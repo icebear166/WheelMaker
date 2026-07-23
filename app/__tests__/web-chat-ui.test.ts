@@ -1656,11 +1656,11 @@ describe('web chat integration', () => {
     expect(mobileSheet).not.toContain("openSettingsDetail('portRelay')");
     expect(mobileSheet).not.toContain("openSettingsDetail('update')");
     expect(mobileSheet).not.toContain('className="project-wrap"');
-    expect(mobileSheet).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, true)');
+    expect(mainTsx).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, mobile)');
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
     expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
-    expect(mobileSheet).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
+    expect(mainTsx).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
     expect(mainTsx).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
 
     expect(stylesCss).toContain('.chat-session-header.mobile {');
@@ -1819,7 +1819,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
     expect(mainTsx).toContain('className="wide-project-hub-dot"');
     expect(mainTsx).toContain('className="wide-project-hub-label"');
-    expect(mainTsx).toContain('className="wide-project-session-list"');
+    expect(mainTsx).toContain('wide-project-session-list');
     expect(mainTsx).toContain('className="wide-project-action-btn"');
     expect(mainTsx).toContain('className="wide-project-action-popover"');
     expect(mainTsx).toContain("import {resolveWideProjectActionPopoverPlacement");

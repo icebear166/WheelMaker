@@ -977,25 +977,6 @@
   margin: 0 0 8px;
 }
 
-.recent-sessions-section-heading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 27px;
-  padding: 0 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 16%, var(--border-subtle));
-  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-secondary));
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.recent-sessions-section-heading .codicon {
-  font-size: 12px;
-}
-
 .chat-session-operation {
   min-height: 40px;
   display: flex;

@@ -57,7 +57,7 @@ describe('web session search UI wiring', () => {
     expect(main).not.toContain('chatSidebarTitleSearchOpen');
 
     const sharedHeaderStart = main.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
-    const sharedHeaderEnd = main.indexOf('const renderMobileChatSessionSheet = () => {', sharedHeaderStart);
+    const sharedHeaderEnd = main.indexOf('const renderProjectSection = (', sharedHeaderStart);
     expect(sharedHeaderStart).toBeGreaterThanOrEqual(0);
     expect(sharedHeaderEnd).toBeGreaterThan(sharedHeaderStart);
     const sharedHeader = main.slice(sharedHeaderStart, sharedHeaderEnd);

@@ -44,7 +44,7 @@ describe('PC chat session-panel layout', () => {
 
   it('orders desktop settings, project, and Hubs before the prompt without changing mobile project navigation', () => {
     const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
-    const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = () => {', headerStart);
+    const headerEnd = workspaceAppSource.indexOf('const renderProjectSection = (', headerStart);
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
     const settingsIndex = headerSource.indexOf('{renderChatMenuSettingsButton()}');
     const projectIndex = headerSource.indexOf('{!mobile ? renderDesktopChatProjectSelector() : null}');
@@ -73,7 +73,7 @@ describe('PC chat session-panel layout', () => {
 
   it('does not let desktop session search change the settings and Hub segment', () => {
     const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
-    const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = () => {', headerStart);
+    const headerEnd = workspaceAppSource.indexOf('const renderProjectSection = (', headerStart);
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
 
     expect(headerSource).toContain('const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;');

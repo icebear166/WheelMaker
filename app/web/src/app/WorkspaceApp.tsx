@@ -14660,13 +14660,7 @@ export function App() {
           recentCollapsed ? ' collapsed' : ''
         }`}
       >
-        {!mobile && options.showHeading !== false ? (
-          <div className="recent-sessions-section-heading">
-            <span className="codicon codicon-history" aria-hidden="true" />
-            <span>Recent</span>
-          </div>
-        ) : null}
-        {mobile ? (
+        {options.showHeading !== false ? (
         <div className="wide-project-row">
           <button
             type="button"
@@ -14694,7 +14688,7 @@ export function App() {
           </button>
         </div>
         ) : null}
-        {mobile && recentCollapsed ? null : (
+        {recentCollapsed && options.showHeading !== false ? null : (
           <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
             {recentSessionSections.map(section => renderRecentProjectSessionSection(section, mobile))}
           </div>
@@ -16213,6 +16207,139 @@ export function App() {
     return <div className={chatSessionHeaderClassName}>{chatSessionHeaderContent}</div>;
   };
 
+  const renderProjectSection = (projectItem: typeof visibleProjectItems[number], mobile: boolean) => {
+    const targetProjectId = projectItem.projectId;
+    const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
+    const collapsed = collapsedProjectIds.includes(targetProjectId);
+    const pinnedProject = pinnedProjectIds.includes(targetProjectId);
+    const projectHub = projectItem.hubId || 'local';
+    const projectHubVariant = tagVariantClass('wide-project-hub', projectItem.hubId || 'local');
+    const sessionError = mobile ? (mobileProjectSessionErrors[targetProjectId] ?? '') : '';
+    const keyPrefix = mobile ? 'mobile-project' : 'wide-project';
+    const sfx = (cls: string) => (mobile ? ` ${cls}` : '');
+
+    const openNew = (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      if (mobile) {
+        openMobileProjectActionMenu(targetProjectId, 'new');
+      } else {
+        openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
+      }
+    };
+    const openResume = (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      if (mobile) {
+        openMobileProjectActionMenu(targetProjectId, 'resume');
+      } else {
+        openWideProjectActionMenu(targetProjectId, 'resume', event.currentTarget);
+      }
+    };
+
+    return (
+      <div
+        key={`${keyPrefix}:${targetProjectId}`}
+        className={`wide-project-section${sfx('mobile-project-section')}${targetProjectId === projectId ? ' active' : ''}${pinnedProject ? ' pinned' : ''}${
+          collapsed ? ' collapsed' : ''
+        }`}
+      >
+        <div className={`wide-project-row${sfx('mobile-project-row')}`}>
+          <button
+            type="button"
+            className={`wide-project-toggle${sfx('mobile-project-toggle')}`}
+            onPointerDown={event => startProjectPinLongPress(targetProjectId, event)}
+            onPointerUp={finishProjectPinLongPress}
+            onPointerCancel={finishProjectPinLongPress}
+            onPointerLeave={finishProjectPinLongPress}
+            onContextMenu={event => event.preventDefault()}
+            onClick={event => {
+              if (consumeProjectPinLongPressClick(targetProjectId, event)) {
+                return;
+              }
+              toggleWideProjectCollapsed(targetProjectId);
+            }}
+            title={collapsed ? 'Expand project' : 'Collapse project'}
+            aria-expanded={!collapsed}
+          >
+            <span className="wide-project-folder-wrap">
+              <span
+                className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon ${projectHubVariant}`}
+                style={hubAccentStyle(projectHub)}
+              />
+              {pinnedProject ? (
+                <span className="codicon codicon-pinned wide-project-pin-badge" aria-hidden="true" />
+              ) : null}
+            </span>
+            <span className="wide-project-title-group">
+              <span className="wide-project-name" title={projectItem.name}>
+                {projectItem.name}
+              </span>
+              <span
+                className={`wide-project-hub-tag ${projectHubVariant}`}
+                style={hubAccentStyle(projectHub)}
+              >
+                <span className="wide-project-hub-dot" aria-hidden="true" />
+                <span className="wide-project-hub-label">{projectHub}</span>
+              </span>
+            </span>
+          </button>
+          <div className={`wide-project-actions${sfx('mobile-project-actions')}`}>
+            <button
+              type="button"
+              className="wide-project-action-btn"
+              title="New session"
+              aria-label={`New session in ${projectItem.name}`}
+              onPointerDown={event => event.stopPropagation()}
+              onClick={openNew}
+            >
+              <span className="codicon codicon-add" />
+            </button>
+            <button
+              type="button"
+              className="wide-project-action-btn"
+              title="Resume session"
+              aria-label={`Resume session in ${projectItem.name}`}
+              onPointerDown={event => event.stopPropagation()}
+              onClick={openResume}
+            >
+              <span className="codicon codicon-history" />
+            </button>
+            <button
+              type="button"
+              className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
+              title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
+              aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
+              aria-pressed={pinnedProject}
+              onPointerDown={event => event.stopPropagation()}
+              onClick={event => {
+                event.stopPropagation();
+                togglePinnedProject(targetProjectId);
+              }}
+            >
+              <span className="codicon codicon-pinned" />
+            </button>
+          </div>
+        </div>
+        {sessionError ? (
+          <div className="mobile-project-session-error">
+            <span>Session refresh failed.</span>
+            <button
+              type="button"
+              onClick={() => refreshMobileChatProjectSessions().catch(() => undefined)}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {!collapsed ? (
+          <div className={`wide-project-session-list${sfx('mobile-project-session-list')}`}>
+            {renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, mobile)}
+            {projectSessions.length === 0 ? <div className="wide-project-empty">No sessions yet.</div> : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderMobileChatSessionSheet = () => {
     return (
       <>
@@ -16227,112 +16354,7 @@ export function App() {
             </div>
           ) : null}
           {renderRecentSessionsSection(true)}
-          {visibleProjectItems.map(projectItem => {
-            const targetProjectId = projectItem.projectId;
-            const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
-            const collapsed = collapsedProjectIds.includes(targetProjectId);
-            const pinnedProject = pinnedProjectIds.includes(targetProjectId);
-            const projectHub = projectItem.hubId || 'local';
-            const projectHubVariant = tagVariantClass('wide-project-hub', projectItem.hubId || 'local');
-            const sessionError = mobileProjectSessionErrors[targetProjectId] ?? '';
-            return (
-              <div
-                key={`mobile-project:${targetProjectId}`}
-                  className={`wide-project-section mobile-project-section${targetProjectId === projectId ? ' active' : ''}${pinnedProject ? ' pinned' : ''}${
-                  collapsed ? ' collapsed' : ''
-                }`}
-              >
-                <div className="wide-project-row mobile-project-row">
-                  <button
-                    type="button"
-                    className="wide-project-toggle mobile-project-toggle"
-                    onPointerDown={event => startProjectPinLongPress(targetProjectId, event)}
-                    onPointerUp={finishProjectPinLongPress}
-                    onPointerCancel={finishProjectPinLongPress}
-                    onPointerLeave={finishProjectPinLongPress}
-                    onContextMenu={event => event.preventDefault()}
-                    onClick={event => {
-                      if (consumeProjectPinLongPressClick(targetProjectId, event)) {
-                        return;
-                      }
-                      toggleWideProjectCollapsed(targetProjectId);
-                    }}
-                    title={collapsed ? 'Expand project' : 'Collapse project'}
-                    aria-expanded={!collapsed}
-                  >
-                    <span className="wide-project-folder-wrap">
-                      <span
-                        className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon ${projectHubVariant}`}
-                        style={hubAccentStyle(projectHub)}
-                      />
-                      {pinnedProject ? (
-                        <span className="codicon codicon-pinned wide-project-pin-badge" aria-hidden="true" />
-                      ) : null}
-                    </span>
-                    <span className="wide-project-title-group">
-                      <span className="wide-project-name" title={projectItem.name}>
-                        {projectItem.name}
-                      </span>
-                      <span
-                        className={`wide-project-hub-tag ${projectHubVariant}`}
-                        style={hubAccentStyle(projectHub)}
-                      >
-                        <span className="wide-project-hub-dot" aria-hidden="true" />
-                        <span className="wide-project-hub-label">{projectHub}</span>
-                      </span>
-                    </span>
-                  </button>
-                  <div className="wide-project-actions mobile-project-actions">
-                    <button
-                      type="button"
-                      className="wide-project-action-btn"
-                      title="New session"
-                      aria-label={`New session in ${projectItem.name}`}
-                      onPointerDown={event => event.stopPropagation()}
-                      onClick={event => {
-                        event.stopPropagation();
-                        openMobileProjectActionMenu(targetProjectId, 'new');
-                      }}
-                    >
-                      <span className="codicon codicon-add" />
-                    </button>
-                    <button
-                      type="button"
-                      className="wide-project-action-btn"
-                      title="Resume session"
-                      aria-label={`Resume session in ${projectItem.name}`}
-                      onPointerDown={event => event.stopPropagation()}
-                      onClick={event => {
-                        event.stopPropagation();
-                        openMobileProjectActionMenu(targetProjectId, 'resume');
-                      }}
-                    >
-                      <span className="codicon codicon-history" />
-                    </button>
-                  </div>
-                </div>
-                {sessionError ? (
-                  <div className="mobile-project-session-error">
-                    <span>Session refresh failed.</span>
-                    <button
-                      type="button"
-                      onClick={() => refreshMobileChatProjectSessions().catch(() => undefined)}
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : null}
-                {!collapsed ? (
-                  <div className="wide-project-session-list mobile-project-session-list">
-                    {renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, true)}
-                    {projectSessions.length === 0 ? (
-                      <div className="wide-project-empty">No sessions yet.</div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+          {visibleProjectItems.map(projectItem => renderProjectSection(projectItem, true))}
           {renderHiddenProjectRows(true)}
         </ChatSessionNav>
         )}
@@ -16621,114 +16643,7 @@ export function App() {
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
         {archivedMode || options?.includeRecent === false ? null : renderRecentSessionsSection(false)}
-        {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
-          const targetProjectId = projectItem.projectId;
-          const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
-          const collapsed = collapsedProjectIds.includes(targetProjectId);
-          const pinnedProject = pinnedProjectIds.includes(targetProjectId);
-          const projectHub = projectItem.hubId || 'local';
-          const projectHubVariant = tagVariantClass('wide-project-hub', projectItem.hubId || 'local');
-          return (
-            <div
-              key={`wide-project:${targetProjectId}`}
-              className={`wide-project-section${targetProjectId === projectId ? ' active' : ''}${pinnedProject ? ' pinned' : ''}${
-                collapsed ? ' collapsed' : ''
-              }`}
-            >
-              <div className="wide-project-row">
-                <button
-                  type="button"
-                  className="wide-project-toggle"
-                  onPointerDown={event => startProjectPinLongPress(targetProjectId, event)}
-                  onPointerUp={finishProjectPinLongPress}
-                  onPointerCancel={finishProjectPinLongPress}
-                  onPointerLeave={finishProjectPinLongPress}
-                  onContextMenu={event => event.preventDefault()}
-                  onClick={event => {
-                    if (consumeProjectPinLongPressClick(targetProjectId, event)) {
-                      return;
-                    }
-                    toggleWideProjectCollapsed(targetProjectId);
-                  }}
-                  title={collapsed ? 'Expand project' : 'Collapse project'}
-                  aria-expanded={!collapsed}
-                >
-                  <span className="wide-project-folder-wrap">
-                    <span
-                      className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon ${projectHubVariant}`}
-                      style={hubAccentStyle(projectHub)}
-                    />
-                    {pinnedProject ? (
-                      <span className="codicon codicon-pinned wide-project-pin-badge" aria-hidden="true" />
-                    ) : null}
-                  </span>
-                  <span className="wide-project-title-group">
-                    <span className="wide-project-name" title={projectItem.name}>
-                      {projectItem.name}
-                    </span>
-                    <span
-                      className={`wide-project-hub-tag ${projectHubVariant}`}
-                      style={hubAccentStyle(projectHub)}
-                    >
-                      <span className="wide-project-hub-dot" aria-hidden="true" />
-                      <span className="wide-project-hub-label">{projectHub}</span>
-                    </span>
-                  </span>
-                </button>
-                <div className="wide-project-actions">
-                  <button
-                    type="button"
-                    className="wide-project-action-btn"
-                    title="New session"
-                    aria-label={`New session in ${projectItem.name}`}
-                    onPointerDown={event => event.stopPropagation()}
-                    onClick={event => {
-                      event.stopPropagation();
-                      openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
-                    }}
-                  >
-                    <span className="codicon codicon-add" />
-                  </button>
-                  <button
-                    type="button"
-                    className="wide-project-action-btn"
-                    title="Resume session"
-                    aria-label={`Resume session in ${projectItem.name}`}
-                    onPointerDown={event => event.stopPropagation()}
-                    onClick={event => {
-                      event.stopPropagation();
-                      openWideProjectActionMenu(targetProjectId, 'resume', event.currentTarget);
-                    }}
-                  >
-                    <span className="codicon codicon-history" />
-                  </button>
-                  <button
-                    type="button"
-                    className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
-                    title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
-                    aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
-                    aria-pressed={pinnedProject}
-                    onPointerDown={event => event.stopPropagation()}
-                    onClick={event => {
-                      event.stopPropagation();
-                      togglePinnedProject(targetProjectId);
-                    }}
-                  >
-                    <span className="codicon codicon-pinned" />
-                  </button>
-                </div>
-              </div>
-              {!collapsed ? (
-                <div className="wide-project-session-list">
-                  {renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, false)}
-                  {projectSessions.length === 0 ? (
-                    <div className="wide-project-empty">No sessions yet.</div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+        {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => renderProjectSection(projectItem, false))}
         {!archivedMode && !sessionSearchActive ? renderHiddenProjectRows(false) : null}
       </ChatSessionNav>
     );

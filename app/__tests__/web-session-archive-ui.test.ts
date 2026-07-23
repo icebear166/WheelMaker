@@ -13,7 +13,7 @@ describe('session archive UI source integration', () => {
     expect(main).not.toContain('renderChatArchiveControls(true)');
 
     const headerStart = main.indexOf('const renderChatSessionHeader = (mobile: boolean) =>');
-    const headerEnd = main.indexOf('const renderMobileChatSessionSheet = () => {', headerStart);
+    const headerEnd = main.indexOf('const renderProjectSection = (', headerStart);
     const header = main.slice(headerStart, headerEnd);
     expect(header.indexOf('renderChatArchiveControls()')).toBeLessThan(header.indexOf('renderChatHeaderSearchControls()'));
   });

@@ -17,8 +17,6 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('renderRecentSessionsSection(true)');
     expect(mainTsx).toContain('recent-sessions-section');
     expect(mainTsx).toContain('recent-sessions-list');
-    expect(mainTsx).toContain('className="recent-sessions-section-heading"');
-    expect(mainTsx).toContain('<span>Recent</span>');
   });
 
   test('recent sessions section behaves like a collapsible block', () => {
@@ -172,10 +170,13 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain("sheetMenu.kind === 'actions'");
     expect(mainTsx).toContain("pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'");
 
-    const mobileSheetStart = mainTsx.indexOf('const renderMobileChatSessionSheet = () => {');
-    const mobileSheetEnd = mainTsx.indexOf('const renderWideProjectActionMenu = (', mobileSheetStart);
-    const mobileSheet = mainTsx.slice(mobileSheetStart, mobileSheetEnd);
-    expect(mobileSheet).not.toContain('wide-project-pin-btn');
+    const projectSectionStart = mainTsx.indexOf('const renderProjectSection = (');
+    const projectSectionEnd = mainTsx.indexOf('const renderMobileChatSessionSheet =', projectSectionStart);
+    const projectSection = mainTsx.slice(projectSectionStart, projectSectionEnd);
+    expect(projectSection).toContain('wide-project-pin-btn');
+    expect(projectSection).toContain("openMobileProjectActionMenu(targetProjectId, 'new')");
+    expect(projectSection).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget)");
+    expect(projectSection).toContain('mobile-project-session-error');
   });
 
   test('keeps transient menus open while their own scroll containers move', () => {
