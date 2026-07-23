@@ -28,6 +28,10 @@
   --motion-emphasized: 240ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --border-faint: #2b2b2b;
+  --surface-active: rgb(255 255 255 / 9%);
+  --accent-soft-bg: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  --sl-icon-size: 14px;
 
   --bg: var(--surface-canvas);
   --panel: var(--surface-sidebar);
@@ -81,6 +85,10 @@
   --motion-emphasized: 240ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --border-faint: #e4e4e4;
+  --surface-active: rgb(21 31 43 / 10%);
+  --accent-soft-bg: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  --sl-icon-size: 14px;
 
   --bg: var(--surface-canvas);
   --panel: var(--surface-sidebar);
