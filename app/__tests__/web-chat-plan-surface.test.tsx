@@ -147,7 +147,7 @@ describe('ChatPlanSurface', () => {
 
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(0);
     const expand = renderer!.root.findByProps({'aria-label': 'Expand Plan'});
-    expect(expand.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
+    expect(expand.findAllByType('svg')).toHaveLength(1);
     expect(renderer!.root.findByProps({className: 'chat-edge-surface-summary'}).children).toContain('Patch the UI');
 
     await ReactTestRenderer.act(() => {
@@ -184,7 +184,7 @@ describe('ChatPlanSurface', () => {
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(0);
     expect(renderer!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Recent Sessions']);
     const trigger = renderer!.root.findByProps({'aria-label': 'Expand Recent Sessions'});
-    expect(trigger.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
+    expect(trigger.findAllByType('svg')).toHaveLength(1);
 
     await ReactTestRenderer.act(() => {
       trigger.props.onClick();

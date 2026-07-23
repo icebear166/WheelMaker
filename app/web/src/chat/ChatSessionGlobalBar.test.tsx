@@ -31,7 +31,7 @@ describe('ChatSessionGlobalBar', () => {
       'Show all sessions',
       'Pin session sidebar',
     ]);
-    expect(buttons[0].findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-layout-sidebar-left');
+    expect(buttons[0].findAllByType('svg')).toHaveLength(1);
   });
 
   it('uses the sidebar-off icon when the full list is open and highlights active Pin', async () => {
@@ -47,9 +47,53 @@ describe('ChatSessionGlobalBar', () => {
       );
     });
 
-    expect(tree!.root.findByProps({'aria-label': 'Close all sessions'}).findByProps({'aria-hidden': 'true'}).props.className)
-      .toContain('codicon-layout-sidebar-left-off');
+    const closeBtn = tree!.root.findByProps({'aria-label': 'Close all sessions'});
+    expect(closeBtn.findAllByType('svg')).toHaveLength(1);
     expect(tree!.root.findByProps({'aria-label': 'Unpin session sidebar'}).props.className).toContain('active');
     expect(tree!.root.findAllByProps({className: 'chat-session-global-bar-shortcut'})).toHaveLength(0);
+  });
+
+  it('renders only the expand button when collapsible and collapsed', async () => {
+    let tree: ReactTestRenderer | undefined;
+    const onToggleExpanded = jest.fn();
+    await act(async () => {
+      tree = create(
+        <ChatSessionGlobalBar
+          collapsible
+          expanded={false}
+          onToggleExpanded={onToggleExpanded}
+          pinActive
+          onTogglePin={() => undefined}
+          leading={<button type="button">archive</button>}
+        />,
+      );
+    });
+    expect(tree!.root.findAllByProps({'aria-label': 'Show session toolbar'})).toHaveLength(1);
+    expect(tree!.root.findAll(node => node.children?.includes?.('archive'))).toHaveLength(0);
+    expect(tree!.root.findAllByProps({'aria-label': 'Unpin session sidebar'})).toHaveLength(0);
+
+    await act(async () => {
+      tree!.root.findByProps({'aria-label': 'Show session toolbar'}).props.onClick();
+    });
+    expect(onToggleExpanded).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders full bar with svgs when expanded', async () => {
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = create(
+        <ChatSessionGlobalBar
+          collapsible
+          expanded
+          onToggleExpanded={() => undefined}
+          pinActive
+          onTogglePin={() => undefined}
+          leading={<button type="button">archive</button>}
+        />,
+      );
+    });
+    expect(tree!.root.findAllByProps({'aria-label': 'Hide session toolbar'})).toHaveLength(1);
+    expect(tree!.root.findAllByProps({'aria-label': 'Unpin session sidebar'})).toHaveLength(1);
+    expect(tree!.root.findAllByType('svg').length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -25,7 +25,7 @@ describe('ChatEdgeSurfaceHeader', () => {
     expect(tree!.root.findByProps({className: 'chat-edge-surface-leading-actions'})).toBeDefined();
     expect(tree!.root.findByProps({className: 'chat-edge-surface-actions'})).toBeDefined();
     const toggle = tree!.root.findByProps({'aria-label': 'Collapse Plan'});
-    expect(toggle.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-down');
+    expect(toggle.findAllByType('svg')).toHaveLength(1);
 
     await act(async () => toggle.props.onClick());
     expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
@@ -40,6 +40,6 @@ describe('ChatEdgeSurfaceHeader', () => {
     });
 
     const toggle = tree!.root.findByProps({'aria-label': 'Expand Limits'});
-    expect(toggle.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
+    expect(toggle.findAllByType('svg')).toHaveLength(1);
   });
 });

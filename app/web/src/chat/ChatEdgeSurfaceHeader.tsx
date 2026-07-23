@@ -1,4 +1,5 @@
 import React, {type ReactNode} from 'react';
+import {SessionIcon} from './sessionlist/SessionIcon';
 
 export type ChatEdgeSurfaceHeaderProps = {
   title: string;
@@ -29,10 +30,7 @@ export function ChatEdgeSurfaceHeader({
           aria-expanded={!collapsed}
           onClick={onToggleCollapsed}
         >
-          <span
-            className={`codicon ${collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'}`}
-            aria-hidden="true"
-          />
+          <SessionIcon name={collapsed ? 'chevronRight' : 'chevronDown'} />
         </button>
       ) : <span className="chat-edge-surface-toggle-spacer" aria-hidden="true" />}
       <span className="chat-edge-surface-title">{title}</span>

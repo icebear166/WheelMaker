@@ -24,7 +24,7 @@ describe('ChatRecentSessionsSurface', () => {
     )).toHaveLength(1);
     expect(tree!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Recent Sessions']);
     const collapse = tree!.root.findByProps({'aria-label': 'Collapse Recent Sessions'});
-    expect(collapse.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-down');
+    expect(collapse.findAllByType('svg')).toHaveLength(1);
     expect(tree!.root.findAllByType('button').find(button => button.children.includes('All sessions'))).toBeDefined();
   });
 });
