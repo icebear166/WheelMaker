@@ -988,12 +988,12 @@
 
 .session-state-marker.running .session-state-dot {
   background: #68a8e8;
-  animation: session-state-breathe 1.6s ease-in-out infinite;
+  animation: session-state-breathe 2s ease-in-out infinite;
 }
 
 @keyframes session-state-breathe {
-  0%, 100% { opacity: 0.45; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.15); }
+  0%, 100% { opacity: 0.55; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.05); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1019,7 +1019,7 @@
 
 .session-state-leading.running .session-state-dot {
   background: #68a8e8;
-  animation: session-state-breathe 1.6s ease-in-out infinite;
+  animation: session-state-breathe 2s ease-in-out infinite;
 }
 
 .session-state-leading.permission-pending {
@@ -2436,6 +2436,8 @@
 
 .chat-recent-sessions-surface.desktop.expanded {
   border-radius: 8px;
+  max-height: 70vh;
+  transition: max-height var(--motion-standard) var(--ease-standard);
 }
 
 .chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass {
@@ -2449,6 +2451,14 @@
 .chat-recent-sessions-surface.desktop.collapsed {
   max-height: 36px;
   border-radius: 8px;
+  transition: max-height var(--motion-standard) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-recent-sessions-surface.desktop.expanded,
+  .chat-recent-sessions-surface.desktop.collapsed {
+    transition: none;
+  }
 }
 
 .chat-view-width-fixed-800 .chat-recent-sessions-surface.desktop {
@@ -2770,14 +2780,14 @@
   transform: translateX(calc(-100% - 24px));
   visibility: hidden;
   pointer-events: none;
-  transition: transform 180ms ease, visibility 0s linear 180ms;
+  transition: transform var(--motion-standard) var(--ease-standard), visibility 0s linear var(--motion-standard);
 }
 
 .chat-session-nav-slideout.open {
   transform: translateX(0);
   visibility: visible;
   pointer-events: auto;
-  transition: transform 180ms ease, visibility 0s;
+  transition: transform var(--motion-standard) var(--ease-standard), visibility 0s;
 }
 
 .chat-session-nav-slideout .chat-session-panel-header {

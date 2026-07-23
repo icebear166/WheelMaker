@@ -54,8 +54,8 @@ describe('web resume session ui', () => {
     expect(mainTsx).not.toContain('newChatAgentPickerOpen');
     expect(mainTsx).not.toContain('className="chat-agent-picker-card chat-agent-picker-overlay"');
     expect(mainTsx).not.toContain('className="chat-resume-list"');
-    expect(mainTsx).toContain('className="wide-project-action-popover"');
-    expect(mainTsx).toContain('className="mobile-project-sheet"');
+    expect(mainTsx).toContain('wide-project-action-popover${wideProjectActionMenuExiting');
+    expect(mainTsx).toContain('mobile-project-sheet${mobileProjectActionMenuExiting');
     expect(mainTsx).toContain("actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
     expect(mainTsx).toContain("const sheetTitle = sheetIsActions");
     expect(mainTsx).toContain("? 'Project Actions'");

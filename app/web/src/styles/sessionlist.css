@@ -143,6 +143,7 @@
 /* ---------- session rows (level 2: quiet, indented) ---------- */
 .wide-project-session-list {
   margin-top: 2px;
+  animation: sl-list-in var(--motion-standard) var(--ease-out);
 }
 .project-session-row-wrap {
   position: relative;
@@ -270,6 +271,38 @@
 }
 .recent-sessions-list .wide-session-row {
   padding-left: calc(var(--sl-indent) - 4px);
+}
+
+/* ---------- menu enter/exit ---------- */
+@keyframes sl-menu-in {
+  from { opacity: 0; transform: translateY(-2px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sl-menu-out {
+  to { opacity: 0; transform: translateY(-2px) scale(0.98); }
+}
+.project-session-action-menu,
+.wide-project-action-popover {
+  animation: sl-menu-in 140ms var(--ease-out);
+}
+.sl-menu-exit {
+  animation: sl-menu-out 100ms ease-in forwards;
+  pointer-events: none;
+}
+
+/* ---------- list enter ---------- */
+@keyframes sl-list-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-session-action-menu,
+  .wide-project-action-popover,
+  .sl-menu-exit,
+  .wide-project-session-list {
+    animation: none;
+  }
 }
 
 /* ---------- misc ---------- */

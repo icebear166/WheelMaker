@@ -124,6 +124,7 @@ import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
+import {useMenuExitState} from '../chat/sessionlist/menuExit';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -3247,9 +3248,9 @@ export function App() {
     }
     return labels;
   }, [projectSessionsByProjectId, projects]);
-  const [wideProjectActionMenu, setWideProjectActionMenu] = useState<WideProjectActionMenuState | null>(null);
-  const [mobileProjectActionMenu, setMobileProjectActionMenu] = useState<MobileProjectActionMenuState | null>(null);
-  const [projectSessionActionMenu, setProjectSessionActionMenu] = useState<ProjectSessionActionMenuState | null>(null);
+  const [wideProjectActionMenu, setWideProjectActionMenu, wideProjectActionMenuExiting] = useMenuExitState<WideProjectActionMenuState>();
+  const [mobileProjectActionMenu, setMobileProjectActionMenu, mobileProjectActionMenuExiting] = useMenuExitState<MobileProjectActionMenuState>();
+  const [projectSessionActionMenu, setProjectSessionActionMenu, projectSessionActionMenuExiting] = useMenuExitState<ProjectSessionActionMenuState>();
   const [mobileProjectSessionErrors, setMobileProjectSessionErrors] = useState<Record<string, string>>({});
   const [mobileProjectSessionsRefreshing, setMobileProjectSessionsRefreshing] = useState(false);
   const [selectedChatId, setSelectedChatId] = useState('');
@@ -14880,6 +14881,7 @@ export function App() {
         onArchive={() => requestArchiveProjectSession(targetProjectId, session)}
         onReload={() => handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined)}
         onDelete={() => requestDeleteProjectSession(targetProjectId, session)}
+        exiting={projectSessionActionMenuExiting}
         popoverStyle={projectSessionActionMenu.popover
           ? {
               top: `${projectSessionActionMenu.popover.top}px`,
@@ -15816,7 +15818,7 @@ export function App() {
           aria-hidden="true"
         />
         <div
-          className="mobile-project-sheet"
+          className={`mobile-project-sheet${mobileProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
           role="dialog"
           aria-modal="true"
           aria-label={sheetIsActions ? 'Project actions' : sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
@@ -15956,7 +15958,7 @@ export function App() {
     return (
       <div
         ref={wideProjectActionMenuRef}
-        className="wide-project-action-popover"
+        className={`wide-project-action-popover${wideProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
         style={actionMenu.popover
           ? {
               top: `${actionMenu.popover.top}px`,

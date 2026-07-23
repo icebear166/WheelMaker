@@ -139,7 +139,7 @@ describe('web chat recent sessions', () => {
 
   test('renders the wide project action menu once outside transformed session panels', () => {
     expect(mainTsx).toContain('const renderWideProjectActionMenu = (');
-    expect(mainTsx.match(/className="wide-project-action-popover"/g)).toHaveLength(1);
+    expect(mainTsx.match(/wide-project-action-popover\$\{wideProjectActionMenuExiting/g)).toHaveLength(1);
     expect(mainTsx).toContain('isWide ? renderWideProjectActionMenu() : null');
   });
 

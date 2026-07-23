@@ -1597,7 +1597,7 @@ describe('web chat integration', () => {
 
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain('const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);');
-    expect(mainTsx).toContain('const [mobileProjectActionMenu, setMobileProjectActionMenu] = useState<MobileProjectActionMenuState | null>(null);');
+    expect(mainTsx).toContain('const [mobileProjectActionMenu, setMobileProjectActionMenu, mobileProjectActionMenuExiting] = useMenuExitState<MobileProjectActionMenuState>();');
     expect(mainTsx).toContain('const refreshMobileChatProjectSessions = async () => {');
     expect(mainTsx).toContain('await refreshChatIndex();');
     expect(mainTsx).toContain('latestProjects.map(projectItem =>');
@@ -1609,7 +1609,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('<div className="mobile-chat-toolbar" aria-label="Chat tools">');
     expect(mainTsx).not.toContain('<span className="mobile-chat-drawer-title">Chats</span>');
     expect(mainTsx).toContain('className="mobile-project-session-nav"');
-    expect(mainTsx).toContain('className="mobile-project-sheet"');
+    expect(mainTsx).toContain('mobile-project-sheet${mobileProjectActionMenuExiting');
     expect(projectSectionTsx).toContain('className="mobile-project-session-error"');
     expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
     expect(mainTsx).not.toContain("if (detail === 'tokenStats') {");
@@ -1826,14 +1826,14 @@ describe('web chat integration', () => {
     expect(projectSectionTsx).toContain('className="wide-project-hub-label"');
     expect(projectSectionTsx).toContain('wide-project-session-list');
     expect(projectSectionTsx).toContain('wide-project-action-btn sl-action-primary');
-    expect(mainTsx).toContain('className="wide-project-action-popover"');
+    expect(mainTsx).toContain('wide-project-action-popover${wideProjectActionMenuExiting');
     expect(mainTsx).toContain("import {resolveWideProjectActionPopoverPlacement");
     expect(mainTsx).toContain('style={actionMenu.popover');
     expect(mainTsx).toContain('className="wide-project-action-title"');
     expect(mainTsx).toContain("actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
     expect(listViewTsx).toContain("const agent = (session.agentType || '').trim();");
     expect(mainTsx).toContain("tagVariantClass('wide-session-agent', agentType)");
-    expect(mainTsx).toContain('const [projectSessionActionMenu, setProjectSessionActionMenu] = useState<ProjectSessionActionMenuState | null>(null);');
+    expect(mainTsx).toContain('const [projectSessionActionMenu, setProjectSessionActionMenu, projectSessionActionMenuExiting] = useMenuExitState<ProjectSessionActionMenuState>();');
     expect(mainTsx).toContain('popover?: WideProjectActionPopoverPlacement | null;');
     expect(mainTsx).toContain('const PROJECT_SESSION_LONG_PRESS_MS = 450;');
     expect(mainTsx).toContain('const handleDeleteProjectSession = async (targetProjectId: string, sessionId: string) => {');
