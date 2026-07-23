@@ -52,6 +52,10 @@ const GLYPHS = {
   ban: (<><circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" /></>),
   // lucide:sliders-horizontal (verified via better-icons)
   sliders: (<><path d="M10 5H3" /><path d="M12 19H3" /><path d="M14 3v4" /><path d="M16 17v4" /><path d="M21 12h-9" /><path d="M21 19h-5" /><path d="M21 5h-7" /><path d="M8 10v4" /><path d="M8 12H3" /></>),
+  // lucide:eye (verified via better-icons)
+  eye: (<><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /><circle cx="12" cy="12" r="3" /></>),
+  // lucide:list (verified via better-icons)
+  list: (<><path d="M3 5h.01" /><path d="M3 12h.01" /><path d="M3 19h.01" /><path d="M8 5h13" /><path d="M8 12h13" /><path d="M8 19h13" /></>),
 } as const;
 
 export type SessionIconName = keyof typeof GLYPHS;
@@ -65,9 +69,10 @@ export type SessionIconProps = {
   filled?: boolean;
   spin?: boolean;
   className?: string;
+  style?: React.CSSProperties;
 };
 
-export function SessionIcon({name, size = 14, filled = false, spin = false, className}: SessionIconProps) {
+export function SessionIcon({name, size = 14, filled = false, spin = false, className, style}: SessionIconProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -80,6 +85,7 @@ export function SessionIcon({name, size = 14, filled = false, spin = false, clas
       strokeLinejoin="round"
       aria-hidden="true"
       className={`sl-icon${spin ? ' sl-icon-spin' : ''}${className ? ` ${className}` : ''}`}
+      style={style}
     >
       {GLYPHS[name]}
     </svg>

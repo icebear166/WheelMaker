@@ -1585,6 +1585,8 @@ describe('web chat integration', () => {
   test('mobile chat drawer uses a cross-project project session sheet', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const projectSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'ProjectSection.tsx'));
+    const listViewTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionListView.tsx'));
     const settingsRootPath = path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx');
     const settingsRootTsx = fs.existsSync(settingsRootPath) ? readSourceText(settingsRootPath) : '';
     const settingsBundlePath = path.join(projectRoot, 'web', 'src', 'settings', 'SettingsBundle.ts');
@@ -1608,7 +1610,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('<span className="mobile-chat-drawer-title">Chats</span>');
     expect(mainTsx).toContain('className="mobile-project-session-nav"');
     expect(mainTsx).toContain('className="mobile-project-sheet"');
-    expect(mainTsx).toContain('className="mobile-project-session-error"');
+    expect(projectSectionTsx).toContain('className="mobile-project-session-error"');
     expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
     expect(mainTsx).not.toContain("if (detail === 'tokenStats') {");
     expect(mainTsx).not.toContain('renderTokenStatsSettingsDetail(options)');
@@ -1656,11 +1658,11 @@ describe('web chat integration', () => {
     expect(mobileSheet).not.toContain("openSettingsDetail('portRelay')");
     expect(mobileSheet).not.toContain("openSettingsDetail('update')");
     expect(mobileSheet).not.toContain('className="project-wrap"');
-    expect(mainTsx).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, mobile)');
+    expect(listViewTsx).toContain('split.visibleSessions.map(session => renderRow(projectId, session, false))');
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
-    expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
+    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
-    expect(mainTsx).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
+    expect(mainTsx).toContain("tagVariantClass('wide-project-hub', section.projectHubId || 'local')");
     expect(mainTsx).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
 
     expect(stylesCss).toContain('.chat-session-header.mobile {');
@@ -1718,7 +1720,7 @@ describe('web chat integration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu');
+    expect(mainTsx).toContain('onOpenSessionContextMenu: openProjectSessionContextMenu');
     expect(mainTsx).not.toContain('wide-session-more-btn');
     expect(stylesCss).not.toContain('.wide-session-more-btn');
   });
@@ -1726,15 +1728,17 @@ describe('web chat integration', () => {
   test('session pin actions use the shared menu and an independent trailing button', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sessionMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionMenu.tsx'));
+    const sessionRowTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("const [chatPinningSessionKey, setChatPinningSessionKey] = useState('');");
     expect(mainTsx).toContain('service.pinProjectSession(targetProjectId, normalizedSessionId, pinned)');
-    expect(mainTsx).toContain('className="project-session-menu-btn pin"');
-    expect(mainTsx).toContain("session.pinned ? 'Unpin' : 'Pin'");
-    expect(mainTsx).toContain('className="wide-session-pin-btn"');
-    expect(mainTsx).toContain('aria-pressed={true}');
-    expect(mainTsx).toContain('handlePinProjectSession(targetProjectId, session.sessionId, false)');
+    expect(sessionMenuTsx).toContain("className: 'pin'");
+    expect(sessionMenuTsx).toContain("pinned ? 'Unpin' : 'Pin'");
+    expect(sessionRowTsx).toContain('className="wide-session-pin-btn"');
+    expect(sessionRowTsx).toContain('aria-pressed={true}');
+    expect(mainTsx).toContain('handlePinProjectSession(targetProjectId, sessionId, false)');
     expect(mainTsx).toContain("setChatPinningSessionKey(current => current === actionKey ? '' : current)");
     expect(stylesCss).toContain('.project-session-row-wrap.has-pin-action .wide-session-row');
     expect(stylesCss).toContain('.wide-session-pin-btn');
@@ -1782,11 +1786,12 @@ describe('web chat integration', () => {
   test('project headers expose an explicit pin action alongside new/resume', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const projectSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'ProjectSection.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('wide-project-action-btn wide-project-pin-btn');
-    expect(mainTsx).toContain('aria-pressed={pinnedProject}');
-    expect(mainTsx).toContain('togglePinnedProject(targetProjectId)');
+    expect(projectSectionTsx).toContain('wide-project-action-btn wide-project-pin-btn');
+    expect(projectSectionTsx).toContain('aria-pressed={pinned}');
+    expect(mainTsx).toContain('onTogglePinnedProject: togglePinnedProject');
     expect(stylesCss).toContain('.wide-project-pin-btn.active');
     expect(stylesCss).toContain('.wide-project-section.active .wide-project-pin-btn.active');
     expect(stylesCss).toContain('background: color-mix(in srgb, var(--accent-primary) 14%, transparent);');
@@ -1796,6 +1801,9 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const appDialogsTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'shell', 'AppDialogs.tsx'));
+    const projectSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'ProjectSection.tsx'));
+    const listViewTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionListView.tsx'));
+    const sessionMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionMenu.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).not.toContain('WIDE_PROJECT_SESSION_LIMIT');
@@ -1810,24 +1818,24 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const consumeProjectPinLongPressClick = useCallback(');
     expect(mainTsx).toContain('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {');
     expect(mainTsx).toContain('className="wide-project-session-nav"');
-    expect(mainTsx).toContain('className="wide-project-title-group"');
-    expect(mainTsx).toContain("collapsed ? 'codicon-folder' : 'codicon-folder-opened'");
-    expect(mainTsx).toContain("className=\"codicon codicon-pinned wide-project-pin-badge\"");
-    expect(mainTsx).toContain('onPointerDown={event => startProjectPinLongPress(targetProjectId, event)}');
-    expect(mainTsx).toContain('onPointerUp={finishProjectPinLongPress}');
-    expect(mainTsx).toContain('onContextMenu={event => event.preventDefault()}');
-    expect(mainTsx).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
-    expect(mainTsx).toContain('className="wide-project-hub-dot"');
-    expect(mainTsx).toContain('className="wide-project-hub-label"');
-    expect(mainTsx).toContain('wide-project-session-list');
-    expect(mainTsx).toContain('className="wide-project-action-btn"');
+    expect(projectSectionTsx).toContain('className="wide-project-title-group"');
+    expect(projectSectionTsx).toContain("collapsed ? 'folder' : 'folderOpen'");
+    expect(projectSectionTsx).toContain('wide-project-pin-badge');
+    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectPinLongPress(targetProjectId, event)');
+    expect(mainTsx).toContain('onPointerUp: finishProjectPinLongPress');
+    expect(mainTsx).toContain('onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault()');
+    expect(mainTsx).toContain("tagVariantClass('wide-project-hub', hubId)");
+    expect(projectSectionTsx).toContain('className="wide-project-hub-dot"');
+    expect(projectSectionTsx).toContain('className="wide-project-hub-label"');
+    expect(projectSectionTsx).toContain('wide-project-session-list');
+    expect(projectSectionTsx).toContain('wide-project-action-btn sl-action-primary');
     expect(mainTsx).toContain('className="wide-project-action-popover"');
     expect(mainTsx).toContain("import {resolveWideProjectActionPopoverPlacement");
     expect(mainTsx).toContain('style={actionMenu.popover');
     expect(mainTsx).toContain('className="wide-project-action-title"');
     expect(mainTsx).toContain("actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
-    expect(mainTsx).toContain("const sessionAgent = (session.agentType || '').trim();");
-    expect(mainTsx).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
+    expect(listViewTsx).toContain("const agent = (session.agentType || '').trim();");
+    expect(mainTsx).toContain("tagVariantClass('wide-session-agent', agentType)");
     expect(mainTsx).toContain('const [projectSessionActionMenu, setProjectSessionActionMenu] = useState<ProjectSessionActionMenuState | null>(null);');
     expect(mainTsx).toContain('popover?: WideProjectActionPopoverPlacement | null;');
     expect(mainTsx).toContain('const PROJECT_SESSION_LONG_PRESS_MS = 450;');
@@ -1871,8 +1879,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const renderProjectSessionActionMenu = () => {');
     expect(mainTsx).not.toContain('className="project-session-more-btn"');
     expect(mainTsx).not.toContain('const openProjectSessionActionMenu = (');
-    expect(mainTsx).toContain('className="project-session-action-menu"');
-    expect(mainTsx).toContain('style={projectSessionActionMenu.popover');
+    expect(sessionMenuTsx).toContain('project-session-action-menu');
+    expect(mainTsx).toContain('popoverStyle={projectSessionActionMenu.popover');
     expect(mainTsx).toContain("transform: projectSessionActionMenu.popover.placement === 'above'");
     expect(mainTsx).toContain('anchorRect: {');
     expect(mainTsx).toContain('left: event.clientX,');
@@ -1880,34 +1888,29 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('bottom: event.clientY,');
     expect(mainTsx).toContain('right: event.clientX,');
     expect(mainTsx).toContain("align: 'start',");
-    expect(mainTsx).toContain('className="project-session-menu-btn reload"');
-    expect(mainTsx).toContain('className="project-session-menu-btn pin"');
-    expect(mainTsx).toContain('className="project-session-menu-btn rename"');
-    expect(mainTsx).toContain('className="project-session-menu-btn archive"');
-    expect(mainTsx).toContain('className="project-session-menu-btn delete"');
     expect(mainTsx).toContain('const sessionActionDisabled = !!session.running ||');
     expect(mainTsx).toContain('const renameActionDisabled = chatRenamingSessionId === sessionId;');
-    expect(mainTsx).toContain('className="project-session-menu-label">Reload</span>');
-    expect(mainTsx).toContain('className="project-session-menu-label">Rename</span>');
-    expect(mainTsx).toContain('className="project-session-menu-label">Archive</span>');
-    expect(mainTsx).toContain('className="project-session-menu-label">Delete</span>');
-    const sessionActionMenuStart = mainTsx.indexOf('className="project-session-action-menu"');
-    const sessionActionMenuEnd = mainTsx.indexOf('const refreshProject = async', sessionActionMenuStart);
-    expect(sessionActionMenuStart).toBeGreaterThanOrEqual(0);
-    expect(sessionActionMenuEnd).toBeGreaterThan(sessionActionMenuStart);
-    const sessionActionMenu = mainTsx.slice(sessionActionMenuStart, sessionActionMenuEnd);
-    const renameMenuIndex = sessionActionMenu.indexOf('className="project-session-menu-label">Rename</span>');
-    const archiveMenuIndex = sessionActionMenu.indexOf('className="project-session-menu-label">Archive</span>');
-    const reloadMenuIndex = sessionActionMenu.indexOf('className="project-session-menu-label">Reload</span>');
-    const deleteMenuIndex = sessionActionMenu.indexOf('className="project-session-menu-label">Delete</span>');
+    expect(sessionMenuTsx).toContain("className: 'reload'");
+    expect(sessionMenuTsx).toContain("className: 'pin'");
+    expect(sessionMenuTsx).toContain("className: 'rename'");
+    expect(sessionMenuTsx).toContain("className: 'archive'");
+    expect(sessionMenuTsx).toContain("className: 'delete'");
+    expect(sessionMenuTsx).toContain("label: 'Reload'");
+    expect(sessionMenuTsx).toContain("label: 'Rename'");
+    expect(sessionMenuTsx).toContain("label: 'Archive'");
+    expect(sessionMenuTsx).toContain("label: 'Delete'");
+    const renameMenuIndex = sessionMenuTsx.indexOf("label: 'Rename'");
+    const archiveMenuIndex = sessionMenuTsx.indexOf("label: 'Archive'");
+    const reloadMenuIndex = sessionMenuTsx.indexOf("label: 'Reload'");
+    const deleteMenuIndex = sessionMenuTsx.indexOf("label: 'Delete'");
     expect(renameMenuIndex).toBeGreaterThanOrEqual(0);
     expect(archiveMenuIndex).toBeGreaterThan(renameMenuIndex);
     expect(reloadMenuIndex).toBeGreaterThan(archiveMenuIndex);
     expect(deleteMenuIndex).toBeGreaterThan(reloadMenuIndex);
     expect(mainTsx).toContain("if (target?.closest('.project-session-action-menu')) {");
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
-    expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
-    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
+    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
+    expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
     expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
     expect(mainTsx).toContain('const wideSidebarMain = renderWideProjectSessionNav();');
     expect(mainTsx).not.toContain('const wideSidebarMain = sidebarSettingsOpen');
@@ -2465,11 +2468,12 @@ describe('web chat integration', () => {
   test('keeps sidebar search fixed in the title region and new sessions project-scoped', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const projectSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'ProjectSection.tsx'));
     const stylesCss = readWebStyles(projectRoot);
     expect(mainTsx).toContain("const chatSessionHeaderClassName = `sidebar-title-row chat-session-header");
     expect(mainTsx).toContain('{renderChatHeaderSearchControls()}');
     expect(mainTsx).toContain('className="chat-header-search-wrap"');
-    expect(mainTsx).toContain('className="wide-project-action-btn"');
+    expect(projectSectionTsx).toContain('wide-project-action-btn sl-action-primary');
     expect(mainTsx).not.toContain('className="global-new-session"');
     expect(stylesCss).toContain('/* workspace-ui-targeted-evolution: session sidebar */');
   });
@@ -2623,7 +2627,7 @@ describe('provider-aware session labels', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain("from '../chat/projectAgents'");
-    expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(5);
+    expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(3);
     expect(mainTsx).not.toContain('normalizeAgentTypeName(draft.agentType)');
     expect(mainTsx).not.toContain('normalizeAgentTypeName(sessionAgent)');
     expect(mainTsx).toContain('{agentDisplayLabel(sheetMenu.agentType)}');

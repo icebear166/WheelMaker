@@ -10,25 +10,30 @@ describe('web chat recent sessions', () => {
   const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
   const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
   const surfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'));
+  const recentSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'RecentSessionsSection.tsx'));
+  const sessionRowTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
+  const listViewTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionListView.tsx'));
+  const projectSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'ProjectSection.tsx'));
 
   test('recent sessions section renders at top of the session list', () => {
     expect(mainTsx).toContain('Recent Sessions');
-    expect(mainTsx).toContain('renderRecentSessionsSection(false)');
-    expect(mainTsx).toContain('renderRecentSessionsSection(true)');
-    expect(mainTsx).toContain('recent-sessions-section');
-    expect(mainTsx).toContain('recent-sessions-list');
+    expect(mainTsx).toContain('buildSessionListViewProps(false,');
+    expect(mainTsx).toContain('buildSessionListViewProps(true,');
+    expect(recentSectionTsx).toContain('recent-sessions-section');
+    expect(recentSectionTsx).toContain('recent-sessions-list');
   });
 
   test('recent sessions section behaves like a collapsible block', () => {
     expect(mainTsx).toContain('RECENT_SESSIONS_VIRTUAL_PROJECT_ID');
     expect(mainTsx).toContain('toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)');
-    expect(mainTsx).toContain('codicon-history recent-sessions-icon');
+    expect(recentSectionTsx).toContain('name="history"');
+    expect(recentSectionTsx).toContain('recent-sessions-icon');
   });
 
   test('recent sessions header shows a chevron collapse affordance on the right', () => {
-    expect(mainTsx).toContain('recent-sessions-collapse-btn');
-    expect(mainTsx).toContain("recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'");
-    expect(mainTsx).toContain('aria-expanded={!recentCollapsed}');
+    expect(recentSectionTsx).toContain('recent-sessions-collapse-btn');
+    expect(recentSectionTsx).toContain("collapsed ? 'chevronDown' : 'chevronUp'");
+    expect(recentSectionTsx).toContain('aria-expanded={!collapsed}');
   });
 
   test('recent sessions reuse the grouped shared builder with an 8-item cap', () => {
@@ -37,17 +42,17 @@ describe('web chat recent sessions', () => {
   });
 
   test('renders recent project context as a quiet micro divider between groups', () => {
-    expect(mainTsx).toContain('recent-project-session-group');
-    expect(mainTsx).toContain('role="group"');
-    expect(mainTsx).toContain('recent-project-divider');
-    expect(mainTsx).toContain('recent-project-divider-name');
-    expect(mainTsx).toContain('recent-project-divider-hub');
-    expect(mainTsx).toContain('recent-project-divider-create');
-    expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);");
-    expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, 'new');");
-    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
-    expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
-    expect(mainTsx).toContain('wide-session-agent-tag');
+    expect(recentSectionTsx).toContain('recent-project-session-group');
+    expect(recentSectionTsx).toContain('role="group"');
+    expect(recentSectionTsx).toContain('recent-project-divider');
+    expect(recentSectionTsx).toContain('recent-project-divider-name');
+    expect(recentSectionTsx).toContain('recent-project-divider-hub');
+    expect(recentSectionTsx).toContain('recent-project-divider-create');
+    expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, kind, anchor)");
+    expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, kind)");
+    expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
+    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
+    expect(sessionRowTsx).toContain('wide-session-agent-tag');
     expect(chatCss).toContain('.recent-project-divider');
     expect(chatCss).toContain('.recent-project-divider-create');
     const dividerBlock = chatCss.match(/\.recent-project-divider \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -55,14 +60,12 @@ describe('web chat recent sessions', () => {
   });
 
   test('recent rows reuse live session pin state without changing recent selection', () => {
-    const recentStart = mainTsx.indexOf('const renderRecentSessionRow = (');
-    const recentEnd = mainTsx.indexOf('const renderRecentProjectSessionSection =', recentStart);
-    const recentRow = mainTsx.slice(recentStart, recentEnd);
-
-    expect(recentRow).toContain("liveSession.pinned ? ' has-pin-action' : ''");
-    expect(recentRow).toContain('className="wide-session-pin-btn"');
-    expect(recentRow).toContain('handlePinProjectSession(targetProjectId, liveSession.sessionId, false)');
-    expect(recentRow).toContain('!liveSession.pinned ? (');
+    expect(mainTsx).toContain('?? snapshot');
+    expect(listViewTsx).toContain('pinned={session.pinned === true}');
+    expect(sessionRowTsx).toContain("${pinned ? ' has-pin-action' : ''}");
+    expect(sessionRowTsx).toContain('className="wide-session-pin-btn"');
+    expect(sessionRowTsx).toContain('{!pinned ? (');
+    expect(mainTsx).toContain('handlePinProjectSession(targetProjectId, sessionId, false)');
     expect(mainTsx).toContain('buildRecentChatSessionProjectSections({');
     expect(mainTsx).not.toContain('pinned: liveSession.pinned');
   });
@@ -125,13 +128,13 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain("import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';");
     expect(mainTsx).toContain('const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;');
     expect(mainTsx).toContain('showFloatingSessionPanel ? (');
-    expect(mainTsx).not.toContain('onUnpin');
-    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(mainTsx).toContain('{renderRecentSessionsSection(false, {showHeading: false})}');
-    expect(mainTsx).toContain('renderRecentSessionsSection(false)');
-    expect(mainTsx).toContain('renderRecentSessionsSection(true)');
     const floatingStart = mainTsx.indexOf('{showFloatingSessionPanel ? (');
     const floatingSource = mainTsx.slice(floatingStart, floatingStart + 2200);
+    expect(floatingSource).not.toContain('onUnpin');
+    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
+    expect(mainTsx).toContain('const floatingViewProps = buildSessionListViewProps(false, false);');
+    expect(mainTsx).toContain('buildSessionListViewProps(false,');
+    expect(mainTsx).toContain('buildSessionListViewProps(true,');
     expect(floatingSource).toContain('showSlideOutShortcut');
     expect(mainTsx.match(/showSlideOutShortcut/g)).toHaveLength(1);
     expect(surfaceTsx).toContain('title="Recent Sessions"');
@@ -166,17 +169,14 @@ describe('web chat recent sessions', () => {
     expect(pinLongPressStart).toContain("openMobileProjectActionMenu(targetProjectId, 'actions');");
     expect(pinLongPressStart).not.toContain('togglePinnedProject(targetProjectId);');
     expect(sessionLongPressStart).toContain('if (isWide) {');
-    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
+    expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
     expect(mainTsx).toContain("sheetMenu.kind === 'actions'");
     expect(mainTsx).toContain("pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'");
 
-    const projectSectionStart = mainTsx.indexOf('const renderProjectSection = (');
-    const projectSectionEnd = mainTsx.indexOf('const renderMobileChatSessionSheet =', projectSectionStart);
-    const projectSection = mainTsx.slice(projectSectionStart, projectSectionEnd);
-    expect(projectSection).toContain('wide-project-pin-btn');
-    expect(projectSection).toContain("openMobileProjectActionMenu(targetProjectId, 'new')");
-    expect(projectSection).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget)");
-    expect(projectSection).toContain('mobile-project-session-error');
+    expect(projectSectionTsx).toContain('wide-project-pin-btn');
+    expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, kind)");
+    expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, kind, anchor)");
+    expect(projectSectionTsx).toContain('mobile-project-session-error');
   });
 
   test('keeps transient menus open while their own scroll containers move', () => {

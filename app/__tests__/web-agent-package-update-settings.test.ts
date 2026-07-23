@@ -652,7 +652,7 @@ describe('agent package update settings UI source structure', () => {
     expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">{shortcut.label}</span>');
 
     const chatSessionHeaderStart = mainTsx.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
-    const chatSessionHeaderEnd = mainTsx.indexOf('const renderProjectSection = (', chatSessionHeaderStart);
+    const chatSessionHeaderEnd = mainTsx.indexOf('const renderMobileChatSessionSheet = (', chatSessionHeaderStart);
     expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);

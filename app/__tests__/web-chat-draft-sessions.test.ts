@@ -203,6 +203,7 @@ describe('web chat draft sessions', () => {
   test('wires draft sessions without adding backend protocol operations to draft rows', () => {
     const root = projectRoot();
     const mainTsx = readSourceText(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sessionRowTsx = readSourceText(path.join(root, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
 
     expect(mainTsx).toContain("from '../chat/session/chatDraftSessions'");
     expect(mainTsx).toContain('const [draftSessionsByProjectId, setDraftSessionsByProjectId] = useState');
@@ -210,7 +211,7 @@ describe('web chat draft sessions', () => {
     expect(mainTsx).toContain('const draftSessionCreatePromisesRef = useRef');
     expect(mainTsx).toContain('const selectDraftChatSession = useCallback');
     expect(mainTsx).toContain('const resolveSelectedDraftSessionForSend = async');
-    expect(mainTsx).toContain('const renderDraftSessionRow = (');
+    expect(sessionRowTsx).toContain('export function DraftSessionRow(');
     expect(mainTsx).toContain('canStartDraftChatSessionCreate(draft)');
     expect(mainTsx).toContain("service.createProjectSession(targetProjectId, agentType, '', draft.draftId)");
     expect(mainTsx).toContain('reconcileCreatedDraftSessions(eventProjectId, [payload.session]);');
@@ -228,7 +229,7 @@ describe('web chat draft sessions', () => {
     expect(canStartIndex).toBeGreaterThanOrEqual(0);
     expect(markSendingIndex).toBeGreaterThan(canStartIndex);
 
-    const draftRowBody = extractConstFunctionBody(mainTsx, 'renderDraftSessionRow');
+    const draftRowBody = sessionRowTsx.slice(sessionRowTsx.indexOf('export function DraftSessionRow('));
     expect(draftRowBody).not.toContain('renderProjectSessionActionMenu');
     expect(draftRowBody).not.toContain('openProjectSessionContextMenu');
     expect(draftRowBody).not.toContain('startProjectSessionLongPress');

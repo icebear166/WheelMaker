@@ -44,7 +44,7 @@ describe('PC chat session-panel layout', () => {
 
   it('orders desktop settings, project, and Hubs before the prompt without changing mobile project navigation', () => {
     const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
-    const headerEnd = workspaceAppSource.indexOf('const renderProjectSection = (', headerStart);
+    const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = (', headerStart);
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
     const settingsIndex = headerSource.indexOf('{renderChatMenuSettingsButton()}');
     const projectIndex = headerSource.indexOf('{!mobile ? renderDesktopChatProjectSelector() : null}');
@@ -73,7 +73,7 @@ describe('PC chat session-panel layout', () => {
 
   it('does not let desktop session search change the settings and Hub segment', () => {
     const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
-    const headerEnd = workspaceAppSource.indexOf('const renderProjectSection = (', headerStart);
+    const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = (', headerStart);
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
 
     expect(headerSource).toContain('const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;');
@@ -137,8 +137,9 @@ describe('PC chat session-panel layout', () => {
   it('reuses the Recent project renderer without the duplicate floating heading', () => {
     const floatingStart = workspaceAppSource.indexOf('{showFloatingSessionPanel ? (');
     const floatingSource = workspaceAppSource.slice(floatingStart, floatingStart + 2200);
-    expect(floatingSource).toContain('{renderRecentSessionsSection(false, {showHeading: false})}');
+    expect(floatingSource).toContain('buildSessionListViewProps(false, false)');
     expect(floatingSource).not.toContain('recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))');
+    expect(floatingSource).not.toContain('showRecentHeading: true');
   });
 
   it('fuses the floating Sessions header and Recent content into one card aligned with the Hub edge', () => {

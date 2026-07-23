@@ -123,6 +123,9 @@ import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
+import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
+import {SessionMenu} from '../chat/sessionlist/SessionMenu';
+import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
 import {
   createSessionNavSlideOutAutoClose,
@@ -6292,7 +6295,7 @@ export function App() {
             <span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>
             <span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>
           </span>
-          <span className="codicon codicon-chevron-down" aria-hidden="true" />
+          <SessionIcon name="chevronDown" />
         </button>
         {chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(
           <div
@@ -6426,7 +6429,7 @@ export function App() {
                               title={projectItem.path || projectItem.projectId}
                             >
                               <span className="chat-hub-project-check" aria-hidden="true">
-                                {visible ? <span className="codicon codicon-check" /> : null}
+                                {visible ? <SessionIcon name="check" /> : null}
                               </span>
                               <span className="chat-hub-project-name">{projectItem.name}</span>
                             </button>
@@ -6480,8 +6483,9 @@ export function App() {
               <div className={`wide-project-row${mobile ? ' mobile-project-row' : ''}`}>
                 <div className={`wide-project-toggle chat-hidden-project-toggle${mobile ? ' mobile-project-toggle' : ''}`}>
                   <span className="wide-project-folder-wrap chat-hidden-project-folder-wrap">
-                    <span
-                      className={`codicon codicon-folder wide-project-folder-icon chat-hidden-project-folder ${projectHubVariant}`}
+                    <SessionIcon
+                      name="folder"
+                      className={`wide-project-folder-icon chat-hidden-project-folder ${projectHubVariant}`}
                       style={hubAccentStyle(hubId)}
                     />
                   </span>
@@ -6510,7 +6514,7 @@ export function App() {
                       );
                     }}
                   >
-                    <span className="codicon codicon-eye" aria-hidden="true" />
+                    <SessionIcon name="eye" />
                   </button>
                 </div>
               </div>
@@ -9104,7 +9108,7 @@ export function App() {
           title={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
           aria-label={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
         >
-          <span className="codicon codicon-question" aria-hidden="true" />
+          <SessionIcon name="help" />
           {pendingPermissionCount > 1 ? (
             <span className="session-permission-count" aria-hidden="true">
               {pendingPermissionCount > 9 ? '9+' : pendingPermissionCount}
@@ -14019,7 +14023,7 @@ export function App() {
             title="Search sessions"
             aria-label="Search sessions"
           >
-            <span className="codicon codicon-search" />
+            <SessionIcon name="search" />
           </button>
         </div>
       );
@@ -14033,7 +14037,7 @@ export function App() {
             startSessionSearch().catch(() => undefined);
           }}
         >
-          <span className="codicon codicon-search session-search-leading-icon" aria-hidden="true" />
+          <SessionIcon name="search" className="session-search-leading-icon" />
           <input
             ref={sessionSearchInputRef}
             className="session-search-input"
@@ -14048,7 +14052,7 @@ export function App() {
             title="Start search"
             aria-label="Start search"
           >
-            <span className="codicon codicon-check" />
+            <SessionIcon name="check" />
           </button>
           <button
             type="button"
@@ -14064,7 +14068,7 @@ export function App() {
               }
             }}
           >
-            <span className="codicon codicon-close" />
+            <SessionIcon name="x" />
           </button>
         </form>
         {renderSessionSearchStatusLine()}
@@ -14087,7 +14091,7 @@ export function App() {
           aria-haspopup="menu"
           aria-expanded={sessionArchiveMenuOpen}
         >
-          <span className="codicon codicon-archive" />
+          <SessionIcon name="archive" />
         </button>
         {sessionArchiveMenuOpen ? (
           <div className="session-archive-menu" role="menu" aria-label="Archive sessions">
@@ -14099,7 +14103,7 @@ export function App() {
               role="menuitem"
             >
               <span className="session-archive-menu-item-icon" aria-hidden="true">
-                <span className="codicon codicon-archive" />
+                <SessionIcon name="archive" />
               </span>
               <span className="session-archive-menu-item-text">
                 <span className="session-archive-menu-item-label">Archive &gt; 7 days</span>
@@ -14113,7 +14117,7 @@ export function App() {
               role="menuitem"
             >
               <span className="session-archive-menu-item-icon" aria-hidden="true">
-                <span className="codicon codicon-archive" />
+                <SessionIcon name="archive" />
               </span>
               <span className="session-archive-menu-item-text">
                 <span className="session-archive-menu-item-label">Archive &gt; 14 days</span>
@@ -14128,7 +14132,7 @@ export function App() {
               role="menuitem"
             >
               <span className="session-archive-menu-item-icon" aria-hidden="true">
-                <span className="codicon codicon-history" />
+                <SessionIcon name="history" />
               </span>
               <span className="session-archive-menu-item-text">
                 <span className="session-archive-menu-item-label">Recover...</span>
@@ -14166,226 +14170,6 @@ export function App() {
       applySelectedChatKey(null);
       setVisibleChatMessagesForRuntimeKey('', [], {resetToLatest: true});
     }
-  };
-
-  const renderDraftSessionRow = (
-    targetProjectId: string,
-    draft: DraftChatSession,
-    mobile: boolean,
-  ) => {
-    const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, draft.draftId);
-    const failed = draft.status === 'failed';
-    const displaySessionAgent = agentDisplayLabel(draft.agentType);
-    const statusLabel =
-      draft.status === 'sendingFirstPrompt'
-        ? 'Sending...'
-        : failed
-          ? 'Failed'
-          : 'Creating...';
-    return (
-      <div
-        key={`${targetProjectId}:${mobile ? 'mobile-draft' : 'wide-draft'}:${draft.draftId}`}
-        className={`project-session-row-wrap draft-session-row-wrap${failed ? ' failed has-dismiss' : ''}`}
-      >
-        <button
-          type="button"
-          className={`wide-session-row draft-session-row ${draft.status}${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
-          title={failed ? draft.errorMessage : draft.title}
-          onClick={() => {
-            selectDraftChatSession(targetProjectId, draft.draftId, {
-              closeMobileDrawer: mobile,
-            });
-          }}
-        >
-          <span className="wide-session-title">
-            {draft.title}
-          </span>
-          {displaySessionAgent ? (
-            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', draft.agentType)}`}>
-              {displaySessionAgent}
-            </span>
-          ) : null}
-          <span className="wide-session-time" title={failed ? draft.errorMessage : draft.createdAt}>
-            {statusLabel}
-          </span>
-        </button>
-        {failed ? (
-          <button
-            type="button"
-            className="draft-session-dismiss"
-            title="Dismiss"
-            aria-label="Dismiss draft session"
-            onClick={() => dismissDraftChatSession(targetProjectId, draft.draftId)}
-          >
-            <span className="codicon codicon-close" />
-          </button>
-        ) : null}
-      </div>
-    );
-  };
-
-  const renderProjectSessionRow = (
-    targetProjectId: string,
-    session: RegistryChatSession,
-    mobile: boolean,
-  ) => {
-    const sessionAgent = (session.agentType || '').trim();
-    const displaySessionAgent = agentDisplayLabel(sessionAgent);
-    return (
-      <div
-        key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
-        className={`project-session-row-wrap${session.pinned ? ' has-pin-action' : ''}`}
-      >
-        {renderSessionLeadingState(session, targetProjectId)}
-        <button
-          type="button"
-          className={`wide-session-row${mobile ? ' mobile-session-row' : ''}${
-            selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
-              ? ' selected'
-              : ''
-          }`}
-          onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}
-          onPointerUp={finishProjectSessionLongPress}
-          onPointerCancel={finishProjectSessionLongPress}
-          onPointerLeave={finishProjectSessionLongPress}
-          onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
-          onClick={event => {
-            if (consumeProjectSessionLongPressClick(targetProjectId, session.sessionId, event)) {
-              return;
-            }
-            if (mobile) {
-              selectProjectChatSession(
-                targetProjectId,
-                session.sessionId,
-                {closeMobileDrawer: true},
-              ).catch(() => undefined);
-              return;
-            }
-            selectWideProjectSession(
-              targetProjectId,
-              session.sessionId,
-            ).catch(() => undefined);
-          }}
-        >
-          <span className="wide-session-title">
-            {resolveSessionDisplayTitle(session) || session.sessionId}
-          </span>
-          {displaySessionAgent ? (
-            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
-              {displaySessionAgent}
-            </span>
-          ) : null}
-          {!session.pinned ? (
-            <span className="wide-session-time" title={session.updatedAt || ''}>
-              {formatCompactRelativeAge(session.updatedAt)}
-            </span>
-          ) : null}
-        </button>
-        {session.pinned ? (
-          <button
-            type="button"
-            className="wide-session-pin-btn"
-            title="Unpin session"
-            aria-label={`Unpin session ${resolveSessionDisplayTitle(session) || session.sessionId}`}
-            aria-pressed={true}
-            disabled={chatPinningSessionKey === projectSessionActionKey(targetProjectId, session.sessionId)}
-            onPointerDown={event => event.stopPropagation()}
-            onClick={event => {
-              event.preventDefault();
-              event.stopPropagation();
-              handlePinProjectSession(targetProjectId, session.sessionId, false).catch(() => undefined);
-            }}
-          >
-            <span className={`codicon ${
-              chatPinningSessionKey === projectSessionActionKey(targetProjectId, session.sessionId)
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-pinned'
-            }`} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    );
-  };
-
-  const renderRecentSessionRow = (
-    targetProjectId: string,
-    session: RegistryChatSession,
-    mobile: boolean,
-  ) => {
-    // Resolve the live session from the store so the state marker stays in
-    // sync with the project list (the recent session snapshot can lag until the
-    // next prompt event). Fall back to the captured snapshot if not found.
-    const liveSession =
-      projectSessionsByProjectId[targetProjectId]?.find(
-        item => item.sessionId === session.sessionId,
-      ) ?? session;
-    const sessionAgent = (liveSession.agentType || '').trim();
-    const displaySessionAgent = agentDisplayLabel(sessionAgent);
-    const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, liveSession.sessionId);
-    return (
-      <div
-        key={`recent:${targetProjectId}:${session.sessionId}`}
-        className={`project-session-row-wrap recent-session-row-wrap${liveSession.pinned ? ' has-pin-action' : ''}`}
-      >
-        {renderSessionLeadingState(liveSession, targetProjectId)}
-        <button
-          type="button"
-          className={`wide-session-row recent-session-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
-          title={resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}
-          onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}
-          onPointerUp={finishProjectSessionLongPress}
-          onPointerCancel={finishProjectSessionLongPress}
-          onPointerLeave={finishProjectSessionLongPress}
-          onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
-          onClick={event => {
-            if (consumeProjectSessionLongPressClick(targetProjectId, session.sessionId, event)) {
-              return;
-            }
-            if (mobile) {
-              selectProjectChatSession(targetProjectId, session.sessionId, {closeMobileDrawer: true}).catch(() => undefined);
-            } else {
-              selectWideProjectSession(targetProjectId, session.sessionId).catch(() => undefined);
-            }
-          }}
-        >
-          <span className="wide-session-title">
-            {resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}
-          </span>
-          {displaySessionAgent ? (
-            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
-              {displaySessionAgent}
-            </span>
-          ) : null}
-          {!liveSession.pinned ? (
-            <span className="wide-session-time" title={liveSession.updatedAt || ''}>
-              {formatCompactRelativeAge(liveSession.updatedAt)}
-            </span>
-          ) : null}
-        </button>
-        {liveSession.pinned ? (
-          <button
-            type="button"
-            className="wide-session-pin-btn"
-            title="Unpin session"
-            aria-label={`Unpin session ${resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}`}
-            aria-pressed={true}
-            disabled={chatPinningSessionKey === projectSessionActionKey(targetProjectId, liveSession.sessionId)}
-            onPointerDown={event => event.stopPropagation()}
-            onClick={event => {
-              event.preventDefault();
-              event.stopPropagation();
-              handlePinProjectSession(targetProjectId, liveSession.sessionId, false).catch(() => undefined);
-            }}
-          >
-            <span className={`codicon ${
-              chatPinningSessionKey === projectSessionActionKey(targetProjectId, liveSession.sessionId)
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-pinned'
-            }`} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    );
   };
 
   const commitTerminalSync = useCallback((next: TerminalSyncState) => {
@@ -14589,146 +14373,6 @@ export function App() {
     handleCloseTerminal(terminal).catch(err => setError(err instanceof Error ? err.message : String(err)));
   }, [handleCloseTerminal]);
 
-  const renderRecentProjectSessionSection = (
-    section: RecentChatSessionProjectSection,
-    mobile: boolean,
-  ) => {
-    const targetProjectId = section.projectId;
-    const projectName = section.projectName || targetProjectId;
-    const projectHub = section.projectHubId || 'local';
-    const projectHubVariant = tagVariantClass('wide-project-hub', section.projectHubId || 'local');
-    return (
-      <div
-        key={`recent-project:${targetProjectId}`}
-        className="recent-project-session-group"
-        role="group"
-        aria-label={`${projectName} recent sessions`}
-      >
-        <div className="recent-project-divider">
-          <span className="codicon codicon-folder recent-project-divider-icon" aria-hidden="true" />
-          <span className="recent-project-divider-name" title={projectName}>
-            {projectName}
-          </span>
-          <span
-            className={`wide-project-hub-tag recent-project-divider-hub ${projectHubVariant}`}
-            style={hubAccentStyle(projectHub)}
-          >
-            <span className="wide-project-hub-dot" aria-hidden="true" />
-            <span className="wide-project-hub-label">{projectHub}</span>
-          </span>
-          <button
-            type="button"
-            className="recent-project-divider-create"
-            title={`New session in ${projectName}`}
-            aria-label={`New session in ${projectName}`}
-            onClick={event => {
-              if (mobile) {
-                openMobileProjectActionMenu(targetProjectId, 'new');
-                return;
-              }
-              openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
-            }}
-          >
-            <span className="codicon codicon-add" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="recent-project-session-list">
-          {section.sessions.map(session => renderRecentSessionRow(
-            targetProjectId,
-            session,
-            mobile,
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderRecentSessionsSection = (
-    mobile: boolean,
-    options: {showHeading?: boolean} = {},
-  ) => {
-    if (archivedMode || sessionSearchActive) {
-      return null;
-    }
-    if (recentSessionSections.length === 0) {
-      return null;
-    }
-    const recentCollapsed = collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID);
-    return (
-      <div
-        className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}${
-          recentCollapsed ? ' collapsed' : ''
-        }`}
-      >
-        {options.showHeading !== false ? (
-        <div className="wide-project-row">
-          <button
-            type="button"
-            className="wide-project-toggle"
-            onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
-            title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
-            aria-expanded={!recentCollapsed}
-          >
-            <span className="wide-project-folder-wrap">
-              <span className="codicon codicon-history recent-sessions-icon" aria-hidden="true" />
-            </span>
-            <span className="wide-project-title-group">
-              <span className="wide-project-name">Recent Sessions</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            className="wide-project-action-btn recent-sessions-collapse-btn"
-            title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
-            aria-label={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
-            aria-expanded={!recentCollapsed}
-            onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
-          >
-            <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
-          </button>
-        </div>
-        ) : null}
-        {recentCollapsed && options.showHeading !== false ? null : (
-          <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
-            {recentSessionSections.map(section => renderRecentProjectSessionSection(section, mobile))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderProjectSessionRowsWithOlderFolding = (
-    targetProjectId: string,
-    projectSessions: RegistryChatSession[],
-    mobile: boolean,
-  ) => {
-    const projectDraftSessions = draftSessionsByProjectId[targetProjectId] ?? [];
-    const split = splitOlderProjectSessions({
-      sessions: projectSessions,
-      nowMs: Date.now(),
-      olderThanDays: OLDER_SESSION_DAYS,
-      expanded: olderSessionsExpandedByProjectId[targetProjectId] === true,
-    });
-    const hiddenOlderCount = split.hiddenOlderCount;
-    return (
-      <>
-        {projectDraftSessions.map(draft => renderDraftSessionRow(targetProjectId, draft, mobile))}
-        {split.visibleSessions.map(session => renderProjectSessionRow(targetProjectId, session, mobile))}
-        {split.showToggle ? (
-          <button
-            type="button"
-            className={`wide-session-row session-older-toggle${mobile ? ' mobile-session-row' : ''}`}
-            onClick={() => toggleOlderSessionsExpanded(targetProjectId)}
-          >
-            <span className="wide-session-title">
-              {split.expanded ? 'Show less' : `Show ${hiddenOlderCount} old sessions...`}
-            </span>
-          </button>
-        ) : null}
-      </>
-    );
-  };
-
   const renderSessionSearchRow = (
     targetProjectId: string,
     row: SessionSearchSectionRow,
@@ -14795,8 +14439,9 @@ export function App() {
               <div className={`wide-project-row session-search-project-row${mobile ? ' mobile-project-row' : ''}`}>
                 <div className="wide-project-toggle session-search-project-label">
                   <span className="wide-project-folder-wrap">
-                    <span
-                      className={`codicon codicon-search wide-project-folder-icon ${projectHubVariant}`}
+                    <SessionIcon
+                      name="search"
+                      className={`wide-project-folder-icon ${projectHubVariant}`}
                       style={hubAccentStyle(projectHub)}
                     />
                   </span>
@@ -14865,7 +14510,7 @@ export function App() {
             disabled={archiveBatchRunning}
             onClick={clearArchiveBatchStatus}
           >
-            <span className="codicon codicon-close" aria-hidden="true" />
+            <SessionIcon name="x" />
           </button>
         </div>
         {archiveBatchProgress ? (
@@ -14900,7 +14545,7 @@ export function App() {
       <>
         <div className={`archived-session-header${mobile ? ' mobile' : ''}`}>
           <div className="archived-session-title">
-            <span className="codicon codicon-archive" aria-hidden="true" />
+            <SessionIcon name="archive" />
             <span>Archived</span>
           </div>
           <button
@@ -14913,7 +14558,7 @@ export function App() {
         </div>
         {archivedLoading ? (
           <div className="wide-project-empty archived-session-empty">
-            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+            <SessionIcon name="loader" spin />
             <span>Loading archived sessions...</span>
           </div>
         ) : null}
@@ -14933,8 +14578,9 @@ export function App() {
               <div className={`wide-project-row archived-session-project-row${mobile ? ' mobile-project-row' : ''}`}>
                 <div className="wide-project-toggle session-search-project-label">
                   <span className="wide-project-folder-wrap">
-                    <span
-                      className={`codicon codicon-archive wide-project-folder-icon ${projectHubVariant}`}
+                    <SessionIcon
+                      name="archive"
+                      className={`wide-project-folder-icon ${projectHubVariant}`}
                       style={hubAccentStyle(projectHub)}
                     />
                   </span>
@@ -14976,7 +14622,7 @@ export function App() {
                         }}
                       >
                         <span className="session-state-marker archived">
-                          <span className="codicon codicon-archive" aria-hidden="true" />
+                          <SessionIcon name="archive" />
                         </span>
                         <span className="wide-session-title">
                           {resolveSessionDisplayTitle(session) || session.sessionId}
@@ -14998,7 +14644,7 @@ export function App() {
                             disabled={restoring}
                             onClick={() => requestRestoreArchivedSession(section.project.projectId, session)}
                           >
-                            <span className={`codicon ${restoring ? 'codicon-loading codicon-modifier-spin' : 'codicon-debug-restart'}`} />
+                            <SessionIcon name={restoring ? 'loader' : 'refreshCw'} spin={restoring} />
                             <span className="project-session-menu-label">Restore</span>
                           </button>
                         </div>
@@ -15220,10 +14866,20 @@ export function App() {
     const renameActionDisabled = chatRenamingSessionId === sessionId;
     const pinActionDisabled = chatPinningSessionKey === projectSessionActionKey(targetProjectId, sessionId);
     return (
-      <div
-        className="project-session-action-menu"
-        role="menu"
-        style={projectSessionActionMenu.popover
+      <SessionMenu
+        pinned={session.pinned === true}
+        pinning={pinActionDisabled}
+        renaming={renameActionDisabled}
+        actionDisabled={sessionActionDisabled}
+        archiving={chatArchivingSessionId === sessionId}
+        reloading={chatReloadingSessionId === sessionId}
+        deleting={chatDeletingSessionId === sessionId}
+        onTogglePin={() => handlePinProjectSession(targetProjectId, sessionId, session.pinned !== true).catch(() => undefined)}
+        onRename={() => requestRenameProjectSession(targetProjectId, session)}
+        onArchive={() => requestArchiveProjectSession(targetProjectId, session)}
+        onReload={() => handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined)}
+        onDelete={() => requestDeleteProjectSession(targetProjectId, session)}
+        popoverStyle={projectSessionActionMenu.popover
           ? {
               top: `${projectSessionActionMenu.popover.top}px`,
               left: `${projectSessionActionMenu.popover.left}px`,
@@ -15234,102 +14890,7 @@ export function App() {
                 : undefined,
             }
           : undefined}
-      >
-        <button
-          type="button"
-          className="project-session-menu-btn pin"
-          role="menuitem"
-          disabled={pinActionDisabled}
-          onClick={event => {
-            event.stopPropagation();
-            handlePinProjectSession(targetProjectId, sessionId, session.pinned !== true).catch(() => undefined);
-          }}
-        >
-          <span
-            className={`codicon ${pinActionDisabled
-              ? 'codicon-loading codicon-modifier-spin'
-              : 'codicon-pinned'}`}
-          />
-          <span className="project-session-menu-label">{session.pinned ? 'Unpin' : 'Pin'}</span>
-        </button>
-        <button
-          type="button"
-          className="project-session-menu-btn rename"
-          role="menuitem"
-          disabled={renameActionDisabled}
-          onClick={event => {
-            event.stopPropagation();
-            requestRenameProjectSession(targetProjectId, session);
-          }}
-        >
-          <span
-            className={`codicon ${
-              chatRenamingSessionId === sessionId
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-edit'
-            }`}
-          />
-          <span className="project-session-menu-label">Rename</span>
-        </button>
-        <button
-          type="button"
-          className="project-session-menu-btn archive"
-          role="menuitem"
-          disabled={sessionActionDisabled}
-          onClick={event => {
-            event.stopPropagation();
-            requestArchiveProjectSession(targetProjectId, session);
-          }}
-        >
-          <span
-            className={`codicon ${
-              chatArchivingSessionId === sessionId
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-archive'
-            }`}
-          />
-          <span className="project-session-menu-label">Archive</span>
-        </button>
-        <div className="project-session-menu-separator" aria-hidden="true" />
-        <button
-          type="button"
-          className="project-session-menu-btn reload"
-          role="menuitem"
-          disabled={sessionActionDisabled}
-          onClick={event => {
-            event.stopPropagation();
-            handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined);
-          }}
-        >
-          <span
-            className={`codicon ${
-              chatReloadingSessionId === sessionId
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-refresh'
-            }`}
-          />
-          <span className="project-session-menu-label">Reload</span>
-        </button>
-        <button
-          type="button"
-          className="project-session-menu-btn delete"
-          role="menuitem"
-          disabled={sessionActionDisabled}
-          onClick={event => {
-            event.stopPropagation();
-            requestDeleteProjectSession(targetProjectId, session);
-          }}
-        >
-          <span
-            className={`codicon ${
-              chatDeletingSessionId === sessionId
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-trash'
-            }`}
-          />
-          <span className="project-session-menu-label">Delete</span>
-        </button>
-      </div>
+      />
     );
   };
 
@@ -16175,7 +15736,7 @@ export function App() {
       title="Open settings"
       aria-label="Open settings"
     >
-      <span className="codicon codicon-settings-gear" aria-hidden="true" />
+      <SessionIcon name="settings" />
     </button>
   );
 
@@ -16201,161 +15762,20 @@ export function App() {
         </div>
       </>
     );
-    if (mobile) {
-      return <div className={chatSessionHeaderClassName}>{chatSessionHeaderContent}</div>;
-    }
     return <div className={chatSessionHeaderClassName}>{chatSessionHeaderContent}</div>;
   };
 
-  const renderProjectSection = (projectItem: typeof visibleProjectItems[number], mobile: boolean) => {
-    const targetProjectId = projectItem.projectId;
-    const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
-    const collapsed = collapsedProjectIds.includes(targetProjectId);
-    const pinnedProject = pinnedProjectIds.includes(targetProjectId);
-    const projectHub = projectItem.hubId || 'local';
-    const projectHubVariant = tagVariantClass('wide-project-hub', projectItem.hubId || 'local');
-    const sessionError = mobile ? (mobileProjectSessionErrors[targetProjectId] ?? '') : '';
-    const keyPrefix = mobile ? 'mobile-project' : 'wide-project';
-    const sfx = (cls: string) => (mobile ? ` ${cls}` : '');
-
-    const openNew = (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      if (mobile) {
-        openMobileProjectActionMenu(targetProjectId, 'new');
-      } else {
-        openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
-      }
-    };
-    const openResume = (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      if (mobile) {
-        openMobileProjectActionMenu(targetProjectId, 'resume');
-      } else {
-        openWideProjectActionMenu(targetProjectId, 'resume', event.currentTarget);
-      }
-    };
-
-    return (
-      <div
-        key={`${keyPrefix}:${targetProjectId}`}
-        className={`wide-project-section${sfx('mobile-project-section')}${targetProjectId === projectId ? ' active' : ''}${pinnedProject ? ' pinned' : ''}${
-          collapsed ? ' collapsed' : ''
-        }`}
-      >
-        <div className={`wide-project-row${sfx('mobile-project-row')}`}>
-          <button
-            type="button"
-            className={`wide-project-toggle${sfx('mobile-project-toggle')}`}
-            onPointerDown={event => startProjectPinLongPress(targetProjectId, event)}
-            onPointerUp={finishProjectPinLongPress}
-            onPointerCancel={finishProjectPinLongPress}
-            onPointerLeave={finishProjectPinLongPress}
-            onContextMenu={event => event.preventDefault()}
-            onClick={event => {
-              if (consumeProjectPinLongPressClick(targetProjectId, event)) {
-                return;
-              }
-              toggleWideProjectCollapsed(targetProjectId);
-            }}
-            title={collapsed ? 'Expand project' : 'Collapse project'}
-            aria-expanded={!collapsed}
-          >
-            <span className="wide-project-folder-wrap">
-              <span
-                className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon ${projectHubVariant}`}
-                style={hubAccentStyle(projectHub)}
-              />
-              {pinnedProject ? (
-                <span className="codicon codicon-pinned wide-project-pin-badge" aria-hidden="true" />
-              ) : null}
-            </span>
-            <span className="wide-project-title-group">
-              <span className="wide-project-name" title={projectItem.name}>
-                {projectItem.name}
-              </span>
-              <span
-                className={`wide-project-hub-tag ${projectHubVariant}`}
-                style={hubAccentStyle(projectHub)}
-              >
-                <span className="wide-project-hub-dot" aria-hidden="true" />
-                <span className="wide-project-hub-label">{projectHub}</span>
-              </span>
-            </span>
-          </button>
-          <div className={`wide-project-actions${sfx('mobile-project-actions')}`}>
-            <button
-              type="button"
-              className="wide-project-action-btn"
-              title="New session"
-              aria-label={`New session in ${projectItem.name}`}
-              onPointerDown={event => event.stopPropagation()}
-              onClick={openNew}
-            >
-              <span className="codicon codicon-add" />
-            </button>
-            <button
-              type="button"
-              className="wide-project-action-btn"
-              title="Resume session"
-              aria-label={`Resume session in ${projectItem.name}`}
-              onPointerDown={event => event.stopPropagation()}
-              onClick={openResume}
-            >
-              <span className="codicon codicon-history" />
-            </button>
-            <button
-              type="button"
-              className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
-              title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
-              aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
-              aria-pressed={pinnedProject}
-              onPointerDown={event => event.stopPropagation()}
-              onClick={event => {
-                event.stopPropagation();
-                togglePinnedProject(targetProjectId);
-              }}
-            >
-              <span className="codicon codicon-pinned" />
-            </button>
-          </div>
-        </div>
-        {sessionError ? (
-          <div className="mobile-project-session-error">
-            <span>Session refresh failed.</span>
-            <button
-              type="button"
-              onClick={() => refreshMobileChatProjectSessions().catch(() => undefined)}
-            >
-              Retry
-            </button>
-          </div>
-        ) : null}
-        {!collapsed ? (
-          <div className={`wide-project-session-list${sfx('mobile-project-session-list')}`}>
-            {renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, mobile)}
-            {projectSessions.length === 0 ? <div className="wide-project-empty">No sessions yet.</div> : null}
-          </div>
-        ) : null}
-      </div>
-    );
-  };
-
   const renderMobileChatSessionSheet = () => {
+    const viewProps = buildSessionListViewProps(true, true);
     return (
       <>
         {renderChatSessionHeader(true)}
         {renderArchiveBatchStatus()}
-        {archivedMode ? renderArchivedSessionRows(true) : sessionSearchActive ? renderSessionSearchResults(true) : (
-        <ChatSessionNav className="mobile-project-session-nav">
-          {projects.length === 0 ? (
-            <div className="chat-empty-hint chat-empty-state">
-              <span className="codicon codicon-inbox" aria-hidden="true" />
-              <span>No projects available.</span>
-            </div>
-          ) : null}
-          {renderRecentSessionsSection(true)}
-          {visibleProjectItems.map(projectItem => renderProjectSection(projectItem, true))}
-          {renderHiddenProjectRows(true)}
+        {archivedMode || sessionSearchActive ? (
+          <SessionListView {...viewProps} />
+        ) : (
+        <ChatSessionNav className="mobile-project-session-nav" dataSessionListDensity="compact">
+          <SessionListView {...viewProps} />
         </ChatSessionNav>
         )}
       </>
@@ -16382,11 +15802,11 @@ export function App() {
       : sheetMenu.kind === 'new'
         ? 'New Session'
         : 'Resume Session';
-    const sheetIcon = sheetIsActions
-      ? 'codicon-list-selection'
+    const sheetIcon: SessionIconName = sheetIsActions
+      ? 'list'
       : sheetMenu.kind === 'new'
-        ? 'codicon-add'
-        : 'codicon-history';
+        ? 'plus'
+        : 'history';
     return (
       <>
         <div
@@ -16402,10 +15822,7 @@ export function App() {
         >
           <div className="mobile-project-sheet-grip" aria-hidden="true" />
           <div className="mobile-project-sheet-header">
-            <span
-              className={`codicon ${sheetIcon} mobile-project-sheet-icon`}
-              aria-hidden="true"
-            />
+            <SessionIcon name={sheetIcon} className="mobile-project-sheet-icon" />
             <span className="mobile-project-sheet-title-copy">
               <span className="mobile-project-sheet-title">
                 {sheetTitle}
@@ -16419,7 +15836,7 @@ export function App() {
               aria-label="Close"
               title="Close"
             >
-              <span className="codicon codicon-close" />
+              <SessionIcon name="x" />
             </button>
           </div>
           <div className="mobile-project-sheet-body">
@@ -16432,7 +15849,7 @@ export function App() {
                   setMobileProjectActionMenu(null);
                 }}
               >
-                <span className="codicon codicon-pinned" aria-hidden="true" />
+                <SessionIcon name="pin" />
                 <span className="mobile-project-sheet-item-label">
                   {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
                 </span>
@@ -16455,7 +15872,7 @@ export function App() {
                 />
                 {sheetAgents.length === 0 ? (
                   <div className="wide-project-action-empty">
-                    <span className="codicon codicon-circle-slash" aria-hidden="true" />
+                    <SessionIcon name="ban" />
                     <span>No agents available.</span>
                   </div>
                 ) : null}
@@ -16475,12 +15892,12 @@ export function App() {
                     });
                   }}
                 >
-                  <span className="codicon codicon-arrow-left" />
+                  <SessionIcon name="arrowLeft" />
                   <span className="mobile-project-sheet-item-label">{agentDisplayLabel(sheetMenu.agentType)}</span>
                 </button>
                 {resumeLoading ? (
                   <div className="wide-project-action-empty">
-                    <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+                    <SessionIcon name="loader" spin />
                     <span>Loading sessions...</span>
                   </div>
                 ) : null}
@@ -16498,7 +15915,7 @@ export function App() {
                           ).catch(() => undefined);
                         }}
                       >
-                        <span className="codicon codicon-history" />
+                        <SessionIcon name="history" />
                         <span className="mobile-project-sheet-item-label">
                           {resolveSessionDisplayTitle(session) || session.sessionId}
                         </span>
@@ -16507,7 +15924,7 @@ export function App() {
                   : null}
                 {!resumeLoading && resumeSessions.length === 0 ? (
                   <div className="wide-project-action-empty">
-                    <span className="codicon codicon-history" aria-hidden="true" />
+                    <SessionIcon name="history" />
                     <span>No resumable sessions.</span>
                   </div>
                 ) : null}
@@ -16552,7 +15969,7 @@ export function App() {
           : undefined}
       >
         <div className="wide-project-action-title">
-          <span className={`codicon ${actionMenu.kind === 'new' ? 'codicon-add' : 'codicon-history'}`} />
+          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'history'} />
           <span className="wide-project-action-title-copy">
             <span className="wide-project-action-title-main">
               {actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
@@ -16578,7 +15995,7 @@ export function App() {
             />
             {agents.length === 0 ? (
               <div className="wide-project-action-empty">
-                <span className="codicon codicon-circle-slash" aria-hidden="true" />
+                <SessionIcon name="ban" />
                 <span>No agents available.</span>
               </div>
             ) : null}
@@ -16594,12 +16011,12 @@ export function App() {
                 setWideProjectActionMenu({...actionMenu, phase: 'agents', agentType: ''});
               }}
             >
-              <span className="codicon codicon-arrow-left" />
+              <SessionIcon name="arrowLeft" />
               <span>{agentDisplayLabel(actionMenu.agentType)}</span>
             </button>
             {resumeLoading ? (
               <div className="wide-project-action-empty">
-                <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+                <SessionIcon name="loader" spin />
                 <span>Loading sessions...</span>
               </div>
             ) : null}
@@ -16616,13 +16033,13 @@ export function App() {
                   ).catch(() => undefined);
                 }}
               >
-                <span className="codicon codicon-history" />
+                <SessionIcon name="history" />
                 <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
               </button>
             )) : null}
             {!resumeLoading && resumeSessions.length === 0 ? (
               <div className="wide-project-action-empty">
-                <span className="codicon codicon-history" aria-hidden="true" />
+                <SessionIcon name="history" />
                 <span>No resumable sessions.</span>
               </div>
             ) : null}
@@ -16632,19 +16049,115 @@ export function App() {
     );
   };
 
+  const sessionListMode = archivedMode ? 'archived' : sessionSearchActive ? 'search' : 'normal';
+
+  const buildSessionListViewProps = (mobile: boolean, showRecentHeading: boolean) => ({
+    mobile,
+    mode: sessionListMode as 'normal' | 'archived' | 'search',
+    hasProjects: projects.length > 0,
+    recentGroups: recentSessionSections.map(section => ({
+      projectId: section.projectId,
+      projectName: section.projectName || section.projectId,
+      hubLabel: section.projectHubId || 'local',
+      hubVariantClass: tagVariantClass('wide-project-hub', section.projectHubId || 'local'),
+      hubAccentStyle: hubAccentStyle(section.projectHubId || 'local'),
+      sessions: section.sessions.map(snapshot =>
+        projectSessionsByProjectId[section.projectId]?.find(item => item.sessionId === snapshot.sessionId) ?? snapshot,
+      ),
+    })),
+    recentCollapsed: collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID),
+    showRecentHeading,
+    onToggleRecent: () => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID),
+    projectItems: visibleProjectItems,
+    activeProjectId: projectId,
+    collapsedProjectIds,
+    pinnedProjectIds,
+    sessionsByProjectId: projectSessionsByProjectId,
+    draftSessionsByProjectId,
+    olderExpandedByProjectId: olderSessionsExpandedByProjectId,
+    selectedChatEncodedKey,
+    pinningSessionKey: chatPinningSessionKey,
+    mobileSessionErrors: mobileProjectSessionErrors,
+    onRetryMobileSessions: () => refreshMobileChatProjectSessions().catch(() => undefined),
+    resolveTitle: (session: {sessionId: string; title?: string}) => resolveSessionDisplayTitle(session as RegistrySessionSummary),
+    agentLabel: agentDisplayLabel,
+    sessionAgentClass: (agentType: string) => tagVariantClass('wide-session-agent', agentType),
+    projectHubClass: (hubId: string) => tagVariantClass('wide-project-hub', hubId),
+    hubAccentStyle,
+    formatAge: formatCompactRelativeAge,
+    runtimeKey: buildChatRuntimeKey,
+    sessionActionKey: projectSessionActionKey,
+    renderLeadingState: (session: {sessionId: string}, targetProjectId: string) =>
+      renderSessionLeadingState(session as RegistryChatSession, targetProjectId),
+    splitOlder: (targetProjectId: string, sessions: Array<{sessionId: string; updatedAt?: string}>) => {
+      const expanded = olderSessionsExpandedByProjectId[targetProjectId] === true;
+      const split = splitOlderProjectSessions({sessions: sessions as RegistryChatSession[], nowMs: Date.now(), olderThanDays: OLDER_SESSION_DAYS, expanded});
+      return {visibleSessions: split.visibleSessions as Array<{sessionId: string; updatedAt?: string}>, showToggle: split.showToggle, hiddenOlderCount: split.hiddenOlderCount};
+    },
+    onSelectSession: (targetProjectId: string, sessionId: string) => {
+      if (mobile) {
+        selectProjectChatSession(targetProjectId, sessionId, {closeMobileDrawer: true}).catch(() => undefined);
+      } else {
+        selectWideProjectSession(targetProjectId, sessionId).catch(() => undefined);
+      }
+    },
+    onSelectDraft: (targetProjectId: string, draftId: string) =>
+      selectDraftChatSession(targetProjectId, draftId, {closeMobileDrawer: mobile}),
+    onDismissDraft: (targetProjectId: string, draftId: string) => dismissDraftChatSession(targetProjectId, draftId),
+    onUnpinSession: (targetProjectId: string, sessionId: string) =>
+      handlePinProjectSession(targetProjectId, sessionId, false).catch(() => undefined),
+    onToggleProjectCollapsed: toggleWideProjectCollapsed,
+    onTogglePinnedProject: togglePinnedProject,
+    onToggleOlder: toggleOlderSessionsExpanded,
+    onOpenProjectMenu: (targetProjectId: string, kind: 'new' | 'resume', anchor: HTMLElement | null) => {
+      if (mobile) {
+        openMobileProjectActionMenu(targetProjectId, kind);
+      } else {
+        openWideProjectActionMenu(targetProjectId, kind, anchor);
+      }
+    },
+    onOpenSessionContextMenu: openProjectSessionContextMenu,
+    sessionGestureHandlers: (targetProjectId: string, sessionId: string) => ({
+      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event),
+      onPointerUp: finishProjectSessionLongPress,
+      onPointerCancel: finishProjectSessionLongPress,
+      onPointerLeave: finishProjectSessionLongPress,
+    }),
+    consumeSessionLongPressClick: consumeProjectSessionLongPressClick,
+    projectGestureHandlers: (targetProjectId: string) => ({
+      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectPinLongPress(targetProjectId, event),
+      onPointerUp: finishProjectPinLongPress,
+      onPointerCancel: finishProjectPinLongPress,
+      onPointerLeave: finishProjectPinLongPress,
+      onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault(),
+    }),
+    consumeProjectLongPressClick: consumeProjectPinLongPressClick,
+    emptyProjectsHint: mobile ? (
+      <div className="chat-empty-hint chat-empty-state">
+        <SessionIcon name="inbox" size={28} />
+        <span>No projects available.</span>
+      </div>
+    ) : (
+      <div className="chat-empty-hint">No projects available.</div>
+    ),
+    hiddenProjectRows: renderHiddenProjectRows(mobile),
+    archivedRows: renderArchivedSessionRows(mobile),
+    searchResults: renderSessionSearchResults(mobile),
+  });
+
   const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {
+    const includeRecent = options?.includeRecent !== false;
+    const viewProps = buildSessionListViewProps(false, includeRecent);
     return (
       <ChatSessionNav
         className="wide-project-session-nav"
         dataSessionListDensity={sessionListDensity}
       >
         {renderArchiveBatchStatus()}
-        {projects.length === 0 ? (
-          <div className="chat-empty-hint">No projects available.</div>
-        ) : null}
-        {archivedMode || options?.includeRecent === false ? null : renderRecentSessionsSection(false)}
-        {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => renderProjectSection(projectItem, false))}
-        {!archivedMode && !sessionSearchActive ? renderHiddenProjectRows(false) : null}
+        <SessionListView
+          {...viewProps}
+          recentGroups={archivedMode || !includeRecent ? [] : viewProps.recentGroups}
+        />
       </ChatSessionNav>
     );
   };
@@ -18161,7 +17674,19 @@ export function App() {
                     />
                   }
                 >
-                  {renderRecentSessionsSection(false, {showHeading: false})}
+                  {(() => {
+                    const floatingViewProps = buildSessionListViewProps(false, false);
+                    return (
+                      <SessionListView
+                        {...floatingViewProps}
+                        mode="normal"
+                        recentGroups={sessionSearchActive ? [] : floatingViewProps.recentGroups}
+                        projectItems={[]}
+                        hiddenProjectRows={null}
+                        emptyProjectsHint={null}
+                      />
+                    );
+                  })()}
                 </ChatRecentSessionsSurface>
               ) : null}
               <ChatPlanSurface

@@ -12,7 +12,7 @@ export type ProjectSectionProps = {
   active: boolean;
   mobile: boolean;
   projectGestureHandlers: SessionRowGestureHandlers;
-  onToggleCollapsed: () => void;
+  onToggleCollapsed: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onNew: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onResume: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onTogglePin: () => void;
