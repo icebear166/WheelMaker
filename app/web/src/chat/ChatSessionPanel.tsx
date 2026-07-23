@@ -13,7 +13,6 @@ export type ChatSessionPanelProps = {
   sessionListDensity?: string;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
-  summary?: ReactNode;
   onPointerEnter?: PointerEventHandler<HTMLElement>;
   onPointerLeave?: PointerEventHandler<HTMLElement>;
   scrollRef?: Ref<HTMLDivElement>;
@@ -31,7 +30,6 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
   sessionListDensity,
   collapsed = false,
   onToggleCollapsed,
-  summary,
   onPointerEnter,
   onPointerLeave,
   scrollRef,
@@ -60,7 +58,6 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
             title={title}
             collapsed={collapsed}
             onToggleCollapsed={onToggleCollapsed}
-            summary={summary}
             toolbar={header}
           />
         </div>
