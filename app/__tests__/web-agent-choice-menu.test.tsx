@@ -4,80 +4,117 @@ import ReactTestRenderer from 'react-test-renderer';
 import {AgentChoiceMenu} from '../web/src/chat/AgentChoiceMenu';
 
 describe('AgentChoiceMenu', () => {
-  test('keeps Claude direct selection separate from expansion', async () => {
+  function pillLabels(root: ReactTestRenderer.ReactTestInstance): string[] {
+    const pills = root.findAllByProps({role: 'option'});
+    return pills.map(pill => pill.findAllByType('span')[1].children[0] as string);
+  }
+
+  test('renders flat pills with no grouping or expand control', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <AgentChoiceMenu agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi']} variant="wide" onSelect={onSelect} />,
+        <AgentChoiceMenu
+          agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'codex']}
+          variant="wide"
+          onSelect={onSelect}
+        />,
       );
     });
 
+    const pills = renderer!.root.findAllByProps({role: 'option'});
+    expect(pills).toHaveLength(5);
+    expect(pillLabels(renderer!.root)).toEqual([
+      'claude',
+      'cc · deepseek',
+      'cc · glm',
+      'cc · kimi',
+      'codex',
+    ]);
+    // No legacy expand control / child structure remains.
+    expect(renderer!.root.findAllByProps({'aria-label': 'Expand Claude agents'})).toHaveLength(0);
     expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(0);
-    const main = renderer!.root.findByProps({className: 'agent-choice-main'});
-    const expand = renderer!.root.findByProps({'aria-label': 'Expand Claude agents'});
-    expect(main.findByType('span').children).toEqual(['claude']);
-
-    await ReactTestRenderer.act(() => {
-      main.props.onClick();
-    });
-    expect(onSelect).toHaveBeenLastCalledWith('claude');
-    expect(expand.props['aria-expanded']).toBe(false);
-
-    await ReactTestRenderer.act(() => {
-      expand.props.onClick();
-    });
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(renderer!.root.findByProps({'aria-label': 'Collapse Claude agents'}).props['aria-expanded']).toBe(true);
-    const children = renderer!.root.findAllByProps({className: 'agent-choice-child'});
-    expect(children).toHaveLength(4);
-    expect(children.map(child => child.findByType('span').children[0])).toEqual(['default', 'deepseek', 'glm', 'kimi']);
   });
 
-  test('selects default and each compatible child by its internal agent ID', async () => {
+  test('sorts the default agent to the first pill', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <AgentChoiceMenu agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi']} variant="mobile" onSelect={onSelect} />,
+        <AgentChoiceMenu
+          agents={['codex', 'claude', 'copilot']}
+          defaultAgent="claude"
+          variant="wide"
+          onSelect={onSelect}
+        />,
       );
     });
-    await ReactTestRenderer.act(() => {
-      renderer!.root.findByProps({'aria-label': 'Expand Claude agents'}).props.onClick();
-    });
 
-    const children = renderer!.root.findAllByProps({className: 'agent-choice-child'});
-    expect(children).toHaveLength(4);
-    await ReactTestRenderer.act(() => {
-      children[0].props.onClick();
-      children[1].props.onClick();
-      children[2].props.onClick();
-      children[3].props.onClick();
-    });
-    expect(onSelect.mock.calls).toEqual([['claude'], ['cc-deepseek'], ['cc-glm'], ['cc-kimi']]);
-    expect(renderer!.root.findByProps({className: 'agent-choice-menu mobile'})).toBeTruthy();
+    expect(pillLabels(renderer!.root)[0]).toBe('claude');
   });
 
-  test('renders default with one compatible child and falls back to direct Claude when no child exists', async () => {
+  test('selects each agent by its internal id on click', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <AgentChoiceMenu agents={['claude', 'cc-kimi']} variant="wide" onSelect={onSelect} />,
+        <AgentChoiceMenu agents={['claude', 'cc-deepseek', 'codex']} variant="mobile" onSelect={onSelect} />,
       );
     });
+
+    const pills = renderer!.root.findAllByProps({role: 'option'});
     await ReactTestRenderer.act(() => {
-      renderer!.root.findByProps({'aria-label': 'Expand Claude agents'}).props.onClick();
+      pills[0].props.onClick();
+      pills[1].props.onClick();
+      pills[2].props.onClick();
     });
-    expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(2);
+
+    expect(onSelect.mock.calls).toEqual([['claude'], ['cc-deepseek'], ['codex']]);
+  });
+
+  test('exposes listbox semantics and marks the active option', async () => {
+    const onSelect = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(<AgentChoiceMenu agents={['claude']} variant="wide" onSelect={onSelect} />);
+      renderer = ReactTestRenderer.create(
+        <AgentChoiceMenu agents={['claude', 'codex']} variant="wide" onSelect={onSelect} />,
+      );
     });
-    expect(renderer!.root.findAllByProps({className: 'agent-choice-expand'})).toHaveLength(0);
-    expect(renderer!.root.findByProps({className: 'agent-choice-menu wide'})).toBeTruthy();
+
+    expect(renderer!.root.findByProps({role: 'listbox'})).toBeTruthy();
+    const pills = renderer!.root.findAllByProps({role: 'option'});
+    expect(pills[0].props['aria-selected']).toBe(true);
+    expect(pills[1].props['aria-selected']).toBe(false);
+  });
+
+  test('confirms the active pill on Enter and closes on Escape', async () => {
+    const onSelect = jest.fn();
+    const onClose = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <AgentChoiceMenu agents={['claude', 'codex']} variant="wide" onSelect={onSelect} onClose={onClose} />,
+      );
+    });
+
+    const listbox = renderer!.root.findByProps({role: 'listbox'});
+
+    await ReactTestRenderer.act(() => {
+      listbox.props.onKeyDown({key: 'ArrowDown', preventDefault() {}});
+    });
+    await ReactTestRenderer.act(() => {
+      listbox.props.onKeyDown({key: 'Enter', preventDefault() {}});
+    });
+    expect(onSelect).toHaveBeenLastCalledWith('codex');
+
+    await ReactTestRenderer.act(() => {
+      listbox.props.onKeyDown({key: 'Escape', preventDefault() {}});
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

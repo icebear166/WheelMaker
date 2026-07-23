@@ -4,17 +4,7 @@ function normalizeAgentTypeName(value?: string | null): string {
   return (value || '').trim();
 }
 
-export type AgentChoiceNode =
-  | {kind: 'agent'; agentType: string; label: string}
-  | {
-      kind: 'claude-group';
-      agentType: 'claude';
-      label: 'claude';
-      children: Array<{
-        agentType: 'claude' | 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
-        label: 'default' | 'deepseek' | 'glm' | 'kimi';
-      }>;
-    };
+export type AgentChoiceNode = {agentType: string; label: string};
 
 export function agentDisplayLabel(agentType?: string | null): string {
   const normalized = normalizeAgentTypeName(agentType);
@@ -32,9 +22,14 @@ export function agentDisplayLabel(agentType?: string | null): string {
   }
 }
 
+/**
+ * Build a flat, deduplicated list of agent choice nodes for the selection menu.
+ * Every agent (claude default + cc-* variants + codex/copilot/...) is a sibling
+ * — no grouping, so the UI renders them as uniform pills.
+ */
 export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
-  const normalizedTypes: string[] = [];
   const seen = new Set<string>();
+  const nodes: AgentChoiceNode[] = [];
   for (const agentType of agentTypes) {
     const normalized = normalizeAgentTypeName(agentType);
     const key = normalized.toLowerCase();
@@ -42,37 +37,9 @@ export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
       continue;
     }
     seen.add(key);
-    normalizedTypes.push(normalized);
+    nodes.push({agentType: normalized, label: agentDisplayLabel(normalized)});
   }
-
-  const hasClaude = normalizedTypes.some(agentType => agentType.toLowerCase() === 'claude');
-  const compatibleChildren = normalizedTypes
-    .filter(agentType => {
-      const key = agentType.toLowerCase();
-      return key === 'cc-deepseek' || key === 'cc-glm' || key === 'cc-kimi';
-    })
-    .map(agentType => {
-      const key = agentType.toLowerCase() as 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
-      const label = key === 'cc-deepseek' ? ('deepseek' as const) : key === 'cc-glm' ? ('glm' as const) : ('kimi' as const);
-      return {agentType: key, label};
-    });
-  const claudeChildren: Extract<AgentChoiceNode, {kind: 'claude-group'}>['children'] = [
-    {agentType: 'claude', label: 'default'},
-    ...compatibleChildren,
-  ];
-
-  return normalizedTypes.reduce<AgentChoiceNode[]>((nodes, agentType) => {
-    const key = agentType.toLowerCase();
-    if (hasClaude && (key === 'cc-deepseek' || key === 'cc-glm' || key === 'cc-kimi')) {
-      return nodes;
-    }
-    if (key === 'claude' && compatibleChildren.length > 0) {
-      nodes.push({kind: 'claude-group', agentType: 'claude', label: 'claude', children: claudeChildren});
-      return nodes;
-    }
-    nodes.push({kind: 'agent', agentType, label: agentDisplayLabel(agentType)});
-    return nodes;
-  }, []);
+  return nodes;
 }
 
 /**

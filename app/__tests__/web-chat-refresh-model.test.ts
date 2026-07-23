@@ -76,12 +76,12 @@ describe('web chat refresh model', () => {
     const main = readMain();
     const body = extractFunctionBody(main, 'handleProjectCreateSession');
 
-    expect(body.indexOf('workspaceStore.rememberChatSession(targetProjectId, session, {turnIndex: 0});'))
-      .toBeLessThan(body.indexOf('await selectProjectChatSession(targetProjectId, session.sessionId, options);'));
-    expect(body.indexOf('setProjectSessionsByProjectId(prev => ({'))
-      .toBeLessThan(body.indexOf('await selectProjectChatSession(targetProjectId, session.sessionId, options);'));
+    // Draft placeholder is registered and runtime caches are initialized before
+    // the draft is selected, so the UI never shows a session with no backing state.
+    expect(body.indexOf('updateProjectDraftSessions(targetProjectId, drafts => [draft, ...drafts]);'))
+      .toBeLessThan(body.indexOf('selectDraftChatSession(targetProjectId, draft.draftId, options);'));
     expect(body.indexOf('chatMessageStoreRef.current[runtimeKey] = [];'))
-      .toBeLessThan(body.indexOf('await selectProjectChatSession(targetProjectId, session.sessionId, options);'));
+      .toBeLessThan(body.indexOf('selectDraftChatSession(targetProjectId, draft.draftId, options);'));
   });
 
   test('project session lists are never mirrored from unscoped chatSessions state', () => {

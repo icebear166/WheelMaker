@@ -50,43 +50,24 @@ describe('web project agent choices', () => {
     expect(choices).toEqual(['Claude']);
   });
 
-  test('projects flat Claude-compatible agents into one ordered display group', () => {
+  test('returns a flat list of agent choice nodes without grouping', () => {
     const {buildAgentChoiceNodes} = loadProjectAgentsModule();
 
     expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'kimi'])).toEqual([
-      {kind: 'agent', agentType: 'codex', label: 'codex'},
-      {
-        kind: 'claude-group',
-        agentType: 'claude',
-        label: 'claude',
-        children: [
-          {agentType: 'claude', label: 'default'},
-          {agentType: 'cc-deepseek', label: 'deepseek'},
-          {agentType: 'cc-glm', label: 'glm'},
-          {agentType: 'cc-kimi', label: 'kimi'},
-        ],
-      },
-      {kind: 'agent', agentType: 'kimi', label: 'kimi'},
+      {agentType: 'codex', label: 'codex'},
+      {agentType: 'claude', label: 'claude'},
+      {agentType: 'cc-deepseek', label: 'cc · deepseek'},
+      {agentType: 'cc-glm', label: 'cc · glm'},
+      {agentType: 'cc-kimi', label: 'cc · kimi'},
+      {agentType: 'kimi', label: 'kimi'},
     ]);
   });
 
-  test('keeps a compatible child selectable when the native Claude entry is absent', () => {
+  test('preserves display labels and dedupes case-insensitively for flat nodes', () => {
     const {buildAgentChoiceNodes, agentDisplayLabel} = loadProjectAgentsModule();
 
-    expect(buildAgentChoiceNodes(['cc-glm'])).toEqual([
-      {kind: 'agent', agentType: 'cc-glm', label: 'cc · glm'},
-    ]);
-    expect(buildAgentChoiceNodes(['claude', 'cc-kimi'])).toEqual([
-      {
-        kind: 'claude-group',
-        agentType: 'claude',
-        label: 'claude',
-        children: [
-          {agentType: 'claude', label: 'default'},
-          {agentType: 'cc-kimi', label: 'kimi'},
-        ],
-      },
-    ]);
+    expect(buildAgentChoiceNodes(['cc-glm'])).toEqual([{agentType: 'cc-glm', label: 'cc · glm'}]);
+    expect(buildAgentChoiceNodes(['Claude', 'claude'])).toEqual([{agentType: 'Claude', label: 'claude'}]);
     expect(agentDisplayLabel('claude')).toBe('claude');
     expect(agentDisplayLabel('cc-glm')).toBe('cc · glm');
     expect(agentDisplayLabel('cc-kimi')).toBe('cc · kimi');

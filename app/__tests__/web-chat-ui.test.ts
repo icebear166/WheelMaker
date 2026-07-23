@@ -273,7 +273,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('chatAttachmentsRef.current = [];');
     expect(mainTsx).toContain('bumpChatDraftGeneration(currentChatDraftKeyRef.current);');
     expect(mainTsx).not.toContain('const result = await service.createSession(normalizedAgentType, title);');
-    expect(mainTsx).toContain("const result = await service.createProjectSession(targetProjectId, agentType, '');");
+    expect(mainTsx).toContain("service.createProjectSession(targetProjectId, agentType, ''");
     expect(mainTsx).not.toContain('const completeNewChatFlow = async (agentType: string) => {');
     expect(mainTsx).toContain('buildProjectAgentChoices(projectItem, sessions)');
     expect(mainTsx).toContain('resetChatComposer();');
@@ -2262,7 +2262,7 @@ describe('web chat integration', () => {
     expect(selectProjectBody).toContain('hydrateChatSessionContentFromCache(sessionId, targetProjectId)');
     expect(selectProjectBody).toContain('selectionSnapshot: runtimeKey');
     expect(mainTsx).toContain('const handleWideProjectCreateSession = async (targetProjectId: string, agentType: string) => {');
-    expect(mainTsx).toContain("const result = await service.createProjectSession(targetProjectId, agentType, '');");
+    expect(mainTsx).toContain("service.createProjectSession(targetProjectId, agentType, ''");
     expect(mainTsx).toContain('const handleWideProjectResumeAgent = async (targetProjectId: string, agentType: string) => {');
     expect(mainTsx).toContain('const sessions = await service.listProjectResumableSessions(targetProjectId, agentType);');
     expect(mainTsx).toContain('const handleWideProjectResumeImport = async (targetProjectId: string, agentType: string, sessionId: string) => {');
@@ -2632,8 +2632,8 @@ describe('provider-aware session labels', () => {
   });
 });
 
-describe('Claude-compatible agent choice menu', () => {
-  test('shares one split menu implementation across mobile and wide new/resume entry points', () => {
+describe('Agent choice menu', () => {
+  test('shares one flat pill menu across mobile and wide new/resume entry points', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
@@ -2649,19 +2649,14 @@ describe('Claude-compatible agent choice menu', () => {
     expect(mainTsx).not.toContain('agents.map(agentType => (');
 
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
-    expect(stylesCss).toContain('.agent-choice-row');
-    expect(stylesCss).toContain('.agent-choice-expand');
-    expect(stylesCss).toContain('flex: 0 0 30px;');
-    expect(stylesCss).toContain('.agent-choice-child');
-    expect(stylesCss).toContain('padding-left: 28px;');
+    expect(stylesCss).toContain('.agent-choice-pill');
+    expect(stylesCss).toContain('.agent-choice-pill-dot');
+    expect(stylesCss).toContain('border-radius: 999px;');
 
     const choiceMenuBlock = cssRuleBlock(stylesCss, '.agent-choice-menu');
-    expect(choiceMenuBlock).toContain('text-transform: lowercase;');
+    expect(choiceMenuBlock).toContain('flex-wrap: wrap;');
 
-    const wideChoiceBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-item');
-    expect(wideChoiceBlock).toContain('min-height: 26px;');
-
-    const mobileChoiceBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-menu.mobile .agent-choice-item');
-    expect(mobileChoiceBlock).toContain('min-height: 40px;');
+    const mobilePillBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-menu.mobile .agent-choice-pill');
+    expect(mobilePillBlock).toContain('min-height: 40px;');
   });
 });

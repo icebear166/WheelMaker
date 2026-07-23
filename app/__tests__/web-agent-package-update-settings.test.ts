@@ -576,12 +576,14 @@ describe('agent package update settings UI source structure', () => {
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('const AGENT_TAG_VARIANT_INDEX');
-    expect(mainTsx).toContain("claude: 2");
-    expect(mainTsx).toContain("flicker: 8");
+    const agentVariantTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'chat', 'agentTagVariant.ts'), 'utf8');
+    expect(mainTsx).toContain("from '../chat/agentTagVariant'");
+    expect(mainTsx).toContain("if (prefix === 'wide-session-agent')");
+    expect(agentVariantTsx).toContain('const AGENT_TAG_VARIANT_INDEX');
+    expect(agentVariantTsx).toContain("claude: 2");
+    expect(agentVariantTsx).toContain("flicker: 8");
     expect(mainTsx).not.toContain("codexapp: 3");
     expect(mainTsx).not.toContain(`${['my', 'flicker'].join('')}:`);
-    expect(mainTsx).toContain("if (prefix === 'wide-session-agent')");
     expect(mainTsx).not.toContain('token-stats-pill-agent');
 
     const agentTagBlock = stylesCss.match(/\.wide-session-agent-tag \{[\s\S]*?\n\}/)?.[0] ?? '';

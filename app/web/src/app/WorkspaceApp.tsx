@@ -123,6 +123,7 @@ import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
+import {agentTagVariantClass} from '../chat/agentTagVariant';
 import {
   createSessionNavSlideOutAutoClose,
   createSessionNavSlideOutState,
@@ -1312,17 +1313,6 @@ function clearPromptCompletionNotificationTargetFromUrl(): void {
   window.history.replaceState(window.history.state, '', nextUrl);
 }
 
-const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
-  codex: 0,
-  copilot: 1,
-  claude: 2,
-  opencode: 3,
-  codebuddy: 4,
-  mimo: 5,
-  kimi: 7,
-  flicker: 8,
-};
-
 function normalizeAgentTypeName(value?: string | null): string {
   return (value || '').trim();
 }
@@ -1333,10 +1323,7 @@ function tagVariantClass(prefix: string, value: string): string {
     return `${prefix}-${resolveHubColorVariantIndex(normalized)}`;
   }
   if (prefix === 'wide-session-agent') {
-    const explicitIndex = AGENT_TAG_VARIANT_INDEX[normalized];
-    if (typeof explicitIndex === 'number') {
-      return `${prefix}-${explicitIndex}`;
-    }
+    return agentTagVariantClass(value);
   }
 
   let hash = 0;
@@ -15041,34 +15028,21 @@ export function App() {
       setError('No agent selected for new session');
       return false;
     }
-    if (agentType.toLowerCase() === 'codex') {
-      const draft = createDraftChatSession({
-        projectId: targetProjectId,
-        agentType,
-      });
-      updateProjectDraftSessions(targetProjectId, drafts => [draft, ...drafts]);
-      const runtimeKey = buildChatRuntimeKey(targetProjectId, draft.draftId);
-      chatMessageStoreRef.current[runtimeKey] = [];
-      chatTurnStoreRef.current[runtimeKey] = createEmptyChatTurnStore();
-      chatFinishedCursorRef.current[runtimeKey] = 0;
-      selectDraftChatSession(targetProjectId, draft.draftId, options);
-      startDraftSessionCreate(targetProjectId, agentType, draft.draftId)
-        .catch(err => setError(err instanceof Error ? err.message : String(err)));
-      return true;
-    }
-    try {
-      const result = await service.createProjectSession(targetProjectId, agentType, '');
-      if (!result.ok || !result.session.sessionId) {
-        throw new Error('project session.create returned ok=false');
-      }
-      const session = result.session;
-      registerCreatedProjectSession(targetProjectId, session);
-      await selectProjectChatSession(targetProjectId, session.sessionId, options);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    }
+    // Universal draft flow: every agent gets an instant draft placeholder while
+    // session.create resolves, replacing the old Codex-only / blocking paths.
+    const draft = createDraftChatSession({
+      projectId: targetProjectId,
+      agentType,
+    });
+    updateProjectDraftSessions(targetProjectId, drafts => [draft, ...drafts]);
+    const runtimeKey = buildChatRuntimeKey(targetProjectId, draft.draftId);
+    chatMessageStoreRef.current[runtimeKey] = [];
+    chatTurnStoreRef.current[runtimeKey] = createEmptyChatTurnStore();
+    chatFinishedCursorRef.current[runtimeKey] = 0;
+    selectDraftChatSession(targetProjectId, draft.draftId, options);
+    startDraftSessionCreate(targetProjectId, agentType, draft.draftId)
+      .catch(err => setError(err instanceof Error ? err.message : String(err)));
+    return true;
   };
 
   const handleWideProjectCreateSession = async (targetProjectId: string, agentType: string) => {
@@ -16423,6 +16397,7 @@ export function App() {
                         key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:agents`}
                         agents={sheetAgents}
                         variant="mobile"
+                        defaultAgent={sheetProject.agent}
                         onSelect={agentType => {
                           if (sheetMenu.kind === 'new') {
                             handleMobileProjectCreateSession(sheetMenu.projectId, agentType).catch(() => undefined);
@@ -16430,6 +16405,7 @@ export function App() {
                             handleMobileProjectResumeAgent(sheetMenu.projectId, agentType).catch(() => undefined);
                           }
                         }}
+                        onClose={() => setMobileProjectActionMenu(null)}
                       />
                       {sheetAgents.length === 0 ? (
                         <div className="wide-project-action-empty">
@@ -16547,6 +16523,7 @@ export function App() {
               key={`${targetProjectId}:${actionMenu.kind}:agents`}
               agents={agents}
               variant="wide"
+              defaultAgent={actionProject.agent}
               onSelect={agentType => {
                 if (actionMenu.kind === 'new') {
                   handleWideProjectCreateSession(targetProjectId, agentType).catch(() => undefined);
@@ -16554,6 +16531,7 @@ export function App() {
                   handleWideProjectResumeAgent(targetProjectId, agentType).catch(() => undefined);
                 }
               }}
+              onClose={() => setWideProjectActionMenu(null)}
             />
             {agents.length === 0 ? (
               <div className="wide-project-action-empty">
