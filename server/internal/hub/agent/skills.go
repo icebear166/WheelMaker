@@ -46,6 +46,8 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 		return ClaudeCompatibleGLMProviderPreset, true
 	case ClaudeCompatibleKimiProviderPreset.Name:
 		return ClaudeCompatibleKimiProviderPreset, true
+	case ClaudeCompatibleQwenProviderPreset.Name:
+		return ClaudeCompatibleQwenProviderPreset, true
 	default:
 		return ACPProviderPreset{}, false
 	}

@@ -17,6 +17,8 @@ export function agentDisplayLabel(agentType?: string | null): string {
       return 'cc · glm';
     case 'cc-kimi':
       return 'cc · kimi';
+    case 'cc-qwen':
+      return 'cc · qwen';
     default:
       return normalized;
   }

@@ -26,6 +26,7 @@ type ACPFactoryOptions struct {
 	StateDir       string
 	DeepSeekAPIKey string
 	KimiAPIKey     string
+	QwenAPIKey     string
 	ZAIAPIKey      string
 }
 
@@ -133,6 +134,9 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 	}
 	if kimiKey := strings.TrimSpace(options.KimiAPIKey); kimiKey != "" {
 		registerConfiguredProvider(f, protocol.ACPProviderCCKimi, NewCCKimiProvider(options.StateDir, kimiKey), available)
+	}
+	if qwenKey := strings.TrimSpace(options.QwenAPIKey); qwenKey != "" {
+		registerConfiguredProvider(f, protocol.ACPProviderCCQwen, NewCCQwenProvider(options.StateDir, qwenKey), available)
 	}
 	if zaiKey := strings.TrimSpace(options.ZAIAPIKey); zaiKey != "" {
 		registerConfiguredProvider(f, protocol.ACPProviderCCGLM, NewCCGLMProvider(options.StateDir, zaiKey), available)

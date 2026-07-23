@@ -46,6 +46,7 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		StateDir:       stateDir,
 		DeepSeekAPIKey: apiKeys.DeepSeek,
 		KimiAPIKey:     apiKeys.Kimi,
+		QwenAPIKey:     apiKeys.Qwen,
 		ZAIAPIKey:      apiKeys.ZAI,
 	}))
 }

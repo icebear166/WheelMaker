@@ -44,6 +44,7 @@ func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
 	input := map[string]any{
 		"api_keys": map[string]any{
 			"kimi": "kimi-test-secret",
+			"qwen": "qwen-test-secret",
 			"zai":  "zai-test-secret",
 		},
 	}
@@ -57,6 +58,7 @@ func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
 	}
 	structInput := configWithAPIKeys{APIKeys: map[string]string{
 		"kimi": "kimi-test-secret",
+		"qwen": "qwen-test-secret",
 		"zai":  "zai-test-secret",
 	}}
 	if got := RedactDiagnosticValue(structInput); !reflect.DeepEqual(got, want) {

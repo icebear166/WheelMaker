@@ -3389,10 +3389,11 @@ func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
 	factory.Register(rp.ACPProviderClaude, creator)
 	factory.Register(rp.ACPProviderCCGLM, creator)
 	factory.Register(rp.ACPProviderCCKimi, creator)
+	factory.Register(rp.ACPProviderCCQwen, creator)
 
 	cfg := &logger.AppConfig{
 		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
-		APIKeys:  logger.APIKeysConfig{Kimi: "kimi-test-key", ZAI: "zai-test-key"},
+		APIKeys:  logger.APIKeysConfig{Kimi: "kimi-test-key", Qwen: "qwen-test-key", ZAI: "zai-test-key"},
 	}
 	h := newHubWithFactory(cfg, dbPath, factory)
 	info := h.collectProjectInfo(cfg.Projects[0])
@@ -3400,14 +3401,14 @@ func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
 	if got, want := info.Agent, "claude"; got != want {
 		t.Fatalf("ProjectInfo.Agent = %q, want %q", got, want)
 	}
-	if got, want := info.Agents, []string{"cc-glm", "cc-kimi", "claude"}; !equalStringsForClaudeTest(got, want) {
+	if got, want := info.Agents, []string{"cc-glm", "cc-kimi", "cc-qwen", "claude"}; !equalStringsForClaudeTest(got, want) {
 		t.Fatalf("ProjectInfo.Agents = %v, want %v", got, want)
 	}
 	encoded, err := json.Marshal(info)
 	if err != nil {
 		t.Fatalf("json.Marshal(ProjectInfo): %v", err)
 	}
-	if strings.Contains(string(encoded), "kimi-test-key") || strings.Contains(string(encoded), "zai-test-key") {
+	if strings.Contains(string(encoded), "kimi-test-key") || strings.Contains(string(encoded), "qwen-test-key") || strings.Contains(string(encoded), "zai-test-key") {
 		t.Fatalf("ProjectInfo leaked API key: %s", encoded)
 	}
 
@@ -3449,6 +3450,37 @@ func TestNewWiresDeepSeekAPIKeyIntoHubFactory(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("ProjectInfo.Agents = %v, want cc-deepseek", info.Agents)
+	}
+}
+
+func TestNewWiresQwenAPIKeyIntoHubFactory(t *testing.T) {
+	binDir := t.TempDir()
+	binaryName := "claude-agent-acp"
+	if runtime.GOOS == "windows" {
+		binaryName += ".cmd"
+	}
+	if err := os.WriteFile(filepath.Join(binDir, binaryName), []byte("@exit /b 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake claude-agent-acp: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	projectPath := t.TempDir()
+	cfg := &logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
+		APIKeys:  logger.APIKeysConfig{Qwen: "qwen-test-key"},
+	}
+	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
+	info := h.collectProjectInfo(cfg.Projects[0])
+
+	found := false
+	for _, name := range info.Agents {
+		if name == "cc-qwen" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ProjectInfo.Agents = %v, want cc-qwen", info.Agents)
 	}
 }
 

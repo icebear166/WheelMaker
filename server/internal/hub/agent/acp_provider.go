@@ -135,6 +135,14 @@ var (
 		SkillProjectDirs:       []string{".claude/skills"},
 		SkillProjectParentDirs: []string{".claude/skills"},
 	}
+	ClaudeCompatibleQwenProviderPreset = ACPProviderPreset{
+		Name:                   "cc-qwen",
+		BinaryName:             "claude-agent-acp",
+		Args:                   []string{"--hide-claude-auth"},
+		InstallHint:            "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs:       []string{".claude/skills"},
+		SkillProjectParentDirs: []string{".claude/skills"},
+	}
 )
 
 // acpProvider is the unified implementation for all ACP providers.
@@ -210,6 +218,15 @@ func NewCCGLMProvider(stateDir, apiKey string) *acpProvider {
 func NewCCKimiProvider(stateDir, apiKey string) *acpProvider {
 	profile := claudeCompatibleKimiProfile(stateDir)
 	preset := ClaudeCompatibleKimiProviderPreset
+	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
+	provider := NewACPProvider(preset)
+	provider.claudeSettings = &profile
+	return provider
+}
+
+func NewCCQwenProvider(stateDir, apiKey string) *acpProvider {
+	profile := claudeCompatibleQwenProfile(stateDir)
+	preset := ClaudeCompatibleQwenProviderPreset
 	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
 	provider := NewACPProvider(preset)
 	provider.claudeSettings = &profile
@@ -328,6 +345,28 @@ func claudeCompatibleGLMProfile(stateDir string) claudeCompatibleProfile {
 			"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
 			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 			"API_TIMEOUT_MS":                           "3000000",
+		},
+	}
+}
+
+func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
+	return claudeCompatibleProfile{
+		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleQwenProviderPreset.Name),
+		endpoint:        "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
+		authName:        "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:    "qwen3.8-max-preview",
+		availableModels: []string{"qwen3.8-max-preview", "qwen3.7-max", "qwen3.7-plus", "qwen3.6-flash", "glm-5.2", "deepseek-v4-pro"},
+		settingsEnv: map[string]string{
+			"ANTHROPIC_DEFAULT_FABLE_MODEL":       "qwen3.8-max-preview",
+			"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  "Qwen3.8 Max Preview",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL":        "qwen3.8-max-preview",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   "Qwen3.8 Max Preview",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL":      "qwen3.8-max-preview",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Qwen3.8 Max Preview",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL":       "deepseek-v4-pro",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "DeepSeek V4 Pro",
+			"CLAUDE_CODE_SUBAGENT_MODEL":          "qwen3.8-max-preview",
+			"CLAUDE_CODE_MAX_CONTEXT_TOKENS":      "983616",
 		},
 	}
 }

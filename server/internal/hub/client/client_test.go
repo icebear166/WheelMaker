@@ -1537,6 +1537,7 @@ func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 		{agentType: acp.ACPProviderCCDeepSeek, wantEffort: "max", wantExplicitSet: true},
 		{agentType: acp.ACPProviderCCGLM, wantEffort: "max", wantExplicitSet: true},
 		{agentType: acp.ACPProviderCCKimi, wantEffort: "high"},
+		{agentType: acp.ACPProviderCCQwen, wantEffort: "default"},
 	}
 
 	for _, tt := range tests {
@@ -1617,6 +1618,19 @@ func TestCreateSession_ClaudeCompatibleProvidersExposeOnlyActualEffortLevels(t *
 			wantOptions: []acp.ConfigOptionValue{
 				{Value: "low", Name: "Low"},
 				{Value: "high", Name: "High"},
+				{Value: "max", Name: "Max"},
+			},
+		},
+		{
+			agentType:   acp.ACPProviderCCQwen,
+			model:       "qwen3.8-max-preview",
+			wantCurrent: "default",
+			wantOptions: []acp.ConfigOptionValue{
+				{Value: "default", Name: "Default"},
+				{Value: "low", Name: "Low"},
+				{Value: "medium", Name: "Medium"},
+				{Value: "high", Name: "High"},
+				{Value: "xhigh", Name: "Xhigh"},
 				{Value: "max", Name: "Max"},
 			},
 		},
@@ -7957,6 +7971,7 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-deepseek", "projects"), "deepseek", "sess-deepseek", cwd, "DeepSeek", "deepseek preview")
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-glm", "projects"), "glm", "sess-glm", cwd, "GLM", "glm preview")
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-kimi", "projects"), "kimi", "sess-kimi", cwd, "Kimi", "kimi preview")
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-qwen", "projects"), "qwen", "sess-qwen", cwd, "Qwen", "qwen preview")
 
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
@@ -7973,6 +7988,7 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 		{agentType: "cc-deepseek", sessionID: "sess-deepseek"},
 		{agentType: "cc-glm", sessionID: "sess-glm"},
 		{agentType: "cc-kimi", sessionID: "sess-kimi"},
+		{agentType: "cc-qwen", sessionID: "sess-qwen"},
 	} {
 		t.Run(testCase.agentType, func(t *testing.T) {
 			response, err := c.recovery().ListResumableSessions(context.Background(), testCase.agentType)

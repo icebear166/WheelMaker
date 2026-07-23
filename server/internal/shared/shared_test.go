@@ -180,6 +180,9 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	if !bytes.Contains(raw, []byte(`"deepseek": ""`)) {
 		t.Fatalf("config.example.json missing empty deepseek API key field")
 	}
+	if !bytes.Contains(raw, []byte(`"qwen": ""`)) {
+		t.Fatalf("config.example.json missing empty qwen API key field")
+	}
 	if !bytes.Contains(raw, []byte(`"api_keys"`)) {
 		t.Fatalf("config.example.json missing canonical api_keys field")
 	}
@@ -187,18 +190,18 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
 	}
-	if cfg.APIKeys.Kimi != "" || cfg.APIKeys.ZAI != "" {
+	if cfg.APIKeys.Kimi != "" || cfg.APIKeys.Qwen != "" || cfg.APIKeys.ZAI != "" {
 		t.Fatalf("config.example.json contains credentials: %#v", cfg.APIKeys)
 	}
 }
 
 func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","zai":"zai-test-key"}}`)
+	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","qwen":"qwen-test-key","zai":"zai-test-key"}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.ZAI != "zai-test-key" {
+	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.Qwen != "qwen-test-key" || cfg.APIKeys.ZAI != "zai-test-key" {
 		t.Fatalf("APIKeys = %#v", cfg.APIKeys)
 	}
 	encoded, err := json.Marshal(cfg.APIKeys)
@@ -208,17 +211,20 @@ func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
 	if !strings.Contains(string(encoded), `"deepseek":"deepseek-test-key"`) {
 		t.Fatalf("APIKeys JSON = %s, want deepseek key", encoded)
 	}
+	if !strings.Contains(string(encoded), `"qwen":"qwen-test-key"`) {
+		t.Fatalf("APIKeys JSON = %s, want qwen key", encoded)
+	}
 }
 
 func TestAppConfigMarshalsCanonicalAPIKeysField(t *testing.T) {
 	encoded, err := json.Marshal(AppConfig{
 		Projects: []ProjectConfig{},
-		APIKeys:  APIKeysConfig{ZAI: "zai-test-key"},
+		APIKeys:  APIKeysConfig{Qwen: "qwen-test-key", ZAI: "zai-test-key"},
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal(AppConfig) error = %v", err)
 	}
-	if !strings.Contains(string(encoded), `"api_keys":{"zai":"zai-test-key"}`) {
+	if !strings.Contains(string(encoded), `"api_keys":{"qwen":"qwen-test-key","zai":"zai-test-key"}`) {
 		t.Fatalf("AppConfig JSON = %s, want canonical api_keys field", encoded)
 	}
 	if strings.Contains(string(encoded), `"apiKeys"`) {

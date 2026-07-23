@@ -291,6 +291,45 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:        "qwen",
+			newProvider: NewCCQwenProvider,
+			key:         "qwen-test-key",
+			wantArgs:    []string{"--hide-claude-auth"},
+			wantEnv: map[string]string{
+				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-qwen"),
+				"ANTHROPIC_BASE_URL":      "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic",
+				"ANTHROPIC_AUTH_TOKEN":    "qwen-test-key",
+				"ANTHROPIC_API_KEY":       "",
+				"CLAUDE_CODE_USE_BEDROCK": "",
+				"CLAUDE_CODE_USE_VERTEX":  "",
+				"CLAUDE_CODE_USE_FOUNDRY": "",
+			},
+			wantSettings: map[string]any{
+				"model": "qwen3.8-max-preview",
+				"availableModels": []any{
+					"qwen3.8-max-preview",
+					"qwen3.7-max",
+					"qwen3.7-plus",
+					"qwen3.6-flash",
+					"glm-5.2",
+					"deepseek-v4-pro",
+				},
+				"enforceAvailableModels": true,
+				"env": map[string]any{
+					"ANTHROPIC_DEFAULT_FABLE_MODEL":       "qwen3.8-max-preview",
+					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  "Qwen3.8 Max Preview",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL":        "qwen3.8-max-preview",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   "Qwen3.8 Max Preview",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL":      "qwen3.8-max-preview",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Qwen3.8 Max Preview",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL":       "deepseek-v4-pro",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "DeepSeek V4 Pro",
+					"CLAUDE_CODE_SUBAGENT_MODEL":          "qwen3.8-max-preview",
+					"CLAUDE_CODE_MAX_CONTEXT_TOKENS":      "983616",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -826,15 +865,20 @@ func TestParseACPProviderClaudeCompatible(t *testing.T) {
 		t.Fatalf("ParseACPProvider(CC-DeepSeek) = (%q, %v), want (%q, true)", provider, ok, "cc-deepseek")
 	}
 
+	provider, ok = protocol.ParseACPProvider("CC-Qwen")
+	if !ok || provider != protocol.ACPProviderCCQwen {
+		t.Fatalf("ParseACPProvider(CC-Qwen) = (%q, %v), want (%q, true)", provider, ok, protocol.ACPProviderCCQwen)
+	}
+
 	names := protocol.ACPProviderNames()
 	counts := map[string]int{}
 	for _, name := range names {
 		counts[name]++
 	}
-	if counts[string(protocol.ACPProviderCCGLM)] != 1 || counts[string(protocol.ACPProviderCCKimi)] != 1 || counts["cc-deepseek"] != 1 {
+	if counts[string(protocol.ACPProviderCCGLM)] != 1 || counts[string(protocol.ACPProviderCCKimi)] != 1 || counts[string(protocol.ACPProviderCCQwen)] != 1 || counts["cc-deepseek"] != 1 {
 		t.Fatalf("ACPProviderNames() = %v, want one entry for each Claude-compatible provider", names)
 	}
-	if names[len(names)-3] != "cc-deepseek" || names[len(names)-2] != string(protocol.ACPProviderCCGLM) || names[len(names)-1] != string(protocol.ACPProviderCCKimi) {
+	if names[len(names)-4] != "cc-deepseek" || names[len(names)-3] != string(protocol.ACPProviderCCGLM) || names[len(names)-2] != string(protocol.ACPProviderCCKimi) || names[len(names)-1] != string(protocol.ACPProviderCCQwen) {
 		t.Fatalf("ACPProviderNames() = %v, want Claude-compatible IDs at the end in stable order", names)
 	}
 }
@@ -4630,7 +4674,7 @@ func TestProviderPresetByNameKimi(t *testing.T) {
 }
 
 func TestClaudeCompatibleProviderPresetsUseProjectClaudeSkillsOnly(t *testing.T) {
-	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi"} {
+	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"} {
 		t.Run(name, func(t *testing.T) {
 			preset, ok := providerPresetByName(name)
 			if !ok || preset.Name != name {
@@ -4693,18 +4737,20 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 		name        string
 		deepseekKey string
 		kimiKey     string
+		qwenKey     string
 		zaiKey      string
 		available   bool
 		wantNames   []string
 	}{
-		{name: "adapter missing", deepseekKey: "deepseek-key", kimiKey: "kimi-key", zaiKey: "zai-key", wantNames: []string{}},
+		{name: "adapter missing", deepseekKey: "deepseek-key", kimiKey: "kimi-key", qwenKey: "qwen-key", zaiKey: "zai-key", wantNames: []string{}},
 		{name: "keys missing", available: true, wantNames: []string{}},
 		{name: "deepseek only", deepseekKey: "deepseek-key", available: true, wantNames: []string{"cc-deepseek"}},
 		{name: "kimi only", kimiKey: "kimi-key", available: true, wantNames: []string{"cc-kimi"}},
+		{name: "qwen only", qwenKey: "qwen-key", available: true, wantNames: []string{"cc-qwen"}},
 		{name: "zai only", zaiKey: "zai-key", available: true, wantNames: []string{"cc-glm"}},
-		{name: "all", deepseekKey: "deepseek-key", kimiKey: "kimi-key", zaiKey: "zai-key", available: true, wantNames: []string{"cc-deepseek", "cc-glm", "cc-kimi"}},
+		{name: "all", deepseekKey: "deepseek-key", kimiKey: "kimi-key", qwenKey: "qwen-key", zaiKey: "zai-key", available: true, wantNames: []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"}},
 		{name: "trimmed input", kimiKey: "  kimi-key  ", available: true, wantNames: []string{"cc-kimi"}},
-		{name: "whitespace only", deepseekKey: "\n", kimiKey: "   ", zaiKey: "\t", available: true, wantNames: []string{}},
+		{name: "whitespace only", deepseekKey: "\n", kimiKey: "   ", qwenKey: "\r", zaiKey: "\t", available: true, wantNames: []string{}},
 	}
 
 	for _, tt := range tests {
@@ -4713,14 +4759,15 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 				StateDir:       stateDir,
 				DeepSeekAPIKey: tt.deepseekKey,
 				KimiAPIKey:     tt.kimiKey,
+				QwenAPIKey:     tt.qwenKey,
 				ZAIAPIKey:      tt.zaiKey,
 			}, func(provider ACPProvider) bool {
-				return tt.available && (provider.Name() == "cc-deepseek" || provider.Name() == "cc-glm" || provider.Name() == "cc-kimi")
+				return tt.available && (provider.Name() == "cc-deepseek" || provider.Name() == "cc-glm" || provider.Name() == "cc-kimi" || provider.Name() == "cc-qwen")
 			})
 			if got := factory.Names(); !reflect.DeepEqual(got, tt.wantNames) {
 				t.Fatalf("factory.Names() = %v, want %v", got, tt.wantNames)
 			}
-			if preferred := factory.PreferredName(); preferred == "cc-deepseek" || preferred == "cc-glm" || preferred == "cc-kimi" {
+			if preferred := factory.PreferredName(); preferred == "cc-deepseek" || preferred == "cc-glm" || preferred == "cc-kimi" || preferred == "cc-qwen" {
 				t.Fatalf("PreferredName() selected Claude-compatible provider: %q", preferred)
 			}
 		})

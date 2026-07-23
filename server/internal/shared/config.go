@@ -19,6 +19,7 @@ type AppConfig struct {
 type APIKeysConfig struct {
 	DeepSeek string `json:"deepseek,omitempty"`
 	Kimi     string `json:"kimi,omitempty"`
+	Qwen     string `json:"qwen,omitempty"`
 	ZAI      string `json:"zai,omitempty"`
 }
 

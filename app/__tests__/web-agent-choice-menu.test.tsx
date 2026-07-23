@@ -16,7 +16,7 @@ describe('AgentChoiceMenu', () => {
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
         <AgentChoiceMenu
-          agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'codex']}
+          agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'cc-qwen', 'codex']}
           variant="wide"
           onSelect={onSelect}
         />,
@@ -24,12 +24,13 @@ describe('AgentChoiceMenu', () => {
     });
 
     const pills = renderer!.root.findAllByProps({role: 'option'});
-    expect(pills).toHaveLength(5);
+    expect(pills).toHaveLength(6);
     expect(pillLabels(renderer!.root)).toEqual([
       'claude',
       'cc · deepseek',
       'cc · glm',
       'cc · kimi',
+      'cc · qwen',
       'codex',
     ]);
     // No legacy expand control / child structure remains.

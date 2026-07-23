@@ -9,6 +9,11 @@ function loadProjectAgentsModule(): any {
   return require(helperPath);
 }
 
+function loadAgentTagVariantModule(): any {
+  const helperPath = path.join(projectRoot(), 'web', 'src', 'chat', 'agentTagVariant.ts');
+  return require(helperPath);
+}
+
 describe('web project agent choices', () => {
   test('filters out agents the hub does not report as available', () => {
     const {buildProjectAgentChoices} = loadProjectAgentsModule();
@@ -53,12 +58,13 @@ describe('web project agent choices', () => {
   test('returns a flat list of agent choice nodes without grouping', () => {
     const {buildAgentChoiceNodes} = loadProjectAgentsModule();
 
-    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'kimi'])).toEqual([
+    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'cc-qwen', 'kimi'])).toEqual([
       {agentType: 'codex', label: 'codex'},
       {agentType: 'claude', label: 'claude'},
       {agentType: 'cc-deepseek', label: 'cc · deepseek'},
       {agentType: 'cc-glm', label: 'cc · glm'},
       {agentType: 'cc-kimi', label: 'cc · kimi'},
+      {agentType: 'cc-qwen', label: 'cc · qwen'},
       {agentType: 'kimi', label: 'kimi'},
     ]);
   });
@@ -72,5 +78,12 @@ describe('web project agent choices', () => {
     expect(agentDisplayLabel('cc-glm')).toBe('cc · glm');
     expect(agentDisplayLabel('cc-kimi')).toBe('cc · kimi');
     expect(agentDisplayLabel('cc-deepseek')).toBe('cc · deepseek');
+    expect(agentDisplayLabel('cc-qwen')).toBe('cc · qwen');
+  });
+
+  test('uses the Claude accent for the Qwen-compatible pill', () => {
+    const {agentTagVariantClass} = loadAgentTagVariantModule();
+
+    expect(agentTagVariantClass('cc-qwen')).toBe('wide-session-agent-2');
   });
 });
