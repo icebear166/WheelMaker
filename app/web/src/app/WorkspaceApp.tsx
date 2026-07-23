@@ -16323,155 +16323,163 @@ export function App() {
           {renderHiddenProjectRows(true)}
         </ChatSessionNav>
         )}
-        {(() => {
-          if (!mobileProjectActionMenu) return null;
-          const sheetMenu = mobileProjectActionMenu;
-          const sheetProject = sortedProjectItems.find(p => p.projectId === sheetMenu.projectId);
-          if (!sheetProject) return null;
-          const sheetProjectSessions = projectSessionsByProjectId[sheetMenu.projectId] ?? [];
-          const sheetAgents = getWideProjectAgents(sheetProject, sheetProjectSessions);
-          const sheetIsActions = sheetMenu.kind === 'actions';
-          const sheetTitle = sheetIsActions
-            ? 'Project Actions'
-            : sheetMenu.kind === 'new'
-              ? 'New Session'
-              : 'Resume Session';
-          const sheetIcon = sheetIsActions
-            ? 'codicon-list-selection'
-            : sheetMenu.kind === 'new'
-              ? 'codicon-add'
-              : 'codicon-history';
-          return (
-            <>
-              <div
-                className="mobile-project-sheet-overlay"
-                onClick={() => setMobileProjectActionMenu(null)}
-                aria-hidden="true"
-              />
-              <div
-                className="mobile-project-sheet"
-                role="dialog"
-                aria-modal="true"
-                aria-label={sheetIsActions ? 'Project actions' : sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
+      </>
+    );
+  };
+
+  // Rendered at the top level (not inside the sidebar/drawer) so the sheet can
+  // open from any entry point — e.g. the title-bar project dropdown's per-row
+  // create button — even when the mobile drawer is closed.
+  const renderMobileProjectActionSheet = () => {
+    if (!mobileProjectActionMenu) {
+      return null;
+    }
+    const sheetMenu = mobileProjectActionMenu;
+    const sheetProject = sortedProjectItems.find(p => p.projectId === sheetMenu.projectId);
+    if (!sheetProject) {
+      return null;
+    }
+    const sheetProjectSessions = projectSessionsByProjectId[sheetMenu.projectId] ?? [];
+    const sheetAgents = getWideProjectAgents(sheetProject, sheetProjectSessions);
+    const sheetIsActions = sheetMenu.kind === 'actions';
+    const sheetTitle = sheetIsActions
+      ? 'Project Actions'
+      : sheetMenu.kind === 'new'
+        ? 'New Session'
+        : 'Resume Session';
+    const sheetIcon = sheetIsActions
+      ? 'codicon-list-selection'
+      : sheetMenu.kind === 'new'
+        ? 'codicon-add'
+        : 'codicon-history';
+    return (
+      <>
+        <div
+          className="mobile-project-sheet-overlay"
+          onClick={() => setMobileProjectActionMenu(null)}
+          aria-hidden="true"
+        />
+        <div
+          className="mobile-project-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label={sheetIsActions ? 'Project actions' : sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
+        >
+          <div className="mobile-project-sheet-grip" aria-hidden="true" />
+          <div className="mobile-project-sheet-header">
+            <span
+              className={`codicon ${sheetIcon} mobile-project-sheet-icon`}
+              aria-hidden="true"
+            />
+            <span className="mobile-project-sheet-title-copy">
+              <span className="mobile-project-sheet-title">
+                {sheetTitle}
+              </span>
+              <span className="mobile-project-sheet-subtitle">{sheetProject.name}</span>
+            </span>
+            <button
+              type="button"
+              className="mobile-project-sheet-close"
+              onClick={() => setMobileProjectActionMenu(null)}
+              aria-label="Close"
+              title="Close"
+            >
+              <span className="codicon codicon-close" />
+            </button>
+          </div>
+          <div className="mobile-project-sheet-body">
+            {sheetMenu.kind === 'actions' ? (
+              <button
+                type="button"
+                className="wide-project-action-menu-item mobile-project-sheet-item"
+                onClick={() => {
+                  togglePinnedProject(sheetMenu.projectId);
+                  setMobileProjectActionMenu(null);
+                }}
               >
-                <div className="mobile-project-sheet-grip" aria-hidden="true" />
-                <div className="mobile-project-sheet-header">
-                  <span
-                    className={`codicon ${sheetIcon} mobile-project-sheet-icon`}
-                    aria-hidden="true"
-                  />
-                  <span className="mobile-project-sheet-title-copy">
-                    <span className="mobile-project-sheet-title">
-                      {sheetTitle}
-                    </span>
-                    <span className="mobile-project-sheet-subtitle">{sheetProject.name}</span>
-                  </span>
-                  <button
-                    type="button"
-                    className="mobile-project-sheet-close"
-                    onClick={() => setMobileProjectActionMenu(null)}
-                    aria-label="Close"
-                    title="Close"
-                  >
-                    <span className="codicon codicon-close" />
-                  </button>
-                </div>
-                <div className="mobile-project-sheet-body">
-                  {sheetMenu.kind === 'actions' ? (
-                    <button
-                      type="button"
-                      className="wide-project-action-menu-item mobile-project-sheet-item"
-                      onClick={() => {
-                        togglePinnedProject(sheetMenu.projectId);
-                        setMobileProjectActionMenu(null);
-                      }}
-                    >
-                      <span className="codicon codicon-pinned" aria-hidden="true" />
-                      <span className="mobile-project-sheet-item-label">
-                        {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
-                      </span>
-                    </button>
-                  ) : sheetMenu.phase === 'agents' ? (
-                    <>
-                      <AgentChoiceMenu
-                        key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:agents`}
-                        agents={sheetAgents}
-                        variant="mobile"
-                        defaultAgent={sheetProject.agent}
-                        onSelect={agentType => {
-                          if (sheetMenu.kind === 'new') {
-                            handleMobileProjectCreateSession(sheetMenu.projectId, agentType).catch(() => undefined);
-                          } else {
-                            handleMobileProjectResumeAgent(sheetMenu.projectId, agentType).catch(() => undefined);
-                          }
-                        }}
-                        onClose={() => setMobileProjectActionMenu(null)}
-                      />
-                      {sheetAgents.length === 0 ? (
-                        <div className="wide-project-action-empty">
-                          <span className="codicon codicon-circle-slash" aria-hidden="true" />
-                          <span>No agents available.</span>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <>
+                <span className="codicon codicon-pinned" aria-hidden="true" />
+                <span className="mobile-project-sheet-item-label">
+                  {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
+                </span>
+              </button>
+            ) : sheetMenu.phase === 'agents' ? (
+              <>
+                <AgentChoiceMenu
+                  key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:agents`}
+                  agents={sheetAgents}
+                  variant="mobile"
+                  defaultAgent={sheetProject.agent}
+                  onSelect={agentType => {
+                    if (sheetMenu.kind === 'new') {
+                      handleMobileProjectCreateSession(sheetMenu.projectId, agentType).catch(() => undefined);
+                    } else {
+                      handleMobileProjectResumeAgent(sheetMenu.projectId, agentType).catch(() => undefined);
+                    }
+                  }}
+                  onClose={() => setMobileProjectActionMenu(null)}
+                />
+                {sheetAgents.length === 0 ? (
+                  <div className="wide-project-action-empty">
+                    <span className="codicon codicon-circle-slash" aria-hidden="true" />
+                    <span>No agents available.</span>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="wide-project-action-back mobile-project-sheet-back"
+                  onClick={() => {
+                    setResumeSessions([]);
+                    setResumeLoading(false);
+                    setMobileProjectActionMenu({
+                      ...sheetMenu,
+                      phase: 'agents',
+                      agentType: '',
+                    });
+                  }}
+                >
+                  <span className="codicon codicon-arrow-left" />
+                  <span className="mobile-project-sheet-item-label">{agentDisplayLabel(sheetMenu.agentType)}</span>
+                </button>
+                {resumeLoading ? (
+                  <div className="wide-project-action-empty">
+                    <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+                    <span>Loading sessions...</span>
+                  </div>
+                ) : null}
+                {!resumeLoading
+                  ? resumeSessions.map(session => (
                       <button
+                        key={`${sheetMenu.projectId}:sheet-resume:${session.sessionId}`}
                         type="button"
-                        className="wide-project-action-back mobile-project-sheet-back"
+                        className="wide-project-action-menu-item mobile-project-sheet-item"
                         onClick={() => {
-                          setResumeSessions([]);
-                          setResumeLoading(false);
-                          setMobileProjectActionMenu({
-                            ...sheetMenu,
-                            phase: 'agents',
-                            agentType: '',
-                          });
+                          handleMobileProjectResumeImport(
+                            sheetMenu.projectId,
+                            sheetMenu.agentType,
+                            session.sessionId,
+                          ).catch(() => undefined);
                         }}
                       >
-                        <span className="codicon codicon-arrow-left" />
-                        <span className="mobile-project-sheet-item-label">{agentDisplayLabel(sheetMenu.agentType)}</span>
+                        <span className="codicon codicon-history" />
+                        <span className="mobile-project-sheet-item-label">
+                          {resolveSessionDisplayTitle(session) || session.sessionId}
+                        </span>
                       </button>
-                      {resumeLoading ? (
-                        <div className="wide-project-action-empty">
-                          <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-                          <span>Loading sessions...</span>
-                        </div>
-                      ) : null}
-                      {!resumeLoading
-                        ? resumeSessions.map(session => (
-                            <button
-                              key={`${sheetMenu.projectId}:sheet-resume:${session.sessionId}`}
-                              type="button"
-                              className="wide-project-action-menu-item mobile-project-sheet-item"
-                              onClick={() => {
-                                handleMobileProjectResumeImport(
-                                  sheetMenu.projectId,
-                                  sheetMenu.agentType,
-                                  session.sessionId,
-                                ).catch(() => undefined);
-                              }}
-                            >
-                              <span className="codicon codicon-history" />
-                              <span className="mobile-project-sheet-item-label">
-                                {resolveSessionDisplayTitle(session) || session.sessionId}
-                              </span>
-                            </button>
-                          ))
-                        : null}
-                      {!resumeLoading && resumeSessions.length === 0 ? (
-                        <div className="wide-project-action-empty">
-                          <span className="codicon codicon-history" aria-hidden="true" />
-                          <span>No resumable sessions.</span>
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              </div>
-            </>
-          );
-        })()}
+                    ))
+                  : null}
+                {!resumeLoading && resumeSessions.length === 0 ? (
+                  <div className="wide-project-action-empty">
+                    <span className="codicon codicon-history" aria-hidden="true" />
+                    <span>No resumable sessions.</span>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
       </>
     );
   };
@@ -20705,6 +20713,7 @@ export function App() {
       {previewSelectionContextMenu}
       {projectSessionActionMenuOverlay}
       {chatTitleProjectMenu}
+      {renderMobileProjectActionSheet()}
       {chatTitlePromptMenu}
       {portRelayClearSiteDataFrame}
       {registryDebugPanel}
