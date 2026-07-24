@@ -183,6 +183,9 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	if !bytes.Contains(raw, []byte(`"qwen": ""`)) {
 		t.Fatalf("config.example.json missing empty qwen API key field")
 	}
+	if !bytes.Contains(raw, []byte(`"flicker": ""`)) {
+		t.Fatalf("config.example.json missing empty flicker API key field")
+	}
 	if !bytes.Contains(raw, []byte(`"api_keys"`)) {
 		t.Fatalf("config.example.json missing canonical api_keys field")
 	}
@@ -190,18 +193,18 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
 	}
-	if cfg.APIKeys.Kimi != "" || cfg.APIKeys.Qwen != "" || cfg.APIKeys.ZAI != "" {
+	if cfg.APIKeys.Kimi != "" || cfg.APIKeys.Qwen != "" || cfg.APIKeys.ZAI != "" || cfg.APIKeys.Flicker != "" {
 		t.Fatalf("config.example.json contains credentials: %#v", cfg.APIKeys)
 	}
 }
 
 func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","qwen":"qwen-test-key","zai":"zai-test-key"}}`)
+	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","qwen":"qwen-test-key","zai":"zai-test-key","flicker":"flicker-test-key"}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.Qwen != "qwen-test-key" || cfg.APIKeys.ZAI != "zai-test-key" {
+	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.Qwen != "qwen-test-key" || cfg.APIKeys.ZAI != "zai-test-key" || cfg.APIKeys.Flicker != "flicker-test-key" {
 		t.Fatalf("APIKeys = %#v", cfg.APIKeys)
 	}
 	encoded, err := json.Marshal(cfg.APIKeys)

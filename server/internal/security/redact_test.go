@@ -43,9 +43,10 @@ func TestRedactDiagnosticValueRedactsNestedAndObfuscatedSecretKeys(t *testing.T)
 func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
 	input := map[string]any{
 		"api_keys": map[string]any{
-			"kimi": "kimi-test-secret",
-			"qwen": "qwen-test-secret",
-			"zai":  "zai-test-secret",
+			"kimi":    "kimi-test-secret",
+			"qwen":    "qwen-test-secret",
+			"zai":     "zai-test-secret",
+			"flicker": "flicker-test-secret",
 		},
 	}
 	want := map[string]any{"api_keys": RedactedValue}
@@ -57,9 +58,10 @@ func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
 		APIKeys map[string]string `json:"api_keys"`
 	}
 	structInput := configWithAPIKeys{APIKeys: map[string]string{
-		"kimi": "kimi-test-secret",
-		"qwen": "qwen-test-secret",
-		"zai":  "zai-test-secret",
+		"kimi":    "kimi-test-secret",
+		"qwen":    "qwen-test-secret",
+		"zai":     "zai-test-secret",
+		"flicker": "flicker-test-secret",
 	}}
 	if got := RedactDiagnosticValue(structInput); !reflect.DeepEqual(got, want) {
 		t.Fatalf("RedactDiagnosticValue(struct) = %#v, want %#v", got, want)

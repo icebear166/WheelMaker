@@ -9,7 +9,8 @@
     "deepseek": "",
     "kimi": "",
     "qwen": "",
-    "zai": ""
+    "zai": "",
+    "flicker": ""
   },
   "registry": {
     "listen": true,

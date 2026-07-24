@@ -21,6 +21,7 @@ type APIKeysConfig struct {
 	Kimi     string `json:"kimi,omitempty"`
 	Qwen     string `json:"qwen,omitempty"`
 	ZAI      string `json:"zai,omitempty"`
+	Flicker  string `json:"flicker,omitempty"`
 }
 
 type rawAppConfig struct {

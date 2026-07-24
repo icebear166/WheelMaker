@@ -1014,15 +1014,20 @@ func TestParseACPProviderClaudeCompatible(t *testing.T) {
 		t.Fatalf("ParseACPProvider(CC-Qwen) = (%q, %v), want (%q, true)", provider, ok, protocol.ACPProviderCCQwen)
 	}
 
+	provider, ok = protocol.ParseACPProvider("CC-FLICKER")
+	if !ok || provider != protocol.ACPProviderCCFlicker {
+		t.Fatalf("ParseACPProvider(CC-FLICKER) = (%q, %v), want (%q, true)", provider, ok, protocol.ACPProviderCCFlicker)
+	}
+
 	names := protocol.ACPProviderNames()
 	counts := map[string]int{}
 	for _, name := range names {
 		counts[name]++
 	}
-	if counts[string(protocol.ACPProviderCCGLM)] != 1 || counts[string(protocol.ACPProviderCCKimi)] != 1 || counts[string(protocol.ACPProviderCCQwen)] != 1 || counts["cc-deepseek"] != 1 {
+	if counts[string(protocol.ACPProviderCCGLM)] != 1 || counts[string(protocol.ACPProviderCCKimi)] != 1 || counts[string(protocol.ACPProviderCCQwen)] != 1 || counts["cc-deepseek"] != 1 || counts[string(protocol.ACPProviderCCFlicker)] != 1 {
 		t.Fatalf("ACPProviderNames() = %v, want one entry for each Claude-compatible provider", names)
 	}
-	if names[len(names)-4] != "cc-deepseek" || names[len(names)-3] != string(protocol.ACPProviderCCGLM) || names[len(names)-2] != string(protocol.ACPProviderCCKimi) || names[len(names)-1] != string(protocol.ACPProviderCCQwen) {
+	if names[len(names)-5] != "cc-deepseek" || names[len(names)-4] != string(protocol.ACPProviderCCGLM) || names[len(names)-3] != string(protocol.ACPProviderCCKimi) || names[len(names)-2] != string(protocol.ACPProviderCCQwen) || names[len(names)-1] != string(protocol.ACPProviderCCFlicker) {
 		t.Fatalf("ACPProviderNames() = %v, want Claude-compatible IDs at the end in stable order", names)
 	}
 }
