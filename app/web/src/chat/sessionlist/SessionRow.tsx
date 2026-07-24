@@ -81,7 +81,7 @@ export function SessionRow({
             onUnpin();
           }}
         >
-          {pinning ? <SessionIcon name="loader" spin /> : <SessionIcon name="pin" filled />}
+          {pinning ? <SessionIcon name="loader" spin /> : <SessionIcon name="pin" />}
         </button>
       ) : null}
     </div>

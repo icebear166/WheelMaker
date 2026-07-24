@@ -94,7 +94,7 @@ export function ProjectSection({
               onTogglePin();
             }}
           >
-            <SessionIcon name="pin" filled={pinned} />
+            <SessionIcon name="pin" />
           </button>
           <button
             type="button"

@@ -10,7 +10,6 @@
   --sl-row-py: 5px;
   --sl-row-font: 12.5px;
   --sl-section-gap: 12px;
-  --sl-indent: 22px;
 }
 [data-session-list-density="compact"] {
   --sl-row-py: 3px;
@@ -149,6 +148,8 @@
   position: relative;
   display: flex;
   align-items: center;
+  /* gutter reserved for the leading state dot; row bg starts after it */
+  padding-left: 20px;
 }
 .wide-session-row {
   flex: 1;
@@ -156,7 +157,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: var(--sl-row-py) 8px var(--sl-row-py) var(--sl-indent);
+  padding: var(--sl-row-py) 8px var(--sl-row-py) 12px;
   border: 0;
   background: none;
   border-radius: var(--radius-control);
@@ -199,9 +200,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* leading state dot sits in the indent gutter, never shifting row content */
+/* leading state dot sits in the reserved gutter, never overlapping the row bg */
 .project-session-row-wrap .session-state-leading {
-  left: 4px;
+  left: 6px;
 }
 .project-session-row-wrap .session-state-leading.permission-pending {
   left: 1px;
@@ -248,8 +249,8 @@
 .recent-project-divider {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px 3px 10px;
+  gap: 8px;
+  padding: 3px 8px 3px 11px;
   color: var(--text-tertiary);
 }
 .recent-project-divider-icon {
@@ -278,9 +279,6 @@
 .recent-project-divider-create:hover {
   color: var(--text-primary);
   background: var(--hover);
-}
-.recent-sessions-list .wide-session-row {
-  padding-left: calc(var(--sl-indent) - 4px);
 }
 
 /* ---------- menu enter/exit ---------- */
@@ -501,7 +499,7 @@
 
 /* ---------- misc ---------- */
 .wide-project-empty {
-  padding: 4px 8px 4px var(--sl-indent);
+  padding: 4px 8px 4px 32px;
   font-size: 11.5px;
   color: var(--text-tertiary);
 }

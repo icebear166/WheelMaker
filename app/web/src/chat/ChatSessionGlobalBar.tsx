@@ -50,7 +50,7 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
             aria-label={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
             title={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
           >
-            <SessionIcon name="pin" filled={pinActive} />
+            <SessionIcon name="pin" />
           </button>
         ) : null}
       </div>
