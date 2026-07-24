@@ -20,12 +20,13 @@ IQ 是 Workspace Web 内的只读模型比较功能。它展示 Codex 模型不�
 
 ## Simple 候选
 
-Simple 按 Sol、Terra、Luna 固定为三行。每个家族按 IQ 从高到低选择前三个 effort，每个候选以低饱和家族色的紧凑分区卡片展示模型名、IQ、Cost 和 Time；IQ 四舍五入为整数，候选不足时不增加占位卡片。
+Simple 按 Sol、Terra、Luna 固定为三行。每个家族按 IQ 从高到低选择前三个 effort，每个候选以低饱和家族色的紧凑分区卡片展示模型名、IQ、Cost 和 Time；IQ 四舍五入为整数，候选不足时不增加占位卡片。家族色收敛为单层表达：卡片只保留 `family-color 30%` 发丝边与 3% 底色，家族色主要体现在模型名与 IQ 文字色，不使用 inset 色条；IQ score 保留 display 尺寸（clamp 18–20px、700、-0.02em）。
 
 ## Monitor 展示
 
 - 桌面 Chat edge stack 只挂载一张 `Monitor` 卡片，IQ 与 Limits 通过标题栏同一行的 Tab 切换。
-- Monitor 默认选择 Limits、默认 Simple；Simple/Detail 是两个 Tab 共用的桌面状态。IQ Detail 按 Sol、Terra、Luna 分组，以 Effort、Score、Cost、Time 表格展示全部有效项，Score 同样四舍五入为整数。
+- Monitor 默认选择 Limits、默认 Simple；Simple/Detail 是两个 Tab 共用的桌面状态。IQ Detail 按 Sol、Terra、Luna 分组，以 Effort、Score、Cost、Time 表格展示全部有效项，Score 同样四舍五入为整数；家族分组拍平为 hairline 分隔（家族标题 + 表格），表格使用 10px mono，不使用卡片套卡片。
+- IQ 加载态使用与内容同形的骨架条（3 组 rail 占位，opacity 呼吸），error 态保留 Retry。
 - Monitor 的折叠、隐藏和显示设置作用于整张桌面卡片。旧 Limits 或 Model efficiency 任一显示偏好为 true 时，迁移后的 Monitor 默认显示。
 - 窄屏快捷入口始终可用并统一命名为 Monitor。`Limits / IQ` Tab 与 Monitor 标题、刷新和关闭按钮位于同一标题行；弹层默认 Limits，IQ Tab 固定显示 Detail，不提供 Simple/Detail 按钮和底部状态栏。
 - Monitor 的共享刷新按钮同时触发 Limits 与 IQ 刷新，两条数据链路仍独立处理成功和失败。
@@ -34,3 +35,4 @@ Simple 按 Sol、Terra、Luna 固定为三行。每个家族按 IQ 从高到低�
 
 - [`../../scope/2026-07-22-model-efficiency-card/spec-model-efficiency-card.md`](../../scope/2026-07-22-model-efficiency-card/spec-model-efficiency-card.md)
 - [`../../scope/2026-07-22-monitor-card/spec-monitor-card.md`](../../scope/2026-07-22-monitor-card/spec-monitor-card.md)
+- [`../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md)
