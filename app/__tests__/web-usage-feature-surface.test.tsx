@@ -473,6 +473,37 @@ describe('UsageFeatureSurface', () => {
     expect(view!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('codicon'))).toHaveLength(0);
   });
 
+  it('uses the unified type scale and token colors for Limits content', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
+    const rule = (selector: string) => styles.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([\\s\\S]*?)\\n\\}`))?.[1] ?? '';
+
+    expect(rule('.usage-quota-rail > span')).toContain('background: var(--accent-primary);');
+    expect(styles).not.toContain('--status-warning');
+    expect(styles).not.toContain('--status-danger');
+
+    const warningStrong = styles.match(/\.usage-compact-limit\.tone-warning \.usage-compact-limit-value strong,\n\.usage-limit-line\.tone-warning strong \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(warningStrong).toContain('color: var(--state-warning);');
+    const warningLabel = styles.match(/\.usage-limit-line\.tone-warning \.usage-limit-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(warningLabel).toContain('color: var(--state-warning);');
+    const dangerStrong = styles.match(/\.usage-compact-limit\.tone-danger \.usage-compact-limit-value strong,\n\.usage-limit-line\.tone-danger strong \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(dangerStrong).toContain('color: var(--state-danger);');
+    const dangerLabel = styles.match(/\.usage-limit-line\.tone-danger \.usage-limit-label \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(dangerLabel).toContain('color: var(--state-danger);');
+
+    expect(rule('.usage-provider-name')).toContain('color: var(--text-primary);');
+    expect(rule('.usage-compact-limit-value')).toContain('color: var(--text-tertiary);');
+    expect(rule('.usage-compact-limit-value')).toContain('font-size: 10px;');
+    expect(rule('.usage-compact-limit-value strong')).toContain('font-size: 11px;');
+    const limitLabelRule = styles.match(/^\.usage-limit-label \{([\s\S]*?)\n\}/m)?.[1] ?? '';
+    expect(limitLabelRule).toContain('font-size: 10px;');
+    expect(rule('.usage-account-hub')).toContain('font-size: 10px;');
+    expect(rule('.usage-account-hub')).toContain('background: transparent;');
+    expect(rule('.usage-account-card')).not.toContain('border: 1px solid');
+    expect(rule('.usage-account-card')).toContain('background: transparent;');
+    expect(styles).toContain('.usage-account-card + .usage-account-card {');
+  });
+
   it('uses a safe-area-aware full-screen mobile Monitor card', () => {
     const projectRoot = path.join(__dirname, '..');
     const usageStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
