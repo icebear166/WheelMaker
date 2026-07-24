@@ -103,6 +103,7 @@ type ReporterConfig struct {
 	PingInterval      time.Duration
 	PongTimeout       time.Duration
 	StateDir          string
+	APIKeys           shared.APIKeysConfig
 }
 
 // Reporter keeps a long-lived hub connection and serves local project queries.
@@ -183,9 +184,13 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+	collector := usage.NewLocalCollector("")
+	collector.KimiAPIKey = cfg.APIKeys.Kimi
+	collector.ZAIAPIKey = cfg.APIKeys.ZAI
+	collector.DeepSeekAPIKey = cfg.APIKeys.DeepSeek
 	r.usageService = usage.NewService(usage.ServiceOptions{
 		HubID:     r.cfg.HubID,
-		Collector: usage.NewLocalCollector(""),
+		Collector: collector,
 		OnSnapshot: func(snapshot usage.Snapshot) {
 			r.updateUsageSnapshot(snapshot)
 		},

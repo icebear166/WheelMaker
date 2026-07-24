@@ -11,37 +11,39 @@ import (
 const defaultZAIEndpoint = "https://api.z.ai/api/monitor/usage/quota/limit"
 
 type ZAIScanner struct {
-	credential string
-	client     *http.Client
-	endpoint   string
+	sources  []ProviderCredentialSource
+	client   *http.Client
+	endpoint string
 }
 
-func NewZAIScanner(credential string, client *http.Client, endpoint string) *ZAIScanner {
+func NewZAIScanner(sources []ProviderCredentialSource, client *http.Client, endpoint string) *ZAIScanner {
 	if client == nil {
 		client = http.DefaultClient
 	}
 	if strings.TrimSpace(endpoint) == "" {
 		endpoint = defaultZAIEndpoint
 	}
-	return &ZAIScanner{credential: strings.TrimSpace(credential), client: client, endpoint: endpoint}
+	return &ZAIScanner{sources: uniqueCredentialSources(sources), client: client, endpoint: endpoint}
 }
 
 func (s *ZAIScanner) Scan(ctx context.Context) ProviderSnapshot {
 	result := ProviderSnapshot{ID: ProviderZAI, Name: "ZAI", Accounts: []Account{}}
-	if s == nil || s.credential == "" {
+	if s == nil || len(s.sources) == 0 {
 		result.Status, result.Message = ProviderUnavailable, "not authenticated"
 		return result
 	}
-	payload, message := fetchProviderJSON(ctx, s.client, s.endpoint, s.credential)
-	account := Account{LocalID: "opencode", Identity: Identity{Kind: "source", Label: "OpenCode"}, Limits: []Limit{}}
-	if message != "" {
-		account.Status, account.Message = ProviderError, message
-	} else if limits, plan, err := parseZAILimits(payload); err != nil {
-		account.Status, account.Message = ProviderError, "invalid response"
-	} else {
-		account.Status, account.Limits, account.Plan = ProviderOK, limits, plan
+	for _, source := range s.sources {
+		payload, message := fetchProviderJSON(ctx, s.client, s.endpoint, source.Credential)
+		account := Account{LocalID: source.LocalID, Identity: Identity{Kind: "source", Label: source.Label}, Limits: []Limit{}}
+		if message != "" {
+			account.Status, account.Message = ProviderError, message
+		} else if limits, plan, err := parseZAILimits(payload); err != nil {
+			account.Status, account.Message = ProviderError, "invalid response"
+		} else {
+			account.Status, account.Limits, account.Plan = ProviderOK, limits, plan
+		}
+		result.Accounts = append(result.Accounts, account)
 	}
-	result.Accounts = []Account{account}
 	result.Status = providerStatus(result.Accounts)
 	return result
 }

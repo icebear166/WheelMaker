@@ -241,6 +241,7 @@ func (h *Hub) setupRegistrySync() {
 		HubID:             hubID,
 		ReconnectInterval: 2 * time.Second,
 		StateDir:          filepath.Dir(filepath.Dir(h.dbPath)),
+		APIKeys:           h.cfg.APIKeys,
 	}, projects)
 	projectsByID := make(map[string]terminalpkg.Project, len(projects))
 	for _, project := range projects {

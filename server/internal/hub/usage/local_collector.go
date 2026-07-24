@@ -10,6 +10,9 @@ type LocalCollector struct {
 	AuthPath                string
 	FlickerCredentialPath   string
 	KimiCodeCredentialsPath string
+	KimiAPIKey              string
+	ZAIAPIKey               string
+	DeepSeekAPIKey          string
 	Client                  *http.Client
 	Binary                  string
 	Timeout                 time.Duration
@@ -39,7 +42,10 @@ func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
 		authPath = defaultOpenCodeAuthPath()
 	}
 	credentials := readOpenCodeCredentials(authPath)
-	kimiSources := make([]KimiCredentialSource, 0, 2)
+	kimiSources := make([]KimiCredentialSource, 0, 3)
+	if c.KimiAPIKey != "" {
+		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: c.KimiAPIKey})
+	}
 	if credential := credentials[ProviderKimi]; credential != "" {
 		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "opencode", Label: "OpenCode", Credential: credential})
 	}
@@ -54,11 +60,19 @@ func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
 	if flickerPath == "" {
 		flickerPath = defaultFlickerCredentialPath()
 	}
+	zaiSources := []ProviderCredentialSource{
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: c.ZAIAPIKey},
+		{LocalID: "opencode", Label: "OpenCode", Credential: credentials[ProviderZAI]},
+	}
+	deepSeekSources := []ProviderCredentialSource{
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: c.DeepSeekAPIKey},
+		{LocalID: "opencode", Label: "OpenCode", Credential: credentials[ProviderDeepSeek]},
+	}
 	return (Collector{Scanners: []ProviderScanner{
 		NewCodexScanner(c.Binary),
 		NewFlickerScanner(readFlickerCredential(flickerPath), client, "", ""),
 		NewKimiScanner(kimiSources, client, ""),
-		NewZAIScanner(credentials[ProviderZAI], client, ""),
-		NewDeepSeekScanner(credentials[ProviderDeepSeek], client, ""),
+		NewZAIScanner(zaiSources, client, ""),
+		NewDeepSeekScanner(deepSeekSources, client, ""),
 	}}).Scan(scanContext)
 }

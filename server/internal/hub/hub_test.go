@@ -1550,6 +1550,25 @@ func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
 	}
 }
 
+func TestHubSetupRegistryPassesLimitsAPIKeysToReporter(t *testing.T) {
+	projectRoot := t.TempDir()
+	h := New(&logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "proj1", Path: projectRoot}},
+		Registry: logger.RegistryConfig{Server: "127.0.0.1", Port: 9630, HubID: "hub-usage-keys"},
+		APIKeys: logger.APIKeysConfig{
+			Kimi: "kimi-config-key", ZAI: "zai-config-key", DeepSeek: "deepseek-config-key",
+		},
+	}, filepath.Join(t.TempDir(), "state.db"))
+	h.setupRegistrySync()
+	defer h.Close()
+	if h.regSync == nil {
+		t.Fatal("registry reporter was not created")
+	}
+	if h.regSync.cfg.APIKeys.Kimi != "kimi-config-key" || h.regSync.cfg.APIKeys.ZAI != "zai-config-key" || h.regSync.cfg.APIKeys.DeepSeek != "deepseek-config-key" {
+		t.Fatalf("reporter api keys=%+v", h.regSync.cfg.APIKeys)
+	}
+}
+
 func TestHubSetupRegistryCreatesTerminalManager(t *testing.T) {
 	projectRoot := t.TempDir()
 	h := New(&logger.AppConfig{

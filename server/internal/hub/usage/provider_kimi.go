@@ -32,13 +32,14 @@ func NewKimiScanner(sources []KimiCredentialSource, client *http.Client, endpoin
 	if strings.TrimSpace(endpoint) == "" {
 		endpoint = defaultKimiEndpoint
 	}
-	filtered := make([]KimiCredentialSource, 0, len(sources))
+	converted := make([]ProviderCredentialSource, 0, len(sources))
 	for _, source := range sources {
-		source.Credential = strings.TrimSpace(source.Credential)
-		if source.Credential == "" {
-			continue
-		}
-		filtered = append(filtered, source)
+		converted = append(converted, ProviderCredentialSource(source))
+	}
+	unique := uniqueCredentialSources(converted)
+	filtered := make([]KimiCredentialSource, 0, len(unique))
+	for _, source := range unique {
+		filtered = append(filtered, KimiCredentialSource(source))
 	}
 	return &KimiScanner{sources: filtered, client: client, endpoint: endpoint}
 }

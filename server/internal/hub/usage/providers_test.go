@@ -223,6 +223,63 @@ func TestProviderErrorNeverContainsCredential(t *testing.T) {
 	}
 }
 
+func TestKimiScannerDeduplicatesCredentialBeforeRequest(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"usage":{"limit":100,"remaining":50}}`)
+	}))
+	defer server.Close()
+
+	scanner := NewKimiScanner([]KimiCredentialSource{
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: "shared-token"},
+		{LocalID: "opencode", Label: "OpenCode", Credential: "shared-token"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if requests != 1 || len(got.Accounts) != 1 || got.Accounts[0].LocalID != "wheelmaker-config" {
+		t.Fatalf("requests=%d snapshot=%+v", requests, got)
+	}
+}
+
+func TestZAIScannerDeduplicatesCredentialBeforeRequest(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":{"limits":[{"type":"TOKENS_LIMIT","unit":6,"percentage":40}]}}`)
+	}))
+	defer server.Close()
+
+	scanner := NewZAIScanner([]ProviderCredentialSource{
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: "shared-token"},
+		{LocalID: "opencode", Label: "OpenCode", Credential: "shared-token"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if requests != 1 || len(got.Accounts) != 1 || got.Accounts[0].LocalID != "wheelmaker-config" {
+		t.Fatalf("requests=%d snapshot=%+v", requests, got)
+	}
+}
+
+func TestDeepSeekScannerKeepsDistinctCredentials(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"10"}]}`)
+	}))
+	defer server.Close()
+
+	scanner := NewDeepSeekScanner([]ProviderCredentialSource{
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: "config-token"},
+		{LocalID: "opencode", Label: "OpenCode", Credential: "opencode-token"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if requests != 2 || len(got.Accounts) != 2 || got.Accounts[0].LocalID != "wheelmaker-config" || got.Accounts[1].LocalID != "opencode" {
+		t.Fatalf("requests=%d snapshot=%+v", requests, got)
+	}
+}
+
 func TestKimiMissingCredentialIsUnavailable(t *testing.T) {
 	scanner := NewKimiScanner(nil, &http.Client{}, "https://unused.invalid")
 	got := scanner.Scan(context.Background())
