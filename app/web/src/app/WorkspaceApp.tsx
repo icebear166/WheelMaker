@@ -5245,17 +5245,23 @@ export function App() {
     ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
   const desktopChatFixedPreview = isWide && chatPreviewOpen;
-  const closeSidebarTransientMenus = useCallback(() => {
+  const closeSidebarTransientMenus = useCallback((keepOpen: 'hub' | 'project' | 'prompt' | null = null) => {
     setProjectMenuOpen(false);
     setWorkspaceProjectMenuOpen(false);
     setWideProjectActionMenu(null);
     setMobileProjectActionMenu(null);
     setProjectSessionActionMenu(null);
     setSessionArchiveMenuOpen(false);
-    setChatHubMenuOpen(false);
+    if (keepOpen !== 'hub') {
+      setChatHubMenuOpen(false);
+    }
     setChatHubColorMenu(null);
-    setChatTitleProjectMenuOpen(false);
-    setChatTitlePromptMenuOpen(false);
+    if (keepOpen !== 'project') {
+      setChatTitleProjectMenuOpen(false);
+    }
+    if (keepOpen !== 'prompt') {
+      setChatTitlePromptMenuOpen(false);
+    }
   }, []);
   const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {
     const target = event.target;
@@ -5277,7 +5283,14 @@ export function App() {
         return;
       }
       if (target?.closest('button, [role="button"]')) {
-        closeSidebarTransientMenus();
+        const keepOpen = target?.closest('.chat-hub-summary-button')
+          ? 'hub'
+          : target?.closest('.chat-title-project-button')
+            ? 'project'
+            : target?.closest('.chat-title-prompt-icon-button, .chat-title-session-button')
+              ? 'prompt'
+              : null;
+        closeSidebarTransientMenus(keepOpen);
       }
     };
     window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
@@ -15795,7 +15808,7 @@ export function App() {
       title="Open settings"
       aria-label="Open settings"
     >
-      <span className="app-product-mark" aria-hidden="true" />
+      <img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />
     </button>
   );
 

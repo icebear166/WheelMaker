@@ -2744,7 +2744,7 @@ describe('top bar action entry points', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
-    expect(mainTsx).toContain('<span className="app-product-mark" aria-hidden="true" />');
+    expect(mainTsx).toContain('<img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />');
     expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
     expect(mainTsx).toContain('aria-label="Open settings"');
   });
@@ -2759,5 +2759,20 @@ describe('top bar action entry points', () => {
     expect(globalPointerStart).toBeGreaterThanOrEqual(0);
     expect(globalPointerEffect).toContain('setProjectMenuOpen(false);');
     expect(globalPointerEffect).not.toContain('setChatTitleProjectMenuOpen(false);');
+  });
+
+  test('keeps a title-bar menu open until its own toggle handles the click', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const captureEffectStart = mainTsx.indexOf('const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {');
+    const captureEffectEnd = mainTsx.indexOf("window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);", captureEffectStart);
+    const captureEffect = mainTsx.slice(captureEffectStart, captureEffectEnd);
+
+    expect(captureEffectStart).toBeGreaterThanOrEqual(0);
+    expect(captureEffectEnd).toBeGreaterThan(captureEffectStart);
+    expect(captureEffect).toContain("target?.closest('.chat-hub-summary-button')");
+    expect(captureEffect).toContain("target?.closest('.chat-title-project-button')");
+    expect(captureEffect).toContain("target?.closest('.chat-title-prompt-icon-button, .chat-title-session-button')");
+    expect(captureEffect).toContain('closeSidebarTransientMenus(keepOpen);');
   });
 });

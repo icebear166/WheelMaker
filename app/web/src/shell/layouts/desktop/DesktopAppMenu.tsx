@@ -219,7 +219,7 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
           title="WheelMaker menu"
           onClick={() => setMenuOpen(open => !open)}
         >
-          <span className="app-product-mark" aria-hidden="true" />
+          <img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />
           {canUpdateDesktop && desktopUpdate.status === 'available' ? (
             <span className="desktop-update-dot desktop-update-dot-app-menu" data-desktop-update-dot="app-menu" aria-hidden="true" />
           ) : null}

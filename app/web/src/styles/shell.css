@@ -1644,9 +1644,6 @@
   width: 20px;
   height: 20px;
   display: block;
-  background: currentColor;
-  -webkit-mask: url('./icon-mark.svg') center / contain no-repeat;
-  mask: url('./icon-mark.svg') center / contain no-repeat;
 }
 
 .desktop-app-menu-trigger .app-product-mark {
