@@ -735,6 +735,31 @@ describe('web chat file peek viewer', () => {
     );
   });
 
+  test('opens a file-only context menu with copy and Desktop actions', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+    const menuTsx = readSourceText(
+      path.join(projectRoot, 'web', 'src', 'chat', 'ChatFileLinkContextMenu.tsx'),
+    );
+
+    expect(mainTsx).toContain("import {ChatFileLinkContextMenu");
+    expect(mainTsx).toContain(
+      'const [chatFileLinkMenu, setChatFileLinkMenu] = useState<ChatFileLinkMenuState | null>(null);',
+    );
+    expect(mainTsx).toContain('onContextMenu={event => {');
+    expect(mainTsx).toContain('if (!targetFile) return;');
+    expect(mainTsx).toContain('setChatFileLinkMenu({');
+    expect(mainTsx).toContain('<ChatFileLinkContextMenu');
+    expect(mainTsx).toContain('canInvokeDesktopFileAction(');
+    expect(mainTsx).toContain('invokeDesktopFileAction(');
+    expect(mainTsx).toContain('absolutePath: chatFileLinkMenu.link.absolutePath');
+    expect(mainTsx).toContain('relativePath: chatFileLinkMenu.link.relativePath');
+    expect(mainTsx).toContain("setToastMessage('Copied relative path.')");
+    expect(mainTsx).toContain("setToastMessage('Copied absolute path.')");
+    expect(stylesCss).toContain('.chat-file-link-context-menu');
+    expect(menuTsx).not.toContain('onLongPress');
+  });
+
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);

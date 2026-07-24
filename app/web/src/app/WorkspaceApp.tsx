@@ -36,7 +36,9 @@ import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
 import {
+  canInvokeDesktopFileAction,
   getDesktopWindowBridge,
+  invokeDesktopFileAction,
   invokeDesktopProjectFileAction,
   type DesktopProjectFileAction,
 } from '../platform/desktop/desktopRuntime';
@@ -120,6 +122,7 @@ import {
 import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
+import {ChatFileLinkContextMenu, type ChatFileLinkMenuAction} from '../chat/ChatFileLinkContextMenu';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
@@ -519,6 +522,7 @@ import {
 import {
   isAbsolutePreviewFilePath,
   resolvePreviewFileLink,
+  type PreviewFileLink,
 } from '../preview/previewFileLink';
 import {splitUnifiedDiffFileBlocks} from '../git/unifiedDiffFiles';
 import { WorkspaceController } from '../workspace/WorkspaceController';
@@ -772,6 +776,13 @@ type PreviewSelectionMenuState = {
 };
 type PreviewSelectionSnapshot = PreviewSelectionMenuState & {
   range: Range | null;
+};
+type ChatFileLinkMenuState = {
+  x: number;
+  y: number;
+  projectId: string;
+  projectRoot: string;
+  link: PreviewFileLink;
 };
 
 function isAbortError(error: unknown): boolean {
@@ -2922,6 +2933,7 @@ export function App() {
   const quickFileQueryIdRef = useRef(0);
   const quickFileQuerySessionIdRef = useRef(`quick-file-${Date.now()}`);
   const [previewSelectionMenu, setPreviewSelectionMenu] = useState<PreviewSelectionMenuState | null>(null);
+  const [chatFileLinkMenu, setChatFileLinkMenu] = useState<ChatFileLinkMenuState | null>(null);
   const previewSelectionMenuRef = useRef<HTMLDivElement | null>(null);
   const previewContextSelectionRef = useRef<PreviewSelectionSnapshot | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -16234,7 +16246,7 @@ export function App() {
   const resolveChatFileLink = (
     href: string,
     projectRoot = currentProject?.path ?? '',
-  ): { path: string; line: number | null } | null =>
+  ): PreviewFileLink | null =>
     resolvePreviewFileLink(href, projectRoot);
   const chatMarkdownUrlTransform = useCallback((value: string) => {
     const trimmed = value.trim();
@@ -16351,6 +16363,17 @@ export function App() {
               }
               event.preventDefault();
               openChatFilePeek(targetFile.path, jumpLine ?? null, linkProjectId);
+            }}
+            onContextMenu={event => {
+              if (!targetFile) return;
+              event.preventDefault();
+              setChatFileLinkMenu({
+                x: Math.min(event.clientX, Math.max(8, window.innerWidth - 212)),
+                y: Math.min(event.clientY, Math.max(8, window.innerHeight - 140)),
+                projectId: linkProjectId,
+                projectRoot: linkProjectRoot,
+                link: targetFile,
+              });
             }}
           >
             <>
@@ -19385,6 +19408,47 @@ export function App() {
     navigator.clipboard.writeText(previewSelectionMenu.text).catch(() => undefined);
     setPreviewSelectionMenu(null);
   };
+  const handleChatFileLinkMenuAction = (action: ChatFileLinkMenuAction) => {
+    if (!chatFileLinkMenu) return;
+    const target = {
+      absolutePath: chatFileLinkMenu.link.absolutePath,
+      projectRoot: chatFileLinkMenu.projectRoot,
+      relativePath: chatFileLinkMenu.link.relativePath,
+    };
+    const relativePath = chatFileLinkMenu.link.relativePath;
+    const absolutePath = chatFileLinkMenu.link.absolutePath;
+    setChatFileLinkMenu(null);
+
+    if (action === 'copy-relative') {
+      if (relativePath === null) return;
+      writeTextToClipboard(relativePath)
+        .then(() => setToastMessage('Copied relative path.'))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`Failed to copy relative path: ${reason}`);
+        });
+      return;
+    }
+    if (action === 'copy-absolute') {
+      writeTextToClipboard(absolutePath)
+        .then(() => setToastMessage('Copied absolute path.'))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`Failed to copy absolute path: ${reason}`);
+        });
+      return;
+    }
+
+    const desktopBridge = getDesktopWindowBridge();
+    if (!desktopBridge) return;
+    const failurePrefix = action === 'vscode'
+      ? 'Failed to open file in VS Code'
+      : 'Failed to show file in File Explorer';
+    invokeDesktopFileAction(desktopBridge, action, target).catch(err => {
+      const reason = err instanceof Error ? err.message : String(err);
+      setToastMessage(`${failurePrefix}: ${reason}`);
+    });
+  };
   const copyChatFilePreviewPath = () => {
     if (!chatFilePeek) return;
     const previewProject = projects.find(item => item.projectId === previewWorkbench.activeProjectId);
@@ -19955,6 +20019,31 @@ export function App() {
       </button>
     </div>
   ) : null;
+  const chatFileLinkDesktopBridge = getDesktopWindowBridge();
+  const chatFileLinkDesktopTarget = chatFileLinkMenu ? {
+    absolutePath: chatFileLinkMenu.link.absolutePath,
+    projectRoot: chatFileLinkMenu.projectRoot,
+    relativePath: chatFileLinkMenu.link.relativePath,
+  } : null;
+  const chatFileLinkContextMenu = chatFileLinkMenu && chatFileLinkDesktopTarget ? (
+    <ChatFileLinkContextMenu
+      x={chatFileLinkMenu.x}
+      y={chatFileLinkMenu.y}
+      link={chatFileLinkMenu.link}
+      canOpenInVSCode={canInvokeDesktopFileAction(
+        chatFileLinkDesktopBridge,
+        'vscode',
+        chatFileLinkDesktopTarget,
+      )}
+      canShowInFolder={canInvokeDesktopFileAction(
+        chatFileLinkDesktopBridge,
+        'folder',
+        chatFileLinkDesktopTarget,
+      )}
+      onAction={handleChatFileLinkMenuAction}
+      onClose={() => setChatFileLinkMenu(null)}
+    />
+  ) : null;
 
   const archiveTarget = confirmTarget?.kind === 'archive' ? confirmTarget : null;
   const archiveBatchTarget = confirmTarget?.kind === 'archiveBatch' ? confirmTarget : null;
@@ -20180,6 +20269,7 @@ export function App() {
       <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}
+      {chatFileLinkContextMenu}
       {projectSessionActionMenuOverlay}
       {chatTitleProjectMenu}
       {renderMobileProjectActionSheet()}
