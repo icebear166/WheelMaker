@@ -2,6 +2,7 @@ import React from 'react';
 
 import {ModelEfficiencySnapshotContent} from '../modelEfficiency/ModelEfficiencyContent';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
+import {SessionIcon} from '../chat/sessionlist/SessionIcon';
 import type {UsageViewSnapshot} from './usageTypes';
 import {UsageDetailContent} from './UsageFeatureSurface';
 
@@ -80,7 +81,7 @@ export function MobileUsageDialog({
               disabled={refreshDisabled}
               onClick={handleRefresh}
             >
-              <span className={`codicon codicon-refresh${refreshing ? ' spinning' : ''}`} aria-hidden="true" />
+              <SessionIcon name="refreshCw" spin={refreshing} />
             </button>
             <button
               type="button"
@@ -89,7 +90,7 @@ export function MobileUsageDialog({
               title="Close monitor"
               onClick={onClose}
             >
-              <span className="codicon codicon-close" aria-hidden="true" />
+              <SessionIcon name="x" />
             </button>
           </span>
         </header>

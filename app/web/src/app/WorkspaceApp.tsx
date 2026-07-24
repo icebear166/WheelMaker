@@ -126,7 +126,7 @@ import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
-import {useMenuExitState} from '../chat/sessionlist/menuExit';
+import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -3362,14 +3362,14 @@ export function App() {
       chatCoreConfigTriggerRef.current?.focus();
     }
   }, [setChatConfigOverflowOpen]);
-  const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
+  const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const chatHubPopoverRef = useRef<HTMLDivElement | null>(null);
-  const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen] = useState(false);
+  const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();
   const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitleProjectMenuRef = useRef<HTMLDivElement | null>(null);
-  const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
+  const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -6312,7 +6312,7 @@ export function App() {
         {chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(
           <div
             ref={chatHubPopoverRef}
-            className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}`}
+            className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}${chatHubMenuExiting ? ' sl-menu-exit' : ''}`}
             role="dialog"
             aria-label="Hub and project display preferences"
             style={chatHubPopoverStyle}
@@ -17234,7 +17234,7 @@ export function App() {
       <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
         {activeChatBreadcrumbProjectName}
       </span>
-      <span className="codicon codicon-chevron-down" aria-hidden="true" />
+      <SessionIcon name="chevronDown" />
     </button>
   );
   const renderDesktopChatBreadcrumbTitle = () => (
@@ -17250,7 +17250,7 @@ export function App() {
         disabled={!chatTitlePromptMenuAvailable}
         onClick={toggleChatTitlePromptMenu}
       >
-        <span className="codicon codicon-history" aria-hidden="true" />
+        <SessionIcon name="history" />
       </button>
       <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
         {activeChatBreadcrumbLabel}
@@ -17276,7 +17276,7 @@ export function App() {
         <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
           {activeChatBreadcrumbProjectName}
         </span>
-        <span className="codicon codicon-chevron-down" aria-hidden="true" />
+        <SessionIcon name="chevronDown" />
       </button>
       <button
         ref={chatTitlePromptButtonRef}
@@ -17308,7 +17308,7 @@ export function App() {
           aria-label="Search current session"
           aria-pressed={chatSearchOpen}
         >
-          <span className="codicon codicon-search" aria-hidden="true" />
+          <SessionIcon name="search" />
         </button>
         <button
           type="button"
@@ -17318,7 +17318,7 @@ export function App() {
           aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
           aria-pressed={terminalOpen}
         >
-          <span className="codicon codicon-terminal" aria-hidden="true" />
+          <SessionIcon name="terminal" />
         </button>
         <button
           type="button"
@@ -17328,7 +17328,7 @@ export function App() {
           aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
           aria-pressed={chatPreviewOpen}
         >
-          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          <SessionIcon name="panelRight" />
           {!chatPreviewOpen && previewTabCount > 0 ? (
             <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
           ) : null}
@@ -18741,7 +18741,7 @@ export function App() {
   const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
       ref={chatTitleProjectMenuRef}
-      className="chat-title-project-menu"
+      className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       aria-label="Switch project"
       style={chatTitleProjectMenuStyle}
@@ -18788,7 +18788,7 @@ export function App() {
                 }
               }}
             >
-              <span className="codicon codicon-add" aria-hidden="true" />
+              <SessionIcon name="plus" />
             </button>
           </div>
         );
@@ -18798,7 +18798,7 @@ export function App() {
   const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
     <div
       ref={chatTitlePromptMenuRef}
-      className="chat-title-prompt-menu"
+      className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       aria-label="Prompt history"
       style={chatTitlePromptMenuStyle}

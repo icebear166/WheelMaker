@@ -1,6 +1,7 @@
 import React, { type ReactNode, useCallback, useEffect, useState, useRef } from 'react';
 import { checkDesktopUpdate, type DesktopUpdateCheck } from '../../../platform/desktop/desktopUpdate';
 import { getDesktopWindowBridge, openLocalDevPanelEvent } from '../../../platform/desktop/desktopRuntime';
+import { useMenuExitFlag } from '../../../chat/sessionlist/menuExit';
 
 type DesktopDragRegionProps = {
   className: string;
@@ -63,7 +64,7 @@ export function DesktopDragRegion({ className, children }: DesktopDragRegionProp
 
 export function DesktopWindowControls() {
   const bridge = getDesktopWindowBridge();
-  const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const [extensionsOpen, setExtensionsOpen, extensionsExiting] = useMenuExitFlag();
   const [localDevDialogOpen, setLocalDevDialogOpen] = useState(false);
   const [localDevSource, setLocalDevSource] = useState('');
   const [localDevError, setLocalDevError] = useState('');
@@ -85,6 +86,32 @@ export function DesktopWindowControls() {
   useEffect(() => {
     void refreshDesktopUpdate();
   }, [refreshDesktopUpdate]);
+
+  const extensionRootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!extensionsOpen || typeof window.addEventListener !== 'function') {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && extensionRootRef.current?.contains(target)) {
+        return;
+      }
+      setExtensionsOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setExtensionsOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [extensionsOpen, setExtensionsOpen]);
 
   if (!bridge) {
     return null;
@@ -151,7 +178,7 @@ export function DesktopWindowControls() {
     <>
       <div className="desktop-window-controls" data-desktop-window-controls={true}>
         {hasWindowsExtensions ? (
-          <div className="desktop-windows-extension-root" data-desktop-window-interactive={true}>
+          <div className="desktop-windows-extension-root" data-desktop-window-interactive={true} ref={extensionRootRef}>
             <button
               type="button"
               className="desktop-titlebar-button desktop-windows-extension-button"
@@ -170,7 +197,7 @@ export function DesktopWindowControls() {
               ) : null}
             </button>
             {extensionsOpen ? (
-              <div className="desktop-windows-extension-menu" role="menu" aria-label="Windows extensions">
+              <div className={`desktop-windows-extension-menu${extensionsExiting ? ' sl-menu-exit' : ''}`} role="menu" aria-label="Windows extensions">
                 <button
                   type="button"
                   role="menuitemcheckbox"

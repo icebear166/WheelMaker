@@ -811,7 +811,7 @@ describe('web chat integration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);');
+    expect(mainTsx).toContain('const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();');
     expect(mainTsx).toContain('const chatHubMenuRef = useRef<HTMLDivElement | null>(null);');
     expect(mainTsx).toContain('const renderChatHubSummary = useCallback(() => {');
     expect(mainTsx).not.toContain('const renderChatHubSummary = useCallback((mobile = false) => {');
@@ -2169,9 +2169,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('ref={chatTitlePromptButtonRef}');
     expect(mainTsx).toContain('aria-haspopup="menu"');
     expect(mainTsx).toContain('aria-expanded={chatTitlePromptMenuOpen}');
-    expect(mainTsx).toContain('className="chat-title-project-menu"');
+    expect(mainTsx).toContain("className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain('className={`chat-title-project-menu-item${selected ? \' selected\' : \'\'}`}');
-    expect(mainTsx).toContain('className="chat-title-prompt-menu"');
+    expect(mainTsx).toContain("className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(mainTsx).toContain('className="chat-title-actions"');
@@ -2221,14 +2221,47 @@ describe('web chat integration', () => {
     expect(promptMenuBlock).toContain('position: fixed;');
     expect(promptMenuBlock).toContain('overflow-y: auto;');
     const previewToggleBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle');
+    expect(previewToggleBlock).toContain('width: 28px;');
     expect(previewToggleBlock).toContain('border: 0;');
     expect(previewToggleBlock).toContain('background: transparent;');
-    expect(previewToggleBlock).toContain('color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));');
+    expect(previewToggleBlock).toContain('color: var(--text-tertiary);');
     expect(previewToggleBlock).not.toContain('var(--surface-raised)');
-    const previewToggleActiveBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle:hover');
-    expect(previewToggleActiveBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 13%, transparent);');
+    const previewToggleHoverBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle:hover');
+    expect(previewToggleHoverBlock).toContain('background: var(--hover);');
+    expect(previewToggleHoverBlock).toContain('color: var(--text-primary);');
     const previewToggleOpenBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle.active');
+    expect(previewToggleOpenBlock).toContain('background: var(--accent-soft-bg);');
     expect(previewToggleOpenBlock).not.toContain('border-color:');
+    const terminalToggleBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-terminal-toggle');
+    expect(terminalToggleBlock).toContain('width: 28px;');
+    expect(terminalToggleBlock).toContain('color: var(--text-tertiary);');
+    expect(stylesCss).not.toContain('.chat-search-toggle {');
+    const sessionTitleBlock2 = cssRuleBlock(stylesCss, '.chat-title-session-text');
+    expect(sessionTitleBlock2).toContain('color: var(--text-primary);');
+    expect(sessionTitleBlock2).toContain('font-weight: 500;');
+  });
+
+  test('top bar menus share the session glass recipe and menu exit wiring', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';");
+    expect(mainTsx).toContain('const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();');
+    expect(mainTsx).toContain('const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();');
+    expect(mainTsx).toContain("className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
+    expect(mainTsx).toContain("className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
+    expect(mainTsx).toContain("chatHubMenuExiting ? ' sl-menu-exit' : ''");
+    const menuRule = cssRuleBlock(stylesCss, '.chat-title-prompt-menu,\n.chat-hub-popover');
+    expect(menuRule).toContain('background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);');
+    expect(menuRule).toContain('blur(12px) saturate(1.1)');
+    expect(menuRule).toContain('border: 1px solid var(--border-faint);');
+    expect(menuRule).toContain('box-shadow: var(--shadow-overlay);');
+    expect(menuRule).toContain('padding: 4px;');
+    expect(menuRule).toContain('animation: sl-menu-in 140ms var(--ease-out);');
+    expect(stylesCss).not.toMatch(/\.chat-title-project-menu,[\s\S]{0,200}workspaceMenuEnter/);
+    expect(stylesCss).not.toMatch(/\.chat-title-prompt-menu,[\s\S]{0,200}workspaceMenuEnter/);
+    expect(stylesCss).not.toMatch(/\.chat-hub-popover,[\s\S]{0,200}workspaceMenuEnter/);
   });
 
   test('wide project session rail actions use project-scoped chat flows', () => {

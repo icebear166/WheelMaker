@@ -211,15 +211,15 @@
   border-radius: var(--chat-menu-icon-button-radius);
   padding: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
+  color: var(--text-tertiary);
   cursor: pointer;
 }
 
 .chat-menu-icon-button:hover,
 .chat-menu-icon-button:focus-visible,
 .chat-menu-icon-button[aria-expanded='true'] {
-  background: color-mix(in srgb, var(--accent-primary) 13%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
+  background: var(--hover);
+  color: var(--text-primary);
   outline: none;
 }
 
@@ -639,6 +639,7 @@
 @media (prefers-reduced-motion: reduce) {
   .gesture-nav-pill,
   .gesture-nav-capsule,
+  .desktop-windows-extension-menu,
   .floating-control-stack[data-drag-state='gesture-open'] {
     animation: none;
     transition: none;
@@ -1636,11 +1637,15 @@
   right: 4px;
   z-index: 100;
   width: 190px;
-  padding: 5px;
-  border: 1px solid var(--border-subtle);
+  padding: 4px;
+  border: 1px solid var(--border-faint);
   border-radius: 7px;
-  background: var(--surface-panel);
-  box-shadow: 0 16px 36px color-mix(in srgb, #000 34%, transparent);
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  box-shadow: var(--shadow-overlay);
+  transform-origin: top right;
+  animation: sl-menu-in 140ms var(--ease-out);
 }
 
 .desktop-windows-extension-menu button {
@@ -1812,5 +1817,13 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-right > .content:has(> .chat-title-bar) {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .desktop-windows-extension-menu {
+    background: var(--surface-overlay);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }

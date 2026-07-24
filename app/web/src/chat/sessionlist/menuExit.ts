@@ -72,3 +72,71 @@ export function useMenuExitState<T extends object>() {
   return [value, setValue, exiting] as const;
 }
 
+/**
+ * useState<boolean> drop-in for popup state: setting false plays the CSS exit
+ * animation first (`.sl-menu-exit` via the returned `exiting` flag) and only
+ * flips to false after MENU_EXIT_MS; setting true cancels any in-flight exit.
+ * A functional toggle during the exit window reopens instead of double-closing.
+ */
+export function useMenuExitFlag() {
+  const [open, setOpenRaw] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const [exiting, setExiting] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  const cancelExit = useCallback(() => {
+    if (timerRef.current !== null) {
+      if (typeof window.clearTimeout === 'function') {
+        window.clearTimeout(timerRef.current);
+      } else {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = null;
+    }
+    setExiting(false);
+  }, []);
+
+  useEffect(() => cancelExit, [cancelExit]);
+
+  const setOpen = useCallback(
+    (next: boolean | ((current: boolean) => boolean)) => {
+      const resolved = typeof next === 'function' ? next(openRef.current) : next;
+      if (resolved) {
+        cancelExit();
+        setOpenRaw(true);
+        return;
+      }
+      if (!openRef.current) {
+        return;
+      }
+      const reducedMotion =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reducedMotion) {
+        setOpenRaw(false);
+        return;
+      }
+      if (timerRef.current !== null) {
+        if (typeof next === 'function') {
+          cancelExit(); // toggle during exit reopens
+        }
+        return; // repeated plain close keeps the single in-flight timer
+      }
+      setExiting(true);
+      const onExitDone = () => {
+        timerRef.current = null;
+        setExiting(false);
+        setOpenRaw(false);
+      };
+      timerRef.current =
+        typeof window.setTimeout === 'function'
+          ? window.setTimeout(onExitDone, MENU_EXIT_MS)
+          : (setTimeout(onExitDone, MENU_EXIT_MS) as unknown as number);
+    },
+    [cancelExit],
+  );
+
+  return [open, setOpen, exiting] as const;
+}
+

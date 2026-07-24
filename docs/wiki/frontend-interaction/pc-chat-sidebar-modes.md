@@ -7,7 +7,9 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 ## 固定顶栏与会话面板标题栏
 
 - **顶部地址栏**保留设置按钮、当前 Project 下拉与 hubs 下拉，搜索/archive 和会话栏展开按钮不在其中。PC 左段固定 360px，与浮动/滑出/固定会话面板共用 `--chat-session-panel-width`，内部按「设置 → 8px 间距 → Project → 弹性空白 → Hubs」排列；Hubs 右边缘与下方 Sessions 卡片右边缘对齐。中部只保留 prompt 历史入口与标题，并独占可伸缩空间，终端/预览操作固定在右侧。桌面 Shell 在 Session 与 Chat 内容上方只渲染一个顶栏实例；浮动、滑出和 pin 只替换其下方的会话面板，不移动、卸载或重新挂载顶栏。地址栏不读取 session 搜索展开状态：搜索只改变 Sessions 面板标题栏和列表内容。右侧 Preview 是顶栏所属主工作区的同级区域，继续使用自己的标题栏。移动端继续使用原有 Project 与 session 标题组合。
+- **顶栏控件语言**：右段 search / terminal / preview 与中部 history 入口统一 28px ghost 按钮（`text-tertiary` 默认 → hover `--hover` 底 + `text-primary`），accent 仅出现于 active 态；Project 下拉与 Hubs 计数为 ghost 文本按钮，不使用 accent chip；中部 session 标题为 `text-primary` + 500 字重。顶栏弹窗族（项目切换、prompt 历史、Hubs、Desktop 扩展菜单）统一毛玻璃材质，统一 `sl-menu-in` / `sl-menu-exit` 进退场。
 - **浮动卡片标题栏**统一由 `ChatEdgeSurfaceHeader` 提供，Sessions、Plan、Limits 都使用 36px 高度、左侧折叠按钮、11px uppercase 标题和右侧操作区。展开态使用向下 chevron，收起态使用向右 chevron；收起只隐藏正文。Plan 可以在收起标题栏中保留一行截断的当前步骤和进度。
+- **Plan 进度表达**：Plan 标题栏在 `n/N` 文本旁显示 3px 分段进度轨，每步一段（完成=绿、进行中=琥珀 1.6s 脉动、待办=低透空槽）；>12 步降级为连续 accent 填充条（宽度 = 完成占比、前沿脉动）；`n/N` 文本常驻。步骤标记使用 Lucide 描边图标，进行中同步脉动。移动端 Plan pill 为毛玻璃材质，保持纯文本进度、不加轨。
 - **Sessions 布局操作**固定在标题栏右侧，顺序是完整会话栏、Pin；完整会话栏使用 `layout-sidebar-left`，打开后切换为 `layout-sidebar-left-off`。浮动态在完整会话栏图标左侧固定显示 **Ctrl+1**，强化该图标与键盘快捷键的对应关系；滑出态与 pin 态不显示这项提示。滑出态把 archive 与 search 放在标题后的左侧操作区，关闭完整栏与 Pin 保持右侧位置；pin 态只保留右侧高亮 Pin。浮动态标题显示 **Recent Sessions**，滑出与 pin 态继续显示 **Sessions**。
 - **会话工具栏可见性**：PC 与移动端的会话工具栏都常态显示，功能集合一致（来源：[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)；2026-07-24 复审后取消 PC 端常态隐藏方案）。
 
@@ -16,7 +18,7 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 ## 浮动态滑出会话导航
 
 - 默认左侧悬浮列按 `Recent Sessions → Plan → Limits` 排列。布局预留宽度固定 360px，从聊天主区左缘起始，并与顶栏下缘保留 8px 垂直间距；列内统一保留 8px 左右 padding，因此三张可见卡片的宽度和左右边界一致。Recent 列表为空时仍保留 Recent Sessions 面板，保证完整会话导航始终有入口。
-- 浮动态的 **RECENT SESSIONS** 标题栏和 Project 分组内容共用一张 8px 圆角卡片，内容区不再重复显示 **RECENT** 分区标题。外层会话面板提供唯一的边框与不透明背景，Recent Project 分组在该模式下移除重复的边框和圆角，避免出现大于卡片的方形底层。Plan 与 Limits 使用相同的卡片圆角、背景、标题栏和列内 padding。
+- 浮动态的 **RECENT SESSIONS** 标题栏和 Project 分组内容共用一张 8px 圆角卡片，内容区不再重复显示 **RECENT** 分区标题。外层会话面板提供唯一的边框与不透明背景，Recent Project 分组在该模式下移除重复的边框和圆角，避免出现大于卡片的方形底层。Recent、Plan 与 Monitor 三张浮窗卡片共用同一实心面板材质（8px 圆角、发丝边、`--shadow-floating`、顶部 1px 内高光）、标题栏和列内 padding。
 - Recent 内容继续复用同一个 renderer：浮动态通过 presentation 选项隐藏桌面分区标题，只显示 Project 分组与 session 行；滑出和 pin 模式继续显示 **RECENT**、history 图标和轻微强调背景，内部再按 Project 分组；完整列表在 Recent 后直接进入普通 Project 卡片，不额外增加 Projects 标题。移动端保持原有 Recent 标题结构。
 - 点「全部 session」滑出完整会话导航。滑出面板与 pin 态共用 `ChatSessionPanel` 框架、标题栏和滚动容器，宽度固定 360px，并以平直全高表面贴齐聊天主区左上角后动画滑入/滑出；面板背景仍覆盖全高，只在 Sessions 标题栏上方保留 8px 同背景空白，使标题和操作图标与默认悬浮卡保持同一纵向位置。打开期间整列 Sessions/Plan/Limits 保持挂载但隐藏并禁用交互，避免两个悬浮层重叠。
 - 滑出面板常挂载，保留 scrollTop；鼠标移出后等待 2 秒再自动滑回，期间重新移入会取消关闭。搜索框聚焦、菜单打开、拖拽滚动条期间抑制自动关闭；用户主动关闭、Pin、切换页面或打开侧栏设置时立即关闭并清理计时器。

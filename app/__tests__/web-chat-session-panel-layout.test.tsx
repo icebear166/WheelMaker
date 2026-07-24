@@ -148,9 +148,14 @@ describe('PC chat session-panel layout', () => {
     expect(stackRule).toContain('padding: 0 0 8px 8px;');
 
     expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded')).toContain('border-radius: 8px;');
-    const glassRule = cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass');
-    expect(glassRule).toContain('border: 1px solid');
-    expect(glassRule).toContain('box-shadow: none;');
+    const glassRule = cssRuleBlock(
+      chatStyles,
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-function-surface.desktop .chat-edge-surface-glass',
+    );
+    expect(glassRule).toContain('border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);');
+    expect(glassRule).toContain('box-shadow:');
+    expect(glassRule).toContain('var(--shadow-floating)');
+    expect(glassRule).toContain('inset 0 1px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);');
     expect(glassRule).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));');
     expect(glassRule).toContain('backdrop-filter: none;');
 
@@ -177,6 +182,17 @@ describe('PC chat session-panel layout', () => {
       '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-plan-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-function-surface.desktop:not(.collapsed)',
     );
     expect(expandedCardRule).toContain('border-radius: 8px;');
+  });
+
+  it('keeps floating-card material on the glass layer only, with no aside-level residue', () => {
+    const recentAsideRule = cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop');
+    expect(recentAsideRule).not.toContain('box-shadow');
+    expect(recentAsideRule).not.toContain('border: 1px solid');
+    const planAsideRule = cssRuleBlock(chatStyles, '.chat-plan-surface.desktop');
+    expect(planAsideRule).not.toContain('box-shadow');
+    expect(planAsideRule).not.toContain('background:');
+    expect(planAsideRule).not.toContain('border: 1px solid');
+    expect(chatStyles).not.toContain('.chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass {');
   });
 
   it('uses one shared title-bar typography and control geometry for all floating cards', () => {
