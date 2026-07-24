@@ -856,9 +856,18 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('chat-header-search-wrap${mobile');
     expect(mainTsx).not.toContain('chat-header-archive-control compact${mobile');
     expect(mainTsx).toContain('renderChatHubSummary()');
-    expect(mainTsx).toMatch(
-      /const renderChatSessionHeader = \(mobile: boolean\) => \{[\s\S]*?const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;[\s\S]*?const chatSessionHeaderClassName = `sidebar-title-row chat-session-header\$\{searchHeaderExpanded \? ' search-open' : ''\}\$\{mobile \? ' mobile' : ''\}`;[\s\S]*?\{!searchHeaderExpanded \? \([\s\S]*?\{renderChatMenuSettingsButton\(\)\}[\s\S]*?\) : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatArchiveControls\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(\)\}/,
-    );
+    const chatSessionHeaderStart = mainTsx.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
+    const chatSessionHeaderEnd = mainTsx.indexOf('const renderMobileChatSessionSheet = () => {', chatSessionHeaderStart);
+    const chatSessionHeaderBlock = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
+    expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
+    expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
+    expect(chatSessionHeaderBlock).toContain('mobile ? renderChatMenuSettingsButton() : (');
+    expect(chatSessionHeaderBlock).toContain('<DesktopAppMenu onOpenSettings={handleDesktopSettingsSelect} />');
+    expect(chatSessionHeaderBlock).toContain('{renderDesktopChatProjectSelector()}');
+    expect(chatSessionHeaderBlock).toContain('<div className="chat-sidebar-title-actions">');
+    expect(chatSessionHeaderBlock).toContain('{renderChatHubSummary()}');
+    expect(chatSessionHeaderBlock).toContain('{renderChatArchiveControls()}');
+    expect(chatSessionHeaderBlock).toContain('{renderChatHeaderSearchControls()}');
     expect(mainTsx).not.toContain('renderChatMenuUsageButton');
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
     const chatMainStart = mainTsx.indexOf('return (', renderMainStart);
@@ -1924,6 +1933,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('chatSidebarTitleSearchOpen');
     expect(mainTsx).not.toContain('const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {');
     expect(mainTsx).toContain('const handleDesktopSettingsSelect = useCallback(() => {');
+    expect(mainTsx).toContain("import {DesktopAppMenu} from '../shell/layouts/desktop/DesktopAppMenu';");
     expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';");
     expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
     expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
@@ -2176,9 +2186,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('ref={chatTitlePromptButtonRef}');
     expect(mainTsx).toContain('aria-haspopup="menu"');
     expect(mainTsx).toContain('aria-expanded={chatTitlePromptMenuOpen}');
-    expect(mainTsx).toContain("className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
+    expect(mainTsx).toContain("className={`chat-title-project-menu topbar-menu-surface${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain('className={`chat-title-project-menu-item${selected ? \' selected\' : \'\'}`}');
-    expect(mainTsx).toContain("className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
+    expect(mainTsx).toContain("className={`chat-title-prompt-menu topbar-menu-surface${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(mainTsx).toContain('className="chat-title-actions"');
@@ -2208,12 +2218,22 @@ describe('web chat integration', () => {
     expect(projectButtonBlock).toContain('max-width: max-content;');
     expect(projectButtonBlock).not.toContain('max-width: min(46%, 280px);');
     expect(projectButtonBlock).toContain('text-align: left;');
+    expect(projectButtonBlock).toContain('color: var(--text-primary);');
+    const desktopProjectButtonBlock = cssRuleBlock(
+      stylesCss,
+      '.chat-title-bar > .chat-session-header .chat-title-project-button',
+    );
+    expect(desktopProjectButtonBlock).toContain('flex: 1 1 0;');
+    expect(desktopProjectButtonBlock).toContain('max-width: none;');
+    expect(desktopProjectButtonBlock).not.toContain('116px');
     const projectButtonNameBlock = cssRuleBlock(stylesCss, '.chat-title-project-button .breadcrumb-project-name');
     expect(projectButtonNameBlock).toContain('flex: 1 1 auto;');
     expect(projectButtonNameBlock).toContain('max-width: 100%;');
     expect(projectButtonNameBlock).toContain('border: 0;');
     expect(projectButtonNameBlock).toContain('padding: 0;');
     expect(projectButtonNameBlock).toContain('background: transparent;');
+    const projectChevronBlock = cssRuleBlock(stylesCss, '.chat-title-project-button .sl-icon');
+    expect(projectChevronBlock).toContain('color: var(--text-tertiary);');
     const sessionTitleBlock = cssRuleBlock(stylesCss, '.chat-title-session-text');
     expect(sessionTitleBlock).toContain('flex: 1 1 0;');
     const mobileSessionTitleBlock = cssRuleBlock(stylesCss, '.chat-title-session-button');
@@ -2256,10 +2276,11 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';");
     expect(mainTsx).toContain('const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();');
     expect(mainTsx).toContain('const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();');
-    expect(mainTsx).toContain("className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
-    expect(mainTsx).toContain("className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
+    expect(mainTsx).toContain("className={`chat-title-project-menu topbar-menu-surface${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
+    expect(mainTsx).toContain("className={`chat-title-prompt-menu topbar-menu-surface${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain("chatHubMenuExiting ? ' sl-menu-exit' : ''");
-    const menuRule = cssRuleBlock(stylesCss, '.chat-title-prompt-menu,\n.chat-hub-popover');
+    expect(mainTsx).toContain('chat-hub-popover topbar-menu-surface');
+    const menuRule = cssRuleBlock(stylesCss, '.topbar-menu-surface');
     expect(menuRule).toContain('background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);');
     expect(menuRule).toContain('blur(12px) saturate(1.1)');
     expect(menuRule).toContain('border: 1px solid var(--border-faint);');

@@ -34,6 +34,7 @@ import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/Por
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
+import {DesktopAppMenu} from '../shell/layouts/desktop/DesktopAppMenu';
 import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
 import {
   canInvokeDesktopFileAction,
@@ -6343,7 +6344,7 @@ export function App() {
         {chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(
           <div
             ref={chatHubPopoverRef}
-            className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}${chatHubMenuExiting ? ' sl-menu-exit' : ''}`}
+            className={`chat-hub-popover topbar-menu-surface${chatHubColorMenuHubId ? ' no-overflow' : ''}${chatHubMenuExiting ? ' sl-menu-exit' : ''}`}
             role="dialog"
             aria-label="Hub and project display preferences"
             style={chatHubPopoverStyle}
@@ -15800,10 +15801,12 @@ export function App() {
     const chatSessionHeaderContent = (
       <>
         {!searchHeaderExpanded ? (
-          <>
-            {renderChatMenuSettingsButton()}
-            {!mobile ? renderDesktopChatProjectSelector() : null}
-          </>
+          mobile ? renderChatMenuSettingsButton() : (
+            <>
+              <DesktopAppMenu onOpenSettings={handleDesktopSettingsSelect} />
+              {renderDesktopChatProjectSelector()}
+            </>
+          )
         ) : null}
         <div className="chat-sidebar-title-actions">
           {renderChatHubSummary()}
@@ -18938,7 +18941,7 @@ export function App() {
   const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
       ref={chatTitleProjectMenuRef}
-      className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}
+      className={`chat-title-project-menu topbar-menu-surface${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       aria-label="Switch project"
       style={chatTitleProjectMenuStyle}
@@ -18995,7 +18998,7 @@ export function App() {
   const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
     <div
       ref={chatTitlePromptMenuRef}
-      className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}
+      className={`chat-title-prompt-menu topbar-menu-surface${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       aria-label="Prompt history"
       style={chatTitlePromptMenuStyle}
