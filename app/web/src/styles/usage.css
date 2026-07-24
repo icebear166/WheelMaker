@@ -7,7 +7,7 @@
   --usage-surface-max-height: min(42vh, 360px);
   max-height: var(--usage-surface-max-height);
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text-primary);
 }
 

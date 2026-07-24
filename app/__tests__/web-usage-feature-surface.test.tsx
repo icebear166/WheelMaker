@@ -523,6 +523,7 @@ describe('UsageFeatureSurface', () => {
     expect(compactRule).toContain('--chat-function-width: var(--chat-edge-surface-width);');
     expect(compactRule).not.toContain('position: absolute;');
     expect(compactRule).not.toContain('bottom:');
+    expect(compactRule).toContain('border-radius: 8px;');
     expect(fixedRule).toBe('');
     expect(stackItemRule).toContain('position: relative;');
     expect(stackItemRule).toContain('bottom: auto;');

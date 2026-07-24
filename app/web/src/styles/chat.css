@@ -2228,23 +2228,13 @@
   z-index: 6;
   width: var(--chat-recent-sessions-resolved-width);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
-  box-shadow: 0 14px 34px color-mix(in srgb, #000 28%, transparent);
 }
 
 .chat-recent-sessions-surface.desktop.expanded {
   border-radius: 8px;
   max-height: 70vh;
   transition: max-height var(--motion-standard) var(--ease-standard);
-}
-
-.chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  box-shadow: none;
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .chat-recent-sessions-surface.desktop.collapsed {
@@ -2302,10 +2292,7 @@
   width: var(--chat-plan-resolved-width);
   max-height: min(42vh, 360px);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-workspace-content));
-  box-shadow: 0 14px 34px color-mix(in srgb, #000 28%, transparent);
 }
 
 .chat-plan-surface.desktop.collapsed {
@@ -2349,7 +2336,9 @@
 .chat-edge-surface-stack > .chat-function-surface.desktop .chat-edge-surface-glass {
   border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
   background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
-  box-shadow: none;
+  box-shadow:
+    var(--shadow-floating),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
