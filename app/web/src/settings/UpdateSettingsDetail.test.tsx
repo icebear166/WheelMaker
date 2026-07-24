@@ -163,3 +163,59 @@ test('android card renders a single row with Download and Check, no meta grid', 
   expect(json).toContain('Check');
   expect(json).not.toContain('android-apk-update-meta-grid');
 });
+
+test('hub card shows Restart when already up to date', async () => {
+  let tree;
+  await act(async () => {
+    tree = create(<UpdateSettingsDetail {...baseProps({
+      wheelMakerPublicMetadata: {stable, publishStatus: null},
+      updateHubCards: [hubCard('hub-1', {
+        wheelMaker: {hubId: 'hub-1', loading: false, error: '', data: {
+          ok: true, status: 'up_to_date', hubId: 'hub-1', canRequestUpdate: true,
+          installed: {schemaVersion: 2, version: 'v1.9', publishedAt: '2026-07-20T00:00:00Z', sourceSha: 'b'.repeat(40), manifestSha256: 'c'.repeat(64), installedAt: '2026-07-20T00:00:00Z'},
+        }},
+      })],
+    })} />);
+  });
+  const json = JSON.stringify(tree!.toJSON());
+  expect(json).toContain('Restart');
+  expect(json).not.toContain('Update Hub');
+});
+
+test('installed npm package shows reinstall and uninstall icon buttons', async () => {
+  const packages = [
+    {packageName: 'cur', displayName: 'Cur', agentTypes: [], kind: 'runtime', installed: true, installedVersion: '2.0.0', latestVersion: '2.0.0', status: 'up_to_date', error: '', canInstall: false, canUpdate: false, canUninstall: true},
+  ];
+  let tree;
+  await act(async () => {
+    tree = create(<UpdateSettingsDetail {...baseProps({
+      updateHubCards: [hubCard('hub-1', {
+        agentPackage: {hubId: 'hub-1', loading: false, error: '', updatedAt: '', hub: {hubId: 'hub-1', nodeVersion: '', npmVersion: '', npmPrefix: '', warning: '', error: '', packages}, operation: null},
+      })],
+      expandedNpmUpdateHubIds: {'hub-1': true},
+      agentPackageActionForPackage: pkg => (pkg.canInstall ? 'install' : pkg.canUpdate ? 'update' : pkg.canUninstall ? 'uninstall' : null),
+    })} />);
+  });
+  const json = JSON.stringify(tree!.toJSON());
+  expect(json).toContain('codicon-sync');
+  expect(json).toContain('codicon-trash');
+});
+
+test('not-installed npm package has no reinstall or uninstall button', async () => {
+  const packages = [
+    {packageName: 'fresh', displayName: 'Fresh', agentTypes: [], kind: 'runtime', installed: false, installedVersion: '', latestVersion: '1.0.0', status: 'not_installed', error: '', canInstall: true, canUpdate: false, canUninstall: false},
+  ];
+  let tree;
+  await act(async () => {
+    tree = create(<UpdateSettingsDetail {...baseProps({
+      updateHubCards: [hubCard('hub-1', {
+        agentPackage: {hubId: 'hub-1', loading: false, error: '', updatedAt: '', hub: {hubId: 'hub-1', nodeVersion: '', npmVersion: '', npmPrefix: '', warning: '', error: '', packages}, operation: null},
+      })],
+      expandedNpmUpdateHubIds: {'hub-1': true},
+      agentPackageActionForPackage: pkg => (pkg.canInstall ? 'install' : null),
+    })} />);
+  });
+  const json = JSON.stringify(tree!.toJSON());
+  expect(json).not.toContain('codicon-sync');
+  expect(json).not.toContain('codicon-trash');
+});

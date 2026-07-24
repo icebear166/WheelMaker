@@ -115,11 +115,13 @@ function hubStatusLabel(
   jobActive: boolean,
   jobFailed: boolean,
   statusFailed: boolean,
+  restart: boolean,
   jobState: string,
 ): string {
   if (pending) return 'Requesting...';
   if (jobActive) return wheelMakerUpdateStatusLabel(jobState);
   if (jobFailed || statusFailed) return 'Retry';
+  if (restart) return 'Restart';
   return 'Update Hub';
 }
 
@@ -269,7 +271,8 @@ export function UpdateSettingsDetail({
           const wheelMakerViewData = wheelMakerData ? {
             ...wheelMakerData,
             status: wheelMakerStatus,
-            canRequestUpdate: wheelMakerData.canRequestUpdate === true && wheelMakerStatus === 'update_available',
+            canRequestUpdate: wheelMakerData.canRequestUpdate === true &&
+              (wheelMakerStatus === 'update_available' || wheelMakerStatus === 'up_to_date' || wheelMakerStatus === 'local_newer'),
           } : null;
           const wheelMakerPending = wheelMakerUpdatePendingHubId === card.hubId;
           const showWheelMakerUpdateAction = shouldShowWheelMakerUpdateAction({
@@ -331,6 +334,7 @@ export function UpdateSettingsDetail({
                       wheelMakerJobActive,
                       wheelMakerJobFailed,
                       wheelMakerStatus === 'checking_failed',
+                      wheelMakerStatus === 'up_to_date' || wheelMakerStatus === 'local_newer',
                       wheelMakerData?.job?.state || '',
                     )}
                   </button>
@@ -406,6 +410,14 @@ export function UpdateSettingsDetail({
                                 <button type="button" className="agent-package-action-btn" disabled={pending}
                                   onClick={() => requestAgentPackageAction('install', card.hubId, pkg)}>
                                   {pending ? 'Running...' : agentPackageActionLabel('install')}
+                                </button>
+                              ) : null}
+                              {pkg.installed ? (
+                                <button type="button" className="agent-package-action-btn npm-row-reinstall-btn" disabled={pending}
+                                  title={agentPackageActionLabel('reinstall')}
+                                  aria-label={agentPackageActionLabel('reinstall')}
+                                  onClick={() => requestAgentPackageAction('reinstall', card.hubId, pkg)}>
+                                  <span className="codicon codicon-sync" aria-hidden="true" />
                                 </button>
                               ) : null}
                               {pkg.canUninstall ? (

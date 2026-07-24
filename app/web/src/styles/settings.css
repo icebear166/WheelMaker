@@ -2716,6 +2716,16 @@ textarea,
   font-size: 11px;
 }
 
+.npm-row-reinstall-btn {
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--text-secondary);
+}
+
+.npm-row-reinstall-btn:hover:not(:disabled) {
+  color: var(--accent-primary);
+}
+
 .npm-row-uninstall-btn {
   min-width: 0;
   padding: 0 8px;
