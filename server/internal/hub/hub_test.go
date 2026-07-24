@@ -1055,7 +1055,15 @@ func TestHubStateFileIndexAdapterReturnsStatus(t *testing.T) {
 func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	ts := newRegistryServer(t, registry.New(registry.Config{}).Handler())
 
-	root := t.TempDir()
+	base := t.TempDir()
+	root := filepath.Join(base, "project")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	externalPath := filepath.Join(base, "outside.txt")
+	if err := os.WriteFile(externalPath, []byte("outside registry"), 0o644); err != nil {
+		t.Fatalf("write external fixture: %v", err)
+	}
 	initGitRepo(t, root)
 	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hello registry"), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
@@ -1122,6 +1130,70 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	}
 	if readResp.Payload["content"] != "hello registry" {
 		t.Fatalf("content=%v, want hello registry", readResp.Payload["content"])
+	}
+
+	mustWriteJSON(t, app, testEnvelope{
+		RequestID: 4,
+		Type:      "request",
+		Method:    "project.fs.external.info",
+		ProjectID: rp.ProjectID("hub-test", "proj1"),
+		Payload:   map[string]any{"path": externalPath},
+	})
+	externalInfo := mustReadEnvelope(t, app)
+	if externalInfo.Payload["path"] != filepath.Clean(externalPath) ||
+		externalInfo.Payload["kind"] != "file" {
+		t.Fatalf("unexpected external info: %#v", externalInfo.Payload)
+	}
+
+	mustWriteJSON(t, app, testEnvelope{
+		RequestID: 5,
+		Type:      "request",
+		Method:    "project.fs.external.read",
+		ProjectID: rp.ProjectID("hub-test", "proj1"),
+		Payload:   map[string]any{"path": externalPath},
+	})
+	externalRead := mustReadEnvelope(t, app)
+	if externalRead.Payload["path"] != filepath.Clean(externalPath) ||
+		externalRead.Payload["content"] != "outside registry" ||
+		externalRead.Payload["notModified"] != false {
+		t.Fatalf("unexpected external read: %#v", externalRead.Payload)
+	}
+
+	for requestID, testCase := range []struct {
+		path string
+		code string
+	}{
+		{path: "outside.txt", code: rp.CodeInvalidArgument},
+		{path: base, code: rp.CodeInvalidArgument},
+		{path: filepath.Join(base, "missing.txt"), code: rp.CodeNotFound},
+	} {
+		mustWriteJSON(t, app, testEnvelope{
+			RequestID: int64(6 + requestID),
+			Type:      "request",
+			Method:    "project.fs.external.info",
+			ProjectID: rp.ProjectID("hub-test", "proj1"),
+			Payload:   map[string]any{"path": testCase.path},
+		})
+		resp := mustReadEnvelope(t, app)
+		if resp.Type != "error" || resp.Payload["code"] != testCase.code {
+			t.Fatalf("external info path=%q response=%#v, want %s", testCase.path, resp, testCase.code)
+		}
+	}
+
+	mustWriteJSON(t, app, testEnvelope{
+		RequestID: 9,
+		Type:      "request",
+		Method:    "project.fs.external.read",
+		ProjectID: rp.ProjectID("hub-test", "proj1"),
+		Payload: map[string]any{
+			"path":      externalPath,
+			"knownHash": externalRead.Payload["hash"],
+		},
+	})
+	externalReadWithHash := mustReadEnvelope(t, app)
+	if externalReadWithHash.Payload["content"] != "outside registry" ||
+		externalReadWithHash.Payload["notModified"] != false {
+		t.Fatalf("external read should ignore knownHash: %#v", externalReadWithHash.Payload)
 	}
 }
 

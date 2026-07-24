@@ -637,6 +637,10 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyFSInfo(conn, in)
 	case rp.RegistryMethodProjectFSRead:
 		r.replyFSRead(conn, in)
+	case rp.RegistryMethodProjectFSExternalInfo:
+		r.replyFSExternalInfo(conn, in)
+	case rp.RegistryMethodProjectFSExternalRead:
+		r.replyFSExternalRead(conn, in)
 	case rp.RegistryMethodProjectFSSearch:
 		r.replyFSSearch(conn, in)
 	case rp.RegistryMethodProjectFSGrep:
@@ -1350,15 +1354,61 @@ func (r *Reporter) replyFSInfo(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
 	}
-	info, err := os.Stat(target)
-	if err != nil {
+	r.replyFSInfoPath(conn, req, target, rel, true)
+}
+
+func (r *Reporter) replyFSExternalInfo(conn *websocket.Conn, req envelope) {
+	type fsExternalInfoPayload struct {
+		Path string `json:"path"`
+	}
+	var payload fsExternalInfoPayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid project.fs.external.info payload")
+		return
+	}
+	if _, err := r.projectRoot(req.ProjectID); err != nil {
 		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
 		return
 	}
+	target, err := resolveExternalFilePath(payload.Path)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	r.replyFSInfoPath(conn, req, target, target, false)
+}
+
+func resolveExternalFilePath(raw string) (string, error) {
+	if raw == "" {
+		return "", fmt.Errorf("external file path is required")
+	}
+	clean := filepath.Clean(filepath.FromSlash(raw))
+	if !filepath.IsAbs(clean) {
+		return "", fmt.Errorf("external file path must be absolute")
+	}
+	return clean, nil
+}
+
+func (r *Reporter) replyFSInfoPath(
+	conn *websocket.Conn,
+	req envelope,
+	target string,
+	responsePath string,
+	allowDirectory bool,
+) {
+	info, err := os.Stat(target)
+	if err != nil {
+		r.writeFSPathError(conn, req, err)
+		return
+	}
 	if info.IsDir() {
+		if !allowDirectory {
+			_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "external file path must reference a regular file")
+			return
+		}
 		entries, err := os.ReadDir(target)
 		if err != nil {
-			_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
+			r.writeFSPathError(conn, req, err)
 			return
 		}
 		_ = r.writeJSON(conn, "->", envelope{
@@ -1367,7 +1417,7 @@ func (r *Reporter) replyFSInfo(conn *websocket.Conn, req envelope) {
 			Method:    req.Method,
 			ProjectID: req.ProjectID,
 			Payload: rp.MustRaw(map[string]any{
-				"path":       rel,
+				"path":       responsePath,
 				"kind":       "dir",
 				"entryCount": len(entries),
 				"hash":       hashDirectoryEntries(target, entries),
@@ -1375,15 +1425,19 @@ func (r *Reporter) replyFSInfo(conn *websocket.Conn, req envelope) {
 		})
 		return
 	}
+	if !info.Mode().IsRegular() {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "file path must reference a regular file")
+		return
+	}
 
 	data, err := os.ReadFile(target)
 	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
+		r.writeFSPathError(conn, req, err)
 		return
 	}
 	isBinary, mimeType := detectBinaryAndMime(data)
 	resp := map[string]any{
-		"path":     rel,
+		"path":     responsePath,
 		"kind":     "file",
 		"size":     info.Size(),
 		"isBinary": isBinary,
@@ -1422,20 +1476,63 @@ func (r *Reporter) replyFSRead(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
 	}
+	r.replyFSReadPath(conn, req, target, rel, payload.KnownHash, false)
+}
+
+func (r *Reporter) replyFSExternalRead(conn *websocket.Conn, req envelope) {
+	type fsExternalReadPayload struct {
+		Path string `json:"path"`
+	}
+	var payload fsExternalReadPayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid project.fs.external.read payload")
+		return
+	}
+	if _, err := r.projectRoot(req.ProjectID); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
+		return
+	}
+	target, err := resolveExternalFilePath(payload.Path)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	r.replyFSReadPath(conn, req, target, target, "", true)
+}
+
+func (r *Reporter) replyFSReadPath(
+	conn *websocket.Conn,
+	req envelope,
+	target string,
+	responsePath string,
+	knownHash string,
+	requireRegular bool,
+) {
+	if requireRegular {
+		info, err := os.Stat(target)
+		if err != nil {
+			r.writeFSPathError(conn, req, err)
+			return
+		}
+		if !info.Mode().IsRegular() {
+			_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "external file path must reference a regular file")
+			return
+		}
+	}
 	data, err := os.ReadFile(target)
 	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
+		r.writeFSPathError(conn, req, err)
 		return
 	}
 	hash := hashBytes(data)
-	if payload.KnownHash != "" && payload.KnownHash == hash {
+	if knownHash != "" && knownHash == hash {
 		_ = r.writeJSON(conn, "->", envelope{
 			RequestID: req.RequestID,
 			Type:      rp.RegistryEnvelopeTypeResponse,
 			Method:    req.Method,
 			ProjectID: req.ProjectID,
 			Payload: rp.MustRaw(map[string]any{
-				"path":        rel,
+				"path":        responsePath,
 				"hash":        hash,
 				"notModified": true,
 			}),
@@ -1444,10 +1541,18 @@ func (r *Reporter) replyFSRead(conn *websocket.Conn, req envelope) {
 	}
 	isBinary, mimeType := detectBinaryAndMime(data)
 	if isBinary {
-		r.replyFSReadBinary(conn, req, rel, data, hash, mimeType)
+		r.replyFSReadBinary(conn, req, responsePath, data, hash, mimeType)
 		return
 	}
-	r.replyFSReadText(conn, req, rel, data, hash, mimeType)
+	r.replyFSReadText(conn, req, responsePath, data, hash, mimeType)
+}
+
+func (r *Reporter) writeFSPathError(conn *websocket.Conn, req envelope, err error) {
+	code := codeInternal
+	if os.IsNotExist(err) {
+		code = codeNotFound
+	}
+	_ = r.writeError(conn, req.RequestID, code, err.Error())
 }
 
 func (r *Reporter) replyFSReadText(conn *websocket.Conn, req envelope, rel string, data []byte, hash string, mimeType string) {
