@@ -1,8 +1,10 @@
-> 摘要：本页维护聊天文件链接的路径解析、项目外预览、右键菜单和 Desktop 文件动作边界。
+> 摘要：本页维护聊天文件链接的路径解析、项目外预览、右键菜单、Desktop 文件动作和 Markdown HTML 导出边界。
 
 # File Links
 
 > 来源：[`docs/scope/2026-07-24-external-file-links/spec-external-file-links.md`](../../scope/2026-07-24-external-file-links/spec-external-file-links.md)
+
+> Markdown HTML 导出来源：[`docs/scope/2026-07-24-markdown-html-export/spec-markdown-html-export.md`](../../scope/2026-07-24-markdown-html-export/spec-markdown-html-export.md)
 
 ## 本地文件识别
 
@@ -38,6 +40,14 @@
 `Open with VS Code` 和 `Show in File Explorer` 只在 WheelMaker Desktop 中显示；点击 preview 和复制路径在各端一致。
 
 Desktop 使用可信页面授权保护的绝对文件 bridge。Bridge 只接受绝对路径，确认目标是现存普通文件后，启动固定的 VS Code 或 Windows File Explorer 进程。项目内和项目外链接均使用该动作；普通浏览器不获得启动本机程序的能力。
+
+## Markdown HTML 导出
+
+项目 Markdown 文件可以从 preview 工作台的更多操作菜单导出为独立 HTML；聊天中已识别的项目 Markdown 文件链接也在右键菜单提供相同动作。非 Markdown 文件和项目外文件不提供该导出动作。
+
+导出网页内嵌核心排版、代码高亮和项目内相对图片，并跟随系统浅/深色主题。项目图片只能在项目根目录内按来源文件目录解析；远程图片尽力内嵌，失败时保留原 URL 并向用户提示。原始 Markdown HTML 经过安全清理，脚本、事件属性与危险 URL 不得进入导出页面。
+
+交付方式由运行环境决定：Desktop 把受控临时 `.html` 文件放入系统剪贴板，粘贴应得到文件而非源码文本；Android 通过系统分享面板交付临时文件；浏览器和 PWA 下载该文件。文件导出将 `.md` 后缀替换为 `.html`，回复导出使用带 turn 序号和时间戳的文件名。
 
 ## 兼容性
 
