@@ -245,9 +245,7 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  /* fixed-width capsule: every row's pill forms one aligned column */
-  width: 64px;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
