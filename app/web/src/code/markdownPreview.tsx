@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { ShikiCodeBlock } from './ShikiCodeBlock';
+import {remarkWindowsFileLinks} from './markdownFileLinks';
 import type { CodeFontId, CodeThemeId } from './shikiSettings';
 import {markdownSourceTargetProps} from '../preview/previewLineNavigation';
 
@@ -113,8 +114,8 @@ export function useMarkdownCapabilityPlugins(content: string): MarkdownCapabilit
   return useMemo(
     () => ({
       remarkPlugins: activeMathPipeline
-        ? [remarkGfm, ...activeMathPipeline.remarkPlugins]
-        : [remarkGfm],
+        ? [remarkGfm, remarkWindowsFileLinks, ...activeMathPipeline.remarkPlugins]
+        : [remarkGfm, remarkWindowsFileLinks],
       rehypePlugins: activeMathPipeline ? activeMathPipeline.rehypePlugins : [],
       pending: needsMath && !activeMathPipeline,
     }),
