@@ -225,4 +225,70 @@ describe('ChatPlanSurface', () => {
 
     expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
+
+  test('renders Lucide step markers and a segmented progress track in the desktop header', async () => {
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatPlanSurface mode="desktop" plan={planSnapshot()} />,
+      );
+    });
+
+    const iconNames = renderer!.root.findAllByType('svg').map(svg => svg.props['data-icon-name']);
+    expect(iconNames).toContain('check');
+    expect(iconNames).toContain('arrowRight');
+    expect(iconNames).toContain('circle');
+    expect(renderer!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('codicon'))).toHaveLength(0);
+
+    const track = renderer!.root.findByProps({className: 'chat-plan-progress-track segmented'});
+    expect(track.findAllByProps({className: 'chat-plan-progress-segment completed'})).toHaveLength(1);
+    expect(track.findAllByProps({className: 'chat-plan-progress-segment in-progress'})).toHaveLength(1);
+    expect(track.findAllByProps({className: 'chat-plan-progress-segment pending'})).toHaveLength(1);
+    expect(renderer!.root.findByProps({className: 'chat-plan-progress'}).children).toEqual(['2/3']);
+  });
+
+  test('falls back to a continuous accent bar beyond twelve steps', async () => {
+    const bigPlan: ChatPlanSnapshot = {
+      turnIndex: 3,
+      entries: Array.from({length: 13}, (_, index) => ({
+        content: `Step ${index + 1}`,
+        status: index < 5 ? 'completed' : index === 5 ? 'in_progress' : 'pending',
+      })),
+      activeEntry: {content: 'Step 6', status: 'in_progress'},
+      activeIndex: 5,
+      completedCount: 5,
+      totalCount: 13,
+    };
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatPlanSurface mode="desktop" plan={bigPlan} />,
+      );
+    });
+
+    const track = renderer!.root.findByProps({className: 'chat-plan-progress-track continuous active'});
+    expect(track.findByProps({className: 'chat-plan-progress-track-fill'}).props.style.width).toBe('38%');
+    expect(renderer!.root.findAllByProps({className: 'chat-plan-progress-track segmented'})).toHaveLength(0);
+    expect(renderer!.root.findByProps({className: 'chat-plan-progress'}).children).toEqual(['6/13']);
+  });
+
+  test('keeps the mobile pill text-only with glass material and Lucide icons', async () => {
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatPlanSurface mode="mobile" plan={planSnapshot()} />,
+      );
+    });
+
+    expect(renderer!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('chat-plan-progress-track'))).toHaveLength(0);
+    expect(renderer!.root.findByProps({className: 'chat-plan-progress'}).children).toEqual(['2/3']);
+    const iconNames = renderer!.root.findAllByType('svg').map(svg => svg.props['data-icon-name']);
+    expect(iconNames).toContain('arrowRight');
+    expect(renderer!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('codicon'))).toHaveLength(0);
+
+    const stylesCss = readSourceText(path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'));
+    const pillRule = cssRuleBlock(stylesCss, '.chat-plan-compact-trigger');
+    expect(pillRule).toContain('border: 1px solid var(--border-faint);');
+    expect(pillRule).toContain('blur(12px) saturate(1.1)');
+  });
 });

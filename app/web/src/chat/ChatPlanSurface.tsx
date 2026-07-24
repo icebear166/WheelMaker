@@ -3,6 +3,9 @@ import React from 'react';
 import {ChatEdgeSurfaceHeader} from './ChatEdgeSurfaceHeader';
 import type {ChatPlanEntry, ChatPlanSnapshot} from './chatPlan';
 import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
+import {SessionIcon} from './sessionlist/SessionIcon';
+
+export const PLAN_SEGMENT_TRACK_MAX_STEPS = 12;
 
 export type ChatPlanSurfaceProps = {
   plan: ChatPlanSnapshot | null;
@@ -20,15 +23,40 @@ function planStepClassName(entry: ChatPlanEntry): string {
   }
 }
 
-function planStepIconClassName(entry: ChatPlanEntry): string {
+function planStepIconName(entry: ChatPlanEntry): 'check' | 'arrowRight' | 'circle' {
   switch (entry.status) {
     case 'completed':
-      return 'codicon-check';
+      return 'check';
     case 'in_progress':
-      return 'codicon-arrow-right';
+      return 'arrowRight';
     default:
-      return 'codicon-circle-outline';
+      return 'circle';
   }
+}
+
+function PlanProgressTrack({plan}: {plan: ChatPlanSnapshot}) {
+  if (plan.totalCount <= 0) {
+    return null;
+  }
+  if (plan.totalCount > PLAN_SEGMENT_TRACK_MAX_STEPS) {
+    const percent = Math.round((plan.completedCount / plan.totalCount) * 100);
+    const active = plan.completedCount < plan.totalCount;
+    return (
+      <span className={`chat-plan-progress-track continuous${active ? ' active' : ''}`} aria-hidden="true">
+        <span className="chat-plan-progress-track-fill" style={{width: `${percent}%`}} />
+      </span>
+    );
+  }
+  return (
+    <span className="chat-plan-progress-track segmented" aria-hidden="true">
+      {plan.entries.map((entry, index) => (
+        <span
+          key={`${plan.turnIndex}:${index}`}
+          className={`chat-plan-progress-segment ${planStepClassName(entry)}`}
+        />
+      ))}
+    </span>
+  );
 }
 
 function renderPlanList(plan: ChatPlanSnapshot) {
@@ -39,19 +67,12 @@ function renderPlanList(plan: ChatPlanSnapshot) {
           key={`${plan.turnIndex}:${index}:${entry.content}`}
           className={`chat-plan-step ${planStepClassName(entry)}`}
         >
-          <span className={`codicon ${planStepIconClassName(entry)} chat-plan-step-marker`} aria-hidden="true" />
+          <SessionIcon name={planStepIconName(entry)} className="chat-plan-step-marker" />
           <span className="chat-plan-step-content">{entry.content}</span>
         </li>
       ))}
     </ol>
   );
-}
-
-function compactChevronClassName(expanded: boolean, mode: 'desktop' | 'mobile'): string {
-  if (mode === 'desktop') {
-    return expanded ? 'codicon-chevron-up' : 'codicon-chevron-down';
-  }
-  return expanded ? 'codicon-chevron-down' : 'codicon-chevron-up';
 }
 
 function renderCompactTrigger({
@@ -76,15 +97,15 @@ function renderCompactTrigger({
       aria-label={expanded ? 'Collapse current plan' : 'Expand current plan'}
       title={expanded ? 'Collapse current plan' : 'Expand current plan'}
     >
-      <span
-        className={`codicon ${activeEntry ? planStepIconClassName(activeEntry) : 'codicon-checklist'} chat-plan-compact-marker`}
-        aria-hidden="true"
+      <SessionIcon
+        name={activeEntry ? planStepIconName(activeEntry) : 'listChecks'}
+        className={`chat-plan-compact-marker${activeEntry ? ` ${planStepClassName(activeEntry)}` : ''}`}
       />
       <span className="chat-plan-progress">{progressLabel}</span>
       <span className="chat-plan-current">{activeEntry?.content ?? ''}</span>
-      <span
-        className={`codicon ${compactChevronClassName(expanded, mode)} chat-plan-compact-chevron`}
-        aria-hidden="true"
+      <SessionIcon
+        name={mode === 'desktop' ? (expanded ? 'chevronUp' : 'chevronDown') : (expanded ? 'chevronDown' : 'chevronUp')}
+        className="chat-plan-compact-chevron"
       />
     </button>
   );
@@ -127,7 +148,12 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
             collapsed={desktopCollapsed}
             onToggleCollapsed={() => setDesktopCollapsed(value => !value)}
             summary={desktopCollapsed ? activeEntry?.content : undefined}
-            actions={<span className="chat-plan-progress">{progressLabel}</span>}
+            actions={
+              <span className="chat-plan-header-progress">
+                <PlanProgressTrack plan={plan} />
+                <span className="chat-plan-progress">{progressLabel}</span>
+              </span>
+            }
           />
           {desktopCollapsed ? null : renderPlanList(plan)}
         </div>

@@ -2612,6 +2612,72 @@
   white-space: nowrap;
 }
 
+.chat-plan-header-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-plan-progress-track {
+  display: inline-flex;
+  align-items: center;
+  height: 3px;
+  min-width: 0;
+}
+
+.chat-plan-progress-track.segmented {
+  gap: 2px;
+}
+
+.chat-plan-progress-segment {
+  width: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-secondary) 22%, transparent);
+}
+
+.chat-plan-progress-segment.completed {
+  background: var(--state-success);
+}
+
+.chat-plan-progress-segment.in-progress {
+  background: var(--state-warning);
+  animation: chat-plan-pulse 1.6s var(--ease-standard) infinite;
+}
+
+.chat-plan-progress-track.continuous {
+  width: 48px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-secondary) 22%, transparent);
+}
+
+.chat-plan-progress-track-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-primary);
+}
+
+.chat-plan-progress-track.continuous.active .chat-plan-progress-track-fill {
+  animation: chat-plan-pulse 1.6s var(--ease-standard) infinite;
+}
+
+@keyframes chat-plan-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-plan-surface-list,
+  .chat-plan-step.in-progress .chat-plan-step-marker,
+  .chat-plan-progress-segment.in-progress,
+  .chat-plan-progress-track.continuous.active .chat-plan-progress-track-fill {
+    animation: none;
+  }
+}
+
 .chat-plan-surface-list {
   list-style: none;
   margin: 0;
@@ -2619,6 +2685,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  animation: sl-list-in 140ms var(--ease-out);
 }
 
 .chat-plan-surface.desktop .chat-plan-surface-list {
@@ -2642,21 +2709,20 @@
 .chat-plan-step-marker {
   width: 16px;
   height: 18px;
-  display: inline-flex !important;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  line-height: 1;
   color: var(--text-secondary);
 }
 
 .chat-plan-step.in-progress .chat-plan-step-marker,
-.chat-plan-compact-marker.codicon-arrow-right {
+.chat-plan-compact-marker.in-progress {
   color: var(--state-warning);
 }
 
+.chat-plan-step.in-progress .chat-plan-step-marker {
+  animation: chat-plan-pulse 1.6s var(--ease-standard) infinite;
+}
+
 .chat-plan-step.completed .chat-plan-step-marker,
-.chat-plan-compact-marker.codicon-check {
+.chat-plan-compact-marker.completed {
   color: var(--state-success);
 }
 
@@ -2685,9 +2751,11 @@
 .chat-plan-compact-trigger {
   width: 100%;
   min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, var(--accent-primary));
+  border: 1px solid var(--border-faint);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-workspace-content));
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
   color: var(--text-primary);
   display: grid;
   grid-template-columns: 18px auto minmax(0, 1fr) 18px;
@@ -2699,7 +2767,7 @@
   line-height: 1.2;
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 8px 22px color-mix(in srgb, #000 20%, transparent);
+  box-shadow: var(--shadow-floating);
 }
 
 .chat-plan-surface.desktop.collapsed .chat-plan-compact-trigger {
@@ -2716,7 +2784,7 @@
 
 .chat-plan-compact-trigger:hover {
   border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--border-subtle));
-  background: color-mix(in srgb, var(--surface-panel) 86%, var(--accent-primary));
+  background: color-mix(in srgb, var(--surface-overlay) 96%, transparent);
 }
 
 .chat-plan-compact-trigger:focus-visible {
@@ -2724,10 +2792,8 @@
   outline-offset: 2px;
 }
 
-.chat-plan-compact-marker,
-.chat-plan-compact-chevron {
-  font-size: 13px;
-  line-height: 1;
+.chat-plan-compact-marker {
+  color: var(--text-secondary);
 }
 
 .chat-plan-compact-chevron {
@@ -5377,6 +5443,7 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .chat-plan-surface.mobile.expanded,
+  .chat-plan-compact-trigger,
   .chat-edge-surface-glass,
   .chat-config-overflow-menu,
   .chat-config-value-menu,
