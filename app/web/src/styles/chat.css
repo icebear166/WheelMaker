@@ -890,7 +890,6 @@
 
 .recent-project-session-list {
   position: relative;
-  padding: 1px 0 1px 11px;
 }
 
 
@@ -2398,6 +2397,11 @@
 
 .collapsed .chat-edge-surface-header {
   border-bottom-color: transparent;
+}
+
+/* align the session panel title with the project-name text column below (39px) */
+.chat-session-panel-header .chat-edge-surface-header {
+  padding-left: 11px;
 }
 
 .chat-edge-surface-toggle,

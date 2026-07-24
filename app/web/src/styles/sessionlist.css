@@ -137,11 +137,17 @@
   .wide-project-row .sl-action-secondary {
     display: none;
   }
+  /* touch devices: the active project keeps all three actions visible */
+  .wide-project-section.active .wide-project-row .sl-action-secondary {
+    display: grid;
+    opacity: 1;
+  }
 }
 
 /* ---------- session rows (level 2: quiet, indented) ---------- */
 .wide-project-session-list {
   margin-top: 2px;
+  padding-left: 11px;
   animation: sl-list-in var(--motion-standard) var(--ease-out);
 }
 .project-session-row-wrap {
@@ -193,7 +199,7 @@
 }
 .wide-session-time {
   flex: none;
-  min-width: 3ch;
+  min-width: 2.5ch;
   text-align: right;
   font-size: 11px;
   color: var(--text-tertiary);
@@ -499,7 +505,7 @@
 
 /* ---------- misc ---------- */
 .wide-project-empty {
-  padding: 4px 8px 4px 20px;
+  padding: 4px 8px 4px 31px;
   font-size: 11.5px;
   color: var(--text-tertiary);
 }
@@ -509,6 +515,7 @@
   user-select: none;
 }
 .session-older-toggle {
+  margin-left: 14px;
   font-style: normal;
   color: var(--text-tertiary);
 }
