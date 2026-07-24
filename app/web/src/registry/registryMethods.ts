@@ -19,6 +19,8 @@ export const RegistryMethods = {
   ProjectFSList: 'project.fs.list',
   ProjectFSInfo: 'project.fs.info',
   ProjectFSRead: 'project.fs.read',
+  ProjectFSExternalInfo: 'project.fs.external.info',
+  ProjectFSExternalRead: 'project.fs.external.read',
   ProjectFSSearch: 'project.fs.search',
   ProjectFSGrep: 'project.fs.grep',
   ProjectFSIndexSearch: 'project.fs.index.search',
