@@ -59,7 +59,13 @@ type PreviewFileLinkModule = {
   resolvePreviewFileLink?: (
     href: string,
     projectRoot: string,
-  ) => {path: string; line: number | null} | null;
+  ) => {
+    path: string;
+    absolutePath: string;
+    relativePath: string | null;
+    line: number | null;
+  } | null;
+  isAbsolutePreviewFilePath?: (value: string) => boolean;
 };
 
 type PreviewWorkbenchStateModule = {
@@ -364,18 +370,88 @@ describe('preview file regressions', () => {
     expect(frames).toHaveLength(1);
   });
 
-  test('resolves chat file paths against the selected chat project root', () => {
-    const {resolvePreviewFileLink} = optionalRequire<PreviewFileLinkModule>(
+  test('resolves internal and external chat file paths', () => {
+    const {
+      isAbsolutePreviewFilePath,
+      resolvePreviewFileLink,
+    } = optionalRequire<PreviewFileLinkModule>(
       '../web/src/preview/previewFileLink',
     );
     expect(resolvePreviewFileLink).toBeDefined();
+    expect(isAbsolutePreviewFilePath).toBeDefined();
 
     expect(
       resolvePreviewFileLink!(
-        'D:/Code/OtherProject/src/worker.ts:42:7',
-        'D:/Code/OtherProject',
+        'D:/Code/WheelMaker/src/main.ts:42:7',
+        'D:/Code/WheelMaker',
       ),
-    ).toEqual({path: 'src/worker.ts', line: 42});
+    ).toEqual({
+      path: 'src/main.ts',
+      absolutePath: 'D:/Code/WheelMaker/src/main.ts',
+      relativePath: 'src/main.ts',
+      line: 42,
+    });
+    expect(
+      resolvePreviewFileLink!(
+        '../OtherProject/src/worker.ts#L9',
+        'D:/Code/WheelMaker',
+      ),
+    ).toEqual({
+      path: 'D:/Code/OtherProject/src/worker.ts',
+      absolutePath: 'D:/Code/OtherProject/src/worker.ts',
+      relativePath: null,
+      line: 9,
+    });
+    expect(
+      resolvePreviewFileLink!('/var/log/system.log', '/srv/wheelmaker'),
+    ).toEqual({
+      path: '/var/log/system.log',
+      absolutePath: '/var/log/system.log',
+      relativePath: null,
+      line: null,
+    });
+    expect(
+      resolvePreviewFileLink!(
+        'file://fileserver/share/report.txt',
+        'D:/Code/WheelMaker',
+      ),
+    ).toEqual({
+      path: '//fileserver/share/report.txt',
+      absolutePath: '//fileserver/share/report.txt',
+      relativePath: null,
+      line: null,
+    });
+    expect(
+      resolvePreviewFileLink!(
+        'vscode://file/D:/Code/WheelMaker/app/main.ts:12:3',
+        'D:/Code/WheelMaker',
+      ),
+    ).toEqual({
+      path: 'app/main.ts',
+      absolutePath: 'D:/Code/WheelMaker/app/main.ts',
+      relativePath: 'app/main.ts',
+      line: 12,
+    });
+    expect(
+      resolvePreviewFileLink!(
+        'file:///D:/Code/WheelMaker/app/main.ts',
+        'D:/Code/WheelMaker',
+      ),
+    ).toEqual({
+      path: 'app/main.ts',
+      absolutePath: 'D:/Code/WheelMaker/app/main.ts',
+      relativePath: 'app/main.ts',
+      line: null,
+    });
+    expect(resolvePreviewFileLink!('https://example.com/file.ts', '')).toBeNull();
+    expect(
+      resolvePreviewFileLink!('D:/Code/WheelMaker', 'D:/Code/WheelMaker'),
+    ).toBeNull();
+
+    expect(isAbsolutePreviewFilePath!('D:/Code/WheelMaker/app/main.ts')).toBe(true);
+    expect(isAbsolutePreviewFilePath!('\\\\fileserver\\share\\report.txt')).toBe(true);
+    expect(isAbsolutePreviewFilePath!('/var/log/system.log')).toBe(true);
+    expect(isAbsolutePreviewFilePath!('../OtherProject/src/worker.ts')).toBe(false);
   });
 
   test('keeps Markdown source ranges available when search changes the target line', () => {
