@@ -1,6 +1,7 @@
 import React from 'react';
 
 import {ChatFunctionSurface} from '../chat/ChatFunctionSurface';
+import {SessionIcon} from '../chat/sessionlist/SessionIcon';
 import {
   formatModelEfficiencyUpdatedAt,
   ModelEfficiencySnapshotContent,
@@ -76,7 +77,7 @@ export function MonitorSurface({
           title="Hide monitor"
           onClick={onRequestHide}
         >
-          <span className="codicon codicon-eye-closed" aria-hidden="true" />
+          <SessionIcon name="eyeOff" />
         </button>
         <button
           type="button"
@@ -85,7 +86,7 @@ export function MonitorSurface({
           title={detail ? 'Compact monitor' : 'Show monitor details'}
           onClick={() => setDetail(value => !value)}
         >
-          <span className={`codicon ${detail ? 'codicon-list-flat' : 'codicon-layout'}`} aria-hidden="true" />
+          <SessionIcon name={detail ? 'list' : 'layoutGrid'} />
         </button>
         <button
           type="button"
@@ -95,7 +96,7 @@ export function MonitorSurface({
           disabled={refreshDisabled}
           onClick={handleRefresh}
         >
-          <span className={`codicon codicon-refresh${refreshing ? ' spinning' : ''}`} aria-hidden="true" />
+          <SessionIcon name="refreshCw" spin={refreshing} />
         </button>
       </span>
     </div>

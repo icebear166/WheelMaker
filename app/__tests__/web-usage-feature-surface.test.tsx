@@ -120,7 +120,7 @@ describe('MonitorSurface module', () => {
 
     let refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
     expect(refresh.props.disabled).toBe(false);
-    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
+    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('sl-icon-spin');
     expect(refresh.props.title).toContain('Limits: Hub cache');
     expect(refresh.props.title).toContain('IQ: 2026-07-22 09:30 UTC');
 
@@ -159,6 +159,25 @@ describe('MonitorSurface module', () => {
     expect(view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props['aria-selected']).toBe(true);
     act(() => view!.root.findByProps({'aria-label': 'Hide monitor'}).props.onClick());
     expect(onRequestHide).toHaveBeenCalledTimes(1);
+  });
+  it('uses Lucide icons for the shared monitor actions', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MonitorSurface
+          usageSnapshot={fixtureSnapshot}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefreshLimits={jest.fn()}
+          onRefreshIq={jest.fn()}
+          onRequestHide={jest.fn()}
+        />,
+      );
+    });
+
+    expect(view!.root.findByProps({'aria-label': 'Hide monitor'}).findByType('svg').props['data-icon-name']).toBe('eyeOff');
+    expect(view!.root.findByProps({'aria-label': 'Show monitor details'}).findByType('svg').props['data-icon-name']).toBe('layoutGrid');
+    expect(view!.root.findByProps({'aria-label': 'Refresh monitor'}).findByType('svg').props['data-icon-name']).toBe('refreshCw');
+    expect(view!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('codicon'))).toHaveLength(0);
   });
 });
 
@@ -411,7 +430,7 @@ describe('UsageFeatureSurface', () => {
 
     const refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
     expect(refresh.props.disabled).toBe(false);
-    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
+    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('sl-icon-spin');
     expect(renderedText(view!.root)).not.toContain('Refreshing…');
   });
 
@@ -431,8 +450,27 @@ describe('UsageFeatureSurface', () => {
 
     const refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
     expect(refresh.props.disabled).toBe(true);
-    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
+    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('sl-icon-spin');
     expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Limits'}).props['aria-selected']).toBe(true);
+  });
+
+  it('uses Lucide icons for the mobile monitor actions', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MobileUsageDialog
+          snapshot={fixtureSnapshot}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefresh={jest.fn()}
+          onRefreshEfficiency={jest.fn()}
+          onClose={jest.fn()}
+        />,
+      );
+    });
+
+    expect(view!.root.findByProps({'aria-label': 'Refresh monitor'}).findByType('svg').props['data-icon-name']).toBe('refreshCw');
+    expect(view!.root.findByProps({'aria-label': 'Close monitor'}).findByType('svg').props['data-icon-name']).toBe('x');
+    expect(view!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('codicon'))).toHaveLength(0);
   });
 
   it('uses a safe-area-aware full-screen mobile Monitor card', () => {
@@ -461,7 +499,7 @@ describe('UsageFeatureSurface', () => {
     expect(detailTableRule).toContain('table-layout: fixed;');
   });
 
-  it('renders Monitor tabs as visible segmented toggles on desktop and mobile', () => {
+  it('renders Monitor tabs as hairline segmented controls on desktop and mobile', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
     const desktopTrack = styles.match(/\.monitor-tabs \{([\s\S]*?)\n\}/)?.[1] ?? '';
@@ -469,14 +507,18 @@ describe('UsageFeatureSurface', () => {
     const mobileTrack = styles.match(/\.usage-mobile-tabs \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const mobileSelected = styles.match(/\.usage-mobile-tabs button\[aria-selected='true'\] \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
-    expect(desktopTrack).toContain('background: color-mix(in srgb, var(--surface-root) 68%, transparent);');
-    expect(desktopSelected).toContain('inset 0 0 0 1px');
+    expect(desktopTrack).toContain('background: transparent;');
+    expect(desktopTrack).toContain('border: 1px solid');
+    expect(desktopSelected).toContain('background: var(--accent-soft-bg);');
     expect(desktopSelected).toContain('color: var(--accent-primary);');
-    expect(desktopSelected).toContain('var(--accent-primary) 18%');
+    expect(desktopSelected).not.toContain('inset 0 0 0 1px');
+    expect(mobileTrack).toContain('background: transparent;');
     expect(mobileTrack).toContain('border: 1px solid');
-    expect(mobileSelected).toContain('inset 0 0 0 1px');
+    expect(mobileSelected).toContain('background: var(--accent-soft-bg);');
     expect(mobileSelected).toContain('color: var(--accent-primary);');
-    expect(mobileSelected).toContain('var(--accent-primary) 18%');
+    expect(mobileSelected).not.toContain('inset 0 0 0 1px');
+    expect(styles).not.toContain('--surface-root');
+    expect(styles).not.toContain('usage-spin');
   });
 
   it('explains how to restore the monitor before hiding it', () => {
