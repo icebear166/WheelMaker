@@ -44,7 +44,7 @@ describe('ProjectSection', () => {
     expect(addBtn.props.className).toContain('sl-action-primary');
     const resumeBtn = tree.root.findByProps({title: 'Resume session'});
     expect(resumeBtn.props.className).toContain('sl-action-secondary');
-    expect(resumeBtn.findByType('svg').props['data-icon-name']).toBe('play');
+    expect(resumeBtn.findByType('svg').props['data-icon-name']).toBe('messageSquareMore');
     expect(tree.root.findByProps({title: 'Pin project to top'}).props.className).toContain('sl-action-secondary');
   });
 

@@ -28,12 +28,14 @@ const GLYPHS = {
   panelLeft: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /></>),
   // lucide:panel-left-close
   panelLeftClose: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m16 15-3-3 3-3" /></>),
-  // lucide:play (verified via better-icons)
-  play: (<><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" /></>),
+  // lucide:message-square-more (verified via better-icons)
+  messageSquareMore: (<><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" /><path d="M12 11h.01" /><path d="M16 11h.01" /><path d="M8 11h.01" /></>),
   // lucide:clock (verified via better-icons)
   clock: (<><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>),
   // lucide:archive
   archive: (<><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></>),
+  // lucide:archive-restore (verified via better-icons)
+  archiveRestore: (<><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h2" /><path d="M20 8v11a2 2 0 0 1-2 2h-2" /><path d="m9 15 3-3 3 3" /><path d="M12 12v9" /></>),
   // lucide:pencil
   pencil: (<><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></>),
   // lucide:refresh-cw

@@ -3,6 +3,25 @@ import path from 'path';
 
 import {readWebStyles} from '../testHelpers/webStyles';
 describe('web resume session ui', () => {
+  test('uses conversation continuation and archive recovery glyphs for their actions', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(mainTsx).not.toContain('<SessionIcon name="play"');
+    expect(mainTsx).toContain(": 'messageSquareMore';");
+    expect(mainTsx).toContain(
+      "<SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'messageSquareMore'} />",
+    );
+    expect(mainTsx).toContain('<SessionIcon name="messageSquareMore" />');
+    expect(mainTsx).toContain('<SessionIcon name="archiveRestore" />');
+    expect(mainTsx).toContain(
+      "<SessionIcon name={restoring ? 'loader' : 'archiveRestore'} spin={restoring} />",
+    );
+  });
+
   test('preserves wide resume popover placement when showing resumable sessions', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(

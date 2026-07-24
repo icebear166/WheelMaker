@@ -14128,7 +14128,7 @@ export function App() {
               role="menuitem"
             >
               <span className="session-archive-menu-item-icon" aria-hidden="true">
-                <SessionIcon name="refreshCw" />
+                <SessionIcon name="archiveRestore" />
               </span>
               <span className="session-archive-menu-item-text">
                 <span className="session-archive-menu-item-label">Recover...</span>
@@ -14640,7 +14640,7 @@ export function App() {
                             disabled={restoring}
                             onClick={() => requestRestoreArchivedSession(section.project.projectId, session)}
                           >
-                            <SessionIcon name={restoring ? 'loader' : 'refreshCw'} spin={restoring} />
+                            <SessionIcon name={restoring ? 'loader' : 'archiveRestore'} spin={restoring} />
                             <span className="project-session-menu-label">Restore</span>
                           </button>
                         </div>
@@ -15804,7 +15804,7 @@ export function App() {
       ? 'list'
       : sheetMenu.kind === 'new'
         ? 'plus'
-        : 'play';
+        : 'messageSquareMore';
     return (
       <>
         <div
@@ -15913,7 +15913,7 @@ export function App() {
                           ).catch(() => undefined);
                         }}
                       >
-                        <SessionIcon name="play" />
+                        <SessionIcon name="messageSquareMore" />
                         <span className="mobile-project-sheet-item-label">
                           {resolveSessionDisplayTitle(session) || session.sessionId}
                         </span>
@@ -15922,7 +15922,7 @@ export function App() {
                   : null}
                 {!resumeLoading && resumeSessions.length === 0 ? (
                   <div className="wide-project-action-empty">
-                    <SessionIcon name="play" />
+                    <SessionIcon name="messageSquareMore" />
                     <span>No resumable sessions.</span>
                   </div>
                 ) : null}
@@ -15967,7 +15967,7 @@ export function App() {
           : undefined}
       >
         <div className="wide-project-action-title">
-          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'play'} />
+          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'messageSquareMore'} />
           <span className="wide-project-action-title-copy">
             <span className="wide-project-action-title-main">
               {actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
@@ -16031,13 +16031,13 @@ export function App() {
                   ).catch(() => undefined);
                 }}
               >
-                <SessionIcon name="play" />
+                <SessionIcon name="messageSquareMore" />
                 <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
               </button>
             )) : null}
             {!resumeLoading && resumeSessions.length === 0 ? (
               <div className="wide-project-action-empty">
-                <SessionIcon name="play" />
+                <SessionIcon name="messageSquareMore" />
                 <span>No resumable sessions.</span>
               </div>
             ) : null}

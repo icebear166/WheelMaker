@@ -16,7 +16,10 @@ describe('SessionIcon', () => {
       // glyph must not be empty
       expect(svg.props.children).toBeTruthy();
     }
-    expect(SESSION_ICON_NAMES).toEqual(expect.arrayContaining(['play', 'clock']));
+    expect(SESSION_ICON_NAMES).toEqual(
+      expect.arrayContaining(['messageSquareMore', 'archiveRestore', 'clock']),
+    );
+    expect(SESSION_ICON_NAMES).not.toContain('play');
   });
 
   it('applies spin class and custom size', async () => {
