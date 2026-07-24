@@ -177,7 +177,7 @@ describe('web chat recent sessions', () => {
   });
 
   test('keeps transient menus open while their own scroll containers move', () => {
-    expect(mainTsx).toContain('const closeSidebarTransientMenus = useCallback(() => {');
+    expect(mainTsx).toContain("const closeSidebarTransientMenus = useCallback((keepOpen: 'hub' | 'project' | 'prompt' | null = null) => {");
     expect(mainTsx).toContain('const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {');
     expect(mainTsx).toContain("target.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)");
     expect(mainTsx).toContain("window.addEventListener('scroll', closeSidebarTransientMenusOnScroll, true);");
