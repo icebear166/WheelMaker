@@ -771,7 +771,8 @@ describe('web chat integration', () => {
       /\.breadcrumb-current \{[\s\S]*min-width: 0;[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*\}/,
     );
     expect(mainTsx).toContain('chatAttachments.map(attachment => {');
-    expect(mainTsx).toContain('onClick={() => removeChatAttachment(attachment.id)}');
+    expect(mainTsx).toContain('setChatAttachmentRemovingId(attachment.id)');
+    expect(mainTsx).toContain('removeChatAttachment(attachment.id)');
     expect(mainTsx).toContain('disabled={chatSendDisabled}');
     expect(stylesCss).not.toContain('.project-presence {');
     expect(stylesCss).not.toContain('.project-dirty {');

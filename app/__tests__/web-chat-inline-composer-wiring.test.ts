@@ -239,4 +239,19 @@ describe('composer menu exclusivity', () => {
     const voiceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'features', 'speech', 'VoiceInputButton.tsx'));
     expect(voiceTsx).not.toContain('codicon');
   });
+
+  test('composer motion polish: drop hint text, attachment exit, capsule transition', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('Drop files to attach');
+    expect(mainTsx).toContain('chatAttachmentRemovingId');
+    expect(stylesCss).toContain('.chat-composer-drop-hint');
+    expect(stylesCss).toMatch(/\.chat-attachment-preview \{[\s\S]*animation: chat-attachment-in var\(--motion-standard\) var\(--ease-out\)/);
+    expect(stylesCss).toContain('.chat-attachment-preview.removing');
+    expect(stylesCss).toMatch(/\.chat-composer-capsule,\s*\n\.chat-prompt-inline-capsule \{[\s\S]*transition: box-shadow var\(--motion-fast\)/);
+    expect(stylesCss).toMatch(/\.chat-composer-toolbar \{[\s\S]*min-height: 30px;/);
+    expect(stylesCss).toMatch(/\.voice-recording-bar \{[\s\S]*min-height: 30px;/);
+  });
 });

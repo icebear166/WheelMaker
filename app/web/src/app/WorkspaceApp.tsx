@@ -3360,6 +3360,7 @@ export function App() {
   const [chatComposerTokens, setChatComposerTokens] = useState<ChatComposerToken[]>([]);
   const [chatComposerSelectionRestore, setChatComposerSelectionRestore] = useState<ChatRichComposerSelectionRestore | null>(null);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
+  const [chatAttachmentRemovingId, setChatAttachmentRemovingId] = useState('');
   const chatAttachmentUploadPending = chatAttachments.some(isChatAttachmentUploadPending);
   const chatComposerHasSendableContent = chatComposerHasSendableTokens(chatComposerTokens) || chatAttachments.length > 0;
   const [voiceRecording, setVoiceRecording] = useState(false);
@@ -18130,13 +18131,19 @@ export function App() {
                 enqueueChatAttachmentFiles(files, attachmentDraftKey, attachmentDraftGeneration);
               }}
             >
+              {chatComposerDragActive ? (
+                <div className="chat-composer-drop-hint" aria-hidden="true">
+                  <ChatIcon name="paperclip" size={14} />
+                  <span>Drop files to attach</span>
+                </div>
+              ) : null}
               {chatAttachments.length > 0 ? (
                 <div className="chat-attachment-preview-list">
                   {chatAttachments.map(attachment => {
                     const previewSrc = chatAttachmentPreviewSrc(attachment);
                     const pending = isChatAttachmentUploadPending(attachment);
                     return (
-                      <div key={attachment.id} className={`chat-attachment-preview ${attachment.status}`}>
+                      <div key={attachment.id} className={`chat-attachment-preview ${attachment.status}${chatAttachmentRemovingId === attachment.id ? ' removing' : ''}`}>
                         {previewSrc ? (
                           <img
                             className="chat-attachment-thumb"
@@ -18179,7 +18186,13 @@ export function App() {
                         <button
                           type="button"
                           className="chat-attachment-remove"
-                          onClick={() => removeChatAttachment(attachment.id)}
+                          onClick={() => {
+                            setChatAttachmentRemovingId(attachment.id);
+                            window.setTimeout(() => {
+                              removeChatAttachment(attachment.id);
+                              setChatAttachmentRemovingId('');
+                            }, 140);
+                          }}
                           disabled={pending}
                           title={pending ? 'Uploading' : 'Remove attachment'}
                           aria-label={pending ? 'Uploading' : 'Remove attachment'}

@@ -3441,6 +3441,29 @@
   background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
 }
 
+.chat-composer-drop-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent-primary) 10%, var(--surface-panel) 88%);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: sl-menu-in 140ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-composer-drop-hint {
+    animation: none;
+  }
+}
+
 .chat-composer-input-row {
   display: flex;
   align-items: flex-end;
@@ -3517,6 +3540,7 @@
   vertical-align: baseline;
   line-height: 1.1;
   white-space: nowrap;
+  transition: box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .chat-composer-capsule.skill,
@@ -3534,8 +3558,7 @@
 }
 
 .chat-composer-capsule.selected {
-  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
-  outline-offset: 1px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 58%, transparent);
 }
 
 .chat-composer-capsule-label,
@@ -3952,7 +3975,7 @@
 
 .voice-recording-bar {
   position: relative;
-  min-height: 26px;
+  min-height: 30px;
   border: 1px solid color-mix(in srgb, var(--state-info) 32%, var(--border-subtle));
   border-radius: 8px;
   background:
@@ -3967,6 +3990,13 @@
   gap: 9px;
   padding: 0 10px;
   overflow: hidden;
+  animation: sl-menu-in 140ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-recording-bar {
+    animation: none;
+  }
 }
 
 .voice-recording-bar.cancel-intent {
@@ -4082,8 +4112,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 24px;
+  min-height: 30px;
   min-width: 0;
+  animation: sl-menu-in 140ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-composer-toolbar {
+    animation: none;
+  }
 }
 
 .chat-composer-toolbar-actions {
@@ -4314,6 +4351,36 @@
   padding: 6px;
   width: 88px;
   position: relative;
+  animation: chat-attachment-in var(--motion-standard) var(--ease-out);
+}
+
+@keyframes chat-attachment-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.chat-attachment-preview.removing {
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity var(--motion-fast) ease-in,
+    transform var(--motion-fast) ease-in;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-attachment-preview {
+    animation: none;
+  }
+
+  .chat-attachment-preview.removing {
+    transition: none;
+  }
 }
 
 .chat-attachment-preview.uploading,
