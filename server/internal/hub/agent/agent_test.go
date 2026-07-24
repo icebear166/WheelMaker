@@ -340,6 +340,33 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:        "flicker",
+			newProvider: NewCCFlickerProvider,
+			key:         "flicker-test-key",
+			wantArgs:    []string{"--hide-claude-auth"},
+			wantEnv: map[string]string{
+				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-flicker"),
+				"ANTHROPIC_BASE_URL":      "http://127.0.0.1:17888",
+				"ANTHROPIC_AUTH_TOKEN":    "flicker-test-key",
+				"ANTHROPIC_API_KEY":       "",
+				"CLAUDE_CODE_USE_BEDROCK": "",
+				"CLAUDE_CODE_USE_VERTEX":  "",
+				"CLAUDE_CODE_USE_FOUNDRY": "",
+			},
+			wantSettings: map[string]any{
+				"model":                  "CLAUDE_OPUS_4_8",
+				"availableModels":        []any{"CLAUDE_OPUS_4_8", "CLAUDE_4_6", "GPT_5_6_SOL", "GPT_5_6_TERRA", "GPT_5_6_LUNA", "KIMI_K3", "GLM_5_2", "DEEPSEEK_V4_PRO"},
+				"enforceAvailableModels": true,
+				"env": map[string]any{
+					"ANTHROPIC_DEFAULT_FABLE_MODEL":  "CLAUDE_OPUS_4_8",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL":   "CLAUDE_OPUS_4_8",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL": "CLAUDE_4_6",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "CLAUDE_4_6",
+					"CLAUDE_CODE_SUBAGENT_MODEL":     "CLAUDE_4_6",
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {

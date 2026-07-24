@@ -147,6 +147,15 @@ var (
 		SkillProjectParentDirs: []string{".claude/skills"},
 		SkillUserDirs:          []string{"~/.claude/skills"},
 	}
+	ClaudeCompatibleFlickerProviderPreset = ACPProviderPreset{
+		Name:                   "cc-flicker",
+		BinaryName:             "claude-agent-acp",
+		Args:                   []string{"--hide-claude-auth"},
+		InstallHint:            "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs:       []string{".claude/skills"},
+		SkillProjectParentDirs: []string{".claude/skills"},
+		SkillUserDirs:          []string{"~/.claude/skills"},
+	}
 )
 
 // acpProvider is the unified implementation for all ACP providers.
@@ -231,6 +240,15 @@ func NewCCKimiProvider(stateDir, apiKey string) *acpProvider {
 func NewCCQwenProvider(stateDir, apiKey string) *acpProvider {
 	profile := claudeCompatibleQwenProfile(stateDir)
 	preset := ClaudeCompatibleQwenProviderPreset
+	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
+	provider := NewACPProvider(preset)
+	provider.claudeSettings = &profile
+	return provider
+}
+
+func NewCCFlickerProvider(stateDir, apiKey string) *acpProvider {
+	profile := claudeCompatibleFlickerProfile(stateDir)
+	preset := ClaudeCompatibleFlickerProviderPreset
 	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
 	provider := NewACPProvider(preset)
 	provider.claudeSettings = &profile
@@ -374,6 +392,23 @@ func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
 			"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "DeepSeek V4 Pro",
 			"CLAUDE_CODE_SUBAGENT_MODEL":          "qwen3.8-max-preview",
 			"CLAUDE_CODE_MAX_CONTEXT_TOKENS":      "983616",
+		},
+	}
+}
+
+func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
+	return claudeCompatibleProfile{
+		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
+		endpoint:        "http://127.0.0.1:17888",
+		authName:        "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:    "CLAUDE_OPUS_4_8",
+		availableModels: []string{"CLAUDE_OPUS_4_8", "CLAUDE_4_6", "GPT_5_6_SOL", "GPT_5_6_TERRA", "GPT_5_6_LUNA", "KIMI_K3", "GLM_5_2", "DEEPSEEK_V4_PRO"},
+		settingsEnv: map[string]string{
+			"ANTHROPIC_DEFAULT_FABLE_MODEL":  "CLAUDE_OPUS_4_8",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL":   "CLAUDE_OPUS_4_8",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL": "CLAUDE_4_6",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "CLAUDE_4_6",
+			"CLAUDE_CODE_SUBAGENT_MODEL":     "CLAUDE_4_6",
 		},
 	}
 }
