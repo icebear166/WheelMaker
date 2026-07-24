@@ -3556,6 +3556,42 @@ func TestNewWiresQwenAPIKeyIntoHubFactory(t *testing.T) {
 	}
 }
 
+func TestNewWiresFlickerAPIKeyIntoHubFactory(t *testing.T) {
+	binDir := t.TempDir()
+	binaryName := "claude-agent-acp"
+	if runtime.GOOS == "windows" {
+		binaryName += ".cmd"
+	}
+	if err := os.WriteFile(filepath.Join(binDir, binaryName), []byte("@exit /b 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake claude-agent-acp: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	projectPath := t.TempDir()
+	cfg := &logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
+		APIKeys:  logger.APIKeysConfig{Flicker: "flicker-test-key"},
+	}
+	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
+	info := h.collectProjectInfo(cfg.Projects[0])
+
+	found := false
+	for _, name := range info.Agents {
+		if name == "cc-flicker" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ProjectInfo.Agents = %v, want cc-flicker", info.Agents)
+	}
+	if blob, err := json.Marshal(info); err != nil {
+		t.Fatalf("marshal ProjectInfo: %v", err)
+	} else if strings.Contains(string(blob), "flicker-test-key") {
+		t.Fatalf("ProjectInfo leaked flicker API key: %s", blob)
+	}
+}
+
 func equalStringsForClaudeTest(got, want []string) bool {
 	if len(got) != len(want) {
 		return false

@@ -48,6 +48,7 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		KimiAPIKey:     apiKeys.Kimi,
 		QwenAPIKey:     apiKeys.Qwen,
 		ZAIAPIKey:      apiKeys.ZAI,
+		FlickerAPIKey:  apiKeys.Flicker,
 	}))
 }
 

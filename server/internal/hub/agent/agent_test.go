@@ -4850,7 +4850,7 @@ func TestProviderPresetByNameKimi(t *testing.T) {
 }
 
 func TestClaudeCompatibleProviderPresetsShareClaudeUserSkills(t *testing.T) {
-	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"} {
+	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen", "cc-flicker"} {
 		t.Run(name, func(t *testing.T) {
 			preset, ok := providerPresetByName(name)
 			if !ok || preset.Name != name {
@@ -4882,7 +4882,7 @@ func TestListProviderSkills_ClaudeCompatibleIncludesClaudeUserSkills(t *testing.
 		t.Fatalf("WriteFile skill: %v", err)
 	}
 
-	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"} {
+	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen", "cc-flicker"} {
 		t.Run(name, func(t *testing.T) {
 			skills, err := ListProviderSkills(context.Background(), name, t.TempDir())
 			if err != nil {
@@ -4946,6 +4946,7 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 		kimiKey     string
 		qwenKey     string
 		zaiKey      string
+		flickerKey  string
 		available   bool
 		wantNames   []string
 	}{
@@ -4955,7 +4956,8 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 		{name: "kimi only", kimiKey: "kimi-key", available: true, wantNames: []string{"cc-kimi"}},
 		{name: "qwen only", qwenKey: "qwen-key", available: true, wantNames: []string{"cc-qwen"}},
 		{name: "zai only", zaiKey: "zai-key", available: true, wantNames: []string{"cc-glm"}},
-		{name: "all", deepseekKey: "deepseek-key", kimiKey: "kimi-key", qwenKey: "qwen-key", zaiKey: "zai-key", available: true, wantNames: []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"}},
+		{name: "flicker only", flickerKey: "flicker-key", available: true, wantNames: []string{"cc-flicker"}},
+		{name: "all", deepseekKey: "deepseek-key", kimiKey: "kimi-key", qwenKey: "qwen-key", zaiKey: "zai-key", flickerKey: "flicker-key", available: true, wantNames: []string{"cc-deepseek", "cc-flicker", "cc-glm", "cc-kimi", "cc-qwen"}},
 		{name: "trimmed input", kimiKey: "  kimi-key  ", available: true, wantNames: []string{"cc-kimi"}},
 		{name: "whitespace only", deepseekKey: "\n", kimiKey: "   ", qwenKey: "\r", zaiKey: "\t", available: true, wantNames: []string{}},
 	}
@@ -4968,13 +4970,14 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 				KimiAPIKey:     tt.kimiKey,
 				QwenAPIKey:     tt.qwenKey,
 				ZAIAPIKey:      tt.zaiKey,
+				FlickerAPIKey:  tt.flickerKey,
 			}, func(provider ACPProvider) bool {
-				return tt.available && (provider.Name() == "cc-deepseek" || provider.Name() == "cc-glm" || provider.Name() == "cc-kimi" || provider.Name() == "cc-qwen")
+				return tt.available && (provider.Name() == "cc-deepseek" || provider.Name() == "cc-glm" || provider.Name() == "cc-kimi" || provider.Name() == "cc-qwen" || provider.Name() == "cc-flicker")
 			})
 			if got := factory.Names(); !reflect.DeepEqual(got, tt.wantNames) {
 				t.Fatalf("factory.Names() = %v, want %v", got, tt.wantNames)
 			}
-			if preferred := factory.PreferredName(); preferred == "cc-deepseek" || preferred == "cc-glm" || preferred == "cc-kimi" || preferred == "cc-qwen" {
+			if preferred := factory.PreferredName(); preferred == "cc-deepseek" || preferred == "cc-glm" || preferred == "cc-kimi" || preferred == "cc-qwen" || preferred == "cc-flicker" {
 				t.Fatalf("PreferredName() selected Claude-compatible provider: %q", preferred)
 			}
 		})
