@@ -12,6 +12,8 @@ export type DesktopWindowBridge = {
   close?: () => Promise<void> | void;
   requestLocalDevMode?: (sourcePath: string) => Promise<void> | void;
   localDev?: DesktopLocalDevBridge;
+  openFileInVSCode?: (absolutePath: string) => Promise<void> | void;
+  showFileInFolder?: (absolutePath: string) => Promise<void> | void;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   getDesktopUpdateInfo?: () => Promise<DesktopUpdateInfo>;
@@ -35,6 +37,12 @@ export type DesktopLocalDevBridge = {
 export const openLocalDevPanelEvent = 'wheelmaker:open-local-dev';
 
 export type DesktopProjectFileAction = 'vscode' | 'folder';
+
+export type DesktopFileActionTarget = {
+  absolutePath: string;
+  projectRoot: string;
+  relativePath: string | null;
+};
 
 declare global {
   interface Window {
@@ -62,4 +70,43 @@ export async function invokeDesktopProjectFileAction(
     throw new Error('Desktop file action is unavailable.');
   }
   await method(projectRoot, relativePath);
+}
+
+export function canInvokeDesktopFileAction(
+  bridge: DesktopWindowBridge | null,
+  action: DesktopProjectFileAction,
+  target: DesktopFileActionTarget,
+): boolean {
+  if (!bridge) return false;
+  const absoluteMethod =
+    action === 'vscode' ? bridge.openFileInVSCode : bridge.showFileInFolder;
+  if (absoluteMethod && target.absolutePath) return true;
+  const projectMethod =
+    action === 'vscode' ? bridge.openProjectFileInVSCode : bridge.showProjectFileInFolder;
+  return Boolean(
+    projectMethod
+    && target.projectRoot
+    && target.relativePath,
+  );
+}
+
+export async function invokeDesktopFileAction(
+  bridge: DesktopWindowBridge,
+  action: DesktopProjectFileAction,
+  target: DesktopFileActionTarget,
+): Promise<void> {
+  const absoluteMethod =
+    action === 'vscode' ? bridge.openFileInVSCode : bridge.showFileInFolder;
+  if (absoluteMethod && target.absolutePath) {
+    await absoluteMethod(target.absolutePath);
+    return;
+  }
+
+  const projectMethod =
+    action === 'vscode' ? bridge.openProjectFileInVSCode : bridge.showProjectFileInFolder;
+  if (projectMethod && target.projectRoot && target.relativePath) {
+    await projectMethod(target.projectRoot, target.relativePath);
+    return;
+  }
+  throw new Error('Desktop file action is unavailable.');
 }

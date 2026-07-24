@@ -921,7 +921,24 @@ export class RegistryRepository {
       payload: {path},
       signal: options?.signal,
     });
-    const payload = (resp.payload ?? {}) as RegistryFsInfo;
+    return this.normalizeFileInfoResponse((resp.payload ?? {}) as RegistryFsInfo);
+  }
+
+  async getExternalFileInfo(
+    projectId: string,
+    path: string,
+    options?: Pick<RegistryFileRequestOptions, 'signal'>,
+  ): Promise<RegistryFsInfo> {
+    const resp = await this.client.request({
+      method: RegistryMethods.ProjectFSExternalInfo,
+      projectId,
+      payload: {path},
+      signal: options?.signal,
+    });
+    return this.normalizeFileInfoResponse((resp.payload ?? {}) as RegistryFsInfo);
+  }
+
+  private normalizeFileInfoResponse(payload: RegistryFsInfo): RegistryFsInfo {
     const tabSize = typeof payload.tabSize === 'number' && Number.isFinite(payload.tabSize)
       ? Math.max(1, Math.min(12, Math.trunc(payload.tabSize)))
       : undefined;
@@ -952,9 +969,35 @@ export class RegistryRepository {
       },
       signal: options?.signal,
     });
-    const payload = (resp.payload ?? {}) as RegistryFsReadResponse;
+    return this.normalizeFileReadResponse(
+      (resp.payload ?? {}) as RegistryFsReadResponse,
+      path,
+    );
+  }
+
+  async readExternalFile(
+    projectId: string,
+    path: string,
+    options?: Pick<RegistryFileRequestOptions, 'signal'>,
+  ): Promise<RegistryFsReadResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.ProjectFSExternalRead,
+      projectId,
+      payload: {path},
+      signal: options?.signal,
+    });
+    return this.normalizeFileReadResponse(
+      (resp.payload ?? {}) as RegistryFsReadResponse,
+      path,
+    );
+  }
+
+  private normalizeFileReadResponse(
+    payload: RegistryFsReadResponse,
+    requestedPath: string,
+  ): RegistryFsReadResponse {
     return {
-      path: payload.path ?? path,
+      path: payload.path ?? requestedPath,
       hash: payload.hash,
       notModified: payload.notModified ?? false,
       isBinary: payload.isBinary ?? false,

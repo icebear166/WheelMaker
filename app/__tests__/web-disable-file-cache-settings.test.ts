@@ -48,5 +48,6 @@ describe('web disable file cache settings', () => {
     expect(loadBody).toContain('const knownHash = !fileCacheDisabled && cachedEntries');
     expect(loadBody).toContain('if (!fileCacheDisabled) {');
     expect(loadBody).toContain('workspaceStore.cacheDirectory(targetProjectId, path, nextHash, entries);');
+    expect(mainTsx).not.toContain('workspaceStore.cacheFile(');
   });
 });

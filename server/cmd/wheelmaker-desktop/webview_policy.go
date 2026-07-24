@@ -32,6 +32,8 @@ const (
 	desktopBridgeRequestServerChange
 	desktopBridgeOpenProjectFileInVSCode
 	desktopBridgeShowProjectFileInFolder
+	desktopBridgeOpenFileInVSCode
+	desktopBridgeShowFileInFolder
 	desktopBridgeEnterLocalDev
 	desktopBridgeGetLocalDevState
 	desktopBridgeSaveLocalDevSource
@@ -112,6 +114,8 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeEnterLocalDev,
 		desktopBridgeOpenProjectFileInVSCode,
 		desktopBridgeShowProjectFileInFolder,
+		desktopBridgeOpenFileInVSCode,
+		desktopBridgeShowFileInFolder,
 		desktopBridgeGetUpdateInfo,
 		desktopBridgeRequestUpdate:
 		return true

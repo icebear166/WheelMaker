@@ -37,8 +37,12 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 	for _, want := range []string{
 		"openProjectFileInVSCode",
 		"showProjectFileInFolder",
+		"openFileInVSCode",
+		"showFileInFolder",
 		desktopOpenProjectFileInVSCodeBinding,
 		desktopShowProjectFileInFolderBinding,
+		desktopOpenFileInVSCodeBinding,
+		desktopShowFileInFolderBinding,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("desktop runtime script missing %q", want)
@@ -57,9 +61,29 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 	for _, privateName := range []string{
 		desktopOpenProjectFileInVSCodeBinding,
 		desktopShowProjectFileInFolderBinding,
+		desktopOpenFileInVSCodeBinding,
+		desktopShowFileInFolderBinding,
 	} {
 		if strings.Contains(bootstrapSection, privateName) {
 			t.Errorf("bootstrap object exposes private file action binding %q", privateName)
+		}
+	}
+	remoteRelative := strings.Index(script[bootstrapStart+bootstrapEnd:], "window.WheelMakerDesktop = Object.freeze({")
+	if remoteRelative < 0 {
+		t.Fatal("desktop runtime remote section was not found")
+	}
+	remoteStart := bootstrapStart + bootstrapEnd + remoteRelative
+	localRelative := strings.Index(script[remoteStart+1:], "window.WheelMakerDesktop = Object.freeze({")
+	if localRelative < 0 {
+		t.Fatal("desktop runtime Local Dev section was not found")
+	}
+	localDevSection := script[remoteStart+1+localRelative:]
+	for _, privateName := range []string{
+		desktopOpenFileInVSCodeBinding,
+		desktopShowFileInFolderBinding,
+	} {
+		if strings.Contains(localDevSection, privateName) {
+			t.Errorf("Local Dev object exposes absolute file action binding %q", privateName)
 		}
 	}
 
@@ -72,6 +96,10 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 		"newDefaultDesktopFileActionEnvironment().openProjectFileInVSCode(projectRoot, relativePath)",
 		"authorize(desktopBridgeShowProjectFileInFolder)",
 		"newDefaultDesktopFileActionEnvironment().showProjectFileInFolder(projectRoot, relativePath)",
+		"authorize(desktopBridgeOpenFileInVSCode)",
+		"newDefaultDesktopFileActionEnvironment().openFileInVSCode(absolutePath)",
+		"authorize(desktopBridgeShowFileInFolder)",
+		"newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)",
 	} {
 		if !strings.Contains(string(source), want) {
 			t.Errorf("Windows desktop binding source missing %q", want)

@@ -260,6 +260,8 @@ App 打开 Git tab 时先调用该方法；只有 `gitRev` 或 `worktreeRev` 相
 - `project.fs.list`
 - `project.fs.info`
 - `project.fs.read`
+- `project.fs.external.info`
+- `project.fs.external.read`
 - `project.fs.search`
 - `project.fs.grep`
 - `project.fs.index.search`
@@ -270,6 +272,12 @@ App 打开 Git tab 时先调用该方法；只有 `gitRev` 或 `worktreeRev` 相
 - 缓存变化或无缓存：返回完整数据和新 `hash`。
 
 文件读取为整文件语义。大文件由 App 先调用 `project.fs.info` 判定后再读取。
+
+`project.fs.external.info` / `project.fs.external.read` 是 Registry 2.6 的增量只读能力。它们与其他 Project 方法一样要求 envelope 顶层 `projectId`，Registry 通过该项目把请求路由到对应 Hub，但 payload 中的 `path` 必须是 Hub 宿主机上的绝对路径。已认证 client 可以通过这两个方法读取目标 Hub 主机上的任意本地文件；这是文件链接功能明确采用的信任边界。
+
+外部文件方法不接受 `knownHash`，不参与项目文件 cache、目录树、索引、搜索或同步，也不提供目录列举和写入能力。它们不会放宽 `project.fs.info` / `project.fs.read` 现有的项目根目录校验。新 App 连接尚未注册外部文件方法的旧 Hub 时必须返回明确的不支持错误，不得回退到项目文件方法。
+
+> 决策来源：[`docs/scope/2026-07-24-external-file-links/spec-external-file-links.md`](../../scope/2026-07-24-external-file-links/spec-external-file-links.md)
 
 ### Git 方法
 

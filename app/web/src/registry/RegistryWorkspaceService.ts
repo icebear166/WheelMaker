@@ -5,6 +5,7 @@ import {
 } from './RegistryRepository';
 import {RegistryRequestError} from './RegistryClient';
 import type {RegistryDebugSink} from './RegistryClient';
+import {RegistryMethods} from './registryMethods';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
 import type {ServerSettings, ServerSettingsUpdate, SpeechModelId} from '../settings/serverSettings';
 import type {
@@ -91,6 +92,26 @@ export type RegistryWorkspaceServiceOptions = {
   createRepository?: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;
   clientName?: RegistryClientName;
 };
+
+export function translateExternalFileError(error: unknown): never {
+  const details = error instanceof RegistryRequestError
+    && error.details
+    && typeof error.details === 'object'
+    ? error.details as {method?: unknown}
+    : {};
+  if (
+    error instanceof RegistryRequestError
+    && error.code === 'INVALID_ARGUMENT'
+    && (error.message === 'unsupported method on hub' || error.message === 'unsupported method')
+    && (
+      details.method === RegistryMethods.ProjectFSExternalInfo
+      || details.method === RegistryMethods.ProjectFSExternalRead
+    )
+  ) {
+    throw new Error('This Hub does not support external file preview.');
+  }
+  throw error;
+}
 
 export class RegistryWorkspaceService {
   private repository: RegistryRepository | null = null;
@@ -258,6 +279,21 @@ export class RegistryWorkspaceService {
     return this.repository.getFileInfo(projectId, path, options);
   }
 
+  async getExternalFileInfo(
+    projectId: string,
+    path: string,
+    options?: Pick<RegistryFileRequestOptions, 'signal'>,
+  ): Promise<RegistryFsInfo> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    try {
+      return await this.repository.getExternalFileInfo(projectId, path, options);
+    } catch (error) {
+      return translateExternalFileError(error);
+    }
+  }
+
   async readFile(path: string, options?: RegistryFileRequestOptions): Promise<{
     content: string;
     hash?: string;
@@ -289,6 +325,34 @@ export class RegistryWorkspaceService {
       total: result.total,
       isBinary: result.isBinary,
     };
+  }
+
+  async readExternalFile(
+    projectId: string,
+    path: string,
+    options?: Pick<RegistryFileRequestOptions, 'signal'>,
+  ): Promise<{
+    content: string;
+    hash?: string;
+    notModified: boolean;
+    total?: number;
+    isBinary?: boolean;
+  }> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    try {
+      const result = await this.repository.readExternalFile(projectId, path, options);
+      return {
+        content: typeof result.content === 'string' ? result.content : '',
+        hash: result.hash,
+        notModified: result.notModified,
+        total: result.total,
+        isBinary: result.isBinary,
+      };
+    } catch (error) {
+      return translateExternalFileError(error);
+    }
   }
 
   async getFileIndexStatus(hubId: string): Promise<RegistryFileIndexStatusResponse> {

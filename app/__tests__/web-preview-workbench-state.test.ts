@@ -111,6 +111,10 @@ describe('preview workbench state', () => {
       path: 'src/../README.md',
       info: {path: 'README.md', kind: 'file'},
     }))).toBe('README.md');
+    expect(resolvePreviewDesktopFilePath(filePreviewTab({
+      path: 'D:/outside/report.md',
+      info: {path: 'D:/outside/report.md', kind: 'file'},
+    }))).toBe('D:/outside/report.md');
   });
 
   test.each([
@@ -706,6 +710,26 @@ describe('preview workbench state', () => {
     expect(activePreviewTab(previewWorkbenchStateFromSnapshot(snapshot))).toMatchObject({
       type: 'prompt-diff',
       activeFilePath: 'src/b.ts',
+    });
+  });
+
+  test('restores an external file path without persisted content', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'file',
+      projectId: 'p1',
+      path: 'D:/outside/report.md',
+      targetLine: 7,
+      title: 'report.md',
+    });
+    const restored = previewWorkbenchStateFromSnapshot(
+      previewWorkbenchSnapshotFromState(state),
+    );
+
+    expect(activePreviewTab(restored)).toMatchObject({
+      type: 'file',
+      path: 'D:/outside/report.md',
+      targetLine: 7,
+      content: '',
     });
   });
 

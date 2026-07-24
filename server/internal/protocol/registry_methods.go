@@ -71,6 +71,8 @@ const (
 	RegistryMethodProjectFSList                 = "project.fs.list"
 	RegistryMethodProjectFSInfo                 = "project.fs.info"
 	RegistryMethodProjectFSRead                 = "project.fs.read"
+	RegistryMethodProjectFSExternalInfo         = "project.fs.external.info"
+	RegistryMethodProjectFSExternalRead         = "project.fs.external.read"
 	RegistryMethodProjectFSSearch               = "project.fs.search"
 	RegistryMethodProjectFSGrep                 = "project.fs.grep"
 	RegistryMethodProjectFSIndexSearch          = "project.fs.index.search"
@@ -188,6 +190,8 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodProjectFSList:                 registryProjectMethod(RegistryMethodProjectFSList, RegistryRouteProjectForward),
 	RegistryMethodProjectFSInfo:                 registryProjectMethod(RegistryMethodProjectFSInfo, RegistryRouteProjectForward),
 	RegistryMethodProjectFSRead:                 registryProjectMethod(RegistryMethodProjectFSRead, RegistryRouteProjectForward),
+	RegistryMethodProjectFSExternalInfo:         registryProjectMethod(RegistryMethodProjectFSExternalInfo, RegistryRouteProjectForward),
+	RegistryMethodProjectFSExternalRead:         registryProjectMethod(RegistryMethodProjectFSExternalRead, RegistryRouteProjectForward),
 	RegistryMethodProjectFSSearch:               registryProjectMethod(RegistryMethodProjectFSSearch, RegistryRouteProjectForward),
 	RegistryMethodProjectFSGrep:                 registryProjectMethod(RegistryMethodProjectFSGrep, RegistryRouteProjectForward),
 	RegistryMethodProjectFSIndexSearch:          registryProjectMethod(RegistryMethodProjectFSIndexSearch, RegistryRouteProjectForward),

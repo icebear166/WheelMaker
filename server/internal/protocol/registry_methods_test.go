@@ -330,6 +330,8 @@ func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 		"project.fs.list",
 		"project.fs.info",
 		"project.fs.read",
+		"project.fs.external.info",
+		"project.fs.external.read",
 		"project.fs.search",
 		"project.fs.grep",
 		"project.fs.index.search",
@@ -360,6 +362,21 @@ func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 	}
 	if _, ok := RegistryMethod("connect.localRead.proof"); ok {
 		t.Fatal("connect.localRead.proof should be removed")
+	}
+	for _, method := range []string{
+		RegistryMethodProjectFSExternalInfo,
+		RegistryMethodProjectFSExternalRead,
+	} {
+		descriptor, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("%s should be registered", method)
+		}
+		if descriptor.Route != RegistryRouteProjectForward || !descriptor.RequiresProjectID {
+			t.Fatalf("%s descriptor=%+v, want project forward with projectId", method, descriptor)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("%s should allow client callers", method)
+		}
 	}
 }
 

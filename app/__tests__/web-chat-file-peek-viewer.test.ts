@@ -130,15 +130,15 @@ describe('web chat file peek viewer', () => {
     expect(actionsEnd).toBeGreaterThan(actionsStart);
     expect(runnerStart).toBeGreaterThanOrEqual(0);
     expect(runnerEnd).toBeGreaterThan(runnerStart);
-    expect(mainTsx).toContain('invokeDesktopProjectFileAction,');
     expect(mainTsx).toContain('type DesktopProjectFileAction,');
     expect(mainTsx).toContain('resolvePreviewDesktopFilePath,');
-    expect(actionsBody).toContain('const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;');
-    expect(actionsBody).toContain('const relativePath = resolvePreviewDesktopFilePath(tab);');
+    expect(actionsBody).toContain("const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path ?? '';");
+    expect(actionsBody).toContain('const confirmedPath = resolvePreviewDesktopFilePath(tab);');
+    expect(actionsBody).toContain('const fileTarget = confirmedPath');
+    expect(actionsBody).toContain('resolvePreviewFileLink(confirmedPath, projectRoot)');
     expect(actionsBody).not.toContain("const relativePath = tab.type === 'file'");
     expect(actionsBody).toContain('const desktopBridge = getDesktopWindowBridge();');
-    expect(actionsBody).toContain('const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
-    expect(actionsBody).toContain('const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');
+    expect(actionsBody).toContain('canInvokeDesktopFileAction(');
     expect(actionsBody).toContain('{canOpenProjectFileInVSCode ? (');
     expect(actionsBody).toContain('{canShowProjectFileInFolder ? (');
     expect(actionsBody).toContain("runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')");
@@ -153,9 +153,9 @@ describe('web chat file peek viewer', () => {
     expect(actionsBody).toContain("'Rebuild file index'");
     expect(runnerBody).toContain('closeActionsMenu();');
     expect(runnerBody).toContain("setToastMessage('');");
-    expect(runnerBody).toContain('if (!desktopBridge || !projectRoot || !relativePath) {');
+    expect(runnerBody).toContain('if (!desktopBridge || !desktopTarget) {');
     expect(runnerBody).toContain('Promise.resolve()');
-    expect(runnerBody).toContain('.then(() => invokeDesktopProjectFileAction(desktopBridge, action, projectRoot, relativePath))');
+    expect(runnerBody).toContain('.then(() => invokeDesktopFileAction(desktopBridge, action, desktopTarget))');
     expect(runnerBody).toContain('.catch(err => {');
     expect(runnerBody).toContain('const reason = err instanceof Error ? err.message : String(err);');
     expect(runnerBody).toContain('setToastMessage(`${failurePrefix}: ${reason}`);');
@@ -176,6 +176,13 @@ describe('web chat file peek viewer', () => {
     expect(connectedToastEnd).toBeGreaterThan(connectedToastStart);
     expect(connectedToastBody).toContain('{toastMessage ? (');
     expect(connectedToastBody).toContain('className="app-toast"');
+
+    const copyStart = mainTsx.indexOf('const copyChatFilePreviewPath = () => {');
+    const copyEnd = mainTsx.indexOf('const refreshActivePortRelayPreview =', copyStart);
+    const copyBody = mainTsx.slice(copyStart, copyEnd);
+    expect(copyBody).toContain('const fileTarget = resolvePreviewFileLink(confirmedPath, projectRoot);');
+    expect(copyBody).toContain('writeTextToClipboard(fileTarget.absolutePath)');
+    expect(copyBody).not.toContain('`${projectRoot}/${relativePath}`');
 
     const activeHeader = cssRuleBlock(stylesCss, '.chat-prompt-diff-file.active > .chat-prompt-diff-file-header');
     const activeHeaderHover = cssRuleBlock(stylesCss, '.chat-prompt-diff-file.active > .chat-prompt-diff-file-header:hover');
@@ -718,6 +725,46 @@ describe('web chat file peek viewer', () => {
     expect(readBody).toContain('signal: controller.signal');
     expect(readBody).not.toContain('requestSeq !== chatFilePeekReadSeqRef.current');
     expect(mainTsx).not.toContain('const chatFilePeekAbortControllerRef = useRef<AbortController | null>(null);');
+  });
+
+  test('routes external file previews outside project cache and tree lookup', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('isAbsolutePreviewFilePath(path)');
+    expect(mainTsx).toContain('service.getExternalFileInfo(targetProjectId, path');
+    expect(mainTsx).toContain('service.readExternalFile(targetProjectId, path');
+    expect(mainTsx).toContain('service.getProjectFileInfo(targetProjectId, path');
+    expect(mainTsx).toContain('service.readProjectFile(path, targetProjectId');
+    expect(mainTsx).not.toContain('workspaceStore.cacheFile(');
+    expect(mainTsx).toContain('if (isAbsolutePreviewFilePath(chatFilePeek.path)) return;');
+    expect(mainTsx).toContain(
+      'disabled={!chatFilePeek?.path || isAbsolutePreviewFilePath(chatFilePeek.path)}',
+    );
+  });
+
+  test('opens a file-only context menu with copy and Desktop actions', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+    const menuTsx = readSourceText(
+      path.join(projectRoot, 'web', 'src', 'chat', 'ChatFileLinkContextMenu.tsx'),
+    );
+
+    expect(mainTsx).toContain("import {ChatFileLinkContextMenu");
+    expect(mainTsx).toContain(
+      'const [chatFileLinkMenu, setChatFileLinkMenu] = useState<ChatFileLinkMenuState | null>(null);',
+    );
+    expect(mainTsx).toContain('onContextMenu={event => {');
+    expect(mainTsx).toContain('if (!targetFile) return;');
+    expect(mainTsx).toContain('setChatFileLinkMenu({');
+    expect(mainTsx).toContain('<ChatFileLinkContextMenu');
+    expect(mainTsx).toContain('canInvokeDesktopFileAction(');
+    expect(mainTsx).toContain('invokeDesktopFileAction(');
+    expect(mainTsx).toContain('absolutePath: chatFileLinkMenu.link.absolutePath');
+    expect(mainTsx).toContain('relativePath: chatFileLinkMenu.link.relativePath');
+    expect(mainTsx).toContain("setToastMessage('Copied relative path.')");
+    expect(mainTsx).toContain("setToastMessage('Copied absolute path.')");
+    expect(stylesCss).toContain('.chat-file-link-context-menu');
+    expect(menuTsx).not.toContain('onLongPress');
   });
 
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {

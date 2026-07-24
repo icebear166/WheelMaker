@@ -74,6 +74,43 @@ func openProjectFileInVSCode(projectRoot, relativePath string) error {
 	return newDefaultDesktopFileActionEnvironment().openProjectFileInVSCode(projectRoot, relativePath)
 }
 
+func resolveDesktopAbsoluteFilePath(absolutePath string) (string, error) {
+	return resolveDesktopAbsoluteFilePathWithStat(absolutePath, os.Stat)
+}
+
+func resolveDesktopAbsoluteFilePathWithStat(
+	absolutePath string,
+	stat func(string) (os.FileInfo, error),
+) (string, error) {
+	if !filepath.IsAbs(absolutePath) {
+		return "", fmt.Errorf("file path must be absolute")
+	}
+	target := filepath.Clean(absolutePath)
+	info, err := stat(target)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", errors.New("file is unavailable")
+		}
+		return "", fmt.Errorf("validate file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("file is not a regular file")
+	}
+	return target, nil
+}
+
+func openFileInVSCode(absolutePath string) error {
+	return newDefaultDesktopFileActionEnvironment().openFileInVSCode(absolutePath)
+}
+
+func (environment desktopFileActionEnvironment) openFileInVSCode(absolutePath string) error {
+	target, err := resolveDesktopAbsoluteFilePathWithStat(absolutePath, environment.stat)
+	if err != nil {
+		return err
+	}
+	return environment.openResolvedFileInVSCode(target, "open file in Visual Studio Code")
+}
+
 func (environment desktopFileActionEnvironment) openProjectFileInVSCode(projectRoot, relativePath string) error {
 	_, target, err := resolveDesktopProjectFilePath(projectRoot, relativePath)
 	if err != nil {
@@ -90,12 +127,16 @@ func (environment desktopFileActionEnvironment) openProjectFileInVSCode(projectR
 		return fmt.Errorf("project file is not a regular file")
 	}
 
+	return environment.openResolvedFileInVSCode(target, "open project file in Visual Studio Code")
+}
+
+func (environment desktopFileActionEnvironment) openResolvedFileInVSCode(target, action string) error {
 	executable, err := environment.findVSCodeExecutable()
 	if err != nil {
 		return err
 	}
 	if err := environment.launch(executable, target); err != nil {
-		return fmt.Errorf("open project file in Visual Studio Code: %w", err)
+		return fmt.Errorf("%s: %w", action, err)
 	}
 	return nil
 }
@@ -139,6 +180,18 @@ func showProjectFileInFolder(projectRoot, relativePath string) error {
 	return newDefaultDesktopFileActionEnvironment().showProjectFileInFolder(projectRoot, relativePath)
 }
 
+func showFileInFolder(absolutePath string) error {
+	return newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)
+}
+
+func (environment desktopFileActionEnvironment) showFileInFolder(absolutePath string) error {
+	target, err := resolveDesktopAbsoluteFilePathWithStat(absolutePath, environment.stat)
+	if err != nil {
+		return err
+	}
+	return environment.showResolvedFileInFolder(target, "show file in File Explorer")
+}
+
 func (environment desktopFileActionEnvironment) showProjectFileInFolder(projectRoot, relativePath string) error {
 	cleanRoot, target, err := resolveDesktopProjectFilePath(projectRoot, relativePath)
 	if err != nil {
@@ -149,10 +202,7 @@ func (environment desktopFileActionEnvironment) showProjectFileInFolder(projectR
 		if !targetInfo.Mode().IsRegular() {
 			return fmt.Errorf("project file is not a regular file")
 		}
-		if err := environment.launch("explorer.exe", "/select,"+target); err != nil {
-			return fmt.Errorf("show project file in File Explorer: %w", err)
-		}
-		return nil
+		return environment.showResolvedFileInFolder(target, "show project file in File Explorer")
 	}
 	if !os.IsNotExist(err) {
 		return fmt.Errorf("validate project file: %w", err)
@@ -164,6 +214,13 @@ func (environment desktopFileActionEnvironment) showProjectFileInFolder(projectR
 	}
 	if err := environment.launch("explorer.exe", directory); err != nil {
 		return fmt.Errorf("show project folder in File Explorer: %w", err)
+	}
+	return nil
+}
+
+func (environment desktopFileActionEnvironment) showResolvedFileInFolder(target, action string) error {
+	if err := environment.launch("explorer.exe", "/select,"+target); err != nil {
+		return fmt.Errorf("%s: %w", action, err)
 	}
 	return nil
 }

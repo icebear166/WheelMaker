@@ -4,6 +4,8 @@ type DesktopProjectFileAction = 'vscode' | 'folder';
 
 type TestDesktopBridge = {
   enabled: true;
+  openFileInVSCode?: (absolutePath: string) => Promise<void> | void;
+  showFileInFolder?: (absolutePath: string) => Promise<void> | void;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
 };
@@ -15,8 +17,26 @@ type DesktopProjectFileActionInvoker = (
   relativePath: string,
 ) => Promise<void>;
 
+type DesktopFileActionTarget = {
+  absolutePath: string;
+  projectRoot: string;
+  relativePath: string | null;
+};
+
+type DesktopFileActionInvoker = (
+  bridge: TestDesktopBridge,
+  action: DesktopProjectFileAction,
+  target: DesktopFileActionTarget,
+) => Promise<void>;
+
 const runtime = desktopRuntime as unknown as {
   invokeDesktopProjectFileAction?: DesktopProjectFileActionInvoker;
+  invokeDesktopFileAction?: DesktopFileActionInvoker;
+  canInvokeDesktopFileAction?: (
+    bridge: TestDesktopBridge | null,
+    action: DesktopProjectFileAction,
+    target: DesktopFileActionTarget,
+  ) => boolean;
 };
 
 function getInvoker(): DesktopProjectFileActionInvoker {
@@ -113,5 +133,66 @@ describe('desktop project file actions', () => {
     await expect(getInvoker()(bridge, 'folder', 'F:\\repo', 'src/file.ts')).rejects.toEqual(
       new Error('Desktop file action is unavailable.'),
     );
+  });
+});
+
+describe('desktop absolute file actions', () => {
+  const externalTarget: DesktopFileActionTarget = {
+    absolutePath: 'D:/outside/file.ts',
+    projectRoot: '',
+    relativePath: null,
+  };
+  const internalTarget: DesktopFileActionTarget = {
+    absolutePath: 'D:/repo/src/file.ts',
+    projectRoot: 'D:/repo',
+    relativePath: 'src/file.ts',
+  };
+
+  test('prefers the absolute VS Code binding', async () => {
+    const openFileInVSCode = jest.fn();
+    const openProjectFileInVSCode = jest.fn();
+    const bridge: TestDesktopBridge = {
+      enabled: true,
+      openFileInVSCode,
+      openProjectFileInVSCode,
+    };
+
+    await runtime.invokeDesktopFileAction!(bridge, 'vscode', externalTarget);
+
+    expect(openFileInVSCode).toHaveBeenCalledWith('D:/outside/file.ts');
+    expect(openProjectFileInVSCode).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the old project binding only for internal files', async () => {
+    const openProjectFileInVSCode = jest.fn();
+    const bridge: TestDesktopBridge = {
+      enabled: true,
+      openProjectFileInVSCode,
+    };
+
+    await runtime.invokeDesktopFileAction!(bridge, 'vscode', internalTarget);
+    expect(openProjectFileInVSCode).toHaveBeenCalledWith('D:/repo', 'src/file.ts');
+
+    await expect(
+      runtime.invokeDesktopFileAction!(bridge, 'vscode', externalTarget),
+    ).rejects.toEqual(new Error('Desktop file action is unavailable.'));
+  });
+
+  test('reports capabilities from absolute and compatible legacy bindings', () => {
+    expect(runtime.canInvokeDesktopFileAction!(
+      {enabled: true, showFileInFolder: () => undefined},
+      'folder',
+      externalTarget,
+    )).toBe(true);
+    expect(runtime.canInvokeDesktopFileAction!(
+      {enabled: true, showProjectFileInFolder: () => undefined},
+      'folder',
+      internalTarget,
+    )).toBe(true);
+    expect(runtime.canInvokeDesktopFileAction!(
+      {enabled: true, showProjectFileInFolder: () => undefined},
+      'folder',
+      externalTarget,
+    )).toBe(false);
   });
 });

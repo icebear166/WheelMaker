@@ -1,5 +1,7 @@
 export type PreviewFileLink = {
   path: string;
+  absolutePath: string;
+  relativePath: string | null;
   line: number | null;
 };
 
@@ -11,81 +13,172 @@ function decodePath(value: string): string {
   }
 }
 
+function normalizeSlashes(value: string): string {
+  return value.replaceAll('\\', '/');
+}
+
+function stripLeadingSlashFromDrivePath(value: string): string {
+  return /^\/[a-z]:\//i.test(value) ? value.slice(1) : value;
+}
+
+export function isAbsolutePreviewFilePath(value: string): boolean {
+  const normalized = stripLeadingSlashFromDrivePath(normalizeSlashes(value.trim()));
+  return (
+    /^[a-z]:\//i.test(normalized)
+    || /^\/\/[^/]+\/[^/]+/.test(normalized)
+    || normalized.startsWith('/')
+  );
+}
+
+function normalizeSegments(segments: string[], floor = 0): string[] {
+  const result: string[] = [];
+  for (const segment of segments) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (result.length > floor) result.pop();
+      continue;
+    }
+    result.push(segment);
+  }
+  return result;
+}
+
+function normalizeAbsoluteLocalPath(value: string): string {
+  const normalized = stripLeadingSlashFromDrivePath(normalizeSlashes(value));
+  const driveMatch = /^([a-z]:)\/(.*)$/i.exec(normalized);
+  if (driveMatch) {
+    const path = normalizeSegments(driveMatch[2].split('/')).join('/');
+    return path ? `${driveMatch[1]}/${path}` : `${driveMatch[1]}/`;
+  }
+
+  if (normalized.startsWith('//')) {
+    const segments = normalized.slice(2).split('/').filter(Boolean);
+    if (segments.length < 2) return '';
+    const normalizedSegments = normalizeSegments(segments, 2);
+    return `//${normalizedSegments.join('/')}`.replace(/\/$/, '');
+  }
+
+  if (normalized.startsWith('/')) {
+    const path = normalizeSegments(normalized.slice(1).split('/')).join('/');
+    return path ? `/${path}` : '/';
+  }
+  return '';
+}
+
+function normalizeRelativePath(value: string): string {
+  const result: string[] = [];
+  for (const segment of normalizeSlashes(value).split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..' && result.length > 0 && result.at(-1) !== '..') {
+      result.pop();
+    } else {
+      result.push(segment);
+    }
+  }
+  return result.join('/');
+}
+
+function resolveAbsolutePath(path: string, projectRoot: string): string {
+  if (isAbsolutePreviewFilePath(path)) {
+    return normalizeAbsoluteLocalPath(path);
+  }
+  if (!projectRoot) return '';
+  return normalizeAbsoluteLocalPath(`${projectRoot}/${path}`);
+}
+
+function relativePathWithinRoot(projectRoot: string, absolutePath: string): string | null {
+  if (!projectRoot || !absolutePath) return null;
+  const windowsLike = /^[a-z]:\//i.test(projectRoot) || projectRoot.startsWith('//');
+  const comparableRoot = windowsLike ? projectRoot.toLowerCase() : projectRoot;
+  const comparablePath = windowsLike ? absolutePath.toLowerCase() : absolutePath;
+  if (comparablePath === comparableRoot) return '';
+  const rootPrefix = comparableRoot.endsWith('/')
+    ? comparableRoot
+    : `${comparableRoot}/`;
+  if (!comparablePath.startsWith(rootPrefix)) return null;
+  return absolutePath.slice(projectRoot.length + (projectRoot.endsWith('/') ? 0 : 1));
+}
+
+function extractLine(value: string): {path: string; line: number | null} {
+  let path = value;
+  let line: number | null = null;
+  const hashMatch = /#L(\d+)(?:C\d+)?$/i.exec(path);
+  if (hashMatch) {
+    line = Number.parseInt(hashMatch[1], 10);
+    path = path.slice(0, hashMatch.index);
+  }
+  const suffixMatch = /:(\d+)(?::\d+)?$/.exec(path);
+  if (suffixMatch) {
+    line = Number.parseInt(suffixMatch[1], 10);
+    path = path.slice(0, suffixMatch.index);
+  }
+  return {path, line: line && line > 0 ? line : null};
+}
+
+function resolvePathCandidate(rawHref: string): string | null {
+  if (/^file:\/\//i.test(rawHref)) {
+    try {
+      const parsed = new URL(rawHref);
+      const pathname = decodePath(parsed.pathname);
+      return parsed.hostname
+        ? `//${parsed.hostname}${pathname}${parsed.hash}`
+        : `${pathname}${parsed.hash}`;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^vscode:\/\//i.test(rawHref)) {
+    try {
+      const parsed = new URL(rawHref);
+      if (parsed.hostname.toLowerCase() !== 'file') return null;
+      return `${decodePath(parsed.pathname)}${parsed.hash}`;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^\/?[a-z]:/i.test(rawHref)) {
+    const decoded = decodePath(rawHref);
+    return /^\/?[a-z]:[^\\/]/i.test(decoded)
+      ? decoded.replace(/^\/?([a-z]:)/i, '$1/')
+      : decoded;
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawHref)) return null;
+  return decodePath(rawHref);
+}
+
 export function resolvePreviewFileLink(
   href: string,
   projectRoot = '',
 ): PreviewFileLink | null {
   const rawHref = href.trim();
   if (!rawHref) return null;
-  const isWindowsDrivePath = /^\/?[a-zA-Z]:/.test(rawHref);
 
-  let pathCandidate = rawHref;
-  if (/^\/?[a-zA-Z]:[^\\/]/.test(pathCandidate)) {
-    const hasLeadingSlash = pathCandidate.startsWith('/');
-    const prefix = hasLeadingSlash ? pathCandidate.slice(0, 3) : pathCandidate.slice(0, 2);
-    const suffix = hasLeadingSlash ? pathCandidate.slice(3) : pathCandidate.slice(2);
-    pathCandidate = `${prefix}/${suffix}`;
-  }
-  if (/^file:\/\//i.test(rawHref)) {
-    try {
-      const parsed = new URL(rawHref);
-      pathCandidate = `${parsed.hostname || ''}${decodePath(parsed.pathname)}`;
-    } catch {
-      return null;
-    }
-  } else if (/^vscode:\/\//i.test(rawHref)) {
-    try {
-      const parsed = new URL(rawHref);
-      if (parsed.hostname.toLowerCase() !== 'file') return null;
-      pathCandidate = decodePath(parsed.pathname);
-    } catch {
-      return null;
-    }
-  } else if (isWindowsDrivePath) {
-    pathCandidate = decodePath(rawHref);
-  } else if (/^[a-z][a-z0-9+.-]*:/i.test(rawHref)) {
-    return null;
-  } else {
-    pathCandidate = decodePath(rawHref);
+  const candidate = resolvePathCandidate(rawHref);
+  if (candidate === null) return null;
+  const parsed = extractLine(normalizeSlashes(candidate).trim());
+  if (!parsed.path) return null;
+
+  const normalizedRoot = normalizeAbsoluteLocalPath(projectRoot);
+  const absolutePath = resolveAbsolutePath(parsed.path, normalizedRoot);
+  if (absolutePath) {
+    const relativePath = relativePathWithinRoot(normalizedRoot, absolutePath);
+    if (relativePath === '') return null;
+    return {
+      path: relativePath ?? absolutePath,
+      absolutePath,
+      relativePath,
+      line: parsed.line,
+    };
   }
 
-  const normalizeSlashes = (value: string) => value.replaceAll('\\', '/');
-  let normalized = normalizeSlashes(pathCandidate.trim());
-  if (!normalized) return null;
-
-  let line: number | null = null;
-  const hashMatch = /#L(\d+)(?:C\d+)?$/i.exec(normalized);
-  if (hashMatch) {
-    const parsedLine = Number.parseInt(hashMatch[1], 10);
-    line = Number.isFinite(parsedLine) && parsedLine > 0 ? parsedLine : null;
-    normalized = normalized.slice(0, hashMatch.index);
-  }
-  const suffixLineMatch = /:(\d+)(?::\d+)?$/.exec(normalized);
-  if (suffixLineMatch) {
-    const parsedLine = Number.parseInt(suffixLineMatch[1], 10);
-    line = Number.isFinite(parsedLine) && parsedLine > 0 ? parsedLine : line;
-    normalized = normalized.slice(0, suffixLineMatch.index);
-  }
-  normalized = normalized.trim();
-  if (!normalized || /^(\/\/|[a-z]+:\/\/)/i.test(normalized)) return null;
-
-  const root = normalizeSlashes(projectRoot).replace(/\/+$/, '');
-  const rootLower = root.toLowerCase();
-  let candidateLower = normalized.toLowerCase();
-  if (root && candidateLower === rootLower) return null;
-  if (/^\/[a-z]:\//i.test(normalized)) {
-    normalized = normalized.slice(1);
-    candidateLower = normalized.toLowerCase();
-  }
-
-  let resolvedPath = normalized;
-  if (root && candidateLower.startsWith(`${rootLower}/`)) {
-    resolvedPath = normalized.slice(root.length + 1);
-  }
-  resolvedPath = resolvedPath
-    .replace(/^\.\/+/, '')
-    .replace(/^\/+/, '')
-    .replace(/\/+/g, '/');
-  if (!resolvedPath || resolvedPath.startsWith('../')) return null;
-  return {path: resolvedPath, line};
+  const relativePath = normalizeRelativePath(parsed.path);
+  if (!relativePath || relativePath.startsWith('../')) return null;
+  return {
+    path: relativePath,
+    absolutePath: '',
+    relativePath,
+    line: parsed.line,
+  };
 }
