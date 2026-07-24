@@ -300,6 +300,8 @@ export class RegistryWorkspaceService {
     notModified: boolean;
     total?: number;
     isBinary?: boolean;
+    mimeType?: string;
+    encoding?: string;
   }> {
     if (!this.session || !this.repository) {
       throw new Error('session is not ready');
@@ -313,6 +315,8 @@ export class RegistryWorkspaceService {
     notModified: boolean;
     total?: number;
     isBinary?: boolean;
+    mimeType?: string;
+    encoding?: string;
   }> {
     if (!this.repository) {
       throw new Error('session is not ready');
@@ -324,6 +328,8 @@ export class RegistryWorkspaceService {
       notModified: result.notModified,
       total: result.total,
       isBinary: result.isBinary,
+      mimeType: result.mimeType,
+      encoding: result.encoding,
     };
   }
 
@@ -337,6 +343,8 @@ export class RegistryWorkspaceService {
     notModified: boolean;
     total?: number;
     isBinary?: boolean;
+    mimeType?: string;
+    encoding?: string;
   }> {
     if (!this.repository) {
       throw new Error('session is not ready');
@@ -349,6 +357,8 @@ export class RegistryWorkspaceService {
         notModified: result.notModified,
         total: result.total,
         isBinary: result.isBinary,
+        mimeType: result.mimeType,
+        encoding: result.encoding,
       };
     } catch (error) {
       return translateExternalFileError(error);

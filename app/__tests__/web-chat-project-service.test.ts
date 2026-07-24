@@ -1,6 +1,31 @@
 import { RegistryWorkspaceService } from '../web/src/registry/RegistryWorkspaceService';
 
 describe('registry workspace project-scoped chat service methods', () => {
+  test('preserves binary file metadata for Markdown export image reads', async () => {
+    const service = new RegistryWorkspaceService();
+    const repository = {
+      readFile: jest.fn().mockResolvedValue({
+        content: 'iVBORw0KGgo=',
+        hash: 'hash-1',
+        notModified: false,
+        isBinary: true,
+        mimeType: 'image/png',
+        encoding: 'base64',
+      }),
+    };
+
+    Object.assign(service as unknown as {repository: unknown}, {repository});
+
+    await expect(service.readProjectFile('assets/logo.png', 'project-1')).resolves.toEqual({
+      content: 'iVBORw0KGgo=',
+      hash: 'hash-1',
+      notModified: false,
+      isBinary: true,
+      mimeType: 'image/png',
+      encoding: 'base64',
+    });
+  });
+
   test('connects to a hub with no projects without selecting or reading a project', async () => {
     const repository = {
       initialize: jest.fn().mockResolvedValue(undefined),
