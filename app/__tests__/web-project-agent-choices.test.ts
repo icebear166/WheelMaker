@@ -58,13 +58,14 @@ describe('web project agent choices', () => {
   test('returns a flat list of agent choice nodes without grouping', () => {
     const {buildAgentChoiceNodes} = loadProjectAgentsModule();
 
-    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'cc-qwen', 'kimi'])).toEqual([
+    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'cc-qwen', 'cc-flicker', 'kimi'])).toEqual([
       {agentType: 'codex', label: 'codex'},
       {agentType: 'claude', label: 'claude'},
       {agentType: 'cc-deepseek', label: 'cc · deepseek'},
       {agentType: 'cc-glm', label: 'cc · glm'},
       {agentType: 'cc-kimi', label: 'cc · kimi'},
       {agentType: 'cc-qwen', label: 'cc · qwen'},
+      {agentType: 'cc-flicker', label: 'cc · flicker'},
       {agentType: 'kimi', label: 'kimi'},
     ]);
   });
@@ -79,11 +80,13 @@ describe('web project agent choices', () => {
     expect(agentDisplayLabel('cc-kimi')).toBe('cc · kimi');
     expect(agentDisplayLabel('cc-deepseek')).toBe('cc · deepseek');
     expect(agentDisplayLabel('cc-qwen')).toBe('cc · qwen');
+    expect(agentDisplayLabel('cc-flicker')).toBe('cc · flicker');
   });
 
-  test('uses the Claude accent for the Qwen-compatible pill', () => {
+  test('uses the Claude accent for Claude-compatible pills', () => {
     const {agentTagVariantClass} = loadAgentTagVariantModule();
 
     expect(agentTagVariantClass('cc-qwen')).toBe('wide-session-agent-2');
+    expect(agentTagVariantClass('cc-flicker')).toBe('wide-session-agent-2');
   });
 });

@@ -210,16 +210,19 @@ Active -> Closed (cancel + cleanup, no persistence)
 
 ## 8. Claude-compatible Provider Isolation
 
-Claude、`cc-glm`、`cc-kimi` 使用三个稳定 agent ID。两个 `cc-*` provider 都通过 owned connection 启动 `claude-agent-acp`，因此每个 Active WheelMaker Session 仍独占一个 adapter process；provider-specific endpoint、Key、模型和配置目录只存在于该子进程环境。
+Claude 与 `cc-deepseek`、`cc-glm`、`cc-kimi`、`cc-qwen`、`cc-flicker` 使用稳定 agent ID。每个 `cc-*` provider 都通过 owned connection 启动 `claude-agent-acp`，因此每个 Active WheelMaker Session 仍独占一个 adapter process；provider-specific endpoint、Key、模型和配置目录只存在于该子进程环境。
 
 ```text
 Hub-scoped AgentFactory
-  ├─ claude  ──► ~/.claude
-  ├─ cc-glm  ──► <stateDir>/.data/cc-glm
-  └─ cc-kimi ──► <stateDir>/.data/cc-kimi
+  ├─ claude       ──► ~/.claude
+  ├─ cc-deepseek  ──► <stateDir>/.data/cc-deepseek
+  ├─ cc-glm       ──► <stateDir>/.data/cc-glm
+  ├─ cc-kimi      ──► <stateDir>/.data/cc-kimi
+  ├─ cc-qwen      ──► <stateDir>/.data/cc-qwen
+  └─ cc-flicker   ──► <stateDir>/.data/cc-flicker
 ```
 
-Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID 选择对应 projects 目录，因而 provider 切换不会把一个上游的 transcript 交给另一个上游。Registry 仍只负责平铺 agent ID 的路由和广播；App 的 Claude 二级展示不改变运行时所有权。
+Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID 选择对应 projects 目录（例如 `<stateDir>/.data/cc-flicker/projects`），因而 provider 切换不会把一个上游的 transcript 交给另一个上游。Registry 仍只负责平铺 agent ID 的路由和广播；App 的 Claude 二级展示不改变运行时所有权。
 
 来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
 

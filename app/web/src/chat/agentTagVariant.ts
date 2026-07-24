@@ -17,6 +17,7 @@ const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
   'cc-glm': 2,
   'cc-kimi': 2,
   'cc-qwen': 2,
+  'cc-flicker': 2,
 };
 
 function normalizeAgentTypeName(value?: string | null): string {

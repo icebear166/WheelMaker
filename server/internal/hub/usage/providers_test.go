@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -220,6 +223,66 @@ func TestProviderErrorNeverContainsCredential(t *testing.T) {
 	message := providerErrorMessage(secret, http.StatusBadGateway, []byte("upstream echoed "+secret), errors.New("request failed"))
 	if strings.Contains(message, secret) || message != "network error" {
 		t.Fatalf("unsafe error=%q", message)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
+
+func TestLocalCollectorUsesConfiguredKeysBeforeExternalCredentials(t *testing.T) {
+	authPath := filepath.Join(t.TempDir(), "auth.json")
+	if err := os.WriteFile(authPath, []byte(`{
+		"kimi-for-coding":{"type":"api","key":"shared-kimi"},
+		"zai-coding-plan":{"type":"api","key":"opencode-zai"},
+		"deepseek":{"type":"api","key":"shared-deepseek"}
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	requests := map[string][]string{}
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		mu.Lock()
+		requests[request.URL.Host] = append(requests[request.URL.Host], request.Header.Get("Authorization"))
+		mu.Unlock()
+		body := ""
+		switch request.URL.Host {
+		case "api.kimi.com":
+			body = `{"usage":{"limit":100,"remaining":50}}`
+		case "api.z.ai":
+			body = `{"data":{"limits":[{"type":"TOKENS_LIMIT","unit":6,"percentage":40}]}}`
+		case "api.deepseek.com":
+			body = `{"is_available":true,"balance_infos":[{"currency":"CNY","total_balance":"10"}]}`
+		default:
+			return nil, fmt.Errorf("unexpected request host %q", request.URL.Host)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+	})}
+
+	collector := NewLocalCollector(authPath)
+	collector.Binary = "missing-codex"
+	collector.FlickerCredentialPath = filepath.Join(t.TempDir(), "missing-flicker.json")
+	collector.KimiCodeCredentialsPath = filepath.Join(t.TempDir(), "missing-kimi-code.json")
+	collector.KimiAPIKey = "shared-kimi"
+	collector.ZAIAPIKey = "config-zai"
+	collector.DeepSeekAPIKey = "shared-deepseek"
+	collector.Client = client
+
+	snapshots := collector.Scan(context.Background())
+	if got := requests["api.kimi.com"]; !reflect.DeepEqual(got, []string{"Bearer shared-kimi"}) {
+		t.Fatalf("Kimi requests=%v, want one configured credential request", got)
+	}
+	if got := requests["api.z.ai"]; !reflect.DeepEqual(got, []string{"Bearer config-zai", "Bearer opencode-zai"}) {
+		t.Fatalf("ZAI requests=%v, want configured credential first and distinct OpenCode credential second", got)
+	}
+	if got := requests["api.deepseek.com"]; !reflect.DeepEqual(got, []string{"Bearer shared-deepseek"}) {
+		t.Fatalf("DeepSeek requests=%v, want one configured credential request", got)
+	}
+	if len(snapshots) != 5 || snapshots[2].Accounts[0].LocalID != "wheelmaker-config" || len(snapshots[3].Accounts) != 2 || snapshots[3].Accounts[0].LocalID != "wheelmaker-config" || snapshots[3].Accounts[1].LocalID != "opencode" || snapshots[4].Accounts[0].LocalID != "wheelmaker-config" {
+		t.Fatalf("snapshots=%+v", snapshots)
 	}
 }
 

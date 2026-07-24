@@ -19,6 +19,8 @@ export function agentDisplayLabel(agentType?: string | null): string {
       return 'cc · kimi';
     case 'cc-qwen':
       return 'cc · qwen';
+    case 'cc-flicker':
+      return 'cc · flicker';
     default:
       return normalized;
   }

@@ -703,6 +703,22 @@ func TestClaudeCompatibleProviderLaunchErrorDoesNotLeakKey(t *testing.T) {
 	}
 }
 
+func TestCCFlickerProviderLaunchErrorDoesNotLeakKey(t *testing.T) {
+	const key = "flicker-test-key"
+	provider := NewCCFlickerProvider(filepath.Join(t.TempDir(), "state"), key)
+	provider.resolveBinary = func(name, configuredPath, installHint string) (string, error) {
+		return "", fmt.Errorf("binary %s is unavailable", name)
+	}
+
+	_, _, _, err := provider.Launch()
+	if err == nil {
+		t.Fatal("Launch() error = nil, want binary resolution error")
+	}
+	if strings.Contains(err.Error(), key) {
+		t.Fatalf("Launch() error leaked provider key: %v", err)
+	}
+}
+
 func testEnvironmentMap(t *testing.T, values []string) map[string]string {
 	t.Helper()
 	result := make(map[string]string, len(values))
