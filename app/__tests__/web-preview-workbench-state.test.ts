@@ -111,6 +111,10 @@ describe('preview workbench state', () => {
       path: 'src/../README.md',
       info: {path: 'README.md', kind: 'file'},
     }))).toBe('README.md');
+    expect(resolvePreviewDesktopFilePath(filePreviewTab({
+      path: 'D:/outside/report.md',
+      info: {path: 'D:/outside/report.md', kind: 'file'},
+    }))).toBe('D:/outside/report.md');
   });
 
   test.each([

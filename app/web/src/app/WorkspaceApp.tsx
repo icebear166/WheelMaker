@@ -39,7 +39,6 @@ import {
   canInvokeDesktopFileAction,
   getDesktopWindowBridge,
   invokeDesktopFileAction,
-  invokeDesktopProjectFileAction,
   type DesktopProjectFileAction,
 } from '../platform/desktop/desktopRuntime';
 import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
@@ -19452,10 +19451,12 @@ export function App() {
   const copyChatFilePreviewPath = () => {
     if (!chatFilePeek) return;
     const previewProject = projects.find(item => item.projectId === previewWorkbench.activeProjectId);
-    const projectRoot = (previewProject?.path ?? currentProject?.path ?? '').replace(/[\\/]+$/, '');
-    const relativePath = chatFilePeek.path.replace(/^\.?[\\/]+/, '');
-    const absolutePath = projectRoot && relativePath ? `${projectRoot}/${relativePath}`.replace(/\\/g, '/') : chatFilePeek.path;
-    navigator.clipboard.writeText(absolutePath).catch(() => undefined);
+    const projectRoot = previewProject?.path ?? currentProject?.path ?? '';
+    const confirmedPath = resolvePreviewDesktopFilePath(chatFilePeek);
+    if (!confirmedPath) return;
+    const fileTarget = resolvePreviewFileLink(confirmedPath, projectRoot);
+    if (!fileTarget?.absolutePath) return;
+    writeTextToClipboard(fileTarget.absolutePath).catch(() => undefined);
   };
   const refreshActivePortRelayPreview = () => {
     const tab = activePortRelayPreview;
@@ -19474,22 +19475,36 @@ export function App() {
       return null;
     }
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
-    const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
-    const relativePath = resolvePreviewDesktopFilePath(tab);
+    const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path ?? '';
+    const confirmedPath = resolvePreviewDesktopFilePath(tab);
+    const fileTarget = confirmedPath
+      ? resolvePreviewFileLink(confirmedPath, projectRoot)
+      : null;
+    const desktopTarget = fileTarget
+      ? {
+          absolutePath: fileTarget.absolutePath,
+          projectRoot,
+          relativePath: fileTarget.relativePath,
+        }
+      : null;
     const desktopBridge = getDesktopWindowBridge();
-    const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
-    const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);
+    const canOpenProjectFileInVSCode = desktopTarget
+      ? canInvokeDesktopFileAction(desktopBridge, 'vscode', desktopTarget)
+      : false;
+    const canShowProjectFileInFolder = desktopTarget
+      ? canInvokeDesktopFileAction(desktopBridge, 'folder', desktopTarget)
+      : false;
     const runProjectFileDesktopAction = (
       action: DesktopProjectFileAction,
       failurePrefix: string,
     ) => {
       closeActionsMenu();
       setToastMessage('');
-      if (!desktopBridge || !projectRoot || !relativePath) {
+      if (!desktopBridge || !desktopTarget) {
         return;
       }
       Promise.resolve()
-        .then(() => invokeDesktopProjectFileAction(desktopBridge, action, projectRoot, relativePath))
+        .then(() => invokeDesktopFileAction(desktopBridge, action, desktopTarget))
         .catch(err => {
           const reason = err instanceof Error ? err.message : String(err);
           setToastMessage(`${failurePrefix}: ${reason}`);
