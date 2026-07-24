@@ -3412,6 +3412,27 @@
   z-index: 32;
 }
 
+.chat-slash-menu,
+.chat-file-mention-menu,
+.chat-core-config-menu,
+.chat-config-value-menu,
+.chat-context-usage-popover,
+.chat-attachment-action-tray {
+  transform-origin: bottom center;
+  animation: sl-menu-in 140ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-slash-menu,
+  .chat-file-mention-menu,
+  .chat-core-config-menu,
+  .chat-config-value-menu,
+  .chat-context-usage-popover,
+  .chat-attachment-action-tray {
+    animation: none;
+  }
+}
+
 .chat-composer.menu-open .chat-composer-frame {
   border-color: color-mix(in srgb, var(--border-subtle) 68%, var(--accent-primary));
   box-shadow:

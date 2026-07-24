@@ -17598,7 +17598,7 @@ export function App() {
         return null;
       }
       return (
-        <div className="chat-config-value-menu" role="menu">
+        <div className={`chat-config-value-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="menu">
           {optionValues.map(item => {
             const selected = item.value === currentValue;
             return (
@@ -17687,7 +17687,7 @@ export function App() {
           />
           <div
             id="chat-context-usage-popover"
-            className="chat-context-usage-popover"
+            className={`chat-context-usage-popover${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}
             role="tooltip"
             style={chatContextUsagePopoverStyle}
           >
@@ -17750,7 +17750,7 @@ export function App() {
           </button>
           {chatCoreConfigMenuOpen ? (
             <div
-              className="chat-core-config-menu"
+              className={`chat-core-config-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}
               role="menu"
               aria-label={chatConfigOverflowOpen ? 'More options' : 'Model, effort, and Fast'}
             >
@@ -18381,7 +18381,7 @@ export function App() {
                 </div>
               </div>
               {chatFileMentionMenuOpen ? (
-                <div ref={chatFileMentionMenuRef} className="chat-file-mention-menu" role="listbox" aria-label="File mentions">
+                <div ref={chatFileMentionMenuRef} className={`chat-file-mention-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="listbox" aria-label="File mentions">
                   <div className="chat-file-mention-shortcut-tip">Up/Down to browse, Right to preview</div>
                   {chatFileMentionLoading ? (
                     <div className="chat-file-mention-empty">Searching...</div>
@@ -18431,7 +18431,7 @@ export function App() {
                 </div>
               ) : null}
               {chatSlashMenuVisible ? (
-                <div ref={chatSlashMenuRef} className="chat-slash-menu" role="listbox" aria-label="Available commands and skills">
+                <div ref={chatSlashMenuRef} className={`chat-slash-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="listbox" aria-label="Available commands and skills">
                   {chatSlashMenuOptions.map((option, index) => {
                     const selected = index === chatSlashActiveIndex;
                     return (
@@ -18526,7 +18526,7 @@ export function App() {
                   {!selectedChatPromptRunning && chatAttachmentTrayOpen ? (
                     <div
                       ref={chatAttachmentTrayRef}
-                      className="chat-attachment-action-tray"
+                      className={`chat-attachment-action-tray${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}
                       role="menu"
                       aria-label="Composer tools"
                     >

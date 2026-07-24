@@ -126,4 +126,29 @@ describe('composer menu exclusivity', () => {
     expect(mainTsx).not.toContain('const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);');
     expect(mainTsx).not.toContain('workspaceUiState.mobile.chatConfigOverflowOpen');
   });
+
+  test('every composer popup renders with exit flag and entrance animation', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    const exitFlag = "chatComposerMenuExiting ? ' sl-menu-exit' : ''";
+    const occurrences = mainTsx.split(exitFlag).length - 1;
+    expect(occurrences).toBeGreaterThanOrEqual(6);
+
+    for (const cls of [
+      'chat-slash-menu',
+      'chat-file-mention-menu',
+      'chat-core-config-menu',
+      'chat-config-value-menu',
+      'chat-context-usage-popover',
+      'chat-attachment-action-tray',
+    ]) {
+      expect(stylesCss).toContain(`.${cls}`);
+    }
+    expect(stylesCss).toMatch(/\.chat-slash-menu,\s*\n\.chat-file-mention-menu,\s*\n\.chat-core-config-menu,\s*\n\.chat-config-value-menu,\s*\n\.chat-context-usage-popover,\s*\n\.chat-attachment-action-tray \{[\s\S]*animation: sl-menu-in 140ms var\(--ease-out\);[\s\S]*\}/);
+    expect(stylesCss).toContain('.chat-composer.menu-open');
+    expect(stylesCss).not.toContain('.chat-composer.config-menu-open');
+    expect(stylesCss).not.toContain('.chat-composer.trigger-menu-open');
+  });
 });
