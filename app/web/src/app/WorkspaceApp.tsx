@@ -96,7 +96,9 @@ import {
 } from '../chat/session/chatPromptQueue';
 import {
   buildChatSessionActionOptions,
+  chatSlashOptionDisplayName,
   filterChatSessionActionOptions,
+  groupChatSlashMenuOptions,
   removeActiveSlashQuery,
   resolveStandaloneSessionAction,
   type ChatSessionActionKind,
@@ -130,6 +132,7 @@ import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon
 import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
+import {ChatIcon} from '../chat/ChatIcon';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -18432,35 +18435,45 @@ export function App() {
               ) : null}
               {chatSlashMenuVisible ? (
                 <div ref={chatSlashMenuRef} className={`chat-slash-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="listbox" aria-label="Available commands and skills">
-                  {chatSlashMenuOptions.map((option, index) => {
-                    const selected = index === chatSlashActiveIndex;
-                    return (
-                      <button
-                        key={option.name}
-                        type="button"
-                        className={`chat-slash-item ${option.kind}${selected ? ' active' : ''}${option.enabled ? '' : ' disabled'}`}
-                        role="option"
-                        aria-selected={selected}
-                        aria-disabled={!option.enabled}
-                        disabled={!option.enabled}
-                        title={option.enabled ? option.description : option.disabledReason}
-                        onMouseEnter={() => setChatSlashActiveIndex(index)}
-                        onMouseDown={event => event.preventDefault()}
-                        onClick={() => applyChatSlashCommand(option)}
-                      >
-                        <span className={`codicon ${option.icon} chat-slash-icon`} aria-hidden="true" />
-                        <span className="chat-slash-name">{option.name}</span>
-                        {option.description || option.disabledReason ? (
-                          <span className="chat-slash-description">{option.enabled ? option.description : option.disabledReason}</span>
-                        ) : null}
-                        {option.checked !== undefined ? (
-                          <span className={`chat-slash-switch${option.checked ? ' checked' : ''}`} aria-hidden="true">
-                            <span className="chat-slash-switch-knob" />
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
+                  {(() => {
+                    let flatIndex = -1;
+                    return groupChatSlashMenuOptions(chatSlashMenuOptions).map(section => (
+                      <div key={section.id} className="chat-slash-section" role="group" aria-label={section.title}>
+                        <div className="chat-slash-section-header">{section.title}</div>
+                        {section.options.map(option => {
+                          flatIndex += 1;
+                          const index = flatIndex;
+                          const selected = index === chatSlashActiveIndex;
+                          return (
+                            <button
+                              key={option.name}
+                              type="button"
+                              className={`chat-slash-item ${option.kind}${selected ? ' active' : ''}${option.enabled ? '' : ' disabled'}`}
+                              role="option"
+                              aria-selected={selected}
+                              aria-disabled={!option.enabled}
+                              disabled={!option.enabled}
+                              title={option.enabled ? option.description : option.disabledReason}
+                              onMouseEnter={() => setChatSlashActiveIndex(index)}
+                              onMouseDown={event => event.preventDefault()}
+                              onClick={() => applyChatSlashCommand(option)}
+                            >
+                              <ChatIcon name={option.icon} size={16} className="chat-slash-icon" />
+                              <span className="chat-slash-name">{chatSlashOptionDisplayName(option.name)}</span>
+                              {option.description || option.disabledReason ? (
+                                <span className="chat-slash-description">{option.enabled ? option.description : option.disabledReason}</span>
+                              ) : null}
+                              {option.checked !== undefined ? (
+                                <span className={`chat-slash-switch${option.checked ? ' checked' : ''}`} aria-hidden="true">
+                                  <span className="chat-slash-switch-knob" />
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ));
+                  })()}
                 </div>
               ) : null}
               {voiceRecording ? (

@@ -151,4 +151,14 @@ describe('composer menu exclusivity', () => {
     expect(stylesCss).not.toContain('.chat-composer.config-menu-open');
     expect(stylesCss).not.toContain('.chat-composer.trigger-menu-open');
   });
+
+  test('slash menu renders grouped sections with display names without slash prefix', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('groupChatSlashMenuOptions(chatSlashMenuOptions)');
+    expect(mainTsx).toContain('chat-slash-section');
+    expect(mainTsx).toContain('chatSlashOptionDisplayName(option.name)');
+    expect(mainTsx).not.toContain('<span className="chat-slash-name">{option.name}</span>');
+  });
 });
