@@ -87,7 +87,7 @@ describe('chat turn groups', () => {
     expect(view.root.findByProps({className: 'chat-thought-title'}).children[0]).toBe('Thinking');
     expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(1);
     expect(view.root.findByProps({className: 'chat-activity-dots'}).children).toHaveLength(3);
-    expect(view.root.findAllByProps({className: 'codicon codicon-chevron-right chat-thought-chevron'}))
+    expect(view.root.findAllByProps({className: 'sl-icon chat-thought-chevron'}))
       .toHaveLength(1);
     expect(view.root.findAllByProps({className: 'chat-thought-content'})).toHaveLength(0);
 
@@ -163,11 +163,12 @@ describe('chat turn groups', () => {
     expect(view.root.findByProps({className: 'chat-tool-group-latest'}).children).toEqual([
       'Search turns',
     ]);
-    expect(view.root.findAllByProps({className: 'codicon codicon-chevron-right chat-tool-group-chevron'}))
+    expect(view.root.findAllByProps({className: 'sl-icon chat-tool-group-chevron'}))
       .toHaveLength(1);
-    expect(view.root.findAllByProps({className: 'codicon codicon-tools chat-tool-group-summary-icon'}))
+    expect(view.root.findAllByProps({className: 'sl-icon chat-tool-group-summary-icon'}))
       .toHaveLength(1);
     expect(view.root.findAll(node => (
+      node.type === 'svg' &&
       typeof node.props.className === 'string' &&
       node.props.className.includes('chat-tool-group-status')
     ))).toHaveLength(0);
@@ -190,6 +191,7 @@ describe('chat turn groups', () => {
 
     expect(view.root.findAllByProps({className: 'chat-tool-group-row'})).toHaveLength(3);
     expect(view.root.findAll(node => (
+      node.type === 'svg' &&
       typeof node.props.className === 'string' &&
       node.props.className.includes('chat-tool-group-status')
     ))).toHaveLength(3);

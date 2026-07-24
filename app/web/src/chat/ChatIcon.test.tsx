@@ -37,4 +37,11 @@ describe('ChatIcon', () => {
     expect(svg.props.fill).toBe('currentColor');
     expect(svg.props.stroke).toBe('none');
   });
+
+  it('exposes aria-label and drops aria-hidden when labelled', async () => {
+    const tree = await render(<ChatIcon name="loader" spin ariaLabel="Submitting" />);
+    const svg = tree.root.findByType('svg');
+    expect(svg.props['aria-label']).toBe('Submitting');
+    expect(svg.props['aria-hidden']).toBeUndefined();
+  });
 });

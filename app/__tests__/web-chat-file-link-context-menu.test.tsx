@@ -8,7 +8,7 @@ import {
 function labels(renderer: TestRenderer.ReactTestRenderer): string[] {
   return renderer.root
     .findAll(node => node.props.role === 'menuitem')
-    .map(button => button.findAllByType('span')[1].props.children as string);
+    .map(button => button.findAllByType('span')[0].props.children as string);
 }
 
 const internalProps: ChatFileLinkContextMenuProps = {
@@ -93,7 +93,7 @@ describe('chat file link context menu', () => {
 
     expect(labels(renderer)).toContain('Export as HTML');
     const button = renderer.root.findAll(node => node.props.role === 'menuitem')
-      .find(item => item.findAllByType('span')[1].props.children === 'Export as HTML');
+      .find(item => item.findAllByType('span')[0].props.children === 'Export as HTML');
     act(() => button?.props.onClick());
     expect(onAction).toHaveBeenCalledWith('export-html');
 

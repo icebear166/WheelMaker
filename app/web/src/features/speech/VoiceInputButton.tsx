@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ChatIcon } from '../../chat/ChatIcon';
 import { resolveVoiceGestureState } from './useVoiceInputController';
 import {
   formatVoiceInputDiagnosticError,
@@ -429,15 +430,10 @@ export function VoiceInputButton({
         }
       }}
     >
-      <span
-        className={`codicon ${
-          hasSendableContent && !recording ? 'codicon-send' : 'codicon-mic'
-        }`}
-        aria-hidden="true"
-      />
+      <ChatIcon name={hasSendableContent && !recording ? 'send' : 'mic'} size={17} />
       {hasSendableContent && !recording ? (
         <span className="voice-input-badge" aria-hidden="true">
-          <span className="codicon codicon-mic" />
+          <ChatIcon name="mic" size={9} />
         </span>
       ) : null}
     </button>

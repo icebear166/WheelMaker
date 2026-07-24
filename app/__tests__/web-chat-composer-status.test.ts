@@ -308,7 +308,7 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain('className="chat-core-config-trigger"');
     expect(mainTsx).toContain('className="chat-core-config-separator" aria-hidden="true">/</span>');
     expect(mainTsx).toContain("fastEnabled ? (");
-    expect(mainTsx).toContain('className="codicon codicon-zap chat-core-config-fast"');
+    expect(mainTsx).toContain('<ChatIcon name="zap" className="chat-core-config-fast" />');
     expect(mainTsx).toContain('chat-core-config-menu${chatComposerMenuExiting');
     expect(mainTsx).toContain('className="chat-core-config-columns"');
     expect(mainTsx).toContain('className={`chat-core-config-column ${item.kind}`}');

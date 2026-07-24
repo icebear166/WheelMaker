@@ -2,6 +2,7 @@ import React from 'react';
 
 import type {RegistryChatMessage} from '../registry/registryTypes';
 import {ChatActivityDots} from './ChatActivityDots';
+import {ChatIcon, type ChatIconName} from './ChatIcon';
 
 type ToolCallView = {
   key: string;
@@ -24,17 +25,17 @@ function toolCallView(message: RegistryChatMessage): ToolCallView {
   };
 }
 
-function toolStatusIcon(status: string): string {
+function toolStatusIcon(status: string): ChatIconName {
   if (status === 'in_progress' || status === 'pending' || status === 'running') {
-    return 'codicon-loading codicon-modifier-spin';
+    return 'loader';
   }
   if (status === 'failed' || status === 'cancelled' || status === 'canceled') {
-    return 'codicon-error';
+    return 'circleX';
   }
   if (status === 'completed' || status === 'done') {
-    return 'codicon-pass-filled';
+    return 'circleCheck';
   }
-  return 'codicon-tools';
+  return 'wrench';
 }
 
 function toolStatusClass(status: string): string {
@@ -83,8 +84,8 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
         onClick={() => setOpen(current => !current)}
         title={open ? undefined : latest.title}
       >
-        <span className="codicon codicon-chevron-right chat-tool-group-chevron" aria-hidden="true" />
-        <span className="codicon codicon-tools chat-tool-group-summary-icon" aria-hidden="true" />
+        <ChatIcon name="chevronRight" size={11} className="chat-tool-group-chevron" />
+        <ChatIcon name="wrench" size={11} className="chat-tool-group-summary-icon" />
         <span className="chat-tool-group-count">
           {countLabel}
           {running ? <ChatActivityDots /> : null}
@@ -100,9 +101,11 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
         <div className="chat-tool-group-list">
           {calls.map(call => (
             <div className="chat-tool-group-row" key={call.key}>
-              <span
-                className={`codicon ${toolStatusIcon(call.status)} chat-tool-group-status ${toolStatusClass(call.status)}`}
-                aria-hidden="true"
+              <ChatIcon
+                size={11}
+                name={toolStatusIcon(call.status)}
+                spin={toolCallRunning(call.status)}
+                className={`chat-tool-group-status ${toolStatusClass(call.status)}`}
               />
               <span className="chat-tool-group-row-title" title={call.title}>{call.title}</span>
               {call.kind ? <span className="chat-tool-group-kind">{call.kind}</span> : null}

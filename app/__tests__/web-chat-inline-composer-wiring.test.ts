@@ -211,4 +211,32 @@ describe('composer menu exclusivity', () => {
     expect(composerTsx).not.toContain('placeholder={null}');
     expect(composerTsx).not.toContain('chat-rich-composer:not(:empty)');
   });
+
+  test('chat module no longer references icon font classes', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const chatDir = path.join(projectRoot, 'web', 'src', 'chat');
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+        } else if (/\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith('.test.tsx')) {
+          if (readSourceText(full).includes('codicon')) {
+            offenders.push(path.relative(projectRoot, full));
+          }
+        }
+      }
+    };
+    walk(chatDir);
+    expect(offenders).toEqual([]);
+
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const composerStart = mainTsx.indexOf('className={`chat-composer');
+    const composerEnd = mainTsx.indexOf('</ChatSurface>', composerStart);
+    expect(mainTsx.slice(composerStart, composerEnd)).not.toContain('codicon');
+
+    const voiceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'features', 'speech', 'VoiceInputButton.tsx'));
+    expect(voiceTsx).not.toContain('codicon');
+  });
 });

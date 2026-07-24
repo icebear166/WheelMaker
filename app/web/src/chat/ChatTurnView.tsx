@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 
 import { useMarkdownCapabilityPlugins } from '../code/markdownPreview';
 import {ChatActivityDots} from './ChatActivityDots';
+import {ChatIcon, type ChatIconName} from './ChatIcon';
 import type {
   RegistryChatMessage,
   RegistrySessionContentBlock,
@@ -63,20 +64,20 @@ function msgKind(method: string): string {
 function sessionOperationView(param: Record<string, unknown>): {
   label: string;
   detail: string;
-  icon: string;
+  icon: ChatIconName;
   status: string;
 } {
   const status = typeof param.status === 'string' ? param.status : '';
   const detail = typeof param.message === 'string' ? param.message.trim() : '';
   switch (status) {
     case 'queued':
-      return {label: 'Context compaction queued', detail, icon: 'codicon-circle-large-outline', status};
+      return {label: 'Context compaction queued', detail, icon: 'circle', status};
     case 'completed':
-      return {label: 'Context compressed', detail, icon: 'codicon-pass-filled', status};
+      return {label: 'Context compressed', detail, icon: 'circleCheck', status};
     case 'failed':
-      return {label: 'Context compaction failed', detail, icon: 'codicon-error', status};
+      return {label: 'Context compaction failed', detail, icon: 'circleX', status};
     default:
-      return {label: 'Compressing context', detail, icon: 'codicon-loading codicon-modifier-spin', status: 'started'};
+      return {label: 'Compressing context', detail, icon: 'loader', status: 'started'};
   }
 }
 
@@ -177,8 +178,8 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
         aria-label={open ? 'Collapse thinking' : 'Expand thinking'}
         onClick={() => setOpen(current => !current)}
       >
-        <span className="codicon codicon-chevron-right chat-thought-chevron" aria-hidden="true" />
-        <span className="codicon codicon-lightbulb chat-thought-icon" aria-hidden="true" />
+        <ChatIcon name="chevronRight" size={11} className="chat-thought-chevron" />
+        <ChatIcon name="lightbulb" size={11} className="chat-thought-icon" />
         <span className="chat-thought-title" title={!open && finished ? firstLine : undefined}>
           {title}
           {!finished ? <ChatActivityDots /> : null}
@@ -331,9 +332,9 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
           aria-hidden="true"
         />
       ) : (
-        <span
-          className={`codicon ${imageAttachment ? 'codicon-file-media' : 'codicon-file'} chat-prompt-attachment-icon`}
-          aria-hidden="true"
+        <ChatIcon
+          name={imageAttachment ? 'image' : 'file'}
+          className="chat-prompt-attachment-icon"
         />
       )}
       <span className="chat-prompt-attachment-body">
@@ -401,7 +402,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
       : reasonLabels[permissionRecord.unansweredReason ?? 'ended'];
     return (
       <div className="chat-permission-history-row" role="status">
-        <span className="codicon codicon-question chat-permission-history-icon" aria-hidden="true" />
+        <ChatIcon name="help" className="chat-permission-history-icon" />
         <span className="chat-permission-history-label">Permission</span>
         <span className="chat-permission-history-summary">{summary}</span>
       </div>
@@ -412,7 +413,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const operation = sessionOperationView(message.param);
     return (
       <div className={`chat-session-operation ${operation.status}`} role="status">
-        <span className={`codicon ${operation.icon} chat-session-operation-icon`} aria-hidden="true" />
+        <ChatIcon name={operation.icon} spin={operation.status === 'started'} className="chat-session-operation-icon" />
         <span className="chat-session-operation-label">{operation.label}</span>
         {operation.detail ? <span className="chat-session-operation-detail">{operation.detail}</span> : null}
       </div>
@@ -446,7 +447,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
             {promptStatus === 'confirming' ? (
               <span className="chat-prompt-status chat-prompt-status-confirming" title="Sending">
-                <span className="codicon codicon-sync" aria-hidden="true" />
+                <ChatIcon name="refreshCw" size={12} />
               </span>
             ) : null}
             {promptStatus === 'queued' ? (
@@ -537,10 +538,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                     aria-busy={loading}
                     title="Open full diff"
                   >
-                    <span
-                      className={`codicon ${loading ? 'codicon-loading codicon-modifier-spin' : 'codicon-diff'}`}
-                      aria-hidden="true"
-                    />
+                    <ChatIcon name={loading ? 'loader' : 'fileDiff'} spin={loading} />
                     <span>{promptArtifactCountLabel(artifact.fileCount || artifact.files?.length || 0)}</span>
                   </button>
                   {artifact.files && artifact.files.length > 0 ? (
@@ -593,11 +591,11 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               aria-label={ttsState === 'playing' ? 'Stop reading aloud' : 'Read response aloud'}
             >
               {ttsState === 'loading' ? (
-                <span className="codicon codicon-loading codicon-modifier-spin" />
+                <ChatIcon name="loader" size={13} spin />
               ) : ttsState === 'playing' ? (
-                <span className="codicon codicon-debug-stop" />
+                <ChatIcon name="square" size={13} filled />
               ) : (
-                <span className="codicon codicon-unmute" />
+                <ChatIcon name="volume2" size={13} />
               )}
             </button>
             <button
@@ -608,7 +606,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               title="Copy response"
               aria-label="Copy response markdown"
             >
-              <span className="codicon codicon-copy" />
+              <ChatIcon name="copy" size={13} />
             </button>
             <button
               type="button"
@@ -619,7 +617,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               title="Export response image"
               aria-label="Export response markdown image"
             >
-              <span className="codicon codicon-device-camera" />
+              <ChatIcon name="camera" size={13} />
             </button>
             <button
               type="button"
@@ -630,7 +628,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               title="Export response HTML"
               aria-label="Export response markdown as HTML"
             >
-              <span className="codicon codicon-file-code" />
+              <ChatIcon name="fileCode" size={13} />
             </button>
           </div>
           {doneStatus ? (
@@ -741,7 +739,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 aria-label={`Reply ${part.reply.replyText}: ${part.reply.sentence}`}
               >
                 <span className="chat-confirmation-reply-check" aria-hidden="true">
-                  <span className="codicon codicon-check" />
+                  <ChatIcon name="check" />
                 </span>
                 <span className="chat-confirmation-reply-text">{part.reply.sentence}</span>
               </button>

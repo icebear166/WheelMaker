@@ -444,15 +444,15 @@ describe('web chat integration', () => {
     expect(chatTurnTsx).toContain('className="chat-prompt-actions"');
     expect(chatTurnTsx).toContain('className="chat-prompt-action-button"');
     expect(chatTurnTsx).toContain('aria-label="Copy response markdown"');
-    expect(chatTurnTsx).toContain('codicon codicon-copy');
+    expect(chatTurnTsx).toContain('<ChatIcon name="copy" size={13} />');
     expect(chatTurnTsx).toContain('aria-label="Export response markdown image"');
-    expect(chatTurnTsx).toContain('codicon codicon-device-camera');
+    expect(chatTurnTsx).toContain('<ChatIcon name="camera" size={13} />');
     expect(chatTurnTsx).toContain('onExportPromptDoneImage');
     expect(chatTurnTsx).toContain('onExportPromptDoneHtml');
     expect(chatTurnTsx).toContain('exportHtmlBusy');
     expect(chatTurnTsx).toContain('title="Export response HTML"');
     expect(chatTurnTsx).toContain('aria-label="Export response markdown as HTML"');
-    expect(chatTurnTsx).toContain('codicon codicon-file-code');
+    expect(chatTurnTsx).toContain('<ChatIcon name="fileCode" size={13} />');
     expect(mainTsx).toContain('exportPromptDoneMarkdownImageEvent(doneTurnIndex)');
     expect(mainTsx).toContain('exportPromptDoneMarkdownHtmlEvent(doneTurnIndex)');
     expect(mainTsx).toContain('exportingMarkdownImageTurnIndex');
@@ -1020,9 +1020,9 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('codicon-wand');
     expect(mainTsx).not.toContain('codicon-symbol-keyword');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-attach-button"');
-    expect(mainTsx).toContain('codicon-attach');
-    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph"');
-    expect(mainTsx).toContain('className="codicon codicon-device-camera"');
+    expect(mainTsx).toContain('<ChatIcon name="paperclip" />');
+    expect(mainTsx).toContain('<ChatIcon name="image" className="chat-composer-tool-glyph" />');
+    expect(mainTsx).toContain('<ChatIcon name="camera" />');
     expect(mainTsx).not.toContain('codicon-cloud-upload');
     expect(mainTsx).not.toContain('codicon-new-file');
     expect(mainTsx).toContain('chatFileInputRef.current?.click();');
@@ -1240,9 +1240,7 @@ describe('web chat integration', () => {
     );
     expect(stylesCss).toContain('.chat-composer-action-column {');
     expect(stylesCss).not.toContain('.chat-cancel-button {');
-    expect(stylesCss).toMatch(
-      /\.chat-send-button \.codicon \{[\s\S]*font-size: 17px;[\s\S]*\}/,
-    );
+    expect(mainTsx).toContain('<ChatIcon name="send" size={17} />');
     expect(stylesCss).toMatch(
       /\.chat-scroll-bottom-button \{[\s\S]*right: 0;[\s\S]*bottom: calc\(100% \+ 10px\);[\s\S]*\}/,
     );
@@ -1403,7 +1401,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('chatImageInputRef.current?.click();');
     expect(mainTsx).toContain('className="chat-attachment-action-button photo"');
     expect(mainTsx).toContain('aria-label="Attach photo"');
-    expect(mainTsx).toContain('className="codicon codicon-device-camera"');
+    expect(mainTsx).toContain('<ChatIcon name="camera" />');
     expect(mainTsx).toContain('closeChatAttachmentTray();');
     expect(mainTsx).toContain('if (target && chatAttachmentTrayRef.current?.contains(target))');
     expect(mainTsx).toContain('if (target && chatAttachmentTrayButtonRef.current?.contains(target))');
@@ -1424,9 +1422,9 @@ describe('web chat integration', () => {
     expect(toolsBlock).not.toContain('chat-attachment-action-button code');
     expect(toolsBlock).toContain('chat-attachment-action-button file');
     expect(toolsBlock).toContain('chat-attachment-action-button photo');
-    expect(toolsBlock).toContain('codicon-attach');
-    expect(toolsBlock).toContain('codicon-file-media');
-    expect(toolsBlock).toContain('codicon-device-camera');
+    expect(toolsBlock).toContain('<ChatIcon name="paperclip" />');
+    expect(toolsBlock).toContain('<ChatIcon name="image" className="chat-composer-tool-glyph" />');
+    expect(toolsBlock).toContain('<ChatIcon name="camera" />');
     expect(toolsBlock).not.toContain('codicon-cloud-upload');
     expect(toolsBlock).not.toContain('codicon-new-file');
 
@@ -2462,7 +2460,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
     expect(mainTsx).not.toContain('codicon-code chat-composer-tool-glyph chat-slash-symbol');
     expect(mainTsx).not.toContain('codicon-file-code chat-composer-tool-glyph chat-at-symbol');
-    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph"');
+    expect(mainTsx).toContain('<ChatIcon name="image" className="chat-composer-tool-glyph" />');
     expect(mainTsx).not.toContain('className="codicon codicon-tools chat-composer-tool-glyph"');
     expect(mainTsx).not.toContain('className="codicon codicon-add chat-composer-tool-glyph"');
     const toolButtonBlock = cssRuleBlock(stylesCss, '.chat-tool-button');

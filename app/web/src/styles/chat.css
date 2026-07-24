@@ -452,10 +452,6 @@
   font-size: 12px;
 }
 
-.chat-empty-preview-body .codicon {
-  font-size: 16px;
-}
-
 .chat-empty-preview-copy {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1776,10 +1772,6 @@
   color: var(--text-secondary);
 }
 
-.chat-prompt-status-sent .codicon {
-  font-size: 13px;
-}
-
 .chat-prompt-status-responding {
   width: auto;
   min-width: 18px;
@@ -1787,10 +1779,6 @@
 
 .chat-prompt-status-confirming {
   color: color-mix(in srgb, var(--text-secondary) 88%, var(--accent-primary));
-}
-
-.chat-prompt-status-confirming .codicon {
-  font-size: 12px;
 }
 
 .chat-prompt-status-queued {
@@ -1843,11 +1831,6 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent-primary) 78%, #22c55e);
   color: #ffffff;
-}
-
-.chat-prompt-status-done .codicon {
-  font-size: 11px;
-  font-weight: 700;
 }
 
 .chat-prompt-delivery-line {
@@ -1924,12 +1907,6 @@
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
-}
-
-.chat-tool-group-header .codicon,
-.chat-tool-group-row .codicon {
-  font-size: 11px;
-  flex: 0 0 auto;
 }
 
 .chat-tool-group-chevron {
@@ -2026,8 +2003,7 @@
   user-select: none;
 }
 
-.chat-thought-header .codicon {
-  font-size: 11px;
+.chat-thought-header .sl-icon {
   opacity: 0.88;
 }
 
@@ -2355,10 +2331,6 @@
 .chat-session-global-bar-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 1px;
-}
-
-.chat-edge-surface-toggle .codicon {
-  font-size: 13px;
 }
 
 .chat-edge-surface-title {
@@ -3158,8 +3130,7 @@
   opacity: 0.64;
 }
 
-.chat-prompt-artifact-summary .codicon {
-  font-size: 14px;
+.chat-prompt-artifact-summary .sl-icon {
   color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
@@ -3318,10 +3289,6 @@
   cursor: pointer;
 }
 
-.chat-prompt-action-button .codicon {
-  font-size: 13px;
-}
-
 .chat-prompt-action-button:hover {
   color: var(--text-primary);
   background: var(--hover);
@@ -3378,11 +3345,6 @@
   display: inline-flex;
   align-items: flex-start;
   justify-content: center;
-}
-
-.chat-scroll-bottom-glyph .codicon {
-  font-size: 15px;
-  line-height: 1;
 }
 
 .chat-scroll-bottom-glyph::after {
@@ -3860,10 +3822,6 @@
   box-shadow: 0 6px 14px color-mix(in srgb, var(--accent-primary) 16%, transparent);
 }
 
-.chat-send-button .codicon {
-  font-size: 17px;
-}
-
 .chat-send-button:hover {
   border-color: color-mix(in srgb, var(--accent-primary) 82%, transparent);
   background:
@@ -3916,10 +3874,6 @@
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
-.voice-input-button .codicon {
-  font-size: 17px;
-}
-
 .voice-input-button:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--state-info) 72%, var(--border-subtle));
   color: var(--text-primary);
@@ -3951,10 +3905,6 @@
   justify-content: center;
   box-shadow: 0 4px 8px color-mix(in srgb, var(--state-info) 20%, transparent);
   pointer-events: none;
-}
-
-.voice-input-badge .codicon {
-  font-size: 9px;
 }
 
 .voice-input-button.recording {
@@ -4315,7 +4265,7 @@
   opacity: 0.55;
 }
 
-.chat-attachment-action-button .codicon {
+.chat-attachment-action-button .sl-icon {
   color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
 }
 
@@ -4389,10 +4339,6 @@
   justify-content: center;
   color: color-mix(in srgb, var(--accent-primary) 70%, var(--text-primary));
   background: color-mix(in srgb, var(--accent-primary) 9%, var(--surface-raised));
-}
-
-.chat-attachment-thumb.file .codicon {
-  font-size: 26px;
 }
 
 .chat-attachment-meta {
@@ -4735,10 +4681,6 @@
   padding: 0;
 }
 
-.chat-config-overflow-button .codicon {
-  font-size: 12px;
-}
-
 .chat-config-overflow-button:hover {
   color: var(--text-primary);
 }
@@ -4922,10 +4864,9 @@
   white-space: nowrap;
 }
 
-.chat-core-config-option .codicon {
+.chat-core-config-option .sl-icon {
   margin-top: 1px;
   color: var(--accent-primary);
-  font-size: 12px;
 }
 
 .chat-core-config-check {
@@ -5093,9 +5034,8 @@
   cursor: not-allowed;
 }
 
-.chat-config-value-option .codicon {
+.chat-config-value-option .sl-icon {
   color: var(--accent-primary);
-  font-size: 12px;
   flex: 0 0 auto;
   margin-top: 1px;
 }
@@ -5112,12 +5052,6 @@
   align-items: center;
   gap: 8px;
   font-style: normal;
-}
-
-.chat-empty-state .codicon {
-  font-size: 14px;
-  opacity: 0.75;
-  flex: 0 0 auto;
 }
 
 /* ── Thinking Block ── */
@@ -5967,11 +5901,11 @@
   cursor: not-allowed;
 }
 
-.chat-search-target-option .codicon {
+.chat-search-target-option .sl-icon {
   color: var(--text-secondary);
 }
 
-.chat-search-target-option.selected .codicon {
+.chat-search-target-option.selected .sl-icon {
   color: var(--accent-primary);
 }
 

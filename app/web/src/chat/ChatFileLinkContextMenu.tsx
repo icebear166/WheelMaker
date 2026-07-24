@@ -1,5 +1,6 @@
 import React, {useEffect, useRef} from 'react';
 import type {PreviewFileLink} from '../preview/previewFileLink';
+import {ChatIcon, type ChatIconName} from './ChatIcon';
 
 export type ChatFileLinkMenuAction =
   | 'vscode'
@@ -57,11 +58,11 @@ export function ChatFileLinkContextMenu({
 
   const item = (
     action: ChatFileLinkMenuAction,
-    icon: string,
+    icon: ChatIconName,
     label: string,
   ) => (
     <button type="button" role="menuitem" onClick={() => onAction(action)}>
-      <span className={`codicon ${icon}`} aria-hidden="true" />
+      <ChatIcon name={icon} />
       <span>{label}</span>
     </button>
   );
@@ -74,18 +75,18 @@ export function ChatFileLinkContextMenu({
       role="menu"
     >
       {canOpenInVSCode
-        ? item('vscode', 'codicon-code', 'Open with VS Code')
+        ? item('vscode', 'code', 'Open with VS Code')
         : null}
       {canShowInFolder
-        ? item('folder', 'codicon-folder-opened', 'Show in File Explorer')
+        ? item('folder', 'folderOpen', 'Show in File Explorer')
         : null}
       {canExportHtml
-        ? item('export-html', 'codicon-export', 'Export as HTML')
+        ? item('export-html', 'share', 'Export as HTML')
         : null}
       {link.relativePath !== null
-        ? item('copy-relative', 'codicon-copy', 'Copy relative path')
+        ? item('copy-relative', 'copy', 'Copy relative path')
         : null}
-      {item('copy-absolute', 'codicon-clippy', 'Copy absolute path')}
+      {item('copy-absolute', 'clipboard', 'Copy absolute path')}
     </div>
   );
 }

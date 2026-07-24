@@ -860,7 +860,7 @@ function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
         disabled={isStreaming}
         aria-expanded={expanded}
       >
-        <span className="thinking-icon codicon codicon-sparkle" />
+        <ChatIcon name="sparkles" className="thinking-icon" />
         {isStreaming ? (
           <span className="thinking-title streaming-text">
             Thinking
@@ -874,10 +874,9 @@ function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
           <span className="thinking-title summary-text">{summaryText}</span>
         )}
         {!isStreaming && (
-          <span
-            className={`thinking-chevron codicon ${
-              expanded ? 'codicon-chevron-up' : 'codicon-chevron-down'
-            }`}
+          <ChatIcon
+            name={expanded ? 'chevronUp' : 'chevronDown'}
+            className="thinking-chevron"
           />
         )}
       </button>
@@ -2146,7 +2145,7 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   if (!peek) {
     body = (
       <div className="chat-file-workbench-empty">
-        <span className="codicon codicon-files" aria-hidden="true" />
+        <ChatIcon name="files" />
         <span>No file selected</span>
       </div>
     );
@@ -2155,7 +2154,7 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   } else if (peek.error) {
     body = (
       <div className="chat-file-peek-error" role="alert">
-        <span className="codicon codicon-error" />
+        <ChatIcon name="circleX" />
         <span>{peek.error || 'Failed to load file'}</span>
       </div>
     );
@@ -2260,12 +2259,12 @@ const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
           title={mode === 'mobile' ? 'Back' : 'Close preview'}
           aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
         >
-          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+          <ChatIcon name={mode === 'mobile' ? 'arrowLeft' : 'x'} />
         </button>
         <div className="chat-preview-title" title="Preview">Preview</div>
       </div>
       <div className="chat-empty-preview-body">
-        <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+        <ChatIcon name="panelRight" size={16} />
         <span className="chat-empty-preview-copy">No preview selected</span>
       </div>
     </div>
@@ -2311,7 +2310,7 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   } else if (preview.error) {
     body = (
       <div className="chat-file-peek-error" role="alert">
-        <span className="codicon codicon-error" />
+        <ChatIcon name="circleX" />
         <span>{preview.error}</span>
       </div>
     );
@@ -2328,7 +2327,7 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   } else if (preview.content === undefined && preview.isBinary === false) {
     body = (
       <div className="chat-file-peek-error" role="alert">
-        <span className="codicon codicon-error" />
+        <ChatIcon name="circleX" />
         <span>Failed to decode file content (UTF-8 expected).</span>
       </div>
     );
@@ -2375,7 +2374,7 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   } else {
     body = (
       <div className="chat-attachment-preview-placeholder">
-        <span className="codicon codicon-file" aria-hidden="true" />
+        <ChatIcon name="file" />
         <div className="chat-attachment-preview-placeholder-main">
           <div className="chat-attachment-preview-placeholder-title">{preview.title}</div>
           {preview.meta ? (
@@ -2438,7 +2437,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
   } else if (preview.error) {
     body = (
       <div className="chat-file-peek-error" role="alert">
-        <span className="codicon codicon-error" />
+        <ChatIcon name="circleX" />
         <span>{preview.error}</span>
       </div>
     );
@@ -2448,7 +2447,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
     body = (
       <div className="chat-prompt-diff-preview">
         <div className="chat-prompt-diff-overview">
-          <span className="codicon codicon-diff" aria-hidden="true" />
+          <ChatIcon name="fileDiff" />
           <span>{promptArtifactPreviewCountLabel(preview.files.length)}</span>
         </div>
         {preview.files.map(file => {
@@ -2468,7 +2467,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
                 aria-current={active || undefined}
                 title={file.path}
               >
-                <span className={`codicon ${file.expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
+                <ChatIcon name={file.expanded ? 'chevronDown' : 'chevronRight'} />
                 <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
                   {file.status}
                 </span>
@@ -16464,7 +16463,7 @@ export function App() {
           >
             <>
               {isFileLink ? (
-                <span className="codicon codicon-file chat-file-link-icon" aria-hidden="true" />
+                <ChatIcon name="file" className="chat-file-link-icon" />
               ) : null}
               {children}
               {isFileLink && jumpLine && !textLine ? (
@@ -17620,7 +17619,7 @@ export function App() {
               >
                 <span className="chat-config-value-label">{chatConfigValueLabel(option, item)}</span>
                 {selected ? (
-                  <span className="codicon codicon-check" aria-hidden="true" />
+                  <ChatIcon name="check" />
                 ) : null}
               </button>
             );
@@ -17749,7 +17748,7 @@ export function App() {
               <span className="chat-core-config-fast-label">Fast</span>
             ) : null}
             {fastEnabled ? (
-              <span className="codicon codicon-zap chat-core-config-fast" aria-hidden="true" />
+              <ChatIcon name="zap" className="chat-core-config-fast" />
             ) : null}
           </button>
           {chatCoreConfigMenuOpen ? (
@@ -17790,7 +17789,7 @@ export function App() {
                                 >
                                   <span className="chat-config-value-label">{chatConfigValueLabel(option, item)}</span>
                                   {selected ? (
-                                    <span className="codicon codicon-check" aria-hidden="true" />
+                                    <ChatIcon name="check" />
                                   ) : null}
                                 </button>
                               );
@@ -17835,9 +17834,10 @@ export function App() {
                                   <span className="chat-core-config-option-label">
                                     {chatConfigValueLabel(item.option, value)}
                                   </span>
-                                  <span
-                                    className={`codicon codicon-check chat-core-config-check${selected ? ' visible' : ''}`}
-                                    aria-hidden="true"
+                                  <ChatIcon
+                                    name="check"
+                                    size={12}
+                                    className={`chat-core-config-check${selected ? ' visible' : ''}`}
                                   />
                                 </button>
                               );
@@ -17860,7 +17860,7 @@ export function App() {
                         }}
                       >
                         <span>More Options</span>
-                        <span className="codicon codicon-chevron-right" aria-hidden="true" />
+                        <ChatIcon name="chevronRight" />
                       </button>
                     </div>
                   ) : null}
@@ -18078,7 +18078,7 @@ export function App() {
                 aria-label="Scroll to bottom"
               >
                 <span className="chat-scroll-bottom-glyph" aria-hidden="true">
-                  <span className="codicon codicon-arrow-down" />
+                  <ChatIcon name="arrowDown" size={15} />
                 </span>
               </button>
             ) : null}
@@ -18145,7 +18145,7 @@ export function App() {
                           />
                         ) : (
                           <div className="chat-attachment-thumb file" aria-hidden="true">
-                            <span className="codicon codicon-file" />
+                            <ChatIcon name="file" size={26} />
                           </div>
                         )}
                         <div className="chat-attachment-meta">
@@ -18173,7 +18173,7 @@ export function App() {
                             title="Queue retry"
                             aria-label="Queue retry"
                           >
-                            <span className="codicon codicon-refresh" />
+                            <ChatIcon name="refreshCw" />
                           </button>
                         ) : null}
                         <button
@@ -18184,7 +18184,7 @@ export function App() {
                           title={pending ? 'Uploading' : 'Remove attachment'}
                           aria-label={pending ? 'Uploading' : 'Remove attachment'}
                         >
-                          <span className="codicon codicon-close" />
+                          <ChatIcon name="x" />
                         </button>
                       </div>
                     );
@@ -18379,7 +18379,7 @@ export function App() {
                       title="Send"
                       aria-label="Send message"
                     >
-                      <span className="codicon codicon-send" />
+                      <ChatIcon name="send" size={17} />
                     </button>
                   )}
                 </div>
@@ -18413,7 +18413,7 @@ export function App() {
                             onMouseDown={event => event.preventDefault()}
                             onClick={() => applyChatFileMentionResult(result)}
                           >
-                            <span className="codicon codicon-file-code" aria-hidden="true" />
+                            <ChatIcon name="fileCode" />
                             <span className="chat-file-mention-name">{name}</span>
                             <span className="chat-file-mention-path">{result.path}</span>
                           </button>
@@ -18425,7 +18425,7 @@ export function App() {
                             title={`Open ${name} preview`}
                             aria-label={`Open ${name} preview`}
                           >
-                            <span className="codicon codicon-open-preview" aria-hidden="true" />
+                            <ChatIcon name="eye" />
                           </button>
                         </div>
                       );
@@ -18528,7 +18528,7 @@ export function App() {
                     aria-haspopup="menu"
                     aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}
                   >
-                    <span className="codicon codicon-file-media chat-composer-tool-glyph" aria-hidden="true" />
+                    <ChatIcon name="image" className="chat-composer-tool-glyph" />
                   </button>
                   {chatStopPillVisible ? (
                     <div className={`chat-composer-stop-slot${chatStopPillExiting ? ' sl-menu-exit' : ''}`}>
@@ -18561,7 +18561,7 @@ export function App() {
                         aria-label="Attach file"
                         role="menuitem"
                       >
-                        <span className="codicon codicon-attach" aria-hidden="true" />
+                        <ChatIcon name="paperclip" />
                         <span className="chat-attachment-action-label">File</span>
                       </button>
                       <button
@@ -18580,7 +18580,7 @@ export function App() {
                         aria-label="Attach photo"
                         role="menuitem"
                       >
-                        <span className="codicon codicon-device-camera" aria-hidden="true" />
+                        <ChatIcon name="camera" />
                         <span className="chat-attachment-action-label">Photo</span>
                       </button>
                     </div>
@@ -20070,7 +20070,7 @@ export function App() {
               disabled={!enabled}
               onClick={() => confirmSearchTarget(target)}
             >
-              <span className={`codicon ${meta.icon}`} aria-hidden="true" />
+              <ChatIcon name={meta.icon} />
               <span className="chat-search-target-label">{meta.label}</span>
               <span className="chat-search-target-hint">{meta.hint}</span>
             </button>

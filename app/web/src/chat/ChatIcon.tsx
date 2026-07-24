@@ -99,9 +99,11 @@ export type ChatIconProps = {
   spin?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  /** Accessible label; when set, the svg is exposed instead of hidden. */
+  ariaLabel?: string;
 };
 
-export function ChatIcon({name, size = 14, filled = false, spin = false, className, style}: ChatIconProps) {
+export function ChatIcon({name, size = 14, filled = false, spin = false, className, style, ariaLabel}: ChatIconProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -112,7 +114,9 @@ export function ChatIcon({name, size = 14, filled = false, spin = false, classNa
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden="true"
+      aria-hidden={ariaLabel ? undefined : true}
+      aria-label={ariaLabel}
+      role={ariaLabel ? 'img' : undefined}
       data-icon-name={name}
       className={`sl-icon${spin ? ' sl-icon-spin' : ''}${className ? ` ${className}` : ''}`}
       style={style}

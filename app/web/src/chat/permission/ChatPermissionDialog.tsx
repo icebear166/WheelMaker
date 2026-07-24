@@ -1,4 +1,5 @@
 import React from 'react';
+import {ChatIcon} from '../ChatIcon';
 
 export type ChatPermissionOption = {
   optionId: string;
@@ -32,7 +33,7 @@ export const ChatPermissionDialog = React.memo(function ChatPermissionDialog({
       aria-describedby={detailsText ? 'chat-permission-dialog-details' : undefined}
     >
       <div className="chat-permission-dialog-kicker">
-        <span className="codicon codicon-question" aria-hidden="true" />
+        <ChatIcon name="help" />
         Agent needs your decision
       </div>
       <h2 id="chat-permission-dialog-title" className="chat-permission-dialog-title">{title}</h2>
@@ -50,9 +51,9 @@ export const ChatPermissionDialog = React.memo(function ChatPermissionDialog({
           >
             <span className="chat-permission-option-name">{option.name}</span>
             {submittingOptionId === option.optionId ? (
-              <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Submitting" />
+              <ChatIcon name="loader" spin ariaLabel="Submitting" />
             ) : (
-              <span className="codicon codicon-chevron-right" aria-hidden="true" />
+              <ChatIcon name="chevronRight" />
             )}
           </button>
         ))}
