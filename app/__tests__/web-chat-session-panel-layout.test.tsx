@@ -26,7 +26,7 @@ describe('PC chat session-panel layout', () => {
     expect(workspaceAppSource).not.toContain('!desktopChatSessionPinned ? renderChatSessionHeader(false)');
   });
 
-  it('keeps settings, project, and Hub controls inside the shared 360px desktop segment', () => {
+  it('keeps the app menu, flexible project, and Hub controls inside the shared 360px desktop segment', () => {
     expect(shellStyles).toMatch(/\.page,\r?\n\.workspace \{[\s\S]*?--chat-session-panel-width: 360px;/);
     const addressRule = cssRuleBlock(chatStyles, '.chat-title-bar > .chat-session-header');
     expect(addressRule).toContain('flex: 0 0 var(--chat-session-panel-width);');
@@ -37,17 +37,18 @@ describe('PC chat session-panel layout', () => {
       chatStyles,
       '.chat-title-bar > .chat-session-header .chat-title-project-button',
     );
-    expect(projectRule).toContain('max-width: 116px;');
+    expect(projectRule).toContain('flex: 1 1 0;');
+    expect(projectRule).toContain('max-width: none;');
     expect(cssRuleBlock(chatStyles, '.chat-sidebar-title-actions')).toContain('margin-left: auto;');
     expect(cssRuleBlock(chatStyles, '.chat-main')).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
   });
 
-  it('orders desktop settings, project, and Hubs before the prompt without changing mobile project navigation', () => {
+  it('orders the desktop app menu, project, and Hubs before the prompt without changing mobile project navigation', () => {
     const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
     const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = (', headerStart);
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
-    const settingsIndex = headerSource.indexOf('{renderChatMenuSettingsButton()}');
-    const projectIndex = headerSource.indexOf('{!mobile ? renderDesktopChatProjectSelector() : null}');
+    const settingsIndex = headerSource.indexOf('<DesktopAppMenu onOpenSettings={handleDesktopSettingsSelect} />');
+    const projectIndex = headerSource.indexOf('{renderDesktopChatProjectSelector()}');
     const hubsIndex = headerSource.indexOf('{renderChatHubSummary()}');
 
     expect(settingsIndex).toBeGreaterThanOrEqual(0);
