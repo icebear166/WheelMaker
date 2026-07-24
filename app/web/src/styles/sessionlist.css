@@ -125,11 +125,10 @@
   color: var(--accent-primary);
   opacity: 1;
 }
-/* persistent affordance: always-visible actions read as clickable buttons */
+/* persistent affordance: always-visible actions read as clickable on hover */
 .sl-action-primary,
 .recent-sessions-collapse-btn,
 .recent-project-divider-create {
-  background: var(--hover);
   color: var(--text-secondary);
 }
 .sl-action-secondary {
