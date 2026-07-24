@@ -328,8 +328,8 @@ export class RegistryWorkspaceService {
   }
 
   async readExternalFile(
-    path: string,
     projectId: string,
+    path: string,
     options?: Pick<RegistryFileRequestOptions, 'signal'>,
   ): Promise<{
     content: string;

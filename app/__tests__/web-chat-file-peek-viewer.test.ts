@@ -720,6 +720,21 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).not.toContain('const chatFilePeekAbortControllerRef = useRef<AbortController | null>(null);');
   });
 
+  test('routes external file previews outside project cache and tree lookup', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('isAbsolutePreviewFilePath(path)');
+    expect(mainTsx).toContain('service.getExternalFileInfo(targetProjectId, path');
+    expect(mainTsx).toContain('service.readExternalFile(targetProjectId, path');
+    expect(mainTsx).toContain('service.getProjectFileInfo(targetProjectId, path');
+    expect(mainTsx).toContain('service.readProjectFile(path, targetProjectId');
+    expect(mainTsx).not.toContain('workspaceStore.cacheFile(');
+    expect(mainTsx).toContain('if (isAbsolutePreviewFilePath(chatFilePeek.path)) return;');
+    expect(mainTsx).toContain(
+      'disabled={!chatFilePeek?.path || isAbsolutePreviewFilePath(chatFilePeek.path)}',
+    );
+  });
+
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);

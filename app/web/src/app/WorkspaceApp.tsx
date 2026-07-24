@@ -516,7 +516,10 @@ import {
   jumpToPreviewLineNow,
   schedulePreviewLineJump,
 } from '../preview/previewLineNavigation';
-import {resolvePreviewFileLink} from '../preview/previewFileLink';
+import {
+  isAbsolutePreviewFilePath,
+  resolvePreviewFileLink,
+} from '../preview/previewFileLink';
 import {splitUnifiedDiffFileBlocks} from '../git/unifiedDiffFiles';
 import { WorkspaceController } from '../workspace/WorkspaceController';
 import { WorkspaceStore } from '../workspace/WorkspaceStore';
@@ -8062,7 +8065,10 @@ export function App() {
       ),
       );
     try {
-      const info = await service.getProjectFileInfo(targetProjectId, path, {signal: controller.signal});
+      const external = isAbsolutePreviewFilePath(path);
+      const info = external
+        ? await service.getExternalFileInfo(targetProjectId, path, {signal: controller.signal})
+        : await service.getProjectFileInfo(targetProjectId, path, {signal: controller.signal});
       if ((info.size ?? 0) > LARGE_FILE_CONFIRM_BYTES) {
         const sizeMB = ((info.size ?? 0) / (1024 * 1024)).toFixed(1);
         const confirmed = window.confirm(
@@ -8081,7 +8087,9 @@ export function App() {
           return;
         }
       }
-      const result = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
+      const result = external
+        ? await service.readExternalFile(targetProjectId, path, {signal: controller.signal})
+        : await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
       setPreviewWorkbench(current =>
         updatePreviewTabAfterLoad(
           current,
@@ -8138,8 +8146,13 @@ export function App() {
       previewFileLoadControllersRef.current.set(loadKey, controller);
       setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
       try {
-        const info = await service.getProjectFileInfo(tab.projectId, tab.path, {signal: controller.signal});
-        const result = await service.readProjectFile(tab.path, tab.projectId, {signal: controller.signal});
+        const external = isAbsolutePreviewFilePath(tab.path);
+        const info = external
+          ? await service.getExternalFileInfo(tab.projectId, tab.path, {signal: controller.signal})
+          : await service.getProjectFileInfo(tab.projectId, tab.path, {signal: controller.signal});
+        const result = external
+          ? await service.readExternalFile(tab.projectId, tab.path, {signal: controller.signal})
+          : await service.readProjectFile(tab.path, tab.projectId, {signal: controller.signal});
         setPreviewWorkbench(current =>
           updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
             currentTab.type === 'file'
@@ -19033,9 +19046,11 @@ export function App() {
     });
   };
   const locateActivePreviewFileInTree = () => {
-    const targetPath = chatFilePeek?.path ?? '';
+    if (!chatFilePeek?.path) return;
+    if (isAbsolutePreviewFilePath(chatFilePeek.path)) return;
+    const targetPath = chatFilePeek.path;
     const targetProjectId = previewWorkbench.activeProjectId;
-    if (!targetPath || !targetProjectId) {
+    if (!targetProjectId) {
       return;
     }
     const ancestors = previewFileAncestorDirs(targetPath);
@@ -19742,7 +19757,7 @@ export function App() {
         type="button"
         className="preview-workbench-tree-tool-button"
         onClick={locateActivePreviewFileInTree}
-        disabled={!chatFilePeek?.path}
+        disabled={!chatFilePeek?.path || isAbsolutePreviewFilePath(chatFilePeek.path)}
         title={chatFilePeek?.path ? 'Locate current file' : 'No current file to locate'}
         aria-label="Locate current file"
       >

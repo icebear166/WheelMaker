@@ -709,6 +709,26 @@ describe('preview workbench state', () => {
     });
   });
 
+  test('restores an external file path without persisted content', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'file',
+      projectId: 'p1',
+      path: 'D:/outside/report.md',
+      targetLine: 7,
+      title: 'report.md',
+    });
+    const restored = previewWorkbenchStateFromSnapshot(
+      previewWorkbenchSnapshotFromState(state),
+    );
+
+    expect(activePreviewTab(restored)).toMatchObject({
+      type: 'file',
+      path: 'D:/outside/report.md',
+      targetLine: 7,
+      content: '',
+    });
+  });
+
   test('restores a legacy prompt diff snapshot without an active path to the first file', () => {
     const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
       type: 'prompt-diff',
