@@ -207,7 +207,7 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(view!.root)).not.toContain('not authenticated');
   });
 
-  it('renders two compact quota columns and a one-line balance', () => {
+  it('keeps the compact quota windows visible beside both remaining values', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(<UsageCompactContent snapshot={fixtureSnapshot} />);
@@ -216,8 +216,10 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(codex.findByProps({className: 'usage-provider-name'}))).toBe('Codex');
     const metrics = codex.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toBe('37%');
-    expect(renderedText(metrics[1])).toContain('90% / 1W');
+    expect(metrics.map(metric => renderedText(metric.findByProps({className: 'usage-compact-limit-label'}))))
+      .toEqual(['5h', '1W']);
+    expect(renderedText(metrics[0])).toContain('37%');
+    expect(renderedText(metrics[1])).toContain('90%');
     expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('37%');
     expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('90%');
 
@@ -286,12 +288,14 @@ describe('UsageFeatureSurface', () => {
     const second = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-b'});
     expect(renderedText(first.findByProps({className: 'usage-provider-name'}))).toBe('Kimi-1');
     expect(renderedText(first)).toContain('15%');
-    expect(renderedText(first)).not.toContain('/ 5h');
-    expect(renderedText(first)).toContain('80% / 1W');
+    expect(renderedText(first)).toContain('5h');
+    expect(renderedText(first)).toContain('80%');
+    expect(renderedText(first)).toContain('1W');
     expect(renderedText(second.findByProps({className: 'usage-provider-name'}))).toBe('Kimi-2');
     expect(renderedText(second)).toContain('74%');
     expect(renderedText(second)).not.toContain('/ 5h');
-    expect(renderedText(second)).toContain('33% / 1W');
+    expect(renderedText(second)).toContain('33%');
+    expect(renderedText(second)).toContain('1W');
     expect(view!.root.findAllByProps({'data-usage-provider': 'kimi'})).toHaveLength(2);
   });
 
@@ -314,9 +318,11 @@ describe('UsageFeatureSurface', () => {
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toBe('-/-');
+    expect(renderedText(metrics[0])).toContain('-/-');
+    expect(renderedText(metrics[0].findByProps({className: 'usage-compact-limit-label'}))).toBe('—');
     expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('0%');
-    expect(renderedText(metrics[1])).toContain('64% / 1W');
+    expect(renderedText(metrics[1])).toContain('64%');
+    expect(renderedText(metrics[1])).toContain('1W');
   });
 
   it('renders MyFlicker monthly credit in the second compact slot', () => {
@@ -338,8 +344,9 @@ describe('UsageFeatureSurface', () => {
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toBe('-/-');
-    expect(renderedText(metrics[1])).toContain('50% / 1M');
+    expect(renderedText(metrics[0])).toContain('-/-');
+    expect(renderedText(metrics[1])).toContain('50%');
+    expect(renderedText(metrics[1].findByProps({className: 'usage-compact-limit-label'}))).toBe('1M');
     expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('50.38%');
   });
 
@@ -494,7 +501,7 @@ describe('UsageFeatureSurface', () => {
     expect(rule('.usage-provider-name')).toContain('color: var(--text-primary);');
     expect(rule('.usage-compact-limit-value')).toContain('color: var(--text-tertiary);');
     expect(rule('.usage-compact-limit-value')).toContain('font-size: 10px;');
-    expect(rule('.usage-compact-limit-value strong')).toContain('font-size: 11px;');
+    expect(rule('.usage-compact-limit-value strong')).toContain('font-size: 12px;');
     const limitLabelRule = styles.match(/^\.usage-limit-label \{([\s\S]*?)\n\}/m)?.[1] ?? '';
     expect(limitLabelRule).toContain('font-size: 10px;');
     expect(rule('.usage-account-hub')).toContain('font-size: 10px;');

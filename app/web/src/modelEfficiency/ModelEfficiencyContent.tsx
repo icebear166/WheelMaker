@@ -35,16 +35,12 @@ function formatEffortLabel(effort: ModelEfficiencyItem['effort']): string {
 
 function ScoreCard({
   item,
-  familyLabel,
 }: {
   item: ModelEfficiencyItem;
-  familyLabel: string;
 }) {
   return (
     <article className="model-efficiency-recommendation" data-model-efficiency-card={true}>
-      <span className="model-efficiency-model-name">
-        {familyLabel} {formatEffortLabel(item.effort)}
-      </span>
+      <span className="model-efficiency-effort">{formatEffortLabel(item.effort)}</span>
       <strong className="model-efficiency-score">{formatScore(item.score)}</strong>
       <span className="model-efficiency-meta">
         <span>{formatModelEfficiencyCost(item.averageCostUsd)}</span>
@@ -57,22 +53,28 @@ function ScoreCard({
 export function ModelEfficiencySimpleContent({items}: {items: readonly ModelEfficiencyItem[]}) {
   return (
     <div className="model-efficiency-simple-list" aria-label="Model efficiency top scores">
-      {MODEL_FAMILIES.map(family => (
-        <section
-          className="model-efficiency-family-row"
-          data-model-efficiency-family={family}
-          aria-label={`${FAMILY_LABELS[family]} top scores`}
-          key={family}
-        >
-          {selectTopModelEfficiencyItems(items.filter(item => item.family === family)).map(item => (
-            <ScoreCard
-              item={item}
-              familyLabel={FAMILY_LABELS[family]}
-              key={item.effort}
-            />
-          ))}
-        </section>
-      ))}
+      {MODEL_FAMILIES.map(family => {
+        const recommendations = selectTopModelEfficiencyItems(items.filter(item => item.family === family));
+        return (
+          <section
+            className="model-efficiency-family-row"
+            data-model-efficiency-family={family}
+            aria-label={`${FAMILY_LABELS[family]} top scores`}
+            key={family}
+          >
+            {recommendations.length > 0 ? (
+              <>
+                <header className="model-efficiency-family-heading">
+                  <span className="model-efficiency-family-name">{FAMILY_LABELS[family]}</span>
+                </header>
+                <div className="model-efficiency-family-recommendations">
+                  {recommendations.map(item => <ScoreCard item={item} key={item.effort} />)}
+                </div>
+              </>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -152,6 +154,7 @@ export function ModelEfficiencySnapshotContent({
         <div className="model-efficiency-skeleton" aria-label="Loading model efficiency">
           {MODEL_FAMILIES.map(family => (
             <span className="model-efficiency-skeleton-row" key={family}>
+              <span className="model-efficiency-skeleton-family-label" />
               <span className="model-efficiency-skeleton-rail" />
               <span className="model-efficiency-skeleton-rail" />
               <span className="model-efficiency-skeleton-rail" />

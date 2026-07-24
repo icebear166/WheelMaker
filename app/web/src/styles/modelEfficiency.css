@@ -11,15 +11,21 @@
 
 .model-efficiency-simple-list {
   display: grid;
-  gap: 4px;
-  padding: 6px 7px 7px;
+  gap: 8px;
+  padding: 8px 9px 9px;
 }
 
 .model-efficiency-family-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 5px;
   min-width: 0;
+  padding: 1px 0 1px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--model-efficiency-family-color) 64%, var(--border-subtle));
+}
+
+.model-efficiency-family-row:empty {
+  display: none;
 }
 
 .model-efficiency-family-row[data-model-efficiency-family='gpt-5.6-sol'] {
@@ -34,69 +40,88 @@
   --model-efficiency-family-color: #858f91;
 }
 
+.model-efficiency-family-heading {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  min-height: 16px;
+}
+
+.model-efficiency-family-name {
+  color: color-mix(in srgb, var(--model-efficiency-family-color) 62%, var(--text-primary));
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.model-efficiency-family-recommendations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
 .model-efficiency-recommendation {
   display: grid;
   grid-template-areas:
-    'model meta'
-    'score meta';
-  grid-template-columns: minmax(0, 1fr) 47px;
-  grid-template-rows: 20px 34px;
-  min-height: 54px;
+    'effort score'
+    'meta meta';
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 24px auto;
+  min-height: 43px;
+  padding: 0 8px 4px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 30%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--model-efficiency-family-color) 3%, var(--surface-panel));
   line-height: 1;
 }
 
-.model-efficiency-model-name {
-  grid-area: model;
+.model-efficiency-recommendation + .model-efficiency-recommendation {
+  border-left: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 20%, var(--border-subtle));
+}
+
+.model-efficiency-effort {
+  grid-area: effort;
   min-width: 0;
-  padding: 7px 3px 1px 6px;
-  color: color-mix(in srgb, var(--model-efficiency-family-color) 54%, var(--text-primary));
+  align-self: center;
+  color: var(--text-secondary);
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 620;
   white-space: nowrap;
 }
 
 .model-efficiency-score {
   grid-area: score;
   align-self: center;
-  padding: 0 6px 3px 8px;
+  padding-left: 5px;
   overflow: hidden;
-  color: color-mix(in srgb, var(--model-efficiency-family-color) 58%, var(--text-primary));
-  font-size: clamp(18px, 1.35vw, 20px);
+  color: color-mix(in srgb, var(--model-efficiency-family-color) 62%, var(--text-primary));
+  font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
   text-overflow: clip;
   white-space: nowrap;
 }
 
 .model-efficiency-meta {
   grid-area: meta;
-  display: grid;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  display: flex;
   min-width: 0;
-  border-left: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 18%, var(--border-subtle));
-  color: color-mix(in srgb, var(--model-efficiency-family-color) 42%, var(--text-primary));
+  align-items: center;
+  gap: 6px;
+  color: var(--text-tertiary);
 }
 
 .model-efficiency-meta span {
-  display: grid;
   min-width: 0;
-  padding: 2px;
-  place-items: center;
   overflow: hidden;
+  color: inherit;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
-  font-weight: 650;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .model-efficiency-meta span + span {
-  border-top: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 14%, var(--border-subtle));
+  padding-left: 6px;
+  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
 }
 
 .model-efficiency-detail-list {
@@ -170,20 +195,30 @@
 
 .model-efficiency-skeleton {
   display: grid;
-  gap: 4px;
-  padding: 6px 7px 7px;
+  gap: 8px;
+  padding: 8px 9px 9px;
 }
 
 .model-efficiency-skeleton-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
+  grid-template-columns: 36px repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
+}
+
+.model-efficiency-skeleton-family-label {
+  display: block;
+  height: 14px;
+  margin-top: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-secondary) 12%, transparent);
 }
 
 .model-efficiency-skeleton-rail {
   display: block;
-  height: 54px;
-  border-radius: 7px;
+  height: 43px;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--text-secondary) 14%, transparent);
   animation: model-efficiency-skeleton-breathe 1.6s var(--ease-standard) infinite;
 }

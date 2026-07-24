@@ -29,7 +29,7 @@ function renderedText(node: TestRenderer.ReactTestInstance): string {
 }
 
 describe('ModelEfficiencyContent', () => {
-  test('renders each family as three score-ranked cards without a model column or role headers', () => {
+  test('renders each family once with its three score-ranked effort comparisons', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(<ModelEfficiencySimpleContent items={items} />);
@@ -47,8 +47,9 @@ describe('ModelEfficiencyContent', () => {
     ]);
     const solCards = rows[0].findAll(node => node.props['data-model-efficiency-card']);
     expect(solCards).toHaveLength(3);
-    expect(solCards.map(card => card.findByProps({className: 'model-efficiency-model-name'}).children.join('')))
-      .toEqual(['Sol Max', 'Sol Xhigh', 'Sol High']);
+    expect(renderedText(rows[0].findByProps({className: 'model-efficiency-family-name'}))).toBe('Sol');
+    expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-effort'}))))
+      .toEqual(['Max', 'Xhigh', 'High']);
     expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-score'}))))
       .toEqual(['142', '140', '135']);
     expect(renderedText(rows[0])).toContain('142');
@@ -70,6 +71,7 @@ describe('ModelEfficiencyContent', () => {
     const rows = view!.root.findAll(node => node.props['data-model-efficiency-family']);
     expect(rows).toHaveLength(3);
     expect(rows[0].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(0);
+    expect(rows[0].findAllByProps({className: 'model-efficiency-family-name'})).toHaveLength(0);
     expect(rows[2].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(1);
     expect(renderedText(rows[2])).not.toContain('—');
   });
@@ -106,7 +108,7 @@ describe('ModelEfficiencyContent', () => {
 });
 
 describe('ModelEfficiency styling', () => {
-  test('uses single-layer family tint score cards', () => {
+  test('uses family-led score comparisons without nine independent cards', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'),
@@ -115,26 +117,24 @@ describe('ModelEfficiency styling', () => {
 
     const recommendationRule = styles.match(/\.model-efficiency-recommendation \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const familyRule = styles.match(/\.model-efficiency-family-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const modelNameRule = styles.match(/\.model-efficiency-model-name \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const familyHeadingRule = styles.match(/\.model-efficiency-family-name \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const recommendationsRule = styles.match(/\.model-efficiency-family-recommendations \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const effortRule = styles.match(/\.model-efficiency-effort \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metaRule = styles.match(/\.model-efficiency-meta span \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(recommendationRule).toContain('grid-template-areas:');
-    expect(recommendationRule).toContain('grid-template-rows: 20px 34px;');
-    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 47px;');
-    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 30%');
-    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 3%');
-    expect(recommendationRule).not.toContain('inset 3px 0 0');
+    expect(recommendationRule).not.toContain('border:');
+    expect(recommendationRule).not.toContain('background:');
     expect(recommendationRule).not.toContain('box-shadow');
-    expect(familyRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
-    expect(modelNameRule).toContain('padding: 7px 3px 1px 6px;');
-    expect(modelNameRule).toContain('font-size: 10px;');
-    expect(modelNameRule).not.toContain('text-overflow: ellipsis;');
-    expect(modelNameRule).not.toContain('IBM Plex Sans');
-    expect(scoreRule).toContain('font-size: clamp(18px, 1.35vw, 20px);');
+    expect(familyRule).toContain('border-left: 2px solid');
+    expect(familyHeadingRule).toContain('font-size: 10px;');
+    expect(recommendationsRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+    expect(effortRule).toContain('font-size: 10px;');
+    expect(scoreRule).toContain('font-size: 18px;');
     expect(scoreRule).toContain('font-weight: 700;');
-    expect(scoreRule).toContain('letter-spacing: -0.02em;');
-    expect(scoreRule).toContain('var(--model-efficiency-family-color) 58%');
+    expect(scoreRule).not.toContain('letter-spacing:');
+    expect(scoreRule).toContain('var(--model-efficiency-family-color) 62%');
     expect(metaRule).toContain('font-size: 10px;');
+    expect(styles).toContain('.model-efficiency-family-row:empty');
     expect(styles).not.toContain('--status-danger');
   });
 
@@ -168,6 +168,7 @@ describe('ModelEfficiency styling', () => {
     });
 
     expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-row'})).toHaveLength(3);
+    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-family-label'})).toHaveLength(3);
     expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-rail'})).toHaveLength(9);
     expect(renderedText(view!.root)).not.toContain('Loading CodexRadar');
   });

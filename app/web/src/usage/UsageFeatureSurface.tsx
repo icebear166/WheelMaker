@@ -66,13 +66,11 @@ function AccountRail({
               data-usage-compact-limit={true}
               key={limit?.id ?? `empty-${index}`}
             >
-              <span className="usage-compact-limit-value">
-                {limit ? (
-                  <>
-                    <strong>{Math.round(limit.remainingPercent)}%</strong>
-                    {index === 1 ? <span>{` / ${shortLimitLabel(limit)}`}</span> : null}
-                  </>
-                ) : <strong>-/-</strong>}
+              <span className="usage-compact-limit-header">
+                <span className="usage-compact-limit-label">{limit ? shortLimitLabel(limit) : '—'}</span>
+                <span className="usage-compact-limit-value">
+                  {limit ? <strong>{Math.round(limit.remainingPercent)}%</strong> : <strong>-/-</strong>}
+                </span>
               </span>
               <QuotaRail remainingPercent={limit?.remainingPercent ?? 0} />
             </span>
