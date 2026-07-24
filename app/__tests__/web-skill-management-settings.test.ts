@@ -75,10 +75,10 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain('skillOperationPollTimerRef');
     expect(detailTsx).toContain('operation?.running');
     expect(detailTsx).toContain('includeProjects: true');
-    expect(detailTsx).toContain('settings-skill-icon-btn');
-    expect(detailTsx).toContain('codicon-add');
-    expect(detailTsx).toContain('codicon-sync');
-    expect(detailTsx).toContain('codicon-trash');
+    expect(detailTsx).toContain('set-btn--icon');
+    expect(detailTsx).toContain("icon: 'plus'");
+    expect(detailTsx).toContain("icon: 'refreshCw'");
+    expect(detailTsx).toContain("icon: 'trash'");
   });
 
   test('keeps Skills pending and polling scoped to the affected hub', () => {
@@ -112,7 +112,7 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);');
     expect(detailTsx).toContain('className="settings-skills-scan-status"');
     expect(detailTsx).toContain('role="status"');
-    expect(detailTsx).toContain('codicon-loading codicon-modifier-spin');
+    expect(detailTsx).toContain('<Icon name="loader" spin');
     expect(detailTsx).toContain('Scanning skills');
     expect(detailTsx).toContain('groups.length === 0 && options.loading ? (');
     expect(detailTsx).toContain('groups.length === 0 && !options.error && !options.loading ? (');

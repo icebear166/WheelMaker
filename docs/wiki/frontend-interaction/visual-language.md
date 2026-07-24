@@ -50,3 +50,11 @@
 - 一级分组行强、二级行弱；强化层级不得显著增加行高（一屏信息密度不降低）。
 - Hub 等可展开分组以小色点、名称和 chevron 表达一级层级，二级项目通过缩进表达；禁止以整条彩色侧轨或独立检查器式外壳强化分组。
 - Monitor 类数据密集浮窗的字号刻度：数据 11px tabular-nums、标签 10px、分区头 11px/650；展示型大数字（如 IQ score）单独使用 display 尺寸。
+
+## 设置界面
+
+- Settings 根页与 Update / Skills / Port Relay 三个详情页共用一套统一 kit：`set-card` / `set-btn`（ghost 默认，`--primary` / `--danger` / `--icon` 变体）/ `set-status`（CSS 状态点 + 标签）/ `set-disclosure` / `set-field` / `set-kv`；kit 置于 `web/src/styles/settings.css` 末尾，权威生效。
+- 详情页不再使用 `codicon-*`；图标统一走共享 Lucide 组件 `web/src/common/Icon`（`SessionIcon` 已改为其薄再导出）。
+- hub / skill / relay / 包的健康度统一用 `set-status` 状态点表达，不用图标；hub 分组沿用 `--hub-accent` 小色点 + 名称，不使用整条彩色侧轨。
+- 机器标识符（hub id、版本、端口、access code、计数）走 mono + `tabular-nums`。设置面板圆角就地取 8px，不修改全局 `--radius-panel`。
+

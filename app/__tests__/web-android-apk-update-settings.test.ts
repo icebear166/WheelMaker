@@ -24,18 +24,18 @@ describe('android apk update settings card', () => {
     expect(mainTsx).toContain('resolveAndroidApkUpdateStatus');
     expect(mainTsx).toContain('wheelmaker:android-apk-update');
     expect(mainTsx).toContain('requestAndroidApkInstall');
-    expect(detailTsx).toContain('Download and Install');
+    expect(detailTsx).toContain('Download & Install');
 
-    expect(detailTsx.indexOf('android-apk-update-card')).toBeGreaterThanOrEqual(0);
-    expect(detailTsx.indexOf('android-apk-update-card')).toBeLessThan(detailTsx.indexOf('update-summary-bar'));
-    expect(detailTsx.indexOf('update-summary-bar')).toBeLessThan(detailTsx.indexOf('agent-package-hub-list'));
+    expect(detailTsx.indexOf('update-apk-card')).toBeGreaterThanOrEqual(0);
+    expect(detailTsx.indexOf('update-apk-card')).toBeLessThan(detailTsx.indexOf('update-overview'));
+    expect(detailTsx.indexOf('update-overview')).toBeLessThan(detailTsx.indexOf('update-hub-list'));
     expect(detailTsx).toContain('androidApkUpdateSupported ?');
-    expect(detailTsx).toContain('android-apk-update-heading');
-    expect(detailTsx).toContain('android-apk-update-meta-grid');
+    expect(detailTsx).toContain('update-apk-scope');
+    expect(detailTsx).toContain('update-apk-versions');
 
-    expect(stylesCss).toContain('.android-apk-update-card');
-    expect(stylesCss).toContain('.android-apk-update-heading');
-    expect(stylesCss).toContain('.android-apk-update-meta-grid');
-    expect(stylesCss).toContain('.android-apk-update-actions');
+    expect(stylesCss).toContain('.update-apk-row');
+    expect(stylesCss).toContain('.update-apk-scope');
+    expect(stylesCss).toContain('.update-apk-versions');
+    expect(stylesCss).toContain('.update-apk-actions');
   });
 });

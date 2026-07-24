@@ -1,5 +1,6 @@
 import React, { type ReactNode } from 'react';
 
+import {Icon, type IconName} from '../common/Icon';
 import type { SettingsDetailId, SettingsPeerDetail } from './settingsNavigation';
 
 export type SettingsDetailShellOptions = {
@@ -47,7 +48,7 @@ type MobileSettingsShortcut = {
   detail: SettingsPeerDetail;
   title: string;
   label: string;
-  iconClass: string;
+  icon: IconName;
 };
 
 export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
@@ -55,19 +56,19 @@ export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
     detail: 'update',
     title: 'Update',
     label: 'Update',
-    iconClass: 'codicon-cloud-download',
+    icon: 'cloudDownload',
   },
   {
     detail: 'skills',
     title: 'Skills',
     label: 'Skills',
-    iconClass: 'codicon-extensions',
+    icon: 'package',
   },
   {
     detail: 'portRelay',
     title: 'Port Relay',
     label: 'Port Relay',
-    iconClass: 'codicon-radio-tower',
+    icon: 'radioTower',
   },
 ];
 
@@ -121,7 +122,7 @@ export function SettingsDetailShell({
             aria-label="Back to settings"
             title="Back"
           >
-            <span className="codicon codicon-arrow-left" />
+            <Icon name="arrowLeft" />
           </button>
           <div className="settings-detail-title">{title}</div>
           {actions ?? <span className="settings-detail-header-spacer" aria-hidden="true" />}
@@ -155,7 +156,7 @@ export function MobileSettingsShortcutBar({
           title="Settings"
           aria-label="Settings"
         >
-          <span className="codicon codicon-settings-gear" />
+          <Icon name="settings" size={22} />
           <span className="mobile-settings-shortcut-label">Settings</span>
         </button>
         {MOBILE_SETTINGS_SHORTCUTS.map(shortcut => (
@@ -167,7 +168,7 @@ export function MobileSettingsShortcutBar({
             title={shortcut.title}
             aria-label={shortcut.title}
           >
-            <span className={`codicon ${shortcut.iconClass}`} />
+            <Icon name={shortcut.icon} size={22} />
             <span className="mobile-settings-shortcut-label">{shortcut.label}</span>
           </button>
         ))}
@@ -216,7 +217,7 @@ export function SettingsScreen({
               aria-label={backAriaLabel}
               title="Back"
             >
-              <span className="codicon codicon-arrow-left" />
+              <Icon name="arrowLeft" size={18} />
             </button>
             <div className="mobile-settings-title">{title}</div>
             <div className="mobile-settings-actions">{actions}</div>
