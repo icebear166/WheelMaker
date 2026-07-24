@@ -537,6 +537,8 @@ describe('UsageFeatureSurface', () => {
     expect(dangerLabel).toContain('color: var(--state-danger);');
 
     expect(rule('.usage-provider-name')).toContain('color: var(--text-primary);');
+    expect(rule('.usage-provider-row')).toContain('grid-template-columns: minmax(72px, 0.72fr) minmax(0, 1.78fr);');
+    expect(rule('.usage-provider-row')).toContain('column-gap: 8px;');
     expect(rule('.usage-provider-row')).toContain('min-height: 34px;');
     expect(rule('.usage-provider-row')).toContain('padding: 5px 4px 4px;');
     expect(styles).not.toContain('.usage-provider-row + .usage-provider-row');

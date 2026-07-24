@@ -40,8 +40,10 @@ function ScoreCard({
 }) {
   return (
     <article className="model-efficiency-recommendation" data-model-efficiency-card={true}>
-      <span className="model-efficiency-effort">{formatEffortLabel(item.effort)}</span>
-      <strong className="model-efficiency-score">{formatScore(item.score)}</strong>
+      <span className="model-efficiency-score-line">
+        <strong className="model-efficiency-score">{formatScore(item.score)}</strong>
+        <span className="model-efficiency-effort">{formatEffortLabel(item.effort)}</span>
+      </span>
       <span className="model-efficiency-meta">
         <span>{formatModelEfficiencyCost(item.averageCostUsd)}</span>
         <span>{formatModelEfficiencyDuration(item.averageTaskSeconds)}</span>

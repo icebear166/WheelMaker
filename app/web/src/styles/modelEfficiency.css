@@ -44,7 +44,7 @@
   display: block;
   min-width: 0;
   min-height: 0;
-  padding-top: 1px;
+  padding-top: 5px;
 }
 
 .model-efficiency-family-name {
@@ -62,13 +62,12 @@
 .model-efficiency-recommendation {
   display: grid;
   grid-template-areas:
-    'effort'
-    'score'
+    'score-line'
     'meta';
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 12px 18px 10px;
-  min-height: 41px;
-  padding: 0 7px 1px;
+  grid-template-rows: 20px 10px;
+  min-height: 32px;
+  padding: 0 7px 2px;
   overflow: hidden;
   line-height: 1;
 }
@@ -77,23 +76,29 @@
   border-left: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 20%, var(--border-subtle));
 }
 
-.model-efficiency-effort {
-  grid-area: effort;
+.model-efficiency-score-line {
+  grid-area: score-line;
+  display: flex;
   min-width: 0;
-  align-self: start;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.model-efficiency-effort {
+  min-width: 0;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 620;
   white-space: nowrap;
 }
 
 .model-efficiency-score {
-  grid-area: score;
-  align-self: center;
+  flex: 0 0 auto;
   padding-left: 0;
   overflow: hidden;
   color: color-mix(in srgb, var(--model-efficiency-family-color) 62%, var(--text-primary));
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-overflow: clip;

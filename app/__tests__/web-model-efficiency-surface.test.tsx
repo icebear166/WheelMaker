@@ -52,6 +52,8 @@ describe('ModelEfficiencyContent', () => {
       .toEqual(['Max', 'Xhigh', 'High']);
     expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-score'}))))
       .toEqual(['142', '140', '135']);
+    expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-score-line'}))))
+      .toEqual(['142Max', '140Xhigh', '135High']);
     expect(renderedText(rows[0])).toContain('142');
     expect(renderedText(rows[0])).not.toContain('142.4');
     expect(renderedText(rows[0])).not.toContain('IQ');
@@ -122,6 +124,7 @@ describe('ModelEfficiency styling', () => {
     const recommendationsRule = styles.match(/\.model-efficiency-family-recommendations \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const effortRule = styles.match(/\.model-efficiency-effort \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const scoreLineRule = styles.match(/\.model-efficiency-score-line \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metaRule = styles.match(/\.model-efficiency-meta span \{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(recommendationRule).not.toContain('border:');
     expect(recommendationRule).not.toContain('background:');
@@ -130,11 +133,13 @@ describe('ModelEfficiency styling', () => {
     expect(familyRule).toContain('grid-template-columns: 34px minmax(0, 1fr);');
     expect(familyRule).not.toContain('grid-template-rows:');
     expect(familyNameRule).toContain('font-size: 10px;');
-    expect(familyHeaderRule).toContain('padding-top: 1px;');
+    expect(familyHeaderRule).toContain('padding-top: 5px;');
     expect(recommendationsRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
-    expect(recommendationRule).toContain("'effort'\n    'score'\n    'meta';");
-    expect(effortRule).toContain('font-size: 10px;');
-    expect(scoreRule).toContain('font-size: 18px;');
+    expect(recommendationRule).toContain("'score-line'\n    'meta';");
+    expect(scoreLineRule).toContain('display: flex;');
+    expect(scoreLineRule).toContain('gap: 4px;');
+    expect(effortRule).toContain('font-size: 9px;');
+    expect(scoreRule).toContain('font-size: 17px;');
     expect(scoreRule).toContain('font-weight: 700;');
     expect(scoreRule).not.toContain('letter-spacing:');
     expect(scoreRule).toContain('var(--model-efficiency-family-color) 62%');
