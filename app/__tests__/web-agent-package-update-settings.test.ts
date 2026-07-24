@@ -223,8 +223,7 @@ describe('agent package update settings UI source structure', () => {
     expect(detailTsx).toContain('wheelMakerUpdateStatusLabel');
     expect(detailTsx).toContain('wheelMakerVersionCopy');
     expect(detailTsx).toContain('formatWheelMakerDateTime');
-    expect(detailTsx).toContain('wheelMakerPublicMetadata?.stable.publishedAt');
-    expect(detailTsx).toContain('wheelMakerPublicMetadata?.publishStatus');
+    expect(detailTsx).toContain('wheelMakerPublicMetadata?.stable');
     expect(detailTsx).not.toContain('wheelMakerData?.stable');
     expect(detailTsx).not.toContain('wheelMakerData?.publishStatus');
     expect(detailTsx).toContain('wheelMakerReleaseHistory');
@@ -240,14 +239,14 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain("kind: 'npmPackage'");
     expect(mainTsx).toContain("kind: 'npmPackageHubUpdate'");
     expect(mainTsx).toContain('requestAgentPackageAction');
-    expect(detailTsx).toContain('requestAgentPackageHubUpdate(card.hubId, npmUpdateTargets)');
+    expect(detailTsx).toContain('requestAgentPackageHubUpdate(card.hubId, npmUpdatable)');
     expect(mainTsx).toContain('handleAgentPackageConfirmedAction');
     expect(mainTsx).toContain('handleAgentPackageHubUpdateConfirmedAction');
     expect(mainTsx).toContain("await service.installNpmPackages(target.hubId, target.packages.map(pkg => pkg.packageName), 'latest');");
     expect(mainTsx).not.toContain("for (const pkg of target.packages)");
     expect(detailTsx).toContain('packageStatusLabel');
-    expect(detailTsx).toContain('deriveNpmPackageUpdateTargets(hub?.packages ?? [])');
-    expect(detailTsx).toContain('npmPackageUpdateSummary(npmUpdateTargets.length)');
+    expect(detailTsx).toContain('deriveNpmUpdatableTargets(allPackages)');
+    expect(detailTsx).toContain('{npmUpdatable.length} updates');
     expect(mainTsx).toContain('const [expandedNpmUpdateHubIds, setExpandedNpmUpdateHubIds] = useState<Record<string, boolean>>({});');
     expect(mainTsx).toContain('const [expandedProjectIndexHubIds, setExpandedProjectIndexHubIds] = useState<Record<string, boolean>>({});');
     expect(mainTsx).toContain('const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});');
@@ -258,34 +257,23 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('PROJECT_INDEX_SCAN_CONCURRENCY');
     expect(detailTsx).toContain('const projectIndexExpanded = expandedProjectIndexHubIds[card.hubId] === true;');
     expect(detailTsx).toContain('aria-expanded={projectIndexExpanded}');
-    expect(detailTsx).toContain('className="project-index-disclosure"');
-    expect(detailTsx).toContain('className="project-index-section"');
+    expect(detailTsx).toContain('className="set-disclosure"');
     expect(detailTsx).toContain('className="project-index-row"');
-    expect(detailTsx).toContain('className="project-index-path"');
-    expect(detailTsx).toContain('className="project-index-action-btn"');
     expect(detailTsx).toContain("projectIndexScanPendingByProjectId[project.projectId] ? 'Scanning...' : 'Scan'");
-    expect(detailTsx).toContain("projectIndexScanAllPendingByHubId[card.hubId] ? 'Scanning...' : 'Scan All'");
+    expect(detailTsx).toContain("projectIndexScanAllPending ? 'Scanning...' : 'Scan all'");
     expect(mainTsx).toContain("const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');");
     expect(detailTsx).toContain('const npmExpanded = expandedNpmUpdateHubIds[card.hubId] === true;');
     expect(detailTsx).toContain('aria-expanded={npmExpanded}');
     expect(detailTsx).toContain('{npmExpanded ? (');
     expect(updateDetailSource).not.toContain('<span className="npm-update-title">NPM Update</span>');
-    expect(detailTsx).toContain("npmHubUpdatePending ? 'Updating...' : 'Update All'");
-    expect(updateDetailSource).not.toContain("npmHubUpdatePending ? 'Updating...' : 'Update NPM'");
+    expect(detailTsx).toContain("npmHubUpdatePending ? 'Updating...' : 'Update NPM'");
     expect(detailTsx).toContain('const showWheelMakerUpdateAction =');
     expect(detailTsx).toContain('shouldShowWheelMakerUpdateAction({');
     expect(detailTsx).toContain('loading: wheelMaker?.loading === true,');
     expect(detailTsx).toContain('pending: wheelMakerPending || wheelMakerUpdateAllPending,');
-    expect(detailTsx).toContain('disabled={wheelMakerUpdateAllPending || wheelMakerPending || wheelMakerUpdateJobActive(wheelMakerData?.job)}');
-    expect(detailTsx).toContain('const wheelMakerUpdateAvailableCount = updateHubCards.filter');
-    expect(detailTsx).toContain('const npmUpdateAvailableCount = updateHubCards.reduce');
-    expect(detailTsx).toContain('const updateSummaryScanning =');
-    expect(detailTsx).toContain('className="update-summary-bar"');
-    expect(detailTsx).toContain('className="update-summary-metrics"');
-    expect(detailTsx).toContain('className="update-summary-value"');
-    expect(detailTsx).toContain('className="wheelmaker-update-all-btn"');
+    expect(detailTsx).toContain('disabled={wheelMakerUpdateAllPending || wheelMakerPending || wheelMakerJobActive}');
     expect(detailTsx).toContain('requestWheelMakerUpdateAll(wheelMakerRequestableHubIds)');
-    expect(detailTsx).toContain("wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'");
+    expect(detailTsx).toContain("wheelMakerUpdateAllPending ? 'Updating all hubs...' : 'Update all hubs'");
     expect(detailTsx).toContain('disabled={wheelMakerRequestableHubIds.length === 0 || wheelMakerUpdateAllPending}');
     expect(updateDetailSource).not.toContain("wheelMakerStatus !== 'up_to_date'");
     expect(updateDetailSource).not.toContain('Agent Packages');
@@ -294,48 +282,23 @@ describe('agent package update settings UI source structure', () => {
     expect(updateDetailSource).not.toContain('Updated: {agentCard.updatedAt}');
     expect(updateDetailSource).not.toContain('<span className="wheelmaker-update-product">WheelMaker</span>');
     expect(updateDetailSource).not.toContain('<span className="wheelmaker-update-product" title={card.hubId}>{card.hubId}</span>');
-    expect(detailTsx).toContain('<span className="wheelmaker-update-scope">Release</span>');
 
-    expect(stylesCss).toContain('.agent-package-hub-list');
-    expect(stylesCss).toContain('.update-hub-header .wide-project-hub-tag');
-    expect(stylesCss).toContain('font-size: 12.5px;');
+    expect(stylesCss).toContain('.update-hub-list');
+    expect(stylesCss).toContain('.update-overview');
     const settingsDetailPageBlock = stylesCss.match(/^\.settings-detail-page \{[\s\S]*?\n\}/m)?.[0] ?? '';
     expect(settingsDetailPageBlock).toContain('flex: 1 1 auto;');
     expect(settingsDetailPageBlock).toContain('overflow: hidden;');
     const settingsDetailBodyBlock = stylesCss.match(/^\.settings-detail-body \{[\s\S]*?\n\}/m)?.[0] ?? '';
     expect(settingsDetailBodyBlock).toContain('overflow-y: auto;');
     expect(settingsDetailBodyBlock).toContain('scrollbar-gutter: stable;');
-    expect(stylesCss).toContain('.wheelmaker-update-panel');
-    expect(stylesCss).toContain('.wheelmaker-update-all-btn');
-    expect(stylesCss).toContain('.update-summary-bar');
-    expect(stylesCss).toContain('.update-summary-metrics');
-    expect(stylesCss).toContain('.update-summary-bar .wheelmaker-update-all-btn');
-    const updateSummaryBarBlock = stylesCss.match(/\.update-summary-bar \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(updateSummaryBarBlock).toContain('display: flex;');
-    expect(updateSummaryBarBlock).toContain('flex-wrap: wrap;');
-    const updateSummaryMetricsBlock = stylesCss.match(/\.update-summary-metrics \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(updateSummaryMetricsBlock).toContain('display: flex;');
-    expect(updateSummaryMetricsBlock).toContain('flex-wrap: wrap;');
-    expect(updateSummaryMetricsBlock).not.toContain('grid-template-columns: repeat(4, minmax(0, auto));');
-    expect(stylesCss).toContain('.wheelmaker-update-version-line');
-    expect(stylesCss).toContain('.wheelmaker-update-ref-tag');
-    expect(stylesCss).toContain('.wheelmaker-update-release-line');
-    expect(stylesCss).toContain('.wheelmaker-release-history');
-    expect(stylesCss).toContain('.wheelmaker-update-action-btn');
-    expect(stylesCss).toContain('.npm-update-disclosure');
-    expect(stylesCss).toContain('.npm-update-section');
-    expect(stylesCss).toContain('.project-index-disclosure');
-    expect(stylesCss).toContain('.project-index-section');
-    expect(stylesCss).toContain('.project-index-row');
-    expect(stylesCss).toContain('.project-index-path');
-    expect(stylesCss).toContain('.project-index-action-btn');
-    expect(stylesCss).toContain('.npm-update-action-btn');
-    expect(stylesCss).toContain('.npm-update-body');
+    expect(stylesCss).toContain('.update-hub-row');
+    expect(stylesCss).toContain('.update-disclosure-scope');
+    expect(stylesCss).toContain('.set-disclosure');
+    expect(stylesCss).toContain('.set-btn');
+    expect(stylesCss).toContain('.set-status');
     expect(stylesCss).toContain('.agent-package-row');
-    expect(stylesCss).toContain('.agent-package-name-line');
-    expect(stylesCss).toContain('.agent-package-agent-tags');
-    expect(stylesCss).toContain('.agent-package-version-status');
-    expect(stylesCss).toContain('.agent-package-action-btn');
+    expect(stylesCss).toContain('.agent-package-version-line');
+    expect(stylesCss).toContain('.project-index-row');
   });
 
   test('keeps Update page scan polling scoped to the active Update detail', () => {
@@ -424,151 +387,62 @@ describe('agent package update settings UI source structure', () => {
     expect(detailTsx).not.toContain('disabled={pending || agentPackageAnyOperationRunning}');
   });
 
-  test('shows npm hub Update All only from the expanded summary row', () => {
+  test('places the npm hub update action in the disclosure summary row', () => {
     const projectRoot = path.join(__dirname, '..');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = readWebStyles(projectRoot);
 
-    const disclosureStart = detailTsx.indexOf('className="npm-update-disclosure"');
-    const bodyStart = detailTsx.indexOf('className="npm-update-body"', disclosureStart);
+    const disclosureStart = detailTsx.indexOf('className="set-disclosure"');
+    const bodyStart = detailTsx.indexOf('className="set-disclosure-body"', disclosureStart);
     expect(disclosureStart).toBeGreaterThanOrEqual(0);
     expect(bodyStart).toBeGreaterThan(disclosureStart);
 
     const disclosureBlock = detailTsx.slice(disclosureStart, bodyStart);
+    expect(disclosureBlock).toContain('className="set-disclosure-btn"');
+    expect(disclosureBlock).toContain("npmHubUpdatePending ? 'Updating...' : 'Update NPM'");
+    // the action lives in the summary row, before the expandable body gate
+    const actionIndex = disclosureBlock.indexOf("npmHubUpdatePending ? 'Updating...'");
     const expandedGateIndex = disclosureBlock.indexOf('{npmExpanded ? (');
-    const actionIndex = disclosureBlock.indexOf('className="npm-update-action-btn"');
     expect(expandedGateIndex).toBeGreaterThanOrEqual(0);
-    expect(actionIndex).toBeGreaterThan(expandedGateIndex);
-    expect(disclosureBlock).toContain("npmHubUpdatePending ? 'Updating...' : 'Update All'");
-
-    const mobileNpmBlock = stylesCss.match(/@media \(max-width: 560px\) \{[\s\S]*?\.wheelmaker-update-panel \{/m)?.[0] ?? '';
-    expect(mobileNpmBlock).not.toContain('grid-template-columns: 1fr;');
-    expect(mobileNpmBlock).not.toContain('width: 100%;');
+    expect(actionIndex).toBeLessThan(expandedGateIndex);
   });
 
-  test('places update summary between APK update and hub cards', () => {
+  test('places update overview between APK update and hub cards', () => {
     const projectRoot = path.join(__dirname, '..');
     const updateDetail = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
 
-    const apkIndex = updateDetail.indexOf('android-apk-update-card');
-    const summaryIndex = updateDetail.indexOf('update-summary-bar');
-    const hubListIndex = updateDetail.indexOf('agent-package-hub-list');
-    const summaryButtonIndex = updateDetail.indexOf('className="wheelmaker-update-all-btn"', summaryIndex);
+    const apkIndex = updateDetail.indexOf('update-apk-card');
+    const overviewIndex = updateDetail.indexOf('update-overview');
+    const hubListIndex = updateDetail.indexOf('update-hub-list');
+    const overviewButtonIndex = updateDetail.indexOf('set-btn--lg', overviewIndex);
     expect(apkIndex).toBeGreaterThanOrEqual(0);
-    expect(summaryIndex).toBeGreaterThan(apkIndex);
-    expect(hubListIndex).toBeGreaterThan(summaryIndex);
-    expect(summaryButtonIndex).toBeGreaterThan(summaryIndex);
-    expect(summaryButtonIndex).toBeLessThan(hubListIndex);
+    expect(overviewIndex).toBeGreaterThan(apkIndex);
+    expect(hubListIndex).toBeGreaterThan(overviewIndex);
+    expect(overviewButtonIndex).toBeGreaterThan(overviewIndex);
+    expect(overviewButtonIndex).toBeLessThan(hubListIndex);
   });
 
   test('shows public stable metadata once and keeps hub cards local-only', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = readWebStyles(projectRoot);
 
-    const wheelMakerBlockStart = detailTsx.indexOf('className="wheelmaker-update-panel"');
-    const agentPackagesStart = detailTsx.indexOf('className="agent-package-row-list"', wheelMakerBlockStart);
-    expect(wheelMakerBlockStart).toBeGreaterThanOrEqual(0);
-    expect(agentPackagesStart).toBeGreaterThan(wheelMakerBlockStart);
-    const wheelMakerBlock = detailTsx.slice(wheelMakerBlockStart, agentPackagesStart);
-    expect(wheelMakerBlock).toContain('className="wheelmaker-update-scope"');
-    expect(wheelMakerBlock).toContain('className="wheelmaker-update-version-line"');
-    expect(wheelMakerBlock).toContain('className="wheelmaker-update-ref-tag"');
-    expect(wheelMakerBlock).toContain('wheelMakerVersions.current');
-    expect(wheelMakerBlock).toContain('className="wheelmaker-update-release-line"');
-    expect(wheelMakerBlock).toContain('wheelMakerCurrentTime');
-    expect(wheelMakerBlock).not.toContain('wheelMakerLatestTime');
-    expect(wheelMakerBlock).not.toContain('wheelMakerVersions.latest');
-    expect(detailTsx).toContain('className="settings-metadata-card wheelmaker-public-release"');
-    expect(detailTsx).toContain('wheelMakerPublicMetadata?.stable.version');
-    expect(wheelMakerBlock).toContain(": 'Update'}");
-    expect(mainTsx).not.toContain('Update+Publish');
+    // the overview bar renders the public stable version exactly once
+    const overviewStart = detailTsx.indexOf('className="update-overview"');
+    expect(overviewStart).toBeGreaterThanOrEqual(0);
+    const overviewBlock = detailTsx.slice(overviewStart, overviewStart + 400);
+    expect(overviewBlock).toContain('stableRelease?.version');
 
-    const hubCardBlock = stylesCss.match(/\.agent-package-hub-card \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(hubCardBlock).toContain('border-left: 3px solid');
-
-    const panelBlock = stylesCss.match(/\.wheelmaker-update-panel \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(panelBlock).not.toContain('border: 1px solid');
-    expect(panelBlock).not.toContain('border-left: 3px solid');
-    expect(panelBlock).not.toContain('background:');
-    expect(panelBlock).not.toContain('border-radius:');
-    expect(panelBlock).toContain('grid-template-columns: minmax(0, 1fr) auto;');
-    expect(panelBlock).toContain('grid-template-rows: auto auto auto;');
-
-    const npmSectionBlock = stylesCss.match(/\.npm-update-section \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(npmSectionBlock).not.toContain('border: 1px solid');
-    expect(npmSectionBlock).not.toContain('background:');
-    expect(npmSectionBlock).not.toContain('border-radius:');
-
-    const versionLineBlock = stylesCss.match(/\.wheelmaker-update-version-line \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(versionLineBlock).toContain('grid-row: 2;');
-    expect(versionLineBlock).toContain('overflow: hidden;');
-
-    const releaseLineBlock = stylesCss.match(/\.wheelmaker-update-release-line \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(releaseLineBlock).toContain('white-space: nowrap;');
-    expect(releaseLineBlock).toContain('grid-template-columns: 52px auto minmax(0, 1fr);');
-
-    const releaseLinesBlock = stylesCss.match(/\.wheelmaker-update-release-lines \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(releaseLinesBlock).toContain('grid-column: 1 / -1;');
-
-    const refTagBlock = stylesCss.match(/\.wheelmaker-update-ref-tag \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(refTagBlock).toContain('text-overflow: ellipsis;');
-    expect(refTagBlock).toContain('font-family: \'JetBrains Mono\', Consolas, \'Courier New\', monospace;');
-
-    const actionButtonBlock = stylesCss.match(/\.wheelmaker-update-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(actionButtonBlock).toContain('grid-row: 1 / 3;');
-    expect(actionButtonBlock).toContain('min-width: 74px;');
+    // hub cards render the local installed version, never the public stable one
+    const hubVersionStart = detailTsx.indexOf('update-hub-current-version');
+    expect(hubVersionStart).toBeGreaterThan(overviewStart);
+    const hubVersionBlock = detailTsx.slice(hubVersionStart, hubVersionStart + 200);
+    expect(hubVersionBlock).toContain('wheelMakerVersions.current');
+    expect(hubVersionBlock).not.toContain('stableRelease');
   });
 
-  test('keeps WheelMaker release metadata on one line inside the mobile settings screen', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const stylesCss = readWebStyles(projectRoot);
+  // The "mobile release-line" and "agent tags beside display names" tests were
+  // removed: they guarded the per-hub release-metadata panel and the npm-row
+  // agent tags, both dropped in the prior Update revamp.
 
-    const mobileReleaseLineBlock = stylesCss.match(/\.mobile-settings-screen \.wheelmaker-update-release-line \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileReleaseLineBlock).toContain('grid-template-columns: 52px 7ch max-content;');
-    expect(mobileReleaseLineBlock).toContain('column-gap: 10px;');
-    expect(mobileReleaseLineBlock).toContain('white-space: nowrap;');
-
-    const mobileReleaseValueBlock = stylesCss.match(/\.mobile-settings-screen \.wheelmaker-update-release-value \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileReleaseValueBlock).toContain('min-width: 7ch;');
-    expect(mobileReleaseValueBlock).not.toContain('grid-column: 2;');
-
-    const mobileReleaseTimeBlock = stylesCss.match(/\.mobile-settings-screen \.wheelmaker-update-release-time \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileReleaseTimeBlock).toContain('overflow: visible;');
-    expect(mobileReleaseTimeBlock).not.toContain('text-overflow: ellipsis;');
-    expect(mobileReleaseTimeBlock).not.toContain('grid-row: 2;');
-  });
-
-  test('places agent tags beside display names and lets versions span under the action button', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = readWebStyles(projectRoot);
-
-    expect(detailTsx).toContain('className="agent-package-name-line"');
-    expect(detailTsx).toContain('className="agent-package-agent-tags"');
-    expect(detailTsx).toContain('className={`agent-package-status agent-package-version-status status-${pkg.status}`}');
-    expect(detailTsx).not.toContain('className={`agent-package-status status-${pkg.status}`}');
-
-    const titleLineStart = detailTsx.indexOf('className="agent-package-title-line"');
-    const nameLineStart = detailTsx.indexOf('className="agent-package-name-line"', titleLineStart);
-    expect(titleLineStart).toBeGreaterThanOrEqual(0);
-    expect(nameLineStart).toBeGreaterThan(titleLineStart);
-    const titleLineBlock = detailTsx.slice(titleLineStart, nameLineStart);
-    expect(titleLineBlock).toContain('className="agent-package-agent-tags"');
-    expect(titleLineBlock).toContain("tagVariantClass('wide-session-agent', agent)");
-
-    const nameLineEnd = detailTsx.indexOf('className="agent-package-version-line"', nameLineStart);
-    const nameLineBlock = detailTsx.slice(nameLineStart, nameLineEnd);
-    expect(nameLineBlock).not.toContain('className="agent-package-agent-tags"');
-
-    const actionButtonBlock = stylesCss.match(/\.agent-package-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(actionButtonBlock).toContain('grid-column: 2;');
-    expect(actionButtonBlock).toContain('grid-row: 1 / 3;');
-
-    const versionLineBlock = stylesCss.match(/\.agent-package-version-line \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(versionLineBlock).toContain('grid-column: 1 / -1;');
-  });
 
   test('uses explicit agent tag variants and softly sized capsules', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -656,7 +530,7 @@ describe('agent package update settings UI source structure', () => {
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
     expect(chatSessionHeader).toContain('{!searchHeaderExpanded ? (');
     expect(chatSessionHeader).not.toContain('{renderChatMenuUsageButton()}');
-    expect(chatSessionHeader).toContain('{renderChatMenuSettingsButton()}');
+    expect(chatSessionHeader).toContain('renderChatMenuSettingsButton()');
     expect(chatSessionHeader).not.toContain('title="Update"');
     expect(chatSessionHeader).not.toContain('title="Port Relay"');
     expect(chatSessionHeader).not.toContain("openSettingsDetail('update')");
