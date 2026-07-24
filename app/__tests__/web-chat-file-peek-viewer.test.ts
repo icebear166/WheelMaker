@@ -193,6 +193,41 @@ describe('web chat file peek viewer', () => {
     expect(activeHeaderHover).toContain('background: color-mix(in srgb, var(--accent-primary) 18%, var(--hover));');
   });
 
+  test('exports loaded project Markdown, chat file links, and completed replies as HTML', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+    const actionsStart = mainTsx.indexOf('const renderPreviewWorkbenchActions = () => {');
+    const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
+    const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
+
+    expect(mainTsx).toContain('buildMarkdownHtmlFileName,');
+    expect(mainTsx).toContain('buildPromptMarkdownHtmlFileName,');
+    expect(mainTsx).toContain('resolveProjectMarkdownImagePath,');
+    expect(mainTsx).toContain('outputMarkdownHtml,');
+    expect(mainTsx).toContain('reserveMarkdownHtmlShare,');
+    expect(mainTsx).toContain('const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest]');
+    expect(mainTsx).toContain("if (action === 'export-html')");
+    expect(mainTsx).toContain('service.readProjectFile(relativePath, menuProjectId)');
+    expect(mainTsx).toContain('const startMarkdownHtmlExport = async');
+    expect(mainTsx).toContain('image.encoding !== \'base64\'');
+    expect(mainTsx).toContain('data:${mimeType};base64,${image.content}');
+    expect(mainTsx).toContain('exportPromptDoneMarkdownHtmlEvent(doneTurnIndex)');
+    expect(mainTsx).toContain('<MarkdownHtmlExportSurface');
+    expect(mainTsx).toContain("'HTML file copied to clipboard.'");
+    expect(mainTsx).toContain("'HTML file shared.'");
+    expect(mainTsx).toContain("'HTML file downloaded.'");
+    expect(actionsBody).toContain('const canExportPreviewHtml =');
+    expect(actionsBody).toContain('<span>Export as HTML</span>');
+    expect(mainTsx).toContain('canExportHtml={');
+    expect(mainTsx).toContain('isMarkdownPath(chatFileLinkMenu.link.path)');
+    expect(stylesCss).toContain('.markdown-html-export-host {');
+    expect(stylesCss).toContain('.markdown-html-export-surface {');
+    const hostRule = cssRuleBlock(stylesCss, '.markdown-html-export-host');
+    expect(hostRule).toContain('left: -10000px;');
+    expect(hostRule).toContain('pointer-events: none;');
+    expect(hostRule).toContain('width: 960px;');
+  });
+
   test('prompt attachments open unified attachment tabs', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);

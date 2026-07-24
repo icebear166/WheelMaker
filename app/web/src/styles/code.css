@@ -146,6 +146,35 @@
   word-break: break-word;
 }
 
+.markdown-html-export-host {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 960px;
+  max-width: none;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.markdown-html-export-surface {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 32px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+}
+
+.markdown-html-export-surface table {
+  table-layout: fixed;
+  max-width: 100%;
+}
+
+.markdown-html-export-surface th,
+.markdown-html-export-surface td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .mermaid-block {
   margin: 10px 0 12px;
   padding: 8px;

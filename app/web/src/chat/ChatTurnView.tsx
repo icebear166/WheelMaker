@@ -263,8 +263,10 @@ export type ChatTurnViewProps = {
   markdownUrlTransform: (value: string) => string;
   copyDisabled?: boolean;
   exportBusy?: boolean;
+  exportHtmlBusy?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
+  onExportPromptDoneHtml?: () => void;
   ttsState?: 'idle' | 'loading' | 'playing';
   readAloudEnabled?: boolean;
   onReadAloud?: () => void;
@@ -353,8 +355,10 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   markdownUrlTransform,
   copyDisabled = true,
   exportBusy = false,
+  exportHtmlBusy = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
+  onExportPromptDoneHtml,
   ttsState = 'idle',
   readAloudEnabled = false,
   onReadAloud,
@@ -616,6 +620,17 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               aria-label="Export response markdown image"
             >
               <span className="codicon codicon-device-camera" />
+            </button>
+            <button
+              type="button"
+              className="chat-prompt-action-button"
+              onClick={() => onExportPromptDoneHtml?.()}
+              disabled={copyDisabled || exportHtmlBusy}
+              aria-busy={exportHtmlBusy}
+              title="Export response HTML"
+              aria-label="Export response markdown as HTML"
+            >
+              <span className="codicon codicon-file-code" />
             </button>
           </div>
           {doneStatus ? (

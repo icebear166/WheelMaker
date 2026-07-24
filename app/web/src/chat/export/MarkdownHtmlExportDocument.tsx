@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, {defaultSchema, type Options as RehypeSanitizeSchema} from 'rehype-sanitize';
 import ReactMarkdown, {type Components} from 'react-markdown';
@@ -17,17 +17,21 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from '../../code/shikiSettings';
+import {waitForMarkdownExportReady} from './chatMarkdownImageExport';
+import {buildStandaloneMarkdownHtmlDocument} from './markdownHtmlExport';
 
 type ThemeMode = 'dark' | 'light';
 
 export type MarkdownHtmlImageWarning = {
   source: string;
   message: string;
+  fatal?: boolean;
 };
 
-type MarkdownHtmlImageResolution = {
+export type MarkdownHtmlImageResolution = {
   src: string;
   warning?: string;
+  fatal?: boolean;
 };
 
 export type MarkdownHtmlImageResolver = (
@@ -46,8 +50,23 @@ export type MarkdownHtmlExportDocumentProps = {
   onImageWarning?: (warning: MarkdownHtmlImageWarning) => void;
 };
 
+export type MarkdownHtmlExportSurfaceRequest = MarkdownHtmlExportDocumentProps & {
+  id: number;
+  title: string;
+};
+
+export type MarkdownHtmlExportSurfaceResult = {
+  html: string;
+  unresolvedImageUrls: string[];
+};
+
 const markdownHtmlExportSanitizeSchema: RehypeSanitizeSchema = {
   ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    '*': [...(defaultSchema.attributes?.['*'] ?? []), 'className'],
+    a: [...(defaultSchema.attributes?.a ?? []), 'rel', 'target'],
+  },
   protocols: {
     ...defaultSchema.protocols,
     src: [...(defaultSchema.protocols?.src ?? []), 'data'],
@@ -83,9 +102,9 @@ function MarkdownHtmlExportImage({
     (imageResolver ?? passThroughMarkdownImage)(source)
       .then(result => {
         if (cancelled) return;
-        setResolvedSrc(result.src || source);
+        setResolvedSrc(result.fatal ? '' : result.src || source);
         if (result.warning) {
-          onImageWarning?.({source, message: result.warning});
+          onImageWarning?.({source, message: result.warning, fatal: result.fatal});
         }
       })
       .catch(error => {
@@ -185,6 +204,80 @@ export function MarkdownHtmlExportDocument({
       >
         {content}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+export function MarkdownHtmlExportSurface({
+  request,
+  onComplete,
+  onError,
+}: {
+  request: MarkdownHtmlExportSurfaceRequest;
+  onComplete: (result: MarkdownHtmlExportSurfaceResult) => void;
+  onError: (message: string) => void;
+}) {
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const imageWarningsRef = useRef(new Map<string, MarkdownHtmlImageWarning>());
+  const onImageWarning = useCallback((warning: MarkdownHtmlImageWarning) => {
+    imageWarningsRef.current.set(warning.source, warning);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const surface = surfaceRef.current;
+      if (!surface) return;
+      try {
+        await waitForMarkdownExportReady(surface);
+        if (cancelled) return;
+        const fatalWarning = Array.from(imageWarningsRef.current.values())
+          .find(warning => warning.fatal);
+        if (fatalWarning) {
+          throw new Error(fatalWarning.message);
+        }
+        const documentNode = surface.querySelector('.markdown-html-export-document');
+        if (!documentNode) {
+          throw new Error('HTML export surface is unavailable.');
+        }
+        const body = documentNode.cloneNode(true) as HTMLElement;
+        body.removeAttribute('data-markdown-export-pending');
+        for (const pendingNode of Array.from(body.querySelectorAll('[data-markdown-export-pending]'))) {
+          pendingNode.removeAttribute('data-markdown-export-pending');
+        }
+        onComplete({
+          html: buildStandaloneMarkdownHtmlDocument({
+            title: request.title,
+            bodyHtml: body.innerHTML,
+          }),
+          unresolvedImageUrls: Array.from(imageWarningsRef.current.keys()),
+        });
+      } catch (error) {
+        if (!cancelled) {
+          onError(error instanceof Error ? error.message : String(error));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onComplete, onError, request.id, request.title]);
+
+  return (
+    <div className="markdown-html-export-host" aria-hidden="true">
+      <div ref={surfaceRef} className="markdown-html-export-surface">
+        <MarkdownHtmlExportDocument
+          content={request.content}
+          themeMode={request.themeMode}
+          codeTheme={request.codeTheme}
+          codeFont={request.codeFont}
+          codeFontSize={request.codeFontSize}
+          codeLineHeight={request.codeLineHeight}
+          codeTabSize={request.codeTabSize}
+          imageResolver={request.imageResolver}
+          onImageWarning={onImageWarning}
+        />
+      </div>
     </div>
   );
 }

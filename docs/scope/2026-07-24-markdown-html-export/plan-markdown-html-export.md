@@ -12,7 +12,7 @@
 
 ## File structure
 
-- `app/web/src/chat/export/markdownHtmlExport.tsx` — naming, project-image path resolution, safe export surface, standalone document assembly.
+- `app/web/src/chat/export/markdownHtmlExport.ts` — naming, project-image path resolution, safe export surface, standalone document assembly.
 - `app/web/src/chat/export/markdownHtmlOutput.ts` — browser, Desktop, and Android Blob delivery.
 - `app/web/src/platform/desktop/desktopRuntime.ts` — typed Desktop HTML clipboard bridge.
 - `app/web/src/platform/android/androidNativeMessageBridge.ts` — typed Android HTML-share RPC.
@@ -48,7 +48,7 @@ Expected: the worktree is clean after the documentation commit.
 
 **Files:**
 
-- Create: `app/web/src/chat/export/markdownHtmlExport.tsx`
+- Create: `app/web/src/chat/export/markdownHtmlExport.ts`
 - Create: `app/__tests__/web-markdown-html-export.test.tsx`
 - Modify: `app/package.json`
 - Modify: `app/package-lock.json`
@@ -185,7 +185,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit the renderer seam**
 
 ```powershell
-git add app/package.json app/package-lock.json app/web/src/chat/export/markdownHtmlExport.tsx app/web/src/registry/RegistryWorkspaceService.ts app/__tests__/web-markdown-html-export.test.tsx app/__tests__/web-external-file-service.test.ts
+git add app/package.json app/package-lock.json app/web/src/chat/export/markdownHtmlExport.ts app/web/src/registry/RegistryWorkspaceService.ts app/__tests__/web-markdown-html-export.test.tsx app/__tests__/web-external-file-service.test.ts
 git commit -m "feat(app): render standalone markdown HTML"
 ```
 
@@ -697,4 +697,3 @@ git push --set-upstream origin feat/markdown-html-export
 ```
 
 Expected: the verified `feat/markdown-html-export` branch is available on `origin`. Stop for user direction only if a rebase conflict changes approved behavior.
-

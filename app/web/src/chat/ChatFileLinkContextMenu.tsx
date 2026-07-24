@@ -5,7 +5,8 @@ export type ChatFileLinkMenuAction =
   | 'vscode'
   | 'folder'
   | 'copy-relative'
-  | 'copy-absolute';
+  | 'copy-absolute'
+  | 'export-html';
 
 export type ChatFileLinkContextMenuProps = {
   x: number;
@@ -13,6 +14,7 @@ export type ChatFileLinkContextMenuProps = {
   link: PreviewFileLink;
   canOpenInVSCode: boolean;
   canShowInFolder: boolean;
+  canExportHtml: boolean;
   onAction: (action: ChatFileLinkMenuAction) => void;
   onClose: () => void;
 };
@@ -23,6 +25,7 @@ export function ChatFileLinkContextMenu({
   link,
   canOpenInVSCode,
   canShowInFolder,
+  canExportHtml,
   onAction,
   onClose,
 }: ChatFileLinkContextMenuProps) {
@@ -75,6 +78,9 @@ export function ChatFileLinkContextMenu({
         : null}
       {canShowInFolder
         ? item('folder', 'codicon-folder-opened', 'Show in File Explorer')
+        : null}
+      {canExportHtml
+        ? item('export-html', 'codicon-export', 'Export as HTML')
         : null}
       {link.relativePath !== null
         ? item('copy-relative', 'codicon-copy', 'Copy relative path')

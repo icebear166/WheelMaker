@@ -448,8 +448,15 @@ describe('web chat integration', () => {
     expect(chatTurnTsx).toContain('aria-label="Export response markdown image"');
     expect(chatTurnTsx).toContain('codicon codicon-device-camera');
     expect(chatTurnTsx).toContain('onExportPromptDoneImage');
+    expect(chatTurnTsx).toContain('onExportPromptDoneHtml');
+    expect(chatTurnTsx).toContain('exportHtmlBusy');
+    expect(chatTurnTsx).toContain('title="Export response HTML"');
+    expect(chatTurnTsx).toContain('aria-label="Export response markdown as HTML"');
+    expect(chatTurnTsx).toContain('codicon codicon-file-code');
     expect(mainTsx).toContain('exportPromptDoneMarkdownImageEvent(doneTurnIndex)');
+    expect(mainTsx).toContain('exportPromptDoneMarkdownHtmlEvent(doneTurnIndex)');
     expect(mainTsx).toContain('exportingMarkdownImageTurnIndex');
+    expect(mainTsx).toContain('exportingMarkdownHtmlKey');
     expect(chatTurnTsx).toContain('disabled={copyDisabled || exportBusy}');
     expect(chatTurnTsx).toContain('aria-busy={exportBusy}');
     expect(mainTsx).toContain('outputResponseImage({');

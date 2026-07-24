@@ -22,6 +22,7 @@ const internalProps: ChatFileLinkContextMenuProps = {
   },
   canOpenInVSCode: true,
   canShowInFolder: true,
+  canExportHtml: false,
   onAction: jest.fn(),
   onClose: jest.fn(),
 };
@@ -74,6 +75,28 @@ describe('chat file link context menu', () => {
     });
 
     expect(labels(renderer)).toEqual(['Copy absolute path']);
+    act(() => renderer.unmount());
+  });
+
+  test('shows HTML export only when the caller marks a Markdown project link exportable', () => {
+    const onAction = jest.fn();
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <ChatFileLinkContextMenu
+          {...internalProps}
+          canExportHtml
+          onAction={onAction}
+        />,
+      );
+    });
+
+    expect(labels(renderer)).toContain('Export as HTML');
+    const button = renderer.root.findAll(node => node.props.role === 'menuitem')
+      .find(item => item.findAllByType('span')[1].props.children === 'Export as HTML');
+    act(() => button?.props.onClick());
+    expect(onAction).toHaveBeenCalledWith('export-html');
+
     act(() => renderer.unmount());
   });
 

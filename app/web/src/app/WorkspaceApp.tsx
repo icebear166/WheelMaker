@@ -243,6 +243,20 @@ import {
   reserveResponseImageShare,
   type ResponseImageOutputResult,
 } from '../chat/export/responseImageOutput';
+import {
+  MarkdownHtmlExportSurface,
+  type MarkdownHtmlExportSurfaceRequest,
+  type MarkdownHtmlImageResolution,
+} from '../chat/export/MarkdownHtmlExportDocument';
+import {
+  buildMarkdownHtmlFileName,
+  buildPromptMarkdownHtmlFileName,
+  resolveProjectMarkdownImagePath,
+} from '../chat/export/markdownHtmlExport';
+import {
+  outputMarkdownHtml,
+  reserveMarkdownHtmlShare,
+} from '../chat/export/markdownHtmlOutput';
 import {createRegistryDebugStore} from '../debug/registryDebug';
 import type {RegistryDebugRecord} from '../debug/registryDebug';
 import {
@@ -1879,6 +1893,20 @@ type MarkdownImageExportRequest = {
   userActionToken?: string;
 };
 
+type MarkdownHtmlExportRequest = MarkdownHtmlExportSurfaceRequest & {
+  fileName: string;
+  userActionToken?: string;
+};
+
+type StartMarkdownHtmlExportInput = {
+  content: string;
+  title: string;
+  fileName: string;
+  projectId: string;
+  sourcePath: string;
+  key: string;
+};
+
 type MarkdownImageExportSurfaceProps = {
   request: MarkdownImageExportRequest;
   exportMode: MarkdownImageExportMode;
@@ -3303,8 +3331,11 @@ export function App() {
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
   const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
+  const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest] = useState<MarkdownHtmlExportRequest | null>(null);
+  const [exportingMarkdownHtmlKey, setExportingMarkdownHtmlKey] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const markdownImageExportIdRef = useRef(0);
+  const markdownHtmlExportIdRef = useRef(0);
   const chatComposerTextRef = useRef('');
   const chatComposerTextCursorRef = useRef(0);
   const chatComposerTokensRef = useRef<ChatComposerToken[]>([]);
@@ -16507,9 +16538,130 @@ export function App() {
       userActionToken,
     });
   };
+
+  const startMarkdownHtmlExport = async ({
+    content,
+    title,
+    fileName,
+    projectId: exportProjectId,
+    sourcePath,
+    key,
+  }: StartMarkdownHtmlExportInput) => {
+    if (exportingMarkdownHtmlKey) {
+      return;
+    }
+    setError('');
+    setExportingMarkdownHtmlKey(key);
+    let userActionToken: string | undefined;
+    try {
+      userActionToken = await reserveMarkdownHtmlShare();
+    } catch (error) {
+      setExportingMarkdownHtmlKey('');
+      setError(`Failed to share HTML: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+
+    const imageResolver = async (source: string): Promise<MarkdownHtmlImageResolution> => {
+      if (/^data:image\//i.test(source)) {
+        return {src: source};
+      }
+      const projectImagePath = resolveProjectMarkdownImagePath(sourcePath, source);
+      if (projectImagePath !== null) {
+        if (!exportProjectId) {
+          return {
+            src: '',
+            fatal: true,
+            warning: `Unable to embed project image: ${source}`,
+          };
+        }
+        try {
+          const image = await service.readProjectFile(projectImagePath, exportProjectId);
+          const mimeType = image.mimeType || '';
+          if (
+            !image.isBinary ||
+            image.encoding !== 'base64' ||
+            !image.content ||
+            !mimeType.toLowerCase().startsWith('image/')
+          ) {
+            return {
+              src: '',
+              fatal: true,
+              warning: `Unable to embed project image: ${source}`,
+            };
+          }
+          return {src: `data:${mimeType};base64,${image.content}`};
+        } catch (error) {
+          return {
+            src: '',
+            fatal: true,
+            warning: `Unable to embed project image: ${source} (${error instanceof Error ? error.message : String(error)})`,
+          };
+        }
+      }
+      if (/^https?:\/\//i.test(source)) {
+        try {
+          const response = await fetch(source);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const blob = await response.blob();
+          const mimeType = (blob.type || response.headers.get('content-type') || '')
+            .split(';', 1)[0]
+            .trim();
+          if (!mimeType.toLowerCase().startsWith('image/')) {
+            throw new Error('response is not an image');
+          }
+          return {
+            src: `data:${mimeType};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}`,
+          };
+        } catch (error) {
+          return {
+            src: source,
+            warning: `Remote image remains linked: ${source} (${error instanceof Error ? error.message : String(error)})`,
+          };
+        }
+      }
+      return {
+        src: source,
+        warning: `Image remains linked: ${source}`,
+      };
+    };
+
+    markdownHtmlExportIdRef.current += 1;
+    setMarkdownHtmlExportRequest({
+      id: markdownHtmlExportIdRef.current,
+      content,
+      title,
+      fileName,
+      imageResolver,
+      themeMode,
+      codeTheme,
+      codeFont,
+      codeFontSize,
+      codeLineHeight,
+      codeTabSize,
+      userActionToken,
+    });
+  };
+
+  const exportPromptDoneMarkdownHtml = async (doneTurnIndex: number) => {
+    const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
+    if (!result.ok) {
+      return;
+    }
+    await startMarkdownHtmlExport({
+      content: result.markdown,
+      title: `WheelMaker response ${doneTurnIndex}`,
+      fileName: buildPromptMarkdownHtmlFileName(doneTurnIndex),
+      projectId: selectedChatKey?.projectId || projectId,
+      sourcePath: '',
+      key: `prompt:${selectedChatEncodedKey}:${doneTurnIndex}`,
+    });
+  };
   const copyPromptDoneMarkdownEvent = useStableEvent(copyPromptDoneMarkdown);
   const readAloudPromptDoneEvent = useStableEvent(readAloudPromptDone);
   const exportPromptDoneMarkdownImageEvent = useStableEvent(exportPromptDoneMarkdownImage);
+  const exportPromptDoneMarkdownHtmlEvent = useStableEvent(exportPromptDoneMarkdownHtml);
 
   const completeMarkdownImageExport = useCallback((result: ResponseImageOutputResult) => {
     setMarkdownImageExportRequest(null);
@@ -16529,6 +16681,43 @@ export function App() {
     setMarkdownImageExportRequest(null);
     setExportingMarkdownImageTurnIndex(null);
     setError(`Failed to share response image: ${message}`);
+  }, []);
+
+  const completeMarkdownHtmlExport = useCallback(async (
+    result: {html: string; unresolvedImageUrls: string[]},
+  ) => {
+    const request = markdownHtmlExportRequest;
+    if (!request) return;
+    try {
+      const output = await outputMarkdownHtml({
+        html: result.html,
+        fileName: request.fileName,
+        userActionToken: request.userActionToken,
+      });
+      if (!output.ok) {
+        throw new Error(output.error || output.status);
+      }
+      const delivery = output.status === 'copied'
+        ? 'HTML file copied to clipboard.'
+        : output.status === 'shared'
+          ? 'HTML file shared.'
+          : 'HTML file downloaded.';
+      setToastMessage(result.unresolvedImageUrls.length > 0
+        ? `${delivery} ${result.unresolvedImageUrls.length} image link(s) remain remote.`
+        : delivery);
+      setMarkdownHtmlExportRequest(null);
+      setExportingMarkdownHtmlKey('');
+    } catch (error) {
+      setMarkdownHtmlExportRequest(null);
+      setExportingMarkdownHtmlKey('');
+      setError(`Failed to export HTML: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [markdownHtmlExportRequest]);
+
+  const failMarkdownHtmlExport = useCallback((message: string) => {
+    setMarkdownHtmlExportRequest(null);
+    setExportingMarkdownHtmlKey('');
+    setError(`Failed to export HTML: ${message}`);
   }, []);
 
   const openPromptArtifactDiff = useCallback(async (
@@ -16870,6 +17059,7 @@ export function App() {
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
           exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
+          exportHtmlBusy={message.method === 'prompt_done' && exportingMarkdownHtmlKey !== ''}
           optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}
           optionRepliesDisabled={chatSendDisabled}
           confirmationReply={confirmationReply}
@@ -16883,6 +17073,11 @@ export function App() {
           onExportPromptDoneImage={
             message.method === 'prompt_done'
               ? () => exportPromptDoneMarkdownImageEvent(doneTurnIndex).catch(() => undefined)
+              : undefined
+          }
+          onExportPromptDoneHtml={
+            message.method === 'prompt_done'
+              ? () => exportPromptDoneMarkdownHtmlEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
           ttsState={message.method === 'prompt_done' && ttsActiveTurnIndexRef.current === doneTurnIndex ? ttsState : 'idle'}
@@ -16916,6 +17111,8 @@ export function App() {
     chatSendDisabled,
     copyPromptDoneMarkdownEvent,
     exportPromptDoneMarkdownImageEvent,
+    exportPromptDoneMarkdownHtmlEvent,
+    exportingMarkdownHtmlKey,
     exportingMarkdownImageTurnIndex,
     findPromptRequestForDone,
     handleSelectChatReply,
@@ -19420,6 +19617,8 @@ export function App() {
     };
     const relativePath = chatFileLinkMenu.link.relativePath;
     const absolutePath = chatFileLinkMenu.link.absolutePath;
+    const menuProjectId = chatFileLinkMenu.projectId;
+    const menuFilePath = chatFileLinkMenu.link.path;
     setChatFileLinkMenu(null);
 
     if (action === 'copy-relative') {
@@ -19438,6 +19637,27 @@ export function App() {
         .catch(err => {
           const reason = err instanceof Error ? err.message : String(err);
           setToastMessage(`Failed to copy absolute path: ${reason}`);
+        });
+      return;
+    }
+    if (action === 'export-html') {
+      if (relativePath === null || !isMarkdownPath(menuFilePath)) return;
+      service.readProjectFile(relativePath, menuProjectId)
+        .then(file => {
+          if (file.isBinary) {
+            throw new Error('Markdown file content is unavailable.');
+          }
+          return startMarkdownHtmlExport({
+            content: file.content,
+            title: relativePath.split('/').pop() || relativePath,
+            fileName: buildMarkdownHtmlFileName(relativePath),
+            projectId: menuProjectId,
+            sourcePath: relativePath,
+            key: `file:${menuProjectId}:${relativePath}`,
+          });
+        })
+        .catch(error => {
+          setError(`Failed to export HTML: ${error instanceof Error ? error.message : String(error)}`);
         });
       return;
     }
@@ -19516,6 +19736,12 @@ export function App() {
     };
     const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true;
     const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
+    const canExportPreviewHtml =
+      tab.type === 'file' &&
+      !tab.loading &&
+      !tab.error &&
+      !tab.info?.isBinary &&
+      isMarkdownPath(tab.path);
     return (
       <>
         {canOpenProjectFileInVSCode ? (
@@ -19542,6 +19768,27 @@ export function App() {
         ) : null}
         {tab.type === 'file' ? (
           <>
+            {canExportPreviewHtml ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="preview-workbench-action-menu-item"
+                onClick={() => {
+                  closeActionsMenu();
+                  startMarkdownHtmlExport({
+                    content: tab.content,
+                    title: tab.title || tab.path.split('/').pop() || 'Markdown document',
+                    fileName: buildMarkdownHtmlFileName(tab.path),
+                    projectId: tab.projectId,
+                    sourcePath: tab.path,
+                    key: `file:${tab.projectId}:${tab.path}`,
+                  }).catch(() => undefined);
+                }}
+              >
+                <span className="codicon codicon-export" aria-hidden="true" />
+                <span>Export as HTML</span>
+              </button>
+            ) : null}
             <button
               type="button"
               role="menuitem"
@@ -20059,6 +20306,10 @@ export function App() {
         'folder',
         chatFileLinkDesktopTarget,
       )}
+      canExportHtml={
+        chatFileLinkMenu.link.relativePath !== null &&
+        isMarkdownPath(chatFileLinkMenu.link.path)
+      }
       onAction={handleChatFileLinkMenuAction}
       onClose={() => setChatFileLinkMenu(null)}
     />
@@ -20295,6 +20546,14 @@ export function App() {
       {chatTitlePromptMenu}
       {portRelayClearSiteDataFrame}
       {registryDebugPanel}
+      {markdownHtmlExportRequest ? (
+        <MarkdownHtmlExportSurface
+          key={markdownHtmlExportRequest.id}
+          request={markdownHtmlExportRequest}
+          onComplete={completeMarkdownHtmlExport}
+          onError={failMarkdownHtmlExport}
+        />
+      ) : null}
       {markdownImageExportRequest ? (
         <MarkdownImageExportSurface
           key={markdownImageExportRequest.id}
