@@ -41,7 +41,6 @@ export type WorkspaceUiState = {
     drawerOpen: boolean;
     floatingControlYRatio: number;
     floatingControlSide: PersistedFloatingControlSide;
-    chatConfigOverflowOpen: boolean;
   };
   transient: {
     chatKeyboardInset: number;
@@ -64,7 +63,6 @@ export type WorkspaceUiStateInput = {
   drawerOpen?: unknown;
   floatingControlYRatio?: unknown;
   floatingControlSide?: unknown;
-  chatConfigOverflowOpen?: unknown;
   chatKeyboardInset?: unknown;
   floatingKeyboardOffset?: unknown;
   floatingDragState?: WorkspaceFloatingDragState | null;
@@ -87,10 +85,6 @@ export type WorkspaceUiAction =
   | {
       type: 'mobile/setFloatingControlSide';
       next: WorkspaceUiStateValue<PersistedFloatingControlSide>;
-    }
-  | {
-      type: 'mobile/setChatConfigOverflowOpen';
-      next: WorkspaceUiStateValue<boolean>;
     }
   | { type: 'transient/setChatKeyboardInset'; next: WorkspaceUiStateValue<number> }
   | {
@@ -171,10 +165,6 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
       drawerOpen: typeof input.drawerOpen === 'boolean' ? input.drawerOpen : false,
       floatingControlYRatio: sanitizeFloatingControlYRatio(input.floatingControlYRatio),
       floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide),
-      chatConfigOverflowOpen:
-        typeof input.chatConfigOverflowOpen === 'boolean'
-          ? input.chatConfigOverflowOpen
-          : false,
     },
     transient: {
       chatKeyboardInset: sanitizeInset(input.chatKeyboardInset),
@@ -294,17 +284,6 @@ export function workspaceUiReducer(
           ),
         },
       };
-    case 'mobile/setChatConfigOverflowOpen':
-      return {
-        ...state,
-        mobile: {
-          ...state.mobile,
-          chatConfigOverflowOpen: !!resolveNext(
-            state.mobile.chatConfigOverflowOpen,
-            action.next,
-          ),
-        },
-      };
     case 'transient/setChatKeyboardInset':
       return {
         ...state,
@@ -342,7 +321,6 @@ export function workspaceUiReducer(
         mobile: {
           ...state.mobile,
           drawerOpen: false,
-          chatConfigOverflowOpen: false,
         },
         transient: resetTransientState(),
       };

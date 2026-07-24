@@ -3408,15 +3408,11 @@
   z-index: 31;
 }
 
-.chat-composer.config-menu-open {
+.chat-composer.menu-open {
   z-index: 32;
 }
 
-.chat-composer.trigger-menu-open {
-  z-index: 32;
-}
-
-.chat-composer.config-menu-open .chat-composer-frame {
+.chat-composer.menu-open .chat-composer-frame {
   border-color: color-mix(in srgb, var(--border-subtle) 68%, var(--accent-primary));
   box-shadow:
     0 14px 34px rgba(0, 0, 0, 0.2),
@@ -5649,8 +5645,7 @@
   box-shadow: 0 4px 16px rgb(0 0 0 / 14%), 0 0 0 1px color-mix(in srgb, var(--accent-primary) 6%, transparent);
 }
 
-.chat-composer.config-menu-open .chat-composer-frame,
-.chat-composer.trigger-menu-open .chat-composer-frame {
+.chat-composer.menu-open .chat-composer-frame {
   border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
   box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
 }

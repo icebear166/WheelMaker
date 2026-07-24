@@ -109,3 +109,21 @@ describe('web chat inline composer capsule wiring', () => {
     expect(sendEnterBlock.indexOf('event.stopPropagation();')).toBeLessThan(sendEnterBlock.indexOf('if (chatSendDisabled)'));
   });
 });
+
+describe('composer menu exclusivity', () => {
+  test('all composer popups share one menu state', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('const [chatComposerMenu, setChatComposerMenu, chatComposerMenuExiting] = useChatComposerMenu();');
+    expect(mainTsx).toContain("const chatPromptMenuOpen = chatComposerMenu.id === 'slash';");
+    expect(mainTsx).toContain("const chatFileMentionMenuOpen = chatComposerMenu.id === 'file-mention';");
+    expect(mainTsx).toContain("const chatAttachmentTrayOpen = chatComposerMenu.id === 'attachment-tray';");
+    expect(mainTsx).toContain("const chatContextUsageOpen = chatComposerMenu.id === 'context-usage';");
+    expect(mainTsx).toContain("const chatCoreConfigMenuOpen = chatComposerMenu.id === 'core-config';");
+    expect(mainTsx).toContain("const chatConfigOverflowOpen = chatComposerMenu.id === 'config-overflow';");
+    expect(mainTsx).not.toContain('const [chatPromptMenuOpen, setChatPromptMenuOpen] = useState(false);');
+    expect(mainTsx).not.toContain('const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);');
+    expect(mainTsx).not.toContain('workspaceUiState.mobile.chatConfigOverflowOpen');
+  });
+});

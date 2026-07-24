@@ -195,7 +195,7 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain('const [chatContextUsageOpen, setChatContextUsageOpen] = useState(false);');
+    expect(mainTsx).toContain("const chatContextUsageOpen = chatComposerMenu.id === 'context-usage';");
     expect(mainTsx).toContain('const chatContextUsageRef = useRef<HTMLDivElement | null>(null);');
     expect(mainTsx).toContain('if (target && chatContextUsageRef.current?.contains(target)) return;');
     expect(mainTsx).toContain('setChatContextUsageOpen(false);');
@@ -224,10 +224,10 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain("chatCoreConfigMenuOpen || chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''");
+    expect(mainTsx).toContain("chatComposerMenu.id !== 'none' ? ' menu-open' : ''");
 
     const planLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop'));
-    const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.config-menu-open'));
+    const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.menu-open'));
     expect(planLayer).toBeGreaterThan(0);
     expect(openComposerLayer).toBeGreaterThan(planLayer);
 
@@ -246,10 +246,10 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain("chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''");
+    expect(mainTsx).toContain("chatComposerMenu.id !== 'none' ? ' menu-open' : ''");
 
     const planLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop'));
-    const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.trigger-menu-open'));
+    const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.menu-open'));
     expect(planLayer).toBeGreaterThan(0);
     expect(openComposerLayer).toBeGreaterThan(planLayer);
 
@@ -304,7 +304,7 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain("const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);");
+    expect(mainTsx).toContain("const chatCoreConfigMenuOpen = chatComposerMenu.id === 'core-config';");
     expect(mainTsx).toContain('className="chat-core-config-trigger"');
     expect(mainTsx).toContain('className="chat-core-config-separator" aria-hidden="true">/</span>');
     expect(mainTsx).toContain("fastEnabled ? (");

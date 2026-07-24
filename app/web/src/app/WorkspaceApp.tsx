@@ -129,6 +129,7 @@ import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
 import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
+import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -2680,6 +2681,46 @@ export function App() {
   );
   const [fileIconResources, setFileIconResources] = useState<FileIconResources | null>(null);
 
+  // Composer popups share one state: at most one menu is open at a time, and
+  // every close path plays the exit animation before unmounting. The legacy
+  // boolean setters below are thin wrappers so call sites stay unchanged.
+  const [chatComposerMenu, setChatComposerMenu, chatComposerMenuExiting] = useChatComposerMenu();
+  const chatPromptMenuOpen = chatComposerMenu.id === 'slash';
+  const chatFileMentionMenuOpen = chatComposerMenu.id === 'file-mention';
+  const chatAttachmentTrayOpen = chatComposerMenu.id === 'attachment-tray';
+  const chatContextUsageOpen = chatComposerMenu.id === 'context-usage';
+  const chatCoreConfigMenuOpen = chatComposerMenu.id === 'core-config';
+  const chatConfigOverflowOpen = chatComposerMenu.id === 'config-overflow';
+  const chatConfigMenuOptionId = chatComposerMenu.id === 'config-value' ? chatComposerMenu.optionId : '';
+  const setChatPromptMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'slash') : next) ? {id: 'slash'} : null));
+  }, [setChatComposerMenu]);
+  const setChatFileMentionMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'file-mention') : next) ? {id: 'file-mention'} : null));
+  }, [setChatComposerMenu]);
+  const setChatAttachmentTrayOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'attachment-tray') : next) ? {id: 'attachment-tray'} : null));
+  }, [setChatComposerMenu]);
+  const setChatContextUsageOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'context-usage') : next) ? {id: 'context-usage'} : null));
+  }, [setChatComposerMenu]);
+  const setChatCoreConfigMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
+    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'core-config') : next) ? {id: 'core-config'} : null));
+  }, [setChatComposerMenu]);
+  const setChatConfigMenuOptionId = useCallback((next: string | ((id: string) => string)) => {
+    setChatComposerMenu(current => {
+      const previous = current.id === 'config-value' ? current.optionId : '';
+      const resolved = typeof next === 'function' ? next(previous) : next;
+      return resolved ? {id: 'config-value', optionId: resolved} : null;
+    });
+  }, [setChatComposerMenu]);
+  const closeChatCoreConfigMenu = useCallback((restoreFocus = false) => {
+    setChatComposerMenu(null);
+    if (restoreFocus) {
+      chatCoreConfigTriggerRef.current?.focus();
+    }
+  }, [setChatComposerMenu]);
+
   const setiFontCss = useMemo(
     () => fileIconResources?.setiFontCss() ?? '',
     [fileIconResources],
@@ -2737,7 +2778,6 @@ export function App() {
       dispatchSessionNavSlideOut({ type: 'forceReset' });
     }
   }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen]);
-  const chatConfigOverflowOpen = workspaceUiState.mobile.chatConfigOverflowOpen;
   const chatKeyboardInset = workspaceUiState.transient.chatKeyboardInset;
   const chatKeyboardInsetRef = useRef(chatKeyboardInset);
   const chatKeyboardInsetSettleTimerRef = useRef<number | null>(null);
@@ -2823,8 +2863,8 @@ export function App() {
     dispatchWorkspaceUi({ type: 'shared/setSettingsOpen', next });
   }, []);
   const setChatConfigOverflowOpen = useCallback((next: WorkspaceUiStateValue<boolean>) => {
-    dispatchWorkspaceUi({ type: 'mobile/setChatConfigOverflowOpen', next });
-  }, []);
+    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'config-overflow') : next) ? {id: 'config-overflow'} : null));
+  }, [setChatComposerMenu]);
   const setChatKeyboardInset = useCallback((next: WorkspaceUiStateValue<number>) => {
     dispatchWorkspaceUi({ type: 'transient/setChatKeyboardInset', next });
   }, []);
@@ -3375,26 +3415,13 @@ export function App() {
   const voiceStartedAtRef = useRef(0);
   const voiceTransportModeRef = useRef<VoiceTransportMode>('registry');
   const androidSpeechRuntimeRef = useRef<AndroidNativeSpeechRuntime | null>(null);
-  const [chatPromptMenuOpen, setChatPromptMenuOpen] = useState(false);
-  const [chatFileMentionMenuOpen, setChatFileMentionMenuOpen] = useState(false);
   const [chatFileMentionResults, setChatFileMentionResults] = useState<RegistryFileIndexSearchResult[]>([]);
   const [chatFileMentionQuery, setChatFileMentionQuery] = useState('');
   const [chatFileMentionLoading, setChatFileMentionLoading] = useState(false);
   const [chatFileMentionError, setChatFileMentionError] = useState('');
   const [chatFileMentionIndexed, setChatFileMentionIndexed] = useState(true);
   const [chatFileMentionActiveIndex, setChatFileMentionActiveIndex] = useState(0);
-  const [chatAttachmentTrayOpen, setChatAttachmentTrayOpen] = useState(false);
-  const [chatContextUsageOpen, setChatContextUsageOpen] = useState(false);
   const [chatContextUsagePopoverStyle, setChatContextUsagePopoverStyle] = useState<React.CSSProperties>({});
-  const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);
-  const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
-  const closeChatCoreConfigMenu = useCallback((restoreFocus = false) => {
-    setChatCoreConfigMenuOpen(false);
-    setChatConfigOverflowOpen(false);
-    if (restoreFocus) {
-      chatCoreConfigTriggerRef.current?.focus();
-    }
-  }, [setChatConfigOverflowOpen]);
   const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();
   const [chatHubColorMenu, setChatHubColorMenu, chatHubColorMenuExiting] = useMenuExitState<{hubId: string}>();
   const chatHubColorMenuHubId = chatHubColorMenu?.hubId ?? '';
@@ -3790,7 +3817,7 @@ export function App() {
     [chatSlashCommandOptions],
   );
 
-  const chatSlashMenuVisible = chatPromptMenuOpen && !chatFileMentionMenuOpen && !chatAttachmentTrayOpen && chatSlashMenuOptions.length > 0;
+  const chatSlashMenuVisible = chatPromptMenuOpen && chatSlashMenuOptions.length > 0;
 
 
   const currentChatDraftKey = useMemo(
@@ -18016,7 +18043,7 @@ export function App() {
           ) : null}
           <div
             ref={chatComposerRef}
-            className={`chat-composer${selectedActivePermission ? ' permission-open' : ''}${chatCoreConfigMenuOpen || chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}
+            className={`chat-composer${selectedActivePermission ? ' permission-open' : ''}${chatComposerMenu.id !== 'none' ? ' menu-open' : ''}`}
             hidden={archivedMode}
           >
             <div className="chat-composer-content">

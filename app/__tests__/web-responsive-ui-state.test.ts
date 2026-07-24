@@ -210,7 +210,6 @@ describe('web responsive ui state', () => {
       },
       floatingControlYRatio: 0.42,
       floatingControlSide: 'left',
-      chatConfigOverflowOpen: true,
       chatKeyboardInset: 120,
       floatingKeyboardOffset: 120,
       floatingDragState: {
@@ -242,7 +241,6 @@ describe('web responsive ui state', () => {
       drawerOpen: true,
       floatingControlYRatio: 0.42,
       floatingControlSide: 'left',
-      chatConfigOverflowOpen: true,
     });
     expect(createWorkspaceUiState({ floatingControlSide: 'invalid' }).mobile.floatingControlSide).toBe('right');
     expect(createWorkspaceUiState({ floatingControlYRatio: 3 }).mobile.floatingControlYRatio).toBe(1);
@@ -265,7 +263,6 @@ describe('web responsive ui state', () => {
     expect(state.mobile.floatingControlYRatio).toBe(0.42);
     expect(state.mobile.floatingControlSide).toBe('left');
     expect(state.mobile.drawerOpen).toBe(false);
-    expect(state.mobile.chatConfigOverflowOpen).toBe(false);
     expect(state.transient.chatKeyboardInset).toBe(0);
     expect(state.transient.floatingKeyboardOffset).toBe(0);
     expect(state.transient.floatingDragState).toBeNull();
