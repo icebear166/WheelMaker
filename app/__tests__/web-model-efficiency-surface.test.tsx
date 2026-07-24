@@ -117,7 +117,8 @@ describe('ModelEfficiency styling', () => {
 
     const recommendationRule = styles.match(/\.model-efficiency-recommendation \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const familyRule = styles.match(/\.model-efficiency-family-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const familyHeadingRule = styles.match(/\.model-efficiency-family-name \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const familyHeaderRule = styles.match(/\.model-efficiency-family-heading \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const familyNameRule = styles.match(/\.model-efficiency-family-name \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const recommendationsRule = styles.match(/\.model-efficiency-family-recommendations \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const effortRule = styles.match(/\.model-efficiency-effort \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
@@ -126,8 +127,12 @@ describe('ModelEfficiency styling', () => {
     expect(recommendationRule).not.toContain('background:');
     expect(recommendationRule).not.toContain('box-shadow');
     expect(familyRule).toContain('border-left: 2px solid');
-    expect(familyHeadingRule).toContain('font-size: 10px;');
+    expect(familyRule).toContain('grid-template-columns: 34px minmax(0, 1fr);');
+    expect(familyRule).not.toContain('grid-template-rows:');
+    expect(familyNameRule).toContain('font-size: 10px;');
+    expect(familyHeaderRule).toContain('padding-top: 1px;');
     expect(recommendationsRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+    expect(recommendationRule).toContain("'effort'\n    'score'\n    'meta';");
     expect(effortRule).toContain('font-size: 10px;');
     expect(scoreRule).toContain('font-size: 18px;');
     expect(scoreRule).toContain('font-weight: 700;');

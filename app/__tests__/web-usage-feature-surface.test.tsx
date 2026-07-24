@@ -537,6 +537,10 @@ describe('UsageFeatureSurface', () => {
     expect(dangerLabel).toContain('color: var(--state-danger);');
 
     expect(rule('.usage-provider-name')).toContain('color: var(--text-primary);');
+    expect(rule('.usage-provider-row')).toContain('min-height: 34px;');
+    expect(rule('.usage-provider-row')).toContain('padding: 5px 4px 4px;');
+    expect(styles).not.toContain('.usage-provider-row + .usage-provider-row');
+    expect(rule('.usage-compact-limit')).toContain('gap: 3px;');
     expect(rule('.usage-compact-limit-value')).toContain('color: var(--text-tertiary);');
     expect(rule('.usage-compact-limit-value')).toContain('font-size: 10px;');
     expect(rule('.usage-compact-limit-value strong')).toContain('font-size: 12px;');

@@ -11,16 +11,16 @@
 
 .model-efficiency-simple-list {
   display: grid;
-  gap: 8px;
-  padding: 8px 9px 9px;
+  gap: 5px;
+  padding: 6px 9px 7px;
 }
 
 .model-efficiency-family-row {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 5px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 6px;
   min-width: 0;
-  padding: 1px 0 1px 8px;
+  padding: 0 0 0 8px;
   border-left: 2px solid color-mix(in srgb, var(--model-efficiency-family-color) 64%, var(--border-subtle));
 }
 
@@ -41,10 +41,10 @@
 }
 
 .model-efficiency-family-heading {
-  display: flex;
+  display: block;
   min-width: 0;
-  align-items: baseline;
-  min-height: 16px;
+  min-height: 0;
+  padding-top: 1px;
 }
 
 .model-efficiency-family-name {
@@ -62,12 +62,13 @@
 .model-efficiency-recommendation {
   display: grid;
   grid-template-areas:
-    'effort score'
-    'meta meta';
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 24px auto;
-  min-height: 43px;
-  padding: 0 8px 4px;
+    'effort'
+    'score'
+    'meta';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 12px 18px 10px;
+  min-height: 41px;
+  padding: 0 7px 1px;
   overflow: hidden;
   line-height: 1;
 }
@@ -79,7 +80,7 @@
 .model-efficiency-effort {
   grid-area: effort;
   min-width: 0;
-  align-self: center;
+  align-self: start;
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 620;
@@ -89,7 +90,7 @@
 .model-efficiency-score {
   grid-area: score;
   align-self: center;
-  padding-left: 5px;
+  padding-left: 0;
   overflow: hidden;
   color: color-mix(in srgb, var(--model-efficiency-family-color) 62%, var(--text-primary));
   font-size: 18px;
