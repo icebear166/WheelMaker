@@ -164,18 +164,17 @@ describe('ChatPlanSurface', () => {
     expect(fs.existsSync(surfacePath)).toBe(true);
     const {ChatRecentSessionsSurface} = require(surfacePath) as {
       ChatRecentSessionsSurface: React.ComponentType<{
-        children: React.ReactNode;
-        collapsed: boolean;
-        onToggleCollapsed: () => void;
-        sessionListDensity: 'relaxed' | 'compact';
-      }>;
+         children: React.ReactNode;
+         collapsed: boolean;
+         onToggleCollapsed: () => void;
+       }>;
     };
     const onToggleCollapsed = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <ChatRecentSessionsSurface collapsed={true} onToggleCollapsed={onToggleCollapsed} sessionListDensity="compact">
+        <ChatRecentSessionsSurface collapsed={true} onToggleCollapsed={onToggleCollapsed}>
           <div data-test-id="recent-row">Recent row</div>
         </ChatRecentSessionsSurface>,
       );
@@ -199,24 +198,23 @@ describe('ChatPlanSurface', () => {
 
     const {ChatRecentSessionsSurface} = require(surfacePath) as {
       ChatRecentSessionsSurface: React.ComponentType<{
-        children: React.ReactNode;
-        collapsed: boolean;
-        onToggleCollapsed: () => void;
-        sessionListDensity: 'relaxed' | 'compact';
-      }>;
+         children: React.ReactNode;
+         collapsed: boolean;
+         onToggleCollapsed: () => void;
+       }>;
     };
     const onToggleCollapsed = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <ChatRecentSessionsSurface collapsed={false} onToggleCollapsed={onToggleCollapsed} sessionListDensity="compact">
+        <ChatRecentSessionsSurface collapsed={false} onToggleCollapsed={onToggleCollapsed}>
           <div data-test-id="recent-row">Recent row</div>
         </ChatRecentSessionsSurface>,
       );
     });
 
-    expect(renderer!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('compact');
+    expect(renderer!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('relaxed');
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
     expect(renderer!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Recent Sessions']);
     const collapse = renderer!.root.findByProps({'aria-label': 'Collapse Recent Sessions'});

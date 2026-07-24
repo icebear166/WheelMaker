@@ -15,9 +15,10 @@ function cssRuleBlock(stylesCss: string, selector: string): string {
 
 describe('web chat fixed 800px layout', () => {
 
-  test('defines relaxed desktop session density and persists it without changing mobile density', () => {
+  test('fixes responsive session densities without exposing or persisting a preference', () => {
     const projectRoot = path.join(__dirname, '..');
     const densityModulePath = path.join(projectRoot, 'web', 'src', 'chat', 'sessionListDensity.ts');
+    const densityModule = readSourceText(densityModulePath);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
     const persistence = readSourceText(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'));
@@ -25,55 +26,30 @@ describe('web chat fixed 800px layout', () => {
 
     expect(fs.existsSync(densityModulePath)).toBe(true);
     const density = require(densityModulePath) as {
-      DEFAULT_SESSION_LIST_DENSITY: string;
-      SESSION_LIST_DENSITY_OPTIONS: Array<{id: string; label: string}>;
-      isSessionListDensity: (value: unknown) => boolean;
-      normalizeSessionListDensity: (value: unknown, fallback?: string) => string;
+      DESKTOP_SESSION_LIST_DENSITY: string;
+      MOBILE_SESSION_LIST_DENSITY: string;
     };
-    expect(density.DEFAULT_SESSION_LIST_DENSITY).toBe('relaxed');
-    expect(density.SESSION_LIST_DENSITY_OPTIONS).toEqual([
-      {id: 'relaxed', label: 'Relaxed'},
-      {id: 'compact', label: 'Compact'},
-    ]);
-    expect(density.isSessionListDensity('relaxed')).toBe(true);
-    expect(density.isSessionListDensity('compact')).toBe(true);
-    expect(density.isSessionListDensity('mobile')).toBe(false);
-    expect(density.normalizeSessionListDensity('invalid')).toBe('relaxed');
-    expect(density.normalizeSessionListDensity(undefined, 'compact')).toBe('compact');
-
-    expect(persistence).toContain('sessionListDensity: SessionListDensity;');
-    expect(persistence).toContain("sessionListDensity: 'sessionListDensity',");
-    expect(persistence).toContain('sessionListDensity: DEFAULT_SESSION_LIST_DENSITY,');
-    expect(persistence).toContain('sessionListDensity: normalizeSessionListDensity(input.sessionListDensity, base.sessionListDensity),');
-    expect(persistence).toContain(
-      '{k: GLOBAL_KEYS.sessionListDensity, v: serialize(this.state.global.sessionListDensity), updatedAt}',
-    );
-
-    expect(mainTsx).toContain('const [sessionListDensity, setSessionListDensity] = useState<SessionListDensity>(');
-    expect(mainTsx).toContain('normalizeSessionListDensity(persistedGlobal.sessionListDensity)');
-    expect(mainTsx).toContain('sessionListDensity,');
-    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(mainTsx).toContain('setSessionListDensity={setSessionListDensity}');
-    expect(mainTsx).toContain('dataSessionListDensity={sessionListDensity}');
-
-    expect(settingsRootTsx).toContain('sessionListDensity: SessionListDensity;');
-    expect(settingsRootTsx).toContain('setSessionListDensity: (value: SessionListDensity) => void;');
-    expect(settingsRootTsx).toContain('Session List Density');
-    expect(settingsRootTsx).toContain('value={sessionListDensity}');
-    expect(settingsRootTsx).toContain('if (isSessionListDensity(next)) setSessionListDensity(next);');
-    expect(settingsRootTsx).toContain('SESSION_LIST_DENSITY_OPTIONS.map(item => (');
-    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
-    const densitySettingStart = settingsRootTsx.indexOf('Session List Density');
-    expect(densitySettingStart).toBeGreaterThan(chatStart);
-    expect(settingsRootTsx.slice(chatStart, densitySettingStart)).toContain('isWide ? (');
+    expect(density.DESKTOP_SESSION_LIST_DENSITY).toBe('relaxed');
+    expect(density.MOBILE_SESSION_LIST_DENSITY).toBe('compact');
+    expect(densityModule).not.toContain('SESSION_LIST_DENSITY_OPTIONS');
+    expect(densityModule).not.toContain('normalizeSessionListDensity');
+    expect(persistence).not.toContain('sessionListDensity');
+    expect(settingsRootTsx).not.toContain('Session List Density');
+    expect(settingsRootTsx).not.toContain('sessionListDensity');
+    expect(mainTsx).not.toContain('const [sessionListDensity');
+    expect(mainTsx).not.toContain('setSessionListDensity');
+    expect(mainTsx).toContain('dataSessionListDensity={DESKTOP_SESSION_LIST_DENSITY}');
+    expect(mainTsx).toContain('dataSessionListDensity={MOBILE_SESSION_LIST_DENSITY}');
 
     const relaxedTokens = stylesCss.match(/\.wide-project-session-nav,[\s\S]*?\{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(relaxedTokens).toContain('--sl-row-py: 5px;');
     expect(relaxedTokens).toContain('--sl-row-font: 12.5px;');
     const compactTokens = cssRuleBlock(stylesCss, '[data-session-list-density="compact"]');
     expect(compactTokens).toContain('--sl-row-py: 3px;');
-    expect(compactTokens).toContain('--sl-row-font: 12px;');
+    expect(compactTokens).not.toContain('--sl-row-font:');
     expect(cssRuleBlock(stylesCss, '.mobile-project-session-nav')).not.toContain('min-height: 30px;');
+    expect(stylesCss).not.toContain('.mobile-project-row {');
+    expect(stylesCss).not.toContain('.mobile-project-toggle {');
   });
 
   test('removes the chat view width setting and always uses the fixed 800px layout', () => {

@@ -2069,7 +2069,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*font-size: var\(--sl-row-font\);[^}]*\}/);
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('display: flex;');
-    expect(wideSessionRowBlock).toContain('gap: 8px;');
+    expect(wideSessionRowBlock).toContain('gap: 4px;');
     expect(wideSessionRowBlock).toContain('padding: var(--sl-row-py) 8px var(--sl-row-py) 6px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
@@ -2514,13 +2514,34 @@ describe('web chat integration', () => {
   test('tightens relaxed session rows', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
+    const sessionRowBlock = cssRuleBlock(stylesCss, '.wide-session-row');
+    const sessionTimeBaseBlock = cssRuleBlock(stylesCss, '.wide-session-time');
+    const sessionTimeBlock = cssRuleBlock(stylesCss, '.wide-session-time.compact-age');
+    const compactTokens = cssRuleBlock(stylesCss, '[data-session-list-density="compact"]');
 
     expect(stylesCss).toContain('--sl-row-py: 5px;');
     expect(stylesCss).toContain('--sl-row-font: 12.5px;');
     expect(stylesCss).toContain('[data-session-list-density="compact"]');
     expect(stylesCss).toContain('--sl-row-py: 3px;');
-    expect(stylesCss).toContain('--sl-row-font: 12px;');
+    expect(compactTokens).not.toContain('--sl-row-font:');
+    expect(sessionRowBlock).toContain('gap: 4px;');
+    expect(sessionTimeBlock).toContain('flex: 0 0 22.5px;');
+    expect(sessionTimeBaseBlock).toContain('white-space: nowrap;');
     expect(stylesCss).not.toContain('.recent-project-session-hub.wide-project-hub-tag');
+  });
+
+  test('centers direct session icons and gives Sessions six more pixels of left inset', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const iconButtonReset = cssRuleBlock(stylesCss, 'button:has(> .sl-icon:only-child)');
+    const pinnedHeaderRule = cssRuleBlockContainingSelector(
+      stylesCss,
+      '.chat-session-panel-pinned .chat-edge-surface-header',
+    );
+
+    expect(iconButtonReset).toContain('appearance: none;');
+    expect(iconButtonReset).toContain('padding: 0;');
+    expect(pinnedHeaderRule).toContain('padding-left: 17px;');
   });
 });
 

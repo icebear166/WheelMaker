@@ -1295,19 +1295,6 @@
   cursor: default;
 }
 
-.mobile-project-section {
-  margin-bottom: 4px;
-}
-
-.mobile-project-row {
-  min-height: 38px;
-  padding: 0 7px;
-}
-
-.mobile-project-toggle {
-  height: 36px;
-}
-
 .mobile-project-actions {
   opacity: 1;
 }

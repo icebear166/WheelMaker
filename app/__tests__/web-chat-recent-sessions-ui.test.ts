@@ -27,7 +27,7 @@ describe('web chat recent sessions', () => {
   test('recent sessions section behaves like a collapsible block', () => {
     expect(mainTsx).toContain('RECENT_SESSIONS_VIRTUAL_PROJECT_ID');
     expect(mainTsx).toContain('toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)');
-    expect(recentSectionTsx).toContain('name="history"');
+    expect(recentSectionTsx).toContain('name="clock"');
     expect(recentSectionTsx).toContain('recent-sessions-icon');
   });
 
@@ -92,9 +92,10 @@ describe('web chat recent sessions', () => {
   });
 
   test('shares row density tokens with the pinned surface', () => {
-    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(surfaceTsx).toContain('sessionListDensity: SessionListDensity;');
-    expect(surfaceTsx).toContain('sessionListDensity={sessionListDensity}');
+    expect(mainTsx).toContain('dataSessionListDensity={DESKTOP_SESSION_LIST_DENSITY}');
+    expect(surfaceTsx).toContain('DESKTOP_SESSION_LIST_DENSITY');
+    expect(surfaceTsx).toContain('sessionListDensity={DESKTOP_SESSION_LIST_DENSITY}');
+    expect(surfaceTsx).not.toContain('sessionListDensity: SessionListDensity;');
     expect(sessionlistCss).toContain('[data-session-list-density="compact"]');
     expect(sessionlistCss).toContain('--sl-row-py: 3px;');
     expect(sessionlistCss).toContain('--sl-row-py: 5px;');
@@ -127,7 +128,7 @@ describe('web chat recent sessions', () => {
     const floatingStart = mainTsx.indexOf('{showFloatingSessionPanel ? (');
     const floatingSource = mainTsx.slice(floatingStart, floatingStart + 2200);
     expect(floatingSource).not.toContain('onUnpin');
-    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
+    expect(mainTsx).not.toContain('sessionListDensity={sessionListDensity}');
     expect(mainTsx).toContain('const floatingViewProps = buildSessionListViewProps(false, false);');
     expect(mainTsx).toContain('buildSessionListViewProps(false,');
     expect(mainTsx).toContain('buildSessionListViewProps(true,');

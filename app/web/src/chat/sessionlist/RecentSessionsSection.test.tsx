@@ -34,6 +34,9 @@ describe('RecentSessionsSection', () => {
       );
     });
     expect(tree!.root.findByProps({className: 'wide-project-name'}).children).toEqual(['Recent Sessions']);
+    expect(
+      tree!.root.findByProps({className: 'recent-sessions-icon'}).findByType('svg').props['data-icon-name'],
+    ).toBe('clock');
     expect(tree!.root.findByProps({className: 'recent-project-divider-name'}).children).toEqual(['WheelMaker']);
     expect(tree!.root.findAllByProps({className: 'recent-row-s1'})).toHaveLength(1);
   });

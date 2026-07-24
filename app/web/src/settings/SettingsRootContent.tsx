@@ -1,11 +1,6 @@
 import React from 'react';
 
 import {
-  SESSION_LIST_DENSITY_OPTIONS,
-  isSessionListDensity,
-  type SessionListDensity,
-} from '../chat/sessionListDensity';
-import {
   MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS,
   isMobileEnterKeyBehavior,
   type MobileEnterKeyBehavior,
@@ -42,8 +37,6 @@ type SettingsRootContentProps = {
   themeMode: ThemeMode;
   setThemeMode: (value: ThemeMode) => void;
   isWide: boolean;
-  sessionListDensity: SessionListDensity;
-  setSessionListDensity: (value: SessionListDensity) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
   showMonitor: boolean;
@@ -170,8 +163,6 @@ export function SettingsRootContent({
   themeMode,
   setThemeMode,
   isWide,
-  sessionListDensity,
-  setSessionListDensity,
   mobileEnterKeyBehavior,
   setMobileEnterKeyBehavior,
   showMonitor,
@@ -230,28 +221,6 @@ export function SettingsRootContent({
         )})}
         {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'comment-discussion', rows: (
         <>
-        {isWide ? (
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <span className="codicon codicon-list-flat settings-row-icon" aria-hidden="true" />
-              Session List Density
-            </span>
-            <select
-              className="sidebar-setting-select"
-              value={sessionListDensity}
-              onChange={event => {
-                const next = event.target.value;
-                if (isSessionListDensity(next)) setSessionListDensity(next);
-              }}
-            >
-              {SESSION_LIST_DENSITY_OPTIONS.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
         {isWide ? (
           <label className="settings-row sidebar-setting-row">
             <span>

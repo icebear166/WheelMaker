@@ -45,7 +45,7 @@ export function RecentSessionsSection({
             aria-expanded={!collapsed}
           >
             <span className="wide-project-folder-wrap">
-              <SessionIcon name="history" size={15} className="recent-sessions-icon" />
+              <SessionIcon name="clock" size={15} className="recent-sessions-icon" />
             </span>
             <span className="wide-project-title-group">
               <span className="wide-project-name">Recent Sessions</span>

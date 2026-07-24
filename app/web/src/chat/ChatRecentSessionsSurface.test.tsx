@@ -10,7 +10,6 @@ describe('ChatRecentSessionsSurface', () => {
         <ChatRecentSessionsSurface
           collapsed={false}
           onToggleCollapsed={() => undefined}
-          sessionListDensity="relaxed"
           header={<button type="button">All sessions</button>}
         >
           <div>Recent session</div>
@@ -22,6 +21,7 @@ describe('ChatRecentSessionsSurface', () => {
       typeof node.props.className === 'string' &&
       node.props.className.includes('chat-session-panel-floating'),
     )).toHaveLength(1);
+    expect(tree!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('relaxed');
     expect(tree!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Recent Sessions']);
     const collapse = tree!.root.findByProps({'aria-label': 'Collapse Recent Sessions'});
     expect(collapse.findAllByType('svg')).toHaveLength(1);

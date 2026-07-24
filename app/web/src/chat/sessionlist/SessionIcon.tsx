@@ -28,8 +28,10 @@ const GLYPHS = {
   panelLeft: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /></>),
   // lucide:panel-left-close
   panelLeftClose: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /><path d="m16 15-3-3 3-3" /></>),
-  // lucide:history
-  history: (<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></>),
+  // lucide:play (verified via better-icons)
+  play: (<><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" /></>),
+  // lucide:clock (verified via better-icons)
+  clock: (<><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>),
   // lucide:archive
   archive: (<><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></>),
   // lucide:pencil
@@ -82,6 +84,7 @@ export function SessionIcon({name, size = 14, filled = false, spin = false, clas
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
+      data-icon-name={name}
       className={`sl-icon${spin ? ' sl-icon-spin' : ''}${className ? ` ${className}` : ''}`}
       style={style}
     >

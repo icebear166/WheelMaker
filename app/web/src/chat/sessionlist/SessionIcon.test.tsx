@@ -12,9 +12,11 @@ describe('SessionIcon', () => {
       const svg = tree!.root.findByType('svg');
       expect(svg.props.className).toContain('sl-icon');
       expect(svg.props['aria-hidden']).toBe('true');
+      expect(svg.props['data-icon-name']).toBe(name);
       // glyph must not be empty
       expect(svg.props.children).toBeTruthy();
     }
+    expect(SESSION_ICON_NAMES).toEqual(expect.arrayContaining(['play', 'clock']));
   });
 
   it('applies spin class and custom size', async () => {

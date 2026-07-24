@@ -63,7 +63,7 @@ export function SessionRow({
           <span className={`wide-session-agent-tag ${agentClassName ?? ''}`}>{agentLabel}</span>
         ) : null}
         {!pinned ? (
-          <span className="wide-session-time" title={timeTitle ?? ''}>{timeLabel}</span>
+          <span className="wide-session-time compact-age" title={timeTitle ?? ''}>{timeLabel}</span>
         ) : null}
       </button>
       {pinned && onUnpin ? (

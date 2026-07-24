@@ -204,8 +204,8 @@ import {useChatLayoutMetrics} from '../chat/layout/chatLayoutMetrics';
 import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from '../chat/layout/wideProjectActionPopover';
 import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';
 import {
-  normalizeSessionListDensity,
-  type SessionListDensity,
+  DESKTOP_SESSION_LIST_DENSITY,
+  MOBILE_SESSION_LIST_DENSITY,
 } from '../chat/sessionListDensity';
 import {
   normalizeMobileEnterKeyBehavior,
@@ -1852,9 +1852,9 @@ function formatCompactRelativeAge(value: string): string {
   const deltaDay = Math.floor(deltaHour / 24);
   if (deltaDay < 30) return `${deltaDay}d`;
   const deltaMonth = Math.floor(deltaDay / 30);
-  if (deltaMonth < 12) return `${deltaMonth}mo`;
+  if (deltaMonth < 12) return `${deltaMonth}M`;
   const deltaYear = Math.floor(deltaMonth / 12);
-  return `${deltaYear}y`;
+  return `${Math.min(deltaYear, 99)}y`;
 }
 
 type MarkdownImageExportRequest = {
@@ -2523,9 +2523,6 @@ export function App() {
   );
   const [codeTabSize, setCodeTabSize] = useState<number>(
     clampCodeTabSize(Number(persistedGlobal.codeTabSize)),
-  );
-  const [sessionListDensity, setSessionListDensity] = useState<SessionListDensity>(
-    normalizeSessionListDensity(persistedGlobal.sessionListDensity),
   );
   const [mobileEnterKeyBehavior, setMobileEnterKeyBehavior] = useState<MobileEnterKeyBehavior>(
     normalizeMobileEnterKeyBehavior(persistedGlobal.mobileEnterKeyBehavior),
@@ -6144,7 +6141,6 @@ export function App() {
       codeFontSize,
       codeLineHeight,
       codeTabSize,
-      sessionListDensity,
       mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
@@ -6170,7 +6166,6 @@ export function App() {
     codeFontSize,
     codeLineHeight,
     codeTabSize,
-    sessionListDensity,
     mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
@@ -14133,7 +14128,7 @@ export function App() {
               role="menuitem"
             >
               <span className="session-archive-menu-item-icon" aria-hidden="true">
-                <SessionIcon name="history" />
+                <SessionIcon name="refreshCw" />
               </span>
               <span className="session-archive-menu-item-text">
                 <span className="session-archive-menu-item-label">Recover...</span>
@@ -15678,8 +15673,6 @@ export function App() {
         themeMode={themeMode}
         setThemeMode={setThemeMode}
         isWide={isWide}
-        sessionListDensity={sessionListDensity}
-        setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
         showMonitor={showMonitor}
@@ -15776,7 +15769,10 @@ export function App() {
         {archivedMode || sessionSearchActive ? (
           <SessionListView {...viewProps} />
         ) : (
-        <ChatSessionNav className="mobile-project-session-nav" dataSessionListDensity="compact">
+        <ChatSessionNav
+          className="mobile-project-session-nav"
+          dataSessionListDensity={MOBILE_SESSION_LIST_DENSITY}
+        >
           <SessionListView {...viewProps} />
         </ChatSessionNav>
         )}
@@ -15808,7 +15804,7 @@ export function App() {
       ? 'list'
       : sheetMenu.kind === 'new'
         ? 'plus'
-        : 'history';
+        : 'play';
     return (
       <>
         <div
@@ -15917,7 +15913,7 @@ export function App() {
                           ).catch(() => undefined);
                         }}
                       >
-                        <SessionIcon name="history" />
+                        <SessionIcon name="play" />
                         <span className="mobile-project-sheet-item-label">
                           {resolveSessionDisplayTitle(session) || session.sessionId}
                         </span>
@@ -15926,7 +15922,7 @@ export function App() {
                   : null}
                 {!resumeLoading && resumeSessions.length === 0 ? (
                   <div className="wide-project-action-empty">
-                    <SessionIcon name="history" />
+                    <SessionIcon name="play" />
                     <span>No resumable sessions.</span>
                   </div>
                 ) : null}
@@ -15971,7 +15967,7 @@ export function App() {
           : undefined}
       >
         <div className="wide-project-action-title">
-          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'history'} />
+          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'play'} />
           <span className="wide-project-action-title-copy">
             <span className="wide-project-action-title-main">
               {actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
@@ -16035,13 +16031,13 @@ export function App() {
                   ).catch(() => undefined);
                 }}
               >
-                <SessionIcon name="history" />
+                <SessionIcon name="play" />
                 <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
               </button>
             )) : null}
             {!resumeLoading && resumeSessions.length === 0 ? (
               <div className="wide-project-action-empty">
-                <SessionIcon name="history" />
+                <SessionIcon name="play" />
                 <span>No resumable sessions.</span>
               </div>
             ) : null}
@@ -16153,7 +16149,7 @@ export function App() {
     return (
       <ChatSessionNav
         className="wide-project-session-nav"
-        dataSessionListDensity={sessionListDensity}
+        dataSessionListDensity={DESKTOP_SESSION_LIST_DENSITY}
       >
         {renderArchiveBatchStatus()}
         <SessionListView
@@ -17661,7 +17657,6 @@ export function App() {
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
-                  sessionListDensity={sessionListDensity}
                   header={
                     <ChatSessionGlobalBar
                       showSlideOutShortcut

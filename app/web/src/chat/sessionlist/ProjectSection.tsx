@@ -80,7 +80,7 @@ export function ProjectSection({
             onPointerDown={event => event.stopPropagation()}
             onClick={onResume}
           >
-            <SessionIcon name="history" />
+            <SessionIcon name="play" />
           </button>
           <button
             type="button"

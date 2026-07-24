@@ -5398,10 +5398,6 @@
 }
 
 @media (max-width: 900px) {
-  .mobile-project-row {
-    min-height: 44px;
-  }
-
   .mobile-project-sheet {
     max-width: 100%;
     padding-bottom: max(12px, var(--wm-safe-area-bottom));
@@ -5996,6 +5992,7 @@
 .chat-session-panel-pinned .chat-edge-surface-header,
 .chat-session-panel-slideout .chat-edge-surface-header {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
+  padding-left: 17px;
 }
 
 .chat-session-panel-pinned .chat-edge-surface-toolbar,

@@ -39,15 +39,15 @@ describe('SessionRow', () => {
     const {tree} = await renderRow();
     expect(tree().root.findByProps({className: 'wide-session-title'}).children).toEqual(['Fix login bug']);
     expect(tree().root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('wide-session-agent-tag'))).toHaveLength(1);
-    expect(tree().root.findByProps({className: 'wide-session-time'}).children).toEqual(['3m']);
+    expect(tree().root.findByProps({className: 'wide-session-time compact-age'}).children).toEqual(['3m']);
   });
 
   it('shows time when unpinned and an svg pin button when pinned', async () => {
     const unpinned = await renderRow();
-    expect(unpinned.tree().root.findAllByProps({className: 'wide-session-time'})).toHaveLength(1);
+    expect(unpinned.tree().root.findAllByProps({className: 'wide-session-time compact-age'})).toHaveLength(1);
 
     const pinned = await renderRow({pinned: true});
-    expect(pinned.tree().root.findAllByProps({className: 'wide-session-time'})).toHaveLength(0);
+    expect(pinned.tree().root.findAllByProps({className: 'wide-session-time compact-age'})).toHaveLength(0);
     const pinBtn = pinned.tree().root.findByProps({className: 'wide-session-pin-btn'});
     expect(pinBtn.findAllByType('svg')).toHaveLength(1);
   });

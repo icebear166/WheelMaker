@@ -42,7 +42,9 @@ describe('ProjectSection', () => {
     expect(tree.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('wide-project-hub-tag'))).toHaveLength(1);
     const addBtn = tree.root.findByProps({title: 'New session'});
     expect(addBtn.props.className).toContain('sl-action-primary');
-    expect(tree.root.findByProps({title: 'Resume session'}).props.className).toContain('sl-action-secondary');
+    const resumeBtn = tree.root.findByProps({title: 'Resume session'});
+    expect(resumeBtn.props.className).toContain('sl-action-secondary');
+    expect(resumeBtn.findByType('svg').props['data-icon-name']).toBe('play');
     expect(tree.root.findByProps({title: 'Pin project to top'}).props.className).toContain('sl-action-secondary');
   });
 
