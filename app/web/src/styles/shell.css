@@ -639,7 +639,7 @@
 @media (prefers-reduced-motion: reduce) {
   .gesture-nav-pill,
   .gesture-nav-capsule,
-  .desktop-windows-extension-menu,
+  .topbar-menu-surface,
   .floating-control-stack[data-drag-state='gesture-open'] {
     animation: none;
     transition: none;
@@ -1602,13 +1602,49 @@
   animation: workspacePageEnter var(--motion-standard) var(--ease-out);
 }
 
-.desktop-windows-extension-root {
-  position: relative;
-  height: 100%;
+.topbar-menu-surface {
+  border: 1px solid var(--border-faint);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  padding: 4px;
+  animation: sl-menu-in 140ms var(--ease-out);
 }
 
-.desktop-windows-extension-button {
+.desktop-app-menu-root {
   position: relative;
+  flex: 0 0 auto;
+}
+
+.desktop-app-menu-trigger {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.desktop-app-menu-trigger:hover,
+.desktop-app-menu-trigger:focus-visible,
+.desktop-app-menu-trigger[aria-expanded='true'] {
+  background: var(--hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.desktop-app-menu-trigger img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border-radius: 4px;
 }
 
 .desktop-update-dot {
@@ -1620,10 +1656,10 @@
   box-shadow: 0 0 0 2px var(--surface-panel);
 }
 
-.desktop-update-dot-titlebar {
+.desktop-update-dot-app-menu {
   position: absolute;
-  top: 8px;
-  right: 9px;
+  top: 3px;
+  right: 3px;
 }
 
 .desktop-update-dot-menu {
@@ -1631,24 +1667,16 @@
   box-shadow: none;
 }
 
-.desktop-windows-extension-menu {
+.desktop-app-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 4px;
+  left: 0;
   z-index: 100;
-  width: 190px;
-  padding: 4px;
-  border: 1px solid var(--border-faint);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
-  backdrop-filter: blur(12px) saturate(1.1);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  box-shadow: var(--shadow-overlay);
-  transform-origin: top right;
-  animation: sl-menu-in 140ms var(--ease-out);
+  width: 220px;
+  transform-origin: top left;
 }
 
-.desktop-windows-extension-menu button {
+.desktop-app-menu button {
   width: 100%;
   min-height: 30px;
   border: 0;
@@ -1665,20 +1693,26 @@
   cursor: pointer;
 }
 
-.desktop-windows-extension-menu button:hover,
-.desktop-windows-extension-menu button:focus-visible {
+.desktop-app-menu button:hover,
+.desktop-app-menu button:focus-visible {
   background: var(--hover);
   outline: none;
 }
 
-.desktop-windows-extension-menu button:disabled {
+.desktop-app-menu button:disabled {
   color: var(--text-secondary);
   cursor: default;
   opacity: 0.72;
 }
 
-.desktop-windows-extension-menu button:disabled:hover {
+.desktop-app-menu button:disabled:hover {
   background: transparent;
+}
+
+.desktop-app-menu-leading-slot {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .local-dev-entry-backdrop {
@@ -1821,7 +1855,7 @@
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .desktop-windows-extension-menu {
+  .topbar-menu-surface {
     background: var(--surface-overlay);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

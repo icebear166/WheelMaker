@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
+import {DesktopAppMenu} from '../web/src/shell/layouts/desktop/DesktopAppMenu';
 import {
   DesktopDragRegion,
   DesktopWindowControls,
@@ -81,7 +82,30 @@ describe('desktop window controls', () => {
     expect(close).toHaveBeenCalled();
   });
 
-  test('plays the exit animation before unmounting the extensions menu', async () => {
+  test('opens a Settings-first WheelMaker menu and keeps native actions conditional', async () => {
+    const onOpenSettings = jest.fn();
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {enabled: true, requestLocalDevMode: jest.fn()},
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={onOpenSettings} />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
+    });
+
+    const actions = root.findAll(node => typeof node.props['data-desktop-app-action'] === 'string');
+    expect(actions.map(action => action.props['data-desktop-app-action'])).toEqual(['settings', 'local-dev']);
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'data-desktop-app-action': 'settings'}).props.onClick();
+    });
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  test('plays the exit animation before unmounting the application menu', async () => {
     jest.useFakeTimers();
     const matchMedia = ((query: string) => ({
       matches: false,
@@ -100,16 +124,16 @@ describe('desktop window controls', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
     });
     const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
     expect(root.findAllByProps({role: 'menu'})).toHaveLength(1);
 
     await ReactTestRenderer.act(async () => {
-      root.findByProps({className: 'desktop-titlebar-button desktop-windows-extension-button'}).props.onClick();
+      root.findByProps({className: 'desktop-app-menu-trigger'}).props.onClick();
     });
     const menu = root.findByProps({role: 'menu'});
     expect(menu.props.className).toContain('sl-menu-exit');
@@ -121,7 +145,7 @@ describe('desktop window controls', () => {
     jest.useRealTimers();
   });
 
-  test('opens a separate Local Dev configuration dialog from the extensions menu', async () => {
+  test('opens a separate Local Dev configuration dialog from the application menu', async () => {
 	const requestLocalDevMode = jest.fn();
 	(global as typeof globalThis & { window?: unknown }).window = {
 		WheelMakerDesktop: {enabled: true, requestLocalDevMode},
@@ -129,18 +153,18 @@ describe('desktop window controls', () => {
 
 	let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 	await ReactTestRenderer.act(async () => {
-		renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+		renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
 	});
 	const root = renderer!.root;
 	const labels = root.findAllByType('button').map(button => button.props['aria-label']).filter(Boolean);
-	expect(labels).toEqual(['Windows extensions', 'Minimize', 'Maximize or restore', 'Close']);
+	expect(labels).toEqual(['Open WheelMaker menu']);
 	await ReactTestRenderer.act(async () => {
-		root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+		root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
 	});
 	const menuItem = root.findByProps({role: 'menuitemcheckbox'});
 	expect(menuItem.props['aria-checked']).toBe(false);
 	expect(menuItem.findAllByType('span').some(span => span.children.includes('Dev Mode'))).toBe(true);
-	expect(root.findAllByProps({className: 'desktop-windows-extension-source'})).toHaveLength(0);
+	expect(root.findAllByProps({className: 'desktop-app-menu-source'})).toHaveLength(0);
 	await ReactTestRenderer.act(async () => {
 		menuItem.props.onClick();
 	});
@@ -174,16 +198,16 @@ describe('desktop window controls', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
     });
     const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
     const menuItem = root.findByProps({role: 'menuitemcheckbox'});
     expect(menuItem.props['aria-checked']).toBe(true);
-    expect(menuItem.findByProps({'data-local-dev-check': true})).toBeDefined();
-    expect(root.findAllByProps({'data-desktop-extension-action': 'desktop-update'})).toHaveLength(0);
+    expect(menuItem.findByProps({'data-icon-name': 'check'})).toBeDefined();
+    expect(root.findAllByProps({'data-desktop-app-action': 'desktop-update'})).toHaveLength(0);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
@@ -207,11 +231,11 @@ describe('desktop window controls', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
     });
     const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
     expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
       'Checking Desktop update…',
@@ -222,21 +246,18 @@ describe('desktop window controls', () => {
     });
 
     const menuItems = root.findAll(node =>
-      typeof node.props['data-desktop-extension-action'] === 'string',
+      typeof node.props['data-desktop-app-action'] === 'string',
     );
-    expect(menuItems.map(item => item.props['data-desktop-extension-action'])).toEqual([
-      'local-dev',
-      'desktop-update',
-    ]);
+    expect(menuItems.map(item => item.props['data-desktop-app-action'])).toEqual(['settings', 'local-dev', 'desktop-update']);
     expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
       'Update Desktop to v1.22',
     );
-    expect(root.findByProps({'data-desktop-update-dot': 'titlebar'})).toBeDefined();
+    expect(root.findByProps({'data-desktop-update-dot': 'app-menu'})).toBeDefined();
     expect(root.findByProps({'data-desktop-update-dot': 'menu'})).toBeDefined();
     expect(global.fetch).toHaveBeenCalledTimes(1);
 
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-extension-action': 'desktop-update'}).props.onClick();
+      root.findByProps({'data-desktop-app-action': 'desktop-update'}).props.onClick();
     });
     expect(requestDesktopUpdate).toHaveBeenCalledTimes(1);
   });
@@ -256,13 +277,13 @@ describe('desktop window controls', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
     });
     const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
-    const updateButton = root.findByProps({'data-desktop-extension-action': 'desktop-update'});
+    const updateButton = root.findByProps({'data-desktop-app-action': 'desktop-update'});
     expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
       'Desktop is up to date',
     );
@@ -287,17 +308,17 @@ describe('desktop window controls', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
     });
     const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
     expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
       'Check failed · Retry',
     );
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-extension-action': 'desktop-update'}).props.onClick();
+      root.findByProps({'data-desktop-app-action': 'desktop-update'}).props.onClick();
     });
     expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
       'Desktop is up to date',
@@ -322,16 +343,16 @@ describe('desktop window controls', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
     });
     const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-extension-action': 'desktop-update'}).props.onClick();
+      root.findByProps({'data-desktop-app-action': 'desktop-update'}).props.onClick();
     });
-    expect(root.findByProps({'data-desktop-window-controls': true})).toBeDefined();
+    expect(root.findByProps({className: 'desktop-app-menu-root'})).toBeDefined();
     expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
       'Check failed · Retry',
     );
