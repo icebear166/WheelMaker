@@ -17,9 +17,10 @@ describe('SessionIcon', () => {
       expect(svg.props.children).toBeTruthy();
     }
     expect(SESSION_ICON_NAMES).toEqual(
-      expect.arrayContaining(['messageSquareMore', 'archiveRestore', 'clock']),
+      expect.arrayContaining(['import', 'archiveRestore', 'clock']),
     );
     expect(SESSION_ICON_NAMES).not.toContain('play');
+    expect(SESSION_ICON_NAMES).not.toContain('messageSquareMore');
   });
 
   it('applies spin class and custom size', async () => {

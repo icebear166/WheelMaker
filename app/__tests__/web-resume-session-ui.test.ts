@@ -11,11 +11,12 @@ describe('web resume session ui', () => {
     );
 
     expect(mainTsx).not.toContain('<SessionIcon name="play"');
-    expect(mainTsx).toContain(": 'messageSquareMore';");
+    expect(mainTsx).toContain(": 'import';");
     expect(mainTsx).toContain(
-      "<SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'messageSquareMore'} />",
+      "<SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'import'} />",
     );
-    expect(mainTsx).toContain('<SessionIcon name="messageSquareMore" />');
+    expect(mainTsx).toContain('<SessionIcon name="import" />');
+    expect(mainTsx).not.toContain('messageSquareMore');
     expect(mainTsx).toContain('<SessionIcon name="archiveRestore" />');
     expect(mainTsx).toContain(
       "<SessionIcon name={restoring ? 'loader' : 'archiveRestore'} spin={restoring} />",

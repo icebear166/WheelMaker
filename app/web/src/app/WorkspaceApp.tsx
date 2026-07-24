@@ -15804,7 +15804,7 @@ export function App() {
       ? 'list'
       : sheetMenu.kind === 'new'
         ? 'plus'
-        : 'messageSquareMore';
+        : 'import';
     return (
       <>
         <div
@@ -15913,7 +15913,7 @@ export function App() {
                           ).catch(() => undefined);
                         }}
                       >
-                        <SessionIcon name="messageSquareMore" />
+                        <SessionIcon name="import" />
                         <span className="mobile-project-sheet-item-label">
                           {resolveSessionDisplayTitle(session) || session.sessionId}
                         </span>
@@ -15922,7 +15922,7 @@ export function App() {
                   : null}
                 {!resumeLoading && resumeSessions.length === 0 ? (
                   <div className="wide-project-action-empty">
-                    <SessionIcon name="messageSquareMore" />
+                    <SessionIcon name="import" />
                     <span>No resumable sessions.</span>
                   </div>
                 ) : null}
@@ -15967,7 +15967,7 @@ export function App() {
           : undefined}
       >
         <div className="wide-project-action-title">
-          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'messageSquareMore'} />
+          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'import'} />
           <span className="wide-project-action-title-copy">
             <span className="wide-project-action-title-main">
               {actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
@@ -16031,13 +16031,13 @@ export function App() {
                   ).catch(() => undefined);
                 }}
               >
-                <SessionIcon name="messageSquareMore" />
+                <SessionIcon name="import" />
                 <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
               </button>
             )) : null}
             {!resumeLoading && resumeSessions.length === 0 ? (
               <div className="wide-project-action-empty">
-                <SessionIcon name="messageSquareMore" />
+                <SessionIcon name="import" />
                 <span>No resumable sessions.</span>
               </div>
             ) : null}
