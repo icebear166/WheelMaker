@@ -185,6 +185,7 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain("window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);");
     expect(mainTsx).toContain("window.removeEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);");
     expect(mainTsx).toContain("target?.closest('button, [role=\"button\"]')");
+    expect(mainTsx).toContain('if (target === chatScrollRef.current) {');
     expect(mainTsx).toContain('closeSidebarTransientMenus();\n    resetProjectResumeState();');
     expect(mainTsx).toContain('setProjectSessionActionMenu(null);');
     expect(mainTsx).toContain('setWideProjectActionMenu(null);');

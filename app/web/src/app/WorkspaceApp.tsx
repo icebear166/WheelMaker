@@ -5297,6 +5297,9 @@ export function App() {
   }, []);
   const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {
     const target = event.target;
+    if (target === chatScrollRef.current) {
+      return;
+    }
     if (target instanceof Element && target.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)) {
       return;
     }
