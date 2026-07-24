@@ -245,15 +245,14 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('const cancelSelectedChatPrompt = async () => {');
     expect(main).toContain('service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId)');
     expect(main).toContain('className="chat-composer-input-row"');
-    expect(main).toContain("const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
     expect(main).toContain('className="chat-tool-button chat-attachment-plus-button"');
-    expect(main).toContain('className="chat-composer-stop-slot"');
-    expect(main).toContain('className={chatComposerStopTriggerClassName}');
-    expect(main.indexOf('className="chat-tool-button chat-attachment-plus-button"')).toBeLessThan(main.indexOf('className="chat-composer-stop-slot"'));
-    expect(main).toContain('disabled={selectedChatPromptCancelling}');
+    expect(main).toContain('chat-composer-stop-slot${chatStopPillExiting');
+    expect(main).toContain('<ChatStopStatusPill');
+    expect(main.indexOf('className="chat-tool-button chat-attachment-plus-button"')).toBeLessThan(main.indexOf('chat-composer-stop-slot${chatStopPillExiting'));
+    expect(main).toContain('cancelling={selectedChatPromptCancelling}');
     expect(main).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
     expect(main).not.toContain('No prompt running');
-    expect(main).toContain("selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'");
+    expect(main).not.toContain('codicon-stop-circle');
   });
 
   test('shows a scroll-to-bottom button when the user is away from the bottom', () => {
