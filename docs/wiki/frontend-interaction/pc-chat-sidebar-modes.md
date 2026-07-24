@@ -9,7 +9,7 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 - **顶部地址栏**保留设置按钮、当前 Project 下拉与 hubs 下拉，搜索/archive 和会话栏展开按钮不在其中。PC 左段固定 360px，与浮动/滑出/固定会话面板共用 `--chat-session-panel-width`，内部按「设置 → 8px 间距 → Project → 弹性空白 → Hubs」排列；Hubs 右边缘与下方 Sessions 卡片右边缘对齐。中部只保留 prompt 历史入口与标题，并独占可伸缩空间，终端/预览操作固定在右侧。桌面 Shell 在 Session 与 Chat 内容上方只渲染一个顶栏实例；浮动、滑出和 pin 只替换其下方的会话面板，不移动、卸载或重新挂载顶栏。地址栏不读取 session 搜索展开状态：搜索只改变 Sessions 面板标题栏和列表内容。右侧 Preview 是顶栏所属主工作区的同级区域，继续使用自己的标题栏。移动端继续使用原有 Project 与 session 标题组合。
 - **浮动卡片标题栏**统一由 `ChatEdgeSurfaceHeader` 提供，Sessions、Plan、Limits 都使用 36px 高度、左侧折叠按钮、11px uppercase 标题和右侧操作区。展开态使用向下 chevron，收起态使用向右 chevron；收起只隐藏正文。Plan 可以在收起标题栏中保留一行截断的当前步骤和进度。
 - **Sessions 布局操作**固定在标题栏右侧，顺序是完整会话栏、Pin；完整会话栏使用 `layout-sidebar-left`，打开后切换为 `layout-sidebar-left-off`。浮动态在完整会话栏图标左侧固定显示 **Ctrl+1**，强化该图标与键盘快捷键的对应关系；滑出态与 pin 态不显示这项提示。滑出态把 archive 与 search 放在标题后的左侧操作区，关闭完整栏与 Pin 保持右侧位置；pin 态只保留右侧高亮 Pin。浮动态标题显示 **Recent Sessions**，滑出与 pin 态继续显示 **Sessions**。
-- **会话工具栏可见性**：PC 端会话工具栏常态隐藏、用户可展开；移动端保持常驻工具栏。两端工具栏的功能集合一致，仅呈现策略不同（来源：[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)）。
+- **会话工具栏可见性**：PC 与移动端的会话工具栏都常态显示，功能集合一致（来源：[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)；2026-07-24 复审后取消 PC 端常态隐藏方案）。
 
 - **Sessions 搜索展开**：搜索框弹出时向左展开，左边缘与侧栏左边框对齐；搜索展开模式下 Sessions 标题文字与左侧对齐。
 

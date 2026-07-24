@@ -192,9 +192,19 @@
 }
 .wide-session-time {
   flex: none;
+  min-width: 3ch;
+  text-align: right;
   font-size: 11px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
+}
+
+/* leading state dot sits in the indent gutter, never shifting row content */
+.project-session-row-wrap .session-state-leading {
+  left: 4px;
+}
+.project-session-row-wrap .session-state-leading.permission-pending {
+  left: 1px;
 }
 .wide-session-pin-btn {
   flex: none;

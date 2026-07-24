@@ -2658,7 +2658,6 @@ export function App() {
     undefined,
     createSessionNavSlideOutState,
   );
-  const [sessionToolbarExpanded, setSessionToolbarExpanded] = useState(false);
   const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
   const sessionNavSlideOutPointerDownRef = useRef(false);
   const sessionNavSlideOutAutoClose = useMemo(
@@ -16181,9 +16180,6 @@ export function App() {
               <ChatSessionGlobalBar
                 pinActive
                 onTogglePin={unpinChatSessionPanel}
-                collapsible
-                expanded={sessionToolbarExpanded}
-                onToggleExpanded={() => setSessionToolbarExpanded(current => !current)}
                 leading={
                   <>
                     {renderChatArchiveControls()}
@@ -17677,9 +17673,6 @@ export function App() {
                       }
                       pinActive={false}
                       onTogglePin={pinChatSessionPanel}
-                      collapsible
-                      expanded={sessionToolbarExpanded}
-                      onToggleExpanded={() => setSessionToolbarExpanded(current => !current)}
                     />
                   }
                 >
@@ -17738,9 +17731,6 @@ export function App() {
                     sessionNavSlideOutAutoClose.closeNow();
                     pinChatSessionPanel();
                   }}
-                  collapsible
-                  expanded={sessionToolbarExpanded}
-                  onToggleExpanded={() => setSessionToolbarExpanded(current => !current)}
                   leading={
                     <>
                       {renderChatArchiveControls()}

@@ -74,16 +74,6 @@ export function ProjectSection({
         <div className={`wide-project-actions${sfx('mobile-project-actions')}`}>
           <button
             type="button"
-            className="wide-project-action-btn sl-action-primary"
-            title="New session"
-            aria-label={`New session in ${name}`}
-            onPointerDown={event => event.stopPropagation()}
-            onClick={onNew}
-          >
-            <SessionIcon name="plus" />
-          </button>
-          <button
-            type="button"
             className="wide-project-action-btn sl-action-secondary"
             title="Resume session"
             aria-label={`Resume session in ${name}`}
@@ -105,6 +95,16 @@ export function ProjectSection({
             }}
           >
             <SessionIcon name="pin" filled={pinned} />
+          </button>
+          <button
+            type="button"
+            className="wide-project-action-btn sl-action-primary"
+            title="New session"
+            aria-label={`New session in ${name}`}
+            onPointerDown={event => event.stopPropagation()}
+            onClick={onNew}
+          >
+            <SessionIcon name="plus" />
           </button>
         </div>
       </div>
