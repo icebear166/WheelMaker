@@ -200,7 +200,7 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain('if (target && chatContextUsageRef.current?.contains(target)) return;');
     expect(mainTsx).toContain('setChatContextUsageOpen(false);');
     expect(mainTsx).toContain("className={`chat-context-usage-anchor${chatContextUsageOpen ? ' open' : ''}`}");
-    expect(mainTsx).toContain('className="chat-context-usage-popover"');
+    expect(mainTsx).toContain('chat-context-usage-popover${chatComposerMenuExiting');
     expect(mainTsx).toContain('role="tooltip"');
     expect(mainTsx).toContain('aria-expanded={chatContextUsageOpen}');
     expect(mainTsx).toContain('aria-labelledby="chat-context-usage-label"');
@@ -256,9 +256,9 @@ describe('chat composer status helpers', () => {
     const slashMenu = cssRuleBlock(stylesCss, '.chat-slash-menu');
     const fileMentionMenu = cssRuleBlock(stylesCss, '.chat-file-mention-menu');
     expect(slashMenu).toContain('z-index: 36;');
-    expect(fileMentionMenu).toContain('z-index: 37;');
-    expect(slashMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
-    expect(fileMentionMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
+    expect(fileMentionMenu).toContain('z-index: 36;');
+    expect(slashMenu).not.toContain('background:');
+    expect(fileMentionMenu).not.toContain('background:');
   });
 
   test('keeps temporary chat glass readable when backdrop sampling degrades', () => {
@@ -309,7 +309,7 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain('className="chat-core-config-separator" aria-hidden="true">/</span>');
     expect(mainTsx).toContain("fastEnabled ? (");
     expect(mainTsx).toContain('className="codicon codicon-zap chat-core-config-fast"');
-    expect(mainTsx).toContain('className="chat-core-config-menu"');
+    expect(mainTsx).toContain('chat-core-config-menu${chatComposerMenuExiting');
     expect(mainTsx).toContain('className="chat-core-config-columns"');
     expect(mainTsx).toContain('className={`chat-core-config-column ${item.kind}`}');
     expect(mainTsx).toContain('className="chat-core-config-values"');

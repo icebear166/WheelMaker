@@ -133,6 +133,7 @@ import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
+import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -18385,7 +18386,6 @@ export function App() {
               </div>
               {chatFileMentionMenuOpen ? (
                 <div ref={chatFileMentionMenuRef} className={`chat-file-mention-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="listbox" aria-label="File mentions">
-                  <div className="chat-file-mention-shortcut-tip">Up/Down to browse, Right to preview</div>
                   {chatFileMentionLoading ? (
                     <div className="chat-file-mention-empty">Searching...</div>
                   ) : chatFileMentionError ? (
@@ -18431,6 +18431,7 @@ export function App() {
                       );
                     })
                   )}
+                  <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['→', 'Preview'], ['↵', 'Insert'], ['esc', 'Close']]} />
                 </div>
               ) : null}
               {chatSlashMenuVisible ? (
@@ -18474,6 +18475,7 @@ export function App() {
                       </div>
                     ));
                   })()}
+                  <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['↵', 'Apply'], ['esc', 'Close']]} />
                 </div>
               ) : null}
               {voiceRecording ? (

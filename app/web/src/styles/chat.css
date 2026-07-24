@@ -3611,25 +3611,71 @@
 
 .chat-slash-menu {
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 0;
+  right: 0;
   bottom: calc(100% + 8px);
-  max-height: min(42vh, 240px);
+  max-height: min(42vh, 280px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior: contain;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
-  box-shadow: var(--shadow-overlay);
-  backdrop-filter: blur(16px) saturate(1.06);
-  -webkit-backdrop-filter: blur(16px) saturate(1.06);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 4px;
   z-index: 36;
+}
+
+.chat-file-mention-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 8px);
+  max-height: min(42vh, 280px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  z-index: 36;
+}
+
+.chat-menu-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+  padding: 5px 10px 3px;
+  border-top: 1px solid var(--border-faint);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.chat-menu-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.chat-menu-hint kbd {
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 1px 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
 }
 
 .chat-slash-section {

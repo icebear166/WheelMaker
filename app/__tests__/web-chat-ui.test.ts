@@ -994,7 +994,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('chat-composer-stop-slot${chatStopPillExiting');
     expect(mainTsx).toContain('aria-label="Open composer tools"');
     expect(mainTsx).toContain('aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}');
-    expect(mainTsx).toContain('className="chat-attachment-action-tray"');
+    expect(mainTsx).toContain('chat-attachment-action-tray${chatComposerMenuExiting');
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('className="chat-attachment-action-button file"');
     expect(mainTsx).toContain('className="chat-attachment-action-button photo"');
@@ -1010,7 +1010,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('title="Mention files"');
     expect(mainTsx).toContain('aria-label="Mention files"');
     expect(mainTsx).not.toContain('className="chat-mention-symbol"');
-    expect(mainTsx).toContain('className="chat-file-mention-menu"');
+    expect(mainTsx).toContain('chat-file-mention-menu${chatComposerMenuExiting');
     expect(mainTsx).toContain('className="chat-file-mention-empty"');
     expect(mainTsx).toContain('aria-label="File mentions"');
     expect(mainTsx).toContain('Index not built');
@@ -1051,7 +1051,7 @@ describe('web chat integration', () => {
     expect(chatTurnTsx).toContain('onSelectConfirmationReply?: (replyText: string) => void;');
     expect(mainTsx).toContain('if (selectedPendingPrompt) {');
     expect(mainTsx).toContain('className="chat-config-pill"');
-    expect(mainTsx).toContain('className="chat-config-value-menu"');
+    expect(mainTsx).toContain('chat-config-value-menu${chatComposerMenuExiting');
     expect(mainTsx).toContain('chat-config-value-option${selected ?');
     expect(mainTsx).toContain('className="chat-config-value-label"');
     expect(mainTsx).toContain('className="chat-config-overflow-group"');
@@ -1277,7 +1277,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-at-symbol {');
     expect(stylesCss).not.toContain('.chat-attachment-plus-button {');
     expect(stylesCss).toContain('.chat-attachment-action-tray {');
-    expect(cssRuleBlock(stylesCss, '.chat-attachment-action-tray')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
+    expect(
+      cssRuleBlocksContainingSelector(stylesCss, '.chat-attachment-action-tray')
+        .some(block => block.includes('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));')),
+    ).toBe(true);
     expect(stylesCss).not.toContain('.chat-attachment-action-tray::after {');
     expect(stylesCss).toContain('.chat-attachment-action-button {');
     expect(stylesCss).toContain('.chat-attachment-action-label {');
@@ -1312,7 +1315,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-config-options .chat-config-item:only-child .chat-config-value-menu {');
     expect(stylesCss).toContain('.chat-config-overflow-group {');
     expect(cssRuleBlock(stylesCss, '.chat-config-overflow-menu')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
-    expect(cssRuleBlock(stylesCss, '.chat-slash-menu')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
+    expect(cssRuleBlock(stylesCss, '.chat-slash-menu')).not.toContain('background:');
+    expect(cssRuleBlock(stylesCss, '.chat-slash-menu')).toContain('border-radius: 8px;');
     expect(stylesCss).not.toContain('.chat-config-select {');
     expect(stylesCss).not.toContain('.chat-config-feedback {');
   });
@@ -2394,8 +2398,9 @@ describe('web chat integration', () => {
     expect(fileMentionKeyEnd).toBeGreaterThan(fileMentionKeyStart);
     const fileMentionKeyBody = mainTsx.slice(fileMentionKeyStart, fileMentionKeyEnd);
 
-    expect(mainTsx).toContain('Up/Down to browse, Right to preview');
-    expect(mainTsx).toContain('className="chat-file-mention-shortcut-tip"');
+    expect(mainTsx).not.toContain('Up/Down to browse, Right to preview');
+    expect(mainTsx).not.toContain('chat-file-mention-shortcut-tip');
+    expect(mainTsx).toContain("['→', 'Preview']");
     expect(mainTsx).toContain('chat-file-mention-option-row');
     expect(mainTsx).toContain('className="chat-file-mention-option-main"');
     expect(mainTsx).toContain('className="chat-file-mention-preview-button"');
@@ -2410,11 +2415,11 @@ describe('web chat integration', () => {
     expect(fileMentionKeyBody).not.toContain('(event.ctrlKey || event.metaKey)');
     expect(fileMentionKeyBody).not.toContain('onContextMenu={event => {');
 
-    expect(stylesCss).toContain('.chat-file-mention-shortcut-tip');
+    expect(stylesCss).not.toContain('.chat-file-mention-shortcut-tip');
     expect(stylesCss).toContain('.chat-file-mention-option-row');
     expect(stylesCss).toContain('.chat-file-mention-preview-button');
-    expect(stylesCss).toMatch(/\.chat-file-mention-shortcut-tip \{[\s\S]*position: sticky;[\s\S]*top: 0;/);
-    expect(stylesCss).toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.chat-file-mention-shortcut-tip \{[\s\S]*?display: none;/);
+    expect(stylesCss).toContain('.chat-menu-footer');
+    expect(stylesCss).toMatch(/\.chat-menu-hint kbd \{[\s\S]*border-radius: 4px;/);
   });
 
   test('chat composer uses compact file mention pins and running tools-slot cancel', () => {

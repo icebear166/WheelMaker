@@ -161,4 +161,27 @@ describe('composer menu exclusivity', () => {
     expect(mainTsx).toContain('chatSlashOptionDisplayName(option.name)');
     expect(mainTsx).not.toContain('<span className="chat-slash-name">{option.name}</span>');
   });
+
+  test('slash and file-mention menus share the same geometry', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    for (const cls of ['.chat-slash-menu', '.chat-file-mention-menu']) {
+      const start = stylesCss.indexOf(`${cls} {`);
+      const end = stylesCss.indexOf('}', start);
+      const rule = stylesCss.slice(start, end);
+      expect(rule).toContain('left: 0;');
+      expect(rule).toContain('right: 0;');
+      expect(rule).toContain('bottom: calc(100% + 8px);');
+      expect(rule).toContain('border-radius: 8px;');
+      expect(rule).toContain('max-height: min(42vh, 280px);');
+      expect(rule).not.toContain('background');
+      expect(rule).not.toContain('backdrop-filter');
+    }
+    expect(stylesCss).not.toContain('chat-file-mention-shortcut-tip');
+    expect(mainTsx).not.toContain('chat-file-mention-shortcut-tip');
+    expect(stylesCss).toContain('.chat-menu-footer');
+    expect(mainTsx.split('<ChatMenuKeyHints').length - 1).toBeGreaterThanOrEqual(2);
+  });
 });
