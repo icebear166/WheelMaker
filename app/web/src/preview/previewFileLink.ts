@@ -47,8 +47,8 @@ function normalizeAbsoluteLocalPath(value: string): string {
   const normalized = stripLeadingSlashFromDrivePath(normalizeSlashes(value));
   const driveMatch = /^([a-z]:)\/(.*)$/i.exec(normalized);
   if (driveMatch) {
-    return `${driveMatch[1]}/${normalizeSegments(driveMatch[2].split('/')).join('/')}`
-      .replace(/\/$/, '');
+    const path = normalizeSegments(driveMatch[2].split('/')).join('/');
+    return path ? `${driveMatch[1]}/${path}` : `${driveMatch[1]}/`;
   }
 
   if (normalized.startsWith('//')) {
@@ -92,8 +92,11 @@ function relativePathWithinRoot(projectRoot: string, absolutePath: string): stri
   const comparableRoot = windowsLike ? projectRoot.toLowerCase() : projectRoot;
   const comparablePath = windowsLike ? absolutePath.toLowerCase() : absolutePath;
   if (comparablePath === comparableRoot) return '';
-  if (!comparablePath.startsWith(`${comparableRoot}/`)) return null;
-  return absolutePath.slice(projectRoot.length + 1);
+  const rootPrefix = comparableRoot.endsWith('/')
+    ? comparableRoot
+    : `${comparableRoot}/`;
+  if (!comparablePath.startsWith(rootPrefix)) return null;
+  return absolutePath.slice(projectRoot.length + (projectRoot.endsWith('/') ? 0 : 1));
 }
 
 function extractLine(value: string): {path: string; line: number | null} {

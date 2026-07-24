@@ -447,6 +447,18 @@ describe('preview file regressions', () => {
     expect(
       resolvePreviewFileLink!('D:/Code/WheelMaker', 'D:/Code/WheelMaker'),
     ).toBeNull();
+    expect(resolvePreviewFileLink!('D:/top.txt', 'D:/')).toEqual({
+      path: 'top.txt',
+      absolutePath: 'D:/top.txt',
+      relativePath: 'top.txt',
+      line: null,
+    });
+    expect(resolvePreviewFileLink!('/etc/hosts', '/')).toEqual({
+      path: 'etc/hosts',
+      absolutePath: '/etc/hosts',
+      relativePath: 'etc/hosts',
+      line: null,
+    });
 
     expect(isAbsolutePreviewFilePath!('D:/Code/WheelMaker/app/main.ts')).toBe(true);
     expect(isAbsolutePreviewFilePath!('\\\\fileserver\\share\\report.txt')).toBe(true);
