@@ -1192,12 +1192,14 @@ function agentPackageActionForPackage(pkg: RegistryNpmPackage): 'install' | 'upd
   return null;
 }
 
-function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall'): string {
+function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall' | 'reinstall'): string {
   switch (action) {
     case 'update':
       return 'Update';
     case 'uninstall':
       return 'Uninstall';
+    case 'reinstall':
+      return 'Reinstall';
     default:
       return 'Install';
   }
@@ -13353,7 +13355,7 @@ export function App() {
   }, [refreshSkillManagementHub]);
 
   const requestAgentPackageAction = useCallback((
-    action: 'install' | 'update' | 'uninstall',
+    action: 'install' | 'update' | 'uninstall' | 'reinstall',
     hubId: string,
     pkg: RegistryNpmPackage,
   ) => {
@@ -13594,9 +13596,11 @@ export function App() {
     setConfirmError('');
     setAgentPackageActionPendingKey(pendingKey);
     try {
-      const result = target.action === 'uninstall'
-        ? await service.uninstallNpmPackage(target.hubId, target.packageName)
-        : await service.installNpmPackage(target.hubId, target.packageName, 'latest');
+      const result = target.action === 'reinstall'
+        ? await service.reinstallNpmPackage(target.hubId, target.packageName)
+        : target.action === 'uninstall'
+          ? await service.uninstallNpmPackage(target.hubId, target.packageName)
+          : await service.installNpmPackage(target.hubId, target.packageName, 'latest');
       setAgentPackageHubs(prev => ({
         ...prev,
         [target.hubId]: {

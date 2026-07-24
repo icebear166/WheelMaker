@@ -41,7 +41,7 @@ export type ConfirmTarget =
   | {kind: 'clearCache'}
   | {
       kind: 'npmPackage';
-      action: 'install' | 'update' | 'uninstall';
+      action: 'install' | 'update' | 'uninstall' | 'reinstall';
       hubId: string;
       packageName: string;
       displayName: string;
@@ -139,12 +139,14 @@ function formatStatusReset(value: string | undefined): string {
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
 }
 
-function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall'): string {
+function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall' | 'reinstall'): string {
   switch (action) {
     case 'update':
       return 'Update';
     case 'uninstall':
       return 'Uninstall';
+    case 'reinstall':
+      return 'Reinstall';
     default:
       return 'Install';
   }

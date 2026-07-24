@@ -33,7 +33,7 @@ import type {
   RegistryWheelMakerUpdateResponse,
 } from '../registry/registryTypes';
 
-type PackageAction = 'install' | 'update' | 'uninstall';
+type PackageAction = 'install' | 'update' | 'uninstall' | 'reinstall';
 
 type WheelMakerUpdateHubView = {
   hubId: string;
