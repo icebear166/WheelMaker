@@ -3,6 +3,7 @@ import React from 'react';
 import {ChatEdgeSurfaceHeader} from './ChatEdgeSurfaceHeader';
 import type {ChatPlanEntry, ChatPlanSnapshot} from './chatPlan';
 import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
+import {useChatEdgeSurfaceHoverReveal} from './layout/chatEdgeSurfaceHoverReveal';
 import {SessionIcon} from './sessionlist/SessionIcon';
 
 export const PLAN_SEGMENT_TRACK_MAX_STEPS = 12;
@@ -118,6 +119,7 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
   const [expanded, setExpanded] = React.useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
   const desktopSurfaceRef = useChatEdgeSurfaceGeometry('left', mode === 'desktop' && !!plan);
+  const hoverReveal = useChatEdgeSurfaceHoverReveal(mode === 'desktop' && !!plan);
 
   React.useEffect(() => {
     setExpanded(false);
@@ -138,8 +140,10 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
     return (
       <aside
         ref={desktopSurfaceRef}
-        className={`chat-plan-surface desktop ${desktopCollapsed ? 'collapsed' : 'expanded'}`}
+        className={`chat-plan-surface desktop ${desktopCollapsed ? 'collapsed' : 'expanded'}${hoverReveal.revealed ? ' chat-edge-surface-hover-revealed' : ''}`}
         aria-label="Current plan"
+        onPointerEnter={hoverReveal.onPointerEnter}
+        onPointerLeave={hoverReveal.onPointerLeave}
       >
         <div className="chat-edge-surface-glass" aria-hidden="true" />
         <div className="chat-edge-surface-content">

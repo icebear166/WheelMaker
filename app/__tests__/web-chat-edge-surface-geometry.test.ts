@@ -29,8 +29,10 @@ describe('chat edge surface geometry', () => {
       /\.chat-plan-surface\.desktop,[\s\S]*\.chat-recent-sessions-surface\.desktop,[\s\S]*\.chat-function-surface\.desktop \{[\s\S]*clip-path: inset\(0 calc\(100% - var\(--chat-edge-fade-end\)\) 0 0\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-recent-sessions-surface\.desktop:is\(:hover, :focus-within\) \{[\s\S]*--chat-edge-hidden-alpha: 100%;[\s\S]*clip-path: none;[\s\S]*\}/,
+      /\.chat-recent-sessions-surface\.desktop:is\(:hover, :focus-within\),[\s\S]*\.chat-plan-surface\.desktop:is\(\.chat-edge-surface-hover-revealed, :focus-within\),[\s\S]*\.chat-function-surface\.desktop\.monitor-surface:is\(\.chat-edge-surface-hover-revealed, :focus-within\) \{[\s\S]*--chat-edge-hidden-alpha: 100%;[\s\S]*clip-path: none;[\s\S]*\}/,
     );
+    expect(stylesCss).not.toContain('.chat-plan-surface.desktop:is(:hover');
+    expect(stylesCss).not.toContain('.chat-function-surface.desktop.monitor-surface:is(:hover');
   });
 
   test('moves the recent sessions fade with the actual left edge of the text column', () => {

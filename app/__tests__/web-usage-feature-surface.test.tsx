@@ -160,6 +160,44 @@ describe('MonitorSurface module', () => {
     act(() => view!.root.findByProps({'aria-label': 'Hide monitor'}).props.onClick());
     expect(onRequestHide).toHaveBeenCalledTimes(1);
   });
+
+  it('uses the same delayed hover reveal as Plan', () => {
+    jest.useFakeTimers();
+    let view: TestRenderer.ReactTestRenderer | undefined;
+    const monitorSurface = () => view!.root.findByProps({'aria-label': 'Monitor'});
+
+    try {
+      act(() => {
+        view = TestRenderer.create(
+          <MonitorSurface
+            usageSnapshot={fixtureSnapshot}
+            efficiencySnapshot={efficiencySnapshot}
+            onRefreshLimits={jest.fn()}
+            onRefreshIq={jest.fn()}
+            onRequestHide={jest.fn()}
+          />,
+        );
+      });
+      const surface = monitorSurface();
+
+      expect(surface.props.className).not.toContain('chat-edge-surface-hover-revealed');
+      expect(typeof surface.props.onPointerEnter).toBe('function');
+      act(() => {
+        surface.props.onPointerEnter({pointerType: 'mouse'});
+        jest.advanceTimersByTime(599);
+      });
+      expect(monitorSurface().props.className).not.toContain('chat-edge-surface-hover-revealed');
+
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(monitorSurface().props.className).toContain('chat-edge-surface-hover-revealed');
+    } finally {
+      view?.unmount();
+      jest.useRealTimers();
+    }
+  });
+
   it('uses Lucide icons for the shared monitor actions', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {

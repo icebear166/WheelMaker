@@ -110,6 +110,7 @@ export function MonitorSurface({
       toolbar={toolbar}
       onToggleCollapsed={() => setCollapsed(value => !value)}
       className="monitor-surface"
+      revealOnHover
     >
       <div
         className={`monitor-body ${activeTab}`}

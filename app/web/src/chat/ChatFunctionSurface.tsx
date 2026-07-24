@@ -5,6 +5,7 @@ import {
   useChatEdgeSurfaceGeometry,
   type ChatEdgeSurfaceSide,
 } from './layout/chatEdgeSurfaceGeometry';
+import {useChatEdgeSurfaceHoverReveal} from './layout/chatEdgeSurfaceHoverReveal';
 
 export type ChatFunctionSurfaceProps = {
   title: string;
@@ -16,6 +17,7 @@ export type ChatFunctionSurfaceProps = {
   children: React.ReactNode;
   side?: ChatEdgeSurfaceSide;
   className?: string;
+  revealOnHover?: boolean;
 };
 
 export function ChatFunctionSurface({
@@ -28,15 +30,19 @@ export function ChatFunctionSurface({
   children,
   side = 'left',
   className = '',
+  revealOnHover = false,
 }: ChatFunctionSurfaceProps) {
   const surfaceRef = useChatEdgeSurfaceGeometry(side);
+  const hoverReveal = useChatEdgeSurfaceHoverReveal(revealOnHover);
   return (
     <aside
       ref={surfaceRef}
-      className={`chat-function-surface desktop side-${side} ${mode}${collapsed ? ' collapsed' : ''}${className ? ` ${className}` : ''}`}
+      className={`chat-function-surface desktop side-${side} ${mode}${collapsed ? ' collapsed' : ''}${className ? ` ${className}` : ''}${hoverReveal.revealed ? ' chat-edge-surface-hover-revealed' : ''}`}
       data-mode={mode}
       data-side={side}
       aria-label={title}
+      onPointerEnter={hoverReveal.onPointerEnter}
+      onPointerLeave={hoverReveal.onPointerLeave}
     >
       <div className="chat-edge-surface-glass" aria-hidden="true" />
       <div className="chat-edge-surface-content">

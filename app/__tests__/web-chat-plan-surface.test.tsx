@@ -84,7 +84,7 @@ describe('ChatPlanSurface', () => {
     expect(planStepRule).toContain('flex: 0 0 auto;');
   });
 
-  test('keeps mobile Plan outside the stack and restores only hovered Recent Sessions', () => {
+  test('keeps mobile Plan outside the stack and restores desktop edges through scoped reveal rules', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const planSource = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatPlanSurface.tsx'));
@@ -95,9 +95,11 @@ describe('ChatPlanSurface', () => {
       '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content,\n.chat-function-surface.desktop .chat-edge-surface-glass,\n.chat-function-surface.desktop .chat-edge-surface-content {',
     );
     expect(mainSource).toContain('<ChatPlanSurface\n              mode="mobile"');
-    expect(stylesCss).toContain('.chat-recent-sessions-surface.desktop:is(:hover, :focus-within) {');
-    expect(stylesCss).not.toContain('.chat-plan-surface.desktop:is(:hover, :focus-within)');
-    expect(stylesCss).not.toContain('.chat-function-surface.desktop:is(:hover, :focus-within)');
+    expect(stylesCss).toContain('.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),');
+    expect(stylesCss).toContain('.chat-plan-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),');
+    expect(stylesCss).toContain('.chat-function-surface.desktop.monitor-surface:is(.chat-edge-surface-hover-revealed, :focus-within) {');
+    expect(stylesCss).not.toContain('.chat-plan-surface.desktop:is(:hover');
+    expect(stylesCss).not.toContain('.chat-function-surface.desktop.monitor-surface:is(:hover');
     expect(stylesCss).not.toContain('.chat-edge-surface-stack:is(:hover, :focus-within)');
   });
 
@@ -155,6 +157,70 @@ describe('ChatPlanSurface', () => {
     });
 
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(1);
+  });
+
+  test('reveals the desktop Plan only after a sustained pointer hover', async () => {
+    jest.useFakeTimers();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const desktopSurface = () => renderer!.root.findByProps({'aria-label': 'Current plan'});
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatPlanSurface mode="desktop" plan={planSnapshot()} />,
+        );
+      });
+
+      const surface = desktopSurface();
+      expect(surface.props.className).not.toContain('chat-edge-surface-hover-revealed');
+      expect(typeof surface.props.onPointerEnter).toBe('function');
+
+      await ReactTestRenderer.act(() => {
+        surface.props.onPointerEnter({pointerType: 'mouse'});
+        jest.advanceTimersByTime(599);
+      });
+      expect(desktopSurface().props.className).not.toContain('chat-edge-surface-hover-revealed');
+
+      await ReactTestRenderer.act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(desktopSurface().props.className).toContain('chat-edge-surface-hover-revealed');
+
+      await ReactTestRenderer.act(() => {
+        desktopSurface().props.onPointerLeave();
+      });
+      expect(desktopSurface().props.className).not.toContain('chat-edge-surface-hover-revealed');
+    } finally {
+      renderer?.unmount();
+      jest.useRealTimers();
+    }
+  });
+
+  test('cancels the desktop Plan reveal when the pointer leaves early', async () => {
+    jest.useFakeTimers();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatPlanSurface mode="desktop" plan={planSnapshot()} />,
+        );
+      });
+      const surface = renderer!.root.findByProps({'aria-label': 'Current plan'});
+
+      await ReactTestRenderer.act(() => {
+        surface.props.onPointerEnter({pointerType: 'mouse'});
+        jest.advanceTimersByTime(300);
+        surface.props.onPointerLeave();
+        jest.advanceTimersByTime(600);
+      });
+
+      expect(renderer!.root.findByProps({'aria-label': 'Current plan'}).props.className)
+        .not.toContain('chat-edge-surface-hover-revealed');
+    } finally {
+      renderer?.unmount();
+      jest.useRealTimers();
+    }
   });
 
   test('renders the shared Sessions header when collapsed and reports toggle clicks', async () => {
