@@ -589,7 +589,7 @@ export interface RegistryNpmHubSnapshot {
 
 export interface RegistryNpmOperation {
   running: boolean;
-  action: 'scan_latest' | 'install' | 'install_many' | 'uninstall' | string;
+  action: 'scan_latest' | 'install' | 'install_many' | 'uninstall' | 'reinstall' | string;
   packageName: string;
   packageNames?: string[];
   version: string;

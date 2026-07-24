@@ -861,6 +861,13 @@ export class RegistryWorkspaceService {
     return this.repository.uninstallNpmPackage(hubId, packageName);
   }
 
+  async reinstallNpmPackage(hubId: string, packageName: string): Promise<RegistryNpmCommandResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.reinstallNpmPackage(hubId, packageName);
+  }
+
   async queryWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');

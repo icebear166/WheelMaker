@@ -1856,6 +1856,11 @@ export class RegistryRepository {
     return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
   }
 
+  async reinstallNpmPackage(hubId: string, packageName: string): Promise<RegistryNpmCommandResponse> {
+    const state = await this.runHubStateAction(hubId, 'agentPackages', 'reinstall', {packageName});
+    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
+  }
+
   async queryWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
     const state = await this.refreshHubState(hubId, ['wheelmakerUpdate']);
     return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
