@@ -87,7 +87,11 @@ export function useMenuExitFlag() {
 
   const cancelExit = useCallback(() => {
     if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
+      if (typeof window.clearTimeout === 'function') {
+        window.clearTimeout(timerRef.current);
+      } else {
+        clearTimeout(timerRef.current);
+      }
       timerRef.current = null;
     }
     setExiting(false);
@@ -120,11 +124,15 @@ export function useMenuExitFlag() {
         return; // repeated plain close keeps the single in-flight timer
       }
       setExiting(true);
-      timerRef.current = window.setTimeout(() => {
+      const onExitDone = () => {
         timerRef.current = null;
         setExiting(false);
         setOpenRaw(false);
-      }, MENU_EXIT_MS);
+      };
+      timerRef.current =
+        typeof window.setTimeout === 'function'
+          ? window.setTimeout(onExitDone, MENU_EXIT_MS)
+          : (setTimeout(onExitDone, MENU_EXIT_MS) as unknown as number);
     },
     [cancelExit],
   );

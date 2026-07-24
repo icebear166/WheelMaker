@@ -81,6 +81,46 @@ describe('desktop window controls', () => {
     expect(close).toHaveBeenCalled();
   });
 
+  test('plays the exit animation before unmounting the extensions menu', async () => {
+    jest.useFakeTimers();
+    const matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {enabled: true, requestLocalDevMode: jest.fn()},
+      matchMedia,
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+    });
+    expect(root.findAllByProps({role: 'menu'})).toHaveLength(1);
+
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({className: 'desktop-titlebar-button desktop-windows-extension-button'}).props.onClick();
+    });
+    const menu = root.findByProps({role: 'menu'});
+    expect(menu.props.className).toContain('sl-menu-exit');
+
+    await ReactTestRenderer.act(async () => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(root.findAllByProps({role: 'menu'})).toHaveLength(0);
+    jest.useRealTimers();
+  });
+
   test('opens a separate Local Dev configuration dialog from the extensions menu', async () => {
 	const requestLocalDevMode = jest.fn();
 	(global as typeof globalThis & { window?: unknown }).window = {

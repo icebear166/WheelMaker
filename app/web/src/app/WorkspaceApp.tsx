@@ -126,7 +126,7 @@ import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
-import {useMenuExitState} from '../chat/sessionlist/menuExit';
+import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -3360,14 +3360,14 @@ export function App() {
       chatCoreConfigTriggerRef.current?.focus();
     }
   }, [setChatConfigOverflowOpen]);
-  const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
+  const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const chatHubPopoverRef = useRef<HTMLDivElement | null>(null);
-  const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen] = useState(false);
+  const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();
   const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitleProjectMenuRef = useRef<HTMLDivElement | null>(null);
-  const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
+  const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -6310,7 +6310,7 @@ export function App() {
         {chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(
           <div
             ref={chatHubPopoverRef}
-            className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}`}
+            className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}${chatHubMenuExiting ? ' sl-menu-exit' : ''}`}
             role="dialog"
             aria-label="Hub and project display preferences"
             style={chatHubPopoverStyle}
@@ -18737,7 +18737,7 @@ export function App() {
   const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
       ref={chatTitleProjectMenuRef}
-      className="chat-title-project-menu"
+      className={`chat-title-project-menu${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       aria-label="Switch project"
       style={chatTitleProjectMenuStyle}
@@ -18794,7 +18794,7 @@ export function App() {
   const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
     <div
       ref={chatTitlePromptMenuRef}
-      className="chat-title-prompt-menu"
+      className={`chat-title-prompt-menu${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       aria-label="Prompt history"
       style={chatTitlePromptMenuStyle}
