@@ -1,5 +1,6 @@
 import React from 'react';
 
+import {Icon, type IconName} from '../common/Icon';
 import {
   MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS,
   isMobileEnterKeyBehavior,
@@ -79,14 +80,14 @@ type SettingsSectionOptions = {
   id: SettingsSectionId;
   title: string;
   rows: React.ReactNode;
-  icon?: string;
+  icon?: IconName;
 };
 
 function renderSettingsSection({id, title, rows, icon}: SettingsSectionOptions) {
   return (
     <section className={`settings-section settings-section-${id}`} aria-label={title}>
       <div className="settings-section-title">
-        {icon ? <span className={`codicon codicon-${icon}`} aria-hidden="true" /> : null}
+        {icon ? <Icon name={icon} className="settings-section-icon" /> : null}
         <span>{title}</span>
       </div>
       <div className="settings-section-rows">{rows}</div>
@@ -124,9 +125,9 @@ function ServerSecretEditor({
     <div className="voice-input-settings-nested">
       <div className="settings-row sidebar-setting-row voice-input-settings-child-row">
         <span>
-          <span className="codicon codicon-key settings-row-icon" aria-hidden="true" />
+          <Icon name="keyRound" className="settings-row-icon" />
           {label}
-          <span className="settings-metadata-line">
+          <span className="settings-metadata-line set-mono">
             {configured ? 'Configured' : 'Not configured'}
             {updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ''}
           </span>
@@ -141,12 +142,13 @@ function ServerSecretEditor({
           disabled={busy}
           onChange={event => setDraft(event.target.value)}
         />
-        <button type="button" disabled={busy || !draft.trim()} onClick={() => void submit()}>
+        <button type="button" className="set-btn" disabled={busy || !draft.trim()} onClick={() => void submit()}>
           {configured ? 'Replace' : 'Set'}
         </button>
         {configured ? (
           <button
             type="button"
+            className="set-btn set-btn--danger"
             disabled={busy}
             onClick={() => void onUpdate({section, field: 'key', action: 'clear'}).catch(() => undefined)}
           >
@@ -202,11 +204,11 @@ export function SettingsRootContent({
     <>
       {showSectionTitle ? <div className="section-title">SETTINGS</div> : null}
       <div className="settings-list">
-        {renderSettingsSection({id: 'appearance', title: 'Appearance', icon: 'paintcan', rows: (
+        {renderSettingsSection({id: 'appearance', title: 'Appearance', icon: 'palette', rows: (
         <>
           <label className="settings-row sidebar-setting-row">
             <span>
-              <span className="codicon codicon-color-mode settings-row-icon" aria-hidden="true" />
+              <Icon name="moon" className="settings-row-icon" />
               Dark Mode
             </span>
             <input
@@ -219,12 +221,12 @@ export function SettingsRootContent({
           </label>
         </>
         )})}
-        {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'comment-discussion', rows: (
+        {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'messageCircle', rows: (
         <>
         {isWide ? (
           <label className="settings-row sidebar-setting-row">
             <span>
-              <span className="codicon codicon-graph settings-row-icon" aria-hidden="true" />
+              <Icon name="activity" className="settings-row-icon" />
               Show Monitor
             </span>
             <input
@@ -237,7 +239,7 @@ export function SettingsRootContent({
         {!isWide ? (
           <label className="settings-row sidebar-setting-row">
             <span>
-              <span className="codicon codicon-keyboard settings-row-icon" aria-hidden="true" />
+              <Icon name="keyboard" className="settings-row-icon" />
               Mobile Enter Key
             </span>
             <select
@@ -259,7 +261,7 @@ export function SettingsRootContent({
         <div className="voice-input-settings-menu">
           <label className="settings-row sidebar-setting-row">
             <span>
-              <span className="codicon codicon-bell settings-row-icon" aria-hidden="true" />
+              <Icon name="bell" className="settings-row-icon" />
               Notifications
             </span>
             <input
@@ -287,7 +289,7 @@ export function SettingsRootContent({
           <div className="voice-input-settings-menu">
             <div className="settings-row sidebar-setting-row">
               <span>
-                <span className="codicon codicon-mic settings-row-icon" aria-hidden="true" />
+                <Icon name="mic" className="settings-row-icon" />
                 Voice Input
               </span>
             </div>
@@ -302,7 +304,7 @@ export function SettingsRootContent({
             <div className="voice-input-settings-nested">
               <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
                 <span>
-                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
+                  <Icon name="bot" className="settings-row-icon" />
                   Model
                 </span>
                 <select
@@ -327,7 +329,7 @@ export function SettingsRootContent({
           <div className="voice-input-settings-menu">
             <div className="settings-row sidebar-setting-row">
               <span>
-                <span className="codicon codicon-unmute settings-row-icon" aria-hidden="true" />
+                <Icon name="volume2" className="settings-row-icon" />
                 Text-to-Speech
               </span>
             </div>
@@ -342,7 +344,7 @@ export function SettingsRootContent({
             <div className="voice-input-settings-nested">
               <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
                 <span>
-                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
+                  <Icon name="bot" className="settings-row-icon" />
                   Model
                 </span>
                 <select
@@ -363,7 +365,7 @@ export function SettingsRootContent({
               </label>
               <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
                 <span>
-                  <span className="codicon codicon-person settings-row-icon" aria-hidden="true" />
+                  <Icon name="userRound" className="settings-row-icon" />
                   Voice
                 </span>
                 <select
@@ -391,7 +393,7 @@ export function SettingsRootContent({
           ) : null}
         </>
         )})}
-        {renderSettingsSection({id: 'connection', title: 'Connection', icon: 'radio-tower', rows: (
+        {renderSettingsSection({id: 'connection', title: 'Connection', icon: 'radioTower', rows: (
         <>
         <button
           type="button"
@@ -399,10 +401,10 @@ export function SettingsRootContent({
           onClick={() => openSettingsChild('connectionStatus')}
         >
           <span>
-            <span className="codicon codicon-radio-tower settings-row-icon" aria-hidden="true" />
+            <Icon name="radioTower" className="settings-row-icon" />
             Connection Status
           </span>
-          <span className="codicon codicon-chevron-right" aria-hidden="true" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         <button
           type="button"
@@ -410,10 +412,10 @@ export function SettingsRootContent({
           onClick={() => openSettingsChild('deviceSessions')}
         >
           <span>
-            <span className="codicon codicon-devices settings-row-icon" aria-hidden="true" />
+            <Icon name="laptop" className="settings-row-icon" />
             Devices
           </span>
-          <span className="codicon codicon-chevron-right" aria-hidden="true" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         </>
         )})}
@@ -421,7 +423,7 @@ export function SettingsRootContent({
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-symbol-color settings-row-icon" aria-hidden="true" />
+            <Icon name="swatchBook" className="settings-row-icon" />
             Code Theme
           </span>
           <select
@@ -451,7 +453,7 @@ export function SettingsRootContent({
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-symbol-string settings-row-icon" aria-hidden="true" />
+            <Icon name="type" className="settings-row-icon" />
             Code Font
           </span>
           <select
@@ -471,7 +473,7 @@ export function SettingsRootContent({
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-text-size settings-row-icon" aria-hidden="true" />
+            <Icon name="aArrowUp" className="settings-row-icon" />
             Font Size
           </span>
           <select
@@ -492,7 +494,7 @@ export function SettingsRootContent({
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-list-flat settings-row-icon" aria-hidden="true" />
+            <Icon name="moveVertical" className="settings-row-icon" />
             Line Height
           </span>
           <select
@@ -513,7 +515,7 @@ export function SettingsRootContent({
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-indent settings-row-icon" aria-hidden="true" />
+            <Icon name="indentIncrease" className="settings-row-icon" />
             Tab Size
           </span>
           <select
@@ -538,7 +540,7 @@ export function SettingsRootContent({
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-eye settings-row-icon" aria-hidden="true" />
+            <Icon name="eye" className="settings-row-icon" />
             Message Viewer
           </span>
           <input
@@ -549,7 +551,7 @@ export function SettingsRootContent({
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-list-filter settings-row-icon" aria-hidden="true" />
+            <Icon name="filter" className="settings-row-icon" />
             Log Level
           </span>
           <select
@@ -565,7 +567,7 @@ export function SettingsRootContent({
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-files settings-row-icon" aria-hidden="true" />
+            <Icon name="database" className="settings-row-icon" />
             Disable File Cache
           </span>
           <input
@@ -580,10 +582,10 @@ export function SettingsRootContent({
           onClick={() => openSettingsChild('debugLogs')}
         >
           <span>
-            <span className="codicon codicon-output settings-row-icon" aria-hidden="true" />
+            <Icon name="scrollText" className="settings-row-icon" />
             Logs
           </span>
-          <span className="codicon codicon-chevron-right" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         <button
           type="button"
@@ -591,10 +593,10 @@ export function SettingsRootContent({
           onClick={() => openSettingsChild('releasePublish')}
         >
           <span>
-            <span className="codicon codicon-cloud-upload settings-row-icon" aria-hidden="true" />
+            <Icon name="uploadCloud" className="settings-row-icon" />
             Release publishing
           </span>
-          <span className="codicon codicon-chevron-right" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         <button
           type="button"
@@ -602,10 +604,10 @@ export function SettingsRootContent({
           onClick={() => openSettingsChild('database')}
         >
           <span>
-            <span className="codicon codicon-database settings-row-icon" aria-hidden="true" />
+            <Icon name="database" className="settings-row-icon" />
             Database
           </span>
-          <span className="codicon codicon-chevron-right" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         <button
           type="button"
@@ -613,10 +615,10 @@ export function SettingsRootContent({
           onClick={requestClearLocalCache}
         >
           <span>
-            <span className="codicon codicon-trash settings-row-icon" aria-hidden="true" />
+            <Icon name="eraser" className="settings-row-icon" />
             Clear Local Cache
           </span>
-          <span className="codicon codicon-chevron-right" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         <button
           type="button"
@@ -624,10 +626,10 @@ export function SettingsRootContent({
           onClick={handleRegistryDebugLogout}
         >
           <span>
-            <span className="codicon codicon-sign-out settings-row-icon" aria-hidden="true" />
+            <Icon name="logOut" className="settings-row-icon" />
             Logout
           </span>
-          <span className="codicon codicon-chevron-right" />
+          <Icon name="chevronRight" className="settings-row-chevron" />
         </button>
         </>
         )})}

@@ -59,17 +59,17 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
     expect(mainTsx).not.toContain('window.open(openUrl, \'_blank\', \'noopener,noreferrer\')');
 
-    expect(detailTsx).toContain('className="port-relay-panel port-relay-panel-shell"');
-    expect(detailTsx).toContain('className="port-relay-form-grid"');
+    expect(detailTsx).toContain('className="port-relay-stack"');
+    expect(detailTsx).toContain('className="set-field"');
     expect(detailTsx).toContain('className="port-relay-code-row"');
-    expect(detailTsx).toContain('className={`port-relay-status-pill ${statusClass}`}');
+    expect(detailTsx).toContain('className={`set-status ${statusVariant}`}');
     expect(detailTsx).toContain('clearPortRelaySiteData');
-    expect(detailTsx).toContain('Clear Relay Cache');
+    expect(detailTsx).toContain('Clear Cache');
     expect(detailTsx).toContain('aria-label="Clear relay cache and service worker data"');
-    expect(stylesCss).toContain('.port-relay-panel');
-    expect(stylesCss).toContain('.port-relay-form-grid');
+    expect(stylesCss).toContain('.port-relay-stack');
+    expect(stylesCss).toContain('.set-field');
     expect(stylesCss).toContain('.port-relay-code-row');
-    expect(stylesCss).toContain('.port-relay-status-pill');
+    expect(stylesCss).toContain('.set-status');
     expect(stylesCss).toContain('.port-relay-clear-site-data-frame');
   });
 
@@ -262,8 +262,8 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).not.toContain('const [portRelayTargetHost, setPortRelayTargetHost]');
     expect(mainTsx).not.toContain('setPortRelayTargetHost(snapshot.targetHost)');
     expect(mainTsx).toContain("targetHost: '127.0.0.1',");
-    expect(detailTsx).toContain("const portRelayTargetDisplay = selectedTarget ? `${selectedTarget.hubId} -> 127.0.0.1:${selectedTarget.targetPort}` : 'No target';");
-    expect(detailTsx).toContain('className="port-relay-target-inline"');
+    expect(detailTsx).toContain("const portRelayTargetDisplay = selectedTarget ? `${selectedTarget.hubId} → 127.0.0.1:${selectedTarget.targetPort}` : 'No target';");
+    expect(detailTsx).toContain('port-relay-target-display');
     expect(detailTsx).toContain('{portRelayTargetDisplay}');
     expect(detailTsx).toContain('className="port-relay-target-list"');
     expect(detailTsx).toContain('type="checkbox"');
@@ -275,10 +275,10 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("if (settingsDetailView !== 'portRelay' || portRelayAccessCode || portRelaySnapshot.enabled) {");
     expect(mainTsx).toContain('setPortRelayAccessCode(generatePortRelayAccessCode());');
 
-    expect(stylesCss).toContain('.port-relay-section');
-    expect(stylesCss).toContain('.port-relay-target-inline');
-    expect(stylesCss).toContain('.port-relay-target-list-row');
-    expect(stylesCss).toContain('.port-relay-target-delete');
+    expect(stylesCss).toContain('.port-relay-stack');
+    expect(stylesCss).toContain('.port-relay-target-display');
+    expect(stylesCss).toContain('.port-relay-target-row');
+    expect(stylesCss).toContain('.port-relay-add-form');
   });
 
   test('adds a copy action beside generated relay access code and polished relay panel styling', () => {
@@ -293,30 +293,30 @@ describe('port relay settings UI source structure', () => {
     expect(detailTsx).toContain('aria-label="Copy port relay access code"');
     expect(detailTsx).toContain("{portRelayCodeCopied ? 'Copied' : 'Copy'}");
 
-    expect(stylesCss).toContain('.port-relay-panel-shell');
-    expect(stylesCss).toContain('.port-relay-control-section');
-    expect(stylesCss).toContain('.port-relay-section-title');
-    expect(stylesCss).toContain('.port-relay-copy-btn');
-    expect(stylesCss).toContain('.port-relay-status-section::before');
+    expect(stylesCss).toContain('.port-relay-stack');
+    expect(stylesCss).toContain('.set-card');
+    expect(stylesCss).toContain('.set-card-title');
+    expect(stylesCss).toContain('.port-relay-code-row');
+    expect(stylesCss).toContain('.set-status');
   });
 
   test('keeps the relay status area to one line without widening the settings panel', () => {
-    const statusStart = detailTsx.indexOf('className="port-relay-section port-relay-status-section"');
+    const statusStart = detailTsx.indexOf('className="set-card set-card--tight port-relay-status"');
     const statusEnd = detailTsx.indexOf('{portRelayError || portRelaySnapshot.error ?', statusStart);
     const statusMarkup = detailTsx.slice(statusStart, statusEnd);
 
-    expect(statusMarkup).toContain('className="port-relay-header"');
-    expect(statusMarkup).toContain('className="port-relay-target-inline"');
+    expect(statusMarkup).toContain('className="set-card-head"');
+    expect(statusMarkup).toContain('port-relay-target-display');
     expect(statusMarkup).not.toContain('className="port-relay-target-row"');
     expect(statusMarkup).not.toContain('className="port-relay-url"');
 
-    const statusCssStart = stylesCss.indexOf('.port-relay-status-section');
-    const statusCssEnd = stylesCss.indexOf('.port-relay-form-grid', statusCssStart);
+    const statusCssStart = stylesCss.indexOf('.port-relay-target-display');
+    const statusCssEnd = stylesCss.indexOf('.port-relay-code-row', statusCssStart);
     const statusCss = stylesCss.slice(statusCssStart, statusCssEnd);
 
     expect(statusCss).toContain('min-width: 0;');
     expect(statusCss).toContain('overflow: hidden;');
-    expect(statusCss).toContain('.port-relay-target-inline');
+    expect(statusCss).toContain('.port-relay-target-display');
     expect(statusCss).toContain('text-overflow: ellipsis;');
     expect(stylesCss).toContain('.port-relay-code-row {');
     expect(stylesCss).toContain('flex-wrap: wrap;');
@@ -329,7 +329,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('setPortRelayError(\'Access code is unknown on this device. Generate a new code before switching target.\');');
     expect(detailTsx).toContain("placeholder={portRelayAccessCodeUnknown ? 'Unknown' : ''}");
     expect(detailTsx).toContain('disabled={portRelayAccessCodeUnknown || !portRelayAccessCode}');
-    expect(detailTsx).toContain("portRelayAccessCodeUnknown ? 'Reset Code' : 'Generate'");
+    expect(detailTsx).toContain("portRelayAccessCodeUnknown ? 'Reset' : 'Generate'");
     expect(mainTsx).toContain("setPortRelayError('Access code is unknown on this device. Generate a new code before copying.');");
     expect(mainTsx).toContain('setPortRelayKnownAccessCodeGeneration(typeof snapshot.accessCodeGeneration === \'number\' ? snapshot.accessCodeGeneration : null);');
   });

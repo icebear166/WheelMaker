@@ -122,12 +122,12 @@ describe('settings navigation model', () => {
     ).replace(/\r\n/g, '\n');
 
     expect(settingsCss).toMatch(/\.settings-detail-header \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 96%, transparent\);[\s\S]*\}/);
-    expect(settingsCss).toMatch(/\.settings-metadata-card,[\s\S]*\.settings-database-storage-metric,[\s\S]*\.settings-database-store-list,[\s\S]*\.update-summary-bar \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
+    expect(settingsCss).toMatch(/\.settings-metadata-card,[\s\S]*\.settings-database-storage-metric,[\s\S]*\.settings-database-store-list \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
     expect(settingsCss).toMatch(/\.settings-detail-action-btn \{[\s\S]*border-radius: var\(--radius-control\);[\s\S]*\}/);
     expect(settingsCss).not.toMatch(/var\(--(?:bg|panel|panel-2|panel-3|text|muted|border|accent|danger)\)/);
-    expect(portRelayCss).toMatch(/\.port-relay-section \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
-    expect(portRelayCss).toContain('var(--state-warning)');
-    expect(portRelayCss).toContain('var(--state-success)');
+    expect(settingsCss).toContain('.port-relay-stack');
+    expect(settingsCss).toContain('var(--state-warning)');
+    expect(settingsCss).toContain('var(--state-success)');
     expect(debugCss).toContain('var(--state-warning)');
     expect(debugCss).toMatch(/\.debug-log-detail-footer \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 96%, transparent\);[\s\S]*\}/);
   });

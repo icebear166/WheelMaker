@@ -80,7 +80,7 @@ test('overview bar shows latest version and Update All Hubs, drops summary metri
   });
   const json = JSON.stringify(tree!.toJSON());
   expect(json).toContain('v1.9');
-  expect(json).toContain('Update All Hubs');
+  expect(json).toContain('Update all hubs');
   expect(json).not.toMatch(/update-summary-bar|update-summary-metric/);
   expect(json).not.toMatch(/wheelmaker-release-history|Release history/);
   expect(json).not.toContain('Indexed projects');
@@ -103,7 +103,7 @@ test('hub card renders current version, update icon, and Update Hub when an upda
   expect(json).toContain('hub-1');
   expect(json).toContain('v1.5');
   expect(json).toContain('Update Hub');
-  expect(json).toContain('is-update');
+  expect(json).toContain('is-warn');
 });
 
 test('npm rows render Install / Update / Up to date plus an uninstall icon button', async () => {
@@ -126,7 +126,7 @@ test('npm rows render Install / Update / Up to date plus an uninstall icon butto
   expect(json).toContain('Install');
   expect(json).toContain('Update');
   expect(json).toContain('Up to date');
-  expect(json).toContain('codicon-trash');
+  expect(json).toContain('"data-icon-name":"trash"');
 });
 
 test('project rows show Scan and omit path and fileCount', async () => {
@@ -159,7 +159,7 @@ test('android card renders a single row with Download and Check, no meta grid', 
   });
   const json = JSON.stringify(tree!.toJSON());
   expect(json).toContain('Android APK');
-  expect(json).toContain('Download and Install');
+  expect(json).toContain('Download & Install');
   expect(json).toContain('Check');
   expect(json).not.toContain('android-apk-update-meta-grid');
 });
@@ -197,8 +197,8 @@ test('installed npm package shows reinstall and uninstall icon buttons', async (
     })} />);
   });
   const json = JSON.stringify(tree!.toJSON());
-  expect(json).toContain('codicon-sync');
-  expect(json).toContain('codicon-trash');
+  expect(json).toContain('"data-icon-name":"refreshCw"');
+  expect(json).toContain('"data-icon-name":"trash"');
 });
 
 test('not-installed npm package has no reinstall or uninstall button', async () => {
@@ -216,6 +216,6 @@ test('not-installed npm package has no reinstall or uninstall button', async () 
     })} />);
   });
   const json = JSON.stringify(tree!.toJSON());
-  expect(json).not.toContain('codicon-sync');
-  expect(json).not.toContain('codicon-trash');
+  expect(json).not.toContain('"data-icon-name":"refreshCw"');
+  expect(json).not.toContain('"data-icon-name":"trash"');
 });

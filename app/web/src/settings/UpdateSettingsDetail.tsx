@@ -1,5 +1,6 @@
 import React from 'react';
 
+import {Icon} from '../common/Icon';
 import {
   resolveAndroidApkUpdateStatus,
   type AndroidApkLatestRelease,
@@ -13,7 +14,6 @@ import {
   packageStatusLabel,
   projectIndexStatusIcon,
   shouldShowWheelMakerUpdateAction,
-  UPDATE_STATUS_ICON_CODICON,
   wheelMakerHubStatusIcon,
   wheelMakerUpdateErrorLabel,
   wheelMakerUpdateJobActive,
@@ -110,6 +110,21 @@ type UpdateSettingsDetailProps = {
   projectFileIndexStatusLabel: (status: string) => string;
 };
 
+function updateStatusDotVariant(kind: 'update' | 'current' | 'checking' | 'failed' | 'missing'): string {
+  switch (kind) {
+    case 'current':
+      return 'is-ok';
+    case 'checking':
+      return 'is-running';
+    case 'failed':
+      return 'is-error';
+    case 'update':
+      return 'is-warn';
+    default:
+      return 'is-idle';
+  }
+}
+
 function hubStatusLabel(
   pending: boolean,
   jobActive: boolean,
@@ -164,6 +179,8 @@ export function UpdateSettingsDetail({
   agentPackageActionForPackage,
   agentPackageActionKey,
   agentPackageActionLabel,
+  androidApkUpdateStatusLabel,
+  projectFileIndexStatusLabel,
 }: UpdateSettingsDetailProps) {
   const stableRelease = wheelMakerPublicMetadata?.stable ?? null;
   const androidApkUpdateStatus = resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease);
@@ -192,72 +209,76 @@ export function UpdateSettingsDetail({
   return (
     <>
       {androidApkUpdateSupported ? (
-        <div className="settings-metadata-card android-apk-update-card">
-          <div className="android-apk-update-row">
-            <span className="codicon codicon-device-mobile" aria-hidden="true" />
-            <span className="wheelmaker-update-scope">Android APK</span>
-            <span className="android-apk-update-versions">
+        <div className="set-card set-card--tight update-apk-card">
+          <div className="update-apk-row">
+            <Icon name="smartphone" size={15} className="update-apk-icon" />
+            <span className="update-apk-scope">Android APK</span>
+            <span className="update-apk-versions set-mono set-num">
               {androidApkLocalRelease?.versionName ? `v${androidApkLocalRelease.versionName}` : '-'}
               {androidApkUpdateStatus === 'update_available' && androidApkLatestRelease?.tagName
                 ? ` → ${androidApkLatestRelease.tagName}`
                 : ''}
             </span>
-            <span className={`update-status-icon is-${androidApkIconKind}`} aria-hidden="true">
-              <span className={`codicon ${UPDATE_STATUS_ICON_CODICON[androidApkIconKind]}`} />
-            </span>
-            <div className="android-apk-update-actions">
+            <span
+              className={`set-status ${updateStatusDotVariant(androidApkIconKind)}`}
+              title={androidApkUpdateStatusLabel(androidApkUpdateStatus)}
+              aria-label={androidApkUpdateStatusLabel(androidApkUpdateStatus)}
+            />
+            <span className="set-card-spacer" />
+            <div className="update-apk-actions">
               <button
                 type="button"
-                className="wheelmaker-update-action-btn android-apk-update-action-btn primary"
+                className="set-btn set-btn--primary"
                 disabled={androidApkInstallDisabled}
                 title={androidApkNoPermission ? 'Install permission needed' : undefined}
                 onClick={() => requestAndroidApkInstall().catch(() => undefined)}
               >
-                {androidApkInstallPending ? 'Preparing...' : 'Download and Install'}
+                {androidApkInstallPending ? 'Preparing...' : 'Download & Install'}
               </button>
               <button
                 type="button"
-                className="wheelmaker-update-action-btn android-apk-update-action-btn"
+                className="set-btn"
                 disabled={androidApkUpdateLoading}
                 onClick={() => refreshAndroidApkUpdate().catch(() => undefined)}
               >
+                {androidApkUpdateLoading ? <Icon name="loader" spin size={13} /> : null}
                 {androidApkUpdateLoading ? 'Checking...' : 'Check'}
               </button>
             </div>
           </div>
           {androidApkUpdateError ? (
-            <div className="settings-metadata-error">{androidApkUpdateError}</div>
+            <div className="set-error">{androidApkUpdateError}</div>
           ) : null}
         </div>
       ) : null}
 
-      <div className="update-overview-bar">
+      <div className="update-overview">
         <span className="update-overview-version">
           <span className="update-overview-label">Latest</span>
-          <span className="update-overview-value">{stableRelease?.version || '-'}</span>
+          <span className="update-overview-value set-mono set-num">{stableRelease?.version || '-'}</span>
         </span>
         <button
           type="button"
-          className="wheelmaker-update-all-btn"
+          className="set-btn set-btn--primary set-btn--lg"
           disabled={wheelMakerRequestableHubIds.length === 0 || wheelMakerUpdateAllPending}
           onClick={() => requestWheelMakerUpdateAll(wheelMakerRequestableHubIds)}
         >
-          <span className={`codicon ${wheelMakerUpdateAllPending ? 'codicon-loading codicon-modifier-spin' : 'codicon-cloud-download'}`} />
-          <span>{wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'}</span>
+          {wheelMakerUpdateAllPending ? <Icon name="loader" spin size={14} /> : <Icon name="cloudDownload" size={14} />}
+          <span>{wheelMakerUpdateAllPending ? 'Updating all hubs...' : 'Update all hubs'}</span>
         </button>
       </div>
 
       {(wheelMakerUpdatesLoading || agentPackagesLoading || projectIndexLoading) && updateHubCards.length === 0 ? (
-        <div className="muted block">Scanning hubs...</div>
+        <div className="set-muted">Scanning hubs...</div>
       ) : null}
       {wheelMakerUpdatesError || agentPackagesError || projectIndexError ? (
-        <div className="muted block settings-metadata-error">{wheelMakerUpdatesError || agentPackagesError || projectIndexError}</div>
+        <div className="set-error">{wheelMakerUpdatesError || agentPackagesError || projectIndexError}</div>
       ) : null}
       {!scanningHubs && updateHubCards.length === 0 && !wheelMakerUpdatesError && !agentPackagesError && !projectIndexError ? (
-        <div className="muted block">No hubs available.</div>
+        <div className="set-muted">No hubs available.</div>
       ) : null}
 
-      <div className="settings-metadata-list agent-package-hub-list">
+      <div className="update-hub-list">
         {updateHubCards.map(card => {
           const wheelMaker = card.wheelMaker;
           const wheelMakerData = wheelMaker?.data ?? null;
@@ -309,7 +330,7 @@ export function UpdateSettingsDetail({
           const projectIndexScanAllPending = projectIndexScanAllPendingByHubId[card.hubId] === true;
 
           return (
-            <div key={`update-hub:${card.hubId}`} className="settings-metadata-card agent-package-hub-card">
+            <div key={`update-hub:${card.hubId}`} className="set-card update-hub-card">
               <div className="update-hub-row">
                 <span
                   className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.hubId)}`}
@@ -318,14 +339,17 @@ export function UpdateSettingsDetail({
                   <span className="wide-project-hub-dot" aria-hidden="true" />
                   <span className="wide-project-hub-label">{card.hubId}</span>
                 </span>
-                <span className="update-hub-current-version">{wheelMakerVersions.current}</span>
-                <span className={`update-status-icon is-${hubIconKind}`} aria-hidden="true">
-                  <span className={`codicon ${UPDATE_STATUS_ICON_CODICON[hubIconKind]}`} />
-                </span>
+                <span className="update-hub-current-version set-mono set-num">{wheelMakerVersions.current}</span>
+                <span
+                  className={`set-status ${updateStatusDotVariant(hubIconKind)}`}
+                  title={wheelMakerUpdateStatusLabel(wheelMakerData?.job?.state || '') || wheelMakerStatus}
+                  aria-label={wheelMakerStatus}
+                />
+                <span className="set-card-spacer" />
                 {showWheelMakerUpdateAction ? (
                   <button
                     type="button"
-                    className="wheelmaker-update-action-btn update-hub-action-btn"
+                    className="set-btn set-btn--primary"
                     disabled={wheelMakerUpdateAllPending || wheelMakerPending || wheelMakerJobActive}
                     onClick={() => requestWheelMakerUpdate(card.hubId, wheelMakerData)}
                   >
@@ -341,27 +365,27 @@ export function UpdateSettingsDetail({
                 ) : null}
               </div>
               {wheelMaker?.error || wheelMakerData?.errorCode || wheelMakerData?.job?.errorCode ? (
-                <div className="settings-metadata-error">
+                <div className="set-error">
                   {wheelMaker?.error || wheelMakerUpdateErrorLabel(wheelMakerData?.job?.errorCode || wheelMakerData?.errorCode)}
                 </div>
               ) : null}
 
-              <section className="npm-update-section">
-                <div className="npm-update-disclosure">
+              <section className="set-disclosure">
+                <div className="set-disclosure-head">
                   <button
                     type="button"
-                    className="npm-update-disclosure-btn"
+                    className="set-disclosure-btn"
                     aria-expanded={npmExpanded}
                     onClick={() => setExpandedNpmUpdateHubIds(prev => ({...prev, [card.hubId]: !prev[card.hubId]}))}
                   >
-                    <span className={`codicon ${npmExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
-                    <span className="npm-update-scope">NPM</span>
-                    <span className="npm-update-count">{npmUpdatable.length} updates</span>
-                    <span className="npm-update-total">{allPackages.length} packages</span>
+                    <Icon name="chevronRight" size={13} />
+                    <span className="update-disclosure-scope">NPM</span>
+                    <span className="set-disclosure-count set-num">{npmUpdatable.length} updates</span>
+                    <span className="update-disclosure-total set-num">{allPackages.length} packages</span>
                   </button>
                   <button
                     type="button"
-                    className="npm-update-action-btn"
+                    className="set-btn"
                     disabled={npmUpdatable.length === 0 || npmActionDisabled}
                     onClick={() => requestAgentPackageHubUpdate(card.hubId, npmUpdatable)}
                   >
@@ -369,9 +393,9 @@ export function UpdateSettingsDetail({
                   </button>
                 </div>
                 {npmExpanded ? (
-                  <div className="npm-update-body">
-                    {hub?.warning ? (<div className="settings-metadata-error">{hub.warning}</div>) : null}
-                    {agentCard?.error || hub?.error ? (<div className="settings-metadata-error">{agentCard?.error || hub?.error}</div>) : null}
+                  <div className="set-disclosure-body">
+                    {hub?.warning ? (<div className="set-error">{hub.warning}</div>) : null}
+                    {agentCard?.error || hub?.error ? (<div className="set-error">{agentCard?.error || hub?.error}</div>) : null}
                     {operation ? (
                       <div className={`agent-package-task ${operation.status === 'failed' ? 'failed' : ''}`}>
                         <span>{packageStatusLabel(operation.status)}</span>
@@ -392,7 +416,7 @@ export function UpdateSettingsDetail({
                             </div>
                             <div className="agent-package-action-line">
                               {action === 'update' ? (
-                                <span className="agent-package-version-line">
+                                <span className="agent-package-version-line set-mono">
                                   <span>{pkg.installedVersion || '-'}</span>
                                   <span className="agent-package-version-arrow" aria-hidden="true">→</span>
                                   <span>{pkg.latestVersion || '-'}</span>
@@ -401,35 +425,35 @@ export function UpdateSettingsDetail({
                                 <span className="agent-package-idle">Up to date</span>
                               ) : null}
                               {action === 'update' ? (
-                                <button type="button" className="agent-package-action-btn" disabled={pending}
+                                <button type="button" className="set-btn set-btn--primary" disabled={pending}
                                   onClick={() => requestAgentPackageAction('update', card.hubId, pkg)}>
                                   {pending ? 'Running...' : agentPackageActionLabel('update')}
                                 </button>
                               ) : null}
                               {action === 'install' ? (
-                                <button type="button" className="agent-package-action-btn" disabled={pending}
+                                <button type="button" className="set-btn set-btn--primary" disabled={pending}
                                   onClick={() => requestAgentPackageAction('install', card.hubId, pkg)}>
                                   {pending ? 'Running...' : agentPackageActionLabel('install')}
                                 </button>
                               ) : null}
                               {pkg.installed ? (
-                                <button type="button" className="agent-package-action-btn npm-row-reinstall-btn" disabled={pending}
+                                <button type="button" className="set-btn set-btn--icon" disabled={pending}
                                   title={agentPackageActionLabel('reinstall')}
                                   aria-label={agentPackageActionLabel('reinstall')}
                                   onClick={() => requestAgentPackageAction('reinstall', card.hubId, pkg)}>
-                                  <span className="codicon codicon-sync" aria-hidden="true" />
+                                  <Icon name="refreshCw" size={13} />
                                 </button>
                               ) : null}
                               {pkg.canUninstall ? (
-                                <button type="button" className="agent-package-action-btn npm-row-uninstall-btn" disabled={pending}
+                                <button type="button" className="set-btn set-btn--icon set-btn--danger" disabled={pending}
                                   title={agentPackageActionLabel('uninstall')}
                                   aria-label={agentPackageActionLabel('uninstall')}
                                   onClick={() => requestAgentPackageAction('uninstall', card.hubId, pkg)}>
-                                  <span className="codicon codicon-trash" aria-hidden="true" />
+                                  <Icon name="trash" size={13} />
                                 </button>
                               ) : null}
                             </div>
-                            {pkg.error ? (<div className="settings-metadata-error">{pkg.error}</div>) : null}
+                            {pkg.error ? (<div className="set-error">{pkg.error}</div>) : null}
                           </div>
                         );
                       })}
@@ -438,31 +462,31 @@ export function UpdateSettingsDetail({
                 ) : null}
               </section>
 
-              <section className="project-index-section">
-                <div className="project-index-disclosure">
+              <section className="set-disclosure">
+                <div className="set-disclosure-head">
                   <button
                     type="button"
-                    className="npm-update-disclosure-btn project-index-disclosure-btn"
+                    className="set-disclosure-btn"
                     aria-expanded={projectIndexExpanded}
                     onClick={() => setExpandedProjectIndexHubIds(prev => ({...prev, [card.hubId]: !prev[card.hubId]}))}
                   >
-                    <span className={`codicon ${projectIndexExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
-                    <span className="project-index-scope">Projects</span>
-                    <span className="project-index-count">{projectIndexIndexedCount}/{projectIndexProjects.length} indexed</span>
+                    <Icon name="chevronRight" size={13} />
+                    <span className="update-disclosure-scope">Projects</span>
+                    <span className="set-disclosure-count set-num">{projectIndexIndexedCount}/{projectIndexProjects.length} indexed</span>
                   </button>
                   <button
                     type="button"
-                    className="project-index-action-btn"
+                    className="set-btn"
                     disabled={projectIndexProjects.length === 0 || projectIndexScanAllPending}
                     onClick={() => handleScanAllProjectIndexes(card.hubId, projectIndexProjects)}
                   >
-                    {projectIndexScanAllPending ? 'Scanning...' : 'Scan All'}
+                    {projectIndexScanAllPending ? 'Scanning...' : 'Scan all'}
                   </button>
                 </div>
                 {projectIndexExpanded ? (
-                  <div className="project-index-body">
+                  <div className="set-disclosure-body">
                     {projectIndexProjects.length === 0 ? (
-                      <div className="project-index-empty">No projects</div>
+                      <div className="set-muted">No projects</div>
                     ) : projectIndexProjects.map(project => {
                       const projectPending = projectIndexScanPendingByProjectId[project.projectId] === true ||
                         project.running === true ||
@@ -471,14 +495,16 @@ export function UpdateSettingsDetail({
                       return (
                         <div key={`${card.hubId}:project-index:${project.projectId}`} className="project-index-row">
                           <span className="settings-metadata-title" title={project.name}>{project.name}</span>
-                          <span className={`update-status-icon is-${projectIconKind}`} aria-hidden="true">
-                            <span className={`codicon ${UPDATE_STATUS_ICON_CODICON[projectIconKind]}`} />
-                          </span>
-                          <button type="button" className="project-index-action-btn" disabled={projectPending}
+                          <span
+                            className={`set-status ${updateStatusDotVariant(projectIconKind)}`}
+                            title={projectFileIndexStatusLabel(project.status)}
+                            aria-label={projectFileIndexStatusLabel(project.status)}
+                          />
+                          <button type="button" className="set-btn" disabled={projectPending}
                             onClick={() => handleScanProjectIndex(card.hubId, project.projectId)}>
                             {projectIndexScanPendingByProjectId[project.projectId] ? 'Scanning...' : 'Scan'}
                           </button>
-                          {project.error ? (<div className="settings-metadata-error">{project.error}</div>) : null}
+                          {project.error ? (<div className="set-error">{project.error}</div>) : null}
                         </div>
                       );
                     })}

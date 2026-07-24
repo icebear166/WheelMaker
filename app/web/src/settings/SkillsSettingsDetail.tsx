@@ -2,6 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import {Icon, type IconName} from '../common/Icon';
 import {
   groupSkillsByCategory,
   isSkillActionPendingForHub,
@@ -114,7 +115,7 @@ function formatSkillFileSize(size?: number): string {
 
 function renderSkillIconButton(options: {
   label: string;
-  icon: string;
+  icon: IconName;
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
@@ -123,13 +124,13 @@ function renderSkillIconButton(options: {
   return (
     <button
       type="button"
-      className={`settings-skill-icon-btn${options.danger ? ' danger' : ''}`}
+      className={`set-btn set-btn--icon${options.danger ? ' set-btn--danger' : ''}`}
       disabled={options.disabled}
       onClick={options.onClick}
       title={options.label}
       aria-label={options.label}
     >
-      <span className={`codicon ${options.pending ? 'codicon-loading codicon-modifier-spin' : options.icon}`} />
+      <Icon name={options.pending ? 'loader' : options.icon} spin={options.pending} size={13} />
     </button>
   );
 }
@@ -149,7 +150,7 @@ function renderSkillDetailMetaRow(label: string, value?: string) {
 function renderSupportingFile(file: RegistrySkillSupportingFile) {
   return (
     <div key={file.relativePath} className="settings-skills-detail-file">
-      <span className={`codicon ${file.directory ? 'codicon-folder' : 'codicon-file'}`} aria-hidden="true" />
+      <Icon name={file.directory ? 'folder' : 'file'} size={13} />
       <span title={file.relativePath}>{file.relativePath}</span>
       <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
     </div>
@@ -195,21 +196,21 @@ export function SkillDetailPanel({
         </div>
         <button
           type="button"
-          className="settings-skill-icon-btn"
+          className="set-btn set-btn--icon"
           onClick={closeSkillDetail}
           title="Close"
           aria-label="Close"
         >
-          <span className="codicon codicon-close" />
+          <Icon name="x" size={14} />
         </button>
       </div>
       {loading ? (
         <div className="settings-skills-detail-status" role="status">
-          <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+          <Icon name="loader" spin size={13} />
           <span>Loading skill detail...</span>
         </div>
       ) : null}
-      {error ? <div className="settings-metadata-error">{error}</div> : null}
+      {error ? <div className="set-error">{error}</div> : null}
       {detail ? (
         <div className="settings-skills-detail-body">
           <section className="settings-skills-detail-section">
@@ -233,7 +234,7 @@ export function SkillDetailPanel({
             {managed ? (
               <button
                 type="button"
-                className="settings-detail-action-btn danger"
+                className="set-btn set-btn--danger"
                 disabled={hubActionPending}
                 onClick={() => requestSkillUninstall({
                   hubId: skillDetailTarget.hubId,
@@ -373,7 +374,7 @@ export function SkillsSettingsDetail({
           <div className="settings-skills-scope-title">{skillScopeLabel(activeInstallTarget)}</div>
           <button
             type="button"
-            className="settings-detail-action-btn"
+            className="set-btn"
             onClick={closeSkillInstallPanel}
           >
             Close
@@ -393,7 +394,7 @@ export function SkillsSettingsDetail({
           />
           <button
             type="button"
-            className="settings-detail-action-btn"
+            className="set-btn"
             disabled={skillSourceLoading}
             onClick={() => listSkillSource().catch(() => undefined)}
           >
@@ -401,7 +402,7 @@ export function SkillsSettingsDetail({
           </button>
         </div>
         {skillSourceError ? (
-          <div className="settings-metadata-error">{skillSourceError}</div>
+          <div className="set-error">{skillSourceError}</div>
         ) : null}
         {candidateNames.length > 0 ? (
           <div className="settings-skills-candidates">
@@ -433,7 +434,7 @@ export function SkillsSettingsDetail({
           <span className="settings-skill-meta">Selected: {skillSourceSelectedNames.length}</span>
           <button
             type="button"
-            className="settings-detail-action-btn"
+            className="set-btn set-btn--primary"
             disabled={skillSourceSelectedNames.length === 0}
             onClick={requestSkillInstallConfirm}
           >
@@ -492,7 +493,7 @@ export function SkillsSettingsDetail({
           <div className="settings-skills-scope-actions">
             {options.allowUpdate ? renderSkillIconButton({
               label: options.updateLabel || 'Update skills',
-              icon: 'codicon-sync',
+              icon: 'refreshCw',
               pending: options.updateIncludeProjects ? options.operationRunning : false,
               disabled: actionDisabled,
               onClick: () => requestSkillUpdate(options.updateIncludeProjects
@@ -501,14 +502,14 @@ export function SkillsSettingsDetail({
             }) : null}
             {renderSkillIconButton({
               label: 'Add skills',
-              icon: 'codicon-add',
+              icon: 'plus',
               disabled: actionDisabled,
               onClick: () => requestSkillInstall({hubId, scope: options.scope, projectName: options.projectName}),
             })}
           </div>
         </div>
         {options.error ? (
-          <div className="settings-metadata-error">{options.error}</div>
+          <div className="set-error">{options.error}</div>
         ) : null}
         {renderSkillInstallPanel({hubId, scope: options.scope, projectName: options.projectName})}
         <div className="settings-skills-scope-body">
@@ -526,7 +527,7 @@ export function SkillsSettingsDetail({
               <div className="settings-skills-bulk-actions">
                 <button
                   type="button"
-                  className="settings-detail-action-btn"
+                  className="set-btn"
                   disabled={selectedManagedNames.length === 0}
                   onClick={() => setScopeSkillSelection(scopeKey, [])}
                 >
@@ -534,7 +535,7 @@ export function SkillsSettingsDetail({
                 </button>
                 <button
                   type="button"
-                  className="settings-detail-action-btn danger"
+                  className="set-btn set-btn--danger"
                   disabled={selectedManagedNames.length === 0 || actionDisabled}
                   onClick={() => requestSkillBatchUninstall({
                     hubId,
@@ -550,7 +551,7 @@ export function SkillsSettingsDetail({
           ) : null}
           {groups.length === 0 && options.loading ? (
             <div className="settings-skills-empty settings-skills-empty-loading">
-              <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+              <Icon name="loader" spin size={13} />
               <span>Scanning skills...</span>
             </div>
           ) : null}
@@ -608,7 +609,7 @@ export function SkillsSettingsDetail({
                     </button>
                     {managed ? renderSkillIconButton({
                       label: pending ? 'Removing skill' : 'Uninstall skill',
-                      icon: 'codicon-trash',
+                      icon: 'trash',
                       danger: true,
                       pending,
                       disabled: actionDisabled,
@@ -666,16 +667,16 @@ export function SkillsSettingsDetail({
           </span>
           <span className="settings-skills-hub-picker-state">
             {activeSkillHub.loading ? (
-              <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+              <span className="set-status is-running" aria-label="Scanning" />
             ) : activeSkillHub.error ? (
-              <span className="codicon codicon-error" aria-label="Error" />
+              <span className="set-status is-error" aria-label="Error" />
             ) : activeSummary.operation?.running ? (
-              <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+              <span className="set-status is-running" aria-label="Running" />
             ) : (
-              <span className="codicon codicon-circle-filled" aria-hidden="true" />
+              <span className="set-status is-ok" aria-label="Ready" />
             )}
           </span>
-          <span className={`codicon ${skillHubMenuOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
+          <Icon name={skillHubMenuOpen ? 'chevronUp' : 'chevronDown'} size={14} className="settings-skills-hub-picker-chevron" />
         </button>
         {skillHubMenuOpen ? (
           <div className="settings-skills-hub-menu" role="listbox" aria-label="Skill hubs">
@@ -703,15 +704,15 @@ export function SkillsSettingsDetail({
                   </span>
                   <span className="settings-skills-hub-option-state">
                     {hub.loading ? (
-                      <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+                      <span className="set-status is-running" aria-label="Scanning" />
                     ) : hub.error ? (
-                      <span className="codicon codicon-error" aria-label="Error" />
+                      <span className="set-status is-error" aria-label="Error" />
                     ) : summary.operation?.running ? (
-                      <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+                      <span className="set-status is-running" aria-label="Running" />
                     ) : selected ? (
-                      <span className="codicon codicon-check" aria-hidden="true" />
+                      <Icon name="check" size={14} className="settings-skills-hub-option-check" />
                     ) : (
-                      <span className="codicon codicon-circle-filled" aria-hidden="true" />
+                      <span className="set-status is-ok" aria-label="Ready" />
                     )}
                   </span>
                 </button>
@@ -737,18 +738,18 @@ export function SkillsSettingsDetail({
             <span className="settings-skills-marketplace-label">Marketplace</span>
             <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
           </span>
-          <span className="codicon codicon-link-external" aria-hidden="true" />
+          <Icon name="externalLink" size={13} />
         </a>
       </div>
       <div className="settings-skills-list">
         {skillsScanning ? (
           <div className="settings-skills-scan-status" role="status" aria-live="polite">
-            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+            <Icon name="loader" spin size={13} />
             <span>{skillsScanStatusLabel}</span>
           </div>
         ) : null}
         {skillsError ? (
-          <div className="muted block settings-metadata-error">{skillsError}</div>
+          <div className="set-error">{skillsError}</div>
         ) : null}
         {!skillsScanning && skillHubCards.length === 0 && !skillsError ? (
           <div className="muted block">No hubs available.</div>
@@ -763,7 +764,7 @@ export function SkillsSettingsDetail({
           return (
             <section className="settings-skills-hub" key={`skills-hub:${activeSkillHub.hubId}`}>
               {activeSkillHub.error ? (
-                <div className="settings-metadata-error">{activeSkillHub.error}</div>
+                <div className="set-error">{activeSkillHub.error}</div>
               ) : null}
               {operation ? (
                 <div className={`agent-package-task ${operation.status === 'failed' ? 'failed' : ''}`}>

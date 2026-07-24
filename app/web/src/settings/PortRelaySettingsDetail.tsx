@@ -1,5 +1,6 @@
 import React from 'react';
 
+import {Icon} from '../common/Icon';
 import {samePortRelayTarget, type PortRelayTarget} from '../portRelay/portRelayTargets';
 import type {RegistryPortRelaySnapshot} from '../registry/registryTypes';
 
@@ -34,6 +35,13 @@ type PortRelaySettingsDetailProps = {
   disablePortRelay: () => Promise<void>;
 };
 
+function relayStatusVariant(statusClass: string): string {
+  if (statusClass === 'up') return 'is-ok';
+  if (statusClass === 'opening') return 'is-running';
+  if (statusClass === 'error') return 'is-error';
+  return 'is-idle';
+}
+
 export function PortRelaySettingsDetail({
   hubIds,
   portRelaySnapshot,
@@ -60,9 +68,11 @@ export function PortRelaySettingsDetail({
   enablePortRelay,
   disablePortRelay,
 }: PortRelaySettingsDetailProps) {
+  const [addingTarget, setAddingTarget] = React.useState(false);
   const selectedTarget = selectedPortRelayTarget ?? portRelayTargets[0] ?? null;
   const statusClass = String(portRelaySnapshot.status || 'Disabled').toLowerCase();
-  const portRelayTargetDisplay = selectedTarget ? `${selectedTarget.hubId} -> 127.0.0.1:${selectedTarget.targetPort}` : 'No target';
+  const statusVariant = relayStatusVariant(statusClass);
+  const portRelayTargetDisplay = selectedTarget ? `${selectedTarget.hubId} → 127.0.0.1:${selectedTarget.targetPort}` : 'No target';
   const listenPortNumber = Number(portRelayListenPort);
   const hasPendingListenPortChange =
     portRelaySnapshot.enabled &&
@@ -70,82 +80,93 @@ export function PortRelaySettingsDetail({
     Number.isInteger(listenPortNumber) &&
     listenPortNumber !== portRelaySnapshot.listenPort;
 
+  const commitDraft = () => {
+    const committed = commitPortRelayDraftTarget();
+    if (committed) {
+      setAddingTarget(false);
+    }
+  };
+
   return (
-    <div className="port-relay-panel port-relay-panel-shell">
-      <div className="port-relay-section port-relay-status-section">
-        <div className="port-relay-header">
-          <span className="port-relay-section-title">
-            <span className="codicon codicon-radio-tower" aria-hidden="true" />
-            Relay
-          </span>
-          <span className={`port-relay-status-pill ${statusClass}`}>{portRelaySnapshot.status}</span>
-          <code className="port-relay-target-inline" title={portRelayTargetDisplay}>
-            {portRelayTargetDisplay}
-          </code>
+    <div className="port-relay-stack">
+      <section className="set-card set-card--tight port-relay-status">
+        <div className="set-card-head">
+          <Icon name="radioTower" size={15} className="port-relay-section-icon" />
+          <span className="set-card-title">Relay</span>
+          <span className={`set-status ${statusVariant}`}>{portRelaySnapshot.status}</span>
+          <span className="set-card-spacer" />
         </div>
+        <code className="port-relay-target-display set-mono" title={portRelayTargetDisplay}>
+          {portRelayTargetDisplay}
+        </code>
         {hasPendingListenPortChange ? (
-          <div className="port-relay-pending-note">Listen port change applies on Enable.</div>
+          <div className="set-status is-warn port-relay-pending-note">Listen port change applies on Enable.</div>
         ) : null}
-      </div>
+      </section>
+
       {portRelayError || portRelaySnapshot.error ? (
-        <div className="settings-metadata-error">{portRelayError || portRelaySnapshot.error}</div>
+        <div className="set-error">{portRelayError || portRelaySnapshot.error}</div>
       ) : null}
-      <div className="port-relay-section port-relay-control-section">
-        <div className="port-relay-section-title">
-          <span className="codicon codicon-key" aria-hidden="true" />
-          Access
+
+      <section className="set-card">
+        <div className="set-card-head">
+          <Icon name="keyRound" size={15} className="port-relay-section-icon" />
+          <span className="set-card-title">Access</span>
         </div>
-        <div className="port-relay-form-grid">
-          <label>
-            <span>Listen Port</span>
-            <input
-              value={portRelayListenPort}
-              inputMode="numeric"
-              onChange={event => {
-                const nextValue = event.target.value.replace(/[^\d]/g, '').slice(0, 5);
-                const nextPort = Number(nextValue);
-                setPortRelayListenPort(nextValue);
-                if (Number.isInteger(nextPort) && nextPort >= 1 && nextPort <= 65535) {
-                  persistPortRelaySettings({listenPort: nextPort});
-                }
-              }}
-            />
-          </label>
-        </div>
-        <div className="port-relay-code-row">
+        <div className="set-field">
+          <span className="set-field-label">Listen Port</span>
           <input
-            value={portRelayAccessCodeUnknown ? '' : portRelayAccessCode}
-            placeholder={portRelayAccessCodeUnknown ? 'Unknown' : ''}
-            readOnly
-            aria-label="Port relay access code"
+            className="set-field-control"
+            value={portRelayListenPort}
+            inputMode="numeric"
+            onChange={event => {
+              const nextValue = event.target.value.replace(/[^\d]/g, '').slice(0, 5);
+              const nextPort = Number(nextValue);
+              setPortRelayListenPort(nextValue);
+              if (Number.isInteger(nextPort) && nextPort >= 1 && nextPort <= 65535) {
+                persistPortRelaySettings({listenPort: nextPort});
+              }
+            }}
           />
-          <button
-            type="button"
-            className="settings-detail-action-btn"
-            onClick={() => regeneratePortRelayAccessCode().catch(() => undefined)}
-            disabled={portRelayLoading}
-          >
-            {portRelayAccessCodeUnknown ? 'Reset Code' : 'Generate'}
-          </button>
-          <button
-            type="button"
-            className="settings-detail-action-btn port-relay-copy-btn"
-            onClick={() => copyPortRelayAccessCode().catch(() => undefined)}
-            disabled={portRelayAccessCodeUnknown || !portRelayAccessCode}
-            aria-label="Copy port relay access code"
-          >
-            <span className={`codicon ${portRelayCodeCopied ? 'codicon-check' : 'codicon-copy'}`} aria-hidden="true" />
-            {portRelayCodeCopied ? 'Copied' : 'Copy'}
-          </button>
         </div>
-      </div>
-      <div className="port-relay-section port-relay-targets-section">
-        <div className="port-relay-targets-header">
-          <span className="port-relay-section-title">
-            <span className="codicon codicon-server-process" aria-hidden="true" />
-            Targets
-          </span>
-          <span>{'Hub -> 127.0.0.1:Port'}</span>
+        <div className="set-field">
+          <span className="set-field-label">Access Code</span>
+          <div className="port-relay-code-row">
+            <input
+              className="set-field-control port-relay-code-input set-mono"
+              value={portRelayAccessCodeUnknown ? '' : portRelayAccessCode}
+              placeholder={portRelayAccessCodeUnknown ? 'Unknown' : ''}
+              readOnly
+              aria-label="Port relay access code"
+            />
+            <button
+              type="button"
+              className="set-btn"
+              onClick={() => regeneratePortRelayAccessCode().catch(() => undefined)}
+              disabled={portRelayLoading}
+            >
+              {portRelayAccessCodeUnknown ? 'Reset' : 'Generate'}
+            </button>
+            <button
+              type="button"
+              className="set-btn"
+              onClick={() => copyPortRelayAccessCode().catch(() => undefined)}
+              disabled={portRelayAccessCodeUnknown || !portRelayAccessCode}
+              aria-label="Copy port relay access code"
+            >
+              <Icon name={portRelayCodeCopied ? 'check' : 'copy'} size={13} />
+              {portRelayCodeCopied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="set-card">
+        <div className="set-card-head">
+          <Icon name="serverCog" size={15} className="port-relay-section-icon" />
+          <span className="set-card-title">Targets</span>
+          <span className="set-card-subtitle set-mono">Hub → 127.0.0.1:Port</span>
+          <span className="set-card-spacer" />
         </div>
         <div className="port-relay-target-list">
           {portRelayTargets.map(target => {
@@ -153,7 +174,7 @@ export function PortRelaySettingsDetail({
             return (
               <div
                 key={`${target.hubId}:${target.targetPort}`}
-                className={`port-relay-target-list-row${selected ? ' selected' : ''}`}
+                className={`port-relay-target-row${selected ? ' selected' : ''}`}
               >
                 <input
                   type="checkbox"
@@ -166,24 +187,30 @@ export function PortRelaySettingsDetail({
                   }}
                   aria-label={`Use ${target.hubId}:${target.targetPort}`}
                 />
-                <span className="port-relay-target-hub">{target.hubId}</span>
-                <code className="port-relay-target-port">{target.targetPort}</code>
+                <span className="port-relay-target-hub" title={target.hubId}>{target.hubId}</span>
+                <code className="port-relay-target-port set-mono">{target.targetPort}</code>
                 <button
                   type="button"
-                  className="port-relay-target-delete"
+                  className="set-btn set-btn--icon set-btn--danger"
                   onClick={() => deletePortRelayTarget(target).catch(() => undefined)}
                   disabled={portRelayLoading}
                   title="Delete target"
                   aria-label={`Delete ${target.hubId}:${target.targetPort}`}
                 >
-                  <span className="codicon codicon-close" />
+                  <Icon name="x" size={14} />
                 </button>
               </div>
             );
           })}
-          <div className="port-relay-target-list-row draft">
-            <span className="port-relay-target-check-spacer" aria-hidden="true" />
+          {portRelayTargets.length === 0 ? (
+            <div className="set-muted port-relay-target-empty">No targets yet.</div>
+          ) : null}
+        </div>
+
+        {addingTarget ? (
+          <div className="port-relay-add-form">
             <select
+              className="set-field-control"
               value={portRelayDraftHubId}
               onChange={event => setPortRelayDraftHubId(event.target.value)}
               disabled={hubIds.length === 0}
@@ -195,29 +222,54 @@ export function PortRelaySettingsDetail({
               ))}
             </select>
             <input
+              className="set-field-control port-relay-add-port set-mono"
               value={portRelayDraftPort}
               inputMode="numeric"
+              placeholder="Port"
+              autoFocus
               onChange={event => setPortRelayDraftPort(event.target.value.replace(/[^\d]/g, '').slice(0, 5))}
-              onBlur={() => {
-                commitPortRelayDraftTarget();
-              }}
               onKeyDown={event => {
                 if (event.key !== 'Enter') {
                   return;
                 }
                 event.preventDefault();
-                commitPortRelayDraftTarget();
+                commitDraft();
               }}
               aria-label="New relay target port"
             />
-            <span className="port-relay-target-delete-spacer" aria-hidden="true" />
+            <button
+              type="button"
+              className="set-btn set-btn--primary"
+              disabled={!portRelayDraftHubId || !portRelayDraftPort}
+              onClick={commitDraft}
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              className="set-btn"
+              onClick={() => setAddingTarget(false)}
+            >
+              Cancel
+            </button>
           </div>
-        </div>
-      </div>
+        ) : (
+          <button
+            type="button"
+            className="set-btn port-relay-add-btn"
+            onClick={() => setAddingTarget(true)}
+            disabled={hubIds.length === 0}
+          >
+            <Icon name="plus" size={14} />
+            Add target
+          </button>
+        )}
+      </section>
+
       <div className="port-relay-actions">
         <button
           type="button"
-          className="settings-detail-action-btn"
+          className="set-btn set-btn--primary set-btn--lg"
           onClick={() => enablePortRelay().catch(() => undefined)}
           disabled={portRelayLoading || !selectedTarget}
         >
@@ -225,17 +277,17 @@ export function PortRelaySettingsDetail({
         </button>
         <button
           type="button"
-          className="settings-detail-action-btn port-relay-clear-cache-btn"
+          className="set-btn"
           onClick={() => clearPortRelaySiteData().catch(() => undefined)}
           disabled={portRelayLoading || !portRelaySnapshot.enabled}
           aria-label="Clear relay cache and service worker data"
         >
-          <span className="codicon codicon-clear-all" aria-hidden="true" />
-          Clear Relay Cache
+          <Icon name="eraser" size={14} />
+          Clear Cache
         </button>
         <button
           type="button"
-          className="settings-detail-action-btn danger"
+          className="set-btn set-btn--danger"
           onClick={() => disablePortRelay().catch(() => undefined)}
           disabled={portRelayLoading || !portRelaySnapshot.enabled}
         >
