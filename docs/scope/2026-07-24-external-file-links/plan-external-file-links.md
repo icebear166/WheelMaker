@@ -30,7 +30,7 @@
 - Modify: `docs/wiki/features/features.md`
 - Modify: `docs/wiki/protocols/registry.md`
 
-- [ ] **Step 1: Rebase the uncommitted design documents onto current main**
+- [x] **Step 1: Rebase the uncommitted design documents onto current main**
 
 Run:
 
@@ -43,7 +43,7 @@ git stash pop
 
 Expected: the feature branch is based on current `origin/main`; the spec, plan, and wiki edits are restored without conflict.
 
-- [ ] **Step 2: Verify the approved documents**
+- [x] **Step 2: Verify the approved documents**
 
 Run:
 
@@ -55,7 +55,7 @@ git diff --cached --check
 
 Expected: the spec and both wiki topics contain the approved method and action boundaries; `git diff --cached --check` exits 0.
 
-- [ ] **Step 3: Commit the design record**
+- [x] **Step 3: Commit the design record**
 
 ```powershell
 git commit -m "docs: define external file link behavior"
@@ -69,7 +69,7 @@ Expected: one documentation commit; no production source is changed.
 - Modify: `app/web/src/preview/previewFileLink.ts`
 - Modify: `app/__tests__/web-preview-file-regressions.test.tsx`
 
-- [ ] **Step 1: Write failing parser tests**
+- [x] **Step 1: Write failing parser tests**
 
 Extend the `PreviewFileLinkModule` test type to expose `isAbsolutePreviewFilePath`, and replace the single selected-project assertion with table-driven cases using this result shape:
 
@@ -146,7 +146,7 @@ expect(isAbsolutePreviewFilePath!('/var/log/system.log')).toBe(true);
 expect(isAbsolutePreviewFilePath!('src/main.ts')).toBe(false);
 ```
 
-- [ ] **Step 2: Run the parser test and confirm RED**
+- [x] **Step 2: Run the parser test and confirm RED**
 
 Run:
 
@@ -157,7 +157,7 @@ npm test -- --runInBand __tests__/web-preview-file-regressions.test.tsx
 
 Expected: FAIL because the resolver does not return absolute/relative metadata, rejects `../`, and strips POSIX/UNC roots.
 
-- [ ] **Step 3: Implement lexical local-path resolution**
+- [x] **Step 3: Implement lexical local-path resolution**
 
 Change the exported contract to:
 
@@ -207,7 +207,7 @@ Implement `normalizeAbsoluteLocalPath`, `resolveAbsoluteLocalPath`, and `relativ
 For file URIs, build UNC paths as `//${parsed.hostname}${decodedPathname}`. For `vscode://file`, require `hostname.toLowerCase() === 'file'` and use the decoded pathname. Keep the existing JavaScript/VBScript and non-file scheme rejection.
 Before absolute-path classification, convert `/C:/path` to `C:/path` so WHATWG URL pathnames for Windows file URIs retain drive semantics.
 
-- [ ] **Step 4: Run parser tests and type-check**
+- [x] **Step 4: Run parser tests and type-check**
 
 Run:
 
@@ -218,7 +218,7 @@ npm run tsc:web
 
 Expected: PASS; no TypeScript errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/web/src/preview/previewFileLink.ts app/__tests__/web-preview-file-regressions.test.tsx
@@ -233,7 +233,7 @@ git commit -m "feat(app): resolve external file links"
 - Modify: `app/web/src/registry/registryMethods.ts`
 - Modify: `app/__tests__/web-registry-protocol-domain-service.test.ts`
 
-- [ ] **Step 1: Write failing protocol registration tests**
+- [x] **Step 1: Write failing protocol registration tests**
 
 Add both methods to `TestRegistryProtocolDomainTargetMethods` and assert their descriptors:
 
@@ -264,7 +264,7 @@ expect(registryMethodsTs).toContain("ProjectFSExternalRead: 'project.fs.external
 expect(registryMethodsTs).toContain("RegistryProtocolVersion = '2.6'");
 ```
 
-- [ ] **Step 2: Run protocol tests and confirm RED**
+- [x] **Step 2: Run protocol tests and confirm RED**
 
 Run:
 
@@ -277,7 +277,7 @@ npm test -- --runInBand __tests__/web-registry-protocol-domain-service.test.ts
 
 Expected: FAIL because the constants and descriptors do not exist.
 
-- [ ] **Step 3: Add constants and project-forward descriptors**
+- [x] **Step 3: Add constants and project-forward descriptors**
 
 Add these constants without changing `RegistryProtocolVersion`:
 
@@ -304,13 +304,13 @@ ProjectFSExternalInfo: 'project.fs.external.info',
 ProjectFSExternalRead: 'project.fs.external.read',
 ```
 
-- [ ] **Step 4: Run protocol tests**
+- [x] **Step 4: Run protocol tests**
 
 Run the two commands from Step 2.
 
 Expected: PASS; protocol version remains `2.6`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add server/internal/protocol/registry_methods.go server/internal/protocol/registry_methods_test.go app/web/src/registry/registryMethods.ts app/__tests__/web-registry-protocol-domain-service.test.ts
@@ -323,7 +323,7 @@ git commit -m "feat(registry): register external file reads"
 - Modify: `server/internal/hub/reporter.go`
 - Modify: `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: Write failing Hub integration tests**
+- [x] **Step 1: Write failing Hub integration tests**
 
 Extend `TestReporterRun_RegistersAndServesFSRequests` so the project is a child of a temporary base directory and `outside.txt` is its sibling:
 
@@ -355,7 +355,7 @@ if externalRead.Payload["path"] != filepath.Clean(externalPath) ||
 
 Send a relative path, a directory path, a missing absolute path, and an external read payload containing the returned hash as `knownHash`. Expect `INVALID_ARGUMENT` for relative/directory, `NOT_FOUND` for missing, and a full response with `notModified: false` for the hash case.
 
-- [ ] **Step 2: Run the Hub test and confirm RED**
+- [x] **Step 2: Run the Hub test and confirm RED**
 
 Run:
 
@@ -366,7 +366,7 @@ go test ./internal/hub -run TestReporterRun_RegistersAndServesFSRequests -count=
 
 Expected: FAIL because the old Hub returns `unsupported method on hub`.
 
-- [ ] **Step 3: Add external handlers and shared file response helpers**
+- [x] **Step 3: Add external handlers and shared file response helpers**
 
 Add switch cases:
 
@@ -398,7 +398,7 @@ The external info helper must reject directories and non-regular files with `INV
 
 Map `os.IsNotExist` to `NOT_FOUND`; keep other stat/read failures as `INTERNAL`.
 
-- [ ] **Step 4: Run focused and related Hub tests**
+- [x] **Step 4: Run focused and related Hub tests**
 
 Run:
 
@@ -409,7 +409,7 @@ go test ./internal/protocol ./internal/registry ./internal/hub
 
 Expected: PASS; existing project hash negotiation still works.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add server/internal/hub/reporter.go server/internal/hub/hub_test.go
@@ -423,7 +423,7 @@ git commit -m "feat(hub): read routed external files"
 - Modify: `app/web/src/registry/RegistryWorkspaceService.ts`
 - Add: `app/__tests__/web-external-file-service.test.ts`
 
-- [ ] **Step 1: Write failing repository/service tests**
+- [x] **Step 1: Write failing repository/service tests**
 
 Create a mock request test:
 
@@ -488,7 +488,7 @@ const unrelated = new RegistryRequestError(
 expect(() => translateExternalFileError(unrelated)).toThrow(unrelated);
 ```
 
-- [ ] **Step 2: Run the new test and confirm RED**
+- [x] **Step 2: Run the new test and confirm RED**
 
 Run:
 
@@ -499,7 +499,7 @@ npm test -- --runInBand __tests__/web-external-file-service.test.ts
 
 Expected: FAIL because external repository and service methods do not exist.
 
-- [ ] **Step 3: Implement repository calls**
+- [x] **Step 3: Implement repository calls**
 
 Add:
 
@@ -519,7 +519,7 @@ async readExternalFile(
 
 Use `{path}` only for both payloads. Extract private `normalizeFileInfoResponse(payload)` and `normalizeFileReadResponse(payload, requestedPath)` helpers from the existing `getFileInfo` and `readFile` field mappings, then call those helpers from both project and external methods.
 
-- [ ] **Step 4: Implement service forwarding and old-Hub translation**
+- [x] **Step 4: Implement service forwarding and old-Hub translation**
 
 Import `RegistryMethods` from `./registryMethods`, then add:
 
@@ -569,7 +569,7 @@ export function translateExternalFileError(error: unknown): never {
 
 Do not change project file error handling.
 
-- [ ] **Step 5: Run tests and type-check**
+- [x] **Step 5: Run tests and type-check**
 
 Run:
 
@@ -580,7 +580,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add app/web/src/registry/RegistryRepository.ts app/web/src/registry/RegistryWorkspaceService.ts app/__tests__/web-external-file-service.test.ts
@@ -595,7 +595,7 @@ git commit -m "feat(app): request external file previews"
 - Modify: `app/__tests__/web-preview-workbench-state.test.ts`
 - Modify: `app/__tests__/web-disable-file-cache-settings.test.ts`
 
-- [ ] **Step 1: Write failing preview routing and restore tests**
+- [x] **Step 1: Write failing preview routing and restore tests**
 
 Add a state test proving an absolute file path survives snapshot/restore without content:
 
@@ -631,7 +631,7 @@ expect(mainTsx).toContain('disabled={!chatFilePeek?.path || isAbsolutePreviewFil
 
 Keep the existing directory-cache assertions unchanged.
 
-- [ ] **Step 2: Run preview tests and confirm RED**
+- [x] **Step 2: Run preview tests and confirm RED**
 
 Run:
 
@@ -642,7 +642,7 @@ npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts __tests__/we
 
 Expected: FAIL because preview loading always calls project file methods.
 
-- [ ] **Step 3: Route initial and restored file loads**
+- [x] **Step 3: Route initial and restored file loads**
 
 Import `isAbsolutePreviewFilePath`. In both `readChatFilePeek` and the file branch of `loadRestoredPreviewTab`, select the service methods from the path:
 
@@ -660,7 +660,7 @@ Use the restored tab's `projectId` and `path` in the restored branch. Keep the s
 
 Guard `locateActivePreviewFileInTree` and its toolbar button with `isAbsolutePreviewFilePath(chatFilePeek.path)`. The project tree may remain visible, but an external path must never be expanded, selected, or searched for in that tree.
 
-- [ ] **Step 4: Run preview tests and type-check**
+- [x] **Step 4: Run preview tests and type-check**
 
 Run:
 
@@ -671,7 +671,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/web/src/app/WorkspaceApp.tsx app/__tests__/web-chat-file-peek-viewer.test.ts app/__tests__/web-preview-workbench-state.test.ts app/__tests__/web-disable-file-cache-settings.test.ts
@@ -691,7 +691,7 @@ git commit -m "feat(app): preview external files"
 - Modify: `app/web/src/platform/desktop/desktopRuntime.ts`
 - Modify: `app/__tests__/web-desktop-runtime.test.ts`
 
-- [ ] **Step 1: Write failing native absolute-path tests**
+- [x] **Step 1: Write failing native absolute-path tests**
 
 Add environment tests:
 
@@ -731,7 +731,7 @@ Add table cases rejecting relative, missing, and directory paths without launchi
 
 Extend bridge policy matrices so `desktopBridgeOpenFileInVSCode` and `desktopBridgeShowFileInFolder` are allowed only for the same committed trusted remote main-frame pages as existing project file actions, and denied for bootstrap, local dev, iframe, wrong origin, and outside-base-path pages.
 
-- [ ] **Step 2: Write failing App runtime tests**
+- [x] **Step 2: Write failing App runtime tests**
 
 Extend `DesktopWindowBridge` test doubles with:
 
@@ -758,7 +758,7 @@ expect(openProjectFileInVSCode).not.toHaveBeenCalled();
 
 Also prove an old Desktop bridge falls back to `openProjectFileInVSCode(projectRoot, relativePath)` for an internal target, while an external target rejects with `Desktop file action is unavailable.` when the absolute binding is missing.
 
-- [ ] **Step 3: Run Desktop tests and confirm RED**
+- [x] **Step 3: Run Desktop tests and confirm RED**
 
 Run:
 
@@ -771,7 +771,7 @@ npm test -- --runInBand __tests__/web-desktop-runtime.test.ts
 
 Expected: FAIL because the absolute actions and bridge methods do not exist.
 
-- [ ] **Step 4: Implement common native resolved-file actions**
+- [x] **Step 4: Implement common native resolved-file actions**
 
 Add:
 
@@ -785,7 +785,7 @@ func (environment desktopFileActionEnvironment) showFileInFolder(absolutePath st
 
 `resolveDesktopAbsoluteFilePath` must require `filepath.IsAbs`, clean the path, stat it, and require `Mode().IsRegular()`. Extract launch helpers so both new absolute actions and old project-relative actions share VS Code discovery and the final `launch` calls. Preserve the old project's missing-file Explorer fallback; the new absolute Explorer action requires an existing regular file.
 
-- [ ] **Step 5: Expose and authorize the absolute bindings**
+- [x] **Step 5: Expose and authorize the absolute bindings**
 
 Add private bindings and trusted-page methods:
 
@@ -801,7 +801,7 @@ showFileInFolder: invoke('__wheelMakerDesktopShowFileInFolder'),
 
 Bind each method in `webview_windows.go`, call `authorize` with its dedicated policy action, and invoke the new environment method. Do not expose either binding in bootstrap or local-dev objects.
 
-- [ ] **Step 6: Implement App capability selection**
+- [x] **Step 6: Implement App capability selection**
 
 Add to `DesktopWindowBridge`:
 
@@ -834,7 +834,7 @@ export async function invokeDesktopFileAction(
 
 Prefer `openFileInVSCode/showFileInFolder` with `absolutePath`. If the new method is absent and `relativePath`, `projectRoot`, and the matching old project method exist, call the old method. Never send an external absolute path through a project-relative binding. Keep `invokeDesktopProjectFileAction` exported for existing callers and tests.
 
-- [ ] **Step 7: Run Desktop suites**
+- [x] **Step 7: Run Desktop suites**
 
 Run:
 
@@ -848,7 +848,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add server/cmd/wheelmaker-desktop/desktop_file_actions_windows.go server/cmd/wheelmaker-desktop/desktop_file_actions_windows_test.go server/cmd/wheelmaker-desktop/desktop_bridge.go server/cmd/wheelmaker-desktop/webview_policy.go server/cmd/wheelmaker-desktop/webview_policy_test.go server/cmd/wheelmaker-desktop/webview_windows.go server/cmd/wheelmaker-desktop/webview_windows_test.go app/web/src/platform/desktop/desktopRuntime.ts app/__tests__/web-desktop-runtime.test.ts
@@ -864,7 +864,7 @@ git commit -m "feat(desktop): open absolute files"
 - Modify: `app/web/src/styles/chat.css`
 - Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
 
 Render the component with React Test Renderer. For an internal reference and Desktop capabilities, assert this exact label order:
 
@@ -939,7 +939,7 @@ jest.spyOn(window, 'removeEventListener').mockImplementation((type, listener) =>
 });
 ```
 
-- [ ] **Step 2: Run the component test and confirm RED**
+- [x] **Step 2: Run the component test and confirm RED**
 
 Run:
 
@@ -950,7 +950,7 @@ npm test -- --runInBand __tests__/web-chat-file-link-context-menu.test.tsx
 
 Expected: FAIL because the component does not exist.
 
-- [ ] **Step 3: Implement the focused menu component**
+- [x] **Step 3: Implement the focused menu component**
 
 Use this prop contract:
 
@@ -977,7 +977,7 @@ Render a fixed `role="menu"` container and `role="menuitem"` buttons. Use the ex
 
 Do not add SVG files or icon dependencies. Only render `Copy relative path` when `link.relativePath !== null`. Register and clean up capture-phase outside pointer, Escape, capture-phase scroll, and resize listeners while mounted.
 
-- [ ] **Step 4: Style the menu with existing design tokens**
+- [x] **Step 4: Style the menu with existing design tokens**
 
 Add `.chat-file-link-context-menu` rules to `chat.css` using:
 
@@ -994,7 +994,7 @@ box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
 
 Match the existing preview menu's 28px rows, 7px icon gap, token colors, hover background, and focus-visible outline.
 
-- [ ] **Step 5: Wire right-click state and actions in WorkspaceApp**
+- [x] **Step 5: Wire right-click state and actions in WorkspaceApp**
 
 Store:
 
@@ -1036,11 +1036,11 @@ The menu action handler must:
 
 Render `ChatFileLinkContextMenu` beside the existing top-level `previewSelectionContextMenu`. Do not add long-press handlers.
 
-- [ ] **Step 6: Update Workspace wiring assertions**
+- [x] **Step 6: Update Workspace wiring assertions**
 
 Require the new import, `onContextMenu`, menu component, relative-path condition, absolute Desktop target, and top-level render. Keep ordinary click assertions and verify Relay/ordinary links do not open this menu.
 
-- [ ] **Step 7: Run menu and chat tests**
+- [x] **Step 7: Run menu and chat tests**
 
 Run:
 
@@ -1051,7 +1051,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add app/web/src/chat/ChatFileLinkContextMenu.tsx app/__tests__/web-chat-file-link-context-menu.test.tsx app/web/src/app/WorkspaceApp.tsx app/web/src/styles/chat.css app/__tests__/web-chat-file-peek-viewer.test.ts
@@ -1065,7 +1065,7 @@ git commit -m "feat(app): add file link context menu"
 - Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
 - Modify: `app/__tests__/web-preview-workbench-state.test.ts`
 
-- [ ] **Step 1: Write failing preview action assertions**
+- [x] **Step 1: Write failing preview action assertions**
 
 Update the preview action test to require:
 
@@ -1088,7 +1088,7 @@ expect(resolvePreviewDesktopFilePath(filePreviewTab({
 
 Assert `copyChatFilePreviewPath` uses `fileTarget.absolutePath` and does not concatenate `projectRoot` with an already absolute path.
 
-- [ ] **Step 2: Run preview tests and confirm RED**
+- [x] **Step 2: Run preview tests and confirm RED**
 
 Run:
 
@@ -1099,7 +1099,7 @@ npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts __tests__/we
 
 Expected: FAIL because preview actions still invoke only project-relative bindings and construct absolute paths by string concatenation.
 
-- [ ] **Step 3: Build one confirmed preview file target**
+- [x] **Step 3: Build one confirmed preview file target**
 
 In `renderPreviewWorkbenchActions`:
 
@@ -1122,7 +1122,7 @@ Use `canInvokeDesktopFileAction` for visibility and `invokeDesktopFileAction` fo
 
 Change `copyChatFilePreviewPath` to resolve the active file's server-confirmed `info.path` and copy `fileTarget.absolutePath`. Keep the existing preview action labels and order. Do not add `Copy relative path` to the preview overflow menu; that action is specific to the chat-link context menu.
 
-- [ ] **Step 4: Run preview and Desktop tests**
+- [x] **Step 4: Run preview and Desktop tests**
 
 Run:
 
@@ -1133,7 +1133,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/web/src/app/WorkspaceApp.tsx app/__tests__/web-chat-file-peek-viewer.test.ts app/__tests__/web-preview-workbench-state.test.ts
@@ -1145,7 +1145,7 @@ git commit -m "refactor(app): share preview file actions"
 **Files:**
 - Modify: `docs/scope/2026-07-24-external-file-links/plan-external-file-links.md` only to check completed steps and record final verification outcomes.
 
-- [ ] **Step 1: Run all focused App tests**
+- [x] **Step 1: Run all focused App tests**
 
 ```powershell
 cd app
@@ -1154,7 +1154,7 @@ npm test -- --runInBand __tests__/web-preview-file-regressions.test.tsx __tests_
 
 Expected: all suites PASS.
 
-- [ ] **Step 2: Run App type-check and production build**
+- [x] **Step 2: Run App type-check and production build**
 
 ```powershell
 npm run tsc:web
@@ -1163,7 +1163,7 @@ npm run build:web
 
 Expected: both commands exit 0; build output goes to `~/.wheelmaker/web`, not `app/dist`.
 
-- [ ] **Step 3: Run all relevant Go tests**
+- [x] **Step 3: Run all relevant Go tests**
 
 ```powershell
 cd ..\server
@@ -1191,7 +1191,7 @@ Confirm:
 6. A normal HTTPS link and a Relay link retain their existing behavior.
 7. An old Hub reports `This Hub does not support external file preview.` for only the external link.
 
-- [ ] **Step 5: Rebase on the latest remote main and rerun changed-area tests**
+- [x] **Step 5: Rebase on the latest remote main and rerun changed-area tests**
 
 ```powershell
 git fetch origin
@@ -1204,7 +1204,7 @@ go test ./internal/protocol ./internal/hub ./cmd/wheelmaker-desktop
 
 Expected: rebase completes without semantic conflict and all changed-area tests PASS. If the rebase changes behavior, rerun Steps 1–3.
 
-- [ ] **Step 6: Record verification and run the required completion gate**
+- [x] **Step 6: Record verification and run the required completion gate**
 
 Mark every completed checkbox in this plan, append the exact successful commands and outcomes under this step, then run from the feature worktree:
 
@@ -1215,6 +1215,16 @@ git push origin feat/external-file-links
 ```
 
 Expected: all three commands succeed in this exact order. Report the resulting commit hash and remote branch. Do not claim completion if any command fails.
+
+Verification recorded on 2026-07-24:
+
+- PASS: focused App Jest command, 9 suites and 124 tests.
+- PASS: `npm run tsc:web`.
+- PASS: `npm run build:web`; webpack rebuilt after worktree cache warnings and exited successfully.
+- PASS: `go test ./internal/protocol ./internal/registry ./internal/hub ./cmd/wheelmaker-desktop`.
+- PASS after `git fetch origin` and no-op rebase: changed-area App suites, 5 suites and 75 tests; changed-area Go packages.
+- PASS after root-path hardening: focused App suites, 9 suites and 124 tests, plus `npm run tsc:web`.
+- NOT RUN: interactive Desktop/browser smoke checks in Step 4; no interactive Desktop or authenticated Hub session is available in this environment.
 
 - [ ] **Step 7: Follow the configured merge preference**
 
