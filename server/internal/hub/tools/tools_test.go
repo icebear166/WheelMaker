@@ -498,8 +498,11 @@ func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
 	if !reflect.DeepEqual(codex.AgentTypes, []string{"codex"}) {
 		t.Fatalf("@openai/codex agentTypes=%v, want [codex]", codex.AgentTypes)
 	}
-	if codex.CanInstall || codex.CanUpdate || codex.CanUninstall {
-		t.Fatalf("codex action flags should be disabled while latest is checking: %#v", codex)
+	if codex.CanInstall || codex.CanUpdate {
+		t.Fatalf("codex install/update flags should be disabled while latest is checking: %#v", codex)
+	}
+	if !codex.CanUninstall {
+		t.Fatalf("installed runtime codex should be uninstallable: %#v", codex)
 	}
 
 	waitForNPMTestOperation(t, cmd)
@@ -514,8 +517,8 @@ func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
 	if codex.Status != "update_available" || codex.InstalledVersion != "0.129.0" || codex.LatestVersion != "0.130.0" {
 		t.Fatalf("codex package=%#v", codex)
 	}
-	if !codex.CanUpdate || codex.CanUninstall {
-		t.Fatalf("codex action flags=%#v", codex)
+	if !codex.CanUpdate || !codex.CanUninstall {
+		t.Fatalf("codex action flags=%#v, want CanUpdate and CanUninstall", codex)
 	}
 
 	deprecated := findNPMTestPackage(t, body.Hub.Packages, "@zed-industries/claude-agent-acp")
@@ -718,6 +721,57 @@ func TestNPMCommandAcceptsBulkRuntimeInstallAsSingleOperation(t *testing.T) {
 	}
 }
 
+func TestNPMCommandReinstallUninstallsThenInstallsLatest(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd := newNPMCommandWithRunner(runner)
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "reinstall",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("reinstall error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	if !body.Accepted || body.Operation == nil || body.Operation.Action != "reinstall" || body.Operation.PackageName != "@openai/codex" {
+		t.Fatalf("reinstall response=%#v", body)
+	}
+
+	operation := waitForNPMTestOperation(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("operation=%#v, want succeeded reinstall", operation)
+	}
+	if !runner.hasCall("npm", "uninstall", "-g", "@openai/codex") {
+		t.Fatalf("reinstall uninstall call not found: %#v", runner.calls)
+	}
+	if !runner.hasCall("npm", "install", "-g", "@openai/codex@latest") {
+		t.Fatalf("reinstall install call not found: %#v", runner.calls)
+	}
+}
+
+func TestNPMCommandUninstallAcceptsRuntimePackages(t *testing.T) {
+	runner := newFakeNPMRunner()
+	cmd := newNPMCommandWithRunner(runner)
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "uninstall",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("runtime uninstall error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	if body.Operation == nil || body.Operation.Action != "uninstall" {
+		t.Fatalf("runtime uninstall response=%#v", body)
+	}
+	waitForNPMTestOperation(t, cmd)
+	if !runner.hasCall("npm", "uninstall", "-g", "@openai/codex") {
+		t.Fatalf("runtime uninstall call not found: %#v", runner.calls)
+	}
+}
+
 func TestNPMCommandRejectsUnsupportedPackagePolicy(t *testing.T) {
 	cmd := newNPMCommandWithRunner(newFakeNPMRunner())
 	cases := []struct {
@@ -740,15 +794,6 @@ func TestNPMCommandRejectsUnsupportedPackagePolicy(t *testing.T) {
 				"action":      "install",
 				"hubId":       "hub-a",
 				"packageName": "@zed-industries/claude-agent-acp",
-			},
-			code: rp.CodeForbidden,
-		},
-		{
-			name: "runtime uninstall package",
-			payload: map[string]any{
-				"action":      "uninstall",
-				"hubId":       "hub-a",
-				"packageName": "@openai/codex",
 			},
 			code: rp.CodeForbidden,
 		},

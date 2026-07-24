@@ -276,6 +276,8 @@ func (c *NPMCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *npm
 		return c.startInstallMany(payload)
 	case "uninstall":
 		return c.startUninstall(payload)
+	case "reinstall":
+		return c.startReinstall(payload)
 	default:
 		return nil, &npmCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.npm action"}
 	}
@@ -318,7 +320,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 			Kind:             policy.Kind,
 			Installed:        installedVersion != "",
 			InstalledVersion: installedVersion,
-			CanUninstall:     false,
+			CanUninstall:     installedVersion != "",
 		}
 		latestResult, hasLatest := latest[policy.PackageName]
 		if hasLatest {
@@ -534,7 +536,7 @@ func (c *NPMCommand) startUninstall(payload npmCommandPayload) (any, *npmCommand
 	if payload.PackageName == "" {
 		return nil, &npmCommandError{Code: rp.CodeInvalidArgument, Message: "packageName is required"}
 	}
-	if !deprecatedPackageAllowed(payload.PackageName) {
+	if !packageUninstallable(payload.PackageName) {
 		return nil, &npmCommandError{Code: rp.CodeForbidden, Message: "package is not uninstallable"}
 	}
 	operation, cmdErr := c.acceptOperation("uninstall", payload.PackageName, "", nil)
@@ -543,6 +545,56 @@ func (c *NPMCommand) startUninstall(payload npmCommandPayload) (any, *npmCommand
 	}
 	go c.runCommandOperation(operation, "npm", "uninstall", "-g", payload.PackageName)
 	return npmCommandResponse{OK: true, Accepted: true, Operation: cloneNPMOperation(operation)}, nil
+}
+
+func (c *NPMCommand) startReinstall(payload npmCommandPayload) (any, *npmCommandError) {
+	if payload.PackageName == "" {
+		return nil, &npmCommandError{Code: rp.CodeInvalidArgument, Message: "packageName is required"}
+	}
+	if !packageUninstallable(payload.PackageName) {
+		return nil, &npmCommandError{Code: rp.CodeForbidden, Message: "package is not reinstallable"}
+	}
+	operation, cmdErr := c.acceptOperation("reinstall", payload.PackageName, "latest", nil)
+	if cmdErr != nil {
+		return nil, cmdErr
+	}
+	go c.runReinstallOperation(operation, payload.PackageName)
+	return npmCommandResponse{OK: true, Accepted: true, Operation: cloneNPMOperation(operation)}, nil
+}
+
+func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, packageName string) {
+	uninstallResult := c.runner.Run(context.Background(), "npm", "uninstall", "-g", packageName)
+	if commandFailed(uninstallResult) {
+		exitCode := uninstallResult.ExitCode
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.operation != operation {
+			return
+		}
+		operation.Running = false
+		operation.FinishedAt = c.now().Format(time.RFC3339)
+		operation.ExitCode = &exitCode
+		operation.Status = "failed"
+		operation.ErrorSummary = formatNPMTaskErrorSummary(uninstallResult.ExitCode, uninstallResult.Stdout, uninstallResult.Stderr, uninstallResult.Err)
+		return
+	}
+	installResult := c.runner.Run(context.Background(), "npm", "install", "-g", packageName+"@latest")
+	exitCode := installResult.ExitCode
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.operation != operation {
+		return
+	}
+	operation.Running = false
+	operation.FinishedAt = c.now().Format(time.RFC3339)
+	operation.ExitCode = &exitCode
+	if commandFailed(installResult) {
+		operation.Status = "failed"
+		operation.ErrorSummary = formatNPMTaskErrorSummary(installResult.ExitCode, installResult.Stdout, installResult.Stderr, installResult.Err)
+		return
+	}
+	operation.Status = "succeeded"
+	operation.Message = c.installSuccessMessage(packageName, "latest")
 }
 
 func (c *NPMCommand) acceptOperation(action string, packageName string, version string, packageNames []string) (*npmOperationSnapshot, *npmCommandError) {
@@ -684,6 +736,10 @@ func deprecatedPackageAllowed(packageName string) bool {
 		}
 	}
 	return false
+}
+
+func packageUninstallable(packageName string) bool {
+	return runtimePackageAllowed(packageName) || deprecatedPackageAllowed(packageName)
 }
 
 func commandFailed(result npmCommandResult) bool {
