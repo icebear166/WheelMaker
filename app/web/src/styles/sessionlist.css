@@ -125,6 +125,13 @@
   color: var(--accent-primary);
   opacity: 1;
 }
+/* persistent affordance: always-visible actions read as clickable buttons */
+.sl-action-primary,
+.recent-sessions-collapse-btn,
+.recent-project-divider-create {
+  background: var(--hover);
+  color: var(--text-secondary);
+}
 .sl-action-secondary {
   opacity: 0;
 }
@@ -238,7 +245,9 @@
   flex: none;
   display: inline-flex;
   align-items: center;
-  max-width: 96px;
+  justify-content: center;
+  /* fixed-width capsule: every row's pill forms one aligned column */
+  width: 64px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -542,4 +551,31 @@
   .sl-icon-spin {
     animation-duration: 1.8s;
   }
+}
+
+/* affordance hover feedback (kept last so it wins over per-button hover rules) */
+.sl-action-primary:hover,
+.recent-sessions-collapse-btn:hover,
+.recent-project-divider-create:hover {
+  background: var(--surface-active);
+  color: var(--text-primary);
+}
+
+/* ---------- recent block distinction ---------- */
+/* the Recent block reads as one smart section above the plain project list */
+.wide-project-section.recent-sessions-section {
+  background: color-mix(in srgb, var(--accent-primary) 4%, transparent);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  padding-bottom: 2px;
+}
+.recent-sessions-section .recent-sessions-icon {
+  color: var(--accent-primary);
+}
+/* compact: tighten the gap between the project title row and its sessions */
+[data-session-list-density="compact"] .wide-project-toggle {
+  padding: 3px 6px;
+}
+[data-session-list-density="compact"] .wide-project-session-list {
+  margin-top: 1px;
 }

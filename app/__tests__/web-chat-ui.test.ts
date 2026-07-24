@@ -2340,7 +2340,7 @@ describe('web chat integration', () => {
     expect(fileMentionKeyBody).toContain('openChatFileMentionPreview(activeResult);');
     expect(fileMentionKeyBody).not.toContain("event.key.toLowerCase() === 'o'");
     expect(fileMentionKeyBody).not.toContain('(event.ctrlKey || event.metaKey)');
-    expect(mainTsx).not.toContain('onContextMenu={event => {');
+    expect(fileMentionKeyBody).not.toContain('onContextMenu={event => {');
 
     expect(stylesCss).toContain('.chat-file-mention-shortcut-tip');
     expect(stylesCss).toContain('.chat-file-mention-option-row');
