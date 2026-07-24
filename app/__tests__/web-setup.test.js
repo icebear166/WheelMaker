@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const {createHash} = require('crypto');
 
 function loadWebpackConfig(projectRoot, mode = 'production') {
   const webpackConfigPath = path.join(projectRoot, 'web', 'webpack.config.js');
@@ -208,13 +209,23 @@ describe('web runtime setup', () => {
     expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
-  test('webpack persists build cache outside node_modules across dependency installs', () => {
+  test('webpack persists build cache outside node_modules and isolates worktrees', () => {
     const projectRoot = path.join(__dirname, '..');
     const webpackConfig = loadWebpackConfig(projectRoot, 'production');
+    const worktreeKey = createHash('sha256')
+      .update(path.resolve(projectRoot, '..'))
+      .digest('hex')
+      .slice(0, 12);
 
     expect(webpackConfig.cache).toEqual({
       type: 'filesystem',
-      cacheDirectory: path.join(require('os').homedir(), '.wheelmaker', 'cache', 'webpack'),
+      cacheDirectory: path.join(
+        require('os').homedir(),
+        '.wheelmaker',
+        'cache',
+        'webpack',
+        worktreeKey,
+      ),
       buildDependencies: {
         config: [
           path.join(projectRoot, 'web', 'webpack.config.js'),
@@ -223,6 +234,23 @@ describe('web runtime setup', () => {
         ],
       },
     });
+  });
+
+  test('webpack honors an explicit cache directory for release builds', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const explicitCache = path.join(projectRoot, '.release-cache');
+    const previous = process.env.WHEELMAKER_WEBPACK_CACHE;
+
+    process.env.WHEELMAKER_WEBPACK_CACHE = explicitCache;
+    const webpackConfig = loadWebpackConfig(projectRoot, 'production');
+
+    if (previous === undefined) {
+      delete process.env.WHEELMAKER_WEBPACK_CACHE;
+    } else {
+      process.env.WHEELMAKER_WEBPACK_CACHE = previous;
+    }
+
+    expect(webpackConfig.cache.cacheDirectory).toBe(explicitCache);
   });
 
   test('production webpack keeps chat startup on the app entry instead of automatic initial chunks', () => {

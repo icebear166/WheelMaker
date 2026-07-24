@@ -1,5 +1,6 @@
 const path = require('path');
 const os = require('os');
+const {createHash} = require('crypto');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
@@ -86,6 +87,20 @@ module.exports = (_env = {}, argv = {}) => {
   const webTarget = process.env.WHEELMAKER_WEB_TARGET
     ? path.resolve(process.env.WHEELMAKER_WEB_TARGET)
     : path.join(os.homedir(), '.wheelmaker', 'web');
+  const worktreeRoot = path.resolve(__dirname, '..', '..');
+  const worktreeCacheKey = createHash('sha256')
+    .update(worktreeRoot)
+    .digest('hex')
+    .slice(0, 12);
+  const webpackCache = process.env.WHEELMAKER_WEBPACK_CACHE
+    ? path.resolve(process.env.WHEELMAKER_WEBPACK_CACHE)
+    : path.join(
+      os.homedir(),
+      '.wheelmaker',
+      'cache',
+      'webpack',
+      worktreeCacheKey,
+    );
 
   return {
     mode,
@@ -101,9 +116,7 @@ module.exports = (_env = {}, argv = {}) => {
     },
     cache: {
       type: 'filesystem',
-      cacheDirectory: process.env.WHEELMAKER_WEBPACK_CACHE
-        ? path.resolve(process.env.WHEELMAKER_WEBPACK_CACHE)
-        : path.join(os.homedir(), '.wheelmaker', 'cache', 'webpack'),
+      cacheDirectory: webpackCache,
       buildDependencies: {
         config: [
           __filename,
