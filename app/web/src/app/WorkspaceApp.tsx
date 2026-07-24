@@ -128,6 +128,7 @@ import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
 import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
+import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
@@ -16973,7 +16974,10 @@ export function App() {
   }, [permissionSubmission, selectedActivePermission, selectedChatKey]);
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
-  const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
+  const [chatStopPillVisible, setChatStopPillVisible, chatStopPillExiting] = useMenuExitFlag();
+  useEffect(() => {
+    setChatStopPillVisible(selectedChatPromptRunning);
+  }, [selectedChatPromptRunning, setChatStopPillVisible]);
 
   useEffect(() => {
     if (selectedChatExecutionRunning) {
@@ -18484,22 +18488,14 @@ export function App() {
                   >
                     <span className="codicon codicon-file-media chat-composer-tool-glyph" aria-hidden="true" />
                   </button>
-                  <div className="chat-composer-stop-slot">
-                    {selectedChatPromptRunning ? (
-                      <button
-                        type="button"
-                        className={chatComposerStopTriggerClassName}
-                        onPointerDown={event => event.preventDefault()}
-                        onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}
-                        disabled={selectedChatPromptCancelling}
-                        title={selectedChatPromptCancelling ? 'Cancelling prompt' : 'Cancel prompt'}
-                        aria-label="Cancel prompt"
-                        aria-busy={selectedChatPromptCancelling}
-                      >
-                        <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'} chat-composer-tool-glyph`} aria-hidden="true" />
-                      </button>
-                    ) : null}
-                  </div>
+                  {chatStopPillVisible ? (
+                    <div className={`chat-composer-stop-slot${chatStopPillExiting ? ' sl-menu-exit' : ''}`}>
+                      <ChatStopStatusPill
+                        cancelling={selectedChatPromptCancelling}
+                        onCancel={() => cancelSelectedChatPrompt().catch(() => undefined)}
+                      />
+                    </div>
+                  ) : null}
                   {!selectedChatPromptRunning && chatAttachmentTrayOpen ? (
                     <div
                       ref={chatAttachmentTrayRef}
