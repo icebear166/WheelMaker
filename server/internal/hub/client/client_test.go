@@ -1538,6 +1538,7 @@ func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 		{agentType: acp.ACPProviderCCGLM, wantEffort: "max", wantExplicitSet: true},
 		{agentType: acp.ACPProviderCCKimi, wantEffort: "high"},
 		{agentType: acp.ACPProviderCCQwen, wantEffort: "default"},
+		{agentType: acp.ACPProviderCCFlicker, wantEffort: "default"},
 	}
 
 	for _, tt := range tests {
@@ -7972,6 +7973,7 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-glm", "projects"), "glm", "sess-glm", cwd, "GLM", "glm preview")
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-kimi", "projects"), "kimi", "sess-kimi", cwd, "Kimi", "kimi preview")
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-qwen", "projects"), "qwen", "sess-qwen", cwd, "Qwen", "qwen preview")
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-flicker", "projects"), "flicker", "sess-flicker", cwd, "Flicker", "flicker preview")
 
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
@@ -7989,6 +7991,7 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 		{agentType: "cc-glm", sessionID: "sess-glm"},
 		{agentType: "cc-kimi", sessionID: "sess-kimi"},
 		{agentType: "cc-qwen", sessionID: "sess-qwen"},
+		{agentType: "cc-flicker", sessionID: "sess-flicker"},
 	} {
 		t.Run(testCase.agentType, func(t *testing.T) {
 			response, err := c.recovery().ListResumableSessions(context.Background(), testCase.agentType)

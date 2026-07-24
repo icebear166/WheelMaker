@@ -190,7 +190,7 @@ func (r *sessionRecovery) sourceFor(agentType string) (recoverySource, error) {
 			agentType:   agentType,
 			projectsDir: filepath.Join(home, ".claude", "projects"),
 		}, nil
-	case "cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen":
+	case "cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen", "cc-flicker":
 		if r.client.stateDir == "" {
 			return nil, fmt.Errorf("state directory is required for %s recovery", agentType)
 		}
