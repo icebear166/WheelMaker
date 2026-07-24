@@ -149,7 +149,7 @@
   display: flex;
   align-items: center;
   /* gutter reserved for the leading state dot; row bg starts after it */
-  padding-left: 20px;
+  padding-left: 14px;
 }
 .wide-session-row {
   flex: 1;
@@ -157,7 +157,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: var(--sl-row-py) 8px var(--sl-row-py) 12px;
+  padding: var(--sl-row-py) 8px var(--sl-row-py) 6px;
   border: 0;
   background: none;
   border-radius: var(--radius-control);
@@ -202,10 +202,10 @@
 
 /* leading state dot sits in the reserved gutter, never overlapping the row bg */
 .project-session-row-wrap .session-state-leading {
-  left: 6px;
+  left: 3px;
 }
 .project-session-row-wrap .session-state-leading.permission-pending {
-  left: 1px;
+  left: 0;
 }
 .wide-session-pin-btn {
   flex: none;
@@ -499,7 +499,7 @@
 
 /* ---------- misc ---------- */
 .wide-project-empty {
-  padding: 4px 8px 4px 32px;
+  padding: 4px 8px 4px 20px;
   font-size: 11.5px;
   color: var(--text-tertiary);
 }

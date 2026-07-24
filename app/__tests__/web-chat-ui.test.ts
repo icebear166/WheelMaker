@@ -2070,7 +2070,7 @@ describe('web chat integration', () => {
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('display: flex;');
     expect(wideSessionRowBlock).toContain('gap: 8px;');
-    expect(wideSessionRowBlock).toContain('padding: var(--sl-row-py) 8px var(--sl-row-py) 12px;');
+    expect(wideSessionRowBlock).toContain('padding: var(--sl-row-py) 8px var(--sl-row-py) 6px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
     expect(sessionStateMarkerBlock).toContain('flex: 0 0 auto;');
