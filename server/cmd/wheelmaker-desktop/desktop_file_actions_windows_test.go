@@ -41,6 +41,58 @@ func writeDesktopTestFile(t *testing.T, path string) {
 	}
 }
 
+func TestDesktopAbsoluteFileActions(t *testing.T) {
+	base := t.TempDir()
+	file := filepath.Join(base, "outside file.go")
+	code := filepath.Join(base, "Code.exe")
+	writeDesktopTestFile(t, file)
+	writeDesktopTestFile(t, code)
+	var launches []desktopLaunchCall
+	environment := newDesktopFileActionTestEnvironment(&launches)
+	environment.lookPath = func(string) (string, error) {
+		return code, nil
+	}
+
+	if err := environment.openFileInVSCode(file); err != nil {
+		t.Fatal(err)
+	}
+	if err := environment.showFileInFolder(file); err != nil {
+		t.Fatal(err)
+	}
+	if len(launches) != 2 ||
+		launches[0].name != code ||
+		launches[0].args[0] != file ||
+		launches[1].name != "explorer.exe" ||
+		launches[1].args[0] != "/select,"+file {
+		t.Fatalf("launches=%v", launches)
+	}
+}
+
+func TestDesktopAbsoluteFileActionsRejectInvalidTargets(t *testing.T) {
+	base := t.TempDir()
+	directory := filepath.Join(base, "folder")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(base, "missing.go")
+
+	for _, target := range []string{"relative.go", missing, directory} {
+		t.Run(target, func(t *testing.T) {
+			var launches []desktopLaunchCall
+			environment := newDesktopFileActionTestEnvironment(&launches)
+			if err := environment.openFileInVSCode(target); err == nil {
+				t.Fatal("openFileInVSCode() error = nil")
+			}
+			if err := environment.showFileInFolder(target); err == nil {
+				t.Fatal("showFileInFolder() error = nil")
+			}
+			if len(launches) != 0 {
+				t.Fatalf("launches=%v, want none", launches)
+			}
+		})
+	}
+}
+
 func TestDesktopProjectFilePathRejectsInvalidRoots(t *testing.T) {
 	tempDir := t.TempDir()
 	fileRoot := filepath.Join(tempDir, "root.txt")

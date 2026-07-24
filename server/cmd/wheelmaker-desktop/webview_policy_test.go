@@ -48,6 +48,8 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 		{name: "bootstrap cannot change server", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRequestServerChange},
 		{name: "bootstrap cannot open project file in VS Code", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
 		{name: "bootstrap cannot show project file in folder", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
+		{name: "bootstrap cannot open absolute file in VS Code", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeOpenFileInVSCode},
+		{name: "bootstrap cannot show absolute file in folder", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeShowFileInFolder},
 		{name: "bootstrap cannot read Desktop update info", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeGetUpdateInfo},
 		{name: "bootstrap cannot request Desktop update", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRequestUpdate},
 		{name: "remote window control", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeClose, want: true},
@@ -59,12 +61,18 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 		{name: "iframe cannot request Desktop update", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeRequestUpdate},
 		{name: "remote open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode, want: true},
 		{name: "remote show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeShowProjectFileInFolder, want: true},
+		{name: "remote open absolute file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeOpenFileInVSCode, want: true},
+		{name: "remote show absolute file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeShowFileInFolder, want: true},
 		{name: "old origin cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
 		{name: "old origin cannot show project file in folder", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
 		{name: "outside base path cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
 		{name: "outside base path cannot show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
+		{name: "outside base path cannot open absolute file", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeOpenFileInVSCode},
+		{name: "wrong origin cannot show absolute file", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeShowFileInFolder},
 		{name: "iframe cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeOpenProjectFileInVSCode},
 		{name: "iframe cannot show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeShowProjectFileInFolder},
+		{name: "iframe cannot open absolute file", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeOpenFileInVSCode},
+		{name: "iframe cannot show absolute file", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeShowFileInFolder},
 		{name: "remote cannot save bootstrap URL", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeSaveBaseURL},
 		{name: "old origin", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeClose},
 		{name: "same origin outside base path", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeClose},
@@ -119,6 +127,10 @@ func TestDesktopLocalDevPageOnlyAuthorizesWindowControls(t *testing.T) {
 	}
 	if state.Authorize(epoch, true, desktopBridgeOpenProjectFileInVSCode) {
 		t.Fatal("local Dev page authorized a remote file action")
+	}
+	if state.Authorize(epoch, true, desktopBridgeOpenFileInVSCode) ||
+		state.Authorize(epoch, true, desktopBridgeShowFileInFolder) {
+		t.Fatal("local Dev page authorized an absolute file action")
 	}
 	if state.Authorize(epoch, true, desktopBridgeGetUpdateInfo) || state.Authorize(epoch, true, desktopBridgeRequestUpdate) {
 		t.Fatal("local Dev page authorized Desktop self-update")

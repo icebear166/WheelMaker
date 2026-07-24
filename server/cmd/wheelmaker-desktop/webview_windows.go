@@ -222,6 +222,18 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			}
 			return newDefaultDesktopFileActionEnvironment().showProjectFileInFolder(projectRoot, relativePath)
 		}},
+		{desktopOpenFileInVSCodeBinding, func(absolutePath string) error {
+			if err := authorize(desktopBridgeOpenFileInVSCode); err != nil {
+				return err
+			}
+			return newDefaultDesktopFileActionEnvironment().openFileInVSCode(absolutePath)
+		}},
+		{desktopShowFileInFolderBinding, func(absolutePath string) error {
+			if err := authorize(desktopBridgeShowFileInFolder); err != nil {
+				return err
+			}
+			return newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)
+		}},
 	}
 	for _, binding := range bindings {
 		if err := w.Bind(binding.name, binding.fn); err != nil {
