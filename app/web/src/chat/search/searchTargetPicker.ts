@@ -1,5 +1,7 @@
 // Pure state helpers for the Windows Ctrl+F search-target picker modal.
 
+import type {ChatIconName} from '../ChatIcon';
+
 export type ChatSearchTarget = 'current' | 'sessions' | 'preview';
 
 export const CHAT_SEARCH_TARGET_ORDER: ChatSearchTarget[] = ['current', 'sessions', 'preview'];
@@ -8,21 +10,21 @@ export type ChatSearchTargetAvailability = Record<ChatSearchTarget, boolean>;
 
 export const CHAT_SEARCH_TARGET_META: Record<
   ChatSearchTarget,
-  {label: string; icon: string; hint: string}
+  {label: string; icon: ChatIconName; hint: string}
 > = {
   current: {
     label: 'Current session',
-    icon: 'codicon-comment-discussion',
+    icon: 'messageSquare',
     hint: 'This chat',
   },
   sessions: {
     label: 'All sessions',
-    icon: 'codicon-list-tree',
+    icon: 'listTree',
     hint: 'Session titles',
   },
   preview: {
     label: 'File preview',
-    icon: 'codicon-go-to-file',
+    icon: 'fileSymlink',
     hint: 'Open file',
   },
 };

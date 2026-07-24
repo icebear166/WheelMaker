@@ -1,6 +1,8 @@
 import {
   buildChatSessionActionOptions,
+  chatSlashOptionDisplayName,
   filterChatSessionActionOptions,
+  groupChatSlashMenuOptions,
   removeActiveSlashQuery,
   resolveStandaloneSessionAction,
 } from '../web/src/chat/session/chatSessionActions';
@@ -20,9 +22,9 @@ describe('chat session action options', () => {
       ['/debug', 'skill', 'insert'],
       ['/zoom-out', 'skill', 'insert'],
     ]);
-    expect(options[0]).toMatchObject({enabled: false, disabledReason: 'Compact is unavailable.', icon: 'codicon-circle-large-outline'});
-    expect(options[1]).toMatchObject({enabled: true, icon: 'codicon-dashboard'});
-    expect(options[2].icon).not.toBe(options[1].icon);
+    expect(options[0]).toMatchObject({enabled: false, disabledReason: 'Compact is unavailable.', icon: 'circle'});
+    expect(options[1]).toMatchObject({enabled: true, icon: 'layoutDashboard'});
+    expect(options[2].icon).toBe('wand');
   });
 
   test('adds fast below status when the session exposes the fast config option', () => {
@@ -45,7 +47,7 @@ describe('chat session action options', () => {
       action: 'fast',
       enabled: true,
       checked: true,
-      icon: 'codicon-zap',
+      icon: 'zap',
     });
     expect(options[2].description).toContain('On');
   });
@@ -68,5 +70,30 @@ describe('chat session action options', () => {
 
   test('removes only the active slash query for invoked commands', () => {
     expect(removeActiveSlashQuery('keep /sta tail', 9)).toEqual({text: 'keep  tail', cursor: 5});
+  });
+});
+
+describe('slash menu grouping and display names', () => {
+  test('groups options into Commands and Skills sections preserving order', () => {
+    const options = buildChatSessionActionOptions(['zoom-out', 'debug'], {
+      status: {supported: true},
+      compact: {supported: true},
+    });
+    const sections = groupChatSlashMenuOptions(options);
+    expect(sections.map(section => section.id)).toEqual(['commands', 'skills']);
+    expect(sections[0].title).toBe('Commands');
+    expect(sections[0].options.map(option => option.name)).toEqual(['/compact', '/status']);
+    expect(sections[1].title).toBe('Skills');
+    expect(sections[1].options.map(option => option.name)).toEqual(['/debug', '/zoom-out']);
+  });
+
+  test('omits empty sections', () => {
+    const sections = groupChatSlashMenuOptions([]);
+    expect(sections).toEqual([]);
+  });
+
+  test('display name strips the leading slash for menu rows', () => {
+    expect(chatSlashOptionDisplayName('/compact')).toBe('compact');
+    expect(chatSlashOptionDisplayName('//deep-skill')).toBe('deep-skill');
   });
 });

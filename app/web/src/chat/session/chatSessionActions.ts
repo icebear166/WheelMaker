@@ -2,6 +2,7 @@ import type {
   RegistrySessionActionCapabilities,
   RegistrySessionConfigOption,
 } from '../../registry/registryTypes';
+import type {ChatIconName} from '../ChatIcon';
 import {resolveChatSlashQuery} from '../composer/chatComposerTriggerQueries';
 
 export type ChatSessionActionKind = 'status' | 'compact' | 'fast';
@@ -11,7 +12,7 @@ export type ChatSessionSlashOption = {
   description: string;
   kind: 'command' | 'skill';
   behavior: 'invoke' | 'insert';
-  icon: string;
+  icon: ChatIconName;
   enabled: boolean;
   disabledReason?: string;
   action?: ChatSessionActionKind;
@@ -39,7 +40,7 @@ export function buildChatSessionActionOptions(
       description: 'Compact this session\'s context',
       kind: 'command',
       behavior: 'invoke',
-      icon: 'codicon-circle-large-outline',
+      icon: 'circle',
       enabled: compact?.supported === true,
       disabledReason: compact?.supported ? undefined : compact?.reason || unsupportedReason,
       action: 'compact',
@@ -49,7 +50,7 @@ export function buildChatSessionActionOptions(
       description: 'Show session ID, context usage, and rate limits',
       kind: 'command',
       behavior: 'invoke',
-      icon: 'codicon-dashboard',
+      icon: 'layoutDashboard',
       enabled: status?.supported === true,
       disabledReason: status?.supported ? undefined : status?.reason || unsupportedReason,
       action: 'status',
@@ -62,7 +63,7 @@ export function buildChatSessionActionOptions(
       description: checked ? 'On · 1.5x speed, increased usage' : 'Off · Standard speed',
       kind: 'command',
       behavior: 'invoke',
-      icon: 'codicon-zap',
+      icon: 'zap',
       enabled: true,
       action: 'fast',
       checked,
@@ -84,7 +85,7 @@ export function buildChatSessionActionOptions(
       description: 'Agent skill',
       kind: 'skill',
       behavior: 'insert',
-      icon: 'codicon-wand',
+      icon: 'wand',
       enabled: true,
     }));
   return [...fixed, ...skillOptions];
@@ -122,4 +123,27 @@ export function removeActiveSlashQuery(text: string, cursor: number): {text: str
     text: `${text.slice(0, query.start)}${text.slice(query.end)}`,
     cursor: query.start,
   };
+}
+
+export type ChatSlashMenuSection = {
+  id: 'commands' | 'skills';
+  title: string;
+  options: ChatSessionSlashOption[];
+};
+
+export function groupChatSlashMenuOptions(options: ChatSessionSlashOption[]): ChatSlashMenuSection[] {
+  const commands = options.filter(option => option.kind === 'command');
+  const skills = options.filter(option => option.kind === 'skill');
+  const sections: ChatSlashMenuSection[] = [];
+  if (commands.length > 0) {
+    sections.push({id: 'commands', title: 'Commands', options: commands});
+  }
+  if (skills.length > 0) {
+    sections.push({id: 'skills', title: 'Skills', options: skills});
+  }
+  return sections;
+}
+
+export function chatSlashOptionDisplayName(name: string): string {
+  return name.replace(/^\/+/, '');
 }
