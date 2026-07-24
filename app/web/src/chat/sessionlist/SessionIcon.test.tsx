@@ -17,7 +17,19 @@ describe('SessionIcon', () => {
       expect(svg.props.children).toBeTruthy();
     }
     expect(SESSION_ICON_NAMES).toEqual(
-      expect.arrayContaining(['import', 'archiveRestore', 'clock']),
+      expect.arrayContaining([
+        'import',
+        'archiveRestore',
+        'clock',
+        'arrowRight',
+        'circle',
+        'eyeOff',
+        'layoutGrid',
+        'terminal',
+        'panelRight',
+        'history',
+        'listChecks',
+      ]),
     );
     expect(SESSION_ICON_NAMES).not.toContain('play');
     expect(SESSION_ICON_NAMES).not.toContain('messageSquareMore');
