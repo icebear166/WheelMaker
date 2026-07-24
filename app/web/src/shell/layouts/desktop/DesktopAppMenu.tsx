@@ -1,4 +1,5 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {createPortal} from 'react-dom';
 import {SessionIcon} from '../../../chat/sessionlist/SessionIcon';
 import {useMenuExitFlag} from '../../../chat/sessionlist/menuExit';
 import {checkDesktopUpdate, type DesktopUpdateCheck} from '../../../platform/desktop/desktopUpdate';
@@ -18,6 +19,9 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
   const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateCheck>({status: 'checking'});
   const [desktopUpdateBusy, setDesktopUpdateBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{left: number; top: number} | null>(null);
   const canUseLocalDev = Boolean(bridge?.requestLocalDevMode || bridge?.localDev);
   const canUpdateDesktop = Boolean(
     bridge?.getDesktopUpdateInfo && bridge.requestDesktopUpdate && !bridge.localDev,
@@ -35,13 +39,37 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
     void refreshDesktopUpdate();
   }, [refreshDesktopUpdate]);
 
+  const updateMenuPosition = useCallback(() => {
+    const triggerRect = triggerRef.current?.getBoundingClientRect();
+    if (!triggerRect) {
+      return;
+    }
+    setMenuPosition({
+      left: triggerRect.left,
+      top: triggerRect.bottom + 6,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!menuOpen || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+      return;
+    }
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [menuOpen, updateMenuPosition]);
+
   useEffect(() => {
     if (!menuOpen || typeof window.addEventListener !== 'function') {
       return;
     }
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target && rootRef.current?.contains(target)) {
+      if (target && (rootRef.current?.contains(target) || menuRef.current?.contains(target))) {
         return;
       }
       setMenuOpen(false);
@@ -123,10 +151,67 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
           ? `Update Desktop to ${desktopUpdate.version}`
           : 'Check failed · Retry';
 
+  const appMenu = menuOpen ? (
+    <div
+      ref={menuRef}
+      className={`desktop-app-menu topbar-menu-surface${menuExiting ? ' sl-menu-exit' : ''}`}
+      role="menu"
+      aria-label="WheelMaker menu"
+      style={menuPosition ?? undefined}
+      data-desktop-window-interactive={true}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        data-desktop-app-action="settings"
+        onClick={() => {
+          setMenuOpen(false);
+          onOpenSettings();
+        }}
+      >
+        <SessionIcon name="settings" />
+        <span>Settings</span>
+      </button>
+      {canUseLocalDev ? (
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={Boolean(bridge?.localDev)}
+          data-desktop-app-action="local-dev"
+          onClick={selectLocalDev}
+        >
+          {bridge?.localDev ? (
+            <SessionIcon name="check" />
+          ) : (
+            <span className="desktop-app-menu-leading-slot" aria-hidden="true" />
+          )}
+          <span>Dev Mode</span>
+        </button>
+      ) : null}
+      {canUpdateDesktop ? (
+        <button
+          type="button"
+          role="menuitem"
+          data-desktop-app-action="desktop-update"
+          disabled={desktopUpdateBusy || desktopUpdate.status === 'checking' || desktopUpdate.status === 'current'}
+          onClick={() => void selectDesktopUpdate()}
+        >
+          {desktopUpdate.status === 'available' ? (
+            <span className="desktop-update-dot desktop-update-dot-menu" data-desktop-update-dot="menu" aria-hidden="true" />
+          ) : (
+            <span className="desktop-app-menu-leading-slot" aria-hidden="true" />
+          )}
+          <span data-desktop-update-label={true}>{desktopUpdateLabel}</span>
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <>
       <div className="desktop-app-menu-root" ref={rootRef} data-desktop-window-interactive={true}>
         <button
+          ref={triggerRef}
           type="button"
           className="desktop-app-menu-trigger"
           aria-label="Open WheelMaker menu"
@@ -134,60 +219,13 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
           title="WheelMaker menu"
           onClick={() => setMenuOpen(open => !open)}
         >
-          <img src="/icons/icon.svg" alt="" aria-hidden="true" />
+          <span className="app-product-mark" aria-hidden="true" />
           {canUpdateDesktop && desktopUpdate.status === 'available' ? (
             <span className="desktop-update-dot desktop-update-dot-app-menu" data-desktop-update-dot="app-menu" aria-hidden="true" />
           ) : null}
         </button>
-        {menuOpen ? (
-          <div className={`desktop-app-menu topbar-menu-surface${menuExiting ? ' sl-menu-exit' : ''}`} role="menu" aria-label="WheelMaker menu">
-            <button
-              type="button"
-              role="menuitem"
-              data-desktop-app-action="settings"
-              onClick={() => {
-                setMenuOpen(false);
-                onOpenSettings();
-              }}
-            >
-              <SessionIcon name="settings" />
-              <span>Settings</span>
-            </button>
-            {canUseLocalDev ? (
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={Boolean(bridge?.localDev)}
-                data-desktop-app-action="local-dev"
-                onClick={selectLocalDev}
-              >
-                {bridge?.localDev ? (
-                  <SessionIcon name="check" />
-                ) : (
-                  <span className="desktop-app-menu-leading-slot" aria-hidden="true" />
-                )}
-                <span>Dev Mode</span>
-              </button>
-            ) : null}
-            {canUpdateDesktop ? (
-              <button
-                type="button"
-                role="menuitem"
-                data-desktop-app-action="desktop-update"
-                disabled={desktopUpdateBusy || desktopUpdate.status === 'checking' || desktopUpdate.status === 'current'}
-                onClick={() => void selectDesktopUpdate()}
-              >
-                {desktopUpdate.status === 'available' ? (
-                  <span className="desktop-update-dot desktop-update-dot-menu" data-desktop-update-dot="menu" aria-hidden="true" />
-                ) : (
-                  <span className="desktop-app-menu-leading-slot" aria-hidden="true" />
-                )}
-                <span data-desktop-update-label={true}>{desktopUpdateLabel}</span>
-              </button>
-            ) : null}
-          </div>
-        ) : null}
       </div>
+      {appMenu && typeof document !== 'undefined' ? createPortal(appMenu, document.body) : appMenu}
       {localDevDialogOpen ? (
         <div className="local-dev-entry-backdrop" data-desktop-window-interactive={true}>
           <section className="local-dev-entry-dialog" role="dialog" aria-modal="true" aria-label="Configure Local Dev">

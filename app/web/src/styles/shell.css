@@ -1628,7 +1628,7 @@
   border-radius: 6px;
   padding: 0;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -1640,11 +1640,27 @@
   outline: none;
 }
 
-.desktop-app-menu-trigger img {
-  width: 16px;
-  height: 16px;
+.app-product-mark {
+  width: 20px;
+  height: 20px;
   display: block;
-  border-radius: 4px;
+  background: currentColor;
+  -webkit-mask: url('./icon-mark.svg') center / contain no-repeat;
+  mask: url('./icon-mark.svg') center / contain no-repeat;
+}
+
+.desktop-app-menu-trigger .app-product-mark {
+  width: 19px;
+  height: 19px;
+}
+
+.chat-menu-product-button {
+  color: var(--text-secondary);
+}
+
+.chat-menu-product-button .app-product-mark {
+  width: 18px;
+  height: 18px;
 }
 
 .desktop-update-dot {
@@ -1668,9 +1684,7 @@
 }
 
 .desktop-app-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  position: fixed;
   z-index: 100;
   width: 220px;
   transform-origin: top left;

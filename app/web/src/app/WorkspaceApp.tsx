@@ -5858,7 +5858,6 @@ export function App() {
   useEffect(() => {
     const onPointer = () => {
       setProjectMenuOpen(false);
-      setChatTitleProjectMenuOpen(false);
     };
     window.addEventListener('pointerdown', onPointer);
     return () => window.removeEventListener('pointerdown', onPointer);
@@ -15791,12 +15790,12 @@ export function App() {
   const renderChatMenuSettingsButton = () => (
     <button
       type="button"
-      className="chat-menu-icon-button chat-menu-settings-button"
+      className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"
       onClick={handleDesktopSettingsSelect}
       title="Open settings"
       aria-label="Open settings"
     >
-      <SessionIcon name="settings" />
+      <span className="app-product-mark" aria-hidden="true" />
     </button>
   );
 

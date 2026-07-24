@@ -851,7 +851,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
     expect(mainTsx).toContain('const renderChatSessionHeader = (mobile: boolean) => {');
     expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
-    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button"');
+    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
     expect(mainTsx).not.toContain('<span className="mobile-chat-drawer-title">Chats</span>');
     expect(mainTsx).toContain('{renderChatSessionHeader(true)}');
     expect(mainTsx).toContain('renderChatSessionHeader(false)');
@@ -1953,7 +1953,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<DesktopWindowControls />');
     expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
     expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
-    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button"');
+    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
     expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
     expect(mainTsx).toContain('<DesktopDragRegion className="sidebar-title-row">');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
@@ -2735,5 +2735,29 @@ describe('Agent choice menu', () => {
 
     // Mobile pills share the desktop specs (no separate mobile override).
     expect(stylesCss).not.toContain('.agent-choice-menu.mobile .agent-choice-pill');
+  });
+});
+
+describe('top bar action entry points', () => {
+  test('uses the product mark for the mobile Settings shortcut without changing its direct action', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
+    expect(mainTsx).toContain('<span className="app-product-mark" aria-hidden="true" />');
+    expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
+    expect(mainTsx).toContain('aria-label="Open settings"');
+  });
+
+  test('leaves title project dismissal to its dedicated outside-click handler', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const globalPointerStart = mainTsx.indexOf('useEffect(() => {\n    const onPointer = () => {');
+    const globalPointerEnd = mainTsx.indexOf('  }, []);', globalPointerStart);
+    const globalPointerEffect = mainTsx.slice(globalPointerStart, globalPointerEnd);
+
+    expect(globalPointerStart).toBeGreaterThanOrEqual(0);
+    expect(globalPointerEffect).toContain('setProjectMenuOpen(false);');
+    expect(globalPointerEffect).not.toContain('setChatTitleProjectMenuOpen(false);');
   });
 });

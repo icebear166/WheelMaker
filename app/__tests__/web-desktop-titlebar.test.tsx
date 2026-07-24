@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import {DesktopAppMenu} from '../web/src/shell/layouts/desktop/DesktopAppMenu';
@@ -103,6 +105,18 @@ describe('desktop window controls', () => {
       root.findByProps({'data-desktop-app-action': 'settings'}).props.onClick();
     });
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  test('ports the application menu outside the clipped desktop title bar', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'shell', 'layouts', 'desktop', 'DesktopAppMenu.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain("import {createPortal} from 'react-dom';");
+    expect(source).toContain('ref={menuRef}');
+    expect(source).toContain('menuRef.current?.contains(target)');
+    expect(source).toContain('createPortal(appMenu, document.body)');
   });
 
   test('plays the exit animation before unmounting the application menu', async () => {
