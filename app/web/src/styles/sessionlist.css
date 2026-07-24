@@ -560,15 +560,27 @@
 }
 
 /* ---------- recent block distinction ---------- */
-/* the Recent block reads as one smart section above the plain project list */
+/* Recent reads as a computed view: quiet eyebrow heading + hairline boundary,
+   no container background — projects stay the "real" entities. */
 .wide-project-section.recent-sessions-section {
-  background: color-mix(in srgb, var(--accent-primary) 4%, transparent);
-  border-radius: var(--radius-panel);
-  overflow: hidden;
-  padding-bottom: 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-faint);
+}
+.recent-sessions-section .wide-project-name {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 .recent-sessions-section .recent-sessions-icon {
-  color: var(--accent-primary);
+  color: var(--text-tertiary);
+}
+/* floating Recent panel: single block, no bottom rule */
+.chat-recent-sessions-surface .recent-sessions-section {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 /* compact: tighten the gap between the project title row and its sessions */
 [data-session-list-density="compact"] .wide-project-toggle {
