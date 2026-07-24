@@ -69,8 +69,18 @@ describe('web mobile enter key settings', () => {
     expect(mainTsx).toContain("enterKeyHint={isWide ? undefined : mobileEnterKeyBehavior === 'send' ? 'send' : 'enter'}");
     expect(mainTsx).toContain("const shouldSendChatOnEnter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing;");
     expect(mainTsx).toContain("const mobileEnterShouldSend = !isWide && mobileEnterKeyBehavior === 'send';");
-    expect(mainTsx).toContain('if (mobileEnterShouldSend || isWindowsPlatform) {');
+    expect(mainTsx).toContain('if (isWide || mobileEnterShouldSend) {');
     expect(mainTsx).toContain('event.preventDefault();');
     expect(mainTsx).toContain('sendChatMessage().catch(() => undefined);');
+  });
+
+  test('sends on Enter for every desktop platform, not only Windows', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    const enterHandlerStart = mainTsx.indexOf('const shouldSendChatOnEnter');
+    const enterHandlerEnd = mainTsx.indexOf('sendChatMessage().catch(() => undefined);', enterHandlerStart);
+    const enterHandler = mainTsx.slice(enterHandlerStart, enterHandlerEnd);
+    expect(enterHandler).not.toContain('isWindowsPlatform');
   });
 });

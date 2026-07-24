@@ -18308,7 +18308,7 @@ export function App() {
                         return;
                       }
                       const mobileEnterShouldSend = !isWide && mobileEnterKeyBehavior === 'send';
-                      if (mobileEnterShouldSend || isWindowsPlatform) {
+                      if (isWide || mobileEnterShouldSend) {
                         event.preventDefault();
                         event.stopPropagation();
                         if (chatSendDisabled) {
