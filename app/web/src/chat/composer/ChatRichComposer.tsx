@@ -456,7 +456,11 @@ function ChatRichComposerContent({
             onPaste={handlePaste}
           />
         }
-        placeholder={null}
+        placeholder={
+          <div className="chat-rich-composer-placeholder" aria-hidden="true">
+            {placeholder}
+          </div>
+        }
         ErrorBoundary={LexicalErrorBoundary}
       />
       <HistoryPlugin />
@@ -464,9 +468,6 @@ function ChatRichComposerContent({
         ignoreSelectionChange
         onChange={handleChange}
       />
-      <span className="chat-rich-composer-placeholder" aria-hidden="true">
-        {placeholder}
-      </span>
     </>
   );
 }

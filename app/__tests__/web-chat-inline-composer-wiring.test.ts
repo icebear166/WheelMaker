@@ -184,4 +184,31 @@ describe('composer menu exclusivity', () => {
     expect(stylesCss).toContain('.chat-menu-footer');
     expect(mainTsx.split('<ChatMenuKeyHints').length - 1).toBeGreaterThanOrEqual(2);
   });
+
+  test('composer frame uses the shared floating panel material', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+
+    const frameStart = stylesCss.indexOf('.chat-composer-frame {');
+    const frameEnd = stylesCss.indexOf('}', frameStart);
+    const frameRule = stylesCss.slice(frameStart, frameEnd);
+    expect(frameRule).toContain('border-radius: 8px;');
+    expect(frameRule).toContain('var(--shadow-floating)');
+    expect(frameRule).toContain('inset 0 1px 0');
+    expect(chatCss).not.toContain('#79c0ff');
+    expect(chatCss).not.toContain('#1f6feb');
+    expect(chatCss).not.toContain('rgba(248, 81, 73');
+    expect(chatCss).not.toContain('chatStopBreath');
+    expect(stylesCss).toContain('inset: var(--chat-composer-input-pad-block) var(--chat-composer-input-pad-inline) auto');
+  });
+
+  test('composer placeholder uses the Lexical placeholder slot', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const composerTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'composer', 'ChatRichComposer.tsx'));
+
+    expect(composerTsx).toContain('placeholder={');
+    expect(composerTsx).not.toContain('placeholder={null}');
+    expect(composerTsx).not.toContain('chat-rich-composer:not(:empty)');
+  });
 });

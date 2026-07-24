@@ -1224,7 +1224,10 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-option-replies {');
     expect(stylesCss).not.toContain('.chat-option-reply-button {');
     expect(stylesCss).toMatch(
-      /\.chat-composer-input \{[\s\S]*min-height: 32px;[\s\S]*padding: 5px 8px 2px;[\s\S]*font-size: 15px;[\s\S]*line-height: 1.4;[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-gutter: stable;[\s\S]*\}/,
+      /\.chat-composer-input \{[\s\S]*min-height: 32px;[\s\S]*padding: var\(--chat-composer-input-pad-block\) var\(--chat-composer-input-pad-inline\) 2px;[\s\S]*font-size: 15px;[\s\S]*line-height: 1.4;[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-gutter: stable;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-composer-input-shell \{[\s\S]*--chat-composer-input-pad-block: 5px;[\s\S]*--chat-composer-input-pad-inline: 8px;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-composer-input::-webkit-scrollbar \{[\s\S]*width: 4px;[\s\S]*\}/,

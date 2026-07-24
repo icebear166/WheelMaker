@@ -3433,13 +3433,6 @@
   }
 }
 
-.chat-composer.menu-open .chat-composer-frame {
-  border-color: color-mix(in srgb, var(--border-subtle) 68%, var(--accent-primary));
-  box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.2),
-    0 0 0 1px color-mix(in srgb, var(--accent-primary) 12%, transparent);
-}
-
 @media (min-width: 901px) {
   .chat-composer {
     padding-bottom: 8px;
@@ -3456,16 +3449,34 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
-  border-radius: 12px;
-  background: var(--surface-panel);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
+  box-shadow:
+    var(--shadow-floating),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent);
   padding: 8px 8px 4px;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard);
+}
+
+.chat-composer:focus-within .chat-composer-frame {
+  border-color: color-mix(in srgb, var(--accent-primary) 36%, var(--border-subtle));
+  box-shadow:
+    var(--shadow-floating),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--accent-primary) 6%, transparent);
+}
+
+.chat-composer.menu-open .chat-composer-frame {
+  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
 }
 
 .chat-composer-frame.drag-over {
-  border-color: color-mix(in srgb, var(--accent-primary) 62%, var(--border-subtle));
-  background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-panel));
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
 }
 
 .chat-composer-input-row {
@@ -3482,6 +3493,8 @@
   min-width: 0;
   display: flex;
   align-items: flex-start;
+  --chat-composer-input-pad-block: 5px;
+  --chat-composer-input-pad-inline: 8px;
 }
 
 .chat-composer-input {
@@ -3495,7 +3508,7 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-primary);
-  padding: 5px 8px 2px;
+  padding: var(--chat-composer-input-pad-block) var(--chat-composer-input-pad-inline) 2px;
   font: inherit;
   font-size: 15px;
   line-height: 1.4;
@@ -3518,10 +3531,8 @@
 
 .chat-rich-composer-placeholder {
   position: absolute;
-  left: 8px;
-  top: 5px;
+  inset: var(--chat-composer-input-pad-block) var(--chat-composer-input-pad-inline) auto;
   z-index: 0;
-  max-width: calc(100% - 16px);
   overflow: hidden;
   color: var(--text-secondary);
   font-size: 15px;
@@ -3529,10 +3540,6 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   pointer-events: none;
-}
-
-.chat-rich-composer:not(:empty) + .chat-rich-composer-placeholder {
-  visibility: hidden;
 }
 
 .chat-composer-capsule,
@@ -3552,8 +3559,8 @@
 
 .chat-composer-capsule.skill,
 .chat-prompt-inline-capsule.skill {
-  color: color-mix(in srgb, #79c0ff 76%, var(--text-primary));
-  background: color-mix(in srgb, #1f6feb 12%, transparent);
+  color: var(--chat-capsule-skill-text);
+  background: var(--chat-capsule-skill-bg);
 }
 
 .chat-composer-capsule.file,
@@ -5717,34 +5724,6 @@
 }
 
 /* workspace-ui-targeted-evolution: composer */
-.chat-composer-frame {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-floating);
-  background: color-mix(in srgb, var(--surface-panel) 64%, var(--surface-workspace-content));
-  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
-  padding: 8px 8px 4px;
-  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
-}
-
-.chat-composer:focus-within .chat-composer-frame {
-  border-color: color-mix(in srgb, var(--accent-primary) 36%, var(--border-subtle));
-  box-shadow: 0 4px 16px rgb(0 0 0 / 14%), 0 0 0 1px color-mix(in srgb, var(--accent-primary) 6%, transparent);
-}
-
-.chat-composer.menu-open .chat-composer-frame {
-  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
-  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
-}
-
-.chat-composer-frame.drag-over {
-  border-color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
-}
-
 .chat-send-button {
   width: 36px;
   height: 36px;

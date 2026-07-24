@@ -49,6 +49,8 @@
   --chat-link-text: #82b6df;
   --chat-inline-code-background: #303030;
   --chat-inline-code-text: #dddddd;
+  --chat-capsule-skill-text: color-mix(in srgb, var(--accent-primary) 62%, var(--text-primary));
+  --chat-capsule-skill-bg: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   --wm-safe-area-top: env(safe-area-inset-top, 0px);
   --wm-safe-area-right: env(safe-area-inset-right, 0px);
   --wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);
