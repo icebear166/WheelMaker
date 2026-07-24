@@ -21,7 +21,7 @@ export type AndroidNativeMessageClient = {
 };
 
 export type AndroidNativeRpcFacade = {
-  reserveUserAction(action: 'image.share' | 'speech.start'): Promise<string>;
+  reserveUserAction(action: 'image.share' | 'html.share' | 'speech.start'): Promise<string>;
   drainWebDiagnostics(): Promise<string>;
   setDiagnosticLogLevel(logLevel: string): Promise<string>;
   getSpeechCredentialState(): Promise<string>;
@@ -39,6 +39,10 @@ export type AndroidNativeRpcFacade = {
   appendResponseImageShare(transferId: string, index: number, data: string): Promise<string>;
   commitResponseImageShare(transferId: string): Promise<string>;
   cancelResponseImageShare(transferId: string): Promise<string>;
+  beginMarkdownHtmlShare(fileName: string, size: number, userActionToken: string): Promise<string>;
+  appendMarkdownHtmlShare(transferId: string, index: number, data: string): Promise<string>;
+  commitMarkdownHtmlShare(transferId: string): Promise<string>;
+  cancelMarkdownHtmlShare(transferId: string): Promise<string>;
   clearPortRelaySiteData(relayUrl: string): Promise<string>;
 };
 
@@ -206,6 +210,14 @@ export function getAndroidNativeRpcFacade(
       request('image.share.chunk', {transferId, index, data}),
     commitResponseImageShare: transferId => request('image.share.commit', {transferId}),
     cancelResponseImageShare: transferId => request('image.share.cancel', {transferId}),
+    beginMarkdownHtmlShare: async (fileName, size, userActionToken) => requiredStringResult(
+      await request('html.share.begin', {fileName, size, userActionToken}),
+      'transferId',
+    ),
+    appendMarkdownHtmlShare: (transferId, index, data) =>
+      request('html.share.chunk', {transferId, index, data}),
+    commitMarkdownHtmlShare: transferId => request('html.share.commit', {transferId}),
+    cancelMarkdownHtmlShare: transferId => request('html.share.cancel', {transferId}),
     clearPortRelaySiteData: relayUrl => request('relay.clearSiteData', {relayUrl}),
   };
 }

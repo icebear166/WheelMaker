@@ -69,6 +69,7 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 		return err
 	}
 	updateController := newWindowsDesktopUpdateController()
+	htmlClipboardTransfers := newDefaultDesktopHTMLClipboardTransferStore()
 	maximizeController := newDesktopMaximizeController(hwnd, win32DesktopWindowOps{})
 	authorize := func(action desktopBridgeAction) error {
 		if !desktopRuntime.security.AuthorizeCurrent(action) {
@@ -233,6 +234,43 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 				return err
 			}
 			return newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)
+		}},
+		{desktopBeginHTMLFileClipboardBinding, func(fileName string, size int) (string, error) {
+			if err := authorize(desktopBridgeBeginHTMLFileClipboard); err != nil {
+				return "", err
+			}
+			return htmlClipboardTransfers.begin(fileName, size)
+		}},
+		{desktopAppendHTMLFileClipboardBinding, func(transferID string, index int, data string) (string, error) {
+			if err := authorize(desktopBridgeAppendHTMLFileClipboard); err != nil {
+				return "", err
+			}
+			if !htmlClipboardTransfers.appendBase64(transferID, index, data) {
+				return desktopHTMLClipboardResult(false, "chunk_rejected", "chunk_rejected"), nil
+			}
+			return desktopHTMLClipboardResult(true, "chunk_received", ""), nil
+		}},
+		{desktopCommitHTMLFileClipboardBinding, func(transferID string) (string, error) {
+			if err := authorize(desktopBridgeCommitHTMLFileClipboard); err != nil {
+				return "", err
+			}
+			path, ok := htmlClipboardTransfers.commit(transferID)
+			if !ok {
+				return desktopHTMLClipboardResult(false, "commit_rejected", "commit_rejected"), nil
+			}
+			if err := setDesktopHTMLFileClipboard(path); err != nil {
+				return desktopHTMLClipboardResult(false, "clipboard_failed", err.Error()), nil
+			}
+			return desktopHTMLClipboardResult(true, "copied", ""), nil
+		}},
+		{desktopCancelHTMLFileClipboardBinding, func(transferID string) (string, error) {
+			if err := authorize(desktopBridgeCancelHTMLFileClipboard); err != nil {
+				return "", err
+			}
+			if !htmlClipboardTransfers.cancel(transferID) {
+				return desktopHTMLClipboardResult(false, "not_found", ""), nil
+			}
+			return desktopHTMLClipboardResult(true, "cancelled", ""), nil
 		}},
 	}
 	for _, binding := range bindings {

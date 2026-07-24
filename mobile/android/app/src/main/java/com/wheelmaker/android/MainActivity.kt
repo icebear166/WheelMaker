@@ -62,6 +62,7 @@ class MainActivity : Activity() {
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
     private lateinit var androidImageShareRuntime: AndroidImageShareRuntime
+    private lateinit var androidHtmlShareRuntime: AndroidHtmlShareRuntime
     private lateinit var androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime
     private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
     private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
@@ -93,12 +94,14 @@ class MainActivity : Activity() {
         )
         androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
         androidImageShareRuntime = AndroidImageShareRuntime(this)
+        androidHtmlShareRuntime = AndroidHtmlShareRuntime(this)
         androidPortRelaySiteDataRuntime = AndroidPortRelaySiteDataRuntime(webView)
         wheelMakerBridge = WheelMakerBridge(
             androidSpeechRuntime,
             androidNotificationRuntime,
             androidApkUpdateRuntime,
             androidImageShareRuntime,
+            androidHtmlShareRuntime,
             androidPortRelaySiteDataRuntime,
             androidWebDiagnostics,
             androidDiagnosticLogLevelStore,
@@ -514,6 +517,7 @@ class MainActivity : Activity() {
         trustedUserGestureGate.clear()
         trustedNativeActionGrantStore.clear()
         androidImageShareRuntime.clear()
+        androidHtmlShareRuntime.clear()
         androidWebDiagnostics.clear()
         val oldBaseUrl = configuredBaseUrl
         val currentUrl = webView.url.orEmpty()

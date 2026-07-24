@@ -9,6 +9,7 @@ class WheelMakerBridge(
     private val androidNotificationRuntime: AndroidNotificationRuntime,
     private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
     private val androidImageShareRuntime: AndroidImageShareRuntime,
+    private val androidHtmlShareRuntime: AndroidHtmlShareRuntime,
     private val androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore,
@@ -45,6 +46,10 @@ class WheelMakerBridge(
         "image.share.chunk" -> androidImageShareRuntime.append(payload.toString())
         "image.share.commit" -> androidImageShareRuntime.commit(payload.toString())
         "image.share.cancel" -> androidImageShareRuntime.cancel(payload.toString())
+        "html.share.begin" -> beginMarkdownHtmlShare(payload)
+        "html.share.chunk" -> androidHtmlShareRuntime.append(payload.toString())
+        "html.share.commit" -> androidHtmlShareRuntime.commit(payload.toString())
+        "html.share.cancel" -> androidHtmlShareRuntime.cancel(payload.toString())
         "relay.clearSiteData" -> androidPortRelaySiteDataRuntime.clear(payload.optString("relayUrl"))
 			else -> throw IllegalArgumentException("unsupported native action")
 		}
@@ -74,6 +79,17 @@ class WheelMakerBridge(
         }
         payload.remove("userActionToken")
         return androidImageShareRuntime.begin(payload.toString())
+    }
+
+    private fun beginMarkdownHtmlShare(payload: JSONObject): String {
+        if (!trustedNativeActionGrantStore.consume(
+                payload.optString("userActionToken"),
+                "html.share"
+            )) {
+            throw SecurityException("invalid native user-action grant")
+        }
+        payload.remove("userActionToken")
+        return androidHtmlShareRuntime.begin(payload.toString())
     }
 
     private fun setDiagnosticLogLevel(logLevel: String): String {

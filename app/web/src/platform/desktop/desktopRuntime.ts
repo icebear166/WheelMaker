@@ -16,6 +16,10 @@ export type DesktopWindowBridge = {
   showFileInFolder?: (absolutePath: string) => Promise<void> | void;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
+  beginHtmlFileClipboard?: (fileName: string, size: number) => Promise<string> | string;
+  appendHtmlFileClipboard?: (transferId: string, index: number, data: string) => Promise<string> | string;
+  commitHtmlFileClipboard?: (transferId: string) => Promise<string> | string;
+  cancelHtmlFileClipboard?: (transferId: string) => Promise<string> | string;
   getDesktopUpdateInfo?: () => Promise<DesktopUpdateInfo>;
   requestDesktopUpdate?: () => Promise<void>;
 };

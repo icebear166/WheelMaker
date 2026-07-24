@@ -71,6 +71,6 @@ class TrustedNativeActionGrantStore(
     }
 
     private companion object {
-        val SUPPORTED_ACTIONS = setOf("image.share", "speech.start")
+        val SUPPORTED_ACTIONS = setOf("image.share", "html.share", "speech.start")
     }
 }

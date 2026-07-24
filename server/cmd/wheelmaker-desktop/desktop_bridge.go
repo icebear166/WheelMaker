@@ -20,6 +20,10 @@ const (
 	desktopShowProjectFileInFolderBinding = "__wheelMakerDesktopShowProjectFileInFolder"
 	desktopOpenFileInVSCodeBinding        = "__wheelMakerDesktopOpenFileInVSCode"
 	desktopShowFileInFolderBinding        = "__wheelMakerDesktopShowFileInFolder"
+	desktopBeginHTMLFileClipboardBinding  = "__wheelMakerDesktopBeginHTMLFileClipboard"
+	desktopAppendHTMLFileClipboardBinding = "__wheelMakerDesktopAppendHTMLFileClipboard"
+	desktopCommitHTMLFileClipboardBinding = "__wheelMakerDesktopCommitHTMLFileClipboard"
+	desktopCancelHTMLFileClipboardBinding = "__wheelMakerDesktopCancelHTMLFileClipboard"
 	desktopGetUpdateInfoBinding           = "__wheelMakerDesktopGetUpdateInfo"
 	desktopRequestUpdateBinding           = "__wheelMakerDesktopRequestUpdate"
 	desktopEnterLocalDevBinding           = "__wheelMakerDesktopEnterLocalDev"
@@ -65,6 +69,10 @@ func desktopRuntimeInitScript() string {
 		showProjectFileInFolder: invoke('` + desktopShowProjectFileInFolderBinding + `'),
 		openFileInVSCode: invoke('` + desktopOpenFileInVSCodeBinding + `'),
 		showFileInFolder: invoke('` + desktopShowFileInFolderBinding + `'),
+		beginHtmlFileClipboard: invoke('` + desktopBeginHTMLFileClipboardBinding + `'),
+		appendHtmlFileClipboard: invoke('` + desktopAppendHTMLFileClipboardBinding + `'),
+		commitHtmlFileClipboard: invoke('` + desktopCommitHTMLFileClipboardBinding + `'),
+		cancelHtmlFileClipboard: invoke('` + desktopCancelHTMLFileClipboardBinding + `'),
 		getDesktopUpdateInfo: invoke('` + desktopGetUpdateInfoBinding + `'),
 		requestDesktopUpdate: invoke('` + desktopRequestUpdateBinding + `'),
     });

@@ -107,6 +107,42 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 	}
 }
 
+func TestDesktopRuntimeHTMLClipboardBindingsStayRemoteOnly(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	for _, want := range []string{
+		"beginHtmlFileClipboard",
+		"appendHtmlFileClipboard",
+		"commitHtmlFileClipboard",
+		"cancelHtmlFileClipboard",
+		desktopBeginHTMLFileClipboardBinding,
+		desktopAppendHTMLFileClipboardBinding,
+		desktopCommitHTMLFileClipboardBinding,
+		desktopCancelHTMLFileClipboardBinding,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("desktop runtime script missing %q", want)
+		}
+	}
+
+	bootstrapStart := strings.Index(script, "window.wheelMakerBootstrap")
+	bootstrapEnd := strings.Index(script[bootstrapStart:], "return;")
+	remoteRelative := strings.Index(script[bootstrapStart+bootstrapEnd:], "window.WheelMakerDesktop = Object.freeze({")
+	remoteStart := bootstrapStart + bootstrapEnd + remoteRelative
+	localRelative := strings.Index(script[remoteStart+1:], "window.WheelMakerDesktop = Object.freeze({")
+	localDevSection := script[remoteStart+1+localRelative:]
+	bootstrapSection := script[bootstrapStart : bootstrapStart+bootstrapEnd]
+	for _, privateName := range []string{
+		desktopBeginHTMLFileClipboardBinding,
+		desktopAppendHTMLFileClipboardBinding,
+		desktopCommitHTMLFileClipboardBinding,
+		desktopCancelHTMLFileClipboardBinding,
+	} {
+		if strings.Contains(bootstrapSection, privateName) || strings.Contains(localDevSection, privateName) {
+			t.Errorf("non-remote runtime exposes HTML clipboard binding %q", privateName)
+		}
+	}
+}
+
 func TestDesktopRuntimeSelfUpdateBindingsStayRemoteAndCloseAfterLaunch(t *testing.T) {
 	script := desktopRuntimeInitScript()
 	for _, want := range []string{
