@@ -118,6 +118,8 @@
 }
 
 .chat-title-prompt-icon-button,
+.chat-search-toggle,
+.chat-terminal-toggle,
 .chat-preview-toggle {
   appearance: none;
   position: relative;
@@ -131,7 +133,7 @@
   border-radius: 6px;
   padding: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
+  color: var(--text-tertiary);
   cursor: pointer;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -140,14 +142,18 @@
 
 .chat-title-prompt-icon-button:hover,
 .chat-title-prompt-icon-button.open,
+.chat-search-toggle:hover,
+.chat-terminal-toggle:hover,
 .chat-preview-toggle:hover {
-  background: color-mix(in srgb, var(--accent-primary) 13%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
+  background: var(--hover);
+  color: var(--text-primary);
 }
 
+.chat-search-toggle.active,
+.chat-terminal-toggle.active,
 .chat-preview-toggle.active {
-  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
 }
 
 .chat-title-prompt-icon-button:disabled {
@@ -173,7 +179,7 @@
   border-radius: 6px;
   padding: 0 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
+  color: var(--text-tertiary);
   font: inherit;
   line-height: inherit;
   overflow: hidden;
@@ -188,8 +194,8 @@
 
 .chat-title-project-button:hover,
 .chat-title-project-button.open {
-  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
+  background: var(--hover);
+  color: var(--text-primary);
 }
 
 .chat-title-project-button .breadcrumb-project-name {
@@ -206,15 +212,15 @@
   white-space: nowrap;
 }
 
-.chat-title-project-button .codicon {
+.chat-title-project-button .sl-icon {
   flex: 0 0 auto;
-  font-size: 12px;
 }
 
 .chat-title-session-text {
   min-width: 0;
   flex: 1 1 0;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  font-weight: 500;
   cursor: default;
 }
 
@@ -1253,10 +1259,10 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 34%, transparent);
+  border: 0;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-panel));
-  color: var(--text-primary);
+  background: transparent;
+  color: var(--text-tertiary);
   padding: 0 7px;
   font-size: 11px;
   font-weight: 700;
@@ -1294,12 +1300,12 @@
 }
 
 .chat-hub-summary-button:hover {
-  border-color: color-mix(in srgb, var(--accent-primary) 52%, transparent);
-  background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-panel));
+  background: var(--hover);
+  color: var(--text-primary);
 }
 
-.chat-hub-summary-button .codicon {
-  font-size: 12px;
+.chat-hub-summary-button .sl-icon {
+  flex: 0 0 auto;
 }
 
 .chat-hub-popover {
@@ -5196,7 +5202,6 @@
 
 
 
-.chat-hub-summary-button,
 .chat-header-search-control,
 .session-search-input {
   border-color: var(--border-subtle);
@@ -5839,28 +5844,6 @@
 .chat-search-icon-button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.chat-search-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.chat-search-toggle:hover {
-  color: var(--text-primary);
-}
-
-.chat-search-toggle.active {
-  color: var(--accent-primary);
 }
 
 .chat-search-match {

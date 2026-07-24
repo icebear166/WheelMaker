@@ -211,15 +211,15 @@
   border-radius: var(--chat-menu-icon-button-radius);
   padding: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
+  color: var(--text-tertiary);
   cursor: pointer;
 }
 
 .chat-menu-icon-button:hover,
 .chat-menu-icon-button:focus-visible,
 .chat-menu-icon-button[aria-expanded='true'] {
-  background: color-mix(in srgb, var(--accent-primary) 13%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
+  background: var(--hover);
+  color: var(--text-primary);
   outline: none;
 }
 

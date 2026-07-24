@@ -1,28 +1,5 @@
 @import '@xterm/xterm/css/xterm.css';
 
-.chat-terminal-toggle {
-  appearance: none;
-  position: relative;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  padding: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-  cursor: pointer;
-}
-
-.chat-terminal-toggle:hover,
-.chat-terminal-toggle.active {
-  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
-}
-
 .terminal-splitter {
   position: relative;
   flex: 0 0 5px;

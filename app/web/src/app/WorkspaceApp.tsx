@@ -17230,7 +17230,7 @@ export function App() {
       <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
         {activeChatBreadcrumbProjectName}
       </span>
-      <span className="codicon codicon-chevron-down" aria-hidden="true" />
+      <SessionIcon name="chevronDown" />
     </button>
   );
   const renderDesktopChatBreadcrumbTitle = () => (
@@ -17246,7 +17246,7 @@ export function App() {
         disabled={!chatTitlePromptMenuAvailable}
         onClick={toggleChatTitlePromptMenu}
       >
-        <span className="codicon codicon-history" aria-hidden="true" />
+        <SessionIcon name="history" />
       </button>
       <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
         {activeChatBreadcrumbLabel}
@@ -17272,7 +17272,7 @@ export function App() {
         <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
           {activeChatBreadcrumbProjectName}
         </span>
-        <span className="codicon codicon-chevron-down" aria-hidden="true" />
+        <SessionIcon name="chevronDown" />
       </button>
       <button
         ref={chatTitlePromptButtonRef}
@@ -17304,7 +17304,7 @@ export function App() {
           aria-label="Search current session"
           aria-pressed={chatSearchOpen}
         >
-          <span className="codicon codicon-search" aria-hidden="true" />
+          <SessionIcon name="search" />
         </button>
         <button
           type="button"
@@ -17314,7 +17314,7 @@ export function App() {
           aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
           aria-pressed={terminalOpen}
         >
-          <span className="codicon codicon-terminal" aria-hidden="true" />
+          <SessionIcon name="terminal" />
         </button>
         <button
           type="button"
@@ -17324,7 +17324,7 @@ export function App() {
           aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
           aria-pressed={chatPreviewOpen}
         >
-          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          <SessionIcon name="panelRight" />
           {!chatPreviewOpen && previewTabCount > 0 ? (
             <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
           ) : null}
@@ -18784,7 +18784,7 @@ export function App() {
                 }
               }}
             >
-              <span className="codicon codicon-add" aria-hidden="true" />
+              <SessionIcon name="plus" />
             </button>
           </div>
         );
