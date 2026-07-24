@@ -819,6 +819,8 @@ describe('web chat integration', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();');
+    expect(mainTsx).toContain('const [chatHubColorMenu, setChatHubColorMenu, chatHubColorMenuExiting] = useMenuExitState<{hubId: string}>();');
+    expect(mainTsx).toContain("const chatHubColorMenuHubId = chatHubColorMenu?.hubId ?? '';");
     expect(mainTsx).toContain('const chatHubMenuRef = useRef<HTMLDivElement | null>(null);');
     expect(mainTsx).toContain('const renderChatHubSummary = useCallback(() => {');
     expect(mainTsx).not.toContain('const renderChatHubSummary = useCallback((mobile = false) => {');
@@ -830,7 +832,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('!chatHubMenuRef.current?.contains(target) &&');
     expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
     expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-palette')");
-    expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-square')");
+    expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-button')");
     expect(mainTsx).toContain("aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}");
     expect(mainTsx).toContain('aria-expanded={chatHubMenuOpen}');
     expect(mainTsx).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");
@@ -840,6 +842,11 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('<span className="chat-hub-summary-count">{hubCount}</span>');
     expect(mainTsx).toContain('{registryHubs.length > 0 ? (');
     expect(mainTsx).toContain('registryHubs.map(hub => {');
+    expect(mainTsx).toContain('className="chat-hub-color-button"');
+    expect(mainTsx).toContain('className="chat-hub-color-dot"');
+    expect(mainTsx).toContain('className="chat-hub-expand-button"');
+    expect(mainTsx).toContain("<SessionIcon name={expanded ? 'chevronDown' : 'chevronRight'} />");
+    expect(mainTsx).toContain("className={`chat-hub-color-palette topbar-menu-surface${chatHubColorMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain('<span className="chat-hub-row-name">{hub.hubId}</span>');
     expect(mainTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
     expect(mainTsx).toContain('const renderChatSessionHeader = (mobile: boolean) => {');
@@ -921,6 +928,12 @@ describe('web chat integration', () => {
     );
     expect(stylesCss).toContain('.chat-hub-row-name {');
     expect(stylesCss).toContain('.chat-hub-empty {');
+    expect(stylesCss).toContain('.chat-hub-color-button {');
+    expect(stylesCss).toContain('.chat-hub-color-dot {');
+    expect(stylesCss).toContain('.chat-hub-expand-button {');
+    const hubTreeBlock = stylesCss.match(/\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(hubTreeBlock).not.toContain('border-left:');
+    expect(stylesCss).toContain('margin: 1px 0 3px 26px;');
   });
 
   test('does not render the retired File/Git drawer project header', () => {

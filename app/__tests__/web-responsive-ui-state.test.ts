@@ -407,17 +407,20 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain("syncWorkspaceProject(nextProject.projectId, {reason: 'chat'}).catch(() => undefined);");
   });
 
-  test('renders hub display preferences with isolated square color controls', () => {
+  test('renders hub display preferences with compact dot color controls', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
     const stylesCss = readWebStyles(projectRoot);
 
-    const hubNameIndex = mainTsx.indexOf('<span className="chat-hub-row-name">{hub.hubId}</span>');
-    const colorSquareIndex = mainTsx.indexOf('className="chat-hub-color-square"', hubNameIndex);
+    const colorButtonIndex = mainTsx.indexOf('className="chat-hub-color-button"');
+    const hubNameIndex = mainTsx.indexOf('<span className="chat-hub-row-name">{hub.hubId}</span>', colorButtonIndex);
+    expect(colorButtonIndex).toBeGreaterThanOrEqual(0);
     expect(hubNameIndex).toBeGreaterThanOrEqual(0);
-    expect(colorSquareIndex).toBeGreaterThan(hubNameIndex);
+    expect(hubNameIndex).toBeGreaterThan(colorButtonIndex);
+    expect(mainTsx).toContain('className="chat-hub-color-dot"');
+    expect(mainTsx).toContain('className="chat-hub-expand-button"');
     expect(mainTsx).not.toContain('chat-hub-read-tag');
     expect(mainTsx).not.toContain('className="chat-hub-color-trigger"');
     expect(mainTsx).not.toContain('className={`chat-hub-visibility-check ${visibilityState}`}');
@@ -465,7 +468,9 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain('className={`chat-hub-color-mode chat-hub-color-custom');
     expect(mainTsx).toContain('!chatHubMenuRef.current?.contains(target) &&');
     expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
-    expect(mainTsx).toContain("setChatHubColorMenuHubId('');");
+    expect(mainTsx).toContain('const [chatHubColorMenu, setChatHubColorMenu, chatHubColorMenuExiting] = useMenuExitState<{hubId: string}>();');
+    expect(mainTsx).toContain('setChatHubColorMenu(null);');
+    expect(mainTsx).not.toContain('chat-hub-color-square');
 
     const popoverBlock = Array.from(stylesCss.matchAll(/\.chat-hub-popover \{[\s\S]*?\n\}/g))
       .map(match => match[0])
@@ -480,24 +485,23 @@ describe('web responsive ui state', () => {
 
     const treeBlock = stylesCss.match(/(?:^|\n)\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(treeBlock).toContain('position: relative;');
-    expect(treeBlock).toContain('--chat-hub-color-chip-width: 36px;');
-    expect(treeBlock).toContain('--chat-hub-color-chip-height: 20px;');
-    expect(treeBlock).toContain('--chat-hub-color-chip-radius: 6px;');
+    expect(treeBlock).not.toContain('border-left:');
+    expect(treeBlock).not.toContain('--chat-hub-color-chip-width');
     expect(stylesCss).not.toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenBlock).toContain('z-index: 3;');
-    const colorOpenProjectListBlock = stylesCss.match(/\.chat-hub-tree\.color-open \.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorOpenProjectListBlock).toContain('margin-top: 0;');
-    expect(stylesCss).toContain('.chat-hub-color-palette::before {');
+    expect(stylesCss).not.toContain('.chat-hub-color-palette::before {');
 
-    const rowBlock = stylesCss.match(/\.chat-hub-row,\n\.chat-hub-empty \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(rowBlock).toContain('grid-template-columns: minmax(0, 1fr) 32px auto;');
-
-    const hubProjectToggleBlock = stylesCss.match(/\.chat-hub-project-toggle \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(hubProjectToggleBlock).toContain('width: 24px;');
-    expect(hubProjectToggleBlock).toContain('height: 24px;');
-    const hubProjectToggleIconBlock = stylesCss.match(/\.chat-hub-project-toggle-icon \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(hubProjectToggleIconBlock).toContain('color: var(--hub-accent);');
+    const rowBlock = stylesCss.match(/\.chat-hub-row \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(rowBlock).toContain('display: flex;');
+    const expandButtonBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(expandButtonBlock).toContain('flex: 1 1 auto;');
+    const colorButtonBlock = stylesCss.match(/\.chat-hub-color-button \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(colorButtonBlock).toContain('width: 24px;');
+    expect(colorButtonBlock).toContain('height: 24px;');
+    const colorDotBlock = stylesCss.match(/\.chat-hub-color-dot \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(colorDotBlock).toContain('width: 8px;');
+    expect(colorDotBlock).toContain('height: 8px;');
 
     const swatchBlock = stylesCss.match(/\.chat-hub-color-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(swatchBlock).toContain('var(--swatch-color)');
@@ -508,35 +512,13 @@ describe('web responsive ui state', () => {
     expect(swatchBlock).toContain('justify-self: center;');
     expect(swatchBlock).not.toContain('--hub-accent');
 
-    const colorSquareBlock = Array.from(stylesCss.matchAll(/\.chat-hub-color-square \{[\s\S]*?\n\}/g))
-      .map(match => match[0])
-      .find(block => block.includes('--hub-accent')) ?? '';
-    expect(colorSquareBlock).toContain('width: 32px;');
-    expect(colorSquareBlock).toContain('height: 24px;');
-    expect(colorSquareBlock).toContain('border: 1px solid transparent;');
-    expect(colorSquareBlock).toContain('background: transparent;');
-    expect(colorSquareBlock).not.toContain('linear-gradient');
-    expect(colorSquareBlock).not.toContain('0 5px 14px');
-
-    const colorSquareFillBlock = stylesCss.match(/\.chat-hub-color-square-fill \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorSquareFillBlock).toContain('width: var(--chat-hub-color-chip-width);');
-    expect(colorSquareFillBlock).toContain('height: var(--chat-hub-color-chip-height);');
-    expect(colorSquareFillBlock).toContain('border-radius: var(--chat-hub-color-chip-radius);');
-    expect(colorSquareFillBlock).toContain('background: var(--hub-accent);');
-    expect(colorSquareFillBlock).not.toContain('linear-gradient');
-
-    const colorSquareOpenBlock = stylesCss.match(/\.chat-hub-color-square\[aria-expanded="true"\] \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorSquareOpenBlock).toContain('border-color: transparent;');
-    expect(colorSquareOpenBlock).toContain('background: color-mix(in srgb, var(--hub-accent) 5%, transparent);');
-
     expect(stylesCss).not.toContain('.chat-hub-visibility-cube');
 
     const paletteBlock = stylesCss.match(/\.chat-hub-color-palette \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(paletteBlock).toContain('position: absolute;');
-    expect(paletteBlock).toContain('right: 4px;');
-    expect(paletteBlock).toContain('width: min(248px, calc(100% - 8px));');
-    const paletteArrowBlock = stylesCss.match(/\.chat-hub-color-palette::before \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(paletteArrowBlock).toContain('right: 56px;');
+    expect(paletteBlock).toContain('right: 0;');
+    expect(paletteBlock).toContain('width: min(248px, calc(100% - 4px));');
+    expect(paletteBlock).not.toContain('backdrop-filter:');
 
     const colorGridBlock = stylesCss.match(/\.chat-hub-color-grid \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorGridBlock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
@@ -583,8 +565,8 @@ describe('web responsive ui state', () => {
 
     const projectListBlock = Array.from(stylesCss.matchAll(/\.chat-hub-project-list \{[\s\S]*?\n\}/g))
       .map(match => match[0])
-      .find(block => block.includes('margin: 2px 2px 4px 9px;')) ?? '';
-    expect(projectListBlock).toContain('margin: 2px 2px 4px 9px;');
+      .find(block => block.includes('margin: 1px 0 3px 26px;')) ?? '';
+    expect(projectListBlock).toContain('margin: 1px 0 3px 26px;');
     expect(projectListBlock).not.toContain('border-radius:');
     expect(projectListBlock).not.toContain('background:');
     expect(projectListBlock).not.toContain('box-shadow:');

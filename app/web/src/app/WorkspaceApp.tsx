@@ -3395,7 +3395,8 @@ export function App() {
     }
   }, [setChatConfigOverflowOpen]);
   const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();
-  const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
+  const [chatHubColorMenu, setChatHubColorMenu, chatHubColorMenuExiting] = useMenuExitState<{hubId: string}>();
+  const chatHubColorMenuHubId = chatHubColorMenu?.hubId ?? '';
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const chatHubPopoverRef = useRef<HTMLDivElement | null>(null);
   const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();
@@ -5252,7 +5253,7 @@ export function App() {
     setProjectSessionActionMenu(null);
     setSessionArchiveMenuOpen(false);
     setChatHubMenuOpen(false);
-    setChatHubColorMenuHubId('');
+    setChatHubColorMenu(null);
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
   }, []);
@@ -6034,7 +6035,7 @@ export function App() {
         !chatHubPopoverRef.current?.contains(target)
       ) {
         setChatHubMenuOpen(false);
-        setChatHubColorMenuHubId('');
+        setChatHubColorMenu(null);
 
         return;
       }
@@ -6043,16 +6044,16 @@ export function App() {
         chatHubColorMenuHubId &&
         targetElement &&
         !targetElement.closest('.chat-hub-color-palette') &&
-        !targetElement.closest('.chat-hub-color-square')
+        !targetElement.closest('.chat-hub-color-button')
       ) {
-        setChatHubColorMenuHubId('');
+        setChatHubColorMenu(null);
 
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setChatHubMenuOpen(false);
-        setChatHubColorMenuHubId('');
+        setChatHubColorMenu(null);
 
       }
     };
@@ -6067,7 +6068,7 @@ export function App() {
   useEffect(() => {
     if (sidebarSettingsOpen) {
       setChatHubMenuOpen(false);
-      setChatHubColorMenuHubId('');
+      setChatHubColorMenu(null);
     }
   }, [sidebarSettingsOpen]);
 
@@ -6308,7 +6309,7 @@ export function App() {
     setChatConfigMenuOptionId('');
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
-    setChatHubColorMenuHubId('');
+    setChatHubColorMenu(null);
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
@@ -6330,7 +6331,7 @@ export function App() {
             setChatFileMentionMenuOpen(false);
             setChatConfigMenuOptionId('');
             setChatConfigOverflowOpen(false);
-            setChatHubColorMenuHubId('');
+            setChatHubColorMenu(null);
     
             setChatHubMenuOpen(open => !open);
           }}
@@ -6367,31 +6368,34 @@ export function App() {
                 } as React.CSSProperties;
                     return (
                       <div key={hub.hubId} className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
-                    <div className="chat-hub-row" style={hubAccentStyle(hub.hubId)}
-                      onClick={() => {
-                        const next = expanded
-                          ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
-                          : [...effectiveExpandedHubIds, hub.hubId];
-                        setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
-                      }}
-                    >
-                      <span className="chat-hub-row-name">{hub.hubId}</span>
+                    <div className="chat-hub-row" style={hubAccentStyle(hub.hubId)}>
                       <button
                         type="button"
-                        className="chat-hub-color-square"
+                        className="chat-hub-color-button"
                         aria-label={`Set color for ${hub.hubId}`}
                         aria-expanded={colorMenuOpen}
                         style={hubAccentStyle(hub.hubId)}
-                        onClick={event => {
-                          event.stopPropagation();
-                          setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId));
+                        onClick={() => setChatHubColorMenu(colorMenuOpen ? null : {hubId: hub.hubId})}
+                      >
+                        <span className="chat-hub-color-dot" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-hub-expand-button"
+                        aria-expanded={expanded}
+                        onClick={() => {
+                          const next = expanded
+                            ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
+                            : [...effectiveExpandedHubIds, hub.hubId];
+                          setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
                         }}
                       >
-                        <span className="chat-hub-color-square-fill" aria-hidden="true" />
+                        <span className="chat-hub-row-name">{hub.hubId}</span>
+                        <SessionIcon name={expanded ? 'chevronDown' : 'chevronRight'} />
                       </button>
                     </div>
                     {colorMenuOpen ? (
-                      <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
+                      <div className={`chat-hub-color-palette topbar-menu-surface${chatHubColorMenuExiting ? ' sl-menu-exit' : ''}`} aria-label={`Color options for ${hub.hubId}`}>
                         <div className="chat-hub-color-grid">
                           {HUB_COLOR_PRESETS.map(color => {
                             const defaultSwatch = color === defaultHubColor;
@@ -6499,6 +6503,7 @@ export function App() {
     applyHubColorHuePointer,
     applyHubColorSvPointer,
     chatHubColorMenuHubId,
+    chatHubColorMenuExiting,
     chatHubMenuOpen,
     chatHubPopoverStyle,
     chatHubTreeItems,
