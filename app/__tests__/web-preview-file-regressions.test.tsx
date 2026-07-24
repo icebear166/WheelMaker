@@ -68,6 +68,13 @@ type PreviewFileLinkModule = {
   isAbsolutePreviewFilePath?: (value: string) => boolean;
 };
 
+type MarkdownFileLinksModule = {
+  remarkWindowsFileLinks?: () => (
+    tree: unknown,
+    file: {value: unknown},
+  ) => void;
+};
+
 type PreviewWorkbenchStateModule = {
   previewSearchDocumentKey?: (tab: unknown) => string;
 };
@@ -464,6 +471,34 @@ describe('preview file regressions', () => {
     expect(isAbsolutePreviewFilePath!('\\\\fileserver\\share\\report.txt')).toBe(true);
     expect(isAbsolutePreviewFilePath!('/var/log/system.log')).toBe(true);
     expect(isAbsolutePreviewFilePath!('../OtherProject/src/worker.ts')).toBe(false);
+  });
+
+  test('preserves a hidden directory segment in a Windows Markdown file link', () => {
+    const {remarkWindowsFileLinks} = optionalRequire<MarkdownFileLinksModule>(
+      '../web/src/code/markdownFileLinks',
+    );
+    expect(remarkWindowsFileLinks).toBeDefined();
+
+    const source = String.raw`[spec](D:\Code\WheelMaker\.worktree\feat\topbar-menu-unification\spec.md)`;
+    const link = {
+      type: 'link',
+      url: String.raw`D:\Code\WheelMaker.worktree\feat\topbar-menu-unification\spec.md`,
+      position: {
+        start: {offset: 0},
+        end: {offset: source.length},
+      },
+      children: [{type: 'text', value: 'spec'}],
+    };
+    const tree = {
+      type: 'root',
+      children: [{type: 'paragraph', children: [link]}],
+    };
+
+    remarkWindowsFileLinks!()(tree, {value: source});
+
+    expect(link.url).toBe(
+      'D:/Code/WheelMaker/.worktree/feat/topbar-menu-unification/spec.md',
+    );
   });
 
   test('keeps Markdown source ranges available when search changes the target line', () => {
