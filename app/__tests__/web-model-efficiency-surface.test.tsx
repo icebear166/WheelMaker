@@ -6,6 +6,7 @@ import TestRenderer, {act} from 'react-test-renderer';
 import {
   ModelEfficiencyDetailContent,
   ModelEfficiencySimpleContent,
+  ModelEfficiencySnapshotContent,
 } from '../web/src/modelEfficiency/ModelEfficiencyContent';
 import type {ModelEfficiencyItem} from '../web/src/modelEfficiency/modelEfficiencyTypes';
 
@@ -105,7 +106,7 @@ describe('ModelEfficiencyContent', () => {
 });
 
 describe('ModelEfficiency styling', () => {
-  test('uses compact split score cards with muted side accents', () => {
+  test('uses single-layer family tint score cards', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'),
@@ -120,15 +121,54 @@ describe('ModelEfficiency styling', () => {
     expect(recommendationRule).toContain('grid-template-areas:');
     expect(recommendationRule).toContain('grid-template-rows: 20px 34px;');
     expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 47px;');
-    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 20%');
-    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 5%');
-    expect(recommendationRule).toContain('inset 3px 0 0');
+    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 30%');
+    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 3%');
+    expect(recommendationRule).not.toContain('inset 3px 0 0');
+    expect(recommendationRule).not.toContain('box-shadow');
     expect(familyRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(modelNameRule).toContain('padding: 7px 3px 1px 6px;');
-    expect(modelNameRule).toContain('font-size: 9.5px;');
+    expect(modelNameRule).toContain('font-size: 10px;');
     expect(modelNameRule).not.toContain('text-overflow: ellipsis;');
+    expect(modelNameRule).not.toContain('IBM Plex Sans');
     expect(scoreRule).toContain('font-size: clamp(18px, 1.35vw, 20px);');
+    expect(scoreRule).toContain('font-weight: 700;');
+    expect(scoreRule).toContain('letter-spacing: -0.02em;');
     expect(scoreRule).toContain('var(--model-efficiency-family-color) 58%');
-    expect(metaRule).toContain('font-size: 10.5px;');
+    expect(metaRule).toContain('font-size: 10px;');
+    expect(styles).not.toContain('--status-danger');
+  });
+
+  test('flattens detail families into hairline groups and shows a skeleton while loading', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const styles = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    const familyCardRule = styles.match(/\.model-efficiency-detail-family \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(familyCardRule).not.toContain('border: 1px solid');
+    expect(familyCardRule).not.toContain('background:');
+    expect(styles).toContain('.model-efficiency-detail-family + .model-efficiency-detail-family {');
+    const tableRule = styles.match(/\.model-efficiency-detail-family table \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(tableRule).toContain('font-size: 10px;');
+    expect(tableRule).toContain("font-family: 'JetBrains Mono', monospace;");
+    expect(styles).toContain('.model-efficiency-skeleton-rail {');
+  });
+
+  test('renders three skeleton rows while loading', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <ModelEfficiencySnapshotContent
+          snapshot={{status: 'loading', refreshing: true, items: []}}
+          mode="simple"
+          onRetry={jest.fn()}
+        />,
+      );
+    });
+
+    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-row'})).toHaveLength(3);
+    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-rail'})).toHaveLength(9);
+    expect(renderedText(view!.root)).not.toContain('Loading CodexRadar');
   });
 });

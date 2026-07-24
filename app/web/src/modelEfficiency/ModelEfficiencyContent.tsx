@@ -148,7 +148,17 @@ export function ModelEfficiencySnapshotContent({
       );
     }
     if (snapshot.status === 'idle' || snapshot.status === 'loading') {
-      return <div className="model-efficiency-state">Loading CodexRadar data…</div>;
+      return (
+        <div className="model-efficiency-skeleton" aria-label="Loading model efficiency">
+          {MODEL_FAMILIES.map(family => (
+            <span className="model-efficiency-skeleton-row" key={family}>
+              <span className="model-efficiency-skeleton-rail" />
+              <span className="model-efficiency-skeleton-rail" />
+              <span className="model-efficiency-skeleton-rail" />
+            </span>
+          ))}
+        </div>
+      );
     }
     return <div className="model-efficiency-state">No supported model data</div>;
   }
