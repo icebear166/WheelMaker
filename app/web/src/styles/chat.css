@@ -1713,8 +1713,14 @@
 }
 
 .chat-view-width-fixed-800 .chat-composer {
+  /* Mirror the chat-block content box exactly: 18px padding plus the 8px
+     classic scrollbar that .chat-block always shows (overflow-y: scroll +
+     scrollbar-gutter: stable). Both columns then resolve min(800px, 100%)
+     centering and the edge-surface clamps against identical reference
+     widths, so their left/right edges cannot drift apart when the preview
+     squeezes the chat column. */
   padding-left: 18px;
-  padding-right: calc(8px + var(--chat-scrollbar-gutter-width, 8px));
+  padding-right: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
 }
 
 .chat-virtuoso-footer {

@@ -85,7 +85,13 @@ describe('web chat fixed 800px layout', () => {
       /\.chat-main \{[\s\S]*--chat-scrollbar-gutter-width: 8px;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(8px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
+      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(18px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
+    );
+    // The composer mirrors the chat-block content box (18px padding + the
+    // permanent 8px scrollbar gutter) so both columns center against equal
+    // reference widths and cannot drift apart under preview squeeze.
+    expect(stylesCss).toMatch(
+      /\.chat-block \{[\s\S]*overflow-y: scroll;[\s\S]*scrollbar-gutter: stable;[\s\S]*padding: 18px 18px 0;/,
     );
     expect(stylesCss).not.toContain('.chat-view-width-fixed-800 .chat-scroll-bottom-button');
   });
