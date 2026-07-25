@@ -43,7 +43,7 @@ This model works well when you want one machine to expose the public entrypoint 
 
 The target machine does not need the WheelMaker source tree, Git, Go, npm, or a platform build toolchain. It needs:
 
-- **Node.js 22+**
+- **Node.js 22.15+**
 - `launchctl` on macOS, or `systemctl --user` on Linux
 - Linux lingering enabled for the deploy user:
 
@@ -343,7 +343,7 @@ Requirements:
 
 - Android SDK with `ANDROID_HOME` or `ANDROID_SDK_ROOT`
 - Gradle in `PATH`
-- Node.js 22+
+- Node.js 22.15+
 
 Run the unified interactive publisher from the repository root:
 

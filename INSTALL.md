@@ -6,7 +6,7 @@
 
 ## 1. 环境准备
 
-目标机器只需要 Node.js `22+`。部署流程从公共发布仓库下载元数据和预编译包，不需要 WheelMaker 源码、Git、Go、npm 或本机交叉编译环境。
+目标机器只需要 Node.js `22.15+`。部署流程从公共发布仓库下载元数据和预编译包，不需要 WheelMaker 源码、Git、Go、npm 或本机交叉编译环境。
 
 Registry 入口机额外需要：
 
@@ -17,7 +17,7 @@ Registry 入口机额外需要：
 
 - 先检测 Node，再安装或升级；不要在目标机安装无关的源码构建工具链。
 - Windows 可使用现有 Scoop 或 winget 安装 Node；不要自动安装 Scoop。
-- Linux 发行版包不满足 Node 22 时，先提出 NodeSource、nvm 等方案让用户确认。
+- Linux 发行版包不满足 Node 22.15 时，先提出 NodeSource、nvm 等方案让用户确认。
 - 只有 Registry 入口机才处理 Nginx。
 - 正常部署和 `deploy.mjs update` 不需要管理员权限。Windows 一次性迁移仅在发现旧 Windows Service 时弹 UAC。
 
@@ -357,7 +357,7 @@ Worker 无法连上入口机时，优先检查：
 node scripts/release.mjs --with-desktop --with-android --publish
 ```
 
-Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/android/signing/signing.properties` 和 `mobile/android/signing/release.p12` 读取已提交的发布身份，不依赖本机环境变量。修改这两个文件会改变后续 APK 的签名身份，应按发布凭据保护源码仓库写权限和备份。发布机器需安装 JDK 17、Android SDK Build Tools、Gradle 和 Node.js 22+；未选择 Android 时不初始化 Android 工具链。
+Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/android/signing/signing.properties` 和 `mobile/android/signing/release.p12` 读取已提交的发布身份，不依赖本机环境变量。修改这两个文件会改变后续 APK 的签名身份，应按发布凭据保护源码仓库写权限和备份。发布机器需安装 JDK 17、Android SDK Build Tools、Gradle 和 Node.js 22.15+；未选择 Android 时不初始化 Android 工具链。
 
 `v1.x` 对应 Android `versionName=1.x`、`versionCode=x`。选中 Android 后，APK 与 `android-release.json` 进入同一个自建 `releases/v1.x/` 目录；未选中时 `stable.androidApk` 继承最近一次 Android 资产。主机上的 `deploy.mjs` 不下载 APK，只有原生 Android Update 页面使用该公共指针安装更新。
 

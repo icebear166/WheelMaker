@@ -110,7 +110,7 @@ function fakeCliDeps() {
           {name: 'deploy.mjs', path: 'deploy.mjs', sha256: 'a'.repeat(64), size: 1},
         ],
         manifestPath: `${input.outputRoot}\\${input.version}\\release-manifest.json`,
-        platforms: [{archivePath: 'archive.tar.gz', key: 'windows-amd64'}],
+        platforms: [{archivePath: 'archive.tar.zst', key: 'windows-amd64'}],
         versionRoot: `${input.outputRoot}\\${input.version}`,
       };
     },
@@ -266,13 +266,13 @@ test('build summary exposes only final release files', () => {
     androidApkPath: undefined,
     desktopExePath: 'D:\\out\\v1.1\\WheelMakerDesktop.exe',
     manifestPath: 'D:\\out\\v1.1\\release-manifest.json',
-    platforms: [{archivePath: 'D:\\out\\v1.1\\package.tar.gz', key: 'windows-amd64'}],
+    platforms: [{archivePath: 'D:\\out\\v1.1\\package.tar.zst', key: 'windows-amd64'}],
     versionRoot: 'D:\\out\\v1.1',
   }), {
     androidApk: null,
     desktopExe: 'D:\\out\\v1.1\\WheelMakerDesktop.exe',
     manifest: 'D:\\out\\v1.1\\release-manifest.json',
-    platforms: [{archive: 'D:\\out\\v1.1\\package.tar.gz', key: 'windows-amd64'}],
+    platforms: [{archive: 'D:\\out\\v1.1\\package.tar.zst', key: 'windows-amd64'}],
     versionRoot: 'D:\\out\\v1.1',
   });
 });

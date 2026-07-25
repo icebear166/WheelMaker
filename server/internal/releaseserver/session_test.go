@@ -121,13 +121,13 @@ func TestUploadRejectsDeclaredFileAndSessionLimitsBeforeReadingBody(t *testing.T
 	}
 
 	session := readTestSession(t, root, started.SessionID)
-	if _, ok := session.AllowedFiles["wheelmaker-v1.1-darwin-amd64.tar.gz"]; !ok {
+	if _, ok := session.AllowedFiles["wheelmaker-v1.1-darwin-amd64.tar.zst"]; !ok {
 		t.Fatal("darwin-amd64 file missing from whitelist")
 	}
 	for _, name := range []string{
-		"wheelmaker-v1.1-windows-amd64.tar.gz",
-		"wheelmaker-v1.1-linux-amd64.tar.gz",
-		"wheelmaker-v1.1-darwin-arm64.tar.gz",
+		"wheelmaker-v1.1-windows-amd64.tar.zst",
+		"wheelmaker-v1.1-linux-amd64.tar.zst",
+		"wheelmaker-v1.1-darwin-arm64.tar.zst",
 		"WheelMakerDesktop.exe",
 	} {
 		session.Files[name] = fileInfo{Size: maxBinaryFileSize, SHA256: strings.Repeat("b", 64)}

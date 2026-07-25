@@ -174,7 +174,7 @@ func (s *Server) validateTransaction(session publishSession) (validatedTransacti
 		return validatedTransaction{}, errors.New("release manifest identity does not match session")
 	}
 	for _, platform := range releasePlatforms {
-		name := "wheelmaker-" + session.Version + "-" + platform + ".tar.gz"
+		name := "wheelmaker-" + session.Version + "-" + platform + ".tar.zst"
 		want := session.Files[name]
 		got, ok := manifest.Artifacts[platform]
 		if !ok || got.Path != releasePath(session.Version, name) || got.SHA256 != want.SHA256 || got.Size != want.Size {

@@ -1,29 +1,29 @@
 import assert from 'node:assert/strict';
-import { gzipSync } from 'node:zlib';
+import { zstdCompressSync } from 'node:zlib';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { extractTarGz } from './deploy-core.mjs';
-import { createTarGz } from '../release/tar.mjs';
+import { extractTarZst } from './deploy-core.mjs';
+import { createTarZst } from '../release/tar.mjs';
 
 test('extractor rejects traversal, absolute paths, and links', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-unsafe-tar-'));
   const fixtures = [
-    makeTarGz([{ body: 'bad', name: '../outside', type: '0' }]),
-    makeTarGz([{ body: 'bad', name: '/absolute', type: '0' }]),
-    makeTarGz([{ body: 'bad', name: 'C:/absolute', type: '0' }]),
-    makeTarGz([{ body: 'bad', name: 'web\\outside', type: '0' }]),
-    makeTarGz([{ body: '', linkName: 'target', name: 'link', type: '2' }]),
-    makeTarGz([{ body: '', linkName: 'target', name: 'link', type: '1' }]),
-    makeTarGz([{ body: '', name: 'device', type: '3' }]),
+    makeTarZst([{ body: 'bad', name: '../outside', type: '0' }]),
+    makeTarZst([{ body: 'bad', name: '/absolute', type: '0' }]),
+    makeTarZst([{ body: 'bad', name: 'C:/absolute', type: '0' }]),
+    makeTarZst([{ body: 'bad', name: 'web\\outside', type: '0' }]),
+    makeTarZst([{ body: '', linkName: 'target', name: 'link', type: '2' }]),
+    makeTarZst([{ body: '', linkName: 'target', name: 'link', type: '1' }]),
+    makeTarZst([{ body: '', name: 'device', type: '3' }]),
   ];
 
   try {
     for (const [index, fixture] of fixtures.entries()) {
       await assert.rejects(
-        () => extractTarGz(fixture, join(root, `target-${index}`)),
+        () => extractTarZst(fixture, join(root, `target-${index}`)),
         /unsafe tar entry/,
       );
     }
@@ -35,7 +35,7 @@ test('extractor rejects traversal, absolute paths, and links', async () => {
 test('extractor reads archives produced by the release tar writer', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-safe-tar-'));
   const source = join(root, 'source');
-  const archive = join(root, 'package.tar.gz');
+  const archive = join(root, 'package.tar.zst');
   const target = join(root, 'target');
 
   try {
@@ -43,9 +43,9 @@ test('extractor reads archives produced by the release tar writer', async () => 
     await mkdir(join(source, 'web'), { recursive: true });
     await writeFile(join(source, 'hub', 'wheelmaker'), 'hub');
     await writeFile(join(source, 'web', 'index.html'), 'web');
-    await createTarGz({ outputPath: archive, sourceDir: source });
+    await createTarZst({ outputPath: archive, sourceDir: source });
 
-    const result = await extractTarGz(await readFile(archive), target);
+    const result = await extractTarZst(await readFile(archive), target);
     assert.equal(await readFile(join(target, 'hub', 'wheelmaker'), 'utf8'), 'hub');
     assert.equal(await readFile(join(target, 'web', 'index.html'), 'utf8'), 'web');
     assert.equal(result.entries, 4);
@@ -58,24 +58,24 @@ test('extractor reads archives produced by the release tar writer', async () => 
 test('extractor enforces per-file and cumulative content limits', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-limited-tar-'));
   try {
-    const fileTooLarge = makeTarGz([
+    const fileTooLarge = makeTarZst([
       { body: '12345', name: 'large', size: 5, type: '0' },
     ]);
     await assert.rejects(
       () =>
-        extractTarGz(fileTooLarge, join(root, 'file-limit'), {
+        extractTarZst(fileTooLarge, join(root, 'file-limit'), {
           maxFileBytes: 4,
         }),
       /archive limit exceeded/,
     );
 
-    const totalTooLarge = makeTarGz([
+    const totalTooLarge = makeTarZst([
       { body: '123', name: 'first', type: '0' },
       { body: '456', name: 'second', type: '0' },
     ]);
     await assert.rejects(
       () =>
-        extractTarGz(totalTooLarge, join(root, 'total-limit'), {
+        extractTarZst(totalTooLarge, join(root, 'total-limit'), {
           maxContentBytes: 5,
         }),
       /archive limit exceeded/,
@@ -85,7 +85,7 @@ test('extractor enforces per-file and cumulative content limits', async () => {
   }
 });
 
-function makeTarGz(entries) {
+function makeTarZst(entries) {
   const blocks = [];
   for (const entry of entries) {
     const body = Buffer.from(entry.body ?? '');
@@ -109,7 +109,7 @@ function makeTarGz(entries) {
     if (padding) blocks.push(Buffer.alloc(padding));
   }
   blocks.push(Buffer.alloc(1024));
-  return gzipSync(Buffer.concat(blocks), { mtime: 0 });
+  return zstdCompressSync(Buffer.concat(blocks), { level: 19 });
 }
 
 function writeText(buffer, offset, length, value) {

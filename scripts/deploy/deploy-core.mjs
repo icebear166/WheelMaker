@@ -13,7 +13,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { createGunzip } from 'node:zlib';
+import { createZstdDecompress } from 'node:zlib';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -352,10 +352,26 @@ function inputStream(input) {
   if (typeof input === 'string') {
     return createReadStream(input);
   }
-  throw new Error('tar.gz input must be bytes or a file path');
+  throw new Error('tar.zst input must be bytes or a file path');
 }
 
-export async function extractTarGz(
+const REQUIRED_NODE_MAJOR = 22;
+const REQUIRED_NODE_MINOR = 15;
+
+function assertNodeRuntime() {
+  const [major, minor] = (process.versions.node || '0').split('.').map(Number);
+  if (
+    major < REQUIRED_NODE_MAJOR ||
+    (major === REQUIRED_NODE_MAJOR && minor < REQUIRED_NODE_MINOR)
+  ) {
+    throw new Error(
+      `WheelMaker requires Node.js ${REQUIRED_NODE_MAJOR}.${REQUIRED_NODE_MINOR}+ to decode the release archive (have ${process.versions.node}). ` +
+        'Re-run the install command from https://release.wheelmaker.top/ to upgrade Node, then retry.',
+    );
+  }
+}
+
+export async function extractTarZst(
   input,
   targetDirectory,
   {
@@ -364,12 +380,13 @@ export async function extractTarGz(
     maxFileBytes = DEFAULT_MAX_FILE_BYTES,
   } = {},
 ) {
+  assertNodeRuntime();
   const root = resolve(targetDirectory);
   await rm(root, { recursive: true, force: true });
   await mkdir(root, { recursive: true });
-  const gunzip = createGunzip();
-  inputStream(input).pipe(gunzip);
-  const reader = new StreamReader(gunzip);
+  const decompress = createZstdDecompress();
+  inputStream(input).pipe(decompress);
+  const reader = new StreamReader(decompress);
   let entries = 0;
   let contentBytes = 0;
 
@@ -429,7 +446,7 @@ export async function extractTarGz(
       await reader.discard(padding);
     }
   } catch (error) {
-    gunzip.destroy();
+    decompress.destroy();
     await rm(root, { recursive: true, force: true });
     throw error;
   }
@@ -548,7 +565,7 @@ export async function stageVerifiedRelease({
   }
 
   const extractionDirectory = join(stagingDirectory, jobId, 'package');
-  const extraction = await extractTarGz(archiveBytes, extractionDirectory);
+  const extraction = await extractTarZst(archiveBytes, extractionDirectory);
   return {
     artifact,
     extraction,

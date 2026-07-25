@@ -206,7 +206,23 @@ module.exports = (_env = {}, argv = {}) => {
       hints: false,
     },
     optimization: {
-      minimizer: [new TerserPlugin({ parallel: false })],
+      minimizer: [
+        new TerserPlugin({
+          parallel: false,
+          terserOptions: {
+            ecma: 2020,
+            compress: {
+              passes: 2,
+            },
+            mangle: {
+              safari10: true,
+            },
+            format: {
+              comments: /^\**!|@preserve|@license|@cc_on/i,
+            },
+          },
+        }),
+      ],
     },
     devtool: isProduction && !envFlag(process.env.WHEELMAKER_WEB_ENABLE_SOURCEMAP)
       ? false

@@ -23,7 +23,7 @@ import {
   encodeJsonBytes,
   sha256Bytes,
 } from '../release/metadata.mjs';
-import { createTarGz } from '../release/tar.mjs';
+import { createTarZst } from '../release/tar.mjs';
 
 const RUNTIME_PATHS = {
   bin: 'C:\\Users\\alice\\.wheelmaker\\bin',
@@ -448,13 +448,13 @@ test('stale lease is reclaimed only when updater is not running', async () => {
 test('manifest and completed archive are verified before extraction', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-stage-'));
   const source = join(root, 'source');
-  const archivePath = join(root, 'package.tar.gz');
+  const archivePath = join(root, 'package.tar.zst');
   try {
     await mkdir(join(source, 'hub'), { recursive: true });
     await mkdir(join(source, 'web'), { recursive: true });
     await writeFile(join(source, 'hub', 'wheelmaker'), 'hub');
     await writeFile(join(source, 'web', 'index.html'), 'web');
-    await createTarGz({ outputPath: archivePath, sourceDir: source });
+    await createTarZst({ outputPath: archivePath, sourceDir: source });
     const archiveBytes = await readFile(archivePath);
     const manifest = {
       schema: 2,
@@ -465,7 +465,7 @@ test('manifest and completed archive are verified before extraction', async () =
         'darwin-amd64': {
           sha256: sha256Bytes(archiveBytes),
           size: archiveBytes.length,
-          path: '/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz',
+          path: '/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.zst',
         },
       },
     };
@@ -489,7 +489,7 @@ test('manifest and completed archive are verified before extraction', async () =
     };
     const downloads = new Map([
       ['https://release.example/releases/v1.7/release-manifest.json', manifestBytes],
-      ['https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz', archiveBytes],
+      ['https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.zst', archiveBytes],
     ]);
 
     const fetched = [];
@@ -512,13 +512,13 @@ test('manifest and completed archive are verified before extraction', async () =
       {label: 'release manifest', url: 'https://release.example/releases/v1.7/release-manifest.json'},
       {
         label: 'darwin-amd64 release package',
-        url: 'https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz',
+        url: 'https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.zst',
       },
     ]);
 
     const tamperedArchive = Buffer.from(archiveBytes);
     tamperedArchive[tamperedArchive.length - 1] ^= 0xff;
-    downloads.set('https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz', tamperedArchive);
+    downloads.set('https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.zst', tamperedArchive);
     await assert.rejects(
       () =>
         stageVerifiedRelease({

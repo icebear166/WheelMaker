@@ -118,9 +118,13 @@ test('Windows Hub uses the GUI subsystem without changing Unix Hub builds', asyn
       ({ options }) => options.env.GOOS !== 'windows',
     );
 
-    assert.equal(windowsBuild.args.includes('-ldflags=-H windowsgui'), true);
+    assert.equal(windowsBuild.args.includes('-ldflags=-s -w -H windowsgui'), true);
     for (const build of unixBuilds) {
-      assert.equal(build.args.includes('-ldflags=-H windowsgui'), false);
+      assert.equal(build.args.includes('-ldflags=-s -w'), true);
+      assert.equal(
+        build.args.some((arg) => arg.startsWith('-ldflags=') && arg.includes('windowsgui')),
+        false,
+      );
     }
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -182,7 +186,7 @@ test('platform directories preserve the Hub and Web package layout', async () =>
     assert.equal(updaterBuilds.length, 1);
     assert.equal(updaterBuilds[0].options.env.GOOS, 'windows');
     assert.equal(updaterBuilds[0].options.env.GOARCH, 'amd64');
-    assert.equal(updaterBuilds[0].args.includes('-ldflags=-H windowsgui'), true);
+    assert.equal(updaterBuilds[0].args.includes('-ldflags=-s -w -H windowsgui'), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -6,7 +6,7 @@
 
 构建只在私有 WheelMaker 源码仓库中进行。它负责从源码生成预编译 Hub、Web 和可选客户端资产，并把完整结果写入 `.release-out/v1.x/`。目标机不编译源码，目标机部署由 [`release.md`](release.md) 记录。
 
-本地构建与 GitHub Action 共用同一套实现，不维护两套构建逻辑。两者都要求 Node.js 22+，并通过 [`scripts/release.mjs`](../../../scripts/release.mjs) 进入核心流程。
+本地构建与 GitHub Action 共用同一套实现，不维护两套构建逻辑。两者都要求 Node.js 22.15+（zstd 压缩/解压需要），并通过 [`scripts/release.mjs`](../../../scripts/release.mjs) 进入核心流程。
 
 ## 入口和模块
 
@@ -24,7 +24,7 @@ scripts/release/cli.mjs         流程编排
    ├─ build.mjs                 Hub、Web、Desktop 构建
    ├─ android.mjs               Android 构建与签名
    ├─ publish.mjs               打包和 manifest
-   ├─ tar.mjs                   tar.gz 生成
+   ├─ tar.mjs                   tar.zst 生成
    ├─ metadata.mjs              版本、SHA-256 和 JSON
    ├─ progress.mjs              阶段、耗时和进度输出
    └─ commands.mjs              跨平台子进程调用
@@ -69,7 +69,7 @@ npm ci --include=dev
 - Desktop：可选，生成 Windows AMD64 GUI 程序 `WheelMakerDesktop.exe`。
 - Android：可选，生成已签名 APK 和 `android-release.json`。
 
-四个 Hub 构建都使用 `CGO_ENABLED=0`，并把同一份 `web-source` 复制到各平台目录。
+所有 Go 二进制（Hub、Desktop 与一次性更新器）都用 `CGO_ENABLED=0` 与 `-trimpath -ldflags=-s -w` 构建：剥离符号与 DWARF 以缩小体积，Windows 额外加 `-H windowsgui`；panic 堆栈仍保留函数名（pclntab 不被剥离）。四个 Hub 构建把同一份 `web-source` 复制到各平台目录。
 
 ## 产物
 
@@ -77,10 +77,10 @@ npm ci --include=dev
 
 ```text
 .release-out/v1.x/
-├─ wheelmaker-v1.x-windows-amd64.tar.gz
-├─ wheelmaker-v1.x-linux-amd64.tar.gz
-├─ wheelmaker-v1.x-darwin-amd64.tar.gz
-├─ wheelmaker-v1.x-darwin-arm64.tar.gz
+├─ wheelmaker-v1.x-windows-amd64.tar.zst
+├─ wheelmaker-v1.x-linux-amd64.tar.zst
+├─ wheelmaker-v1.x-darwin-amd64.tar.zst
+├─ wheelmaker-v1.x-darwin-arm64.tar.zst
 ├─ deploy.mjs
 ├─ deploy-core.mjs
 ├─ release-manifest.json

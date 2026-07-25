@@ -5,16 +5,16 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
-  createTarGz,
+  createTarZst,
   listTarEntries,
   normalizeTarPath,
 } from './tar.mjs';
 
-test('tar.gz output is deterministic and sorted', async () => {
+test('tar.zst output is deterministic and sorted', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-tar-'));
   const source = join(root, 'source');
-  const first = join(root, 'first.tar.gz');
-  const second = join(root, 'second.tar.gz');
+  const first = join(root, 'first.tar.zst');
+  const second = join(root, 'second.tar.zst');
 
   try {
     await mkdir(join(source, 'web'), { recursive: true });
@@ -22,8 +22,8 @@ test('tar.gz output is deterministic and sorted', async () => {
     await writeFile(join(source, 'web', 'index.html'), 'web');
     await writeFile(join(source, 'hub', 'wheelmaker'), 'hub');
 
-    await createTarGz({ sourceDir: source, outputPath: first });
-    await createTarGz({ sourceDir: source, outputPath: second });
+    await createTarZst({ sourceDir: source, outputPath: first });
+    await createTarZst({ sourceDir: source, outputPath: second });
 
     assert.deepEqual(await readFile(first), await readFile(second));
     assert.deepEqual(await listTarEntries(first), [
@@ -47,13 +47,13 @@ test('tar paths reject absolute and traversal-like names', () => {
 test('Hub binaries are executable while Web files remain read-only data', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-tar-mode-'));
   const source = join(root, 'source');
-  const archive = join(root, 'package.tar.gz');
+  const archive = join(root, 'package.tar.zst');
   try {
     await mkdir(join(source, 'hub'), { recursive: true });
     await mkdir(join(source, 'web'), { recursive: true });
     await writeFile(join(source, 'hub', 'wheelmaker'), 'hub');
     await writeFile(join(source, 'web', 'index.html'), 'web');
-    await createTarGz({ sourceDir: source, outputPath: archive });
+    await createTarZst({ sourceDir: source, outputPath: archive });
 
     const entries = await listTarEntries(archive, { details: true });
     const byPath = Object.fromEntries(entries.map((entry) => [entry.path, entry]));

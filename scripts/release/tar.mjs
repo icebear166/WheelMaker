@@ -1,6 +1,6 @@
 import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, posix } from 'node:path';
-import { gzipSync, gunzipSync } from 'node:zlib';
+import { zstdCompressSync, zstdDecompressSync } from 'node:zlib';
 
 const BLOCK_SIZE = 512;
 
@@ -111,7 +111,7 @@ function createHeader(entry) {
   return header;
 }
 
-export async function createTarGz({ sourceDir, outputPath }) {
+export async function createTarZst({ sourceDir, outputPath }) {
   const entries = await collectEntries(sourceDir);
   const blocks = [];
   for (const entry of entries) {
@@ -129,7 +129,7 @@ export async function createTarGz({ sourceDir, outputPath }) {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(
     outputPath,
-    gzipSync(Buffer.concat(blocks), { level: 9, mtime: 0 }),
+    zstdCompressSync(Buffer.concat(blocks), { level: 19 }),
   );
   return outputPath;
 }
@@ -139,8 +139,8 @@ function readTarString(bytes) {
   return bytes.subarray(0, end === -1 ? bytes.length : end).toString('utf8');
 }
 
-export async function listTarEntries(tarGzPath, { details = false } = {}) {
-  const archive = gunzipSync(await readFile(tarGzPath));
+export async function listTarEntries(archivePath, { details = false } = {}) {
+  const archive = zstdDecompressSync(await readFile(archivePath));
   const entries = [];
   for (let offset = 0; offset + BLOCK_SIZE <= archive.length; ) {
     const header = archive.subarray(offset, offset + BLOCK_SIZE);

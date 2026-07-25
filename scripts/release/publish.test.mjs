@@ -88,10 +88,10 @@ test('packaging creates the exact schema 2 server directory and renders one laun
       'deploy-core.mjs',
       'deploy.mjs',
       'release-manifest.json',
-      'wheelmaker-v1.1-darwin-amd64.tar.gz',
-      'wheelmaker-v1.1-darwin-arm64.tar.gz',
-      'wheelmaker-v1.1-linux-amd64.tar.gz',
-      'wheelmaker-v1.1-windows-amd64.tar.gz',
+      'wheelmaker-v1.1-darwin-amd64.tar.zst',
+      'wheelmaker-v1.1-darwin-arm64.tar.zst',
+      'wheelmaker-v1.1-linux-amd64.tar.zst',
+      'wheelmaker-v1.1-windows-amd64.tar.zst',
     ].sort());
     assert.equal(
       await readFile(join(packaged.versionRoot, 'deploy.mjs'), 'utf8'),
@@ -108,10 +108,10 @@ test('packaging creates the exact schema 2 server directory and renders one laun
         Object.entries(manifest.artifacts).map(([key, value]) => [key, value.path]),
       ),
       {
-        'darwin-amd64': '/releases/v1.1/wheelmaker-v1.1-darwin-amd64.tar.gz',
-        'darwin-arm64': '/releases/v1.1/wheelmaker-v1.1-darwin-arm64.tar.gz',
-        'linux-amd64': '/releases/v1.1/wheelmaker-v1.1-linux-amd64.tar.gz',
-        'windows-amd64': '/releases/v1.1/wheelmaker-v1.1-windows-amd64.tar.gz',
+        'darwin-amd64': '/releases/v1.1/wheelmaker-v1.1-darwin-amd64.tar.zst',
+        'darwin-arm64': '/releases/v1.1/wheelmaker-v1.1-darwin-arm64.tar.zst',
+        'linux-amd64': '/releases/v1.1/wheelmaker-v1.1-linux-amd64.tar.zst',
+        'windows-amd64': '/releases/v1.1/wheelmaker-v1.1-windows-amd64.tar.zst',
       },
     );
     assert.equal(packaged.assets.every(asset => !('bytes' in asset)), true);

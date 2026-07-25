@@ -567,7 +567,7 @@ func allowedReleaseFiles(request startRequest) map[string]fileRule {
 		"release-manifest.json": {MaxSize: maxControlFileSize},
 	}
 	for _, platform := range releasePlatforms {
-		name := "wheelmaker-" + request.Version + "-" + platform + ".tar.gz"
+		name := "wheelmaker-" + request.Version + "-" + platform + ".tar.zst"
 		files[name] = fileRule{MaxSize: maxBinaryFileSize}
 	}
 	if request.WithDesktop {

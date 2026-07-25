@@ -13,7 +13,7 @@ import {join} from 'node:path';
 
 import {encodeJsonBytes} from './metadata.mjs';
 import {validateReleaseChannel, versionAssetPath} from './channel.mjs';
-import {createTarGz} from './tar.mjs';
+import {createTarZst} from './tar.mjs';
 
 const RELEASE_BASE_URL_MARKER = '__WHEELMAKER_RELEASE_BASE_URL__';
 
@@ -88,9 +88,9 @@ export async function packageBuiltRelease(release) {
   const artifacts = {};
   const platforms = [];
   for (const platform of release.platforms) {
-    const name = `wheelmaker-${release.version}-${platform.key}.tar.gz`;
+    const name = `wheelmaker-${release.version}-${platform.key}.tar.zst`;
     const path = join(packageRoot, name);
-    await createTarGz({sourceDir: platform.directory, outputPath: path});
+    await createTarZst({sourceDir: platform.directory, outputPath: path});
     const identity = await inspectFile(path);
     artifacts[platform.key] = {
       path: versionAssetPath(release.version, name),

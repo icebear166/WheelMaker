@@ -48,6 +48,12 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 
 源码中的发布地址是占位符。打包时才把 `deploy.mjs` 渲染为 `https://release.wheelmaker.top`，避免在部署代码各处重复维护 URL。
 
+## 平台包格式与解压
+
+平台包是 `wheelmaker-v1.x-<platform>.tar.zst`，由 [`scripts/release/tar.mjs`](../../../scripts/release/tar.mjs) 用 zstd level 19 压缩。目标机由 `deploy-core.mjs` 的 `extractTarZst` 用 `node:zlib` 原生 zstd 流式解压，因此要求 Node.js ≥ 22.15。
+
+`deploy-core.mjs` 在解压前做版本守卫：Node < 22.15 时抛出明确错误，指引重跑 `https://release.wheelmaker.top/` 的一行安装命令升级 Node，而不是崩溃在缺失的 zstd API 上。日常 `deploy.mjs update` 不安装或升级 Node，所以存量机若仍停在 22.15 以下，需要重新执行一次完整安装才能继续更新。
+
 ## 启动器职责
 
 `deploy.mjs` 只负责获得可信的部署核心，不直接停止 Hub 或替换业务文件：

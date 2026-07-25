@@ -43,8 +43,8 @@ func TestFirstCommitCreatesV11Schema2StableAndHistory(t *testing.T) {
 		}
 	}
 	for _, name := range []string{
-		"wheelmaker-v1.1-windows-amd64.tar.gz",
-		"wheelmaker-v1.1-darwin-amd64.tar.gz",
+		"wheelmaker-v1.1-windows-amd64.tar.zst",
+		"wheelmaker-v1.1-darwin-amd64.tar.zst",
 	} {
 		if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.1", name)); err != nil {
 			t.Fatalf("version asset %s missing: %v", name, err)
@@ -209,10 +209,10 @@ func prepareCompleteTestSession(t *testing.T, server *Server, request startReque
 	files := map[string][]byte{
 		"deploy.mjs":      []byte("#!/usr/bin/env node\n"),
 		"deploy-core.mjs": []byte("export const core = true;\n"),
-		"wheelmaker-" + request.Version + "-windows-amd64.tar.gz": []byte("windows archive"),
-		"wheelmaker-" + request.Version + "-linux-amd64.tar.gz":   []byte("linux archive"),
-		"wheelmaker-" + request.Version + "-darwin-amd64.tar.gz":  []byte("darwin amd64 archive"),
-		"wheelmaker-" + request.Version + "-darwin-arm64.tar.gz":  []byte("darwin archive"),
+		"wheelmaker-" + request.Version + "-windows-amd64.tar.zst": []byte("windows archive"),
+		"wheelmaker-" + request.Version + "-linux-amd64.tar.zst":   []byte("linux archive"),
+		"wheelmaker-" + request.Version + "-darwin-amd64.tar.zst":  []byte("darwin amd64 archive"),
+		"wheelmaker-" + request.Version + "-darwin-arm64.tar.zst":  []byte("darwin archive"),
 	}
 	if request.WithDesktop {
 		files["WheelMakerDesktop.exe"] = []byte("desktop executable")
@@ -243,7 +243,7 @@ func prepareCompleteTestSession(t *testing.T, server *Server, request startReque
 
 	artifacts := map[string]artifact{}
 	for _, platform := range []string{"windows-amd64", "linux-amd64", "darwin-amd64", "darwin-arm64"} {
-		name := "wheelmaker-" + request.Version + "-" + platform + ".tar.gz"
+		name := "wheelmaker-" + request.Version + "-" + platform + ".tar.zst"
 		body := files[name]
 		artifacts[platform] = artifact{
 			Path:   "/releases/" + request.Version + "/" + name,

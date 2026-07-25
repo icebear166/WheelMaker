@@ -121,7 +121,9 @@ export async function buildRelease({
 
       const buildArguments = ['build', '-trimpath'];
       if (target.GOOS === 'windows') {
-        buildArguments.push('-ldflags=-H windowsgui');
+        buildArguments.push('-ldflags=-s -w -H windowsgui');
+      } else {
+        buildArguments.push('-ldflags=-s -w');
       }
       buildArguments.push('-o', binaryPath, './cmd/wheelmaker');
 
@@ -141,7 +143,7 @@ export async function buildRelease({
         await runner('go', [
           'build',
           '-trimpath',
-          '-ldflags=-H windowsgui',
+          '-ldflags=-s -w -H windowsgui',
           '-o',
           updaterPath,
           './cmd/wheelmaker-desktop-updater',
@@ -196,7 +198,7 @@ export async function buildRelease({
           [
             'build',
             '-trimpath',
-            '-ldflags=-H windowsgui',
+            '-ldflags=-s -w -H windowsgui',
             '-o',
             desktopExe,
             './cmd/wheelmaker-desktop',
