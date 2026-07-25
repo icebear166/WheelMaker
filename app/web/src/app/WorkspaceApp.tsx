@@ -18617,12 +18617,21 @@ export function App() {
                     onPointerDown={event => event.preventDefault()}
                     onClick={() => {
                       if (selectedChatPromptRunning) return;
+                      // Desktop: File and Photo both open the same native file
+                      // dialog (the accept filter is switchable there), so the
+                      // tray is skipped and the picker opens directly. Mobile
+                      // keeps the tray because accept="image/*" routes to the
+                      // photo library instead of the file manager.
+                      if (isWide) {
+                        chatFileInputRef.current?.click();
+                        return;
+                      }
                       toggleChatAttachmentTray();
                     }}
-                    title="Attach files or photos"
-                    aria-label="Attach files or photos"
-                    aria-haspopup="menu"
-                    aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}
+                    title={isWide ? 'Attach files' : 'Attach files or photos'}
+                    aria-label={isWide ? 'Attach files' : 'Attach files or photos'}
+                    aria-haspopup={isWide ? undefined : 'menu'}
+                    aria-expanded={isWide ? undefined : !selectedChatPromptRunning && chatAttachmentTrayOpen}
                   >
                     <ChatIcon name="paperclip" />
                   </button>
@@ -18634,7 +18643,7 @@ export function App() {
                       />
                     </div>
                   ) : null}
-                  {!selectedChatPromptRunning && chatAttachmentTrayOpen ? (
+                  {!isWide && !selectedChatPromptRunning && chatAttachmentTrayOpen ? (
                     <div
                       ref={chatAttachmentTrayRef}
                       className={`chat-attachment-action-tray${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}

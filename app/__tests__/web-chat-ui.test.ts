@@ -996,8 +996,10 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-tools"');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain('chat-composer-stop-slot${chatStopPillExiting');
-    expect(mainTsx).toContain('aria-label="Attach files or photos"');
-    expect(mainTsx).toContain('aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}');
+    expect(mainTsx).toContain("title={isWide ? 'Attach files' : 'Attach files or photos'}");
+    expect(mainTsx).toContain('aria-haspopup={isWide ? undefined : \'menu\'}');
+    expect(mainTsx).toContain('aria-expanded={isWide ? undefined : !selectedChatPromptRunning && chatAttachmentTrayOpen}');
+    expect(mainTsx).toContain('{!isWide && !selectedChatPromptRunning && chatAttachmentTrayOpen ? (');
     expect(mainTsx).toContain('chat-attachment-action-tray${chatComposerMenuExiting');
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('className="chat-attachment-action-button file"');
@@ -1452,7 +1454,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('resizeChatComposerTextarea({scrollToEnd: true})');
   });
 
-  test('keeps file and photo actions behind a tools tray while file mentions use the @ shortcut', () => {
+  test('attaches files directly on desktop and keeps the File/Photo tray on mobile', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
@@ -1473,6 +1475,16 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('if (target && chatAttachmentTrayRef.current?.contains(target))');
     expect(mainTsx).toContain('if (target && chatAttachmentTrayButtonRef.current?.contains(target))');
     expect(mainTsx).toContain('setChatAttachmentTrayOpen(false);');
+
+    // Desktop: File and Photo open the same native dialog, so the paperclip
+    // goes straight to the file picker and the tray only exists on mobile.
+    const attachButtonStart = mainTsx.indexOf('className="chat-tool-button chat-attachment-plus-button"');
+    expect(attachButtonStart).toBeGreaterThanOrEqual(0);
+    const attachButtonBlock = mainTsx.slice(attachButtonStart, attachButtonStart + 1200);
+    expect(attachButtonBlock).toContain('if (isWide) {');
+    expect(attachButtonBlock).toContain('chatFileInputRef.current?.click();');
+    expect(attachButtonBlock).toContain('toggleChatAttachmentTray();');
+    expect(mainTsx).toContain('{!isWide && !selectedChatPromptRunning && chatAttachmentTrayOpen ? (');
 
     const imageHandlerStart = mainTsx.indexOf('const handleChatImageChange = (');
     const imageHandlerEnd = mainTsx.indexOf('const connect = async', imageHandlerStart);
