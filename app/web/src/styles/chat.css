@@ -4322,14 +4322,14 @@
 @keyframes chat-stop-bike-wind {
   0% {
     opacity: 0;
-    transform: translateX(4px) scaleX(0.6);
+    transform: translateX(2.5px) scaleX(0.6);
   }
   35% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateX(-5px) scaleX(1);
+    transform: translateX(-6px) scaleX(1);
   }
 }
 

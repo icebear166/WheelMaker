@@ -25,9 +25,9 @@ function ChatPedalingBikeGlyph() {
       className="chat-stop-bike"
     >
       <g className="chat-stop-bike-wind" strokeWidth={1.2}>
-        <path d="M1 6.5h4.5" />
-        <path d="M0 10.5h6" />
-        <path d="M1.5 15h4" />
+        <path d="M1 6.5h6" />
+        <path d="M0 10.5h7.5" />
+        <path d="M1 15h5.5" />
       </g>
       <g className="chat-stop-bike-wheel-anim" strokeWidth={1.4}>
         <circle cx="14" cy="14" r="5" />
@@ -56,10 +56,10 @@ function ChatPedalingBikeGlyph() {
         <path d="M27.3 8l1.2-1.9h2" />
       </g>
       <g strokeWidth={1.4}>
-        <circle cx="22.4" cy="3" r="1.5" />
-        <path d="M19 8.2 23.8 6.4" />
-        <path d="M23.8 6.4 28.6 6.6" />
-        <path d="M19 8.2 21.2 10.6" />
+        <circle cx="24.9" cy="3.3" r="1.5" />
+        <path d="M18.8 8.3 23.9 6.3" />
+        <path d="M23.9 6.3 29.2 6.5" />
+        <path d="M18.8 8.3 21 10.7" />
       </g>
       <g className="chat-stop-bike-crank" strokeWidth={1.2}>
         <path d="M20.5 12v4.6" />
