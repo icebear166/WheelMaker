@@ -4218,7 +4218,7 @@
 
 .chat-stop-pill-stage {
   position: relative;
-  width: 24px;
+  width: 28px;
   height: 16px;
   display: inline-flex;
   align-items: center;
@@ -4238,17 +4238,47 @@
 }
 
 .chat-stop-bike-wheel-anim {
-  animation: chat-stop-bike-spin 0.95s linear infinite;
+  animation: chat-stop-bike-spin 0.55s linear infinite;
 }
 
 .chat-stop-bike-crank {
-  animation: chat-stop-bike-spin 1.35s linear infinite;
+  animation: chat-stop-bike-spin 0.8s linear infinite;
 }
 
-/* Braking: the wheels freeze mid-turn as soon as cancel starts. */
+/* Speed lines trailing the bike; they streak backward and stretch as they
+   fade, staggered so the flow never syncs up. */
+.chat-stop-bike-wind {
+  opacity: 0.85;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.chat-stop-bike-wind path {
+  transform-box: fill-box;
+  animation: chat-stop-bike-wind 0.72s linear infinite;
+}
+
+.chat-stop-bike-wind path:nth-child(2) {
+  animation-duration: 0.58s;
+  animation-delay: -0.2s;
+}
+
+.chat-stop-bike-wind path:nth-child(3) {
+  animation-duration: 0.86s;
+  animation-delay: -0.45s;
+}
+
+/* Braking: the wheels freeze mid-turn and the wind dies immediately. */
 .chat-stop-pill.cancelling .chat-stop-bike-wheel-anim,
 .chat-stop-pill.cancelling .chat-stop-bike-crank {
   animation-play-state: paused;
+}
+
+.chat-stop-pill.cancelling .chat-stop-bike-wind {
+  opacity: 0;
+}
+
+.chat-stop-pill.cancelling .chat-stop-bike-wind path {
+  animation: none;
 }
 
 .chat-stop-pill-stop-glyph {
@@ -4289,10 +4319,29 @@
   }
 }
 
+@keyframes chat-stop-bike-wind {
+  0% {
+    opacity: 0;
+    transform: translateX(4px) scaleX(0.6);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-5px) scaleX(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-stop-bike-wheel-anim,
-  .chat-stop-bike-crank {
+  .chat-stop-bike-crank,
+  .chat-stop-bike-wind path {
     animation: none;
+  }
+
+  .chat-stop-bike-wind {
+    opacity: 0;
   }
 }
 
