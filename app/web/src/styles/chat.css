@@ -4226,15 +4226,36 @@
 .chat-stop-pill-glyph {
   flex: 0 0 auto;
   color: color-mix(in srgb, var(--state-danger) 78%, var(--text-primary));
+  transform-box: fill-box;
+  transform-origin: center;
   transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.chat-stop-pill:not(.cancelling) .chat-stop-pill-glyph {
+  animation: chat-stop-pill-glyph-breathe 2.4s var(--ease-standard) infinite;
 }
 
 .chat-stop-pill:hover:not(:disabled) .chat-stop-pill-glyph {
   color: var(--state-danger);
+  animation-play-state: paused;
+  opacity: 1;
+  transform: none;
 }
 
 .chat-stop-pill.cancelling .chat-stop-pill-glyph {
   color: var(--text-tertiary);
+}
+
+@keyframes chat-stop-pill-glyph-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes chat-stop-pill-shimmer {
@@ -4252,22 +4273,10 @@
     background: none;
     color: var(--text-secondary);
   }
-}
 
-.chat-composer-tool-glyph {
-  width: 16px;
-  height: 16px;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.chat-slash-symbol,
-.chat-at-symbol {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  transform: translateY(-0.5px);
+  .chat-stop-pill:not(.cancelling) .chat-stop-pill-glyph {
+    animation: none;
+  }
 }
 
 .chat-attach-button {

@@ -957,6 +957,7 @@ const PORT_RELAY_CLEAR_SITE_DATA_TIMEOUT_MS = 1200;
 const PROJECT_INDEX_SCAN_CONCURRENCY = 2;
 const CHAT_FILE_MENTION_SEARCH_LIMIT = 20;
 const CHAT_FILE_MENTION_DEBOUNCE_MS = 140;
+const CHAT_FILE_MENTION_SKELETON_ROWS = [0, 1, 2, 3, 4] as const;
 const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };
 const EMPTY_CHAT_OPTION_REPLIES: ChatOptionReply[] = [];
 const EMPTY_PREVIEW_WORKBENCH_TABS: FilePreviewTab[] = [];
@@ -2687,7 +2688,13 @@ export function App() {
   // Composer popups share one state: at most one menu is open at a time, and
   // every close path plays the exit animation before unmounting. The legacy
   // boolean setters below are thin wrappers so call sites stay unchanged.
+  // Each wrapper only closes its OWN menu: resolving `false` against an
+  // unrelated open menu must be a no-op, otherwise per-keystroke schedulers
+  // (scheduleChatSlashMenu/scheduleChatFileMentionSearch) would keep closing
+  // each other's menus and the popup would flap on every keypress.
   const [chatComposerMenu, setChatComposerMenu, chatComposerMenuExiting] = useChatComposerMenu();
+  const chatComposerMenuRef = useRef(chatComposerMenu);
+  chatComposerMenuRef.current = chatComposerMenu;
   const chatPromptMenuOpen = chatComposerMenu.id === 'slash';
   const chatFileMentionMenuOpen = chatComposerMenu.id === 'file-mention';
   const chatAttachmentTrayOpen = chatComposerMenu.id === 'attachment-tray';
@@ -2697,26 +2704,71 @@ export function App() {
   const chatCoreConfigPanelOpen = chatComposerMenu.id === 'core-config' || chatComposerMenu.id === 'config-overflow';
   const chatConfigMenuOptionId = chatComposerMenu.id === 'config-value' ? chatComposerMenu.optionId : '';
   const setChatPromptMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
-    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'slash') : next) ? {id: 'slash'} : null));
+    const current = chatComposerMenuRef.current;
+    const resolved = typeof next === 'function' ? next(current.id === 'slash') : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'slash'});
+      return;
+    }
+    if (current.id === 'slash') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const setChatFileMentionMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
-    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'file-mention') : next) ? {id: 'file-mention'} : null));
+    const current = chatComposerMenuRef.current;
+    const resolved = typeof next === 'function' ? next(current.id === 'file-mention') : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'file-mention'});
+      return;
+    }
+    if (current.id === 'file-mention') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const setChatAttachmentTrayOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
-    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'attachment-tray') : next) ? {id: 'attachment-tray'} : null));
+    const current = chatComposerMenuRef.current;
+    const resolved = typeof next === 'function' ? next(current.id === 'attachment-tray') : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'attachment-tray'});
+      return;
+    }
+    if (current.id === 'attachment-tray') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const setChatContextUsageOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
-    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'context-usage') : next) ? {id: 'context-usage'} : null));
+    const current = chatComposerMenuRef.current;
+    const resolved = typeof next === 'function' ? next(current.id === 'context-usage') : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'context-usage'});
+      return;
+    }
+    if (current.id === 'context-usage') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const setChatCoreConfigMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
-    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'core-config') : next) ? {id: 'core-config'} : null));
+    const current = chatComposerMenuRef.current;
+    const resolved = typeof next === 'function' ? next(current.id === 'core-config') : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'core-config'});
+      return;
+    }
+    if (current.id === 'core-config') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const setChatConfigMenuOptionId = useCallback((next: string | ((id: string) => string)) => {
-    setChatComposerMenu(current => {
-      const previous = current.id === 'config-value' ? current.optionId : '';
-      const resolved = typeof next === 'function' ? next(previous) : next;
-      return resolved ? {id: 'config-value', optionId: resolved} : null;
-    });
+    const current = chatComposerMenuRef.current;
+    const previous = current.id === 'config-value' ? current.optionId : '';
+    const resolved = typeof next === 'function' ? next(previous) : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'config-value', optionId: resolved});
+      return;
+    }
+    if (current.id === 'config-value') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const closeChatCoreConfigMenu = useCallback((restoreFocus = false) => {
     setChatComposerMenu(null);
@@ -2867,7 +2919,15 @@ export function App() {
     dispatchWorkspaceUi({ type: 'shared/setSettingsOpen', next });
   }, []);
   const setChatConfigOverflowOpen = useCallback((next: WorkspaceUiStateValue<boolean>) => {
-    setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'config-overflow') : next) ? {id: 'config-overflow'} : null));
+    const current = chatComposerMenuRef.current;
+    const resolved = typeof next === 'function' ? next(current.id === 'config-overflow') : next;
+    if (resolved) {
+      setChatComposerMenu({id: 'config-overflow'});
+      return;
+    }
+    if (current.id === 'config-overflow') {
+      setChatComposerMenu(null);
+    }
   }, [setChatComposerMenu]);
   const setChatKeyboardInset = useCallback((next: WorkspaceUiStateValue<number>) => {
     dispatchWorkspaceUi({ type: 'transient/setChatKeyboardInset', next });
@@ -18403,16 +18463,24 @@ export function App() {
                 </div>
               </div>
               {chatFileMentionMenuOpen ? (
-                <div ref={chatFileMentionMenuRef} className={`chat-file-mention-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="listbox" aria-label="File mentions">
-                  {chatFileMentionLoading ? (
-                    <div className="chat-file-mention-empty">Searching...</div>
-                  ) : chatFileMentionError ? (
-                    <div className="chat-file-mention-empty">File search failed</div>
-                  ) : !chatFileMentionIndexed ? (
-                    <div className="chat-file-mention-empty">Index not built</div>
-                  ) : chatFileMentionResults.length === 0 ? (
-                    <div className="chat-file-mention-empty">{chatFileMentionQuery ? 'No files found' : 'No indexed files'}</div>
-                  ) : (
+                <div
+                  ref={chatFileMentionMenuRef}
+                  className={`chat-file-mention-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}${chatFileMentionLoading && chatFileMentionResults.length > 0 ? ' refreshing' : ''}`}
+                  role="listbox"
+                  aria-label="File mentions"
+                  aria-busy={chatFileMentionLoading}
+                >
+                  {chatFileMentionLoading && chatFileMentionResults.length === 0 ? (
+                    <div className="chat-file-mention-skeleton" aria-hidden="true">
+                      {CHAT_FILE_MENTION_SKELETON_ROWS.map(row => (
+                        <div key={row} className="chat-file-mention-skeleton-row">
+                          <span className="chat-file-mention-skeleton-icon" />
+                          <span className="chat-file-mention-skeleton-name" />
+                          <span className="chat-file-mention-skeleton-path" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : chatFileMentionResults.length > 0 ? (
                     chatFileMentionResults.map((result, index) => {
                       const selected = index === chatFileMentionActiveIndex;
                       const name = result.name || chatFileMentionName(result.path);
@@ -18448,6 +18516,12 @@ export function App() {
                         </div>
                       );
                     })
+                  ) : chatFileMentionError ? (
+                    <div className="chat-file-mention-empty">File search failed</div>
+                  ) : !chatFileMentionIndexed ? (
+                    <div className="chat-file-mention-empty">Index not built</div>
+                  ) : (
+                    <div className="chat-file-mention-empty">{chatFileMentionQuery ? 'No files found' : 'No indexed files'}</div>
                   )}
                   <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['→', 'Preview'], ['↵', 'Insert'], ['esc', 'Close']]} />
                 </div>
@@ -18517,7 +18591,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
                   >
-                    <span className="chat-composer-tool-glyph chat-slash-symbol" aria-hidden="true">/</span>
+                    <ChatIcon name="slash" />
                   </button>
                   <button
                     type="button"
@@ -18530,7 +18604,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatFileMentionMenuOpen}
                   >
-                    <span className="chat-composer-tool-glyph chat-at-symbol" aria-hidden="true">@</span>
+                    <ChatIcon name="atSign" />
                   </button>
                   <button
                     type="button"
@@ -18546,7 +18620,7 @@ export function App() {
                     aria-haspopup="menu"
                     aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}
                   >
-                    <ChatIcon name="image" className="chat-composer-tool-glyph" />
+                    <ChatIcon name="image" />
                   </button>
                   {chatStopPillVisible ? (
                     <div className={`chat-composer-stop-slot${chatStopPillExiting ? ' sl-menu-exit' : ''}`}>

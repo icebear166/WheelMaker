@@ -1210,3 +1210,74 @@
   font-size: 13px;
   font-weight: 500;
 }
+
+/* Stale-while-revalidate: keep the current list visible (dimmed) while a
+   search is in flight instead of flashing a "Searching..." placeholder. */
+.chat-file-mention-option-row {
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.chat-file-mention-menu.refreshing .chat-file-mention-option-row {
+  opacity: 0.55;
+}
+
+/* Structural skeleton shown only before the first results arrive; rows match
+   the 34px option rows so the swap does not shift the menu geometry. */
+.chat-file-mention-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-file-mention-skeleton-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 0 6px 0 10px;
+  animation: chat-file-mention-skeleton-pulse 1.6s var(--ease-standard) infinite;
+}
+
+.chat-file-mention-skeleton-icon,
+.chat-file-mention-skeleton-name,
+.chat-file-mention-skeleton-path {
+  display: block;
+  border-radius: 4px;
+  background: var(--hover);
+}
+
+.chat-file-mention-skeleton-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.chat-file-mention-skeleton-name {
+  width: 88px;
+  height: 12px;
+}
+
+.chat-file-mention-skeleton-row:nth-child(2n) .chat-file-mention-skeleton-name {
+  width: 64px;
+}
+
+.chat-file-mention-skeleton-path {
+  width: 58%;
+  height: 11px;
+}
+
+@keyframes chat-file-mention-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-file-mention-skeleton-row {
+    animation: none;
+  }
+}
