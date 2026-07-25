@@ -134,7 +134,10 @@ describe('composer menu exclusivity', () => {
 
     const exitFlag = "chatComposerMenuExiting ? ' sl-menu-exit' : ''";
     const occurrences = mainTsx.split(exitFlag).length - 1;
-    expect(occurrences).toBeGreaterThanOrEqual(6);
+    // The always-mounted context-usage tooltip is deliberately excluded: it
+    // has its own visibility model, and the shared exit/enter animations made
+    // it flash whenever an unrelated composer menu closed.
+    expect(occurrences).toBeGreaterThanOrEqual(5);
 
     for (const cls of [
       'chat-slash-menu',
@@ -146,7 +149,8 @@ describe('composer menu exclusivity', () => {
     ]) {
       expect(stylesCss).toContain(`.${cls}`);
     }
-    expect(stylesCss).toMatch(/\.chat-slash-menu,\s*\n\.chat-file-mention-menu,\s*\n\.chat-core-config-menu,\s*\n\.chat-config-value-menu,\s*\n\.chat-context-usage-popover,\s*\n\.chat-attachment-action-tray \{[\s\S]*animation: sl-menu-in 140ms var\(--ease-out\);[\s\S]*\}/);
+    expect(stylesCss).toMatch(/\.chat-slash-menu,\s*\n\.chat-file-mention-menu,\s*\n\.chat-core-config-menu,\s*\n\.chat-config-value-menu,\s*\n\.chat-attachment-action-tray \{[\s\S]*animation: sl-menu-in 140ms var\(--ease-out\);[\s\S]*\}/);
+    expect(stylesCss).not.toMatch(/\.chat-context-usage-popover,\s*\n\.chat-attachment-action-tray \{[\s\S]*animation: sl-menu-in/);
     expect(stylesCss).toContain('.chat-composer.menu-open');
     expect(stylesCss).not.toContain('.chat-composer.config-menu-open');
     expect(stylesCss).not.toContain('.chat-composer.trigger-menu-open');
@@ -183,6 +187,8 @@ describe('composer menu exclusivity', () => {
     expect(mainTsx).not.toContain('chat-file-mention-shortcut-tip');
     expect(stylesCss).toContain('.chat-menu-footer');
     expect(mainTsx.split('<ChatMenuKeyHints').length - 1).toBeGreaterThanOrEqual(2);
+    // Keyboards hints only render on wide layouts; touch has no keyboard.
+    expect(mainTsx.split('{isWide ? <ChatMenuKeyHints').length - 1).toBe(2);
   });
 
   test('composer frame uses the shared floating panel material', () => {

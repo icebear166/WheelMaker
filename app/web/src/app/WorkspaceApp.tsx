@@ -17756,7 +17756,7 @@ export function App() {
           />
           <div
             id="chat-context-usage-popover"
-            className={`chat-context-usage-popover${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}
+            className="chat-context-usage-popover"
             role="tooltip"
             style={chatContextUsagePopoverStyle}
           >
@@ -18525,7 +18525,7 @@ export function App() {
                     <div className="chat-file-mention-empty">{chatFileMentionQuery ? 'No files found' : 'No indexed files'}</div>
                   )}
                   </div>
-                  <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['→', 'Preview'], ['↵', 'Insert'], ['esc', 'Close']]} />
+                  {isWide ? <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['→', 'Preview'], ['↵', 'Insert'], ['esc', 'Close']]} /> : null}
                 </div>
               ) : null}
               {chatSlashMenuVisible ? (
@@ -18571,7 +18571,7 @@ export function App() {
                     ));
                   })()}
                   </div>
-                  <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['↵', 'Apply'], ['esc', 'Close']]} />
+                  {isWide ? <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['↵', 'Apply'], ['esc', 'Close']]} /> : null}
                 </div>
               ) : null}
               {voiceRecording ? (

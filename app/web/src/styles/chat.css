@@ -3384,7 +3384,6 @@
 .chat-file-mention-menu,
 .chat-core-config-menu,
 .chat-config-value-menu,
-.chat-context-usage-popover,
 .chat-attachment-action-tray {
   transform-origin: bottom center;
   animation: sl-menu-in 140ms var(--ease-out);
@@ -3395,7 +3394,6 @@
   .chat-file-mention-menu,
   .chat-core-config-menu,
   .chat-config-value-menu,
-  .chat-context-usage-popover,
   .chat-attachment-action-tray {
     animation: none;
   }
@@ -4777,12 +4775,21 @@
   -webkit-backdrop-filter: blur(16px) saturate(1.06);
 }
 
-.chat-context-usage-anchor:hover .chat-context-usage-popover,
 .chat-context-usage:focus-visible + .chat-context-usage-popover,
 .chat-context-usage-anchor.open .chat-context-usage-popover {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0) scale(1);
+}
+
+/* Hover is a desktop-only show channel; on touch it sticks after taps and
+   would ghost the tooltip back on after unrelated popups close. */
+@media (hover: hover) {
+  .chat-context-usage-anchor:hover .chat-context-usage-popover {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .chat-context-usage-popover-kicker {

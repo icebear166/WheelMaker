@@ -200,7 +200,10 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain('if (target && chatContextUsageRef.current?.contains(target)) return;');
     expect(mainTsx).toContain('setChatContextUsageOpen(false);');
     expect(mainTsx).toContain("className={`chat-context-usage-anchor${chatContextUsageOpen ? ' open' : ''}`}");
-    expect(mainTsx).toContain('chat-context-usage-popover${chatComposerMenuExiting');
+    expect(mainTsx).toContain('className="chat-context-usage-popover"');
+    // The always-mounted tooltip keeps its own visibility model; attaching
+    // the shared exit/enter animations made it flash on every menu close.
+    expect(mainTsx).not.toContain('chat-context-usage-popover${chatComposerMenuExiting');
     expect(mainTsx).toContain('role="tooltip"');
     expect(mainTsx).toContain('aria-expanded={chatContextUsageOpen}');
     expect(mainTsx).toContain('aria-labelledby="chat-context-usage-label"');
@@ -212,7 +215,8 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).not.toContain('title={chatContextUsage.title}');
     expect(stylesCss).toContain('.chat-context-usage-popover {');
     expect(stylesCss).not.toContain('.chat-context-usage-popover::after');
-    expect(stylesCss).toContain('.chat-context-usage-anchor:hover .chat-context-usage-popover,');
+    expect(stylesCss).not.toContain('.chat-context-usage-anchor:hover .chat-context-usage-popover,');
+    expect(stylesCss).toMatch(/@media \(hover: hover\) \{[\s\S]*\.chat-context-usage-anchor:hover \.chat-context-usage-popover \{[\s\S]*opacity: 1;/);
     expect(stylesCss).toContain(".chat-context-usage-anchor.open .chat-context-usage-popover {");
     expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('position: fixed;');
     expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('opacity: 0;');

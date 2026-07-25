@@ -2507,6 +2507,9 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-file-mention-shortcut-tip');
     expect(stylesCss).toContain('.chat-file-mention-option-row');
     expect(stylesCss).toContain('.chat-file-mention-preview-button');
+    // Touch has no hover, so the preview eye stays visible instead of being
+    // an invisible tap target.
+    expect(stylesCss).toMatch(/@media \(hover: none\) \{[\s\S]*\.chat-file-mention-preview-button \{[\s\S]*opacity: 1;/);
     expect(stylesCss).toContain('.chat-menu-footer');
     expect(stylesCss).toMatch(/\.chat-menu-hint kbd \{[\s\S]*border-radius: 4px;/);
   });
