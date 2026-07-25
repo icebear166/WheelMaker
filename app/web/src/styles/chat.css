@@ -3607,10 +3607,7 @@
   right: 0;
   bottom: calc(100% + 8px);
   max-height: min(42vh, 280px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  overscroll-behavior: contain;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 8px;
   display: flex;
@@ -3626,10 +3623,7 @@
   right: 0;
   bottom: calc(100% + 8px);
   max-height: min(42vh, 280px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  overscroll-behavior: contain;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 8px;
   display: flex;
@@ -3639,7 +3633,23 @@
   z-index: 36;
 }
 
+/* Scrollable list area; the key-hints footer stays pinned below it instead
+   of scrolling away with the options. */
+.chat-slash-menu-body,
+.chat-file-mention-menu-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .chat-menu-footer {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -5805,6 +5815,10 @@
   .chat-config-value-menu {
     max-width: calc(100vw - 24px);
     max-height: min(56vh, 420px);
+  }
+
+  .chat-config-overflow-menu,
+  .chat-config-value-menu {
     overflow: auto;
     overscroll-behavior: contain;
   }

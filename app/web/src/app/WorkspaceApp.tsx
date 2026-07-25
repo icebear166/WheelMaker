@@ -18470,6 +18470,7 @@ export function App() {
                   aria-label="File mentions"
                   aria-busy={chatFileMentionLoading}
                 >
+                  <div className="chat-file-mention-menu-body">
                   {chatFileMentionLoading && chatFileMentionResults.length === 0 ? (
                     <div className="chat-file-mention-skeleton" aria-hidden="true">
                       {CHAT_FILE_MENTION_SKELETON_ROWS.map(row => (
@@ -18523,11 +18524,13 @@ export function App() {
                   ) : (
                     <div className="chat-file-mention-empty">{chatFileMentionQuery ? 'No files found' : 'No indexed files'}</div>
                   )}
+                  </div>
                   <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['→', 'Preview'], ['↵', 'Insert'], ['esc', 'Close']]} />
                 </div>
               ) : null}
               {chatSlashMenuVisible ? (
                 <div ref={chatSlashMenuRef} className={`chat-slash-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`} role="listbox" aria-label="Available commands and skills">
+                  <div className="chat-slash-menu-body">
                   {(() => {
                     let flatIndex = -1;
                     return groupChatSlashMenuOptions(chatSlashMenuOptions).map(section => (
@@ -18567,6 +18570,7 @@ export function App() {
                       </div>
                     ));
                   })()}
+                  </div>
                   <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['↵', 'Apply'], ['esc', 'Close']]} />
                 </div>
               ) : null}
@@ -18591,7 +18595,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
                   >
-                    <ChatIcon name="slash" />
+                    <ChatIcon name="command" />
                   </button>
                   <button
                     type="button"
@@ -18615,12 +18619,12 @@ export function App() {
                       if (selectedChatPromptRunning) return;
                       toggleChatAttachmentTray();
                     }}
-                    title="Tools"
-                    aria-label="Open composer tools"
+                    title="Attach files or photos"
+                    aria-label="Attach files or photos"
                     aria-haspopup="menu"
                     aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}
                   >
-                    <ChatIcon name="image" />
+                    <ChatIcon name="paperclip" />
                   </button>
                   {chatStopPillVisible ? (
                     <div className={`chat-composer-stop-slot${chatStopPillExiting ? ' sl-menu-exit' : ''}`}>
@@ -18635,7 +18639,7 @@ export function App() {
                       ref={chatAttachmentTrayRef}
                       className={`chat-attachment-action-tray${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}
                       role="menu"
-                      aria-label="Composer tools"
+                      aria-label="Attachments"
                     >
                       <button
                         type="button"
