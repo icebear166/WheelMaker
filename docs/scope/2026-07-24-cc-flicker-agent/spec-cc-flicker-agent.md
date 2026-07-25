@@ -15,11 +15,11 @@ WheelMaker 已有 4 个 Claude-compatible provider（`cc-deepseek` / `cc-glm` / 
 - **Q：鉴权用哪个变量、值是什么？** A —— 用 `ANTHROPIC_AUTH_TOKEN`（同 cc-glm），值取 `api_keys.flicker`。框架的 `claudeCompatibleLaunchEnvironment` 会把 `ANTHROPIC_API_KEY` 置空，正好满足 bridge「必须移除 ANTHROPIC_API_KEY，否则 Claude Code 走 anthropic.com OAuth」的要求。
 - **Q：`api_keys.flicker` 填什么？** A —— 必须**逐字节等于** bridge 的 `MYFLICKER_BRIDGE_API_KEY`。bridge 校验用 `hmac.compare_digest` 精确比对，提供非空但不匹配的 token 会直接 401。默认场景 bridge 用占位符，用户就填 `00000000000000000000`；若 bridge 设了私有 key（共享机器或 `MYFLICKER_REQUIRE_PRIVATE_KEY=1`），则填相同私有值。
 - **Q：注册条件？** A —— `claude-agent-acp` 可执行 **且** `api_keys.flicker` 非空时才注册，与现有 `cc-*` 完全一致。不在启动时联网验证 key，也不探测 bridge 是否在运行。
-- **Q：暴露哪些模型、默认哪个？** A —— 白名单 8 个：`CLAUDE_OPUS_4_8`、`CLAUDE_4_6`、`GPT_5_6_SOL`、`GPT_5_6_TERRA`、`GPT_5_6_LUNA`、`KIMI_K3`、`GLM_5_2`、`DEEPSEEK_V4_PRO`；默认 `CLAUDE_OPUS_4_8`。通过 `enforceAvailableModels=true` 隐藏原生 Opus/Sonnet/Haiku。
-- **Q：模型 ID 用什么形式？** A —— 直接用 MyFlicker 真实 `modelType`（如 `CLAUDE_OPUS_4_8`），不加 `CLAUDE-MYFLICKER-` 前缀。bridge `resolve_model_type` 接受裸 modelType；白名单走 settings.json 不经 CLI gateway discovery，因此**不注入** `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`。
-- **Q：分级映射（防子任务回落 anthropic.com）？** A —— Opus / Fable → `CLAUDE_OPUS_4_8`；Sonnet / Haiku / Subagent → `CLAUDE_4_6`。
-- **Q：上下文窗口 / auto-compact 参数？** A —— 不设 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`，也不设 `AUTO_COMPACT_WINDOW`，沿用 Claude Code / bridge 默认策略。白名单模型上下文窗口混合（190K~450K），硬编码单一上限会误伤大窗口模型；token 计数与压缩交给默认行为，与其它 cc-* 保持一致。
-- **Q：effort / thinking 档位？** A —— 不做特殊 normalize（`claudeCompatibleEffortValues` 对 cc-flicker 返回 nil，走通用 `configOptions` 链路）。bridge 对 effort 全档位宽容，且白名单里 KIMI_K3/GLM_5_2/DEEPSEEK_V4_PRO 不带 think。
+- **Q：暴露哪些模型、默认哪个？** A —— 走 CLI **gateway model discovery**，跟随 bridge `/v1/models` 动态 catalog 全量展示（约 21 个：Claude / GPT / GLM / Kimi / DeepSeek / Gemini / Minimax / Qwen / KAT 等，随上游 account 变化）；默认 `CLAUDE_OPUS_4_8`。**不用 `availableModels` 白名单、不设 `enforceAvailableModels`**——实测该白名单与 discovery 互斥，会把非 Claude 模型的 effort 能力过滤掉。
+- **Q：模型 ID 用什么形式？** A —— 注入 `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`（写进 settings.json 的 `env` 块），CLI 拉取 bridge catalog；非 Claude 模型在 picker 中带 `CLAUDE-MYFLICKER-` 前缀 id，Claude 系为裸 id。`set_config_option` 对裸 type 与前缀 id 均接受，已持久化的裸 id 偏好可继续回放。
+- **Q：分级映射（防子任务回落 anthropic.com）？** A —— Opus / Fable → `CLAUDE_OPUS_4_8`；Sonnet / Haiku / Subagent → `CLAUDE_4_6`。（保留，与 discovery 不冲突。）
+- **Q：上下文窗口 / auto-compact 参数？** A —— 不设 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`，也不设 `AUTO_COMPACT_WINDOW`，沿用 Claude Code / bridge 默认策略。catalog 模型上下文窗口混合，硬编码单一上限会误伤大窗口模型；token 计数与压缩交给默认行为，与其它 cc-* 保持一致。
+- **Q：effort / thinking 档位？** A —— WheelMaker 侧不做特殊 normalize（`claudeCompatibleEffortValues` 对 cc-flicker 返回 nil，走通用 `configOptions` 链路）。走 discovery 后，claude-agent-acp 会为每个模型（含 GPT/Kimi/GLM/DeepSeek）吐出完整 effort 档位（`default/low/medium/high/xhigh/max`），bridge `resolve_thinking_config` 读 effortLevel 转 thinking budget 透传上游。这是本次从白名单改 discovery 的**核心动机**：白名单模式下非 Claude 模型无 `supportsEffort`、effort 选项被隐藏。
 - **Q：前端展示？** A —— 标签 `cc · flicker`，沿用 claude 家族色（variant 2），作为 Claude 主项的展开子项，与其它 `cc-*` 一致。
 - **Q：limits 监控是否联动？** A —— 否。cc-flicker 走 bridge 门禁 token，与现有 MyFlicker 额度链路（读 `~/.myflicker/ai-token.json`）无关，不改 limits。
 
@@ -40,7 +40,7 @@ claude-agent-acp --hide-claude-auth（owned process）
 本地 MyFlickerBridge :17888  ──►  MyFlicker 上游（Claude/GPT/GLM/Kimi/DeepSeek）
 ```
 
-新增 provider profile 的落地方式与现有 `cc-*` 一致：`claudeCompatibleFlickerProfile` 定义 `configDir` / `endpoint` / `authName` / `defaultModel` / `availableModels` / `settingsEnv`；`NewCCFlickerProvider(stateDir, apiKey)` 由 `claudeCompatibleLaunchEnvironment` 生成启动环境，`ensureClaudeCompatibleSettings` 把默认模型、白名单（`enforceAvailableModels=true`）和分级映射写进 `<stateDir>/.data/cc-flicker/settings.json`。Session 历史隔离在 `<stateDir>/.data/cc-flicker/projects`。
+新增 provider profile 的落地方式与现有 `cc-*` 一致：`claudeCompatibleFlickerProfile` 定义 `configDir` / `endpoint` / `authName` / `defaultModel` / `gatewayDiscovery` / `settingsEnv`；`NewCCFlickerProvider(stateDir, apiKey)` 由 `claudeCompatibleLaunchEnvironment` 生成启动环境，`ensureClaudeCompatibleSettings` 把默认模型、`env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` 和分级映射写进 `<stateDir>/.data/cc-flicker/settings.json`（`gatewayDiscovery=true` 时不写 `availableModels`/`enforceAvailableModels`，并清理旧值）。Session 历史隔离在 `<stateDir>/.data/cc-flicker/projects`。
 
 ### 与 bridge 的鉴权契约（关键差异）
 
@@ -61,8 +61,8 @@ claude-agent-acp --hide-claude-auth（owned process）
 - `config.json` 接受可选 `api_keys.flicker`，拒绝未知字段；`config.example.json` 含空值示例并注明「值须等于 bridge 的 MYFLICKER_BRIDGE_API_KEY，默认 00000000000000000000」。
 - `claude-agent-acp` 缺失或 `api_keys.flicker` 为空时不注册 cc-flicker；两者齐备才注册。`PreferredName()` 不选 cc-flicker。
 - cc-flicker 启动的 `claude-agent-acp` 环境含正确且互不污染的 `ANTHROPIC_BASE_URL=http://127.0.0.1:17888`、`ANTHROPIC_AUTH_TOKEN=<api_keys.flicker>`、置空的 `ANTHROPIC_API_KEY`、`CLAUDE_CONFIG_DIR=<stateDir>/.data/cc-flicker`。
-- `<stateDir>/.data/cc-flicker/settings.json` 的 `model=CLAUDE_OPUS_4_8`、`availableModels` 为 8 个白名单、`enforceAvailableModels=true`、分级映射就位；不含 `CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY`，也不注入 `CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `AUTO_COMPACT_WINDOW`。
-- model option 只包含 8 个白名单和 Claude ACP 无法移除的 `Default`（解析到 CLAUDE_OPUS_4_8）；新 Session 默认 CLAUDE_OPUS_4_8。
+- `<stateDir>/.data/cc-flicker/settings.json` 的 `model=CLAUDE_OPUS_4_8`、`env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`、分级映射就位；**不含** `availableModels` / `enforceAvailableModels`，也不注入 `CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `AUTO_COMPACT_WINDOW`。
+- model option 跟随 bridge discovery catalog 全量（约 21 个）加 Claude ACP 无法移除的 `Default`（解析到 CLAUDE_OPUS_4_8）；新 Session 默认 CLAUDE_OPUS_4_8。每个模型均可调 effort（`default/low/medium/high/xhigh/max`）。
 - Session 历史扫描、load、持久化 agent ID 与 claude / 其它 cc-* 相互隔离，不跨目录可见。
 - `api_keys.flicker` 不出现在 argv、日志、`ProjectInfo`、Registry snapshot、Session 存储、错误信息或 Web state。
 - App 桌面端与移动端、New / Resume Session 均把 cc-flicker 展示为 Claude 展开子项，标签 `cc · flicker`；点击创建/恢复发送的 agentType 仍是 `cc-flicker`。
