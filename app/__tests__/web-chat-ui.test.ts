@@ -1085,6 +1085,7 @@ describe('web chat integration', () => {
     const stopPillBlock = mainTsx.slice(stopPillStart, stopPillEnd);
     expect(stopPillBlock).toContain('cancelling={selectedChatPromptCancelling}');
     expect(stopPillBlock).toContain('onCancel={() => cancelSelectedChatPrompt().catch(() => undefined)}');
+    expect(stopPillBlock).toContain('armOnTap={!isWide}');
 
     const stopPillTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'composer', 'ChatStopStatusPill.tsx'));
     expect(stopPillTsx).toContain('disabled={cancelling}');
@@ -1206,8 +1207,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('@keyframes chat-stop-bike-wind');
     expect(stylesCss).toContain('.chat-stop-pill.cancelling .chat-stop-bike-wind {');
     expect(stylesCss).toContain('.chat-stop-pill-stop-glyph {');
-    expect(stylesCss).toContain('.chat-stop-pill:hover:not(:disabled) .chat-stop-bike {');
-    expect(stylesCss).toContain('.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph {');
+    expect(stylesCss).toContain('.chat-stop-pill:hover:not(:disabled) .chat-stop-bike,');
+    expect(stylesCss).toContain('.chat-stop-pill.armed .chat-stop-bike {');
+    expect(stylesCss).toContain('.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph,');
+    expect(stylesCss).toContain('.chat-stop-pill.armed .chat-stop-pill-stop-glyph {');
     expect(stylesCss).toContain('.chat-stop-pill.cancelling .chat-stop-bike-wheel-anim,');
     expect(stylesCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.chat-stop-bike-wheel-anim,[\s\S]*\.chat-stop-bike-crank,[\s\S]*\.chat-stop-bike-wind path \{[\s\S]*animation: none;/);
     expect(stylesCss).not.toContain('.chat-stop-pill-label');

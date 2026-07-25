@@ -38,4 +38,54 @@ describe('ChatStopStatusPill', () => {
     expect(button.props.className).toBe('chat-stop-pill cancelling');
     expect(tree.root.findByProps({className: 'chat-stop-pill-a11y-label'}).children).toEqual(['Cancelling']);
   });
+
+  it('arms on first tap and cancels on the second tap within the timeout', async () => {
+    jest.useFakeTimers();
+    try {
+      const onCancel = jest.fn();
+      const tree = await render(<ChatStopStatusPill cancelling={false} onCancel={onCancel} armOnTap />);
+      await act(async () => {
+        tree.root.findByType('button').props.onClick();
+      });
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(tree.root.findByType('button').props.className).toBe('chat-stop-pill armed');
+      expect(tree.root.findByProps({className: 'chat-stop-pill-a11y-label'}).children).toEqual(['Tap again to stop']);
+      await act(async () => {
+        tree.root.findByType('button').props.onClick();
+      });
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      expect(tree.root.findByType('button').props.className).toBe('chat-stop-pill');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('reverts to the bike when the second tap does not come in time', async () => {
+    jest.useFakeTimers();
+    try {
+      const onCancel = jest.fn();
+      const tree = await render(<ChatStopStatusPill cancelling={false} onCancel={onCancel} armOnTap />);
+      await act(async () => {
+        tree.root.findByType('button').props.onClick();
+      });
+      expect(tree.root.findByType('button').props.className).toBe('chat-stop-pill armed');
+      await act(async () => {
+        jest.advanceTimersByTime(2100);
+      });
+      expect(tree.root.findByType('button').props.className).toBe('chat-stop-pill');
+      expect(onCancel).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancels immediately on desktop click without arming', async () => {
+    const onCancel = jest.fn();
+    const tree = await render(<ChatStopStatusPill cancelling={false} onCancel={onCancel} />);
+    await act(async () => {
+      tree.root.findByType('button').props.onClick();
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(tree.root.findByType('button').props.className).toBe('chat-stop-pill');
+  });
 });

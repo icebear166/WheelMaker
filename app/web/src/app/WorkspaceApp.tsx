@@ -18640,6 +18640,7 @@ export function App() {
                       <ChatStopStatusPill
                         cancelling={selectedChatPromptCancelling}
                         onCancel={() => cancelSelectedChatPrompt().catch(() => undefined)}
+                        armOnTap={!isWide}
                       />
                     </div>
                   ) : null}

@@ -4199,7 +4199,8 @@
     transform var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-pill:hover:not(:disabled) {
+.chat-stop-pill:hover:not(:disabled),
+.chat-stop-pill.armed {
   border-color: color-mix(in srgb, var(--state-danger) 45%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-danger) 9%, var(--surface-raised));
 }
@@ -4291,12 +4292,14 @@
     transform var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-pill:hover:not(:disabled) .chat-stop-bike {
+.chat-stop-pill:hover:not(:disabled) .chat-stop-bike,
+.chat-stop-pill.armed .chat-stop-bike {
   opacity: 0;
   transform: scale(0.8);
 }
 
-.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph {
+.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph,
+.chat-stop-pill.armed .chat-stop-pill-stop-glyph {
   opacity: 1;
   transform: none;
 }
