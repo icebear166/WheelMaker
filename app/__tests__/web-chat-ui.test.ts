@@ -1198,16 +1198,19 @@ describe('web chat integration', () => {
     expect(stopPillStyleBlock).toContain('border-radius: 999px;');
     expect(stopPillStyleBlock).not.toContain('background: var(--state-danger);');
     expect(stylesCss).toContain('.chat-stop-pill.cancelling {');
-    const stopPillLabelBlock = cssRuleBlock(stylesCss, '.chat-stop-pill-label');
-    expect(stopPillLabelBlock).toContain('background-clip: text;');
-    expect(stopPillLabelBlock).toContain('color: transparent;');
-    expect(stylesCss).toContain('.chat-stop-pill-glyph {');
-    expect(stylesCss).toContain('@keyframes chat-stop-pill-shimmer');
-    expect(stylesCss).toContain('animation: chat-stop-pill-shimmer 2.4s linear infinite;');
-    expect(stylesCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.chat-stop-pill-label \{[\s\S]*animation: none;/);
-    expect(stylesCss).toContain('.chat-stop-pill:not(.cancelling) .chat-stop-pill-glyph {');
-    expect(stylesCss).toContain('animation: chat-stop-pill-glyph-breathe 2.4s var(--ease-standard) infinite;');
-    expect(stylesCss).toContain('@keyframes chat-stop-pill-glyph-breathe');
+    expect(stylesCss).toContain('.chat-stop-pill-stage {');
+    expect(stylesCss).toContain('.chat-stop-bike-wheel-anim {');
+    expect(stylesCss).toContain('.chat-stop-bike-crank {');
+    expect(stylesCss).toContain('@keyframes chat-stop-bike-spin');
+    expect(stylesCss).toContain('.chat-stop-pill-stop-glyph {');
+    expect(stylesCss).toContain('.chat-stop-pill:hover:not(:disabled) .chat-stop-bike {');
+    expect(stylesCss).toContain('.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph {');
+    expect(stylesCss).toContain('.chat-stop-pill.cancelling .chat-stop-bike-wheel-anim,');
+    expect(stylesCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.chat-stop-bike-wheel-anim,[\s\S]*\.chat-stop-bike-crank \{[\s\S]*animation: none;/);
+    expect(stylesCss).not.toContain('.chat-stop-pill-label');
+    expect(stylesCss).not.toContain('chat-stop-pill-shimmer');
+    expect(stylesCss).not.toContain('chat-stop-pill-glyph-breathe');
+    expect(stylesCss).not.toContain('.chat-stop-pill-glyph {');
     expect(stylesCss).not.toContain('.chat-stop-pill-dot');
     expect(stylesCss).not.toContain('chat-stop-pill-breathe');
     expect(stylesCss).not.toContain('.chat-stop-status');
@@ -1439,8 +1442,8 @@ describe('web chat integration', () => {
     expect(stopPillCssBlock).toContain('border: 1px solid var(--border-subtle);');
     expect(stopPillCssBlock).toContain('border-radius: 999px;');
     expect(stopPillCssBlock).not.toContain('background: var(--state-danger);');
-    const stopPillGlyphCssBlock = cssRuleBlock(stylesCss, '.chat-stop-pill-glyph');
-    expect(stopPillGlyphCssBlock).toContain('color: color-mix(in srgb, var(--state-danger) 78%, var(--text-primary));');
+    const stopGlyphCssBlock = cssRuleBlock(stylesCss, '.chat-stop-pill-stop-glyph');
+    expect(stopGlyphCssBlock).toContain('color: var(--state-danger);');
     expect(stylesCss).toMatch(/\.chat-main \{[\s\S]*gap: 0;[\s\S]*\}/);
   });
 
@@ -2558,8 +2561,8 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-attachment-action-button.photo .codicon');
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
-    expect(stylesCss).toMatch(/\.chat-stop-pill \{[\s\S]*gap: 6px;[\s\S]*height: 24px;[\s\S]*border-radius: 999px;/);
-    expect(stylesCss).toMatch(/\.chat-stop-pill-label \{[\s\S]*background-clip: text;[\s\S]*animation: chat-stop-pill-shimmer/);
+    expect(stylesCss).toMatch(/\.chat-stop-pill \{[\s\S]*justify-content: center;[\s\S]*height: 24px;[\s\S]*border-radius: 999px;/);
+    expect(stylesCss).toMatch(/\.chat-stop-bike-wheel-anim \{[\s\S]*animation: chat-stop-bike-spin 0\.95s linear infinite;/);
   });
 
   test('keeps running chat editable and queues another send for that chat', () => {
