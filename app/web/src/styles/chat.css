@@ -4169,11 +4169,10 @@
 .chat-stop-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 4px 0 9px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
-  border-radius: 999px;
+  gap: 7px;
+  height: 24px;
+  padding: 0;
+  border: none;
   background: transparent;
   color: var(--text-secondary);
   font-size: 11px;
@@ -4206,14 +4205,14 @@
 }
 
 .chat-stop-button {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border: 0;
-  border-radius: 999px;
+  border: none;
+  border-radius: var(--radius-control);
   background: var(--state-danger);
   color: #fff;
   cursor: pointer;
@@ -5783,7 +5782,7 @@
     padding-right: 12px;
     padding-bottom: max(4px, var(--wm-safe-area-bottom));
     padding-left: 12px;
-    background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
+    background: var(--surface-canvas);
   }
 
   .chat-composer-content,

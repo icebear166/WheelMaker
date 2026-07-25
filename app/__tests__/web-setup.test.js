@@ -133,6 +133,10 @@ describe('web runtime setup', () => {
       type: 'image/svg+xml',
       purpose: 'any maskable',
     });
+    expect(manifest).toMatchObject({
+      background_color: '#1b1b1b',
+      theme_color: '#1b1b1b',
+    });
     const iconText = icon.toString('utf8');
     expect(iconText).toContain('<svg');
     expect(iconText).toContain('viewBox="0 0 1536 1536"');
@@ -142,6 +146,7 @@ describe('web runtime setup', () => {
     expect(indexHtml).not.toContain('href="/icons/icon.png"');
     expect(indexHtml).not.toContain('rel="icon"');
     expect(indexHtml).not.toContain('rel="apple-touch-icon"');
+    expect(indexHtml).toContain('<meta name="theme-color" content="#1b1b1b" />');
   });
 
   test('preloads codicons because chat uses icon font classes on the first screen', () => {

@@ -1185,8 +1185,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-stop-status {');
     const stopStatusStyleBlock = stylesCss.match(/\.chat-stop-status \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(stopStatusStyleBlock).not.toContain('position: absolute;');
-    expect(stopStatusStyleBlock).toContain('border-radius: 999px;');
-    expect(stopStatusStyleBlock).toContain('height: 26px;');
+    expect(stopStatusStyleBlock).toContain('border: none;');
+    expect(stopStatusStyleBlock).toContain('height: 24px;');
     expect(stylesCss).toContain('.chat-stop-status.cancelling {');
     expect(stylesCss).toContain('.chat-stop-status-dot {');
     expect(stylesCss).toContain('.chat-stop-button {');
@@ -1380,6 +1380,14 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-composer-toolbar \{[\s\S]*gap: 8px;[\s\S]*\}/);
     const stopStatusCssBlock = stylesCss.match(/\.chat-stop-status \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(stopStatusCssBlock).not.toContain('position: absolute;');
+    expect(stopStatusCssBlock).toContain('height: 24px;');
+    expect(stopStatusCssBlock).toContain('border: none;');
+    expect(stopStatusCssBlock).toContain('background: transparent;');
+    const stopButtonCssBlock = cssRuleBlock(stylesCss, '.chat-stop-button');
+    expect(stopButtonCssBlock).toContain('width: 24px;');
+    expect(stopButtonCssBlock).toContain('height: 24px;');
+    expect(stopButtonCssBlock).toContain('border-radius: var(--radius-control);');
+    expect(stopButtonCssBlock).toContain('background: var(--state-danger);');
     expect(stylesCss).toMatch(/\.chat-main \{[\s\S]*gap: 0;[\s\S]*\}/);
   });
 
@@ -2484,7 +2492,8 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-attachment-action-button.photo .codicon');
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
-    expect(stylesCss).toMatch(/\.chat-stop-status \{[\s\S]*border-radius: 999px;[\s\S]*height: 26px;/);
+    expect(stylesCss).toMatch(/\.chat-stop-status \{[\s\S]*gap: 7px;[\s\S]*height: 24px;[\s\S]*border: none;/);
+    expect(stylesCss).toMatch(/\.chat-stop-button \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*border-radius: var\(--radius-control\);/);
   });
 
   test('keeps running chat editable and queues another send for that chat', () => {
@@ -2563,6 +2572,9 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('/* workspace-ui-targeted-evolution: composer */');
     expect(stylesCss).toContain('max-width: calc(100vw - 24px)');
     expect(stylesCss).toContain('padding-bottom: max(4px, var(--wm-safe-area-bottom))');
+    expect(stylesCss).toMatch(
+      /@media \(max-width: 900px\) \{[\s\S]*?\.chat-composer \{[\s\S]*?background: var\(--surface-canvas\);[\s\S]*?\}/,
+    );
   });
 
   test('uses a clear but restrained selection surface and information-state colors for chat chrome', () => {
