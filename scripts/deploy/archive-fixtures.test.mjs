@@ -109,7 +109,7 @@ function makeTarZst(entries) {
     if (padding) blocks.push(Buffer.alloc(padding));
   }
   blocks.push(Buffer.alloc(1024));
-  return zstdCompressSync(Buffer.concat(blocks), { level: 19 });
+  return zstdCompressSync(Buffer.concat(blocks), { level: 22 });
 }
 
 function writeText(buffer, offset, length, value) {

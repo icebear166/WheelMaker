@@ -6,9 +6,10 @@ export type ChatStopStatusPillProps = {
   onCancel: () => void;
 };
 
-// One capsule that is both the running status and the stop target. The glyph
-// slot keeps a fixed footprint so the pill does not resize when the spinner
-// replaces the stop square while cancelling.
+// One capsule that is both the running status and the stop target. The label
+// carries a light-sweep shimmer while responding; the glyph slot keeps a
+// fixed footprint so the pill does not resize when the spinner replaces the
+// stop square while cancelling.
 export function ChatStopStatusPill({cancelling, onCancel}: ChatStopStatusPillProps) {
   return (
     <button
@@ -20,9 +21,8 @@ export function ChatStopStatusPill({cancelling, onCancel}: ChatStopStatusPillPro
       aria-busy={cancelling}
       title={cancelling ? 'Cancelling prompt' : 'Stop generating'}
     >
-      <span className="chat-stop-pill-status" role="status" aria-live="polite" aria-atomic="true">
-        <span className="chat-stop-pill-dot" aria-hidden="true" />
-        <span className="chat-stop-pill-label">{cancelling ? 'Cancelling' : 'Responding'}</span>
+      <span className="chat-stop-pill-label" role="status" aria-live="polite" aria-atomic="true">
+        {cancelling ? 'Cancelling' : 'Responding'}
       </span>
       <ChatIcon
         name={cancelling ? 'loader' : 'stop'}

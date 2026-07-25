@@ -1,10 +1,18 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '@vscode/codicons/dist/codicon.css';
-import '@fontsource/ibm-plex-sans/400.css';
-import '@fontsource/ibm-plex-sans/500.css';
-import '@fontsource/ibm-plex-sans/600.css';
-import '@fontsource/jetbrains-mono/400.css';
+// Subset each weight to latin + latin-ext only. The all-subset CSS (e.g.
+// 400.css) also pulls cyrillic/greek/vietnamese/hebrew/... in woff2+woff,
+// which webpack emits as bundled assets; non-Latin glyphs fall back to the
+// system stack anyway, so we ship only the subsets that can render here.
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-ext-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-ext-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/ibm-plex-sans/latin-ext-600.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-ext-400.css';
 import { App, workspaceAppReady } from './app/WorkspaceApp';
 import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';
 import './styles/index.css';

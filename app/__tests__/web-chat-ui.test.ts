@@ -1189,11 +1189,15 @@ describe('web chat integration', () => {
     expect(stopPillStyleBlock).toContain('border-radius: 999px;');
     expect(stopPillStyleBlock).not.toContain('background: var(--state-danger);');
     expect(stylesCss).toContain('.chat-stop-pill.cancelling {');
-    expect(stylesCss).toContain('.chat-stop-pill-dot {');
+    const stopPillLabelBlock = cssRuleBlock(stylesCss, '.chat-stop-pill-label');
+    expect(stopPillLabelBlock).toContain('background-clip: text;');
+    expect(stopPillLabelBlock).toContain('color: transparent;');
     expect(stylesCss).toContain('.chat-stop-pill-glyph {');
-    expect(stylesCss).toContain('@keyframes chat-stop-pill-breathe');
-    expect(stylesCss).toContain('animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;');
-    expect(stylesCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.chat-stop-pill-dot \{[\s\S]*animation: none;/);
+    expect(stylesCss).toContain('@keyframes chat-stop-pill-shimmer');
+    expect(stylesCss).toContain('animation: chat-stop-pill-shimmer 2.4s linear infinite;');
+    expect(stylesCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.chat-stop-pill-label \{[\s\S]*animation: none;/);
+    expect(stylesCss).not.toContain('.chat-stop-pill-dot');
+    expect(stylesCss).not.toContain('chat-stop-pill-breathe');
     expect(stylesCss).not.toContain('.chat-stop-status');
     expect(stylesCss).not.toContain('.chat-stop-button');
     expect(stylesCss).not.toContain('.chat-composer-stop-trigger');
@@ -2493,7 +2497,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
     expect(stylesCss).toMatch(/\.chat-stop-pill \{[\s\S]*gap: 6px;[\s\S]*height: 24px;[\s\S]*border-radius: 999px;/);
-    expect(stylesCss).toMatch(/\.chat-stop-pill-dot \{[\s\S]*width: 6px;[\s\S]*height: 6px;[\s\S]*background: var\(--state-success\);/);
+    expect(stylesCss).toMatch(/\.chat-stop-pill-label \{[\s\S]*background-clip: text;[\s\S]*animation: chat-stop-pill-shimmer/);
   });
 
   test('keeps running chat editable and queues another send for that chat', () => {

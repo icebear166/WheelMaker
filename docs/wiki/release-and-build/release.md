@@ -50,7 +50,7 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 
 ## 平台包格式与解压
 
-平台包是 `wheelmaker-v1.x-<platform>.tar.zst`，由 [`scripts/release/tar.mjs`](../../../scripts/release/tar.mjs) 用 zstd level 19 压缩。目标机由 `deploy-core.mjs` 的 `extractTarZst` 用 `node:zlib` 原生 zstd 流式解压，因此要求 Node.js ≥ 22.15。
+平台包是 `wheelmaker-v1.x-<platform>.tar.zst`，由 [`scripts/release/tar.mjs`](../../../scripts/release/tar.mjs) 用 zstd level 22 压缩。目标机由 `deploy-core.mjs` 的 `extractTarZst` 用 `node:zlib` 原生 zstd 流式解压，因此要求 Node.js ≥ 22.15。
 
 `deploy-core.mjs` 在解压前做版本守卫：Node < 22.15 时抛出明确错误，指引重跑 `https://release.wheelmaker.top/` 的一行安装命令升级 Node，而不是崩溃在缺失的 zstd API 上。日常 `deploy.mjs update` 不安装或升级 Node，所以存量机若仍停在 22.15 以下，需要重新执行一次完整安装才能继续更新。
 

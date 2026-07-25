@@ -129,7 +129,7 @@ export async function createTarZst({ sourceDir, outputPath }) {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(
     outputPath,
-    zstdCompressSync(Buffer.concat(blocks), { level: 19 }),
+    zstdCompressSync(Buffer.concat(blocks), { level: 22 }),
   );
   return outputPath;
 }

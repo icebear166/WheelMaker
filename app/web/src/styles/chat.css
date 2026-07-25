@@ -4171,7 +4171,7 @@
   align-items: center;
   gap: 6px;
   height: 24px;
-  padding: 0 9px;
+  padding: 0 8px 0 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   background: var(--surface-raised);
@@ -4183,14 +4183,12 @@
   transition:
     background var(--motion-fast) var(--ease-standard),
     border-color var(--motion-fast) var(--ease-standard),
-    color var(--motion-fast) var(--ease-standard),
     transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-stop-pill:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--state-danger) 45%, var(--border-subtle));
   background: color-mix(in srgb, var(--state-danger) 9%, var(--surface-raised));
-  color: var(--text-primary);
 }
 
 .chat-stop-pill:active:not(:disabled) {
@@ -4205,24 +4203,24 @@
   opacity: 0.72;
 }
 
-.chat-stop-pill-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+.chat-stop-pill-label {
+  background: linear-gradient(
+    100deg,
+    var(--text-secondary) 44%,
+    var(--text-primary) 50%,
+    var(--text-secondary) 56%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: chat-stop-pill-shimmer 2.4s linear infinite;
 }
 
-.chat-stop-pill-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--state-success);
-  animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;
-}
-
-.chat-stop-pill.cancelling .chat-stop-pill-dot {
+.chat-stop-pill.cancelling .chat-stop-pill-label {
   animation: none;
-  opacity: 0.55;
+  background: none;
+  color: var(--text-secondary);
 }
 
 .chat-stop-pill-glyph {
@@ -4239,19 +4237,20 @@
   color: var(--text-tertiary);
 }
 
-@keyframes chat-stop-pill-breathe {
-  0%,
-  100% {
-    opacity: 0.68;
+@keyframes chat-stop-pill-shimmer {
+  0% {
+    background-position: 200% 0;
   }
-  50% {
-    opacity: 0.94;
+  100% {
+    background-position: 0% 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-stop-pill-dot {
+  .chat-stop-pill-label {
     animation: none;
+    background: none;
+    color: var(--text-secondary);
   }
 }
 

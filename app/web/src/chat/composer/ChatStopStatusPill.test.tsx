@@ -18,9 +18,10 @@ describe('ChatStopStatusPill', () => {
     expect(button.props.disabled).toBe(false);
     expect(button.props['aria-label']).toBe('Stop generating');
     expect(button.props.className).toBe('chat-stop-pill');
-    expect(tree.root.findByProps({className: 'chat-stop-pill-status'}).props.role).toBe('status');
-    expect(tree.root.findByProps({className: 'chat-stop-pill-dot'}).props['aria-hidden']).toBe('true');
-    expect(tree.root.findByProps({className: 'chat-stop-pill-label'}).children).toEqual(['Responding']);
+    const label = tree.root.findByProps({className: 'chat-stop-pill-label'});
+    expect(label.props.role).toBe('status');
+    expect(label.props['aria-live']).toBe('polite');
+    expect(label.children).toEqual(['Responding']);
     const glyph = tree.root.findByType('svg');
     expect(glyph.props['data-icon-name']).toBe('stop');
     expect(glyph.props.fill).toBe('currentColor');
