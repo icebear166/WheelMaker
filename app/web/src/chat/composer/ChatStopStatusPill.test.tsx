@@ -17,10 +17,13 @@ describe('ChatStopStatusPill', () => {
     const button = tree.root.findByType('button');
     expect(button.props.disabled).toBe(false);
     expect(button.props['aria-label']).toBe('Stop generating');
-    expect(button.props.className).toBe('chat-stop-button');
-    expect(tree.root.findByProps({className: 'chat-stop-status-indicator'}).props.role).toBe('status');
-    expect(tree.root.findByProps({className: 'chat-stop-status-dot'}).props['aria-hidden']).toBe('true');
-    expect(tree.root.findByProps({className: 'chat-stop-status-label'}).children).toEqual(['Responding']);
+    expect(button.props.className).toBe('chat-stop-pill');
+    expect(tree.root.findByProps({className: 'chat-stop-pill-status'}).props.role).toBe('status');
+    expect(tree.root.findByProps({className: 'chat-stop-pill-dot'}).props['aria-hidden']).toBe('true');
+    expect(tree.root.findByProps({className: 'chat-stop-pill-label'}).children).toEqual(['Responding']);
+    const glyph = tree.root.findByType('svg');
+    expect(glyph.props['data-icon-name']).toBe('stop');
+    expect(glyph.props.fill).toBe('currentColor');
     await act(async () => {
       button.props.onClick();
     });
@@ -32,8 +35,10 @@ describe('ChatStopStatusPill', () => {
     const button = tree.root.findByType('button');
     expect(button.props.disabled).toBe(true);
     expect(button.props['aria-busy']).toBe(true);
-    expect(tree.root.findByProps({className: 'chat-stop-status-label'}).children).toEqual(['Cancelling']);
+    expect(button.props.className).toBe('chat-stop-pill cancelling');
+    expect(tree.root.findByProps({className: 'chat-stop-pill-label'}).children).toEqual(['Cancelling']);
     const svg = tree.root.findByType('svg');
+    expect(svg.props['data-icon-name']).toBe('loader');
     expect(svg.props.className).toContain('sl-icon-spin');
   });
 });

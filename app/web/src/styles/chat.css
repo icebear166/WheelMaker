@@ -4166,79 +4166,80 @@
   min-width: 0;
 }
 
-.chat-stop-status {
+.chat-stop-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
+  padding: 0 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-raised);
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-status-indicator {
+.chat-stop-pill:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--state-danger) 45%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-danger) 9%, var(--surface-raised));
+  color: var(--text-primary);
+}
+
+.chat-stop-pill:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.chat-stop-pill:disabled {
+  cursor: default;
+}
+
+.chat-stop-pill.cancelling {
+  opacity: 0.72;
+}
+
+.chat-stop-pill-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
 }
 
-.chat-stop-status.cancelling {
-  opacity: 0.72;
-}
-
-.chat-stop-status-dot {
+.chat-stop-pill-dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
   background: var(--state-success);
-  animation: chat-stop-status-breathe 2.4s var(--ease-standard) infinite;
+  animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;
 }
 
-.chat-stop-status.cancelling .chat-stop-status-dot {
+.chat-stop-pill.cancelling .chat-stop-pill-dot {
   animation: none;
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
-.chat-stop-button {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.chat-stop-pill-glyph {
   flex: 0 0 auto;
-  border: none;
-  border-radius: var(--radius-control);
-  background: var(--state-danger);
-  color: #fff;
-  cursor: pointer;
-  padding: 0;
-  transition:
-    background var(--motion-fast) var(--ease-standard),
-    transform var(--motion-fast) var(--ease-standard);
+  color: color-mix(in srgb, var(--state-danger) 78%, var(--text-primary));
+  transition: color var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--state-danger) 86%, #000);
+.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-glyph {
+  color: var(--state-danger);
 }
 
-.chat-stop-button:active:not(:disabled) {
-  transform: scale(0.92);
+.chat-stop-pill.cancelling .chat-stop-pill-glyph {
+  color: var(--text-tertiary);
 }
 
-.chat-stop-button:disabled {
-  cursor: default;
-}
-
-.chat-stop-button-glyph {
-  flex: 0 0 auto;
-}
-
-@keyframes chat-stop-status-breathe {
+@keyframes chat-stop-pill-breathe {
   0%,
   100% {
     opacity: 0.68;
@@ -4249,7 +4250,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-stop-status-dot {
+  .chat-stop-pill-dot {
     animation: none;
   }
 }

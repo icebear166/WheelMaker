@@ -593,7 +593,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               {ttsState === 'loading' ? (
                 <ChatIcon name="loader" size={13} spin />
               ) : ttsState === 'playing' ? (
-                <ChatIcon name="square" size={13} filled />
+                <ChatIcon name="stop" size={13} filled />
               ) : (
                 <ChatIcon name="volume2" size={13} />
               )}

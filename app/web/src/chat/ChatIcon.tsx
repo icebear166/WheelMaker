@@ -47,6 +47,8 @@ const GLYPHS = {
   refreshCw: (<><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></>),
   // lucide:square
   square: (<><rect width="18" height="18" x="3" y="3" rx="2" /></>),
+  // mingcute:stop-fill (filled; crisper corners than a filled lucide:square)
+  stop: (<><rect width="16" height="16" x="4" y="4" rx="2" /></>),
   // lucide:volume-2
   volume2: (<><path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" /><path d="M16 9a5 5 0 0 1 0 6" /><path d="M19.364 18.364a9 9 0 0 0 0-12.728" /></>),
   // lucide:copy
