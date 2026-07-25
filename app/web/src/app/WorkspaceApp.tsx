@@ -2694,6 +2694,7 @@ export function App() {
   const chatContextUsageOpen = chatComposerMenu.id === 'context-usage';
   const chatCoreConfigMenuOpen = chatComposerMenu.id === 'core-config';
   const chatConfigOverflowOpen = chatComposerMenu.id === 'config-overflow';
+  const chatCoreConfigPanelOpen = chatComposerMenu.id === 'core-config' || chatComposerMenu.id === 'config-overflow';
   const chatConfigMenuOptionId = chatComposerMenu.id === 'config-value' ? chatComposerMenu.optionId : '';
   const setChatPromptMenuOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => {
     setChatComposerMenu(current => ((typeof next === 'function' ? next(current.id === 'slash') : next) ? {id: 'slash'} : null));
@@ -6035,7 +6036,7 @@ export function App() {
   }, [chatConfigMenuOptionId]);
 
   useEffect(() => {
-    if (!chatCoreConfigMenuOpen) return;
+    if (!chatCoreConfigPanelOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (target && chatConfigOptionsRef.current?.contains(target)) return;
@@ -6052,7 +6053,7 @@ export function App() {
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [chatCoreConfigMenuOpen, closeChatCoreConfigMenu]);
+  }, [chatCoreConfigPanelOpen, closeChatCoreConfigMenu]);
 
   useEffect(() => {
     if (!chatContextUsageOpen) return;
@@ -14987,6 +14988,7 @@ export function App() {
         onArchive={() => requestArchiveProjectSession(targetProjectId, session)}
         onReload={() => handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined)}
         onDelete={() => requestDeleteProjectSession(targetProjectId, session)}
+        onClose={() => setProjectSessionActionMenu(null)}
         exiting={projectSessionActionMenuExiting}
         popoverStyle={projectSessionActionMenu.popover
           ? {
@@ -17729,13 +17731,13 @@ export function App() {
             title={title}
             aria-label={title}
             aria-haspopup="menu"
-            aria-expanded={chatCoreConfigMenuOpen}
+            aria-expanded={chatCoreConfigPanelOpen}
             onClick={() => {
               setChatPromptMenuOpen(false);
               setChatFileMentionMenuOpen(false);
               setChatContextUsageOpen(false);
               setChatConfigMenuOptionId('');
-              if (chatCoreConfigMenuOpen) {
+              if (chatCoreConfigPanelOpen) {
                 closeChatCoreConfigMenu();
               } else {
                 setChatConfigOverflowOpen(false);
@@ -17755,7 +17757,7 @@ export function App() {
               <ChatIcon name="zap" className="chat-core-config-fast" />
             ) : null}
           </button>
-          {chatCoreConfigMenuOpen ? (
+          {chatCoreConfigPanelOpen ? (
             <div
               className={`chat-core-config-menu${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}
               role="menu"

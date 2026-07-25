@@ -17,6 +17,7 @@ async function renderMenu(extra?: Partial<React.ComponentProps<typeof SessionMen
     onArchive: jest.fn(),
     onReload: jest.fn(),
     onDelete: jest.fn(),
+    onClose: jest.fn(),
     ...extra,
   };
   await act(async () => {
@@ -28,6 +29,7 @@ async function renderMenu(extra?: Partial<React.ComponentProps<typeof SessionMen
 describe('SessionMenu', () => {
   it('renders five menu items in order with a separator before Reload', async () => {
     const {tree} = await renderMenu();
+    expect(typeof tree.root.findByProps({role: 'menu'}).props.onKeyDown).toBe('function');
     const labels = tree.root
       .findAll(node => node.type === 'span' && typeof node.props.className === 'string' && node.props.className.includes('project-session-menu-label'))
       .map(node => node.children.join(''));

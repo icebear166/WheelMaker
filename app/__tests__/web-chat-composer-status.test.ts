@@ -369,6 +369,18 @@ describe('chat composer status helpers', () => {
     expect(cssRuleBlock(stylesCss, '.chat-core-config-footer')).toContain('justify-content: flex-end;');
   });
 
+  test('keeps the core config panel mounted while More Options is selected', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const rendererStart = mainTsx.indexOf('const renderChatCoreConfigSelector = () => {');
+    const rendererEnd = mainTsx.indexOf('const chatReadOnlyPreview =', rendererStart);
+    const renderer = mainTsx.slice(rendererStart, rendererEnd);
+
+    expect(mainTsx).toContain("const chatCoreConfigPanelOpen = chatComposerMenu.id === 'core-config' || chatComposerMenu.id === 'config-overflow';");
+    expect(renderer).toContain('aria-expanded={chatCoreConfigPanelOpen}');
+    expect(renderer).toContain('{chatCoreConfigPanelOpen ? (');
+  });
+
   test('returns focus to the core config trigger after choosing an option', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

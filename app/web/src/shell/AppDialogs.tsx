@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ArchiveCandidate } from '../chat/session/sessionArchiveState';
+import {Icon, type IconName} from '../common/Icon';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/agentPackageUpdateView';
 import { skillScopeLabel } from '../settings/skillManagementView';
 import type {
@@ -238,23 +239,23 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
   return 'Archived sessions leave the chat list.';
 }
 
-function resolveConfirmIcon(target: ConfirmTarget): string {
-  if (target.kind === 'hideMonitor') return 'codicon-eye-closed';
-  if (target.kind === 'terminalClose') return 'codicon-debug-stop';
-  if (target.kind === 'clearCache') return 'codicon-trash';
-  if (target.kind === 'restoreArchived') return 'codicon-debug-restart';
-  if (target.kind === 'delete') return 'codicon-trash';
+function resolveConfirmIcon(target: ConfirmTarget): IconName {
+  if (target.kind === 'hideMonitor') return 'eyeOff';
+  if (target.kind === 'terminalClose') return 'ban';
+  if (target.kind === 'clearCache') return 'trash';
+  if (target.kind === 'restoreArchived') return 'archiveRestore';
+  if (target.kind === 'delete') return 'trash';
   if (target.kind === 'npmPackage') {
-    return target.action === 'uninstall' ? 'codicon-trash' : 'codicon-cloud-download';
+    return target.action === 'uninstall' ? 'trash' : 'cloudDownload';
   }
-  if (target.kind === 'npmPackageHubUpdate') return 'codicon-cloud-download';
-  if (target.kind === 'wheelMakerUpdate') return 'codicon-cloud-download';
-  if (target.kind === 'wheelMakerUpdateAll') return 'codicon-cloud-download';
-  if (target.kind === 'skillInstall') return 'codicon-cloud-download';
-  if (target.kind === 'skillUninstall') return 'codicon-trash';
-  if (target.kind === 'skillBatchUninstall') return 'codicon-trash';
-  if (target.kind === 'skillUpdate') return 'codicon-sync';
-  return 'codicon-archive';
+  if (target.kind === 'npmPackageHubUpdate') return 'cloudDownload';
+  if (target.kind === 'wheelMakerUpdate') return 'cloudDownload';
+  if (target.kind === 'wheelMakerUpdateAll') return 'cloudDownload';
+  if (target.kind === 'skillInstall') return 'cloudDownload';
+  if (target.kind === 'skillUninstall') return 'trash';
+  if (target.kind === 'skillBatchUninstall') return 'trash';
+  if (target.kind === 'skillUpdate') return 'refreshCw';
+  return 'archive';
 }
 
 function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
@@ -324,7 +325,7 @@ export function AppConfirmDialog({
         onPointerDown={event => event.stopPropagation()}
       >
         <div className={confirmIconClassName}>
-          <span className={`codicon ${confirmIcon}`} />
+          <Icon name={confirmIcon} size={17} />
         </div>
         <div className="app-confirm-content">
           <div id="app-confirm-title" className="app-confirm-title">
@@ -351,13 +352,7 @@ export function AppConfirmDialog({
             disabled={busy}
             onClick={onPrimary}
           >
-            <span
-              className={`codicon ${
-                busy
-                  ? 'codicon-loading codicon-modifier-spin'
-                  : confirmIcon
-              }`}
-            />
+            <Icon name={busy ? 'loader' : confirmIcon} spin={busy} />
             {confirmPrimaryLabel}
           </button>
         </div>
@@ -395,7 +390,7 @@ export function AppRenameDialog({
         onPointerDown={event => event.stopPropagation()}
       >
         <div className="app-confirm-icon">
-          <span className="codicon codicon-edit" />
+          <Icon name="pencil" size={17} />
         </div>
         <div className="app-confirm-content">
           <div id="app-rename-title" className="app-confirm-title">
@@ -440,13 +435,7 @@ export function AppRenameDialog({
             disabled={busy}
             onClick={onSubmit}
           >
-            <span
-              className={`codicon ${
-                busy
-                  ? 'codicon-loading codicon-modifier-spin'
-                  : 'codicon-check'
-              }`}
-            />
+            <Icon name={busy ? 'loader' : 'check'} spin={busy} />
             Save
           </button>
         </div>
@@ -498,7 +487,7 @@ export function AppSessionStatusDialog({
             </div>
           </div>
           <button type="button" className="app-session-status-close" onClick={onClose} aria-label="Close session status">
-            <span className="codicon codicon-close" aria-hidden="true" />
+            <Icon name="x" />
           </button>
         </div>
 
@@ -547,7 +536,7 @@ export function AppSessionStatusDialog({
 
           {loading ? (
             <div className="app-session-status-loading" aria-label="Refreshing session status">
-              <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+              <Icon name="loader" spin />
               Refreshing limits…
             </div>
           ) : null}
@@ -556,7 +545,7 @@ export function AppSessionStatusDialog({
 
         <div className="app-session-status-actions">
           <button type="button" className="app-confirm-btn secondary" onClick={onRefresh} disabled={loading}>
-            <span className={`codicon ${loading ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} aria-hidden="true" />
+            <Icon name={loading ? 'loader' : 'refreshCw'} spin={loading} />
             Refresh
           </button>
           <button type="button" className="app-confirm-btn primary" onClick={onClose}>Close</button>

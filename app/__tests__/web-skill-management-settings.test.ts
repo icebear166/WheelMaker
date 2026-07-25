@@ -194,6 +194,13 @@ describe('skill management settings UI source structure', () => {
     expect(stylesCss).not.toContain('max-height: min(32vh, 320px);');
   });
 
+  test('pairs each hub status dot with visible text', () => {
+    expect(detailTsx).toContain('<span className="set-status is-running">Scanning</span>');
+    expect(detailTsx).toContain('<span className="set-status is-running">Running</span>');
+    expect(detailTsx).toContain('<span className="set-status is-error">Error</span>');
+    expect(detailTsx).toContain('<span className="set-status is-ok">Ready</span>');
+  });
+
   test('expands skill install controls inline with select all', () => {
     expect(mainTsx).toContain('sameSkillInstallTarget');
     expect(mainTsx).toContain('toggleAllSkillSourceCandidates');

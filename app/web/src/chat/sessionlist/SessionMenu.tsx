@@ -1,4 +1,5 @@
-import React from 'react';
+import React, {useEffect, useRef} from 'react';
+import {focusFirstMenuItem, handleMenuKeyDown} from '../../common/menuKeyboardNavigation';
 import {SessionIcon, type SessionIconName} from './SessionIcon';
 
 export type SessionMenuProps = {
@@ -15,6 +16,7 @@ export type SessionMenuProps = {
   onArchive: () => void;
   onReload: () => void;
   onDelete: () => void;
+  onClose: () => void;
   /** Popover positioning style computed by the caller. */
   popoverStyle?: React.CSSProperties;
   /** When true, plays the exit animation (wired by the caller's close helper). */
@@ -44,9 +46,18 @@ export function SessionMenu({
   onArchive,
   onReload,
   onDelete,
+  onClose,
   popoverStyle,
   exiting = false,
 }: SessionMenuProps) {
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    previouslyFocusedRef.current = typeof document !== 'undefined' && typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    focusFirstMenuItem(menuRef.current);
+  }, []);
   const items: Array<MenuItem | 'separator'> = [
     {key: 'pin', className: 'pin', icon: 'pin', label: pinned ? 'Unpin' : 'Pin', disabled: pinning, busy: pinning, onSelect: onTogglePin},
     {key: 'rename', className: 'rename', icon: 'pencil', label: 'Rename', disabled: renaming, busy: renaming, onSelect: onRename},
@@ -57,9 +68,19 @@ export function SessionMenu({
   ];
   return (
     <div
+      ref={menuRef}
       className={`project-session-action-menu${exiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       style={popoverStyle}
+      onKeyDown={event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          previouslyFocusedRef.current?.focus();
+          onClose();
+          return;
+        }
+        handleMenuKeyDown(event, menuRef.current);
+      }}
     >
       {items.map(item =>
         item === 'separator' ? (

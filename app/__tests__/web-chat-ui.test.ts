@@ -410,6 +410,9 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /@media \(min-width: 901px\) \{[\s\S]*\.chat-composer \{[\s\S]*padding-bottom: 8px;[\s\S]*\}[\s\S]*\}/,
     );
+    expect(stylesCss).toMatch(
+      /@media \(max-width: 900px\) \{[\s\S]*\.chat-composer \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--surface-raised\)\);[\s\S]*\}[\s\S]*\}/,
+    );
     expect(stylesCss).not.toContain('--chat-composer-frame-top');
     expect(stylesCss).not.toContain('--chat-composer-fade-distance');
     expect(stylesCss).not.toContain('margin-top: calc(-1 * var(--chat-composer-frame-top));');
@@ -1186,7 +1189,8 @@ describe('web chat integration', () => {
     expect(stopPillStyleBlock).toContain('height: 26px;');
     expect(stylesCss).toContain('.chat-stop-pill.cancelling {');
     expect(stylesCss).toContain('.chat-stop-pill-dot {');
-    expect(stylesCss).toContain('@keyframes chat-stop-pill-pulse');
+    expect(stylesCss).toContain('@keyframes chat-stop-pill-breathe');
+    expect(stylesCss).toContain('animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;');
     expect(stylesCss).not.toContain('.chat-composer-stop-trigger');
     expect(stylesCss).not.toContain('chatStopBreath');
     expect(stylesCss).not.toContain('.chat-stop-glyph {');

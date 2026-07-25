@@ -1,4 +1,5 @@
 import React, {useEffect, useRef} from 'react';
+import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
 import type {PreviewFileLink} from '../preview/previewFileLink';
 import {ChatIcon, type ChatIconName} from './ChatIcon';
 
@@ -31,8 +32,13 @@ export function ChatFileLinkContextMenu({
   onClose,
 }: ChatFileLinkContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    previouslyFocusedRef.current = typeof document !== 'undefined' && typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    focusFirstMenuItem(menuRef.current);
     const handlePointerDown = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) {
         onClose();
@@ -40,6 +46,7 @@ export function ChatFileLinkContextMenu({
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        previouslyFocusedRef.current?.focus();
         onClose();
       }
     };
@@ -73,6 +80,7 @@ export function ChatFileLinkContextMenu({
       className="chat-file-link-context-menu"
       style={{left: x, top: y}}
       role="menu"
+      onKeyDown={event => handleMenuKeyDown(event, menuRef.current)}
     >
       {canOpenInVSCode
         ? item('vscode', 'code', 'Open with VS Code')

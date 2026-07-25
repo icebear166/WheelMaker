@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useLayoutEffect, useRef, useState} from '
 import {createPortal} from 'react-dom';
 import {SessionIcon} from '../../../chat/sessionlist/SessionIcon';
 import {useMenuExitFlag} from '../../../chat/sessionlist/menuExit';
+import {focusFirstMenuItem, handleMenuKeyDown} from '../../../common/menuKeyboardNavigation';
 import {checkDesktopUpdate, type DesktopUpdateCheck} from '../../../platform/desktop/desktopUpdate';
 import {getDesktopWindowBridge, openLocalDevPanelEvent} from '../../../platform/desktop/desktopRuntime';
 
@@ -21,11 +22,56 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const localDevDialogRef = useRef<HTMLElement | null>(null);
+  const localDevBusyRef = useRef(false);
   const [menuPosition, setMenuPosition] = useState<{left: number; top: number} | null>(null);
   const canUseLocalDev = Boolean(bridge?.requestLocalDevMode || bridge?.localDev);
   const canUpdateDesktop = Boolean(
     bridge?.getDesktopUpdateInfo && bridge.requestDesktopUpdate && !bridge.localDev,
   );
+
+  useEffect(() => {
+    localDevBusyRef.current = localDevBusy;
+  }, [localDevBusy]);
+
+  useEffect(() => {
+    if (!localDevDialogOpen || typeof document === 'undefined' || typeof window === 'undefined') {
+      return undefined;
+    }
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const focusFirstControl = () => {
+      const dialog = localDevDialogRef.current;
+      const firstControl = dialog?.querySelector<HTMLElement>('input:not([disabled]), button:not([disabled])');
+      firstControl?.focus();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !localDevBusyRef.current) {
+        event.preventDefault();
+        setLocalDevDialogOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = localDevDialogRef.current;
+      const focusable = Array.from(
+        dialog?.querySelectorAll<HTMLElement>('input:not([disabled]), button:not([disabled])') ?? [],
+      );
+      if (focusable.length === 0) return;
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+      const nextIndex = event.shiftKey
+        ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+        : (currentIndex === focusable.length - 1 ? 0 : currentIndex + 1);
+      event.preventDefault();
+      focusable[nextIndex]?.focus();
+    };
+    focusFirstControl();
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [localDevDialogOpen]);
 
   const refreshDesktopUpdate = useCallback(async () => {
     if (!bridge || !canUpdateDesktop) {
@@ -55,6 +101,7 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
       return;
     }
     updateMenuPosition();
+    focusFirstMenuItem(menuRef.current);
     window.addEventListener('resize', updateMenuPosition);
     window.addEventListener('scroll', updateMenuPosition, true);
     return () => {
@@ -77,6 +124,7 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
+        triggerRef.current?.focus();
       }
     };
     window.addEventListener('pointerdown', onPointerDown);
@@ -159,6 +207,7 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
       aria-label="WheelMaker menu"
       style={menuPosition ?? undefined}
       data-desktop-window-interactive={true}
+      onKeyDown={event => handleMenuKeyDown(event, menuRef.current)}
     >
       <button
         type="button"
@@ -227,8 +276,16 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
       </div>
       {appMenu && typeof document !== 'undefined' ? createPortal(appMenu, document.body) : appMenu}
       {localDevDialogOpen ? (
-        <div className="local-dev-entry-backdrop" data-desktop-window-interactive={true}>
-          <section className="local-dev-entry-dialog" role="dialog" aria-modal="true" aria-label="Configure Local Dev">
+        <div
+          className="local-dev-entry-backdrop"
+          data-desktop-window-interactive={true}
+          onPointerDown={event => {
+            if (event.currentTarget === event.target && !localDevBusy) {
+              setLocalDevDialogOpen(false);
+            }
+          }}
+        >
+          <section ref={localDevDialogRef} className="local-dev-entry-dialog" role="dialog" aria-modal="true" aria-label="Configure Local Dev">
             <header>
               <span className="local-dev-entry-eyebrow">Windows extension</span>
               <h2>Enter Dev Mode</h2>
@@ -241,7 +298,6 @@ export function DesktopAppMenu({onOpenSettings}: DesktopAppMenuProps) {
                 value={localDevSource}
                 placeholder="E:\\_Code\\WheelMaker"
                 spellCheck={false}
-                autoFocus
                 onChange={event => setLocalDevSource(event.target.value)}
               />
             </label>

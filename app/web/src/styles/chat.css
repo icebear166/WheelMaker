@@ -4201,8 +4201,8 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: var(--state-danger);
-  animation: chat-stop-pill-pulse 1.6s var(--ease-standard) infinite;
+  background: color-mix(in srgb, var(--state-danger) 84%, var(--text-tertiary));
+  animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;
 }
 
 .chat-stop-pill.cancelling .chat-stop-pill-dot {
@@ -4218,13 +4218,13 @@
   color: var(--state-danger);
 }
 
-@keyframes chat-stop-pill-pulse {
+@keyframes chat-stop-pill-breathe {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 0.68;
   }
   50% {
-    opacity: 1;
+    opacity: 0.94;
   }
 }
 
@@ -5762,6 +5762,7 @@
     padding-right: 12px;
     padding-bottom: max(4px, var(--wm-safe-area-bottom));
     padding-left: 12px;
+    background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
   }
 
   .chat-composer-content,

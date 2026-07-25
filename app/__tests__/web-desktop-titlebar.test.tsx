@@ -194,6 +194,18 @@ describe('desktop window controls', () => {
 	expect(requestLocalDevMode).toHaveBeenCalledWith('E:\\_Code\\WheelMaker');
   });
 
+  test('keeps focus inside the Local Dev dialog and restores it on close', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'shell', 'layouts', 'desktop', 'DesktopAppMenu.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('const localDevDialogRef = useRef<HTMLElement | null>(null);');
+    expect(source).toContain("if (event.key === 'Escape' && !localDevBusyRef.current)");
+    expect(source).toContain("if (event.key !== 'Tab') return;");
+    expect(source).toContain('previouslyFocused?.focus();');
+  });
+
   test('marks Dev Mode as checked when the local native bridge is active', async () => {
     global.fetch = jest.fn() as unknown as typeof fetch;
     (global as typeof globalThis & { window?: unknown }).window = {

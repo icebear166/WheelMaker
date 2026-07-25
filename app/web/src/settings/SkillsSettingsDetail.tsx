@@ -665,15 +665,15 @@ export function SkillsSettingsDetail({
               {activeSummary.hubSkillCount} skills / {activeSummary.projectCount} projects / {activeSummary.projectSkillCount} project skills
             </span>
           </span>
-          <span className="settings-skills-hub-picker-state">
-            {activeSkillHub.loading ? (
-              <span className="set-status is-running" aria-label="Scanning" />
-            ) : activeSkillHub.error ? (
-              <span className="set-status is-error" aria-label="Error" />
-            ) : activeSummary.operation?.running ? (
-              <span className="set-status is-running" aria-label="Running" />
-            ) : (
-              <span className="set-status is-ok" aria-label="Ready" />
+            <span className="settings-skills-hub-picker-state">
+              {activeSkillHub.loading ? (
+              <span className="set-status is-running">Scanning</span>
+              ) : activeSkillHub.error ? (
+              <span className="set-status is-error">Error</span>
+              ) : activeSummary.operation?.running ? (
+              <span className="set-status is-running">Running</span>
+              ) : (
+              <span className="set-status is-ok">Ready</span>
             )}
           </span>
           <Icon name={skillHubMenuOpen ? 'chevronUp' : 'chevronDown'} size={14} className="settings-skills-hub-picker-chevron" />
@@ -704,15 +704,15 @@ export function SkillsSettingsDetail({
                   </span>
                   <span className="settings-skills-hub-option-state">
                     {hub.loading ? (
-                      <span className="set-status is-running" aria-label="Scanning" />
+                      <span className="set-status is-running">Scanning</span>
                     ) : hub.error ? (
-                      <span className="set-status is-error" aria-label="Error" />
+                      <span className="set-status is-error">Error</span>
                     ) : summary.operation?.running ? (
-                      <span className="set-status is-running" aria-label="Running" />
+                      <span className="set-status is-running">Running</span>
                     ) : selected ? (
                       <Icon name="check" size={14} className="settings-skills-hub-option-check" />
                     ) : (
-                      <span className="set-status is-ok" aria-label="Ready" />
+                      <span className="set-status is-ok">Ready</span>
                     )}
                   </span>
                 </button>

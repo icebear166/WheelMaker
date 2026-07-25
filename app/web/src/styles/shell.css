@@ -1205,8 +1205,8 @@
   background: color-mix(in srgb, var(--state-danger) 14%, transparent);
 }
 
-.app-confirm-icon .codicon {
-  font-size: 17px;
+.app-confirm-icon .sl-icon {
+  flex: 0 0 auto;
 }
 
 .app-confirm-content {
