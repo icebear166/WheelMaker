@@ -4166,12 +4166,12 @@
   min-width: 0;
 }
 
-.chat-stop-pill {
+.chat-stop-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 26px;
-  padding: 0 9px;
+  padding: 0 4px 0 9px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 999px;
   background: transparent;
@@ -4179,46 +4179,67 @@
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  cursor: pointer;
-  transition:
-    color var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard),
-    background var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-pill:hover:not(:disabled) {
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--state-danger) 46%, var(--border-subtle));
-  background: color-mix(in srgb, var(--state-danger) 8%, transparent);
+.chat-stop-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
-.chat-stop-pill.cancelling {
-  cursor: default;
+.chat-stop-status.cancelling {
   opacity: 0.72;
 }
 
-.chat-stop-pill-dot {
+.chat-stop-status-dot {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--state-danger) 84%, var(--text-tertiary));
-  animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;
+  background: var(--state-success);
+  animation: chat-stop-status-breathe 2.4s var(--ease-standard) infinite;
 }
 
-.chat-stop-pill.cancelling .chat-stop-pill-dot {
+.chat-stop-status.cancelling .chat-stop-status-dot {
   animation: none;
   opacity: 0.6;
 }
 
-.chat-stop-pill-glyph {
-  color: var(--text-tertiary);
+.chat-stop-button {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 999px;
+  background: var(--state-danger);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-glyph {
-  color: var(--state-danger);
+.chat-stop-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--state-danger) 86%, #000);
 }
 
-@keyframes chat-stop-pill-breathe {
+.chat-stop-button:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.chat-stop-button:disabled {
+  cursor: default;
+}
+
+.chat-stop-button-glyph {
+  flex: 0 0 auto;
+}
+
+@keyframes chat-stop-status-breathe {
   0%,
   100% {
     opacity: 0.68;
@@ -4229,7 +4250,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-stop-pill-dot {
+  .chat-stop-status-dot {
     animation: none;
   }
 }

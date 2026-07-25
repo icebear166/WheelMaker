@@ -1182,15 +1182,18 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-composer-skill-trigger {');
     expect(stylesCss).toContain('.chat-composer-action-column {');
     expect(stylesCss).toContain('.chat-composer-toolbar-actions {');
-    expect(stylesCss).toContain('.chat-stop-pill {');
-    const stopPillStyleBlock = stylesCss.match(/\.chat-stop-pill \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(stopPillStyleBlock).not.toContain('position: absolute;');
-    expect(stopPillStyleBlock).toContain('border-radius: 999px;');
-    expect(stopPillStyleBlock).toContain('height: 26px;');
-    expect(stylesCss).toContain('.chat-stop-pill.cancelling {');
-    expect(stylesCss).toContain('.chat-stop-pill-dot {');
-    expect(stylesCss).toContain('@keyframes chat-stop-pill-breathe');
-    expect(stylesCss).toContain('animation: chat-stop-pill-breathe 2.4s var(--ease-standard) infinite;');
+    expect(stylesCss).toContain('.chat-stop-status {');
+    const stopStatusStyleBlock = stylesCss.match(/\.chat-stop-status \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(stopStatusStyleBlock).not.toContain('position: absolute;');
+    expect(stopStatusStyleBlock).toContain('border-radius: 999px;');
+    expect(stopStatusStyleBlock).toContain('height: 26px;');
+    expect(stylesCss).toContain('.chat-stop-status.cancelling {');
+    expect(stylesCss).toContain('.chat-stop-status-dot {');
+    expect(stylesCss).toContain('.chat-stop-button {');
+    expect(stylesCss).toContain('background: var(--state-danger);');
+    expect(stylesCss).toContain('@keyframes chat-stop-status-breathe');
+    expect(stylesCss).toContain('animation: chat-stop-status-breathe 2.4s var(--ease-standard) infinite;');
+    expect(stylesCss).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.chat-stop-status-dot \{[\s\S]*animation: none;/);
     expect(stylesCss).not.toContain('.chat-composer-stop-trigger');
     expect(stylesCss).not.toContain('chatStopBreath');
     expect(stylesCss).not.toContain('.chat-stop-glyph {');
@@ -1299,7 +1302,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.chat-image-attach-button \{[\s\S]*color: color-mix\(in srgb, var\(--state-warning\) 78%, var\(--text-primary\)\);[\s\S]*\}/,
     );
-    expect(stylesCss).not.toContain('.chat-stop-button {');
+    expect(stylesCss).toContain('.chat-stop-button {');
     expect(stylesCss).not.toContain('.chat-stop-button.active {');
     expect(stylesCss).toContain('.chat-config-pill {');
     expect(stylesCss).not.toContain('.chat-config-pill .codicon');
@@ -1375,8 +1378,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-composer-toolbar-actions');
     expect(stylesCss).toMatch(/\.chat-composer-action-column \{[\s\S]*width: 36px;[\s\S]*height: 36px;[\s\S]*align-self: flex-end;[\s\S]*\}/);
     expect(stylesCss).toMatch(/\.chat-composer-toolbar \{[\s\S]*gap: 8px;[\s\S]*\}/);
-    const stopPillCssBlock = stylesCss.match(/\.chat-stop-pill \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(stopPillCssBlock).not.toContain('position: absolute;');
+    const stopStatusCssBlock = stylesCss.match(/\.chat-stop-status \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(stopStatusCssBlock).not.toContain('position: absolute;');
     expect(stylesCss).toMatch(/\.chat-main \{[\s\S]*gap: 0;[\s\S]*\}/);
   });
 
@@ -2481,7 +2484,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-attachment-action-button.photo .codicon');
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
-    expect(stylesCss).toMatch(/\.chat-stop-pill \{[\s\S]*border-radius: 999px;[\s\S]*height: 26px;/);
+    expect(stylesCss).toMatch(/\.chat-stop-status \{[\s\S]*border-radius: 999px;[\s\S]*height: 26px;/);
   });
 
   test('keeps running chat editable and queues another send for that chat', () => {
