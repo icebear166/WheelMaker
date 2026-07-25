@@ -57,12 +57,12 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 ### Claude-compatible provider 约定
 
-`cc-deepseek`、`cc-glm`、`cc-kimi`、`cc-qwen`、`cc-flicker` 复用 `claude-agent-acp` 与 Claude Agent SDK，不在 WheelMaker 内重新实现 Anthropic Messages。它们是独立 ACP provider：使用不同的 Hub 本地 Key、Anthropic-compatible endpoint、模型白名单和 `CLAUDE_CONFIG_DIR`，但继续复用 owned ACP process、权限请求、工具调用和通用 `configOptions` 链路。
+`cc-deepseek`、`cc-glm`、`cc-kimi`、`cc-qwen`、`cc-flicker` 复用 `claude-agent-acp` 与 Claude Agent SDK，不在 WheelMaker 内重新实现 Anthropic Messages。它们是独立 ACP provider：使用不同的 Hub 本地 Key、Anthropic-compatible endpoint、模型来源（前四者用 `availableModels` 白名单，`cc-flicker` 用 gateway model discovery）和 `CLAUDE_CONFIG_DIR`，但继续复用 owned ACP process、权限请求、工具调用和通用 `configOptions` 链路。
 
 - provider 只在 Hub 启动时、`claude-agent-acp` 与对应 Key 都存在时注册；Registry 只接收平铺的可用 agent ID，不接触 Key。
 - 模型选择由 provider 注入 `availableModels` 和默认模型，App 不增加 provider 私有模型协议。
 - `cc-kimi` 的模型白名单是 `k3[1m]`、`k3`、`kimi-for-coding`、`kimi-for-coding-highspeed`，默认 `k3[1m]`；`cc-glm` 的模型白名单是 `glm-5.2[1m]`、`glm-5.2`、`glm-4.7`、`glm-4.5-air`，默认 `glm-5.2[1m]`。Claude ACP 无法移除的 `Default` 条目仍可能出现，但会解析到对应 provider 默认模型。
-- `cc-flicker` 连接本地 MyFlickerBridge（`http://127.0.0.1:17888`），默认 `CLAUDE_OPUS_4_8`，并强制使用白名单 `CLAUDE_OPUS_4_8`、`CLAUDE_4_6`、`GPT_5_6_SOL`、`GPT_5_6_TERRA`、`GPT_5_6_LUNA`、`KIMI_K3`、`GLM_5_2`、`DEEPSEEK_V4_PRO`。Opus/Fable 映射到 `CLAUDE_OPUS_4_8`，Sonnet/Haiku/Subagent 映射到 `CLAUDE_4_6`，不做 effort 归一化。`api_keys.flicker` 仅是本地 bridge gate token，必须与 `MYFLICKER_BRIDGE_API_KEY` 匹配；MyFlicker 的设备 token/SSO 凭据由 bridge 自己持有，WheelMaker 不读取或传递它们。
+- `cc-flicker` 连接本地 MyFlickerBridge（`http://127.0.0.1:17888`），默认 `CLAUDE_OPUS_4_8`，走 **CLI gateway model discovery**（注入 `env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`，不用 `availableModels`/`enforceAvailableModels`），模型选择跟随 bridge `/v1/models` 动态 catalog 全量展示（非 Claude 模型带 `CLAUDE-MYFLICKER-` 前缀 id）。这样每个模型都能调 effort——白名单模式下非 Claude 模型无 `supportsEffort`、effort 选项会被隐藏。Opus/Fable 映射到 `CLAUDE_OPUS_4_8`，Sonnet/Haiku/Subagent 映射到 `CLAUDE_4_6`，WheelMaker 侧不做 effort 归一化。`api_keys.flicker` 仅是本地 bridge gate token，必须与 `MYFLICKER_BRIDGE_API_KEY` 匹配；MyFlicker 的设备 token/SSO 凭据由 bridge 自己持有，WheelMaker 不读取或传递它们。
 - 状态与上游 Session 分别位于各自的 `<stateDir>/.data/cc-*` 目录；历史、settings、agents、hooks、plugins 和认证配置继续相互隔离。唯一共享的用户配置是全局 Skills：每个 `cc-*` 的 `<configDir>/skills` 整目录链接到 `~/.claude/skills`，Windows 使用 Junction，其他平台使用目录符号链接。已有非空真实目录或指向其他位置的链接不会被覆盖，provider 启动会返回明确错误。
 - Session 恢复以 agent ID 和各自 projects 目录为边界，不允许在 Claude、GLM、Kimi 间跨 provider 导入或恢复。
 - App 可以把平铺 ID 投影为 Claude 主项旁的展开子项，但分组只属于展示层，不进入 ACP 或 Registry wire schema。

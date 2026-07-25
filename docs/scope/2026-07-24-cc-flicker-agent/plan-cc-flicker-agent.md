@@ -1,5 +1,7 @@
 # cc-flicker Claude-compatible Agent Implementation Plan
 
+> **Update (post-implementation):** cc-flicker later switched from the `availableModels` allowlist to **CLI gateway model discovery** (`env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1`, no `availableModels`/`enforceAvailableModels`). Reason: the allowlist path strips non-Claude models' effort capability, so only Claude models could switch effort. The `profile.gatewayDiscovery` flag now gates this in `ensureClaudeCompatibleSettings`. Sections below that describe the 8-model whitelist / `enforceAvailableModels=true` are superseded by the spec's updated model decisions.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a fifth Claude-compatible provider `cc-flicker` that launches `claude-agent-acp` against the local MyFlickerBridge (`http://127.0.0.1:17888`), registers only when `api_keys.flicker` is set and the adapter binary is available, exposes the 8 MyFlicker whitelist models with `CLAUDE_OPUS_4_8` default, isolates its state/recovery under `<stateDir>/.data/cc-flicker`, and appears as a Claude child labeled `cc · flicker` in every App agent picker.

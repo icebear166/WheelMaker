@@ -282,13 +282,23 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 	return exePath, defaultArgs, defaultEnv, nil
 }
 
+// gatewayModelDiscoveryEnv toggles Claude Code CLI's gateway model discovery,
+// which pulls the endpoint's /v1/models catalog (with full per-model
+// capabilities, including effort) instead of the static availableModels list.
+const gatewayModelDiscoveryEnv = "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY"
+
 type claudeCompatibleProfile struct {
 	configDir       string
 	endpoint        string
 	authName        string
 	defaultModel    string
 	availableModels []string
-	settingsEnv     map[string]string
+	// gatewayDiscovery selects CLI gateway model discovery instead of the
+	// availableModels allowlist. Discovery lets non-Claude models inherit their
+	// upstream effort/reasoning capabilities (the allowlist path strips them),
+	// at the cost of surfacing the bridge's full dynamic catalog in the picker.
+	gatewayDiscovery bool
+	settingsEnv      map[string]string
 }
 
 var claudeCompatibleConfigMu sync.Mutex
@@ -398,11 +408,11 @@ func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
 
 func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
 	return claudeCompatibleProfile{
-		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
-		endpoint:        "http://127.0.0.1:17888",
-		authName:        "ANTHROPIC_AUTH_TOKEN",
-		defaultModel:    "CLAUDE_OPUS_4_8",
-		availableModels: []string{"CLAUDE_OPUS_4_8", "CLAUDE_4_6", "GPT_5_6_SOL", "GPT_5_6_TERRA", "GPT_5_6_LUNA", "KIMI_K3", "GLM_5_2", "DEEPSEEK_V4_PRO"},
+		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
+		endpoint:         "http://127.0.0.1:17888",
+		authName:         "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:     "CLAUDE_OPUS_4_8",
+		gatewayDiscovery: true,
 		settingsEnv: map[string]string{
 			"ANTHROPIC_DEFAULT_FABLE_MODEL":  "CLAUDE_OPUS_4_8",
 			"ANTHROPIC_DEFAULT_OPUS_MODEL":   "CLAUDE_OPUS_4_8",
@@ -445,8 +455,18 @@ func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
 		env[name] = value
 	}
 	settings["model"] = profile.defaultModel
-	settings["availableModels"] = append([]string(nil), profile.availableModels...)
-	settings["enforceAvailableModels"] = true
+	if profile.gatewayDiscovery {
+		// Gateway model discovery is mutually exclusive with the allowlist:
+		// enforceAvailableModels re-filters discovered models and strips their
+		// effort capability. Drop any stale allowlist keys from a prior launch
+		// and let the CLI pull the bridge's dynamic catalog instead.
+		delete(settings, "availableModels")
+		delete(settings, "enforceAvailableModels")
+		env[gatewayModelDiscoveryEnv] = "1"
+	} else {
+		settings["availableModels"] = append([]string(nil), profile.availableModels...)
+		settings["enforceAvailableModels"] = true
+	}
 	settings["env"] = env
 
 	data, err := json.MarshalIndent(settings, "", "  ")
@@ -553,6 +573,7 @@ func removeClaudeCompatibleManagedEnv(env map[string]any) {
 		"CLAUDE_CODE_EFFORT_LEVEL",
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW",
 		"CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+		gatewayModelDiscoveryEnv,
 	} {
 		delete(env, name)
 	}
