@@ -105,7 +105,29 @@ describe('UsageStore', () => {
     expect(summary.accountCount).toBe(3);
   });
 
-  it('rejects stale generations and a late scanning phase from the same generation', () => {
+  it('uses a lower-generation snapshot received after a Hub restart', () => {
+    const store = new UsageStore();
+    store.replaceHub('hub-a', {
+      hubId: 'hub-a', generation: 20, status: 'ready', providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+          localId: 'current', identity: {}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 47}],
+        }],
+      }],
+    });
+    store.replaceHub('hub-a', {
+      hubId: 'hub-a', generation: 1, status: 'ready', providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+          localId: 'current', identity: {}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 44}],
+        }],
+      }],
+    });
+
+    expect(store.snapshot().providers[0].remainingPercent).toBe(44);
+  });
+
+  it('uses the most recently received phase from the same generation', () => {
     const store = new UsageStore();
     const ready = {
       hubId: 'hub-a', generation: 3, status: 'ready' as const, providers: [{
@@ -113,10 +135,9 @@ describe('UsageStore', () => {
       }],
     };
     store.replaceHub('hub-a', ready);
-    store.replaceHub('hub-a', {...ready, generation: 2, providers: []});
     store.replaceHub('hub-a', {...ready, status: 'scanning', providers: []});
 
-    expect(store.snapshot().providers.map(provider => provider.id)).toEqual(['kimi']);
-    expect(store.snapshot().refreshing).toBe(false);
+    expect(store.snapshot().providers).toEqual([]);
+    expect(store.snapshot().refreshing).toBe(true);
   });
 });

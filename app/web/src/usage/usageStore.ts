@@ -10,12 +10,6 @@ import type {
 } from './usageTypes';
 
 const providerOrder: UsageProviderId[] = ['codex', 'flicker', 'kimi', 'zai', 'deepseek'];
-const scanPhaseOrder: Record<UsageHubSnapshot['status'], number> = {
-  idle: 0,
-  scanning: 1,
-  ready: 2,
-  error: 2,
-};
 
 interface UsageProviderAggregate {
   name: string;
@@ -31,9 +25,6 @@ export class UsageStore {
   replaceHub(hubId: string, snapshot: UsageHubSnapshot): void {
     const normalizedHubId = hubId.trim();
     if (!normalizedHubId || snapshot.hubId !== normalizedHubId) return;
-    const existing = this.hubs.get(normalizedHubId);
-    if (existing && existing.generation > snapshot.generation) return;
-    if (existing && existing.generation === snapshot.generation && scanPhaseOrder[existing.status] > scanPhaseOrder[snapshot.status]) return;
     this.hubs.set(normalizedHubId, snapshot);
     this.emit();
   }
