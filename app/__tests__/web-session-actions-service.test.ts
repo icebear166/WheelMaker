@@ -76,6 +76,7 @@ describe('web session action protocol', () => {
     });
     expect(RegistryProtocolVersion).toBe('2.6');
     expect(RegistryMethods.SessionPin).toBe('session.pin');
+    expect(RegistryMethods.SessionMark).toBe('session.mark');
   });
 
   test('requests session pin and normalizes shared pin state', async () => {
@@ -126,11 +127,67 @@ describe('web session action protocol', () => {
     expect(result.session.pinned).toBe(false);
   });
 
+  test('requests session mark and normalizes the four shared colors', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        sessionId: 's1',
+        session: {
+          sessionId: 's1',
+          title: 'One',
+          preview: '',
+          updatedAt: '2026-07-26T10:00:00Z',
+          messageCount: 1,
+          pinned: false,
+          markColor: 'blue',
+        },
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const result = await repository.markSession('project-a', 's1', 'blue');
+
+    expect(request).toHaveBeenCalledWith({
+      method: RegistryMethods.SessionMark,
+      projectId: 'project-a',
+      payload: {sessionId: 's1', markColor: 'blue'},
+      timeoutMs: 15000,
+    });
+    expect(result.session.markColor).toBe('blue');
+    expect(result.session.pinned).toBe(false);
+    expect(RegistryProtocolVersion).toBe('2.6');
+  });
+
+  test('normalizes cleared and unknown session marks to undefined', async () => {
+    const request = jest.fn()
+      .mockResolvedValueOnce({
+        payload: {
+          ok: true,
+          session: {sessionId: 's1', title: 'One', preview: '', updatedAt: '', messageCount: 1},
+        },
+      })
+      .mockResolvedValueOnce({
+        payload: {
+          ok: true,
+          session: {sessionId: 's1', title: 'One', preview: '', updatedAt: '', messageCount: 1, markColor: 'purple'},
+        },
+      });
+    const repository = new RegistryRepository({request} as never);
+
+    await expect(repository.markSession('project-a', 's1', '')).resolves.toMatchObject({
+      session: {markColor: undefined},
+    });
+    await expect(repository.markSession('project-a', 's1', 'red')).resolves.toMatchObject({
+      session: {markColor: undefined},
+    });
+  });
+
   test('workspace delegates project-scoped status and compact actions', async () => {
     const repository = {
       statusSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', limits: [], updatedAt: ''}),
       compactSession: jest.fn().mockResolvedValue({ok: true, accepted: true, sessionId: 's1', operationId: 'op-1'}),
       pinSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', pinned: true}}),
+      markSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', markColor: 'green'}}),
     };
     const service = new RegistryWorkspaceService();
     Object.assign(service as unknown as {repository: unknown}, {repository});
@@ -138,9 +195,11 @@ describe('web session action protocol', () => {
     await service.statusProjectSession('project-a', 's1');
     await service.compactProjectSession('project-a', 's1');
     await service.pinProjectSession('project-a', 's1', true);
+    await service.markProjectSession('project-a', 's1', 'green');
 
     expect(repository.statusSession).toHaveBeenCalledWith('project-a', 's1');
     expect(repository.compactSession).toHaveBeenCalledWith('project-a', 's1');
     expect(repository.pinSession).toHaveBeenCalledWith('project-a', 's1', true);
+    expect(repository.markSession).toHaveBeenCalledWith('project-a', 's1', 'green');
   });
 });

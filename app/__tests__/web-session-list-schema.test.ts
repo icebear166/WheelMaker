@@ -21,13 +21,18 @@ describe('web session list schema', () => {
     expect(repositoryTs).toContain('typeof input.lastReadTurnIndex ===');
     expect(repositoryTs).toContain('pinned: input.pinned === true');
     expect(repositoryTs).toContain('RegistryMethods.SessionPin');
+    expect(repositoryTs).toContain('markColor: this.normalizeSessionMarkColor(input.markColor)');
+    expect(repositoryTs).toContain('RegistryMethods.SessionMark');
     expect(serviceTs).toContain('async markProjectSessionRead(');
     expect(serviceTs).toContain('async pinProjectSession(');
+    expect(serviceTs).toContain('async markProjectSession(');
     expect(registryTypes).toContain('running?: boolean;');
     expect(registryTypes).toContain('lastDoneTurnIndex?: number;');
     expect(registryTypes).toContain('lastDoneSuccess?: boolean;');
     expect(registryTypes).toContain('lastReadTurnIndex?: number;');
     expect(registryTypes).toContain('pinned?: boolean;');
+    expect(registryTypes).toContain("export type RegistrySessionMarkColor = 'red' | 'yellow' | 'green' | 'blue';");
+    expect(registryTypes).toContain('markColor?: RegistrySessionMarkColor;');
     expect(registryTypes).toContain('pendingPermissionCount?: number;');
     expect(repositoryTs).toContain('pendingPermissionCount: typeof input.pendingPermissionCount');
     expect(mainTsx).toContain('const renderSessionStateMarker = (session: RegistryChatSession, activeProjectId = projectIdRef.current) => {');

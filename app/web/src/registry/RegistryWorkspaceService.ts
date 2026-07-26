@@ -50,6 +50,7 @@ import type {
   RegistrySessionContentBlock,
   RegistrySessionConfigOption,
   RegistrySessionMessage,
+  RegistrySessionMarkColor,
   RegistryArchivedSessionSummary,
   RegistrySessionArchiveReadResponse,
   RegistrySessionArchiveRestoreResponse,
@@ -751,6 +752,17 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.pinSession(projectId, sessionId, pinned);
+  }
+
+  async markProjectSession(
+    projectId: string,
+    sessionId: string,
+    markColor: RegistrySessionMarkColor | '',
+  ): Promise<{ok: boolean; sessionId: string; session: RegistrySessionSummary}> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.markSession(projectId, sessionId, markColor);
   }
 
   async listResumableSessions(agentType: string): Promise<RegistryResumableSession[]> {

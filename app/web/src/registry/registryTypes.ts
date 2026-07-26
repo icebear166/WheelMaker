@@ -460,6 +460,8 @@ export interface RegistrySessionForkResponse {
   session: RegistrySessionSummary;
 }
 
+export type RegistrySessionMarkColor = 'red' | 'yellow' | 'green' | 'blue';
+
 export type RegistrySessionOperationStatus = 'queued' | 'started' | 'completed' | 'failed';
 
 export interface RegistrySessionOperationPayload {
@@ -488,6 +490,7 @@ export interface RegistrySessionSummary {
   lastDoneSuccess?: boolean;
   lastReadTurnIndex?: number;
   pinned?: boolean;
+  markColor?: RegistrySessionMarkColor;
   configOptions?: RegistrySessionConfigOption[];
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;
