@@ -15847,19 +15847,31 @@ export function App() {
           </div>
           <div className="mobile-project-sheet-body">
             {sheetMenu.kind === 'actions' ? (
-              <button
-                type="button"
-                className="wide-project-action-menu-item mobile-project-sheet-item"
-                onClick={() => {
-                  togglePinnedProject(sheetMenu.projectId);
-                  setMobileProjectActionMenu(null);
-                }}
-              >
-                <SessionIcon name="pin" />
-                <span className="mobile-project-sheet-item-label">
-                  {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
-                </span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="wide-project-action-menu-item mobile-project-sheet-item"
+                  onClick={() => {
+                    openMobileProjectActionMenu(sheetMenu.projectId, 'resume');
+                  }}
+                >
+                  <SessionIcon name="import" />
+                  <span className="mobile-project-sheet-item-label">Resume session</span>
+                </button>
+                <button
+                  type="button"
+                  className="wide-project-action-menu-item mobile-project-sheet-item"
+                  onClick={() => {
+                    togglePinnedProject(sheetMenu.projectId);
+                    setMobileProjectActionMenu(null);
+                  }}
+                >
+                  <SessionIcon name="pin" />
+                  <span className="mobile-project-sheet-item-label">
+                    {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
+                  </span>
+                </button>
+              </>
             ) : sheetMenu.phase === 'agents' ? (
               <>
                 <AgentChoiceMenu

@@ -2863,3 +2863,16 @@ describe('top bar action entry points', () => {
     expect(captureEffect).toContain('closeSidebarTransientMenus(keepOpen);');
   });
 });
+
+describe('mobile project action sheet resume entry', () => {
+  test('offers resume from the actions phase reusing the existing resume flow', () => {
+    const main = readSourceText(path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const actionsStart = main.indexOf("sheetMenu.kind === 'actions' ? (");
+    const actionsEnd = main.indexOf("sheetMenu.phase === 'agents'", actionsStart);
+    const actionsBody = main.slice(actionsStart, actionsEnd);
+
+    expect(actionsBody).toContain('>Resume session<');
+    expect(actionsBody).toContain('SessionIcon name="import"');
+    expect(actionsBody).toContain("openMobileProjectActionMenu(sheetMenu.projectId, 'resume')");
+  });
+});
