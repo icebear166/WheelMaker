@@ -83,6 +83,7 @@ import type {
   RegistrySessionUsage,
   RegistrySessionMessage,
   RegistrySessionMessageEventPayload,
+  RegistrySessionMarkColor,
   RegistrySessionReadResponse,
   RegistrySessionSearchError,
   RegistrySessionSearchResponse,
@@ -458,6 +459,18 @@ export class RegistryRepository {
       rateLimitResetCredits: this.normalizeSessionResetCredits(input.rateLimitResetCredits),
     };
   }
+  private normalizeSessionMarkColor(raw: unknown): RegistrySessionMarkColor | undefined {
+    switch (raw) {
+      case 'red':
+      case 'yellow':
+      case 'green':
+      case 'blue':
+        return raw;
+      default:
+        return undefined;
+    }
+  }
+
   private normalizeSessionSummary(raw: unknown): RegistrySessionSummary | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -493,6 +506,7 @@ export class RegistryRepository {
         ? Math.max(0, Math.trunc(input.lastReadTurnIndex))
         : undefined,
       pinned: input.pinned === true,
+      markColor: this.normalizeSessionMarkColor(input.markColor),
       configOptions: Array.isArray(input.configOptions)
         ? input.configOptions
             .map(item => this.normalizeSessionConfigOption(item))
@@ -538,7 +552,11 @@ export class RegistryRepository {
     if (!archivedAt) {
       return null;
     }
-    const {pinned: _activeSessionPin, ...archivedBase} = base;
+    const {
+      pinned: _activeSessionPin,
+      markColor: _activeSessionMark,
+      ...archivedBase
+    } = base;
     return {
       ...archivedBase,
       projectName: typeof input.projectName === 'string' ? input.projectName : undefined,
@@ -1690,6 +1708,33 @@ export class RegistryRepository {
       updatedAt: '',
       messageCount: 0,
       pinned,
+    };
+    return {
+      ok: body.ok ?? false,
+      sessionId: body.sessionId ?? session.sessionId ?? sessionId,
+      session,
+    };
+  }
+
+  async markSession(
+    projectId: string,
+    sessionId: string,
+    markColor: RegistrySessionMarkColor | '',
+  ): Promise<{ok: boolean; sessionId: string; session: RegistrySessionSummary}> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionMark,
+      projectId,
+      payload: {sessionId, markColor},
+      timeoutMs: 15000,
+    });
+    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string; session?: unknown};
+    const session = this.normalizeSessionSummary(body.session) ?? {
+      sessionId,
+      title: '',
+      preview: '',
+      updatedAt: '',
+      messageCount: 0,
+      markColor: markColor || undefined,
     };
     return {
       ok: body.ok ?? false,

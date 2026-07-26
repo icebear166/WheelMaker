@@ -85,6 +85,31 @@ describe('chat session ordering', () => {
     expect(merged[0].pinned).toBe(true);
   });
 
+  test('updates and authoritatively clears mark without changing order or pin', () => {
+    const existing = [
+      {...session('a', '2026-07-22T12:00:00Z'), pinned: true, markColor: 'red' as const},
+      session('b', '2026-07-21T12:00:00Z'),
+    ];
+
+    const changed = mergeChatSession(existing, {sessionId: 'a', markColor: 'blue'});
+    expect(changed.map(item => item.sessionId)).toEqual(['a', 'b']);
+    expect(changed[0]).toMatchObject({pinned: true, markColor: 'blue'});
+
+    const cleared = mergeChatSession(changed, {sessionId: 'a', markColor: undefined});
+    expect(cleared.map(item => item.sessionId)).toEqual(['a', 'b']);
+    expect(cleared[0].pinned).toBe(true);
+    expect(cleared[0].markColor).toBeUndefined();
+  });
+
+  test('preserves mark when an unrelated partial patch omits it', () => {
+    const merged = mergeChatSession(
+      [{...session('s1', '2026-07-22T12:00:00Z'), markColor: 'green'}],
+      {sessionId: 's1', preview: 'patched'},
+    );
+
+    expect(merged[0].markColor).toBe('green');
+  });
+
   test('patches metadata without moving a session when updatedAt is unchanged', () => {
     const items = [
       session('a', '2026-07-20T05:00:00Z'),

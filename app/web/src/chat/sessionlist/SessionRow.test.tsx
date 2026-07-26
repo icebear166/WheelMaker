@@ -74,4 +74,23 @@ describe('SessionRow', () => {
     expect(tree().root.findByProps({'data-icon-name': 'gitFork'})).toBeTruthy();
     expect(tree().root.findAllByType('button')).toHaveLength(1);
   });
+
+  it('renders a non-interactive trailing mark for pinned and unpinned rows', async () => {
+    const unpinned = await renderRow({markColor: 'red'});
+    const unpinnedMark = unpinned.tree().root.findByProps({
+      className: 'wide-session-mark session-mark-red',
+    });
+
+    expect(unpinnedMark.props.role).toBe('img');
+    expect(unpinnedMark.props['aria-label']).toBe('Red mark');
+    expect(unpinned.tree().root.findAllByType('button')).toHaveLength(1);
+
+    const pinned = await renderRow({pinned: true, markColor: 'blue'});
+    const pinnedMark = pinned.tree().root.findByProps({
+      className: 'wide-session-mark session-mark-blue',
+    });
+
+    expect(pinnedMark.props['aria-label']).toBe('Blue mark');
+    expect(pinned.tree().root.findAllByType('button')).toHaveLength(2);
+  });
 });

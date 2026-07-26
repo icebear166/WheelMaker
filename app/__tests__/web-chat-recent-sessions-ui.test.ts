@@ -71,6 +71,17 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).not.toContain('pinned: liveSession.pinned');
   });
 
+  test('recent rows reuse live session mark state without reserving row width', () => {
+    expect(listViewTsx).toContain('markColor={session.markColor}');
+    expect(sessionRowTsx).toContain('wide-session-mark');
+
+    const markBlock = sessionlistCss.match(/\.wide-session-mark \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(markBlock).toContain('position: absolute;');
+    expect(markBlock).toContain('pointer-events: none;');
+    expect(markBlock).not.toContain('margin:');
+    expect(markBlock).not.toContain('padding:');
+  });
+
   test('removes colored cards, watermarks and floating create rail from recent groups', () => {
     expect(mainTsx).not.toContain('recent-project-session-watermark');
     expect(mainTsx).not.toContain('recent-project-session-create');

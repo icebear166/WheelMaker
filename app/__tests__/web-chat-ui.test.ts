@@ -1864,6 +1864,32 @@ describe('web chat integration', () => {
     );
   });
 
+  test('session mark actions use a shared palette and a layout-neutral trailing marker', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sessionMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionMenu.tsx'));
+    const sessionListViewTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionListView.tsx'));
+    const sessionRowTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("const [chatMarkingSessionKey, setChatMarkingSessionKey] = useState('');");
+    expect(mainTsx).toContain('service.markProjectSession(targetProjectId, normalizedSessionId, markColor)');
+    expect(mainTsx).toContain('markColor={session.markColor}');
+    expect(mainTsx).toContain('marking={chatMarkingSessionKey === actionKey}');
+    expect(sessionMenuTsx).toContain('project-session-mark-picker');
+    expect(sessionMenuTsx).toContain('name="ban"');
+    expect(sessionListViewTsx).toContain('markColor={session.markColor}');
+    expect(sessionRowTsx).toContain('wide-session-mark');
+
+    const markBlock = stylesCss.match(/\.wide-session-mark \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(markBlock).toContain('position: absolute;');
+    expect(markBlock).toContain('right: 1px;');
+    expect(markBlock).toContain('pointer-events: none;');
+    expect(markBlock).not.toContain('margin:');
+    expect(markBlock).not.toContain('padding:');
+    expect(markBlock).not.toContain('flex:');
+  });
+
   test('session rows show the state dot in the leading gutter outside the selected frame', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

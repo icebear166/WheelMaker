@@ -1,8 +1,8 @@
-> 摘要：本页维护 Project、Recent 与移动端 Session 列表的排序、菜单、pin 状态、层级呈现、动作可见性和生命周期交互约定。
+> 摘要：本页维护 Project、Recent 与移动端 Session 列表的排序、菜单、pin/mark 状态、层级呈现、动作可见性和生命周期交互约定。
 
 # Session 列表交互
 
-> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md)
+> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md)、[`../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md`](../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md)
 
 本页用于持续记录 Session 列表层面的稳定交互。对话内容、Turn 展示和侧边栏容器布局分别由其他前端交互页面维护；图标、动效和配色等视觉语言约定见 [`visual-language.md`](visual-language.md)。
 
@@ -26,9 +26,9 @@
 ## 列表表面
 
 - Project 活跃 Session 列表是完整列表，负责 project 内的 pin 置顶排序。
-- Recent 复用活跃 Session 行的状态与操作，但仍按自身候选选择和 project 分组规则排序；pin 不强制 Session 进入 Recent。
-- 草稿 Session 尚无 Hub session identity，不参与 pin。
-- 归档列表是独立的只读历史入口，不显示 pin 操作。
+- Recent 复用活跃 Session 行的 pin、mark 状态与操作，但仍按自身候选选择和 project 分组规则排序；pin 或 mark 都不强制 Session 进入 Recent。
+- 草稿 Session 尚无 Hub session identity，不参与 pin 或 mark。
+- 归档列表是独立的只读历史入口，不显示 pin 或 mark 操作。
 
 ## 排序
 
@@ -36,8 +36,8 @@ Project 活跃 Session 列表先分为 pinned 与 unpinned 两组，pinned 组�
 
 ## 操作入口
 
-- 桌面端 Session 通过右键菜单或行尾更多菜单执行 Pin/Unpin、Rename、Archive、Reload 和 Delete 等操作。
-- 移动端 Project 与 Session 统一通过长按打开各自操作菜单，再选择 Pin/Unpin；长按本身不直接切换 pin。Project 长按 sheet 同时提供 "Resume session" 入口（选 agent → 可恢复会话列表 → import）。
+- 桌面端 Session 通过右键菜单或行尾更多菜单执行 Pin/Unpin、Mark、Rename、Archive、Reload 和 Delete 等操作。
+- 移动端 Project 与 Session 统一通过长按打开各自操作菜单，再选择 Pin/Unpin 或 Mark；长按本身不直接切换 pin。Project 长按 sheet 同时提供 "Resume session" 入口（选 agent → 可恢复会话列表 → import）。
 - 运行中的 Session 仍可 pin/unpin；只有该 Session 的 pin 请求进行中才禁用重复提交。
 
 ## Pin 展示与取消
@@ -46,8 +46,18 @@ Project 活跃 Session 列表先分为 pinned 与 unpinned 两组，pinned 组�
 
 Recent 中出现同一个 pinned Session 时显示相同 pin 状态和 Pin/Unpin 菜单，但 Recent 自身的选择与排序保持不变。
 
+## Mark 展示与操作
+
+Mark 是独立于 Pin 的单色视觉标记，不具备置顶、排序、筛选或分组语义。任意活跃 Session（包括未 pin 和运行中的 Session）最多设置一个 Mark，固定颜色为红、黄、绿、蓝。
+
+Session 操作菜单在 Pin/Unpin 下方显示 Mark 色板：四个颜色选项是等尺寸圆形色块，清除选项使用同尺寸圆形按钮和禁止图标。色板按钮带可访问名称与选中状态；选择或清除后关闭菜单。行内颜色只负责展示，不提供直接操作入口。
+
+有 Mark 时，Session 行最右侧覆盖绘制一条细圆角竖标；已 pin 行中竖标位于 pin 图标右侧，未 pin 行中位于相同的外侧边缘。竖标不参与 flex 布局，不减少标题、agent、时间或 pin 控件的可用宽度。项目列表和 Recent 显示并修改同一 Mark。
+
 ## 共享与生命周期
 
 Pin 状态由 Hub 持久化，并由连接同一 Hub 的客户端共享。发起 pin/unpin 的客户端使用请求响应立即更新；其他客户端不接收实时 pin 事件，在刷新或重新进入 project 时同步。
 
 Session reload 或 turn cursor reset 保留 pin。归档或删除 Session 会清除 pin；恢复归档 Session 后默认未 pin。请求失败时列表保留请求前状态并使用现有错误入口提示。
+
+Mark 使用相同的 Hub 持久化与同步边界，但其状态与 Pin 相互独立。Session reload、turn cursor reset 和 recorder 重建保留 Mark；归档或删除清除 Mark，恢复后默认无 Mark。Mark 请求失败时不改变本地颜色。

@@ -2459,9 +2459,9 @@ func TestReporterForwardsSessionRenameRequests(t *testing.T) {
 	}
 }
 
-func TestReporterForwardsSessionPinToProjectHandlerAndRequiresProjectID(t *testing.T) {
+func TestReporterForwardsSessionPinAndMarkToProjectHandlerAndRequiresProjectID(t *testing.T) {
 	reqSeen := make(chan struct{}, 1)
-	respSeen := make(chan testEnvelope, 2)
+	respSeen := make(chan testEnvelope, 3)
 	errSeen := make(chan error, 1)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -2527,10 +2527,22 @@ func TestReporterForwardsSessionPinToProjectHandlerAndRequiresProjectID(t *testi
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: 105,
 			Type:      "request",
-			Method:    rp.RegistryMethodSessionPin,
+			Method:    rp.RegistryMethodSessionMark,
+			ProjectID: "hub-session-pin:proj1",
 			Payload: map[string]any{
 				"sessionId": "sess-1",
-				"pinned":    false,
+				"markColor": "blue",
+			},
+		})
+		respSeen <- mustReadEnvelope(t, ws)
+
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: 106,
+			Type:      "request",
+			Method:    rp.RegistryMethodSessionMark,
+			Payload: map[string]any{
+				"sessionId": "sess-1",
+				"markColor": "",
 			},
 		})
 		respSeen <- mustReadEnvelope(t, ws)
@@ -2595,10 +2607,28 @@ func TestReporterForwardsSessionPinToProjectHandlerAndRequiresProjectID(t *testi
 	case err := <-errSeen:
 		t.Fatalf("fake registry error: %v", err)
 	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodSessionMark || resp.ProjectID != "hub-session-pin:proj1" {
+			t.Fatalf("unexpected session.mark response: %#v", resp)
+		}
+		if target.calls != 2 || target.lastMethod != rp.RegistryMethodSessionMark ||
+			target.lastProject != "hub-session-pin:proj1" || !strings.Contains(target.lastBody, `"markColor":"blue"`) {
+			t.Fatalf("target handler calls=%d method=%q project=%q body=%q", target.calls, target.lastMethod, target.lastProject, target.lastBody)
+		}
+		if other.calls != 0 {
+			t.Fatalf("other project handler calls=%d, want 0", other.calls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive session.mark response from reporter")
+	}
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
 		if resp.Type != "error" || resp.Payload["message"] != "projectId is required" {
 			t.Fatalf("missing projectId response=%#v", resp)
 		}
-		if target.calls != 1 || other.calls != 0 {
+		if target.calls != 2 || other.calls != 0 {
 			t.Fatalf("missing projectId routed to a handler: target=%d other=%d", target.calls, other.calls)
 		}
 	case <-time.After(2 * time.Second):

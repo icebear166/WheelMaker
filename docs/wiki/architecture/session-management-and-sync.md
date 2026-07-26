@@ -23,7 +23,9 @@ SQLite 只保存会话索引和热状态，不保存对话正文：
   "latestPersistedTurnIndex": 132,
   "lastDoneTurnIndex": 132,
   "lastDoneSuccess": true,
-  "lastReadTurnIndex": 128
+  "lastReadTurnIndex": 128,
+  "pinned": true,
+  "markColor": "blue"
 }
 ```
 
@@ -31,6 +33,8 @@ SQLite 只保存会话索引和热状态，不保存对话正文：
 - `lastDoneTurnIndex` 表示最近一个 `prompt_done` turn。
 - `lastDoneSuccess` 由 `prompt_done.param.stopReason !== "failed"` 推导。
 - `lastReadTurnIndex` 表示该 session 已被任意客户端查看到的最大 done turn。当前没有 viewer 概念，因此是 session 级全局 read cursor。
+- `pinned` 是活跃 Session 的共享置顶状态。
+- `markColor` 是独立于 Pin 的可选共享颜色标记，只允许 `red`、`yellow`、`green`、`blue`；缺失表示无 Mark。
 - 服务端列 session 时会再叠加内存中的 live turn，得到返回给客户端的 `latestTurnIndex`。
 
 ## 2. Turn 语义
@@ -194,7 +198,9 @@ ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 
 
 服务端把 `lastReadTurnIndex` 按 `max(old, incoming)` 写入 `session_sync_json`，并返回更新后的 session summary。客户端只在用户打开 session，或当前可见 session 收到 `prompt_done` 后调用；列表刷新和后台事件不能清 read cursor。
 
-`session.reload` 会清除该 session 的内存 turn state、删除该 session 的 turn 文件、把 `session_sync_json` 重置为 `latestPersistedTurnIndex=0`，然后从 agent replay 回灌。
+`session.reload` 会清除该 session 的内存 turn state、删除该 session 的 turn 文件、把 `session_sync_json` 的 turn/read/done cursor 重置后从 agent replay 回灌；`pinned` 与 `markColor` 作为独立 Session 元数据保留。
+
+`session.mark` 通过 project-scoped 请求更新 `markColor` 并返回权威 Session summary。空字符串清除 Mark；写入路径拒绝未知颜色。该操作不改变 `pinned`、`updated_at` 或列表排序，也不发布 `session.updated`。发起请求的客户端立即合并响应，其他客户端在下次 `session.list` 时同步。
 
 ## 5. App/Web 同步
 
@@ -311,6 +317,8 @@ permission turns 与所在 prompt 共用持久化边界。Hub 强关时尚未 te
 ```
 
 manifest 只保存索引和元信息，不保存 `agent_json`、`session_sync_json`、route binding 或图片信息。`restoredAt` 非空表示该归档记录已恢复，`session.archive.list` 不再返回。`nativeArchivedAt`、`nativeUnarchivedAt` 和 `nativeSyncWarning` 只记录 agent 原生归档同步的 best-effort 结果，不改变 WheelMaker 归档 source of truth。
+
+由于归档 manifest 不保存 `session_sync_json`，Pin 与 Mark 都不会进入冷归档；归档或删除清除这些活跃 Session 元数据，恢复后的 Session 默认未 pin 且无 Mark。
 
 ### 7.2 Pack Segment
 

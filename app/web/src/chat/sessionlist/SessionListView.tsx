@@ -1,4 +1,5 @@
 import React, {type ReactNode} from 'react';
+import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
 import {SessionRow, DraftSessionRow, type SessionRowGestureHandlers} from './SessionRow';
 import {ProjectSection} from './ProjectSection';
 import {RecentSessionsSection, type RecentGroup} from './RecentSessionsSection';
@@ -16,6 +17,7 @@ type AnySession = {
   title?: string;
   agentType?: string;
   pinned?: boolean;
+  markColor?: RegistrySessionMarkColor;
   updatedAt?: string;
   forkedFrom?: {sessionId: string; turnIndex: number; title?: string};
 };
@@ -117,6 +119,7 @@ export function SessionListView(props: SessionListViewProps) {
         forked={!!session.forkedFrom}
         pinned={session.pinned === true}
         pinning={props.pinningSessionKey === props.sessionActionKey(projectId, session.sessionId)}
+        markColor={session.markColor}
         recent={recent}
         leadingState={props.renderLeadingState(session, projectId)}
         gestureHandlers={{

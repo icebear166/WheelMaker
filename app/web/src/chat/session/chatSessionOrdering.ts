@@ -49,6 +49,7 @@ function mergeSessionSummary(
   existing: RegistryChatSession | undefined,
   next: Partial<RegistryChatSession> & {sessionId: string},
 ): RegistryChatSession {
+  const hasMarkColor = Object.prototype.hasOwnProperty.call(next, 'markColor');
   return {
     sessionId: next.sessionId,
     title: next.title ?? existing?.title ?? '',
@@ -64,6 +65,7 @@ function mergeSessionSummary(
     lastDoneSuccess: next.lastDoneSuccess ?? existing?.lastDoneSuccess,
     lastReadTurnIndex: next.lastReadTurnIndex ?? existing?.lastReadTurnIndex,
     pinned: next.pinned ?? existing?.pinned ?? false,
+    markColor: hasMarkColor ? next.markColor : existing?.markColor,
     pendingPermissionCount: next.pendingPermissionCount ?? existing?.pendingPermissionCount ?? 0,
     configOptions: next.configOptions ?? existing?.configOptions,
     commands: next.commands ?? existing?.commands,

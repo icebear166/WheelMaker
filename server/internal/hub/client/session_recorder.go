@@ -51,6 +51,7 @@ type sessionViewSummary struct {
 	LastDoneSuccess        bool                          `json:"lastDoneSuccess"`
 	LastReadTurnIndex      int64                         `json:"lastReadTurnIndex"`
 	Pinned                 bool                          `json:"pinned"`
+	MarkColor              string                        `json:"markColor,omitempty"`
 	ConfigOptions          []acp.ConfigOption            `json:"configOptions,omitempty"`
 	Usage                  *acp.SessionUsage             `json:"usage,omitempty"`
 	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
@@ -70,6 +71,7 @@ type sessionSyncProjection struct {
 	LastDoneSuccess          *bool                  `json:"lastDoneSuccess,omitempty"`
 	LastReadTurnIndex        int64                  `json:"lastReadTurnIndex,omitempty"`
 	Pinned                   bool                   `json:"pinned,omitempty"`
+	MarkColor                string                 `json:"markColor,omitempty"`
 	ForkedFrom               *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
 }
 
@@ -837,6 +839,39 @@ func (r *SessionRecorder) SetSessionPinned(ctx context.Context, sessionID string
 	return r.sessionViewSummaryFromRecord(*rec), nil
 }
 
+func validateSessionMarkColor(markColor string) error {
+	switch markColor {
+	case "", "red", "yellow", "green", "blue":
+		return nil
+	default:
+		return fmt.Errorf("invalid markColor: %q", markColor)
+	}
+}
+
+func (r *SessionRecorder) SetSessionMarkColor(ctx context.Context, sessionID, markColor string) (sessionViewSummary, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return sessionViewSummary{}, fmt.Errorf("sessionId is required")
+	}
+	if err := validateSessionMarkColor(markColor); err != nil {
+		return sessionViewSummary{}, err
+	}
+	rec, err := r.store.LoadSession(ctx, r.projectName, sessionID)
+	if err != nil {
+		return sessionViewSummary{}, err
+	}
+	if rec == nil {
+		return sessionViewSummary{}, fmt.Errorf("session not found: %s", sessionID)
+	}
+	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+	projection.MarkColor = markColor
+	rec.SessionSyncJSON = sessionSyncProjectionJSON(projection)
+	if err := r.store.SaveSession(ctx, rec); err != nil {
+		return sessionViewSummary{}, err
+	}
+	return r.sessionViewSummaryFromRecord(*rec), nil
+}
+
 func (r *SessionRecorder) RenameSessionTitle(ctx context.Context, sessionID string, title string) (sessionViewSummary, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -1190,6 +1225,7 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		projection.LastReadTurnIndex,
 	)
 	summary.Pinned = projection.Pinned
+	summary.MarkColor = projection.MarkColor
 	summary.ForkedFrom = cloneSessionForkOrigin(projection.ForkedFrom)
 	var agentState SessionAgentState
 	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil {
