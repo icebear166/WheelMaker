@@ -2724,17 +2724,49 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.recent-project-session-hub.wide-project-hub-tag');
   });
 
-  test('centers direct session icons and gives Sessions six more pixels of left inset', () => {
+  test('scopes icon-only padding resets without collapsing icon-and-label button spacing', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
-    const iconButtonReset = cssRuleBlock(stylesCss, 'button:has(> .sl-icon:only-child)');
+    const baseCss = readSourceText(
+      path.join(projectRoot, 'web', 'src', 'styles', 'base.css'),
+    );
+
+    expect(baseCss).not.toContain('button:has(> .sl-icon:only-child)');
+    for (const selector of [
+      '.wide-project-action-btn',
+      '.recent-project-divider-create',
+      '.session-search-icon-btn',
+      '.chat-title-project-menu-create',
+      '.chat-session-global-bar-btn',
+      '.draft-session-dismiss',
+      '.mobile-project-sheet-close',
+      '.app-session-status-close',
+      '.mobile-settings-back',
+    ]) {
+      const iconButtonRule =
+        cssRuleBlocksContainingSelector(stylesCss, selector).find(block =>
+          block.includes('appearance: none;'),
+        ) ?? '';
+      expect(iconButtonRule).toContain('appearance: none;');
+      expect(iconButtonRule).toContain('padding: 0;');
+    }
+    expect(cssRuleBlock(stylesCss, '.app-confirm-btn')).toContain(
+      'padding: 0 12px;',
+    );
+    expect(cssRuleBlock(stylesCss, '.set-btn')).toContain('padding: 0 12px;');
+    expect(cssRuleBlock(stylesCss, '.set-btn--lg')).toContain(
+      'padding: 0 14px;',
+    );
+  });
+
+  test('gives Sessions six more pixels of left inset', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
     const pinnedHeaderRule = cssRuleBlockContainingSelector(
       stylesCss,
       '.chat-session-panel-pinned .chat-edge-surface-header',
     );
 
-    expect(iconButtonReset).toContain('appearance: none;');
-    expect(iconButtonReset).toContain('padding: 0;');
     expect(pinnedHeaderRule).toContain('padding-left: 17px;');
   });
 });

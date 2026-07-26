@@ -287,9 +287,11 @@
 }
 
 .chat-title-project-menu-create {
+  appearance: none;
   flex: 0 0 auto;
   width: 30px;
   height: 30px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -699,9 +701,11 @@
 }
 
 .session-search-icon-btn {
+  appearance: none;
   flex: 0 0 auto;
   width: 24px;
   height: 24px;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
@@ -1101,11 +1105,13 @@
 }
 
 .draft-session-dismiss {
+  appearance: none;
   position: absolute;
   right: 4px;
   top: 50%;
   width: 20px;
   height: 20px;
+  padding: 0;
   border: none;
   border-radius: 5px;
   background: transparent;
@@ -2464,11 +2470,13 @@
 }
 
 .chat-session-global-bar-btn {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
+  padding: 0;
   border: none;
   border-radius: 4px;
   background: transparent;

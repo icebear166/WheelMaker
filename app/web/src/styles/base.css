@@ -11,11 +11,6 @@ button,
   -webkit-tap-highlight-color: transparent;
 }
 
-button:has(> .sl-icon:only-child) {
-  appearance: none;
-  padding: 0;
-}
-
 :where(
   button,
   select,
