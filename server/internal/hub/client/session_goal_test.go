@@ -68,6 +68,26 @@ func TestSessionSendGoalRecordsRawCommandWithoutPromptingAgent(t *testing.T) {
 	}
 }
 
+func TestSessionGoalCreateRejectsNonPositiveBudget(t *testing.T) {
+	client, _, runtime := newGoalTestClient(t, "session-goal-invalid-budget")
+	_, err := client.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionGoalCreate,
+		"test",
+		json.RawMessage(mustJSON(map[string]any{
+			"sessionId":   "session-goal-invalid-budget",
+			"objective":   "Ship release",
+			"tokenBudget": -1,
+		})),
+	)
+	if err == nil || !strings.Contains(err.Error(), "positive") {
+		t.Fatalf("session.goal.create error = %v", err)
+	}
+	if len(runtime.goalSetCalls) != 0 {
+		t.Fatalf("invalid budget reached provider: %#v", runtime.goalSetCalls)
+	}
+}
+
 func TestSessionGoalDoesNotBecomeIdleBetweenNativeTurns(t *testing.T) {
 	client, session, _ := newGoalTestClient(t, "session-goal-turns")
 	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(mustJSON(map[string]any{
@@ -262,6 +282,72 @@ func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
 		client.HasSessionInMemoryForTest("goal-paused") ||
 		client.HasSessionInMemoryForTest("goal-complete") {
 		t.Fatal("restore materialized the wrong Goal sessions")
+	}
+}
+
+func TestClientRecoversActiveGoalAfterAgentRuntimeStops(t *testing.T) {
+	client, session, stoppedRuntime := newGoalTestClient(t, "goal-runtime-reconnect")
+	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(mustJSON(map[string]any{
+		"sessionId": "goal-runtime-reconnect",
+		"text":      "/goal ship",
+	})))
+	if err != nil {
+		t.Fatalf("session.send: %v", err)
+	}
+	session.SessionUpdate(acp.SessionUpdateParams{
+		SessionID: "goal-runtime-reconnect",
+		Update: acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateGoalTurnStarted,
+			TurnID:        "stopped-turn",
+		},
+	})
+
+	reloaded := make(chan struct{}, 1)
+	replacement := &testInjectedInstance{
+		name:  string(acp.ACPProviderCodex),
+		alive: true,
+		initResult: acp.InitializeResult{
+			ProtocolVersion: "1",
+			AgentCapabilities: acp.AgentCapabilities{
+				LoadSession: true,
+			},
+		},
+		goal: runtimeGoalForTest(t, session),
+	}
+	client.InjectAgentFactory(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) {
+		return &goalRestoreCountingInstance{
+			testInjectedInstance: replacement,
+			onLoad: func(sessionID string) {
+				if sessionID != "goal-runtime-reconnect" {
+					t.Errorf("SessionLoad session ID = %q", sessionID)
+				}
+				reloaded <- struct{}{}
+			},
+		}, nil
+	})
+
+	stoppedRuntime.alive = false
+	client.recoverActiveGoals(context.Background())
+
+	select {
+	case <-reloaded:
+	default:
+		t.Fatal("active Goal runtime was not reloaded")
+	}
+	session.mu.Lock()
+	current := session.instance
+	status := session.agentState.Goal.Status
+	kind := session.executionKind
+	turnActive := session.goal.turnActive
+	session.mu.Unlock()
+	if current == stoppedRuntime {
+		t.Fatal("stopped runtime remained attached")
+	}
+	if status != acp.SessionGoalStatusActive || kind != sessionGoalExecutionKind {
+		t.Fatalf("recovered Goal status=%q execution=%q", status, kind)
+	}
+	if turnActive {
+		t.Fatal("stopped runtime left its physical Goal turn active")
 	}
 }
 

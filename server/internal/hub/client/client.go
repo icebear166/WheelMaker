@@ -67,6 +67,7 @@ type Client struct {
 	// being persisted to SQLite and evicted. Default: 5 minutes.
 	suspendTimeout time.Duration
 	stopPersistCh  chan struct{} // closed to stop the persist timer goroutine
+	backgroundWG   sync.WaitGroup
 
 	sessionRecorder *SessionRecorder
 	archiveStore    *sessionArchiveStore
@@ -213,7 +214,11 @@ func (c *Client) Start(ctx context.Context) error {
 		return fmt.Errorf("client: ensure project row: %w", err)
 	}
 	c.restoreActiveGoals(ctx)
-	go c.persistLoop()
+	c.backgroundWG.Add(1)
+	go func() {
+		defer c.backgroundWG.Done()
+		c.persistLoop()
+	}()
 	return nil
 }
 
@@ -266,6 +271,9 @@ func (c *Client) restoreActiveGoals(ctx context.Context) {
 		if controller, ok := instance.(agent.SessionGoalController); ok {
 			goal, getErr := controller.SessionGoalGet(ctx, sessionID)
 			if getErr != nil {
+				session.mu.Lock()
+				session.goal.recoveryPending = true
+				session.mu.Unlock()
 				hubLogger(c.projectName).Warn("reconcile active goal session=%s err=%v", record.ID, getErr)
 			} else if goal == nil {
 				session.applyGoalCleared()
@@ -290,6 +298,7 @@ func (c *Client) Close() error {
 	default:
 		close(c.stopPersistCh)
 	}
+	c.backgroundWG.Wait()
 	if c.sessionSearch != nil {
 		c.sessionSearch.Close()
 	}
@@ -2266,16 +2275,22 @@ func (c *Client) clientListSessions() ([]SessionRecord, error) {
 	return c.ListSessions(context.Background())
 }
 
-// persistLoop periodically scans for Suspended sessions and evicts old ones from memory.
+// persistLoop evicts stale suspended sessions and reconnects active Goals.
 func (c *Client) persistLoop() {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+	persistTicker := time.NewTicker(1 * time.Minute)
+	goalTicker := time.NewTicker(2 * time.Second)
+	defer persistTicker.Stop()
+	defer goalTicker.Stop()
 	for {
 		select {
 		case <-c.stopPersistCh:
 			return
-		case <-ticker.C:
+		case <-persistTicker.C:
 			c.evictSuspendedSessions()
+		case <-goalTicker.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			c.recoverActiveGoals(ctx)
+			cancel()
 		}
 	}
 }

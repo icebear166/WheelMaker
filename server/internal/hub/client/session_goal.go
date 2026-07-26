@@ -19,6 +19,7 @@ type sessionGoalState struct {
 	continuationCount    int
 	releaseAfterTurn     bool
 	suppressPromptResult bool
+	recoveryPending      bool
 }
 
 func cloneSessionGoal(goal *acp.SessionGoal) *acp.SessionGoal {
@@ -71,6 +72,13 @@ func validateGoalObjective(objective string) (string, error) {
 	return objective, nil
 }
 
+func validateGoalTokenBudget(tokenBudget acp.OptionalInt64) error {
+	if tokenBudget.Present && tokenBudget.Value != nil && *tokenBudget.Value <= 0 {
+		return fmt.Errorf("tokenBudget must be positive or null")
+	}
+	return nil
+}
+
 func goalBlocks(raw string) []acp.ContentBlock {
 	return []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: raw}}
 }
@@ -92,6 +100,9 @@ func (s *Session) CreateGoalFromCommand(
 ) (acp.SessionGoal, error) {
 	objective, err := validateGoalObjective(objective)
 	if err != nil {
+		return acp.SessionGoal{}, err
+	}
+	if err := validateGoalTokenBudget(tokenBudget); err != nil {
 		return acp.SessionGoal{}, err
 	}
 	s.mu.Lock()
@@ -157,8 +168,8 @@ func (s *Session) UpdateGoal(ctx context.Context, patch acp.SessionGoalSetParams
 		}
 		patch.Objective = &objective
 	}
-	if patch.TokenBudget.Present && patch.TokenBudget.Value != nil && *patch.TokenBudget.Value <= 0 {
-		return acp.SessionGoal{}, fmt.Errorf("tokenBudget must be positive or null")
+	if err := validateGoalTokenBudget(patch.TokenBudget); err != nil {
+		return acp.SessionGoal{}, err
 	}
 	if patch.Status != nil && *patch.Status != acp.SessionGoalStatusActive && *patch.Status != acp.SessionGoalStatusPaused {
 		return acp.SessionGoal{}, fmt.Errorf("goal status can only be active or paused")
@@ -251,6 +262,100 @@ func (s *Session) goalController(ctx context.Context) (agent.SessionGoalControll
 		return nil, "", agent.ErrSessionActionUnsupported
 	}
 	return controller, sessionID, nil
+}
+
+func (c *Client) recoverActiveGoals(ctx context.Context) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	sessions := make([]*Session, 0, len(c.sessions))
+	for _, session := range c.sessions {
+		sessions = append(sessions, session)
+	}
+	c.mu.Unlock()
+
+	for _, session := range sessions {
+		if err := session.recoverActiveGoal(ctx); err != nil {
+			hubLogger(c.projectName).Warn("recover active goal session=%s err=%v", session.acpSessionID, err)
+		}
+	}
+}
+
+func (s *Session) recoverActiveGoal(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	goalActive := s.Status == SessionActive &&
+		s.agentState.Goal != nil &&
+		s.agentState.Goal.Status == acp.SessionGoalStatusActive
+	instance := s.instance
+	ready := s.ready
+	kind := s.executionKind
+	recoveryPending := s.goal.recoveryPending
+	s.mu.Unlock()
+	if !goalActive {
+		return nil
+	}
+
+	alive := instance != nil && s.agentProcessAlive()
+	if alive && ready && !recoveryPending {
+		return nil
+	}
+	if kind != "" && kind != sessionGoalExecutionKind {
+		return nil
+	}
+	if kind == "" {
+		if err := s.beginExecution(sessionGoalExecutionKind); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		if s.goal.continuationCount == 0 {
+			s.goal.continuationCount = 1
+		}
+		s.mu.Unlock()
+	}
+
+	s.mu.Lock()
+	s.goal.recoveryPending = true
+	s.mu.Unlock()
+	if instance != nil && !alive {
+		s.mu.Lock()
+		s.goal.turnActive = false
+		s.goal.turnID = ""
+		s.goal.releaseAfterTurn = false
+		s.mu.Unlock()
+		s.resetDeadConnection(fmt.Errorf("agent process exited"))
+	}
+	if err := s.ensureInstance(ctx); err != nil {
+		return err
+	}
+	if err := s.ensureReadyAndNotify(ctx); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	instance = s.instance
+	sessionID := s.acpSessionID
+	s.mu.Unlock()
+	controller, ok := instance.(agent.SessionGoalController)
+	if !ok {
+		return agent.ErrSessionActionUnsupported
+	}
+	goal, err := controller.SessionGoalGet(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.goal.recoveryPending = false
+	s.mu.Unlock()
+	if goal == nil {
+		s.applyGoalCleared()
+		return nil
+	}
+	s.applyGoalSnapshot(goal)
+	return nil
 }
 
 func (s *Session) rollbackGoalOwnership(acquired bool, upgraded bool) {
