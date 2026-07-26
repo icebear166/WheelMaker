@@ -2645,6 +2645,38 @@ func TestInstanceSteerDelegatesToOptionalConnection(t *testing.T) {
 	}
 }
 
+func TestInstanceSessionGoalController(t *testing.T) {
+	conn := &fakeGoalConn{goal: protocol.SessionGoal{
+		SessionID: "session-1",
+		Objective: "ship",
+		Status:    protocol.SessionGoalStatusActive,
+	}}
+	inst := NewInstance("test", conn)
+	controller, ok := inst.(SessionGoalController)
+	if !ok {
+		t.Fatalf("instance type %T does not implement SessionGoalController", inst)
+	}
+	got, err := controller.SessionGoalGet(context.Background(), "session-1")
+	if err != nil {
+		t.Fatalf("SessionGoalGet(): %v", err)
+	}
+	if got == nil || got.Objective != "ship" {
+		t.Fatalf("SessionGoalGet() = %#v", got)
+	}
+}
+
+func TestInstanceSessionGoalControllerUnsupported(t *testing.T) {
+	inst := NewInstance("test", &fakeRawConn{})
+	controller, ok := inst.(SessionGoalController)
+	if !ok {
+		t.Fatalf("instance type %T does not implement SessionGoalController", inst)
+	}
+	_, err := controller.SessionGoalGet(context.Background(), "session-1")
+	if !errors.Is(err, ErrSessionActionUnsupported) {
+		t.Fatalf("SessionGoalGet() error = %v", err)
+	}
+}
+
 func setActiveCodexPromptForTest(conn *codexappConn, turnID string) {
 	conn.mu.Lock()
 	conn.promptDone = make(chan codexappPromptResult, 1)
@@ -4966,6 +4998,26 @@ type fakeSteerConn struct {
 	sessionID       string
 	clientMessageID string
 	blocks          []protocol.ContentBlock
+}
+
+type fakeGoalConn struct {
+	fakeRawConn
+	goal protocol.SessionGoal
+}
+
+func (f *fakeGoalConn) SessionGoalSet(_ context.Context, params protocol.SessionGoalSetParams) (protocol.SessionGoal, error) {
+	f.goal.SessionID = params.SessionID
+	return f.goal, nil
+}
+
+func (f *fakeGoalConn) SessionGoalGet(_ context.Context, _ string) (*protocol.SessionGoal, error) {
+	goal := f.goal
+	return &goal, nil
+}
+
+func (f *fakeGoalConn) SessionGoalClear(_ context.Context, _ string) error {
+	f.goal = protocol.SessionGoal{}
+	return nil
 }
 
 func (f *fakeSteerConn) SteerSession(

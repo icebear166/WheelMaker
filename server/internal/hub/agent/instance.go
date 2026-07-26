@@ -68,6 +68,12 @@ type SessionCompactor interface {
 	CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error)
 }
 
+type SessionGoalController interface {
+	SessionGoalSet(context.Context, protocol.SessionGoalSetParams) (protocol.SessionGoal, error)
+	SessionGoalGet(context.Context, string) (*protocol.SessionGoal, error)
+	SessionGoalClear(context.Context, string) error
+}
+
 func (i *instance) SteerSession(
 	ctx context.Context,
 	sessionID string,
@@ -328,6 +334,39 @@ func (i *instance) CompactSession(ctx context.Context, sessionID string) (<-chan
 		return nil, ErrSessionActionUnsupported
 	}
 	return compactor.CompactSession(ctx, sessionID)
+}
+
+func (i *instance) SessionGoalSet(ctx context.Context, params protocol.SessionGoalSetParams) (protocol.SessionGoal, error) {
+	if err := i.ensureConn(); err != nil {
+		return protocol.SessionGoal{}, err
+	}
+	controller, ok := i.conn.(SessionGoalController)
+	if !ok {
+		return protocol.SessionGoal{}, ErrSessionActionUnsupported
+	}
+	return controller.SessionGoalSet(ctx, params)
+}
+
+func (i *instance) SessionGoalGet(ctx context.Context, sessionID string) (*protocol.SessionGoal, error) {
+	if err := i.ensureConn(); err != nil {
+		return nil, err
+	}
+	controller, ok := i.conn.(SessionGoalController)
+	if !ok {
+		return nil, ErrSessionActionUnsupported
+	}
+	return controller.SessionGoalGet(ctx, sessionID)
+}
+
+func (i *instance) SessionGoalClear(ctx context.Context, sessionID string) error {
+	if err := i.ensureConn(); err != nil {
+		return err
+	}
+	controller, ok := i.conn.(SessionGoalController)
+	if !ok {
+		return ErrSessionActionUnsupported
+	}
+	return controller.SessionGoalClear(ctx, sessionID)
 }
 
 func (i *instance) ResolveForkPoints(ctx context.Context, sessionID string, prompts []protocol.SessionForkPrompt) (map[int64]protocol.SessionForkPoint, error) {
