@@ -65,6 +65,10 @@ const GLYPHS = {
   arrowRight: (<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>),
   // lucide:circle
   circle: (<><circle cx="12" cy="12" r="10" /></>),
+  // lucide:target
+  target: (<><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>),
+  // lucide:pause
+  pause: (<><rect width="5" height="18" x="14" y="3" rx="1" /><rect width="5" height="18" x="5" y="3" rx="1" /></>),
   // lucide:play
   play: (<><path d="m6 3 14 9-14 9z" /></>),
   // lucide:square
