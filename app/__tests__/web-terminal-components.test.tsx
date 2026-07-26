@@ -154,6 +154,52 @@ describe('terminal components', () => {
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalled();
   });
 
+  test('starts xterm with the light terminal palette in light mode', async () => {
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView themeMode="light" active resizeEnabled cols={80} rows={24}
+          onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+
+    expect(mockTerminalInstances[0].options).toMatchObject({
+      theme: {
+        background: '#ffffff',
+        foreground: '#242424',
+        cursor: '#242424',
+      },
+    });
+  });
+
+  test('updates the xterm palette when the app theme changes', async () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView themeMode="dark" active resizeEnabled cols={80} rows={24}
+          onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+
+    await act(async () => {
+      renderer!.update(
+        <TerminalView themeMode="light" active resizeEnabled cols={80} rows={24}
+          onInput={jest.fn()} onResize={jest.fn()} />,
+      );
+    });
+
+    expect(mockTerminalInstances).toHaveLength(1);
+    expect(xterm.options).toMatchObject({
+      theme: {
+        background: '#ffffff',
+        foreground: '#242424',
+        cursor: '#242424',
+      },
+    });
+  });
+
   test('lets the browser copy Ctrl+C when terminal text is selected', async () => {
     const onCopy = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;

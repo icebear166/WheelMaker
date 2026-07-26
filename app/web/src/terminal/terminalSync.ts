@@ -168,26 +168,29 @@ export function applyTerminalSnapshot(
   } catch {
     return requestRefresh(state, key, current);
   }
+  const unavailableHubIds = {...state.unavailableHubIds};
+  delete unavailableHubIds[hubId];
+  const availableState = {...state, unavailableHubIds};
   const effects: TerminalEffect[] = [{kind: 'reset', terminalKey: key, data: snapshotData}];
   let expectedSeq = snapshot.snapshotSeq + 1;
   for (const event of current.buffered) {
     if (event.runId !== snapshot.terminal.runId) {
-      return snapshotGap(state, key, snapshot.terminal, expectedSeq, effects);
+      return snapshotGap(availableState, key, snapshot.terminal, expectedSeq, effects);
     }
     if (event.seq < expectedSeq) continue;
     if (event.seq > expectedSeq) {
-      return snapshotGap(state, key, snapshot.terminal, expectedSeq, effects);
+      return snapshotGap(availableState, key, snapshot.terminal, expectedSeq, effects);
     }
     try {
       effects.push({kind: 'write', terminalKey: key, data: base64ToBytes(event.data)});
     } catch {
-      return snapshotGap(state, key, snapshot.terminal, expectedSeq, effects);
+      return snapshotGap(availableState, key, snapshot.terminal, expectedSeq, effects);
     }
     expectedSeq += 1;
   }
   return {
     state: {
-      ...withAttachment(state, key, {
+      ...withAttachment(availableState, key, {
         runId: snapshot.terminal.runId,
         expectedSeq,
         loading: false,
@@ -195,7 +198,7 @@ export function applyTerminalSnapshot(
         buffered: [],
         bufferedBytes: 0,
       }),
-      terminals: {...state.terminals, [key]: snapshot.terminal},
+      terminals: {...availableState.terminals, [key]: snapshot.terminal},
     },
     effects,
   };

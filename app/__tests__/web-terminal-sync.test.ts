@@ -52,6 +52,30 @@ describe('terminal synchronization', () => {
     expect(canSendTerminalInput(state, 'hub-a:t1', true)).toBe(false);
   });
 
+  test('clears a stale unavailable marker after a successful terminal snapshot', () => {
+    let state = mergeTerminalLists(createTerminalSyncState(), [{hubId: 'hub-a', terminals: [terminal()]}]);
+    state = markTerminalsUnavailable(state, ['hub-a']);
+    state = applyTerminalSnapshot(beginTerminalSnapshot(state, 'hub-a', 't1'), 'hub-a', {
+      terminal: terminal(), snapshotSeq: 0, snapshot: '',
+    }).state;
+
+    expect(state.unavailableHubIds['hub-a']).toBeUndefined();
+    expect(canSendTerminalInput(state, 'hub-a:t1', true)).toBe(true);
+  });
+
+  test('clears a stale unavailable marker when a successful snapshot still needs gap recovery', () => {
+    let state = mergeTerminalLists(createTerminalSyncState(), [{hubId: 'hub-a', terminals: [terminal()]}]);
+    state = markTerminalsUnavailable(state, ['hub-a']);
+    state = beginTerminalSnapshot(state, 'hub-a', 't1');
+    state = receiveTerminalOutput(state, 'hub-a', output(2)).state;
+    const result = applyTerminalSnapshot(state, 'hub-a', {
+      terminal: terminal(), snapshotSeq: 0, snapshot: '',
+    });
+
+    expect(result.state.unavailableHubIds['hub-a']).toBeUndefined();
+    expect(result.effects.at(-1)).toEqual({kind: 'refresh', terminalKey: 'hub-a:t1'});
+  });
+
   test('applies changed metadata and removes closed terminals', () => {
     let state = mergeTerminalLists(createTerminalSyncState(), [{hubId: 'hub-a', terminals: [terminal()]}]);
     state = applyTerminalChanged(state, 'hub-a', {

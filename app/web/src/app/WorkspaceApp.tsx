@@ -3082,6 +3082,7 @@ export function App() {
   const terminalResizeTokensRef = useRef(new Map<string, string>());
   const terminalResizeClaimsRef = useRef(new Set<string>());
   const terminalRefreshInFlightRef = useRef(new Set<string>());
+  const terminalListRefreshInFlightRef = useRef(new Set<string>());
   const terminalRefreshRef = useRef<(key: string) => Promise<void>>(async () => undefined);
   const [terminalPanelHeight, setTerminalPanelHeight] = useState(280);
   const terminalPanelResizeRef = useRef<{pointerId: number; originY: number; startHeight: number} | null>(null);
@@ -14253,21 +14254,32 @@ export function App() {
   terminalRefreshRef.current = refreshTerminal;
 
   const refreshTerminalLists = useCallback(async (hubs: RegistryHub[]) => {
-    const hubIds = deriveRegistryHubIds(hubs);
-    const results = await Promise.allSettled(hubIds.map(hubId => service.listTerminals(hubId)));
-    const successful = results.flatMap((result, index) => result.status === 'fulfilled'
-      ? [{hubId: hubIds[index], terminals: result.value.terminals}]
-      : []);
-    const failedHubIds = results.flatMap((result, index) => result.status === 'rejected' ? [hubIds[index]] : []);
-    let next = mergeTerminalLists(terminalSyncRef.current, successful);
-    if (failedHubIds.length > 0) next = markTerminalsUnavailable(next, failedHubIds);
-    commitTerminalSync(next);
-    const currentKey = activeTerminalKeyRef.current;
-    const selectedKey = currentKey && next.terminals[currentKey]
-      ? currentKey
-      : Object.keys(next.terminals)[0] ?? '';
-    activeTerminalKeyRef.current = selectedKey;
-    setActiveTerminalKey(selectedKey);
+    const hubIds = deriveRegistryHubIds(hubs).filter(hubId => {
+      if (terminalListRefreshInFlightRef.current.has(hubId)) return false;
+      terminalListRefreshInFlightRef.current.add(hubId);
+      return true;
+    });
+    if (hubIds.length === 0) return;
+    try {
+      const results = await Promise.allSettled(hubIds.map(hubId => service.listTerminals(hubId)));
+      const successful = results.flatMap((result, index) => result.status === 'fulfilled'
+        ? [{hubId: hubIds[index], terminals: result.value.terminals}]
+        : []);
+      const failedHubIds = results.flatMap((result, index) => result.status === 'rejected' ? [hubIds[index]] : []);
+      let next = mergeTerminalLists(terminalSyncRef.current, successful);
+      if (failedHubIds.length > 0) next = markTerminalsUnavailable(next, failedHubIds);
+      commitTerminalSync(next);
+      const currentKey = activeTerminalKeyRef.current;
+      const selectedKey = currentKey && next.terminals[currentKey]
+        ? currentKey
+        : Object.keys(next.terminals)[0] ?? '';
+      activeTerminalKeyRef.current = selectedKey;
+      setActiveTerminalKey(selectedKey);
+    } finally {
+      for (const hubId of hubIds) {
+        terminalListRefreshInFlightRef.current.delete(hubId);
+      }
+    }
   }, [commitTerminalSync]);
 
   useEffect(() => {
@@ -15223,6 +15235,13 @@ export function App() {
         });
         if (!eventProjectId || reportedProjectId === projectIdRef.current) {
           setHasPendingProjectUpdates(true);
+        }
+        if (
+          nextProject.online &&
+          reportedHubId &&
+          terminalSyncRef.current.unavailableHubIds[reportedHubId]
+        ) {
+          refreshTerminalLists([{hubId: reportedHubId}]).catch(() => undefined);
         }
         return;
       }
@@ -18804,6 +18823,7 @@ export function App() {
                     <TerminalView
                       key={activeTerminalKey}
                       ref={terminalViewRef}
+                      themeMode={themeMode}
                       active
                       resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
                       cols={activeTerminal.cols}
@@ -20355,6 +20375,7 @@ export function App() {
           <TerminalView
             key={`mobile:${activeTerminalKey}`}
             ref={terminalViewRef}
+            themeMode={themeMode}
             active
             resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
             cols={activeTerminal.cols}

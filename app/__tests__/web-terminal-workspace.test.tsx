@@ -148,6 +148,14 @@ describe('terminal workspace integration', () => {
     expect(source).not.toContain('workspaceStore.rememberTerminal');
   });
 
+  test('refreshes an unavailable terminal Hub when an online project report arrives', () => {
+    const source = read('web/src/app/WorkspaceApp.tsx');
+    expect(source).toContain('terminalListRefreshInFlightRef');
+    expect(source).toContain('nextProject.online &&');
+    expect(source).toContain('terminalSyncRef.current.unavailableHubIds[reportedHubId]');
+    expect(source).toContain('refreshTerminalLists([{hubId: reportedHubId}]).catch(() => undefined);');
+  });
+
   test('shows the global toast after terminal text is copied', () => {
     const source = read('web/src/app/WorkspaceApp.tsx');
     expect(source).toContain("const handleTerminalCopy = () => setToastMessage('Copied to clipboard.');");
@@ -191,6 +199,27 @@ describe('terminal workspace integration', () => {
     expect(terminalCss).toContain('display: inline-flex;');
     expect(terminalCss).toContain('width: 32px;');
     expect(terminalCss).toContain('height: 32px;');
+  });
+
+  test('uses the danger state color for an unavailable terminal', () => {
+    const terminalCss = read('web/src/styles/terminal.css');
+    expect(terminalCss).toContain('.terminal-status.unavailable { background: var(--state-danger); }');
+    expect(terminalCss).not.toContain('.terminal-status.unavailable { background: #d8a34c; }');
+  });
+
+  test('passes the current app theme to desktop and mobile terminals', () => {
+    const source = read('web/src/app/WorkspaceApp.tsx');
+    const terminalViews = source.match(/<TerminalView\s[\s\S]*?\/>/g) ?? [];
+    expect(terminalViews).toHaveLength(2);
+    terminalViews.forEach(view => expect(view).toContain('themeMode={themeMode}'));
+  });
+
+  test('uses app theme tokens throughout the terminal chrome', () => {
+    const terminalCss = read('web/src/styles/terminal.css');
+    expect(terminalCss).toContain('background: var(--surface-workspace-content);');
+    expect(terminalCss).toContain('background: var(--surface-sidebar);');
+    expect(terminalCss).toContain('color: var(--text-primary);');
+    expect(terminalCss).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 
   test('automatically claims changed focused dimensions and recovers a stale resize token', () => {

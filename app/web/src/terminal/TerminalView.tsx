@@ -1,7 +1,60 @@
 import React, {forwardRef, useEffect, useImperativeHandle, useRef, useState} from 'react';
-import {Terminal} from '@xterm/xterm';
+import {Terminal, type ITheme} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
 import {Icon} from '../common/Icon';
+
+export type TerminalThemeMode = 'dark' | 'light';
+
+const TERMINAL_THEMES: Record<TerminalThemeMode, ITheme> = {
+  dark: {
+    background: '#1e1e1e',
+    foreground: '#dedede',
+    cursor: '#dedede',
+    cursorAccent: '#1e1e1e',
+    selectionBackground: '#264f78',
+    selectionInactiveBackground: '#3a3d41',
+    black: '#000000',
+    red: '#cd3131',
+    green: '#0dbc79',
+    yellow: '#e5e510',
+    blue: '#2472c8',
+    magenta: '#bc3fbc',
+    cyan: '#11a8cd',
+    white: '#e5e5e5',
+    brightBlack: '#666666',
+    brightRed: '#f14c4c',
+    brightGreen: '#23d18b',
+    brightYellow: '#f5f543',
+    brightBlue: '#3b8eea',
+    brightMagenta: '#d670d6',
+    brightCyan: '#29b8db',
+    brightWhite: '#e5e5e5',
+  },
+  light: {
+    background: '#ffffff',
+    foreground: '#242424',
+    cursor: '#242424',
+    cursorAccent: '#ffffff',
+    selectionBackground: '#add6ff',
+    selectionInactiveBackground: '#e5ebf1',
+    black: '#000000',
+    red: '#cd3131',
+    green: '#008000',
+    yellow: '#949800',
+    blue: '#0451a5',
+    magenta: '#bc05bc',
+    cyan: '#0598bc',
+    white: '#555555',
+    brightBlack: '#666666',
+    brightRed: '#cd3131',
+    brightGreen: '#14ce14',
+    brightYellow: '#b5ba00',
+    brightBlue: '#0451a5',
+    brightMagenta: '#bc05bc',
+    brightCyan: '#0598bc',
+    brightWhite: '#a5a5a5',
+  },
+};
 
 export type TerminalViewHandle = {
   resetAndWrite(data: Uint8Array): Promise<void>;
@@ -11,6 +64,7 @@ export type TerminalViewHandle = {
 };
 
 export type TerminalViewProps = {
+  themeMode?: TerminalThemeMode;
   active: boolean;
   resizeEnabled: boolean;
   cols: number;
@@ -24,7 +78,19 @@ export type TerminalViewProps = {
 };
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(
-  {active, resizeEnabled, cols, rows, shell = '', initialCwd = '', onInput, onResize, onAutoResize, onCopy},
+  {
+    themeMode = 'dark',
+    active,
+    resizeEnabled,
+    cols,
+    rows,
+    shell = '',
+    initialCwd = '',
+    onInput,
+    onResize,
+    onAutoResize,
+    onCopy,
+  },
   ref,
 ) {
   const [copyMenu, setCopyMenu] = useState<{left: number; top: number; text: string} | null>(null);
@@ -86,7 +152,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       cursorBlink: true,
       fontFamily: "'JetBrains Mono', Consolas, monospace",
       fontSize: 13,
-      theme: {background: '#101214'},
+      theme: {...TERMINAL_THEMES[themeMode]},
       ...(windowsTerminal ? {windowsPty: {backend: 'conpty' as const}} : {}),
     });
     const fitAddon = new FitAddon();
@@ -219,6 +285,12 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitAddonRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.theme = {...TERMINAL_THEMES[themeMode]};
+  }, [themeMode]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
