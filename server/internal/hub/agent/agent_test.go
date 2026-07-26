@@ -5130,6 +5130,16 @@ func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
 	}
 }
 
+func TestFactoryCodexSupportsSteer(t *testing.T) {
+	factory := newACPFactoryWithOptions(ACPFactoryOptions{}, func(provider ACPProvider) bool {
+		return provider.Name() == string(protocol.ACPProviderCodex)
+	})
+	got := factory.SessionActions(protocol.ACPProviderCodex)
+	if !got.Status || !got.Compact || !got.Steer {
+		t.Fatalf("Codex session actions = %+v", got)
+	}
+}
+
 func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	tests := []struct {

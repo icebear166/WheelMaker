@@ -220,7 +220,7 @@ func TestSessionMarkIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 }
 
 func TestRegistrySessionActionMethods(t *testing.T) {
-	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact, RegistryMethodSessionFork} {
+	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact, RegistryMethodSessionSteer, RegistryMethodSessionFork} {
 		desc, ok := RegistryMethod(method)
 		if !ok {
 			t.Fatalf("method %q is not registered", method)
@@ -231,6 +231,19 @@ func TestRegistrySessionActionMethods(t *testing.T) {
 		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
 			t.Fatalf("method %q should allow client", method)
 		}
+	}
+}
+
+func TestRegistrySessionSteerDescriptor(t *testing.T) {
+	desc, ok := RegistryMethod(RegistryMethodSessionSteer)
+	if !ok {
+		t.Fatal("session.steer descriptor missing")
+	}
+	if !desc.RequiresProjectID || desc.Route != RegistryRouteSessionForward {
+		t.Fatalf("session.steer descriptor = %+v", desc)
+	}
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
 	}
 }
 

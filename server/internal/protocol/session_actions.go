@@ -4,6 +4,7 @@ package protocol
 const (
 	SessionActionStatus  = "status"
 	SessionActionCompact = "compact"
+	SessionActionSteer   = "steer"
 
 	SessionOperationTypeCompact = "compact"
 	SessionOperationTypeFork    = "fork"
@@ -14,6 +15,9 @@ const (
 	SessionOperationStatusFailed    = "failed"
 
 	SessionTurnMethodOperation = "session_operation"
+
+	SessionSteerOutcomeSteered = "steered"
+	SessionSteerOutcomeSent    = "sent"
 )
 
 type SessionForkPoint struct {
@@ -46,6 +50,7 @@ type SessionActionCapability struct {
 type SessionActionCapabilities struct {
 	Status  SessionActionCapability `json:"status"`
 	Compact SessionActionCapability `json:"compact"`
+	Steer   SessionActionCapability `json:"steer"`
 }
 
 type SessionActionStatusContext struct {
@@ -102,6 +107,20 @@ type SessionCompactAccepted struct {
 	Accepted    bool   `json:"accepted"`
 	SessionID   string `json:"sessionId"`
 	OperationID string `json:"operationId"`
+}
+
+type SessionSteerParams struct {
+	SessionID       string         `json:"sessionId"`
+	ClientMessageID string         `json:"clientMessageId"`
+	Blocks          []ContentBlock `json:"blocks"`
+}
+
+type SessionSteerAccepted struct {
+	OK              bool   `json:"ok"`
+	Accepted        bool   `json:"accepted"`
+	SessionID       string `json:"sessionId"`
+	ClientMessageID string `json:"clientMessageId"`
+	Outcome         string `json:"outcome"`
 }
 
 type SessionOperationPayload struct {

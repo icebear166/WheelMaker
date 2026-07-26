@@ -1315,7 +1315,7 @@ func TestReporterRespondsToSessionPermissionRespondRequests(t *testing.T) {
 }
 
 func TestReporterForwardsSessionActionRequests(t *testing.T) {
-	for _, method := range []string{rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact} {
+	for _, method := range []string{rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact, rp.RegistryMethodSessionSteer} {
 		t.Run(method, func(t *testing.T) {
 			respSeen := make(chan testEnvelope, 1)
 			errSeen := make(chan error, 1)

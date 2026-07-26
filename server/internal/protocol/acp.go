@@ -188,6 +188,9 @@ type SessionUpdateParams struct {
 type SessionUpdate struct {
 	SessionUpdate     string             `json:"sessionUpdate"`
 	Content           json.RawMessage    `json:"content,omitempty"`
+	ContentBlocks     []ContentBlock     `json:"contentBlocks,omitempty"`
+	ClientMessageID   string             `json:"clientMessageId,omitempty"`
+	Steered           bool               `json:"steered,omitempty"`
 	AvailableCommands []AvailableCommand `json:"availableCommands,omitempty"`
 	ToolCallID        string             `json:"toolCallId,omitempty"`
 	Title             string             `json:"title,omitempty"`
