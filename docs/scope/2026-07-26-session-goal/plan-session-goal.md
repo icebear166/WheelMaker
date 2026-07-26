@@ -925,7 +925,7 @@ git diff origin/main...HEAD -- server/internal/protocol server/internal/hub/agen
 
 Expected: only Session Goal implementation, tests, scope, and approved Agent wiki changes.
 
-- [ ] **Step 8: Rebase, perform the required final commit tail, and push**
+- [x] **Step 8: Rebase, perform the required final commit tail, and push**
 
 Fetch and rebase the feature branch without touching the user’s dirty main worktree:
 
