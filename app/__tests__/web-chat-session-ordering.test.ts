@@ -7,17 +7,39 @@ import {
 } from '../web/src/chat/session/chatSessionOrdering';
 import type {RegistryChatSession} from '../web/src/registry/registryTypes';
 
-function session(sessionId: string, updatedAt: string): RegistryChatSession {
+function session(
+  sessionId: string,
+  updatedAt: string,
+  overrides: Partial<RegistryChatSession> = {},
+): RegistryChatSession {
   return {
     sessionId,
     title: sessionId,
     preview: '',
     updatedAt,
     messageCount: 1,
+    ...overrides,
   };
 }
 
 describe('chat session ordering', () => {
+  test('preserves Goal snapshots on partial updates and clears explicit undefined', () => {
+    const snapshot = {
+      sessionId: 'a',
+      objective: 'Ship',
+      status: 'active' as const,
+      tokenBudget: null,
+      tokensUsed: 1,
+      timeUsedSeconds: 2,
+      createdAt: 3,
+      updatedAt: 4,
+    };
+    const existing = [session('a', '2026-01-01T00:00:00Z', {goal: snapshot})];
+
+    expect(mergeChatSession(existing, {sessionId: 'a', preview: 'next'})[0].goal).toEqual(snapshot);
+    expect(mergeChatSession(existing, {sessionId: 'a', goal: undefined})[0].goal).toBeUndefined();
+  });
+
   test('compares timestamps by instant rather than timestamp text', () => {
     const earlier = '2026-07-20T12:30:00+08:00';
     const later = '2026-07-20T05:00:00.500Z';

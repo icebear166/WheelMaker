@@ -58,7 +58,7 @@ describe('ChatPlanSurface', () => {
     const planFixedRule = cssRuleBlock(stylesCss, '.chat-view-width-fixed-800 .chat-plan-surface.desktop');
     const stackItemRule = cssRuleBlock(
       stylesCss,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-goal-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
     expect(stylesCss).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
@@ -92,10 +92,11 @@ describe('ChatPlanSurface', () => {
 
     expect(planSource).toContain("useChatEdgeSurfaceGeometry('left'");
     expect(stylesCss).toContain(
-      '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content,\n.chat-function-surface.desktop .chat-edge-surface-glass,\n.chat-function-surface.desktop .chat-edge-surface-content {',
+      '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-goal-surface.desktop .chat-edge-surface-glass,\n.chat-goal-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content,\n.chat-function-surface.desktop .chat-edge-surface-glass,\n.chat-function-surface.desktop .chat-edge-surface-content {',
     );
-    expect(mainSource).toContain('<ChatPlanSurface\n              mode="mobile"');
+    expect(mainSource).toMatch(/<ChatPlanSurface\s+mode="mobile"/);
     expect(stylesCss).toContain('.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),');
+    expect(stylesCss).toContain('.chat-goal-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),');
     expect(stylesCss).toContain('.chat-plan-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),');
     expect(stylesCss).toContain('.chat-function-surface.desktop.monitor-surface:is(.chat-edge-surface-hover-revealed, :focus-within) {');
     expect(stylesCss).not.toContain('.chat-plan-surface.desktop:is(:hover');

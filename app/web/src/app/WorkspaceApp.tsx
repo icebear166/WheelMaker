@@ -46,6 +46,7 @@ import {
 import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
 import {
   AppConfirmDialog,
+  AppGoalEditDialog,
   AppRenameDialog,
   AppSessionStatusDialog,
   type ConfirmTarget,
@@ -127,6 +128,7 @@ import {
 } from '../chat/permission/chatPermissionReadGate';
 import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
+import {ChatGoalSurface} from '../chat/ChatGoalSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatFileLinkContextMenu, type ChatFileLinkMenuAction} from '../chat/ChatFileLinkContextMenu';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
@@ -600,6 +602,8 @@ import type {
   RegistrySessionPromptArtifact,
   RegistrySessionPromptArtifactFile,
   RegistrySessionMarkColor,
+  RegistrySessionGoal,
+  RegistrySessionGoalPatch,
   RegistrySessionSummary,
   RegistrySessionStatusResult,
   RegistrySessionUsage,
@@ -774,6 +778,11 @@ type SessionStatusDialogState = {
   status: RegistrySessionStatusResult | null;
   loading: boolean;
   error: string;
+};
+type GoalEditTarget = {
+  projectId: string;
+  sessionId: string;
+  goal: RegistrySessionGoal;
 };
 type FloatingDragState = {
   pointerId: number;
@@ -3431,6 +3440,9 @@ export function App() {
   const [renameTarget, setRenameTarget] = useState<RenameSessionTarget | null>(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
   const [renameError, setRenameError] = useState('');
+  const [goalEditTarget, setGoalEditTarget] = useState<GoalEditTarget | null>(null);
+  const [goalEditError, setGoalEditError] = useState('');
+  const [goalControlPendingKey, setGoalControlPendingKey] = useState('');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [confirmError, setConfirmError] = useState('');
   const [sessionStatusDialog, setSessionStatusDialog] = useState<SessionStatusDialogState | null>(null);
@@ -3595,6 +3607,9 @@ export function App() {
     },
     [chatSessions, projectId, projectSessionsByProjectId, selectedChatKey],
   );
+  const selectedGoal = selectedChatSession?.sessionActions?.goal?.supported === true
+    ? selectedChatSession.goal ?? null
+    : null;
 
   const selectedDraftChatSession = useMemo(
     () => {
@@ -11550,6 +11565,120 @@ export function App() {
     forgetPendingChatPrompt(runtimeKey);
   }, [saveChatComposerDraft]);
 
+  const applyChatSessionGoal = (
+    activeProjectId: string,
+    sessionId: string,
+    goal: RegistrySessionGoal | undefined,
+  ) => {
+    rememberChatSessionSummary(activeProjectId, {sessionId, goal});
+  };
+
+  const handlePauseGoal = async () => {
+    const selectedKey = selectedChatKeyRef.current;
+    if (!selectedKey || !selectedGoal || goalControlPendingKey) return;
+    const pendingKey = `${encodeChatSessionKey(selectedKey)}:pause`;
+    setGoalControlPendingKey(pendingKey);
+    setError('');
+    try {
+      const result = await service.updateProjectSessionGoal(selectedKey.projectId, selectedKey.sessionId, {
+        status: 'paused',
+      });
+      if (!result.ok || !result.goal) {
+        throw new Error('session.goal.update returned no Goal');
+      }
+      applyChatSessionGoal(selectedKey.projectId, selectedKey.sessionId, result.goal);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGoalControlPendingKey(current => current === pendingKey ? '' : current);
+    }
+  };
+
+  const handleResumeGoal = async () => {
+    const selectedKey = selectedChatKeyRef.current;
+    if (!selectedKey || !selectedGoal || goalControlPendingKey) return;
+    const pendingKey = `${encodeChatSessionKey(selectedKey)}:resume`;
+    setGoalControlPendingKey(pendingKey);
+    setError('');
+    try {
+      const result = await service.updateProjectSessionGoal(selectedKey.projectId, selectedKey.sessionId, {
+        status: 'active',
+      });
+      if (!result.ok || !result.goal) {
+        throw new Error('session.goal.update returned no Goal');
+      }
+      applyChatSessionGoal(selectedKey.projectId, selectedKey.sessionId, result.goal);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGoalControlPendingKey(current => current === pendingKey ? '' : current);
+    }
+  };
+
+  const openGoalEdit = () => {
+    const selectedKey = selectedChatKeyRef.current;
+    if (!selectedKey || !selectedGoal) return;
+    setGoalEditError('');
+    setGoalEditTarget({
+      projectId: selectedKey.projectId,
+      sessionId: selectedKey.sessionId,
+      goal: selectedGoal,
+    });
+  };
+
+  const submitGoalEdit = async (patch: RegistrySessionGoalPatch) => {
+    const target = goalEditTarget;
+    if (!target || goalControlPendingKey) return;
+    const pendingKey = `${buildChatRuntimeKey(target.projectId, target.sessionId)}:edit`;
+    setGoalControlPendingKey(pendingKey);
+    setGoalEditError('');
+    try {
+      const result = await service.updateProjectSessionGoal(target.projectId, target.sessionId, patch);
+      if (!result.ok || !result.goal) {
+        throw new Error('session.goal.update returned no Goal');
+      }
+      applyChatSessionGoal(target.projectId, target.sessionId, result.goal);
+      setGoalEditTarget(null);
+    } catch (err) {
+      setGoalEditError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGoalControlPendingKey(current => current === pendingKey ? '' : current);
+    }
+  };
+
+  const requestClearGoal = () => {
+    const selectedKey = selectedChatKeyRef.current;
+    if (!selectedKey || !selectedGoal) return;
+    setConfirmError('');
+    setConfirmTarget({
+      kind: 'goalClear',
+      projectId: selectedKey.projectId,
+      sessionId: selectedKey.sessionId,
+      objective: selectedGoal.objective,
+    });
+  };
+
+  const clearGoal = async (
+    target: Extract<ConfirmTarget, {kind: 'goalClear'}>,
+  ) => {
+    const pendingKey = `${buildChatRuntimeKey(target.projectId, target.sessionId)}:clear`;
+    if (goalControlPendingKey) return;
+    setGoalControlPendingKey(pendingKey);
+    setConfirmError('');
+    try {
+      const result = await service.clearProjectSessionGoal(target.projectId, target.sessionId);
+      if (!result.ok || !result.cleared) {
+        throw new Error('session.goal.clear returned ok=false');
+      }
+      applyChatSessionGoal(target.projectId, target.sessionId, undefined);
+      setConfirmTarget(null);
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGoalControlPendingKey(current => current === pendingKey ? '' : current);
+    }
+  };
+
   const cancelSelectedChatPrompt = async () => {
     const selectedKey = selectedChatKeyRef.current;
     if (!selectedKey?.sessionId) {
@@ -11562,9 +11691,19 @@ export function App() {
     setChatCancellingRuntimeKey(runtimeKey);
     setError('');
     try {
-      const result = await service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId);
-      if (!result.ok) {
-        throw new Error('session.cancel returned ok=false');
+      if (selectedGoal?.status === 'active' && selectedChatSession?.running === true) {
+        const result = await service.stopProjectSessionGoal(selectedKey.projectId, selectedKey.sessionId);
+        if (!result.ok) {
+          throw new Error('session.goal.stop returned ok=false');
+        }
+        if (result.goal) {
+          applyChatSessionGoal(selectedKey.projectId, selectedKey.sessionId, result.goal);
+        }
+      } else {
+        const result = await service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId);
+        if (!result.ok) {
+          throw new Error('session.cancel returned ok=false');
+        }
       }
     } catch (err) {
       setChatCancellingRuntimeKey(current => (current === runtimeKey ? '' : current));
@@ -18135,6 +18274,16 @@ export function App() {
                   })()}
                 </ChatRecentSessionsSurface>
               ) : null}
+              {selectedGoal ? (
+                <ChatGoalSurface
+                  mode="desktop"
+                  goal={selectedGoal}
+                  onPause={() => { void handlePauseGoal(); }}
+                  onResume={() => { void handleResumeGoal(); }}
+                  onEdit={openGoalEdit}
+                  onClear={requestClearGoal}
+                />
+              ) : null}
               <ChatPlanSurface
                 mode="desktop"
                 plan={selectedChatPlan}
@@ -18198,10 +18347,22 @@ export function App() {
           ) : null}
           {isWide ? renderWideProjectActionMenu() : null}
           {!isWide ? (
-            <ChatPlanSurface
-              mode="mobile"
-              plan={selectedChatPlan}
-            />
+            <>
+              {selectedGoal ? (
+                <ChatGoalSurface
+                  mode="mobile"
+                  goal={selectedGoal}
+                  onPause={() => { void handlePauseGoal(); }}
+                  onResume={() => { void handleResumeGoal(); }}
+                  onEdit={openGoalEdit}
+                  onClear={requestClearGoal}
+                />
+              ) : null}
+              <ChatPlanSurface
+                mode="mobile"
+                plan={selectedChatPlan}
+              />
+            </>
           ) : null}
           <div
             ref={chatComposerRef}
@@ -20522,6 +20683,7 @@ export function App() {
   const archiveBatchTarget = confirmTarget?.kind === 'archiveBatch' ? confirmTarget : null;
   const restoreArchivedTarget = confirmTarget?.kind === 'restoreArchived' ? confirmTarget : null;
   const deleteTarget = confirmTarget?.kind === 'delete' ? confirmTarget : null;
+  const goalClearTarget = confirmTarget?.kind === 'goalClear' ? confirmTarget : null;
   const npmPackageTarget = confirmTarget?.kind === 'npmPackage' ? confirmTarget : null;
   const npmPackageHubUpdateTarget = confirmTarget?.kind === 'npmPackageHubUpdate' ? confirmTarget : null;
   const wheelMakerUpdateTarget = confirmTarget?.kind === 'wheelMakerUpdate' ? confirmTarget : null;
@@ -20551,7 +20713,9 @@ export function App() {
         ? archivedRestoringSessionId === buildChatRuntimeKey(restoreArchivedTarget.projectId, restoreArchivedTarget.sessionId)
         : deleteTarget
           ? chatDeletingSessionId === deleteTarget.sessionId
-          : npmPackageTarget
+          : goalClearTarget
+            ? goalControlPendingKey === `${buildChatRuntimeKey(goalClearTarget.projectId, goalClearTarget.sessionId)}:clear`
+            : npmPackageTarget
             ? agentPackageActionPendingKey === npmPackageConfirmPendingKey
             : npmPackageHubUpdateTarget
               ? agentPackageHubUpdatePendingId === npmPackageHubUpdateTarget.hubId
@@ -20593,6 +20757,10 @@ export function App() {
         confirmTarget.projectId,
         confirmTarget.sessionId,
       ).catch(() => undefined);
+      return;
+    }
+    if (confirmTarget.kind === 'goalClear') {
+      clearGoal(confirmTarget).catch(() => undefined);
       return;
     }
     if (confirmTarget.kind === 'archiveBatch') {
@@ -20674,6 +20842,21 @@ export function App() {
         setRenameTitleDraft('');
       }}
       onSubmit={submitRenameTarget}
+    />
+  );
+  const appGoalEditDialog = (
+    <AppGoalEditDialog
+      goal={goalEditTarget?.goal ?? null}
+      busy={goalControlPendingKey.endsWith(':edit')}
+      error={goalEditError}
+      onCancel={() => {
+        if (goalControlPendingKey.endsWith(':edit')) return;
+        setGoalEditError('');
+        setGoalEditTarget(null);
+      }}
+      onSubmit={patch => {
+        submitGoalEdit(patch).catch(() => undefined);
+      }}
     />
   );
   const appSessionStatusDialog = (
@@ -20776,6 +20959,7 @@ export function App() {
         </div>
       ) : null}
       {appRenameDialog}
+      {appGoalEditDialog}
       {appConfirmDialog}
       {appSessionStatusDialog}
     </>

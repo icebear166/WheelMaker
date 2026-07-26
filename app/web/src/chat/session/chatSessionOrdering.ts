@@ -50,6 +50,7 @@ function mergeSessionSummary(
   next: Partial<RegistryChatSession> & {sessionId: string},
 ): RegistryChatSession {
   const hasMarkColor = Object.prototype.hasOwnProperty.call(next, 'markColor');
+  const hasGoal = Object.prototype.hasOwnProperty.call(next, 'goal');
   return {
     sessionId: next.sessionId,
     title: next.title ?? existing?.title ?? '',
@@ -71,6 +72,8 @@ function mergeSessionSummary(
     commands: next.commands ?? existing?.commands,
     usage: next.usage ?? existing?.usage,
     sessionActions: next.sessionActions ?? existing?.sessionActions,
+    goal: hasGoal ? next.goal : existing?.goal,
+    forkedFrom: next.forkedFrom ?? existing?.forkedFrom,
   };
 }
 

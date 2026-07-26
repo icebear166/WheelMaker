@@ -2415,6 +2415,49 @@
   padding: 0 6px 6px;
 }
 
+.app-goal-edit-dialog {
+  width: min(520px, calc(100vw - 28px));
+}
+
+.app-goal-edit-field {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.app-goal-edit-objective,
+.app-goal-edit-budget {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.app-goal-edit-objective {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.app-goal-edit-budget {
+  height: 34px;
+}
+
+.app-goal-edit-objective:focus,
+.app-goal-edit-budget:focus {
+  border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
 .chat-plan-surface.desktop {
   --chat-plan-desktop-width: var(--chat-edge-surface-width);
   --chat-plan-column-gap: 12px;
@@ -2445,6 +2488,7 @@
 }
 
 .chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,
+.chat-edge-surface-stack > .chat-goal-surface.desktop,
 .chat-edge-surface-stack > .chat-plan-surface.desktop,
 .chat-edge-surface-stack > .chat-function-surface.desktop {
   position: relative;
@@ -2458,12 +2502,14 @@
 }
 
 .chat-edge-surface-stack > .chat-recent-sessions-surface.desktop.expanded,
+.chat-edge-surface-stack > .chat-goal-surface.desktop.expanded,
 .chat-edge-surface-stack > .chat-plan-surface.desktop.expanded,
 .chat-edge-surface-stack > .chat-function-surface.desktop:not(.collapsed) {
   border-radius: 8px;
 }
 
 .chat-edge-surface-stack > .chat-recent-sessions-surface.desktop.collapsed,
+.chat-edge-surface-stack > .chat-goal-surface.desktop.collapsed,
 .chat-edge-surface-stack > .chat-plan-surface.desktop.collapsed,
 .chat-edge-surface-stack > .chat-function-surface.desktop.collapsed {
   max-height: 36px;
@@ -2471,6 +2517,7 @@
 }
 
 .chat-edge-surface-stack > .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,
+.chat-edge-surface-stack > .chat-goal-surface.desktop .chat-edge-surface-glass,
 .chat-edge-surface-stack > .chat-plan-surface.desktop .chat-edge-surface-glass,
 .chat-edge-surface-stack > .chat-function-surface.desktop .chat-edge-surface-glass {
   border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
@@ -5722,6 +5769,7 @@
 
 
 .chat-recent-sessions-surface.desktop,
+.chat-goal-surface.desktop,
 .chat-plan-surface.desktop,
 .chat-function-surface.desktop {
   --chat-edge-fade-start: calc(100% - 28px);
@@ -5758,6 +5806,8 @@
 
 .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,
 .chat-recent-sessions-surface.desktop .chat-edge-surface-content,
+.chat-goal-surface.desktop .chat-edge-surface-glass,
+.chat-goal-surface.desktop .chat-edge-surface-content,
 .chat-plan-surface.desktop .chat-edge-surface-glass,
 .chat-plan-surface.desktop .chat-edge-surface-content,
 .chat-function-surface.desktop .chat-edge-surface-glass,
@@ -5779,6 +5829,7 @@
 }
 
 .chat-recent-sessions-surface.desktop:is(:hover, :focus-within),
+.chat-goal-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),
 .chat-plan-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),
 .chat-function-surface.desktop.monitor-surface:is(.chat-edge-surface-hover-revealed, :focus-within) {
   --chat-edge-hidden-alpha: 100%;
@@ -5788,6 +5839,7 @@
 @media (prefers-reduced-transparency: reduce) {
   .chat-plan-surface.mobile.expanded,
   .chat-plan-compact-trigger,
+  .chat-goal-surface.mobile,
   .chat-edge-surface-glass,
   .chat-config-overflow-menu,
   .chat-config-value-menu,

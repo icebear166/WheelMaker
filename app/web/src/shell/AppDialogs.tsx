@@ -4,6 +4,8 @@ import {Icon, type IconName} from '../common/Icon';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/agentPackageUpdateView';
 import { skillScopeLabel } from '../settings/skillManagementView';
 import type {
+  RegistrySessionGoal,
+  RegistrySessionGoalPatch,
   RegistrySessionStatusResult,
   RegistrySessionUsage,
   RegistrySkillScope,
@@ -38,6 +40,12 @@ export type ConfirmTarget =
       projectId: string;
       sessionId: string;
       title: string;
+    }
+  | {
+      kind: 'goalClear';
+      projectId: string;
+      sessionId: string;
+      objective: string;
     }
   | {kind: 'clearCache'}
   | {
@@ -119,6 +127,14 @@ type AppRenameDialogProps = {
   onSubmit: () => void;
 };
 
+type AppGoalEditDialogProps = {
+  goal: RegistrySessionGoal | null;
+  busy: boolean;
+  error: string;
+  onCancel: () => void;
+  onSubmit: (patch: RegistrySessionGoalPatch) => void;
+};
+
 export type AppSessionStatusDialogProps = {
   sessionId: string;
   cachedUsage?: RegistrySessionUsage;
@@ -160,6 +176,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'archiveBatch') return `Archive sessions older than ${target.days} days?`;
   if (target.kind === 'restoreArchived') return 'Restore archived session?';
   if (target.kind === 'delete') return 'Delete session?';
+  if (target.kind === 'goalClear') return 'Clear goal?';
   if (target.kind === 'npmPackage') return `${agentPackageActionLabel(target.action)} package?`;
   if (target.kind === 'npmPackageHubUpdate') return 'Update npm packages?';
   if (target.kind === 'wheelMakerUpdate') return 'Update WheelMaker?';
@@ -178,6 +195,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
   if (target.kind === 'delete') return target.title || 'Untitled session';
+  if (target.kind === 'goalClear') return target.objective;
   if (target.kind === 'npmPackage') return target.displayName || target.packageName;
   if (target.kind === 'npmPackageHubUpdate') {
     return `${target.hubId} - ${npmPackageUpdateSummary(target.packages.length)}`;
@@ -209,6 +227,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
   }
   if (target.kind === 'delete') {
     return 'This permanently deletes the session data from the Hub.';
+  }
+  if (target.kind === 'goalClear') {
+    return 'The current turn will continue, but Goal will not start another turn. The objective and its saved progress will be removed.';
   }
   if (target.kind === 'npmPackage') {
     return `Hub: ${target.hubId}. Package: ${target.packageName}. Installed: ${target.installedVersion || '-'}. Target: ${target.action === 'uninstall' ? 'remove deprecated package' : target.latestVersion || 'latest'}. Restart WheelMaker or start a new agent session for changes to take effect.`;
@@ -245,6 +266,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'clearCache') return 'trash';
   if (target.kind === 'restoreArchived') return 'archiveRestore';
   if (target.kind === 'delete') return 'trash';
+  if (target.kind === 'goalClear') return 'trash';
   if (target.kind === 'npmPackage') {
     return target.action === 'uninstall' ? 'trash' : 'cloudDownload';
   }
@@ -264,6 +286,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'clearCache') return 'Clear Cache';
   if (target.kind === 'restoreArchived') return 'Restore';
   if (target.kind === 'delete') return 'Delete';
+  if (target.kind === 'goalClear') return 'Clear Goal';
   if (target.kind === 'npmPackage') return agentPackageActionLabel(target.action);
   if (target.kind === 'npmPackageHubUpdate') return 'Update';
   if (target.kind === 'wheelMakerUpdate') return 'Update';
@@ -279,6 +302,7 @@ function isDangerConfirmTarget(target: ConfirmTarget): boolean {
   return (
     target.kind === 'clearCache' ||
     target.kind === 'delete' ||
+    target.kind === 'goalClear' ||
     target.kind === 'terminalClose' ||
     (target.kind === 'npmPackage' && target.action === 'uninstall') ||
     target.kind === 'skillUninstall' ||
@@ -437,6 +461,145 @@ export function AppRenameDialog({
           >
             <Icon name={busy ? 'loader' : 'check'} spin={busy} />
             Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AppGoalEditDialog({
+  goal,
+  busy,
+  error,
+  onCancel,
+  onSubmit,
+}: AppGoalEditDialogProps) {
+  const [objectiveDraft, setObjectiveDraft] = React.useState('');
+  const [budgetDraft, setBudgetDraft] = React.useState('');
+  const [validationError, setValidationError] = React.useState('');
+
+  React.useEffect(() => {
+    setObjectiveDraft(goal?.objective ?? '');
+    setBudgetDraft(goal?.tokenBudget === null || goal?.tokenBudget === undefined ? '' : String(goal.tokenBudget));
+    setValidationError('');
+  }, [goal?.sessionId]);
+
+  if (!goal) return null;
+
+  const submit = () => {
+    const objective = objectiveDraft.trim();
+    if (!objective) {
+      setValidationError('Objective is required.');
+      return;
+    }
+    if (objective.length > 4000) {
+      setValidationError('Objective must be 4,000 characters or fewer.');
+      return;
+    }
+    const normalizedBudget = budgetDraft.trim();
+    let tokenBudget: number | null = null;
+    if (normalizedBudget) {
+      tokenBudget = Number(normalizedBudget);
+      if (!/^[1-9]\d*$/.test(normalizedBudget) || !Number.isSafeInteger(tokenBudget)) {
+        setValidationError('Token budget must be a positive integer or left blank for unlimited.');
+        return;
+      }
+    }
+    setValidationError('');
+    onSubmit({objective, tokenBudget});
+  };
+
+  return (
+    <div
+      className="app-confirm-backdrop"
+      role="presentation"
+      onPointerDown={() => {
+        if (!busy) {
+          onCancel();
+        }
+      }}
+    >
+      <div
+        className="app-confirm-dialog app-goal-edit-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-goal-edit-title"
+        onPointerDown={event => event.stopPropagation()}
+      >
+        <div className="app-confirm-icon">
+          <Icon name="target" size={17} />
+        </div>
+        <div className="app-confirm-content">
+          <div id="app-goal-edit-title" className="app-confirm-title">Edit goal</div>
+          <label className="app-goal-edit-field">
+            <span>Objective</span>
+            <textarea
+              className="app-goal-edit-objective"
+              aria-label="Goal objective"
+              value={objectiveDraft}
+              maxLength={4000}
+              autoFocus
+              disabled={busy}
+              onChange={event => {
+                setObjectiveDraft(event.target.value);
+                setValidationError('');
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Escape' && !busy) {
+                  onCancel();
+                }
+              }}
+            />
+          </label>
+          <label className="app-goal-edit-field">
+            <span>Token budget</span>
+            <input
+              className="app-goal-edit-budget"
+              type="text"
+              inputMode="numeric"
+              aria-label="Goal token budget"
+              value={budgetDraft}
+              placeholder="Unlimited"
+              disabled={busy}
+              onChange={event => {
+                setBudgetDraft(event.target.value);
+                setValidationError('');
+              }}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submit();
+                }
+                if (event.key === 'Escape' && !busy) {
+                  onCancel();
+                }
+              }}
+            />
+          </label>
+          <div className="app-confirm-copy">Leave token budget blank for unlimited.</div>
+          {validationError || error ? (
+            <div className="app-confirm-error" role="alert">{validationError || error}</div>
+          ) : null}
+        </div>
+        <div className="app-confirm-actions">
+          <button
+            type="button"
+            className="app-confirm-btn secondary"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="app-confirm-btn primary"
+            aria-label="Save goal changes"
+            disabled={busy}
+            onClick={submit}
+          >
+            <Icon name={busy ? 'loader' : 'check'} spin={busy} />
+            Save changes
           </button>
         </div>
       </div>
