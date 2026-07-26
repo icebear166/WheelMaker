@@ -66,9 +66,10 @@ export function SessionMenu({
       : null;
     focusFirstMenuItem(menuRef.current);
   }, []);
-  const items: Array<MenuItem | 'mark' | 'separator'> = [
-    {key: 'pin', className: 'pin', icon: 'pin', label: pinned ? 'Unpin' : 'Pin', disabled: pinning, busy: pinning, onSelect: onTogglePin},
+  const items: Array<MenuItem | 'mark' | 'mark-separator' | 'separator'> = [
     'mark',
+    'mark-separator',
+    {key: 'pin', className: 'pin', icon: 'pin', label: pinned ? 'Unpin' : 'Pin', disabled: pinning, busy: pinning, onSelect: onTogglePin},
     {key: 'rename', className: 'rename', icon: 'pencil', label: 'Rename', disabled: renaming, busy: renaming, onSelect: onRename},
     {key: 'archive', className: 'archive', icon: 'archive', label: 'Archive', disabled: actionDisabled, busy: archiving, onSelect: onArchive},
     'separator',
@@ -92,8 +93,8 @@ export function SessionMenu({
       }}
     >
       {items.map(item =>
-        item === 'separator' ? (
-          <div key="separator" className="project-session-menu-separator" aria-hidden="true" />
+        item === 'separator' || item === 'mark-separator' ? (
+          <div key={item} className="project-session-menu-separator" aria-hidden="true" />
         ) : item === 'mark' ? (
           <div
             key="mark"

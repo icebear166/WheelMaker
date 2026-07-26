@@ -30,14 +30,28 @@ async function renderMenu(extra?: Partial<React.ComponentProps<typeof SessionMen
 }
 
 describe('SessionMenu', () => {
-  it('renders five menu items in order with a separator before Reload', async () => {
+  it('renders the mark palette above Pin with separators between menu groups', async () => {
     const {tree} = await renderMenu();
-    expect(typeof tree.root.findByProps({role: 'menu'}).props.onKeyDown).toBe('function');
+    const menu = tree.root.findByProps({role: 'menu'});
+    expect(typeof menu.props.onKeyDown).toBe('function');
     const labels = tree.root
       .findAll(node => node.type === 'span' && typeof node.props.className === 'string' && node.props.className.includes('project-session-menu-label'))
       .map(node => node.children.join(''));
     expect(labels).toEqual(['Pin', 'Rename', 'Archive', 'Reload', 'Delete']);
-    expect(tree.root.findAllByProps({className: 'project-session-menu-separator'})).toHaveLength(1);
+    expect(
+      menu.children
+        .filter(child => typeof child !== 'string')
+        .map(child => child.props.className),
+    ).toEqual([
+      'project-session-mark-picker',
+      'project-session-menu-separator',
+      'project-session-menu-btn pin',
+      'project-session-menu-btn rename',
+      'project-session-menu-btn archive',
+      'project-session-menu-separator',
+      'project-session-menu-btn reload',
+      'project-session-menu-btn delete',
+    ]);
     // every item has an svg icon
     expect(tree.root.findAllByType('svg').length).toBeGreaterThanOrEqual(5);
   });
@@ -55,7 +69,7 @@ describe('SessionMenu', () => {
     expect(props.onArchive).toHaveBeenCalledTimes(1);
   });
 
-  it('renders four circular mark colors and a matching clear control after Pin', async () => {
+  it('renders four circular mark colors and a matching clear control', async () => {
     const {tree} = await renderMenu({markColor: 'yellow'});
 
     const picker = tree.root.findByProps({className: 'project-session-mark-picker'});
