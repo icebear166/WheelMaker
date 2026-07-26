@@ -2,11 +2,24 @@ import {deriveRegistryEndpoints} from '../web/src/registry/registryBaseUrl';
 
 describe('registry endpoints derived from page base URL', () => {
   test.each([
-    ['https://wheelmaker.top/', 'https://wheelmaker.top/ws', 'wss://wheelmaker.top/ws', '/'],
-    ['https://example.com:8443/wheelmaker/', 'https://example.com:8443/wheelmaker/ws', 'wss://example.com:8443/wheelmaker/ws', '/wheelmaker/'],
-  ])('derives auth and websocket endpoints from %s', (base, auth, ws, basePath) => {
+    [
+      'https://wheelmaker.top/',
+      'https://wheelmaker.top/ws',
+      'https://wheelmaker.top/ws/preview/',
+      'wss://wheelmaker.top/ws',
+      '/',
+    ],
+    [
+      'https://example.com:8443/wheelmaker/',
+      'https://example.com:8443/wheelmaker/ws',
+      'https://example.com:8443/wheelmaker/ws/preview/',
+      'wss://example.com:8443/wheelmaker/ws',
+      '/wheelmaker/',
+    ],
+  ])('derives auth, preview, and websocket endpoints from %s', (base, auth, preview, ws, basePath) => {
     const endpoints = deriveRegistryEndpoints(base);
     expect(endpoints.authURL.toString()).toBe(auth);
+    expect(endpoints.previewURL.toString()).toBe(preview);
     expect(endpoints.wsURL).toBe(ws);
     expect(endpoints.basePath).toBe(basePath);
     endpoints.authURL.searchParams.set('auth', 'status');
@@ -24,8 +37,12 @@ describe('registry endpoints derived from page base URL', () => {
   });
 
   test('allows explicit insecure loopback only for development tests', () => {
-    expect(deriveRegistryEndpoints('http://127.0.0.1:8080/', {allowInsecureLoopback: true}).wsURL)
-      .toBe('ws://127.0.0.1:8080/ws');
+    const endpoints = deriveRegistryEndpoints(
+      'http://127.0.0.1:8080/',
+      {allowInsecureLoopback: true},
+    );
+    expect(endpoints.wsURL).toBe('ws://127.0.0.1:8080/ws');
+    expect(endpoints.previewURL.toString()).toBe('http://127.0.0.1:8080/ws/preview/');
     expect(() => deriveRegistryEndpoints('http://example.com/', {allowInsecureLoopback: true})).toThrow();
   });
 });

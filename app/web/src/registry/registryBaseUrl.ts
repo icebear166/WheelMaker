@@ -1,5 +1,6 @@
 export type RegistryEndpoints = {
   authURL: URL;
+  previewURL: URL;
   wsURL: string;
   basePath: string;
 };
@@ -29,10 +30,12 @@ export function deriveRegistryEndpoints(
   }
 
   const authURL = new URL('ws', base);
+  const previewURL = new URL('ws/preview/', base);
   const wsURL = new URL(authURL.toString());
   wsURL.protocol = secure ? 'wss:' : 'ws:';
   return {
     authURL,
+    previewURL,
     wsURL: wsURL.toString(),
     basePath: base.pathname,
   };
