@@ -23,6 +23,7 @@ import {
   normalizePortRelayTarget,
   normalizePortRelayTargets,
   orderPortRelayTargetsForMenu,
+  portRelayTargetKey,
   removePortRelayTarget,
   reconcilePortRelayTargetSelection,
   samePortRelayTarget,
@@ -30,7 +31,7 @@ import {
   upsertPortRelayTarget,
   type PortRelayTarget,
 } from '../portRelay/portRelayTargets';
-import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
+import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
@@ -771,12 +772,6 @@ type FloatingDragState = {
   startTop: number;
   currentTop: number;
 };
-type PortRelayTargetMenuPressState = {
-  pointerId: number;
-  originX: number;
-  originY: number;
-  longPressed: boolean;
-};
 type GestureNavigationState =
   | {
       phase: 'pressing' | 'neutral';
@@ -958,7 +953,6 @@ const CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO = 0.8;
 const CHAT_FILE_PEEK_MAIN_MIN_WIDTH = 420;
 const CHAT_FILE_PEEK_HISTORY_KIND = 'wheelmaker:chat-file-peek';
 const GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS = 160;
-const PORT_RELAY_TARGET_MENU_LONG_PRESS_MS = 200;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
 const PORT_RELAY_FLOATING_SLOT_STORAGE_KEY = 'wheelmaker:portRelayFloatingSlot';
 const PORT_RELAY_FLOATING_SIDE_STORAGE_KEY = 'wheelmaker:portRelayFloatingSide';
@@ -3063,7 +3057,6 @@ export function App() {
   const [portRelayClearSiteDataUrl, setPortRelayClearSiteDataUrl] = useState('');
   const [portRelayFrameReloadKey, setPortRelayFrameReloadKey] = useState(0);
   const [portRelayFrameAutoOpenPending, setPortRelayFrameAutoOpenPending] = useState(false);
-  const [portRelayTargetMenuOpen, setPortRelayTargetMenuOpen] = useState(false);
   const [portRelayMenuSwitchingTarget, setPortRelayMenuSwitchingTarget] = useState<PortRelayTarget | null>(null);
   const [previewWorkbench, setPreviewWorkbench] = useState(() =>
     previewWorkbenchStateFromSnapshot(persistedGlobal.previewWorkbenchSnapshot),
@@ -3119,9 +3112,6 @@ export function App() {
   const previewContextSelectionRef = useRef<PreviewSelectionSnapshot | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const portRelayTargetMenuPressRef = useRef<PortRelayTargetMenuPressState | null>(null);
-  const portRelayTargetMenuRef = useRef<HTMLDivElement | null>(null);
   const activeWorkbenchTab = activePreviewTab(previewWorkbench);
   const previewWorkbenchTabs =
     previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? [];
@@ -3243,47 +3233,11 @@ export function App() {
     setSidebarSettingsOpen(false);
   }, [mobilePortRelayFrameOpen, setDrawerOpen, setSidebarSettingsOpen]);
 
-  const clearPortRelayTargetMenuTimer = useCallback(() => {
-    if (portRelayTargetMenuTimerRef.current) {
-      window.clearTimeout(portRelayTargetMenuTimerRef.current);
-      portRelayTargetMenuTimerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => () => {
-    clearPortRelayTargetMenuTimer();
-  }, [clearPortRelayTargetMenuTimer]);
-
   useEffect(() => {
     if (!mobilePortRelayFrameOpen) {
-      setPortRelayTargetMenuOpen(false);
       setPortRelayMenuSwitchingTarget(null);
     }
   }, [mobilePortRelayFrameOpen]);
-
-  useEffect(() => {
-    if (!portRelayTargetMenuOpen) {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (target && portRelayTargetMenuRef.current?.contains(target)) {
-        return;
-      }
-      setPortRelayTargetMenuOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPortRelayTargetMenuOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [portRelayTargetMenuOpen]);
 
   useEffect(() => () => {
     if (portRelayCodeCopyTimerRef.current) {
@@ -3446,6 +3400,8 @@ export function App() {
   }, [projectSessionsByProjectId, projects]);
   const [wideProjectActionMenu, setWideProjectActionMenu, wideProjectActionMenuExiting] = useMenuExitState<WideProjectActionMenuState>();
   const [mobileProjectActionMenu, setMobileProjectActionMenu, mobileProjectActionMenuExiting] = useMenuExitState<MobileProjectActionMenuState>();
+  const [mobileRelayTargetSheet, setMobileRelayTargetSheet, mobileRelayTargetSheetExiting] =
+    useMenuExitState<{open: true}>();
   const [projectSessionActionMenu, setProjectSessionActionMenu, projectSessionActionMenuExiting] = useMenuExitState<ProjectSessionActionMenuState>();
   const [mobileProjectSessionErrors, setMobileProjectSessionErrors] = useState<Record<string, string>>({});
   const [mobileProjectSessionsRefreshing, setMobileProjectSessionsRefreshing] = useState(false);
@@ -6450,7 +6406,6 @@ export function App() {
     [selectedChatDisplayTitle],
   );
   const closeMobileDrawerCompanionOverlays = useCallback(() => {
-    setPortRelayTargetMenuOpen(false);
     setChatPromptMenuOpen(false);
     setChatFileMentionMenuOpen(false);
     setChatAttachmentTrayOpen(false);
@@ -7064,17 +7019,8 @@ export function App() {
       setDrawerOpen,
     ],
   );
-  const handleGestureNavigationButtonPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (gestureNavStateRef.current?.phase !== 'expanded') {
-        beginGestureNavigationPress(event);
-      }
-      event.stopPropagation();
-    },
-    [beginGestureNavigationPress],
-  );
   const handleGestureNavigationPillPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
+    (event: React.PointerEvent<HTMLElement>) => {
       beginGestureNavigationPress(event);
       event.stopPropagation();
     },
@@ -7223,80 +7169,6 @@ export function App() {
     }
     openSettingsRoot();
   }, [closeSettingsPanel, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
-  const handlePortRelayFloatingPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      if (isWide || event.button !== 0) {
-        return;
-      }
-      if (floatingClickCooldownUntilRef.current > Date.now()) {
-        return;
-      }
-      if (!mobilePortRelayFrameOpen) {
-        return;
-      }
-      clearPortRelayTargetMenuTimer();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      portRelayTargetMenuPressRef.current = {
-        pointerId: event.pointerId,
-        originX: event.clientX,
-        originY: event.clientY,
-        longPressed: false,
-      };
-      portRelayTargetMenuTimerRef.current = window.setTimeout(() => {
-        const current = portRelayTargetMenuPressRef.current;
-        if (!current || current.pointerId !== event.pointerId) {
-          return;
-        }
-        portRelayTargetMenuPressRef.current = {
-          ...current,
-          longPressed: true,
-        };
-        portRelayTargetMenuTimerRef.current = null;
-        floatingClickCooldownUntilRef.current = Date.now() + 180;
-        setPortRelayTargetMenuOpen(true);
-      }, PORT_RELAY_TARGET_MENU_LONG_PRESS_MS);
-    },
-    [clearPortRelayTargetMenuTimer, isWide, mobilePortRelayFrameOpen],
-  );
-  const handlePortRelayFloatingPointerMove = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      const current = portRelayTargetMenuPressRef.current;
-      if (!current || current.pointerId !== event.pointerId || current.longPressed) {
-        return;
-      }
-      const distancePx = Math.hypot(event.clientX - current.originX, event.clientY - current.originY);
-      if (distancePx < 10) {
-        return;
-      }
-      clearPortRelayTargetMenuTimer();
-      portRelayTargetMenuPressRef.current = null;
-    },
-    [clearPortRelayTargetMenuTimer],
-  );
-  const finishPortRelayFloatingPress = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.stopPropagation();
-      const current = portRelayTargetMenuPressRef.current;
-      if (!current || current.pointerId !== event.pointerId) {
-        return;
-      }
-      clearPortRelayTargetMenuTimer();
-      portRelayTargetMenuPressRef.current = null;
-      try {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      } catch {
-        // Pointer capture can already be released by the browser on some mobile WebViews.
-      }
-      if (!current.longPressed) {
-        return;
-      }
-      event.preventDefault();
-      floatingClickCooldownUntilRef.current = Date.now() + 180;
-    },
-    [clearPortRelayTargetMenuTimer],
-  );
   useEffect(() => {
     if (isWide || !sidebarSettingsOpen) {
       mobileSettingsHistoryKeyRef.current = null;
@@ -12509,7 +12381,6 @@ export function App() {
   ]);
 
   const handleMobilePortRelayTargetMenuSelect = useCallback(async (target: PortRelayTarget) => {
-    setPortRelayTargetMenuOpen(false);
     if (samePortRelayTarget(activePortRelayTarget, target)) {
       return;
     }
@@ -12600,25 +12471,6 @@ export function App() {
     selectedPortRelayTarget,
     settingsDetailView,
     sidebarSettingsOpen,
-  ]);
-
-  const handlePortRelayFloatingToggle = useCallback(() => {
-    if (floatingClickCooldownUntilRef.current > Date.now()) {
-      return;
-    }
-    setPortRelayTargetMenuOpen(false);
-    const target = activePortRelayTarget ?? selectedPortRelayTarget;
-    if (!target) {
-      openSettingsDetail('portRelay');
-      return;
-    }
-    openPortRelayWorkbenchTab(target, portRelayFramePath, {source: 'floating'}).catch(() => undefined);
-  }, [
-    activePortRelayTarget,
-    openPortRelayWorkbenchTab,
-    openSettingsDetail,
-    portRelayFramePath,
-    selectedPortRelayTarget,
   ]);
 
   const updateHubCards = useMemo(() => {
@@ -17398,6 +17250,76 @@ export function App() {
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
   }, [chatPreviewOpen, isWide, setSidebarSettingsOpen]);
+  const floatingNavCurrent = resolveFloatingNavCurrent({
+    relayFrameOpen: mobilePortRelayFrameOpen,
+    settingsOpen: sidebarSettingsOpen,
+    usageOpen: mobileUsageOpen,
+    terminalOpen: terminalOpen,
+    previewOpen: chatPreviewOpen && !mobilePortRelayFrameOpen,
+  });
+  const floatingNavRelayState = resolveFloatingNavRelayState({
+    ready: portRelayReady,
+    frameUrl: portRelayFrameUrl,
+    hasTarget: (activePortRelayTarget ?? selectedPortRelayTarget) !== null,
+    frameOpen: mobilePortRelayFrameOpen,
+  });
+  const handleFloatingNavRelayOpen = useCallback(() => {
+    if (mobilePortRelayFrameOpen) {
+      closePortRelayFrameFromChrome();
+      return;
+    }
+    const target = activePortRelayTarget ?? selectedPortRelayTarget;
+    if (!target) {
+      return; // Relay item renders disabled in this state.
+    }
+    if (portRelayTargetMenuTargets.length > 1) {
+      setMobileRelayTargetSheet({open: true});
+      return;
+    }
+    openPortRelayWorkbenchTab(target, portRelayFramePath, {source: 'floating'}).catch(() => undefined);
+  }, [
+    activePortRelayTarget,
+    mobilePortRelayFrameOpen,
+    closePortRelayFrameFromChrome,
+    openPortRelayWorkbenchTab,
+    portRelayFramePath,
+    portRelayTargetMenuTargets.length,
+    selectedPortRelayTarget,
+    setMobileRelayTargetSheet,
+  ]);
+  const handleFloatingNavSelect = useCallback(
+    (destination: FloatingNavDestination) => {
+      cancelGestureNavigation();
+      if (destination === 'relay') {
+        handleFloatingNavRelayOpen();
+        return;
+      }
+      if (destination === 'preview') {
+        toggleChatPreviewFromTitle();
+        return;
+      }
+      setMobileUsageOpen(false);
+      closeChatPreview();
+      setSidebarSettingsOpen(false);
+      setTerminalOpen(false);
+      if (destination === 'terminal') {
+        setTerminalOpen(true);
+      } else if (destination === 'monitor') {
+        setMobileUsageOpen(true);
+      } else if (destination === 'settings') {
+        openSettingsRoot();
+      }
+      // 'chat' falls through: every overlay above is closed.
+    },
+    [
+      cancelGestureNavigation,
+      closeChatPreview,
+      handleFloatingNavRelayOpen,
+      openSettingsRoot,
+      setSidebarSettingsOpen,
+      toggleChatPreviewFromTitle,
+    ],
+  );
   const toggleTerminalFromTitle = useCallback(() => {
     setTerminalOpen(open => {
       const next = !open;
@@ -19196,129 +19118,80 @@ export function App() {
           cancelGestureNavigation(event.pointerId);
         }}
       >
-        <PortRelayFloatingButton
-          ready={portRelayReady}
-          frameUrl={portRelayFrameUrl}
-          frameOpen={portRelayWorkbenchOpen}
-          mobileFrameOpen={mobilePortRelayFrameOpen}
-          targetMenuOpen={portRelayTargetMenuOpen}
-          targetMenuRef={portRelayTargetMenuRef}
-          targets={portRelayTargetMenuTargets}
-          activeTarget={activePortRelayTarget}
-          switchingTarget={portRelayMenuSwitchingTarget}
-          onTargetSelect={handlePortRelayFloatingTargetSelect}
-          onPointerDown={handlePortRelayFloatingPointerDown}
-          onPointerMove={handlePortRelayFloatingPointerMove}
-          onPointerUp={finishPortRelayFloatingPress}
-          onPointerCancel={finishPortRelayFloatingPress}
-          onToggle={handlePortRelayFloatingToggle}
+        <MobileFloatingNav
+          expanded={gestureNavigationExpanded}
+          current={floatingNavCurrent}
+          previewActive={chatPreviewOpen && !mobilePortRelayFrameOpen}
+          terminalActive={terminalOpen}
+          monitorActive={mobileUsageOpen}
+          chatUnread={hasCompletedUnreadChatSessionIndicator}
+          relay={floatingNavRelayState}
+          onSelect={handleFloatingNavSelect}
+          onCurrentSelect={handleGestureNavigationCurrentSelect}
+          onButtonPointerDown={handleGestureNavigationPillPointerDown}
         />
-        {mobilePortRelayFrameOpen ? null : (
-          <div
-            className="gesture-nav-control"
-            data-expanded={gestureNavigationExpanded ? 'true' : 'false'}
-            aria-label="Gesture navigation"
-          >
-            <div
-              className="gesture-nav-pill"
-              onPointerDown={handleGestureNavigationPillPointerDown}
-            >
-              {gestureNavigationExpanded ? (
-                <button
-                  key="preview"
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule"
-                  data-active={chatPreviewOpen}
-                  onPointerDown={e => e.stopPropagation()}
-                  onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
-                  title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                  aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                  aria-pressed={chatPreviewOpen}
-                >
-                  <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
-                </button>
-              ) : null}
-              {gestureNavigationExpanded ? (
-                <button
-                  key="terminal"
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule"
-                  data-active={terminalOpen}
-                  onPointerDown={e => e.stopPropagation()}
-                  onClick={() => {
-                    cancelGestureNavigation();
-                    setMobileUsageOpen(false);
-                    closeChatPreview();
-                    setSidebarSettingsOpen(false);
-                    setTerminalOpen(true);
-                  }}
-                  title="Terminal"
-                  aria-label="Terminal"
-                  aria-pressed={terminalOpen}
-                >
-                  <span className="codicon codicon-terminal" aria-hidden="true" />
-                </button>
-              ) : null}
-              <button
-                key="chat"
-                type="button"
-                className="gesture-nav-button gesture-nav-current-button"
-                data-active="true"
-                onPointerDown={handleGestureNavigationButtonPointerDown}
-                onClick={handleGestureNavigationCurrentSelect}
-                title={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}
-                aria-label={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}
-              >
-                <span className="codicon codicon-comment-discussion" aria-hidden="true" />
-                {hasCompletedUnreadChatSessionIndicator ? (
-                  <span className="floating-nav-unread-dot" aria-hidden="true" />
-                ) : null}
-              </button>
-              {gestureNavigationExpanded ? (
-                <button
-                  key="monitor"
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule"
-                  data-active={mobileUsageOpen}
-                  onPointerDown={e => e.stopPropagation()}
-                  onClick={() => {
-                    cancelGestureNavigation();
-                    setTerminalOpen(false);
-                    closeChatPreview();
-                    setSidebarSettingsOpen(false);
-                    setMobileUsageOpen(true);
-                  }}
-                  title="Monitor"
-                  aria-label="Monitor"
-                  aria-pressed={mobileUsageOpen}
-                >
-                  <span className="codicon codicon-dashboard" aria-hidden="true" />
-                </button>
-              ) : null}
-              {gestureNavigationExpanded ? (
-                <button
-                  key="settings"
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule"
-                  onPointerDown={e => e.stopPropagation()}
-                  onClick={() => {
-                    cancelGestureNavigation();
-                    setMobileUsageOpen(false);
-                    setTerminalOpen(false);
-                    closeChatPreview();
-                    openSettingsRoot();
-                  }}
-                  title="Settings"
-                  aria-label="Settings"
-                >
-                  <span className="codicon codicon-settings-gear" aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
-          </div>
-        )}
       </div>
     </div>
+  ) : null;
+
+  const mobileRelayTargetSheetNode = !isWide && mobileRelayTargetSheet ? (
+    <>
+      <div
+        className="mobile-project-sheet-overlay"
+        onClick={() => setMobileRelayTargetSheet(null)}
+        aria-hidden="true"
+      />
+      <div
+        className={`mobile-project-sheet${mobileRelayTargetSheetExiting ? ' sl-menu-exit' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Port Relay targets"
+      >
+        <div className="mobile-project-sheet-grip" aria-hidden="true" />
+        <div className="mobile-project-sheet-header">
+          <SessionIcon name="radioTower" className="mobile-project-sheet-icon" />
+          <span className="mobile-project-sheet-title-copy">
+            <span className="mobile-project-sheet-title">Relay target</span>
+            <span className="mobile-project-sheet-subtitle">
+              {activePortRelayTarget
+                ? `${activePortRelayTarget.hubId}:${activePortRelayTarget.targetPort}`
+                : 'Select a target'}
+            </span>
+          </span>
+          <button
+            type="button"
+            className="mobile-project-sheet-close"
+            onClick={() => setMobileRelayTargetSheet(null)}
+            aria-label="Close"
+            title="Close"
+          >
+            <SessionIcon name="x" />
+          </button>
+        </div>
+        <div className="mobile-project-sheet-body">
+          {portRelayTargetMenuTargets.map(target => {
+            const selected = samePortRelayTarget(activePortRelayTarget, target);
+            const switching = samePortRelayTarget(portRelayMenuSwitchingTarget, target);
+            return (
+              <button
+                key={portRelayTargetKey(target)}
+                type="button"
+                className="wide-project-action-menu-item mobile-project-sheet-item"
+                onClick={() => {
+                  setMobileRelayTargetSheet(null);
+                  handlePortRelayFloatingTargetSelect(target);
+                }}
+              >
+                <SessionIcon name={switching ? 'loader' : selected ? 'check' : 'radioTower'} spin={switching} />
+                <span className="mobile-project-sheet-item-label">
+                  {`${target.hubId}:${target.targetPort}`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
   ) : null;
 
   const mobileSettingsTitle = settingsDetailView
@@ -20681,6 +20554,7 @@ export function App() {
       {projectSessionActionMenuOverlay}
       {chatTitleProjectMenu}
       {renderMobileProjectActionSheet()}
+      {mobileRelayTargetSheetNode}
       {chatTitlePromptMenu}
       {portRelayClearSiteDataFrame}
       {registryDebugPanel}

@@ -586,13 +586,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .topbar-menu-surface,
   .floating-nav-card,
   .floating-nav-button,
   .floating-nav-card-item,
   .floating-control-drag-backdrop,
   .floating-control-dock-rail,
-  .floating-control-stack,
-  .topbar-menu-surface {
+  .floating-control-stack {
     animation: none;
     transition: none;
   }

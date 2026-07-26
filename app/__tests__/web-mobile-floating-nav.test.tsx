@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import React from 'react';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {MobileFloatingNav} from '../web/src/shell/layouts/mobile/MobileFloatingNav';
@@ -105,5 +107,47 @@ describe('mobile floating nav model', () => {
       .toEqual({visible: true, frameOpen: false, enabled: false, active: false});
     expect(resolveFloatingNavRelayState({ready: true, frameUrl: 'http://x', hasTarget: true, frameOpen: true}))
       .toEqual({visible: true, frameOpen: true, enabled: true, active: true});
+  });
+});
+
+function readMain(): string {
+  return fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+}
+
+describe('floating nav wiring', () => {
+  test('resolves current surface and relay state through the model', () => {
+    const main = readMain();
+
+    expect(main).toContain('resolveFloatingNavCurrent({');
+    expect(main).toContain('relayFrameOpen: mobilePortRelayFrameOpen');
+    expect(main).toContain('resolveFloatingNavRelayState({');
+    expect(main).toContain('ready: portRelayReady');
+    expect(main).toContain('frameUrl: portRelayFrameUrl');
+    expect(main).toContain('expandedOverflowPx: FLOATING_NAV_EXPANDED_OVERFLOW_PX');
+  });
+
+  test('merges relay into the nav and drops the standalone bubble', () => {
+    const main = readMain();
+
+    expect(main).not.toContain('PortRelayFloatingButton');
+    expect(main).not.toContain('handlePortRelayFloatingPointerDown');
+    expect(main).not.toContain('finishPortRelayFloatingPress');
+    expect(main).not.toContain('PORT_RELAY_TARGET_MENU_LONG_PRESS_MS');
+    expect(main).not.toContain('portRelayTargetMenuOpen');
+    expect(main).not.toContain("mobilePortRelayFrameOpen ? null : (");
+    expect(main).toContain('handleFloatingNavSelect');
+    expect(main).toContain('mobileRelayTargetSheet');
+    expect(main).toContain('useMenuExitState');
+  });
+
+  test('relay frame chrome uses lucide icons', () => {
+    const surface = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'portRelay', 'PortRelayFrameSurface.tsx'),
+      'utf8',
+    );
+
+    expect(surface).not.toContain('codicon');
+    expect(surface).not.toContain('PortRelayFloatingButton');
+    expect(surface).toContain("from '../common/Icon'");
   });
 });

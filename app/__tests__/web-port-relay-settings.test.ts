@@ -99,22 +99,21 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("previewTabId({type: 'port-relay'");
     expect(mainTsx).toContain('const handleDesktopPortRelaySelect = useCallback(() => {');
     expect(mainTsx).not.toContain('onClick={handleDesktopPortRelaySelect}');
-    expect(mainTsx).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
+    expect(mainTsx).toContain("import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
     expect(mainTsx).toContain('<PortRelayFrameSurface');
     expect(mainTsx).toContain('mode={mode}');
     expect(mainTsx).toContain('chrome={false}');
     expect(mainTsx).toContain('url={portRelayFrameUrl || activePortRelayPreview.url}');
     expect(mainTsx).toContain('key={`workbench:${activePortRelayPreview.id}:${activePortRelayPreview.reloadKey}:${portRelayFrameUrl}`}');
-    expect(mainTsx).toContain('<PortRelayFloatingButton');
-    expect(mainTsx).toContain('onToggle={handlePortRelayFloatingToggle}');
+    expect(mainTsx).not.toContain('<PortRelayFloatingButton');
+    expect(mainTsx).toContain('resolveFloatingNavRelayState({');
     expect(surfaceTsx).toContain('className={`port-relay-frame-surface ${mode}`}');
     expect(surfaceTsx).toContain('className="chat-preview-title"');
     expect(surfaceTsx).toContain('aria-label="Open relay page in browser"');
     expect(surfaceTsx).toContain('<iframe');
     expect(surfaceTsx).toContain('src={url}');
     expect(surfaceTsx).toContain('className="port-relay-frame"');
-    expect(surfaceTsx).toContain('className="drawer-toggle-bubble port-relay-floating-bubble"');
-    expect(surfaceTsx).toContain("title={frameOpen ? 'Close relay page' : 'Open relay page'}");
+    expect(surfaceTsx).not.toContain('codicon');
     expect(mainTsx).not.toContain("type PortRelayFramePlacement = 'main' | 'chatPreview';");
     expect(mainTsx).not.toContain('setPortRelayFramePlacement(');
     expect(mainTsx).not.toContain('const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen');
@@ -122,10 +121,10 @@ describe('port relay settings UI source structure', () => {
     expect(stylesCss).toContain('.port-relay-frame-surface');
     expect(stylesCss).toContain('.port-relay-frame-surface.mobile');
     expect(stylesCss).toContain('.port-relay-frame');
-    expect(stylesCss).toContain('.port-relay-floating-bubble');
+    expect(stylesCss).not.toContain('.port-relay-floating-bubble');
     expect(stylesCss).toContain(".floating-control-stack[data-side='left']");
     expect(stylesCss).toContain(".floating-control-stack[data-side='right']");
-    expect(stylesCss).toContain(".floating-control-stack[data-side='left'] .port-relay-target-switch-menu");
+    expect(stylesCss).not.toContain('.port-relay-target-switch-menu');
   });
 
   test('loads the relay cleanup page in a hidden iframe before reloading visible relay frames', () => {
@@ -215,44 +214,35 @@ describe('port relay settings UI source structure', () => {
     expect(iframeCss).toContain('max-width: 100%;');
   });
 
-  test('hides mobile navigation and drawer while the relay iframe is open', () => {
+  test('hides the drawer while the relay iframe is open but keeps the nav draggable', () => {
     expect(mainTsx).toContain('const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;');
     expect(mainTsx).toContain('if (!mobilePortRelayFrameOpen) {');
     expect(mainTsx).toContain('setDrawerOpen(false);');
     expect(mainTsx).toContain('setSidebarSettingsOpen(false);');
     expect(mainTsx).toContain('}, [mobilePortRelayFrameOpen, setDrawerOpen, setSidebarSettingsOpen]);');
-    expect(mainTsx).toContain('{mobilePortRelayFrameOpen ? null : (');
-    expect(mainTsx).not.toContain('{mobilePortRelayFrameOpen ? null : gestureNavigation ? (');
+    expect(mainTsx).not.toContain('{mobilePortRelayFrameOpen ? null : (');
     expect(mainTsx).toContain('drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}');
     expect(mainTsx).not.toContain('const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen');
   });
 
-  test('adds a mobile long-press target switch menu for the relay floating button', () => {
+  test('switches relay targets from a mobile bottom sheet in the floating nav', () => {
     expect(mainTsx).toContain('orderPortRelayTargetsForMenu(');
-    expect(mainTsx).toContain('const [portRelayTargetMenuOpen, setPortRelayTargetMenuOpen] = useState(false);');
-    expect(mainTsx).toContain('const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);');
-    expect(mainTsx).toContain('const handlePortRelayFloatingPointerDown = useCallback(');
-    expect(mainTsx).toContain('if (!mobilePortRelayFrameOpen) {');
-    expect(mainTsx).toContain('setPortRelayTargetMenuOpen(true);');
+    expect(mainTsx).toContain('useMenuExitState<{open: true}>()');
+    expect(mainTsx).toContain('const handleFloatingNavRelayOpen = useCallback(() => {');
+    expect(mainTsx).toContain('if (portRelayTargetMenuTargets.length > 1) {');
+    expect(mainTsx).toContain('setMobileRelayTargetSheet({open: true});');
     expect(mainTsx).toContain('const handleMobilePortRelayTargetMenuSelect = useCallback(async (target: PortRelayTarget) => {');
     expect(mainTsx).toContain('if (samePortRelayTarget(activePortRelayTarget, target)) {');
-    expect(mainTsx).toContain("openSettingsDetail('portRelay');");
     expect(mainTsx).toContain("await openPortRelayWorkbenchTab(target, '', {source: 'floating'});");
     expect(mainTsx).toContain('const handlePortRelayFloatingTargetSelect = useCallback((target: PortRelayTarget) => {');
-    expect(mainTsx).toContain('<PortRelayFloatingButton');
-    expect(mainTsx).toContain('targetMenuOpen={portRelayTargetMenuOpen}');
-    expect(mainTsx).toContain('targetMenuRef={portRelayTargetMenuRef}');
-    expect(mainTsx).toContain('targets={portRelayTargetMenuTargets}');
-    expect(mainTsx).toContain('activeTarget={activePortRelayTarget}');
-    expect(mainTsx).toContain('switchingTarget={portRelayMenuSwitchingTarget}');
-    expect(mainTsx).toContain('onPointerDown={handlePortRelayFloatingPointerDown}');
-    expect(surfaceTsx).toContain('const targetMenu = targetMenuOpen && mobileFrameOpen');
-    expect(surfaceTsx).toContain('className="port-relay-target-switch-menu"');
-    expect(surfaceTsx).toContain('className="port-relay-target-switch-item"');
-    expect(surfaceTsx).toContain('`${target.hubId}:${target.targetPort}`');
+    expect(mainTsx).toContain('mobileRelayTargetSheetNode');
+    expect(mainTsx).toContain('aria-label="Port Relay targets"');
+    expect(mainTsx).toContain('className="wide-project-action-menu-item mobile-project-sheet-item"');
+    expect(mainTsx).toContain('`${target.hubId}:${target.targetPort}`');
+    expect(mainTsx).not.toContain('port-relay-target-switch-menu');
 
-    expect(stylesCss).toContain('.port-relay-target-switch-menu');
-    expect(stylesCss).toContain('.port-relay-target-switch-item');
+    expect(stylesCss).toContain('.mobile-project-sheet');
+    expect(stylesCss).not.toContain('.port-relay-target-switch-menu');
   });
 
   test('keeps relay settings focused on hub local port mapping', () => {

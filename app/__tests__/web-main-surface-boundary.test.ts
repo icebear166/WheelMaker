@@ -21,7 +21,7 @@ describe('main surface boundaries', () => {
     expect(workspaceApp).toContain("} from '../shell/AppDialogs';");
     expect(workspaceApp).toContain("import { FileExplorerTree } from '../file/FileExplorerTree';");
     expect(workspaceApp).not.toContain("../git/GitSidebar");
-    expect(workspaceApp).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
+    expect(workspaceApp).toContain("import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
 
     expect(workspaceApp).not.toContain('const renderFileTree = (');
     expect(workspaceApp).not.toContain('const renderWorkspaceProjectSelector = () =>');

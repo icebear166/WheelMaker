@@ -10,30 +10,26 @@ function readFile(filePath: string): string {
 }
 
 describe('port relay frame surface boundary', () => {
-  test('main delegates relay frame and floating button rendering to port relay components', () => {
+  test('main delegates relay frame rendering to the port relay component', () => {
     const main = readFile(mainPath);
 
-    expect(main).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
+    expect(main).toContain("import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
     expect(main).toContain('<PortRelayFrameSurface');
-    expect(main).toContain('<PortRelayFloatingButton');
+    expect(main).not.toContain('<PortRelayFloatingButton');
     expect(main).not.toContain('const renderPortRelayFrameSurface =');
     expect(main).not.toContain('className={`port-relay-frame-surface ${mode}`}');
     expect(main).not.toContain('className="port-relay-frame"');
-    expect(main).not.toContain('className="port-relay-target-switch-menu"');
-    expect(main).not.toContain('className="drawer-toggle-bubble port-relay-floating-bubble"');
   });
 
-  test('port relay surface owns iframe chrome and mobile target switch markup', () => {
+  test('port relay surface owns iframe chrome markup', () => {
     expect(fs.existsSync(surfacePath)).toBe(true);
     const source = readFile(surfacePath);
 
     expect(source).toContain('export function PortRelayFrameSurface');
-    expect(source).toContain('export function PortRelayFloatingButton');
+    expect(source).not.toContain('PortRelayFloatingButton');
     expect(source).toContain('className={`port-relay-frame-surface ${mode}`}');
     expect(source).toContain('className="port-relay-frame"');
     expect(source).toContain('aria-label="Open relay page in browser"');
-    expect(source).toContain('className="drawer-toggle-bubble port-relay-floating-bubble"');
-    expect(source).toContain('className="port-relay-target-switch-menu"');
-    expect(source).toContain('className="port-relay-target-switch-item"');
+    expect(source).not.toContain('codicon');
   });
 });

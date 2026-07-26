@@ -102,14 +102,16 @@ describe('gesture navigation', () => {
     expect(uiState).not.toContain('WorkspaceFloatingDragState');
   });
 
-  test('does not restart the gesture press when the expanded chat button is clicked', () => {
-    const main = readMain();
-    const pointerDownStart = main.indexOf('const handleGestureNavigationButtonPointerDown = useCallback(');
-    const pointerDownEnd = main.indexOf('const handleGestureNavigationPillPointerDown = useCallback', pointerDownStart);
-    const pointerDownBody = main.slice(pointerDownStart, pointerDownEnd);
+  test('does not restart the gesture press from expanded card items', () => {
+    const component = fs.readFileSync(
+      path.join(projectRoot(), 'web', 'src', 'shell', 'layouts', 'mobile', 'MobileFloatingNav.tsx'),
+      'utf8',
+    );
 
-    expect(pointerDownBody).toContain("gestureNavStateRef.current?.phase !== 'expanded'");
-    expect(pointerDownBody).toContain('beginGestureNavigationPress(event);');
+    // Card items stop pointerdown propagation so a press on an item never
+    // re-arms the drag long-press; only the card background starts a press.
+    expect(component).toContain('onPointerDown={event => event.stopPropagation()}');
+    expect(component).toContain('onPointerDown={onButtonPointerDown}');
   });
 
   test('renders the floating nav through the MobileFloatingNav component', () => {
@@ -122,7 +124,6 @@ describe('gesture navigation', () => {
     expect(main).not.toContain('gesture-nav-capsule');
     expect(main).not.toContain('<PortRelayFloatingButton');
     expect(main).not.toContain('codicon-comment-discussion');
-    expect(main).not.toContain('codicon-layout-sidebar-right');
     expect(main).not.toContain('codicon-settings-gear');
     expect(main).not.toContain('codicon-radio-tower');
     expect(main).not.toContain('data-idle=');
