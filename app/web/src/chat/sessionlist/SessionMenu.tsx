@@ -102,9 +102,6 @@ export function SessionMenu({
             role="group"
             aria-label="Mark session"
           >
-            <span className="project-session-mark-label" aria-hidden="true">
-              Mark
-            </span>
             <span className="project-session-mark-options">
               {SESSION_MARK_OPTIONS.map(option => (
                 <button

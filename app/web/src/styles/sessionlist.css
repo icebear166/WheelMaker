@@ -388,7 +388,7 @@
   padding: 4px;
 }
 .project-session-action-menu {
-  min-width: 168px;
+  min-width: 148px;
 }
 .wide-project-action-popover {
   width: min(260px, calc(100vw - 16px));
@@ -440,24 +440,19 @@
 .project-session-mark-picker {
   display: flex;
   align-items: center;
+  justify-content: center;
   min-height: 30px;
   padding: 2px 8px;
-}
-.project-session-mark-label {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  -webkit-user-select: none;
-  user-select: none;
 }
 .project-session-mark-options {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  /* Neutral fallback inherited by the clear control; color classes on the
+     option buttons override it, so it must not live on the button itself. */
+  --session-mark-color: var(--text-tertiary);
 }
 .project-session-mark-option {
-  /* Neutral default so the clear control shares the same ring treatment. */
-  --session-mark-color: var(--text-tertiary);
   width: 16px;
   height: 16px;
   display: grid;
