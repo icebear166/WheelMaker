@@ -39,7 +39,22 @@ var ErrSessionArchiveUnsupported = errors.New("session archive unsupported")
 var (
 	ErrSessionActionUnsupported = errors.New("session action unsupported")
 	ErrSessionBusy              = errors.New("session is busy")
+	ErrSessionSteerInactive     = errors.New("session steer target is inactive")
+	ErrSessionSteerUnavailable  = errors.New("session steer is unavailable")
 )
+
+type SessionSteerResult struct {
+	ProviderTurnID string
+}
+
+type SessionSteerer interface {
+	SteerSession(
+		ctx context.Context,
+		sessionID string,
+		clientMessageID string,
+		blocks []protocol.ContentBlock,
+	) (SessionSteerResult, error)
+}
 
 type SessionCompactResult struct {
 	Err error
@@ -51,6 +66,22 @@ type SessionStatusProvider interface {
 
 type SessionCompactor interface {
 	CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error)
+}
+
+func (i *instance) SteerSession(
+	ctx context.Context,
+	sessionID string,
+	clientMessageID string,
+	blocks []protocol.ContentBlock,
+) (SessionSteerResult, error) {
+	if err := i.ensureConn(); err != nil {
+		return SessionSteerResult{}, err
+	}
+	steerer, ok := i.conn.(SessionSteerer)
+	if !ok {
+		return SessionSteerResult{}, ErrSessionActionUnsupported
+	}
+	return steerer.SteerSession(ctx, sessionID, clientMessageID, blocks)
 }
 
 type SessionForker interface {

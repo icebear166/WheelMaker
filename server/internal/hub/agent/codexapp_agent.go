@@ -205,6 +205,16 @@ type codexappRuntimeEvent struct {
 	request bool
 }
 
+type codexappRPCRequestError struct {
+	Method  string
+	Code    int
+	Message string
+}
+
+func (e *codexappRPCRequestError) Error() string {
+	return fmt.Sprintf("codexapp %s: %s", e.Method, e.Message)
+}
+
 func (r *codexappRuntime) request(ctx context.Context, method string, params any, out any) error {
 	if r == nil || r.transport == nil {
 		return errors.New("codexapp runtime is not ready")
@@ -235,7 +245,11 @@ func (r *codexappRuntime) request(ctx context.Context, method string, params any
 	select {
 	case resp := <-ch:
 		if resp.Error != nil {
-			return fmt.Errorf("codexapp %s: %s", method, resp.Error.Message)
+			return &codexappRPCRequestError{
+				Method:  method,
+				Code:    resp.Error.Code,
+				Message: resp.Error.Message,
+			}
 		}
 		if out == nil {
 			return nil
@@ -514,6 +528,14 @@ type codexappConn struct {
 	pendingPromptStops   map[string]string
 	pendingPromptUpdates map[string][]protocol.SessionUpdateParams
 	pendingTurnDiffs     map[string]string
+	pendingSteers        map[string]*codexappSteerTracker
+}
+
+type codexappSteerTracker struct {
+	turnID   string
+	blocks   []protocol.ContentBlock
+	accepted chan struct{}
+	once     sync.Once
 }
 
 type codexappPromptResult struct {
@@ -845,6 +867,89 @@ func (c *codexappConn) SessionStatus(ctx context.Context) (protocol.SessionActio
 	return normalizeCodexappRateLimits(response, time.Now()), nil
 }
 
+func (c *codexappConn) SteerSession(
+	ctx context.Context,
+	sessionID string,
+	clientMessageID string,
+	blocks []protocol.ContentBlock,
+) (SessionSteerResult, error) {
+	threadID := c.runtimeThreadIDForSession(sessionID)
+	if threadID == "" {
+		return SessionSteerResult{}, errors.New("codexapp steer requires sessionId")
+	}
+	input, err := codexappPromptToInputWithArtifacts(c.projectName, sessionID, blocks)
+	if err != nil {
+		return SessionSteerResult{}, err
+	}
+
+	c.mu.Lock()
+	expectedTurnID := strings.TrimSpace(c.activeTurnID)
+	if c.promptDone == nil || expectedTurnID == "" {
+		c.mu.Unlock()
+		return SessionSteerResult{}, ErrSessionSteerInactive
+	}
+	if c.pendingSteers == nil {
+		c.pendingSteers = make(map[string]*codexappSteerTracker)
+	}
+	tracker := &codexappSteerTracker{
+		turnID:   expectedTurnID,
+		blocks:   cloneCodexappContentBlocks(blocks),
+		accepted: make(chan struct{}),
+	}
+	c.pendingSteers[clientMessageID] = tracker
+	c.mu.Unlock()
+	defer c.removePendingSteer(clientMessageID, tracker)
+
+	var response appServerTurnSteerResponse
+	err = c.runtime.request(ctx, "turn/steer", appServerTurnSteerParams{
+		ThreadID:            threadID,
+		ExpectedTurnID:      expectedTurnID,
+		ClientUserMessageID: clientMessageID,
+		Input:               input,
+	}, &response)
+	if err != nil {
+		return SessionSteerResult{}, classifyCodexappSteerError(err)
+	}
+	if strings.TrimSpace(response.TurnID) != expectedTurnID {
+		return SessionSteerResult{}, fmt.Errorf(
+			"codexapp turn/steer accepted turn %q, expected %q",
+			response.TurnID,
+			expectedTurnID,
+		)
+	}
+	select {
+	case <-tracker.accepted:
+		return SessionSteerResult{ProviderTurnID: response.TurnID}, nil
+	case <-ctx.Done():
+		return SessionSteerResult{}, ctx.Err()
+	}
+}
+
+func (c *codexappConn) removePendingSteer(clientMessageID string, tracker *codexappSteerTracker) {
+	c.mu.Lock()
+	if c.pendingSteers[clientMessageID] == tracker {
+		delete(c.pendingSteers, clientMessageID)
+	}
+	c.mu.Unlock()
+}
+
+func classifyCodexappSteerError(err error) error {
+	var requestErr *codexappRPCRequestError
+	if !errors.As(err, &requestErr) {
+		return err
+	}
+	message := strings.ToLower(strings.TrimSpace(requestErr.Message))
+	switch {
+	case message == "no active turn to steer",
+		strings.HasPrefix(message, "expected active turn id"):
+		return fmt.Errorf("%w: %s", ErrSessionSteerInactive, requestErr.Message)
+	case strings.Contains(message, "not steerable"):
+		return fmt.Errorf("%w: %s", ErrSessionSteerUnavailable, requestErr.Message)
+	default:
+		return err
+	}
+}
+
 func (c *codexappConn) CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error) {
 	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID))
 	if strings.TrimSpace(threadID) == "" {
@@ -1119,6 +1224,9 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "item/started", "item/completed":
 		var p appServerItemEventParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
+			if method == "item/started" && c.handleSteerUserMessage(p) {
+				return
+			}
 			if c.handleCompactionItem(p, method == "item/completed") {
 				return
 			}
@@ -1219,6 +1327,27 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 			})
 		}
 	}
+}
+
+func (c *codexappConn) handleSteerUserMessage(p appServerItemEventParams) bool {
+	clientID := strings.TrimSpace(p.Item.ClientID)
+	if p.Item.Type != "userMessage" || clientID == "" {
+		return false
+	}
+	c.mu.Lock()
+	tracker := c.pendingSteers[clientID]
+	c.mu.Unlock()
+	if tracker == nil || tracker.turnID != strings.TrimSpace(p.TurnID) {
+		return false
+	}
+	c.emitTurnUpdate(p.ThreadID, p.TurnID, protocol.SessionUpdate{
+		SessionUpdate:   protocol.SessionUpdateUserMessageChunk,
+		ContentBlocks:   cloneCodexappContentBlocks(tracker.blocks),
+		ClientMessageID: clientID,
+		Steered:         true,
+	})
+	tracker.once.Do(func() { close(tracker.accepted) })
+	return true
 }
 
 func (c *codexappConn) handleCompactionItem(p appServerItemEventParams, completed bool) bool {
@@ -1767,23 +1896,42 @@ func (c *codexappConn) replayThreadTurns(acpSessionID string, turns []appServerT
 		return
 	}
 	for _, turn := range turns {
+		seenUserMessage := false
 		for _, item := range turn.Items {
-			c.replayThreadItem(acpSessionID, item)
+			steered := item.Type == "userMessage" && seenUserMessage
+			c.replayThreadItem(acpSessionID, item, steered)
+			if item.Type == "userMessage" {
+				seenUserMessage = true
+			}
 		}
 	}
 }
 
-func (c *codexappConn) replayThreadItem(acpSessionID string, item appServerThreadItem) {
+func (c *codexappConn) replayThreadItem(acpSessionID string, item appServerThreadItem, steered bool) {
 	switch item.Type {
 	case "userMessage":
 		var inputs []appServerUserInput
-		if len(item.Content) > 0 && json.Unmarshal(item.Content, &inputs) == nil {
-			for _, input := range inputs {
-				if input.Type == "text" && input.Text != "" {
-					c.emitReplayText(acpSessionID, protocol.SessionUpdateUserMessageChunk, input.Text)
-				}
-			}
+		if len(item.Content) == 0 || json.Unmarshal(item.Content, &inputs) != nil {
+			return
 		}
+		blocks := codexappReplayInputBlocks(inputs)
+		if len(blocks) == 0 {
+			return
+		}
+		var legacyContent json.RawMessage
+		if blocks[0].Type == protocol.ContentBlockTypeText {
+			legacyContent = mustRaw(blocks[0])
+		}
+		c.emitSessionUpdate(protocol.SessionUpdateParams{
+			SessionID: acpSessionID,
+			Update: protocol.SessionUpdate{
+				SessionUpdate:   protocol.SessionUpdateUserMessageChunk,
+				Content:         legacyContent,
+				ContentBlocks:   blocks,
+				ClientMessageID: item.ClientID,
+				Steered:         steered,
+			},
+		})
 	case "agentMessage":
 		if item.Text != "" {
 			c.emitReplayText(acpSessionID, protocol.SessionUpdateAgentMessageChunk, item.Text)

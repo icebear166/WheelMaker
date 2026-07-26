@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -2416,6 +2417,242 @@ func TestCodexAppPromptDoesNotEchoUserMessageChunk(t *testing.T) {
 	}
 }
 
+func TestCodexAppSteerAcceptsCorrelatedUserMessageBeforeResponse(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+
+	updates := make(chan protocol.SessionUpdateParams, 8)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+	setActiveCodexPromptForTest(conn, "turn-1")
+
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "turn/steer" {
+			return
+		}
+		params := msg["params"].(map[string]any)
+		if params["expectedTurnId"] != "turn-1" || params["clientUserMessageId"] != "queued-1" {
+			t.Fatalf("turn/steer params = %#v", params)
+		}
+		_ = tr.emit(map[string]any{
+			"method": "item/started",
+			"params": map[string]any{
+				"threadId": "thread-1",
+				"turnId":   "turn-1",
+				"item": map[string]any{
+					"id":       "user-2",
+					"type":     "userMessage",
+					"clientId": "queued-1",
+					"content":  []any{map[string]any{"type": "text", "text": "steer me"}},
+				},
+			},
+		})
+		_ = tr.emit(map[string]any{
+			"id":     msg["id"],
+			"result": map[string]any{"turnId": "turn-1"},
+		})
+	}
+
+	result, err := conn.SteerSession(context.Background(), "thread-1", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "steer me",
+	}})
+	if err != nil {
+		t.Fatalf("SteerSession(): %v", err)
+	}
+	if result.ProviderTurnID != "turn-1" {
+		t.Fatalf("provider turn = %q", result.ProviderTurnID)
+	}
+	update := waitForCodexappUpdate(t, updates)
+	if update.Update.SessionUpdate != protocol.SessionUpdateUserMessageChunk ||
+		update.Update.ClientMessageID != "queued-1" ||
+		!update.Update.Steered {
+		t.Fatalf("steer update = %#v", update.Update)
+	}
+	if len(update.Update.ContentBlocks) != 1 || update.Update.ContentBlocks[0].Text != "steer me" {
+		t.Fatalf("steer blocks = %#v", update.Update.ContentBlocks)
+	}
+}
+
+func TestCodexAppSteerResponseBeforeUserMessage(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	setActiveCodexPromptForTest(conn, "turn-1")
+
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "turn/steer" {
+			return
+		}
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{"turnId": "turn-1"}})
+		_ = tr.emit(map[string]any{
+			"method": "item/started",
+			"params": map[string]any{
+				"threadId": "thread-1",
+				"turnId":   "turn-1",
+				"item": map[string]any{
+					"id":       "user-2",
+					"type":     "userMessage",
+					"clientId": "queued-1",
+					"content":  []any{map[string]any{"type": "text", "text": "steer me"}},
+				},
+			},
+		})
+	}
+
+	result, err := conn.SteerSession(context.Background(), "thread-1", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "steer me",
+	}})
+	if err != nil || result.ProviderTurnID != "turn-1" {
+		t.Fatalf("SteerSession() result=%#v err=%v", result, err)
+	}
+}
+
+func TestCodexAppSteerKeepsSameTurnUpdatesFlowingBeforeAcceptance(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	setActiveCodexPromptForTest(conn, "turn-1")
+	updates := make(chan protocol.SessionUpdateParams, 8)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "turn/steer" {
+			return
+		}
+		_ = tr.emit(map[string]any{
+			"method": "item/agentMessage/delta",
+			"params": map[string]any{"threadId": "thread-1", "turnId": "turn-1", "delta": "before"},
+		})
+		_ = tr.emit(map[string]any{
+			"method": "item/started",
+			"params": map[string]any{
+				"threadId": "thread-1",
+				"turnId":   "turn-1",
+				"item": map[string]any{
+					"id":       "user-2",
+					"type":     "userMessage",
+					"clientId": "queued-1",
+					"content":  []any{map[string]any{"type": "text", "text": "change"}},
+				},
+			},
+		})
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{"turnId": "turn-1"}})
+	}
+
+	if _, err := conn.SteerSession(context.Background(), "thread-1", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "change",
+	}}); err != nil {
+		t.Fatalf("SteerSession(): %v", err)
+	}
+	first := waitForCodexappUpdate(t, updates)
+	second := waitForCodexappUpdate(t, updates)
+	if first.Update.SessionUpdate != protocol.SessionUpdateAgentMessageChunk ||
+		second.Update.SessionUpdate != protocol.SessionUpdateUserMessageChunk ||
+		!second.Update.Steered {
+		t.Fatalf("update order = %#v then %#v", first.Update, second.Update)
+	}
+}
+
+func TestCodexAppSteerNoActiveTurnReturnsInactive(t *testing.T) {
+	conn := newCodexappConnWithRuntime(newCodexappRuntimeWithTransport(newFakeCodexappTransport()), t.TempDir())
+	conn.BindSessionID("thread-1")
+	_, err := conn.SteerSession(context.Background(), "thread-1", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "change",
+	}})
+	if !errors.Is(err, ErrSessionSteerInactive) {
+		t.Fatalf("SteerSession() err=%v, want inactive", err)
+	}
+}
+
+func TestCodexAppSteerNonSteerableTurnReturnsUnavailable(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	setActiveCodexPromptForTest(conn, "turn-1")
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "turn/steer" {
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"error": map[string]any{
+					"code":    -32600,
+					"message": "active turn is not steerable",
+				},
+			})
+		}
+	}
+	_, err := conn.SteerSession(context.Background(), "thread-1", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "change",
+	}})
+	if !errors.Is(err, ErrSessionSteerUnavailable) {
+		t.Fatalf("SteerSession() err=%v, want unavailable", err)
+	}
+}
+
+func TestCodexAppReplayMarksAdditionalUserMessagesSteered(t *testing.T) {
+	conn := newCodexappConnWithRuntime(nil, t.TempDir())
+	updates := make(chan protocol.SessionUpdateParams, 4)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+	conn.replayThreadTurns("thread-1", []appServerTurn{{
+		ID: "turn-1",
+		Items: []appServerThreadItem{
+			{ID: "user-1", Type: "userMessage", Content: mustRaw([]appServerUserInput{{Type: "text", Text: "initial"}})},
+			{ID: "user-2", ClientID: "queued-1", Type: "userMessage", Content: mustRaw([]appServerUserInput{{Type: "text", Text: "change"}})},
+		},
+	}})
+	first := waitForCodexappUpdate(t, updates)
+	second := waitForCodexappUpdate(t, updates)
+	if first.Update.Steered {
+		t.Fatalf("initial user message marked steered: %#v", first.Update)
+	}
+	if !second.Update.Steered || second.Update.ClientMessageID != "queued-1" {
+		t.Fatalf("additional user message = %#v", second.Update)
+	}
+}
+
+func TestInstanceSteerDelegatesToOptionalConnection(t *testing.T) {
+	conn := &fakeSteerConn{}
+	inst := NewInstance("test", conn)
+	steerer, ok := inst.(SessionSteerer)
+	if !ok {
+		t.Fatalf("instance type %T does not implement SessionSteerer", inst)
+	}
+	result, err := steerer.SteerSession(context.Background(), "session-1", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "change",
+	}})
+	if err != nil {
+		t.Fatalf("SteerSession(): %v", err)
+	}
+	if result.ProviderTurnID != "turn-1" ||
+		conn.sessionID != "session-1" ||
+		conn.clientMessageID != "queued-1" ||
+		len(conn.blocks) != 1 ||
+		conn.blocks[0].Text != "change" {
+		t.Fatalf("delegation result=%#v conn=%#v", result, conn)
+	}
+}
+
+func setActiveCodexPromptForTest(conn *codexappConn, turnID string) {
+	conn.mu.Lock()
+	conn.promptDone = make(chan codexappPromptResult, 1)
+	conn.activeTurnID = turnID
+	conn.lastTurnID = turnID
+	conn.mu.Unlock()
+}
+
 func TestCodexAppItemLifecycleEmitsToolCallThenUpdates(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)
@@ -4722,6 +4959,25 @@ func waitForTurnDiff(t *testing.T, conn *codexappConn, turnID string, want strin
 type fakeRawConn struct {
 	req  ACPRequestHandler
 	resp ACPResponseHandler
+}
+
+type fakeSteerConn struct {
+	fakeRawConn
+	sessionID       string
+	clientMessageID string
+	blocks          []protocol.ContentBlock
+}
+
+func (f *fakeSteerConn) SteerSession(
+	_ context.Context,
+	sessionID string,
+	clientMessageID string,
+	blocks []protocol.ContentBlock,
+) (SessionSteerResult, error) {
+	f.sessionID = sessionID
+	f.clientMessageID = clientMessageID
+	f.blocks = cloneCodexappContentBlocks(blocks)
+	return SessionSteerResult{ProviderTurnID: "turn-1"}, nil
 }
 
 func (f *fakeRawConn) Send(_ context.Context, _ string, _ any, _ any) error { return nil }

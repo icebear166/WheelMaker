@@ -371,6 +371,17 @@ type appServerTurnStartParams struct {
 	ServiceTier    *string              `json:"serviceTier"`
 }
 
+type appServerTurnSteerParams struct {
+	ThreadID            string               `json:"threadId"`
+	ExpectedTurnID      string               `json:"expectedTurnId"`
+	ClientUserMessageID string               `json:"clientUserMessageId"`
+	Input               []appServerUserInput `json:"input"`
+}
+
+type appServerTurnSteerResponse struct {
+	TurnID string `json:"turnId"`
+}
+
 type appServerSandbox struct {
 	Type                string   `json:"type"`
 	WritableRoots       []string `json:"writableRoots,omitempty"`
@@ -453,6 +464,7 @@ type appServerItemEventParams struct {
 
 type appServerThreadItem struct {
 	ID               string                `json:"id"`
+	ClientID         string                `json:"clientId,omitempty"`
 	Type             string                `json:"type"`
 	Text             string                `json:"text,omitempty"`
 	Phase            string                `json:"phase,omitempty"`
@@ -470,6 +482,52 @@ type appServerThreadItem struct {
 	Result           json.RawMessage       `json:"result,omitempty"`
 	Error            json.RawMessage       `json:"error,omitempty"`
 	Changes          []appServerFileChange `json:"changes,omitempty"`
+}
+
+func cloneCodexappContentBlocks(blocks []protocol.ContentBlock) []protocol.ContentBlock {
+	if len(blocks) == 0 {
+		return nil
+	}
+	out := make([]protocol.ContentBlock, len(blocks))
+	for index := range blocks {
+		out[index] = blocks[index]
+		out[index].Annotations = append(json.RawMessage(nil), blocks[index].Annotations...)
+		if blocks[index].Resource != nil {
+			resource := *blocks[index].Resource
+			out[index].Resource = &resource
+		}
+	}
+	return out
+}
+
+func codexappReplayInputBlocks(inputs []appServerUserInput) []protocol.ContentBlock {
+	blocks := make([]protocol.ContentBlock, 0, len(inputs))
+	for _, input := range inputs {
+		switch input.Type {
+		case "text":
+			if input.Text != "" {
+				blocks = append(blocks, protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: input.Text})
+			}
+		case "image":
+			if strings.TrimSpace(input.URL) != "" {
+				blocks = append(blocks, protocol.ContentBlock{Type: protocol.ContentBlockTypeResourceLink, URI: input.URL})
+			}
+		case "localImage", "skill", "mention":
+			if strings.TrimSpace(input.Path) == "" {
+				continue
+			}
+			path := filepath.ToSlash(filepath.Clean(input.Path))
+			if filepath.VolumeName(input.Path) != "" && !strings.HasPrefix(path, "/") {
+				path = "/" + path
+			}
+			blocks = append(blocks, protocol.ContentBlock{
+				Type: protocol.ContentBlockTypeResourceLink,
+				URI:  (&url.URL{Scheme: "file", Path: path}).String(),
+				Name: input.Name,
+			})
+		}
+	}
+	return blocks
 }
 
 type appServerFileChange struct {
