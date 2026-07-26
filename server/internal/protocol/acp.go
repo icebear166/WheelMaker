@@ -209,6 +209,8 @@ type SessionUpdate struct {
 	Size          *int64         `json:"size,omitempty"`
 	Used          *int64         `json:"used,omitempty"`
 	UpdatedAt     string         `json:"updatedAt,omitempty"`
+	Goal          *SessionGoal   `json:"goal,omitempty"`
+	TurnID        string         `json:"turnId,omitempty"`
 }
 
 // SessionUsage is the current context-window usage snapshot for a session.

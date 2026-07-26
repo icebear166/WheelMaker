@@ -1848,6 +1848,101 @@ func TestCodexAppSessionGoalClear(t *testing.T) {
 	}
 }
 
+func TestCodexAppGoalNotificationsDriveAutomaticTurnLifecycle(t *testing.T) {
+	conn := newCodexappConnWithRuntime(nil, t.TempDir())
+	conn.bindSessionIDs("session-stable", "thread-runtime")
+	updates := make(chan protocol.SessionUpdateParams, 8)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	conn.handleAppServerNotification("thread/goal/updated", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"turnId":   nil,
+		"goal": map[string]any{
+			"threadId": "thread-runtime", "objective": "ship", "status": "active",
+			"tokenBudget": nil, "tokensUsed": 42, "timeUsedSeconds": 7,
+			"createdAt": 10, "updatedAt": 11,
+		},
+	}))
+	goalUpdate := waitForCodexappUpdate(t, updates)
+	if goalUpdate.Update.SessionUpdate != protocol.SessionUpdateGoalUpdated ||
+		goalUpdate.Update.Goal == nil ||
+		goalUpdate.Update.Goal.SessionID != "session-stable" {
+		t.Fatalf("goal update = %#v", goalUpdate)
+	}
+
+	conn.handleAppServerNotification("turn/started", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"turn":     map[string]any{"id": "turn-goal-1", "status": "inProgress"},
+	}))
+	started := waitForCodexappUpdate(t, updates)
+	if started.Update.SessionUpdate != protocol.SessionUpdateGoalTurnStarted || started.Update.TurnID != "turn-goal-1" {
+		t.Fatalf("turn started = %#v", started)
+	}
+	conn.handleAppServerNotification("item/agentMessage/delta", mustRaw(map[string]any{
+		"threadId": "thread-runtime", "turnId": "turn-goal-1", "delta": "working",
+	}))
+	if got := waitForCodexappUpdate(t, updates); got.Update.SessionUpdate != protocol.SessionUpdateAgentMessageChunk {
+		t.Fatalf("agent update = %#v", got)
+	}
+	conn.handleAppServerNotification("turn/completed", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"turn":     map[string]any{"id": "turn-goal-1", "status": "completed"},
+	}))
+	completed := waitForCodexappUpdate(t, updates)
+	if completed.Update.SessionUpdate != protocol.SessionUpdateGoalTurnCompleted || completed.Update.TurnID != "turn-goal-1" {
+		t.Fatalf("turn completed = %#v", completed)
+	}
+}
+
+func TestCodexAppGoalTurnCanSteerWithoutPromptDone(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "turn/steer" {
+			return
+		}
+		params, _ := msg["params"].(map[string]any)
+		if params["expectedTurnId"] != "turn-goal-1" {
+			t.Errorf("expectedTurnId = %v", params["expectedTurnId"])
+		}
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{"turnId": "turn-goal-1"}})
+		_ = tr.emit(map[string]any{
+			"method": "item/started",
+			"params": map[string]any{
+				"threadId": "thread-runtime", "turnId": "turn-goal-1",
+				"item": map[string]any{
+					"id": "user-steer", "type": "userMessage", "clientId": "queued-1",
+					"content": []map[string]any{{"type": "text", "text": "fix tests"}},
+				},
+			},
+		})
+	}
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-stable", "thread-runtime")
+	conn.handleAppServerNotification("thread/goal/updated", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"goal": map[string]any{
+			"threadId": "thread-runtime", "objective": "ship", "status": "active",
+			"tokenBudget": nil, "tokensUsed": 0, "timeUsedSeconds": 0,
+			"createdAt": 10, "updatedAt": 11,
+		},
+	}))
+	conn.handleAppServerNotification("turn/started", mustRaw(map[string]any{
+		"threadId": "thread-runtime", "turn": map[string]any{"id": "turn-goal-1"},
+	}))
+	result, err := conn.SteerSession(context.Background(), "session-stable", "queued-1", []protocol.ContentBlock{{
+		Type: protocol.ContentBlockTypeText,
+		Text: "fix tests",
+	}})
+	if err != nil {
+		t.Fatalf("SteerSession(): %v", err)
+	}
+	if result.ProviderTurnID != "turn-goal-1" {
+		t.Fatalf("result = %#v", result)
+	}
+}
+
 func TestCodexappCompactTracksContextCompaction(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

@@ -509,21 +509,23 @@ type codexappConn struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	mu            sync.Mutex
-	reqHandler    ACPRequestHandler
-	respHandler   ACPResponseHandler
-	acpSessionID  string
-	threadID      string
-	projectName   string
-	config        codexappConfigState
-	activeTurnID  string
-	lastTurnID    string
-	promptDone    chan codexappPromptResult
-	compactDone   chan SessionCompactResult
-	compactTurnID string
-	compactItemID string
-	compactGen    uint64
-	startedTools  map[string]bool
+	mu             sync.Mutex
+	reqHandler     ACPRequestHandler
+	respHandler    ACPResponseHandler
+	acpSessionID   string
+	threadID       string
+	projectName    string
+	config         codexappConfigState
+	activeTurnID   string
+	lastTurnID     string
+	promptDone     chan codexappPromptResult
+	compactDone    chan SessionCompactResult
+	compactTurnID  string
+	compactItemID  string
+	compactGen     uint64
+	startedTools   map[string]bool
+	goal           *protocol.SessionGoal
+	goalTurnActive bool
 
 	pendingPromptStops   map[string]string
 	pendingPromptUpdates map[string][]protocol.SessionUpdateParams
@@ -776,6 +778,10 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 	}
 	cwd := firstNonEmptyString(p.CWD, c.cwd)
 	runtimeThreadID := firstNonEmptyString(codexappMappedThreadID(acpSessionID), acpSessionID)
+	// Resume can immediately emit Goal and Turn notifications. Register the
+	// stable/runtime mapping before the request so those notifications are not
+	// dropped by the shared runtime dispatcher.
+	c.bindSessionIDs(acpSessionID, runtimeThreadID)
 	req := c.config.threadResumeParams(runtimeThreadID, cwd)
 	var resp appServerThreadStartResponse
 	recreatedThread := false
@@ -947,7 +953,7 @@ func (c *codexappConn) SteerSession(
 
 	c.mu.Lock()
 	expectedTurnID := strings.TrimSpace(c.activeTurnID)
-	if c.promptDone == nil || expectedTurnID == "" {
+	if (c.promptDone == nil && !c.goalTurnActive) || expectedTurnID == "" {
 		c.mu.Unlock()
 		return SessionSteerResult{}, ErrSessionSteerInactive
 	}
@@ -1274,6 +1280,37 @@ func (e codexappMethodNotFoundError) Error() string {
 
 func (c *codexappConn) handleAppServerNotification(method string, params json.RawMessage) {
 	switch method {
+	case "thread/goal/updated":
+		var p appServerThreadGoalUpdatedParams
+		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
+			goal := normalizeCodexappGoal(p.Goal, c.outboundSessionID(p.ThreadID))
+			c.mu.Lock()
+			c.goal = &goal
+			c.mu.Unlock()
+			c.emitSessionUpdate(protocol.SessionUpdateParams{
+				SessionID: goal.SessionID,
+				Update: protocol.SessionUpdate{
+					SessionUpdate: protocol.SessionUpdateGoalUpdated,
+					Goal:          &goal,
+				},
+			})
+			if p.TurnID != nil && goal.Status == protocol.SessionGoalStatusActive {
+				c.setActiveTurnID(*p.TurnID)
+			}
+		}
+	case "thread/goal/cleared":
+		var p appServerThreadGoalClearedParams
+		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
+			c.mu.Lock()
+			c.goal = nil
+			c.mu.Unlock()
+			c.emitSessionUpdate(protocol.SessionUpdateParams{
+				SessionID: c.outboundSessionID(p.ThreadID),
+				Update: protocol.SessionUpdate{
+					SessionUpdate: protocol.SessionUpdateGoalCleared,
+				},
+			})
+		}
 	case "item/agentMessage/delta":
 		var p appServerAgentMessageDeltaParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" && p.Delta != "" {
@@ -2189,13 +2226,18 @@ func (c *codexappConn) setActiveTurnID(turnID string) {
 		return
 	}
 	c.mu.Lock()
-	if c.promptDone == nil {
+	goalActive := c.goal != nil && c.goal.Status == protocol.SessionGoalStatusActive
+	if c.promptDone == nil && !goalActive {
 		c.lastTurnID = turnID
 		c.mu.Unlock()
 		return
 	}
+	goalTurnStarted := goalActive && (!c.goalTurnActive || c.activeTurnID != turnID)
 	c.activeTurnID = turnID
 	c.lastTurnID = turnID
+	if goalActive {
+		c.goalTurnActive = true
+	}
 	updates := append([]protocol.SessionUpdateParams(nil), c.pendingPromptUpdates[turnID]...)
 	if c.pendingPromptUpdates != nil {
 		delete(c.pendingPromptUpdates, turnID)
@@ -2207,6 +2249,15 @@ func (c *codexappConn) setActiveTurnID(turnID string) {
 	}
 	c.mu.Unlock()
 
+	if goalTurnStarted {
+		c.emitSessionUpdate(protocol.SessionUpdateParams{
+			SessionID: c.outboundSessionID(""),
+			Update: protocol.SessionUpdate{
+				SessionUpdate: protocol.SessionUpdateGoalTurnStarted,
+				TurnID:        turnID,
+			},
+		})
+	}
 	for _, update := range updates {
 		c.emitSessionUpdate(update)
 	}
@@ -2239,15 +2290,18 @@ func (c *codexappConn) completePrompt(turnID string, stopReason string) {
 	turnID = strings.TrimSpace(turnID)
 	c.mu.Lock()
 	done := c.promptDone
-	if done == nil || turnID == "" {
+	goalTurn := c.goalTurnActive
+	if (done == nil && !goalTurn) || turnID == "" {
 		c.mu.Unlock()
 		return
 	}
 	if c.activeTurnID == "" {
-		if c.pendingPromptStops == nil {
-			c.pendingPromptStops = map[string]string{}
+		if done != nil {
+			if c.pendingPromptStops == nil {
+				c.pendingPromptStops = map[string]string{}
+			}
+			c.pendingPromptStops[turnID] = stopReason
 		}
-		c.pendingPromptStops[turnID] = stopReason
 		c.mu.Unlock()
 		return
 	}
@@ -2259,12 +2313,28 @@ func (c *codexappConn) completePrompt(turnID string, stopReason string) {
 	if c.pendingTurnDiffs != nil {
 		diff = c.pendingTurnDiffs[turnID]
 	}
-	c.promptDone = nil
+	if done != nil {
+		c.promptDone = nil
+		c.pendingPromptStops = nil
+		c.pendingPromptUpdates = nil
+		c.pendingTurnDiffs = nil
+	}
 	c.activeTurnID = ""
-	c.pendingPromptStops = nil
-	c.pendingPromptUpdates = nil
-	c.pendingTurnDiffs = nil
+	c.goalTurnActive = false
+	sessionID := c.acpSessionID
 	c.mu.Unlock()
+	if goalTurn {
+		c.emitSessionUpdate(protocol.SessionUpdateParams{
+			SessionID: sessionID,
+			Update: protocol.SessionUpdate{
+				SessionUpdate: protocol.SessionUpdateGoalTurnCompleted,
+				TurnID:        turnID,
+			},
+		})
+	}
+	if done == nil {
+		return
+	}
 	artifacts := codexappPromptDiffArtifacts(diff)
 	select {
 	case done <- codexappPromptResult{stopReason: stopReason, turnID: turnID, artifacts: artifacts}:

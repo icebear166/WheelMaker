@@ -238,6 +238,16 @@ type appServerThreadGoalClearResponse struct {
 	Cleared bool `json:"cleared"`
 }
 
+type appServerThreadGoalUpdatedParams struct {
+	ThreadID string              `json:"threadId"`
+	TurnID   *string             `json:"turnId"`
+	Goal     appServerThreadGoal `json:"goal"`
+}
+
+type appServerThreadGoalClearedParams struct {
+	ThreadID string `json:"threadId"`
+}
+
 type appServerThreadCompactStartParams struct {
 	ThreadID string `json:"threadId"`
 }
