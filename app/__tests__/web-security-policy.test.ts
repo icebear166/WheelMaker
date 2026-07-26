@@ -65,15 +65,18 @@ describe('web security policy', () => {
     const docs = [
       fs.readFileSync(path.resolve('../docs/nginx-security.md'), 'utf8'),
       fs.readFileSync(path.resolve('../INSTALL.md'), 'utf8'),
-    ].join('\n');
-    expect(docs).toContain('Content-Security-Policy');
-    expect(docs).toContain('https://codexradar.com');
-    expect(docs).toContain('X-Content-Type-Options "nosniff" always');
-    expect(docs).toContain('X-Frame-Options "DENY" always');
-    expect(docs).toContain('Referrer-Policy "no-referrer" always');
-    expect(docs).toContain('/ws/preview/');
-    expect(docs).toContain('prefix location');
-    expect(docs).toContain('upstream Content-Security-Policy');
-    expect(docs).toContain('must not add X-Frame-Options: DENY');
+    ];
+    const combinedDocs = docs.join('\n');
+    expect(combinedDocs).toContain('Content-Security-Policy');
+    expect(combinedDocs).toContain('https://codexradar.com');
+    expect(combinedDocs).toContain('X-Content-Type-Options "nosniff" always');
+    expect(combinedDocs).toContain('X-Frame-Options "DENY" always');
+    expect(combinedDocs).toContain('Referrer-Policy "no-referrer" always');
+    for (const doc of docs) {
+      expect(doc).toContain('/ws/preview/');
+      expect(doc).toContain('prefix location');
+      expect(doc).toContain('upstream Content-Security-Policy');
+      expect(doc).toContain('must not add X-Frame-Options: DENY');
+    }
   });
 });
