@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,18 +10,23 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/security"
 )
 
 const (
-	registryHTMLPreviewSuffix      = "/preview/"
-	maxHTMLPreviewDescriptorBytes  = 64 * 1024
-	htmlPreviewErrorSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox"
+	registryHTMLPreviewSuffix        = "/preview/"
+	maxHTMLPreviewDescriptorBytes    = 64 * 1024
+	htmlPreviewContentSecurityPolicy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'; frame-ancestors 'self'; sandbox allow-scripts"
+	htmlPreviewErrorSecurityPolicy   = "default-src 'none'; style-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox"
 )
 
-var errHTMLPreviewMediaType = errors.New("unsupported preview media type")
+var (
+	errHTMLPreviewMediaType          = errors.New("unsupported preview media type")
+	errHTMLPreviewUnsupportedContent = errors.New("unsupported preview content")
+)
 
 type registryHTMLPreviewRequest struct {
 	ProjectID string
@@ -175,8 +181,112 @@ func isAbsoluteHTMLPreviewPath(value string) bool {
 		(value[2] == '\\' || value[2] == '/')
 }
 
-func (s *Server) handleRegistryHTMLPreview(w http.ResponseWriter, _ *http.Request) {
-	writeRegistryHTMLPreviewError(w, http.StatusNotImplemented)
+type registryHTMLPreviewReadResult struct {
+	Content  *string `json:"content"`
+	Encoding string  `json:"encoding"`
+	IsBinary *bool   `json:"isBinary"`
+	MIMEType string  `json:"mimeType"`
+}
+
+func (s *Server) handleRegistryHTMLPreview(w http.ResponseWriter, r *http.Request) {
+	session, ok := s.authenticateWebRequest(r)
+	if !ok {
+		writeRegistryHTMLPreviewError(w, http.StatusUnauthorized)
+		return
+	}
+	if !registryHTMLPreviewRequestAllowed(r) {
+		writeRegistryHTMLPreviewError(w, http.StatusForbidden)
+		return
+	}
+	request, err := decodeRegistryHTMLPreviewForm(w, r)
+	if err != nil {
+		status := http.StatusBadRequest
+		var maxBytesErr *http.MaxBytesError
+		switch {
+		case errors.As(err, &maxBytesErr):
+			status = http.StatusRequestEntityTooLarge
+		case errors.Is(err, errHTMLPreviewMediaType):
+			status = http.StatusUnsupportedMediaType
+		}
+		writeRegistryHTMLPreviewError(w, status)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(request.CSRFToken), []byte(session.CSRFToken)) != 1 {
+		writeRegistryHTMLPreviewError(w, http.StatusForbidden)
+		return
+	}
+
+	response := s.executeProjectRequest(r.Context(), "", envelope{
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    request.Method,
+		ProjectID: request.ProjectID,
+		Payload:   request.Payload,
+	})
+	if status := registryHTMLPreviewResponseStatus(response); status != http.StatusOK {
+		writeRegistryHTMLPreviewError(w, status)
+		return
+	}
+	content, err := decodeRegistryHTMLPreviewResult(request.Source, response.Payload)
+	if err != nil {
+		writeRegistryHTMLPreviewError(w, http.StatusUnsupportedMediaType)
+		return
+	}
+	writeRegistryHTMLPreviewSuccess(w, content)
+}
+
+func registryHTMLPreviewResponseStatus(response envelope) int {
+	if response.Type == rp.RegistryEnvelopeTypeResponse {
+		return http.StatusOK
+	}
+	if response.Type != rp.RegistryEnvelopeTypeError {
+		return http.StatusBadGateway
+	}
+	var payload errorPayload
+	if json.Unmarshal(response.Payload, &payload) != nil {
+		return http.StatusBadGateway
+	}
+	switch payload.Code {
+	case codeNotFound:
+		return http.StatusNotFound
+	case codeUnavailable:
+		return http.StatusServiceUnavailable
+	case codeTimeout:
+		return http.StatusGatewayTimeout
+	default:
+		return http.StatusBadGateway
+	}
+}
+
+func decodeRegistryHTMLPreviewResult(source string, payload json.RawMessage) (string, error) {
+	if !utf8.Valid(payload) {
+		return "", errHTMLPreviewUnsupportedContent
+	}
+	var result registryHTMLPreviewReadResult
+	if err := json.Unmarshal(payload, &result); err != nil {
+		return "", err
+	}
+	if result.Content == nil ||
+		result.IsBinary == nil ||
+		*result.IsBinary ||
+		!strings.EqualFold(result.Encoding, "utf-8") ||
+		!utf8.ValidString(*result.Content) {
+		return "", errHTMLPreviewUnsupportedContent
+	}
+	if source == "session-attachment" {
+		mediaType, _, err := mime.ParseMediaType(result.MIMEType)
+		if err != nil || !strings.EqualFold(mediaType, "text/html") {
+			return "", errHTMLPreviewUnsupportedContent
+		}
+	}
+	return *result.Content, nil
+}
+
+func writeRegistryHTMLPreviewSuccess(w http.ResponseWriter, content string) {
+	setRegistryHTMLPreviewHeaders(w, htmlPreviewContentSecurityPolicy)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Disposition", "inline")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, content)
 }
 
 func writeRegistryHTMLPreviewError(w http.ResponseWriter, status int) {
