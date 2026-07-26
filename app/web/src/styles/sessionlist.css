@@ -388,7 +388,7 @@
   padding: 4px;
 }
 .project-session-action-menu {
-  min-width: 148px;
+  min-width: 168px;
 }
 .wide-project-action-popover {
   width: min(260px, calc(100vw - 16px));
@@ -440,43 +440,75 @@
 .project-session-mark-picker {
   display: flex;
   align-items: center;
-  justify-content: center;
   min-height: 30px;
-  padding: 4px 8px;
+  padding: 2px 8px;
+}
+.project-session-mark-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  -webkit-user-select: none;
+  user-select: none;
 }
 .project-session-mark-options {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-left: auto;
 }
 .project-session-mark-option {
-  width: 20px;
-  height: 20px;
+  /* Neutral default so the clear control shares the same ring treatment. */
+  --session-mark-color: var(--text-tertiary);
+  width: 16px;
+  height: 16px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 2px solid transparent;
+  border: none;
   border-radius: 50%;
   background: var(--session-mark-color);
   color: var(--text-tertiary);
   cursor: pointer;
+  transition: box-shadow var(--motion-fast) var(--ease-standard);
 }
-.project-session-mark-option:hover:not(:disabled),
+.project-session-mark-option:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 38%, transparent);
+}
 .project-session-mark-option:focus-visible {
-  border-color: color-mix(in srgb, var(--text-primary) 72%, transparent);
   outline: none;
-}
-.project-session-mark-option[aria-checked='true'] {
-  border-color: var(--surface-overlay);
   box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+/* Selection ring stays in the dot's own hue instead of the accent color. */
+.project-session-mark-option[aria-checked='true'] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 72%, transparent);
+}
+.project-session-mark-option[aria-checked='true']:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 88%, transparent);
 }
 .project-session-mark-option:disabled {
   opacity: 0.45;
   cursor: default;
 }
+.project-session-mark-divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--border-faint);
+}
 .project-session-mark-clear {
-  border-color: var(--border-subtle);
-  background: var(--surface-raised);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+}
+.project-session-mark-clear:hover:not(:disabled) {
+  box-shadow: none;
+  border-color: var(--text-tertiary);
+  color: var(--text-primary);
+}
+.project-session-mark-clear[aria-checked='true'],
+.project-session-mark-clear[aria-checked='true']:hover:not(:disabled) {
+  box-shadow: none;
+  border-color: var(--text-secondary);
+  background: var(--hover);
+  color: var(--text-primary);
 }
 .project-session-menu-separator {
   height: 1px;

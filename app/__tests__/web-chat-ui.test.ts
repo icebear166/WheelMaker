@@ -2239,7 +2239,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.project-session-action-strip');
     expect(stylesCss).not.toContain('.project-session-row-wrap:hover .project-session-more-btn');
     expect(stylesCss).toMatch(
-      /\.project-session-action-menu \{[^}]*min-width: 148px;[^}]*\}/,
+      /\.project-session-action-menu \{[^}]*min-width: 168px;[^}]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.project-session-menu-btn \{[^}]*gap: 8px;[^}]*padding: 6px 8px;[^}]*font-size: 12px;[^}]*\}/,
