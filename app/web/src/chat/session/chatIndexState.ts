@@ -33,6 +33,50 @@ export type ChatSessionEventClassification =
   | { kind: 'refreshAll' }
   | { kind: 'ignore' };
 
+export const CHAT_INDEX_PROJECT_REFRESH_CONCURRENCY = 4;
+
+export function reconnectSessionRuntimeKeys(selectedRuntimeKey: string): string[] {
+  return selectedRuntimeKey ? [selectedRuntimeKey] : [];
+}
+
+export function chatIndexProjectRefreshTargets(
+  projects: RegistryProject[],
+  skipProjectId = '',
+): string[] {
+  return projects
+    .filter(project =>
+      !!project.projectId &&
+      project.online !== false &&
+      project.projectId !== skipProjectId,
+    )
+    .map(project => project.projectId);
+}
+
+export async function runChatIndexProjectRefreshes(
+  projectIds: string[],
+  refresh: (projectId: string) => Promise<void>,
+  concurrency = CHAT_INDEX_PROJECT_REFRESH_CONCURRENCY,
+): Promise<void> {
+  if (projectIds.length === 0) {
+    return;
+  }
+  const workerCount = Math.min(
+    projectIds.length,
+    Number.isFinite(concurrency)
+      ? Math.max(1, Math.trunc(concurrency))
+      : CHAT_INDEX_PROJECT_REFRESH_CONCURRENCY,
+  );
+  let nextIndex = 0;
+  const workers = Array.from({length: workerCount}, async () => {
+    while (nextIndex < projectIds.length) {
+      const projectId = projectIds[nextIndex];
+      nextIndex += 1;
+      await refresh(projectId);
+    }
+  });
+  await Promise.all(workers);
+}
+
 export function createChatIndexState(): ChatIndexState {
   return {
     projects: [],

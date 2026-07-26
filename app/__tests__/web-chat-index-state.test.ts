@@ -10,6 +10,7 @@ import {
   shouldUpdateCurrentProjectSessions,
   sortChatIndexProjects,
 } from '../web/src/chat/session/chatIndexState';
+import * as chatIndexStateModel from '../web/src/chat/session/chatIndexState';
 import type { RegistryChatSession, RegistryProject } from '../web/src/registry/registryTypes';
 
 function project(projectId: string, name: string): RegistryProject {
@@ -235,5 +236,64 @@ describe('chat index state helpers', () => {
     expect(shouldUpdateCurrentProjectSessions('p1', 'p1')).toBe(true);
     expect(shouldUpdateCurrentProjectSessions('p-selected', 'p-workspace')).toBe(false);
     expect(shouldUpdateCurrentProjectSessions('', 'p-workspace')).toBe(false);
+  });
+
+  test('reconnect sync targets only the selected session runtime', () => {
+    const resolveTargets = (chatIndexStateModel as {
+      reconnectSessionRuntimeKeys?: (selectedRuntimeKey: string) => string[];
+    }).reconnectSessionRuntimeKeys;
+
+    expect(typeof resolveTargets).toBe('function');
+    if (!resolveTargets) return;
+
+    expect(resolveTargets('project-a:session-selected')).toEqual([
+      'project-a:session-selected',
+    ]);
+    expect(resolveTargets('')).toEqual([]);
+  });
+
+  test('project session refresh targets skip offline and already-loaded projects', () => {
+    const resolveTargets = (chatIndexStateModel as {
+      chatIndexProjectRefreshTargets?: (
+        projects: RegistryProject[],
+        skipProjectId?: string,
+      ) => string[];
+    }).chatIndexProjectRefreshTargets;
+
+    expect(typeof resolveTargets).toBe('function');
+    if (!resolveTargets) return;
+
+    expect(resolveTargets([
+      project('p-active', 'Active'),
+      project('p-online', 'Online'),
+      {...project('p-offline', 'Offline'), online: false},
+    ], 'p-active')).toEqual(['p-online']);
+  });
+
+  test('project session refresh runner bounds request concurrency', async () => {
+    const runRefreshes = (chatIndexStateModel as {
+      runChatIndexProjectRefreshes?: (
+        projectIds: string[],
+        refresh: (projectId: string) => Promise<void>,
+        concurrency?: number,
+      ) => Promise<void>;
+    }).runChatIndexProjectRefreshes;
+
+    expect(typeof runRefreshes).toBe('function');
+    if (!runRefreshes) return;
+
+    let active = 0;
+    let maxActive = 0;
+    const completed: string[] = [];
+    await runRefreshes(['p1', 'p2', 'p3', 'p4', 'p5'], async projectId => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      completed.push(projectId);
+      active -= 1;
+    });
+
+    expect(maxActive).toBe(4);
+    expect(completed.sort()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5']);
   });
 });

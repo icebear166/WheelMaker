@@ -73,22 +73,17 @@ export function resolveFloatingControlYRatioForStableTop({
 
 export function resolveFloatingControlYRatioForBoundsChange({
   previousTop,
-  previousHadDefaultComposerTop,
-  nextHasDefaultComposerTop,
   minTop,
   maxTop,
   fallbackRatio = FLOATING_CONTROL_DEFAULT_Y_RATIO,
 }: {
   previousTop: number;
-  previousHadDefaultComposerTop: boolean;
-  nextHasDefaultComposerTop: boolean;
   minTop: number;
   maxTop: number;
   fallbackRatio?: number;
 }): number {
-  if (!previousHadDefaultComposerTop && nextHasDefaultComposerTop) {
-    return sanitizeFloatingControlYRatio(fallbackRatio);
-  }
+  // Bounds shifts (keyboard, composer measurement) must preserve the visible
+  // position; snapping back to the default ratio teleports the control.
   return resolveFloatingControlYRatioForStableTop({
     previousTop,
     minTop,

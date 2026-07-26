@@ -134,6 +134,7 @@ describe('gesture navigation', () => {
     const styles = readStyles();
 
     expect(styles).toContain('.floating-nav-button');
+    expect(styles).toContain('.floating-nav-expanded-anchor');
     expect(styles).toContain('.floating-nav-card');
     expect(styles).toContain('.floating-nav-card-item');
     expect(styles).toContain('.floating-nav-unread-dot');

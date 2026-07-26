@@ -52,12 +52,13 @@ export function MobileFloatingNav({
     );
   }
   return (
-    <div
-      className="floating-nav-card"
-      role="menu"
-      aria-label="Navigate"
-      onPointerDown={onButtonPointerDown}
-    >
+    <div className="floating-nav-expanded-anchor">
+      <div
+        className="floating-nav-card"
+        role="menu"
+        aria-label="Navigate"
+        onPointerDown={onButtonPointerDown}
+      >
       {FLOATING_NAV_ITEMS.map(item => {
         const isCurrent = item.id === current;
         const active = item.id === 'preview'
@@ -99,6 +100,7 @@ export function MobileFloatingNav({
           </button>
         );
       })}
+      </div>
     </div>
   );
 }

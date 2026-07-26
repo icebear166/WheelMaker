@@ -510,7 +510,6 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('setChatPromptSnapshotVersion(version => version + 1);');
     expect(mainTsx).toContain('const nextSessions = mergeChatSessionList(knownSessions, listedSessions);');
     expect(mainTsx).toContain('setChatSessions(prev => mergeChatSessionList(prev, listedSessions));');
-    expect(mainTsx).toContain('const mergedSessions = mergeChatSessionList(knownSessions, sortedSessions);');
     expect(mainTsx).toContain('return mergeChatSession([projectSession], currentProjectSession)[0];');
     expect(mainTsx).toContain("import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';");
     expect(mainTsx).toContain('const chatComposerStatusCompact = !isWide || windowWidth < 980 || (chatPreviewOpen && windowWidth < 1280);');
@@ -1651,9 +1650,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const floatingPositionSnapshotRef = useRef');
     expect(mainTsx).toContain('resolveFloatingControlYRatioForBoundsChange({');
     expect(mainTsx).toContain('previousTop: previousFloatingPosition.top');
-    expect(mainTsx).toContain('previousHadDefaultComposerTop: previousFloatingPosition.hasDefaultComposerTop');
-    expect(mainTsx).toContain('const nextHasDefaultComposerTop = floatingDefaultComposerTop !== null;');
-    expect(mainTsx).toContain('nextHasDefaultComposerTop,');
+    expect(mainTsx).not.toContain('hasDefaultComposerTop');
     expect(mainTsx).toContain('const [floatingDefaultComposerTop, setFloatingDefaultComposerTop] = useState<number | null>(null);');
     expect(mainTsx).toContain('resolveFloatingControlDefaultBounds({');
     expect(mainTsx).toContain('resolveFloatingControlAvoidanceBounds({');
@@ -1706,8 +1703,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const [mobileProjectActionMenu, setMobileProjectActionMenu, mobileProjectActionMenuExiting] = useMenuExitState<MobileProjectActionMenuState>();');
     expect(mainTsx).toContain('const refreshMobileChatProjectSessions = async () => {');
     expect(mainTsx).toContain('await refreshChatIndex();');
-    expect(mainTsx).toContain('latestProjects.map(projectItem =>');
-    expect(mainTsx).toContain('refreshChatProjectSessions(projectItem.projectId, {force: options?.force === true})');
+    expect(mainTsx).toContain('chatIndexProjectRefreshTargets(');
+    expect(mainTsx).toContain('options?.skipProjectId,');
+    expect(mainTsx).toContain('refreshChatProjectSessions(projectId, {force: options?.force === true})');
     expect(mainTsx).toContain('const renderMobileChatSessionSheet = () => {');
     expect(mainTsx).toContain('const renderChatSessionHeader = (mobile: boolean) => {');
     expect(mainTsx).toContain('{renderChatSessionHeader(true)}');

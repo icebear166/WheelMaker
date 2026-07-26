@@ -40,7 +40,21 @@ describe('web chat refresh model', () => {
     expect(main).toContain('const refreshChatProjectSessions = async');
     expect(main).toContain('chatIndexFullRefreshInFlightRef');
     expect(main).toContain('chatProjectRefreshInFlightRef');
+    expect(main).toContain('chatIndexProjectRefreshTargets(');
+    expect(main).toContain('options?.skipProjectId,');
+    expect(main).toContain('runChatIndexProjectRefreshes(');
     expect(main).toContain('await refreshChatIndex();');
+  });
+
+  test('post-connect refresh does not duplicate the active session list load', () => {
+    const main = readMain();
+    const connectBody = extractFunctionBody(main, 'connect');
+
+    expect(connectBody).not.toContain('loadChatSessions(');
+    expect(connectBody).toContain(
+      'schedulePostConnectProjectRefresh(preferredSelectedChatKey?.projectId ?? connectedProjectId);',
+    );
+    expect(main).not.toContain('.listProjectSessions(projectItem.projectId)');
   });
 
   test('session events use envelope project id and never fall back to workspace project', () => {

@@ -21,14 +21,11 @@ describe('web chat runtime memory store', () => {
     expect(main).not.toContain('delete chatFinishedCursorRef.current');
   });
 
-  test('keeps every received session message in memory and reconnects known in-memory sessions', () => {
+  test('keeps every received session message in memory without reconnect fan-out', () => {
     const main = readMain();
 
-    expect(main).toContain('const runtimeKeysFromChatStores = (): string[] =>');
-    expect(main).toContain('Object.keys(chatTurnStoreRef.current)');
-    expect(main).toContain('Object.keys(chatMessageStoreRef.current)');
-    expect(main).toContain('Object.keys(chatFinishedCursorRef.current)');
-    expect(main).toContain('const runtimeKeys = new Set(runtimeKeysFromChatStores());');
+    expect(main).not.toContain('runtimeKeysFromChatStores');
+    expect(main).toContain('reconnectSessionRuntimeKeys(selectedRuntimeKey)');
     expect(main).not.toContain('if (!isSelectedSession && !chatActiveRuntimeSetRef.current.isActive(runtimeKey))');
     expect(main).toContain('if (!knownSession && !isSelectedSession) {');
     expect(main).toContain('refreshChatProjectSessions(eventProjectId).catch(() => undefined);');

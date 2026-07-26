@@ -45,6 +45,8 @@ describe('MobileFloatingNav', () => {
 
   test('expanded renders one card item per destination, relay always present', () => {
     const {tree} = renderNav({expanded: true});
+    // The anchor keeps the stack at button height so the card cannot shift.
+    expect(tree.root.findAllByProps({className: 'floating-nav-expanded-anchor'})).toHaveLength(1);
     const items = tree.root.findAllByProps({className: 'floating-nav-card-item'});
     expect(items).toHaveLength(6);
     const withRelay = renderNav({expanded: true, relay: relayOn});

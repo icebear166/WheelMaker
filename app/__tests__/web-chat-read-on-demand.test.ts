@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 describe('web chat read-on-demand behavior', () => {
-  test('connect and project switch only load session list; reconnect hydrates only when currently in chat with selected session', () => {
+  test('connect and project switch only load session list; reconnect hydrates only the selected session', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
@@ -21,8 +21,8 @@ describe('web chat read-on-demand behavior', () => {
     expect(mainTsx).toContain('forceFull?: boolean;');
     expect(mainTsx).toContain('const useIncremental = requestedIncremental && !fallbackToFullRead;');
     expect(mainTsx).toContain('const syncChatSessionsAfterReconnect = async (');
-    expect(mainTsx).toContain('runtimeKeysFromChatStores()');
-    expect(mainTsx).toContain('runtimeKeys.add(selectedRuntimeKey);');
+    expect(mainTsx).not.toContain('runtimeKeysFromChatStores()');
+    expect(mainTsx).toContain('reconnectSessionRuntimeKeys(selectedRuntimeKey)');
     expect(mainTsx).toContain('syncChatSessionsAfterReconnect(preferredSelectedChatKey).catch(() => undefined);');
     expect(mainTsx).toContain('const requestedAfterTurnIndex = useIncremental ? checkpointTurnIndex : 0;');
     expect(mainTsx).toContain('requestedAfterTurnIndex,');

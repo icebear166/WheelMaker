@@ -20,13 +20,14 @@ describe('web reconnect fallback behavior', () => {
     );
     expect(mainTsx).toContain('if (!connected && !keepWorkspaceVisible) {');
     expect(mainTsx).toContain('const syncChatSessionsAfterReconnect = async (');
-    expect(mainTsx).toContain('runtimeKeysFromChatStores()');
-    expect(mainTsx).toContain('runtimeKeys.add(selectedRuntimeKey);');
+    expect(mainTsx).toContain('reconnectSessionRuntimeKeys(selectedRuntimeKey)');
     expect(mainTsx).toContain('syncChatSessionsAfterReconnect(preferredSelectedChatKey).catch(() => undefined);');
     const connectStart = mainTsx.indexOf('const connect = async');
     const disconnectStart = mainTsx.indexOf('const disconnectForSupervisor', connectStart);
     const connectBlock = mainTsx.slice(connectStart, disconnectStart);
-    expect(connectBlock).toContain('schedulePostConnectProjectRefresh();');
+    expect(connectBlock).toContain(
+      'schedulePostConnectProjectRefresh(preferredSelectedChatKey?.projectId ?? connectedProjectId);',
+    );
     expect(connectBlock).not.toContain('await refreshChatIndex();');
   });
 
@@ -37,16 +38,18 @@ describe('web reconnect fallback behavior', () => {
       'utf8',
     );
 
-    expect(mainTsx).toContain('const schedulePostConnectProjectRefresh = () => {');
+    expect(mainTsx).toContain('const schedulePostConnectProjectRefresh = (activeProjectId: string) => {');
     expect(mainTsx).toContain('window.setTimeout(() => {');
-    expect(mainTsx).toContain('refreshChatIndex({force: true}).catch(() => undefined);');
-    expect(mainTsx).toContain('const refreshChatIndex = async (options?: {force?: boolean}) => {');
+    expect(mainTsx).toContain('refreshChatIndex({force: true, skipProjectId: activeProjectId}).catch(() => undefined);');
+    expect(mainTsx).toContain('const refreshChatIndex = async (options?: {force?: boolean; skipProjectId?: string}) => {');
     expect(mainTsx).toContain('if (!options?.force && !connected && !connectInFlightRef.current) return;');
 
     const connectStart = mainTsx.indexOf('const connect = async');
     const disconnectStart = mainTsx.indexOf('const disconnectForSupervisor', connectStart);
     const connectBlock = mainTsx.slice(connectStart, disconnectStart);
-    expect(connectBlock).toContain('schedulePostConnectProjectRefresh();');
+    expect(connectBlock).toContain(
+      'schedulePostConnectProjectRefresh(preferredSelectedChatKey?.projectId ?? connectedProjectId);',
+    );
     expect(connectBlock).not.toContain('refreshChatIndex().catch(() => undefined);');
     expect(connectBlock).not.toContain('await refreshChatIndex();');
   });
@@ -65,7 +68,7 @@ describe('web reconnect fallback behavior', () => {
       "if ((!options?.force && !connected && !connectInFlightRef.current) || !targetProjectId) return;",
     );
     expect(mainTsx).toContain(
-      'refreshChatProjectSessions(projectItem.projectId, {force: options?.force === true}),',
+      'refreshChatProjectSessions(projectId, {force: options?.force === true}),',
     );
   });
 

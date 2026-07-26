@@ -302,7 +302,12 @@ import {
   type AndroidApkLocalRelease,
   type AndroidApkUpdateStatus,
 } from '../platform/android/androidApkUpdate';
-import { shouldUpdateCurrentProjectSessions } from '../chat/session/chatIndexState';
+import {
+  chatIndexProjectRefreshTargets,
+  reconnectSessionRuntimeKeys,
+  runChatIndexProjectRefreshes,
+  shouldUpdateCurrentProjectSessions,
+} from '../chat/session/chatIndexState';
 import {
   resolveChatListSelection,
   resolveSelectedChatVisibilityRecovery,
@@ -2898,7 +2903,7 @@ export function App() {
   const floatingClickCooldownUntilRef = useRef(0);
   const floatingIgnoreLostCaptureRef = useRef(false);
   const floatingControlStackRef = useRef<HTMLDivElement | null>(null);
-  const floatingPositionSnapshotRef = useRef<{minTop: number; maxTop: number; top: number; hasDefaultComposerTop: boolean} | null>(null);
+  const floatingPositionSnapshotRef = useRef<{minTop: number; maxTop: number; top: number} | null>(null);
   const [floatingSidePulse, setFloatingSidePulse] = useState<PersistedFloatingControlSide | ''>('');
   const floatingControlSideRef = useRef(floatingControlSide);
   const floatingSidePulseTimerRef = useRef<number | null>(null);
@@ -4132,16 +4137,6 @@ export function App() {
     };
     return promise;
   };
-
-  const runtimeKeysFromChatStores = (): string[] =>
-    Array.from(new Set([
-      ...Object.keys(chatTurnStoreRef.current),
-      ...Object.keys(chatMessageStoreRef.current),
-      ...Object.keys(chatFinishedCursorRef.current),
-    ])).filter(runtimeKey => {
-      const key = decodeChatSessionKey(runtimeKey);
-      return !key || !isDraftChatSessionId(key.sessionId);
-    });
 
   const ensureChatTurnStore = (runtimeKey: string): ChatTurnStoreState => {
     const existing = chatTurnStoreRef.current[runtimeKey];
@@ -5678,42 +5673,6 @@ export function App() {
   }, [isWide, drawerOpen, projectIdListKey]);
 
   useEffect(() => {
-    if (!connected || !isWide || projects.length === 0) return;
-    let cancelled = false;
-    for (const projectItem of projects) {
-      service
-        .listProjectSessions(projectItem.projectId)
-        .then(sessions => {
-          if (cancelled) return;
-          const sortedSessions = sortProjectChatSessions(sessions);
-          const knownSessions = knownChatSessionsForProject(projectItem.projectId);
-          const mergedSessions = mergeChatSessionList(knownSessions, sortedSessions);
-          setProjectSessionsByProjectId(prev => ({
-            ...prev,
-            [projectItem.projectId]: mergeChatSessionList(
-              prev[projectItem.projectId] ?? knownSessions,
-              sortedSessions,
-            ),
-          }));
-          const cached = workspaceStore.hydrateChatSessions(projectItem.projectId);
-          const cursorBySessionId: Record<string, {turnIndex: number}> = {};
-          for (const entry of cached) {
-            cursorBySessionId[entry.session.sessionId] = entry.cursor;
-          }
-          workspaceStore.replaceChatSessions(
-            projectItem.projectId,
-            mergedSessions,
-            cursorBySessionId,
-          );
-        })
-        .catch(() => undefined);
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [connected, isWide, projectIdListKey]);
-
-  useEffect(() => {
     if (!wideProjectActionMenu) return;
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
@@ -6762,11 +6721,8 @@ export function App() {
       (previousFloatingPosition.minTop !== floatingBaseBounds.minTop ||
         previousFloatingPosition.maxTop !== floatingBaseBounds.maxTop);
     if (boundsChanged && previousFloatingPosition) {
-      const nextHasDefaultComposerTop = floatingDefaultComposerTop !== null;
       const nextYRatio = resolveFloatingControlYRatioForBoundsChange({
         previousTop: previousFloatingPosition.top,
-        previousHadDefaultComposerTop: previousFloatingPosition.hasDefaultComposerTop,
-        nextHasDefaultComposerTop,
         minTop: floatingBaseBounds.minTop,
         maxTop: floatingBaseBounds.maxTop,
         fallbackRatio: floatingControlYRatio,
@@ -6780,7 +6736,6 @@ export function App() {
         minTop: floatingBaseBounds.minTop,
         maxTop: floatingBaseBounds.maxTop,
         top: nextTop,
-        hasDefaultComposerTop: nextHasDefaultComposerTop,
       };
       if (Math.abs(nextYRatio - floatingControlYRatio) > 0.001) {
         setFloatingControlYRatio(nextYRatio);
@@ -6791,7 +6746,6 @@ export function App() {
       minTop: floatingBaseBounds.minTop,
       maxTop: floatingBaseBounds.maxTop,
       top: floatingRestTop,
-      hasDefaultComposerTop: floatingDefaultComposerTop !== null,
     };
   }, [
     floatingBaseBounds.maxTop,
@@ -9420,12 +9374,9 @@ export function App() {
     const selectedRuntimeKey =
       encodeChatSessionKey(preferredSelectedChatKey) ||
       encodeChatSessionKey(selectedChatKeyRef.current);
-    const runtimeKeys = new Set(runtimeKeysFromChatStores());
-    if (selectedRuntimeKey) {
-      runtimeKeys.add(selectedRuntimeKey);
-    }
+    const runtimeKeys = reconnectSessionRuntimeKeys(selectedRuntimeKey);
 
-    await Promise.all(Array.from(runtimeKeys).map(runtimeKey => {
+    await Promise.all(runtimeKeys.map(runtimeKey => {
       const key = decodeChatSessionKey(runtimeKey);
       if (!key) {
         return Promise.resolve();
@@ -11621,9 +11572,9 @@ export function App() {
     event.target.value = '';
   };
 
-  const schedulePostConnectProjectRefresh = () => {
+  const schedulePostConnectProjectRefresh = (activeProjectId: string) => {
     window.setTimeout(() => {
-      refreshChatIndex({force: true}).catch(() => undefined);
+      refreshChatIndex({force: true, skipProjectId: activeProjectId}).catch(() => undefined);
     }, 0);
   };
 
@@ -11700,7 +11651,6 @@ export function App() {
           result.hydrated.projectId,
           workspaceStore.getSelectedChatSessionId(result.hydrated.projectId),
         );
-      const preferredSelectedChatId = preferredSelectedChatKey?.sessionId ?? '';
       setProjects(result.projects);
       setRegistryHubs(result.hubs);
       setHasPendingProjectUpdates(false);
@@ -11722,13 +11672,8 @@ export function App() {
       }
       if (silentReconnect) {
         syncChatSessionsAfterReconnect(preferredSelectedChatKey).catch(() => undefined);
-      } else {
-        loadChatSessions(
-          preferredSelectedChatKey?.projectId ?? result.hydrated.projectId,
-          preferredSelectedChatId,
-        ).catch(() => undefined);
       }
-      schedulePostConnectProjectRefresh();
+      schedulePostConnectProjectRefresh(preferredSelectedChatKey?.projectId ?? connectedProjectId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       connectError = message;
@@ -15012,7 +14957,7 @@ export function App() {
     }
   };
 
-  const refreshChatIndex = async (options?: {force?: boolean}) => {
+  const refreshChatIndex = async (options?: {force?: boolean; skipProjectId?: string}) => {
     if (!options?.force && !connected && !connectInFlightRef.current) return;
     if (chatIndexFullRefreshInFlightRef.current) {
       chatIndexFullRefreshDirtyRef.current = true;
@@ -15032,10 +14977,31 @@ export function App() {
         projectCount = latestProjects.length;
         setProjects(latestProjects);
         setHasPendingProjectUpdates(false);
-        await Promise.all(
-          latestProjects.map(projectItem =>
-            refreshChatProjectSessions(projectItem.projectId, {force: options?.force === true}),
-          ),
+        const offlineProjectIds = new Set(
+          latestProjects
+            .filter(projectItem => projectItem.online === false)
+            .map(projectItem => projectItem.projectId),
+        );
+        if (offlineProjectIds.size > 0) {
+          setMobileProjectSessionErrors(prev => {
+            const next = {...prev};
+            let changed = false;
+            for (const projectId of offlineProjectIds) {
+              if (!next[projectId]) continue;
+              delete next[projectId];
+              changed = true;
+            }
+            return changed ? next : prev;
+          });
+        }
+        const refreshProjectIds = chatIndexProjectRefreshTargets(
+          latestProjects,
+          options?.skipProjectId,
+        );
+        await runChatIndexProjectRefreshes(
+          refreshProjectIds,
+          projectId =>
+            refreshChatProjectSessions(projectId, {force: options?.force === true}),
         );
       } while (chatIndexFullRefreshDirtyRef.current);
     } catch (err) {

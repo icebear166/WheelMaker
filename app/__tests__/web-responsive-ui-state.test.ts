@@ -63,16 +63,12 @@ describe('web responsive ui state', () => {
     })).toBe(1);
     expect(resolveFloatingControlYRatioForBoundsChange({
       previousTop: 260,
-      previousHadDefaultComposerTop: false,
-      nextHasDefaultComposerTop: true,
       minTop: 10,
       maxTop: 310,
       fallbackRatio: 0.4,
-    })).toBe(0.4);
+    })).toBeCloseTo(0.8333, 4);
     expect(resolveFloatingControlYRatioForBoundsChange({
       previousTop: 90,
-      previousHadDefaultComposerTop: true,
-      nextHasDefaultComposerTop: true,
       minTop: 10,
       maxTop: 310,
       fallbackRatio: 0.4,
