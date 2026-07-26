@@ -12,7 +12,7 @@ HTML 预览面向简单、自包含文档。第三方或相对脚本、外部子
 
 Web 前端不把 HTML 放入 `srcDoc`，也不预读正文。`HtmlPreview` 使用隐藏 form，把类型化 source descriptor 和当前 Registry CSRF token 无状态 POST 到同一 base path 下的 `/ws/preview/`，响应直接加载进目标 sandbox iframe。descriptor 位于请求体，不进入 URL、浏览器历史或默认 Nginx access log。
 
-Registry 校验 browser session、base path、同源 Origin、Fetch Metadata、CSRF 和 descriptor schema 后，只能使用以下固定映射向拥有该项目的 Hub 请求正文：
+Registry 校验 browser session、base path、Origin、Fetch Metadata、CSRF 和 descriptor schema 后，只能使用以下固定映射向拥有该项目的 Hub 请求正文：
 
 | Preview source | Hub method |
 | --- | --- |
@@ -30,7 +30,7 @@ iframe 固定使用 `sandbox="allow-scripts"`，不增加 `allow-same-origin`、
 
 preview CSP 只允许内联脚本、内联样式及 `data:` / `blob:` 图片、字体和媒体。外部脚本与子资源、`fetch`、XHR、WebSocket、Worker、子 frame、对象、表单和 `unsafe-eval` 均被阻止。主应用 CSP 不为预览放宽。
 
-opaque-origin 文档不能读取主应用 DOM、Registry cookie、`localStorage` 或 Desktop native bridge。导航 POST 仍携带 HttpOnly Registry session cookie；server 只接受同源 iframe navigation，并用 CSRF token 防止非预期请求。GET、顶层访问、跨站 form、缺少 Fetch Metadata 和认证失败都不能读取 HTML。
+opaque-origin 文档不能读取主应用 DOM、Registry cookie、`localStorage` 或 Desktop native bridge。导航 POST 仍携带 HttpOnly Registry session cookie；常规浏览器必须发送与 Registry 精确同源的 Origin。Android WebView 会把 sandbox iframe 的 opaque origin 序列化为 `Origin: null`，因此只有 preview endpoint 额外接受该值，并且仍要求有效 session、`Sec-Fetch-Site: same-origin`、`Sec-Fetch-Mode: navigate`、`Sec-Fetch-Dest: iframe` 和正确 CSRF token。该例外不放宽 Registry 的通用 browser write 校验。GET、顶层访问、跨站 form、缺少 Fetch Metadata 和认证失败都不能读取 HTML。
 
 标准 sandbox 允许文档导航自己的 child navigable，CSP fetch directives 也不约束普通 `_self` navigation。本功能不支持或鼓励预览内外部导航，但不通过解析或改写 HTML/JavaScript 拦截该浏览器行为。它不能逃出 iframe；Desktop 导航策略还会阻止 base origin 之外的子框架目标。
 

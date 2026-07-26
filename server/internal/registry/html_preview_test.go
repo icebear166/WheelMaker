@@ -58,6 +58,13 @@ func TestRegistryHTMLPreviewRequestAllowed(t *testing.T) {
 		t.Fatal("valid iframe navigation was rejected")
 	}
 
+	opaqueOrigin := valid.Clone(valid.Context())
+	opaqueOrigin.Header = valid.Header.Clone()
+	opaqueOrigin.Header.Set("Origin", "null")
+	if !registryHTMLPreviewRequestAllowed(opaqueOrigin) {
+		t.Fatal("sandboxed iframe navigation with an opaque origin was rejected")
+	}
+
 	for _, header := range []string{"Origin", "Sec-Fetch-Site", "Sec-Fetch-Mode", "Sec-Fetch-Dest"} {
 		t.Run("missing_"+header, func(t *testing.T) {
 			request := valid.Clone(valid.Context())
@@ -81,6 +88,22 @@ func TestRegistryHTMLPreviewRequestAllowed(t *testing.T) {
 			mutate(request)
 			if registryHTMLPreviewRequestAllowed(request) {
 				t.Fatal("invalid browser provenance was accepted")
+			}
+		})
+	}
+
+	for name, mutate := range map[string]func(*http.Request){
+		"missing_fetch_site": func(r *http.Request) { r.Header.Del("Sec-Fetch-Site") },
+		"cross_site":         func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") },
+		"cors":               func(r *http.Request) { r.Header.Set("Sec-Fetch-Mode", "cors") },
+		"top_level":          func(r *http.Request) { r.Header.Set("Sec-Fetch-Dest", "document") },
+	} {
+		t.Run("opaque_origin_"+name, func(t *testing.T) {
+			request := opaqueOrigin.Clone(opaqueOrigin.Context())
+			request.Header = opaqueOrigin.Header.Clone()
+			mutate(request)
+			if registryHTMLPreviewRequestAllowed(request) {
+				t.Fatal("opaque origin without strict iframe provenance was accepted")
 			}
 		})
 	}
@@ -888,6 +911,35 @@ func TestRegistryHTMLPreviewSecurityFailures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRegistryHTMLPreviewAllowsSandboxedOpaqueOrigin(t *testing.T) {
+	server := New(Config{Token: "custom-token"})
+	testServer := httptest.NewServer(server.Handler())
+	t.Cleanup(testServer.Close)
+	cookie, csrf := loginHTMLPreviewBrowser(t, testServer.URL, "/")
+
+	request := newHTMLPreviewHTTPRequest(
+		t,
+		testServer.URL,
+		"/",
+		cookie,
+		csrf,
+		url.Values{
+			"source": {"project-file"}, "projectId": {"missing:project"},
+			"path": {"page.html"},
+		},
+	)
+	request.Header.Set("Origin", "null")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", response.StatusCode)
+	}
+	assertHTMLPreviewSecurityHeaders(t, response, false)
 }
 
 func TestRegistryHTMLPreviewBasePathSessionIsolation(t *testing.T) {

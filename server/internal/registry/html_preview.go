@@ -54,10 +54,13 @@ func registryHTMLPreviewBasePath(requestPath string) (string, bool) {
 }
 
 func registryHTMLPreviewRequestAllowed(r *http.Request) bool {
-	return security.RequestOriginMatchesHost(r) &&
-		r.Header.Get("Sec-Fetch-Site") == "same-origin" &&
-		r.Header.Get("Sec-Fetch-Mode") == "navigate" &&
-		r.Header.Get("Sec-Fetch-Dest") == "iframe"
+	if r.Header.Get("Sec-Fetch-Site") != "same-origin" ||
+		r.Header.Get("Sec-Fetch-Mode") != "navigate" ||
+		r.Header.Get("Sec-Fetch-Dest") != "iframe" {
+		return false
+	}
+	// Sandboxed Android WebViews serialize this iframe navigation's opaque origin as null.
+	return r.Header.Get("Origin") == "null" || security.RequestOriginMatchesHost(r)
 }
 
 func decodeRegistryHTMLPreviewForm(w http.ResponseWriter, r *http.Request) (registryHTMLPreviewRequest, error) {
