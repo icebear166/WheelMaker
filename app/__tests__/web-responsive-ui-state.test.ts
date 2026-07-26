@@ -117,6 +117,46 @@ describe('web responsive ui state', () => {
     expect(floatingControlYRatioFromLegacySlot('invalid')).toBeNull();
   });
 
+  test('reserves expanded overflow above the docked control', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'layouts', 'mobile', 'floatingControls.ts');
+    const {resolveFloatingControlDefaultBounds} = require(modulePath);
+
+    const withoutOverflow = resolveFloatingControlDefaultBounds({
+      viewportHeight: 800,
+      stackHeight: 48,
+      safeAreaTopInset: 20,
+      safeAreaBottomInset: 0,
+      defaultComposerTop: null,
+    });
+    const withOverflow = resolveFloatingControlDefaultBounds({
+      viewportHeight: 800,
+      stackHeight: 48,
+      safeAreaTopInset: 20,
+      safeAreaBottomInset: 0,
+      defaultComposerTop: null,
+      expandedOverflowPx: 224,
+    });
+    expect(withOverflow.minTop).toBe(withoutOverflow.minTop + 224);
+    expect(withOverflow.maxTop).toBe(withoutOverflow.maxTop);
+  });
+
+  test('never lets a negative overflow shrink the minimum top', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'layouts', 'mobile', 'floatingControls.ts');
+    const {resolveFloatingControlDefaultBounds} = require(modulePath);
+
+    const bounds = resolveFloatingControlDefaultBounds({
+      viewportHeight: 800,
+      stackHeight: 48,
+      safeAreaTopInset: 20,
+      safeAreaBottomInset: 0,
+      defaultComposerTop: null,
+      expandedOverflowPx: -10,
+    });
+    expect(bounds.minTop).toBe(26);
+  });
+
 
   test('uses a best-effort mobile haptic helper around navigator vibration', () => {
     const projectRoot = path.join(__dirname, '..');

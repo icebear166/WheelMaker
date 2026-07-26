@@ -104,6 +104,7 @@ export function resolveFloatingControlDefaultBounds({
   safeAreaBottomInset,
   defaultComposerTop,
   composerGap = FLOATING_CONTROL_COMPOSER_GAP_PX,
+  expandedOverflowPx = 0,
 }: {
   viewportHeight: number;
   stackHeight: number;
@@ -111,8 +112,10 @@ export function resolveFloatingControlDefaultBounds({
   safeAreaBottomInset: number;
   defaultComposerTop: number | null;
   composerGap?: number;
+  /** Extra headroom above the collapsed control reserved for its expanded card. */
+  expandedOverflowPx?: number;
 }): FloatingControlVerticalBounds {
-  const minTop = Math.max(safeAreaTopInset + 6, 6);
+  const minTop = Math.max(safeAreaTopInset + 6, 6) + Math.max(0, expandedOverflowPx);
   const bottomInset = Math.max(safeAreaBottomInset + 6, 6);
   const viewportMaxTop = viewportHeight - stackHeight - bottomInset;
   const composerMaxTop = defaultComposerTop === null
