@@ -43,9 +43,9 @@ describe('gesture navigation', () => {
     expect(persistence).not.toContain('next.gestureNavigation');
   });
 
-  test('uses click movement cancellation and 1000ms drag threshold', () => {
+  test('uses click movement cancellation and 450ms drag threshold', () => {
     expect(GESTURE_CLICK_CANCEL_PX).toBe(12);
-    expect(GESTURE_MOVE_LONG_PRESS_MS).toBe(1000);
+    expect(GESTURE_MOVE_LONG_PRESS_MS).toBe(450);
   });
 
   test('cancels click expansion after pointer movement crosses the threshold', () => {
@@ -57,7 +57,7 @@ describe('gesture navigation', () => {
     })).toBe(true);
   });
 
-  test('enters gesture movement after a one second hold', () => {
+  test('enters gesture movement after a 450ms hold', () => {
     expect(shouldStartGestureMove({
       elapsedMs: GESTURE_MOVE_LONG_PRESS_MS - 1,
     })).toBe(false);

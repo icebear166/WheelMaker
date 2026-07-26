@@ -1,5 +1,5 @@
 export const GESTURE_CLICK_CANCEL_PX = 12;
-export const GESTURE_MOVE_LONG_PRESS_MS = 1000;
+export const GESTURE_MOVE_LONG_PRESS_MS = 450;
 
 export function shouldCancelGestureClick({
   distancePx,
