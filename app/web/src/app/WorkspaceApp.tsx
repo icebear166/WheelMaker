@@ -2311,7 +2311,7 @@ const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
         <div className="chat-preview-title" title="Preview">Preview</div>
       </div>
       <div className="chat-empty-preview-body">
-        <ChatIcon name="panelRight" size={16} />
+        <ChatIcon name="appWindow" size={16} />
         <span className="chat-empty-preview-copy">No preview selected</span>
       </div>
     </div>
@@ -17577,7 +17577,7 @@ export function App() {
           aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
           aria-pressed={chatPreviewOpen}
         >
-          <SessionIcon name="panelRight" />
+          <SessionIcon name="appWindow" />
           {!chatPreviewOpen && previewTabCount > 0 ? (
             <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
           ) : null}
@@ -19946,14 +19946,14 @@ export function App() {
     if (!activeTab) {
       return (
         <div className="chat-file-workbench-empty">
-          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          <ChatIcon name="appWindow" size={16} />
           <span>No preview selected</span>
           <button
             type="button"
             className="chat-file-workbench-empty-action"
             onClick={toggleChatFilePreviewTree}
           >
-            <span className="codicon codicon-files" aria-hidden="true" />
+            <ChatIcon name="folderOpen" size={14} />
             <span>Open files</span>
           </button>
         </div>
