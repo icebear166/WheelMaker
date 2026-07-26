@@ -60,6 +60,7 @@ import type {
   RegistryResumableSession,
   RegistrySessionSummary,
   RegistrySessionCompactAccepted,
+  RegistrySessionSteerAccepted,
   RegistrySessionForkResponse,
   RegistrySessionStatusResult,
   RegistrySkillCommandResponse,
@@ -575,6 +576,20 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.sendSessionMessage(projectId, payload);
+  }
+
+  async steerProjectSession(
+    projectId: string,
+    payload: {
+      sessionId: string;
+      clientMessageId: string;
+      blocks: RegistrySessionContentBlock[];
+    },
+  ): Promise<RegistrySessionSteerAccepted> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.steerSession(projectId, payload);
   }
 
   async statusProjectSession(projectId: string, sessionId: string): Promise<RegistrySessionStatusResult> {

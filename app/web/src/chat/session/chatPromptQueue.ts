@@ -7,6 +7,7 @@ export type QueuedChatPrompt = {
   blocks: RegistryChatContentBlock[];
   createdAt: string;
   text: string;
+  status: 'queued' | 'steering';
 };
 
 export type QueuedChatCompact = {
@@ -97,6 +98,31 @@ export function cancelQueuedChatPrompt(
   return cancelQueuedChatItem(state, runtimeKey, promptId);
 }
 
+export function setQueuedChatPromptSteering(
+  state: QueuedChatItemsByKey,
+  runtimeKey: string,
+  promptId: string,
+  steering: boolean,
+): QueuedChatItemsByKey {
+  const current = state[runtimeKey] ?? [];
+  let changed = false;
+  const next = current.map(item => {
+    if (item.kind !== 'prompt' || item.id !== promptId) return item;
+    changed = true;
+    return {...item, status: steering ? 'steering' as const : 'queued' as const};
+  });
+  return changed ? {...state, [runtimeKey]: next} : state;
+}
+
+export function hasSteeringChatPrompt(
+  state: QueuedChatItemsByKey,
+  runtimeKey: string,
+): boolean {
+  return (state[runtimeKey] ?? []).some(
+    item => item.kind === 'prompt' && item.status === 'steering',
+  );
+}
+
 export function moveQueuedChatPromptToFront(
   state: QueuedChatItemsByKey,
   runtimeKey: string,
@@ -115,6 +141,9 @@ export function shiftNextQueuedChatItem(
   state: QueuedChatItemsByKey,
   runtimeKey: string,
 ): {state: QueuedChatItemsByKey; item: QueuedChatItem | null} {
+  if (hasSteeringChatPrompt(state, runtimeKey)) {
+    return {state, item: null};
+  }
   const current = state[runtimeKey] ?? [];
   const [item, ...rest] = current;
   if (!item) return {state, item: null};
@@ -165,7 +194,7 @@ export function buildQueuedPromptMessage(prompt: QueuedChatPrompt, turnIndex: nu
       contentBlocks: prompt.blocks.map(block => ({...block})),
       createdAt: prompt.createdAt,
       queuedPromptId: prompt.id,
-      queueStatus: 'queued',
+      queueStatus: prompt.status,
     },
     finished: false,
   };

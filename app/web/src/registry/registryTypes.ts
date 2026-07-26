@@ -386,6 +386,17 @@ export interface RegistrySessionActionCapability {
 export interface RegistrySessionActionCapabilities {
   status: RegistrySessionActionCapability;
   compact: RegistrySessionActionCapability;
+  steer: RegistrySessionActionCapability;
+}
+
+export type RegistrySessionSteerOutcome = 'steered' | 'sent';
+
+export interface RegistrySessionSteerAccepted {
+  ok: boolean;
+  accepted: boolean;
+  sessionId: string;
+  clientMessageId: string;
+  outcome: RegistrySessionSteerOutcome;
 }
 
 export interface RegistrySessionStatusContext {

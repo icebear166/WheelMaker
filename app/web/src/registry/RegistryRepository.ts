@@ -72,6 +72,7 @@ import type {
   RegistrySessionActionCapabilities,
   RegistrySessionActionCapability,
   RegistrySessionCompactAccepted,
+  RegistrySessionSteerAccepted,
   RegistrySessionForkResponse,
   RegistrySessionCredits,
   RegistrySessionIndividualLimit,
@@ -365,6 +366,7 @@ export class RegistryRepository {
     return {
       status: this.normalizeSessionActionCapability(input.status),
       compact: this.normalizeSessionActionCapability(input.compact),
+      steer: this.normalizeSessionActionCapability(input.steer),
     };
   }
   private normalizeSessionStatusContext(raw: unknown): RegistrySessionStatusContext | undefined {
@@ -1331,6 +1333,35 @@ export class RegistryRepository {
     return {
       ok: body.ok ?? false,
       sessionId: body.sessionId ?? payload.sessionId,
+    };
+  }
+
+  async steerSession(
+    projectId: string,
+    payload: {
+      sessionId: string;
+      clientMessageId: string;
+      blocks: RegistrySessionContentBlock[];
+    },
+  ): Promise<RegistrySessionSteerAccepted> {
+    const response = await this.client.request({
+      method: RegistryMethods.SessionSteer,
+      projectId,
+      payload,
+      timeoutMs: 30000,
+    });
+    const body = response.payload && typeof response.payload === 'object'
+      ? response.payload as Record<string, unknown>
+      : {};
+    const outcome = body.outcome === 'sent' ? 'sent' : 'steered';
+    return {
+      ok: body.ok === true,
+      accepted: body.accepted === true,
+      sessionId: typeof body.sessionId === 'string' ? body.sessionId : payload.sessionId,
+      clientMessageId: typeof body.clientMessageId === 'string'
+        ? body.clientMessageId
+        : payload.clientMessageId,
+      outcome,
     };
   }
 

@@ -79,6 +79,41 @@ describe('web session action protocol', () => {
     expect(RegistryMethods.SessionMark).toBe('session.mark');
   });
 
+  test('sends session.steer and normalizes the accepted outcome', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        accepted: true,
+        sessionId: 's1',
+        clientMessageId: 'queued-1',
+        outcome: 'steered',
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    await expect(repository.steerSession('project-a', {
+      sessionId: 's1',
+      clientMessageId: 'queued-1',
+      blocks: [{type: 'text', text: 'change direction'}],
+    })).resolves.toEqual({
+      ok: true,
+      accepted: true,
+      sessionId: 's1',
+      clientMessageId: 'queued-1',
+      outcome: 'steered',
+    });
+    expect(request).toHaveBeenCalledWith({
+      method: RegistryMethods.SessionSteer,
+      projectId: 'project-a',
+      payload: {
+        sessionId: 's1',
+        clientMessageId: 'queued-1',
+        blocks: [{type: 'text', text: 'change direction'}],
+      },
+      timeoutMs: 30000,
+    });
+  });
+
   test('requests session pin and normalizes shared pin state', async () => {
     const request = jest.fn().mockResolvedValue({
       payload: {
@@ -186,6 +221,13 @@ describe('web session action protocol', () => {
     const repository = {
       statusSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', limits: [], updatedAt: ''}),
       compactSession: jest.fn().mockResolvedValue({ok: true, accepted: true, sessionId: 's1', operationId: 'op-1'}),
+      steerSession: jest.fn().mockResolvedValue({
+        ok: true,
+        accepted: true,
+        sessionId: 's1',
+        clientMessageId: 'queued-1',
+        outcome: 'steered',
+      }),
       pinSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', pinned: true}}),
       markSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', markColor: 'green'}}),
     };
@@ -194,11 +236,21 @@ describe('web session action protocol', () => {
 
     await service.statusProjectSession('project-a', 's1');
     await service.compactProjectSession('project-a', 's1');
+    await service.steerProjectSession('project-a', {
+      sessionId: 's1',
+      clientMessageId: 'queued-1',
+      blocks: [{type: 'text', text: 'change direction'}],
+    });
     await service.pinProjectSession('project-a', 's1', true);
     await service.markProjectSession('project-a', 's1', 'green');
 
     expect(repository.statusSession).toHaveBeenCalledWith('project-a', 's1');
     expect(repository.compactSession).toHaveBeenCalledWith('project-a', 's1');
+    expect(repository.steerSession).toHaveBeenCalledWith('project-a', {
+      sessionId: 's1',
+      clientMessageId: 'queued-1',
+      blocks: [{type: 'text', text: 'change direction'}],
+    });
     expect(repository.pinSession).toHaveBeenCalledWith('project-a', 's1', true);
     expect(repository.markSession).toHaveBeenCalledWith('project-a', 's1', 'green');
   });

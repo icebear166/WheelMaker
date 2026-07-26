@@ -3,11 +3,13 @@ import {
   cancelQueuedChatPrompt,
   enqueueChatCompact,
   enqueueChatPrompt,
+  hasSteeringChatPrompt,
   hasQueuedChatCompact,
   moveQueuedChatPromptToFront,
   queuedChatPrompts,
   shiftNextQueuedChatItem,
   shiftNextQueuedChatPrompt,
+  setQueuedChatPromptSteering,
   type QueuedChatCompact,
   type QueuedChatPrompt,
 } from '../web/src/chat/session/chatPromptQueue';
@@ -19,6 +21,7 @@ const basePrompt = (id: string, text: string): QueuedChatPrompt => ({
   blocks: [{type: 'text', text}],
   createdAt: `2026-06-18T00:00:0${id}.000Z`,
   text,
+  status: 'queued',
 });
 
 const baseCompact = (id = 'compact-1'): QueuedChatCompact => ({
@@ -73,6 +76,31 @@ describe('chat prompt queue state', () => {
     expect(message.turnIndex).toBe(42);
     expect(message.param.queuedPromptId).toBe('1');
     expect(message.param.queueStatus).toBe('queued');
+  });
+
+  test('marks one prompt steering without moving it', () => {
+    const runtimeKey = 'project:sess-1';
+    const state = {
+      [runtimeKey]: [basePrompt('1', 'first'), basePrompt('2', 'second'), basePrompt('3', 'third')],
+    };
+
+    const next = setQueuedChatPromptSteering(state, runtimeKey, '2', true);
+
+    expect(next[runtimeKey].map(item => item.id)).toEqual(['1', '2', '3']);
+    expect(next[runtimeKey][1]).toMatchObject({id: '2', status: 'steering'});
+    expect(buildQueuedPromptMessage(next[runtimeKey][1] as QueuedChatPrompt, 43).param.queueStatus)
+      .toBe('steering');
+  });
+
+  test('prevents drain while a steer is pending', () => {
+    const runtimeKey = 'project:sess-1';
+    const state = setQueuedChatPromptSteering({
+      [runtimeKey]: [basePrompt('1', 'first'), basePrompt('2', 'second')],
+    }, runtimeKey, '2', true);
+
+    expect(hasSteeringChatPrompt(state, runtimeKey)).toBe(true);
+    expect(shiftNextQueuedChatItem(state, runtimeKey).item).toBeNull();
+    expect(shiftNextQueuedChatPrompt(state, runtimeKey).prompt).toBeNull();
   });
 
   test('keeps prompt and compact work in one FIFO queue', () => {
