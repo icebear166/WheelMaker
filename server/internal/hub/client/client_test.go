@@ -5488,6 +5488,96 @@ func TestHandleSessionRequestPinPersistsSummaryWithoutPublishingUpdate(t *testin
 	}
 }
 
+func TestHandleSessionRequestMarkPersistsSummaryWithoutPublishingUpdate(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-mark", "Marked")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if _, err := c.sessionRecorder.SetSessionPinned(ctx, "sess-mark", true); err != nil {
+		t.Fatalf("SetSessionPinned: %v", err)
+	}
+
+	var published []string
+	c.sessionRecorder.SetEventPublisher(func(method string, _ any) error {
+		published = append(published, method)
+		return nil
+	})
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj1", json.RawMessage(`{"sessionId":"sess-mark","markColor":"red"}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.mark): %v", err)
+	}
+	body := resp.(map[string]any)
+	summary := body["session"].(sessionViewSummary)
+	if body["ok"] != true || body["sessionId"] != "sess-mark" || summary.MarkColor != "red" || !summary.Pinned {
+		t.Fatalf("session.mark response = %#v", body)
+	}
+	if len(published) != 0 {
+		t.Fatalf("published methods = %v, want none", published)
+	}
+
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj1", json.RawMessage(`{"sessionId":"sess-mark","markColor":""}`)); err != nil {
+		t.Fatalf("clear session mark: %v", err)
+	}
+	rec, err := c.store.LoadSession(ctx, "proj1", "sess-mark")
+	if err != nil || rec == nil {
+		t.Fatalf("LoadSession = %#v, %v", rec, err)
+	}
+	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+	if projection.MarkColor != "" || !projection.Pinned {
+		t.Fatalf("projection after clear = %#v", projection)
+	}
+}
+
+func TestHandleSessionRequestMarkValidatesColorScopeAndAllowsRunningSession(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	for _, payload := range []json.RawMessage{
+		json.RawMessage(`{"markColor":"red"}`),
+		json.RawMessage(`{"sessionId":"missing","markColor":"red"}`),
+		json.RawMessage(`{"sessionId":"missing","markColor":"purple"}`),
+	} {
+		if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj1", payload); err == nil {
+			t.Fatalf("session.mark payload %s unexpectedly succeeded", payload)
+		}
+	}
+
+	now := time.Now().UTC()
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:              "same-mark-id",
+		ProjectName:     "proj2",
+		Status:          SessionPersisted,
+		AgentType:       "claude",
+		AgentJSON:       `{}`,
+		SessionSyncJSON: sessionSyncJSON(0),
+		CreatedAt:       now,
+		LastActiveAt:    now,
+	}); err != nil {
+		t.Fatalf("SaveSession other project: %v", err)
+	}
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj2", json.RawMessage(`{"sessionId":"same-mark-id","markColor":"blue"}`)); err == nil {
+		t.Fatal("session.mark crossed the client project scope")
+	}
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-running-mark", "Running")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj1", json.RawMessage(`{"sessionId":"sess-running-mark"}`)); err == nil {
+		t.Fatal("session.mark accepted a missing markColor")
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-running-mark", "still running", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj1", json.RawMessage(`{"sessionId":"sess-running-mark","markColor":"green"}`))
+	if err != nil {
+		t.Fatalf("mark running session: %v", err)
+	}
+	summary := resp.(map[string]any)["session"].(sessionViewSummary)
+	if !summary.Running || summary.MarkColor != "green" {
+		t.Fatalf("running mark summary = %#v", summary)
+	}
+}
+
 func TestHandleSessionRequestPinValidatesScopeAndAllowsRunningSession(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
@@ -5542,6 +5632,9 @@ func TestSessionPinSurvivesCursorUpdatesAndRecorderRebuild(t *testing.T) {
 	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionPin, "proj1", json.RawMessage(`{"sessionId":"sess-rebuild","pinned":true}`)); err != nil {
 		t.Fatalf("pin session: %v", err)
 	}
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj1", json.RawMessage(`{"sessionId":"sess-rebuild","markColor":"blue"}`)); err != nil {
+		t.Fatalf("mark session: %v", err)
+	}
 	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-rebuild", "persist", nil)); err != nil {
 		t.Fatalf("RecordEvent prompt: %v", err)
 	}
@@ -5557,13 +5650,14 @@ func TestSessionPinSurvivesCursorUpdatesAndRecorderRebuild(t *testing.T) {
 		t.Fatalf("LoadSession = %#v, %v", rec, err)
 	}
 	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
-	if !projection.Pinned || projection.LastReadTurnIndex != 2 || projection.LatestPersistedTurnIndex != 2 {
+	if !projection.Pinned || projection.MarkColor != "blue" ||
+		projection.LastReadTurnIndex != 2 || projection.LatestPersistedTurnIndex != 2 {
 		t.Fatalf("stored projection = %#v", projection)
 	}
 	rebuilt := newSessionRecorder("proj1", c.store, nil)
 	summary := rebuilt.sessionViewSummaryFromRecord(*rec)
-	if !summary.Pinned {
-		t.Fatalf("rebuilt summary = %#v, want pinned", summary)
+	if !summary.Pinned || summary.MarkColor != "blue" {
+		t.Fatalf("rebuilt summary = %#v, want pinned and marked", summary)
 	}
 }
 
@@ -7415,15 +7509,19 @@ func TestHandleSessionRequestSessionDeleteRemovesActiveSession(t *testing.T) {
 	now := time.Now().UTC()
 	addRuntimeSession(c, "sess-1", "Delete Target", "claude", now, now)
 	if err := c.store.SaveSession(ctx, &SessionRecord{
-		ID:              "sess-1",
-		ProjectName:     "proj1",
-		Status:          SessionPersisted,
-		AgentType:       "claude",
-		AgentJSON:       `{}`,
-		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{LatestPersistedTurnIndex: 3, Pinned: true}),
-		CreatedAt:       now,
-		LastActiveAt:    now,
-		Title:           "Delete Target",
+		ID:          "sess-1",
+		ProjectName: "proj1",
+		Status:      SessionPersisted,
+		AgentType:   "claude",
+		AgentJSON:   `{}`,
+		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{
+			LatestPersistedTurnIndex: 3,
+			Pinned:                   true,
+			MarkColor:                "red",
+		}),
+		CreatedAt:    now,
+		LastActiveAt: now,
+		Title:        "Delete Target",
 	}); err != nil {
 		t.Fatalf("SaveSession: %v", err)
 	}
@@ -7538,6 +7636,9 @@ func TestHandleSessionRequestSessionArchiveWritesPackAndDeletesActiveSession(t *
 	}
 	if _, err := c.sessionRecorder.SetSessionPinned(ctx, "sess-archive", true); err != nil {
 		t.Fatalf("SetSessionPinned: %v", err)
+	}
+	if _, err := c.sessionRecorder.SetSessionMarkColor(ctx, "sess-archive", "green"); err != nil {
+		t.Fatalf("SetSessionMarkColor: %v", err)
 	}
 
 	sessionDir := filepath.Join(historyRoot, safeHistoryPathPart("proj1"), safeHistoryPathPart("sess-archive"))
@@ -8062,8 +8163,8 @@ func TestHandleSessionRequestSessionArchiveRestoreRecreatesSessionAndTurns(t *te
 	if summary.SessionID != "restore-protocol" || summary.LatestTurnIndex != 3 || summary.AgentType != "claude" {
 		t.Fatalf("restore summary = %#v, want restored session summary", summary)
 	}
-	if summary.Pinned {
-		t.Fatalf("restore summary = %#v, want unpinned", summary)
+	if summary.Pinned || summary.MarkColor != "" {
+		t.Fatalf("restore summary = %#v, want unpinned and unmarked", summary)
 	}
 	stored, err := c.store.LoadSession(ctx, "proj1", "restore-protocol")
 	if err != nil {
@@ -8324,15 +8425,19 @@ func TestHandleSessionRequestSessionReloadClearsPromptStateBeforeReplay(t *testi
 	})
 
 	if err := c.store.SaveSession(ctx, &SessionRecord{
-		ID:              "sess-reload",
-		ProjectName:     "proj1",
-		Status:          SessionPersisted,
-		AgentType:       "claude",
-		AgentJSON:       `{}`,
-		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{LatestPersistedTurnIndex: 4, Pinned: true}),
-		CreatedAt:       now,
-		LastActiveAt:    now,
-		Title:           "Reload target",
+		ID:          "sess-reload",
+		ProjectName: "proj1",
+		Status:      SessionPersisted,
+		AgentType:   "claude",
+		AgentJSON:   `{}`,
+		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{
+			LatestPersistedTurnIndex: 4,
+			Pinned:                   true,
+			MarkColor:                "yellow",
+		}),
+		CreatedAt:    now,
+		LastActiveAt: now,
+		Title:        "Reload target",
 	}); err != nil {
 		t.Fatalf("SaveSession: %v", err)
 	}
@@ -8358,8 +8463,9 @@ func TestHandleSessionRequestSessionReloadClearsPromptStateBeforeReplay(t *testi
 		t.Fatalf("LoadSession after reload = %#v, %v", stored, loadErr)
 	}
 	projection := sessionSyncProjectionFromJSON(stored.SessionSyncJSON)
-	if !projection.Pinned || projection.LatestPersistedTurnIndex != 0 || projection.LastReadTurnIndex != 0 {
-		t.Fatalf("projection after reload failure = %#v, want only pinned", projection)
+	if !projection.Pinned || projection.MarkColor != "yellow" ||
+		projection.LatestPersistedTurnIndex != 0 || projection.LastReadTurnIndex != 0 {
+		t.Fatalf("projection after reload failure = %#v, want pin and mark only", projection)
 	}
 }
 

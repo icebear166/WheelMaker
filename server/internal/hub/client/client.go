@@ -686,6 +686,22 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return map[string]any{"ok": true, "sessionId": summary.SessionID, "session": summary}, nil
+	case acp.RegistryMethodSessionMark:
+		var req struct {
+			SessionID string  `json:"sessionId"`
+			MarkColor *string `json:"markColor"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.mark payload: %w", err)
+		}
+		if req.MarkColor == nil {
+			return nil, fmt.Errorf("markColor is required")
+		}
+		summary, err := c.sessionRecorder.SetSessionMarkColor(ctx, req.SessionID, *req.MarkColor)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": summary.SessionID, "session": summary}, nil
 	case acp.RegistryMethodSessionRename:
 		var req struct {
 			SessionID string `json:"sessionId"`
