@@ -2088,7 +2088,7 @@ go test -race ./internal/hub/agent ./internal/hub/client
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the complete Go suite**
+- [x] **Step 2: Run the complete Go suite**
 
 Run from `server`:
 
@@ -2098,7 +2098,7 @@ go test ./...
 
 Expected: PASS.
 
-- [ ] **Step 3: Run focused and complete Web tests**
+- [x] **Step 3: Run focused and complete Web tests**
 
 Run from `app`:
 
@@ -2109,7 +2109,7 @@ npm test -- --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Web typecheck and production build**
+- [x] **Step 4: Run Web typecheck and production build**
 
 ```powershell
 npm run tsc:web
@@ -2134,7 +2134,7 @@ With a Codex Session actively streaming:
 
 Expected: no duplicate transcript turns, no dropped queue items, and no provider IDs visible in Web.
 
-- [ ] **Step 6: Compare implementation against every spec acceptance criterion**
+- [x] **Step 6: Compare implementation against every spec acceptance criterion**
 
 Use this explicit checklist:
 
@@ -2152,7 +2152,7 @@ Compatibility: Registry version remains 2.6
 
 Expected: every line maps to passing automated coverage or the smoke test.
 
-- [ ] **Step 7: Check the final worktree and commit any verification-only fixes**
+- [x] **Step 7: Check the final worktree and commit any verification-only fixes**
 
 ```powershell
 git status --short
@@ -2163,10 +2163,24 @@ If verification required code changes, return to the owning Task, rerun that Tas
 
 Expected: no unstaged implementation changes and no whitespace errors.
 
-- [ ] **Step 8: Push the completed implementation**
+- [x] **Step 8: Push the completed implementation**
 
 ```powershell
 git push
 ```
 
 Expected: the current branch is published with all Task commits.
+
+### Verification record (2026-07-26)
+
+- Complete Go suite: PASS.
+- Focused Web suites: PASS, 104 tests.
+- Complete Web suite: PASS, 230 suites and 1320 tests.
+- Web typecheck and production build: PASS.
+- Repeated Session Steer Go coverage: PASS, 20 consecutive runs.
+- Race detector: not available in this Windows environment because CGO is disabled
+  and no C compiler is installed; the corresponding non-race tests pass.
+- Live Codex smoke test: intentionally left as a manual check requiring an
+  authenticated, actively streaming Codex session. Automated app-server contract
+  tests cover response/notification reordering, correlation, fallback, and
+  concurrent same-session turn delivery.
