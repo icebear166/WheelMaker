@@ -6,6 +6,7 @@ const (
 	SessionActionCompact = "compact"
 	SessionActionSteer   = "steer"
 	SessionActionFork    = "fork"
+	SessionActionGoal    = "goal"
 
 	SessionOperationTypeCompact = "compact"
 	SessionOperationTypeFork    = "fork"
@@ -19,6 +20,13 @@ const (
 
 	SessionSteerOutcomeSteered = "steered"
 	SessionSteerOutcomeSent    = "sent"
+
+	SessionGoalStatusActive        = "active"
+	SessionGoalStatusPaused        = "paused"
+	SessionGoalStatusBlocked       = "blocked"
+	SessionGoalStatusUsageLimited  = "usageLimited"
+	SessionGoalStatusBudgetLimited = "budgetLimited"
+	SessionGoalStatusComplete      = "complete"
 )
 
 type SessionForkPoint struct {
@@ -53,6 +61,32 @@ type SessionActionCapabilities struct {
 	Compact SessionActionCapability `json:"compact"`
 	Steer   SessionActionCapability `json:"steer"`
 	Fork    SessionActionCapability `json:"fork"`
+	Goal    SessionActionCapability `json:"goal"`
+}
+
+type SessionGoal struct {
+	SessionID       string `json:"sessionId"`
+	Objective       string `json:"objective"`
+	Status          string `json:"status"`
+	TokenBudget     *int64 `json:"tokenBudget"`
+	TokensUsed      int64  `json:"tokensUsed"`
+	TimeUsedSeconds int64  `json:"timeUsedSeconds"`
+	CreatedAt       int64  `json:"createdAt"`
+	UpdatedAt       int64  `json:"updatedAt"`
+}
+
+// OptionalInt64 preserves the difference between an omitted patch field and
+// an explicit JSON null.
+type OptionalInt64 struct {
+	Present bool
+	Value   *int64
+}
+
+type SessionGoalSetParams struct {
+	SessionID   string
+	Objective   *string
+	Status      *string
+	TokenBudget OptionalInt64
 }
 
 type SessionActionStatusContext struct {

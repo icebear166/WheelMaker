@@ -247,6 +247,31 @@ func TestRegistrySessionSteerDescriptor(t *testing.T) {
 	}
 }
 
+func TestRegistryGoalMethodsAreProjectScopedSessionForwards(t *testing.T) {
+	methods := []string{
+		RegistryMethodSessionGoalCreate,
+		RegistryMethodSessionGoalGet,
+		RegistryMethodSessionGoalUpdate,
+		RegistryMethodSessionGoalStop,
+		RegistryMethodSessionGoalClear,
+	}
+	for _, method := range methods {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("RegistryMethod(%q) missing", method)
+		}
+		if desc.Route != RegistryRouteSessionForward || !desc.RequiresProjectID {
+			t.Fatalf("%s descriptor = %#v", method, desc)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("%s should allow client", method)
+		}
+	}
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
+	}
+}
+
 func TestRegistryTerminalMethods(t *testing.T) {
 	tests := []struct {
 		method    string

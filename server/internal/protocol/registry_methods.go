@@ -120,6 +120,11 @@ const (
 	RegistryMethodSessionCompact             = "session.compact"
 	RegistryMethodSessionSteer               = "session.steer"
 	RegistryMethodSessionFork                = "session.fork"
+	RegistryMethodSessionGoalCreate          = "session.goal.create"
+	RegistryMethodSessionGoalGet             = "session.goal.get"
+	RegistryMethodSessionGoalUpdate          = "session.goal.update"
+	RegistryMethodSessionGoalStop            = "session.goal.stop"
+	RegistryMethodSessionGoalClear           = "session.goal.clear"
 	RegistryMethodSessionPermissionRespond   = "session.permission.respond"
 	RegistryMethodSessionAttachmentStart     = "session.attachment.start"
 	RegistryMethodSessionAttachmentChunk     = "session.attachment.chunk"
@@ -234,6 +239,11 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionCompact:             registryProjectMethod(RegistryMethodSessionCompact, RegistryRouteSessionForward),
 	RegistryMethodSessionSteer:               registryProjectMethod(RegistryMethodSessionSteer, RegistryRouteSessionForward),
 	RegistryMethodSessionFork:                registryProjectMethod(RegistryMethodSessionFork, RegistryRouteSessionForward),
+	RegistryMethodSessionGoalCreate:          registryProjectMethod(RegistryMethodSessionGoalCreate, RegistryRouteSessionForward),
+	RegistryMethodSessionGoalGet:             registryProjectMethod(RegistryMethodSessionGoalGet, RegistryRouteSessionForward),
+	RegistryMethodSessionGoalUpdate:          registryProjectMethod(RegistryMethodSessionGoalUpdate, RegistryRouteSessionForward),
+	RegistryMethodSessionGoalStop:            registryProjectMethod(RegistryMethodSessionGoalStop, RegistryRouteSessionForward),
+	RegistryMethodSessionGoalClear:           registryProjectMethod(RegistryMethodSessionGoalClear, RegistryRouteSessionForward),
 	RegistryMethodSessionPermissionRespond:   registryProjectMethod(RegistryMethodSessionPermissionRespond, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentStart:     registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentChunk:     registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),
