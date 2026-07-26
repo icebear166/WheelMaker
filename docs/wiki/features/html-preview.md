@@ -6,7 +6,7 @@
 
 Workspace 对项目文件、项目外绝对路径文件和 Session 附件中的 `.html` / `.htm` 提供相同的渲染预览。内联 JavaScript 默认执行，不提供脚本开关；HTML 预览也不参与 Workspace 自定义源码搜索或源码行跳转。
 
-HTML 预览面向简单、自包含文档。第三方或相对脚本、外部子资源、网络 API 和相对 workspace 资源都不受支持；依赖库必须打包进 HTML。预览不解析、注入或改写用户 HTML、CSS 和 JavaScript。
+HTML 预览面向简单文档，允许从任意绝对 HTTPS 地址加载第三方 JavaScript、CSS、字体、图片和媒体。`fetch`、XHR、WebSocket、Worker、子 frame、网络表单和相对 workspace 资源仍不受支持；`./styles.css`、`./app.js` 等相对资源不会映射到项目文件。预览不解析、注入或改写用户 HTML、CSS 和 JavaScript。
 
 ## 加载架构
 
@@ -28,7 +28,9 @@ HTML 正文只由 preview handler 读取一次。预览层不增加专用文件�
 
 iframe 固定使用 `sandbox="allow-scripts"`，不增加 `allow-same-origin`、表单、popup、下载或顶层导航权限。Registry 响应同时发送带 `sandbox allow-scripts` 的专用 CSP，形成 iframe attribute 之外的纵深限制。
 
-preview CSP 只允许内联脚本、内联样式及 `data:` / `blob:` 图片、字体和媒体。外部脚本与子资源、`fetch`、XHR、WebSocket、Worker、子 frame、对象、表单和 `unsafe-eval` 均被阻止。主应用 CSP 不为预览放宽。
+preview CSP 允许内联脚本、内联样式，以及任意 HTTPS 来源的脚本、样式、字体、图片和媒体；图片和媒体继续支持 `data:` / `blob:`，字体继续支持 `data:`。`fetch`、XHR、WebSocket、Worker、子 frame、对象、表单和 `unsafe-eval` 仍被阻止。主应用 CSP 不为预览放宽。
+
+打开含第三方资源的 HTML 会向对应服务器暴露设备网络信息。第三方 JavaScript 可以读取完整预览正文，并可借允许的资源 URL 把内容发送出去；因此该能力只适合用户愿意信任其 HTML 和依赖来源的场景。sandbox 隔离范围不变，第三方代码仍不能读取主应用 DOM、Registry cookie、`localStorage` 或 Desktop native bridge。
 
 opaque-origin 文档不能读取主应用 DOM、Registry cookie、`localStorage` 或 Desktop native bridge。导航 POST 仍携带 HttpOnly Registry session cookie；常规浏览器必须发送与 Registry 精确同源的 Origin。Android WebView 会把 sandbox iframe 的 opaque origin 序列化为 `Origin: null`，因此只有 preview endpoint 额外接受该值，并且仍要求有效 session、`Sec-Fetch-Site: same-origin`、`Sec-Fetch-Mode: navigate`、`Sec-Fetch-Dest: iframe` 和正确 CSRF token。该例外不放宽 Registry 的通用 browser write 校验。GET、顶层访问、跨站 form、缺少 Fetch Metadata 和认证失败都不能读取 HTML。
 

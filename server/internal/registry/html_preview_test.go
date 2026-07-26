@@ -651,7 +651,11 @@ func assertHTMLPreviewSecurityHeaders(t *testing.T, response *http.Response, suc
 		return
 	}
 	for _, directive := range []string{
-		"script-src 'unsafe-inline'",
+		"script-src 'unsafe-inline' https:",
+		"style-src 'unsafe-inline' https:",
+		"img-src data: blob: https:",
+		"font-src data: https:",
+		"media-src data: blob: https:",
 		"connect-src 'none'",
 		"frame-src 'none'",
 		"worker-src 'none'",
