@@ -19,7 +19,7 @@
 - Modify: `docs/wiki/protocols/registry.md`
 - Modify: `docs/wiki/architecture/session-management-and-sync.md`
 
-- [ ] **Step 1: Verify the focused pre-change test baseline**
+- [x] **Step 1: Verify the focused pre-change test baseline**
 
 Run:
 
@@ -32,7 +32,7 @@ go test ./internal/protocol ./internal/hub ./internal/hub/client
 
 Expected: all selected Jest suites and all three Go packages pass before production code changes.
 
-- [ ] **Step 2: Check approved docs for wiki and scope invariants**
+- [x] **Step 2: Check approved docs for wiki and scope invariants**
 
 Run:
 
@@ -46,7 +46,7 @@ Get-Content docs/wiki/architecture/session-management-and-sync.md -TotalCount 1
 
 Expected: the placeholder search has no matches; each Wiki page begins with `> 摘要：`.
 
-- [ ] **Step 3: Commit the approved design checkpoint**
+- [x] **Step 3: Commit the approved design checkpoint**
 
 ```powershell
 git add docs/scope/2026-07-26-session-color-mark docs/wiki/frontend-interaction/session-list.md docs/wiki/protocols/registry.md docs/wiki/architecture/session-management-and-sync.md
@@ -63,7 +63,7 @@ Expected: one documentation commit containing the approved spec, implementation 
 - Modify: `server/internal/hub/reporter.go`
 - Modify: `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: Write the failing Registry descriptor test**
+- [x] **Step 1: Write the failing Registry descriptor test**
 
 Add beside `TestSessionPinIsClientProjectForwardWithoutVersionChange`:
 
@@ -88,7 +88,7 @@ func TestSessionMarkIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the descriptor test and verify it fails**
+- [x] **Step 2: Run the descriptor test and verify it fails**
 
 Run:
 
@@ -99,7 +99,7 @@ go test ./internal/protocol -run TestSessionMarkIsClientProjectForwardWithoutVer
 
 Expected: FAIL because `RegistryMethodSessionMark` is undefined.
 
-- [ ] **Step 3: Register the method without changing Registry 2.6**
+- [x] **Step 3: Register the method without changing Registry 2.6**
 
 Add the constant next to `RegistryMethodSessionPin` and its descriptor next to the Pin descriptor:
 
@@ -115,7 +115,7 @@ RegistryMethodSessionMark: registryProjectMethod(RegistryMethodSessionMark, Regi
 
 Do not modify `DefaultProtocolVersion`.
 
-- [ ] **Step 4: Run the descriptor test and verify it passes**
+- [x] **Step 4: Run the descriptor test and verify it passes**
 
 Run:
 
@@ -125,7 +125,7 @@ go test ./internal/protocol -run TestSessionMarkIsClientProjectForwardWithoutVer
 
 Expected: PASS.
 
-- [ ] **Step 5: Extend the reporter forwarding test before changing the switch**
+- [x] **Step 5: Extend the reporter forwarding test before changing the switch**
 
 In `TestReporterForwardsSessionPinToProjectHandlerAndRequiresProjectID`, rename the test to cover Pin and Mark, increase `respSeen` capacity, and have the fake Registry send this additional request after the successful Pin response:
 
@@ -182,7 +182,7 @@ case <-time.After(2 * time.Second):
 
 Update the final missing-project assertions to expect `target.calls == 2`.
 
-- [ ] **Step 6: Run the reporter test and verify it fails**
+- [x] **Step 6: Run the reporter test and verify it fails**
 
 Run:
 
@@ -192,7 +192,7 @@ go test ./internal/hub -run TestReporterForwardsSessionPinAndMarkToProjectHandle
 
 Expected: FAIL because `session.mark` is not handled by `Reporter.handleRegistryRequest`.
 
-- [ ] **Step 7: Forward `session.mark` through the existing Session handler**
+- [x] **Step 7: Forward `session.mark` through the existing Session handler**
 
 Add `rp.RegistryMethodSessionMark` beside Pin:
 
@@ -201,7 +201,7 @@ rp.RegistryMethodSessionRename, rp.RegistryMethodSessionPin, rp.RegistryMethodSe
 rp.RegistryMethodSessionSend, rp.RegistryMethodSessionCancel,
 ```
 
-- [ ] **Step 8: Run focused protocol and forwarding tests**
+- [x] **Step 8: Run focused protocol and forwarding tests**
 
 Run:
 
@@ -211,7 +211,7 @@ go test ./internal/protocol ./internal/hub -run "TestSessionMark|TestReporterFor
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Registry routing**
+- [x] **Step 9: Commit Registry routing**
 
 ```powershell
 Set-Location ..
@@ -227,7 +227,7 @@ git commit -m "feat(server): route session mark requests"
 - Modify: `server/internal/hub/client/client.go`
 - Modify: `server/internal/hub/client/client_test.go`
 
-- [ ] **Step 1: Write failing request and persistence tests**
+- [x] **Step 1: Write failing request and persistence tests**
 
 Add next to the Pin tests:
 
@@ -331,7 +331,7 @@ if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionMark, "proj2",
 }
 ```
 
-- [ ] **Step 2: Run the new Hub tests and verify they fail**
+- [x] **Step 2: Run the new Hub tests and verify they fail**
 
 Run:
 
@@ -342,7 +342,7 @@ go test ./internal/hub/client -run "TestHandleSessionRequestMark" -count=1
 
 Expected: FAIL because the method, fields, and setter do not exist.
 
-- [ ] **Step 3: Add Mark to the sync projection and summary**
+- [x] **Step 3: Add Mark to the sync projection and summary**
 
 Add the fields:
 
@@ -371,7 +371,7 @@ summary.Pinned = projection.Pinned
 summary.MarkColor = projection.MarkColor
 ```
 
-- [ ] **Step 4: Add exact enum validation and persistence**
+- [x] **Step 4: Add exact enum validation and persistence**
 
 Add beside `SetSessionPinned`; do not trim `markColor` because only exact wire values are accepted:
 
@@ -410,7 +410,7 @@ func (r *SessionRecorder) SetSessionMarkColor(ctx context.Context, sessionID, ma
 }
 ```
 
-- [ ] **Step 5: Handle `session.mark` in the client**
+- [x] **Step 5: Handle `session.mark` in the client**
 
 Add next to the Pin case:
 
@@ -433,7 +433,7 @@ case acp.RegistryMethodSessionMark:
 	return map[string]any{"ok": true, "sessionId": summary.SessionID, "session": summary}, nil
 ```
 
-- [ ] **Step 6: Run request tests and verify they pass**
+- [x] **Step 6: Run request tests and verify they pass**
 
 Run:
 
@@ -443,7 +443,7 @@ go test ./internal/hub/client -run "TestHandleSessionRequestMark" -count=1
 
 Expected: PASS.
 
-- [ ] **Step 7: Write failing preservation and archive/restore assertions**
+- [x] **Step 7: Write failing preservation and archive/restore assertions**
 
 Extend `TestSessionPinSurvivesCursorUpdatesAndRecorderRebuild` to set a blue Mark and require both values after cursor updates and recorder rebuild:
 
@@ -506,7 +506,7 @@ if summary.Pinned || summary.MarkColor != "" {
 }
 ```
 
-- [ ] **Step 8: Run lifecycle tests and verify reload preservation fails**
+- [x] **Step 8: Run lifecycle tests and verify reload preservation fails**
 
 Run:
 
@@ -516,7 +516,7 @@ go test ./internal/hub/client -run "TestSessionPinSurvivesCursorUpdatesAndRecord
 
 Expected: the reload preservation assertion fails because reload currently copies only `Pinned`.
 
-- [ ] **Step 9: Preserve Mark during reload cursor reset**
+- [x] **Step 9: Preserve Mark during reload cursor reset**
 
 Update `sessionRecovery.ReloadSession`:
 
@@ -530,7 +530,7 @@ rec.SessionSyncJSON = sessionSyncProjectionJSON(sessionSyncProjection{
 
 Do not copy Mark into archive manifests or restored projections.
 
-- [ ] **Step 10: Run the complete client package**
+- [x] **Step 10: Run the complete client package**
 
 Run:
 
@@ -540,7 +540,7 @@ go test ./internal/hub/client -count=1
 
 Expected: PASS.
 
-- [ ] **Step 11: Commit Hub persistence**
+- [x] **Step 11: Commit Hub persistence**
 
 ```powershell
 Set-Location ..
@@ -561,7 +561,7 @@ git commit -m "feat(server): persist session color marks"
 - Modify: `app/__tests__/web-chat-project-service.test.ts`
 - Modify: `app/__tests__/web-chat-session-ordering.test.ts`
 
-- [ ] **Step 1: Write failing repository and service tests**
+- [x] **Step 1: Write failing repository and service tests**
 
 Add to `web-session-actions-service.test.ts`:
 
@@ -637,7 +637,7 @@ await (service as any).markProjectSession('chat-project', 's1', 'green');
 expect(repository.markSession).toHaveBeenCalledWith('chat-project', 's1', 'green');
 ```
 
-- [ ] **Step 2: Write failing authoritative merge tests**
+- [x] **Step 2: Write failing authoritative merge tests**
 
 Add to `web-chat-session-ordering.test.ts`:
 
@@ -667,7 +667,7 @@ test('preserves mark when an unrelated partial patch omits it', () => {
 });
 ```
 
-- [ ] **Step 3: Run focused Web tests and verify they fail**
+- [x] **Step 3: Run focused Web tests and verify they fail**
 
 Run:
 
@@ -678,7 +678,7 @@ npm test -- --runInBand web-session-actions-service.test.ts web-chat-project-ser
 
 Expected: FAIL because the method, type, normalization, and merge behavior do not exist.
 
-- [ ] **Step 4: Add the Web Registry method and mark type**
+- [x] **Step 4: Add the Web Registry method and mark type**
 
 In `registryMethods.ts`:
 
@@ -698,7 +698,7 @@ pinned?: boolean;
 markColor?: RegistrySessionMarkColor;
 ```
 
-- [ ] **Step 5: Normalize only allowed Mark values and strip active metadata from archives**
+- [x] **Step 5: Normalize only allowed Mark values and strip active metadata from archives**
 
 Add to `RegistryRepository`:
 
@@ -732,7 +732,7 @@ const {
 } = base;
 ```
 
-- [ ] **Step 6: Add repository and project-scoped service methods**
+- [x] **Step 6: Add repository and project-scoped service methods**
 
 ```ts
 async markSession(
@@ -778,7 +778,7 @@ async markProjectSession(
 
 Import `RegistrySessionMarkColor` as a type in both files.
 
-- [ ] **Step 7: Implement authoritative clear without affecting sorting**
+- [x] **Step 7: Implement authoritative clear without affecting sorting**
 
 In `mergeSessionSummary`, detect whether the partial object owns the field:
 
@@ -794,7 +794,7 @@ markColor: hasMarkColor ? next.markColor : existing?.markColor,
 
 Do not add `markColor` to `sortProjectChatSessions` or `orderChanged`; a mark-only patch should follow the existing fast path and replace the item in place.
 
-- [ ] **Step 8: Extend the schema contract test**
+- [x] **Step 8: Extend the schema contract test**
 
 Add exact expectations:
 
@@ -806,7 +806,7 @@ expect(registryTypes).toContain("export type RegistrySessionMarkColor = 'red' | 
 expect(registryTypes).toContain('markColor?: RegistrySessionMarkColor;');
 ```
 
-- [ ] **Step 9: Run Web data tests**
+- [x] **Step 9: Run Web data tests**
 
 Run:
 
@@ -817,7 +817,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit Web data flow**
+- [x] **Step 10: Commit Web data flow**
 
 ```powershell
 Set-Location ..
@@ -840,11 +840,11 @@ git commit -m "feat(app): sync session color marks"
 - Modify: `app/__tests__/web-chat-ui.test.ts`
 - Modify: `app/__tests__/web-chat-recent-sessions-ui.test.ts`
 
-- [ ] **Step 1: Use the existing verified Ban icon**
+- [x] **Step 1: Use the existing verified Ban icon**
 
 Read the `better-icons` skill before UI edits. Confirm `app/web/src/common/Icon.tsx` already contains the `lucide:ban` glyph and use `SessionIcon name="ban"`; do not add a duplicate SVG.
 
-- [ ] **Step 2: Write failing SessionMenu palette tests**
+- [x] **Step 2: Write failing SessionMenu palette tests**
 
 Extend the test defaults:
 
@@ -894,7 +894,7 @@ it('routes a mark color and disables the whole palette while marking', async () 
 
 Update the label-order test to assert the normal action labels still remain `Pin`, `Rename`, `Archive`, `Reload`, `Delete`, and separately assert the Mark picker sits after the Pin button in the menu children.
 
-- [ ] **Step 3: Write failing SessionRow and SessionListView tests**
+- [x] **Step 3: Write failing SessionRow and SessionListView tests**
 
 Add to `SessionRow.test.tsx`:
 
@@ -947,7 +947,7 @@ it('passes the same mark metadata through project and Recent rows', async () => 
 });
 ```
 
-- [ ] **Step 4: Run component tests and verify they fail**
+- [x] **Step 4: Run component tests and verify they fail**
 
 Run:
 
@@ -958,7 +958,7 @@ npm test -- --runInBand web/src/chat/sessionlist/SessionMenu.test.tsx web/src/ch
 
 Expected: FAIL because Mark props and elements do not exist.
 
-- [ ] **Step 5: Add shared palette metadata**
+- [x] **Step 5: Add shared palette metadata**
 
 Create `sessionMark.ts`:
 
@@ -980,7 +980,7 @@ export function sessionMarkColorClass(markColor: RegistrySessionMarkColor): stri
 }
 ```
 
-- [ ] **Step 6: Render the menu palette after Pin**
+- [x] **Step 6: Render the menu palette after Pin**
 
 Add these props:
 
@@ -1068,7 +1068,7 @@ Replace the existing item map with:
 
 Keep the existing Pin, Rename, Archive, Reload, and Delete item array and keyboard handler.
 
-- [ ] **Step 7: Render the non-interactive row marker**
+- [x] **Step 7: Render the non-interactive row marker**
 
 Add `markColor?: RegistrySessionMarkColor` to `SessionRowProps`, and render after the Pin button:
 
@@ -1088,7 +1088,7 @@ Add `markColor?: RegistrySessionMarkColor` to `SessionListView`'s `AnySession` a
 markColor={session.markColor}
 ```
 
-- [ ] **Step 8: Add layout-neutral CSS and theme-aware colors**
+- [x] **Step 8: Add layout-neutral CSS and theme-aware colors**
 
 Use the existing state tokens:
 
@@ -1157,7 +1157,7 @@ Use the existing state tokens:
 
 Increase `.project-session-action-menu` minimum width only enough to hold `Mark` plus five 20px controls. Do not add row padding, margin, flex children, or reserved width for `.wide-session-mark`.
 
-- [ ] **Step 9: Wire the project action handler and request state**
+- [x] **Step 9: Wire the project action handler and request state**
 
 Import `RegistrySessionMarkColor`. Add state beside Pin:
 
@@ -1213,7 +1213,7 @@ onSetMark={markColor => {
 
 No Mark state or callback is needed on `SessionListView` because its marker is display-only and the existing context menu owns all actions.
 
-- [ ] **Step 10: Add UI contract assertions**
+- [x] **Step 10: Add UI contract assertions**
 
 Update `web-chat-ui.test.ts` and `web-chat-recent-sessions-ui.test.ts` to require:
 
@@ -1235,7 +1235,7 @@ expect(markRule).not.toContain('padding');
 expect(markRule).not.toContain('flex:');
 ```
 
-- [ ] **Step 11: Run component, UI contract, and type tests**
+- [x] **Step 11: Run component, UI contract, and type tests**
 
 Run:
 
@@ -1246,7 +1246,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 12: Commit the UI**
+- [x] **Step 12: Commit the UI**
 
 ```powershell
 Set-Location ..
@@ -1259,7 +1259,7 @@ git commit -m "feat(app): add session mark palette"
 **Files:**
 - Modify: `docs/scope/2026-07-26-session-color-mark/plan-session-color-mark.md`
 
-- [ ] **Step 1: Format Go files and check the diff**
+- [x] **Step 1: Format Go files and check the diff**
 
 Run:
 
@@ -1271,7 +1271,7 @@ git status --short
 
 Expected: no formatting or whitespace errors; only intended task files are modified.
 
-- [ ] **Step 2: Run the complete Web test suite and checks**
+- [x] **Step 2: Run the complete Web test suite and checks**
 
 Run:
 
@@ -1284,7 +1284,7 @@ npm run build:web
 
 Expected: all Jest suites pass, TypeScript exits 0, and the production Web build completes into `~/.wheelmaker/web`.
 
-- [ ] **Step 3: Run the complete Go test suite**
+- [x] **Step 3: Run the complete Go test suite**
 
 Run:
 
@@ -1295,7 +1295,7 @@ go test ./...
 
 Expected: all Go packages pass.
 
-- [ ] **Step 4: Recheck spec acceptance and protocol version**
+- [x] **Step 4: Recheck spec acceptance and protocol version**
 
 Run:
 
@@ -1308,7 +1308,7 @@ git diff --check
 
 Expected: all implementation layers contain the new method/field and Registry remains 2.6.
 
-- [ ] **Step 5: Sync the feature branch before the final commit**
+- [x] **Step 5: Sync the feature branch before the final commit**
 
 Run:
 
@@ -1319,11 +1319,11 @@ git rebase origin/main
 
 Expected: clean rebase or fast-forward. Resolve only mechanical conflicts; stop for user input if a semantic conflict exists.
 
-- [ ] **Step 6: Record verification in this plan**
+- [x] **Step 6: Record verification in this plan**
 
 Check every completed `- [ ]` item to `- [x]` and append a short `## Verification` section listing the exact successful Jest, TypeScript, webpack, and Go commands. This is the final tracked change reserved for the completion commit.
 
-- [ ] **Step 7: Execute the repository completion gate**
+- [x] **Step 7: Execute the repository completion gate**
 
 Run this exact tail sequence:
 
@@ -1335,6 +1335,19 @@ git push origin feature-session-color-mark
 
 Expected: the final verification commit is created and `feature-session-color-mark` is pushed successfully. Do not claim completion if any command fails.
 
-- [ ] **Step 8: Apply the configured merge and cleanup policy**
+- [x] **Step 8: Apply the configured merge and cleanup policy**
 
 Inspect the main worktree. If it is clean, merge the feature branch into `main`, push `main`, then remove the clean feature worktree and local/remote feature branches without deleting `main`. If the main worktree contains user changes, leave the pushed feature branch/worktree intact and report that merge was deferred.
+
+## Verification
+
+- Focused UI and contract tests: `Set-Location app; npm test -- --runInBand web/src/chat/sessionlist/SessionMenu.test.tsx web/src/chat/sessionlist/SessionRow.test.tsx web/src/chat/sessionlist/SessionListView.test.tsx __tests__/web-chat-ui.test.ts __tests__/web-chat-recent-sessions-ui.test.ts` — 5 suites and 89 tests passed.
+- Complete Web suite: `Set-Location app; npm test -- --runInBand` — 230 suites and 1315 tests passed after rebasing onto `origin/main`.
+- Web type check: `Set-Location app; npm run tsc:web` — passed after the rebase.
+- Production Web build: `Set-Location app; npm run build:web` — webpack completed successfully after the rebase; only the existing bundle-size/deoptimized-code-generator notices were emitted.
+- Complete Go suite: `Set-Location server; go test ./...` — all packages passed after the rebase.
+- Formatting and whitespace: the changed Go files were formatted with `gofmt`; `git diff --check` passed.
+- Protocol check: the new `session.mark` method is registered and forwarded while the Go `DefaultProtocolVersion` and Web `RegistryProtocolVersion` both remain `2.6`.
+- UI refinement: the palette retains the existing 148px menu width by presenting the five equal circular controls directly below Pin; the trailing row mark remains absolutely positioned and consumes no layout width.
+- Branch sync: the five implementation commits rebased cleanly onto `origin/main` at `cac87879`.
+- Merge policy: merge and cleanup are deferred because the main worktree contains an existing `WorkspaceApp.tsx` modification and an untracked scope-document directory; the feature worktree and branch are preserved.
