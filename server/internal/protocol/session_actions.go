@@ -6,6 +6,7 @@ const (
 	SessionActionCompact = "compact"
 
 	SessionOperationTypeCompact = "compact"
+	SessionOperationTypeFork    = "fork"
 
 	SessionOperationStatusQueued    = "queued"
 	SessionOperationStatusStarted   = "started"
@@ -14,6 +15,28 @@ const (
 
 	SessionTurnMethodOperation = "session_operation"
 )
+
+type SessionForkPoint struct {
+	Provider string `json:"provider"`
+	Ref      string `json:"ref"`
+}
+
+type SessionForkPrompt struct {
+	DoneTurnIndex int64
+	ContentBlocks []ContentBlock
+}
+
+type SessionForkResult struct {
+	SessionID  string
+	Title      string
+	ForkPoints map[int64]SessionForkPoint
+}
+
+type SessionForkOrigin struct {
+	SessionID string `json:"sessionId"`
+	TurnIndex int64  `json:"turnIndex"`
+	Title     string `json:"title,omitempty"`
+}
 
 type SessionActionCapability struct {
 	Supported bool   `json:"supported"`
@@ -82,10 +105,11 @@ type SessionCompactAccepted struct {
 }
 
 type SessionOperationPayload struct {
-	OperationID string `json:"operationId"`
-	Type        string `json:"type"`
-	Status      string `json:"status"`
-	StartedAt   string `json:"startedAt,omitempty"`
-	CompletedAt string `json:"completedAt,omitempty"`
-	Message     string `json:"message,omitempty"`
+	OperationID string             `json:"operationId"`
+	Type        string             `json:"type"`
+	Status      string             `json:"status"`
+	StartedAt   string             `json:"startedAt,omitempty"`
+	CompletedAt string             `json:"completedAt,omitempty"`
+	Message     string             `json:"message,omitempty"`
+	ForkedFrom  *SessionForkOrigin `json:"forkedFrom,omitempty"`
 }

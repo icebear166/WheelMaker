@@ -53,6 +53,11 @@ type SessionCompactor interface {
 	CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error)
 }
 
+type SessionForker interface {
+	ResolveForkPoints(ctx context.Context, sessionID string, prompts []protocol.SessionForkPrompt) (map[int64]protocol.SessionForkPoint, error)
+	ForkSession(ctx context.Context, sessionID string, lastTurnID string, prompts []protocol.SessionForkPrompt) (protocol.SessionForkResult, error)
+}
+
 type SessionArchiver interface {
 	ArchiveSession(ctx context.Context, sessionID string) error
 	UnarchiveSession(ctx context.Context, sessionID string) error
@@ -292,6 +297,28 @@ func (i *instance) CompactSession(ctx context.Context, sessionID string) (<-chan
 		return nil, ErrSessionActionUnsupported
 	}
 	return compactor.CompactSession(ctx, sessionID)
+}
+
+func (i *instance) ResolveForkPoints(ctx context.Context, sessionID string, prompts []protocol.SessionForkPrompt) (map[int64]protocol.SessionForkPoint, error) {
+	if err := i.ensureConn(); err != nil {
+		return nil, err
+	}
+	forker, ok := i.conn.(SessionForker)
+	if !ok {
+		return nil, ErrSessionActionUnsupported
+	}
+	return forker.ResolveForkPoints(ctx, sessionID, prompts)
+}
+
+func (i *instance) ForkSession(ctx context.Context, sessionID string, lastTurnID string, prompts []protocol.SessionForkPrompt) (protocol.SessionForkResult, error) {
+	if err := i.ensureConn(); err != nil {
+		return protocol.SessionForkResult{}, err
+	}
+	forker, ok := i.conn.(SessionForker)
+	if !ok {
+		return protocol.SessionForkResult{}, ErrSessionActionUnsupported
+	}
+	return forker.ForkSession(ctx, sessionID, lastTurnID, prompts)
 }
 
 func (i *instance) HandleACPResponse(_ context.Context, method string, params json.RawMessage) {

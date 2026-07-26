@@ -72,6 +72,7 @@ import type {
   RegistrySessionActionCapabilities,
   RegistrySessionActionCapability,
   RegistrySessionCompactAccepted,
+  RegistrySessionForkResponse,
   RegistrySessionCredits,
   RegistrySessionIndividualLimit,
   RegistrySessionRateLimit,
@@ -504,6 +505,26 @@ export class RegistryRepository {
         : undefined,
       usage: this.normalizeSessionUsage(input.usage),
       sessionActions: this.normalizeSessionActions(input.sessionActions),
+      forkedFrom: this.normalizeSessionForkOrigin(input.forkedFrom),
+    };
+  }
+
+  private normalizeSessionForkOrigin(raw: unknown): RegistrySessionSummary['forkedFrom'] {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    const sessionId = typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
+    const turnIndex = typeof input.turnIndex === 'number' && Number.isFinite(input.turnIndex)
+      ? Math.max(0, Math.trunc(input.turnIndex))
+      : 0;
+    if (!sessionId || turnIndex <= 0) {
+      return undefined;
+    }
+    return {
+      sessionId,
+      turnIndex,
+      title: typeof input.title === 'string' && input.title.trim() ? input.title.trim() : undefined,
     };
   }
 
@@ -1334,6 +1355,30 @@ export class RegistryRepository {
       accepted: body.accepted === true,
       sessionId,
       operationId: typeof body.operationId === 'string' ? body.operationId : '',
+    };
+  }
+
+  async forkSession(projectId: string, sessionId: string, turnIndex: number): Promise<RegistrySessionForkResponse> {
+    const normalizedTurnIndex = Number.isFinite(turnIndex) ? Math.max(0, Math.trunc(turnIndex)) : 0;
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionFork,
+      projectId,
+      payload: {sessionId, turnIndex: normalizedTurnIndex},
+      timeoutMs: 30000,
+    });
+    const body = resp.payload && typeof resp.payload === 'object'
+      ? resp.payload as Record<string, unknown>
+      : {};
+    const session = this.normalizeSessionSummary(body.session);
+    return {
+      ok: body.ok === true,
+      session: session ?? {
+        sessionId: '',
+        title: '',
+        preview: '',
+        updatedAt: '',
+        messageCount: 0,
+      },
     };
   }
 

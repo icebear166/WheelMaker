@@ -202,6 +202,11 @@ type appServerThreadReadParams struct {
 	IncludeTurns bool   `json:"includeTurns"`
 }
 
+type appServerThreadForkParams struct {
+	ThreadID   string `json:"threadId"`
+	LastTurnID string `json:"lastTurnId,omitempty"`
+}
+
 type appServerThreadArchiveParams struct {
 	ThreadID string `json:"threadId"`
 }

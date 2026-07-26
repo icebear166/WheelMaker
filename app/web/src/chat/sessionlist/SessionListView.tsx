@@ -11,7 +11,14 @@ export type SessionListProjectItem = {
   hubId?: string | null;
 };
 
-type AnySession = {sessionId: string; title?: string; agentType?: string; pinned?: boolean; updatedAt?: string};
+type AnySession = {
+  sessionId: string;
+  title?: string;
+  agentType?: string;
+  pinned?: boolean;
+  updatedAt?: string;
+  forkedFrom?: {sessionId: string; turnIndex: number; title?: string};
+};
 type AnyDraft = {draftId: string; title: string; status: string; errorMessage?: string; createdAt?: string; agentType?: string};
 
 export type SessionListViewProps = {
@@ -107,6 +114,7 @@ export function SessionListView(props: SessionListViewProps) {
         timeLabel={props.formatAge(session.updatedAt ?? '')}
         timeTitle={session.updatedAt ?? ''}
         selected={props.selectedChatEncodedKey === props.runtimeKey(projectId, session.sessionId)}
+        forked={!!session.forkedFrom}
         pinned={session.pinned === true}
         pinning={props.pinningSessionKey === props.sessionActionKey(projectId, session.sessionId)}
         recent={recent}

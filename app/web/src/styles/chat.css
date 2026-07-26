@@ -841,6 +841,10 @@
   color: var(--state-success);
 }
 
+.chat-session-operation.fork.completed .chat-session-operation-icon {
+  color: var(--text-tertiary);
+}
+
 .chat-session-operation.failed .chat-session-operation-icon,
 .chat-session-operation.failed .chat-session-operation-detail {
   color: var(--state-danger);

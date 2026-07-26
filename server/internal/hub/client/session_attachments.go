@@ -474,6 +474,50 @@ func (c *Client) sessionAttachmentRoot(sessionID string) (string, error) {
 	return filepath.Join(root, safeHistoryPathPart(c.projectName), safeHistoryPathPart(sessionID), "attachments"), nil
 }
 
+func (c *Client) copyForkAttachment(ctx context.Context, sourceSessionID, targetSessionID, uri string) (string, error) {
+	resolved, err := c.resolveSessionAttachment(ctx, sourceSessionID, "", uri)
+	if err != nil {
+		return "", err
+	}
+	targetRoot, err := c.sessionAttachmentRoot(targetSessionID)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(targetRoot, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir target attachment dir: %w", err)
+	}
+	targetFilePath := filepath.Join(targetRoot, resolved.sidecar.FileName)
+	raw, err := os.ReadFile(resolved.filePath)
+	if err != nil {
+		return "", fmt.Errorf("read source attachment: %w", err)
+	}
+	if err := os.WriteFile(targetFilePath, raw, 0o600); err != nil {
+		return "", fmt.Errorf("write target attachment: %w", err)
+	}
+	sidecar := resolved.sidecar
+	sidecar.ProjectName = c.projectName
+	sidecar.SessionID = targetSessionID
+	sidecar.URI, err = fileURI(targetFilePath)
+	if err != nil {
+		return "", err
+	}
+	if thumbnailFileName := strings.TrimSpace(sidecar.Thumbnail.FileName); thumbnailFileName != "" {
+		sourceThumbnailPath := filepath.Join(resolved.root, thumbnailFileName)
+		targetThumbnailPath := filepath.Join(targetRoot, thumbnailFileName)
+		thumbnail, readErr := os.ReadFile(sourceThumbnailPath)
+		if readErr != nil {
+			return "", fmt.Errorf("read source attachment thumbnail: %w", readErr)
+		}
+		if err := os.WriteFile(targetThumbnailPath, thumbnail, 0o600); err != nil {
+			return "", fmt.Errorf("write target attachment thumbnail: %w", err)
+		}
+	}
+	if err := writeAttachmentSidecar(attachmentSidecarPath(targetFilePath), sidecar); err != nil {
+		return "", fmt.Errorf("write target attachment sidecar: %w", err)
+	}
+	return sidecar.URI, nil
+}
+
 func (c *Client) sessionHistoryRoot() (string, error) {
 	if c != nil && c.sessionRecorder != nil && c.sessionRecorder.turnStore != nil {
 		if root := strings.TrimSpace(c.sessionRecorder.turnStore.root); root != "" {

@@ -17,6 +17,7 @@ export type SessionRowProps = {
   timeLabel?: string;
   timeTitle?: string;
   selected: boolean;
+  forked?: boolean;
   pinned?: boolean;
   pinning?: boolean;
   recent?: boolean;
@@ -36,6 +37,7 @@ export function SessionRow({
   timeLabel,
   timeTitle,
   selected,
+  forked = false,
   pinned = false,
   pinning = false,
   recent = false,
@@ -56,7 +58,14 @@ export function SessionRow({
         {...gestureHandlers}
         onClick={onClick}
       >
-        <span className="wide-session-title">{title}</span>
+        {forked ? (
+          <span className="wide-session-title forked">
+            <span className="wide-session-title-text">{title}</span>
+            <SessionIcon name="gitFork" size={11} className="wide-session-fork-marker" />
+          </span>
+        ) : (
+          <span className="wide-session-title">{title}</span>
+        )}
         {agentLabel ? (
           <span className={`wide-session-agent-tag ${agentClassName ?? ''}`}>{agentLabel}</span>
         ) : null}

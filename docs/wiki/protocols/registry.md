@@ -401,6 +401,7 @@ Session 请求要求 envelope 顶层 `projectId`。`sessionId` 放在 payload �
 - `session.delete`
 - `session.rename`
 - `session.send`
+- `session.fork`
 - `session.cancel`
 - `session.markRead`
 - `session.config`
@@ -418,6 +419,47 @@ Hub 上传和 Registry 广播使用同一事件名：
 `session.create` 可在 payload 中携带可选的 `createRequestId`。Hub 将其持久化到会话摘要，并在创建响应、`session.list` 与 `session.updated` 中原样返回，使客户端能在请求响应丢失后将已创建会话与本地草稿重新关联。
 
 `session.read` 响应 payload 使用 top-level `sessionId` 和 `turns[]`；turn 内不重复 `sessionId`。
+
+### Codex 会话分叉
+
+`session.fork` 从一个已经完成且有精确原生映射的 `prompt_done` 创建独立会话：
+
+```json
+{
+  "method": "session.fork",
+  "projectId": "hub-a:WheelMaker",
+  "payload": {
+    "sessionId": "source-session",
+    "turnIndex": 7
+  }
+}
+```
+
+成功响应：
+
+```json
+{
+  "ok": true,
+  "session": {
+    "sessionId": "forked-session",
+    "forkedFrom": {
+      "sessionId": "source-session",
+      "turnIndex": 7,
+      "title": "Source session"
+    }
+  }
+}
+```
+
+持久化和显示规则：
+
+- 新完成的 `prompt_done.param` 可携带 provider-neutral 的 `forkPoint: {provider, ref}`。Codex 的 `ref` 是原生 turn ID，但通用会话层不保存 `codexTurnId` 之类的 provider 专用字段。
+- 老 Codex 历史没有 `forkPoint` 时，`session.read` 通过 `thread/read` 对完整 prompt 序列做精确匹配，只在响应内存中补充映射；不匹配时不猜测，也不重写 WMT2。
+- 目标会话复制所选完成 turn 之前的 WMT2 历史、diff artifacts 和被引用附件，并把所有已映射的 `forkPoint` 改写成目标 Codex thread 的 turn ID。源会话和目标会话没有共享的可变历史文件。
+- 目标摘要携带 `forkedFrom`，归档 manifest 与恢复流程保留该来源标记。复制历史末尾追加一个已完成的 `session_operation`，其中 `type:"fork"` 且携带相同的 `forkedFrom`，供前端显示被动提示行。
+- `forkPoint`、`forkedFrom` 与 `session.fork` 都是增量字段/方法；Registry 协议仍为 2.6，WMT2 文件版本不变。
+
+> 决策与实施计划：[`docs/scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md`](../../scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md)
 
 ## 9. Registry Relay
 

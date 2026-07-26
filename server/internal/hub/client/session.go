@@ -526,6 +526,61 @@ func (s *Session) SessionStatus(ctx context.Context) (acp.SessionActionStatusRes
 	return result, nil
 }
 
+func (s *Session) ResolveForkPoints(ctx context.Context, prompts []acp.SessionForkPrompt) (map[int64]acp.SessionForkPoint, error) {
+	if !s.promptMu.TryLock() {
+		return nil, agent.ErrSessionBusy
+	}
+	defer s.promptMu.Unlock()
+	if err := s.ensureInstance(ctx); err != nil {
+		return nil, err
+	}
+	if _, err := s.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	inst := s.instance
+	sessionID := s.acpSessionID
+	s.mu.Unlock()
+	forker, ok := inst.(agent.SessionForker)
+	if !ok {
+		return nil, agent.ErrSessionActionUnsupported
+	}
+	return forker.ResolveForkPoints(ctx, sessionID, prompts)
+}
+
+func (s *Session) ForkSession(ctx context.Context, lastTurnID string, prompts []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
+	if err := s.beginExecution(acp.SessionOperationTypeFork); err != nil {
+		return acp.SessionForkResult{}, err
+	}
+	defer s.endExecution()
+	if err := s.ensureInstance(ctx); err != nil {
+		return acp.SessionForkResult{}, err
+	}
+	if _, err := s.ensureInitialized(ctx); err != nil {
+		return acp.SessionForkResult{}, err
+	}
+	s.mu.Lock()
+	inst := s.instance
+	sessionID := s.acpSessionID
+	s.mu.Unlock()
+	forker, ok := inst.(agent.SessionForker)
+	if !ok {
+		return acp.SessionForkResult{}, agent.ErrSessionActionUnsupported
+	}
+	return forker.ForkSession(ctx, sessionID, lastTurnID, prompts)
+}
+
+func (s *Session) ArchiveForkTarget(ctx context.Context, sessionID string) error {
+	s.mu.Lock()
+	inst := s.instance
+	s.mu.Unlock()
+	archiver, ok := inst.(agent.SessionArchiver)
+	if !ok {
+		return agent.ErrSessionArchiveUnsupported
+	}
+	return archiver.ArchiveSession(ctx, sessionID)
+}
+
 func (s *Session) beginExecution(kind string) error {
 	if !s.promptMu.TryLock() {
 		return agent.ErrSessionBusy
@@ -1352,6 +1407,7 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 					"result": *ev.result,
 				}),
 				Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
+				ForkPoint: cloneSessionForkPoint(ev.result.ForkPoint),
 			})
 			streamDone = true
 		}

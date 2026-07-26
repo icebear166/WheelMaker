@@ -91,6 +91,8 @@ const GLYPHS = {
   command: (<><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3" /></>),
   // lucide:at-sign
   atSign: (<><circle cx="12" cy="12" r="4" /><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" /></>),
+  // lucide:git-fork
+  gitFork: (<><circle cx="12" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9m6 3v3" /></>),
 } as const;
 
 export type ChatIconName = keyof typeof GLYPHS;

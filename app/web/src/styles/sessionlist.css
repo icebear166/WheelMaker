@@ -199,6 +199,20 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.wide-session-fork-marker {
+  flex: none;
+  margin-left: 5px;
+  color: var(--text-tertiary);
+}
+.wide-session-title.forked {
+  display: flex;
+  align-items: center;
+}
+.wide-session-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .wide-session-row.selected .wide-session-title {
   font-weight: 500;
 }

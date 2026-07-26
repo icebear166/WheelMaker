@@ -147,6 +147,8 @@ const GLYPHS = {
   circleAlert: (<><g><circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" /></g></>),
   // lucide:file
   file: (<><g><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /></g></>),
+  // lucide:git-fork
+  gitFork: (<><circle cx="12" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><circle cx="18" cy="6" r="3" /><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9m6 3v3" /></>),
 } as const;
 
 export type IconName = keyof typeof GLYPHS;

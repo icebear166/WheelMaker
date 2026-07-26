@@ -53,6 +53,7 @@ type SessionTurnPromptResult struct {
 	CompletedAt string                      `json:"completedAt,omitempty"`
 	Message     string                      `json:"message,omitempty"`
 	Artifacts   []SessionTurnPromptArtifact `json:"artifacts,omitempty"`
+	ForkPoint   *SessionForkPoint           `json:"forkPoint,omitempty"`
 }
 
 type SessionTurnPromptArtifact struct {

@@ -162,6 +162,7 @@ type SessionPromptResult struct {
 	StopReason string                         `json:"stopReason"`
 	Message    string                         `json:"message,omitempty"`
 	Artifacts  []SessionPromptArtifactPayload `json:"-"`
+	ForkPoint  *SessionForkPoint              `json:"-"`
 }
 
 // SessionPromptArtifactPayload is internal side-band data attached to a prompt

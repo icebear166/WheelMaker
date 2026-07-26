@@ -68,4 +68,10 @@ describe('SessionRow', () => {
     const row = tree().root.findAllByType('button').find(b => b.props.className.includes('wide-session-row'))!;
     expect(row.props.className).toContain('selected');
   });
+
+  it('renders a fork-origin marker inside the row without another button', async () => {
+    const {tree} = await renderRow({forked: true});
+    expect(tree().root.findByProps({'data-icon-name': 'gitFork'})).toBeTruthy();
+    expect(tree().root.findAllByType('button')).toHaveLength(1);
+  });
 });

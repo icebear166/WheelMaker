@@ -59,6 +59,7 @@ import type {
   RegistryResumableSession,
   RegistrySessionSummary,
   RegistrySessionCompactAccepted,
+  RegistrySessionForkResponse,
   RegistrySessionStatusResult,
   RegistrySkillCommandResponse,
   RegistrySkillDetailPayload,
@@ -587,6 +588,13 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.compactSession(projectId, sessionId);
+  }
+
+  async forkProjectSession(projectId: string, sessionId: string, turnIndex: number): Promise<RegistrySessionForkResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.forkSession(projectId, sessionId, turnIndex);
   }
 
   async startProjectSessionAttachment(

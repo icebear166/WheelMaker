@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,6 +37,11 @@ type promptStreamEvent struct {
 	err    error
 }
 
+type sessionForkPointCacheEntry struct {
+	latestTurnIndex int64
+	points          map[int64]acp.SessionForkPoint
+}
+
 // Client is the top-level coordinator for a single WheelMaker project.
 // Agent initialization is lazy: the first incoming message triggers ensureInstance(),
 // which connects the active agent and creates the ACP forwarder.
@@ -49,6 +55,9 @@ type Client struct {
 	store Store
 
 	mu sync.Mutex
+
+	forkPointMu    sync.Mutex
+	forkPointCache map[string]sessionForkPointCacheEntry
 
 	// sessions maps session IDs to Session objects.
 	sessions map[string]*Session
@@ -95,6 +104,7 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		registry:       runtime.AgentFactory,
 		store:          store,
 		sessions:       make(map[string]*Session),
+		forkPointCache: make(map[string]sessionForkPointCacheEntry),
 		suspendTimeout: 5 * time.Minute,
 		stopPersistCh:  make(chan struct{}),
 		attachments:    newAttachmentManager(),
@@ -633,6 +643,14 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			}
 			return nil, err
 		}
+		if strings.EqualFold(summary.AgentType, string(acp.ACPProviderCodex)) {
+			enriched, enrichErr := c.enrichLegacySessionForkPoints(ctx, sessionID, latestTurnIndex, turns)
+			if enrichErr == nil {
+				turns = enriched
+			} else {
+				hubLogger(c.projectName).Warn("resolve legacy fork points failed session=%s err=%v", sessionID, enrichErr)
+			}
+		}
 		if log.VerboseEnabled() {
 			log.Verbose("session.read result sessionId=%s afterTurnIndex=%d latestTurnIndex=%d turnCount=%d lastDoneTurnIndex=%d lastReadTurnIndex=%d lastDoneSuccess=%t running=%t", sessionID, afterTurnIndex, latestTurnIndex, len(turns), summary.LastDoneTurnIndex, summary.LastReadTurnIndex, summary.LastDoneSuccess, summary.Running)
 		}
@@ -887,6 +905,15 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			SessionID:   sessionID,
 			OperationID: operationID,
 		}, nil
+	case acp.RegistryMethodSessionFork:
+		var req struct {
+			SessionID string `json:"sessionId"`
+			TurnIndex int64  `json:"turnIndex"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.fork payload: %w", err)
+		}
+		return c.forkSessionAtTurn(ctx, req.SessionID, req.TurnIndex)
 	case acp.RegistryMethodSessionSend:
 		var req struct {
 			SessionID string             `json:"sessionId"`
@@ -969,6 +996,400 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
 	}
+}
+
+func (c *Client) enrichLegacySessionForkPoints(ctx context.Context, sessionID string, latestTurnIndex int64, turns []sessionViewTurn) ([]sessionViewTurn, error) {
+	if !sessionTurnsNeedForkPoint(turns) {
+		return turns, nil
+	}
+	c.forkPointMu.Lock()
+	cached, ok := c.forkPointCache[sessionID]
+	c.forkPointMu.Unlock()
+	if ok && cached.latestTurnIndex == latestTurnIndex {
+		return applySessionForkPointsToTurns(turns, cached.points), nil
+	}
+	_, fullTurns, err := c.sessionRecorder.ReadSessionTurns(ctx, sessionID, 0)
+	if err != nil {
+		return turns, err
+	}
+	prompts := sessionForkPromptsFromTurns(fullTurns)
+	if len(prompts) == 0 {
+		return turns, nil
+	}
+	sess, err := c.SessionByID(ctx, sessionID)
+	if err != nil {
+		return turns, err
+	}
+	points, err := sess.ResolveForkPoints(ctx, prompts)
+	if err != nil {
+		return turns, err
+	}
+	copied := cloneSessionForkPointMap(points)
+	c.forkPointMu.Lock()
+	c.forkPointCache[sessionID] = sessionForkPointCacheEntry{
+		latestTurnIndex: latestTurnIndex,
+		points:          copied,
+	}
+	c.forkPointMu.Unlock()
+	return applySessionForkPointsToTurns(turns, copied), nil
+}
+
+func sessionTurnsNeedForkPoint(turns []sessionViewTurn) bool {
+	for _, turn := range turns {
+		var message acp.SessionTurnMessage
+		if json.Unmarshal([]byte(turn.Content), &message) != nil || message.Method != acp.SessionTurnMethodPromptDone {
+			continue
+		}
+		var result acp.SessionTurnPromptResult
+		if json.Unmarshal(message.Param, &result) == nil && cloneSessionForkPoint(result.ForkPoint) == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func sessionForkPromptsFromTurns(turns []sessionViewTurn) []acp.SessionForkPrompt {
+	var pending []acp.ContentBlock
+	out := make([]acp.SessionForkPrompt, 0)
+	for _, turn := range turns {
+		var message acp.SessionTurnMessage
+		if json.Unmarshal([]byte(turn.Content), &message) != nil {
+			continue
+		}
+		switch message.Method {
+		case acp.SessionTurnMethodPromptRequest:
+			var request acp.SessionTurnPromptRequest
+			if json.Unmarshal(message.Param, &request) != nil {
+				pending = nil
+				continue
+			}
+			pending = cloneSessionContentBlocks(request.ContentBlocks)
+		case acp.SessionTurnMethodPromptDone:
+			if pending == nil || turn.TurnIndex <= 0 {
+				continue
+			}
+			out = append(out, acp.SessionForkPrompt{
+				DoneTurnIndex: turn.TurnIndex,
+				ContentBlocks: cloneSessionContentBlocks(pending),
+			})
+			pending = nil
+		}
+	}
+	return out
+}
+
+func applySessionForkPointsToTurns(turns []sessionViewTurn, points map[int64]acp.SessionForkPoint) []sessionViewTurn {
+	if len(points) == 0 {
+		return turns
+	}
+	out := append([]sessionViewTurn(nil), turns...)
+	for index := range out {
+		point, ok := points[out[index].TurnIndex]
+		if !ok || cloneSessionForkPoint(&point) == nil {
+			continue
+		}
+		var envelope map[string]any
+		if json.Unmarshal([]byte(out[index].Content), &envelope) != nil {
+			continue
+		}
+		method, _ := envelope["method"].(string)
+		param, _ := envelope["param"].(map[string]any)
+		if method != acp.SessionTurnMethodPromptDone || param == nil {
+			continue
+		}
+		if existing, exists := param["forkPoint"]; exists && existing != nil {
+			continue
+		}
+		param["forkPoint"] = point
+		raw, err := json.Marshal(envelope)
+		if err != nil {
+			continue
+		}
+		out[index].Content = string(raw)
+	}
+	return out
+}
+
+func cloneSessionForkPointMap(points map[int64]acp.SessionForkPoint) map[int64]acp.SessionForkPoint {
+	out := make(map[int64]acp.SessionForkPoint, len(points))
+	for turnIndex, point := range points {
+		cloned := cloneSessionForkPoint(&point)
+		if turnIndex > 0 && cloned != nil {
+			out[turnIndex] = *cloned
+		}
+	}
+	return out
+}
+
+func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, turnIndex int64) (any, error) {
+	sourceSessionID = strings.TrimSpace(sourceSessionID)
+	if sourceSessionID == "" || turnIndex <= 0 {
+		return nil, fmt.Errorf("sessionId and positive turnIndex are required")
+	}
+	latestTurnIndex, sourceTurns, err := c.sessionRecorder.ReadSessionTurns(ctx, sourceSessionID, 0)
+	if err != nil {
+		return nil, err
+	}
+	if turnIndex > latestTurnIndex {
+		return nil, fmt.Errorf("fork turn %d exceeds latest turn %d", turnIndex, latestTurnIndex)
+	}
+	sourceSummary, err := c.sessionRecorder.ReadSessionSummary(ctx, sourceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(sourceSummary.AgentType, string(acp.ACPProviderCodex)) {
+		return nil, fmt.Errorf("%w: fork", agent.ErrSessionActionUnsupported)
+	}
+	sourceTurns, err = c.enrichLegacySessionForkPoints(ctx, sourceSessionID, latestTurnIndex, sourceTurns)
+	if err != nil {
+		return nil, err
+	}
+	selectedPoint := sessionForkPointAtTurn(sourceTurns, turnIndex)
+	if selectedPoint == nil {
+		return nil, fmt.Errorf("fork point is not available for turn %d", turnIndex)
+	}
+	if !strings.EqualFold(selectedPoint.Provider, string(acp.ACPProviderCodex)) {
+		return nil, fmt.Errorf("unsupported fork point provider: %s", selectedPoint.Provider)
+	}
+	prompts := mappedSessionForkPromptsThroughTurn(sourceTurns, turnIndex)
+	if len(prompts) == 0 {
+		return nil, fmt.Errorf("fork source prompts are not available")
+	}
+	sourceSession, err := c.SessionByID(ctx, sourceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	forkResult, err := sourceSession.ForkSession(ctx, selectedPoint.Ref, prompts)
+	if err != nil {
+		return nil, err
+	}
+	targetSessionID := strings.TrimSpace(forkResult.SessionID)
+	if targetSessionID == "" || targetSessionID == sourceSessionID {
+		return nil, fmt.Errorf("provider returned invalid forked session id")
+	}
+	localTargetCreated := false
+	cleanupTarget := func() {
+		if localTargetCreated {
+			_ = c.deleteActiveSession(context.Background(), targetSessionID, false)
+		}
+		_ = sourceSession.ArchiveForkTarget(context.Background(), targetSessionID)
+	}
+	existing, err := c.store.LoadSession(ctx, c.projectName, targetSessionID)
+	if err != nil {
+		_ = sourceSession.ArchiveForkTarget(context.Background(), targetSessionID)
+		return nil, err
+	}
+	if existing != nil {
+		cleanupTarget()
+		return nil, fmt.Errorf("forked session already exists: %s", targetSessionID)
+	}
+	sourceRecord, err := c.store.LoadSession(ctx, c.projectName, sourceSessionID)
+	if err != nil || sourceRecord == nil {
+		cleanupTarget()
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("source session not found: %s", sourceSessionID)
+	}
+	targetSession, err := c.newForkTargetSession(sourceSession, targetSessionID, forkResult.Title)
+	if err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	localTargetCreated = true
+	if err := targetSession.persistSession(ctx); err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	contents, err := c.buildForkHistoryContents(ctx, sourceSessionID, targetSessionID, turnIndex, sourceTurns, forkResult.ForkPoints)
+	if err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	origin := acp.SessionForkOrigin{
+		SessionID: sourceSessionID,
+		TurnIndex: turnIndex,
+		Title:     sessionForkOriginTitle(sourceRecord.Title),
+	}
+	now := time.Now().UTC()
+	if err := c.sessionRecorder.InitializeForkedSession(ctx, targetSessionID, contents, sourceRecord.Title, origin, now); err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	if err := c.sessionRecorder.RecordSessionOperation(ctx, targetSessionID, acp.SessionOperationPayload{
+		OperationID: uuid.NewString(),
+		Type:        acp.SessionOperationTypeFork,
+		Status:      acp.SessionOperationStatusCompleted,
+		CompletedAt: now.Format(time.RFC3339),
+		ForkedFrom:  &origin,
+	}); err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	c.mu.Lock()
+	c.sessions[targetSessionID] = targetSession
+	c.mu.Unlock()
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, targetSessionID)
+	if err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	summary.ConfigOptions = targetSession.CurrentConfigOptions()
+	return map[string]any{"ok": true, "session": summary}, nil
+}
+
+func (c *Client) newForkTargetSession(source *Session, targetSessionID, providerTitle string) (*Session, error) {
+	source.mu.Lock()
+	agentType := source.agentType
+	state := cloneSessionAgentState(&source.agentState)
+	source.mu.Unlock()
+	target, err := c.newWiredSession(targetSessionID, agentType)
+	if err != nil {
+		return nil, err
+	}
+	if state != nil {
+		target.agentState = *state
+	}
+	if title := strings.TrimSpace(providerTitle); title != "" {
+		target.agentState.Title = title
+	}
+	target.Status = SessionActive
+	target.createdAt = time.Now()
+	return target, nil
+}
+
+func mappedSessionForkPromptsThroughTurn(turns []sessionViewTurn, throughTurnIndex int64) []acp.SessionForkPrompt {
+	all := sessionForkPromptsFromTurns(turns)
+	out := make([]acp.SessionForkPrompt, 0, len(all))
+	for _, prompt := range all {
+		if prompt.DoneTurnIndex > throughTurnIndex || sessionForkPointAtTurn(turns, prompt.DoneTurnIndex) == nil {
+			continue
+		}
+		out = append(out, prompt)
+	}
+	return out
+}
+
+func sessionForkPointAtTurn(turns []sessionViewTurn, turnIndex int64) *acp.SessionForkPoint {
+	for _, turn := range turns {
+		if turn.TurnIndex != turnIndex {
+			continue
+		}
+		var message acp.SessionTurnMessage
+		if json.Unmarshal([]byte(turn.Content), &message) != nil || message.Method != acp.SessionTurnMethodPromptDone {
+			return nil
+		}
+		var result acp.SessionTurnPromptResult
+		if json.Unmarshal(message.Param, &result) != nil {
+			return nil
+		}
+		return cloneSessionForkPoint(result.ForkPoint)
+	}
+	return nil
+}
+
+func (c *Client) buildForkHistoryContents(
+	ctx context.Context,
+	sourceSessionID string,
+	targetSessionID string,
+	throughTurnIndex int64,
+	sourceTurns []sessionViewTurn,
+	targetForkPoints map[int64]acp.SessionForkPoint,
+) ([]string, error) {
+	contents := make([]string, 0, throughTurnIndex)
+	for _, turn := range sourceTurns {
+		if turn.TurnIndex > throughTurnIndex {
+			break
+		}
+		if turn.TurnIndex != int64(len(contents)+1) {
+			return nil, fmt.Errorf("fork source history has a gap at turn %d", turn.TurnIndex)
+		}
+		var message acp.SessionTurnMessage
+		if err := json.Unmarshal([]byte(turn.Content), &message); err != nil {
+			return nil, fmt.Errorf("decode fork source turn %d: %w", turn.TurnIndex, err)
+		}
+		content := turn.Content
+		switch message.Method {
+		case acp.SessionTurnMethodPromptRequest:
+			var request acp.SessionTurnPromptRequest
+			if err := json.Unmarshal(message.Param, &request); err != nil {
+				return nil, fmt.Errorf("decode fork prompt request %d: %w", turn.TurnIndex, err)
+			}
+			for index := range request.ContentBlocks {
+				block := &request.ContentBlocks[index]
+				if !c.sessionURIWithinAttachmentRoot(sourceSessionID, block.URI) {
+					continue
+				}
+				targetURI, err := c.copyForkAttachment(ctx, sourceSessionID, targetSessionID, block.URI)
+				if err != nil {
+					return nil, err
+				}
+				block.URI = targetURI
+			}
+			content = buildSessionTurnContentJSON(message.Method, request)
+		case acp.SessionTurnMethodPromptDone:
+			var result acp.SessionTurnPromptResult
+			if err := json.Unmarshal(message.Param, &result); err != nil {
+				return nil, fmt.Errorf("decode fork prompt done %d: %w", turn.TurnIndex, err)
+			}
+			if cloneSessionForkPoint(result.ForkPoint) != nil {
+				targetPoint, ok := targetForkPoints[turn.TurnIndex]
+				if !ok || cloneSessionForkPoint(&targetPoint) == nil {
+					return nil, fmt.Errorf("target fork point is missing for turn %d", turn.TurnIndex)
+				}
+				result.ForkPoint = cloneSessionForkPoint(&targetPoint)
+			}
+			if len(result.Artifacts) > 0 {
+				copiedArtifacts := make([]acp.SessionTurnPromptArtifact, 0, len(result.Artifacts))
+				for _, artifact := range result.Artifacts {
+					body, err := c.sessionRecorder.artifactStore.ReadArtifact(ctx, c.projectName, sourceSessionID, artifact.ArtifactID)
+					if err != nil {
+						return nil, err
+					}
+					copied, err := c.sessionRecorder.artifactStore.WriteDiffArtifact(ctx, c.projectName, targetSessionID, body.Content)
+					if err != nil {
+						return nil, err
+					}
+					copiedArtifacts = append(copiedArtifacts, copied)
+				}
+				result.Artifacts = copiedArtifacts
+			}
+			content = buildSessionTurnContentJSON(message.Method, result)
+		}
+		contents = append(contents, content)
+	}
+	if int64(len(contents)) != throughTurnIndex {
+		return nil, fmt.Errorf("fork source history ended at %d, want %d", len(contents), throughTurnIndex)
+	}
+	return contents, nil
+}
+
+func (c *Client) sessionURIWithinAttachmentRoot(sessionID, uri string) bool {
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return false
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil || !strings.EqualFold(parsed.Scheme, "file") {
+		return false
+	}
+	root, err := c.sessionAttachmentRoot(sessionID)
+	if err != nil {
+		return false
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	pathAbs, err := filepath.Abs(attachmentFileURIPath(parsed))
+	return err == nil && pathWithinRoot(rootAbs, pathAbs)
+}
+
+func sessionForkOriginTitle(rawTitle string) string {
+	if facts, ok := sessionTitleFactsFromJSON(rawTitle); ok {
+		return firstNonEmpty(facts.Manual, facts.First, facts.Last)
+	}
+	return strings.TrimSpace(rawTitle)
 }
 
 func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
@@ -1351,14 +1772,17 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 	createdAt := parseArchiveEntryTime(entry.CreatedAt, entry.ArchivedAt)
 	updatedAt := parseArchiveEntryTime(entry.UpdatedAt, entry.ArchivedAt)
 	rec := &SessionRecord{
-		ID:              sessionID,
-		ProjectName:     c.projectName,
-		Status:          SessionPersisted,
-		AgentType:       normalizeAgentType(entry.AgentType),
-		Title:           strings.TrimSpace(entry.Title),
-		SessionSyncJSON: sessionSyncJSON(int64(len(contents))),
-		CreatedAt:       createdAt,
-		LastActiveAt:    updatedAt,
+		ID:          sessionID,
+		ProjectName: c.projectName,
+		Status:      SessionPersisted,
+		AgentType:   normalizeAgentType(entry.AgentType),
+		Title:       strings.TrimSpace(entry.Title),
+		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{
+			LatestPersistedTurnIndex: int64(len(contents)),
+			ForkedFrom:               cloneSessionForkOrigin(entry.ForkedFrom),
+		}),
+		CreatedAt:    createdAt,
+		LastActiveAt: updatedAt,
 	}
 	if err := c.store.SaveSession(ctx, rec); err != nil {
 		_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
@@ -1398,6 +1822,7 @@ func archiveSummaryFromEntry(entry sessionArchiveManifestEntry) sessionArchiveSu
 		NativeArchivedAt:   strings.TrimSpace(entry.NativeArchivedAt),
 		NativeUnarchivedAt: strings.TrimSpace(entry.NativeUnarchivedAt),
 		NativeSyncWarning:  strings.TrimSpace(entry.NativeSyncWarning),
+		ForkedFrom:         cloneSessionForkOrigin(entry.ForkedFrom),
 	}
 }
 

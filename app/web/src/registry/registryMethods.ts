@@ -40,6 +40,7 @@ export const RegistryMethods = {
   SessionSend: 'session.send',
   SessionStatus: 'session.status',
   SessionCompact: 'session.compact',
+  SessionFork: 'session.fork',
   SessionCancel: 'session.cancel',
   SessionPermissionRespond: 'session.permission.respond',
   SessionMarkRead: 'session.markRead',

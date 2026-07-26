@@ -444,15 +444,32 @@ export interface RegistrySessionCompactAccepted {
   operationId: string;
 }
 
+export interface RegistrySessionForkPoint {
+  provider: string;
+  ref: string;
+}
+
+export interface RegistrySessionForkOrigin {
+  sessionId: string;
+  turnIndex: number;
+  title?: string;
+}
+
+export interface RegistrySessionForkResponse {
+  ok: boolean;
+  session: RegistrySessionSummary;
+}
+
 export type RegistrySessionOperationStatus = 'queued' | 'started' | 'completed' | 'failed';
 
 export interface RegistrySessionOperationPayload {
   operationId: string;
-  type: 'compact';
+  type: 'compact' | 'fork';
   status: RegistrySessionOperationStatus;
   startedAt?: string;
   completedAt?: string;
   message?: string;
+  forkedFrom?: RegistrySessionForkOrigin;
 }
 
 export interface RegistrySessionSummary {
@@ -475,6 +492,7 @@ export interface RegistrySessionSummary {
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;
   sessionActions?: RegistrySessionActionCapabilities;
+  forkedFrom?: RegistrySessionForkOrigin;
 }
 
 export interface RegistryPermissionRespondResponse {

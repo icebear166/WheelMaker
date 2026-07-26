@@ -201,7 +201,7 @@ func TestSessionPinIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 }
 
 func TestRegistrySessionActionMethods(t *testing.T) {
-	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact} {
+	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact, RegistryMethodSessionFork} {
 		desc, ok := RegistryMethod(method)
 		if !ok {
 			t.Fatalf("method %q is not registered", method)

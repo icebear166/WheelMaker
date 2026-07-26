@@ -3479,6 +3479,183 @@ func TestCodexAppSessionLoadReadsThreadWhenResumeTurnsAreNotFull(t *testing.T) {
 	}
 }
 
+func TestCodexAppPromptResultIncludesForkPoint(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "turn/start":
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"turn": map[string]any{"id": "turn-fork-point"},
+			}})
+			_ = tr.emit(map[string]any{
+				"method": "turn/completed",
+				"params": map[string]any{
+					"threadId": "thread-1",
+					"turn": map[string]any{
+						"id":     "turn-fork-point",
+						"status": "completed",
+					},
+				},
+			})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("thread-1", "thread-1")
+	var promptRes protocol.SessionPromptResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+		SessionID: "thread-1",
+		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "fork me"}},
+	}, &promptRes); err != nil {
+		t.Fatalf("SessionPrompt: %v", err)
+	}
+	if promptRes.ForkPoint == nil {
+		t.Fatal("prompt result forkPoint is nil")
+	}
+	if promptRes.ForkPoint.Provider != string(protocol.ACPProviderCodex) || promptRes.ForkPoint.Ref != "turn-fork-point" {
+		t.Fatalf("forkPoint = %#v", promptRes.ForkPoint)
+	}
+}
+
+func TestCodexAppResolveForkPointsReadsAndExactlyMatchesPrompts(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/read":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "thread-source" || params["includeTurns"] != true {
+				t.Errorf("thread/read params=%#v", params)
+			}
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"thread": map[string]any{
+					"id": "thread-source",
+					"turns": []map[string]any{
+						codexappTestPromptTurn("turn-1", "first"),
+						codexappTestPromptTurn("turn-2", "second"),
+					},
+				},
+			}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj")
+	points, err := conn.ResolveForkPoints(context.Background(), "thread-source", []protocol.SessionForkPrompt{
+		{DoneTurnIndex: 3, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "first"}}},
+		{DoneTurnIndex: 7, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "second"}}},
+	})
+	if err != nil {
+		t.Fatalf("ResolveForkPoints: %v", err)
+	}
+	if len(points) != 2 || points[3].Ref != "turn-1" || points[7].Ref != "turn-2" {
+		t.Fatalf("points = %#v", points)
+	}
+}
+
+func TestCodexAppResolveForkPointsDoesNotGuessOnMismatch(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		id := msg["id"]
+		_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+			"thread": map[string]any{
+				"id":    "thread-source",
+				"turns": []map[string]any{codexappTestPromptTurn("turn-1", "native text")},
+			},
+		}})
+	}
+
+	conn := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj")
+	points, err := conn.ResolveForkPoints(context.Background(), "thread-source", []protocol.SessionForkPrompt{{
+		DoneTurnIndex: 3,
+		ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "different text"}},
+	}})
+	if err != nil {
+		t.Fatalf("ResolveForkPoints: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("points = %#v, want no guessed mapping", points)
+	}
+}
+
+func TestCodexAppForkSessionUsesLastTurnIDAndRemapsTargetTurns(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/fork":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "thread-source" || params["lastTurnId"] != "source-turn-2" {
+				t.Errorf("thread/fork params=%#v", params)
+			}
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"thread": map[string]any{
+					"id":      "thread-target",
+					"preview": "Forked thread",
+					"turns": []map[string]any{
+						codexappTestPromptTurn("target-turn-1", "first"),
+						codexappTestPromptTurn("target-turn-2", "second"),
+					},
+				},
+			}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj")
+	result, err := conn.ForkSession(
+		context.Background(),
+		"thread-source",
+		"source-turn-2",
+		[]protocol.SessionForkPrompt{
+			{DoneTurnIndex: 3, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "first"}}},
+			{DoneTurnIndex: 7, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "second"}}},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ForkSession: %v", err)
+	}
+	if result.SessionID != "thread-target" || result.Title != "Forked thread" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(result.ForkPoints) != 2 || result.ForkPoints[3].Ref != "target-turn-1" || result.ForkPoints[7].Ref != "target-turn-2" {
+		t.Fatalf("fork points = %#v", result.ForkPoints)
+	}
+}
+
+func codexappTestPromptTurn(turnID string, text string) map[string]any {
+	return map[string]any{
+		"id":        turnID,
+		"itemsView": "full",
+		"status":    "completed",
+		"items": []map[string]any{{
+			"id":   "user-" + turnID,
+			"type": "userMessage",
+			"content": []map[string]any{{
+				"type":          "text",
+				"text":          text,
+				"text_elements": []any{},
+			}},
+		}},
+	}
+}
+
 func TestCodexAppArchiveSessionCallsThreadArchive(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	acp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 const (
@@ -40,45 +42,47 @@ type sessionArchiveManifest struct {
 }
 
 type sessionArchiveManifestEntry struct {
-	SessionID          string `json:"sessionId"`
-	ProjectName        string `json:"projectName"`
-	Title              string `json:"title,omitempty"`
-	AgentType          string `json:"agentType,omitempty"`
-	Storage            string `json:"storage"`
-	File               string `json:"file"`
-	Offset             int64  `json:"offset"`
-	Length             int64  `json:"length"`
-	UncompressedLength int64  `json:"uncompressedLength"`
-	Codec              string `json:"codec"`
-	SHA256             string `json:"sha256"`
-	UncompressedSHA256 string `json:"uncompressedSha256"`
-	TurnCount          int    `json:"turnCount"`
-	GapCount           int    `json:"gapCount"`
-	WMT2Version        int    `json:"wmt2Version"`
-	ChunkSizeCode      int    `json:"chunkSizeCode"`
-	ArchivedAt         string `json:"archivedAt"`
-	CreatedAt          string `json:"createdAt,omitempty"`
-	UpdatedAt          string `json:"updatedAt,omitempty"`
-	RestoredAt         string `json:"restoredAt,omitempty"`
-	NativeArchivedAt   string `json:"nativeArchivedAt,omitempty"`
-	NativeUnarchivedAt string `json:"nativeUnarchivedAt,omitempty"`
-	NativeSyncWarning  string `json:"nativeSyncWarning,omitempty"`
+	SessionID          string                 `json:"sessionId"`
+	ProjectName        string                 `json:"projectName"`
+	Title              string                 `json:"title,omitempty"`
+	AgentType          string                 `json:"agentType,omitempty"`
+	Storage            string                 `json:"storage"`
+	File               string                 `json:"file"`
+	Offset             int64                  `json:"offset"`
+	Length             int64                  `json:"length"`
+	UncompressedLength int64                  `json:"uncompressedLength"`
+	Codec              string                 `json:"codec"`
+	SHA256             string                 `json:"sha256"`
+	UncompressedSHA256 string                 `json:"uncompressedSha256"`
+	TurnCount          int                    `json:"turnCount"`
+	GapCount           int                    `json:"gapCount"`
+	WMT2Version        int                    `json:"wmt2Version"`
+	ChunkSizeCode      int                    `json:"chunkSizeCode"`
+	ArchivedAt         string                 `json:"archivedAt"`
+	CreatedAt          string                 `json:"createdAt,omitempty"`
+	UpdatedAt          string                 `json:"updatedAt,omitempty"`
+	RestoredAt         string                 `json:"restoredAt,omitempty"`
+	NativeArchivedAt   string                 `json:"nativeArchivedAt,omitempty"`
+	NativeUnarchivedAt string                 `json:"nativeUnarchivedAt,omitempty"`
+	NativeSyncWarning  string                 `json:"nativeSyncWarning,omitempty"`
+	ForkedFrom         *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
 }
 
 type sessionArchiveSummary struct {
-	SessionID          string `json:"sessionId"`
-	ProjectName        string `json:"projectName"`
-	Title              string `json:"title,omitempty"`
-	AgentType          string `json:"agentType,omitempty"`
-	CreatedAt          string `json:"createdAt,omitempty"`
-	UpdatedAt          string `json:"updatedAt,omitempty"`
-	ArchivedAt         string `json:"archivedAt"`
-	RestoredAt         string `json:"restoredAt,omitempty"`
-	TurnCount          int    `json:"turnCount"`
-	GapCount           int    `json:"gapCount"`
-	NativeArchivedAt   string `json:"nativeArchivedAt,omitempty"`
-	NativeUnarchivedAt string `json:"nativeUnarchivedAt,omitempty"`
-	NativeSyncWarning  string `json:"nativeSyncWarning,omitempty"`
+	SessionID          string                 `json:"sessionId"`
+	ProjectName        string                 `json:"projectName"`
+	Title              string                 `json:"title,omitempty"`
+	AgentType          string                 `json:"agentType,omitempty"`
+	CreatedAt          string                 `json:"createdAt,omitempty"`
+	UpdatedAt          string                 `json:"updatedAt,omitempty"`
+	ArchivedAt         string                 `json:"archivedAt"`
+	RestoredAt         string                 `json:"restoredAt,omitempty"`
+	TurnCount          int                    `json:"turnCount"`
+	GapCount           int                    `json:"gapCount"`
+	NativeArchivedAt   string                 `json:"nativeArchivedAt,omitempty"`
+	NativeUnarchivedAt string                 `json:"nativeUnarchivedAt,omitempty"`
+	NativeSyncWarning  string                 `json:"nativeSyncWarning,omitempty"`
+	ForkedFrom         *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
 }
 
 type sessionArchiveNativeSyncUpdate struct {
@@ -163,6 +167,7 @@ func (s *sessionArchiveStore) AppendSession(ctx context.Context, rec SessionReco
 	}
 
 	now := time.Now().UTC()
+	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
 	entry := sessionArchiveManifestEntry{
 		SessionID:          sessionID,
 		ProjectName:        projectName,
@@ -183,6 +188,7 @@ func (s *sessionArchiveStore) AppendSession(ctx context.Context, rec SessionReco
 		ArchivedAt:         now.Format(time.RFC3339),
 		CreatedAt:          formatArchiveTime(rec.CreatedAt),
 		UpdatedAt:          formatArchiveTime(rec.LastActiveAt),
+		ForkedFrom:         cloneSessionForkOrigin(projection.ForkedFrom),
 	}
 	manifest.Version = sessionArchiveManifestVersion
 	manifest.UpdatedAt = entry.ArchivedAt

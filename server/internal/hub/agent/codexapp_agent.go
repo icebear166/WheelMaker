@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -517,6 +518,7 @@ type codexappConn struct {
 
 type codexappPromptResult struct {
 	stopReason string
+	turnID     string
 	artifacts  []protocol.SessionPromptArtifactPayload
 	err        error
 }
@@ -870,6 +872,137 @@ func (c *codexappConn) CompactSession(ctx context.Context, sessionID string) (<-
 	return done, nil
 }
 
+func (c *codexappConn) ResolveForkPoints(ctx context.Context, sessionID string, prompts []protocol.SessionForkPrompt) (map[int64]protocol.SessionForkPoint, error) {
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), strings.TrimSpace(sessionID))
+	if threadID == "" {
+		return nil, errors.New("codexapp fork point resolution requires sessionId")
+	}
+	var resp appServerThreadStartResponse
+	if err := c.runtime.request(ctx, "thread/read", appServerThreadReadParams{
+		ThreadID:     threadID,
+		IncludeTurns: true,
+	}, &resp); err != nil {
+		return nil, err
+	}
+	points, matched, err := c.matchForkPromptTurns(sessionID, prompts, resp.Thread.Turns)
+	if err != nil {
+		return nil, err
+	}
+	if !matched {
+		return map[int64]protocol.SessionForkPoint{}, nil
+	}
+	return points, nil
+}
+
+func (c *codexappConn) ForkSession(ctx context.Context, sessionID string, lastTurnID string, prompts []protocol.SessionForkPrompt) (protocol.SessionForkResult, error) {
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), strings.TrimSpace(sessionID))
+	lastTurnID = strings.TrimSpace(lastTurnID)
+	if threadID == "" || lastTurnID == "" {
+		return protocol.SessionForkResult{}, errors.New("codexapp fork requires sessionId and last turn id")
+	}
+	var resp appServerThreadStartResponse
+	if err := c.runtime.request(ctx, "thread/fork", appServerThreadForkParams{
+		ThreadID:   threadID,
+		LastTurnID: lastTurnID,
+	}, &resp); err != nil {
+		return protocol.SessionForkResult{}, err
+	}
+	targetThreadID := strings.TrimSpace(resp.Thread.ID)
+	if targetThreadID == "" {
+		return protocol.SessionForkResult{}, errors.New("codexapp thread/fork returned empty thread id")
+	}
+	if codexappThreadNeedsFullRead(resp.Thread.Turns) {
+		if err := c.runtime.request(ctx, "thread/read", appServerThreadReadParams{
+			ThreadID:     targetThreadID,
+			IncludeTurns: true,
+		}, &resp); err != nil {
+			_ = c.archiveForkTarget(context.Background(), targetThreadID)
+			return protocol.SessionForkResult{}, err
+		}
+	}
+	points, matched, err := c.matchForkPromptTurns(sessionID, prompts, resp.Thread.Turns)
+	if err != nil || !matched {
+		_ = c.archiveForkTarget(context.Background(), targetThreadID)
+		if err != nil {
+			return protocol.SessionForkResult{}, err
+		}
+		return protocol.SessionForkResult{}, errors.New("codexapp forked thread turns do not match source prompts")
+	}
+	return protocol.SessionForkResult{
+		SessionID:  targetThreadID,
+		Title:      strings.TrimSpace(resp.Thread.displayTitle()),
+		ForkPoints: points,
+	}, nil
+}
+
+func (c *codexappConn) archiveForkTarget(ctx context.Context, threadID string) error {
+	var ignored json.RawMessage
+	return c.runtime.request(ctx, "thread/archive", appServerThreadArchiveParams{ThreadID: threadID}, &ignored)
+}
+
+func (c *codexappConn) matchForkPromptTurns(sessionID string, prompts []protocol.SessionForkPrompt, turns []appServerTurn) (map[int64]protocol.SessionForkPoint, bool, error) {
+	nativeInputs := make([][]appServerUserInput, 0, len(turns))
+	nativeTurnIDs := make([]string, 0, len(turns))
+	for _, turn := range turns {
+		inputs, ok := codexappTurnUserInputs(turn)
+		if !ok {
+			continue
+		}
+		turnID := strings.TrimSpace(turn.ID)
+		if turnID == "" {
+			continue
+		}
+		nativeInputs = append(nativeInputs, inputs)
+		nativeTurnIDs = append(nativeTurnIDs, turnID)
+	}
+	if len(nativeInputs) != len(prompts) {
+		return map[int64]protocol.SessionForkPoint{}, false, nil
+	}
+	points := make(map[int64]protocol.SessionForkPoint, len(prompts))
+	for index, prompt := range prompts {
+		if prompt.DoneTurnIndex <= 0 {
+			return map[int64]protocol.SessionForkPoint{}, false, nil
+		}
+		expected, err := codexappPromptToInputWithArtifacts(c.projectName, sessionID, prompt.ContentBlocks)
+		if err != nil {
+			return nil, false, err
+		}
+		expectedJSON, err := json.Marshal(expected)
+		if err != nil {
+			return nil, false, err
+		}
+		actualJSON, err := json.Marshal(nativeInputs[index])
+		if err != nil {
+			return nil, false, err
+		}
+		if !bytes.Equal(expectedJSON, actualJSON) {
+			return map[int64]protocol.SessionForkPoint{}, false, nil
+		}
+		points[prompt.DoneTurnIndex] = protocol.SessionForkPoint{
+			Provider: string(protocol.ACPProviderCodex),
+			Ref:      nativeTurnIDs[index],
+		}
+	}
+	return points, true, nil
+}
+
+func codexappTurnUserInputs(turn appServerTurn) ([]appServerUserInput, bool) {
+	var inputs []appServerUserInput
+	found := false
+	for _, item := range turn.Items {
+		if item.Type != "userMessage" || len(item.Content) == 0 {
+			continue
+		}
+		var itemInputs []appServerUserInput
+		if err := json.Unmarshal(item.Content, &itemInputs); err != nil {
+			return nil, false
+		}
+		inputs = append(inputs, itemInputs...)
+		found = true
+	}
+	return inputs, found
+}
+
 func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.SessionPromptParams, result any) error {
 	threadID := c.runtimeThreadIDForSession(p.SessionID)
 	if threadID == "" {
@@ -906,7 +1039,14 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 		if promptResult.err != nil {
 			return promptResult.err
 		}
-		return assignResult(result, protocol.SessionPromptResult{StopReason: promptResult.stopReason, Artifacts: promptResult.artifacts})
+		return assignResult(result, protocol.SessionPromptResult{
+			StopReason: promptResult.stopReason,
+			Artifacts:  promptResult.artifacts,
+			ForkPoint: &protocol.SessionForkPoint{
+				Provider: string(protocol.ACPProviderCodex),
+				Ref:      promptResult.turnID,
+			},
+		})
 	case <-ctx.Done():
 		c.clearPromptDone(done)
 		return ctx.Err()
@@ -1916,7 +2056,7 @@ func (c *codexappConn) completePrompt(turnID string, stopReason string) {
 	c.mu.Unlock()
 	artifacts := codexappPromptDiffArtifacts(diff)
 	select {
-	case done <- codexappPromptResult{stopReason: stopReason, artifacts: artifacts}:
+	case done <- codexappPromptResult{stopReason: stopReason, turnID: turnID, artifacts: artifacts}:
 	default:
 	}
 }

@@ -69,6 +69,25 @@ function sessionOperationView(param: Record<string, unknown>): {
 } {
   const status = typeof param.status === 'string' ? param.status : '';
   const detail = typeof param.message === 'string' ? param.message.trim() : '';
+  if (param.type === 'fork') {
+    const rawOrigin = param.forkedFrom && typeof param.forkedFrom === 'object'
+      ? param.forkedFrom as Record<string, unknown>
+      : {};
+    const source = typeof rawOrigin.title === 'string' && rawOrigin.title.trim()
+      ? rawOrigin.title.trim()
+      : typeof rawOrigin.sessionId === 'string' && rawOrigin.sessionId.trim()
+        ? rawOrigin.sessionId.trim()
+        : 'another session';
+    const turnIndex = typeof rawOrigin.turnIndex === 'number' && Number.isFinite(rawOrigin.turnIndex)
+      ? Math.max(0, Math.trunc(rawOrigin.turnIndex))
+      : 0;
+    return {
+      label: `Forked from ${source}`,
+      detail: detail || (turnIndex > 0 ? `Through turn ${turnIndex}` : ''),
+      icon: 'gitFork',
+      status: status || 'completed',
+    };
+  }
   switch (status) {
     case 'queued':
       return {label: 'Context compaction queued', detail, icon: 'circle', status};
@@ -265,9 +284,11 @@ export type ChatTurnViewProps = {
   copyDisabled?: boolean;
   exportBusy?: boolean;
   exportHtmlBusy?: boolean;
+  forkBusy?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
   onExportPromptDoneHtml?: () => void;
+  onForkPromptDone?: () => void;
   ttsState?: 'idle' | 'loading' | 'playing';
   readAloudEnabled?: boolean;
   onReadAloud?: () => void;
@@ -357,9 +378,11 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   copyDisabled = true,
   exportBusy = false,
   exportHtmlBusy = false,
+  forkBusy = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
   onExportPromptDoneHtml,
+  onForkPromptDone,
   ttsState = 'idle',
   readAloudEnabled = false,
   onReadAloud,
@@ -411,8 +434,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
 
   if (message.method === 'session_operation') {
     const operation = sessionOperationView(message.param);
+    const operationTypeClass = message.param.type === 'fork' ? ' fork' : '';
     return (
-      <div className={`chat-session-operation ${operation.status}`} role="status">
+      <div className={`chat-session-operation${operationTypeClass} ${operation.status}`} role="status">
         <ChatIcon name={operation.icon} spin={operation.status === 'started'} className="chat-session-operation-icon" />
         <span className="chat-session-operation-label">{operation.label}</span>
         {operation.detail ? <span className="chat-session-operation-detail">{operation.detail}</span> : null}
@@ -520,6 +544,15 @@ export const ChatTurnView = React.memo(function ChatTurnView({
       : '';
     const doneStatus = resolvePromptDoneStatus(message.param);
     const diffArtifacts = promptDiffArtifacts(message.param);
+    const rawForkPoint = message.param.forkPoint;
+    const forkPoint = rawForkPoint && typeof rawForkPoint === 'object'
+      ? rawForkPoint as Record<string, unknown>
+      : null;
+    const canFork = typeof forkPoint?.provider === 'string'
+      && forkPoint.provider.trim() !== ''
+      && typeof forkPoint.ref === 'string'
+      && forkPoint.ref.trim() !== ''
+      && typeof onForkPromptDone === 'function';
     return (
       <>
         {diffArtifacts.length > 0 ? (
@@ -581,6 +614,19 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
           </span>
           <div className="chat-prompt-actions" aria-label="Prompt actions">
+            {canFork ? (
+              <button
+                type="button"
+                className="chat-prompt-action-button"
+                onClick={() => onForkPromptDone?.()}
+                disabled={forkBusy}
+                aria-busy={forkBusy}
+                title="Fork session from here"
+                aria-label="Fork session from here"
+              >
+                <ChatIcon name={forkBusy ? 'loader' : 'gitFork'} size={13} spin={forkBusy} />
+              </button>
+            ) : null}
             <button
               type="button"
               className="chat-prompt-action-button"

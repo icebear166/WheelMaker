@@ -117,6 +117,7 @@ const (
 	RegistryMethodSessionConfig              = "session.config"
 	RegistryMethodSessionStatus              = "session.status"
 	RegistryMethodSessionCompact             = "session.compact"
+	RegistryMethodSessionFork                = "session.fork"
 	RegistryMethodSessionPermissionRespond   = "session.permission.respond"
 	RegistryMethodSessionAttachmentStart     = "session.attachment.start"
 	RegistryMethodSessionAttachmentChunk     = "session.attachment.chunk"
@@ -228,6 +229,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionConfig:              registryProjectMethod(RegistryMethodSessionConfig, RegistryRouteSessionForward),
 	RegistryMethodSessionStatus:              registryProjectMethod(RegistryMethodSessionStatus, RegistryRouteSessionForward),
 	RegistryMethodSessionCompact:             registryProjectMethod(RegistryMethodSessionCompact, RegistryRouteSessionForward),
+	RegistryMethodSessionFork:                registryProjectMethod(RegistryMethodSessionFork, RegistryRouteSessionForward),
 	RegistryMethodSessionPermissionRespond:   registryProjectMethod(RegistryMethodSessionPermissionRespond, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentStart:     registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentChunk:     registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),

@@ -25,6 +25,7 @@ type SessionViewEvent struct {
 	SessionID string
 	Content   string
 	Artifacts []acp.SessionPromptArtifactPayload
+	ForkPoint *acp.SessionForkPoint
 
 	SourceChannel string
 	SourceChatID  string
@@ -54,6 +55,7 @@ type sessionViewSummary struct {
 	Usage                  *acp.SessionUsage             `json:"usage,omitempty"`
 	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
 	PendingPermissionCount int                           `json:"pendingPermissionCount"`
+	ForkedFrom             *acp.SessionForkOrigin        `json:"forkedFrom,omitempty"`
 }
 
 type sessionTitleFacts struct {
@@ -63,11 +65,12 @@ type sessionTitleFacts struct {
 }
 
 type sessionSyncProjection struct {
-	LatestPersistedTurnIndex int64 `json:"latestPersistedTurnIndex"`
-	LastDoneTurnIndex        int64 `json:"lastDoneTurnIndex,omitempty"`
-	LastDoneSuccess          *bool `json:"lastDoneSuccess,omitempty"`
-	LastReadTurnIndex        int64 `json:"lastReadTurnIndex,omitempty"`
-	Pinned                   bool  `json:"pinned,omitempty"`
+	LatestPersistedTurnIndex int64                  `json:"latestPersistedTurnIndex"`
+	LastDoneTurnIndex        int64                  `json:"lastDoneTurnIndex,omitempty"`
+	LastDoneSuccess          *bool                  `json:"lastDoneSuccess,omitempty"`
+	LastReadTurnIndex        int64                  `json:"lastReadTurnIndex,omitempty"`
+	Pinned                   bool                   `json:"pinned,omitempty"`
+	ForkedFrom               *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
 }
 
 type sessionTurnMessage struct {
@@ -104,6 +107,7 @@ type parsedSessionViewEvent struct {
 	method            string
 	payload           any
 	artifacts         []acp.SessionPromptArtifactPayload
+	forkPoint         *acp.SessionForkPoint
 	acpMethod         string
 	turnKey           string
 	sessionInfoUpdate bool
@@ -310,6 +314,91 @@ func (r *SessionRecorder) RecordSessionOperation(ctx context.Context, sessionID 
 	}
 	r.publishSessionTurn(turn, content)
 	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return nil
+}
+
+func (r *SessionRecorder) InitializeForkedSession(
+	ctx context.Context,
+	targetSessionID string,
+	contents []string,
+	rawTitle string,
+	origin acp.SessionForkOrigin,
+	updatedAt time.Time,
+) error {
+	if r == nil {
+		return fmt.Errorf("session recorder is required")
+	}
+	targetSessionID = strings.TrimSpace(targetSessionID)
+	clonedOrigin := cloneSessionForkOrigin(&origin)
+	if targetSessionID == "" || clonedOrigin == nil {
+		return fmt.Errorf("forked session identity is required")
+	}
+	if len(contents) == 0 {
+		return fmt.Errorf("forked session history is required")
+	}
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
+
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	rec, err := r.store.LoadSession(ctx, r.projectName, targetSessionID)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		return fmt.Errorf("session not found: %s", targetSessionID)
+	}
+	if sessionSyncLatestPersistedTurnIndex(rec.SessionSyncJSON) != 0 {
+		return fmt.Errorf("forked session history already exists: %s", targetSessionID)
+	}
+	latestTurnIndex := int64(len(contents))
+	if r.turnStore != nil {
+		latest, err := r.turnStore.WriteTurns(ctx, r.projectName, targetSessionID, 1, contents)
+		if err != nil {
+			return err
+		}
+		latestTurnIndex = latest
+	} else {
+		for index, content := range contents {
+			r.finishedTurns[targetSessionID] = append(r.finishedTurns[targetSessionID], sessionViewTurn{
+				TurnIndex: int64(index + 1),
+				Content:   normalizeJSONDoc(content, "{}"),
+				Finished:  true,
+			})
+		}
+	}
+
+	lastDoneTurnIndex := int64(0)
+	lastDoneSuccess := false
+	for index, content := range contents {
+		var message acp.SessionTurnMessage
+		if json.Unmarshal([]byte(content), &message) != nil || message.Method != acp.SessionTurnMethodPromptDone {
+			continue
+		}
+		var result acp.SessionTurnPromptResult
+		if json.Unmarshal(message.Param, &result) != nil {
+			continue
+		}
+		lastDoneTurnIndex = int64(index + 1)
+		lastDoneSuccess = strings.TrimSpace(result.StopReason) != acp.StopReasonFailed
+	}
+	projection := sessionSyncProjection{
+		LatestPersistedTurnIndex: latestTurnIndex,
+		LastDoneTurnIndex:        lastDoneTurnIndex,
+		LastReadTurnIndex:        lastDoneTurnIndex,
+		ForkedFrom:               clonedOrigin,
+	}
+	if lastDoneTurnIndex > 0 {
+		projection.LastDoneSuccess = boolPtr(lastDoneSuccess)
+	}
+	rec.Title = strings.TrimSpace(rawTitle)
+	rec.SessionSyncJSON = sessionSyncProjectionJSON(projection)
+	rec.LastActiveAt = updatedAt
+	if err := r.store.SaveSession(ctx, rec); err != nil {
+		return err
+	}
+	r.nextTurnIndex[targetSessionID] = latestTurnIndex + 1
 	return nil
 }
 
@@ -900,10 +989,10 @@ func (r *SessionRecorder) handlePromptFinishedLocked(ctx context.Context, parsed
 	if err != nil {
 		return err
 	}
-	return r.finishPromptStateLocked(ctx, event.SessionID, state, stopReason, strings.TrimSpace(result.Message), parsedEvent.artifacts, event.UpdatedAt, true)
+	return r.finishPromptStateLocked(ctx, event.SessionID, state, stopReason, strings.TrimSpace(result.Message), parsedEvent.artifacts, parsedEvent.forkPoint, event.UpdatedAt, true)
 }
 
-func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID string, state *sessionPromptState, stopReason string, message string, artifacts []acp.SessionPromptArtifactPayload, updatedAt time.Time, publishDone bool) error {
+func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID string, state *sessionPromptState, stopReason string, message string, artifacts []acp.SessionPromptArtifactPayload, forkPoint *acp.SessionForkPoint, updatedAt time.Time, publishDone bool) error {
 	if state == nil {
 		return nil
 	}
@@ -930,6 +1019,7 @@ func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID
 				CompletedAt: updatedAt.UTC().Format(time.RFC3339Nano),
 				Message:     message,
 				Artifacts:   artifactMetadata,
+				ForkPoint:   cloneSessionForkPoint(forkPoint),
 			},
 			turnIndex: state.nextTurnIndex,
 			finished:  true,
@@ -1100,6 +1190,7 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		projection.LastReadTurnIndex,
 	)
 	summary.Pinned = projection.Pinned
+	summary.ForkedFrom = cloneSessionForkOrigin(projection.ForkedFrom)
 	var agentState SessionAgentState
 	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil {
 		summary.CreateRequestID = agentState.CreateRequestID
@@ -1449,7 +1540,7 @@ func (r *SessionRecorder) nextPromptStateLocked(ctx context.Context, sessionID s
 		return &created, nil
 	}
 	if len(state.turns) > 0 && !sessionPromptStateTerminal(state) {
-		if err := r.finishPromptStateLocked(ctx, sessionID, state, "interrupted", "", nil, updatedAt, true); err != nil {
+		if err := r.finishPromptStateLocked(ctx, sessionID, state, "interrupted", "", nil, nil, updatedAt, true); err != nil {
 			return nil, err
 		}
 	}
@@ -1589,6 +1680,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 	parsed := parsedSessionViewEvent{
 		raw:       event,
 		artifacts: cloneSessionPromptArtifactPayloads(event.Artifacts),
+		forkPoint: cloneSessionForkPoint(event.ForkPoint),
 	}
 	parsed.raw.SessionID = strings.TrimSpace(parsed.raw.SessionID)
 	parsed.raw.Content = strings.TrimSpace(parsed.raw.Content)
@@ -1617,6 +1709,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				parsed.setJSONMessage(acp.SessionTurnMethodPromptDone, acp.SessionTurnPromptResult{
 					StopReason: strings.TrimSpace(promptResult.StopReason),
 					Message:    strings.TrimSpace(promptResult.Message),
+					ForkPoint:  cloneSessionForkPoint(event.ForkPoint),
 				}, "")
 				return parsed, nil
 			}
@@ -1677,6 +1770,33 @@ func cloneSessionPromptArtifactPayloads(in []acp.SessionPromptArtifactPayload) [
 	out := make([]acp.SessionPromptArtifactPayload, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneSessionForkPoint(point *acp.SessionForkPoint) *acp.SessionForkPoint {
+	if point == nil {
+		return nil
+	}
+	provider := strings.TrimSpace(point.Provider)
+	ref := strings.TrimSpace(point.Ref)
+	if provider == "" || ref == "" {
+		return nil
+	}
+	return &acp.SessionForkPoint{Provider: provider, Ref: ref}
+}
+
+func cloneSessionForkOrigin(origin *acp.SessionForkOrigin) *acp.SessionForkOrigin {
+	if origin == nil {
+		return nil
+	}
+	sessionID := strings.TrimSpace(origin.SessionID)
+	if sessionID == "" || origin.TurnIndex <= 0 {
+		return nil
+	}
+	return &acp.SessionForkOrigin{
+		SessionID: sessionID,
+		TurnIndex: origin.TurnIndex,
+		Title:     strings.TrimSpace(origin.Title),
+	}
 }
 
 func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) sessionTurnMessage {

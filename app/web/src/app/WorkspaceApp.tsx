@@ -5118,6 +5118,8 @@ export function App() {
 
   const [openingPromptArtifactKey, setOpeningPromptArtifactKey] = useState('');
   const [promptArtifactErrors, setPromptArtifactErrors] = useState<Record<string, string>>({});
+  const [forkingPromptDoneKey, setForkingPromptDoneKey] = useState('');
+  const forkingPromptDoneKeyRef = useRef('');
   const projectIdListKey = useMemo(
     () => projects.map(item => item.projectId).join('|'),
     [projects],
@@ -16975,8 +16977,44 @@ export function App() {
     ? latestSelectableAssistantReply.messageKey
     : '';
 
+  const forkPromptDoneEvent = async (doneTurnIndex: number) => {
+    const selected = selectedChatKeyRef.current;
+    const normalizedTurnIndex = Number.isFinite(doneTurnIndex)
+      ? Math.max(0, Math.trunc(doneTurnIndex))
+      : 0;
+    if (!selected || normalizedTurnIndex <= 0 || forkingPromptDoneKeyRef.current) {
+      return;
+    }
+    const busyKey = `${encodeChatSessionKey(selected)}:${normalizedTurnIndex}`;
+    forkingPromptDoneKeyRef.current = busyKey;
+    setForkingPromptDoneKey(busyKey);
+    try {
+      const result = await service.forkProjectSession(
+        selected.projectId,
+        selected.sessionId,
+        normalizedTurnIndex,
+      );
+      const targetSessionId = result.session.sessionId.trim();
+      if (!result.ok || !targetSessionId) {
+        throw new Error('fork did not return a session');
+      }
+      await refreshChatProjectSessions(selected.projectId, {force: true});
+      await selectProjectChatSession(selected.projectId, targetSessionId);
+      setToastMessage('Session forked.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setToastMessage(`Session fork failed: ${message || 'unknown error'}`);
+    } finally {
+      if (forkingPromptDoneKeyRef.current === busyKey) {
+        forkingPromptDoneKeyRef.current = '';
+        setForkingPromptDoneKey('');
+      }
+    }
+  };
+
   const renderChatMessageTurn = useCallback((message: RegistryChatMessage) => {
     const doneTurnIndex = message.turnIndex ?? 0;
+    const forkKey = `${selectedChatEncodedKey}:${doneTurnIndex}`;
     const permissionRecord = message.method === 'permission_request'
       ? selectedPermissionState.byRequestTurnIndex.get(doneTurnIndex)
       : undefined;
@@ -17024,6 +17062,7 @@ export function App() {
           copyDisabled={copyRange ? !copyRange.ok : true}
           exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
           exportHtmlBusy={message.method === 'prompt_done' && exportingMarkdownHtmlKey !== ''}
+          forkBusy={message.method === 'prompt_done' && forkingPromptDoneKey === forkKey}
           optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}
           optionRepliesDisabled={chatSendDisabled}
           confirmationReply={confirmationReply}
@@ -17042,6 +17081,11 @@ export function App() {
           onExportPromptDoneHtml={
             message.method === 'prompt_done'
               ? () => exportPromptDoneMarkdownHtmlEvent(doneTurnIndex).catch(() => undefined)
+              : undefined
+          }
+          onForkPromptDone={
+            message.method === 'prompt_done'
+              ? () => forkPromptDoneEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
           ttsState={message.method === 'prompt_done' && ttsActiveTurnIndexRef.current === doneTurnIndex ? ttsState : 'idle'}
@@ -17079,6 +17123,7 @@ export function App() {
     exportingMarkdownHtmlKey,
     exportingMarkdownImageTurnIndex,
     findPromptRequestForDone,
+    forkingPromptDoneKey,
     handleSelectChatReply,
     latestSelectableAssistantReply,
     latestSelectableOptionReplyMessageKey,

@@ -1139,6 +1139,37 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 	}
 
 	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 21,
+		Type:      "request",
+		Method:    "session.fork",
+		ProjectID: "hub-a:server",
+		Payload: map[string]any{
+			"sessionId": "sess-1",
+			"turnIndex": 7,
+		},
+	})
+	forwardedFork := mustReadEnvelope(t, hub)
+	if forwardedFork.Method != "session.fork" || forwardedFork.ProjectID != "hub-a:server" {
+		t.Fatalf("unexpected session.fork forwarding: %#v", forwardedFork)
+	}
+	if forwardedFork.Payload["sessionId"] != "sess-1" || forwardedFork.Payload["turnIndex"] != float64(7) {
+		t.Fatalf("forwarded fork payload=%v", forwardedFork.Payload)
+	}
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwardedFork.RequestID,
+		Type:      "response",
+		Method:    "session.fork",
+		ProjectID: forwardedFork.ProjectID,
+		Payload: map[string]any{
+			"ok": true,
+		},
+	})
+	forkResp := mustReadEnvelope(t, client)
+	if forkResp.Type != "response" || forkResp.Method != "session.fork" {
+		t.Fatalf("unexpected session.fork response: %#v", forkResp)
+	}
+
+	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 3,
 		Type:      "request",
 		Method:    "session.config",
