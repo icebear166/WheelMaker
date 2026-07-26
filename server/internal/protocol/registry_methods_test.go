@@ -200,6 +200,25 @@ func TestSessionPinIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 	}
 }
 
+func TestSessionMarkIsClientProjectForwardWithoutVersionChange(t *testing.T) {
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	}
+	descriptor, ok := RegistryMethod(RegistryMethodSessionMark)
+	if !ok {
+		t.Fatal("session.mark is not registered")
+	}
+	if descriptor.Route != RegistryRouteSessionForward || !descriptor.RequiresProjectID {
+		t.Fatalf("descriptor=%+v", descriptor)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleClient), descriptor.Method) {
+		t.Fatal("client role cannot mark a session")
+	}
+	if RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
+		t.Fatal("hub role can invoke session.mark")
+	}
+}
+
 func TestRegistrySessionActionMethods(t *testing.T) {
 	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact, RegistryMethodSessionFork} {
 		desc, ok := RegistryMethod(method)
