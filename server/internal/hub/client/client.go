@@ -212,8 +212,68 @@ func (c *Client) Start(ctx context.Context) error {
 	if err := c.store.SaveProjectDefaultAgent(ctx, c.projectName, ""); err != nil {
 		return fmt.Errorf("client: ensure project row: %w", err)
 	}
+	c.restoreActiveGoals(ctx)
 	go c.persistLoop()
 	return nil
+}
+
+func (c *Client) restoreActiveGoals(ctx context.Context) {
+	if c == nil || c.store == nil || c.registry == nil {
+		return
+	}
+	records, err := c.store.ListSessions(ctx, c.projectName)
+	if err != nil {
+		hubLogger(c.projectName).Warn("list active goals for restore failed err=%v", err)
+		return
+	}
+	for index := range records {
+		record := &records[index]
+		var state SessionAgentState
+		if strings.TrimSpace(record.AgentJSON) == "" || json.Unmarshal([]byte(record.AgentJSON), &state) != nil ||
+			state.Goal == nil || state.Goal.Status != acp.SessionGoalStatusActive {
+			continue
+		}
+		provider, ok := acp.ParseACPProvider(record.AgentType)
+		if !ok || !c.registry.SessionActions(provider).Goal {
+			continue
+		}
+		session, loadErr := c.SessionByID(ctx, record.ID)
+		if loadErr != nil {
+			hubLogger(c.projectName).Warn("restore active goal session=%s err=%v", record.ID, loadErr)
+			continue
+		}
+		if beginErr := session.beginExecution(sessionGoalExecutionKind); beginErr != nil {
+			hubLogger(c.projectName).Warn("claim active goal session=%s err=%v", record.ID, beginErr)
+			continue
+		}
+		session.mu.Lock()
+		session.goal.continuationCount = 1
+		session.mu.Unlock()
+		if instanceErr := session.ensureInstance(ctx); instanceErr != nil {
+			session.endExecution()
+			hubLogger(c.projectName).Warn("create active goal runtime session=%s err=%v", record.ID, instanceErr)
+			continue
+		}
+		if readyErr := session.ensureReadyAndNotify(ctx); readyErr != nil {
+			session.endExecution()
+			hubLogger(c.projectName).Warn("resume active goal session=%s err=%v", record.ID, readyErr)
+			continue
+		}
+		session.mu.Lock()
+		instance := session.instance
+		sessionID := session.acpSessionID
+		session.mu.Unlock()
+		if controller, ok := instance.(agent.SessionGoalController); ok {
+			goal, getErr := controller.SessionGoalGet(ctx, sessionID)
+			if getErr != nil {
+				hubLogger(c.projectName).Warn("reconcile active goal session=%s err=%v", record.ID, getErr)
+			} else if goal == nil {
+				session.applyGoalCleared()
+			} else {
+				session.applyGoalSnapshot(goal)
+			}
+		}
+	}
 }
 
 // Run blocks until ctx is cancelled.
@@ -1477,6 +1537,7 @@ func (c *Client) newForkTargetSession(source *Session, targetSessionID, provider
 		return nil, err
 	}
 	if state != nil {
+		state.Goal = nil
 		target.agentState = *state
 	}
 	if title := strings.TrimSpace(providerTitle); title != "" {

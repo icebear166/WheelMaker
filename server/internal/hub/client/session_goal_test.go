@@ -3,7 +3,9 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -178,6 +180,119 @@ func TestSessionGoalResumeUpgradesOrdinaryPromptOwnership(t *testing.T) {
 			Goal:          &complete,
 		},
 	})
+}
+
+func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore(): %v", err)
+	}
+	if err := store.SaveProjectDefaultAgent(context.Background(), "project-goal-restore", ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		id     string
+		status string
+	}{
+		{id: "goal-active", status: acp.SessionGoalStatusActive},
+		{id: "goal-paused", status: acp.SessionGoalStatusPaused},
+		{id: "goal-complete", status: acp.SessionGoalStatusComplete},
+	} {
+		state, marshalErr := json.Marshal(SessionAgentState{Goal: &acp.SessionGoal{
+			SessionID: item.id,
+			Objective: "ship",
+			Status:    item.status,
+			CreatedAt: 10,
+			UpdatedAt: 11,
+		}})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if err := store.SaveSession(context.Background(), &SessionRecord{
+			ID:          item.id,
+			ProjectName: "project-goal-restore",
+			AgentType:   string(acp.ACPProviderCodex),
+			AgentJSON:   string(state),
+			Status:      SessionPersisted,
+			CreatedAt:   time.Now(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var mu sync.Mutex
+	loads := make([]string, 0)
+	factory := agent.NewACPFactory()
+	factory.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{Goal: true})
+	factory.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) {
+		runtime := &testInjectedInstance{
+			name:  string(acp.ACPProviderCodex),
+			alive: true,
+			initResult: acp.InitializeResult{
+				ProtocolVersion: "1",
+				AgentCapabilities: acp.AgentCapabilities{
+					LoadSession: true,
+				},
+			},
+		}
+		runtime.loadUpdates = nil
+		runtime.loadResult = acp.SessionLoadResult{}
+		originalLoad := runtime.loadCalls
+		_ = originalLoad
+		return &goalRestoreCountingInstance{
+			testInjectedInstance: runtime,
+			onLoad: func(sessionID string) {
+				mu.Lock()
+				loads = append(loads, sessionID)
+				mu.Unlock()
+			},
+		}, nil
+	})
+	client := NewWithRuntime(store, "project-goal-restore", t.TempDir(), RuntimeConfig{AgentFactory: factory})
+	t.Cleanup(func() { _ = client.Close() })
+	if err := client.Start(context.Background()); err != nil {
+		t.Fatalf("Start(): %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if strings.Join(loads, ",") != "goal-active" {
+		t.Fatalf("loaded sessions = %v", loads)
+	}
+	if !client.HasSessionInMemoryForTest("goal-active") ||
+		client.HasSessionInMemoryForTest("goal-paused") ||
+		client.HasSessionInMemoryForTest("goal-complete") {
+		t.Fatal("restore materialized the wrong Goal sessions")
+	}
+}
+
+func TestForkDoesNotCopyGoalSnapshot(t *testing.T) {
+	client, source, _ := newGoalTestClient(t, "goal-fork-source")
+	source.mu.Lock()
+	source.agentState.Goal = &acp.SessionGoal{
+		SessionID: source.acpSessionID,
+		Objective: "ship",
+		Status:    acp.SessionGoalStatusActive,
+	}
+	source.mu.Unlock()
+	target, err := client.newForkTargetSession(source, "goal-fork-target", "Fork")
+	if err != nil {
+		t.Fatalf("newForkTargetSession(): %v", err)
+	}
+	if target.agentState.Goal != nil {
+		t.Fatalf("fork inherited Goal: %#v", target.agentState.Goal)
+	}
+}
+
+type goalRestoreCountingInstance struct {
+	*testInjectedInstance
+	onLoad func(string)
+}
+
+func (i *goalRestoreCountingInstance) SessionLoad(ctx context.Context, params acp.SessionLoadParams) (acp.SessionLoadResult, error) {
+	if i.onLoad != nil {
+		i.onLoad(params.SessionID)
+	}
+	return i.testInjectedInstance.SessionLoad(ctx, params)
 }
 
 func runtimeGoalForTest(t *testing.T, session *Session) *acp.SessionGoal {
