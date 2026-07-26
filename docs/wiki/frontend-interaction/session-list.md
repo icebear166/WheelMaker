@@ -2,7 +2,7 @@
 
 # Session 列表交互
 
-> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)
+> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md)
 
 本页用于持续记录 Session 列表层面的稳定交互。对话内容、Turn 展示和侧边栏容器布局分别由其他前端交互页面维护；图标、动效和配色等视觉语言约定见 [`visual-language.md`](visual-language.md)。
 
@@ -11,7 +11,7 @@
 - 列表保留二级结构：一级是 Recent 分区与 Project 分组，二级是具体 session 行；不做信息架构重组，项目与 session 保持全量展示。
 - 一级分组行强、二级 session 行弱：分组行靠字重/字号对比和 hub 色色彩锚点（跟随 `--hub-accent`，不为单项目配色）强化辨识度；session 行缩进并使用次级色。
 - 层级强化不得显著增加行高，一屏 session 数量不减少。
-- 密度按平台分化：PC relaxed、移动端 compact，density token 两端生效。
+- 密度两端统一 relaxed：移动端曾用 compact，因行高过低不利于触控已取消，density token 两端同档生效。
 
 ## 行内动作可见性
 
@@ -37,7 +37,7 @@ Project 活跃 Session 列表先分为 pinned 与 unpinned 两组，pinned 组�
 ## 操作入口
 
 - 桌面端 Session 通过右键菜单或行尾更多菜单执行 Pin/Unpin、Rename、Archive、Reload 和 Delete 等操作。
-- 移动端 Project 与 Session 统一通过长按打开各自操作菜单，再选择 Pin/Unpin；长按本身不直接切换 pin。
+- 移动端 Project 与 Session 统一通过长按打开各自操作菜单，再选择 Pin/Unpin；长按本身不直接切换 pin。Project 长按 sheet 同时提供 "Resume session" 入口（选 agent → 可恢复会话列表 → import）。
 - 运行中的 Session 仍可 pin/unpin；只有该 Session 的 pin 请求进行中才禁用重复提交。
 
 ## Pin 展示与取消

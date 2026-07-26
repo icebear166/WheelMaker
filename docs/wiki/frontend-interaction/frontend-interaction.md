@@ -8,4 +8,5 @@
 - [`chat-turn-presentation.md`](chat-turn-presentation.md)：Thinking 与连续 Tool Call 在虚拟聊天列表中的折叠、聚合、状态和固定高度规则。
 - [`composer.md`](composer.md)：Composer 输入区的两行布局、stop 状态 pill、Enter 行为、触发菜单几何与弹层互斥/动画约定。
 - [`session-list.md`](session-list.md)：Project、Recent 与移动端 Session 列表的排序、菜单、pin 状态、层级呈现和动作可见性约定。
+- [`mobile-floating-nav.md`](mobile-floating-nav.md)：移动端 Floating Nav 的形态、材质分档、手势阈值、Relay 合并入口与动效约定。
 - [`visual-language.md`](visual-language.md)：跨页面的视觉语言约定：设计风格定位、Lucide 图标体系、动效原则、色彩收敛与层级呈现规则。
