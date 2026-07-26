@@ -305,7 +305,7 @@ describe('web responsive ui state', () => {
     expect(state.mobile.drawerOpen).toBe(false);
     expect(state.transient.chatKeyboardInset).toBe(0);
     expect(state.transient.floatingKeyboardOffset).toBe(0);
-    expect(state.transient.floatingDragState).toBeNull();
+    expect(state.transient).not.toHaveProperty('floatingDragState');
 
     state = workspaceUiReducer(state, {
       type: 'shared/setPinnedProjectIds',

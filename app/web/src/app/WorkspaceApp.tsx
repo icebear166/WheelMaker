@@ -357,6 +357,14 @@ import {
   shouldCancelGestureClick,
   shouldStartGestureMove,
 } from '../shell/layouts/mobile/gestureNavigation';
+import {MobileFloatingNav} from '../shell/layouts/mobile/MobileFloatingNav';
+import {
+  FLOATING_NAV_BUTTON_SIZE_PX,
+  FLOATING_NAV_EXPANDED_OVERFLOW_PX,
+  resolveFloatingNavCurrent,
+  resolveFloatingNavRelayState,
+  type FloatingNavDestination,
+} from '../shell/layouts/mobile/mobileFloatingNavModel';
 import {
   createMobileSettingsHistoryState,
   isMobileSettingsHistoryState,
@@ -757,16 +765,11 @@ type SessionStatusDialogState = {
   error: string;
 };
 type FloatingDragState = {
-  active: boolean;
-  pressing: boolean;
   pointerId: number;
-  originX: number;
   originY: number;
   startSide: PersistedFloatingControlSide;
-  currentX: number;
   startTop: number;
   currentTop: number;
-  cooldownUntil: number;
 };
 type PortRelayTargetMenuPressState = {
   pointerId: number;
@@ -774,15 +777,17 @@ type PortRelayTargetMenuPressState = {
   originY: number;
   longPressed: boolean;
 };
-type GestureNavigationState = {
-  phase: 'pressing' | 'neutral' | 'expanded';
-  pointerId: number;
-  originX: number;
-  originY: number;
-  currentX: number;
-  currentY: number;
-  startedAt: number;
-};
+type GestureNavigationState =
+  | {
+      phase: 'pressing' | 'neutral';
+      pointerId: number;
+      originX: number;
+      originY: number;
+      currentX: number;
+      currentY: number;
+      startedAt: number;
+    }
+  | {phase: 'expanded'};
 type DesktopSidebarResizeState = {
   pointerId: number;
   originX: number;
@@ -2836,7 +2841,6 @@ export function App() {
   );
   const floatingControlYRatio = workspaceUiState.mobile.floatingControlYRatio;
   const floatingControlSide = workspaceUiState.mobile.floatingControlSide;
-  const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;
   const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;
   const sidebarCollapsed = workspaceUiState.desktop.sidebarCollapsed;
   const [sessionPanelShortcutUnpinned, setSessionPanelShortcutUnpinned] = useState(false);
@@ -2887,17 +2891,16 @@ export function App() {
   const chatKeyboardInsetRef = useRef(chatKeyboardInset);
   const chatKeyboardInsetSettleTimerRef = useRef<number | null>(null);
   const mobileKeyboardLayoutViewportHeightRef = useRef(0);
+  const [floatingDragState, setFloatingDragState] = useState<FloatingDragState | null>(null);
   const floatingDragStateRef = useRef<FloatingDragState | null>(null);
   const [gestureNavState, setGestureNavState] = useState<GestureNavigationState | null>(null);
   const gestureNavStateRef = useRef<GestureNavigationState | null>(null);
   const gestureMoveLongPressTimerRef = useRef<number | null>(null);
-  const gestureNavigationSuppressClickRef = useRef(false);
   const gestureNavigationSuppressClickUntilRef = useRef(0);
-  const [floatingControlStackHeight, setFloatingControlStackHeight] = useState(184);
+  const [floatingControlStackHeight, setFloatingControlStackHeight] = useState(FLOATING_NAV_BUTTON_SIZE_PX);
   const chatComposerRef = useRef<HTMLDivElement | null>(null);
   const [chatComposerTop, setChatComposerTop] = useState<number | null>(null);
   const [floatingDefaultComposerTop, setFloatingDefaultComposerTop] = useState<number | null>(null);
-  const floatingCooldownTimerRef = useRef<number | null>(null);
   const floatingClickCooldownUntilRef = useRef(0);
   const floatingIgnoreLostCaptureRef = useRef(false);
   const floatingControlStackRef = useRef<HTMLDivElement | null>(null);
@@ -2920,12 +2923,6 @@ export function App() {
   const setFloatingControlSide = useCallback(
     (next: WorkspaceUiStateValue<PersistedFloatingControlSide>) => {
       dispatchWorkspaceUi({ type: 'mobile/setFloatingControlSide', next });
-    },
-    [],
-  );
-  const setFloatingDragState = useCallback(
-    (next: WorkspaceUiStateValue<FloatingDragState | null>) => {
-      dispatchWorkspaceUi({ type: 'transient/setFloatingDragState', next });
     },
     [],
   );
@@ -5880,12 +5877,11 @@ export function App() {
     if (isWide) {
       return;
     }
-    const nextFloatingHeight = floatingControlStackRef.current?.offsetHeight ?? 184;
+    const nextFloatingHeight = floatingControlStackRef.current?.offsetHeight ?? FLOATING_NAV_BUTTON_SIZE_PX;
     setFloatingControlStackHeight(prev => (prev === nextFloatingHeight ? prev : nextFloatingHeight));
   }, [
     isWide,
     windowWidth,
-    gestureNavigationExpanded,
     projectId,
     projects.length,
   ]);
@@ -5989,12 +5985,7 @@ export function App() {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
       gestureMoveLongPressTimerRef.current = null;
     }
-    if (floatingCooldownTimerRef.current !== null) {
-      window.clearTimeout(floatingCooldownTimerRef.current);
-      floatingCooldownTimerRef.current = null;
-    }
     floatingIgnoreLostCaptureRef.current = false;
-    gestureNavigationSuppressClickRef.current = false;
     gestureNavigationSuppressClickUntilRef.current = 0;
     setFloatingDragState(null);
     gestureNavStateRef.current = null;
@@ -6007,10 +5998,6 @@ export function App() {
       if (gestureMoveLongPressTimerRef.current !== null) {
         window.clearTimeout(gestureMoveLongPressTimerRef.current);
         gestureMoveLongPressTimerRef.current = null;
-      }
-      if (floatingCooldownTimerRef.current !== null) {
-        window.clearTimeout(floatingCooldownTimerRef.current);
-        floatingCooldownTimerRef.current = null;
       }
       floatingIgnoreLostCaptureRef.current = false;
     },
@@ -6744,6 +6731,7 @@ export function App() {
       safeAreaTopInset,
       safeAreaBottomInset,
       defaultComposerTop: floatingDefaultComposerTop,
+      expandedOverflowPx: FLOATING_NAV_EXPANDED_OVERFLOW_PX,
     });
   }, [
     floatingControlStackHeight,
@@ -6785,7 +6773,7 @@ export function App() {
     [floatingBaseBounds.maxTop, floatingBaseBounds.minTop, floatingControlYRatio],
   );
   const floatingControlTop = useMemo(() => {
-    if (floatingDragState?.active) {
+    if (floatingDragState) {
       return clampFloatingTop(
         floatingDragState.currentTop,
         floatingBounds.minTop,
@@ -6804,7 +6792,7 @@ export function App() {
     floatingRestTop,
   ]);
   useLayoutEffect(() => {
-    if (isWide || floatingDragState?.active) {
+    if (isWide || floatingDragState) {
       floatingPositionSnapshotRef.current = null;
       return;
     }
@@ -6851,7 +6839,7 @@ export function App() {
     floatingDefaultComposerTop,
     floatingRestTop,
     floatingControlYRatio,
-    floatingDragState?.active,
+    floatingDragState,
     isWide,
     setFloatingControlYRatio,
   ]);
@@ -6866,27 +6854,15 @@ export function App() {
     [effectiveFloatingControlTop, isWide],
   );
   const floatingDragVisualState =
-    floatingDragState?.active
+    floatingDragState !== null
       ? 'dragging'
       : gestureNavigationExpanded
-        ? 'gesture-open'
-        : gestureNavState?.phase === 'pressing'
-          ? 'drag-ready'
-          : 'idle';
-  const floatingControlsIdle = floatingDragVisualState === 'idle'
-    && !drawerOpen
-    && !portRelayTargetMenuOpen
-    && !mobilePortRelayFrameOpen;
+        ? 'nav-open'
+        : 'idle';
   const clearGestureMoveLongPressTimer = useCallback(() => {
     if (gestureMoveLongPressTimerRef.current !== null) {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
       gestureMoveLongPressTimerRef.current = null;
-    }
-  }, []);
-  const clearFloatingCooldownTimer = useCallback(() => {
-    if (floatingCooldownTimerRef.current !== null) {
-      window.clearTimeout(floatingCooldownTimerRef.current);
-      floatingCooldownTimerRef.current = null;
     }
   }, []);
   const clearFloatingSidePulseTimer = useCallback(() => {
@@ -6907,49 +6883,14 @@ export function App() {
     [clearFloatingSidePulseTimer],
   );
   useEffect(() => clearFloatingSidePulseTimer, [clearFloatingSidePulseTimer]);
-  const clearFloatingCooldownState = useCallback((cooldownUntil: number) => {
-    clearFloatingCooldownTimer();
-    const remaining = cooldownUntil - Date.now();
-    if (remaining <= 0) {
-      setFloatingDragState(prev =>
-        prev && !prev.active && !prev.pressing && prev.cooldownUntil <= Date.now()
-          ? null
-          : prev,
-      );
-      return;
-    }
-    floatingCooldownTimerRef.current = window.setTimeout(() => {
-      setFloatingDragState(prev =>
-        prev && !prev.active && !prev.pressing && prev.cooldownUntil <= Date.now()
-          ? null
-          : prev,
-      );
-      floatingCooldownTimerRef.current = null;
-    }, remaining);
-  }, [clearFloatingCooldownTimer]);
   const handleFloatingPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const current = floatingDragStateRef.current;
       if (!current || current.pointerId !== event.pointerId) {
         return;
       }
-      const deltaY = event.clientY - current.originY;
-      if (!current.active) {
-        if (Math.abs(deltaY) >= 10) {
-          const cooldownUntil = Date.now() + 120;
-          floatingClickCooldownUntilRef.current = cooldownUntil;
-          setFloatingDragState({
-            ...current,
-            active: false,
-            pressing: false,
-            currentX: event.clientX,
-            cooldownUntil,
-          });
-          clearFloatingCooldownState(cooldownUntil);
-        }
-        return;
-      }
       event.preventDefault();
+      const deltaY = event.clientY - current.originY;
       const currentSide = floatingControlSideRef.current;
       const nextSide = resolveFloatingControlDragSide(
         currentSide,
@@ -6959,19 +6900,12 @@ export function App() {
       if (nextSide !== currentSide) {
         floatingControlSideRef.current = nextSide;
         setFloatingControlSide(nextSide);
-        workspaceStore.rememberGlobalState({ floatingControlSide: nextSide });
-        try {
-          window.localStorage.setItem(PORT_RELAY_FLOATING_SIDE_STORAGE_KEY, nextSide);
-        } catch {
-          // Ignore local storage failures in private or restricted contexts.
-        }
         closeMobileDrawerCompanionOverlays();
         triggerMobileHaptic();
         pulseFloatingControlSide(nextSide);
       }
       setFloatingDragState({
         ...current,
-        currentX: event.clientX,
         currentTop: clampFloatingTop(
           current.startTop + deltaY,
           floatingBounds.minTop,
@@ -6981,7 +6915,6 @@ export function App() {
     },
     [
       closeMobileDrawerCompanionOverlays,
-      clearFloatingCooldownState,
       floatingBounds.maxTop,
       floatingBounds.minTop,
       pulseFloatingControlSide,
@@ -6995,10 +6928,6 @@ export function App() {
       if (!current || current.pointerId !== pointerId) {
         return;
       }
-      if (!current.active) {
-        setFloatingDragState(null);
-        return;
-      }
       const snappedTop = clampFloatingTop(
         current.currentTop,
         floatingBounds.minTop,
@@ -7010,8 +6939,7 @@ export function App() {
         floatingBaseBounds.maxTop,
       );
       const nextSide = floatingControlSideRef.current;
-      const cooldownUntil = Date.now() + 120;
-      floatingClickCooldownUntilRef.current = cooldownUntil;
+      floatingClickCooldownUntilRef.current = Date.now() + 120;
       setFloatingControlYRatio(nextYRatio);
       setFloatingControlSide(nextSide);
       workspaceStore.rememberGlobalState({ floatingControlYRatio: nextYRatio, floatingControlSide: nextSide });
@@ -7021,17 +6949,9 @@ export function App() {
       } catch {
         // Ignore local storage failures in private or restricted contexts.
       }
-      setFloatingDragState({
-        ...current,
-        active: false,
-        pressing: false,
-        currentTop: snappedTop,
-        cooldownUntil,
-      });
-      clearFloatingCooldownState(cooldownUntil);
+      setFloatingDragState(null);
     },
     [
-      clearFloatingCooldownState,
       floatingBounds.maxTop,
       floatingBounds.minTop,
       floatingBaseBounds.maxTop,
@@ -7046,34 +6966,14 @@ export function App() {
       if (!current || current.pointerId !== pointerId) {
         return;
       }
-      if (!current.active) {
-        setFloatingDragState(null);
-        return;
-      }
-      const cooldownUntil = Date.now() + 120;
-      floatingClickCooldownUntilRef.current = cooldownUntil;
-      setFloatingDragState({
-        ...current,
-        active: false,
-        pressing: false,
-        cooldownUntil,
-      });
-      clearFloatingCooldownState(cooldownUntil);
+      floatingClickCooldownUntilRef.current = Date.now() + 120;
+      setFloatingDragState(null);
     },
-    [clearFloatingCooldownState],
+    [],
   );
   const openGestureNavigationActions = useCallback(() => {
     clearGestureMoveLongPressTimer();
-    const startedAt = Date.now();
-    const nextState: GestureNavigationState = {
-      phase: 'expanded',
-      pointerId: -1,
-      originX: 0,
-      originY: 0,
-      currentX: 0,
-      currentY: 0,
-      startedAt,
-    };
+    const nextState: GestureNavigationState = {phase: 'expanded'};
     gestureNavStateRef.current = nextState;
     setGestureNavState(nextState);
     setDrawerOpen(true);
@@ -7083,9 +6983,7 @@ export function App() {
   ]);
   const handleGestureNavigationCurrentSelect = useCallback(() => {
     const shouldSuppressSyntheticClick =
-      gestureNavigationSuppressClickRef.current &&
       Date.now() <= gestureNavigationSuppressClickUntilRef.current;
-    gestureNavigationSuppressClickRef.current = false;
     gestureNavigationSuppressClickUntilRef.current = 0;
     if (shouldSuppressSyntheticClick) {
       return;
@@ -7116,7 +7014,6 @@ export function App() {
         return;
       }
       clearGestureMoveLongPressTimer();
-      gestureNavigationSuppressClickRef.current = false;
       gestureNavigationSuppressClickUntilRef.current = 0;
       floatingIgnoreLostCaptureRef.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -7135,7 +7032,7 @@ export function App() {
       gestureMoveLongPressTimerRef.current = window.setTimeout(() => {
         const current = gestureNavStateRef.current;
         gestureMoveLongPressTimerRef.current = null;
-        if (!current || current.pointerId !== event.pointerId) {
+        if (!current || current.phase === 'expanded' || current.pointerId !== event.pointerId) {
           return;
         }
         if (!shouldStartGestureMove({
@@ -7143,7 +7040,6 @@ export function App() {
         })) {
           return;
         }
-        gestureNavigationSuppressClickRef.current = false;
         gestureNavigationSuppressClickUntilRef.current = 0;
         gestureNavStateRef.current = null;
         setGestureNavState(null);
@@ -7151,16 +7047,11 @@ export function App() {
         setDrawerOpen(false);
         triggerMobileHaptic();
         setFloatingDragState({
-          active: true,
-          pressing: false,
           pointerId: current.pointerId,
-          originX: current.currentX,
           originY: current.currentY,
           startSide: floatingControlSide,
-          currentX: current.currentX,
           startTop: floatingControlTop,
           currentTop: floatingControlTop,
-          cooldownUntil: 0,
         });
       }, GESTURE_MOVE_LONG_PRESS_MS);
     },
@@ -7171,7 +7062,6 @@ export function App() {
       floatingControlTop,
       isWide,
       setDrawerOpen,
-      setFloatingDragState,
     ],
   );
   const handleGestureNavigationButtonPointerDown = useCallback(
@@ -7198,7 +7088,7 @@ export function App() {
         return;
       }
       const current = gestureNavStateRef.current;
-      if (!current || current.pointerId !== event.pointerId) {
+      if (!current || current.phase === 'expanded' || current.pointerId !== event.pointerId) {
         return;
       }
       const deltaX = event.clientX - current.originX;
@@ -7209,36 +7099,32 @@ export function App() {
         currentX: event.clientX,
         currentY: event.clientY,
       };
-      if (current.phase !== 'expanded') {
-        if (shouldCancelGestureClick({distancePx}) && current.phase !== 'neutral') {
-          gestureNavigationSuppressClickRef.current = true;
-          gestureNavigationSuppressClickUntilRef.current =
-            Date.now() + GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS;
-          const nextState = {...nextCurrent, phase: 'neutral' as const};
-          gestureNavStateRef.current = nextState;
-          setGestureNavState(nextState);
-          return;
-        }
-        if (current.currentX !== event.clientX || current.currentY !== event.clientY) {
-          gestureNavStateRef.current = nextCurrent;
-          setGestureNavState(nextCurrent);
-        }
+      if (shouldCancelGestureClick({distancePx}) && current.phase !== 'neutral') {
+        clearGestureMoveLongPressTimer();
+        gestureNavigationSuppressClickUntilRef.current =
+          Date.now() + GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS;
+        const nextState = {...nextCurrent, phase: 'neutral' as const};
+        gestureNavStateRef.current = nextState;
+        setGestureNavState(nextState);
+        return;
+      }
+      if (current.currentX !== event.clientX || current.currentY !== event.clientY) {
+        gestureNavStateRef.current = nextCurrent;
+        setGestureNavState(nextCurrent);
       }
     },
     [
+      clearGestureMoveLongPressTimer,
       handleFloatingPointerMove,
     ],
   );
   const finishGestureNavigation = useCallback(
     (pointerId: number) => {
       const current = gestureNavStateRef.current;
-      if (!current || current.pointerId !== pointerId) {
+      if (!current || current.phase === 'expanded' || current.pointerId !== pointerId) {
         return;
       }
       clearGestureMoveLongPressTimer();
-      if (current.phase === 'expanded') {
-        return;
-      }
       gestureNavStateRef.current = null;
       setGestureNavState(null);
     },
@@ -7249,7 +7135,7 @@ export function App() {
   const cancelGestureNavigation = useCallback(
     (pointerId?: number) => {
       const current = gestureNavStateRef.current;
-      if (typeof pointerId === 'number' && current && current.pointerId !== pointerId) {
+      if (typeof pointerId === 'number' && current && current.phase !== 'expanded' && current.pointerId !== pointerId) {
         return;
       }
       if (!current && gestureMoveLongPressTimerRef.current === null) {
@@ -7257,14 +7143,11 @@ export function App() {
       }
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
-      gestureNavigationSuppressClickRef.current = false;
       gestureNavigationSuppressClickUntilRef.current = 0;
       setGestureNavState(null);
-      const cooldownUntil = Date.now() + 120;
-      floatingClickCooldownUntilRef.current = cooldownUntil;
-      clearFloatingCooldownState(cooldownUntil);
+      floatingClickCooldownUntilRef.current = Date.now() + 120;
     },
-    [clearFloatingCooldownState, clearGestureMoveLongPressTimer],
+    [clearGestureMoveLongPressTimer],
   );
   useEffect(() => {
     if (!gestureNavigationExpanded) {
@@ -19282,7 +19165,6 @@ export function App() {
         ref={floatingControlStackRef}
         className="floating-control-stack"
         data-drag-state={floatingDragVisualState}
-        data-idle={floatingControlsIdle}
         data-side={floatingControlSide}
         style={effectiveFloatingControlStackStyle}
         onPointerMove={handleGestureNavigationPointerMove}

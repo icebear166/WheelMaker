@@ -75,19 +75,31 @@ describe('gesture navigation', () => {
     const pointerMoveEnd = main.indexOf('const finishGestureNavigation = useCallback', pointerMoveStart);
     const pointerMoveBody = main.slice(pointerMoveStart, pointerMoveEnd);
 
-    expect(main).toContain('const gestureNavigationSuppressClickRef = useRef(false);');
     expect(main).toContain('const gestureNavigationSuppressClickUntilRef = useRef(0);');
-    expect(currentSelectBody).toContain('gestureNavigationSuppressClickRef.current');
+    expect(main).not.toContain('gestureNavigationSuppressClickRef');
     expect(currentSelectBody).toContain('Date.now() <= gestureNavigationSuppressClickUntilRef.current');
     expect(currentSelectBody).toContain('floatingClickCooldownUntilRef.current > Date.now()');
     expect(currentSelectBody).toContain("gestureNavStateRef.current?.phase === 'expanded'");
     expect(currentSelectBody).toContain('setDrawerOpen(false);');
     expect(pointerMoveBody).toContain('shouldCancelGestureClick({');
-    expect(pointerMoveBody).toContain('gestureNavigationSuppressClickRef.current = true;');
-    expect(main).toContain('gestureNavigationSuppressClickRef.current = false;');
-    expect(main).toContain('gestureNavigationSuppressClickUntilRef.current = 0;');
+    expect(pointerMoveBody).toContain('clearGestureMoveLongPressTimer();');
+    expect(pointerMoveBody).toContain('gestureNavigationSuppressClickUntilRef.current');
     expect(pointerMoveBody).not.toContain("intent === 'expand'");
     expect(main).not.toContain('GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS');
+  });
+
+  test('keeps floating drag state local and out of the workspace store', () => {
+    const main = readMain();
+    const uiState = fs.readFileSync(
+      path.join(projectRoot(), 'web', 'src', 'shell', 'state', 'workspaceUiState.ts'),
+      'utf8',
+    );
+
+    expect(main).toContain('useState<FloatingDragState | null>(null)');
+    expect(main).not.toContain('transient.setFloatingDragState');
+    expect(main).not.toContain('transient.floatingDragState');
+    expect(uiState).not.toContain('floatingDragState');
+    expect(uiState).not.toContain('WorkspaceFloatingDragState');
   });
 
   test('does not restart the gesture press when the expanded chat button is clicked', () => {

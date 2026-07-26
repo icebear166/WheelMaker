@@ -11,19 +11,6 @@ export const DESKTOP_SIDEBAR_WIDTH_MIN = 320;
 export const DESKTOP_SIDEBAR_WIDTH_DEFAULT = 380;
 export const DESKTOP_SIDEBAR_WIDTH_MAX = 560;
 
-export type WorkspaceFloatingDragState = {
-  active: boolean;
-  pressing: boolean;
-  pointerId: number;
-  originX: number;
-  originY: number;
-  startSide: PersistedFloatingControlSide;
-  currentX: number;
-  startTop: number;
-  currentTop: number;
-  cooldownUntil: number;
-};
-
 export type WorkspaceUiState = {
   shared: {
     settingsOpen: boolean;
@@ -45,7 +32,6 @@ export type WorkspaceUiState = {
   transient: {
     chatKeyboardInset: number;
     floatingKeyboardOffset: number;
-    floatingDragState: WorkspaceFloatingDragState | null;
   };
 };
 
@@ -65,7 +51,6 @@ export type WorkspaceUiStateInput = {
   floatingControlSide?: unknown;
   chatKeyboardInset?: unknown;
   floatingKeyboardOffset?: unknown;
-  floatingDragState?: WorkspaceFloatingDragState | null;
 };
 
 export type WorkspaceUiAction =
@@ -90,10 +75,6 @@ export type WorkspaceUiAction =
   | {
       type: 'transient/setFloatingKeyboardOffset';
       next: WorkspaceUiStateValue<number>;
-    }
-  | {
-      type: 'transient/setFloatingDragState';
-      next: WorkspaceUiStateValue<WorkspaceFloatingDragState | null>;
     }
   | { type: 'layout/modeChanged'; from: LayoutMode; to: LayoutMode };
 
@@ -134,7 +115,6 @@ function resetTransientState(): WorkspaceUiState['transient'] {
   return {
     chatKeyboardInset: 0,
     floatingKeyboardOffset: 0,
-    floatingDragState: null,
   };
 }
 
@@ -169,7 +149,6 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
     transient: {
       chatKeyboardInset: sanitizeInset(input.chatKeyboardInset),
       floatingKeyboardOffset: sanitizeInset(input.floatingKeyboardOffset),
-      floatingDragState: input.floatingDragState ?? null,
     },
   };
 }
@@ -302,14 +281,6 @@ export function workspaceUiReducer(
           floatingKeyboardOffset: sanitizeInset(
             resolveNext(state.transient.floatingKeyboardOffset, action.next),
           ),
-        },
-      };
-    case 'transient/setFloatingDragState':
-      return {
-        ...state,
-        transient: {
-          ...state.transient,
-          floatingDragState: resolveNext(state.transient.floatingDragState, action.next),
         },
       };
     case 'layout/modeChanged':
