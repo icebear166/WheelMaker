@@ -493,6 +493,10 @@ describe('web chat integration', () => {
     expect(sendBlock).toContain('rememberPendingChatPrompt(runtimeKey, {');
     expect(sendBlock).toContain("status: 'confirming',");
     expect(sendBlock).toContain('const result = await service.sendProjectSessionMessage(selectedProjectId, {');
+    expect(mainTsx).toContain('const chatSteerChainsByKeyRef = useRef<Record<string, Promise<void>>>({});');
+    expect(mainTsx).toContain('const chatAcceptedSteerIdsByKeyRef = useRef<Record<string, Set<string>>>({});');
+    expect(mainTsx).toContain('service.steerProjectSession(');
+    expect(mainTsx).toContain('onSteerQueuedPrompt=');
     expect(sendBlock).toContain('if (!result.ok) {');
     expect(sendBlock).toContain('markPendingChatPromptUndelivered(runtimeKey');
     expect(sendBlock).toContain('if (shouldApplySentChatSelection(selectedChatKeyRef.current, sentFromKey)) {');

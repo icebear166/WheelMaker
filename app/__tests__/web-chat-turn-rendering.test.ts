@@ -174,6 +174,7 @@ describe('web chat turn rendering', () => {
   });
 
   test('renders queued prompts in the chat stream with queue actions', () => {
+    const main = readMain();
     const chatTurn = readChatTurnView();
     const displayIndex = readDisplayIndex();
     const styles = readStyles();
@@ -184,6 +185,12 @@ describe('web chat turn rendering', () => {
     expect(chatTurn).toContain("'queued'");
     expect(chatTurn).toContain('onCancelQueuedPrompt?: () => void;');
     expect(chatTurn).toContain('onPrioritizeQueuedPrompt?: () => void;');
+    expect(main).toContain('service.steerProjectSession(');
+    expect(main).toContain('setQueuedChatPromptSteering(current, runtimeKey, prompt.id, true)');
+    expect(main).toContain("message.method === 'user_message_chunk'");
+    expect(main).toContain("message.param.steered === true");
+    expect(main).toContain('hasSteeringChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey)');
+    expect(main).toContain('chatAcceptedSteerIdsByKeyRef.current[runtimeKey]?.has(prompt.id)');
     expect(chatTurn).toContain('chat-prompt-status-queued');
     expect(chatTurn).toContain('Queued');
     expect(chatTurn).toContain('Send next');

@@ -119,6 +119,7 @@ describe('chat session ordering', () => {
         sessionActions: {
           status: {supported: true},
           compact: {supported: false, reason: 'busy'},
+          steer: {supported: true},
         },
       },
     ];
@@ -159,6 +160,7 @@ describe('chat session ordering', () => {
       sessionActions: {
         status: {supported: true},
         compact: {supported: true},
+        steer: {supported: true},
       },
     }];
     const incoming = [

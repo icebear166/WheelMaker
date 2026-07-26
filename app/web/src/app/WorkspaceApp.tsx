@@ -87,9 +87,11 @@ import {
   enqueueChatCompact,
   enqueueChatItemToFront,
   enqueueChatPrompt,
+  hasSteeringChatPrompt,
   moveQueuedChatPromptToFront,
   moveQueuedChatPrompts,
   queuedChatPrompts,
+  setQueuedChatPromptSteering,
   shiftNextQueuedChatItem,
   type QueuedChatCompact,
   type QueuedChatPrompt,
@@ -3463,6 +3465,8 @@ export function App() {
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
   const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});
+  const chatSteerChainsByKeyRef = useRef<Record<string, Promise<void>>>({});
+  const chatAcceptedSteerIdsByKeyRef = useRef<Record<string, Set<string>>>({});
   const chatCompactingByKeyRef = useRef<Record<string, boolean>>({});
   const terminalCompactionOperationIdsRef = useRef<Set<string>>(new Set());
   const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});
@@ -9758,6 +9762,52 @@ export function App() {
     setQueuedPrompts(current => moveQueuedChatPromptToFront(current, runtimeKey, promptId));
   }, [setQueuedPrompts]);
 
+  const steerQueuedPrompt = useCallback((
+    projectId: string,
+    runtimeKey: string,
+    prompt: QueuedChatPrompt,
+  ) => {
+    setQueuedPrompts(current =>
+      setQueuedChatPromptSteering(current, runtimeKey, prompt.id, true));
+
+    const previous = chatSteerChainsByKeyRef.current[runtimeKey] ?? Promise.resolve();
+    const next = previous.then(async () => {
+      try {
+        const result = await service.steerProjectSession(projectId, {
+          sessionId: prompt.sessionId,
+          clientMessageId: prompt.id,
+          blocks: prompt.blocks,
+        });
+        if (!result.ok || !result.accepted) {
+          throw new Error('session.steer returned accepted=false');
+        }
+        setQueuedPrompts(current =>
+          cancelQueuedChatPrompt(current, runtimeKey, prompt.id));
+      } catch (errorValue) {
+        if (chatAcceptedSteerIdsByKeyRef.current[runtimeKey]?.has(prompt.id)) {
+          return;
+        }
+        setQueuedPrompts(current =>
+          setQueuedChatPromptSteering(current, runtimeKey, prompt.id, false));
+        setError(errorValue instanceof Error ? errorValue.message : String(errorValue));
+      }
+    }).finally(() => {
+      const acceptedIds = chatAcceptedSteerIdsByKeyRef.current[runtimeKey];
+      acceptedIds?.delete(prompt.id);
+      if (acceptedIds?.size === 0) {
+        const remainingAccepted = {...chatAcceptedSteerIdsByKeyRef.current};
+        delete remainingAccepted[runtimeKey];
+        chatAcceptedSteerIdsByKeyRef.current = remainingAccepted;
+      }
+      if (chatSteerChainsByKeyRef.current[runtimeKey] === next) {
+        const remaining = {...chatSteerChainsByKeyRef.current};
+        delete remaining[runtimeKey];
+        chatSteerChainsByKeyRef.current = remaining;
+      }
+    });
+    chatSteerChainsByKeyRef.current[runtimeKey] = next;
+  }, [service, setQueuedPrompts]);
+
   const clearPendingChatPromptTimer = (runtimeKey: string) => {
     const timerId = chatPendingPromptTimersRef.current[runtimeKey];
     if (timerId !== undefined) {
@@ -10501,6 +10551,7 @@ export function App() {
           blocks: blocks.map(block => ({...block})),
           createdAt: new Date().toISOString(),
           text: trimmedText || msgText('prompt_request', {contentBlocks: blocks}).trim(),
+          status: 'queued',
         };
         enqueueSelectedChatPrompt(runtimeKey, queuedPrompt);
         if (!options.preserveComposer) {
@@ -10583,6 +10634,7 @@ export function App() {
     const selectedKey = selectedChatKeyRef.current;
     if (!selectedKey) return;
     if (buildChatRuntimeKey(selectedKey.projectId, selectedKey.sessionId) !== runtimeKey) return;
+    if (hasSteeringChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey)) return;
     if (runtimeSessionIsBusy(selectedKey.projectId, selectedKey.sessionId, runtimeKey)) return;
     const result = shiftNextQueuedChatItem(chatQueuedPromptsByKeyRef.current, runtimeKey);
     if (!result.item) return;
@@ -15216,6 +15268,31 @@ export function App() {
         }
         const sessionId = message.sessionId;
         const runtimeKey = buildChatRuntimeKey(eventProjectId, sessionId);
+        if (
+          message.method === 'user_message_chunk' &&
+          message.param.steered === true &&
+          typeof message.param.clientMessageId === 'string'
+        ) {
+          const clientMessageId = message.param.clientMessageId;
+          const pending = chatQueuedPromptsByKeyRef.current[runtimeKey] ?? [];
+          if (pending.some(
+            item => item.kind === 'prompt' &&
+              item.id === clientMessageId &&
+              item.status === 'steering',
+          )) {
+            const accepted = chatAcceptedSteerIdsByKeyRef.current[runtimeKey] ?? new Set<string>();
+            accepted.add(clientMessageId);
+            chatAcceptedSteerIdsByKeyRef.current = {
+              ...chatAcceptedSteerIdsByKeyRef.current,
+              [runtimeKey]: accepted,
+            };
+          }
+          setQueuedPrompts(current => cancelQueuedChatPrompt(
+            current,
+            runtimeKey,
+            clientMessageId,
+          ));
+        }
         if (message.method === 'session_operation') {
           const operationId = typeof message.param.operationId === 'string' ? message.param.operationId : '';
           const operationType = typeof message.param.type === 'string' ? message.param.type : '';
@@ -16866,6 +16943,10 @@ export function App() {
     [chatDisplayIndex, selectedChatPromptRunning],
   );
   const selectedChatExecutionRunning = selectedChatPromptRunning || selectedChatCompactionRunning;
+  const queuedPromptCanSteer =
+    selectedChatSession?.sessionActions?.steer?.supported === true &&
+    selectedChatSession?.running === true &&
+    chatCompactingByKeyRef.current[selectedChatEncodedKey] !== true;
   const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || !!selectedActivePermission;
   const submitChatPermission = useCallback(async (optionId: string) => {
     const activePermission = selectedActivePermission;
@@ -17226,9 +17307,12 @@ export function App() {
       <div className="chat-view-content">
         <ChatTurnView
           message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
-          promptStatus="queued"
+          promptStatus={queuedPrompt.status}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
+          onSteerQueuedPrompt={queuedPromptCanSteer
+            ? () => steerQueuedPrompt(selectedChatKeyRef.current?.projectId ?? '', selectedChatEncodedKey, queuedPrompt)
+            : undefined}
           onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
           onPrioritizeQueuedPrompt={() => prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -17268,6 +17352,7 @@ export function App() {
     openChatAttachmentPreview,
     prioritizeQueuedPrompt,
     queuedPromptTurnIndex,
+    queuedPromptCanSteer,
     renderArchivedChatMessageTurn,
     renderChatMessageTurn,
     resolvePromptAttachmentThumbnail,
@@ -17277,6 +17362,7 @@ export function App() {
     selectedPendingPrompt,
     selectedQueuedPrompts,
     sessionSearchTargetTurn,
+    steerQueuedPrompt,
   ]);
   const closePortRelayFrameFromChrome = useCallback(() => {
     const tab = activePreviewTab(previewWorkbenchRef.current);
