@@ -493,7 +493,7 @@ export function AppGoalEditDialog({
       setValidationError('Objective is required.');
       return;
     }
-    if (objective.length > 4000) {
+    if (Array.from(objective).length > 4000) {
       setValidationError('Objective must be 4,000 characters or fewer.');
       return;
     }
@@ -506,8 +506,19 @@ export function AppGoalEditDialog({
         return;
       }
     }
+    const patch: RegistrySessionGoalPatch = {};
+    if (objective !== goal.objective) {
+      patch.objective = objective;
+    }
+    if (tokenBudget !== goal.tokenBudget) {
+      patch.tokenBudget = tokenBudget;
+    }
+    if (Object.keys(patch).length === 0) {
+      setValidationError('No changes to save.');
+      return;
+    }
     setValidationError('');
-    onSubmit({objective, tokenBudget});
+    onSubmit(patch);
   };
 
   return (
@@ -538,7 +549,6 @@ export function AppGoalEditDialog({
               className="app-goal-edit-objective"
               aria-label="Goal objective"
               value={objectiveDraft}
-              maxLength={4000}
               autoFocus
               disabled={busy}
               onChange={event => {

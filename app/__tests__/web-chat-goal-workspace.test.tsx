@@ -106,6 +106,60 @@ describe('Workspace Session Goal integration', () => {
     });
   });
 
+  test('submits only changed Goal fields', async () => {
+    const onSubmit = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <AppGoalEditDialog
+          goal={goal({objective: 'Old objective', tokenBudget: 20_000})}
+          busy={false}
+          error=""
+          onCancel={jest.fn()}
+          onSubmit={onSubmit}
+        />,
+      );
+    });
+
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({'aria-label': 'Goal objective'}).props.onChange({
+        target: {value: 'New objective'},
+      });
+    });
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({'aria-label': 'Save goal changes'}).props.onClick();
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith({objective: 'New objective'});
+  });
+
+  test('counts Unicode code points when validating the objective limit', async () => {
+    const onSubmit = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <AppGoalEditDialog
+          goal={goal({objective: 'Old objective'})}
+          busy={false}
+          error=""
+          onCancel={jest.fn()}
+          onSubmit={onSubmit}
+        />,
+      );
+    });
+
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({'aria-label': 'Goal objective'}).props.onChange({
+        target: {value: '🚀'.repeat(4000)},
+      });
+    });
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({'aria-label': 'Save goal changes'}).props.onClick();
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith({objective: '🚀'.repeat(4000)});
+  });
+
   test('confirms clear and explains that the current turn continues', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(() => {

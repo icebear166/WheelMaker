@@ -151,7 +151,7 @@ describe('PC chat session-panel layout', () => {
     expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded')).toContain('border-radius: 8px;');
     const glassRule = cssRuleBlock(
       chatStyles,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-function-surface.desktop .chat-edge-surface-glass',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-goal-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-edge-surface-stack > .chat-function-surface.desktop .chat-edge-surface-glass',
     );
     expect(glassRule).toContain('border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);');
     expect(glassRule).toContain('box-shadow:');
@@ -171,16 +171,16 @@ describe('PC chat session-panel layout', () => {
     expect(recentSectionRule).toContain('background: transparent;');
   });
 
-  it('gives expanded Sessions, Plan, and Monitor cards the same width and radius', () => {
+  it('gives expanded Sessions, Goal, Plan, and Monitor cards the same width and radius', () => {
     const stackItemRule = cssRuleBlock(
       chatStyles,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-goal-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
     expect(stackItemRule).toContain('width: 100%;');
 
     const expandedCardRule = cssRuleBlock(
       chatStyles,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-plan-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-function-surface.desktop:not(.collapsed)',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-goal-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-plan-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-function-surface.desktop:not(.collapsed)',
     );
     expect(expandedCardRule).toContain('border-radius: 8px;');
   });

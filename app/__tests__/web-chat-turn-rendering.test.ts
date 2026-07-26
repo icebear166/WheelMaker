@@ -311,7 +311,7 @@ describe('web chat turn rendering', () => {
     const fixedBlock = cssRuleBlock(styles, '.chat-view-width-fixed-800 .chat-edge-surface-stack');
     const itemBlock = cssRuleBlock(
       styles,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-goal-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
     expect(styles).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
