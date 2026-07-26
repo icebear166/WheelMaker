@@ -777,6 +777,38 @@ describe('web chat file peek viewer', () => {
     );
   });
 
+  test('routes HTML sources through Registry preview without prefetching their bodies', () => {
+    const mainTsx = readSourceText(mainPath);
+    const readStart = mainTsx.indexOf('const readChatFilePeek = useCallback(async');
+    const restoreStart = mainTsx.indexOf('const loadRestoredPreviewTab = useCallback', readStart);
+    const attachmentStart = mainTsx.indexOf('const openChatAttachmentPreview = useCallback');
+    const attachmentEnd = mainTsx.indexOf('const buildLineRange', attachmentStart);
+    const readBody = mainTsx.slice(readStart, restoreStart);
+    const restoreBody = mainTsx.slice(restoreStart, attachmentStart);
+    const attachmentBody = mainTsx.slice(attachmentStart, attachmentEnd);
+
+    expect(mainTsx).toContain("import {HtmlPreview} from '../preview/HtmlPreview';");
+    expect(mainTsx).toContain(
+      "source: isAbsolutePreviewFilePath(peek.path) ? 'external-file' : 'project-file'",
+    );
+    expect(mainTsx).toContain("source: 'session-attachment'");
+    expect(mainTsx).toContain('htmlPreviewEndpoint={registryEndpoints.previewURL.toString()}');
+    expect(mainTsx).toContain("htmlPreviewCSRFToken={registryAuth.status?.csrfToken || ''}");
+    expect(mainTsx).toContain('p?.projectId === n?.projectId');
+
+    expect(readBody.indexOf('if (isHtmlPreviewPath(path)) {')).toBeGreaterThanOrEqual(0);
+    expect(readBody.indexOf('if (isHtmlPreviewPath(path)) {')).toBeLessThan(
+      readBody.indexOf('service.readExternalFile(targetProjectId, path'),
+    );
+    expect(restoreBody).toContain('if (isHtmlPreviewPath(tab.path)) {');
+    expect(attachmentBody).toContain(
+      "const htmlAttachment = isHtmlPreviewAttachment(title, block.mimeType || '');",
+    );
+    expect(attachmentBody.indexOf('if (htmlAttachment) {')).toBeLessThan(
+      attachmentBody.indexOf('service.readProjectSessionAttachment('),
+    );
+  });
+
   test('opens a file-only context menu with copy and Desktop actions', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
@@ -875,7 +907,7 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(mainTsx).toContain('isMarkdownPath(peek.path)');
-    expect(mainTsx).toContain('isHtmlPath(peek.path)');
+    expect(mainTsx).toContain('isHtmlPreviewPath(peek.path)');
     expect(mainTsx).toContain('isImageFile(peek.path');
     expect(mainTsx).toContain('Failed to load file');
     expect(mainTsx).toContain('createChatFilePeekHistoryState()');

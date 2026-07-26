@@ -1,4 +1,5 @@
 import type {RegistryFsInfo, RegistrySessionPromptArtifactFile} from '../registry/registryTypes';
+import {isHtmlPreviewPath} from './htmlPreviewSource';
 
 export type PreviewWorkbenchTabType = 'file' | 'prompt-diff' | 'attachment' | 'port-relay';
 
@@ -305,6 +306,9 @@ export function buildPreviewSearchMatches(
     return [];
   }
   if (tab.type === 'file') {
+    if (isHtmlPreviewPath(tab.path)) {
+      return [];
+    }
     return tab.content
       .split('\n')
       .map((text, index) => ({kind: 'file' as const, line: index + 1, text}))
@@ -326,7 +330,7 @@ export function previewSearchDocumentKey(tab: PreviewWorkbenchTab | null): strin
     return '';
   }
   if (tab.type === 'file') {
-    return tab.content;
+    return isHtmlPreviewPath(tab.path) ? '' : tab.content;
   }
   if (tab.type === 'prompt-diff') {
     return tab.files

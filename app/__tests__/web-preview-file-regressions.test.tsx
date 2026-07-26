@@ -561,7 +561,7 @@ describe('preview file regressions', () => {
     expect(main).toContain('openChatFilePeek(targetFile.path, jumpLine ?? null, linkProjectId);');
   });
 
-  test('updates an HTML preview target when search selects a source line', () => {
+  test('keeps HTML previews out of source-line search navigation', () => {
     const appRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(
       path.join(appRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
@@ -575,10 +575,13 @@ describe('preview file regressions', () => {
     const searchStart = main.indexOf('const scrollToPreviewSearchMatch =');
     const searchEnd = main.indexOf('useEffect(() => {', searchStart);
     const searchBody = main.slice(searchStart, searchEnd);
-    expect(searchBody).toContain('if (isHtmlPath(tab.path)) {');
-    expect(searchBody).toContain("item.type === 'file' ? {...item, targetLine: match.line} : item");
-    expect(markdownPreview).toContain('const frameRef = useRef<HTMLIFrameElement | null>(null);');
-    expect(markdownPreview).toContain('scrollHtmlPreviewFrameToLine(frame, content, targetLine);');
+    expect(searchBody).not.toContain('if (isHtmlPreviewPath(tab.path)) {');
+    expect(searchBody).not.toContain(
+      "item.type === 'file' ? {...item, targetLine: match.line} : item",
+    );
+    expect(main).toContain("'Search is not available for this preview.'");
+    expect(markdownPreview).not.toContain('srcDoc');
+    expect(markdownPreview).not.toContain('scrollHtmlPreviewFrameToLine');
   });
 
   test('keeps the preview search document stable across navigation-only tab changes', () => {

@@ -7,6 +7,7 @@ import {
   cyclePreviewTabId,
   ensurePreviewProjectVisible,
   openPreviewTab,
+  previewSearchDocumentKey,
   previewWorkbenchSnapshotFromState,
   previewRenderedTabs,
   previewTabId,
@@ -599,6 +600,20 @@ describe('preview workbench state', () => {
     });
 
     expect(buildPreviewSearchMatches(activePreviewTab(attachmentState), 'needle')).toEqual([]);
+  });
+
+  test('HTML file tabs do not expose source search documents', () => {
+    const tab = filePreviewTab({
+      id: 'file:page.html',
+      title: 'page.html',
+      path: 'page.HTML',
+      targetLine: 9,
+      content: '<p>needle</p>',
+      info: null,
+    });
+
+    expect(buildPreviewSearchMatches(tab, 'needle')).toEqual([]);
+    expect(previewSearchDocumentKey(tab)).toBe('');
   });
 
   test('serializes a lightweight restorable snapshot without preview body content', () => {

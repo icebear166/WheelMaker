@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -201,11 +201,6 @@ export type MarkdownPreviewProps = {
   targetLine?: number | null;
 };
 
-export type HtmlPreviewProps = {
-  content: string;
-  targetLine?: number | null;
-};
-
 export const markdownPreRenderer: NonNullable<Components['pre']> = ({ children }) => (
   <>{children}</>
 );
@@ -275,33 +270,6 @@ const markdownPreviewPropsEqual = (
   prev.wrap === next.wrap &&
   prev.lineNumbers === next.lineNumbers &&
   prev.targetLine === next.targetLine;
-
-function scrollHtmlPreviewFrameToLine(
-  frame: HTMLIFrameElement,
-  content: string,
-  targetLine?: number | null,
-) {
-  if (!targetLine) return;
-  try {
-    const documentElement = frame.contentDocument?.documentElement;
-    const scrollRoot = frame.contentDocument?.scrollingElement ?? documentElement;
-    if (!scrollRoot) return;
-    const totalLines = Math.max(1, content.split('\n').length);
-    const ratio = Math.min(1, Math.max(0, (targetLine - 1) / Math.max(1, totalLines - 1)));
-    const maxScrollTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
-    scrollRoot.scrollTop = Math.round(maxScrollTop * ratio);
-    frame.contentDocument?.body?.classList.add('wm-html-source-target');
-    window.setTimeout(() => {
-      try {
-        frame.contentDocument?.body?.classList.remove('wm-html-source-target');
-      } catch {
-        // The sandboxed preview can become unavailable while the timer is pending.
-      }
-    }, 1200);
-  } catch {
-    // Sandboxed iframe access is best-effort; source views still have exact jumps.
-  }
-}
 
 export const MarkdownPreview = React.memo(function MarkdownPreview({
   content,
@@ -418,29 +386,3 @@ export const MarkdownPreview = React.memo(function MarkdownPreview({
     </div>
   );
 }, markdownPreviewPropsEqual);
-
-export const HtmlPreview = React.memo(function HtmlPreview({
-  content,
-  targetLine,
-}: HtmlPreviewProps) {
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
-
-  useEffect(() => {
-    const frame = frameRef.current;
-    if (!frame || !targetLine) return;
-    scrollHtmlPreviewFrameToLine(frame, content, targetLine);
-  }, [content, targetLine]);
-
-  return (
-    <div className="html-preview">
-      <iframe
-        ref={frameRef}
-        className="html-preview-frame"
-        title="HTML preview"
-        sandbox="allow-scripts"
-        srcDoc={content}
-        onLoad={event => scrollHtmlPreviewFrameToLine(event.currentTarget, content, targetLine)}
-      />
-    </div>
-  );
-});

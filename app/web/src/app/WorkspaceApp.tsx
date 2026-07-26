@@ -431,12 +431,17 @@ import {
 } from '../code/shikiSettings';
 import { ShikiCodeBlock, ShikiDiffPane, preloadShikiRenderer } from '../code/ShikiCodeBlock';
 import {
-  HtmlPreview,
   MarkdownPreview,
   markdownCodeRenderer,
   markdownPreRenderer,
   useMarkdownCapabilityPlugins,
 } from '../code/markdownPreview';
+import {HtmlPreview} from '../preview/HtmlPreview';
+import {
+  isHtmlPreviewAttachment,
+  isHtmlPreviewPath,
+  type HtmlPreviewSource,
+} from '../preview/htmlPreviewSource';
 import {createVoiceInputSession, type VoiceInputSession} from '../features/speech/useVoiceInputController';
 import {
   VOICE_LONG_TIMEOUT_MS,
@@ -1133,6 +1138,33 @@ function attachmentPreviewReadPayloadFromKey(tab: AttachmentPreviewTab): {sessio
   return null;
 }
 
+function attachmentHTMLPreviewSource(tab: AttachmentPreviewTab): HtmlPreviewSource | null {
+  if (!isHtmlPreviewAttachment(tab.title, tab.mimeType)) {
+    return null;
+  }
+  const payload = attachmentPreviewReadPayloadFromKey(tab);
+  if (!payload) {
+    return null;
+  }
+  if (payload.attachmentId) {
+    return {
+      source: 'session-attachment',
+      projectId: tab.projectId,
+      sessionId: payload.sessionId,
+      attachmentId: payload.attachmentId,
+    };
+  }
+  if (payload.uri) {
+    return {
+      source: 'session-attachment',
+      projectId: tab.projectId,
+      sessionId: payload.sessionId,
+      uri: payload.uri,
+    };
+  }
+  return null;
+}
+
 function attachmentBase64DataUrl(content: string, mimeType?: string): string {
   const normalizedMime = (mimeType || '').trim() || 'application/octet-stream';
   return content ? `data:${normalizedMime};base64,${content}` : '';
@@ -1696,11 +1728,6 @@ function isMarkdownPath(path: string): boolean {
   return ext === 'md' || ext === 'markdown';
 }
 
-function isHtmlPath(path: string): boolean {
-  const ext = getFileExtension(path);
-  return ext === 'html' || ext === 'htm';
-}
-
 function detectCodeLanguage(path: string): string {
   const ext = getFileExtension(path);
   switch (ext) {
@@ -2095,7 +2122,12 @@ function splitPathForDisplay(path: string): {fileName: string; parentPath: strin
   };
 }
 
-type ChatFilePeekViewerProps = {
+type HTMLPreviewConnectionProps = {
+  htmlPreviewEndpoint: string;
+  htmlPreviewCSRFToken: string;
+};
+
+type ChatFilePeekViewerProps = HTMLPreviewConnectionProps & {
   peek: FilePreviewTab | null;
   mode: 'desktop' | 'mobile';
   tabs: FilePreviewTab[];
@@ -2141,6 +2173,8 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   onToggleTree,
   treeContent,
   scrollRef,
+  htmlPreviewEndpoint,
+  htmlPreviewCSRFToken,
 }: ChatFilePeekViewerProps) {
   let body: React.ReactNode;
   if (!peek) {
@@ -2192,11 +2226,16 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
         targetLine={peek.targetLine}
       />
     );
-  } else if (isHtmlPath(peek.path)) {
+  } else if (isHtmlPreviewPath(peek.path)) {
     body = (
       <HtmlPreview
-        content={peek.content}
-        targetLine={peek.targetLine}
+        endpoint={htmlPreviewEndpoint}
+        csrfToken={htmlPreviewCSRFToken}
+        source={{
+          source: isAbsolutePreviewFilePath(peek.path) ? 'external-file' : 'project-file',
+          projectId: peek.projectId,
+          path: peek.path,
+        }}
       />
     );
   } else {
@@ -2223,6 +2262,7 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   const p = prev.peek;
   const n = next.peek;
   return (
+    p?.projectId === n?.projectId &&
     p?.path === n?.path &&
     p?.targetLine === n?.targetLine &&
     p?.content === n?.content &&
@@ -2239,7 +2279,9 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
     prev.codeTabSize === next.codeTabSize &&
     prev.wrapLines === next.wrapLines &&
     prev.showLineNumbers === next.showLineNumbers &&
-    prev.highlightedLines === next.highlightedLines
+    prev.highlightedLines === next.highlightedLines &&
+    prev.htmlPreviewEndpoint === next.htmlPreviewEndpoint &&
+    prev.htmlPreviewCSRFToken === next.htmlPreviewCSRFToken
   );
 });
 
@@ -2272,7 +2314,7 @@ const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
   );
 });
 
-type ChatAttachmentPreviewViewerProps = {
+type ChatAttachmentPreviewViewerProps = HTMLPreviewConnectionProps & {
   preview: AttachmentPreviewTab;
   mode: 'desktop' | 'mobile';
   onClose: () => void;
@@ -2304,7 +2346,10 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   showLineNumbers,
   highlightedLines,
   onLineClick,
+  htmlPreviewEndpoint,
+  htmlPreviewCSRFToken,
 }: ChatAttachmentPreviewViewerProps) {
+  const htmlSource = attachmentHTMLPreviewSource(preview);
   let body: React.ReactNode;
   if (preview.loading) {
     body = <div className="muted block">Loading attachment...</div>;
@@ -2314,6 +2359,14 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
         <ChatIcon name="circleX" />
         <span>{preview.error}</span>
       </div>
+    );
+  } else if (htmlSource) {
+    body = (
+      <HtmlPreview
+        endpoint={htmlPreviewEndpoint}
+        csrfToken={htmlPreviewCSRFToken}
+        source={htmlSource}
+      />
     );
   } else if (preview.kind === 'image' && preview.src) {
     body = (
@@ -2346,12 +2399,6 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
           codeTabSize={codeTabSize}
           wrap={wrapLines}
           lineNumbers={showLineNumbers}
-        />
-      );
-    } else if (isHtmlPath(fileName)) {
-      body = (
-        <HtmlPreview
-          content={preview.content}
         />
       );
     } else {
@@ -2399,7 +2446,9 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   prev.codeTabSize === next.codeTabSize &&
   prev.wrapLines === next.wrapLines &&
   prev.showLineNumbers === next.showLineNumbers &&
-  prev.highlightedLines === next.highlightedLines
+  prev.highlightedLines === next.highlightedLines &&
+  prev.htmlPreviewEndpoint === next.htmlPreviewEndpoint &&
+  prev.htmlPreviewCSRFToken === next.htmlPreviewCSRFToken
 ));
 
 type ChatPromptArtifactPreviewViewerProps = {
@@ -3093,7 +3142,11 @@ export function App() {
   );
   const previewSearchDocument = previewSearchDocumentKey(activeWorkbenchTab);
   const previewSearchUnavailableMessage =
-    activeWorkbenchTab && activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff'
+    activeWorkbenchTab &&
+    (
+      (activeWorkbenchTab.type === 'file' && isHtmlPreviewPath(activeWorkbenchTab.path)) ||
+      (activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff')
+    )
       ? 'Search is not available for this preview.'
       : '';
   const previewWorkbenchRef = useRef(previewWorkbench);
@@ -8063,7 +8116,7 @@ export function App() {
     const targetLine = chatFilePeek.targetLine;
     const targetPath = chatFilePeek.path;
     const targetContent = chatFilePeek.content;
-    const isHtmlPreview = isHtmlPath(targetPath);
+    const isHtmlPreview = isHtmlPreviewPath(targetPath);
     const isImagePreview = isImageFile(targetPath, chatFilePeek.info?.mimeType);
     if (isHtmlPreview || isImagePreview) return;
     return schedulePreviewLineJump({
@@ -8227,6 +8280,21 @@ export function App() {
       const info = external
         ? await service.getExternalFileInfo(targetProjectId, path, {signal: controller.signal})
         : await service.getProjectFileInfo(targetProjectId, path, {signal: controller.signal});
+      if (isHtmlPreviewPath(path)) {
+        setPreviewWorkbench(current =>
+          updatePreviewTabAfterLoad(
+            current,
+            targetProjectId,
+            tabId,
+            requestSeq,
+            tab =>
+              tab.type === 'file'
+                ? {...tab, info, content: '', loading: false, error: '', targetLine: null}
+                : tab,
+          ),
+        );
+        return;
+      }
       if ((info.size ?? 0) > LARGE_FILE_CONFIRM_BYTES) {
         const sizeMB = ((info.size ?? 0) / (1024 * 1024)).toFixed(1);
         const confirmed = window.confirm(
@@ -8308,6 +8376,28 @@ export function App() {
         const info = external
           ? await service.getExternalFileInfo(tab.projectId, tab.path, {signal: controller.signal})
           : await service.getProjectFileInfo(tab.projectId, tab.path, {signal: controller.signal});
+        if (isHtmlPreviewPath(tab.path)) {
+          setPreviewWorkbench(current =>
+            updatePreviewTabAfterLoad(
+              current,
+              tab.projectId,
+              tab.id,
+              requestSeq,
+              currentTab =>
+                currentTab.type === 'file'
+                  ? {
+                      ...currentTab,
+                      info,
+                      content: '',
+                      loading: false,
+                      error: '',
+                      targetLine: null,
+                    }
+                  : currentTab,
+            ),
+          );
+          return;
+        }
         const result = external
           ? await service.readExternalFile(tab.projectId, tab.path, {signal: controller.signal})
           : await service.readProjectFile(tab.path, tab.projectId, {signal: controller.signal});
@@ -8381,6 +8471,9 @@ export function App() {
       return;
     }
     if (tab.type === 'attachment') {
+      if (attachmentHTMLPreviewSource(tab)) {
+        return;
+      }
       if (tab.loading || tab.src || tab.content !== undefined || tab.requestId > 0) {
         return;
       }
@@ -8518,6 +8611,7 @@ export function App() {
     const tabId = previewTabId({type: 'attachment', sessionId, attachmentKey});
     const title = chatPromptAttachmentLabel(block, 0);
     const meta = chatPromptAttachmentMeta(block);
+    const htmlAttachment = isHtmlPreviewAttachment(title, block.mimeType || '');
     const initialSrc = block.type === 'image' && block.data
       ? attachmentBase64DataUrl(block.data, block.mimeType || 'image/png')
       : '';
@@ -8550,6 +8644,9 @@ export function App() {
       }
     }
     if (initialSrc) {
+      return;
+    }
+    if (htmlAttachment) {
       return;
     }
     service.readProjectSessionAttachment(targetProjectId, {
@@ -18775,15 +18872,6 @@ export function App() {
       if (tab.type !== 'file') {
         return;
       }
-      if (isHtmlPath(tab.path)) {
-        setPreviewWorkbench(current =>
-          updatePreviewTab(current, tab.projectId, tab.id, item =>
-            item.type === 'file' ? {...item, targetLine: match.line} : item,
-          ),
-        );
-        chatPeekAnchorRef.current = match.line;
-        return;
-      }
       previewSearchJumpCancelRef.current = schedulePreviewLineJump({
         getContainer: () => chatFilePeekScrollRef.current,
         isCurrent: () => activePreviewTab(previewWorkbenchRef.current)?.id === tab.id,
@@ -20021,6 +20109,8 @@ export function App() {
           onToggleTree={toggleChatFilePreviewTree}
           treeContent={null}
           scrollRef={chatFilePeekScrollRef}
+          htmlPreviewEndpoint={registryEndpoints.previewURL.toString()}
+          htmlPreviewCSRFToken={registryAuth.status?.csrfToken || ''}
         />
       );
     }
@@ -20059,6 +20149,8 @@ export function App() {
           showLineNumbers={showLineNumbers}
           highlightedLines={active ? chatPeekSelectedLines : EMPTY_HIGHLIGHTED_LINES}
           onLineClick={active ? handlePeekLineClick : undefined}
+          htmlPreviewEndpoint={registryEndpoints.previewURL.toString()}
+          htmlPreviewCSRFToken={registryAuth.status?.csrfToken || ''}
         />
       );
     }
