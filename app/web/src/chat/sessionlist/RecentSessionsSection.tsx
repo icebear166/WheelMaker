@@ -14,7 +14,6 @@ export type RecentGroup = {
 export type RecentSessionsSectionProps = {
   groups: RecentGroup[];
   collapsed: boolean;
-  mobile: boolean;
   /** Defaults to true; floating Recent panel passes false (card title already says Recent). */
   showHeading?: boolean;
   onToggleCollapsed: () => void;
@@ -25,7 +24,6 @@ export type RecentSessionsSectionProps = {
 export function RecentSessionsSection({
   groups,
   collapsed,
-  mobile,
   showHeading = true,
   onToggleCollapsed,
   onNewInProject,
@@ -33,7 +31,7 @@ export function RecentSessionsSection({
 }: RecentSessionsSectionProps) {
   return (
     <div
-      className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}${collapsed ? ' collapsed' : ''}`}
+      className={`wide-project-section recent-sessions-section${collapsed ? ' collapsed' : ''}`}
     >
       {showHeading ? (
         <div className="wide-project-row">
@@ -64,7 +62,7 @@ export function RecentSessionsSection({
         </div>
       ) : null}
       {collapsed && showHeading ? null : (
-        <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
+        <div className="wide-project-session-list recent-sessions-list">
           {groups.map(group => (
             <div
               key={`recent-project:${group.projectId}`}

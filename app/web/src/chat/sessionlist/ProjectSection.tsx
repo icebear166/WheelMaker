@@ -10,7 +10,6 @@ export type ProjectSectionProps = {
   collapsed: boolean;
   pinned: boolean;
   active: boolean;
-  mobile: boolean;
   projectGestureHandlers: SessionRowGestureHandlers;
   onToggleCollapsed: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onNew: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -29,7 +28,6 @@ export function ProjectSection({
   collapsed,
   pinned,
   active,
-  mobile,
   projectGestureHandlers,
   onToggleCollapsed,
   onNew,
@@ -39,15 +37,14 @@ export function ProjectSection({
   onRetryError,
   children,
 }: ProjectSectionProps) {
-  const sfx = (cls: string) => (mobile ? ` ${cls}` : '');
   return (
     <div
-      className={`wide-project-section${sfx('mobile-project-section')}${active ? ' active' : ''}${pinned ? ' pinned' : ''}${collapsed ? ' collapsed' : ''}`}
+      className={`wide-project-section${active ? ' active' : ''}${pinned ? ' pinned' : ''}${collapsed ? ' collapsed' : ''}`}
     >
-      <div className={`wide-project-row${sfx('mobile-project-row')}`}>
+      <div className="wide-project-row">
         <button
           type="button"
-          className={`wide-project-toggle${sfx('mobile-project-toggle')}`}
+          className="wide-project-toggle"
           {...projectGestureHandlers}
           onClick={onToggleCollapsed}
           title={collapsed ? 'Expand project' : 'Collapse project'}
@@ -71,7 +68,7 @@ export function ProjectSection({
             </span>
           </span>
         </button>
-        <div className={`wide-project-actions${sfx('mobile-project-actions')}`}>
+        <div className="wide-project-actions">
           <button
             type="button"
             className="wide-project-action-btn sl-action-secondary"
@@ -115,7 +112,7 @@ export function ProjectSection({
         </div>
       ) : null}
       {!collapsed ? (
-        <div className={`wide-project-session-list${sfx('mobile-project-session-list')}`}>
+        <div className="wide-project-session-list">
           {children}
         </div>
       ) : null}

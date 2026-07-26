@@ -26,7 +26,6 @@ describe('RecentSessionsSection', () => {
         <RecentSessionsSection
           groups={groups}
           collapsed={false}
-          mobile={false}
           onToggleCollapsed={() => undefined}
           onNewInProject={onNewInProject}
           renderRow={renderRow}
@@ -48,7 +47,6 @@ describe('RecentSessionsSection', () => {
         <RecentSessionsSection
           groups={groups}
           collapsed
-          mobile={false}
           showHeading={false}
           onToggleCollapsed={() => undefined}
           onNewInProject={() => undefined}

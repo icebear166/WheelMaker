@@ -30,7 +30,7 @@ describe('web chat fixed 800px layout', () => {
       MOBILE_SESSION_LIST_DENSITY: string;
     };
     expect(density.DESKTOP_SESSION_LIST_DENSITY).toBe('relaxed');
-    expect(density.MOBILE_SESSION_LIST_DENSITY).toBe('compact');
+    expect(density.MOBILE_SESSION_LIST_DENSITY).toBe('relaxed');
     expect(densityModule).not.toContain('SESSION_LIST_DENSITY_OPTIONS');
     expect(densityModule).not.toContain('normalizeSessionListDensity');
     expect(persistence).not.toContain('sessionListDensity');
@@ -40,6 +40,14 @@ describe('web chat fixed 800px layout', () => {
     expect(mainTsx).not.toContain('setSessionListDensity');
     expect(mainTsx).toContain('dataSessionListDensity={DESKTOP_SESSION_LIST_DENSITY}');
     expect(mainTsx).toContain('dataSessionListDensity={MOBILE_SESSION_LIST_DENSITY}');
+
+    const sessionRowTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
+    const projectSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'ProjectSection.tsx'));
+    expect(sessionRowTsx).not.toContain('mobile-session-row');
+    expect(projectSectionTsx).not.toContain('mobile-project-section');
+    expect(projectSectionTsx).not.toContain('mobile-project-row');
+    expect(projectSectionTsx).not.toContain('mobile-project-toggle');
+    expect(projectSectionTsx).not.toContain('mobile-project-session-list');
 
     const relaxedTokens = stylesCss.match(/\.wide-project-session-nav,[\s\S]*?\{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(relaxedTokens).toContain('--sl-row-py: 5px;');

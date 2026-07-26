@@ -6654,7 +6654,7 @@ export function App() {
                     </span>
                   </span>
                 </div>
-                <div className={`wide-project-actions${mobile ? ' mobile-project-actions' : ''}`}>
+                <div className="wide-project-actions">
                   <button
                     type="button"
                     className="wide-project-action-btn chat-hidden-project-restore-btn"

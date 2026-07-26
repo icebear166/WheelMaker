@@ -109,7 +109,6 @@ export function SessionListView(props: SessionListViewProps) {
         selected={props.selectedChatEncodedKey === props.runtimeKey(projectId, session.sessionId)}
         pinned={session.pinned === true}
         pinning={props.pinningSessionKey === props.sessionActionKey(projectId, session.sessionId)}
-        mobile={mobile}
         recent={recent}
         leadingState={props.renderLeadingState(session, projectId)}
         gestureHandlers={{
@@ -135,7 +134,6 @@ export function SessionListView(props: SessionListViewProps) {
         <RecentSessionsSection
           groups={recentGroups}
           collapsed={recentCollapsed}
-          mobile={mobile}
           showHeading={showRecentHeading}
           onToggleCollapsed={onToggleRecent}
           onNewInProject={(projectId, event) => props.onOpenProjectMenu(projectId, 'new', event.currentTarget)}
@@ -159,7 +157,6 @@ export function SessionListView(props: SessionListViewProps) {
             collapsed={collapsed}
             pinned={props.pinnedProjectIds.includes(projectId)}
             active={projectId === props.activeProjectId}
-            mobile={mobile}
             projectGestureHandlers={props.projectGestureHandlers(projectId)}
             onToggleCollapsed={event => {
               if (props.consumeProjectLongPressClick(projectId, event)) {
@@ -191,7 +188,6 @@ export function SessionListView(props: SessionListViewProps) {
                 agentClassName={draft.agentType ? props.sessionAgentClass(draft.agentType) : undefined}
                 statusClassName={draft.status}
                 selected={props.selectedChatEncodedKey === props.runtimeKey(projectId, draft.draftId)}
-                mobile={mobile}
                 onClick={() => props.onSelectDraft(projectId, draft.draftId)}
                 onDismiss={draft.status === 'failed' ? () => props.onDismissDraft(projectId, draft.draftId) : undefined}
               />
@@ -200,7 +196,7 @@ export function SessionListView(props: SessionListViewProps) {
             {split.showToggle ? (
               <button
                 type="button"
-                className={`wide-session-row session-older-toggle${mobile ? ' mobile-session-row' : ''}`}
+                className="wide-session-row session-older-toggle"
                 onClick={() => props.onToggleOlder(projectId)}
               >
                 <span className="wide-session-title">

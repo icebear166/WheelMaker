@@ -1266,18 +1266,6 @@
   cursor: default;
 }
 
-.mobile-project-actions {
-  opacity: 1;
-}
-
-.mobile-project-action-panel {
-  margin: 2px 7px 6px 21px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-raised) 74%, transparent);
-  padding: 4px;
-}
-
 .mobile-project-sheet-overlay {
   position: fixed;
   inset: 0;

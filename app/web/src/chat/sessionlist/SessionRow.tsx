@@ -19,7 +19,6 @@ export type SessionRowProps = {
   selected: boolean;
   pinned?: boolean;
   pinning?: boolean;
-  mobile?: boolean;
   recent?: boolean;
   leadingState?: ReactNode;
   rowTitleAttr?: string;
@@ -39,7 +38,6 @@ export function SessionRow({
   selected,
   pinned = false,
   pinning = false,
-  mobile = false,
   recent = false,
   leadingState,
   rowTitleAttr,
@@ -53,7 +51,7 @@ export function SessionRow({
       {leadingState}
       <button
         type="button"
-        className={`wide-session-row${recent ? ' recent-session-row' : ''}${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
+        className={`wide-session-row${recent ? ' recent-session-row' : ''}${selected ? ' selected' : ''}`}
         title={rowTitleAttr}
         {...gestureHandlers}
         onClick={onClick}
@@ -97,7 +95,6 @@ export type DraftSessionRowProps = {
   agentLabel?: string;
   agentClassName?: string;
   selected: boolean;
-  mobile?: boolean;
   /** Extra status class appended to the row button (legacy `draft.status` hook). */
   statusClassName?: string;
   onClick: () => void;
@@ -113,7 +110,6 @@ export function DraftSessionRow({
   agentLabel,
   agentClassName,
   selected,
-  mobile = false,
   statusClassName,
   onClick,
   onDismiss,
@@ -122,7 +118,7 @@ export function DraftSessionRow({
     <div className={`project-session-row-wrap draft-session-row-wrap${failed ? ' failed has-dismiss' : ''}`}>
       <button
         type="button"
-        className={`wide-session-row draft-session-row${statusClassName ? ` ${statusClassName}` : ''}${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
+        className={`wide-session-row draft-session-row${statusClassName ? ` ${statusClassName}` : ''}${selected ? ' selected' : ''}`}
         title={failed ? errorMessage : title}
         onClick={onClick}
       >

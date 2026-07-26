@@ -20,7 +20,6 @@ async function renderSection(extra?: Partial<React.ComponentProps<typeof Project
     collapsed: false,
     pinned: false,
     active: false,
-    mobile: false,
     projectGestureHandlers: gesture,
     onToggleCollapsed: jest.fn(),
     onNew: jest.fn(),
