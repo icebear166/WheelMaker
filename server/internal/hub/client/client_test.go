@@ -9143,8 +9143,10 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 	if sessions[0].Usage.Used != 19000 || sessions[0].Usage.Size != 258000 || sessions[0].Usage.UpdatedAt != "2026-07-07T08:00:00Z" {
 		t.Fatalf("usage = %+v", sessions[0].Usage)
 	}
-	if !sessions[0].SessionActions.Status.Supported || !sessions[0].SessionActions.Compact.Supported {
-		t.Fatalf("sessionActions = %+v, want Codex status and compact support", sessions[0].SessionActions)
+	if !sessions[0].SessionActions.Status.Supported ||
+		!sessions[0].SessionActions.Compact.Supported ||
+		!sessions[0].SessionActions.Steer.Supported {
+		t.Fatalf("sessionActions = %+v, want Codex status, compact, and steer support", sessions[0].SessionActions)
 	}
 }
 

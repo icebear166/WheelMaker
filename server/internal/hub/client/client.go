@@ -142,6 +142,10 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 				Supported: support.Compact,
 				Reason:    unsupportedSessionActionReason(support.Compact),
 			},
+			Steer: acp.SessionActionCapability{
+				Supported: support.Steer,
+				Reason:    unsupportedSessionActionReason(support.Steer),
+			},
 		}
 	}
 	c.viewSink = c.sessionRecorder
@@ -167,6 +171,7 @@ func unsupportedSessionActions(reason string) acp.SessionActionCapabilities {
 	return acp.SessionActionCapabilities{
 		Status:  acp.SessionActionCapability{Supported: false, Reason: reason},
 		Compact: acp.SessionActionCapability{Supported: false, Reason: reason},
+		Steer:   acp.SessionActionCapability{Supported: false, Reason: reason},
 	}
 }
 
@@ -930,6 +935,42 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, fmt.Errorf("invalid session.fork payload: %w", err)
 		}
 		return c.forkSessionAtTurn(ctx, req.SessionID, req.TurnIndex)
+	case acp.RegistryMethodSessionSteer:
+		var req acp.SessionSteerParams
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.steer payload: %w", err)
+		}
+		req.SessionID = strings.TrimSpace(req.SessionID)
+		req.ClientMessageID = strings.TrimSpace(req.ClientMessageID)
+		if req.SessionID == "" {
+			return nil, fmt.Errorf("sessionId is required")
+		}
+		if req.ClientMessageID == "" {
+			return nil, fmt.Errorf("clientMessageId is required")
+		}
+		if len(req.Blocks) == 0 {
+			return nil, fmt.Errorf("session steer is empty")
+		}
+		sess, err := c.SessionByID(ctx, req.SessionID)
+		if err != nil {
+			return nil, err
+		}
+		if !c.sessionSupportsAction(sess, acp.SessionActionSteer) {
+			return nil, fmt.Errorf("%w: steer", agent.ErrSessionActionUnsupported)
+		}
+		blocks, attachmentRefs, err := c.prepareSessionPromptBlocks(ctx, req.SessionID, req.Blocks)
+		if err != nil {
+			return nil, err
+		}
+		req.Blocks = blocks
+		accepted, err := sess.Steer(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		if err := c.markSessionAttachmentsSent(attachmentRefs); err != nil {
+			return nil, err
+		}
+		return accepted, nil
 	case acp.RegistryMethodSessionSend:
 		var req struct {
 			SessionID string             `json:"sessionId"`
@@ -1448,6 +1489,8 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 		return support.Status
 	case acp.SessionActionCompact:
 		return support.Compact
+	case acp.SessionActionSteer:
+		return support.Steer
 	default:
 		return false
 	}

@@ -2,8 +2,12 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -108,6 +112,43 @@ func newReadySteerTestSession(t *testing.T, instance *steerTestInstance) *Sessio
 	instance.SetCallbacks(session)
 	t.Cleanup(instance.finishPrompt)
 	return session
+}
+
+func newSteerRequestTestClient(t *testing.T) (*Client, *steerTestInstance) {
+	t.Helper()
+	client := newSessionViewTestClient(t)
+	client.registry = agent.DefaultACPFactory().Clone()
+	client.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{
+		Status:  true,
+		Compact: true,
+		Steer:   true,
+	})
+	session, err := client.newWiredSession("sess-1", string(acp.ACPProviderCodex))
+	if err != nil {
+		t.Fatalf("newWiredSession: %v", err)
+	}
+	instance := newSteerTestInstance()
+	instance.testInjectedInstance.sessionID = "sess-1"
+	session.mu.Lock()
+	session.instance = instance
+	session.acpSessionID = "sess-1"
+	session.initialized = true
+	session.ready = true
+	session.Status = SessionActive
+	session.mu.Unlock()
+	instance.SetCallbacks(session)
+	client.mu.Lock()
+	client.sessions["sess-1"] = session
+	client.mu.Unlock()
+	if err := client.RecordEvent(context.Background(), sessionViewCreatedEventWithAgent(
+		"sess-1",
+		"Steer request",
+		string(acp.ACPProviderCodex),
+	)); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	t.Cleanup(instance.finishPrompt)
+	return client, instance
 }
 
 func steerTextParams(clientMessageID, text string) acp.SessionSteerParams {
@@ -442,5 +483,169 @@ func TestSessionSteerSuspendDiscardsAcceptedFallback(t *testing.T) {
 	session.mu.Unlock()
 	if state.nextGeneration != 0 || state.active != nil || state.acceptingFallbacks || len(state.priority) != 0 {
 		t.Fatalf("steer state restarted after suspend = %#v", state)
+	}
+}
+
+func TestHandleSessionSteerPreparesBlocksAndReturnsOutcome(t *testing.T) {
+	client, instance := newSteerRequestTestClient(t)
+	projectFile := "steer-context.txt"
+	if err := os.WriteFile(filepath.Join(client.cwd, projectFile), []byte("context"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	session, err := client.SessionByID(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	promptDone := startBlockingSteerPrompt(t, session, instance)
+
+	response, err := client.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionSteer,
+		"test",
+		mustJSON(acp.SessionSteerParams{
+			SessionID:       "sess-1",
+			ClientMessageID: "queued-1",
+			Blocks: []acp.ContentBlock{
+				{Type: acp.ContentBlockTypeText, Text: "change direction"},
+				{Type: acp.ContentBlockTypeResourceLink, URI: projectFile},
+			},
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, ok := response.(acp.SessionSteerAccepted)
+	if !ok || !accepted.Accepted || accepted.Outcome != acp.SessionSteerOutcomeSteered {
+		t.Fatalf("accepted = %#v", response)
+	}
+	calls := instance.calls()
+	if len(calls) != 1 || len(calls[0].blocks) != 2 || !strings.HasPrefix(calls[0].blocks[1].URI, "file:") {
+		t.Fatalf("prepared steer calls = %#v", calls)
+	}
+
+	instance.finishPrompt()
+	waitSteerPromptDone(t, promptDone)
+}
+
+func TestHandleSessionSteerValidatesRequiredFields(t *testing.T) {
+	client, _ := newSteerRequestTestClient(t)
+	for _, testCase := range []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{name: "session id", payload: `{"clientMessageId":"queued-1","blocks":[{"type":"text","text":"change"}]}`, want: "sessionId"},
+		{name: "client message id", payload: `{"sessionId":"sess-1","blocks":[{"type":"text","text":"change"}]}`, want: "clientMessageId"},
+		{name: "blocks", payload: `{"sessionId":"sess-1","clientMessageId":"queued-1"}`, want: "empty"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := client.HandleSessionRequest(
+				context.Background(),
+				acp.RegistryMethodSessionSteer,
+				"test",
+				json.RawMessage(testCase.payload),
+			)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("session.steer error = %v, want %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+func TestHandleSessionSteerRejectsUnsupportedProvider(t *testing.T) {
+	client, _ := newSteerRequestTestClient(t)
+	client.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{
+		Status:  true,
+		Compact: true,
+	})
+	_, err := client.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionSteer,
+		"test",
+		json.RawMessage(`{"sessionId":"sess-1","clientMessageId":"queued-1","blocks":[{"type":"text","text":"change"}]}`),
+	)
+	if !errors.Is(err, agent.ErrSessionActionUnsupported) {
+		t.Fatalf("session.steer error = %v, want unsupported", err)
+	}
+}
+
+func TestHandleSessionSteerInactiveReturnsSentOutcome(t *testing.T) {
+	client, instance := newSteerRequestTestClient(t)
+	instance.steerFn = func(context.Context, string, string, []acp.ContentBlock) (agent.SessionSteerResult, error) {
+		return agent.SessionSteerResult{}, agent.ErrSessionSteerInactive
+	}
+	session, err := client.SessionByID(context.Background(), "sess-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	promptDone := startBlockingSteerPrompt(t, session, instance)
+
+	response, err := client.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionSteer,
+		"test",
+		json.RawMessage(`{"sessionId":"sess-1","clientMessageId":"queued-1","blocks":[{"type":"text","text":"fallback"}]}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted := response.(acp.SessionSteerAccepted)
+	if accepted.Outcome != acp.SessionSteerOutcomeSent {
+		t.Fatalf("outcome = %q", accepted.Outcome)
+	}
+	instance.finishPrompt()
+	if got := instance.waitForPromptStart(t); got != "fallback" {
+		t.Fatalf("fallback prompt = %q", got)
+	}
+	waitSteerPromptDone(t, promptDone)
+}
+
+func TestHandleSessionSteerMarksAttachmentOnlyAfterAcceptedOwnership(t *testing.T) {
+	for _, testCase := range []struct {
+		name     string
+		steerErr error
+		wantSent bool
+	}{
+		{name: "accepted", wantSent: true},
+		{name: "provider failure", steerErr: errors.New("provider disconnected"), wantSent: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client, instance := newSteerRequestTestClient(t)
+			if testCase.steerErr != nil {
+				instance.steerFn = func(context.Context, string, string, []acp.ContentBlock) (agent.SessionSteerResult, error) {
+					return agent.SessionSteerResult{}, testCase.steerErr
+				}
+			}
+			block := uploadSessionAttachmentForTest(t, client, "sess-1", "steer.txt", "text/plain", []byte("attachment"))
+			session, err := client.SessionByID(context.Background(), "sess-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			promptDone := startBlockingSteerPrompt(t, session, instance)
+
+			_, gotErr := client.HandleSessionRequest(
+				context.Background(),
+				acp.RegistryMethodSessionSteer,
+				"test",
+				mustJSON(acp.SessionSteerParams{
+					SessionID:       "sess-1",
+					ClientMessageID: "queued-1",
+					Blocks:          []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "use attachment"}, block},
+				}),
+			)
+			if !errors.Is(gotErr, testCase.steerErr) {
+				t.Fatalf("session.steer error = %v, want %v", gotErr, testCase.steerErr)
+			}
+			sidecar, err := readAttachmentSidecar(attachmentSidecarPathForTest(attachmentFileURIPathForTest(t, block.URI)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sidecar.Sent != testCase.wantSent {
+				t.Fatalf("attachment sent = %v, want %v", sidecar.Sent, testCase.wantSent)
+			}
+
+			instance.finishPrompt()
+			waitSteerPromptDone(t, promptDone)
+		})
 	}
 }
