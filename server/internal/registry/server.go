@@ -1268,11 +1268,15 @@ func (s *Server) handleForwardRequest(clientPeer *peerConn, state *connectionSta
 }
 
 func (s *Server) executeClientRequest(state *connectionState, in envelope) envelope {
+	return s.executeProjectRequest(context.Background(), state.scopeHubID, in)
+}
+
+func (s *Server) executeProjectRequest(ctx context.Context, scopeHubID string, in envelope) envelope {
 	projectID := strings.TrimSpace(in.ProjectID)
 	if projectID == "" {
 		return s.errorEnvelope(in.Method, codeInvalidArgument, "projectId is required", nil)
 	}
-	if state.scopeHubID != "" && !strings.HasPrefix(projectID, state.scopeHubID+":") {
+	if scopeHubID != "" && !strings.HasPrefix(projectID, scopeHubID+":") {
 		return s.errorEnvelope(in.Method, codeForbidden, "project out of client scope", map[string]any{"projectId": projectID})
 	}
 
@@ -1304,6 +1308,8 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 		return s.errorEnvelope(in.Method, codeInternal, "forward request write failed", nil)
 	}
 
+	timer := time.NewTimer(projectForwardRequestTimeout(in.Method))
+	defer timer.Stop()
 	select {
 	case resp, ok := <-waitCh:
 		if !ok {
@@ -1311,7 +1317,10 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 		}
 		resp.ProjectID = projectID
 		return resp
-	case <-time.After(projectForwardRequestTimeout(in.Method)):
+	case <-ctx.Done():
+		hubPeer.resolvePending(forwardID, envelope{})
+		return s.errorEnvelope(in.Method, codeTimeout, "request cancelled", nil)
+	case <-timer.C:
 		hubPeer.resolvePending(forwardID, envelope{})
 		return s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 	}

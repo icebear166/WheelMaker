@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -312,5 +313,49 @@ func TestRegistryHTMLPreviewRouteIsolation(t *testing.T) {
 				t.Fatalf("Allow = %q, want %q", got, test.wantAllow)
 			}
 		})
+	}
+}
+
+func TestExecuteProjectRequestCancellationCleansPending(t *testing.T) {
+	server := New(Config{})
+	testServer := httptest.NewServer(server.Handler())
+	t.Cleanup(testServer.Close)
+
+	hub := dialWS(t, testServer.URL+"/ws")
+	t.Cleanup(func() { _ = hub.Close() })
+	mustReportHubProjects(t, hub, "hub-preview", []map[string]any{
+		{"name": "proj1", "path": `C:\src\proj1`, "online": true},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan envelope, 1)
+	go func() {
+		result <- server.executeProjectRequest(ctx, "", envelope{
+			Type:      rp.RegistryEnvelopeTypeRequest,
+			Method:    rp.RegistryMethodProjectFSRead,
+			ProjectID: "hub-preview:proj1",
+			Payload:   rp.MustRaw(map[string]string{"path": "page.html"}),
+		})
+	}()
+
+	forwarded := mustReadEnvelope(t, hub)
+	cancel()
+	response := <-result
+	var payload errorPayload
+	if err := json.Unmarshal(response.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Code != codeTimeout {
+		t.Fatalf("code = %q, want %q", payload.Code, codeTimeout)
+	}
+
+	server.mu.RLock()
+	peer := server.hubPeers["hub-preview"]
+	server.mu.RUnlock()
+	peer.pendingMu.Lock()
+	_, pending := peer.pending[forwarded.RequestID]
+	peer.pendingMu.Unlock()
+	if pending {
+		t.Fatal("cancelled request remained pending")
 	}
 }
