@@ -80,7 +80,9 @@ type Session struct {
 
 	mu            sync.Mutex
 	promptMu      sync.Mutex
+	steerMu       sync.Mutex
 	executionKind string
+	steerState    sessionSteerState
 	permissions   sessionPermissionState
 }
 
@@ -1156,6 +1158,7 @@ func (s *Session) Suspend(ctx context.Context) error {
 	s.initializing = false
 	s.loading = false
 	s.Status = SessionSuspended
+	s.clearSteerStateLocked()
 	s.mu.Unlock()
 
 	if inst != nil {
@@ -1304,7 +1307,53 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 	if err := s.beginExecution("prompt"); err != nil {
 		return err
 	}
+	return s.runPromptExecution(blocks)
+}
+
+func (s *Session) runPromptExecution(initial []acp.ContentBlock) error {
 	defer s.endExecution()
+	s.mu.Lock()
+	s.steerState.acceptingFallbacks = true
+	s.mu.Unlock()
+
+	blocks := cloneSessionContentBlocks(initial)
+	for len(blocks) > 0 {
+		s.mu.Lock()
+		generation := s.beginPromptGenerationLocked()
+		s.mu.Unlock()
+
+		runErr := s.runPromptBlocks(blocks)
+
+		s.mu.Lock()
+		generation.completed = true
+		resolvePromptGenerationLocked(generation)
+		resolved := generation.resolved
+		s.mu.Unlock()
+		<-resolved
+
+		s.mu.Lock()
+		if s.steerState.active != generation {
+			s.steerState.acceptingFallbacks = false
+			s.mu.Unlock()
+			return runErr
+		}
+		s.steerState.priority = append(s.steerState.priority, generation.fallbacks...)
+		s.steerState.active = nil
+		next, ok := s.shiftPriorityPromptLocked()
+		if !ok {
+			s.steerState.acceptingFallbacks = false
+		}
+		s.mu.Unlock()
+		if !ok {
+			return runErr
+		}
+		blocks = next.blocks
+	}
+	return nil
+}
+
+// runPromptBlocks executes one provider turn while promptMu is already owned.
+func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
 	s.recordSessionViewEvent(SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
@@ -1550,6 +1599,7 @@ func (s *Session) resetDeadConnection(err error) bool {
 	s.prompt.cancel = nil
 	s.prompt.updatesCh = nil
 	s.prompt.currentCh = nil
+	s.clearSteerStateLocked()
 	s.mu.Unlock()
 	if old != nil {
 		_ = old.Close()

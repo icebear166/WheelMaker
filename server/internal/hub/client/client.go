@@ -1638,6 +1638,7 @@ func (c *Client) deleteActiveSession(ctx context.Context, sessionID string, reje
 		sess.initializing = false
 		sess.loading = false
 		sess.Status = SessionSuspended
+		sess.clearSteerStateLocked()
 		sess.mu.Unlock()
 		if inst != nil {
 			_ = inst.Close()
