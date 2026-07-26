@@ -35,18 +35,30 @@ describe('web security policy', () => {
     const createConfig = require('../web/webpack.config.js');
     const config = createConfig({}, {mode: 'development'});
     const devServer = config.devServer;
+    const headersFor = (url: string): Record<string, string> =>
+      devServer.headers({url}, {}, {});
+    const documentHeaders = headersFor('/');
 
     expect(devServer.host).toBe('127.0.0.1');
     expect(devServer.allowedHosts).toEqual(['localhost', '127.0.0.1']);
-    expect(devServer.headers['Content-Security-Policy']).toContain("default-src 'self'");
-    expect(devServer.headers['Content-Security-Policy']).toContain(
+    expect(documentHeaders['Content-Security-Policy']).toContain("default-src 'self'");
+    expect(documentHeaders['Content-Security-Policy']).toContain(
       "connect-src 'self' ws: wss: https://release.wheelmaker.top https://codexradar.com",
     );
-	 expect(devServer.headers['Content-Security-Policy']).not.toContain('upgrade-insecure-requests');
-    expect(devServer.headers['Content-Security-Policy']).not.toContain('github.com');
-    expect(devServer.headers['X-Content-Type-Options']).toBe('nosniff');
-    expect(devServer.headers['X-Frame-Options']).toBe('DENY');
-    expect(devServer.headers['Referrer-Policy']).toBe('no-referrer');
+    expect(documentHeaders['Content-Security-Policy']).not.toContain('upgrade-insecure-requests');
+    expect(documentHeaders['Content-Security-Policy']).not.toContain('github.com');
+    expect(documentHeaders['X-Content-Type-Options']).toBe('nosniff');
+    expect(documentHeaders['X-Frame-Options']).toBe('DENY');
+    expect(documentHeaders['Referrer-Policy']).toBe('no-referrer');
+    expect(devServer.proxy[0].context).toEqual(['/ws']);
+
+    for (const url of ['/ws/preview/', '/wheelmaker/ws/preview/']) {
+      const previewHeaders = headersFor(url);
+      expect(previewHeaders['Content-Security-Policy']).toBeUndefined();
+      expect(previewHeaders['X-Frame-Options']).toBeUndefined();
+      expect(previewHeaders['X-Content-Type-Options']).toBe('nosniff');
+      expect(previewHeaders['Referrer-Policy']).toBe('no-referrer');
+    }
   });
 
   test('deployment documentation includes matching static response headers', () => {

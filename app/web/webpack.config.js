@@ -49,6 +49,26 @@ const LOCAL_WEB_SECURITY_POLICY = WEB_SECURITY_POLICY
   .replace("connect-src 'self' wss:", "connect-src 'self' ws: wss:")
   .replace('; upgrade-insecure-requests', '');
 
+function isHTMLPreviewRequest(request) {
+  const pathname = String(request?.url || '').split(/[?#]/, 1)[0];
+  return pathname === '/ws/preview/' || pathname.endsWith('/ws/preview/');
+}
+
+function developmentResponseHeaders(request) {
+  const common = {
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+  };
+  if (isHTMLPreviewRequest(request)) {
+    return common;
+  }
+  return {
+    ...common,
+    'Content-Security-Policy': LOCAL_WEB_SECURITY_POLICY,
+    'X-Frame-Options': 'DENY',
+  };
+}
+
 function envFlag(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
@@ -191,12 +211,7 @@ module.exports = (_env = {}, argv = {}) => {
 				ws: true,
 			},
 		],
-		headers: {
-			'Content-Security-Policy': LOCAL_WEB_SECURITY_POLICY,
-			'Referrer-Policy': 'no-referrer',
-			'X-Content-Type-Options': 'nosniff',
-			'X-Frame-Options': 'DENY',
-		},
+		headers: developmentResponseHeaders,
       historyApiFallback: true,
       static: {
         directory: path.resolve(__dirname, 'public'),

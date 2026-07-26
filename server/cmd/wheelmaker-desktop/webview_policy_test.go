@@ -276,6 +276,7 @@ func TestDesktopNavigationPolicy(t *testing.T) {
 		{name: "base", url: "https://example.com/wheelmaker/", mainFrame: true, want: desktopNavigationAllow},
 		{name: "base child", url: "https://example.com/wheelmaker/projects/1", mainFrame: true, want: desktopNavigationAllow},
 		{name: "trusted iframe", url: "https://example.com/wheelmaker/embed", want: desktopNavigationAllow},
+		{name: "same base preview iframe", url: "https://example.com/wheelmaker/ws/preview/", want: desktopNavigationAllow},
 		{name: "external origin", url: "https://docs.example.net/help", mainFrame: true, want: desktopNavigationOpenExternal},
 		{name: "same origin outside base", url: "https://example.com/admin/", mainFrame: true, want: desktopNavigationOpenExternal},
 		{name: "untrusted iframe", url: "https://docs.example.net/help", want: desktopNavigationBlock},
