@@ -75,16 +75,15 @@ describe('limits workspace integration', () => {
     expect(main).toContain('setShowMonitor(false);');
   });
 
-  test('adds an always-available Monitor action to the five-button mobile shortcut', () => {
-    const pillStart = main.indexOf('className="gesture-nav-pill"');
-    const pillEnd = main.indexOf('</div>', pillStart);
-    const pill = pillStart >= 0 && pillEnd >= 0 ? main.slice(pillStart, pillEnd) : '';
-    const keys = Array.from(pill.matchAll(/key="([^"]+)"/g), match => match[1]);
+  test('adds an always-available Monitor action to the mobile floating nav', () => {
+    const model = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'shell', 'layouts', 'mobile', 'mobileFloatingNavModel.ts'),
+      'utf8',
+    );
+    const ids = Array.from(model.matchAll(/\{id: '([^']+)'/g), match => match[1]);
 
-    expect(keys).toEqual(['preview', 'terminal', 'chat', 'monitor', 'settings']);
-    expect(pill).not.toContain('showMonitor');
-    expect(pill).toContain('aria-label="Terminal"');
-    expect(pill).toContain('aria-label="Monitor"');
+    expect(ids).toEqual(['preview', 'terminal', 'relay', 'monitor', 'settings', 'chat']);
+    expect(model).toContain("{id: 'monitor', icon: 'activity', label: 'Monitor'}");
   });
 
   test('uses cached usage in one exclusive mobile overlay and closes it first on native back', () => {
@@ -94,14 +93,14 @@ describe('limits workspace integration', () => {
     expect(main).toContain('snapshot={usageSnapshot}');
     expect(main).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
 
-    const monitorButtonStart = main.indexOf('key="monitor"');
-    const monitorButtonEnd = main.indexOf('</button>', monitorButtonStart);
-    const monitorButton = monitorButtonStart >= 0 && monitorButtonEnd >= 0
-      ? main.slice(monitorButtonStart, monitorButtonEnd)
-      : '';
-    expect(monitorButton).toContain('setTerminalOpen(false);');
-    expect(monitorButton).toContain('closeChatPreview();');
-    expect(monitorButton).not.toContain('refreshUsageAcrossHubs');
+    const selectStart = main.indexOf('const handleFloatingNavSelect = useCallback(');
+    const selectEnd = main.indexOf('const toggleTerminalFromTitle', selectStart);
+    const selectBody = selectStart >= 0 && selectEnd >= 0 ? main.slice(selectStart, selectEnd) : '';
+    expect(selectBody).toContain("destination === 'monitor'");
+    expect(selectBody).toContain('setMobileUsageOpen(true);');
+    expect(selectBody).toContain('setTerminalOpen(false);');
+    expect(selectBody).toContain('closeChatPreview();');
+    expect(selectBody).not.toContain('refreshUsageAcrossHubs');
 
     const backStart = main.indexOf('const handleAndroidNativeBack');
     const backEnd = main.indexOf('useEffect(() => {', backStart);
