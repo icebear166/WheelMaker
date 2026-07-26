@@ -108,4 +108,39 @@ describe('SessionListView', () => {
     });
     expect(search!.root.findAllByProps({className: 'search-marker'})).toHaveLength(1);
   });
+
+  it('passes the same mark metadata through project and Recent rows', async () => {
+    const marked = {
+      sessionId: 's1',
+      title: 'Fix bug',
+      agentType: 'kimi',
+      updatedAt: '2026-07-24T00:00:00Z',
+      markColor: 'green' as const,
+    };
+    let tree: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      tree = create(
+        <SessionListView
+          {...makeProps({
+            sessionsByProjectId: {p1: [marked], p2: []},
+            recentGroups: [
+              {
+                projectId: 'p1',
+                projectName: 'WheelMaker',
+                hubLabel: 'local',
+                hubVariantClass: 'wide-project-hub variant-0',
+                hubAccentStyle: {'--hub-accent': '#58a6ff'} as React.CSSProperties,
+                sessions: [marked],
+              },
+            ],
+          })}
+        />,
+      );
+    });
+
+    expect(
+      tree!.root.findAllByProps({className: 'wide-session-mark session-mark-green'}),
+    ).toHaveLength(2);
+  });
 });

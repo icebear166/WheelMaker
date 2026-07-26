@@ -1,5 +1,7 @@
 import React, {type ReactNode} from 'react';
+import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
 import {SessionIcon} from './SessionIcon';
+import {sessionMarkColorClass} from './sessionMark';
 
 export type SessionRowGestureHandlers = {
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>;
@@ -20,6 +22,7 @@ export type SessionRowProps = {
   forked?: boolean;
   pinned?: boolean;
   pinning?: boolean;
+  markColor?: RegistrySessionMarkColor;
   recent?: boolean;
   leadingState?: ReactNode;
   rowTitleAttr?: string;
@@ -40,6 +43,7 @@ export function SessionRow({
   forked = false,
   pinned = false,
   pinning = false,
+  markColor,
   recent = false,
   leadingState,
   rowTitleAttr,
@@ -90,6 +94,13 @@ export function SessionRow({
         >
           {pinning ? <SessionIcon name="loader" spin /> : <SessionIcon name="pin" />}
         </button>
+      ) : null}
+      {markColor ? (
+        <span
+          className={`wide-session-mark ${sessionMarkColorClass(markColor)}`}
+          role="img"
+          aria-label={`${markColor[0].toUpperCase()}${markColor.slice(1)} mark`}
+        />
       ) : null}
     </div>
   );

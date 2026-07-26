@@ -1,10 +1,14 @@
 import React, {useEffect, useRef} from 'react';
 import {focusFirstMenuItem, handleMenuKeyDown} from '../../common/menuKeyboardNavigation';
+import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
 import {SessionIcon, type SessionIconName} from './SessionIcon';
+import {SESSION_MARK_OPTIONS, sessionMarkColorClass} from './sessionMark';
 
 export type SessionMenuProps = {
   pinned: boolean;
   pinning: boolean;
+  markColor?: RegistrySessionMarkColor;
+  marking: boolean;
   renaming: boolean;
   /** Disables archive/reload/delete (session running or another destructive op in flight). */
   actionDisabled: boolean;
@@ -12,6 +16,7 @@ export type SessionMenuProps = {
   reloading: boolean;
   deleting: boolean;
   onTogglePin: () => void;
+  onSetMark: (markColor: RegistrySessionMarkColor | '') => void;
   onRename: () => void;
   onArchive: () => void;
   onReload: () => void;
@@ -36,12 +41,15 @@ type MenuItem = {
 export function SessionMenu({
   pinned,
   pinning,
+  markColor,
+  marking,
   renaming,
   actionDisabled,
   archiving,
   reloading,
   deleting,
   onTogglePin,
+  onSetMark,
   onRename,
   onArchive,
   onReload,
@@ -58,8 +66,9 @@ export function SessionMenu({
       : null;
     focusFirstMenuItem(menuRef.current);
   }, []);
-  const items: Array<MenuItem | 'separator'> = [
+  const items: Array<MenuItem | 'mark' | 'separator'> = [
     {key: 'pin', className: 'pin', icon: 'pin', label: pinned ? 'Unpin' : 'Pin', disabled: pinning, busy: pinning, onSelect: onTogglePin},
+    'mark',
     {key: 'rename', className: 'rename', icon: 'pencil', label: 'Rename', disabled: renaming, busy: renaming, onSelect: onRename},
     {key: 'archive', className: 'archive', icon: 'archive', label: 'Archive', disabled: actionDisabled, busy: archiving, onSelect: onArchive},
     'separator',
@@ -85,6 +94,47 @@ export function SessionMenu({
       {items.map(item =>
         item === 'separator' ? (
           <div key="separator" className="project-session-menu-separator" aria-hidden="true" />
+        ) : item === 'mark' ? (
+          <div
+            key="mark"
+            className="project-session-mark-picker"
+            role="group"
+            aria-label="Mark session"
+          >
+            <span className="project-session-mark-options">
+              {SESSION_MARK_OPTIONS.map(option => (
+                <button
+                  key={option.color}
+                  type="button"
+                  className={`project-session-mark-option ${sessionMarkColorClass(option.color)}`}
+                  role="menuitemradio"
+                  aria-label={`Mark ${option.color}`}
+                  aria-checked={markColor === option.color}
+                  title={`${option.label} mark`}
+                  disabled={marking}
+                  onClick={event => {
+                    event.stopPropagation();
+                    onSetMark(option.color);
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                className="project-session-mark-option project-session-mark-clear"
+                role="menuitemradio"
+                aria-label="Clear mark"
+                aria-checked={!markColor}
+                title="Clear mark"
+                disabled={marking}
+                onClick={event => {
+                  event.stopPropagation();
+                  onSetMark('');
+                }}
+              >
+                <SessionIcon name="ban" size={12} />
+              </button>
+            </span>
+          </div>
         ) : (
           <button
             key={item.key}

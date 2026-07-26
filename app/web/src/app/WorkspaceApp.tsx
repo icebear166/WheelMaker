@@ -595,6 +595,7 @@ import type {
   RegistrySessionReadResponse,
   RegistrySessionPromptArtifact,
   RegistrySessionPromptArtifactFile,
+  RegistrySessionMarkColor,
   RegistrySessionSummary,
   RegistrySessionStatusResult,
   RegistrySessionUsage,
@@ -3421,6 +3422,7 @@ export function App() {
   const [chatDeletingSessionId, setChatDeletingSessionId] = useState('');
   const [chatRenamingSessionId, setChatRenamingSessionId] = useState('');
   const [chatPinningSessionKey, setChatPinningSessionKey] = useState('');
+  const [chatMarkingSessionKey, setChatMarkingSessionKey] = useState('');
   const [renameTarget, setRenameTarget] = useState<RenameSessionTarget | null>(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
   const [renameError, setRenameError] = useState('');
@@ -10169,6 +10171,38 @@ export function App() {
     }
   };
 
+  const handleMarkProjectSession = async (
+    targetProjectId: string,
+    sessionId: string,
+    markColor: RegistrySessionMarkColor | '',
+  ) => {
+    const normalizedSessionId = sessionId.trim();
+    const actionKey = projectSessionActionKey(targetProjectId, normalizedSessionId);
+    if (!targetProjectId || !normalizedSessionId || chatMarkingSessionKey === actionKey) {
+      return;
+    }
+    setError('');
+    setChatMarkingSessionKey(actionKey);
+    try {
+      const result = await service.markProjectSession(targetProjectId, normalizedSessionId, markColor);
+      if (!result.ok) {
+        throw new Error('session.mark returned ok=false');
+      }
+      rememberChatSessionSummary(targetProjectId, result.session);
+      const runtimeKey = buildChatRuntimeKey(targetProjectId, result.session.sessionId);
+      workspaceStore.rememberChatSession(
+        targetProjectId,
+        mergeKnownChatSessionForProject(targetProjectId, result.session),
+        {turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? 0},
+      );
+      setProjectSessionActionMenu(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChatMarkingSessionKey(current => current === actionKey ? '' : current);
+    }
+  };
+
   const handleRenameProjectSession = async (targetProjectId: string, sessionId: string, title: string) => {
     const normalizedSessionId = sessionId.trim();
     const normalizedTitle = Array.from(title.replace(/\r\n|\r|\n/g, ' ').trim()).slice(0, 200).join('');
@@ -14816,16 +14850,20 @@ export function App() {
       chatDeletingSessionId === sessionId;
     const renameActionDisabled = chatRenamingSessionId === sessionId;
     const pinActionDisabled = chatPinningSessionKey === projectSessionActionKey(targetProjectId, sessionId);
+    const actionKey = projectSessionActionKey(targetProjectId, sessionId);
     return (
       <SessionMenu
         pinned={session.pinned === true}
         pinning={pinActionDisabled}
+        markColor={session.markColor}
+        marking={chatMarkingSessionKey === actionKey}
         renaming={renameActionDisabled}
         actionDisabled={sessionActionDisabled}
         archiving={chatArchivingSessionId === sessionId}
         reloading={chatReloadingSessionId === sessionId}
         deleting={chatDeletingSessionId === sessionId}
         onTogglePin={() => handlePinProjectSession(targetProjectId, sessionId, session.pinned !== true).catch(() => undefined)}
+        onSetMark={markColor => handleMarkProjectSession(targetProjectId, sessionId, markColor).catch(() => undefined)}
         onRename={() => requestRenameProjectSession(targetProjectId, session)}
         onArchive={() => requestArchiveProjectSession(targetProjectId, session)}
         onReload={() => handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined)}

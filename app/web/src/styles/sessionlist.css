@@ -252,6 +252,29 @@
 .wide-session-pin-btn:hover {
   background: var(--hover);
 }
+.session-mark-red {
+  --session-mark-color: var(--state-danger);
+}
+.session-mark-yellow {
+  --session-mark-color: var(--state-warning);
+}
+.session-mark-green {
+  --session-mark-color: var(--state-success);
+}
+.session-mark-blue {
+  --session-mark-color: var(--state-info);
+}
+.wide-session-mark {
+  position: absolute;
+  top: 50%;
+  right: 1px;
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--session-mark-color);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 
 /* ---------- agent pill (refined) ---------- */
 .wide-session-agent-tag {
@@ -409,6 +432,47 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.project-session-mark-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 4px 8px;
+}
+.project-session-mark-options {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.project-session-mark-option {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--session-mark-color);
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.project-session-mark-option:hover:not(:disabled),
+.project-session-mark-option:focus-visible {
+  border-color: color-mix(in srgb, var(--text-primary) 72%, transparent);
+  outline: none;
+}
+.project-session-mark-option[aria-checked='true'] {
+  border-color: var(--surface-overlay);
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+.project-session-mark-option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.project-session-mark-clear {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
 }
 .project-session-menu-separator {
   height: 1px;
