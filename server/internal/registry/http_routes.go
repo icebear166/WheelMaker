@@ -40,6 +40,21 @@ func requestRegistryBasePath(r *http.Request) string {
 }
 
 func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if basePath, ok := registryHTMLPreviewBasePath(r.URL.Path); ok {
+		if r.URL.RawQuery != "" {
+			http.NotFound(w, r)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), registryBasePathContextKey{}, basePath))
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeRegistryHTMLPreviewError(w, http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleRegistryHTMLPreview(w, r)
+		return
+	}
+
 	basePath, ok := registryBasePath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
