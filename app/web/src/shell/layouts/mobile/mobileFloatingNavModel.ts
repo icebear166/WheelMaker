@@ -17,7 +17,7 @@ export type FloatingNavItem = {
 // Fixed top-to-bottom order inside the expanded card. Chat stays at the
 // bottom, adjacent to where the collapsed button rests.
 export const FLOATING_NAV_ITEMS: ReadonlyArray<FloatingNavItem> = [
-  {id: 'preview', icon: 'panelRight', label: 'Preview'},
+  {id: 'preview', icon: 'appWindow', label: 'Preview'},
   {id: 'terminal', icon: 'terminal', label: 'Terminal'},
   {id: 'relay', icon: 'radioTower', label: 'Relay'},
   {id: 'monitor', icon: 'activity', label: 'Monitor'},

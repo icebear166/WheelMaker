@@ -83,7 +83,7 @@ describe('mobile floating nav model', () => {
       'preview', 'terminal', 'relay', 'monitor', 'settings', 'chat',
     ]);
     expect(FLOATING_NAV_ITEMS.map(item => item.icon)).toEqual([
-      'panelRight', 'terminal', 'radioTower', 'activity', 'settings', 'messageCircle',
+      'appWindow', 'terminal', 'radioTower', 'activity', 'settings', 'messageCircle',
     ]);
   });
 

@@ -71,6 +71,8 @@ const GLYPHS = {
   terminal: (<><path d="m4 17 6-6-6-6" /><path d="M12 19h8" /></>),
   // lucide:panel-right
   panelRight: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /></>),
+  // lucide:app-window
+  appWindow: (<><rect width="20" height="16" x="2" y="4" rx="2" /><path d="M10 4v4" /><path d="M2 8h20" /><path d="M6 4v4" /></>),
   // lucide:history
   history: (<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l4 2" /></>),
   // lucide:list-checks
