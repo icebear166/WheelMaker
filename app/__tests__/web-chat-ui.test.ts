@@ -1171,6 +1171,9 @@ describe('web chat integration', () => {
     expect(slashApplyEnd).toBeGreaterThan(slashApplyStart);
     const slashApplyBody = mainTsx.slice(slashApplyStart, slashApplyEnd);
     expect(slashApplyBody).toContain('chatRichComposerRef.current?.insertSkill({');
+    expect(slashApplyBody).toContain("command.behavior === 'insert-command'");
+    expect(slashApplyBody).toContain('replaceActiveSlashQuery(');
+    expect(slashApplyBody).toContain('command.insertText');
     expect(slashApplyBody).toContain('command: command.name,');
     expect(slashApplyBody).toContain('label: chatSlashCommandLabel(command.name),');
     expect(slashApplyBody).toContain('chatRichComposerRef.current?.focus();');

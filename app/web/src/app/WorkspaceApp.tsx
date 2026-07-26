@@ -102,6 +102,7 @@ import {
   chatSlashOptionDisplayName,
   filterChatSessionActionOptions,
   groupChatSlashMenuOptions,
+  replaceActiveSlashQuery,
   removeActiveSlashQuery,
   resolveStandaloneSessionAction,
   type ChatSessionActionKind,
@@ -4518,6 +4519,18 @@ export function App() {
         invokeChatSessionAction(command.action).catch(err => {
           setError(err instanceof Error ? err.message : String(err));
         });
+        window.requestAnimationFrame(() => {
+          chatRichComposerRef.current?.focus();
+        });
+        return;
+      }
+      if (command.behavior === 'insert-command') {
+        const next = replaceActiveSlashQuery(
+          chatComposerTextRef.current,
+          chatComposerTextCursorRef.current,
+          command.insertText || command.name,
+        );
+        updateChatComposerText(next.text, next.cursor);
         window.requestAnimationFrame(() => {
           chatRichComposerRef.current?.focus();
         });

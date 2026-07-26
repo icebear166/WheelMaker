@@ -11,7 +11,8 @@ export type ChatSessionSlashOption = {
   name: string;
   description: string;
   kind: 'command' | 'skill';
-  behavior: 'invoke' | 'insert';
+  behavior: 'invoke' | 'insert' | 'insert-command';
+  insertText?: string;
   icon: ChatIconName;
   enabled: boolean;
   disabledReason?: string;
@@ -33,6 +34,7 @@ export function buildChatSessionActionOptions(
 ): ChatSessionSlashOption[] {
   const compact = capabilities?.compact;
   const status = capabilities?.status;
+  const goal = capabilities?.goal;
   const fastMode = configOptions.find(option => option.id === 'fast_mode');
   const fixed: ChatSessionSlashOption[] = [
     {
@@ -56,6 +58,17 @@ export function buildChatSessionActionOptions(
       action: 'status',
     },
   ];
+  if (goal?.supported === true) {
+    fixed.push({
+      name: '/goal',
+      description: 'Run toward an objective across turns',
+      kind: 'command',
+      behavior: 'insert-command',
+      insertText: '/goal ',
+      icon: 'circle',
+      enabled: true,
+    });
+  }
   if (fastMode) {
     const checked = fastMode.currentValue === 'on';
     fixed.push({
@@ -74,7 +87,7 @@ export function buildChatSessionActionOptions(
     const skill = rawSkill.trim().replace(/^\/+/, '');
     if (!skill) continue;
     const key = skill.toLowerCase();
-    if (!deduped.has(key) && key !== 'status' && key !== 'compact' && key !== 'fast') {
+    if (!deduped.has(key) && key !== 'status' && key !== 'compact' && key !== 'fast' && key !== 'goal') {
       deduped.set(key, skill);
     }
   }
@@ -122,6 +135,19 @@ export function removeActiveSlashQuery(text: string, cursor: number): {text: str
   return {
     text: `${text.slice(0, query.start)}${text.slice(query.end)}`,
     cursor: query.start,
+  };
+}
+
+export function replaceActiveSlashQuery(
+  text: string,
+  cursor: number,
+  replacement: string,
+): {text: string; cursor: number} {
+  const query = resolveChatSlashQuery(text, cursor);
+  if (!query) return {text, cursor};
+  return {
+    text: `${text.slice(0, query.start)}${replacement}${text.slice(query.end)}`,
+    cursor: query.start + replacement.length,
   };
 }
 

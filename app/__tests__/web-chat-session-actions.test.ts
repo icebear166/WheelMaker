@@ -3,6 +3,7 @@ import {
   chatSlashOptionDisplayName,
   filterChatSessionActionOptions,
   groupChatSlashMenuOptions,
+  replaceActiveSlashQuery,
   removeActiveSlashQuery,
   resolveStandaloneSessionAction,
 } from '../web/src/chat/session/chatSessionActions';
@@ -66,6 +67,26 @@ describe('chat session action options', () => {
     expect(resolveStandaloneSessionAction('/fast', 0)).toEqual({kind: 'fast'});
     expect(resolveStandaloneSessionAction('/fast on', 0)).toEqual({kind: 'invalid', command: '/fast'});
     expect(resolveStandaloneSessionAction('/debug', 0)).toBeNull();
+    expect(resolveStandaloneSessionAction('/goal ship', 0)).toBeNull();
+  });
+
+  test('shows Goal only when supported and inserts plain command text', () => {
+    const supported = buildChatSessionActionOptions([], {
+      ...capabilities,
+      goal: {supported: true},
+    });
+    expect(supported).toContainEqual(expect.objectContaining({
+      name: '/goal',
+      behavior: 'insert-command',
+      insertText: '/goal ',
+      enabled: true,
+    }));
+
+    expect(buildChatSessionActionOptions(['goal'], capabilities).map(option => option.name)).not.toContain('/goal');
+    expect(replaceActiveSlashQuery('keep /go tail', 8, '/goal ')).toEqual({
+      text: 'keep /goal  tail',
+      cursor: 11,
+    });
   });
 
   test('removes only the active slash query for invoked commands', () => {
