@@ -20,6 +20,7 @@ type SessionActionSupport struct {
 	Status  bool
 	Compact bool
 	Steer   bool
+	Fork    bool
 }
 
 // ACPFactoryOptions contains one Hub's local provider configuration.
@@ -106,7 +107,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 	codexProvider := NewCodexProvider()
 	if available(codexProvider) {
 		f.Register(protocol.ACPProviderCodex, codexappInstanceCreator(codexProvider))
-		f.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true, Compact: true, Steer: true})
+		f.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true, Compact: true, Steer: true, Fork: true})
 	}
 	candidates := []struct {
 		provider protocol.ACPProvider

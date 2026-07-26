@@ -55,10 +55,11 @@ describe('ChatTurnView session fork', () => {
         stopReason: 'end_turn',
         forkPoint: {provider: 'codex', ref: 'turn-1'},
       }),
-      {onForkPromptDone},
+      {onForkPromptDone, forkSupported: true},
     );
     const forkButton = mapped.root.findByProps({'aria-label': 'Fork session from here'});
     expect(forkButton.props.disabled).toBe(false);
+    expect(forkButton.findByProps({'data-icon-name': 'gitBranch'})).toBeTruthy();
     await act(async () => {
       forkButton.props.onClick();
     });
@@ -66,6 +67,12 @@ describe('ChatTurnView session fork', () => {
 
     const unmapped = await renderTurn(message('prompt_done', {stopReason: 'end_turn'}), {onForkPromptDone});
     expect(unmapped.root.findAllByProps({'aria-label': 'Fork session from here'})).toHaveLength(0);
+
+    const unsupported = await renderTurn(message('prompt_done', {
+      stopReason: 'end_turn',
+      forkPoint: {provider: 'codex', ref: 'turn-1'},
+    }), {onForkPromptDone, forkSupported: false});
+    expect(unsupported.root.findAllByProps({'aria-label': 'Fork session from here'})).toHaveLength(0);
 
     const readOnly = await renderTurn(message('prompt_done', {
       stopReason: 'end_turn',
@@ -86,7 +93,7 @@ describe('ChatTurnView session fork', () => {
       },
     }));
     expect(tree.root.findAllByType('button')).toHaveLength(0);
-    expect(tree.root.findByProps({'data-icon-name': 'gitFork'})).toBeTruthy();
+    expect(tree.root.findByProps({'data-icon-name': 'gitBranch'})).toBeTruthy();
     const text = tree.root.findByProps({className: 'chat-session-operation-label'}).children.join('');
     expect(text).toContain('Forked from Source session');
   });

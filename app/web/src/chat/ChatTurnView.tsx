@@ -84,7 +84,7 @@ function sessionOperationView(param: Record<string, unknown>): {
     return {
       label: `Forked from ${source}`,
       detail: detail || (turnIndex > 0 ? `Through turn ${turnIndex}` : ''),
-      icon: 'gitFork',
+      icon: 'gitBranch',
       status: status || 'completed',
     };
   }
@@ -284,6 +284,7 @@ export type ChatTurnViewProps = {
   copyDisabled?: boolean;
   exportBusy?: boolean;
   exportHtmlBusy?: boolean;
+  forkSupported?: boolean;
   forkBusy?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
@@ -380,6 +381,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   copyDisabled = true,
   exportBusy = false,
   exportHtmlBusy = false,
+  forkSupported = false,
   forkBusy = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
@@ -591,6 +593,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
       && forkPoint.provider.trim() !== ''
       && typeof forkPoint.ref === 'string'
       && forkPoint.ref.trim() !== ''
+      && forkSupported
       && typeof onForkPromptDone === 'function';
     return (
       <>
@@ -663,7 +666,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 title="Fork session from here"
                 aria-label="Fork session from here"
               >
-                <ChatIcon name={forkBusy ? 'loader' : 'gitFork'} size={13} spin={forkBusy} />
+                <ChatIcon name={forkBusy ? 'loader' : 'gitBranch'} size={13} spin={forkBusy} />
               </button>
             ) : null}
             <button

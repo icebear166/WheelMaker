@@ -387,6 +387,7 @@ export interface RegistrySessionActionCapabilities {
   status: RegistrySessionActionCapability;
   compact: RegistrySessionActionCapability;
   steer: RegistrySessionActionCapability;
+  fork: RegistrySessionActionCapability;
 }
 
 export type RegistrySessionSteerOutcome = 'steered' | 'sent';
