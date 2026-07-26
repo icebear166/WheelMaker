@@ -59,6 +59,9 @@ type testInjectedInstance struct {
 	compactErr     error
 	resolveForkFn  func(context.Context, string, []acp.SessionForkPrompt) (map[int64]acp.SessionForkPoint, error)
 	forkSessionFn  func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error)
+	goal           *acp.SessionGoal
+	goalSetCalls   []acp.SessionGoalSetParams
+	goalClearCalls []string
 }
 
 func (c *Client) InjectForwarder(agentName, sessionID string, promptFn func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error), cancelFn func() error) {
@@ -275,12 +278,51 @@ func (i *testInjectedInstance) ForkSession(ctx context.Context, sessionID string
 	return i.forkSessionFn(ctx, sessionID, lastTurnID, prompts)
 }
 
+func (i *testInjectedInstance) SessionGoalSet(_ context.Context, params acp.SessionGoalSetParams) (acp.SessionGoal, error) {
+	i.goalSetCalls = append(i.goalSetCalls, params)
+	if i.goal == nil {
+		now := time.Now().Unix()
+		i.goal = &acp.SessionGoal{
+			SessionID: params.SessionID,
+			Status:    acp.SessionGoalStatusActive,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+	}
+	if params.Objective != nil {
+		i.goal.Objective = *params.Objective
+	}
+	if params.Status != nil {
+		i.goal.Status = *params.Status
+	}
+	if params.TokenBudget.Present {
+		i.goal.TokenBudget = params.TokenBudget.Value
+	}
+	goal := *i.goal
+	return goal, nil
+}
+
+func (i *testInjectedInstance) SessionGoalGet(_ context.Context, _ string) (*acp.SessionGoal, error) {
+	if i.goal == nil {
+		return nil, nil
+	}
+	goal := *i.goal
+	return &goal, nil
+}
+
+func (i *testInjectedInstance) SessionGoalClear(_ context.Context, sessionID string) error {
+	i.goalClearCalls = append(i.goalClearCalls, sessionID)
+	i.goal = nil
+	return nil
+}
+
 func (i *testInjectedInstance) Close() error { return nil }
 
 var _ agent.Instance = (*testInjectedInstance)(nil)
 var _ agent.SessionStatusProvider = (*testInjectedInstance)(nil)
 var _ agent.SessionCompactor = (*testInjectedInstance)(nil)
 var _ agent.SessionForker = (*testInjectedInstance)(nil)
+var _ agent.SessionGoalController = (*testInjectedInstance)(nil)
 
 type noopStore struct{}
 

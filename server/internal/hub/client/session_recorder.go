@@ -57,6 +57,7 @@ type sessionViewSummary struct {
 	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
 	PendingPermissionCount int                           `json:"pendingPermissionCount"`
 	ForkedFrom             *acp.SessionForkOrigin        `json:"forkedFrom,omitempty"`
+	Goal                   *acp.SessionGoal              `json:"goal,omitempty"`
 }
 
 type sessionTitleFacts struct {
@@ -494,6 +495,57 @@ func (r *SessionRecorder) SetEventPublisher(publish func(method string, payload 
 	r.mu.Lock()
 	r.publish = publish
 	r.mu.Unlock()
+}
+
+func (r *SessionRecorder) PublishSessionSummary(ctx context.Context, sessionID string) error {
+	if r == nil || strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	rec, err := r.loadSessionForSummaryLocked(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return nil
+}
+
+func (r *SessionRecorder) RecordGoalContinuation(ctx context.Context, sessionID string) error {
+	if r == nil || strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	state, err := r.currentPromptStateLocked(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if state == nil || sessionPromptStateTerminal(state) {
+		next, nextErr := r.nextSessionTurnIndexLocked(ctx, sessionID)
+		if nextErr != nil {
+			return nextErr
+		}
+		created := newSessionPromptState(next)
+		state = &created
+		r.promptState[sessionID] = state
+	}
+	rec, err := r.loadSessionForSummaryLocked(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	r.publishOpenTextTurnDone(state)
+	turn := sessionTurnMessage{
+		sessionID: sessionID,
+		method:    acp.SessionTurnMethodSystem,
+		payload:   acp.SessionTurnTextResult{Text: "Goal continued"},
+		turnIndex: state.nextTurnIndex,
+		finished:  true,
+	}
+	state.updateTurn(turn, "")
+	r.publishSessionTurn(turn, buildSessionTurnContentJSON(turn.method, turn.payload))
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return nil
 }
 
 func (r *SessionRecorder) eventPublisher() func(method string, payload any) error {
@@ -1237,6 +1289,14 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		if agentState.Usage != nil {
 			usage := *agentState.Usage
 			summary.Usage = &usage
+		}
+		if agentState.Goal != nil {
+			goal := *agentState.Goal
+			if agentState.Goal.TokenBudget != nil {
+				budget := *agentState.Goal.TokenBudget
+				goal.TokenBudget = &budget
+			}
+			summary.Goal = &goal
 		}
 	}
 	if r.actionLookup != nil {

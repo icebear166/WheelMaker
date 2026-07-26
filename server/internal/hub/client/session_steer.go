@@ -141,6 +141,20 @@ func (s *Session) Steer(
 	}
 	s.mu.Unlock()
 
+	if executionKind == sessionGoalExecutionKind {
+		if instance == nil {
+			return acp.SessionSteerAccepted{}, agent.ErrSessionSteerUnavailable
+		}
+		steerer, ok := instance.(agent.SessionSteerer)
+		if !ok {
+			return acp.SessionSteerAccepted{}, agent.ErrSessionActionUnsupported
+		}
+		if _, err := steerer.SteerSession(ctx, sessionID, clientID, params.Blocks); err != nil {
+			return acp.SessionSteerAccepted{}, err
+		}
+		return s.cacheSteerOutcome(clientID, acp.SessionSteerOutcomeSteered), nil
+	}
+
 	if generation == nil || generation.completed {
 		if executionKind != "" && executionKind != "prompt" {
 			return acp.SessionSteerAccepted{}, agent.ErrSessionSteerUnavailable

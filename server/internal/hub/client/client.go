@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -150,6 +151,10 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 				Supported: support.Fork,
 				Reason:    unsupportedSessionActionReason(support.Fork),
 			},
+			Goal: acp.SessionActionCapability{
+				Supported: support.Goal,
+				Reason:    unsupportedSessionActionReason(support.Goal),
+			},
 		}
 	}
 	c.viewSink = c.sessionRecorder
@@ -177,6 +182,7 @@ func unsupportedSessionActions(reason string) acp.SessionActionCapabilities {
 		Compact: acp.SessionActionCapability{Supported: false, Reason: reason},
 		Steer:   acp.SessionActionCapability{Supported: false, Reason: reason},
 		Fork:    acp.SessionActionCapability{Supported: false, Reason: reason},
+		Goal:    acp.SessionActionCapability{Supported: false, Reason: reason},
 	}
 }
 
@@ -884,6 +890,139 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			"sessionId":     sess.acpSessionID,
 			"configOptions": options,
 		}, nil
+	case acp.RegistryMethodSessionGoalCreate:
+		var req struct {
+			SessionID   string          `json:"sessionId"`
+			Objective   string          `json:"objective"`
+			TokenBudget json.RawMessage `json:"tokenBudget"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.goal.create payload: %w", err)
+		}
+		sessionID := strings.TrimSpace(req.SessionID)
+		if sessionID == "" {
+			return nil, fmt.Errorf("sessionId is required")
+		}
+		sess, err := c.SessionByID(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if !c.sessionSupportsAction(sess, acp.SessionActionGoal) {
+			return nil, fmt.Errorf("%w: goal", agent.ErrSessionActionUnsupported)
+		}
+		budget := acp.OptionalInt64{Present: true}
+		if len(bytes.TrimSpace(req.TokenBudget)) > 0 && string(bytes.TrimSpace(req.TokenBudget)) != "null" {
+			var value int64
+			if err := json.Unmarshal(req.TokenBudget, &value); err != nil {
+				return nil, fmt.Errorf("tokenBudget must be a positive integer or null")
+			}
+			budget.Value = &value
+		}
+		objective := strings.TrimSpace(req.Objective)
+		goal, err := sess.CreateGoalFromCommand(ctx, "/goal "+objective, objective, budget)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": sessionID, "goal": goal}, nil
+	case acp.RegistryMethodSessionGoalGet:
+		var req struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.goal.get payload: %w", err)
+		}
+		sessionID := strings.TrimSpace(req.SessionID)
+		if sessionID == "" {
+			return nil, fmt.Errorf("sessionId is required")
+		}
+		sess, err := c.SessionByID(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": sessionID, "goal": sess.GoalSnapshot()}, nil
+	case acp.RegistryMethodSessionGoalUpdate:
+		var raw map[string]json.RawMessage
+		if err := decodeSessionRequestPayload(payload, &raw); err != nil {
+			return nil, fmt.Errorf("invalid session.goal.update payload: %w", err)
+		}
+		var sessionID string
+		if value, ok := raw["sessionId"]; ok {
+			_ = json.Unmarshal(value, &sessionID)
+		}
+		sessionID = strings.TrimSpace(sessionID)
+		if sessionID == "" {
+			return nil, fmt.Errorf("sessionId is required")
+		}
+		patch := acp.SessionGoalSetParams{}
+		if value, ok := raw["objective"]; ok {
+			var objective string
+			if err := json.Unmarshal(value, &objective); err != nil {
+				return nil, fmt.Errorf("objective must be a string")
+			}
+			patch.Objective = &objective
+		}
+		if value, ok := raw["status"]; ok {
+			var status string
+			if err := json.Unmarshal(value, &status); err != nil {
+				return nil, fmt.Errorf("status must be a string")
+			}
+			patch.Status = &status
+		}
+		if value, ok := raw["tokenBudget"]; ok {
+			patch.TokenBudget.Present = true
+			if string(bytes.TrimSpace(value)) != "null" {
+				var budget int64
+				if err := json.Unmarshal(value, &budget); err != nil {
+					return nil, fmt.Errorf("tokenBudget must be a positive integer or null")
+				}
+				patch.TokenBudget.Value = &budget
+			}
+		}
+		sess, err := c.SessionByID(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if !c.sessionSupportsAction(sess, acp.SessionActionGoal) {
+			return nil, fmt.Errorf("%w: goal", agent.ErrSessionActionUnsupported)
+		}
+		goal, err := sess.UpdateGoal(ctx, patch)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": sessionID, "goal": goal}, nil
+	case acp.RegistryMethodSessionGoalStop:
+		var req struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.goal.stop payload: %w", err)
+		}
+		sessionID := strings.TrimSpace(req.SessionID)
+		sess, err := c.SessionByID(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		goal, err := sess.StopGoal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": sessionID, "goal": goal}, nil
+	case acp.RegistryMethodSessionGoalClear:
+		var req struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.goal.clear payload: %w", err)
+		}
+		sessionID := strings.TrimSpace(req.SessionID)
+		sess, err := c.SessionByID(ctx, sessionID)
+		if err != nil {
+			return nil, err
+		}
+		if err := sess.ClearGoal(ctx); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": sessionID, "cleared": true}, nil
 	case acp.RegistryMethodSessionStatus:
 		var req struct {
 			SessionID string `json:"sessionId"`
@@ -994,6 +1133,25 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		}
 		if len(blocks) == 0 {
 			return nil, fmt.Errorf("session prompt is empty")
+		}
+		rawGoal, objective, matchedGoal, goalErr := parseGoalCommand(blocks)
+		if matchedGoal {
+			if goalErr != nil {
+				return nil, goalErr
+			}
+			sessionID := strings.TrimSpace(req.SessionID)
+			sess, err := c.SessionByID(ctx, sessionID)
+			if err != nil {
+				return nil, err
+			}
+			if !c.sessionSupportsAction(sess, acp.SessionActionGoal) {
+				return nil, fmt.Errorf("%w: goal", agent.ErrSessionActionUnsupported)
+			}
+			goal, err := sess.CreateGoalFromCommand(ctx, rawGoal, objective, acp.OptionalInt64{Present: true})
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"ok": true, "sessionId": sessionID, "goal": goal}, nil
 		}
 		blocks, attachmentRefs, err := c.prepareSessionPromptBlocks(ctx, req.SessionID, blocks)
 		if err != nil {
@@ -1501,6 +1659,8 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 		return support.Steer
 	case acp.SessionActionFork:
 		return support.Fork
+	case acp.SessionActionGoal:
+		return support.Goal
 	default:
 		return false
 	}

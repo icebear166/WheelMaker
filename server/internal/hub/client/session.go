@@ -36,6 +36,7 @@ type SessionAgentState struct {
 	AgentCapabilities acp.AgentCapabilities  `json:"agentCapabilities,omitempty"`
 	AgentInfo         *acp.AgentInfo         `json:"agentInfo,omitempty"`
 	AuthMethods       []acp.AuthMethod       `json:"authMethods,omitempty"`
+	Goal              *acp.SessionGoal       `json:"goal,omitempty"`
 }
 
 type createdSessionState struct {
@@ -78,12 +79,14 @@ type Session struct {
 	createdAt    time.Time
 	lastActiveAt time.Time
 
-	mu            sync.Mutex
-	promptMu      sync.Mutex
-	steerMu       sync.Mutex
-	executionKind string
-	steerState    sessionSteerState
-	permissions   sessionPermissionState
+	mu              sync.Mutex
+	promptMu        sync.Mutex
+	steerMu         sync.Mutex
+	executionKind   string
+	executionLocked bool
+	steerState      sessionSteerState
+	goal            sessionGoalState
+	permissions     sessionPermissionState
 }
 
 // newSession creates a Session with sensible defaults.
@@ -129,6 +132,14 @@ func cloneSessionAgentState(src *SessionAgentState) *SessionAgentState {
 	if src.Usage != nil {
 		usage := *src.Usage
 		cp.Usage = &usage
+	}
+	if src.Goal != nil {
+		goal := *src.Goal
+		if src.Goal.TokenBudget != nil {
+			budget := *src.Goal.TokenBudget
+			goal.TokenBudget = &budget
+		}
+		cp.Goal = &goal
 	}
 	return &cp
 }
@@ -589,13 +600,20 @@ func (s *Session) beginExecution(kind string) error {
 	}
 	s.mu.Lock()
 	s.executionKind = strings.TrimSpace(kind)
+	s.executionLocked = true
 	s.mu.Unlock()
 	return nil
 }
 
 func (s *Session) endExecution() {
 	s.mu.Lock()
+	if !s.executionLocked {
+		s.executionKind = ""
+		s.mu.Unlock()
+		return
+	}
 	s.executionKind = ""
+	s.executionLocked = false
 	s.mu.Unlock()
 	s.promptMu.Unlock()
 }
@@ -1189,6 +1207,10 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	}
 
 	update := params.Update
+	if isGoalLifecycleUpdate(update.SessionUpdate) {
+		s.handleGoalLifecycleUpdate(update)
+		return
+	}
 
 	changed := false
 	if update.SessionUpdate == acp.SessionUpdateAvailableCommandsUpdate ||
@@ -1273,6 +1295,18 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	}
 
 	if ch == nil {
+		s.mu.Lock()
+		goalOwned := s.executionKind == sessionGoalExecutionKind
+		s.mu.Unlock()
+		if goalOwned {
+			s.recordSessionViewEvent(SessionViewEvent{
+				Type:      SessionViewEventTypeACP,
+				SessionID: sessID,
+				Content: acp.BuildACPContentJSON(acp.MethodSessionUpdate, map[string]any{
+					"params": params,
+				}),
+			})
+		}
 		return
 	}
 	if promptCtx == nil {
@@ -1311,7 +1345,14 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 }
 
 func (s *Session) runPromptExecution(initial []acp.ContentBlock) error {
-	defer s.endExecution()
+	defer func() {
+		s.mu.Lock()
+		goalOwned := s.executionKind == sessionGoalExecutionKind
+		s.mu.Unlock()
+		if !goalOwned {
+			s.endExecution()
+		}
+	}()
 	s.mu.Lock()
 	s.steerState.acceptingFallbacks = true
 	s.mu.Unlock()
@@ -1449,15 +1490,23 @@ func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
 			}
 		}
 		if ev.result != nil {
-			s.recordSessionViewEvent(SessionViewEvent{
-				Type:      SessionViewEventTypeACP,
-				SessionID: s.acpSessionID,
-				Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-					"result": *ev.result,
-				}),
-				Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
-				ForkPoint: cloneSessionForkPoint(ev.result.ForkPoint),
-			})
+			s.mu.Lock()
+			suppressPromptResult := s.goal.suppressPromptResult
+			if suppressPromptResult {
+				s.goal.suppressPromptResult = false
+			}
+			s.mu.Unlock()
+			if !suppressPromptResult {
+				s.recordSessionViewEvent(SessionViewEvent{
+					Type:      SessionViewEventTypeACP,
+					SessionID: s.acpSessionID,
+					Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
+						"result": *ev.result,
+					}),
+					Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
+					ForkPoint: cloneSessionForkPoint(ev.result.ForkPoint),
+				})
+			}
 			streamDone = true
 		}
 	}
