@@ -211,6 +211,33 @@ type appServerThreadArchiveParams struct {
 	ThreadID string `json:"threadId"`
 }
 
+type appServerThreadGoal struct {
+	ThreadID        string `json:"threadId"`
+	Objective       string `json:"objective"`
+	Status          string `json:"status"`
+	TokenBudget     *int64 `json:"tokenBudget"`
+	TokensUsed      int64  `json:"tokensUsed"`
+	TimeUsedSeconds int64  `json:"timeUsedSeconds"`
+	CreatedAt       int64  `json:"createdAt"`
+	UpdatedAt       int64  `json:"updatedAt"`
+}
+
+type appServerThreadGoalSetResponse struct {
+	Goal appServerThreadGoal `json:"goal"`
+}
+
+type appServerThreadGoalGetResponse struct {
+	Goal *appServerThreadGoal `json:"goal"`
+}
+
+type appServerThreadGoalClearParams struct {
+	ThreadID string `json:"threadId"`
+}
+
+type appServerThreadGoalClearResponse struct {
+	Cleared bool `json:"cleared"`
+}
+
 type appServerThreadCompactStartParams struct {
 	ThreadID string `json:"threadId"`
 }

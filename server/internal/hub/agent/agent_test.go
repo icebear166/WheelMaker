@@ -1766,6 +1766,88 @@ func TestCodexappSessionStatusNormalizesRateLimits(t *testing.T) {
 	}
 }
 
+func TestCodexAppSessionGoalSetPreservesNullableBudgetPatch(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "thread/goal/set" {
+			return
+		}
+		params, _ := msg["params"].(map[string]any)
+		if params["threadId"] != "thread-runtime" {
+			t.Errorf("threadId = %v", params["threadId"])
+		}
+		if value, ok := params["tokenBudget"]; !ok || value != nil {
+			t.Errorf("tokenBudget = %#v, present=%t", value, ok)
+		}
+		if _, ok := params["objective"]; ok {
+			t.Error("objective must be omitted")
+		}
+		_ = tr.emit(map[string]any{
+			"id": msg["id"],
+			"result": map[string]any{"goal": map[string]any{
+				"threadId": "thread-runtime", "objective": "ship", "status": "active",
+				"tokenBudget": nil, "tokensUsed": 42, "timeUsedSeconds": 7,
+				"createdAt": 10, "updatedAt": 11,
+			}},
+		})
+	}
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-stable", "thread-runtime")
+	got, err := conn.SessionGoalSet(context.Background(), protocol.SessionGoalSetParams{
+		SessionID:   "session-stable",
+		TokenBudget: protocol.OptionalInt64{Present: true},
+	})
+	if err != nil {
+		t.Fatalf("SessionGoalSet(): %v", err)
+	}
+	if got.SessionID != "session-stable" || got.Objective != "ship" || got.TokenBudget != nil {
+		t.Fatalf("goal = %#v", got)
+	}
+}
+
+func TestCodexAppSessionGoalGetReturnsNilGoal(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "thread/goal/get" {
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{"goal": nil}})
+		}
+	}
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	got, err := conn.SessionGoalGet(context.Background(), "thread-1")
+	if err != nil {
+		t.Fatalf("SessionGoalGet(): %v", err)
+	}
+	if got != nil {
+		t.Fatalf("goal = %#v, want nil", got)
+	}
+}
+
+func TestCodexAppSessionGoalClear(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "thread/goal/clear" {
+			return
+		}
+		params, _ := msg["params"].(map[string]any)
+		if params["threadId"] != "thread-1" {
+			t.Errorf("threadId = %v", params["threadId"])
+		}
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{"cleared": true}})
+	}
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	if err := conn.SessionGoalClear(context.Background(), "thread-1"); err != nil {
+		t.Fatalf("SessionGoalClear(): %v", err)
+	}
+}
+
 func TestCodexappCompactTracksContextCompaction(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

@@ -845,6 +845,69 @@ func (c *codexappConn) UnarchiveSession(ctx context.Context, sessionID string) e
 	return c.sendThreadArchiveState(ctx, sessionID, false)
 }
 
+func (c *codexappConn) SessionGoalSet(ctx context.Context, params protocol.SessionGoalSetParams) (protocol.SessionGoal, error) {
+	sessionID := strings.TrimSpace(params.SessionID)
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), sessionID)
+	if threadID == "" {
+		return protocol.SessionGoal{}, errors.New("codexapp goal set requires sessionId")
+	}
+	request := map[string]any{"threadId": threadID}
+	if params.Objective != nil {
+		request["objective"] = *params.Objective
+	}
+	if params.Status != nil {
+		request["status"] = *params.Status
+	}
+	if params.TokenBudget.Present {
+		request["tokenBudget"] = params.TokenBudget.Value
+	}
+	var response appServerThreadGoalSetResponse
+	if err := c.runtime.request(ctx, "thread/goal/set", request, &response); err != nil {
+		return protocol.SessionGoal{}, err
+	}
+	return normalizeCodexappGoal(response.Goal, firstNonEmptyString(sessionID, c.outboundSessionID(threadID))), nil
+}
+
+func (c *codexappConn) SessionGoalGet(ctx context.Context, sessionID string) (*protocol.SessionGoal, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), sessionID)
+	if threadID == "" {
+		return nil, errors.New("codexapp goal get requires sessionId")
+	}
+	var response appServerThreadGoalGetResponse
+	if err := c.runtime.request(ctx, "thread/goal/get", appServerThreadGoalClearParams{ThreadID: threadID}, &response); err != nil {
+		return nil, err
+	}
+	if response.Goal == nil {
+		return nil, nil
+	}
+	goal := normalizeCodexappGoal(*response.Goal, firstNonEmptyString(sessionID, c.outboundSessionID(threadID)))
+	return &goal, nil
+}
+
+func (c *codexappConn) SessionGoalClear(ctx context.Context, sessionID string) error {
+	sessionID = strings.TrimSpace(sessionID)
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), sessionID)
+	if threadID == "" {
+		return errors.New("codexapp goal clear requires sessionId")
+	}
+	var response appServerThreadGoalClearResponse
+	return c.runtime.request(ctx, "thread/goal/clear", appServerThreadGoalClearParams{ThreadID: threadID}, &response)
+}
+
+func normalizeCodexappGoal(goal appServerThreadGoal, sessionID string) protocol.SessionGoal {
+	return protocol.SessionGoal{
+		SessionID:       strings.TrimSpace(sessionID),
+		Objective:       goal.Objective,
+		Status:          goal.Status,
+		TokenBudget:     goal.TokenBudget,
+		TokensUsed:      goal.TokensUsed,
+		TimeUsedSeconds: goal.TimeUsedSeconds,
+		CreatedAt:       goal.CreatedAt,
+		UpdatedAt:       goal.UpdatedAt,
+	}
+}
+
 func (c *codexappConn) sendThreadArchiveState(ctx context.Context, sessionID string, archived bool) error {
 	sessionID = strings.TrimSpace(sessionID)
 	threadID := firstNonEmptyString(codexappMappedThreadID(sessionID), c.runtimeThreadIDForSession(sessionID), sessionID)
