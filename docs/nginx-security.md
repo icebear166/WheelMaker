@@ -35,6 +35,14 @@ location /ws {
 
 Nginx forwards the query string unchanged when `proxy_pass` has no replacement URI. Therefore `/ws?auth=status`, `/ws?auth=login`, `/ws?auth=logout`, and the WebSocket Upgrade all share this single location. Root-path deployments with this existing route require no Nginx change. Registry applies the login rate limiter itself. For a subpath deployment, map that base path's existing endpoint (for example `location /wheelmaker/ws`) to the same upstream while preserving the request path and query.
 
+`/ws/preview/` is an authenticated iframe POST endpoint carried by the same
+`/ws` prefix location. Keep that proxy as a prefix location: an exact `/ws`
+match would continue to route the Registry WebSocket but would break HTML
+preview responses. For preview responses, pass the upstream Content-Security-Policy
+through unchanged; the proxy must not add X-Frame-Options: DENY. The `DENY`
+header below still applies to WheelMaker's static application responses.
+Deployments using the documented prefix proxy need no additional Nginx location.
+
 The public server must redirect HTTP to HTTPS, allow only TLS 1.2 or TLS 1.3, and send HSTS after HTTPS deployment is verified. Do not log request bodies or authentication headers. Default Nginx access logs do not include request bodies; custom log formats must preserve that property.
 
 Every location that serves WheelMaker static content must also send these headers (Nginx does not inherit server-level `add_header` values into a location that defines its own `add_header`):

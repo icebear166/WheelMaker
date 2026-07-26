@@ -295,9 +295,15 @@ server {
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
         proxy_buffering off;
+        }
     }
-}
 ```
+
+`/ws/preview/` 是经过认证的 iframe POST 端点，由现有 `/ws` prefix location
+一并代理。必须保持前缀匹配；若改为精确匹配 `/ws`，Registry WebSocket
+仍可工作，但 HTML 预览响应会被挡住。预览响应必须原样透传 upstream Content-Security-Policy，
+且 must not add X-Frame-Options: DENY；上面静态 Web location 的 `DENY`
+仍然保留。使用此模板的部署不需要新增 Nginx location。
 
 Windows 路径示例：
 

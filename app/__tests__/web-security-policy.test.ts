@@ -71,5 +71,9 @@ describe('web security policy', () => {
     expect(docs).toContain('X-Content-Type-Options "nosniff" always');
     expect(docs).toContain('X-Frame-Options "DENY" always');
     expect(docs).toContain('Referrer-Policy "no-referrer" always');
+    expect(docs).toContain('/ws/preview/');
+    expect(docs).toContain('prefix location');
+    expect(docs).toContain('upstream Content-Security-Policy');
+    expect(docs).toContain('must not add X-Frame-Options: DENY');
   });
 });
