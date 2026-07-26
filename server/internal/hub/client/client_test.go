@@ -4964,6 +4964,237 @@ func TestSessionReadWithoutCheckpointReturnsAllTurns(t *testing.T) {
 	}
 }
 
+func TestSessionRecorderStoresSteeredMessageBetweenAgentTurns(t *testing.T) {
+	client := newSessionViewTestClient(t)
+	ctx := context.Background()
+	sessionID := "steer-order"
+	events := []SessionViewEvent{
+		sessionViewCreatedEvent(sessionID, "Steer ordering"),
+		sessionViewPromptEvent(sessionID, "start", nil),
+		sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "before"}),
+		}),
+		sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateUserMessageChunk,
+			ContentBlocks: []acp.ContentBlock{
+				{Type: acp.ContentBlockTypeText, Text: "change direction"},
+				{Type: acp.ContentBlockTypeResourceLink, URI: "file:///tmp/input.png", Name: "input.png"},
+			},
+			ClientMessageID: "queued-1",
+			Steered:         true,
+		}),
+		sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "after"}),
+		}),
+		sessionViewPromptFinishedEvent(sessionID, acp.StopReasonEndTurn),
+	}
+	for _, event := range events {
+		if err := client.RecordEvent(ctx, event); err != nil {
+			t.Fatalf("RecordEvent(%s): %v", event.Type, err)
+		}
+	}
+
+	_, turns, err := client.sessionRecorder.ReadSessionTurns(ctx, sessionID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantMethods := []string{
+		acp.SessionTurnMethodPromptRequest,
+		acp.SessionUpdateAgentMessageChunk,
+		acp.SessionUpdateUserMessageChunk,
+		acp.SessionUpdateAgentMessageChunk,
+		acp.SessionTurnMethodPromptDone,
+	}
+	if len(turns) != len(wantMethods) {
+		t.Fatalf("turn count = %d, want %d: %+v", len(turns), len(wantMethods), turns)
+	}
+	var payload acp.SessionTurnUserMessage
+	for index, turn := range turns {
+		var message acp.SessionTurnMessage
+		if err := json.Unmarshal([]byte(turn.Content), &message); err != nil {
+			t.Fatalf("decode turn %d: %v", index, err)
+		}
+		if message.Method != wantMethods[index] {
+			t.Fatalf("turn %d method = %q, want %q", index, message.Method, wantMethods[index])
+		}
+		if index == 2 {
+			if err := json.Unmarshal(message.Param, &payload); err != nil {
+				t.Fatalf("decode steered payload: %v", err)
+			}
+		}
+	}
+	if payload.ClientMessageID != "queued-1" || !payload.Steered || len(payload.ContentBlocks) != 2 {
+		t.Fatalf("steered payload = %+v", payload)
+	}
+}
+
+func TestSessionRecorderDeduplicatesSteeredClientMessageID(t *testing.T) {
+	client := newSessionViewTestClient(t)
+	ctx := context.Background()
+	sessionID := "steer-dedupe"
+	if err := client.RecordEvent(ctx, sessionViewCreatedEvent(sessionID, "Steer dedupe")); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.RecordEvent(ctx, sessionViewPromptEvent(sessionID, "start", nil)); err != nil {
+		t.Fatal(err)
+	}
+	update := sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+		SessionUpdate:   acp.SessionUpdateUserMessageChunk,
+		ContentBlocks:   []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "change"}},
+		ClientMessageID: "queued-1",
+		Steered:         true,
+	})
+	if err := client.RecordEvent(ctx, update); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.RecordEvent(ctx, update); err != nil {
+		t.Fatal(err)
+	}
+	_, turns, err := client.sessionRecorder.ReadSessionTurns(ctx, sessionID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, turn := range turns {
+		var message acp.SessionTurnMessage
+		if json.Unmarshal([]byte(turn.Content), &message) == nil &&
+			message.Method == acp.SessionUpdateUserMessageChunk {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("steered turn count = %d, want 1: %+v", count, turns)
+	}
+}
+
+func TestSessionSearchVisibleTextReadsSteeredContentBlocksAndLegacyText(t *testing.T) {
+	structured := buildSessionTurnContentJSON(acp.SessionUpdateUserMessageChunk, acp.SessionTurnUserMessage{
+		ContentBlocks: []acp.ContentBlock{
+			{Type: acp.ContentBlockTypeText, Text: "change direction"},
+			{Type: acp.ContentBlockTypeResourceLink, Name: "requirements.md", URI: "file:///tmp/requirements.md"},
+		},
+		ClientMessageID: "queued-1",
+		Steered:         true,
+	})
+	if got := sessionSearchTurnVisibleText(structured); got != "change direction" {
+		t.Fatalf("structured visible text = %q", got)
+	}
+
+	legacy := buildSessionTurnContentJSON(acp.SessionUpdateUserMessageChunk, acp.SessionTurnTextResult{Text: "legacy steer"})
+	if got := sessionSearchTurnVisibleText(legacy); got != "legacy steer" {
+		t.Fatalf("legacy visible text = %q", got)
+	}
+}
+
+func TestSessionRecoveryKeepsSteeredMessageInsideNativeTurn(t *testing.T) {
+	client := newSessionViewTestClient(t)
+	ctx := context.Background()
+	sessionID := "steer-recovery"
+	if err := client.RecordEvent(ctx, sessionViewCreatedEvent(sessionID, "Steer recovery")); err != nil {
+		t.Fatal(err)
+	}
+	startBlocks := []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "start"},
+		{Type: acp.ContentBlockTypeResourceLink, Name: "start.png", URI: "file:///tmp/start.png"},
+	}
+	steerBlocks := []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "change"},
+		{Type: acp.ContentBlockTypeResourceLink, Name: "change.png", URI: "file:///tmp/change.png"},
+	}
+	client.recovery().feedReplayToRecorder(ctx, sessionID, []acp.SessionUpdateParams{
+		{
+			SessionID: sessionID,
+			Update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateUserMessageChunk,
+				Content:       mustJSON(startBlocks[0]),
+				ContentBlocks: startBlocks,
+			},
+		},
+		{
+			SessionID: sessionID,
+			Update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+				Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "before"}),
+			},
+		},
+		{
+			SessionID: sessionID,
+			Update: acp.SessionUpdate{
+				SessionUpdate:   acp.SessionUpdateUserMessageChunk,
+				ContentBlocks:   steerBlocks,
+				ClientMessageID: "queued-1",
+				Steered:         true,
+			},
+		},
+		{
+			SessionID: sessionID,
+			Update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+				Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "after"}),
+			},
+		},
+	})
+
+	_, turns, err := client.sessionRecorder.ReadSessionTurns(ctx, sessionID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantMethods := []string{
+		acp.MethodSessionPrompt,
+		acp.SessionUpdateAgentMessageChunk,
+		acp.SessionUpdateUserMessageChunk,
+		acp.SessionUpdateAgentMessageChunk,
+		acp.MethodSessionPrompt,
+	}
+	if len(turns) != len(wantMethods) {
+		t.Fatalf("turn count = %d, want %d: %+v", len(turns), len(wantMethods), turns)
+	}
+	for index, turn := range turns {
+		if got := decodeTurnMethod(t, turn.Content); got != wantMethods[index] {
+			t.Fatalf("turn %d method = %q, want %q", index, got, wantMethods[index])
+		}
+	}
+	if blocks := promptRequestBlocksForTest(t, turns[0]); !reflect.DeepEqual(blocks, startBlocks) {
+		t.Fatalf("recovered prompt blocks = %#v, want %#v", blocks, startBlocks)
+	}
+}
+
+func TestSessionForkPromptsIncludeSteeredBlocks(t *testing.T) {
+	turns := []sessionViewTurn{
+		{
+			TurnIndex: 1,
+			Content: buildSessionTurnContentJSON(acp.SessionTurnMethodPromptRequest, acp.SessionTurnPromptRequest{
+				ContentBlocks: []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "start"}},
+			}),
+		},
+		{
+			TurnIndex: 2,
+			Content: buildSessionTurnContentJSON(acp.SessionUpdateUserMessageChunk, acp.SessionTurnUserMessage{
+				ContentBlocks: []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "change"}},
+				Steered:       true,
+			}),
+		},
+		{
+			TurnIndex: 3,
+			Content:   buildSessionTurnContentJSON(acp.SessionTurnMethodPromptDone, acp.SessionTurnPromptResult{}),
+		},
+	}
+
+	prompts := sessionForkPromptsFromTurns(turns)
+	if len(prompts) != 1 || prompts[0].DoneTurnIndex != 3 {
+		t.Fatalf("fork prompts = %#v", prompts)
+	}
+	want := []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "start"},
+		{Type: acp.ContentBlockTypeText, Text: "change"},
+	}
+	if !reflect.DeepEqual(prompts[0].ContentBlocks, want) {
+		t.Fatalf("fork prompt blocks = %#v, want %#v", prompts[0].ContentBlocks, want)
+	}
+}
+
 func TestSessionReadAfterTurnIndexReturnsLaterTurns(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
@@ -6871,6 +7102,18 @@ func TestForkHistoryCopiesArtifactsAndReferencedAttachments(t *testing.T) {
 	if err := c.RecordEvent(ctx, sessionViewPromptEvent(sourceID, "", []acp.ContentBlock{block})); err != nil {
 		t.Fatalf("RecordEvent prompt: %v", err)
 	}
+	steeredBlock := uploadSessionAttachmentForTest(t, c, sourceID, "change.txt", "text/plain", []byte("steered attachment"))
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent(sourceID, acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateUserMessageChunk,
+		ContentBlocks: []acp.ContentBlock{
+			{Type: acp.ContentBlockTypeText, Text: "use this too"},
+			steeredBlock,
+		},
+		ClientMessageID: "queued-copy",
+		Steered:         true,
+	})); err != nil {
+		t.Fatalf("RecordEvent steer: %v", err)
+	}
 	done := sessionViewPromptFinishedEvent(sourceID, acp.StopReasonEndTurn)
 	done.ForkPoint = &acp.SessionForkPoint{Provider: string(acp.ACPProviderCodex), Ref: "source-copy-turn"}
 	done.Artifacts = []acp.SessionPromptArtifactPayload{{
@@ -6882,18 +7125,23 @@ func TestForkHistoryCopiesArtifactsAndReferencedAttachments(t *testing.T) {
 		t.Fatalf("RecordEvent done: %v", err)
 	}
 	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
-	runtime.forkSessionFn = func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
+	var forkPrompts []acp.SessionForkPrompt
+	runtime.forkSessionFn = func(_ context.Context, _, _ string, prompts []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
+		forkPrompts = prompts
 		return acp.SessionForkResult{
 			SessionID: targetID,
 			Title:     "Copied target",
 			ForkPoints: map[int64]acp.SessionForkPoint{
-				2: {Provider: string(acp.ACPProviderCodex), Ref: "target-copy-turn"},
+				3: {Provider: string(acp.ACPProviderCodex), Ref: "target-copy-turn"},
 			},
 		}, nil
 	}
 
-	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-copy-source","turnIndex":2}`)); err != nil {
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-copy-source","turnIndex":3}`)); err != nil {
 		t.Fatalf("session.fork: %v", err)
+	}
+	if len(forkPrompts) != 1 || len(forkPrompts[0].ContentBlocks) != 3 {
+		t.Fatalf("fork prompts = %#v, want prompt plus steered blocks", forkPrompts)
 	}
 	_, targetTurns, err := c.sessionRecorder.ReadSessionTurns(ctx, targetID, 0)
 	if err != nil {
@@ -6903,8 +7151,20 @@ func TestForkHistoryCopiesArtifactsAndReferencedAttachments(t *testing.T) {
 	if targetBlock.URI == block.URI || !strings.Contains(targetBlock.URI, safeHistoryPathPart(targetID)) {
 		t.Fatalf("target attachment uri = %q, source = %q", targetBlock.URI, block.URI)
 	}
+	var steeredMessage acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(targetTurns[1].Content), &steeredMessage); err != nil {
+		t.Fatalf("unmarshal target steer: %v", err)
+	}
+	var targetSteer acp.SessionTurnUserMessage
+	if err := json.Unmarshal(steeredMessage.Param, &targetSteer); err != nil || len(targetSteer.ContentBlocks) != 2 {
+		t.Fatalf("target steer = %#v err=%v", targetSteer, err)
+	}
+	targetSteeredBlock := targetSteer.ContentBlocks[1]
+	if targetSteeredBlock.URI == steeredBlock.URI || !strings.Contains(targetSteeredBlock.URI, safeHistoryPathPart(targetID)) {
+		t.Fatalf("target steered attachment uri = %q, source = %q", targetSteeredBlock.URI, steeredBlock.URI)
+	}
 	var doneMessage acp.SessionTurnMessage
-	if err := json.Unmarshal([]byte(targetTurns[1].Content), &doneMessage); err != nil {
+	if err := json.Unmarshal([]byte(targetTurns[2].Content), &doneMessage); err != nil {
 		t.Fatalf("unmarshal target done: %v", err)
 	}
 	var doneResult acp.SessionTurnPromptResult
@@ -6924,6 +7184,12 @@ func TestForkHistoryCopiesArtifactsAndReferencedAttachments(t *testing.T) {
 		"uri":       targetBlock.URI,
 	})); err != nil {
 		t.Fatalf("read target attachment after source delete: %v", err)
+	}
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionAttachmentRead, "test", mustJSON(map[string]any{
+		"sessionId": targetID,
+		"uri":       targetSteeredBlock.URI,
+	})); err != nil {
+		t.Fatalf("read target steered attachment after source delete: %v", err)
 	}
 }
 

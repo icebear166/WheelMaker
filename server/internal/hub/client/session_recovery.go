@@ -305,14 +305,18 @@ func (r *sessionRecovery) feedReplayToRecorder(ctx context.Context, sessionID st
 		})
 	}
 
-	startPrompt := func(text string) {
+	startPrompt := func(blocks []acp.ContentBlock, fallbackText string) {
+		blocks = cloneSessionContentBlocks(blocks)
+		if len(blocks) == 0 {
+			blocks = []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: fallbackText}}
+		}
 		_ = r.client.sessionRecorder.RecordEvent(ctx, SessionViewEvent{
 			Type:      SessionViewEventTypeACP,
 			SessionID: sessionID,
 			Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
 				"params": acp.SessionPromptParams{
 					SessionID: sessionID,
-					Prompt:    []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: text}},
+					Prompt:    blocks,
 				},
 			}),
 		})
@@ -341,11 +345,22 @@ func (r *sessionRecovery) feedReplayToRecorder(ctx context.Context, sessionID st
 		}
 
 		if u.Update.SessionUpdate == acp.SessionUpdateUserMessageChunk {
+			if u.Update.Steered {
+				if !hasPending && !recordedAny {
+					if err := r.ensureReplayPromptState(ctx, sessionID); err != nil {
+						hubLogger(r.client.projectName).Warn("session.reload replay prompt init failed session=%s err=%v", sessionID, err)
+						return
+					}
+				}
+				recordUpdate(u)
+				recordedAny = true
+				continue
+			}
 			if hasPending || recordedAny {
 				finishPrompt()
 				recordedAny = false
 			}
-			startPrompt(extractRecoveryUpdateText(u.Update.Content))
+			startPrompt(u.Update.ContentBlocks, extractRecoveryUpdateText(u.Update.Content))
 			hasPending = true
 			continue
 		}

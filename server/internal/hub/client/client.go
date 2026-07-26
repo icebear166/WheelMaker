@@ -1080,6 +1080,12 @@ func sessionForkPromptsFromTurns(turns []sessionViewTurn) []acp.SessionForkPromp
 				continue
 			}
 			pending = cloneSessionContentBlocks(request.ContentBlocks)
+		case acp.SessionUpdateUserMessageChunk:
+			var userMessage acp.SessionTurnUserMessage
+			if json.Unmarshal(message.Param, &userMessage) != nil || !userMessage.Steered || pending == nil {
+				continue
+			}
+			pending = append(pending, cloneSessionContentBlocks(userMessage.ContentBlocks)...)
 		case acp.SessionTurnMethodPromptDone:
 			if pending == nil || turn.TurnIndex <= 0 {
 				continue
@@ -1343,6 +1349,23 @@ func (c *Client) buildForkHistoryContents(
 				block.URI = targetURI
 			}
 			content = buildSessionTurnContentJSON(message.Method, request)
+		case acp.SessionUpdateUserMessageChunk:
+			var userMessage acp.SessionTurnUserMessage
+			if err := json.Unmarshal(message.Param, &userMessage); err != nil {
+				return nil, fmt.Errorf("decode fork user message %d: %w", turn.TurnIndex, err)
+			}
+			for index := range userMessage.ContentBlocks {
+				block := &userMessage.ContentBlocks[index]
+				if !c.sessionURIWithinAttachmentRoot(sourceSessionID, block.URI) {
+					continue
+				}
+				targetURI, err := c.copyForkAttachment(ctx, sourceSessionID, targetSessionID, block.URI)
+				if err != nil {
+					return nil, err
+				}
+				block.URI = targetURI
+			}
+			content = buildSessionTurnContentJSON(message.Method, userMessage)
 		case acp.SessionTurnMethodPromptDone:
 			var result acp.SessionTurnPromptResult
 			if err := json.Unmarshal(message.Param, &result); err != nil {

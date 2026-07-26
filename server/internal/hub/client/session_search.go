@@ -424,7 +424,16 @@ func sessionSearchTurnVisibleText(content string) string {
 		default:
 			return strings.TrimSpace(payload.Message)
 		}
-	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought, acp.SessionUpdateUserMessageChunk, acp.SessionTurnMethodSystem:
+	case acp.SessionUpdateUserMessageChunk:
+		var payload acp.SessionTurnUserMessage
+		if err := json.Unmarshal(turn.Param, &payload); err != nil {
+			return ""
+		}
+		if text := sessionSearchContentBlockText(payload.ContentBlocks); text != "" {
+			return text
+		}
+		return strings.TrimSpace(payload.Text)
+	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought, acp.SessionTurnMethodSystem:
 		var payload acp.SessionTurnTextResult
 		if err := json.Unmarshal(turn.Param, &payload); err != nil {
 			return ""

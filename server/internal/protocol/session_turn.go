@@ -28,8 +28,10 @@ const (
 //     param is SessionTurnPromptRequest
 //   - method=prompt_done:
 //     param is SessionTurnPromptResult
-//   - method=agent_message_chunk / agent_thought_chunk / user_message_chunk:
+//   - method=agent_message_chunk / agent_thought_chunk:
 //     param is SessionTurnTextResult
+//   - method=user_message_chunk:
+//     param is SessionTurnUserMessage
 //   - method=tool_call:
 //     param is SessionTurnToolResult
 //   - method=agent_plan:
@@ -73,6 +75,13 @@ type SessionTurnPromptArtifactFile struct {
 
 type SessionTurnTextResult struct {
 	Text string `json:"text"`
+}
+
+type SessionTurnUserMessage struct {
+	Text            string         `json:"text,omitempty"`
+	ContentBlocks   []ContentBlock `json:"contentBlocks,omitempty"`
+	ClientMessageID string         `json:"clientMessageId,omitempty"`
+	Steered         bool           `json:"steered,omitempty"`
 }
 
 type SessionTurnToolResult struct {

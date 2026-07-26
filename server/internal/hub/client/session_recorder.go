@@ -952,6 +952,10 @@ func (r *SessionRecorder) addMessageTurn(state *sessionPromptState, event parsed
 		if event.turnKey != "" {
 			mergedTurnIndex = state.turnIndexByKey[event.turnKey]
 		}
+	case acp.SessionUpdateUserMessageChunk:
+		if event.turnKey != "" {
+			mergedTurnIndex = state.turnIndexByKey[event.turnKey]
+		}
 	case acp.SessionTurnMethodAgentPlan:
 		for _, existing := range state.turns {
 			if existing.method == event.method {
@@ -1760,7 +1764,31 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				return parsed, nil
 			}
 			switch method {
-			case acp.SessionUpdateAgentMessageChunk, acp.SessionUpdateAgentThoughtChunk, acp.SessionUpdateUserMessageChunk:
+			case acp.SessionUpdateUserMessageChunk:
+				blocks := cloneSessionContentBlocks(params.Update.ContentBlocks)
+				if len(blocks) == 0 {
+					var block acp.ContentBlock
+					if json.Unmarshal(params.Update.Content, &block) == nil &&
+						strings.TrimSpace(block.Type) != "" {
+						blocks = []acp.ContentBlock{block}
+					}
+				}
+				text := sessionSearchContentBlockText(blocks)
+				if text == "" {
+					text = extractUpdateText(params.Update.Content)
+				}
+				clientMessageID := strings.TrimSpace(params.Update.ClientMessageID)
+				turnKey := ""
+				if clientMessageID != "" {
+					turnKey = "user:" + clientMessageID
+				}
+				parsed.setJSONMessage(method, acp.SessionTurnUserMessage{
+					Text:            text,
+					ContentBlocks:   blocks,
+					ClientMessageID: clientMessageID,
+					Steered:         params.Update.Steered,
+				}, turnKey)
+			case acp.SessionUpdateAgentMessageChunk, acp.SessionUpdateAgentThoughtChunk:
 				text := extractUpdateText(params.Update.Content)
 				if method == acp.SessionUpdateAgentThoughtChunk && strings.TrimSpace(text) == "" {
 					return parsed, nil
