@@ -19,6 +19,10 @@ const GLYPHS = {
   arrowDown: (<><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></>),
   // lucide:arrow-left
   arrowLeft: (<><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></>),
+  // lucide:corner-down-left
+  cornerDownLeft: (<><path d="M20 4v7a4 4 0 0 1-4 4H4" /><path d="m9 10-5 5 5 5" /></>),
+  // lucide:arrow-up-to-line
+  arrowUpToLine: (<><path d="M5 3h14" /><path d="m18 13-6-6-6 6" /><path d="M12 7v14" /></>),
   // lucide:loader-circle
   loader: (<><path d="M21 12a9 9 0 1 1-6.219-8.56" /></>),
   // lucide:circle-x

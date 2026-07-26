@@ -1873,19 +1873,21 @@
 .chat-prompt-queue-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 4px;
 }
 
 .chat-prompt-queue-action {
-  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--surface-panel);
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-  padding: 0 10px;
+  padding: 0;
 }
 
 .chat-prompt-queue-action:hover {
@@ -1896,6 +1898,28 @@
 .chat-prompt-queue-action.danger:hover {
   border-color: color-mix(in srgb, var(--state-danger) 50%, var(--border-subtle));
   color: var(--state-danger);
+}
+
+.chat-prompt-queue-action:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.chat-prompt-queue-action:disabled:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.chat-prompt-queue-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.chat-prompt-steered-label {
+  align-self: flex-end;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 18px;
 }
 
 .chat-tool-group {

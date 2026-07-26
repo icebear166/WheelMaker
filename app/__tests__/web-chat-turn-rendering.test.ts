@@ -185,6 +185,8 @@ describe('web chat turn rendering', () => {
     expect(chatTurn).toContain("'queued'");
     expect(chatTurn).toContain('onCancelQueuedPrompt?: () => void;');
     expect(chatTurn).toContain('onPrioritizeQueuedPrompt?: () => void;');
+    expect(chatTurn).toContain('onSteerQueuedPrompt?: () => void;');
+    expect(chatTurn).toContain('queuedPromptSteering?: boolean;');
     expect(main).toContain('service.steerProjectSession(');
     expect(main).toContain('setQueuedChatPromptSteering(current, runtimeKey, prompt.id, true)');
     expect(main).toContain("message.method === 'user_message_chunk'");
@@ -193,7 +195,14 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('chatAcceptedSteerIdsByKeyRef.current[runtimeKey]?.has(prompt.id)');
     expect(chatTurn).toContain('chat-prompt-status-queued');
     expect(chatTurn).toContain('Queued');
-    expect(chatTurn).toContain('Send next');
+    expect(chatTurn).toContain('title="Steer"');
+    expect(chatTurn).toContain('aria-label="Steer"');
+    expect(chatTurn).toContain('<ChatIcon name="cornerDownLeft"');
+    expect(chatTurn).toContain('title="Next"');
+    expect(chatTurn).toContain('<ChatIcon name="arrowUpToLine"');
+    expect(chatTurn).toContain('title="Cancel"');
+    expect(chatTurn).not.toContain('Send next');
+    expect(chatTurn).toContain('chat-prompt-steered-label');
     expect(styles).toContain('.chat-prompt-status-queued');
     expect(styles).toContain('.chat-prompt-queue-actions');
   });

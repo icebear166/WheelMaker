@@ -11,6 +11,10 @@ async function render(element: React.ReactElement): Promise<ReactTestRenderer> {
 }
 
 describe('ChatIcon', () => {
+  it('registers queued prompt action glyphs', () => {
+    expect(CHAT_ICON_NAMES).toEqual(expect.arrayContaining(['cornerDownLeft', 'arrowUpToLine', 'x']));
+  });
+
   it('renders every registered glyph as an svg', async () => {
     const tree = await render(
       <>

@@ -1,6 +1,6 @@
 import type { RegistryChatMessage } from '../../registry/registryTypes';
 
-export type ChatPromptStatus = 'confirming' | 'responding' | 'undelivered' | 'queued' | null;
+export type ChatPromptStatus = 'confirming' | 'responding' | 'undelivered' | 'queued' | 'steering' | null;
 
 export type ChatPromptDoneStatus = {
   kind: 'cancelled' | 'interrupted' | 'failed';
@@ -19,7 +19,8 @@ function positiveTurnIndex(message: RegistryChatMessage): number {
 }
 
 function isPromptStart(message: RegistryChatMessage): boolean {
-  return message.method === 'prompt_request' || message.method === 'user_message_chunk';
+  if (message.method === 'prompt_request') return true;
+  return message.method === 'user_message_chunk' && message.param.steered !== true;
 }
 
 function promptStatusKey(message: RegistryChatMessage): string {

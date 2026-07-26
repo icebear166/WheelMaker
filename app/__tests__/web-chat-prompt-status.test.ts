@@ -63,6 +63,25 @@ describe('web chat prompt status', () => {
     expect(status).toBe('responding');
   });
 
+  test('does not treat a steered user message as a new prompt start', () => {
+    const request = message(1, 'prompt_request');
+    const steered: RegistryChatMessage = {
+      sessionId: 's1',
+      turnIndex: 3,
+      method: 'user_message_chunk',
+      param: {
+        steered: true,
+        contentBlocks: [{type: 'text', text: 'change'}],
+      },
+      finished: true,
+    };
+
+    const index = buildPromptTurnStatusIndex([request, steered]);
+
+    expect(index.statusFor(request)).toBe('responding');
+    expect(index.statusFor(steered)).toBeNull();
+  });
+
   test('maps non-normal prompt stop reasons to compact status labels', () => {
     expect(resolvePromptDoneStatus({stopReason: 'cancelled'})).toEqual({
       kind: 'cancelled',

@@ -497,6 +497,11 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const chatAcceptedSteerIdsByKeyRef = useRef<Record<string, Set<string>>>({});');
     expect(mainTsx).toContain('service.steerProjectSession(');
     expect(mainTsx).toContain('onSteerQueuedPrompt=');
+    expect(chatTurnTsx).toContain('aria-label="Steer"');
+    expect(chatTurnTsx).toContain('aria-label="Next"');
+    expect(chatTurnTsx).toContain('aria-label="Cancel"');
+    expect(chatTurnTsx).toContain('chat-prompt-steered-label');
+    expect(chatTurnTsx).not.toContain('Send next');
     expect(sendBlock).toContain('if (!result.ok) {');
     expect(sendBlock).toContain('markPendingChatPromptUndelivered(runtimeKey');
     expect(sendBlock).toContain('if (shouldApplySentChatSelection(selectedChatKeyRef.current, sentFromKey)) {');

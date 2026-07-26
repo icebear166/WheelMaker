@@ -299,8 +299,10 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
+  onSteerQueuedPrompt?: () => void;
   onCancelQueuedPrompt?: () => void;
   onPrioritizeQueuedPrompt?: () => void;
+  queuedPromptSteering?: boolean;
   onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
   onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
@@ -393,8 +395,10 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onSelectConfirmationReply,
   onRetryPendingPrompt,
   onEditPendingPrompt,
+  onSteerQueuedPrompt,
   onCancelQueuedPrompt,
   onPrioritizeQueuedPrompt,
+  queuedPromptSteering = false,
   onOpenPromptAttachment,
   resolvePromptAttachmentThumbnail,
   onLoadPromptAttachmentThumbnail,
@@ -449,9 +453,10 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const attachmentBlocks = groupPromptAttachmentBlocks([message]);
     const blocks = msgBlocks(message.method, message.param);
     const inlineParts = buildChatPromptInlineParts(blocks);
+    const steered = message.method === 'user_message_chunk' && message.param.steered === true;
     return (
       <div className="chat-prompt-group">
-        {text || promptStatus ? (
+        {text || promptStatus || steered ? (
           <div className="chat-prompt-user-row">
             {text ? (
               <div className="chat-prompt-user">
@@ -459,6 +464,11 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                   ? renderPromptInlineParts(inlineParts, highlightQuery)
                   : renderChatTextWithHighlight(text, highlightQuery)}
               </div>
+            ) : null}
+            {steered ? (
+              <span className="chat-prompt-steered-label" title="Inserted into the active turn">
+                Steered
+              </span>
             ) : null}
             {promptStatus === 'responding' ? (
               <span className="chat-prompt-status chat-prompt-status-responding" title="Responding">
@@ -474,9 +484,12 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 <ChatIcon name="refreshCw" size={12} />
               </span>
             ) : null}
-            {promptStatus === 'queued' ? (
-              <span className="chat-prompt-status chat-prompt-status-queued" title="Queued">
-                Queued
+            {promptStatus === 'queued' || promptStatus === 'steering' ? (
+              <span
+                className="chat-prompt-status chat-prompt-status-queued"
+                title={promptStatus === 'steering' ? 'Steering' : 'Queued'}
+              >
+                {promptStatus === 'steering' ? 'Steering' : 'Queued'}
               </span>
             ) : null}
           </div>
@@ -519,13 +532,39 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             </button>
           </div>
         ) : null}
-        {promptStatus === 'queued' ? (
+        {promptStatus === 'queued' || promptStatus === 'steering' ? (
           <div className="chat-prompt-queue-actions">
-            <button type="button" className="chat-prompt-queue-action" onClick={onPrioritizeQueuedPrompt}>
-              Send next
+            {onSteerQueuedPrompt ? (
+              <button
+                type="button"
+                className="chat-prompt-queue-action"
+                title="Steer"
+                aria-label="Steer"
+                disabled={queuedPromptSteering}
+                onClick={onSteerQueuedPrompt}
+              >
+                <ChatIcon name="cornerDownLeft" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="chat-prompt-queue-action"
+              title="Next"
+              aria-label="Next"
+              disabled={queuedPromptSteering}
+              onClick={onPrioritizeQueuedPrompt}
+            >
+              <ChatIcon name="arrowUpToLine" />
             </button>
-            <button type="button" className="chat-prompt-queue-action danger" onClick={onCancelQueuedPrompt}>
-              Cancel
+            <button
+              type="button"
+              className="chat-prompt-queue-action danger"
+              title="Cancel"
+              aria-label="Cancel"
+              disabled={queuedPromptSteering}
+              onClick={onCancelQueuedPrompt}
+            >
+              <ChatIcon name="x" />
             </button>
           </div>
         ) : null}

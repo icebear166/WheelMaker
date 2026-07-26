@@ -17313,6 +17313,7 @@ export function App() {
           onSteerQueuedPrompt={queuedPromptCanSteer
             ? () => steerQueuedPrompt(selectedChatKeyRef.current?.projectId ?? '', selectedChatEncodedKey, queuedPrompt)
             : undefined}
+          queuedPromptSteering={queuedPrompt.status === 'steering'}
           onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
           onPrioritizeQueuedPrompt={() => prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
           onOpenPromptAttachment={openChatAttachmentPreview}
