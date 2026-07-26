@@ -468,12 +468,12 @@
   width: 48px;
   height: 48px;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-panel) 38%, transparent);
-  backdrop-filter: blur(6px) saturate(1.1);
-  -webkit-backdrop-filter: blur(6px) saturate(1.1);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 10%);
+  background: color-mix(in srgb, var(--surface-panel) 24%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 8%);
   color: var(--text-primary);
   display: inline-flex;
   align-items: center;
@@ -483,6 +483,10 @@
   transition: background var(--motion-standard) var(--ease-standard),
     border-color var(--motion-standard) var(--ease-standard),
     transform var(--motion-fast) var(--ease-standard);
+}
+
+.floating-nav-button .sl-icon {
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 40%));
 }
 
 .floating-nav-button:active {
@@ -550,9 +554,8 @@
   color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
-.floating-nav-card-item:disabled {
-  opacity: 0.35;
-  cursor: default;
+.floating-nav-card-item[data-enabled='false'] {
+  opacity: 0.45;
 }
 
 .floating-nav-unread-dot {

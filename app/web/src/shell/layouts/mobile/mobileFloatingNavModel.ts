@@ -51,10 +51,8 @@ export function resolveFloatingNavCurrent(flags: FloatingNavSurfaceFlags): Float
 }
 
 export type FloatingNavRelayState = {
-  /** Mirrors the legacy bubble: only shown when the relay is up with a frame URL. */
-  visible: boolean;
   frameOpen: boolean;
-  /** Tappable: a target exists or the frame is already open (tap closes it). */
+  /** Can open the frame right now (relay up with a target, or frame already open). */
   enabled: boolean;
   active: boolean;
 };
@@ -70,10 +68,10 @@ export function resolveFloatingNavRelayState({
   hasTarget: boolean;
   frameOpen: boolean;
 }): FloatingNavRelayState {
+  const frameReady = ready && frameUrl !== '';
   return {
-    visible: ready && frameUrl !== '',
     frameOpen,
-    enabled: hasTarget || frameOpen,
+    enabled: frameOpen || (frameReady && hasTarget),
     active: frameOpen,
   };
 }

@@ -6688,11 +6688,14 @@ export function App() {
       safeAreaTopInset,
       safeAreaBottomInset,
       defaultComposerTop: floatingDefaultComposerTop,
-      expandedOverflowPx: FLOATING_NAV_EXPANDED_OVERFLOW_PX,
+      // The keyboard shrinks the dockable range; reserving expansion headroom
+      // then would collapse it and shove the control downward.
+      expandedOverflowPx: floatingKeyboardOffset > 0 ? 0 : FLOATING_NAV_EXPANDED_OVERFLOW_PX,
     });
   }, [
     floatingControlStackHeight,
     floatingDefaultComposerTop,
+    floatingKeyboardOffset,
     isWide,
     safeAreaBottomInset,
     safeAreaTopInset,
@@ -17326,8 +17329,9 @@ export function App() {
       return;
     }
     const target = activePortRelayTarget ?? selectedPortRelayTarget;
-    if (!target) {
-      return; // Relay item renders disabled in this state.
+    if (!portRelayReady || !portRelayFrameUrl || !target) {
+      openSettingsDetail('portRelay');
+      return;
     }
     if (portRelayTargetMenuTargets.length > 1) {
       setMobileRelayTargetSheet({open: true});
@@ -17339,7 +17343,10 @@ export function App() {
     mobilePortRelayFrameOpen,
     closePortRelayFrameFromChrome,
     openPortRelayWorkbenchTab,
+    openSettingsDetail,
     portRelayFramePath,
+    portRelayFrameUrl,
+    portRelayReady,
     portRelayTargetMenuTargets.length,
     selectedPortRelayTarget,
     setMobileRelayTargetSheet,

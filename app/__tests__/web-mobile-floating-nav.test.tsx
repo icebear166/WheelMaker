@@ -11,8 +11,8 @@ import {
   resolveFloatingNavRelayState,
 } from '../web/src/shell/layouts/mobile/mobileFloatingNavModel';
 
-const relayOff = {visible: false, frameOpen: false, enabled: false, active: false};
-const relayOn = {visible: true, frameOpen: false, enabled: true, active: false};
+const relayOff = {frameOpen: false, enabled: false, active: false};
+const relayOn = {frameOpen: false, enabled: true, active: false};
 
 function renderNav(extra?: Partial<React.ComponentProps<typeof MobileFloatingNav>>) {
   const props: React.ComponentProps<typeof MobileFloatingNav> = {
@@ -43,18 +43,19 @@ describe('MobileFloatingNav', () => {
     expect(button.findAllByProps({className: 'floating-nav-unread-dot'})).toHaveLength(1);
   });
 
-  test('expanded renders one card item per destination, hiding relay when not visible', () => {
+  test('expanded renders one card item per destination, relay always present', () => {
     const {tree} = renderNav({expanded: true});
     const items = tree.root.findAllByProps({className: 'floating-nav-card-item'});
-    expect(items).toHaveLength(5);
+    expect(items).toHaveLength(6);
     const withRelay = renderNav({expanded: true, relay: relayOn});
     expect(withRelay.tree.root.findAllByProps({className: 'floating-nav-card-item'})).toHaveLength(6);
   });
 
-  test('relay item is disabled without a target and shows a status dot', () => {
-    const {tree} = renderNav({expanded: true, relay: {visible: true, frameOpen: false, enabled: false, active: false}});
+  test('relay item dims when the frame cannot open and shows a status dot', () => {
+    const {tree} = renderNav({expanded: true, relay: {frameOpen: false, enabled: false, active: false}});
     const relayItem = tree.root.findByProps({title: 'Relay'});
-    expect(relayItem.props.disabled).toBe(true);
+    expect(relayItem.props['data-enabled']).toBe(false);
+    expect(relayItem.props.disabled).toBeUndefined();
     expect(relayItem.findAllByProps({className: 'floating-nav-relay-dot'})).toHaveLength(1);
   });
 
@@ -99,14 +100,16 @@ describe('mobile floating nav model', () => {
     expect(resolveFloatingNavCurrent({...all, settingsOpen: true, relayFrameOpen: true})).toBe('relay');
   });
 
-  test('relay item mirrors bubble visibility and target availability', () => {
+  test('relay item is always present; enabled only when the frame can open', () => {
     expect(resolveFloatingNavRelayState({ready: false, frameUrl: 'http://x', hasTarget: true, frameOpen: false}))
-      .toEqual({visible: false, frameOpen: false, enabled: true, active: false});
-    expect(resolveFloatingNavRelayState({ready: true, frameUrl: '', hasTarget: true, frameOpen: false}).visible).toBe(false);
+      .toEqual({frameOpen: false, enabled: false, active: false});
+    expect(resolveFloatingNavRelayState({ready: true, frameUrl: '', hasTarget: true, frameOpen: false}).enabled).toBe(false);
     expect(resolveFloatingNavRelayState({ready: true, frameUrl: 'http://x', hasTarget: false, frameOpen: false}))
-      .toEqual({visible: true, frameOpen: false, enabled: false, active: false});
+      .toEqual({frameOpen: false, enabled: false, active: false});
+    expect(resolveFloatingNavRelayState({ready: true, frameUrl: 'http://x', hasTarget: true, frameOpen: false}))
+      .toEqual({frameOpen: false, enabled: true, active: false});
     expect(resolveFloatingNavRelayState({ready: true, frameUrl: 'http://x', hasTarget: true, frameOpen: true}))
-      .toEqual({visible: true, frameOpen: true, enabled: true, active: true});
+      .toEqual({frameOpen: true, enabled: true, active: true});
   });
 });
 
@@ -123,7 +126,7 @@ describe('floating nav wiring', () => {
     expect(main).toContain('resolveFloatingNavRelayState({');
     expect(main).toContain('ready: portRelayReady');
     expect(main).toContain('frameUrl: portRelayFrameUrl');
-    expect(main).toContain('expandedOverflowPx: FLOATING_NAV_EXPANDED_OVERFLOW_PX');
+    expect(main).toContain('expandedOverflowPx: floatingKeyboardOffset > 0 ? 0 : FLOATING_NAV_EXPANDED_OVERFLOW_PX');
   });
 
   test('merges relay into the nav and drops the standalone bubble', () => {

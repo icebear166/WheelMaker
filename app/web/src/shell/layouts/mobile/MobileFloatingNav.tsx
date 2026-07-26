@@ -59,9 +59,6 @@ export function MobileFloatingNav({
       onPointerDown={onButtonPointerDown}
     >
       {FLOATING_NAV_ITEMS.map(item => {
-        if (item.id === 'relay' && !relay.visible) {
-          return null;
-        }
         const isCurrent = item.id === current;
         const active = item.id === 'preview'
           ? previewActive
@@ -72,7 +69,6 @@ export function MobileFloatingNav({
               : item.id === 'relay'
                 ? relay.active
                 : isCurrent;
-        const disabled = item.id === 'relay' && !relay.enabled;
         return (
           <button
             key={item.id}
@@ -80,7 +76,7 @@ export function MobileFloatingNav({
             role="menuitem"
             className="floating-nav-card-item"
             data-active={active}
-            disabled={disabled}
+            data-enabled={item.id === 'relay' ? relay.enabled : true}
             onPointerDown={event => event.stopPropagation()}
             onClick={() => {
               if (isCurrent) {

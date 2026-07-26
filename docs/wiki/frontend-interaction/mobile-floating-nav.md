@@ -19,7 +19,8 @@
 
 ## Relay 入口
 
-- Relay 无独立气泡，彻底并入菜单卡：单 target 时 tap Relay 位直接打开/收起 frame；多 target 时先弹 bottom-sheet 选 target（复用项目 sheet 的菜单语言）；无 target 时 Relay 位呈不可用态。
+- Relay 无独立气泡，彻底并入菜单卡且**常驻可见**：frame 打开时 tap 关闭 frame；relay 已启用且有 target 时单 target 直接打开 frame、多 target 先弹 bottom-sheet 选 target（复用项目 sheet 的菜单语言）；未启用或无 target 时 tap 进入 Port Relay 设置页。
+- Relay 位用 CSS 状态点呈现 frame 开关状态；frame 打不开时整位降不透明度，不做禁用。
 - Relay frame 打开期间浮控整体保持可拖拽，不卸载。
 
 ## 手势阈值
@@ -31,6 +32,7 @@
 ## 展开几何
 
 - 展开菜单卡的高度计入停靠 bounds：控件拖到允许范围最顶部时菜单卡仍完整可见、全部项可点，不伸出安全区。
+- 顶部余量只在软键盘关闭时预留；键盘打开时可停靠区间被压缩，继续预留会把控件推走，此时取消余量。
 - 菜单卡高度由内容决定，不写死像素几何。
 
 ## 动效
