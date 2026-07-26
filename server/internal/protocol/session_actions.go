@@ -5,6 +5,7 @@ const (
 	SessionActionStatus  = "status"
 	SessionActionCompact = "compact"
 	SessionActionSteer   = "steer"
+	SessionActionFork    = "fork"
 
 	SessionOperationTypeCompact = "compact"
 	SessionOperationTypeFork    = "fork"
@@ -51,6 +52,7 @@ type SessionActionCapabilities struct {
 	Status  SessionActionCapability `json:"status"`
 	Compact SessionActionCapability `json:"compact"`
 	Steer   SessionActionCapability `json:"steer"`
+	Fork    SessionActionCapability `json:"fork"`
 }
 
 type SessionActionStatusContext struct {

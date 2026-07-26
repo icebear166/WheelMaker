@@ -5386,12 +5386,12 @@ func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
 	}
 }
 
-func TestFactoryCodexSupportsSteer(t *testing.T) {
+func TestFactoryCodexSupportsSessionActions(t *testing.T) {
 	factory := newACPFactoryWithOptions(ACPFactoryOptions{}, func(provider ACPProvider) bool {
 		return provider.Name() == string(protocol.ACPProviderCodex)
 	})
 	got := factory.SessionActions(protocol.ACPProviderCodex)
-	if !got.Status || !got.Compact || !got.Steer {
+	if !got.Status || !got.Compact || !got.Steer || !got.Fork {
 		t.Fatalf("Codex session actions = %+v", got)
 	}
 }

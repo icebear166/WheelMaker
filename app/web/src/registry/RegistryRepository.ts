@@ -367,6 +367,7 @@ export class RegistryRepository {
       status: this.normalizeSessionActionCapability(input.status),
       compact: this.normalizeSessionActionCapability(input.compact),
       steer: this.normalizeSessionActionCapability(input.steer),
+      fork: this.normalizeSessionActionCapability(input.fork),
     };
   }
   private normalizeSessionStatusContext(raw: unknown): RegistrySessionStatusContext | undefined {

@@ -65,7 +65,7 @@ export function SessionRow({
         {forked ? (
           <span className="wide-session-title forked">
             <span className="wide-session-title-text">{title}</span>
-            <SessionIcon name="gitFork" size={11} className="wide-session-fork-marker" />
+            <SessionIcon name="gitBranch" size={11} className="wide-session-fork-marker" />
           </span>
         ) : (
           <span className="wide-session-title">{title}</span>

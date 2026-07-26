@@ -71,7 +71,7 @@ describe('SessionRow', () => {
 
   it('renders a fork-origin marker inside the row without another button', async () => {
     const {tree} = await renderRow({forked: true});
-    expect(tree().root.findByProps({'data-icon-name': 'gitFork'})).toBeTruthy();
+    expect(tree().root.findByProps({'data-icon-name': 'gitBranch'})).toBeTruthy();
     expect(tree().root.findAllByType('button')).toHaveLength(1);
   });
 

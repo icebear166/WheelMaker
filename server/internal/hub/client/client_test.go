@@ -7042,6 +7042,35 @@ func TestHandleSessionForkRejectsMissingForkPoint(t *testing.T) {
 	}
 }
 
+func TestHandleSessionForkRejectsUnsupportedCapabilityBeforeProviderCall(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	ctx := context.Background()
+	sessionID := "sess-fork-unsupported"
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sessionID, "Unsupported", string(acp.ACPProviderCodex))); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	recordPromptWithForkPointForTest(t, c, sessionID, "first", "source-turn-1")
+	c.InjectForwarder(string(acp.ACPProviderCodex), sessionID, nil, nil)
+	runtime := c.sessions[sessionID].instance.(*testInjectedInstance)
+	forkCalls := 0
+	runtime.forkSessionFn = func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
+		forkCalls++
+		return acp.SessionForkResult{}, nil
+	}
+	c.registry = c.registry.Clone()
+	c.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{})
+
+	_, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-fork-unsupported","turnIndex":2}`))
+	if err == nil || !errors.Is(err, agent.ErrSessionActionUnsupported) {
+		t.Fatalf("session.fork error = %v, want unsupported action", err)
+	}
+	if forkCalls != 0 {
+		t.Fatalf("provider fork calls = %d, want 0", forkCalls)
+	}
+}
+
 func TestHandleSessionForkArchivesNativeTargetWithoutDeletingLocalConflict(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(t.TempDir())
@@ -9145,8 +9174,9 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 	}
 	if !sessions[0].SessionActions.Status.Supported ||
 		!sessions[0].SessionActions.Compact.Supported ||
-		!sessions[0].SessionActions.Steer.Supported {
-		t.Fatalf("sessionActions = %+v, want Codex status, compact, and steer support", sessions[0].SessionActions)
+		!sessions[0].SessionActions.Steer.Supported ||
+		!sessions[0].SessionActions.Fork.Supported {
+		t.Fatalf("sessionActions = %+v, want Codex status, compact, steer, and fork support", sessions[0].SessionActions)
 	}
 }
 

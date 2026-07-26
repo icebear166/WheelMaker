@@ -17150,6 +17150,7 @@ export function App() {
           copyDisabled={copyRange ? !copyRange.ok : true}
           exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
           exportHtmlBusy={message.method === 'prompt_done' && exportingMarkdownHtmlKey !== ''}
+          forkSupported={selectedChatSession?.sessionActions?.fork?.supported === true}
           forkBusy={message.method === 'prompt_done' && forkingPromptDoneKey === forkKey}
           optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}
           optionRepliesDisabled={chatSendDisabled}
@@ -17223,6 +17224,7 @@ export function App() {
     readAloudPromptDoneEvent,
     resolvePromptAttachmentThumbnail,
     selectedChatEncodedKey,
+    selectedChatSession?.sessionActions?.fork?.supported,
     selectedFullChatMessages,
     selectedPermissionState,
     selectedPromptTurnStatusIndex,

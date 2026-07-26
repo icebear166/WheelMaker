@@ -146,6 +146,10 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 				Supported: support.Steer,
 				Reason:    unsupportedSessionActionReason(support.Steer),
 			},
+			Fork: acp.SessionActionCapability{
+				Supported: support.Fork,
+				Reason:    unsupportedSessionActionReason(support.Fork),
+			},
 		}
 	}
 	c.viewSink = c.sessionRecorder
@@ -172,6 +176,7 @@ func unsupportedSessionActions(reason string) acp.SessionActionCapabilities {
 		Status:  acp.SessionActionCapability{Supported: false, Reason: reason},
 		Compact: acp.SessionActionCapability{Supported: false, Reason: reason},
 		Steer:   acp.SessionActionCapability{Supported: false, Reason: reason},
+		Fork:    acp.SessionActionCapability{Supported: false, Reason: reason},
 	}
 }
 
@@ -1203,6 +1208,13 @@ func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, 
 	if !strings.EqualFold(sourceSummary.AgentType, string(acp.ACPProviderCodex)) {
 		return nil, fmt.Errorf("%w: fork", agent.ErrSessionActionUnsupported)
 	}
+	sourceSession, err := c.SessionByID(ctx, sourceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	if !c.sessionSupportsAction(sourceSession, acp.SessionActionFork) {
+		return nil, fmt.Errorf("%w: fork", agent.ErrSessionActionUnsupported)
+	}
 	sourceTurns, err = c.enrichLegacySessionForkPoints(ctx, sourceSessionID, latestTurnIndex, sourceTurns)
 	if err != nil {
 		return nil, err
@@ -1217,10 +1229,6 @@ func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, 
 	prompts := mappedSessionForkPromptsThroughTurn(sourceTurns, turnIndex)
 	if len(prompts) == 0 {
 		return nil, fmt.Errorf("fork source prompts are not available")
-	}
-	sourceSession, err := c.SessionByID(ctx, sourceSessionID)
-	if err != nil {
-		return nil, err
 	}
 	forkResult, err := sourceSession.ForkSession(ctx, selectedPoint.Ref, prompts)
 	if err != nil {
@@ -1491,6 +1499,8 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 		return support.Compact
 	case acp.SessionActionSteer:
 		return support.Steer
+	case acp.SessionActionFork:
+		return support.Fork
 	default:
 		return false
 	}
