@@ -388,6 +388,44 @@ export interface RegistrySessionActionCapabilities {
   compact: RegistrySessionActionCapability;
   steer: RegistrySessionActionCapability;
   fork: RegistrySessionActionCapability;
+  goal?: RegistrySessionActionCapability;
+}
+
+export type RegistrySessionGoalStatus =
+  | 'active'
+  | 'paused'
+  | 'blocked'
+  | 'usageLimited'
+  | 'budgetLimited'
+  | 'complete';
+
+export interface RegistrySessionGoal {
+  sessionId: string;
+  objective: string;
+  status: RegistrySessionGoalStatus;
+  tokenBudget: number | null;
+  tokensUsed: number;
+  timeUsedSeconds: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type RegistrySessionGoalPatch = {
+  objective?: string;
+  tokenBudget?: number | null;
+  status?: 'active' | 'paused';
+};
+
+export interface RegistrySessionGoalResponse {
+  ok: boolean;
+  sessionId: string;
+  goal: RegistrySessionGoal | null;
+}
+
+export interface RegistrySessionGoalClearResponse {
+  ok: boolean;
+  sessionId: string;
+  cleared: boolean;
 }
 
 export type RegistrySessionSteerOutcome = 'steered' | 'sent';
@@ -507,6 +545,7 @@ export interface RegistrySessionSummary {
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;
   sessionActions?: RegistrySessionActionCapabilities;
+  goal?: RegistrySessionGoal;
   forkedFrom?: RegistrySessionForkOrigin;
 }
 

@@ -62,6 +62,9 @@ import type {
   RegistrySessionCompactAccepted,
   RegistrySessionSteerAccepted,
   RegistrySessionForkResponse,
+  RegistrySessionGoalClearResponse,
+  RegistrySessionGoalPatch,
+  RegistrySessionGoalResponse,
   RegistrySessionStatusResult,
   RegistrySkillCommandResponse,
   RegistrySkillDetailPayload,
@@ -604,6 +607,50 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.compactSession(projectId, sessionId);
+  }
+
+  async createProjectSessionGoal(
+    projectId: string,
+    sessionId: string,
+    objective: string,
+    tokenBudget: number | null = null,
+  ): Promise<RegistrySessionGoalResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.createSessionGoal(projectId, sessionId, objective, tokenBudget);
+  }
+
+  async getProjectSessionGoal(projectId: string, sessionId: string): Promise<RegistrySessionGoalResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getSessionGoal(projectId, sessionId);
+  }
+
+  async updateProjectSessionGoal(
+    projectId: string,
+    sessionId: string,
+    patch: RegistrySessionGoalPatch,
+  ): Promise<RegistrySessionGoalResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.updateSessionGoal(projectId, sessionId, patch);
+  }
+
+  async stopProjectSessionGoal(projectId: string, sessionId: string): Promise<RegistrySessionGoalResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.stopSessionGoal(projectId, sessionId);
+  }
+
+  async clearProjectSessionGoal(projectId: string, sessionId: string): Promise<RegistrySessionGoalClearResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.clearSessionGoal(projectId, sessionId);
   }
 
   async forkProjectSession(projectId: string, sessionId: string, turnIndex: number): Promise<RegistrySessionForkResponse> {

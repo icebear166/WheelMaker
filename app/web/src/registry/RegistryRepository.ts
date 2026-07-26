@@ -74,6 +74,11 @@ import type {
   RegistrySessionCompactAccepted,
   RegistrySessionSteerAccepted,
   RegistrySessionForkResponse,
+  RegistrySessionGoal,
+  RegistrySessionGoalClearResponse,
+  RegistrySessionGoalPatch,
+  RegistrySessionGoalResponse,
+  RegistrySessionGoalStatus,
   RegistrySessionCredits,
   RegistrySessionIndividualLimit,
   RegistrySessionRateLimit,
@@ -368,6 +373,61 @@ export class RegistryRepository {
       compact: this.normalizeSessionActionCapability(input.compact),
       steer: this.normalizeSessionActionCapability(input.steer),
       fork: this.normalizeSessionActionCapability(input.fork),
+      goal: this.normalizeSessionActionCapability(input.goal),
+    };
+  }
+  private normalizeSessionGoalStatus(raw: unknown): RegistrySessionGoalStatus | null {
+    switch (raw) {
+      case 'active':
+      case 'paused':
+      case 'blocked':
+      case 'usageLimited':
+      case 'budgetLimited':
+      case 'complete':
+        return raw;
+      default:
+        return null;
+    }
+  }
+  private normalizeSessionGoal(raw: unknown): RegistrySessionGoal | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    const sessionId = typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
+    const objective = typeof input.objective === 'string' ? input.objective : '';
+    const status = this.normalizeSessionGoalStatus(input.status);
+    if (!sessionId || !objective || !status) {
+      return undefined;
+    }
+    const count = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+      ? Math.max(0, Math.trunc(value))
+      : 0;
+    const tokenBudget = input.tokenBudget === null
+      ? null
+      : typeof input.tokenBudget === 'number' && Number.isFinite(input.tokenBudget) && input.tokenBudget > 0
+        ? Math.trunc(input.tokenBudget)
+        : null;
+    return {
+      sessionId,
+      objective,
+      status,
+      tokenBudget,
+      tokensUsed: count(input.tokensUsed),
+      timeUsedSeconds: count(input.timeUsedSeconds),
+      createdAt: count(input.createdAt),
+      updatedAt: count(input.updatedAt),
+    };
+  }
+  private normalizeSessionGoalResponse(
+    raw: unknown,
+    fallbackSessionId: string,
+  ): RegistrySessionGoalResponse {
+    const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    return {
+      ok: input.ok === true,
+      sessionId: typeof input.sessionId === 'string' ? input.sessionId : fallbackSessionId,
+      goal: this.normalizeSessionGoal(input.goal) ?? null,
     };
   }
   private normalizeSessionStatusContext(raw: unknown): RegistrySessionStatusContext | undefined {
@@ -522,6 +582,7 @@ export class RegistryRepository {
         : undefined,
       usage: this.normalizeSessionUsage(input.usage),
       sessionActions: this.normalizeSessionActions(input.sessionActions),
+      goal: this.normalizeSessionGoal(input.goal),
       forkedFrom: this.normalizeSessionForkOrigin(input.forkedFrom),
     };
   }
@@ -1405,6 +1466,72 @@ export class RegistryRepository {
       accepted: body.accepted === true,
       sessionId,
       operationId: typeof body.operationId === 'string' ? body.operationId : '',
+    };
+  }
+
+  async createSessionGoal(
+    projectId: string,
+    sessionId: string,
+    objective: string,
+    tokenBudget: number | null = null,
+  ): Promise<RegistrySessionGoalResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.SessionGoalCreate,
+      projectId,
+      payload: {sessionId, objective, tokenBudget},
+      timeoutMs: 30000,
+    });
+    return this.normalizeSessionGoalResponse(response.payload, sessionId);
+  }
+
+  async getSessionGoal(projectId: string, sessionId: string): Promise<RegistrySessionGoalResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.SessionGoalGet,
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 30000,
+    });
+    return this.normalizeSessionGoalResponse(response.payload, sessionId);
+  }
+
+  async updateSessionGoal(
+    projectId: string,
+    sessionId: string,
+    patch: RegistrySessionGoalPatch,
+  ): Promise<RegistrySessionGoalResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.SessionGoalUpdate,
+      projectId,
+      payload: {sessionId, ...patch},
+      timeoutMs: 30000,
+    });
+    return this.normalizeSessionGoalResponse(response.payload, sessionId);
+  }
+
+  async stopSessionGoal(projectId: string, sessionId: string): Promise<RegistrySessionGoalResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.SessionGoalStop,
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 30000,
+    });
+    return this.normalizeSessionGoalResponse(response.payload, sessionId);
+  }
+
+  async clearSessionGoal(projectId: string, sessionId: string): Promise<RegistrySessionGoalClearResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.SessionGoalClear,
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 30000,
+    });
+    const body = response.payload && typeof response.payload === 'object'
+      ? response.payload as Record<string, unknown>
+      : {};
+    return {
+      ok: body.ok === true,
+      sessionId: typeof body.sessionId === 'string' ? body.sessionId : sessionId,
+      cleared: body.cleared === true,
     };
   }
 
