@@ -1,5 +1,6 @@
 import React from 'react';
 import {Virtuoso, type VirtuosoHandle} from 'react-virtuoso';
+import {Icon} from '../common/Icon';
 import {
   filterRegistryDebugRecords,
   type RegistryDebugRecord,
@@ -368,7 +369,7 @@ export function RegistryDebugPanel({
         onPointerCancel={finishPanelPointer}
       >
         <div className="registry-debug-title">
-          <span className="codicon codicon-debug-alt" />
+          <Icon name="bug" />
           <span>Message Viewer</span>
           <span className="registry-debug-count">{records.length}</span>
         </div>
@@ -380,13 +381,13 @@ export function RegistryDebugPanel({
             aria-label={detailCollapsed ? 'Show detail pane' : 'Hide detail pane'}
             title={detailCollapsed ? 'Show detail' : 'Hide detail'}
           >
-            <span className={`codicon ${detailCollapsed ? 'codicon-chevron-left' : 'codicon-chevron-right'}`} />
+            <Icon name={detailCollapsed ? 'panelRightOpen' : 'panelRightClose'} />
           </button>
           <button type="button" className="registry-debug-action" onClick={onClear}>
             Clear
           </button>
           <button type="button" className="registry-debug-icon-action" onClick={onClose} aria-label="Close debug panel" title="Close">
-            <span className="codicon codicon-close" />
+            <Icon name="x" />
           </button>
         </div>
       </div>

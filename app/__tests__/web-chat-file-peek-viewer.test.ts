@@ -40,6 +40,19 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).not.toContain('<svg viewBox="0 0 16 16" focusable="false">');
   });
 
+  test('preview and file workbench use the shared SVG icon system instead of Codicon', () => {
+    const mainTsx = readSourceText(mainPath);
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const fileTreeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'file', 'FileExplorerTree.tsx'));
+
+    expect(mainTsx).not.toContain('codicon');
+    expect(chromeTsx).not.toContain('codicon');
+    expect(fileTreeTsx).not.toContain('codicon');
+    expect(mainTsx).toContain("import {Icon} from '../common/Icon';");
+    expect(chromeTsx).toContain("import {Icon, type IconName} from '../common/Icon';");
+    expect(fileTreeTsx).toContain("import {Icon} from '../common/Icon';");
+  });
+
   test('file mention preview reuses chat peek without inserting or closing the menu', () => {
     const mainTsx = readSourceText(mainPath);
     const previewStart = mainTsx.indexOf('const openChatFileMentionPreview = useCallback(');
@@ -484,7 +497,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('className="preview-workbench-tree-search-input"');
     expect(mainTsx).toContain('className="preview-workbench-tree-tool-button"');
     expect(mainTsx).toContain('onClick={locateActivePreviewFileInTree}');
-    expect(mainTsx).toContain('codicon codicon-location');
+    expect(mainTsx).toContain('<Icon name="locateFixed"');
     expect(mainTsx).toContain('const previewFileTreeDepthIndent = 8;');
     expect(mainTsx).toContain('const paddingLeft = 10 + depth * previewFileTreeDepthIndent;');
     expect(mainTsx).toContain('depthIndent={previewFileTreeDepthIndent}');
@@ -508,7 +521,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const togglePreviewFileTreeSearchDirectory = (path: string) => {');
     expect(mainTsx).toContain('const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);');
     expect(mainTsx).toContain('onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}');
-    expect(mainTsx).toContain("collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'");
+    expect(mainTsx).toContain("<Icon name={collapsed ? 'chevronRight' : 'chevronDown'}");
     expect(mainTsx).toContain('{collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}');
     expect(mainTsx).not.toContain('className="path"');
 
@@ -541,7 +554,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('preview-workbench-mobile-header-toggle');
     expect(chromeTsx).toContain("setMobileHeaderHidden(hidden => !hidden)");
     expect(chromeTsx).toContain("mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'");
-    expect(chromeTsx).toContain("mobileHeaderHidden ? 'codicon-screen-normal' : 'codicon-screen-full'");
+    expect(chromeTsx).toContain("mobileHeaderHidden ? 'panelTopOpen' : 'panelTop'");
 
     expect(stylesCss).toContain('.preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-toolbar');
     expect(stylesCss).toContain('.preview-workbench-mobile-header-toggle');

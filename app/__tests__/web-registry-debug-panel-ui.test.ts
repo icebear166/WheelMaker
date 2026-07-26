@@ -10,6 +10,8 @@ describe('web registry debug panel ui', () => {
     expect(fs.existsSync(panelPath)).toBe(true);
     const panelTsx = fs.readFileSync(panelPath, 'utf8');
 
+    expect(panelTsx).not.toContain('codicon');
+    expect(panelTsx).toContain("import {Icon} from '../common/Icon';");
     expect(panelTsx).toContain("import {Virtuoso, type VirtuosoHandle} from 'react-virtuoso';");
     expect(panelTsx).toContain('className="registry-debug-panel"');
     expect(panelTsx).toContain('className="registry-debug-list-pane"');
@@ -31,6 +33,9 @@ describe('web registry debug panel ui', () => {
     expect(panelTsx).not.toContain('payload summary');
     expect(panelTsx).not.toContain('registry-debug-payload-summary');
     expect(panelTsx).toContain('<span>Message Viewer</span>');
+    expect(panelTsx).toContain('<Icon name="bug" />');
+    expect(panelTsx).toContain("detailCollapsed ? 'panelRightOpen' : 'panelRightClose'");
+    expect(panelTsx).toContain('<Icon name="x" />');
     expect(panelTsx).not.toContain('Registry Debug');
     expect(panelTsx).not.toContain('Logout');
     expect(panelTsx).not.toContain('onLogout');

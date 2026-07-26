@@ -176,9 +176,8 @@
   text-align: left;
 }
 
-.local-dev-actions button .codicon {
+.local-dev-actions button .sl-icon {
   color: var(--accent-primary);
-  font-size: 14px;
 }
 
 .local-dev-source-row button:hover,
@@ -190,7 +189,7 @@
   outline: none;
 }
 
-.local-dev-actions button.danger .codicon {
+.local-dev-actions button.danger .sl-icon {
   color: #e68a8a;
 }
 

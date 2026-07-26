@@ -224,10 +224,6 @@ body,
   background: rgba(127, 127, 127, 0.15);
 }
 
-.codicon-chevron-right {
-  transition: transform 160ms ease, color 140ms ease;
-}
-
 .tab-label {
   display: inline;
 }
@@ -384,8 +380,7 @@ body,
   line-height: 1;
 }
 
-.node-icon.codicon {
-  font-size: 15px;
+.node-icon.sl-icon {
   color: #dcb67a;
 }
 

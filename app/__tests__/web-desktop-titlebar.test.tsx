@@ -74,6 +74,11 @@ describe('desktop window controls', () => {
       'Maximize or restore',
       'Close',
     ]);
+    expect(buttons.map(button => button.findByType('svg').props['data-icon-name'])).toEqual([
+      'minus',
+      'maximize',
+      'x',
+    ]);
 
     root.findByProps({'aria-label': 'Minimize'}).props.onClick();
     root.findByProps({'aria-label': 'Maximize or restore'}).props.onClick();

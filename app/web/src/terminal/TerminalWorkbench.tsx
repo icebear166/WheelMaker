@@ -1,4 +1,5 @@
 import React, {type ReactNode, useState} from 'react';
+import {Icon} from '../common/Icon';
 import type {RegistryTerminal} from '../registry/registryTypes';
 
 export type TerminalWorkbenchProps = {
@@ -50,7 +51,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
       <div className="terminal-tabbar" role="tablist" aria-label="Terminals">
         {props.mode === 'mobile' ? (
           <button type="button" className="terminal-back" aria-label="Back to Chat" onClick={props.onCloseSurface}>
-            <span className="codicon codicon-chevron-left" aria-hidden="true" />
+            <Icon name="arrowLeft" />
           </button>
         ) : null}
         <div className="terminal-tabs">
@@ -79,7 +80,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
             <button type="button" className="terminal-fit" aria-label="Fit terminal to this screen"
               title="Fit terminal to this screen" onClick={props.onClaimResize}>
               {props.mode === 'mobile'
-                ? <span className="codicon codicon-screen-normal" aria-hidden="true" />
+                ? <Icon name="maximize" />
                 : 'Fit to this screen'}
             </button>
           </div>

@@ -91,11 +91,6 @@
   outline: none;
 }
 
-.desktop-window-source-button .codicon {
-  font-size: 13px;
-  line-height: 1;
-}
-
 .desktop-window-source-popover {
   position: absolute;
   top: calc(100% + 6px);
@@ -190,8 +185,7 @@
   color: #ffffff;
 }
 
-.desktop-titlebar-button .codicon {
-  font-size: 13px;
+.desktop-titlebar-button .sl-icon {
   line-height: 1;
 }
 
@@ -223,9 +217,9 @@
   outline: none;
 }
 
-.chat-menu-icon-button .codicon {
-  font-size: 14px;
-  line-height: 1;
+.chat-menu-icon-button .sl-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .desktop-shell {
@@ -1399,7 +1393,7 @@
   overflow: hidden;
 }
 
-.mobile-project-sheet-item .codicon {
+.mobile-project-sheet-item .sl-icon {
   flex: 0 0 auto;
 }
 

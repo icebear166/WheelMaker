@@ -148,7 +148,7 @@ describe('port relay settings UI source structure', () => {
     expect(previewChromeTsx).toContain("activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (");
     expect(previewChromeTsx).toContain('className="preview-workbench-mobile-port-relay-refresh"');
     expect(previewChromeTsx).toContain('aria-label="Refresh relay page"');
-    expect(previewChromeTsx).toContain('codicon-refresh');
+    expect(previewChromeTsx).toContain('<Icon name="refreshCw" />');
 
     expect(stylesCss).toContain('.preview-workbench-mobile-port-relay-refresh');
     const refreshStart = stylesCss.indexOf('.preview-workbench-mobile-port-relay-refresh');

@@ -5,6 +5,7 @@ import {
   type PreviewWorkbenchTab,
   type PreviewWorkbenchTabType,
 } from './previewWorkbenchState';
+import {Icon, type IconName} from '../common/Icon';
 import { DesktopDragRegion } from '../shell/layouts/desktop/DesktopTitleBar';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
@@ -33,11 +34,11 @@ type PreviewWorkbenchChromeProps = {
   children: React.ReactNode;
 };
 
-function previewWorkbenchTabIcon(type: PreviewWorkbenchTabType): string {
-  if (type === 'file') return 'codicon-file-code';
-  if (type === 'prompt-diff') return 'codicon-diff';
-  if (type === 'attachment') return 'codicon-paperclip';
-  return 'codicon-radio-tower';
+function previewWorkbenchTabIcon(type: PreviewWorkbenchTabType): IconName {
+  if (type === 'file') return 'fileCode';
+  if (type === 'prompt-diff') return 'fileDiff';
+  if (type === 'attachment') return 'paperclip';
+  return 'radioTower';
 }
 
 export function PreviewWorkbenchChrome({
@@ -79,7 +80,7 @@ export function PreviewWorkbenchChrome({
         title={mode === 'mobile' ? 'Back' : 'Close preview'}
         aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
       >
-        <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+        <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} />
       </button>
       <div className="preview-workbench-title" title={activeTitle}>{activeTitle}</div>
       {onSearch ? (
@@ -92,7 +93,7 @@ export function PreviewWorkbenchChrome({
           aria-label="Search in preview"
           aria-pressed={searchActive}
         >
-          <span className="codicon codicon-search" aria-hidden="true" />
+          <Icon name="search" />
         </button>
       ) : null}
       {actions ? (
@@ -106,7 +107,7 @@ export function PreviewWorkbenchChrome({
             aria-haspopup="menu"
             aria-expanded={actionsMenuOpen}
           >
-            <span className="codicon codicon-ellipsis" aria-hidden="true" />
+            <Icon name="ellipsis" />
           </button>
           {actionsMenuOpen ? (
             <div className="preview-workbench-actions-menu" role="menu" aria-label="Preview actions">
@@ -184,7 +185,7 @@ export function PreviewWorkbenchChrome({
               title={tooltip}
             >
               <button type="button" className="chat-file-workbench-tab-open" onClick={() => onTabSelect(tab.id)}>
-                <span className={`codicon ${previewWorkbenchTabIcon(tab.type)} preview-workbench-tab-icon`} aria-hidden="true" />
+                <Icon name={previewWorkbenchTabIcon(tab.type)} className="preview-workbench-tab-icon" />
                 <span className="preview-workbench-tab-label">{tab.title}</span>
               </button>
               <button
@@ -194,7 +195,7 @@ export function PreviewWorkbenchChrome({
                 aria-label={`Close ${tab.title}`}
                 title="Close"
               >
-                <span className="codicon codicon-close" />
+                <Icon name="x" />
               </button>
             </div>
           );
@@ -221,7 +222,7 @@ export function PreviewWorkbenchChrome({
               title="Toggle file tree"
               aria-pressed={fileTreeOpen}
             >
-              <span className="codicon codicon-files" />
+              <Icon name="files" />
             </button>
           </div>
         ) : null}
@@ -240,7 +241,7 @@ export function PreviewWorkbenchChrome({
                 title="Refresh relay page"
                 aria-label="Refresh relay page"
               >
-                <span className="codicon codicon-refresh" />
+                <Icon name="refreshCw" />
               </button>
             ) : null}
             <button
@@ -251,7 +252,7 @@ export function PreviewWorkbenchChrome({
               aria-label={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
               aria-pressed={mobileHeaderHidden}
             >
-              <span className={`codicon ${mobileHeaderHidden ? 'codicon-screen-normal' : 'codicon-screen-full'}`} />
+              <Icon name={mobileHeaderHidden ? 'panelTopOpen' : 'panelTop'} />
             </button>
           </>
         ) : null}

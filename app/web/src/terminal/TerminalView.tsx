@@ -1,6 +1,7 @@
 import React, {forwardRef, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import {Terminal} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
+import {Icon} from '../common/Icon';
 
 export type TerminalViewHandle = {
   resetAndWrite(data: Uint8Array): Promise<void>;
@@ -301,7 +302,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
           style={{left: copyMenu.left, top: copyMenu.top}}
         >
           <button type="button" role="menuitem" onClick={copySelection}>
-            <span className="codicon codicon-copy" aria-hidden="true" />
+            <Icon name="copy" />
             <span>Copy</span>
           </button>
         </div>

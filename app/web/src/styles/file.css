@@ -210,8 +210,9 @@
   font-size: 13px;
 }
 
-.chat-file-workbench-empty .codicon {
-  font-size: 24px;
+.chat-file-workbench-empty .sl-icon {
+  width: 24px;
+  height: 24px;
   opacity: 0.75;
 }
 
@@ -233,8 +234,9 @@
   background: color-mix(in srgb, var(--accent-primary) 14%, var(--surface-panel));
 }
 
-.chat-file-workbench-empty-action .codicon {
-  font-size: 14px;
+.chat-file-workbench-empty-action .sl-icon {
+  width: 14px;
+  height: 14px;
   opacity: 0.9;
 }
 
@@ -383,7 +385,8 @@
 
 .preview-workbench-tab-icon {
   flex: 0 0 auto;
-  font-size: 13px;
+  width: 13px;
+  height: 13px;
   opacity: 0.86;
 }
 
@@ -836,7 +839,7 @@
   color: var(--text-secondary);
 }
 
-.chat-attachment-preview-placeholder .codicon {
+.chat-attachment-preview-placeholder .sl-icon {
   width: 32px;
   height: 32px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
@@ -895,7 +898,7 @@
   font-size: 12px;
 }
 
-.chat-prompt-diff-overview .codicon {
+.chat-prompt-diff-overview .sl-icon {
   color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
@@ -1068,10 +1071,11 @@
   padding: 0 5px 0 9px;
 }
 
-.chat-file-mention-chip .codicon {
+.chat-file-mention-chip .sl-icon {
   flex: 0 0 auto;
   color: var(--accent-primary);
-  font-size: 13px;
+  width: 13px;
+  height: 13px;
 }
 
 .chat-file-mention-chip-name {
@@ -1102,9 +1106,10 @@
   color: var(--state-danger);
 }
 
-.chat-file-mention-remove .codicon {
+.chat-file-mention-remove .sl-icon {
   color: currentColor;
-  font-size: 12px;
+  width: 12px;
+  height: 12px;
 }
 
 .chat-file-mention-empty {
@@ -1156,9 +1161,10 @@
   cursor: pointer;
 }
 
-.chat-file-mention-option-main .codicon {
+.chat-file-mention-option-main .sl-icon {
   color: var(--text-secondary);
-  font-size: 13px;
+  width: 13px;
+  height: 13px;
 }
 
 .chat-file-mention-preview-button {
@@ -1195,8 +1201,9 @@
   color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
 }
 
-.chat-file-mention-preview-button .codicon {
-  font-size: 14px;
+.chat-file-mention-preview-button .sl-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .chat-file-mention-path {

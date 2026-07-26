@@ -59,7 +59,6 @@ async function cacheFirst(request) {
 
 function isImmutableBuildAsset(url) {
   const extension = url.pathname.slice(url.pathname.lastIndexOf('.'));
-  if (url.pathname === '/codicon.ttf') return true;
   if (!['.js', '.css', '.woff', '.woff2', '.ttf', '.svg'].includes(extension)) {
     return false;
   }

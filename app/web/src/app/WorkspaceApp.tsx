@@ -136,6 +136,7 @@ import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
+import {Icon} from '../common/Icon';
 import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
@@ -19143,9 +19144,9 @@ export function App() {
   const refreshButtonContent = refreshingProject ? (
     '...'
   ) : reconnecting ? (
-    <span className="codicon codicon-loading codicon-modifier-spin" />
+    <Icon name="loader" spin />
   ) : (
-    <span className="codicon codicon-refresh" />
+    <Icon name="refreshCw" />
   );
 
   const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();
@@ -19486,8 +19487,8 @@ export function App() {
               title={node.path}
               aria-expanded={!collapsed}
             >
-              <span className={`caret codicon ${collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'}`} />
-              <span className={`node-icon codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'}`} />
+              <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} className="caret" />
+              <Icon name={collapsed ? 'folder' : 'folderOpen'} className="node-icon" />
               <span className="label">{node.name}</span>
             </button>
             {collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}
@@ -19915,7 +19916,7 @@ export function App() {
             className="preview-workbench-action-menu-item"
             onClick={() => runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')}
           >
-            <span className="codicon codicon-code" aria-hidden="true" />
+            <Icon name="code" />
             <span>Open with VS Code</span>
           </button>
         ) : null}
@@ -19926,7 +19927,7 @@ export function App() {
             className="preview-workbench-action-menu-item"
             onClick={() => runProjectFileDesktopAction('folder', 'Failed to show file in File Explorer')}
           >
-            <span className="codicon codicon-folder-opened" aria-hidden="true" />
+            <Icon name="folderOpen" />
             <span>Show in File Explorer</span>
           </button>
         ) : null}
@@ -19949,7 +19950,7 @@ export function App() {
                   }).catch(() => undefined);
                 }}
               >
-                <span className="codicon codicon-export" aria-hidden="true" />
+                <Icon name="share" />
                 <span>Export as HTML</span>
               </button>
             ) : null}
@@ -19962,7 +19963,7 @@ export function App() {
                 closeActionsMenu();
               }}
             >
-              <span className="codicon codicon-clippy" aria-hidden="true" />
+              <Icon name="copy" />
               <span>Copy absolute path</span>
             </button>
           </>
@@ -19977,7 +19978,7 @@ export function App() {
               closeActionsMenu();
             }}
           >
-            <span className="codicon codicon-link-external" aria-hidden="true" />
+            <Icon name="externalLink" />
             <span>Open relay page in browser</span>
           </button>
         ) : null}
@@ -19989,7 +19990,7 @@ export function App() {
           onClick={() => handlePreviewProjectIndexRebuild(tab.projectId).catch(() => undefined)}
           disabled={indexPending}
         >
-          <span className={`codicon ${indexPending ? 'codicon-sync' : 'codicon-refresh'}`} aria-hidden="true" />
+          <Icon name="refreshCw" spin={indexPending} />
           <span>{projectIndexScanPendingByProjectId[tab.projectId] ? 'Indexing...' : 'Rebuild file index'}</span>
         </button>
         {indexError ? <div className="preview-workbench-action-menu-error" role="alert">{indexError}</div> : null}
@@ -20116,7 +20117,7 @@ export function App() {
       : 'Search current preview';
   const previewSearchBar = previewSearchOpen ? (
     <div className="preview-workbench-search-bar">
-      <span className="codicon codicon-search" aria-hidden="true" />
+      <Icon name="search" />
       <input
         ref={previewSearchInputRef}
         className="preview-workbench-search-input"
@@ -20135,7 +20136,7 @@ export function App() {
         title="Previous match"
         aria-label="Previous match"
       >
-        <span className="codicon codicon-chevron-up" />
+        <Icon name="chevronUp" />
       </button>
       <button
         type="button"
@@ -20145,7 +20146,7 @@ export function App() {
         title="Next match"
         aria-label="Next match"
       >
-        <span className="codicon codicon-chevron-down" />
+        <Icon name="chevronDown" />
       </button>
       <button
         type="button"
@@ -20154,7 +20155,7 @@ export function App() {
         title="Close search"
         aria-label="Close search"
       >
-        <span className="codicon codicon-close" />
+        <Icon name="x" />
       </button>
     </div>
   ) : null;
@@ -20197,7 +20198,7 @@ export function App() {
     : 'Search current session';
   const chatSearchBar = chatSearchOpen ? (
     <div className="chat-search-bar">
-      <span className="codicon codicon-search" aria-hidden="true" />
+      <Icon name="search" />
       <input
         ref={chatSearchInputRef}
         className="chat-search-input"
@@ -20216,7 +20217,7 @@ export function App() {
         title="Previous match"
         aria-label="Previous match"
       >
-        <span className="codicon codicon-chevron-up" />
+        <Icon name="chevronUp" />
       </button>
       <button
         type="button"
@@ -20226,7 +20227,7 @@ export function App() {
         title="Next match"
         aria-label="Next match"
       >
-        <span className="codicon codicon-chevron-down" />
+        <Icon name="chevronDown" />
       </button>
       <button
         type="button"
@@ -20235,13 +20236,13 @@ export function App() {
         title="Close search"
         aria-label="Close search"
       >
-        <span className="codicon codicon-close" />
+        <Icon name="x" />
       </button>
     </div>
   ) : null;
   const previewFileTreeSearch = (
     <>
-      <span className="codicon codicon-search preview-workbench-tree-search-icon" aria-hidden="true" />
+      <Icon name="search" className="preview-workbench-tree-search-icon" />
       <input
         ref={previewFileTreeSearchInputRef}
         className="preview-workbench-tree-search-input"
@@ -20259,7 +20260,7 @@ export function App() {
         title={chatFilePeek?.path ? 'Locate current file' : 'No current file to locate'}
         aria-label="Locate current file"
       >
-        <span className="codicon codicon-location" aria-hidden="true" />
+        <Icon name="locateFixed" />
       </button>
     </>
   );
@@ -20383,7 +20384,7 @@ export function App() {
     >
       <div className="quick-file-search-panel" onPointerDown={event => event.stopPropagation()}>
         <div className="quick-file-search-header">
-          <span className="codicon codicon-go-to-file" aria-hidden="true" />
+          <Icon name="search" />
           <span className="quick-file-search-project" title={quickFileProjectName}>
             {quickFileProjectName}
           </span>
@@ -20429,7 +20430,7 @@ export function App() {
                   onClick={() => openQuickFileResult(result)}
                   title={result.path}
                 >
-                  <span className="codicon codicon-file-code" aria-hidden="true" />
+                  <Icon name="fileCode" />
                   <span className="quick-file-search-name">{name}</span>
                   <span className="quick-file-search-path">{result.path}</span>
                 </button>
@@ -20448,7 +20449,7 @@ export function App() {
       role="menu"
     >
       <button type="button" role="menuitem" onClick={copyPreviewSelection}>
-        <span className="codicon codicon-copy" aria-hidden="true" />
+        <Icon name="copy" />
         <span>Copy</span>
       </button>
     </div>

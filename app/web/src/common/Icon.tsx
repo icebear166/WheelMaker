@@ -7,6 +7,8 @@ import React from 'react';
 const GLYPHS = {
   // lucide:plus
   plus: (<><path d="M5 12h14" /><path d="M12 5v14" /></>),
+  // lucide:minus
+  minus: (<><path d="M5 12h14" /></>),
   // lucide:x
   x: (<><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>),
   // lucide:check
@@ -63,6 +65,10 @@ const GLYPHS = {
   arrowRight: (<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>),
   // lucide:circle
   circle: (<><circle cx="12" cy="12" r="10" /></>),
+  // lucide:play
+  play: (<><path d="m6 3 14 9-14 9z" /></>),
+  // lucide:square
+  square: (<><rect width="18" height="18" x="3" y="3" rx="2" /></>),
   // lucide:eye-off
   eyeOff: (<><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></>),
   // lucide:layout-grid
@@ -71,6 +77,12 @@ const GLYPHS = {
   terminal: (<><path d="m4 17 6-6-6-6" /><path d="M12 19h8" /></>),
   // lucide:panel-right
   panelRight: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /></>),
+  // lucide:panel-right-open
+  panelRightOpen: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /><path d="m10 15-3-3 3-3" /></>),
+  // lucide:panel-right-close
+  panelRightClose: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M15 3v18" /><path d="m8 9 3 3-3 3" /></>),
+  // lucide:maximize
+  maximize: (<><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></>),
   // lucide:app-window
   appWindow: (<><rect width="20" height="16" x="2" y="4" rx="2" /><path d="M10 4v4" /><path d="M2 8h20" /><path d="M6 4v4" /></>),
   // lucide:history
@@ -149,6 +161,24 @@ const GLYPHS = {
   circleAlert: (<><g><circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" /></g></>),
   // lucide:file
   file: (<><g><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /></g></>),
+  // lucide:file-code
+  fileCode: (<><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /><path d="m10 11.5L8 15l2 2.5" /><path d="m14 12.5 2 2.5-2 2.5" /></>),
+  // lucide:file-diff
+  fileDiff: (<><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M9 10h6" /><path d="M12 13V7" /><path d="M9 17h6" /></>),
+  // lucide:files
+  files: (<><path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" /><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" /><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" /></>),
+  // lucide:paperclip
+  paperclip: (<><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></>),
+  // lucide:ellipsis
+  ellipsis: (<><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>),
+  // lucide:locate-fixed
+  locateFixed: (<><path d="M2 12h3" /><path d="M19 12h3" /><path d="M12 2v3" /><path d="M12 19v3" /><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="3" /></>),
+  // lucide:share
+  share: (<><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><path d="m16 6-4-4-4 4" /><path d="M12 2v13" /></>),
+  // lucide:panel-top
+  panelTop: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /></>),
+  // lucide:panel-top-open
+  panelTopOpen: (<><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path d="m15 14-3 3-3-3" /></>),
   // lucide:git-branch
   gitBranch: (<><path d="M15 6a9 9 0 0 0-9 9V3" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /></>),
 } as const;

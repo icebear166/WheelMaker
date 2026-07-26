@@ -1,4 +1,5 @@
 import React, {useCallback, useEffect, useState} from 'react';
+import {Icon, type IconName} from '../../../common/Icon';
 import {
   getDesktopWindowBridge,
   openLocalDevPanelEvent,
@@ -6,13 +7,13 @@ import {
   type DesktopLocalDevState,
 } from '../../../platform/desktop/desktopRuntime';
 
-const operations: Array<{operation: DesktopLocalDevOperation; label: string; icon: string; tone?: string}> = [
-  {operation: 'build', label: 'Build', icon: 'codicon-package'},
-  {operation: 'start', label: 'Start', icon: 'codicon-play'},
-  {operation: 'stop', label: 'Stop', icon: 'codicon-debug-stop'},
-  {operation: 'restart', label: 'Restart', icon: 'codicon-refresh'},
-  {operation: 'open-directory', label: 'Open artifacts', icon: 'codicon-folder-opened'},
-  {operation: 'exit', label: 'Exit Local Dev', icon: 'codicon-sign-out', tone: 'danger'},
+const operations: Array<{operation: DesktopLocalDevOperation; label: string; icon: IconName; tone?: string}> = [
+  {operation: 'build', label: 'Build', icon: 'package'},
+  {operation: 'start', label: 'Start', icon: 'play'},
+  {operation: 'stop', label: 'Stop', icon: 'square'},
+  {operation: 'restart', label: 'Restart', icon: 'refreshCw'},
+  {operation: 'open-directory', label: 'Open artifacts', icon: 'folderOpen'},
+  {operation: 'exit', label: 'Exit Local Dev', icon: 'logOut', tone: 'danger'},
 ];
 
 function errorMessage(error: unknown): string {
@@ -91,7 +92,7 @@ export function LocalDevModePanel() {
             <span aria-hidden="true" />{state?.running ? 'Running' : 'Stopped'}
           </span>
           <button type="button" className="local-dev-close" aria-label="Close Local Dev panel" onClick={() => setVisible(false)}>
-            <span className="codicon codicon-close" aria-hidden="true" />
+            <Icon name="x" />
           </button>
         </div>
       </header>
@@ -121,7 +122,7 @@ export function LocalDevModePanel() {
             disabled={Boolean(busy)}
             onClick={() => void perform(item.operation)}
           >
-            <span className={`codicon ${item.icon}`} aria-hidden="true" />
+            <Icon name={item.icon} filled={item.icon === 'square'} />
             <span>{busy === item.operation ? 'Working…' : item.label}</span>
           </button>
         ))}

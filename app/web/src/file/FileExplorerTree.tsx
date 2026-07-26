@@ -1,4 +1,5 @@
 import React from 'react';
+import {Icon} from '../common/Icon';
 import type { RegistryFsEntry } from '../registry/registryTypes';
 
 type FileResolvedIcon = {
@@ -49,15 +50,13 @@ export function FileExplorerTree({
                 toggleDirectory(entry.path);
               }}
             >
-              <span
-                className={`caret codicon ${
-                  expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'
-                }`}
+              <Icon
+                name={expanded ? 'chevronDown' : 'chevronRight'}
+                className="caret"
               />
-              <span
-                className={`node-icon codicon ${
-                  expanded ? 'codicon-folder-opened' : 'codicon-folder'
-                }`}
+              <Icon
+                name={expanded ? 'folderOpen' : 'folder'}
+                className="node-icon"
               />
               <span className="label">{entry.name}</span>
               {loadingDirs[entry.path] ? (

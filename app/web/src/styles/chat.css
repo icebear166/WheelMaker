@@ -302,8 +302,9 @@
   cursor: pointer;
 }
 
-.chat-title-project-menu-create .codicon {
-  font-size: 14px;
+.chat-title-project-menu-create .sl-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .chat-title-project-menu-create:hover {

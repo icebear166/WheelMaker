@@ -108,7 +108,7 @@ describe('web resume session ui', () => {
       /\.mobile-project-sheet-item-label \{[\s\S]*min-width: 0;[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*white-space: nowrap;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.mobile-project-sheet-item \.codicon \{[\s\S]*flex: 0 0 auto;[\s\S]*\}/,
+      /\.mobile-project-sheet-item \.sl-icon \{[\s\S]*flex: 0 0 auto;[\s\S]*\}/,
     );
   });
 });

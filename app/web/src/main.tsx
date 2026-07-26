@@ -1,6 +1,5 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@vscode/codicons/dist/codicon.css';
 // Subset each weight to latin + latin-ext only. The all-subset CSS (e.g.
 // 400.css) also pulls cyrillic/greek/vietnamese/hebrew/... in woff2+woff,
 // which webpack emits as bundled assets; non-Latin glyphs fall back to the

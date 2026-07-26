@@ -92,7 +92,7 @@ describe('web runtime setup', () => {
     expect(sw).toContain("event.data?.type === 'WM_PWA_NOTIFY'");
     expect(sw).toContain("if (req.mode === 'navigate')");
     expect(sw).toContain('isImmutableBuildAsset');
-    expect(sw).toContain("url.pathname === '/codicon.ttf'");
+    expect(sw).not.toContain('codicon');
     expect(sw).toContain("event.respondWith(cacheFirst(req));");
   });
 
@@ -149,7 +149,7 @@ describe('web runtime setup', () => {
     expect(indexHtml).toContain('<meta name="theme-color" content="#1b1b1b" />');
   });
 
-  test('preloads codicons because chat uses icon font classes on the first screen', () => {
+  test('does not load the retired Codicon font runtime', () => {
     const projectRoot = path.join(__dirname, '..');
     const indexHtml = fs.readFileSync(
       path.join(projectRoot, 'web', 'public', 'index.html'),
@@ -159,25 +159,48 @@ describe('web runtime setup', () => {
       path.join(projectRoot, 'web', 'src', 'main.tsx'),
       'utf8',
     );
+    const packageJson = fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8');
+    const packageLock = fs.readFileSync(path.join(projectRoot, 'package-lock.json'), 'utf8');
 
-    expect(mainTsx).toContain("import '@vscode/codicons/dist/codicon.css';");
-    expect(indexHtml).toContain('rel="preload"');
-    expect(indexHtml).toContain('as="font"');
-    expect(indexHtml).toContain('href="codicon.ttf"');
-    expect(indexHtml).toContain('crossorigin');
+    expect(mainTsx).not.toContain('codicon');
+    expect(indexHtml).not.toContain('codicon');
+    expect(packageJson).not.toContain('@vscode/codicons');
+    expect(packageLock).not.toContain('@vscode/codicons');
   });
 
-  test('webpack emits codicon font at the preload path even when css-loader preserves its query string', () => {
+  test('runtime source no longer references Codicon classes or glyphs', () => {
+    const sourceRoot = path.join(__dirname, '..', 'web', 'src');
+    const sourceFiles = [];
+    const visit = directory => {
+      for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+        const absolutePath = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          visit(absolutePath);
+          continue;
+        }
+        if (
+          /\.(?:css|ts|tsx)$/.test(entry.name) &&
+          !entry.name.includes('.test.')
+        ) {
+          sourceFiles.push(absolutePath);
+        }
+      }
+    };
+    visit(sourceRoot);
+
+    const offenders = sourceFiles
+      .filter(filePath => fs.readFileSync(filePath, 'utf8').toLowerCase().includes('codicon'))
+      .map(filePath => path.relative(sourceRoot, filePath));
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('webpack emits font assets through the standard hashed path', () => {
     const projectRoot = path.join(__dirname, '..');
     const webpackConfig = loadWebpackConfig(projectRoot, 'production');
     const assetRule = webpackConfig.module.rules.find(rule => String(rule.test) === String(/\.(woff2?|ttf|eot|svg)$/));
 
-    expect(assetRule.generator.filename({
-      filename: 'node_modules/@vscode/codicons/dist/codicon.ttf?721d4c0a96379d0c13d3d5596893c348',
-    })).toBe('codicon.ttf');
-    expect(assetRule.generator.filename({
-      filename: 'node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2',
-    })).toBe('[hash][ext][query]');
+    expect(assetRule.generator.filename).toBe('[hash][ext][query]');
   });
 
   test('webpack output path can be redirected for desktop staging', () => {

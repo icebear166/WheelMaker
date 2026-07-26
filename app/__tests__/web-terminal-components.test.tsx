@@ -209,6 +209,7 @@ describe('terminal components', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
     const copy = renderer!.root.findByProps({role: 'menuitem'});
+    expect(copy.findByProps({'data-icon-name': 'copy'})).toBeTruthy();
     await act(async () => copy.props.onClick());
     expect(writeText).toHaveBeenCalledWith('selected output');
     expect(onCopy).toHaveBeenCalledTimes(1);
@@ -679,7 +680,7 @@ describe('terminal components', () => {
 
     const fit = renderer!.root.findByProps({'aria-label': 'Fit terminal to this screen'});
     expect(fit.props.title).toBe('Fit terminal to this screen');
-    expect(fit.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-screen-normal');
+    expect(fit.findByProps({'data-icon-name': 'maximize'})).toBeTruthy();
     expect(fit.children).not.toContain('Fit');
     act(() => fit.props.onClick());
     expect(onClaimResize).toHaveBeenCalledTimes(1);
@@ -706,7 +707,9 @@ describe('terminal components', () => {
       );
     });
 
-    act(() => renderer!.root.findByProps({'aria-label': 'Back to Chat'}).props.onClick());
+    const back = renderer!.root.findByProps({'aria-label': 'Back to Chat'});
+    expect(back.findByProps({'data-icon-name': 'arrowLeft'})).toBeTruthy();
+    act(() => back.props.onClick());
     expect(onCloseSurface).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,4 +1,5 @@
 import React, { type ReactNode, useRef } from 'react';
+import {Icon} from '../../../common/Icon';
 import { getDesktopWindowBridge } from '../../../platform/desktop/desktopRuntime';
 
 type DesktopDragRegionProps = {
@@ -76,7 +77,7 @@ export function DesktopWindowControls() {
         title="Minimize"
         onClick={() => invokeDesktopAction(bridge.minimize)}
       >
-        <span className="codicon codicon-chrome-minimize" aria-hidden="true" />
+        <Icon name="minus" />
       </button>
       <button
         type="button"
@@ -85,7 +86,7 @@ export function DesktopWindowControls() {
         title="Maximize or restore"
         onClick={() => invokeDesktopAction(bridge.toggleMaximize)}
       >
-        <span className="codicon codicon-chrome-maximize" aria-hidden="true" />
+        <Icon name="maximize" />
       </button>
       <button
         type="button"
@@ -94,7 +95,7 @@ export function DesktopWindowControls() {
         title="Close"
         onClick={() => invokeDesktopAction(bridge.close)}
       >
-        <span className="codicon codicon-chrome-close" aria-hidden="true" />
+        <Icon name="x" />
       </button>
     </div>
   );

@@ -29,9 +29,10 @@ describe('SessionIcon', () => {
         'panelRight',
         'history',
         'listChecks',
+        'play',
+        'square',
       ]),
     );
-    expect(SESSION_ICON_NAMES).not.toContain('play');
     expect(SESSION_ICON_NAMES).not.toContain('messageSquareMore');
   });
 

@@ -176,12 +176,7 @@ module.exports = (_env = {}, argv = {}) => {
           test: /\.(woff2?|ttf|eot|svg)$/,
           type: 'asset/resource',
           generator: {
-            filename: pathData => {
-              const rawFilename = pathData.filename || '';
-              return rawFilename.replace(/\\/g, '/').includes('@vscode/codicons/dist/codicon.ttf')
-                ? 'codicon.ttf'
-                : '[hash][ext][query]';
-            },
+            filename: '[hash][ext][query]',
           },
         },
       ],

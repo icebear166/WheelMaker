@@ -35,6 +35,10 @@ describe('Windows Local Dev panel', () => {
     expect(root.findByProps({'aria-label': 'WheelMaker source directory'}).props.value).toBe('D:\\Code\\WheelMaker');
     const operations = root.findAllByType('button').map(button => button.props['data-local-dev-operation']).filter(Boolean);
     expect(operations).toEqual(['build', 'start', 'stop', 'restart', 'open-directory', 'exit']);
+    expect(root.findByProps({'aria-label': 'Close Local Dev panel'}).findByType('svg').props['data-icon-name']).toBe('x');
+    expect(root.findAll(node => typeof node.props['data-local-dev-operation'] === 'string')
+      .map(button => button.findByType('svg').props['data-icon-name']))
+      .toEqual(['package', 'play', 'square', 'refreshCw', 'folderOpen', 'logOut']);
     await ReactTestRenderer.act(async () => {
       root.findByProps({'data-local-dev-operation': 'restart'}).props.onClick();
     });

@@ -126,14 +126,6 @@ export function deriveNpmPackageUpdateTargets(packages: RegistryNpmPackage[]): N
 
 export type UpdateStatusIconKind = 'update' | 'current' | 'checking' | 'failed' | 'missing';
 
-export const UPDATE_STATUS_ICON_CODICON: Record<UpdateStatusIconKind, string> = {
-  update: 'codicon-arrow-up',
-  current: 'codicon-check',
-  checking: 'codicon-loading codicon-modifier-spin',
-  failed: 'codicon-error',
-  missing: 'codicon-circle-outline',
-};
-
 export function wheelMakerHubStatusIcon(
   status: string,
   loading: boolean,
