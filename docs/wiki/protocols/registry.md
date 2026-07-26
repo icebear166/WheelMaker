@@ -400,6 +400,8 @@ Session 请求要求 envelope 顶层 `projectId`。`sessionId` 放在 payload �
 - `session.archive.restore`
 - `session.delete`
 - `session.rename`
+- `session.pin`
+- `session.mark`
 - `session.send`
 - `session.fork`
 - `session.cancel`
@@ -419,6 +421,38 @@ Hub 上传和 Registry 广播使用同一事件名：
 `session.create` 可在 payload 中携带可选的 `createRequestId`。Hub 将其持久化到会话摘要，并在创建响应、`session.list` 与 `session.updated` 中原样返回，使客户端能在请求响应丢失后将已创建会话与本地草稿重新关联。
 
 `session.read` 响应 payload 使用 top-level `sessionId` 和 `turns[]`；turn 内不重复 `sessionId`。
+
+### Session Pin 与颜色 Mark
+
+`session.pin` 与 `session.mark` 是相互独立的 project-scoped Session summary 元数据写入。两者都使用现有 `session_forward` 路由，成功响应携带权威的 Session summary，不发布 `session.updated`；其他客户端在下次 `session.list` 时同步。
+
+`session.mark` 请求：
+
+```json
+{
+  "method": "session.mark",
+  "projectId": "hub-a:WheelMaker",
+  "payload": {
+    "sessionId": "sess-1",
+    "markColor": "red"
+  }
+}
+```
+
+`markColor` 只接受 `"red"`、`"yellow"`、`"green"`、`"blue"` 或用于清除的空字符串。Hub 校验 Session 属于 envelope 指定的 project，并拒绝其他值。
+
+活跃 Session summary 可携带：
+
+```ts
+{
+  pinned?: boolean
+  markColor?: "red" | "yellow" | "green" | "blue"
+}
+```
+
+缺失 `markColor` 表示无 Mark。Mark 不改变 `pinned`，Pin/Unpin 也不改变 `markColor`。字段与方法都是 Registry 2.6 的兼容性扩展，不修改 protocol version；旧客户端可忽略字段，新客户端不为旧 Hub 提供本地 Mark fallback。
+
+> 决策来源：[`docs/scope/2026-07-26-session-color-mark/spec-session-color-mark.md`](../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md)
 
 ### Codex 会话分叉
 
