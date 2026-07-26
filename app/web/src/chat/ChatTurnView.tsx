@@ -469,7 +469,8 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
             {steered ? (
               <span className="chat-prompt-steered-label" title="Inserted into the active turn">
-                Steered
+                <ChatIcon name="cornerDownLeft" size={11} />
+                <span>Steered</span>
               </span>
             ) : null}
             {promptStatus === 'responding' ? (
@@ -493,6 +494,42 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               >
                 {promptStatus === 'steering' ? 'Steering' : 'Queued'}
               </span>
+            ) : null}
+            {promptStatus === 'queued' || promptStatus === 'steering' ? (
+              <div className="chat-prompt-queue-actions">
+                {onSteerQueuedPrompt ? (
+                  <button
+                    type="button"
+                    className="chat-prompt-queue-action"
+                    title="Steer"
+                    aria-label="Steer"
+                    disabled={queuedPromptSteering}
+                    onClick={onSteerQueuedPrompt}
+                  >
+                    <ChatIcon name="cornerDownLeft" size={12} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="chat-prompt-queue-action"
+                  title="Next"
+                  aria-label="Next"
+                  disabled={queuedPromptSteering}
+                  onClick={onPrioritizeQueuedPrompt}
+                >
+                  <ChatIcon name="arrowUpToLine" size={12} />
+                </button>
+                <button
+                  type="button"
+                  className="chat-prompt-queue-action danger"
+                  title="Cancel"
+                  aria-label="Cancel"
+                  disabled={queuedPromptSteering}
+                  onClick={onCancelQueuedPrompt}
+                >
+                  <ChatIcon name="x" size={12} />
+                </button>
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -531,42 +568,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             </button>
             <button type="button" onClick={() => onEditPendingPrompt?.()}>
               Edit
-            </button>
-          </div>
-        ) : null}
-        {promptStatus === 'queued' || promptStatus === 'steering' ? (
-          <div className="chat-prompt-queue-actions">
-            {onSteerQueuedPrompt ? (
-              <button
-                type="button"
-                className="chat-prompt-queue-action"
-                title="Steer"
-                aria-label="Steer"
-                disabled={queuedPromptSteering}
-                onClick={onSteerQueuedPrompt}
-              >
-                <ChatIcon name="cornerDownLeft" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="chat-prompt-queue-action"
-              title="Next"
-              aria-label="Next"
-              disabled={queuedPromptSteering}
-              onClick={onPrioritizeQueuedPrompt}
-            >
-              <ChatIcon name="arrowUpToLine" />
-            </button>
-            <button
-              type="button"
-              className="chat-prompt-queue-action danger"
-              title="Cancel"
-              aria-label="Cancel"
-              disabled={queuedPromptSteering}
-              onClick={onCancelQueuedPrompt}
-            >
-              <ChatIcon name="x" />
             </button>
           </div>
         ) : null}

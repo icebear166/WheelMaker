@@ -1687,7 +1687,17 @@ func TestReporterRespondsToSessionPermissionRespondRequests(t *testing.T) {
 }
 
 func TestReporterForwardsSessionActionRequests(t *testing.T) {
-	for _, method := range []string{rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact, rp.RegistryMethodSessionSteer} {
+	for _, method := range []string{
+		rp.RegistryMethodSessionStatus,
+		rp.RegistryMethodSessionCompact,
+		rp.RegistryMethodSessionSteer,
+		rp.RegistryMethodSessionFork,
+		rp.RegistryMethodSessionGoalCreate,
+		rp.RegistryMethodSessionGoalGet,
+		rp.RegistryMethodSessionGoalUpdate,
+		rp.RegistryMethodSessionGoalStop,
+		rp.RegistryMethodSessionGoalClear,
+	} {
 		t.Run(method, func(t *testing.T) {
 			respSeen := make(chan testEnvelope, 1)
 			errSeen := make(chan error, 1)
