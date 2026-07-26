@@ -28,9 +28,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -703,6 +705,9 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionSkills, action: "uninstall"},
 		{section: hubStateSectionSkills, action: "update"},
 		{section: hubStateSectionSkills, action: "detail", params: map[string]any{"scope": "hub", "skillName": "debug"}},
+		{section: "flickerBridge", action: "start"},
+		{section: "flickerBridge", action: "stop"},
+		{section: "flickerBridge", action: "restart"},
 		{
 			section: hubStateSectionFileIndex,
 			action:  "rebuild",
@@ -717,6 +722,9 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 			handler := handlers[tc.section]
 			if handler.Action == nil {
 				t.Fatalf("%s action handler missing", tc.section)
+			}
+			if tc.section == hubStateSectionFlickerBridge {
+				return
 			}
 			if _, err := handler.Action(context.Background(), tc.action, tc.params); err != nil {
 				t.Fatalf("adapter action returned error: %v", err)
@@ -769,6 +777,370 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	}
 	if body["action"] != "status" || body["jobId"] != "release-job" {
 		t.Fatalf("release payload=%s", payload)
+	}
+}
+
+func TestReporterFlickerBridgeStateDoesNotExposeConfiguredKey(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-flicker-bridge",
+		StateDir: t.TempDir(),
+		APIKeys:  logger.APIKeysConfig{Flicker: "flicker-enable-key"},
+	}, nil)
+	if got := reporter.flickerBridge.localAPIKey(); got != "flicker-enable-key" {
+		t.Fatalf("Flicker Bridge local key = %q, want configured key", got)
+	}
+	handler, ok := reporter.hubStateSectionHandlers()["flickerBridge"]
+	if !ok || handler.Refresh == nil {
+		t.Fatal("flickerBridge refresh handler is missing")
+	}
+	data, err := handler.Refresh(context.Background(), hubStateRefreshInput{HubID: "hub-flicker-bridge"})
+	if err != nil {
+		t.Fatalf("refresh flickerBridge: %v", err)
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("marshal flickerBridge state: %v", err)
+	}
+	var state map[string]any
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatalf("decode flickerBridge state: %v", err)
+	}
+	for _, field := range []string{"configured", "state", "endpoint", "port"} {
+		if _, ok := state[field]; !ok {
+			t.Fatalf("flickerBridge state missing %q: %s", field, raw)
+		}
+	}
+	if strings.Contains(string(raw), "flicker-enable-key") || state["apiKey"] != nil {
+		t.Fatalf("flickerBridge state leaked configured key: %s", raw)
+	}
+}
+
+type fakeFlickerBridgeProcess struct {
+	done      chan struct{}
+	killCount int
+	mu        sync.Mutex
+}
+
+func newFakeFlickerBridgeProcess() *fakeFlickerBridgeProcess {
+	return &fakeFlickerBridgeProcess{done: make(chan struct{})}
+}
+
+func (p *fakeFlickerBridgeProcess) PID() int {
+	return 12345
+}
+
+func (p *fakeFlickerBridgeProcess) Kill() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.killCount++
+	select {
+	case <-p.done:
+	default:
+		close(p.done)
+	}
+	return nil
+}
+
+func (p *fakeFlickerBridgeProcess) Wait() error {
+	<-p.done
+	return nil
+}
+
+func (p *fakeFlickerBridgeProcess) killed() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.killCount
+}
+
+func TestFlickerBridgeManagerRejectsUnconfiguredStart(t *testing.T) {
+	manager := newFlickerBridgeManager(t.TempDir(), "")
+	status, err := manager.Start(context.Background())
+	if err == nil {
+		t.Fatal("Start() error = nil, want missing configuration error")
+	}
+	if status.Configured || status.State != "notConfigured" {
+		t.Fatalf("status=%+v, want not configured", status)
+	}
+}
+
+func TestFlickerBridgeManagerStartsOwnedChildAndStopsIt(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Flicker Bridge child process is Windows-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	process := newFakeFlickerBridgeProcess()
+	var startedArgs []string
+	var startedEnv []string
+	var startedOutput io.Writer
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.startProcess = func(_ string, args []string, environ []string, output io.Writer) (flickerBridgeProcess, error) {
+		startedArgs = append([]string(nil), args...)
+		startedEnv = append([]string(nil), environ...)
+		startedOutput = output
+		return process, nil
+	}
+	manager.health = func(context.Context) error { return nil }
+
+	status, err := manager.Start(context.Background())
+	if err != nil {
+		t.Fatalf("Start() error: %v", err)
+	}
+	if status.State != "starting" || status.PID != 12345 {
+		t.Fatalf("start status=%+v", status)
+	}
+	if !slices.Equal(startedArgs, []string{"--flicker-bridge", "--host", "127.0.0.1", "--port", "17999"}) {
+		t.Fatalf("child args=%v", startedArgs)
+	}
+	if !slices.Contains(startedEnv, "MYFLICKER_BRIDGE_API_KEY=configured-flicker-key") {
+		t.Fatalf("child environment does not contain the configured bridge key: %v", startedEnv)
+	}
+	if startedOutput != io.Discard {
+		t.Fatalf("child bootstrap output = %T, want io.Discard because child owns its log", startedOutput)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for manager.Status(context.Background()).State != "running" {
+		if time.Now().After(deadline) {
+			t.Fatalf("bridge did not become running: %+v", manager.Status(context.Background()))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	status, err = manager.Stop(context.Background())
+	if err != nil {
+		t.Fatalf("Stop() error: %v", err)
+	}
+	if status.State != "stopped" || process.killed() != 1 {
+		t.Fatalf("stop status=%+v kills=%d", status, process.killed())
+	}
+}
+
+func TestFlickerBridgeManagerDoesNotStartWithCanceledContext(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	var starts atomic.Int32
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.startProcess = func(_ string, _ []string, _ []string, _ io.Writer) (flickerBridgeProcess, error) {
+		starts.Add(1)
+		return newFakeFlickerBridgeProcess(), nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	status, err := manager.Start(ctx)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start() error = %v, want context.Canceled", err)
+	}
+	if starts.Load() != 0 || status.State != "stopped" {
+		t.Fatalf("Start() launched %d processes with status %+v", starts.Load(), status)
+	}
+}
+
+func TestFlickerBridgeActionReturnsLifecycleStartFailure(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	manager.executable = func() (string, error) { return "", errors.New("executable lookup failed") }
+	reporter := NewReporter(ReporterConfig{
+		HubID:         "hub-flicker-action-error",
+		StateDir:      t.TempDir(),
+		FlickerBridge: manager,
+	}, nil)
+
+	state, err := reporter.ensureHubStateManager().action(
+		context.Background(),
+		hubStateSectionFlickerBridge,
+		"start",
+		nil,
+	)
+
+	if err == nil || !strings.Contains(err.Error(), "executable lookup failed") {
+		t.Fatalf("action error = %v, state=%+v; want lifecycle start failure", err, state)
+	}
+}
+
+func TestFlickerBridgeManagerSerializesConcurrentStarts(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.health = func(context.Context) error { return nil }
+	release := make(chan struct{})
+	entered := make(chan struct{}, 8)
+	var starts atomic.Int32
+	manager.startProcess = func(_ string, _ []string, _ []string, _ io.Writer) (flickerBridgeProcess, error) {
+		starts.Add(1)
+		entered <- struct{}{}
+		<-release
+		return newFakeFlickerBridgeProcess(), nil
+	}
+
+	const callers = 5
+	results := make(chan error, callers)
+	for range callers {
+		go func() {
+			_, err := manager.Start(context.Background())
+			results <- err
+		}()
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("no start process call")
+	}
+	time.Sleep(30 * time.Millisecond)
+	close(release)
+	for range callers {
+		if err := <-results; err != nil {
+			t.Fatalf("Start() error: %v", err)
+		}
+	}
+	if got := starts.Load(); got != 1 {
+		t.Fatalf("start process calls = %d, want 1", got)
+	}
+	if _, err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFlickerBridgeManagerHealthTimeoutKillsAndCanRestart(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.healthInterval = time.Millisecond
+	manager.healthAttemptTimeout = 5 * time.Millisecond
+	manager.healthTimeout = 25 * time.Millisecond
+	first := newFakeFlickerBridgeProcess()
+	second := newFakeFlickerBridgeProcess()
+	processes := []*fakeFlickerBridgeProcess{first, second}
+	var starts atomic.Int32
+	manager.startProcess = func(_ string, _ []string, _ []string, _ io.Writer) (flickerBridgeProcess, error) {
+		index := int(starts.Add(1)) - 1
+		return processes[index], nil
+	}
+	manager.health = func(context.Context) error { return errors.New("not ready") }
+
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		status := manager.Status(context.Background())
+		if status.State == "failed" && status.PID == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("health timeout did not reap process: %+v", status)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if first.killed() != 1 {
+		t.Fatalf("timed out process kills = %d, want 1", first.killed())
+	}
+
+	manager.health = func(context.Context) error { return nil }
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(time.Second)
+	for manager.Status(context.Background()).State != "running" {
+		if time.Now().After(deadline) {
+			t.Fatalf("bridge did not recover: %+v", manager.Status(context.Background()))
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if got := starts.Load(); got != 2 {
+		t.Fatalf("start process calls = %d, want 2", got)
+	}
+	if _, err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFlickerBridgeManagerPublishesLifecycleStateChanges(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.healthInterval = time.Millisecond
+	manager.health = func(context.Context) error { return nil }
+	process := newFakeFlickerBridgeProcess()
+	manager.startProcess = func(_ string, _ []string, _ []string, _ io.Writer) (flickerBridgeProcess, error) {
+		return process, nil
+	}
+	states := make(chan flickerBridgeStatus, 8)
+	manager.setStateChangeHandler(func(status flickerBridgeStatus) {
+		states <- status
+	})
+
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"starting", "running"}
+	for _, state := range want {
+		select {
+		case status := <-states:
+			if status.State != state {
+				t.Fatalf("state event = %+v, want %s", status, state)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for %s event", state)
+		}
+	}
+	if _, err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case status := <-states:
+		if status.State != "stopped" {
+			t.Fatalf("stop event = %+v", status)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for stopped event")
+	}
+}
+
+func TestReporterTracksFlickerBridgeLifecycleWithoutRefreshPolling(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key")
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.healthInterval = time.Millisecond
+	manager.health = func(context.Context) error { return nil }
+	manager.startProcess = func(_ string, _ []string, _ []string, _ io.Writer) (flickerBridgeProcess, error) {
+		return newFakeFlickerBridgeProcess(), nil
+	}
+	reporter := NewReporter(ReporterConfig{
+		HubID: "hub-flicker-lifecycle", StateDir: t.TempDir(), FlickerBridge: manager,
+	}, nil)
+	t.Cleanup(func() { _ = manager.Close() })
+
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		state := reporter.ensureHubStateManager().get([]string{hubStateSectionFlickerBridge})
+		section, ok := state.Sections[hubStateSectionFlickerBridge]
+		raw, _ := json.Marshal(section.Data)
+		if ok && strings.Contains(string(raw), `"state":"running"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("reporter state did not receive lifecycle transition: %+v", state)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if _, err := manager.Stop(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

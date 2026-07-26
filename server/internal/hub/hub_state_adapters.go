@@ -37,6 +37,27 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 			Refresh: r.refreshHubStateFileIndex,
 			Action:  r.actionHubStateFileIndex,
 		},
+		hubStateSectionFlickerBridge: {
+			Refresh: r.refreshHubStateFlickerBridge,
+			Action:  r.actionHubStateFlickerBridge,
+		},
+	}
+}
+
+func (r *Reporter) refreshHubStateFlickerBridge(ctx context.Context, _ hubStateRefreshInput) (any, error) {
+	return r.flickerBridge.Status(ctx), nil
+}
+
+func (r *Reporter) actionHubStateFlickerBridge(ctx context.Context, action string, _ map[string]any) (any, error) {
+	switch action {
+	case "start":
+		return r.flickerBridge.Start(ctx)
+	case "stop":
+		return r.flickerBridge.Stop(ctx)
+	case "restart":
+		return r.flickerBridge.Restart(ctx)
+	default:
+		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionFlickerBridge, action)
 	}
 }
 

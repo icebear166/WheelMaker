@@ -2,6 +2,12 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, us
 import {createPortal} from 'react-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import {resolveSessionsShortcutAction, resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
+import {
+  applyFlickerBridgeHubStateEvent,
+  flickerBridgeActions,
+  flickerBridgeLabel,
+  normalizeFlickerBridgeStatus,
+} from './flickerBridgeState';
 
 declare global {
   interface Window {
@@ -624,6 +630,7 @@ import type {
   RegistryFileIndexSearchResult,
   RegistryFileIndexStatus,
   RegistryFileIndexStatusResponse,
+  RegistryFlickerBridgeStatus,
   RegistryTerminal,
   RegistryTerminalChangedEvent,
   RegistryTerminalOutputEvent,
@@ -3524,6 +3531,9 @@ export function App() {
   const chatHubColorMenuHubId = chatHubColorMenu?.hubId ?? '';
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const chatHubPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
+  const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
+  const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
   const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();
   const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitleProjectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3539,6 +3549,80 @@ export function App() {
   const chatFileMentionSearchGenerationRef = useRef(0);
   const [resumeSessions, setResumeSessions] = useState<RegistryResumableSession[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
+
+  const refreshChatHubFlickerBridge = useCallback(async (hubId: string): Promise<void> => {
+    const generation = (chatHubFlickerBridgeRequestGenerationRef.current[hubId] ?? 0) + 1;
+    chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
+    let state;
+    try {
+      state = await service.refreshHubState(hubId, ['flickerBridge']);
+    } catch (error) {
+      if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
+        return;
+      }
+      throw error;
+    }
+    if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
+      return;
+    }
+    const status = normalizeFlickerBridgeStatus(state.sections.flickerBridge?.data);
+    setChatHubFlickerBridgeStatuses(current => ({...current, [hubId]: status}));
+  }, []);
+
+  const runChatHubFlickerBridgeAction = useCallback(async (
+    hubId: string,
+    action: 'start' | 'stop' | 'restart',
+  ): Promise<void> => {
+    const generation = (chatHubFlickerBridgeRequestGenerationRef.current[hubId] ?? 0) + 1;
+    chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
+    setChatHubFlickerBridgeActionHubId(hubId);
+    try {
+      const state = await service.runHubStateAction(hubId, 'flickerBridge', action);
+      if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
+        return;
+      }
+      const status = normalizeFlickerBridgeStatus(state.sections.flickerBridge?.data);
+      setChatHubFlickerBridgeStatuses(current => ({...current, [hubId]: status}));
+    } catch (error) {
+      if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      setChatHubFlickerBridgeStatuses(current => ({
+        ...current,
+        [hubId]: {
+          ...(current[hubId] ?? normalizeFlickerBridgeStatus(null)),
+          state: 'failed',
+          error: message,
+        },
+      }));
+    } finally {
+      setChatHubFlickerBridgeActionHubId(current => current === hubId ? '' : current);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!chatHubMenuOpen || !connected || registryHubs.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    for (const hub of registryHubs) {
+      refreshChatHubFlickerBridge(hub.hubId).catch(() => {
+          if (cancelled) return;
+          setChatHubFlickerBridgeStatuses(current => ({
+            ...current,
+            [hub.hubId]: {
+              ...(current[hub.hubId] ?? normalizeFlickerBridgeStatus(null)),
+              state: 'failed',
+              error: 'Could not read Flicker Bridge status',
+            },
+          }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, registryHubs]);
 
   function knownChatSessionsForProject(targetProjectId: string): RegistryChatSession[] {
     const projectSessions = projectSessionsByProjectIdRef.current[targetProjectId] ?? [];
@@ -6459,6 +6543,14 @@ export function App() {
                 const defaultHubColor = resolveDefaultHubColor(hub.hubId);
                 const currentHubHsv = hubColorToHsv(currentHubColor);
                 const currentHubHueColor = hubHsvToColor({h: currentHubHsv.h, s: 1, v: 1});
+                const flickerBridge = chatHubFlickerBridgeStatuses[hub.hubId];
+                const flickerBridgeState = flickerBridge?.state ?? 'loading';
+                const flickerBridgeBusy = chatHubFlickerBridgeActionHubId === hub.hubId;
+                const {
+                  canStart: flickerBridgeCanStart,
+                  canStop: flickerBridgeCanStop,
+                  canRestart: flickerBridgeCanRestart,
+                } = flickerBridgeActions(flickerBridge);
                 const customHubColorStyle = {
                   ...hubAccentStyle(hub.hubId),
                   '--hub-custom-hue': currentHubHueColor,
@@ -6493,6 +6585,30 @@ export function App() {
                         <span className="chat-hub-row-name">{hub.hubId}</span>
                         <SessionIcon name={expanded ? 'chevronDown' : 'chevronRight'} />
                       </button>
+                    </div>
+                    <div className={`chat-hub-flicker-bridge state-${flickerBridgeState}`} aria-live="polite">
+                      <div className="chat-hub-flicker-bridge-summary">
+                        <span className="chat-hub-flicker-bridge-dot" aria-hidden="true" />
+                        <span className="chat-hub-flicker-bridge-name">Flicker Bridge</span>
+                        <span className="chat-hub-flicker-bridge-state" title={flickerBridge?.endpoint}>{flickerBridgeLabel(flickerBridge)}</span>
+                      </div>
+                      <div className="chat-hub-flicker-bridge-actions">
+                        {flickerBridgeCanStop ? (
+                          <button type="button" aria-label="Stop Flicker Bridge" disabled={flickerBridgeBusy} onClick={() => runChatHubFlickerBridgeAction(hub.hubId, 'stop')}>
+                            Stop
+                          </button>
+                        ) : (
+                          <button type="button" aria-label="Start Flicker Bridge" disabled={!flickerBridgeCanStart || flickerBridgeBusy} onClick={() => runChatHubFlickerBridgeAction(hub.hubId, 'start')}>
+                            Start
+                          </button>
+                        )}
+                        {flickerBridgeCanRestart ? (
+                          <button type="button" aria-label="Restart Flicker Bridge" disabled={flickerBridgeBusy} onClick={() => runChatHubFlickerBridgeAction(hub.hubId, 'restart')}>
+                            Restart
+                          </button>
+                        ) : null}
+                      </div>
+                      {flickerBridge?.error ? <span className="chat-hub-flicker-bridge-error" title={flickerBridge.error}>{flickerBridge.error}</span> : null}
                     </div>
                     {colorMenuOpen ? (
                       <div className={`chat-hub-color-palette topbar-menu-surface${chatHubColorMenuExiting ? ' sl-menu-exit' : ''}`} aria-label={`Color options for ${hub.hubId}`}>
@@ -6602,6 +6718,8 @@ export function App() {
   }, [
     applyHubColorHuePointer,
     applyHubColorSvPointer,
+    chatHubFlickerBridgeActionHubId,
+    chatHubFlickerBridgeStatuses,
     chatHubColorMenuHubId,
     chatHubColorMenuExiting,
     chatHubMenuOpen,
@@ -6613,6 +6731,7 @@ export function App() {
     hubColors,
     projects.length,
     registryHubs,
+    runChatHubFlickerBridgeAction,
     setChatConfigOverflowOpen,
     setExpandedHubIds,
     setHiddenProjectIds,
@@ -15302,6 +15421,14 @@ export function App() {
     const unsubscribeEvent = service.onEvent(event => {
       if (event.method === RegistryMethods.HubStateUpdated) {
         usageStore.ingest(event);
+        setChatHubFlickerBridgeStatuses(current => {
+          const next = applyFlickerBridgeHubStateEvent(current, event);
+          if (next !== current && event.hubId) {
+            chatHubFlickerBridgeRequestGenerationRef.current[event.hubId] =
+              (chatHubFlickerBridgeRequestGenerationRef.current[event.hubId] ?? 0) + 1;
+          }
+          return next;
+        });
         return;
       }
       if (event.method === RegistryMethods.TerminalOutput && event.hubId) {

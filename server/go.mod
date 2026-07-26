@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
+	github.com/klauspost/compress v1.18.5
 	github.com/sahilm/fuzzy v0.1.2
 	golang.org/x/sys v0.44.0
 	modernc.org/sqlite v1.48.0

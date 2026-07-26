@@ -348,7 +348,7 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			wantArgs:    []string{"--hide-claude-auth"},
 			wantEnv: map[string]string{
 				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-flicker"),
-				"ANTHROPIC_BASE_URL":      "http://127.0.0.1:17888",
+				"ANTHROPIC_BASE_URL":      "http://127.0.0.1:17999",
 				"ANTHROPIC_AUTH_TOKEN":    "flicker-test-key",
 				"ANTHROPIC_API_KEY":       "",
 				"CLAUDE_CODE_USE_BEDROCK": "",

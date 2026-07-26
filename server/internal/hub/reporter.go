@@ -104,6 +104,7 @@ type ReporterConfig struct {
 	PongTimeout       time.Duration
 	StateDir          string
 	APIKeys           shared.APIKeysConfig
+	FlickerBridge     *flickerBridgeManager
 }
 
 // Reporter keeps a long-lived hub connection and serves local project queries.
@@ -129,6 +130,7 @@ type Reporter struct {
 	usageService    *usage.Service
 	terminalHandler TerminalHandler
 	hubEventSink    *hubEventSink
+	flickerBridge   *flickerBridgeManager
 }
 
 // NewReporter creates a Reporter.
@@ -176,6 +178,10 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		relayClient:  portrelay.NewHubClient(),
 		fileIndex:    newProjectFileIndexManager(stateDir),
 	}
+	r.flickerBridge = cfg.FlickerBridge
+	if r.flickerBridge == nil {
+		r.flickerBridge = newFlickerBridgeManager(stateDir, cfg.APIKeys.Flicker)
+	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
 		HubID:                 cfg.HubID,
 		Projects:              cp,
@@ -184,6 +190,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
 	collector := usage.NewLocalCollector("")
 	collector.KimiAPIKey = cfg.APIKeys.Kimi
 	collector.ZAIAPIKey = cfg.APIKeys.ZAI
@@ -197,6 +204,24 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	})
 	r.requestSeq.Store(2)
 	return r
+}
+
+func (r *Reporter) updateFlickerBridgeLifecycleState(status flickerBridgeStatus) {
+	sectionStatus := hubStateSectionStatusReady
+	if status.State == "starting" {
+		sectionStatus = hubStateSectionStatusRefreshing
+	} else if status.State == "failed" {
+		sectionStatus = hubStateSectionStatusError
+	}
+	state := r.ensureHubStateManager().replaceSection(hubStateSectionFlickerBridge, hubStateSection{
+		Status:    sectionStatus,
+		UpdatedAt: formatHubStateTime(time.Now().UTC()),
+		Error:     status.Error,
+		Data:      status,
+	})
+	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+		"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "lifecycle",
+	})
 }
 
 // Run holds a persistent connection; reconnects on failure until ctx cancelled.
@@ -807,6 +832,11 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
 	}
+	if payload.Section == hubStateSectionFlickerBridge {
+		_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+			"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "action",
+		})
+	}
 	_ = r.writeJSON(conn, "->", envelope{
 		RequestID: req.RequestID,
 		Type:      rp.RegistryEnvelopeTypeResponse,
@@ -848,6 +878,11 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionFileIndex: {
 			"rebuild": {},
+		},
+		hubStateSectionFlickerBridge: {
+			"start":   {},
+			"stop":    {},
+			"restart": {},
 		},
 	}
 	sectionActions, ok := allowedActions[section]

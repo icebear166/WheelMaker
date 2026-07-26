@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/swm8023/wheelmaker/internal/flickerbridge"
 	"github.com/swm8023/wheelmaker/internal/hub"
 	"github.com/swm8023/wheelmaker/internal/registry"
 	"github.com/swm8023/wheelmaker/internal/security"
@@ -24,6 +25,7 @@ const daemonWorkerArg = "--daemon-worker"
 const hubWorkerArg = "--hub-worker"
 const registryWorkerArg = "--registry-worker"
 const localDevArg = "--local-dev"
+const flickerBridgeArg = "--flicker-bridge"
 const wheelmakerWindowsServiceName = "WheelMaker"
 const defaultRegistryAddr = "127.0.0.1:9630"
 
@@ -35,6 +37,9 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) > 1 && os.Args[1] == flickerBridgeArg {
+		return flickerbridge.Run(os.Args[2:])
+	}
 	fs := flag.NewFlagSet("wheelmaker", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	daemonMode := fs.Bool("d", false, "run guardian mode (checks service every 30 seconds)")

@@ -409,7 +409,7 @@ func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
 func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
 	return claudeCompatibleProfile{
 		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
-		endpoint:         "http://127.0.0.1:17888",
+		endpoint:         "http://127.0.0.1:17999",
 		authName:         "ANTHROPIC_AUTH_TOKEN",
 		defaultModel:     "CLAUDE_OPUS_4_8",
 		gatewayDiscovery: true,

@@ -6573,3 +6573,75 @@
   outline: 1px solid var(--focus-border);
   outline-offset: -1px;
 }
+
+.chat-hub-flicker-bridge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 5px 31px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.chat-hub-flicker-bridge-summary,
+.chat-hub-flicker-bridge-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-hub-flicker-bridge-name {
+  color: var(--text-primary);
+}
+
+.chat-hub-flicker-bridge-state,
+.chat-hub-flicker-bridge-error {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-hub-flicker-bridge-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--text-muted);
+}
+
+.chat-hub-flicker-bridge.state-running .chat-hub-flicker-bridge-dot {
+  background: var(--success, #4abf7a);
+}
+
+.chat-hub-flicker-bridge.state-starting .chat-hub-flicker-bridge-dot {
+  background: var(--warning, #e4a84d);
+}
+
+.chat-hub-flicker-bridge.state-failed .chat-hub-flicker-bridge-dot {
+  background: var(--danger, #df6674);
+}
+
+.chat-hub-flicker-bridge-actions button {
+  border: 0;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: var(--hover);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.chat-hub-flicker-bridge-actions button:hover:not(:disabled) {
+  background: var(--surface-hover, var(--hover));
+}
+
+.chat-hub-flicker-bridge-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.chat-hub-flicker-bridge-error {
+  max-width: 130px;
+  color: var(--danger, #df6674);
+}

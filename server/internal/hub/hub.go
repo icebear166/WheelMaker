@@ -31,6 +31,7 @@ type Hub struct {
 	clients         []*client.Client
 	regSync         *Reporter
 	terminalManager *terminalpkg.Manager
+	flickerBridge   *flickerBridgeManager
 	clientsByName   map[string]*client.Client
 }
 
@@ -42,14 +43,17 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 	if cfg != nil {
 		apiKeys = cfg.APIKeys
 	}
-	return newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
+	flickerBridge := newFlickerBridgeManager(stateDir, apiKeys.Flicker)
+	h := newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
 		StateDir:       stateDir,
 		DeepSeekAPIKey: apiKeys.DeepSeek,
 		KimiAPIKey:     apiKeys.Kimi,
 		QwenAPIKey:     apiKeys.Qwen,
 		ZAIAPIKey:      apiKeys.ZAI,
-		FlickerAPIKey:  apiKeys.Flicker,
+		FlickerAPIKey:  flickerBridge.localAPIKey(),
 	}))
+	h.flickerBridge = flickerBridge
+	return h
 }
 
 func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPFactory) *Hub {
@@ -67,6 +71,13 @@ func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPF
 
 // Start validates config, creates one client.Client per project, and starts each client.
 func (h *Hub) Start(ctx context.Context) error {
+	if h.flickerBridge == nil {
+		flickerKey := ""
+		if h.cfg != nil {
+			flickerKey = h.cfg.APIKeys.Flicker
+		}
+		h.flickerBridge = newFlickerBridgeManager(h.stateDir, flickerKey)
+	}
 	hubLogger("").Info("start projects=%d", len(h.cfg.Projects))
 	if err := client.CheckStoreSchema(h.dbPath); err != nil {
 		if client.IsStoreSchemaMismatch(err) {
@@ -93,6 +104,11 @@ func (h *Hub) Start(ctx context.Context) error {
 		hubLogger(pc.Name).Info("client ready")
 	}
 	h.setupRegistrySync()
+	if h.flickerBridge != nil && h.flickerBridge.Status(ctx).Configured {
+		if _, err := h.flickerBridge.Start(ctx); err != nil {
+			hubLogger("").Warn("Flicker Bridge start failed err=%v", err)
+		}
+	}
 	hubLogger("").Info("start completed projects=%d", len(h.clients))
 	return nil
 }
@@ -189,6 +205,11 @@ func (h *Hub) Run(ctx context.Context) error {
 // Close calls Close() on all project clients, collecting any errors.
 func (h *Hub) Close() error {
 	var errs []error
+	if h.flickerBridge != nil {
+		if err := h.flickerBridge.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if h.terminalManager != nil {
 		if err := h.terminalManager.Close(); err != nil {
 			errs = append(errs, err)
@@ -242,6 +263,7 @@ func (h *Hub) setupRegistrySync() {
 		ReconnectInterval: 2 * time.Second,
 		StateDir:          filepath.Dir(filepath.Dir(h.dbPath)),
 		APIKeys:           h.cfg.APIKeys,
+		FlickerBridge:     h.flickerBridge,
 	}, projects)
 	projectsByID := make(map[string]terminalpkg.Project, len(projects))
 	for _, project := range projects {

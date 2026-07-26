@@ -897,6 +897,17 @@ export class RegistryWorkspaceService {
     return this.repository.refreshHubState(hubId, sections);
   }
 
+  async runHubStateAction(
+    hubId: string,
+    section: RegistryHubStateSectionName,
+    action: string,
+  ): Promise<RegistryHubState> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.runHubStateAction(hubId, section, action);
+  }
+
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
@@ -1138,7 +1149,6 @@ export class RegistryWorkspaceService {
     };
   }
 }
-
 
 
 

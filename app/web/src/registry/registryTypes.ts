@@ -115,6 +115,7 @@ export type RegistryHubStateSectionName =
   | 'agentPackages'
   | 'wheelmakerUpdate'
   | 'skills'
+  | 'flickerBridge'
   | 'tokenStats'
   | 'fileIndex'
 	  | 'releasePublish'
@@ -924,6 +925,16 @@ export interface RegistryPortRelaySnapshot {
   relayUrl?: string;
   accessCodeGeneration?: number;
   tunnelConnectedAt?: string;
+  error?: string;
+}
+
+export interface RegistryFlickerBridgeStatus {
+  configured: boolean;
+  supported: boolean;
+  state: string;
+  endpoint: string;
+  port: number;
+  pid?: number;
   error?: string;
 }
 

@@ -44,6 +44,7 @@ const (
 	hubStateSectionSkills           = "skills"
 	hubStateSectionTokenStats       = "tokenStats"
 	hubStateSectionFileIndex        = "fileIndex"
+	hubStateSectionFlickerBridge    = "flickerBridge"
 )
 
 type hubState struct {
@@ -228,7 +229,7 @@ func (m *HubStateManager) action(ctx context.Context, sectionName string, action
 	if section.Action == nil || section.Action.ID != action.ID {
 		state := m.snapshotLocked(nil)
 		m.mu.Unlock()
-		return state, nil
+		return state, err
 	}
 	section.Action.FinishedAt = formatHubStateTime(finishedAt)
 	if err != nil {
