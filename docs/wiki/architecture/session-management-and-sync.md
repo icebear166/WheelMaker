@@ -6,6 +6,8 @@
 
 本文是 session 对话链路的基础协议、存储说明、turn-first 同步、状态和显示重构的主文档。旧的 `session_prompts`、`turns_json`、`promptIndex` 游标和一次性迁移工具都已移除；运行期协议只暴露 session 级全局 `turnIndex`。
 
+Agent 的 Steer、Goal 等可选 Session 能力统一见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。普通 prompt start/done 边界对 Goal 有一个明确例外：active Goal 可以跨多个 provider Turn 保持同一个 running execution，只有暂停/终态/clear 且当前物理 Turn 完成后才写最终 `prompt_done`。Goal snapshot 随 `SessionAgentState` 持久化并通过现有 `session.updated` 同步；active Goal 在 Hub 重启时主动恢复，paused/terminal Goal 仍保持懒加载。
+
 ## 1. 数据模型
 
 SQLite 只保存会话索引和热状态，不保存对话正文：

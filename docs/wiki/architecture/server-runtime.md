@@ -7,6 +7,8 @@
 Updated: 2026-05-27  
 Status: **Implemented, App-only session runtime**
 
+Agent provider 还可以通过可选接口声明 Session action capability。Client/Session 负责通用执行所有权、持久化和 Registry 投影，adapter 只负责原生协议映射；Steer/Goal 的稳定边界见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)，Codex 映射见 [`../agents/codex.md`](../agents/codex.md)。
+
 ## 0. Terms
 
 - App Session: WheelMaker business session identified by `projectId + sessionId` in Registry requests.

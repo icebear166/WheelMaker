@@ -23,6 +23,7 @@
 
 - 两个菜单共享同一几何：宽度/内缩、圆角、padding、行高、max-height、active 态与空态样式一致；切换时只有内容变化。
 - slash 菜单按 Commands / Skills 分组；菜单项显示名不带 `/` 前缀，选中插入后发送文本仍带 `/`。
+- Agent Session action 可以贡献 slash entry。Goal supported 时 `/goal` 选择后只插入普通文本 `/goal `，不创建 Skill capsule、不立即调用控制 API；发送和运行中排队继续走普通 prompt queue。详细语义见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。
 - 快捷键提示统一在菜单 footer，kbd 样式；不使用顶部提示文本条。
 - `@` 菜单行内预览按钮默认隐藏，hover / 键盘 active 行显示。
 

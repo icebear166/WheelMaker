@@ -6,6 +6,7 @@ Wiki 只记录当前、稳定、跨任务仍然有效的项目知识。完整来
 
 ## 顶层目录
 
+- [`agents/`](agents/agents.md)：Agent provider、可选 Session 能力以及各 provider 的原生协议映射。
 - [`architecture/`](architecture/architecture.md)：系统架构、运行时职责以及 Session 生命周期与同步机制。
 - [`features/`](features/features.md)：面向用户的产品功能、稳定行为和跨模块边界。
 - [`frontend-interaction/`](frontend-interaction/frontend-interaction.md)：前端交互设计规则、布局模式和稳定的 UI 行为约定。

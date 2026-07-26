@@ -497,6 +497,8 @@ Hub 上传和 Registry 广播使用同一事件名：
 
 ## 9. Registry Relay
 
+Session 的可选 Agent 控制面继续使用 project-scoped forwarding。Goal 增加 `session.goal.create`、`session.goal.get`、`session.goal.update`、`session.goal.stop`、`session.goal.clear`；Session summary 的 `sessionActions.goal` 声明 provider support，`goal` 携带最新 snapshot。它们是 Registry 2.6 的兼容性扩展，不修改 protocol version。字段和状态语义见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。
+
 Relay 是 Registry 自有全局控制器，不进入 HubState。
 
 Client 方法：
