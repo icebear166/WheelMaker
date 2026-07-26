@@ -380,7 +380,7 @@
   background: rgba(0, 0, 0, 0.13);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
-  transition: opacity 160ms ease;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 .floating-control-stack-layer[data-drag-state='dragging'] .floating-control-drag-backdrop {
@@ -400,7 +400,9 @@
   box-shadow: 0 0 0 color-mix(in srgb, var(--accent-primary) 0%, transparent);
   transform: scaleY(0.92);
   transform-origin: center;
-  transition: opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  transition: opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .floating-control-dock-rail.left {
@@ -425,7 +427,7 @@
 
 .floating-control-stack-layer[data-side-pulse='left'] .floating-control-dock-rail.left,
 .floating-control-stack-layer[data-side-pulse='right'] .floating-control-dock-rail.right {
-  animation: floatingDockRailPulse 160ms ease-out;
+  animation: floatingDockRailPulse var(--motion-fast) var(--ease-out);
 }
 
 .floating-control-stack {
@@ -433,13 +435,14 @@
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
   pointer-events: auto;
   touch-action: none;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  transition: top 180ms ease, transform 180ms ease, opacity 180ms ease, filter 180ms ease;
+  transition: top var(--motion-standard) var(--ease-standard),
+    transform var(--motion-standard) var(--ease-standard),
+    filter var(--motion-standard) var(--ease-standard);
 }
 
 .floating-control-stack[data-side='right'] {
@@ -452,62 +455,147 @@
   right: auto;
 }
 
-.floating-control-stack[data-drag-state='drag-ready'] {
-  transform: scale(0.98);
-}
-
 .floating-control-stack[data-drag-state='dragging'] {
   transform: scale(1.06);
   filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.28));
-  transition: top 0ms linear, transform 140ms ease, opacity 180ms ease, filter 180ms ease;
+  transition: top 0ms linear,
+    transform var(--motion-fast) var(--ease-standard),
+    filter var(--motion-standard) var(--ease-standard);
 }
 
-.floating-control-stack[data-drag-state='gesture-open'] {
-  transition: top 140ms ease, transform 120ms ease, opacity 180ms ease, filter 180ms ease;
-}
-
-.drawer-toggle-bubble {
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
-}
-
-.gesture-nav-pill {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 50px;
+.floating-nav-button {
+  position: relative;
+  width: 48px;
   height: 48px;
-  box-sizing: border-box;
-  display: grid;
-  grid-template-rows: 48px;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
-  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-panel) 38%, transparent);
+  backdrop-filter: blur(6px) saturate(1.1);
+  -webkit-backdrop-filter: blur(6px) saturate(1.1);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 10%);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--motion-standard) var(--ease-standard),
+    border-color var(--motion-standard) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+.floating-nav-button:active {
+  transform: scale(0.96);
+}
+
+.floating-nav-card {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px;
+  border: 1px solid var(--border-faint);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  box-shadow: var(--shadow-overlay);
+  animation: floating-nav-card-in var(--motion-standard) var(--ease-out);
+}
+
+.floating-control-stack[data-side='left'] .floating-nav-card {
+  right: auto;
+  left: 0;
+}
+
+@keyframes floating-nav-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.floating-nav-card-item {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
   background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  overflow: hidden;
-  pointer-events: auto;
-  transition: top 200ms ease, height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.floating-nav-card-item:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.floating-nav-card-item[data-active='true'] {
+  background: var(--accent-soft-bg);
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
+}
+
+.floating-nav-card-item:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .floating-nav-unread-dot {
   position: absolute;
   top: 7px;
   right: 7px;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   background: var(--state-success);
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--surface-panel) 78%, transparent),
     0 0 10px color-mix(in srgb, var(--state-success) 34%, transparent);
   pointer-events: none;
+}
+
+.floating-nav-relay-dot {
+  position: absolute;
+  bottom: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.floating-nav-relay-dot[data-on='true'] {
+  background: var(--state-success);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--state-success) 40%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-nav-card,
+  .floating-nav-button,
+  .floating-nav-card-item,
+  .floating-control-drag-backdrop,
+  .floating-control-dock-rail,
+  .floating-control-stack,
+  .topbar-menu-surface {
+    animation: none;
+    transition: none;
+  }
 }
 
 .chat-preview-badge {
@@ -526,124 +614,6 @@
   text-align: center;
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--surface-panel) 78%, transparent);
   pointer-events: none;
-}
-
-.drawer-toggle-bubble {
-  width: 48px;
-  height: 48px;
-  border-radius: 999px;
-  color: var(--text-primary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 17px;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.drawer-toggle-bubble:hover {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--surface-panel) 64%, transparent);
-}
-
-.drawer-toggle-bubble:active {
-  transform: scale(0.97);
-}
-
-.drawer-toggle-bubble[data-active='true'] {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--accent-primary) 72%, transparent);
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-}
-
-.gesture-nav-control {
-  position: relative;
-  width: 50px;
-  height: 48px;
-  pointer-events: none;
-  overflow: visible;
-}
-
-.gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
-  top: -81px;
-  height: 210px;
-  grid-template-rows: repeat(5, 40px);
-  padding: 4px;
-}
-
-.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button {
-  width: 50px;
-  height: 48px;
-  border-radius: inherit;
-}
-
-.gesture-nav-button {
-  position: relative;
-  z-index: 1;
-  width: 40px;
-  height: 40px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.gesture-nav-button:hover {
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--border-subtle) 82%, transparent);
-  background: color-mix(in srgb, var(--surface-overlay) 84%, transparent);
-}
-
-.gesture-nav-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
-  outline-offset: 2px;
-}
-
-.gesture-nav-current-button[data-active='true'] {
-  border-color: color-mix(in srgb, var(--accent-primary) 54%, var(--border-subtle));
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-}
-
-.gesture-nav-current-button[data-active='true']:hover {
-  background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-}
-
-.gesture-nav-capsule {
-  color: var(--text-secondary);
-  animation: gesture-capsule-fade-in 200ms ease-out;
-}
-
-.gesture-nav-capsule[data-active='true'] {
-  border-color: color-mix(in srgb, var(--accent-primary) 46%, var(--border-subtle));
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-}
-
-@keyframes gesture-capsule-fade-in {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .gesture-nav-pill,
-  .gesture-nav-capsule,
-  .topbar-menu-surface,
-  .floating-control-stack[data-drag-state='gesture-open'] {
-    animation: none;
-    transition: none;
-  }
 }
 
 .breadcrumb-title {
@@ -1559,16 +1529,6 @@
   transition: transform var(--motion-emphasized) var(--ease-out);
 }
 
-.floating-control-stack[data-idle='true'] .drawer-toggle-bubble,
-.floating-control-stack[data-idle='true'] .gesture-nav-pill {
-  opacity: 0.6;
-  border-color: color-mix(in srgb, var(--border-subtle) 92%, transparent);
-  background: color-mix(in srgb, var(--surface-panel) 32%, transparent);
-  box-shadow: 0 8px 20px rgb(0 0 0 / 12%);
-  backdrop-filter: blur(10px) saturate(1.15);
-  -webkit-backdrop-filter: blur(10px) saturate(1.15);
-}
-
 .connect-titlebar {
   height: 32px;
   display: flex;
@@ -1581,14 +1541,6 @@
   font-weight: 600;
   -webkit-user-select: none;
   user-select: none;
-}
-
-.gesture-nav-button {
-  border-color: var(--border-subtle);
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

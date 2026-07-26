@@ -66,119 +66,6 @@ describe('gesture navigation', () => {
     })).toBe(true);
   });
 
-  test('wires gesture navigation as the only mobile floating controls scheme', () => {
-    const main = readMain();
-    const settingsRoot = readSettingsRoot();
-    const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
-    const currentSelectEnd = main.indexOf('const beginGestureNavigationPress = useCallback', currentSelectStart);
-    const currentSelectBody = main.slice(currentSelectStart, currentSelectEnd);
-    const heightMeasureDeps = main.match(
-      /useLayoutEffect\(\(\) => \{[\s\S]*?const nextFloatingHeight = floatingControlStackRef\.current\?\.offsetHeight \?\? 184;[\s\S]*?\}, \[([\s\S]*?)\]\);/,
-    )?.[1] ?? '';
-
-    expect(main).toContain("import {");
-    expect(main).toContain("} from '../shell/layouts/mobile/gestureNavigation';");
-    expect(main).not.toContain('const [gestureNavigation, setGestureNavigation] = useState(');
-    expect(main).not.toContain('persistedGlobal.gestureNavigation');
-    expect(main).not.toContain('gestureNavigation={gestureNavigation}');
-    expect(main).not.toContain('setGestureNavigation={setGestureNavigation}');
-    expect(settingsRoot).not.toContain('Gesture Navigation');
-    expect(settingsRoot).not.toContain('checked={gestureNavigation}');
-    expect(settingsRoot).not.toContain('setGestureNavigation');
-    expect(main).not.toContain('gestureNavigation ? (');
-    expect(main).toContain('className="gesture-nav-control"');
-    expect(main).toContain('className="gesture-nav-pill"');
-    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule"');
-    expect(main).toContain('className="gesture-nav-button gesture-nav-current-button"');
-    expect(main).toContain('onClick={handleGestureNavigationCurrentSelect}');
-    expect(main).not.toContain('className="gesture-nav-badge"');
-    expect(main).not.toContain('className="floating-nav-group"');
-    expect(main).not.toContain('className="floating-nav-button"');
-    expect(main).not.toContain('floating-nav-indicator');
-    expect(main).not.toContain('handleFloatingNavSelect');
-    expect(main).not.toContain('handleFloatingDrawerToggle');
-    expect(main).toContain("title={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}");
-    expect(main).toContain("aria-label={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}");
-    expect(main).toContain("codicon-comment-discussion");
-    expect(main).toContain('handleGestureNavigationCurrentSelect');
-    expect(main).toContain('const openGestureNavigationActions = useCallback(');
-    expect(main).toContain('setDrawerOpen(true);');
-    expect(currentSelectBody).toContain('openGestureNavigationActions();');
-    expect(currentSelectBody).not.toContain('handleFloatingChatSelect();');
-    expect(currentSelectBody).not.toContain('handleFloatingNavSelect(tab)');
-    expect(heightMeasureDeps).toContain('gestureNavigationExpanded,');
-    expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
-    expect(main).not.toContain('GESTURE_LONG_PRESS_MS');
-    expect(main).not.toContain('resolveGesturePressIntent');
-    expect(main).not.toContain('gestureLongPressTimerRef.current = window.setTimeout');
-    expect(main).toContain('codicon-layout-sidebar-right');
-    expect(main).toContain('codicon-settings-gear');
-    expect(main).not.toContain('gesture-nav-drawer-button');
-    expect(main).not.toContain('data-gesture-nav-tab');
-  });
-
-  test('styles gesture navigation as a collapsed pill and expanded vertical capsules', () => {
-    const styles = readStyles();
-
-    expect(styles).toContain('.gesture-nav-control');
-    expect(styles).toContain('.gesture-nav-pill');
-    expect(styles).toMatch(
-      /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
-    );
-    expect(styles).toMatch(
-      /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 48px;[\s\S]*padding: 0;[\s\S]*\}/,
-    );
-    expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -81px;[\s\S]*height: 210px;[\s\S]*grid-template-rows: repeat\(5, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
-    );
-    expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
-    );
-    expect(styles).not.toContain('height: 168px;');
-    expect(styles).not.toContain('grid-template-rows: repeat(4, 40px);');
-    expect(styles).not.toContain(".gesture-nav-control[data-expanded='true'] .gesture-nav-current-button");
-    expect(styles).toContain('.gesture-nav-button');
-    expect(styles).toContain('.gesture-nav-current-button');
-    expect(styles).not.toContain('.gesture-nav-badge');
-    expect(styles).toContain('.gesture-nav-capsule');
-    expect(styles).toContain('gesture-capsule-fade-in');
-    expect(styles).not.toContain('.gesture-nav-option');
-    expect(styles).not.toContain('.gesture-nav-option-chat');
-    expect(styles).not.toContain('.gesture-nav-option-file');
-    expect(styles).not.toContain('.gesture-nav-option-git');
-    expect(styles).not.toContain('.gesture-nav-drawer-button');
-    expect(styles).not.toContain('gesture-nav-capsule-drawer');
-    expect(styles).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,\s*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-pill \{[\s\S]*opacity: 0\.6;[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 32%, transparent\);[\s\S]*box-shadow: 0 8px 20px rgb\(0 0 0 \/ 12%\);[\s\S]*backdrop-filter: blur\(10px\) saturate\(1\.15\);[\s\S]*\}/,
-    );
-    expect(styles).not.toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity:/,
-    );
-  });
-
-  test('shows preview capsule state and respects reduced motion', () => {
-    const main = readMain();
-    const styles = readStyles();
-
-    expect(main).toContain('data-active={chatPreviewOpen}');
-    expect(main).toContain('aria-pressed={chatPreviewOpen}');
-    expect(styles).toMatch(
-      /\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 88%, var\(--text-primary\)\);[\s\S]*\}/,
-    );
-    expect(styles).toMatch(
-      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 88%, var\(--text-primary\)\);[\s\S]*\}/,
-    );
-    const activeCurrentButtonBlock = styles.match(/\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const activeCapsuleBlock = styles.match(/\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(activeCurrentButtonBlock).not.toContain('background:');
-    expect(activeCurrentButtonBlock).not.toContain('box-shadow:');
-    expect(activeCapsuleBlock).not.toContain('background:');
-    expect(activeCapsuleBlock).not.toContain('box-shadow:');
-    expect(styles).toMatch(
-      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.gesture-nav-pill,[\s\S]*\.gesture-nav-capsule[\s\S]*animation: none;[\s\S]*transition: none;[\s\S]*\}/,
-    );
-  });
-
   test('suppresses chat click expansion after movement cancellation', () => {
     const main = readMain();
     const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
@@ -213,22 +100,47 @@ describe('gesture navigation', () => {
     expect(pointerDownBody).toContain('beginGestureNavigationPress(event);');
   });
 
-  test('keeps chat centered between preview and settings when the gesture pill expands', () => {
+  test('renders the floating nav through the MobileFloatingNav component', () => {
     const main = readMain();
-    const pillStart = main.indexOf('className="gesture-nav-pill"');
-    const pillEnd = main.indexOf('const mobileSettingsTitle', pillStart);
-    const pillBody = main.slice(pillStart, pillEnd);
-    const previewIndex = pillBody.indexOf('codicon-layout-sidebar-right');
-    const currentButtonIndex = pillBody.indexOf('className="gesture-nav-button gesture-nav-current-button"');
-    const settingsIndex = pillBody.indexOf('codicon-settings-gear');
 
-    expect(previewIndex).toBeGreaterThan(-1);
-    expect(currentButtonIndex).toBeGreaterThan(-1);
-    expect(settingsIndex).toBeGreaterThan(-1);
-    expect(previewIndex).toBeLessThan(currentButtonIndex);
-    expect(currentButtonIndex).toBeLessThan(settingsIndex);
-    expect(pillBody).not.toContain('gesture-nav-capsule-drawer');
-    expect(pillBody).not.toContain('aria-hidden={gestureNavigationExpanded}');
-    expect(pillBody).not.toContain('tabIndex={gestureNavigationExpanded ? -1 : undefined}');
+    expect(main).toContain("from '../shell/layouts/mobile/MobileFloatingNav';");
+    expect(main).toContain('<MobileFloatingNav');
+    expect(main).not.toContain('className="gesture-nav-control"');
+    expect(main).not.toContain('className="gesture-nav-pill"');
+    expect(main).not.toContain('gesture-nav-capsule');
+    expect(main).not.toContain('<PortRelayFloatingButton');
+    expect(main).not.toContain('codicon-comment-discussion');
+    expect(main).not.toContain('codicon-layout-sidebar-right');
+    expect(main).not.toContain('codicon-settings-gear');
+    expect(main).not.toContain('codicon-radio-tower');
+    expect(main).not.toContain('data-idle=');
+    expect(main).not.toContain('floatingControlsIdle');
+  });
+
+  test('styles the floating nav button and card on motion tokens', () => {
+    const styles = readStyles();
+
+    expect(styles).toContain('.floating-nav-button');
+    expect(styles).toContain('.floating-nav-card');
+    expect(styles).toContain('.floating-nav-card-item');
+    expect(styles).toContain('.floating-nav-unread-dot');
+    expect(styles).toContain('.floating-nav-relay-dot');
+    expect(styles).not.toContain('.gesture-nav-pill');
+    expect(styles).not.toContain('.gesture-nav-capsule');
+    expect(styles).not.toContain('.port-relay-floating-bubble');
+    expect(styles).not.toContain('.port-relay-target-switch-menu');
+    expect(styles).not.toContain("data-idle='true'");
+    // No stray hardcoded durations inside the floating nav rules.
+    const navSection = styles.match(/\.floating-nav-button \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(navSection).toContain('var(--motion-');
+    expect(navSection).not.toMatch(/\d+ms/);
+    // Expanded card uses the frosted overlay material; collapsed stays light.
+    const cardBlock = styles.match(/\.floating-nav-card \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(cardBlock).toContain('blur(12px) saturate(1.1)');
+    expect(cardBlock).toContain('var(--shadow-overlay)');
+    // Reduced motion covers the card entrance.
+    expect(styles).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.floating-nav-card[\s\S]*animation: none;[\s\S]*\}/,
+    );
   });
 });
