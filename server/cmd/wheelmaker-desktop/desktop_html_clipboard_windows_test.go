@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -61,7 +62,7 @@ func TestEncodeDesktopVirtualHTMLFileClipboardData(t *testing.T) {
 	}
 }
 
-func TestSetDesktopHTMLFileClipboardUsesOwnerWindow(t *testing.T) {
+func TestSetDesktopHTMLFileClipboardRawFallbackUsesOwnerWindow(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "README.html")
 	if err := os.WriteFile(path, []byte("<h1>Hello</h1>"), 0o600); err != nil {
 		t.Fatal(err)
@@ -98,6 +99,67 @@ func TestSetDesktopHTMLFileClipboardUsesOwnerWindow(t *testing.T) {
 	if setCount != 5 {
 		t.Fatalf("clipboard format count = %d, want 5", setCount)
 	}
+}
+
+func TestSetDesktopHTMLFileClipboardUsesShellOLEDataObject(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "README.html")
+	if err := os.WriteFile(path, []byte("<h1>Hello</h1>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	const dataObject = uintptr(0x4321)
+	var createdPath string
+	var setDataObject uintptr
+	released := false
+	operations := desktopHTMLClipboardOLEOperations{
+		createDataObject: func(gotPath string) (uintptr, func(), error) {
+			createdPath = gotPath
+			return dataObject, func() { released = true }, nil
+		},
+		setClipboard: func(gotDataObject uintptr) error {
+			setDataObject = gotDataObject
+			return nil
+		},
+	}
+
+	if err := setDesktopHTMLFileClipboardWithOLEOperations(path, operations); err != nil {
+		t.Fatal(err)
+	}
+	if createdPath != path {
+		t.Fatalf("Shell data object path = %q, want %q", createdPath, path)
+	}
+	if setDataObject != dataObject {
+		t.Fatalf("OleSetClipboard data object = %#x, want %#x", setDataObject, dataObject)
+	}
+	if !released {
+		t.Fatal("Shell data object was not released after OleSetClipboard")
+	}
+}
+
+func TestNewDesktopShellFileDataObjectFromHTMLFile(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	path := filepath.Join(t.TempDir(), "README.html")
+	if err := os.WriteFile(path, []byte("<h1>Hello</h1>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := initializeDesktopClipboardOLE(); err != nil {
+		t.Fatal(err)
+	}
+	defer uninitializeDesktopClipboardOLE()
+
+	dataObject, release, err := newDesktopShellFileDataObject(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dataObject == 0 {
+		t.Fatal("Shell data object is empty")
+	}
+	if release == nil {
+		t.Fatal("Shell data object release function is nil")
+	}
+	release()
 }
 
 func TestDesktopHTMLClipboardTransferStoreKeepsNamedHtmlFile(t *testing.T) {

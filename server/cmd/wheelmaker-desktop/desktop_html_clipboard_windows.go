@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"unsafe"
@@ -209,8 +210,24 @@ type desktopHTMLClipboardOperations struct {
 	setClipboardData        func(uintptr, []byte, string) error
 }
 
+type desktopHTMLClipboardOLEOperations struct {
+	createDataObject func(string) (uintptr, func(), error)
+	setClipboard     func(uintptr) error
+}
+
 func setDesktopHTMLFileClipboard(hwnd uintptr, path string) error {
-	return setDesktopHTMLFileClipboardWithOperations(hwnd, path, desktopHTMLClipboardOperations{
+	oleErr := setDesktopHTMLFileClipboardWithOLEOperations(path, desktopHTMLClipboardOLEOperations{
+		createDataObject: newDesktopShellFileDataObject,
+		setClipboard:     setDesktopOLEClipboard,
+	})
+	if oleErr == nil {
+		return nil
+	}
+
+	// Keep the raw clipboard path as a compatibility fallback for systems that
+	// do not expose the Shell data-object APIs. OLE-aware targets use the path
+	// above, while older targets can still consume the legacy formats below.
+	rawErr := setDesktopHTMLFileClipboardWithOperations(hwnd, path, desktopHTMLClipboardOperations{
 		openClipboard: func(owner uintptr) error {
 			opened, _, callErr := procDesktopOpenClipboard.Call(owner)
 			if opened == 0 {
@@ -231,6 +248,170 @@ func setDesktopHTMLFileClipboard(hwnd uintptr, path string) error {
 		registerClipboardFormat: registerDesktopClipboardFormat,
 		setClipboardData:        setDesktopGlobalClipboardData,
 	})
+	if rawErr == nil {
+		return nil
+	}
+	return fmt.Errorf("set Shell/OLE HTML clipboard: %v; raw clipboard fallback: %w", oleErr, rawErr)
+}
+
+func setDesktopHTMLFileClipboardWithOLEOperations(
+	path string,
+	operations desktopHTMLClipboardOLEOperations,
+) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat HTML clipboard file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("HTML clipboard path is not a regular file")
+	}
+	if info.Size() < 1 || info.Size() > maxDesktopHTMLClipboardBytes {
+		return fmt.Errorf("HTML clipboard file size is invalid")
+	}
+	if operations.createDataObject == nil || operations.setClipboard == nil {
+		return fmt.Errorf("HTML clipboard OLE operations are unavailable")
+	}
+	dataObject, release, err := operations.createDataObject(path)
+	if err != nil {
+		return err
+	}
+	if release != nil {
+		defer release()
+	}
+	if dataObject == 0 {
+		return fmt.Errorf("Shell data object is unavailable")
+	}
+	return operations.setClipboard(dataObject)
+}
+
+type desktopClipboardGUID struct {
+	data1 uint32
+	data2 uint16
+	data3 uint16
+	data4 [8]byte
+}
+
+var (
+	desktopClipboardIIDShellFolder = desktopClipboardGUID{
+		data1: 0x000214e6,
+		data4: [8]byte{0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46},
+	}
+	desktopClipboardIIDDataObject = desktopClipboardGUID{
+		data1: 0x0000010e,
+		data4: [8]byte{0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46},
+	}
+)
+
+func newDesktopShellFileDataObject(path string) (uintptr, func(), error) {
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return 0, nil, fmt.Errorf("resolve HTML clipboard path: %w", err)
+	}
+	fullPIDL, err := parseDesktopShellPIDL(absolutePath)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer windows.CoTaskMemFree(fullPIDL)
+
+	parentPIDL, err := parseDesktopShellPIDL(filepath.Dir(absolutePath))
+	if err != nil {
+		return 0, nil, err
+	}
+	defer windows.CoTaskMemFree(parentPIDL)
+
+	var parentFolder unsafe.Pointer
+	var childPIDL unsafe.Pointer
+	result, _, callErr := procDesktopClipboardSHBindToParent.Call(
+		uintptr(fullPIDL),
+		uintptr(unsafe.Pointer(&desktopClipboardIIDShellFolder)),
+		uintptr(unsafe.Pointer(&parentFolder)),
+		uintptr(unsafe.Pointer(&childPIDL)),
+	)
+	if err := desktopClipboardHRESULTError("bind HTML clipboard file to its parent", result, callErr); err != nil {
+		return 0, nil, err
+	}
+	if parentFolder == nil || childPIDL == nil {
+		return 0, nil, fmt.Errorf("Shell parent data for HTML clipboard file is unavailable")
+	}
+	defer releaseDesktopClipboardCOM(parentFolder)
+
+	childPIDLs := [1]unsafe.Pointer{childPIDL}
+	var dataObject unsafe.Pointer
+	result, _, callErr = procDesktopClipboardSHCreateDataObject.Call(
+		uintptr(parentPIDL),
+		1,
+		uintptr(unsafe.Pointer(&childPIDLs[0])),
+		0,
+		uintptr(unsafe.Pointer(&desktopClipboardIIDDataObject)),
+		uintptr(unsafe.Pointer(&dataObject)),
+	)
+	runtime.KeepAlive(fullPIDL)
+	runtime.KeepAlive(parentPIDL)
+	runtime.KeepAlive(childPIDLs)
+	if err := desktopClipboardHRESULTError("create HTML clipboard Shell data object", result, callErr); err != nil {
+		return 0, nil, err
+	}
+	if dataObject == nil {
+		return 0, nil, fmt.Errorf("HTML clipboard Shell data object is unavailable")
+	}
+	return uintptr(dataObject), func() {
+		releaseDesktopClipboardCOM(dataObject)
+	}, nil
+}
+
+func parseDesktopShellPIDL(path string) (unsafe.Pointer, error) {
+	encodedPath, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, fmt.Errorf("encode Shell path: %w", err)
+	}
+	var pidl unsafe.Pointer
+	var attributes uint32
+	result, _, callErr := procDesktopClipboardSHParseDisplayName.Call(
+		uintptr(unsafe.Pointer(encodedPath)),
+		0,
+		uintptr(unsafe.Pointer(&pidl)),
+		0,
+		uintptr(unsafe.Pointer(&attributes)),
+	)
+	if err := desktopClipboardHRESULTError("parse Shell path", result, callErr); err != nil {
+		return nil, err
+	}
+	if pidl == nil {
+		return nil, fmt.Errorf("Shell path returned an empty PIDL")
+	}
+	return pidl, nil
+}
+
+func releaseDesktopClipboardCOM(value unsafe.Pointer) {
+	if value == nil {
+		return
+	}
+	unknown := (*struct{ Vtbl *desktopIUnknownVtbl })(value)
+	if unknown.Vtbl == nil {
+		return
+	}
+	_, _, _ = unknown.Vtbl.Release.Call(uintptr(value))
+}
+
+func setDesktopOLEClipboard(dataObject uintptr) error {
+	result, _, callErr := procDesktopClipboardOleSetClipboard.Call(dataObject)
+	return desktopClipboardHRESULTError("set OLE clipboard", result, callErr)
+}
+
+func initializeDesktopClipboardOLE() error {
+	result, _, callErr := procDesktopClipboardOleInitialize.Call(0)
+	return desktopClipboardHRESULTError("initialize OLE clipboard", result, callErr)
+}
+
+func uninitializeDesktopClipboardOLE() {
+	procDesktopClipboardOleUninitialize.Call()
+}
+
+func desktopClipboardHRESULTError(action string, result uintptr, _ error) error {
+	if int32(result) < 0 {
+		return fmt.Errorf("%s failed: HRESULT 0x%08x", action, uint32(result))
+	}
+	return nil
 }
 
 func setDesktopHTMLFileClipboardWithOperations(
@@ -478,16 +659,24 @@ func encodeDesktopDropFiles(paths []string) ([]byte, error) {
 }
 
 var (
-	desktopClipboardKernel32           = windows.NewLazySystemDLL("kernel32.dll")
-	procDesktopClipboardGlobalAlloc    = desktopClipboardKernel32.NewProc("GlobalAlloc")
-	procDesktopClipboardGlobalFree     = desktopClipboardKernel32.NewProc("GlobalFree")
-	procDesktopClipboardGlobalLock     = desktopClipboardKernel32.NewProc("GlobalLock")
-	procDesktopClipboardGlobalUnlock   = desktopClipboardKernel32.NewProc("GlobalUnlock")
-	procDesktopOpenClipboard           = user32.NewProc("OpenClipboard")
-	procDesktopCloseClipboard          = user32.NewProc("CloseClipboard")
-	procDesktopEmptyClipboard          = user32.NewProc("EmptyClipboard")
-	procDesktopRegisterClipboardFormat = user32.NewProc("RegisterClipboardFormatW")
-	procDesktopSetClipboardData        = user32.NewProc("SetClipboardData")
+	desktopClipboardKernel32               = windows.NewLazySystemDLL("kernel32.dll")
+	desktopClipboardShell32                = windows.NewLazySystemDLL("shell32.dll")
+	desktopClipboardOle32                  = windows.NewLazySystemDLL("ole32.dll")
+	procDesktopClipboardGlobalAlloc        = desktopClipboardKernel32.NewProc("GlobalAlloc")
+	procDesktopClipboardGlobalFree         = desktopClipboardKernel32.NewProc("GlobalFree")
+	procDesktopClipboardGlobalLock         = desktopClipboardKernel32.NewProc("GlobalLock")
+	procDesktopClipboardGlobalUnlock       = desktopClipboardKernel32.NewProc("GlobalUnlock")
+	procDesktopClipboardSHParseDisplayName = desktopClipboardShell32.NewProc("SHParseDisplayName")
+	procDesktopClipboardSHBindToParent     = desktopClipboardShell32.NewProc("SHBindToParent")
+	procDesktopClipboardSHCreateDataObject = desktopClipboardShell32.NewProc("SHCreateDataObject")
+	procDesktopClipboardOleInitialize      = desktopClipboardOle32.NewProc("OleInitialize")
+	procDesktopClipboardOleUninitialize    = desktopClipboardOle32.NewProc("OleUninitialize")
+	procDesktopClipboardOleSetClipboard    = desktopClipboardOle32.NewProc("OleSetClipboard")
+	procDesktopOpenClipboard               = user32.NewProc("OpenClipboard")
+	procDesktopCloseClipboard              = user32.NewProc("CloseClipboard")
+	procDesktopEmptyClipboard              = user32.NewProc("EmptyClipboard")
+	procDesktopRegisterClipboardFormat     = user32.NewProc("RegisterClipboardFormatW")
+	procDesktopSetClipboardData            = user32.NewProc("SetClipboardData")
 )
 
 func desktopClipboardCallError(action string, callErr error) error {

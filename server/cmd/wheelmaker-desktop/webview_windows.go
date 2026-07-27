@@ -20,6 +20,11 @@ func newWebView2Launcher() desktopLauncher {
 }
 
 func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOptions) error {
+	if err := initializeDesktopClipboardOLE(); err != nil {
+		return err
+	}
+	defer uninitializeDesktopClipboardOLE()
+
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
