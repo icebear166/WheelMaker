@@ -14,7 +14,7 @@ const providerOrder: UsageProviderId[] = ['codex', 'flicker', 'kimi', 'zai', 'de
 interface UsageProviderAggregate {
   name: string;
   statuses: UsageProviderStatus[];
-  accounts: Map<string, UsageViewAccount>;
+  accounts: Map<string, {account: UsageViewAccount; updatedAt?: string}>;
   hubs: Map<string, {hubId: string; status: UsageProviderStatus; message?: string}>;
 }
 
@@ -25,7 +25,12 @@ export class UsageStore {
   replaceHub(hubId: string, snapshot: UsageHubSnapshot): void {
     const normalizedHubId = hubId.trim();
     if (!normalizedHubId || snapshot.hubId !== normalizedHubId) return;
-    this.hubs.set(normalizedHubId, snapshot);
+    const existing = this.hubs.get(normalizedHubId);
+    if (existing && isOlderSnapshot(existing, snapshot)) return;
+    const next = existing && snapshot.status === 'scanning' && snapshot.providers.length === 0
+      ? {...snapshot, providers: existing.providers}
+      : snapshot;
+    this.hubs.set(normalizedHubId, next);
     this.emit();
   }
 
@@ -59,7 +64,7 @@ export class UsageStore {
         const aggregate: UsageProviderAggregate = providers.get(provider.id) ?? {
           name: provider.name,
           statuses: [],
-          accounts: new Map<string, UsageViewAccount>(),
+          accounts: new Map<string, {account: UsageViewAccount; updatedAt?: string}>(),
           hubs: new Map(),
         };
         aggregate.name = provider.name || aggregate.name;
@@ -79,10 +84,16 @@ export class UsageStore {
               ? `${provider.id}:source:${localId}`
               : `${hubId}:${provider.id}:${account.localId}`;
           const existing = aggregate.accounts.get(identityKey);
-          if (existing) {
-            existing.hubIds = Array.from(new Set([...existing.hubIds, hubId])).sort();
+          const hubIds = existing
+            ? Array.from(new Set([...existing.account.hubIds, hubId])).sort()
+            : [hubId];
+          if (!existing || isNewerSnapshotTime(hub.updatedAt, existing.updatedAt)) {
+            aggregate.accounts.set(identityKey, {
+              account: {...account, hubIds},
+              updatedAt: hub.updatedAt,
+            });
           } else {
-            aggregate.accounts.set(identityKey, {...account, hubIds: [hubId]});
+            existing.account.hubIds = hubIds;
           }
         }
         providers.set(provider.id, aggregate);
@@ -92,7 +103,7 @@ export class UsageStore {
       id,
       name: aggregate.name,
       status: aggregateStatus(aggregate.statuses),
-      accounts: Array.from(aggregate.accounts.values()),
+      accounts: Array.from(aggregate.accounts.values(), value => value.account),
       hubs: Array.from(aggregate.hubs.values()),
     })).sort((left, right) => providerOrder.indexOf(left.id) - providerOrder.indexOf(right.id));
     return {refreshing, updatedAt: updatedAt || undefined, providers: views};
@@ -198,4 +209,24 @@ function isProviderStatus(value: unknown): value is UsageProviderStatus {
 
 function isScanStatus(value: unknown): value is UsageHubSnapshot['status'] {
   return value === 'idle' || value === 'scanning' || value === 'ready' || value === 'error';
+}
+
+function isOlderSnapshot(existing: UsageHubSnapshot, incoming: UsageHubSnapshot): boolean {
+  const existingAt = parseSnapshotTime(existing.updatedAt);
+  const incomingAt = parseSnapshotTime(incoming.updatedAt);
+  if (existingAt === null || incomingAt === null) return false;
+  return incomingAt < existingAt;
+}
+
+function parseSnapshotTime(value?: string): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isNewerSnapshotTime(incoming?: string, existing?: string): boolean {
+  const incomingAt = parseSnapshotTime(incoming);
+  if (incomingAt === null) return false;
+  const existingAt = parseSnapshotTime(existing);
+  return existingAt === null || incomingAt > existingAt;
 }

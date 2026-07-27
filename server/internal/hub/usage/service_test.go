@@ -96,6 +96,97 @@ func (c *immediateCollector) Scan(context.Context) []ProviderSnapshot {
 	return nil
 }
 
+type sequenceCollector struct {
+	results [][]ProviderSnapshot
+	index   int
+}
+
+func (c *sequenceCollector) Scan(context.Context) []ProviderSnapshot {
+	if c.index >= len(c.results) {
+		return nil
+	}
+	result := c.results[c.index]
+	c.index++
+	return result
+}
+
+func TestServiceKeepsPreviousProviderWhenRefreshFails(t *testing.T) {
+	collector := &sequenceCollector{results: [][]ProviderSnapshot{
+		{{
+			ID: ProviderKimi, Name: "Kimi", Status: ProviderOK,
+			Accounts: []Account{{
+				LocalID: "opencode", Status: ProviderOK,
+				Limits: []Limit{{ID: "week", RemainingPercent: 66}},
+			}},
+		}},
+		{{
+			ID: ProviderKimi, Name: "Kimi", Status: ProviderError,
+			Accounts: []Account{{
+				LocalID: "opencode", Status: ProviderError,
+				Limits: []Limit{},
+			}},
+		}},
+	}}
+	service := NewService(ServiceOptions{Collector: collector})
+
+	if _, err := service.Refresh(context.Background()); err != nil {
+		t.Fatalf("first refresh: %v", err)
+	}
+	got, err := service.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+
+	if len(got.Providers) != 1 || len(got.Providers[0].Accounts) != 1 {
+		t.Fatalf("providers=%+v, want previous provider and account", got.Providers)
+	}
+	if len(got.Providers[0].Accounts[0].Limits) != 1 {
+		t.Fatalf("limits=%+v, want previous successful limit", got.Providers[0].Accounts[0].Limits)
+	}
+	if got.Providers[0].Accounts[0].Limits[0].RemainingPercent != 66 {
+		t.Fatalf("limits=%+v, want previous successful limit", got.Providers[0].Accounts[0].Limits)
+	}
+}
+
+func TestServiceKeepsPreviousAccountWhenOneAccountRefreshFails(t *testing.T) {
+	collector := &sequenceCollector{results: [][]ProviderSnapshot{
+		{{
+			ID: ProviderDeepSeek, Name: "DeepSeek", Status: ProviderOK,
+			Accounts: []Account{
+				{LocalID: "one", Status: ProviderOK, Limits: []Limit{{ID: "week", RemainingPercent: 80}}},
+				{LocalID: "two", Status: ProviderOK, Limits: []Limit{{ID: "week", RemainingPercent: 60}}},
+			},
+		}},
+		{{
+			ID: ProviderDeepSeek, Name: "DeepSeek", Status: ProviderOK,
+			Accounts: []Account{
+				{LocalID: "one", Status: ProviderOK, Limits: []Limit{{ID: "week", RemainingPercent: 70}}},
+				{LocalID: "two", Status: ProviderError, Limits: []Limit{}},
+			},
+		}},
+	}}
+	service := NewService(ServiceOptions{Collector: collector})
+
+	if _, err := service.Refresh(context.Background()); err != nil {
+		t.Fatalf("first refresh: %v", err)
+	}
+	got, err := service.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+
+	accounts := got.Providers[0].Accounts
+	if len(accounts) != 2 {
+		t.Fatalf("accounts=%+v, want two accounts", accounts)
+	}
+	if len(accounts[0].Limits) != 1 || len(accounts[1].Limits) != 1 {
+		t.Fatalf("accounts=%+v, want one limit per account", accounts)
+	}
+	if accounts[0].Limits[0].RemainingPercent != 70 || accounts[1].Limits[0].RemainingPercent != 60 {
+		t.Fatalf("accounts=%+v, want refreshed account plus previous failed account", accounts)
+	}
+}
+
 func TestManualRefreshRestartsAutomaticInterval(t *testing.T) {
 	afterCalls := make(chan time.Duration, 2)
 	collector := &immediateCollector{}

@@ -127,17 +127,94 @@ describe('UsageStore', () => {
     expect(store.snapshot().providers[0].remainingPercent).toBe(44);
   });
 
-  it('uses the most recently received phase from the same generation', () => {
+  it('keeps visible data while a scan is in progress', () => {
     const store = new UsageStore();
     const ready = {
       hubId: 'hub-a', generation: 3, status: 'ready' as const, providers: [{
-        id: 'kimi' as const, name: 'Kimi', status: 'ok' as const, accounts: [],
+        id: 'kimi' as const, name: 'Kimi', status: 'ok' as const, accounts: [{
+          localId: 'opencode', identity: {}, status: 'ok' as const,
+          limits: [{id: 'week', label: 'Week', remainingPercent: 77}],
+        }],
       }],
     };
     store.replaceHub('hub-a', ready);
     store.replaceHub('hub-a', {...ready, status: 'scanning', providers: []});
 
-    expect(store.snapshot().providers).toEqual([]);
+    expect(store.snapshot().providers[0].remainingPercent).toBe(77);
     expect(store.snapshot().refreshing).toBe(true);
+  });
+
+  it('keeps the last successful data while a newer scan is in progress', () => {
+    const store = new UsageStore();
+    const ready = {
+      hubId: 'hub-a', generation: 4, status: 'ready' as const,
+      updatedAt: '2026-07-27T10:00:00Z',
+      providers: [{
+        id: 'kimi' as const, name: 'Kimi', status: 'ok' as const, accounts: [{
+          localId: 'opencode', identity: {}, status: 'ok' as const,
+          limits: [{id: 'week', label: 'Week', remainingPercent: 66}],
+        }],
+      }],
+    };
+    store.replaceHub('hub-a', ready);
+    store.replaceHub('hub-a', {
+      ...ready,
+      generation: 5,
+      status: 'scanning',
+      providers: [],
+    });
+
+    expect(store.snapshot().providers[0].remainingPercent).toBe(66);
+    expect(store.snapshot().refreshing).toBe(true);
+  });
+
+  it('ignores an older completed snapshot for the same Hub', () => {
+    const store = new UsageStore();
+    store.replaceHub('hub-a', {
+      hubId: 'hub-a', generation: 5, status: 'ready',
+      updatedAt: '2026-07-27T10:05:00Z', providers: [{
+        id: 'kimi', name: 'Kimi', status: 'ok', accounts: [{
+          localId: 'opencode', identity: {}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 66}],
+        }],
+      }],
+    });
+    store.replaceHub('hub-a', {
+      hubId: 'hub-a', generation: 4, status: 'ready',
+      updatedAt: '2026-07-27T10:04:00Z', providers: [{
+        id: 'kimi', name: 'Kimi', status: 'ok', accounts: [{
+          localId: 'opencode', identity: {}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 12}],
+        }],
+      }],
+    });
+
+    expect(store.snapshot().providers[0].remainingPercent).toBe(66);
+  });
+
+  it('uses the newest account data when the same account is reported by multiple Hubs', () => {
+    const store = new UsageStore();
+    store.replaceHub('hub-a', {
+      hubId: 'hub-a', generation: 1, status: 'ready',
+      updatedAt: '2026-07-27T10:04:00Z', providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+          localId: 'current', identity: {kind: 'email', value: 'user@example.com'}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 40}],
+        }],
+      }],
+    });
+    store.replaceHub('hub-b', {
+      hubId: 'hub-b', generation: 1, status: 'ready',
+      updatedAt: '2026-07-27T10:05:00Z', providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+          localId: 'current', identity: {kind: 'email', value: 'user@example.com'}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 60}],
+        }],
+      }],
+    });
+
+    const account = store.snapshot().providers[0].accounts[0];
+    expect(account.limits[0].remainingPercent).toBe(60);
+    expect(account.hubIds).toEqual(['hub-a', 'hub-b']);
   });
 });

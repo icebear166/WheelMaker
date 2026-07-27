@@ -132,7 +132,7 @@ func (s *Service) execute(ctx context.Context, run *scanRun) {
 	now := s.options.Now().UTC()
 	next := now.Add(s.options.Interval)
 	s.mu.Lock()
-	s.snapshot.Providers = append([]ProviderSnapshot(nil), providers...)
+	s.snapshot.Providers = mergeProviderSnapshots(s.snapshot.Providers, providers)
 	s.snapshot.UpdatedAt = &now
 	s.snapshot.NextScanAt = &next
 	if ctx.Err() != nil {
@@ -179,6 +179,62 @@ func (s *Service) publish(snapshot Snapshot) {
 	}
 }
 
+func mergeProviderSnapshots(previous, current []ProviderSnapshot) []ProviderSnapshot {
+	previousByID := make(map[ProviderID]ProviderSnapshot, len(previous))
+	for _, provider := range previous {
+		previousByID[provider.ID] = provider
+	}
+
+	merged := make([]ProviderSnapshot, 0, len(current)+len(previous))
+	seen := make(map[ProviderID]struct{}, len(current))
+	for _, provider := range current {
+		previousProvider, hasPrevious := previousByID[provider.ID]
+		provider, keep := mergeProviderSnapshot(previousProvider, provider, hasPrevious)
+		if !keep {
+			continue
+		}
+		merged = append(merged, provider)
+		seen[provider.ID] = struct{}{}
+	}
+	for _, provider := range previous {
+		if _, exists := seen[provider.ID]; !exists {
+			merged = append(merged, provider)
+		}
+	}
+	return merged
+}
+
+func mergeProviderSnapshot(previous, current ProviderSnapshot, hasPrevious bool) (ProviderSnapshot, bool) {
+	if !hasPrevious {
+		return current, current.Status != ProviderError
+	}
+	if current.Status == ProviderUnavailable || len(current.Accounts) == 0 {
+		return previous, true
+	}
+
+	previousByLocalID := make(map[string]Account, len(previous.Accounts))
+	for _, account := range previous.Accounts {
+		previousByLocalID[account.LocalID] = account
+	}
+	accounts := make([]Account, 0, len(current.Accounts))
+	for _, account := range current.Accounts {
+		if account.Status == ProviderOK {
+			accounts = append(accounts, account)
+			continue
+		}
+		if previousAccount, exists := previousByLocalID[account.LocalID]; exists {
+			accounts = append(accounts, previousAccount)
+		}
+	}
+	if len(accounts) == 0 {
+		return previous, true
+	}
+
+	current.Accounts = accounts
+	current.Status = providerStatus(accounts)
+	current.Message = ""
+	return current, true
+}
 func cloneSnapshot(snapshot Snapshot) Snapshot {
 	copySnapshot := snapshot
 	copySnapshot.Providers = append([]ProviderSnapshot{}, snapshot.Providers...)
