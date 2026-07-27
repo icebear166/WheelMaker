@@ -53,6 +53,23 @@ export type SessionNavSlideOutAutoClose = {
   dispose: () => void;
 };
 
+export type SessionNavSlideOutAutoCloseSyncInput = {
+  open: boolean;
+  pointerInside: boolean;
+  suppressed: boolean;
+};
+
+export function syncSessionNavSlideOutAutoClose(
+  controller: SessionNavSlideOutAutoClose,
+  input: SessionNavSlideOutAutoCloseSyncInput,
+): void {
+  if (!input.open || input.pointerInside) {
+    controller.cancel();
+    return;
+  }
+  controller.schedule(input.suppressed);
+}
+
 export function createSessionNavSlideOutAutoClose(
   onClose: () => void,
   delayMs = SESSION_NAV_SLIDE_OUT_CLOSE_DELAY_MS,

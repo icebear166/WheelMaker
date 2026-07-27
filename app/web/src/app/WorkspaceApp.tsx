@@ -155,6 +155,7 @@ import {
   createSessionNavSlideOutState,
   isSessionNavSlideOutCloseSuppressed,
   sessionNavSlideOutReducer,
+  syncSessionNavSlideOutAutoClose,
 } from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
@@ -2874,6 +2875,7 @@ export function App() {
     undefined,
     createSessionNavSlideOutState,
   );
+  const sessionNavSlideOutPanelRef = useRef<HTMLElement | null>(null);
   const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
   const sessionNavSlideOutPointerDownRef = useRef(false);
   const sessionNavSlideOutAutoClose = useMemo(
@@ -5361,6 +5363,38 @@ export function App() {
   );
   const sessionSearchActive = !!activeSessionSearchId;
   const sessionSearchHeaderExpanded = sessionSearchOpen || sessionSearchActive;
+  useEffect(() => {
+    if (!sessionNavSlideOut.open) {
+      syncSessionNavSlideOutAutoClose(sessionNavSlideOutAutoClose, {
+        open: false,
+        pointerInside: false,
+        suppressed: false,
+      });
+      return;
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      syncSessionNavSlideOutAutoClose(sessionNavSlideOutAutoClose, {
+        open: true,
+        pointerInside: sessionNavSlideOutPanelRef.current?.matches(':hover') ?? false,
+        suppressed: isSessionNavSlideOutCloseSuppressed({
+          searchActive: sessionSearchActive || sessionSearchHeaderExpanded,
+          menuOpen: sessionArchiveMenuOpen || !!wideProjectActionMenu || !!projectSessionActionMenu,
+          pointerDownInList: sessionNavSlideOutPointerDownRef.current,
+          archivedOpen: archivedMode,
+        }),
+      });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [
+    archivedMode,
+    projectSessionActionMenu,
+    sessionArchiveMenuOpen,
+    sessionNavSlideOut.open,
+    sessionNavSlideOutAutoClose,
+    sessionSearchActive,
+    sessionSearchHeaderExpanded,
+    wideProjectActionMenu,
+  ]);
   const sessionSearchProjectDoneCount = useMemo(() => {
     if (!activeSessionSearchId) {
       return 0;
@@ -18422,6 +18456,7 @@ export function App() {
             <ChatSessionPanel
               mode="slideout"
               title="Sessions"
+              ref={sessionNavSlideOutPanelRef}
               className={`chat-session-nav-slideout${sessionNavSlideOut.open ? ' open' : ''}`}
               onPointerEnter={() => sessionNavSlideOutAutoClose.cancel()}
               onPointerLeave={() => {

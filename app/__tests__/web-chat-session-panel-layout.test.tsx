@@ -269,6 +269,13 @@ describe('PC chat session-panel layout', () => {
     );
   });
 
+  it('starts delayed closing when the slide-out opens with the pointer outside', () => {
+    expect(workspaceAppSource).toContain('syncSessionNavSlideOutAutoClose');
+    expect(workspaceAppSource).toContain('const sessionNavSlideOutPanelRef = useRef<HTMLElement | null>(null);');
+    expect(workspaceAppSource).toContain('ref={sessionNavSlideOutPanelRef}');
+    expect(workspaceAppSource).toContain("sessionNavSlideOutPanelRef.current?.matches(':hover') ?? false");
+  });
+
   it('keeps 100px of floating surfaces visible before shrinking the fixed chat column', () => {
     const fixedRule = cssRuleBlock(chatStyles, '.chat-view-width-fixed-800-edge-surfaces');
     expect(fixedRule).toContain('--chat-edge-min-visible: 100px;');

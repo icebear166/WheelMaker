@@ -57,6 +57,41 @@ describe('isSessionNavSlideOutCloseSuppressed', () => {
 });
 
 describe('session nav slide-out delayed close', () => {
+  it('starts delayed close when the panel opens with the pointer outside', () => {
+    jest.useFakeTimers();
+    const onClose = jest.fn();
+    const autoClose = slideOutStateModule.createSessionNavSlideOutAutoClose(onClose);
+
+    slideOutStateModule.syncSessionNavSlideOutAutoClose(autoClose, {
+      open: true,
+      pointerInside: false,
+      suppressed: false,
+    });
+    jest.advanceTimersByTime(2000);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    autoClose.dispose();
+    jest.useRealTimers();
+  });
+
+  it('cancels a pending close while the pointer is inside the panel', () => {
+    jest.useFakeTimers();
+    const onClose = jest.fn();
+    const autoClose = slideOutStateModule.createSessionNavSlideOutAutoClose(onClose);
+
+    autoClose.schedule(false);
+    slideOutStateModule.syncSessionNavSlideOutAutoClose(autoClose, {
+      open: true,
+      pointerInside: true,
+      suppressed: false,
+    });
+    jest.advanceTimersByTime(2000);
+
+    expect(onClose).not.toHaveBeenCalled();
+    autoClose.dispose();
+    jest.useRealTimers();
+  });
+
   it('waits two seconds and cancels when the pointer returns', () => {
     jest.useFakeTimers();
     const createAutoClose = (
