@@ -295,7 +295,11 @@ import {
   resolveChatScrollToBottomVisibility,
   shouldAutoScrollChatToBottom,
 } from '../chat/layout/chatScrollIntent';
-import { buildPromptTurnStatusIndex, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';
+import {
+  buildPromptTurnStatusIndex,
+  findPromptStartForDone,
+  type ChatPromptStatus,
+} from '../chat/turns/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
@@ -16779,25 +16783,8 @@ export function App() {
     ],
   );
 
-  const findPromptRequestForDoneInMessages = (
-    messages: RegistryChatMessage[],
-    doneTurnIndex: number,
-  ): RegistryChatMessage | undefined => {
-    const ordered = [...messages].sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0));
-    const doneIndex = ordered.findIndex(message => message.method === 'prompt_done' && (message.turnIndex ?? 0) === doneTurnIndex);
-    if (doneIndex < 0) {
-      return undefined;
-    }
-    for (let index = doneIndex - 1; index >= 0; index -= 1) {
-      if (isPromptStartMessage(ordered[index])) {
-        return ordered[index];
-      }
-    }
-    return undefined;
-  };
-
   const findPromptRequestForDone = useCallback((doneTurnIndex: number): RegistryChatMessage | undefined => {
-    return findPromptRequestForDoneInMessages(selectedFullChatMessages, doneTurnIndex);
+    return findPromptStartForDone(selectedFullChatMessages, doneTurnIndex);
   }, [selectedFullChatMessages]);
 
   const copyPromptDoneMarkdown = async (doneTurnIndex: number) => {
@@ -17092,7 +17079,7 @@ export function App() {
       ? archivedPreview?.messages ?? []
       : selectedFullChatMessages;
     const promptRequest =
-      findPromptRequestForDoneInMessages(promptMessages, message.turnIndex ?? 0) ||
+      findPromptStartForDone(promptMessages, message.turnIndex ?? 0) ||
       findPromptRequestForDone(message.turnIndex ?? 0);
     const promptText = promptRequest ? msgText(promptRequest.method, promptRequest.param).trim() : '';
     const promptSummary = promptArtifactPromptSummary(promptText);

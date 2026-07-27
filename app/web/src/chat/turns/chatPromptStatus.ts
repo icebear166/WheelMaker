@@ -23,6 +23,28 @@ function isPromptStart(message: RegistryChatMessage): boolean {
   return message.method === 'user_message_chunk' && message.param.steered !== true;
 }
 
+export function findPromptStartForDone(
+  messages: RegistryChatMessage[],
+  doneTurnIndex: number,
+): RegistryChatMessage | undefined {
+  const ordered = [...messages].sort((left, right) => positiveTurnIndex(left) - positiveTurnIndex(right));
+  const doneIndex = ordered.findIndex(message => (
+    message.method === 'prompt_done'
+    && positiveTurnIndex(message) === doneTurnIndex
+  ));
+  if (doneIndex < 0) {
+    return undefined;
+  }
+  const sessionId = ordered[doneIndex].sessionId;
+  for (let index = doneIndex - 1; index >= 0; index -= 1) {
+    const message = ordered[index];
+    if (message.sessionId === sessionId && isPromptStart(message)) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
 function promptStatusKey(message: RegistryChatMessage): string {
   return `${message.sessionId}\u0000${positiveTurnIndex(message)}\u0000${message.method}`;
 }

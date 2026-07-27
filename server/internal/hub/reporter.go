@@ -632,21 +632,11 @@ func (r *Reporter) runSession(ctx context.Context) error {
 }
 
 func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
-	switch in.Method {
-	case rp.RegistryMethodSessionList, rp.RegistryMethodSessionRead, rp.RegistryMethodSessionSearch,
-		rp.RegistryMethodSessionCreate, rp.RegistryMethodSessionResumeList, rp.RegistryMethodSessionResumeImport,
-		rp.RegistryMethodSessionReload, rp.RegistryMethodSessionArchive,
-		rp.RegistryMethodSessionArchiveList, rp.RegistryMethodSessionArchiveRead, rp.RegistryMethodSessionArchiveRestore,
-		rp.RegistryMethodSessionArtifactRead, rp.RegistryMethodSessionDelete,
-		rp.RegistryMethodSessionRename, rp.RegistryMethodSessionPin, rp.RegistryMethodSessionMark,
-		rp.RegistryMethodSessionSend, rp.RegistryMethodSessionCancel,
-		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionConfig,
-		rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact, rp.RegistryMethodSessionSteer, rp.RegistryMethodSessionPermissionRespond,
-		rp.RegistryMethodSessionAttachmentStart, rp.RegistryMethodSessionAttachmentChunk,
-		rp.RegistryMethodSessionAttachmentFinish, rp.RegistryMethodSessionAttachmentCancel,
-		rp.RegistryMethodSessionAttachmentDelete, rp.RegistryMethodSessionAttachmentThumbnail,
-		rp.RegistryMethodSessionAttachmentRead:
+	if rp.RegistrySessionForwardMethod(in.Method) {
 		r.replySession(conn, in)
+		return
+	}
+	switch in.Method {
 	case rp.RegistryMethodHubRelayOpen:
 		r.replyRelayOpen(conn, in)
 	case rp.RegistryMethodHubRelayClose:

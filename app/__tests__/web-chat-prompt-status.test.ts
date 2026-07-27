@@ -1,5 +1,6 @@
 import {
   buildPromptTurnStatusIndex,
+  findPromptStartForDone,
   resolvePromptDoneStatus,
   resolvePromptTurnStatus,
   type ChatPromptStatus,
@@ -80,6 +81,23 @@ describe('web chat prompt status', () => {
 
     expect(index.statusFor(request)).toBe('responding');
     expect(index.statusFor(steered)).toBeNull();
+  });
+
+  test('pairs prompt done with the original prompt across a steered user message', () => {
+    const request: RegistryChatMessage = {
+      ...message(1, 'prompt_request'),
+      param: {modelName: 'GPT-5.6-Sol'},
+    };
+    const steered: RegistryChatMessage = {
+      ...message(3, 'user_message_chunk'),
+      param: {
+        steered: true,
+        contentBlocks: [{type: 'text', text: 'change direction'}],
+      },
+    };
+    const done = message(5, 'prompt_done');
+
+    expect(findPromptStartForDone([done, steered, request], 5)).toBe(request);
   });
 
   test('maps non-normal prompt stop reasons to compact status labels', () => {

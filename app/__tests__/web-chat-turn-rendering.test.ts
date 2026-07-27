@@ -143,7 +143,9 @@ describe('web chat turn rendering', () => {
     const main = readMain();
     const chatTurn = readChatTurnView();
 
-    expect(main).toContain("import { buildPromptTurnStatusIndex, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';");
+    expect(main).toContain('buildPromptTurnStatusIndex,');
+    expect(main).toContain('findPromptStartForDone,');
+    expect(main).toContain("} from '../chat/turns/chatPromptStatus';");
     expect(main).toContain('selectedChatEncodedKey && chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey');
     expect(main).toContain('? chatMessages');
     expect(main).toContain('const selectedPromptTurnStatusIndex = useMemo(');
