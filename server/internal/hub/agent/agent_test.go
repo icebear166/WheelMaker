@@ -425,6 +425,23 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			if err := json.Unmarshal(settingsData, &gotSettings); err != nil {
 				t.Fatalf("generated settings are invalid JSON: %v", err)
 			}
+			if tt.name == "flicker" {
+				// The models array is fetched from the live bridge /v1/models at
+				// profile construction (builtin exposed list as fallback), so its
+				// exact content is runtime-dependent. Validate its shape here and
+				// drop it before the exact settings comparison below.
+				models, ok := gotSettings["models"].([]any)
+				if !ok || len(models) == 0 {
+					t.Fatalf("flicker settings.models = %#v, want non-empty object array", gotSettings["models"])
+				}
+				for _, entry := range models {
+					object, ok := entry.(map[string]any)
+					if !ok || object["id"] == "" || object["name"] == "" {
+						t.Fatalf("flicker settings.models entry missing id/name: %#v", entry)
+					}
+				}
+				delete(gotSettings, "models")
+			}
 			if !reflect.DeepEqual(gotSettings, tt.wantSettings) {
 				t.Fatalf("settings = %#v, want %#v", gotSettings, tt.wantSettings)
 			}
@@ -684,6 +701,97 @@ func TestClaudeCompatibleProviderSettingsWriteIsIdempotent(t *testing.T) {
 	}
 	if !after.ModTime().Equal(before.ModTime()) {
 		t.Fatalf("settings file was rewritten: before=%v after=%v", before.ModTime(), after.ModTime())
+	}
+}
+
+func TestClaudeCompatibleFlickerSettingsWriteStaticModelsWithGatewayDiscovery(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "cc-flicker")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	profile := claudeCompatibleProfile{
+		configDir:        configDir,
+		endpoint:         "http://127.0.0.1:17999",
+		authName:         "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:     "CLAUDE_OPUS_4_8",
+		gatewayDiscovery: true,
+		staticModels: []claudeModelEntry{
+			{ID: "CLAUDE_OPUS_4_8", Name: "MF Claude Opus 4.8"},
+			{ID: "CLAUDE-MYFLICKER-GPT_5_4", Name: "MF GPT-5.4"},
+		},
+		settingsEnv: map[string]string{"CLAUDE_CODE_SUBAGENT_MODEL": "CLAUDE_4_6"},
+	}
+	if err := ensureClaudeCompatibleSettings(profile); err != nil {
+		t.Fatalf("ensureClaudeCompatibleSettings: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(configDir, "settings.json"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	env, ok := settings["env"].(map[string]any)
+	if !ok || env[gatewayModelDiscoveryEnv] != "1" {
+		t.Fatalf("gateway discovery env not set: %#v", settings["env"])
+	}
+	for _, forbidden := range []string{"availableModels", "enforceAvailableModels"} {
+		if _, exists := settings[forbidden]; exists {
+			t.Fatalf("gateway discovery must not write %s: %#v", forbidden, settings)
+		}
+	}
+	models, ok := settings["models"].([]any)
+	if !ok || len(models) != 2 {
+		t.Fatalf("models = %#v, want 2-entry object array", settings["models"])
+	}
+	found := false
+	for _, entry := range models {
+		object, ok := entry.(map[string]any)
+		if !ok || object["id"] == "" || object["name"] == "" {
+			t.Fatalf("model entry missing id/name: %#v", entry)
+		}
+		if object["id"] == "CLAUDE-MYFLICKER-GPT_5_4" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("static models did not survive: %#v", models)
+	}
+}
+
+func TestClaudeCompatibleFlickerSettingsDropStaleModelsWhenEmpty(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "cc-flicker")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	settingsPath := filepath.Join(configDir, "settings.json")
+	existing := `{"models": [{"id": "STALE", "name": "stale"}], "env": {}}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	profile := claudeCompatibleProfile{
+		configDir:        configDir,
+		endpoint:         "http://127.0.0.1:17999",
+		authName:         "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:     "CLAUDE_OPUS_4_8",
+		gatewayDiscovery: true,
+	}
+	if err := ensureClaudeCompatibleSettings(profile); err != nil {
+		t.Fatalf("ensureClaudeCompatibleSettings: %v", err)
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if _, exists := settings["models"]; exists {
+		t.Fatalf("stale models must be dropped when no static models: %#v", settings)
 	}
 }
 

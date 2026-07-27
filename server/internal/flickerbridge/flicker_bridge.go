@@ -844,6 +844,28 @@ func builtinSupportedModels() []ModelEntry {
 	return models
 }
 
+// ExposedModel is a minimal public model descriptor (id + display name) for
+// callers outside this package that only need the discovery-visible catalog.
+type ExposedModel struct {
+	ID   string
+	Name string
+}
+
+// BuiltinExposedModels returns the built-in model catalog filtered to the
+// duet/agent-capable entries that /v1/models would expose, carrying the public
+// id (CLAUDE-MYFLICKER- prefix on non-Claude types) and the "MF "-prefixed
+// display name. It is the network-free fallback for consumers that cannot reach
+// a running bridge's /v1/models endpoint.
+func BuiltinExposedModels() []ExposedModel {
+	catalog := newModelCatalog()
+	exposed := catalog.Exposed()
+	result := make([]ExposedModel, 0, len(exposed))
+	for _, model := range exposed {
+		result = append(result, ExposedModel{ID: model.ID, Name: model.Name})
+	}
+	return result
+}
+
 type ModelCatalog struct {
 	mu     sync.RWMutex
 	models []ModelEntry

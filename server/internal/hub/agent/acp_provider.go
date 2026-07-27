@@ -2,9 +2,11 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -12,7 +14,9 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/swm8023/wheelmaker/internal/flickerbridge"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -298,7 +302,19 @@ type claudeCompatibleProfile struct {
 	// upstream effort/reasoning capabilities (the allowlist path strips them),
 	// at the cost of surfacing the bridge's full dynamic catalog in the picker.
 	gatewayDiscovery bool
-	settingsEnv      map[string]string
+	// staticModels, when set, is written to settings["models"] as an object
+	// array (id + name) so gateway-discovered non-Claude ids survive the CLI's
+	// "claude" prefix filter and appear in the model picker. Distinct from
+	// availableModels (an allowlist that strips effort capability); used
+	// together with gatewayDiscovery.
+	staticModels []claudeModelEntry
+	settingsEnv  map[string]string
+}
+
+// claudeModelEntry is one entry of the settings["models"] object array.
+type claudeModelEntry struct {
+	ID   string
+	Name string
 }
 
 var claudeCompatibleConfigMu sync.Mutex
@@ -406,6 +422,65 @@ func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
 	}
 }
 
+// flickerExposedModels returns the flicker bridge's discovery-visible model
+// catalog (id + display name). It prefers the running bridge's live /v1/models
+// (which reflects the current upstream catalog) and falls back to the built-in
+// exposed list when the endpoint is unreachable. The result is written into the
+// Claude settings["models"] array so gateway-discovered non-Claude ids survive
+// the CLI's "claude" prefix filter.
+func flickerExposedModels() []claudeModelEntry {
+	if models := fetchFlickerModelsFromBridge(flickerACPModelsEndpoint); len(models) > 0 {
+		return models
+	}
+	builtin := flickerbridge.BuiltinExposedModels()
+	models := make([]claudeModelEntry, 0, len(builtin))
+	for _, model := range builtin {
+		models = append(models, claudeModelEntry{ID: model.ID, Name: model.Name})
+	}
+	return models
+}
+
+// flickerACPModelsEndpoint is the managed bridge's OpenAI-compatible model list.
+const flickerACPModelsEndpoint = "http://127.0.0.1:17999/v1/models"
+
+func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return nil
+	}
+	var payload struct {
+		Data []struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return nil
+	}
+	models := make([]claudeModelEntry, 0, len(payload.Data))
+	for _, model := range payload.Data {
+		if model.ID == "" {
+			continue
+		}
+		name := model.DisplayName
+		if name == "" {
+			name = model.ID
+		}
+		models = append(models, claudeModelEntry{ID: model.ID, Name: name})
+	}
+	return models
+}
+
 func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
 	return claudeCompatibleProfile{
 		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
@@ -413,6 +488,7 @@ func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
 		authName:         "ANTHROPIC_AUTH_TOKEN",
 		defaultModel:     "CLAUDE_OPUS_4_8",
 		gatewayDiscovery: true,
+		staticModels:     flickerExposedModels(),
 		settingsEnv: map[string]string{
 			"ANTHROPIC_DEFAULT_FABLE_MODEL":  "CLAUDE_OPUS_4_8",
 			"ANTHROPIC_DEFAULT_OPUS_MODEL":   "CLAUDE_OPUS_4_8",
@@ -463,6 +539,18 @@ func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
 		delete(settings, "availableModels")
 		delete(settings, "enforceAvailableModels")
 		env[gatewayModelDiscoveryEnv] = "1"
+		// A static models object array (id + name) makes gateway-discovered
+		// non-Claude ids survive the CLI's "claude" prefix filter so they show
+		// up in the picker. Unlike availableModels this does not strip effort.
+		if len(profile.staticModels) > 0 {
+			models := make([]any, 0, len(profile.staticModels))
+			for _, model := range profile.staticModels {
+				models = append(models, map[string]any{"id": model.ID, "name": model.Name})
+			}
+			settings["models"] = models
+		} else {
+			delete(settings, "models")
+		}
 	} else {
 		settings["availableModels"] = append([]string(nil), profile.availableModels...)
 		settings["enforceAvailableModels"] = true
