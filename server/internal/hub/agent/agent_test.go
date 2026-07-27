@@ -434,13 +434,38 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				if !ok || len(models) == 0 {
 					t.Fatalf("flicker settings.models = %#v, want non-empty object array", gotSettings["models"])
 				}
+				modelNamesByID := map[string]string{}
 				for _, entry := range models {
 					object, ok := entry.(map[string]any)
 					if !ok || object["id"] == "" || object["name"] == "" {
 						t.Fatalf("flicker settings.models entry missing id/name: %#v", entry)
 					}
+					modelNamesByID[object["id"].(string)] = object["name"].(string)
 				}
 				delete(gotSettings, "models")
+
+				// Tier display names (ANTHROPIC_DEFAULT_<TIER>_MODEL_NAME) are
+				// derived from the same runtime catalog. Validate that each name
+				// present matches the exposed model for its tier id, then strip
+				// them before the exact env comparison below.
+				env := gotSettings["env"].(map[string]any)
+				tierPairs := []struct{ idKey, nameKey string }{
+					{"ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"},
+					{"ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"},
+					{"ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"},
+					{"ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"},
+				}
+				for _, pair := range tierPairs {
+					name, present := env[pair.nameKey]
+					if !present {
+						continue // tier id absent from the runtime catalog; no name written
+					}
+					wantName := modelNamesByID[env[pair.idKey].(string)]
+					if name != wantName {
+						t.Fatalf("%s = %q, want %q (from exposed catalog)", pair.nameKey, name, wantName)
+					}
+					delete(env, pair.nameKey)
+				}
 			}
 			if !reflect.DeepEqual(gotSettings, tt.wantSettings) {
 				t.Fatalf("settings = %#v, want %#v", gotSettings, tt.wantSettings)

@@ -482,20 +482,47 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 }
 
 func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
+	models := flickerExposedModels()
+	// Claude Code shows a tier's picker label from ANTHROPIC_DEFAULT_<TIER>_MODEL_NAME
+	// when present, falling back to the raw id otherwise. Populate each tier name
+	// from the same exposed catalog the picker uses so the Claude-family tiers
+	// render consistently (e.g. "MF Claude Opus 4.8") instead of the bare id.
+	displayNames := make(map[string]string, len(models))
+	for _, model := range models {
+		displayNames[model.ID] = model.Name
+	}
+	const (
+		fableModel  = "CLAUDE_OPUS_4_8"
+		opusModel   = "CLAUDE_OPUS_4_8"
+		sonnetModel = "CLAUDE_4_6"
+		haikuModel  = "CLAUDE_4_6"
+	)
+	settingsEnv := map[string]string{
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":  fableModel,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   opusModel,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": sonnetModel,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  haikuModel,
+		"CLAUDE_CODE_SUBAGENT_MODEL":     sonnetModel,
+	}
+	tierNames := map[string]string{
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  fableModel,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   opusModel,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": sonnetModel,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  haikuModel,
+	}
+	for nameEnv, modelID := range tierNames {
+		if displayName := displayNames[modelID]; displayName != "" {
+			settingsEnv[nameEnv] = displayName
+		}
+	}
 	return claudeCompatibleProfile{
 		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
 		endpoint:         "http://127.0.0.1:17999",
 		authName:         "ANTHROPIC_AUTH_TOKEN",
-		defaultModel:     "CLAUDE_OPUS_4_8",
+		defaultModel:     opusModel,
 		gatewayDiscovery: true,
-		staticModels:     flickerExposedModels(),
-		settingsEnv: map[string]string{
-			"ANTHROPIC_DEFAULT_FABLE_MODEL":  "CLAUDE_OPUS_4_8",
-			"ANTHROPIC_DEFAULT_OPUS_MODEL":   "CLAUDE_OPUS_4_8",
-			"ANTHROPIC_DEFAULT_SONNET_MODEL": "CLAUDE_4_6",
-			"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "CLAUDE_4_6",
-			"CLAUDE_CODE_SUBAGENT_MODEL":     "CLAUDE_4_6",
-		},
+		staticModels:     models,
+		settingsEnv:      settingsEnv,
 	}
 }
 
