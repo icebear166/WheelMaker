@@ -1076,8 +1076,8 @@ function chatComposerTokensEqual(left: ChatComposerToken[], right: ChatComposerT
     if (item.type === 'text') {
       return other.type === 'text' && item.text === other.text;
     }
-    if (item.type === 'skill') {
-      return other.type === 'skill' &&
+    if (item.type === 'skill' || item.type === 'goal') {
+      return other.type === item.type &&
         item.command === other.command &&
         item.label === other.label;
     }
@@ -18645,9 +18645,10 @@ export function App() {
                     onTokensChange={updateChatComposerTokens}
                     readOnly={selectedChatSubmitPending}
                     enterKeyHint={isWide ? undefined : mobileEnterKeyBehavior === 'send' ? 'send' : 'enter'}
-                    slashCommands={chatSlashCommands.filter(option => option.kind === 'skill').map(command => ({
+                    slashCommands={chatSlashCommands.filter(option => option.kind === 'skill' || option.name === '/goal').map(command => ({
                       command: command.name,
                       label: chatSlashCommandLabel(command.name),
+                      kind: command.name === '/goal' ? 'goal' : 'skill',
                     }))}
                     selectionRestore={chatComposerSelectionRestore}
                     onPlainTextChange={(text, cursor) => {

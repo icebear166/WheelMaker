@@ -51,6 +51,8 @@
   --chat-inline-code-text: #dddddd;
   --chat-capsule-skill-text: color-mix(in srgb, var(--accent-primary) 62%, var(--text-primary));
   --chat-capsule-skill-bg: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  --chat-capsule-goal-text: color-mix(in srgb, var(--state-success) 68%, var(--text-primary));
+  --chat-capsule-goal-bg: color-mix(in srgb, var(--state-success) 13%, transparent);
   --wm-safe-area-top: env(safe-area-inset-top, 0px);
   --wm-safe-area-right: env(safe-area-inset-right, 0px);
   --wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);

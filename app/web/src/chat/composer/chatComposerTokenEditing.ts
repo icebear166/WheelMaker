@@ -2,8 +2,8 @@ import {
   chatComposerSingleTokenUnitLength,
   chatComposerTokenUnitLength,
   normalizeChatComposerTokens,
+  type ChatComposerCommandToken,
   type ChatComposerFileToken,
-  type ChatComposerSkillToken,
   type ChatComposerTextToken,
   type ChatComposerToken,
 } from './chatComposerTokens';
@@ -100,7 +100,7 @@ export function chatComposerTokenHasId(token: ChatComposerToken, id: string): bo
 export function chatComposerCapsuleBeforePosition(
   tokens: ChatComposerToken[],
   position: number,
-): ChatComposerFileToken | ChatComposerSkillToken | null {
+): ChatComposerFileToken | ChatComposerCommandToken | null {
   let cursor = 0;
   for (const token of tokens) {
     const next = cursor + chatComposerSingleTokenUnitLength(token);
@@ -115,7 +115,7 @@ export function chatComposerCapsuleBeforePosition(
 export function chatComposerCapsuleAfterPosition(
   tokens: ChatComposerToken[],
   position: number,
-): ChatComposerFileToken | ChatComposerSkillToken | null {
+): ChatComposerFileToken | ChatComposerCommandToken | null {
   let cursor = 0;
   for (const token of tokens) {
     if (cursor === position && token.type !== 'text') {

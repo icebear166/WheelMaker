@@ -3839,6 +3839,12 @@
   background: var(--chat-capsule-skill-bg);
 }
 
+.chat-composer-capsule.goal,
+.chat-prompt-inline-capsule.goal {
+  color: var(--chat-capsule-goal-text);
+  background: var(--chat-capsule-goal-bg);
+}
+
 .chat-composer-capsule.file,
 .chat-prompt-inline-capsule.file {
   max-width: 100%;

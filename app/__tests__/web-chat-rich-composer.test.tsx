@@ -93,6 +93,8 @@ describe('ChatRichComposer', () => {
     const tokens: ChatComposerToken[] = [
       {type: 'text', text: 'ask '},
       {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+      {type: 'text', text: ' then '},
+      {type: 'goal', id: 'g1', command: '/goal', label: 'Goal'},
       {type: 'text', text: ' about '},
       {type: 'file', id: 'f1', path: 'app/a.ts', name: 'a.ts', label: 'a.ts'},
     ];

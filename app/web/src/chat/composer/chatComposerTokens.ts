@@ -13,6 +13,15 @@ export type ChatComposerSkillToken = {
   label: string;
 };
 
+export type ChatComposerGoalToken = {
+  type: 'goal';
+  id: string;
+  command: string;
+  label: string;
+};
+
+export type ChatComposerCommandToken = ChatComposerSkillToken | ChatComposerGoalToken;
+
 export type ChatComposerFileToken = {
   type: 'file';
   id: string;
@@ -24,11 +33,13 @@ export type ChatComposerFileToken = {
 export type ChatComposerToken =
   | ChatComposerTextToken
   | ChatComposerSkillToken
+  | ChatComposerGoalToken
   | ChatComposerFileToken;
 
 export type ChatComposerSlashCommand = {
   command: string;
   label: string;
+  kind?: ChatComposerCommandToken['type'];
 };
 
 export type SerializedChatComposerTokens = {
@@ -51,15 +62,15 @@ export function normalizeChatComposerTokens(tokens: ChatComposerToken[]): ChatCo
       }
       continue;
     }
-    if (token.type === 'skill') {
-      const command = normalizeSkillCommand(token.command);
+    if (token.type === 'skill' || token.type === 'goal') {
+      const command = normalizeSlashCommand(token.command);
       if (!command) {
         continue;
       }
       out.push({
         ...token,
         command,
-        label: token.label.trim() || skillLabelFromCommand(command),
+        label: token.label.trim() || slashCommandLabelFromCommand(command),
       });
       continue;
     }
@@ -137,7 +148,10 @@ export function tokenizeKnownChatSlashCommands(
 ): ChatComposerToken[] {
   const byCommand = new Map(
     commands
-      .map(item => [normalizeSkillCommand(item.command), item.label.trim()] as const)
+      .map(item => [normalizeSlashCommand(item.command), {
+        label: item.label.trim(),
+        kind: item.kind ?? 'skill',
+      }] as const)
       .filter(([command]) => command),
   );
   if (byCommand.size === 0 || !text.includes('/')) {
@@ -154,19 +168,19 @@ export function tokenizeKnownChatSlashCommands(
       continue;
     }
     const rawCommand = text.slice(commandStart, pattern.lastIndex);
-    const command = normalizeSkillCommand(rawCommand);
-    const label = byCommand.get(command);
-    if (!label) {
+    const command = normalizeSlashCommand(rawCommand);
+    const option = byCommand.get(command);
+    if (!option) {
       continue;
     }
     if (commandStart > cursor) {
       parts.push({type: 'text', text: text.slice(cursor, commandStart)});
     }
     parts.push({
-      type: 'skill',
-      id: `skill:${command}:${commandStart}`,
+      type: option.kind,
+      id: `${option.kind}:${command}:${commandStart}`,
       command,
-      label,
+      label: option.label,
     });
     cursor = pattern.lastIndex;
   }
@@ -232,7 +246,7 @@ function serializedChatComposerTokenText(token: ChatComposerToken): string {
   if (token.type === 'text') {
     return token.text;
   }
-  if (token.type === 'skill') {
+  if (token.type === 'skill' || token.type === 'goal') {
     return token.command;
   }
   return fileReferenceText(token.label || token.name || fileNameFromPath(token.path));
@@ -246,7 +260,7 @@ export function chatComposerSingleTokenUnitLength(token: ChatComposerToken): num
   return token.type === 'text' ? token.text.length : 1;
 }
 
-function normalizeSkillCommand(command: string): string {
+function normalizeSlashCommand(command: string): string {
   const value = command.trim();
   if (!value) {
     return '';
@@ -254,8 +268,8 @@ function normalizeSkillCommand(command: string): string {
   return value.startsWith('/') ? value : `/${value}`;
 }
 
-function skillLabelFromCommand(command: string): string {
-  return normalizeSkillCommand(command)
+function slashCommandLabelFromCommand(command: string): string {
+  return normalizeSlashCommand(command)
     .replace(/^\//, '')
     .split(/[-_]+/)
     .filter(Boolean)

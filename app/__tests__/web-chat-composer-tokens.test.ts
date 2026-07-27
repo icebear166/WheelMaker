@@ -81,6 +81,18 @@ describe('chat composer tokens', () => {
     ]);
   });
 
+  test('tokenizes Goal as a distinct capsule without changing serialized text', () => {
+    const tokens = tokenizeKnownChatSlashCommands('/goal ship the release', [
+      {command: '/goal', label: 'Goal', kind: 'goal'},
+    ]);
+
+    expect(tokens).toEqual([
+      {type: 'goal', id: expect.any(String), command: '/goal', label: 'Goal'},
+      {type: 'text', text: ' ship the release'},
+    ]);
+    expect(serializeChatComposerTokens(tokens).text).toBe('/goal ship the release');
+  });
+
   test('only tokenizes known slash commands at text start or after whitespace', () => {
     expect(
       tokenizeKnownChatSlashCommands('path/to (/grill-me hello\t/grill-me', [

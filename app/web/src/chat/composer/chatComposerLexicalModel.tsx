@@ -29,8 +29,9 @@ import {
   chatComposerTokenUnitLength,
   normalizeChatComposerTokens,
   tokenizeKnownChatSlashCommands,
+  type ChatComposerCommandToken,
   type ChatComposerFileToken,
-  type ChatComposerSkillToken,
+  type ChatComposerSlashCommand,
   type ChatComposerToken,
 } from './chatComposerTokens';
 import {
@@ -43,7 +44,7 @@ import {
 } from './chatComposerTokenEditing';
 
 export type SerializedChatComposerCapsuleNode = Spread<{
-  kind: 'skill' | 'file';
+  kind: 'skill' | 'goal' | 'file';
   tokenId: string;
   command?: string;
   label: string;
@@ -55,7 +56,7 @@ export type SerializedChatComposerCapsuleNode = Spread<{
 export type ChatComposerLexicalNodeForTest =
   | {type: 'text'; text: string}
   | {type: 'linebreak'}
-  | {type: 'capsule'; token: ChatComposerSkillToken | ChatComposerFileToken};
+  | {type: 'capsule'; token: ChatComposerCommandToken | ChatComposerFileToken};
 
 export type ChatComposerLexicalInsertionResult = {
   tokens: ChatComposerToken[];
@@ -63,7 +64,7 @@ export type ChatComposerLexicalInsertionResult = {
 };
 
 export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
-  __kind: 'skill' | 'file';
+  __kind: 'skill' | 'goal' | 'file';
   __tokenId: string;
   __command: string;
   __label: string;
@@ -105,7 +106,7 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
 
   constructor(
     input: {
-      kind: 'skill' | 'file';
+      kind: 'skill' | 'goal' | 'file';
       tokenId: string;
       command?: string;
       label: string;
@@ -169,17 +170,19 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
     return (
       <>
         <span className="chat-composer-capsule-icon" aria-hidden="true">
-          {this.__kind === 'skill' ? '/' : '@'}
+          {this.__kind === 'file' ? '@' : '/'}
         </span>
         <span className="chat-composer-capsule-label">
-          {this.__kind === 'skill' ? this.__label : (this.__label || this.__name)}
+          {this.__kind === 'file' ? (this.__label || this.__name) : this.__label}
         </span>
       </>
     );
   }
 
   getTextContent(): string {
-    return this.__kind === 'skill' ? this.__command : fileReferenceText(this.__label || this.__name || this.__path);
+    return this.__kind === 'file'
+      ? fileReferenceText(this.__label || this.__name || this.__path)
+      : this.__command;
   }
 
   getTextContentSize(): number {
@@ -198,10 +201,10 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
     return true;
   }
 
-  getToken(): ChatComposerSkillToken | ChatComposerFileToken {
-    if (this.__kind === 'skill') {
+  getToken(): ChatComposerCommandToken | ChatComposerFileToken {
+    if (this.__kind !== 'file') {
       return {
-        type: 'skill',
+        type: this.__kind,
         id: this.__tokenId,
         command: this.__command,
         label: this.__label,
@@ -229,7 +232,7 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
 
 export function $createChatComposerCapsuleNode(
   input: {
-    kind: 'skill' | 'file';
+    kind: 'skill' | 'goal' | 'file';
     tokenId: string;
     command?: string;
     label: string;
@@ -306,7 +309,7 @@ export function $getSelectedComposerCapsuleId(): string {
 
 export function registerComposerSlashCommandTransform(
   editor: LexicalEditor,
-  slashCommands: {command: string; label: string}[],
+  slashCommands: ChatComposerSlashCommand[],
 ): () => void {
   if (slashCommands.length === 0) {
     return () => undefined;
@@ -322,7 +325,7 @@ export function registerComposerSlashCommandTransform(
 
 export function $insertComposerTokens(
   insertedTokens: ChatComposerToken[],
-  slashCommands: {command: string; label: string}[],
+  slashCommands: ChatComposerSlashCommand[],
 ): ChatComposerLexicalInsertionResult {
   const sourceTokens = $readComposerTokens();
   const insertion = insertChatComposerTokens(
@@ -474,7 +477,7 @@ function $createComposerNodes(tokens: ChatComposerToken[], selectedTokenId: stri
     return $createChatComposerCapsuleNode({
       kind: node.token.type,
       tokenId: node.token.id,
-      command: node.token.type === 'skill' ? node.token.command : '',
+      command: node.token.type === 'file' ? '' : node.token.command,
       label: node.token.label,
       path: node.token.type === 'file' ? node.token.path : '',
       name: node.token.type === 'file' ? node.token.name : '',
@@ -485,7 +488,7 @@ function $createComposerNodes(tokens: ChatComposerToken[], selectedTokenId: stri
 
 export function normalizeComposerTextTokens(
   tokens: ChatComposerToken[],
-  slashCommands: {command: string; label: string}[],
+  slashCommands: ChatComposerSlashCommand[],
 ): ChatComposerToken[] {
   if (slashCommands.length === 0) {
     return normalizeChatComposerTokens(tokens);
@@ -500,7 +503,7 @@ export function normalizeComposerTextTokens(
 
 function $replaceKnownSlashCommandsInTextNode(
   textNode: TextNode,
-  slashCommands: {command: string; label: string}[],
+  slashCommands: ChatComposerSlashCommand[],
 ): boolean {
   const text = textNode.getTextContent();
   const nextTokens = normalizeComposerTextTokens([{type: 'text', text}], slashCommands);
@@ -561,7 +564,7 @@ function composerPositionFromSerializedTextOffset(tokens: ChatComposerToken[], o
   for (const token of tokens) {
     const serializedText = token.type === 'text'
       ? token.text
-      : token.type === 'skill'
+      : token.type === 'skill' || token.type === 'goal'
         ? token.command
         : fileReferenceText(token.label || token.name || token.path);
     const serializedEnd = serializedCursor + serializedText.length;
@@ -657,7 +660,7 @@ function composerCapsuleInRange(
   tokens: ChatComposerToken[],
   start: number,
   end: number,
-): {token: ChatComposerSkillToken | ChatComposerFileToken; start: number; end: number} | null {
+): {token: ChatComposerCommandToken | ChatComposerFileToken; start: number; end: number} | null {
   if (start >= end) {
     return null;
   }
@@ -688,7 +691,10 @@ function chatComposerTokensEqualForLexical(left: ChatComposerToken[], right: Cha
     if (token.type === 'text' && other.type === 'text') {
       return token.text === other.text;
     }
-    if (token.type === 'skill' && other.type === 'skill') {
+    if (
+      (token.type === 'skill' || token.type === 'goal') &&
+      other.type === token.type
+    ) {
       return token.id === other.id && token.command === other.command && token.label === other.label;
     }
     if (token.type === 'file' && other.type === 'file') {

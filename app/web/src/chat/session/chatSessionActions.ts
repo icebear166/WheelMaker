@@ -65,7 +65,7 @@ export function buildChatSessionActionOptions(
       kind: 'command',
       behavior: 'insert-command',
       insertText: '/goal ',
-      icon: 'circle',
+      icon: 'target',
       enabled: true,
     });
   }

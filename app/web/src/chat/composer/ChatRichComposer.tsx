@@ -25,6 +25,7 @@ import {
   serializeChatComposerTokens,
   serializedChatComposerTextPosition,
   type ChatComposerFileToken,
+  type ChatComposerSlashCommand,
   type ChatComposerSkillToken,
   type ChatComposerToken,
 } from './chatComposerTokens';
@@ -72,7 +73,7 @@ export type ChatRichComposerProps = {
   placeholder?: string;
   enterKeyHint?: React.HTMLAttributes<HTMLDivElement>['enterKeyHint'];
   className?: string;
-  slashCommands?: {command: string; label: string}[];
+  slashCommands?: ChatComposerSlashCommand[];
   onPlainTextChange?: (text: string, cursor: number) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onPaste?: React.ClipboardEventHandler<HTMLDivElement>;
@@ -478,7 +479,7 @@ function emitLexicalInsertion(
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
   onTokensChange: (tokens: ChatComposerToken[]) => void,
   onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
-  slashCommands: {command: string; label: string}[],
+  slashCommands: ChatComposerSlashCommand[],
   insertedTokens: ChatComposerToken[],
 ): void {
   let emitted: ChatComposerToken[] | null = null;

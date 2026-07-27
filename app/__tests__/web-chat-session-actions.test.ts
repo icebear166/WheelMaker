@@ -79,6 +79,7 @@ describe('chat session action options', () => {
       name: '/goal',
       behavior: 'insert-command',
       insertText: '/goal ',
+      icon: 'target',
       enabled: true,
     }));
 

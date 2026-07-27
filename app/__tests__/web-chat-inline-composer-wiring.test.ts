@@ -36,6 +36,16 @@ describe('web chat inline composer capsule wiring', () => {
     expect(stylesCss).toMatch(/\.chat-composer-capsule\.file \.chat-composer-capsule-label,\s*\.chat-prompt-inline-capsule\.file \.chat-prompt-inline-capsule-label \{[\s\S]*overflow: visible;[\s\S]*text-overflow: clip;[\s\S]*overflow-wrap: anywhere;[\s\S]*\}/);
   });
 
+  test('wires Goal into the composer with distinct capsule colors', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("option.kind === 'skill' || option.name === '/goal'");
+    expect(mainTsx).toContain("kind: command.name === '/goal' ? 'goal' : 'skill'");
+    expect(stylesCss).toMatch(/\.chat-composer-capsule\.goal,\s*\.chat-prompt-inline-capsule\.goal \{[\s\S]*--chat-capsule-goal-text[\s\S]*--chat-capsule-goal-bg[\s\S]*\}/);
+  });
+
   test('keeps long composer content inside the input scroll area', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
