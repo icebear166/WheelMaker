@@ -734,6 +734,19 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 			if _, err := handler.Action(context.Background(), tc.action, tc.params); err != nil {
 				t.Fatalf("adapter action returned error: %v", err)
 			}
+			if tc.section == hubStateSectionAgentPackages && tc.action == "reinstall" {
+				method, payload, _ := toolHandler.snapshot()
+				if method != hubToolMethodNPM {
+					t.Fatalf("reinstall method=%q, want %q", method, hubToolMethodNPM)
+				}
+				var decoded map[string]any
+				if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+					t.Fatalf("decode reinstall payload: %v", err)
+				}
+				if decoded["action"] != "reinstall" || decoded["packageName"] != "@openai/codex" {
+					t.Fatalf("reinstall payload=%v", decoded)
+				}
+			}
 		})
 	}
 
