@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/swm8023/wheelmaker/internal/shared"
 	_ "modernc.org/sqlite"
 )
 
@@ -1413,6 +1414,8 @@ type SecurityProcessor struct {
 	mu       sync.Mutex
 	config   securityConfig
 	expires  time.Time
+	keyMu    sync.Mutex
+	key      []byte
 }
 
 type securityConfig struct {
@@ -1429,6 +1432,9 @@ func (processor *SecurityProcessor) ForceRefresh() {
 	processor.config = securityConfig{}
 	processor.expires = time.Time{}
 	processor.mu.Unlock()
+	processor.keyMu.Lock()
+	processor.key = nil
+	processor.keyMu.Unlock()
 }
 
 func (processor *SecurityProcessor) Protect(ctx context.Context, method, path string, body []byte) ([]byte, http.Header, error) {
@@ -1444,7 +1450,7 @@ func (processor *SecurityProcessor) Protect(ctx context.Context, method, path st
 	if !ok {
 		return body, headers, nil
 	}
-	key, err := resolveSecurityKey(processor.environment(), securityKeyCandidatePaths(processor.environment()))
+	key, err := processor.securityKey()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1456,6 +1462,25 @@ func (processor *SecurityProcessor) Protect(ctx context.Context, method, path st
 		headers[name] = values
 	}
 	return protected, headers, nil
+}
+
+func (processor *SecurityProcessor) securityKey() ([]byte, error) {
+	processor.keyMu.Lock()
+	defer processor.keyMu.Unlock()
+	if len(processor.key) == 32 {
+		return append([]byte(nil), processor.key...), nil
+	}
+	environ := processor.environment()
+	var candidates []string
+	if strings.TrimSpace(environ["MYFLICKER_SECURITY_KEY_B64"]) == "" {
+		candidates = securityKeyCandidatePaths(environ)
+	}
+	key, err := resolveSecurityKey(environ, candidates)
+	if err != nil {
+		return nil, err
+	}
+	processor.key = append([]byte(nil), key...)
+	return append([]byte(nil), key...), nil
 }
 
 func (processor *SecurityProcessor) getConfig(ctx context.Context) (securityConfig, error) {
@@ -1568,7 +1593,7 @@ func securityKeyCandidatePathsForRunning(environ map[string]string, runningPaths
 }
 
 func runningMyFlickerExecutablePaths() []string {
-	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "(Get-Process -Name MyFlicker -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path)")
+	command := newRunningMyFlickerExecutablePathsCommand()
 	output, err := command.Output()
 	if err != nil {
 		return nil
@@ -1581,6 +1606,12 @@ func runningMyFlickerExecutablePaths() []string {
 		}
 	}
 	return paths
+}
+
+func newRunningMyFlickerExecutablePathsCommand() *exec.Cmd {
+	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "(Get-Process -Name MyFlicker -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path)")
+	shared.ConfigureBackgroundCommand(command)
+	return command
 }
 
 func matchSecurityRule(rules []securityRule, method, path string) (securityRule, bool) {

@@ -2,6 +2,7 @@ package flickerbridge
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,62 @@ import (
 type failingResponseWriter struct {
 	header http.Header
 	err    error
+}
+
+func TestMain(m *testing.M) {
+	if strings.EqualFold(filepath.Base(os.Args[0]), "powershell.exe") &&
+		os.Getenv("WHEELMAKER_TEST_POWERSHELL_PROBE") == "1" {
+		marker := os.Getenv("WHEELMAKER_TEST_POWERSHELL_MARKER")
+		file, err := os.OpenFile(marker, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		if err != nil {
+			os.Exit(2)
+		}
+		_, err = file.WriteString("call\n")
+		_ = file.Close()
+		if err != nil {
+			os.Exit(2)
+		}
+		if output := os.Getenv("WHEELMAKER_TEST_POWERSHELL_OUTPUT"); output != "" {
+			_, _ = fmt.Fprintln(os.Stdout, output)
+		}
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+
+func installPowerShellProbe(t *testing.T, output string) string {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err := os.ReadFile(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	helper := filepath.Join(directory, "powershell.exe")
+	if err := os.WriteFile(helper, binary, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(directory, "calls.log")
+	t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("WHEELMAKER_TEST_POWERSHELL_PROBE", "1")
+	t.Setenv("WHEELMAKER_TEST_POWERSHELL_MARKER", marker)
+	t.Setenv("WHEELMAKER_TEST_POWERSHELL_OUTPUT", output)
+	return marker
+}
+
+func powerShellProbeCalls(t *testing.T, marker string) int {
+	t.Helper()
+	data, err := os.ReadFile(marker)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Count(string(data), "call\n")
 }
 
 func (writer *failingResponseWriter) Header() http.Header {
@@ -72,6 +129,104 @@ func testBridge(t *testing.T) *BridgeServer {
 	bridge := newBridgeServer(settings, map[string]string{}, nil)
 	seedTestModels(bridge)
 	return bridge
+}
+
+func TestSecurityProcessorCachesResolvedSecurityKeyAcrossRequests(t *testing.T) {
+	root := t.TempDir()
+	key := strings.Repeat("A", 32)
+	encoded := base64.StdEncoding.EncodeToString([]byte(key))
+	bundle := filepath.Join(root, "resources", "app", "extensions", "codeflicker", "out", "extension-export.js")
+	if err := os.MkdirAll(filepath.Dir(bundle), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bundle, []byte(`aes-256-gcm "`+encoded+`"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	marker := installPowerShellProbe(t, filepath.Join(root, "MyFlicker.exe"))
+
+	processor := newSecurityProcessor(Settings{}, map[string]string{}, nil, nil)
+	processor.config = securityConfig{
+		Version: 1,
+		Rules: []securityRule{{
+			Path:      "/protected",
+			Methods:   []string{http.MethodPost},
+			Signature: true,
+		}},
+	}
+	processor.expires = time.Now().Add(time.Hour)
+
+	for range 2 {
+		if _, _, err := processor.Protect(context.Background(), http.MethodPost, "/protected", []byte(`{"ok":true}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := powerShellProbeCalls(t, marker); got != 1 {
+		t.Fatalf("PowerShell process discovery calls = %d, want 1 across repeated protected requests", got)
+	}
+}
+
+func TestSecurityProcessorExplicitKeySkipsProcessDiscovery(t *testing.T) {
+	marker := installPowerShellProbe(t, "")
+	key := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("B", 32)))
+	processor := newSecurityProcessor(Settings{}, map[string]string{
+		"MYFLICKER_SECURITY_KEY_B64": key,
+	}, nil, nil)
+	processor.config = securityConfig{
+		Version: 1,
+		Rules: []securityRule{{
+			Path:      "/protected",
+			Methods:   []string{http.MethodPost},
+			Signature: true,
+		}},
+	}
+	processor.expires = time.Now().Add(time.Hour)
+
+	if _, _, err := processor.Protect(context.Background(), http.MethodPost, "/protected", []byte(`{"ok":true}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := powerShellProbeCalls(t, marker); got != 0 {
+		t.Fatalf("PowerShell process discovery calls = %d, want 0 with an explicit security key", got)
+	}
+}
+
+func TestSecurityProcessorForceRefreshInvalidatesCachedKey(t *testing.T) {
+	root := t.TempDir()
+	encoded := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("C", 32)))
+	bundle := filepath.Join(root, "resources", "app", "extensions", "codeflicker", "out", "extension-export.js")
+	if err := os.MkdirAll(filepath.Dir(bundle), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bundle, []byte(`aes-256-gcm "`+encoded+`"`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	marker := installPowerShellProbe(t, filepath.Join(root, "MyFlicker.exe"))
+	processor := newSecurityProcessor(Settings{}, map[string]string{}, nil, nil)
+	config := securityConfig{
+		Version: 1,
+		Rules: []securityRule{{
+			Path:      "/protected",
+			Methods:   []string{http.MethodPost},
+			Signature: true,
+		}},
+	}
+	processor.config = config
+	processor.expires = time.Now().Add(time.Hour)
+
+	if _, _, err := processor.Protect(context.Background(), http.MethodPost, "/protected", []byte(`{"ok":true}`)); err != nil {
+		t.Fatal(err)
+	}
+	processor.ForceRefresh()
+	processor.config = config
+	processor.expires = time.Now().Add(time.Hour)
+	if _, _, err := processor.Protect(context.Background(), http.MethodPost, "/protected", []byte(`{"ok":true}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := powerShellProbeCalls(t, marker); got != 2 {
+		t.Fatalf("PowerShell process discovery calls = %d, want a fresh discovery after ForceRefresh", got)
+	}
 }
 
 func TestBuildFlickerBodyRejectsUnknownModel(t *testing.T) {
