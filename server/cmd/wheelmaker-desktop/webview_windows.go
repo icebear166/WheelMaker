@@ -258,7 +258,7 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			if !ok {
 				return desktopHTMLClipboardResult(false, "commit_rejected", "commit_rejected"), nil
 			}
-			if err := setDesktopHTMLFileClipboard(path); err != nil {
+			if err := setDesktopHTMLFileClipboard(hwnd, path); err != nil {
 				return desktopHTMLClipboardResult(false, "clipboard_failed", err.Error()), nil
 			}
 			return desktopHTMLClipboardResult(true, "copied", ""), nil

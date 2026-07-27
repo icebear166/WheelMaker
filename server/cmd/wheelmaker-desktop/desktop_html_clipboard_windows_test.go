@@ -61,6 +61,45 @@ func TestEncodeDesktopVirtualHTMLFileClipboardData(t *testing.T) {
 	}
 }
 
+func TestSetDesktopHTMLFileClipboardUsesOwnerWindow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "README.html")
+	if err := os.WriteFile(path, []byte("<h1>Hello</h1>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	const ownerWindow = uintptr(0x1234)
+	var openedWindow uintptr
+	setCount := 0
+	nextFormat := uintptr(100)
+	operations := desktopHTMLClipboardOperations{
+		openClipboard: func(hwnd uintptr) error {
+			openedWindow = hwnd
+			return nil
+		},
+		closeClipboard: func() {},
+		emptyClipboard: func() error { return nil },
+		registerClipboardFormat: func(string) (uintptr, error) {
+			format := nextFormat
+			nextFormat++
+			return format, nil
+		},
+		setClipboardData: func(uintptr, []byte, string) error {
+			setCount++
+			return nil
+		},
+	}
+
+	if err := setDesktopHTMLFileClipboardWithOperations(ownerWindow, path, operations); err != nil {
+		t.Fatal(err)
+	}
+	if openedWindow != ownerWindow {
+		t.Fatalf("OpenClipboard hwnd = %#x, want %#x", openedWindow, ownerWindow)
+	}
+	if setCount != 5 {
+		t.Fatalf("clipboard format count = %d, want 5", setCount)
+	}
+}
+
 func TestDesktopHTMLClipboardTransferStoreKeepsNamedHtmlFile(t *testing.T) {
 	store := newDesktopHTMLClipboardTransferStore(t.TempDir(), 8, 4)
 

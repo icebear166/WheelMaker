@@ -201,7 +201,43 @@ func desktopHTMLClipboardResult(ok bool, status string, errorMessage string) str
 	return fmt.Sprintf(`{"ok":%t,"status":%q,"error":%q}`, ok, status, errorMessage)
 }
 
-func setDesktopHTMLFileClipboard(path string) error {
+type desktopHTMLClipboardOperations struct {
+	openClipboard           func(uintptr) error
+	closeClipboard          func()
+	emptyClipboard          func() error
+	registerClipboardFormat func(string) (uintptr, error)
+	setClipboardData        func(uintptr, []byte, string) error
+}
+
+func setDesktopHTMLFileClipboard(hwnd uintptr, path string) error {
+	return setDesktopHTMLFileClipboardWithOperations(hwnd, path, desktopHTMLClipboardOperations{
+		openClipboard: func(owner uintptr) error {
+			opened, _, callErr := procDesktopOpenClipboard.Call(owner)
+			if opened == 0 {
+				return desktopClipboardCallError("open clipboard", callErr)
+			}
+			return nil
+		},
+		closeClipboard: func() {
+			procDesktopCloseClipboard.Call()
+		},
+		emptyClipboard: func() error {
+			emptied, _, callErr := procDesktopEmptyClipboard.Call()
+			if emptied == 0 {
+				return desktopClipboardCallError("empty clipboard", callErr)
+			}
+			return nil
+		},
+		registerClipboardFormat: registerDesktopClipboardFormat,
+		setClipboardData:        setDesktopGlobalClipboardData,
+	})
+}
+
+func setDesktopHTMLFileClipboardWithOperations(
+	hwnd uintptr,
+	path string,
+	operations desktopHTMLClipboardOperations,
+) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("stat HTML clipboard file: %w", err)
@@ -229,33 +265,31 @@ func setDesktopHTMLFileClipboard(path string) error {
 	if err != nil {
 		return err
 	}
-	descriptorAFormat, err := registerDesktopClipboardFormat(desktopFileDescriptorAFormatName)
+	descriptorAFormat, err := operations.registerClipboardFormat(desktopFileDescriptorAFormatName)
 	if err != nil {
 		return err
 	}
-	descriptorWFormat, err := registerDesktopClipboardFormat(desktopFileDescriptorWFormatName)
+	descriptorWFormat, err := operations.registerClipboardFormat(desktopFileDescriptorWFormatName)
 	if err != nil {
 		return err
 	}
-	contentsFormat, err := registerDesktopClipboardFormat(desktopFileContentsFormatName)
+	contentsFormat, err := operations.registerClipboardFormat(desktopFileContentsFormatName)
 	if err != nil {
 		return err
 	}
-	preferredDropEffectFormat, err := registerDesktopClipboardFormat(desktopPreferredDropEffectFormat)
+	preferredDropEffectFormat, err := operations.registerClipboardFormat(desktopPreferredDropEffectFormat)
 	if err != nil {
 		return err
 	}
 
 	// Keep CF_HDROP for filesystem-aware targets such as Explorer. IM/OLE
 	// targets commonly consume the virtual-file descriptor and contents pair.
-	opened, _, callErr := procDesktopOpenClipboard.Call(0)
-	if opened == 0 {
-		return desktopClipboardCallError("open clipboard", callErr)
+	if err := operations.openClipboard(hwnd); err != nil {
+		return err
 	}
-	defer procDesktopCloseClipboard.Call()
-	emptied, _, callErr := procDesktopEmptyClipboard.Call()
-	if emptied == 0 {
-		return desktopClipboardCallError("empty clipboard", callErr)
+	defer operations.closeClipboard()
+	if err := operations.emptyClipboard(); err != nil {
+		return err
 	}
 	for _, payload := range []struct {
 		format uintptr
@@ -268,7 +302,7 @@ func setDesktopHTMLFileClipboard(path string) error {
 		{format: contentsFormat, data: content, label: "file contents"},
 		{format: preferredDropEffectFormat, data: encodeDesktopPreferredDropEffect(), label: "preferred drop effect"},
 	} {
-		if err := setDesktopGlobalClipboardData(payload.format, payload.data, payload.label); err != nil {
+		if err := operations.setClipboardData(payload.format, payload.data, payload.label); err != nil {
 			return err
 		}
 	}
