@@ -3827,7 +3827,7 @@
   padding: 1px 7px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, var(--accent-primary));
   border-radius: 999px;
-  vertical-align: -0.1em;
+  vertical-align: -0.05em;
   font-size: 0.85em;
   line-height: 1.25;
   white-space: nowrap;
