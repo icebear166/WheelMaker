@@ -83,6 +83,8 @@ func (r *Reporter) actionHubStateAgentPackages(ctx context.Context, action strin
 		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install_many", params))
 	case "uninstall":
 		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
+	case "reinstall":
+		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "reinstall", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionAgentPackages, action)
 	}

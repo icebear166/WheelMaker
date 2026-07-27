@@ -365,7 +365,7 @@ HubState 变化事件由已认证且 `hubId` 匹配的 Hub 发出，Registry 按
 
 | Section | Refresh | Actions |
 | --- | --- | --- |
-| `agentPackages` | 扫描 agent npm 包 | `install`、`installMany`、`uninstall` |
+| `agentPackages` | 扫描 agent npm 包 | `install`、`installMany`、`uninstall`、`reinstall` |
 | `wheelmakerUpdate` | 查询 WheelMaker 发布状态 | `updatePublish` |
 | `skills` | 扫描已安装 skills | `listSource`、`install`、`uninstall`、`update` |
 | `tokenStats` | 返回 Hub 所有的完整 Limits 快照；自动扫描由 Hub 调度，手动 refresh 会等待同一轮扫描 | 无 |

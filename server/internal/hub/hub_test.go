@@ -697,6 +697,11 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionAgentPackages, action: "install"},
 		{section: hubStateSectionAgentPackages, action: "installMany"},
 		{section: hubStateSectionAgentPackages, action: "uninstall"},
+		{
+			section: hubStateSectionAgentPackages,
+			action:  "reinstall",
+			params:  map[string]any{"packageName": "@openai/codex"},
+		},
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
 		{section: hubStateSectionReleasePublish, action: "start"},
 		{section: hubStateSectionReleasePublish, action: "status", params: map[string]any{"jobId": "release-job"}},

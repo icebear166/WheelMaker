@@ -851,6 +851,7 @@ func validateHubStateAction(section string, action string) error {
 			"install":     {},
 			"installMany": {},
 			"uninstall":   {},
+			"reinstall":   {},
 		},
 		hubStateSectionWheelmakerUpdate: {
 			"requestUpdate": {},

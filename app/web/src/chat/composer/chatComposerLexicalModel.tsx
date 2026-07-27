@@ -34,6 +34,7 @@ import {
   type ChatComposerSlashCommand,
   type ChatComposerToken,
 } from './chatComposerTokens';
+import {ChatIcon} from '../ChatIcon';
 import {
   chatComposerCapsuleAfterPosition,
   chatComposerCapsuleBeforePosition,
@@ -167,10 +168,11 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
   }
 
   decorate(): React.ReactNode {
+    const icon = this.__kind === 'file' ? 'file' : this.__kind === 'goal' ? 'target' : 'zap';
     return (
       <>
         <span className="chat-composer-capsule-icon" aria-hidden="true">
-          {this.__kind === 'file' ? '@' : '/'}
+          <ChatIcon name={icon} size={11} />
         </span>
         <span className="chat-composer-capsule-label">
           {this.__kind === 'file' ? (this.__label || this.__name) : this.__label}
