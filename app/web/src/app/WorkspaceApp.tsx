@@ -17372,6 +17372,7 @@ export function App() {
       if (!result.ok || !targetSessionId) {
         throw new Error('fork did not return a session');
       }
+      rememberChatSessionSummary(selected.projectId, result.session);
       await refreshChatProjectSessions(selected.projectId, {force: true});
       await selectProjectChatSession(selected.projectId, targetSessionId);
       setToastMessage('Session forked.');
