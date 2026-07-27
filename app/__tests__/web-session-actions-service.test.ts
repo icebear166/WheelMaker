@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import {RegistryMethods, RegistryProtocolVersion} from '../web/src/registry/registryMethods';
 import {RegistryWorkspaceService} from '../web/src/registry/RegistryWorkspaceService';
@@ -77,6 +80,43 @@ describe('web session action protocol', () => {
     expect(RegistryProtocolVersion).toBe('2.6');
     expect(RegistryMethods.SessionPin).toBe('session.pin');
     expect(RegistryMethods.SessionMark).toBe('session.mark');
+  });
+
+  test('allows session fork requests the same long timeout as session creation', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        session: {
+          sessionId: 'forked-session',
+          title: 'Forked session',
+          preview: '',
+          updatedAt: '',
+          messageCount: 1,
+        },
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    await repository.forkSession('project-a', 'source-session', 7);
+
+    expect(request).toHaveBeenCalledWith({
+      method: RegistryMethods.SessionFork,
+      projectId: 'project-a',
+      payload: {sessionId: 'source-session', turnIndex: 7},
+      timeoutMs: 120000,
+    });
+  });
+
+  test('warns that a timed out session fork may still complete', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const workspaceSource = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(workspaceSource).toContain(
+      'Session branch request timed out; creation may still complete in the background. Check the session list before retrying.',
+    );
   });
 
   test('sends session.steer and normalizes the accepted outcome', async () => {

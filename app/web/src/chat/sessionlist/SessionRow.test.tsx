@@ -1,5 +1,5 @@
 import React from 'react';
-import {act, create, type ReactTestRenderer} from 'react-test-renderer';
+import {act, create, type ReactTestInstance, type ReactTestRenderer} from 'react-test-renderer';
 import {SessionRow} from './SessionRow';
 
 const gesture = {
@@ -71,7 +71,10 @@ describe('SessionRow', () => {
 
   it('renders a fork-origin marker inside the row without another button', async () => {
     const {tree} = await renderRow({forked: true});
-    expect(tree().root.findByProps({'data-icon-name': 'gitBranch'})).toBeTruthy();
+    const title = tree().root.findByProps({className: 'wide-session-title forked'});
+    const [marker, text] = title.children as ReactTestInstance[];
+    expect(marker.props.name).toBe('gitBranch');
+    expect(text.props.className).toBe('wide-session-title-text');
     expect(tree().root.findAllByType('button')).toHaveLength(1);
   });
 

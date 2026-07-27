@@ -17377,7 +17377,11 @@ export function App() {
       setToastMessage('Session forked.');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setToastMessage(`Session fork failed: ${message || 'unknown error'}`);
+      setToastMessage(
+        message.includes('registry request timed out') && message.includes(RegistryMethods.SessionFork)
+          ? 'Session branch request timed out; creation may still complete in the background. Check the session list before retrying.'
+          : `Session fork failed: ${message || 'unknown error'}`,
+      );
     } finally {
       if (forkingPromptDoneKeyRef.current === busyKey) {
         forkingPromptDoneKeyRef.current = '';

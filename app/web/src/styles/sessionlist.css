@@ -203,7 +203,7 @@
 }
 .wide-session-fork-marker {
   flex: none;
-  margin-left: 5px;
+  margin-right: 5px;
   color: var(--text-tertiary);
 }
 .wide-session-title.forked {

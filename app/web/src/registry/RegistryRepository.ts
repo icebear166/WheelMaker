@@ -117,6 +117,7 @@ export type RegistryFileRequestOptions = {
 };
 
 const SESSION_CREATE_TIMEOUT_MS = 120000;
+const SESSION_FORK_TIMEOUT_MS = SESSION_CREATE_TIMEOUT_MS;
 
 function normalizeAgentType(agentType: unknown): string | undefined {
   if (typeof agentType !== 'string') {
@@ -1541,7 +1542,7 @@ export class RegistryRepository {
       method: RegistryMethods.SessionFork,
       projectId,
       payload: {sessionId, turnIndex: normalizedTurnIndex},
-      timeoutMs: 30000,
+      timeoutMs: SESSION_FORK_TIMEOUT_MS,
     });
     const body = resp.payload && typeof resp.payload === 'object'
       ? resp.payload as Record<string, unknown>
