@@ -791,89 +791,13 @@ type ModelEntry struct {
 	Agent    bool   `json:"agent"`
 }
 
-func builtinSupportedModels() []ModelEntry {
-	models := []ModelEntry{
-		{Type: "CLAUDE_4", Name: "Claude Sonnet 4", Image: true, Tool: true, MaxInput: 140000},
-		{Type: "CLAUDE_4_5", Name: "Claude Sonnet 4.5", Image: true, Tool: true, Think: true, MaxInput: 140000, Duet: true, Agent: true},
-		{Type: "CLAUDE_4_6", Name: "Claude Sonnet 4.6", Image: true, Tool: true, Think: true, MaxInput: 140000, Duet: true, Agent: true},
-		{Type: "CLAUDE_OPUS_4_7", Name: "Claude Opus 4.7", Image: true, Tool: true, Think: true, MaxInput: 140000, Duet: true, Agent: true},
-		{Type: "CLAUDE_5", Name: "Claude Opus 4.7", Image: true, Tool: true, Think: true, MaxInput: 140000},
-		{Type: "CLAUDE_OPUS_4_5", Name: "Claude Opus 4.5", Image: true, Tool: true, Think: true, MaxInput: 140000},
-		{Type: "CLAUDE_OPUS_4_6", Name: "Claude Opus 4.6", Image: true, Tool: true, Think: true, MaxInput: 140000},
-		{Type: "CLAUDE_3", Name: "Claude 3.7 Sonnet", Image: true, Tool: true, MaxInput: 140000},
-		{Type: "deepseek_v3", Name: "DeepSeek-V3", MaxInput: 200000},
-		{Type: "GEMINI_PRO_25", Name: "Gemini 2.5 pro", Tool: true, MaxInput: 180000},
-		{Type: "GEMINI_PRO_3", Name: "Gemini 3 pro", Image: true, Tool: true, MaxInput: 180000},
-		{Type: "GEMINI_FLASH_3", Name: "Gemini 3 flash", Image: true, Tool: true, MaxInput: 300000},
-		{Type: "GEMINI_PRO_3_1", Name: "Gemini 3.1 pro", Image: true, Tool: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "kwaipilot_40b", Name: "Kwai-KAT-V1", MaxInput: 50000},
-		{Type: "kwaipilot_40b_agent", Name: "Kwai-KAT-V1-Agent", Tool: true, MaxInput: 50000},
-		{Type: "kat_coder", Name: "KAT-Coder-Pro V1", Tool: true, MaxInput: 200000},
-		{Type: "kat_coder_pro_v2", Name: "KAT-Coder-Pro V2", Tool: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "qwen3_32", Name: "Qwen3-235B-A22B-Instruct-2507", Tool: true},
-		{Type: "QWEN_3", Name: "Qwen 3", Tool: true},
-		{Type: "kat_200b", Name: "KAT-Coder-Test", Tool: true, MaxInput: 200000},
-		{Type: "KIMI_K2", Name: "KIMI_K2", Tool: true, MaxInput: 200000},
-		{Type: "KIMI_K2_5", Name: "KIMI K2.5", Image: true, Tool: true, Think: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "KIMI_K2_6", Name: "KIMI K2.6", Image: true, Tool: true, Think: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "KIMI_K3", Name: "KIMI K3", Image: true, Tool: true, Think: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "GLM_4_6", Name: "GLM 4.6", Tool: true, MaxInput: 140000},
-		{Type: "MINIMAX_M2", Name: "Minimax M2", Tool: true, MaxInput: 140000},
-		{Type: "MINIMAX_M2_1", Name: "Minimax M2.1", Tool: true, MaxInput: 140000},
-		{Type: "MINIMAX_M2_5", Name: "MiniMax M2.5", Tool: true, MaxInput: 140000, Duet: true, Agent: true},
-		{Type: "MINIMAX_M2_7", Name: "Minimax M2.7", Tool: true, MaxInput: 140000, Duet: true, Agent: true},
-		{Type: "DEEPSEEK_V3_2", Name: "Deepseek-V3.2", Tool: true, MaxInput: 90000},
-		{Type: "DEEPSEEK_V4_PRO", Name: "Deepseek-V4 PRO", Tool: true, MaxInput: 190000, Duet: true, Agent: true},
-		{Type: "DEEPSEEK_V4_FLASH", Name: "Deepseek-V4 Flash", Tool: true, MaxInput: 190000, Duet: true, Agent: true},
-		{Type: "GPT_5_2", Name: "GPT-5.2", Image: true, Tool: true, MaxInput: 200000},
-		{Type: "GPT_5_3_CODEX", Name: "GPT-5.3 Codex", Image: true, Tool: true, Think: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "GPT_5_4", Name: "GPT-5.4", Image: true, Tool: true, Think: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "GPT_5_5", Name: "GPT-5.5", Image: true, Tool: true, Think: true, MaxInput: 200000},
-		{Type: "GPT_5_6", Name: "GPT-5.6", Image: true, Tool: true, Think: true, MaxInput: 200000, Duet: true, Agent: true},
-		{Type: "GLM_4_7", Name: "GLM-4.7", Tool: true, Think: true, MaxInput: 140000},
-		{Type: "GLM_5", Name: "GLM-5", Tool: true, MaxInput: 140000},
-		{Type: "GLM_5_AUTO", Name: "GLM-5", Tool: true, MaxInput: 140000},
-		{Type: "GLM_5_TURBO", Name: "GLM 5 Turbo", Tool: true, MaxInput: 140000},
-		{Type: "GLM_5_1", Name: "GLM-5.1", Tool: true, MaxInput: 140000, Duet: true, Agent: true},
-		{Type: "AUTO", Name: "Auto", Image: true, Tool: true, MaxInput: 140000},
-		{Type: "BYOK", Name: "Byok", Image: true, Tool: true, MaxInput: 140000},
-	}
-	for index := range models {
-		models[index].ID = publicModelID(models[index].Type)
-		models[index].Name = "MF " + strings.TrimPrefix(models[index].Name, "MF ")
-	}
-	return models
-}
-
-// ExposedModel is a minimal public model descriptor (id + display name) for
-// callers outside this package that only need the discovery-visible catalog.
-type ExposedModel struct {
-	ID   string
-	Name string
-}
-
-// BuiltinExposedModels returns the built-in model catalog filtered to the
-// duet/agent-capable entries that /v1/models would expose, carrying the public
-// id (CLAUDE-MYFLICKER- prefix on non-Claude types) and the "MF "-prefixed
-// display name. It is the network-free fallback for consumers that cannot reach
-// a running bridge's /v1/models endpoint.
-func BuiltinExposedModels() []ExposedModel {
-	catalog := newModelCatalog()
-	exposed := catalog.Exposed()
-	result := make([]ExposedModel, 0, len(exposed))
-	for _, model := range exposed {
-		result = append(result, ExposedModel{ID: model.ID, Name: model.Name})
-	}
-	return result
-}
-
 type ModelCatalog struct {
 	mu     sync.RWMutex
 	models []ModelEntry
 }
 
 func newModelCatalog() *ModelCatalog {
-	return &ModelCatalog{models: builtinSupportedModels()}
+	return &ModelCatalog{}
 }
 
 func (catalog *ModelCatalog) Exposed() []ModelEntry {
@@ -4886,9 +4810,6 @@ func (bridge *BridgeServer) handleModels(response http.ResponseWriter, request *
 		return
 	}
 	models := bridge.catalog.Exposed()
-	if len(models) == 0 {
-		models = []ModelEntry{{Type: bridge.settings.DefaultModel, ID: publicModelID(bridge.settings.DefaultModel), Name: "MF " + bridge.settings.DefaultModel, Agent: true}}
-	}
 	data := make([]map[string]any, 0, len(models))
 	for _, model := range models {
 		data = append(data, map[string]any{

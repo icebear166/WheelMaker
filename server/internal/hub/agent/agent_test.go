@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -341,32 +343,6 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				},
 			},
 		},
-		{
-			name:        "flicker",
-			newProvider: NewCCFlickerProvider,
-			key:         "flicker-test-key",
-			wantArgs:    []string{"--hide-claude-auth"},
-			wantEnv: map[string]string{
-				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-flicker"),
-				"ANTHROPIC_BASE_URL":      "http://127.0.0.1:17999",
-				"ANTHROPIC_AUTH_TOKEN":    "flicker-test-key",
-				"ANTHROPIC_API_KEY":       "",
-				"CLAUDE_CODE_USE_BEDROCK": "",
-				"CLAUDE_CODE_USE_VERTEX":  "",
-				"CLAUDE_CODE_USE_FOUNDRY": "",
-			},
-			wantSettings: map[string]any{
-				"model": "CLAUDE_OPUS_4_8",
-				"env": map[string]any{
-					"ANTHROPIC_DEFAULT_FABLE_MODEL":              "CLAUDE_OPUS_4_8",
-					"ANTHROPIC_DEFAULT_OPUS_MODEL":               "CLAUDE_OPUS_4_8",
-					"ANTHROPIC_DEFAULT_SONNET_MODEL":             "CLAUDE_4_6",
-					"ANTHROPIC_DEFAULT_HAIKU_MODEL":              "CLAUDE_4_6",
-					"CLAUDE_CODE_SUBAGENT_MODEL":                 "CLAUDE_4_6",
-					"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
-				},
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -424,48 +400,6 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			var gotSettings map[string]any
 			if err := json.Unmarshal(settingsData, &gotSettings); err != nil {
 				t.Fatalf("generated settings are invalid JSON: %v", err)
-			}
-			if tt.name == "flicker" {
-				// The models array is fetched from the live bridge /v1/models at
-				// profile construction (builtin exposed list as fallback), so its
-				// exact content is runtime-dependent. Validate its shape here and
-				// drop it before the exact settings comparison below.
-				models, ok := gotSettings["models"].([]any)
-				if !ok || len(models) == 0 {
-					t.Fatalf("flicker settings.models = %#v, want non-empty object array", gotSettings["models"])
-				}
-				modelNamesByID := map[string]string{}
-				for _, entry := range models {
-					object, ok := entry.(map[string]any)
-					if !ok || object["id"] == "" || object["name"] == "" {
-						t.Fatalf("flicker settings.models entry missing id/name: %#v", entry)
-					}
-					modelNamesByID[object["id"].(string)] = object["name"].(string)
-				}
-				delete(gotSettings, "models")
-
-				// Tier display names (ANTHROPIC_DEFAULT_<TIER>_MODEL_NAME) are
-				// derived from the same runtime catalog. Validate that each name
-				// present matches the exposed model for its tier id, then strip
-				// them before the exact env comparison below.
-				env := gotSettings["env"].(map[string]any)
-				tierPairs := []struct{ idKey, nameKey string }{
-					{"ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"},
-					{"ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"},
-					{"ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"},
-					{"ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"},
-				}
-				for _, pair := range tierPairs {
-					name, present := env[pair.nameKey]
-					if !present {
-						continue // tier id absent from the runtime catalog; no name written
-					}
-					wantName := modelNamesByID[env[pair.idKey].(string)]
-					if name != wantName {
-						t.Fatalf("%s = %q, want %q (from exposed catalog)", pair.nameKey, name, wantName)
-					}
-					delete(env, pair.nameKey)
-				}
 			}
 			if !reflect.DeepEqual(gotSettings, tt.wantSettings) {
 				t.Fatalf("settings = %#v, want %#v", gotSettings, tt.wantSettings)
@@ -838,7 +772,7 @@ func TestClaudeCompatibleProviderLaunchErrorDoesNotLeakKey(t *testing.T) {
 
 func TestCCFlickerProviderLaunchErrorDoesNotLeakKey(t *testing.T) {
 	const key = "flicker-test-key"
-	provider := NewCCFlickerProvider(filepath.Join(t.TempDir(), "state"), key)
+	provider := NewCCFlickerProvider(filepath.Join(t.TempDir(), "state"), key, nil)
 	provider.resolveBinary = func(name, configuredPath, installHint string) (string, error) {
 		return "", fmt.Errorf("binary %s is unavailable", name)
 	}
@@ -5817,5 +5751,43 @@ func TestApplyFlickerModelsSynthesizesMissingTierLabel(t *testing.T) {
 	}
 	if got := profile.settingsEnv["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; got != "MF Claude Sonnet 4.6" {
 		t.Fatalf("sonnet tier label = %q, want catalog name %q", got, "MF Claude Sonnet 4.6")
+	}
+}
+
+func TestFlickerModelStoreRefreshFromEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"CLAUDE_OPUS_4_8","display_name":"MF Claude Opus 4.8"},{"id":"CLAUDE-MYFLICKER-GPT_5_4","display_name":"MF GPT-5.4"}]}`))
+	}))
+	defer server.Close()
+
+	store := &FlickerModelStore{endpoint: server.URL}
+	store.Refresh()
+	got := store.Models()
+	want := []claudeModelEntry{
+		{ID: "CLAUDE_OPUS_4_8", Name: "MF Claude Opus 4.8"},
+		{ID: "CLAUDE-MYFLICKER-GPT_5_4", Name: "MF GPT-5.4"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Models() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFlickerModelStoreRefreshKeepsPreviousOnFailure(t *testing.T) {
+	// No server listening at this endpoint: Refresh must not wipe a prior catalog
+	// and must never invent a builtin fallback.
+	store := &FlickerModelStore{
+		endpoint: "http://127.0.0.1:0/v1/models",
+		models:   []claudeModelEntry{{ID: "CLAUDE_4_6", Name: "MF Claude Sonnet 4.6"}},
+	}
+	store.Refresh()
+	if got := store.Models(); len(got) != 1 || got[0].ID != "CLAUDE_4_6" {
+		t.Fatalf("Models() after failed refresh = %#v, want prior catalog preserved", got)
+	}
+}
+
+func TestFlickerModelStoreEmptyByDefault(t *testing.T) {
+	if got := NewFlickerModelStore().Models(); len(got) != 0 {
+		t.Fatalf("new store Models() = %#v, want empty (no builtin fallback)", got)
 	}
 }

@@ -32,6 +32,7 @@ type Hub struct {
 	regSync         *Reporter
 	terminalManager *terminalpkg.Manager
 	flickerBridge   *flickerBridgeManager
+	flickerModels   *agent.FlickerModelStore
 	clientsByName   map[string]*client.Client
 }
 
@@ -44,15 +45,18 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		apiKeys = cfg.APIKeys
 	}
 	flickerBridge := newFlickerBridgeManager(stateDir, apiKeys.Flicker)
+	flickerModels := agent.NewFlickerModelStore()
 	h := newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
-		StateDir:       stateDir,
-		DeepSeekAPIKey: apiKeys.DeepSeek,
-		KimiAPIKey:     apiKeys.Kimi,
-		QwenAPIKey:     apiKeys.Qwen,
-		ZAIAPIKey:      apiKeys.ZAI,
-		FlickerAPIKey:  flickerBridge.localAPIKey(),
+		StateDir:          stateDir,
+		DeepSeekAPIKey:    apiKeys.DeepSeek,
+		KimiAPIKey:        apiKeys.Kimi,
+		QwenAPIKey:        apiKeys.Qwen,
+		ZAIAPIKey:         apiKeys.ZAI,
+		FlickerAPIKey:     flickerBridge.localAPIKey(),
+		FlickerModelStore: flickerModels,
 	}))
 	h.flickerBridge = flickerBridge
+	h.flickerModels = flickerModels
 	return h
 }
 
@@ -105,6 +109,9 @@ func (h *Hub) Start(ctx context.Context) error {
 	}
 	h.setupRegistrySync()
 	if h.flickerBridge != nil && h.flickerBridge.Status(ctx).Configured {
+		if h.flickerModels != nil {
+			h.flickerBridge.setReadyHandler(h.flickerModels.Refresh)
+		}
 		if _, err := h.flickerBridge.Start(ctx); err != nil {
 			hubLogger("").Warn("Flicker Bridge start failed err=%v", err)
 		}

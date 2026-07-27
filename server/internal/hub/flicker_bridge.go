@@ -84,6 +84,10 @@ type flickerBridgeManager struct {
 	healthAttemptTimeout time.Duration
 	healthTimeout        time.Duration
 	stateChange          func(flickerBridgeStatus)
+	// onReady fires once each time the bridge transitions into the running
+	// state (initial start and every restart), after health checks pass. Used
+	// to refresh the shared flicker model catalog from the live /v1/models.
+	onReady func()
 }
 
 func newFlickerBridgeManager(stateDir, apiKey string) *flickerBridgeManager {
@@ -127,6 +131,15 @@ func (m *flickerBridgeManager) setStateChangeHandler(handler func(flickerBridgeS
 	}
 	m.mu.Lock()
 	m.stateChange = handler
+	m.mu.Unlock()
+}
+
+func (m *flickerBridgeManager) setReadyHandler(handler func()) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.onReady = handler
 	m.mu.Unlock()
 }
 
@@ -371,16 +384,21 @@ func (m *flickerBridgeManager) waitForHealth(process flickerBridgeProcess, done 
 			}
 			var status flickerBridgeStatus
 			var stateChange func(flickerBridgeStatus)
+			var onReady func()
 			m.mu.Lock()
 			if m.process == process && m.state == "starting" {
 				m.state = "running"
 				m.errMessage = ""
 				status = m.statusLocked()
 				stateChange = m.stateChange
+				onReady = m.onReady
 			}
 			m.mu.Unlock()
 			if status.State != "" {
 				notifyFlickerBridgeState(stateChange, status)
+				if onReady != nil {
+					go onReady()
+				}
 			}
 			return
 		}

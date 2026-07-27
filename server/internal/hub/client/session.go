@@ -750,7 +750,22 @@ func normalizeStoredConfigPreferences(agentName string, options []PreferenceConf
 func normalizeAgentConfigOptions(agentName string, options []acp.ConfigOption) []acp.ConfigOption {
 	normalized := append([]acp.ConfigOption(nil), options...)
 	for index := range normalized {
-		normalized[index].Options = append([]acp.ConfigOptionValue(nil), normalized[index].Options...)
+		// Copy and dedup each option's selectable values by Value. Some agents
+		// (e.g. cc-flicker) surface the same model both as a tier default and in
+		// the discovered catalog; without this the picker shows it twice. Keep
+		// the first occurrence so the tier-provided display name is preserved.
+		src := normalized[index].Options
+		seen := make(map[string]struct{}, len(src))
+		deduped := make([]acp.ConfigOptionValue, 0, len(src))
+		for _, value := range src {
+			key := strings.TrimSpace(value.Value)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			deduped = append(deduped, value)
+		}
+		normalized[index].Options = deduped
 	}
 	actualValues := claudeCompatibleEffortValues(agentName)
 	if actualValues == nil {

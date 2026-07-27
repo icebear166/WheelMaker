@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/swm8023/wheelmaker/internal/flickerbridge"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -250,8 +249,12 @@ func NewCCQwenProvider(stateDir, apiKey string) *acpProvider {
 	return provider
 }
 
-func NewCCFlickerProvider(stateDir, apiKey string) *acpProvider {
+func NewCCFlickerProvider(stateDir, apiKey string, store *FlickerModelStore) *acpProvider {
 	profile := claudeCompatibleFlickerProfile(stateDir)
+	profile.flickerStore = store
+	if store != nil {
+		applyFlickerModels(&profile, store.Models())
+	}
 	preset := ClaudeCompatibleFlickerProviderPreset
 	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
 	provider := NewACPProvider(preset)
@@ -276,12 +279,11 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 		return p.launchFlicker(exePath)
 	}
 	if p.claudeSettings != nil {
-		// For the dynamic flicker profile, refresh the exposed model catalog and
-		// tier labels from the live bridge /v1/models now (at first message),
-		// when the bridge has typically pulled the upstream catalog, rather
-		// than reusing the possibly-stale list frozen at provider construction.
-		if p.claudeSettings.dynamicFlickerModels {
-			applyFlickerModels(p.claudeSettings, flickerExposedModels())
+		// For the flicker profile, apply the shared model catalog (populated once
+		// when the managed bridge became healthy) to staticModels and tier labels.
+		// This reads memory only — no HTTP on the session path.
+		if p.claudeSettings.flickerStore != nil {
+			applyFlickerModels(p.claudeSettings, p.claudeSettings.flickerStore.Models())
 		}
 		if err := ensureClaudeCompatibleSkills(p.claudeSettings.configDir); err != nil {
 			return "", nil, nil, fmt.Errorf("%s: prepare Claude skills: %w", p.preset.Name, err)
@@ -315,12 +317,10 @@ type claudeCompatibleProfile struct {
 	// availableModels (an allowlist that strips effort capability); used
 	// together with gatewayDiscovery.
 	staticModels []claudeModelEntry
-	// dynamicFlickerModels marks the flicker profile whose staticModels and tier
-	// _NAME labels must be refreshed from the live bridge /v1/models at Launch
-	// time (not frozen at construction, when the bridge may not have pulled the
-	// upstream catalog yet). See applyFlickerModels.
-	dynamicFlickerModels bool
-	settingsEnv          map[string]string
+	// flickerStore, whenset, sources staticModels and tier _NAME labelsfrom
+	// the shared FlickerModelStore, populated oncewhen the bridge is healthy.
+	flickerStore *FlickerModelStore
+	settingsEnv  map[string]string
 }
 
 // claudeModelEntry is one entry of the settings["models"] object array.
@@ -440,19 +440,48 @@ func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
 // exposed list when the endpoint is unreachable. The result is written into the
 // Claude settings["models"] array so gateway-discovered non-Claude ids survive
 // the CLI's "claude" prefix filter.
-func flickerExposedModels() []claudeModelEntry {
-	if models := fetchFlickerModelsFromBridge(flickerACPModelsEndpoint); len(models) > 0 {
-		return models
-	}
-	builtin := flickerbridge.BuiltinExposedModels()
-	models := make([]claudeModelEntry, 0, len(builtin))
-	for _, model := range builtin {
-		models = append(models, claudeModelEntry{ID: model.ID, Name: model.Name})
-	}
-	return models
+// FlickerModelStore caches the flickerbridge's discovery-visible model catalog
+// (id + display name). Itisrefreshed once, when the managed bridge reports
+// healthy, then read by the cc-flicker provider on every Launch with no further
+// networkaccess. There is deliberately no built-in fallback: an empty store
+// means the bridge has no models to offer, so the picker shows none ratherthan
+// ahardcoded list thatwould imply availability.
+type FlickerModelStore struct {
+	endpoint string
+	mu       sync.RWMutex
+	models   []claudeModelEntry
 }
 
-// flickerACPModelsEndpoint is the managed bridge's OpenAI-compatible model list.
+// NewFlickerModelStore returns a store boundto the managed bridge endpoint.
+func NewFlickerModelStore() *FlickerModelStore {
+	return &FlickerModelStore{endpoint: flickerACPModelsEndpoint}
+}
+
+// Refresh performs a single GETagainst thebridge /v1/models and replaces the
+// cached catalog withthe parsed result. On error the previous catalog is left
+// untouched, so a transient failure after a good refreshkeeps serving the last
+// known real list; it never invents entries.
+func (s *FlickerModelStore) Refresh() {
+	if s == nil {
+		return
+	}
+	if models := fetchFlickerModelsFromBridge(s.endpoint); len(models) > 0 {
+		s.mu.Lock()
+		s.models = models
+		s.mu.Unlock()
+	}
+}
+
+// Models returns acopy of the currently cached catalog (maybeempty).
+func (s *FlickerModelStore) Models() []claudeModelEntry {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]claudeModelEntry(nil), s.models...)
+}
+
 const flickerACPModelsEndpoint = "http://127.0.0.1:17999/v1/models"
 
 func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
@@ -513,18 +542,15 @@ func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
 		"CLAUDE_CODE_SUBAGENT_MODEL":     flickerTierModels.sonnet,
 	}
 	profile := claudeCompatibleProfile{
-		configDir:            filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
-		endpoint:             "http://127.0.0.1:17999",
-		authName:             "ANTHROPIC_AUTH_TOKEN",
-		defaultModel:         flickerTierModels.opus,
-		gatewayDiscovery:     true,
-		dynamicFlickerModels: true,
-		settingsEnv:          settingsEnv,
+		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
+		endpoint:         "http://127.0.0.1:17999",
+		authName:         "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:     flickerTierModels.opus,
+		gatewayDiscovery: true,
+		settingsEnv:      settingsEnv,
 	}
-	// Seed the catalog and tier labels once up front so a profile used without
-	// a Launch refresh (e.g. tests) still carries a sane list; Launch refreshes
-	// this against the live bridge before writing settings.
-	applyFlickerModels(&profile, flickerExposedModels())
+	// Base profile only: staticModels and tier _NAME labels stay empty until a
+	// FlickerModelStore is applied (in NewCCFlickerProvider and again at Launch).
 	return profile
 }
 

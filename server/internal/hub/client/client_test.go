@@ -1652,6 +1652,36 @@ func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 	}
 }
 
+func TestNormalizeAgentConfigOptionsDedupsOptionValues(t *testing.T) {
+	// A model option can carry the same value twice when an agent surfaces it
+	// both as a tier default and in the discovered catalog (e.g. cc-flicker).
+	// normalizeAgentConfigOptions must collapse duplicates by value, keeping the
+	// first occurrence so its display name survives.
+	options := []acp.ConfigOption{
+		{
+			ID:       acp.ConfigOptionIDModel,
+			Category: acp.ConfigOptionCategoryModel,
+			Options: []acp.ConfigOptionValue{
+				{Value: "CLAUDE_OPUS_4_8", Name: "MF Claude Opus 4.8"},
+				{Value: "CLAUDE_4_6", Name: "MF Claude Sonnet 4.6"},
+				{Value: "CLAUDE_OPUS_4_8", Name: "dup opus"},
+				{Value: "CLAUDE-MYFLICKER-GPT_5_4", Name: "MF GPT-5.4"},
+				{Value: "CLAUDE_4_6", Name: "dup sonnet"},
+			},
+		},
+	}
+	normalized := normalizeAgentConfigOptions("cc-flicker", options)
+	got := normalized[0].Options
+	want := []acp.ConfigOptionValue{
+		{Value: "CLAUDE_OPUS_4_8", Name: "MF Claude Opus 4.8"},
+		{Value: "CLAUDE_4_6", Name: "MF Claude Sonnet 4.6"},
+		{Value: "CLAUDE-MYFLICKER-GPT_5_4", Name: "MF GPT-5.4"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("deduped options = %#v, want %#v", got, want)
+	}
+}
+
 func TestCreateSession_ClaudeCompatibleProvidersExposeOnlyActualEffortLevels(t *testing.T) {
 	tests := []struct {
 		agentType   acp.ACPProvider

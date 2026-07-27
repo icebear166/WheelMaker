@@ -32,6 +32,9 @@ type ACPFactoryOptions struct {
 	QwenAPIKey     string
 	ZAIAPIKey      string
 	FlickerAPIKey  string
+	// FlickerModelStore,when set,suppliesthe cc-flicker provider's model
+	// catalog. It is refreshedonce when the managed bridge reportshealthy.
+	FlickerModelStore *FlickerModelStore
 }
 
 type projectNameContextKey struct{}
@@ -146,7 +149,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		registerConfiguredProvider(f, protocol.ACPProviderCCGLM, NewCCGLMProvider(options.StateDir, zaiKey), available)
 	}
 	if flickerKey := strings.TrimSpace(options.FlickerAPIKey); flickerKey != "" {
-		registerConfiguredProvider(f, protocol.ACPProviderCCFlicker, NewCCFlickerProvider(options.StateDir, flickerKey), available)
+		registerConfiguredProvider(f, protocol.ACPProviderCCFlicker, NewCCFlickerProvider(options.StateDir, flickerKey, options.FlickerModelStore), available)
 	}
 	if len(f.Names()) == 0 {
 		agentLogger().Warn("no available ACP providers detected")

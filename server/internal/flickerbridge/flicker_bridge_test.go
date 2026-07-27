@@ -260,28 +260,6 @@ func TestValidateOpenAIBodyMatchesPythonPreStreamValidation(t *testing.T) {
 	}
 }
 
-func TestBuiltinCatalogValidatesSupportedButUnexposedModel(t *testing.T) {
-	settings := testSettings(t)
-	bridge := newBridgeServer(settings, map[string]string{}, nil)
-	body, err := bridge.buildFlickerBody(map[string]any{
-		"model": "GPT_5_5",
-		"messages": []any{
-			map[string]any{"role": "user", "content": "hello"},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstText(body["model"]) != "GPT_5_5" {
-		t.Fatalf("upstream model = %q", firstText(body["model"]))
-	}
-	for _, model := range bridge.catalog.Exposed() {
-		if model.Type == "GPT_5_5" {
-			t.Fatal("supported non-agent model GPT_5_5 should not be exposed")
-		}
-	}
-}
-
 func TestBridgeUsesShortDedicatedAuthHTTPTimeout(t *testing.T) {
 	settings := testSettings(t)
 	settings.UpstreamTimeout = 10 * time.Minute
