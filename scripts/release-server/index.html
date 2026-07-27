@@ -121,6 +121,29 @@
       font-size: clamp(16px, 1.4vw, 18px);
       line-height: 1.5;
     }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .guide-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 8px 13px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 620;
+      text-decoration: none;
+    }
+    .guide-link:hover { background: var(--surface-hover); }
+    .guide-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
 
     .commands {
       margin-top: clamp(20px, 3vh, 28px);
@@ -358,6 +381,9 @@
     <section class="hero">
       <h1>Install WheelMaker</h1>
       <p class="sub">One command downloads the installer and sets up the latest release. Run it from any directory.</p>
+      <div class="hero-actions">
+        <a class="guide-link" href="/deployment.md">AI deployment guide</a>
+      </div>
     </section>
 
     <section class="commands" aria-label="Install commands">
