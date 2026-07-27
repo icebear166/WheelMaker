@@ -3822,25 +3822,28 @@
   display: inline-flex;
   align-items: center;
   max-width: min(260px, 100%);
-  gap: 1px;
-  margin: 0 2px;
-  padding: 0 5px;
+  gap: 2px;
+  margin: 0 1px;
+  padding: 1px 7px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, var(--accent-primary));
   border-radius: 999px;
-  vertical-align: baseline;
-  line-height: 1.1;
+  vertical-align: -0.1em;
+  font-size: 0.85em;
+  line-height: 1.25;
   white-space: nowrap;
   transition: box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .chat-composer-capsule.skill,
 .chat-prompt-inline-capsule.skill {
+  border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
   color: var(--chat-capsule-skill-text);
   background: var(--chat-capsule-skill-bg);
 }
 
 .chat-composer-capsule.goal,
 .chat-prompt-inline-capsule.goal {
+  border-color: color-mix(in srgb, var(--state-success) 34%, transparent);
   color: var(--chat-capsule-goal-text);
   background: var(--chat-capsule-goal-bg);
 }
@@ -3849,6 +3852,8 @@
 .chat-prompt-inline-capsule.file {
   max-width: 100%;
   white-space: normal;
+  border-color: var(--border-subtle);
+  border-radius: 7px;
   color: color-mix(in srgb, var(--text-primary) 84%, var(--text-secondary));
   background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent-primary));
 }
@@ -3876,8 +3881,10 @@
 .chat-prompt-inline-capsule-icon {
   flex: 0 0 auto;
   font-family: var(--font-mono);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 0.92em;
   line-height: 1;
+  opacity: 0.72;
 }
 
 .chat-composer-input:focus {

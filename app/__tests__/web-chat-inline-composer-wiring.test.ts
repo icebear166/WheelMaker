@@ -25,7 +25,7 @@ describe('web chat inline composer capsule wiring', () => {
     const capsuleRuleStart = stylesCss.indexOf('.chat-composer-capsule,\n.chat-prompt-inline-capsule {');
     const capsuleRuleEnd = stylesCss.indexOf('}', capsuleRuleStart);
     const capsuleRule = stylesCss.slice(capsuleRuleStart, capsuleRuleEnd);
-    expect(capsuleRule).toContain('gap: 1px;');
+    expect(capsuleRule).toContain('gap: 2px;');
   });
 
   test('keeps file mention capsule labels readable without ellipsis', () => {
