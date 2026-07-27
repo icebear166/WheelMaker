@@ -266,7 +266,7 @@ function renderPromptInlineParts(
         title={part.type === 'file' ? part.path : part.command}
       >
         <span className="chat-prompt-inline-capsule-icon" aria-hidden="true">
-          <ChatIcon name={part.type === 'skill' ? 'zap' : 'file'} size={11} />
+          <ChatIcon name={part.type === 'skill' ? 'wand' : 'file'} size={11} />
         </span>
         <span className="chat-prompt-inline-capsule-label">{part.label}</span>
       </span>

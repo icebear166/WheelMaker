@@ -168,7 +168,7 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
   }
 
   decorate(): React.ReactNode {
-    const icon = this.__kind === 'file' ? 'file' : this.__kind === 'goal' ? 'target' : 'zap';
+    const icon = this.__kind === 'file' ? 'file' : this.__kind === 'goal' ? 'target' : 'wand';
     return (
       <>
         <span className="chat-composer-capsule-icon" aria-hidden="true">
