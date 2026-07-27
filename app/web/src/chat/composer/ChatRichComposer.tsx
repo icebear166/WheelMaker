@@ -541,7 +541,10 @@ function chatComposerTokenEqual(left: ChatComposerToken, right: ChatComposerToke
   if (left.type === 'text' && right.type === 'text') {
     return left.text === right.text;
   }
-  if (left.type === 'skill' && right.type === 'skill') {
+  if (
+    (left.type === 'skill' || left.type === 'goal') &&
+    right.type === left.type
+  ) {
     return left.id === right.id && left.command === right.command && left.label === right.label;
   }
   return left.type === 'file' &&

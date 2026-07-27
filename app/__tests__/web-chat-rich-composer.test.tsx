@@ -7,6 +7,7 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
   DELETE_CHARACTER_COMMAND,
   KEY_BACKSPACE_COMMAND,
   SKIP_SELECTION_FOCUS_TAG,
@@ -684,6 +685,71 @@ describe('ChatRichComposer', () => {
       collapsed: true,
       position: 'prefix voice'.length,
     });
+  });
+
+  test('keeps the cursor after typing following a controlled goal capsule', async () => {
+    const initialTokens: ChatComposerToken[] = [
+      {type: 'goal', id: 'g1', command: '/goal', label: 'Goal'},
+      {type: 'text', text: ' suffix'},
+    ];
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState(initialTokens);
+      return <ChatRichComposer tokens={tokens} onTokensChange={setTokens} readOnly={false} />;
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editor = renderer!.root.findByType(EditorRefPlugin).props.editorRef.current;
+    await ReactTestRenderer.act(() => {
+      editor.update(() => {
+        $setComposerTokens(initialTokens, '', 1);
+        $insertComposerPlainText('中文');
+      }, {discrete: true});
+    });
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'goal', id: 'g1', command: '/goal', label: 'Goal'},
+      {type: 'text', text: '中文 suffix'},
+    ]);
+    expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(3);
+  });
+
+  test('keeps the cursor after deleting text following a controlled goal capsule', async () => {
+    const initialTokens: ChatComposerToken[] = [
+      {type: 'goal', id: 'g1', command: '/goal', label: 'Goal'},
+      {type: 'text', text: ' suffix'},
+    ];
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState(initialTokens);
+      return <ChatRichComposer tokens={tokens} onTokensChange={setTokens} readOnly={false} />;
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editor = renderer!.root.findByType(EditorRefPlugin).props.editorRef.current;
+    await ReactTestRenderer.act(() => {
+      editor.update(() => {
+        $setComposerTokens(initialTokens, '', 3);
+        const paragraph = $getRoot().getFirstChild();
+        const text = paragraph?.getChildAtIndex(1);
+        if (!$isTextNode(text)) {
+          throw new Error('expected following text node');
+        }
+        text.spliceText(1, 1, '', true);
+      }, {discrete: true});
+    });
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'goal', id: 'g1', command: '/goal', label: 'Goal'},
+      {type: 'text', text: ' uffix'},
+    ]);
+    expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(2);
   });
 
   test('reports serialized text cursor after replacing an active slash query', async () => {
