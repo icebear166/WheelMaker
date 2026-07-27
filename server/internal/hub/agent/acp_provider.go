@@ -276,6 +276,13 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 		return p.launchFlicker(exePath)
 	}
 	if p.claudeSettings != nil {
+		// For the dynamic flicker profile, refresh the exposed model catalog and
+		// tier labels from the live bridge /v1/models now (at first message),
+		// when the bridge has typically pulled the upstream catalog, rather
+		// than reusing the possibly-stale list frozen at provider construction.
+		if p.claudeSettings.dynamicFlickerModels {
+			applyFlickerModels(p.claudeSettings, flickerExposedModels())
+		}
 		if err := ensureClaudeCompatibleSkills(p.claudeSettings.configDir); err != nil {
 			return "", nil, nil, fmt.Errorf("%s: prepare Claude skills: %w", p.preset.Name, err)
 		}
@@ -308,7 +315,12 @@ type claudeCompatibleProfile struct {
 	// availableModels (an allowlist that strips effort capability); used
 	// together with gatewayDiscovery.
 	staticModels []claudeModelEntry
-	settingsEnv  map[string]string
+	// dynamicFlickerModels marks the flicker profile whose staticModels and tier
+	// _NAME labels must be refreshed from the live bridge /v1/models at Launch
+	// time (not frozen at construction, when the bridge may not have pulled the
+	// upstream catalog yet). See applyFlickerModels.
+	dynamicFlickerModels bool
+	settingsEnv          map[string]string
 }
 
 // claudeModelEntry is one entry of the settings["models"] object array.
@@ -481,49 +493,109 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 	return models
 }
 
+// flickerTierModels holds the tier -> model id assignments for the flicker
+// profile, shared by profile construction and the Launch-time refresh.
+var flickerTierModels = struct {
+	fable, opus, sonnet, haiku string
+}{
+	fable:  "CLAUDE_OPUS_4_8",
+	opus:   "CLAUDE_OPUS_4_8",
+	sonnet: "CLAUDE_4_6",
+	haiku:  "CLAUDE_4_6",
+}
+
 func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
-	models := flickerExposedModels()
-	// Claude Code shows a tier's picker label from ANTHROPIC_DEFAULT_<TIER>_MODEL_NAME
-	// when present, falling back to the raw id otherwise. Populate each tier name
-	// from the same exposed catalog the picker uses so the Claude-family tiers
-	// render consistently (e.g. "MF Claude Opus 4.8") instead of the bare id.
+	settingsEnv := map[string]string{
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":  flickerTierModels.fable,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   flickerTierModels.opus,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": flickerTierModels.sonnet,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  flickerTierModels.haiku,
+		"CLAUDE_CODE_SUBAGENT_MODEL":     flickerTierModels.sonnet,
+	}
+	profile := claudeCompatibleProfile{
+		configDir:            filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
+		endpoint:             "http://127.0.0.1:17999",
+		authName:             "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:         flickerTierModels.opus,
+		gatewayDiscovery:     true,
+		dynamicFlickerModels: true,
+		settingsEnv:          settingsEnv,
+	}
+	// Seed the catalog and tier labels once up front so a profile used without
+	// a Launch refresh (e.g. tests) still carries a sane list; Launch refreshes
+	// this against the live bridge before writing settings.
+	applyFlickerModels(&profile, flickerExposedModels())
+	return profile
+}
+
+// applyFlickerModels sets profile.staticModels to the given exposed catalog and
+// derives each tier's ANTHROPIC_DEFAULT_<TIER>_MODEL_NAME label from it. Claude
+// Code shows a tier's picker label from that env var when present, falling
+// back to the raw id otherwise; deriving the label from the same catalog the
+// picker uses keeps the Claude-family tiers rendering consistently. When a tier
+// model id is absent from the catalog, a friendly label is synthesized from the
+// id so the picker never shows a bare id.
+func applyFlickerModels(profile *claudeCompatibleProfile, models []claudeModelEntry) {
+	profile.staticModels = models
 	displayNames := make(map[string]string, len(models))
 	for _, model := range models {
 		displayNames[model.ID] = model.Name
 	}
-	const (
-		fableModel  = "CLAUDE_OPUS_4_8"
-		opusModel   = "CLAUDE_OPUS_4_8"
-		sonnetModel = "CLAUDE_4_6"
-		haikuModel  = "CLAUDE_4_6"
-	)
-	settingsEnv := map[string]string{
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":  fableModel,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":   opusModel,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL": sonnetModel,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  haikuModel,
-		"CLAUDE_CODE_SUBAGENT_MODEL":     sonnetModel,
-	}
 	tierNames := map[string]string{
-		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  fableModel,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   opusModel,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": sonnetModel,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  haikuModel,
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  flickerTierModels.fable,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   flickerTierModels.opus,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": flickerTierModels.sonnet,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  flickerTierModels.haiku,
 	}
 	for nameEnv, modelID := range tierNames {
-		if displayName := displayNames[modelID]; displayName != "" {
-			settingsEnv[nameEnv] = displayName
+		label := displayNames[modelID]
+		if label == "" {
+			label = flickerModelDisplayName(modelID)
+		}
+		profile.settingsEnv[nameEnv] = label
+	}
+}
+
+// flickerModelDisplayName synthesizes an "MF ..."-style label for a model id not
+// present in the exposed catalog, so tier labels never fall back to a bare id.
+// Claude-family ids (CLAUDE_OPUS_4_8) become "MF Claude Opus 4.8".
+func flickerModelDisplayName(modelID string) string {
+	name := strings.TrimPrefix(modelID, "CLAUDE-MYFLICKER-")
+	if strings.HasPrefix(strings.ToUpper(name), "CLAUDE_") {
+		parts := strings.Split(name, "_")
+		words := make([]string, 0, len(parts))
+		for _, part := range parts {
+			var word string
+			switch strings.ToUpper(part) {
+			case "CLAUDE":
+				word = "Claude"
+			case "OPUS":
+				word = "Opus"
+			default:
+				word = part
+			}
+			if len(words) > 0 && isNumericFragment(word) && isNumericFragment(words[len(words)-1]) {
+				words[len(words)-1] = words[len(words)-1] + "." + word
+				continue
+			}
+			words = append(words, word)
+		}
+		return "MF " + strings.Join(words, " ")
+	}
+	return "MF " + name
+}
+
+// isNumericFragment reports whether value is a bare version-number fragment.
+func isNumericFragment(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
 		}
 	}
-	return claudeCompatibleProfile{
-		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
-		endpoint:         "http://127.0.0.1:17999",
-		authName:         "ANTHROPIC_AUTH_TOKEN",
-		defaultModel:     opusModel,
-		gatewayDiscovery: true,
-		staticModels:     models,
-		settingsEnv:      settingsEnv,
-	}
+	return true
 }
 
 func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {

@@ -5803,3 +5803,19 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyFlickerModelsSynthesizesMissingTierLabel(t *testing.T) {
+	// OPUS_MODEL (CLAUDE_OPUS_4_8) is deliberately absent from the catalog, as
+	// happens when the bridge falls back to its builtin list (which tops out
+	// below 4.8). The tier label must still render a friendly name, not a bare id.
+	profile := claudeCompatibleProfile{settingsEnv: map[string]string{}}
+	applyFlickerModels(&profile, []claudeModelEntry{
+		{ID: "CLAUDE_4_6", Name: "MF Claude Sonnet 4.6"},
+	})
+	if got := profile.settingsEnv["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"]; got != "MF Claude Opus 4.8" {
+		t.Fatalf("opus tier label = %q, want synthesized %q", got, "MF Claude Opus 4.8")
+	}
+	if got := profile.settingsEnv["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; got != "MF Claude Sonnet 4.6" {
+		t.Fatalf("sonnet tier label = %q, want catalog name %q", got, "MF Claude Sonnet 4.6")
+	}
+}
