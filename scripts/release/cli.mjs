@@ -92,10 +92,17 @@ export async function runRelease(options, deps) {
   let deploymentSources;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const version = await progress.phase(
+    const target = await progress.phase(
       'Resolving release version',
-      () => deps.resolveNextVersion({floorVersion}),
+      () => deps.resolveReleaseTarget({floorVersion}),
     );
+    const {version} = target;
+    if (options.publish && target.stable?.sourceSha === sourceSha) {
+      progress.info(
+        `Skipping publish: ${target.stable.version} already contains source ${sourceSha}`,
+      );
+      return {mode: 'publish', stable: target.stable, unchanged: true};
+    }
     deploymentSources ??= await progress.phase(
       'Loading deployment scripts',
       () => deps.loadDeploymentSources(),
@@ -290,10 +297,12 @@ export async function createDefaultReleaseDependencies({
     },
     now: () => new Date().toISOString(),
     publishBuiltRelease,
-    async resolveNextVersion({floorVersion} = {}) {
+    async resolveReleaseTarget({floorVersion} = {}) {
       const stable = await anonymousApi.readStable();
       const stableBytes = stable ? encodeJsonBytes(stable) : null;
-      if (!floorVersion) return nextVersionFromStableBytes(stableBytes);
+      if (!floorVersion) {
+        return {stable, version: nextVersionFromStableBytes(stableBytes)};
+      }
       if (!/^v1\.(0|[1-9]\d*)$/.test(floorVersion)) {
         throw new Error(`invalid release version floor: ${floorVersion}`);
       }
@@ -302,9 +311,12 @@ export async function createDefaultReleaseDependencies({
         : 'v1.0';
       const stableNumber = Number(stableVersion.slice(3));
       const floorNumber = Number(floorVersion.slice(3));
-      return nextV1Version(
-        stableNumber > floorNumber ? stableVersion : floorVersion,
-      );
+      return {
+        stable,
+        version: nextV1Version(
+          stableNumber > floorNumber ? stableVersion : floorVersion,
+        ),
+      };
     },
     resolveSourceSha: options => resolveGitSourceSha(repoRoot, options),
   };

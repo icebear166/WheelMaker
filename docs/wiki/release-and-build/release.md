@@ -17,6 +17,8 @@
 → 服务端原子更新 stable.json
 ```
 
+正式发布在认证、创建会话和构建前读取当前 `stable.json`。如果干净源码工作树的当前 Git HEAD 与 `stable.sourceSha` 相同，发布器直接返回 `unchanged`，不构建、不打包且不占用新版本号；本地只构建模式不受此规则影响。版本冲突后的重试也会重新检查该 SHA，避免并发操作为同一源码提交生成两个正式版本。
+
 本地发布从 `~/.wheelmaker/release-server.json` 读取发布 Token。GitHub Action 从仓库 Secret `WHEELMAKER_RELEASE_TOKEN` 读取同一个 Token。匿名客户端可以读取 `stable.json`、发布历史、部署脚本和版本资产，但不能上传。
 
 如果提交时版本已存在，发布器重新读取 `stable.json`、分配下一个 `v1.x` 并重试，最多三次。

@@ -122,9 +122,17 @@ function fakeCliDeps() {
       await client.status(input.session.sessionId, {phase: 'committing', state: 'running'});
       return client.commit(input.session.sessionId);
     },
-    async resolveNextVersion({floorVersion} = {}) {
+    async resolveReleaseTarget({floorVersion} = {}) {
       state.order.push('version');
-      return floorVersion === 'v1.24' ? 'v1.25' : 'v1.24';
+      const version = floorVersion === 'v1.24' ? 'v1.25' : 'v1.24';
+      return {
+        stable: {
+          schema: 2,
+          sourceSha: 'f'.repeat(40),
+          version: floorVersion ?? 'v1.23',
+        },
+        version,
+      };
     },
     async resolveSourceSha(options) {
       state.sourceOptions = options;
@@ -165,6 +173,13 @@ test('local release holds the shared build lock through asset construction', asy
 
 test('local build reads public version and creates the identical final directory without auth or session', async () => {
   const deps = fakeCliDeps();
+  deps.resolveReleaseTarget = async () => {
+    deps.state.order.push('version');
+    return {
+      stable: {schema: 2, sourceSha: SOURCE_SHA, version: 'v1.23'},
+      version: 'v1.24',
+    };
+  };
   const result = await runRelease({publish: false, withDesktop: false}, deps);
 
   assert.equal(deps.state.clientCalls, 0);
@@ -182,6 +197,33 @@ test('local build reads public version and creates the identical final directory
     'cleanup',
   ]);
   assert.equal(result.mode, 'build');
+});
+
+test('publish skips authentication and packaging when stable already has the current source SHA', async () => {
+  const deps = fakeCliDeps();
+  deps.resolveReleaseTarget = async () => {
+    deps.state.order.push('version');
+    return {
+      stable: {schema: 2, sourceSha: SOURCE_SHA, version: 'v1.23'},
+      version: 'v1.24',
+    };
+  };
+
+  const result = await runRelease(
+    {publish: true, withAndroid: true, withDesktop: true},
+    deps,
+  );
+
+  assert.deepEqual(deps.state.sourceOptions, {requireClean: true});
+  assert.deepEqual(deps.state.order, ['version']);
+  assert.equal(deps.state.clientCalls, 0);
+  assert.equal(deps.state.builds.length, 0);
+  assert.equal(deps.state.packages.length, 0);
+  assert.deepEqual(result, {
+    mode: 'publish',
+    stable: {schema: 2, sourceSha: SOURCE_SHA, version: 'v1.23'},
+    unchanged: true,
+  });
 });
 
 test('publish starts its remote session before building and uses server publishedAt', async () => {
@@ -242,9 +284,22 @@ test('a failed build exposes only a generic failed status and cancels the sessio
   assert.equal(deps.state.cleanups.length, 1);
 });
 
-test('commit conflict cancels and rebuilds all versioned assets in a new session', async () => {
+test('commit conflict cancels then skips retry when stable now has the current source SHA', async () => {
   const deps = fakeCliDeps();
   let attempts = 0;
+  deps.resolveReleaseTarget = async ({floorVersion} = {}) => {
+    deps.state.order.push('version');
+    if (floorVersion === 'v1.24') {
+      return {
+        stable: {schema: 2, sourceSha: SOURCE_SHA, version: 'v1.24'},
+        version: 'v1.25',
+      };
+    }
+    return {
+      stable: {schema: 2, sourceSha: 'f'.repeat(40), version: 'v1.23'},
+      version: 'v1.24',
+    };
+  };
   deps.publishBuiltRelease = async input => {
     deps.state.order.push('publish');
     attempts += 1;
@@ -255,10 +310,14 @@ test('commit conflict cancels and rebuilds all versioned assets in a new session
     {publish: true, withAndroid: true, withDesktop: false},
     deps,
   );
-  assert.deepEqual(deps.state.builds.map(build => build.version), ['v1.24', 'v1.25']);
-  assert.deepEqual(deps.state.sessions.map(session => session.version), ['v1.24', 'v1.25']);
+  assert.deepEqual(deps.state.builds.map(build => build.version), ['v1.24']);
+  assert.deepEqual(deps.state.sessions.map(session => session.version), ['v1.24']);
   assert.equal(deps.state.order.filter(value => value === 'cancel').length, 1);
-  assert.equal(result.stable.version, 'v1.25');
+  assert.deepEqual(result, {
+    mode: 'publish',
+    stable: {schema: 2, sourceSha: SOURCE_SHA, version: 'v1.24'},
+    unchanged: true,
+  });
 });
 
 test('build summary exposes only final release files', () => {
