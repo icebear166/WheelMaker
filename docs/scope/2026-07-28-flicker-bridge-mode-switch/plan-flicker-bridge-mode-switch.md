@@ -8,6 +8,14 @@
 
 **Tech Stack:** Go 1.26, existing Hub State/Registry transport, private atomic JSON config writer, React 19, TypeScript 5.8, Jest/react-test-renderer, CSS.
 
+## 2026-07-28 execution record
+
+- Implemented V2 in the existing `server/internal/flickerbridge` package as the single production file `v2.go`; V1 remains on `Run`/`--flicker-bridge`, and V2 uses `RunV2`/`--flicker-bridge-v2`.
+- Added the generic `<stateDir>/db/hub-config.json` store, mode-aware Hub lifecycle management, S1 stopped-state persistence, F1 running/startup rollback, Hub State `switchMode`, and the Hub menu V1/V2 control.
+- Passed `go test ./... -count=1`, scoped `go vet` for all changed Go packages, targeted Jest, `tsc:web`, the production Web build, both bridge self-test suites, and the V2 live catalog/format suite.
+- A real, non-intercepted Wanqing smoke request through the V2 Anthropic message path used `glm-5.2` and returned exactly `WHEELMAKER_V2_OK`; the worker was closed and no V2 test process remained.
+- The repository-wide race command could not run because this Windows Go environment has `CGO_ENABLED=0` and no GCC. Repository-wide `go vet ./...` remains blocked by pre-existing `portrelay` lock-copy and Windows desktop `unsafe.Pointer` findings; scoped vet for the changed packages passed.
+
 ---
 
 ### Task 0: Protect the repository completion gate
