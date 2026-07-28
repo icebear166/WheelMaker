@@ -111,7 +111,7 @@ func TestSetDesktopHTMLFileClipboardUsesShellOLEDataObject(t *testing.T) {
 	var createdPath string
 	var setDataObject uintptr
 	released := false
-	operations := desktopHTMLClipboardOLEOperations{
+	operations := desktopFileClipboardOLEOperations{
 		createDataObject: func(gotPath string) (uintptr, func(), error) {
 			createdPath = gotPath
 			return dataObject, func() { released = true }, nil

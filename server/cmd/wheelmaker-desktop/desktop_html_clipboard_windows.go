@@ -210,13 +210,13 @@ type desktopHTMLClipboardOperations struct {
 	setClipboardData        func(uintptr, []byte, string) error
 }
 
-type desktopHTMLClipboardOLEOperations struct {
+type desktopFileClipboardOLEOperations struct {
 	createDataObject func(string) (uintptr, func(), error)
 	setClipboard     func(uintptr) error
 }
 
 func setDesktopHTMLFileClipboard(hwnd uintptr, path string) error {
-	oleErr := setDesktopHTMLFileClipboardWithOLEOperations(path, desktopHTMLClipboardOLEOperations{
+	oleErr := setDesktopHTMLFileClipboardWithOLEOperations(path, desktopFileClipboardOLEOperations{
 		createDataObject: newDesktopShellFileDataObject,
 		setClipboard:     setDesktopOLEClipboard,
 	})
@@ -256,7 +256,7 @@ func setDesktopHTMLFileClipboard(hwnd uintptr, path string) error {
 
 func setDesktopHTMLFileClipboardWithOLEOperations(
 	path string,
-	operations desktopHTMLClipboardOLEOperations,
+	operations desktopFileClipboardOLEOperations,
 ) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -268,20 +268,7 @@ func setDesktopHTMLFileClipboardWithOLEOperations(
 	if info.Size() < 1 || info.Size() > maxDesktopHTMLClipboardBytes {
 		return fmt.Errorf("HTML clipboard file size is invalid")
 	}
-	if operations.createDataObject == nil || operations.setClipboard == nil {
-		return fmt.Errorf("HTML clipboard OLE operations are unavailable")
-	}
-	dataObject, release, err := operations.createDataObject(path)
-	if err != nil {
-		return err
-	}
-	if release != nil {
-		defer release()
-	}
-	if dataObject == 0 {
-		return fmt.Errorf("Shell data object is unavailable")
-	}
-	return operations.setClipboard(dataObject)
+	return publishDesktopFileClipboardWithOLEOperations(path, operations)
 }
 
 type desktopClipboardGUID struct {
