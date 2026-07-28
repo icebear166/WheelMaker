@@ -1,7 +1,9 @@
 import type {
   RegistryUsageHistoryLimit,
+  RegistryUsageHistoryResponse,
   RegistryUsageHistorySample,
 } from '../registry/registryTypes';
+import type {UsageAccountSource} from './usageTypes';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -27,6 +29,23 @@ export interface UsageForecastInput {
   samples: RegistryUsageHistorySample[];
   resetsAtMillis: number;
   lookbackMillis: number;
+}
+
+export type UsageHistoryLoadResult =
+  | {status: 'error'}
+  | {status: 'empty'}
+  | {
+      status: 'ready';
+      hubId: string;
+      limit: UsageHistoryLimit;
+      forecast: UsageForecast;
+    };
+
+export interface UsageHistoryLoadInput {
+  providerId: string;
+  sources: UsageAccountSource[];
+  nowMillis: number;
+  request: (source: UsageAccountSource) => Promise<RegistryUsageHistoryResponse>;
 }
 
 export function selectLongestLimit(limits: UsageHistoryLimit[]): UsageHistoryLimit | undefined {
@@ -147,6 +166,40 @@ export function calculateUsageForecast(input: UsageForecastInput): UsageForecast
       {observedAtMillis: input.resetsAtMillis, remainingPercent: remainingAtReset},
     ],
     validIntervalCount,
+  };
+}
+
+export async function loadUsageHistoryFromSources(
+  input: UsageHistoryLoadInput,
+): Promise<UsageHistoryLoadResult> {
+  if (input.sources.length === 0) return {status: 'error'};
+  const settled = await Promise.allSettled(input.sources.map(source =>
+    Promise.resolve().then(() => input.request(source))));
+  const histories = settled.flatMap(result =>
+    result.status === 'fulfilled' && result.value.providerId === input.providerId
+      ? [result.value]
+      : []);
+  if (histories.length === 0) return {status: 'error'};
+
+  const longest = selectLongestLimit(histories.flatMap(history => history.limits));
+  if (!longest) return {status: 'empty'};
+  const candidates = histories.flatMap(history =>
+    history.limits
+      .filter(limit => limit.id === longest.id)
+      .map(limit => ({hubId: history.hubId, limit})));
+  const best = selectBestHistory(candidates, input.nowMillis);
+  if (!best) return {status: 'empty'};
+  const resetAtMillis = Date.parse(best.limit.resetsAt ?? '');
+  if (!Number.isFinite(resetAtMillis)) return {status: 'empty'};
+  return {
+    status: 'ready',
+    hubId: best.hubId,
+    limit: best.limit,
+    forecast: calculateUsageForecast({
+      samples: best.limit.samples,
+      resetsAtMillis: resetAtMillis,
+      lookbackMillis: usageForecastLookbackMillis(best.limit),
+    }),
   };
 }
 

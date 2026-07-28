@@ -111,6 +111,22 @@
   min-height: 34px;
   padding: 5px 4px 4px;
 }
+.usage-account-trigger {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.usage-account-trigger:hover {
+  background: var(--hover);
+}
+.usage-account-trigger:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
 .usage-provider-name {
   padding-top: 1px;
   overflow: hidden;

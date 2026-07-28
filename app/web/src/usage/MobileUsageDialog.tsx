@@ -4,7 +4,7 @@ import {ModelEfficiencySnapshotContent} from '../modelEfficiency/ModelEfficiency
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {SessionIcon} from '../chat/sessionlist/SessionIcon';
 import type {UsageViewSnapshot} from './usageTypes';
-import {UsageDetailContent} from './UsageFeatureSurface';
+import {UsageDetailContent, type UsageOpenHistory} from './UsageFeatureSurface';
 
 type Props = {
   snapshot: UsageViewSnapshot;
@@ -12,6 +12,7 @@ type Props = {
   onRefresh: () => void;
   onRefreshEfficiency: () => void;
   onClose: () => void;
+  onOpenHistory?: UsageOpenHistory;
 };
 
 export function MobileUsageDialog({
@@ -20,6 +21,7 @@ export function MobileUsageDialog({
   onRefresh,
   onRefreshEfficiency,
   onClose,
+  onOpenHistory,
 }: Props) {
   const [activeTab, setActiveTab] = React.useState<'limits' | 'iq'>('limits');
   const showingLimits = activeTab === 'limits';
@@ -101,7 +103,7 @@ export function MobileUsageDialog({
           aria-labelledby={showingLimits ? 'mobile-usage-limits-tab' : 'mobile-usage-iq-tab'}
         >
           {showingLimits ? (
-            <UsageDetailContent snapshot={snapshot} />
+            <UsageDetailContent snapshot={snapshot} onOpenHistory={onOpenHistory} />
           ) : (
             <ModelEfficiencySnapshotContent
               snapshot={efficiencySnapshot}

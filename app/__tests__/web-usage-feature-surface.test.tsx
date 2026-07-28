@@ -16,6 +16,10 @@ const fixtureSnapshot: UsageViewSnapshot = {
     accounts: [{
       localId: 'acct-a', identity: {kind: 'email', value: 'a@example.com', label: 'a@example.com'},
       status: 'ok', hubIds: ['hub-a', 'hub-b'],
+      sources: [
+        {hubId: 'hub-a', accountLocalId: 'acct-a'},
+        {hubId: 'hub-b', accountLocalId: 'acct-b'},
+      ],
       limits: [
         {id: '5h', label: '5 hours', remainingPercent: 37, resetsAt: '2027-01-01T05:00:00Z'},
         {id: 'week', label: 'Week', remainingPercent: 90, resetsAt: '2027-01-08T05:00:00Z'},
@@ -25,7 +29,9 @@ const fixtureSnapshot: UsageViewSnapshot = {
     id: 'deepseek', name: 'DeepSeek', status: 'ok', accountCount: 1,
     accounts: [{
       localId: 'opencode', identity: {kind: 'source', label: 'OpenCode'},
-      status: 'ok', hubIds: ['hub-a'], limits: [],
+      status: 'ok', hubIds: ['hub-a'],
+      sources: [{hubId: 'hub-a', accountLocalId: 'opencode'}],
+      limits: [],
       balance: {isAvailable: true, items: [{currency: 'CNY', total: '12.50'}]},
     }],
   }],
@@ -56,6 +62,41 @@ describe('MonitorSurface module', () => {
       'usage',
       'MonitorSurface.tsx',
     ))).toBe(true);
+  });
+
+  it('opens history from percentage account rows but not balance-only rows', () => {
+    const onOpenHistory = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageCompactContent snapshot={fixtureSnapshot} onOpenHistory={onOpenHistory} />,
+      );
+    });
+
+    const trigger = view!.root.findByProps({'data-usage-account-trigger': 'codex:acct-a'});
+    expect(trigger.type).toBe('button');
+    expect(trigger.props.role).toBe('button');
+    act(() => trigger.props.onClick({currentTarget: trigger}));
+    expect(onOpenHistory).toHaveBeenCalledWith(
+      expect.objectContaining({id: 'codex'}),
+      expect.objectContaining({localId: 'acct-a'}),
+      trigger,
+    );
+    expect(view!.root.findAllByProps({'data-usage-account-trigger': 'deepseek:opencode'})).toHaveLength(0);
+
+    act(() => {
+      view!.update(<UsageDetailContent snapshot={fixtureSnapshot} onOpenHistory={onOpenHistory} />);
+    });
+    const detailTrigger = view!.root.findByProps({'data-usage-account-trigger': 'codex:acct-a'});
+    expect(detailTrigger.props.tabIndex).toBe(0);
+    const preventDefault = jest.fn();
+    act(() => detailTrigger.props.onKeyDown({
+      key: 'Enter',
+      currentTarget: detailTrigger,
+      preventDefault,
+    }));
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(onOpenHistory).toHaveBeenCalledTimes(2);
   });
 
   it('shares one detail mode across the Limits and IQ tabs', () => {

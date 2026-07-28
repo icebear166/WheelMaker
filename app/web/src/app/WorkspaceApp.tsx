@@ -16,6 +16,17 @@ declare global {
   }
 }
 
+type UsageHistoryDialogTarget = {
+  provider: UsageProviderView;
+  account: UsageViewAccount;
+  triggerElement: HTMLElement;
+};
+
+type UsageHistoryDialogView = {
+  target: UsageHistoryDialogTarget;
+  state: UsageHistoryDialogState;
+};
+
 import {deriveRegistryEndpoints} from '../registry/registryBaseUrl';
 import {RegistryWebAuthClient} from '../registry/RegistryWebAuthClient';
 import {RegistryAuthController, type RegistryAuthSnapshot} from '../registry/RegistryAuthController';
@@ -419,8 +430,10 @@ import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileVi
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {MobileUsageDialog} from '../usage/MobileUsageDialog';
 import {MonitorSurface} from '../usage/MonitorSurface';
+import {UsageHistoryDialog, type UsageHistoryDialogState} from '../usage/UsageHistoryDialog';
+import {loadUsageHistoryFromSources} from '../usage/usageHistory';
 import {UsageStore, parseHubSnapshot} from '../usage/usageStore';
-import type {UsageViewSnapshot} from '../usage/usageTypes';
+import type {UsageProviderView, UsageViewAccount, UsageViewSnapshot} from '../usage/usageTypes';
 import {ModelEfficiencyStore} from '../modelEfficiency/modelEfficiencyStore';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {
@@ -3293,6 +3306,8 @@ export function App() {
   const [registryHubs, setRegistryHubs] = useState<RegistryHub[]>([]);
   const usageStore = useMemo(() => new UsageStore(), []);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
+  const usageHistoryRequestSeqRef = useRef(0);
+  const [usageHistoryDialogView, setUsageHistoryDialogView] = useState<UsageHistoryDialogView | null>(null);
   const modelEfficiencyStore = useMemo(() => new ModelEfficiencyStore(), []);
   const [modelEfficiencySnapshot, setModelEfficiencySnapshot] = useState<ModelEfficiencySnapshot>(
     () => modelEfficiencyStore.snapshot(),
@@ -12293,6 +12308,59 @@ export function App() {
     ));
   }, [registryHubs, usageStore]);
 
+  const loadUsageHistoryDialog = useCallback(async (target: UsageHistoryDialogTarget) => {
+    const requestSeq = ++usageHistoryRequestSeqRef.current;
+    const providerName = target.provider.name || target.provider.id;
+    const accountLabel = target.account.identity.label
+      || target.account.identity.value
+      || target.account.localId;
+    setUsageHistoryDialogView({
+      target,
+      state: {status: 'loading', providerName, accountLabel},
+    });
+    const result = await loadUsageHistoryFromSources({
+      providerId: target.provider.id,
+      sources: target.account.sources,
+      nowMillis: Date.now(),
+      request: source => service.getUsageHistory(
+        source.hubId,
+        target.provider.id,
+        source.accountLocalId,
+      ),
+    });
+    if (usageHistoryRequestSeqRef.current !== requestSeq) return;
+    const state: UsageHistoryDialogState = result.status === 'ready'
+      ? {
+          status: 'ready',
+          providerName,
+          accountLabel,
+          limit: result.limit,
+          forecast: result.forecast,
+        }
+      : result.status === 'empty'
+        ? {status: 'empty', providerName, accountLabel}
+        : {
+            status: 'error',
+            providerName,
+            accountLabel,
+            message: 'History could not be read from any online Hub.',
+          };
+    setUsageHistoryDialogView({target, state});
+  }, []);
+
+  const openUsageHistory = useCallback((
+    provider: UsageProviderView,
+    account: UsageViewAccount,
+    triggerElement: HTMLElement,
+  ) => {
+    void loadUsageHistoryDialog({provider, account, triggerElement});
+  }, [loadUsageHistoryDialog]);
+
+  const closeUsageHistory = useCallback(() => {
+    usageHistoryRequestSeqRef.current += 1;
+    setUsageHistoryDialogView(null);
+  }, []);
+
   const agentPackageActionKey = useCallback((hubId: string, packageName: string): string => {
     return `${hubId}:${packageName}`;
   }, []);
@@ -18505,6 +18573,7 @@ export function App() {
                   onRefreshLimits={() => { void refreshUsageAcrossHubs(); }}
                   onRefreshIq={() => { void modelEfficiencyStore.refresh(); }}
                   onRequestHide={() => setConfirmTarget({kind: 'hideMonitor'})}
+                  onOpenHistory={openUsageHistory}
                 />
               ) : null}
             </div>
@@ -20750,6 +20819,14 @@ export function App() {
       {renderPreviewWorkbenchSurface('mobile')}
     </div>
   ) : null;
+  const usageHistoryOverlay = usageHistoryDialogView ? (
+    <UsageHistoryDialog
+      state={usageHistoryDialogView.state}
+      triggerElement={usageHistoryDialogView.target.triggerElement}
+      onClose={closeUsageHistory}
+      onRetry={() => { void loadUsageHistoryDialog(usageHistoryDialogView.target); }}
+    />
+  ) : null;
   const mobileUsageOverlay = !isWide && mobileUsageOpen ? (
     <MobileUsageDialog
       snapshot={usageSnapshot}
@@ -20757,6 +20834,7 @@ export function App() {
       onRefresh={() => { void refreshUsageAcrossHubs(); }}
       onRefreshEfficiency={() => void modelEfficiencyStore.refresh()}
       onClose={() => setMobileUsageOpen(false)}
+      onOpenHistory={openUsageHistory}
     />
   ) : null;
   const terminalMobileOverlay = !isWide && terminalOpen ? (
@@ -21162,6 +21240,7 @@ export function App() {
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
       />
+      {usageHistoryOverlay}
       <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}

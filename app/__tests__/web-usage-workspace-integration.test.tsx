@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import {loadUsageHistoryFromSources} from '../web/src/usage/usageHistory';
 
 describe('limits workspace integration', () => {
   const root = path.join(__dirname, '..');
@@ -14,6 +15,46 @@ describe('limits workspace integration', () => {
     expect(main).toContain('RegistryMethods.HubStateUpdated');
     expect(main).not.toContain('setInterval(refreshUsageAcrossHubs');
     expect(main).not.toContain('renderChatMenuUsageButton');
+  });
+
+  test('loads every account source and keeps a successful Hub when another fails', async () => {
+    const resetAt = '2026-08-01T00:00:00Z';
+    const request = jest.fn().mockImplementation((source: {hubId: string; accountLocalId: string}) => {
+      if (source.hubId === 'hub-b') return Promise.reject(new Error('old Hub'));
+      return Promise.resolve({
+        hubId: source.hubId,
+        providerId: 'codex',
+        accountLocalId: source.accountLocalId,
+        limits: [{
+          id: 'week',
+          label: 'W',
+          windowKind: 'fixed' as const,
+          windowDurationMins: 10080,
+          resetsAt: resetAt,
+          samples: [
+            {observedAtMillis: Date.parse('2026-07-27T23:40:00Z'), remainingPercent: 84},
+            {observedAtMillis: Date.parse('2026-07-27T23:50:00Z'), remainingPercent: 83},
+            {observedAtMillis: Date.parse('2026-07-28T00:00:00Z'), remainingPercent: 82},
+          ],
+        }],
+      });
+    });
+
+    const result = await loadUsageHistoryFromSources({
+      providerId: 'codex',
+      sources: [
+        {hubId: 'hub-a', accountLocalId: 'local-a'},
+        {hubId: 'hub-b', accountLocalId: 'local-b'},
+      ],
+      nowMillis: Date.parse('2026-07-28T00:05:00Z'),
+      request,
+    });
+
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({status: 'ready', hubId: 'hub-a', limit: {id: 'week'}});
+    expect(main).toContain('onOpenHistory={openUsageHistory}');
+    expect(main).toContain('<UsageHistoryDialog');
+    expect(main).toContain('{usageHistoryOverlay}');
   });
 
   test('uses four data-driven Settings shortcut columns', () => {
