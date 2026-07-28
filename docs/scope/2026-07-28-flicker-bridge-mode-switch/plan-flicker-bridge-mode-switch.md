@@ -16,6 +16,263 @@
 - A real, non-intercepted Wanqing smoke request through the V2 Anthropic message path used `glm-5.2` and returned exactly `WHEELMAKER_V2_OK`; the worker was closed and no V2 test process remained.
 - The repository-wide race command could not run because this Windows Go environment has `CGO_ENABLED=0` and no GCC. Repository-wide `go vet ./...` remains blocked by pre-existing `portrelay` lock-copy and Windows desktop `unsafe.Pointer` findings; scoped vet for the changed packages passed.
 
+## 2026-07-28 V2 authentication and compact-control correction
+
+**Goal:** Remove the V1 fake-key authentication mechanism from V2 while retaining `api_keys.flicker` as the Hub enablement gate, restore unauthenticated loopback model discovery, make that dynamic catalog visible through the real Claude ACP model config option, accept Claude Code system-role messages, and remove the redundant inline running label from the Hub control.
+
+**Architecture:** V1 keeps its existing local key gate. V2 binds only to loopback, ignores Claude Code authentication headers, and obtains all real Wanqing authorization inside the Node worker through `@myflicker/cli` login/context/plugin initialization. The shared `cc-flicker` profile remains compatible with V1, so an existing Claude process may keep sending the fake header even though V2 does not inspect it. The Hub continues caching the live bridge catalog, but writes its IDs to `availableModels` as well as `models`, because `claude-agent-acp 0.61.0` uses the former—not the latter—to populate ACP `session/new.configOptions[id=model]`.
+
+**Files:**
+- Modify: `server/internal/flickerbridge/v2.go`
+- Modify: `server/internal/hub/flicker_bridge.go`
+- Test: `server/internal/hub/hub_test.go`
+- Modify: `server/internal/hub/agent/acp_provider.go`
+- Test: `server/internal/hub/agent/agent_test.go`
+- Modify: `app/web/src/app/FlickerBridgeControl.tsx`
+- Modify: `app/web/src/app/flickerBridgeState.ts`
+- Modify: `app/web/src/styles/chat.css`
+- Test: `app/__tests__/web-hub-flicker-bridge-control.test.tsx`
+- Modify: `docs/scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`
+- Modify: `docs/wiki/protocols/acp.md`
+
+### Correction Task 1: Make V2 authentication exclusively MyFlicker-owned
+
+- [x] **Step 1: Change the V2 HTTP self-test to require header-free loopback access**
+
+In `selfTestHTTP`, remove `APIKey` from the fixture settings and remove the `authorizedRequest` argument from the request helper:
+
+```go
+do := func(method, target string, body []byte) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(method, target, bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	server.Handler.ServeHTTP(recorder, request)
+	return recorder
+}
+```
+
+Assert that `/v1/models`, `/v1/messages`, and `/v1/messages/count_tokens` all succeed without `x-api-key` or `Authorization`. Keep the existing non-loopback Origin rejection test so the HTTP surface remains loopback-only.
+
+- [x] **Step 2: Change the Hub launch test to reject V1 key injection into V2**
+
+Replace the current positive V2 environment assertion in `TestFlickerBridgeManagerStartsSelectedV2` with:
+
+```go
+if slices.Contains(startedEnv, "MYFLICKER_WANQING_PROXY_KEY=configured-flicker-key") {
+	t.Fatalf("V2 environment leaked the V1 local key: %v", startedEnv)
+}
+```
+
+- [x] **Step 3: Run the focused tests and verify RED**
+
+Run:
+
+```powershell
+cd E:\_Code\WheelMaker\server
+go test ./internal/hub -run TestFlickerBridgeManagerStartsSelectedV2 -count=1
+go run ./cmd/wheelmaker --flicker-bridge-v2 --self-test=http
+```
+
+Expected: the Hub test fails because V2 still receives `MYFLICKER_WANQING_PROXY_KEY`; the HTTP self-test fails because V2 still returns 401 without a local key.
+
+- [x] **Step 4: Remove the local key from the V2 implementation**
+
+In `server/internal/flickerbridge/v2.go`:
+
+- delete `defaultProxyKey`;
+- delete `proxySettings.APIKey`;
+- stop reading `MYFLICKER_WANQING_PROXY_KEY`;
+- delete the `--key` flag and the non-empty-key validation;
+- delete the now-unused `authorized` helper and `crypto/subtle` import;
+- retain `loopbackOrigin` checks on `/v1/models`, `/v1/messages`, and `/v1/messages/count_tokens`;
+- keep `internals.login("myflicker", cwd)`, login/userInfo context injection, `wanqingPlugin.initialized`, and `wanqing.createModel` unchanged.
+
+Each protected handler must use this boundary:
+
+```go
+if !loopbackOrigin(request) {
+	writeAnthropicError(response, http.StatusUnauthorized, "unauthorized")
+	return
+}
+```
+
+In `server/internal/hub/flicker_bridge.go`, make the V2 launch environment independent of the configured V1 key:
+
+```go
+case flickerBridgeModeV2:
+	return append([]string{"--flicker-bridge-v2"}, baseArgs...), os.Environ()
+```
+
+Do not change `manager.configured`; a non-empty `api_keys.flicker` remains the product enablement gate selected in the approved spec.
+
+- [x] **Step 5: Run the focused tests and verify GREEN**
+
+Run:
+
+```powershell
+cd E:\_Code\WheelMaker\server
+go test ./internal/hub -run TestFlickerBridgeManagerStartsSelectedV2 -count=1
+go run ./cmd/wheelmaker --flicker-bridge-v2 --self-test=settings,http
+```
+
+Expected: all selected tests print PASS or exit 0. The V2 HTTP test performs model discovery and messages without a local authentication header.
+
+### Correction Task 2: Reduce the Hub control to toggle and lifecycle actions
+
+- [x] **Step 1: Change the component test to forbid the inline running label**
+
+Rename the running-mode test to `highlights the actual running mode without an inline status label` and replace its final assertion with:
+
+```tsx
+expect(v2.props.className).toContain('running');
+expect(renderer.root.findAllByProps({className: 'chat-hub-flicker-bridge-state'})).toHaveLength(0);
+```
+
+- [x] **Step 2: Run the component test and verify RED**
+
+Run:
+
+```powershell
+cd E:\_Code\WheelMaker\app
+npm test -- web-hub-flicker-bridge-control.test.tsx --runInBand
+```
+
+Expected: FAIL because `FlickerBridgeControl` still renders `chat-hub-flicker-bridge-state`.
+
+- [x] **Step 3: Remove the normal status copy while preserving errors and running highlight**
+
+In `FlickerBridgeControl.tsx`, remove the `flickerBridgeLabel` import and the `chat-hub-flicker-bridge-state` span. Keep the existing `running` class and `aria-current` on the actual running segment.
+
+In `flickerBridgeState.ts`, delete the unused `flickerBridgeLabel` function.
+
+In `chat.css`, narrow the shared overflow selector from:
+
+```css
+.chat-hub-flicker-bridge-state,
+.chat-hub-flicker-bridge-error {
+```
+
+to:
+
+```css
+.chat-hub-flicker-bridge-error {
+```
+
+Do not remove `chat-hub-flicker-bridge-error`; unavailable-mode and lifecycle failures remain visible.
+
+- [x] **Step 4: Run the component test and verify GREEN**
+
+Run:
+
+```powershell
+cd E:\_Code\WheelMaker\app
+npm test -- web-hub-flicker-bridge-control.test.tsx --runInBand
+```
+
+Expected: PASS; the running V1/V2 segment remains highlighted and no normal status label is rendered.
+
+### Correction Task 2A: Accept Claude Code system-role messages
+
+- [x] **Step 1: Add a failing conversion fixture**
+
+Extend the V2 request-conversion self-test with a `messages[].role="system"` entry. Require its content to survive in the merged system prompt and require the MyFlicker base prompt to occur exactly once.
+
+Observed RED: `request-conversion: unsupported message role "system"`.
+
+- [x] **Step 2: Merge system-role content before turn conversion**
+
+Collect system-role message blocks into the V3 prompt, skip them in the user/assistant turn loop, and share paragraph normalization with the top-level Anthropic `system` conversion.
+
+Observed GREEN: the request-conversion self-test and `go test ./internal/flickerbridge` passed. A real Claude Code prompt through isolated V2 then returned exactly `WHEELMAKER_V2_AUTH_OK`.
+
+### Correction Task 2B: Surface the dynamic bridge catalog through ACP
+
+- [x] **Step 1: Reproduce with the installed ACP adapter**
+
+Start `@agentclientprotocol/claude-agent-acp` 0.61.0 against isolated V2 and inspect `session/new`. With gateway discovery and `settings.models` only, the adapter returned its five fixed Claude choices and did not expose `glm-5.2`.
+
+- [x] **Step 2: Prove the adapter input**
+
+Add the same dynamic IDs to `settings.availableModels` in an isolated config and repeat `session/new`.
+
+Observed: the model config option became `Default + configured dynamic IDs`, including `glm-5.2`.
+
+- [x] **Step 3: Add RED/GREEN Hub settings coverage**
+
+Change the existing flicker settings test to require bridge-derived IDs in `availableModels`; observe RED while only `models` is written. Update `ensureClaudeCompatibleSettings` to write both arrays, keep gateway discovery enabled, omit `enforceAvailableModels`, and delete both arrays when the shared store is empty.
+
+Observed GREEN: the focused Hub agent test passed.
+
+### Correction Task 3: Regression, live verification, and completion gate
+
+- [x] **Step 1: Run scoped formatting and regression tests**
+
+Run:
+
+```powershell
+cd E:\_Code\WheelMaker\server
+gofmt -w internal\flickerbridge\v2.go internal\hub\flicker_bridge.go internal\hub\hub_test.go
+go test ./internal/flickerbridge ./internal/hub ./internal/hub/agent -count=1
+go run ./cmd/wheelmaker --flicker-bridge-v2 --self-test=all
+go vet ./internal/flickerbridge ./internal/hub ./internal/hub/agent
+
+cd E:\_Code\WheelMaker\app
+npm test -- web-hub-flicker-bridge-control.test.tsx web-hub-flicker-bridge-menu.test.ts --runInBand
+npm run tsc:web
+npm run build:web
+```
+
+Expected: every scoped command exits 0.
+
+- [x] **Step 2: Verify the real MyFlicker authentication path and model catalog**
+
+Run the V2 live self-tests with the installed compatible npm package:
+
+```powershell
+cd E:\_Code\WheelMaker\server
+go run ./cmd/wheelmaker --flicker-bridge-v2 --self-test-live=all
+```
+
+Expected: catalog and format tests pass using the MyFlicker CLI login/context/provider chain. No `MYFLICKER_WANQING_PROXY_KEY` is supplied.
+
+Start an isolated V2 listener on an unused loopback port, wait for health, and request `/v1/models` without authentication headers. Assert HTTP 200 and a non-empty `data` array, then stop only the captured process in `finally`.
+
+- [x] **Step 3: Run a real Claude Code prompt smoke test**
+
+Start V2 through the Hub, create a new `cc-flicker` Session, and verify:
+
+```text
+the ACP session exposes a non-empty model list
+a bounded prompt returns visible text
+V2 logs/state contain no local key, MyFlicker token, signature, or authorization value
+```
+
+Do not change model ID publication rules during this correction; any remaining model-selection mismatch must be reported separately with the actual `/v1/models` response.
+
+- [x] **Step 4: Inspect the final diff and worktree**
+
+Run:
+
+```powershell
+cd E:\_Code\WheelMaker
+git diff --check
+git diff --stat
+git status --short
+```
+
+Expected: only the approved authentication, compact UI, tests, spec, wiki, and this plan are modified.
+
+- [ ] **Step 5: Execute the repository completion gate**
+
+Run this exact tail sequence:
+
+```powershell
+git add -A
+git commit -m "fix: separate flicker v2 authentication"
+git push origin main
+```
+
+Expected: all three commands succeed and `main` is pushed to `origin`.
+
 ---
 
 ### Task 0: Protect the repository completion gate

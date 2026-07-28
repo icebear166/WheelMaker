@@ -397,9 +397,7 @@ func (m *flickerBridgeManager) launchSpecLocked(mode flickerBridgeMode, apiKey, 
 	baseArgs := []string{"--host", flickerBridgeHost, "--port", fmt.Sprint(flickerBridgePort)}
 	switch mode {
 	case flickerBridgeModeV2:
-		return append([]string{"--flicker-bridge-v2"}, baseArgs...), append(os.Environ(),
-			"MYFLICKER_WANQING_PROXY_KEY="+apiKey,
-		)
+		return append([]string{"--flicker-bridge-v2"}, baseArgs...), os.Environ()
 	default:
 		logPath := filepath.Join(stateDir, "log", "flicker-bridge.log")
 		return append([]string{"--flicker-bridge"}, baseArgs...), append(os.Environ(),

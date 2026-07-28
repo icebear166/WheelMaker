@@ -4,7 +4,7 @@ import type {
   RegistryFlickerBridgeMode,
   RegistryFlickerBridgeStatus,
 } from '../registry/registryTypes';
-import {flickerBridgeActions, flickerBridgeLabel} from './flickerBridgeState';
+import {flickerBridgeActions} from './flickerBridgeState';
 
 interface FlickerBridgeControlProps {
   status?: RegistryFlickerBridgeStatus;
@@ -36,9 +36,6 @@ export function FlickerBridgeControl({
       <div className="chat-hub-flicker-bridge-summary">
         <span className="chat-hub-flicker-bridge-dot" aria-hidden="true" />
         <span className="chat-hub-flicker-bridge-name">Flicker Bridge</span>
-        <span className="chat-hub-flicker-bridge-state" title={status?.endpoint}>
-          {flickerBridgeLabel(status)}
-        </span>
       </div>
       <div className="chat-hub-flicker-bridge-actions">
         <div className="chat-hub-flicker-bridge-modes" role="group" aria-label="Flicker Bridge mode">

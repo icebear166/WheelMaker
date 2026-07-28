@@ -1021,8 +1021,8 @@ func TestFlickerBridgeManagerStartsSelectedV2(t *testing.T) {
 	if !slices.Contains(startedArgs, "--flicker-bridge-v2") {
 		t.Fatalf("V2 args = %v", startedArgs)
 	}
-	if !slices.Contains(startedEnv, "MYFLICKER_WANQING_PROXY_KEY=configured-flicker-key") {
-		t.Fatalf("V2 environment = %v", startedEnv)
+	if slices.Contains(startedEnv, "MYFLICKER_WANQING_PROXY_KEY=configured-flicker-key") {
+		t.Fatalf("V2 environment leaked the V1 local key: %v", startedEnv)
 	}
 	if _, err := manager.Stop(context.Background()); err != nil {
 		t.Fatal(err)

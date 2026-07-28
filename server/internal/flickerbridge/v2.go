@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -33,7 +32,6 @@ import (
 const (
 	defaultProxyHost      = "127.0.0.1"
 	defaultProxyPort      = 17889
-	defaultProxyKey       = "00000000000000000000"
 	defaultMaxRequestSize = int64(8 << 20)
 	minimumMaxRequestSize = int64(1 << 10)
 	maximumMaxRequestSize = int64(32 << 20)
@@ -42,7 +40,6 @@ const (
 type proxySettings struct {
 	Host           string
 	Port           int
-	APIKey         string
 	NodePath       string
 	MyFlickerDir   string
 	ModelBlacklist map[string]struct{}
@@ -780,7 +777,6 @@ func parseProxySettingsWithLookPath(args []string, environ map[string]string, lo
 	settings := proxySettings{
 		Host:           defaultProxyHost,
 		Port:           defaultProxyPort,
-		APIKey:         defaultProxyKey,
 		MaxRequestSize: defaultMaxRequestSize,
 		ModelBlacklist: make(map[string]struct{}),
 	}
@@ -794,9 +790,6 @@ func parseProxySettingsWithLookPath(args []string, environ map[string]string, lo
 			return proxySettings{}, fmt.Errorf("invalid MYFLICKER_WANQING_PROXY_PORT: %w", err)
 		}
 		settings.Port = port
-	}
-	if value, ok := environ["MYFLICKER_WANQING_PROXY_KEY"]; ok {
-		settings.APIKey = value
 	}
 	if value, ok := environ["MYFLICKER_WANQING_MODEL_BLACKLIST"]; ok {
 		for _, id := range strings.Split(value, ",") {
@@ -817,7 +810,6 @@ func parseProxySettingsWithLookPath(args []string, environ map[string]string, lo
 	flags.SetOutput(os.Stderr)
 	flags.StringVar(&settings.Host, "host", settings.Host, "loopback listen host")
 	flags.IntVar(&settings.Port, "port", settings.Port, "listen port")
-	flags.StringVar(&settings.APIKey, "key", settings.APIKey, "local API key")
 	flags.StringVar(&settings.NodePath, "node", settings.NodePath, "Node executable")
 	flags.StringVar(&settings.MyFlickerDir, "myflicker-dir", settings.MyFlickerDir, "@myflicker/cli directory")
 	flags.Int64Var(&settings.MaxRequestSize, "max-request-size", settings.MaxRequestSize, "maximum request body size")
@@ -833,9 +825,6 @@ func parseProxySettingsWithLookPath(args []string, environ map[string]string, lo
 	}
 	if settings.Port < 1 || settings.Port > 65535 {
 		return proxySettings{}, fmt.Errorf("port %d is outside 1..65535", settings.Port)
-	}
-	if settings.APIKey == "" {
-		return proxySettings{}, errors.New("local API key must not be empty")
 	}
 	if settings.MaxRequestSize < minimumMaxRequestSize || settings.MaxRequestSize > maximumMaxRequestSize {
 		return proxySettings{}, fmt.Errorf("max request size %d is outside 1 KiB..32 MiB", settings.MaxRequestSize)
@@ -965,9 +954,13 @@ func normalizeTools(tools []anthropicTool) []anthropicTool {
 }
 
 func normalizeSystemPrompt(system string) string {
+	return strings.Join(append([]string{myFlickerBasePrompt}, normalizedSystemParagraphs(system)...), "\n\n")
+}
+
+func normalizedSystemParagraphs(system string) []string {
 	normalized := strings.ReplaceAll(system, "\r\n", "\n")
 	paragraphs := regexp.MustCompile(`\n[ \t]*\n`).Split(normalized, -1)
-	result := []string{myFlickerBasePrompt}
+	result := make([]string, 0, len(paragraphs))
 	for _, paragraph := range paragraphs {
 		paragraph = strings.TrimSpace(paragraph)
 		if paragraph == "" || identityParagraph(paragraph) {
@@ -979,7 +972,7 @@ func normalizeSystemPrompt(system string) string {
 		}
 		result = append(result, paragraph)
 	}
-	return strings.Join(result, "\n\n")
+	return result
 }
 
 func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, error) {
@@ -1003,11 +996,24 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 		}
 	}
 
-	prompt, err := anthropicSystemToV3(request.System)
+	prompt, err := anthropicSystemToV3(request.System, true)
 	if err != nil {
 		return nil, err
 	}
 	for _, message := range request.Messages {
+		if message.Role != "system" {
+			continue
+		}
+		systemMessages, err := anthropicSystemToV3(message.Content, false)
+		if err != nil {
+			return nil, err
+		}
+		prompt = append(prompt, systemMessages...)
+	}
+	for _, message := range request.Messages {
+		if message.Role == "system" {
+			continue
+		}
 		if message.Role != "user" && message.Role != "assistant" {
 			return nil, fmt.Errorf("unsupported message role %q", message.Role)
 		}
@@ -1164,30 +1170,41 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 	return options, nil
 }
 
-func anthropicSystemToV3(raw json.RawMessage) ([]any, error) {
+func anthropicSystemToV3(raw json.RawMessage, includeBase bool) ([]any, error) {
+	result := make([]any, 0)
+	if includeBase {
+		result = append(result, map[string]any{"role": "system", "content": myFlickerBasePrompt})
+	}
 	if len(raw) == 0 || string(raw) == "null" {
-		return []any{map[string]any{"role": "system", "content": myFlickerBasePrompt}}, nil
+		return result, nil
 	}
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		return []any{map[string]any{
-			"role":    "system",
-			"content": normalizeSystemPrompt(text),
-		}}, nil
+		paragraphs := normalizedSystemParagraphs(text)
+		if includeBase {
+			paragraphs = append([]string{myFlickerBasePrompt}, paragraphs...)
+			result = result[:0]
+		}
+		if len(paragraphs) > 0 {
+			result = append(result, map[string]any{
+				"role":    "system",
+				"content": strings.Join(paragraphs, "\n\n"),
+			})
+		}
+		return result, nil
 	}
 	var blocks []anthropicContentBlock
 	if err := json.Unmarshal(raw, &blocks); err != nil {
 		return nil, errors.New("system must be a string or text block array")
 	}
-	result := []any{map[string]any{"role": "system", "content": myFlickerBasePrompt}}
 	for _, block := range blocks {
 		if block.Type != "text" {
 			return nil, fmt.Errorf("unsupported Anthropic system block: %s", block.Type)
 		}
-		if identityParagraph(block.Text) {
+		content := strings.Join(normalizedSystemParagraphs(block.Text), "\n\n")
+		if content == "" {
 			continue
 		}
-		content := normalizeToolReferences(block.Text)
 		message := map[string]any{"role": "system", "content": content}
 		addCacheControl(message, block.CacheControl)
 		result = append(result, message)
@@ -1704,7 +1721,7 @@ func (s *proxyServer) handleModels(response http.ResponseWriter, request *http.R
 		writeAnthropicError(response, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !authorized(request, s.settings.APIKey) || !loopbackOrigin(request) {
+	if !loopbackOrigin(request) {
 		writeAnthropicError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -1733,7 +1750,7 @@ func (s *proxyServer) handleMessages(response http.ResponseWriter, request *http
 		writeAnthropicError(response, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !authorized(request, s.settings.APIKey) || !loopbackOrigin(request) {
+	if !loopbackOrigin(request) {
 		writeAnthropicError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -1817,7 +1834,7 @@ func (s *proxyServer) handleCountTokens(response http.ResponseWriter, request *h
 		writeAnthropicError(response, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !authorized(request, s.settings.APIKey) || !loopbackOrigin(request) {
+	if !loopbackOrigin(request) {
 		writeAnthropicError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -1853,20 +1870,6 @@ func decodeRequestJSON(response http.ResponseWriter, request *http.Request, limi
 		return http.StatusBadRequest, errors.New("request body must contain one JSON value")
 	}
 	return 0, nil
-}
-
-func authorized(request *http.Request, key string) bool {
-	value := request.Header.Get("x-api-key")
-	if value == "" {
-		authorization := request.Header.Get("authorization")
-		if strings.HasPrefix(strings.ToLower(authorization), "bearer ") {
-			value = authorization[len("Bearer "):]
-		}
-	}
-	if len(value) != len(key) {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(value), []byte(key)) == 1
 }
 
 func loopbackOrigin(request *http.Request) bool {
@@ -2131,7 +2134,7 @@ func selfTestSettings() error {
 	if err != nil {
 		return err
 	}
-	if got.Host != "127.0.0.1" || got.Port != 17889 || got.APIKey != "00000000000000000000" {
+	if got.Host != "127.0.0.1" || got.Port != 17889 {
 		return fmt.Errorf("unexpected defaults: %+v", got)
 	}
 	_, err = parseProxySettings([]string{"--host", "0.0.0.0"}, map[string]string{})
@@ -2141,8 +2144,8 @@ func selfTestSettings() error {
 	if _, err := parseProxySettings([]string{"--port", "0"}, map[string]string{}); err == nil {
 		return errors.New("invalid port must fail")
 	}
-	if _, err := parseProxySettings(nil, map[string]string{"MYFLICKER_WANQING_PROXY_KEY": ""}); err == nil {
-		return errors.New("empty explicit key must fail")
+	if _, err := parseProxySettings(nil, map[string]string{"MYFLICKER_WANQING_PROXY_KEY": ""}); err != nil {
+		return fmt.Errorf("legacy local key must be ignored: %w", err)
 	}
 	if _, err := parseProxySettings([]string{"--max-request-size", "512"}, map[string]string{}); err == nil {
 		return errors.New("undersized request limit must fail")
@@ -2497,6 +2500,7 @@ func selfTestRequestConversion() error {
 		"max_tokens":512,
 		"system":"You are Claude Code, Anthropic's official CLI.\n\nUse Read before Write.",
 		"messages":[
+			{"role":"system","content":"Project policy: keep the answer concise."},
 			{"role":"user","content":"inspect"},
 			{"role":"assistant","content":[
 				{"type":"thinking","thinking":"reason","signature":"sig"},
@@ -2536,6 +2540,7 @@ func selfTestRequestConversion() error {
 		`"budgetTokens":256`,
 		myFlickerBasePrompt,
 		"Use read before write.",
+		"Project policy: keep the answer concise.",
 	} {
 		if !strings.Contains(body, expected) {
 			return fmt.Errorf("converted request missing %q: %s", expected, body)
@@ -2543,6 +2548,9 @@ func selfTestRequestConversion() error {
 	}
 	if strings.Contains(strings.ToLower(body), "claude code") {
 		return errors.New("converted request retained Claude Code identity")
+	}
+	if strings.Count(body, myFlickerBasePrompt) != 1 {
+		return fmt.Errorf("converted request duplicated MyFlicker identity: %s", body)
 	}
 	return nil
 }
@@ -2652,7 +2660,6 @@ func selfTestHTTP() error {
 	settings := proxySettings{
 		Host:           "127.0.0.1",
 		Port:           17889,
-		APIKey:         "test-local-key",
 		MaxRequestSize: 1024,
 	}
 	fake := &fakeWorkerBackend{}
@@ -2664,34 +2671,34 @@ func selfTestHTTP() error {
 		return err
 	}
 
-	do := func(method, target string, body []byte, authorizedRequest bool) *httptest.ResponseRecorder {
+	do := func(method, target string, body []byte) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(method, target, bytes.NewReader(body))
-		if authorizedRequest {
-			request.Header.Set("x-api-key", settings.APIKey)
-		}
 		recorder := httptest.NewRecorder()
 		server.Handler.ServeHTTP(recorder, request)
 		return recorder
 	}
 
 	for _, target := range []string{"/health", "/_myflicker/health"} {
-		response := do(http.MethodGet, target, nil, false)
+		response := do(http.MethodGet, target, nil)
 		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"ok":true`) {
 			return fmt.Errorf("%s response = %d %s", target, response.Code, response.Body.String())
 		}
 	}
-	models := do(http.MethodGet, "/v1/models", nil, true)
+	models := do(http.MethodGet, "/v1/models", nil)
 	if models.Code != http.StatusOK ||
 		!strings.Contains(models.Body.String(), `"id":"glm-5.2"`) ||
 		!strings.Contains(models.Body.String(), `"display_name":"GLM 5.2"`) {
 		return fmt.Errorf("models response = %d %s", models.Code, models.Body.String())
 	}
-	requestBody := []byte(`{"model":"glm-5.2","max_tokens":16,"messages":[{"role":"user","content":"ping"}],"stream":true}`)
-	unauthorized := do(http.MethodPost, "/v1/messages", requestBody, false)
-	if unauthorized.Code != http.StatusUnauthorized {
-		return fmt.Errorf("unauthorized response = %d", unauthorized.Code)
+	crossOriginRequest := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	crossOriginRequest.Header.Set("origin", "https://example.com")
+	crossOrigin := httptest.NewRecorder()
+	server.Handler.ServeHTTP(crossOrigin, crossOriginRequest)
+	if crossOrigin.Code != http.StatusUnauthorized {
+		return fmt.Errorf("cross-origin response = %d", crossOrigin.Code)
 	}
-	streamed := do(http.MethodPost, "/v1/messages", requestBody, true)
+	requestBody := []byte(`{"model":"glm-5.2","max_tokens":16,"messages":[{"role":"user","content":"ping"}],"stream":true}`)
+	streamed := do(http.MethodPost, "/v1/messages", requestBody)
 	if streamed.Code != http.StatusOK ||
 		!strings.Contains(streamed.Header().Get("content-type"), "text/event-stream") ||
 		!strings.Contains(streamed.Body.String(), "event: message_start") ||
@@ -2699,30 +2706,29 @@ func selfTestHTTP() error {
 		return fmt.Errorf("stream response = %d %s", streamed.Code, streamed.Body.String())
 	}
 	nonStreamingBody := bytes.Replace(requestBody, []byte(`"stream":true`), []byte(`"stream":false`), 1)
-	nonStreaming := do(http.MethodPost, "/v1/messages", nonStreamingBody, true)
+	nonStreaming := do(http.MethodPost, "/v1/messages", nonStreamingBody)
 	if nonStreaming.Code != http.StatusOK ||
 		!strings.Contains(nonStreaming.Body.String(), `"text":"pong"`) {
 		return fmt.Errorf("JSON response = %d %s", nonStreaming.Code, nonStreaming.Body.String())
 	}
-	counted := do(http.MethodPost, "/v1/messages/count_tokens", requestBody, true)
+	counted := do(http.MethodPost, "/v1/messages/count_tokens", requestBody)
 	if counted.Code != http.StatusOK || !strings.Contains(counted.Body.String(), `"input_tokens":`) {
 		return fmt.Errorf("count response = %d %s", counted.Code, counted.Body.String())
 	}
 	unknownBody := bytes.Replace(requestBody, []byte(`glm-5.2`), []byte(`missing`), 1)
-	unknown := do(http.MethodPost, "/v1/messages", unknownBody, true)
+	unknown := do(http.MethodPost, "/v1/messages", unknownBody)
 	if unknown.Code != http.StatusBadRequest {
 		return fmt.Errorf("unknown model response = %d %s", unknown.Code, unknown.Body.String())
 	}
 	oversizedBody := append([]byte(`{"padding":"`), bytes.Repeat([]byte("x"), 1025)...)
 	oversizedBody = append(oversizedBody, []byte(`"}`)...)
-	oversized := do(http.MethodPost, "/v1/messages", oversizedBody, true)
+	oversized := do(http.MethodPost, "/v1/messages", oversizedBody)
 	if oversized.Code != http.StatusRequestEntityTooLarge {
 		return fmt.Errorf("oversized response = %d %s", oversized.Code, oversized.Body.String())
 	}
 	cancelContext, cancel := context.WithCancel(context.Background())
 	cancelRequest := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(requestBody)).
 		WithContext(cancelContext)
-	cancelRequest.Header.Set("x-api-key", settings.APIKey)
 	cancel()
 	server.Handler.ServeHTTP(httptest.NewRecorder(), cancelRequest)
 	deadline := time.Now().Add(time.Second)

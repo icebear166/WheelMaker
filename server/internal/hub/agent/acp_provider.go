@@ -657,11 +657,10 @@ func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
 	}
 	settings["model"] = profile.defaultModel
 	if profile.gatewayDiscovery {
-		// Gateway model discovery is mutually exclusive with the allowlist:
-		// enforceAvailableModels re-filters discovered models and strips their
-		// effort capability. Drop any stale allowlist keys from a prior launch
-		// and let the CLI pull the bridge's dynamic catalog instead.
-		delete(settings, "availableModels")
+		// Keep gateway discovery enabled for Claude Code's live model metadata,
+		// while also supplying the same dynamic ids through availableModels.
+		// claude-agent-acp uses that list as the source for its ACP model
+		// configOption; settings["models"] alone is not surfaced by the adapter.
 		delete(settings, "enforceAvailableModels")
 		env[gatewayModelDiscoveryEnv] = "1"
 		// A static models object array (id + name) makes gateway-discovered
@@ -673,8 +672,14 @@ func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
 				models = append(models, map[string]any{"id": model.ID, "name": model.Name})
 			}
 			settings["models"] = models
+			availableModels := make([]string, 0, len(profile.staticModels))
+			for _, model := range profile.staticModels {
+				availableModels = append(availableModels, model.ID)
+			}
+			settings["availableModels"] = availableModels
 		} else {
 			delete(settings, "models")
+			delete(settings, "availableModels")
 		}
 	} else {
 		settings["availableModels"] = append([]string(nil), profile.availableModels...)

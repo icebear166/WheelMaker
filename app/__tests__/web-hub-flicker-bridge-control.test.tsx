@@ -34,7 +34,7 @@ test('switches Flicker Bridge mode and exposes the selected segment', async () =
   expect(onSwitchMode).toHaveBeenCalledWith('v2');
 });
 
-test('highlights the actual running mode and explains it inline', async () => {
+test('highlights the actual running mode without an inline status label', async () => {
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
     renderer = TestRenderer.create(
@@ -59,8 +59,7 @@ test('highlights the actual running mode and explains it inline', async () => {
   expect(v1.props.className).toContain('selected');
   expect(v1.props.className).not.toContain('running');
   expect(v2.props.className).toContain('running');
-  expect(renderer.root.findByProps({className: 'chat-hub-flicker-bridge-state'}).children)
-    .toEqual(['Running V2 · MyFlicker AI SDK']);
+  expect(renderer.root.findAllByProps({className: 'chat-hub-flicker-bridge-state'})).toHaveLength(0);
 });
 
 test('disables unavailable mode and all lifecycle actions while busy', async () => {

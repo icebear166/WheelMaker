@@ -37,21 +37,6 @@ export function normalizeFlickerBridgeStatus(value: unknown): RegistryFlickerBri
   };
 }
 
-export function flickerBridgeLabel(status: RegistryFlickerBridgeStatus | undefined): string {
-  switch (status?.state) {
-    case 'running':
-      if (status.runningMode === 'v1') return 'Running V1 · Go Bridge';
-      if (status.runningMode === 'v2') return 'Running V2 · MyFlicker AI SDK';
-      return 'Running';
-    case 'starting': return 'Starting';
-    case 'stopped': return 'Stopped';
-    case 'failed': return 'Failed';
-    case 'unsupported': return 'Unsupported platform';
-    case 'notConfigured': return 'Not configured';
-    default: return status ? 'Checking status' : 'Loading';
-  }
-}
-
 export function flickerBridgeActions(status: RegistryFlickerBridgeStatus | undefined): {
   canStart: boolean;
   canStop: boolean;

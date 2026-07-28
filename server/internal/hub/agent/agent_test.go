@@ -697,10 +697,14 @@ func TestClaudeCompatibleFlickerSettingsWriteStaticModelsWithGatewayDiscovery(t 
 	if !ok || env[gatewayModelDiscoveryEnv] != "1" {
 		t.Fatalf("gateway discovery env not set: %#v", settings["env"])
 	}
-	for _, forbidden := range []string{"availableModels", "enforceAvailableModels"} {
-		if _, exists := settings[forbidden]; exists {
-			t.Fatalf("gateway discovery must not write %s: %#v", forbidden, settings)
-		}
+	if _, exists := settings["enforceAvailableModels"]; exists {
+		t.Fatalf("gateway discovery must not write enforceAvailableModels: %#v", settings)
+	}
+	availableModels, ok := settings["availableModels"].([]any)
+	if !ok || len(availableModels) != 2 ||
+		availableModels[0] != "CLAUDE_OPUS_4_8" ||
+		availableModels[1] != "CLAUDE-MYFLICKER-GPT_5_4" {
+		t.Fatalf("availableModels = %#v, want dynamic bridge model ids", settings["availableModels"])
 	}
 	models, ok := settings["models"].([]any)
 	if !ok || len(models) != 2 {
@@ -727,7 +731,7 @@ func TestClaudeCompatibleFlickerSettingsDropStaleModelsWhenEmpty(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	settingsPath := filepath.Join(configDir, "settings.json")
-	existing := `{"models": [{"id": "STALE", "name": "stale"}], "env": {}}`
+	existing := `{"models": [{"id": "STALE", "name": "stale"}], "availableModels": ["STALE"], "env": {}}`
 	if err := os.WriteFile(settingsPath, []byte(existing), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -751,6 +755,9 @@ func TestClaudeCompatibleFlickerSettingsDropStaleModelsWhenEmpty(t *testing.T) {
 	}
 	if _, exists := settings["models"]; exists {
 		t.Fatalf("stale models must be dropped when no static models: %#v", settings)
+	}
+	if _, exists := settings["availableModels"]; exists {
+		t.Fatalf("stale availableModels must be dropped when no static models: %#v", settings)
 	}
 }
 

@@ -6643,7 +6643,6 @@
   color: var(--text-primary);
 }
 
-.chat-hub-flicker-bridge-state,
 .chat-hub-flicker-bridge-error {
   overflow: hidden;
   text-overflow: ellipsis;
