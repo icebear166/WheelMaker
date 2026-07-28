@@ -49,6 +49,7 @@ import {
 } from '../portRelay/portRelayTargets';
 import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from '../platform/pwa';
+import { writeTextToClipboard } from '../platform/clipboard';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {DesktopAppMenu} from '../shell/layouts/desktop/DesktopAppMenu';
@@ -1667,26 +1668,6 @@ function groupPromptAttachmentBlocks(msgs: RegistryChatMessage[]): RegistrySessi
     }
   }
   return blocks;
-}
-
-async function writeTextToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'fixed';
-  textarea.style.top = '-1000px';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-  } finally {
-    document.body.removeChild(textarea);
-  }
 }
 
 function shouldRenderChatTurn(
@@ -16785,6 +16766,7 @@ export function App() {
         codeTabSize,
         wrap: true,
         lineNumbers: false,
+        framed: true,
       });
     },
     [

@@ -5,6 +5,7 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from './shikiSettings';
+import { CodeBlockFrame } from './CodeBlockFrame';
 import type {ThemedToken} from '@shikijs/types';
 
 type ThemeMode = 'dark' | 'light';
@@ -58,6 +59,8 @@ export type ShikiCodeBlockProps = {
   codeFontSize: number;
   codeLineHeight: number;
   codeTabSize: number;
+  /** Wrap the block in a bordered frame with a language label and copy button. */
+  framed?: boolean;
   highlightedLines?: Set<number>;
   onLineClick?: (line: number, event: MouseEvent) => void;
 };
@@ -339,14 +342,20 @@ function ShikiCodeBlockVirtualized({
 export function ShikiCodeBlock(props: ShikiCodeBlockProps) {
   const lineCount = useMemo(() => countCodeLines(props.content), [props.content]);
 
-  if (
+  const block =
     lineCount >= VIRTUALIZE_LINE_THRESHOLD ||
     props.content.length >= INCREMENTAL_CHARACTER_THRESHOLD
-  ) {
-    return <ShikiCodeBlockVirtualized {...props} />;
-  }
+      ? <ShikiCodeBlockVirtualized {...props} />
+      : <ShikiCodeBlockSmall {...props} />;
 
-  return <ShikiCodeBlockSmall {...props} />;
+  if (!props.framed) {
+    return block;
+  }
+  return (
+    <CodeBlockFrame language={props.language} content={props.content}>
+      {block}
+    </CodeBlockFrame>
+  );
 }
 
 function ShikiCodeBlockSmall({
