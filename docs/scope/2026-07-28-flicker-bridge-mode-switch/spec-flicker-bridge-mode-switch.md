@@ -120,6 +120,10 @@ C1 只承诺能由当前 V2 元数据唯一对应的 ID。V1 独有模型、V2 �
 
 Hub 在 bridge 健康后从当前 `/v1/models` 刷新共享模型目录，并在每次启动 `cc-flicker` 时同时写入 Claude 配置的 `models` 和 `availableModels`。前者保留展示元数据，后者是当前 `claude-agent-acp` 生成 ACP `model` config option 的实际输入；`CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1` 继续保留。目录必须来自当前运行模式，不在 WheelMaker 中写死，因此 V2 切换成功后 CC 能看到 V2 的动态模型 ID。
 
+`cc-flicker` 的 default、Opus/Fable、Sonnet、Haiku 和 Subagent ID 必须从当前目录选择；V1 使用当前 V1 ID，V2 使用当前 V2 canonical ID。配置不得引用不在 `availableModels` 中的旧模式 ID；首选模型缺失时回退到当前目录内最强的实际 Claude 模型。
+
+模型选择器采用稳定排序：厂商优先级为 Claude、GPT、Kimi、GLM、DeepSeek，其他厂商按名称排列，`auto` 最后；同一厂商内按能力从弱到强排列。当前同版本变体顺序为 Haiku < Sonnet < Opus、Luna < Terra < Sol、Flash < Pro。
+
 V2 的 Anthropic Messages 转换同时接受顶层 `system` 和 Claude Code 可能放入 `messages[].role="system"` 的系统内容。MyFlicker 基础 prompt 在合并后只出现一次，额外系统内容按原顺序保留；系统消息不得作为 user/assistant turn 发送给 AI SDK。
 
 ### Hub 菜单
@@ -174,6 +178,8 @@ V2 的 Anthropic Messages 转换同时接受顶层 `system` 和 Claude Code 可�
 - V1/V2 在同一时刻最多一个 manager-owned listener；切换、回滚和关闭后不遗留目标子进程或 Node worker。
 - Running 状态切换成功后 endpoint 不变、PID 变化、mode/runningMode 一致，并刷新模型目录。
 - 刷新后的动态模型 ID 同时进入 `models` 与 `availableModels`；真实 `claude-agent-acp session/new` 的 `model` config option 至少包含当前 bridge 的非 Claude 模型。
+- `cc-flicker` 的默认和 tier 模型均存在于当前 `availableModels`，V2 不再因使用 V1 `CLAUDE_OPUS_4_8` 而触发 restricted fallback。
+- 模型选择器按确认的厂商优先级和厂商内弱到强顺序展示，且不依赖上游目录返回顺序。
 - Running 状态切换失败时自动恢复原版本；持久化 mode 和 UI 选中态保持原值，并显示失败原因。
 - Stopped 状态切换只更新 mode，不产生 bridge 或 Node 进程。
 - Hub 重启后启动上次成功持久化的模式；持久化 V2 启动失败时按 F1 回滚并提交 V1。
@@ -212,6 +218,7 @@ V2 的 Anthropic Messages 转换同时接受顶层 `system` 和 Claude Code 可�
 - V2 HTTP 测试证明无本地认证 header 也能读取模型、计数和发送消息，并证明 worker 初始化调用 MyFlicker `login` 后才对外就绪；测试不得把真实 MyFlicker 凭证写入响应、日志或 Hub 状态。
 - V2 request conversion 测试覆盖 `messages[].role="system"`，证明额外系统内容保留且 MyFlicker 基础 prompt 只合并一次。
 - Claude-compatible settings 测试证明共享模型目录同时生成动态 `models` 和 `availableModels`，空目录会删除两者的陈旧值；真实 ACP smoke test 展开 `session/new.configOptions[id=model]` 并确认动态非 Claude ID 可见。
+- Claude-compatible profile 测试使用乱序的当前 V2 目录，证明默认/tier ID 来自当前目录，并锁定 23 个模型的确认顺序；首选模型缺失时回退到实际可用 Claude 模型。
 - Hub 测试证明缺失 `api_keys.flicker` 时 V2 仍被产品门槛禁用，同时 V2 launch spec 不再注入 `MYFLICKER_WANQING_PROXY_KEY`。
 - Windows x64 集成测试依次启动 V1、切到 V2、切回 V1，确认全程 endpoint 为 17999、各阶段 health/models 正确，最终无遗留子进程。
 - 使用真实 Claude Code 做 C1 smoke test：V1 建立 `cc-flicker` Session，切换 V2 后以可映射模型继续一轮文本或工具请求；测试不得主动删除该 Session。

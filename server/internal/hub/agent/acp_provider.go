@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -554,24 +556,65 @@ func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
 	return profile
 }
 
-// applyFlickerModels sets profile.staticModels to the given exposed catalog and
-// derives each tier's ANTHROPIC_DEFAULT_<TIER>_MODEL_NAME label from it. Claude
-// Code shows a tier's picker label from that env var when present, falling
-// back to the raw id otherwise; deriving the label from the same catalog the
-// picker uses keeps the Claude-family tiers rendering consistently. When a tier
-// model id is absent from the catalog, a friendly label is synthesized from the
-// id so the picker never shows a bare id.
+// applyFlickerModels sorts the exposed catalog for the picker, selects tier IDs
+// that exist in the current bridge mode, and derives their display labels.
+// Keeping IDs and labels sourced from the same catalog prevents Claude Code
+// from rejecting a stale V1 default after the bridge switches to V2.
 func applyFlickerModels(profile *claudeCompatibleProfile, models []claudeModelEntry) {
-	profile.staticModels = models
-	displayNames := make(map[string]string, len(models))
-	for _, model := range models {
+	sortedModels := append([]claudeModelEntry(nil), models...)
+	sort.SliceStable(sortedModels, func(i, j int) bool {
+		return compareFlickerModels(sortedModels[i], sortedModels[j]) < 0
+	})
+	profile.staticModels = sortedModels
+
+	displayNames := make(map[string]string, len(sortedModels))
+	for _, model := range sortedModels {
 		displayNames[model.ID] = model.Name
 	}
+	opusModel := firstAvailableFlickerModel(sortedModels,
+		profile.defaultModel,
+		"claude-4.8-opus",
+	)
+	if opusModel == "" {
+		opusModel = strongestFlickerModel(sortedModels, "claude", "")
+	}
+	sonnetModel := firstAvailableFlickerModel(sortedModels,
+		profile.settingsEnv["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+		"claude-4.6-sonnet",
+	)
+	if sonnetModel == "" {
+		sonnetModel = strongestFlickerModel(sortedModels, "claude", "sonnet")
+	}
+	if sonnetModel == "" {
+		sonnetModel = opusModel
+	}
+	haikuModel := firstAvailableFlickerModel(sortedModels,
+		profile.settingsEnv["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+		"claude-haiku-4.5",
+	)
+	if haikuModel == "" {
+		haikuModel = strongestFlickerModel(sortedModels, "claude", "haiku")
+	}
+	if haikuModel == "" {
+		haikuModel = sonnetModel
+	}
+	if opusModel != "" {
+		profile.defaultModel = opusModel
+		profile.settingsEnv["ANTHROPIC_DEFAULT_FABLE_MODEL"] = opusModel
+		profile.settingsEnv["ANTHROPIC_DEFAULT_OPUS_MODEL"] = opusModel
+	}
+	if sonnetModel != "" {
+		profile.settingsEnv["ANTHROPIC_DEFAULT_SONNET_MODEL"] = sonnetModel
+		profile.settingsEnv["CLAUDE_CODE_SUBAGENT_MODEL"] = sonnetModel
+	}
+	if haikuModel != "" {
+		profile.settingsEnv["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = haikuModel
+	}
 	tierNames := map[string]string{
-		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  flickerTierModels.fable,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   flickerTierModels.opus,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": flickerTierModels.sonnet,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  flickerTierModels.haiku,
+		"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  profile.settingsEnv["ANTHROPIC_DEFAULT_FABLE_MODEL"],
+		"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   profile.settingsEnv["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+		"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": profile.settingsEnv["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  profile.settingsEnv["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
 	}
 	for nameEnv, modelID := range tierNames {
 		label := displayNames[modelID]
@@ -580,6 +623,165 @@ func applyFlickerModels(profile *claudeCompatibleProfile, models []claudeModelEn
 		}
 		profile.settingsEnv[nameEnv] = label
 	}
+}
+
+func firstAvailableFlickerModel(models []claudeModelEntry, candidates ...string) string {
+	available := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		available[model.ID] = struct{}{}
+	}
+	for _, candidate := range candidates {
+		if _, ok := available[candidate]; ok {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func strongestFlickerModel(models []claudeModelEntry, vendor, family string) string {
+	for i := len(models) - 1; i >= 0; i-- {
+		normalized := normalizeFlickerModelID(models[i].ID)
+		if flickerModelVendor(normalized) == vendor &&
+			(family == "" || strings.Contains(normalized, family)) {
+			return models[i].ID
+		}
+	}
+	return ""
+}
+
+func compareFlickerModels(left, right claudeModelEntry) int {
+	leftID := normalizeFlickerModelID(left.ID)
+	rightID := normalizeFlickerModelID(right.ID)
+	leftVendor := flickerModelVendor(leftID)
+	rightVendor := flickerModelVendor(rightID)
+	leftRank := flickerVendorRank(leftVendor)
+	rightRank := flickerVendorRank(rightVendor)
+	if leftRank != rightRank {
+		return leftRank - rightRank
+	}
+	if leftVendor != rightVendor {
+		return strings.Compare(leftVendor, rightVendor)
+	}
+	if versionOrder := compareVersionParts(
+		flickerModelVersion(leftID),
+		flickerModelVersion(rightID),
+	); versionOrder != 0 {
+		return versionOrder
+	}
+	leftVariant := flickerModelVariantRank(leftVendor, leftID)
+	rightVariant := flickerModelVariantRank(rightVendor, rightID)
+	if leftVariant != rightVariant {
+		return leftVariant - rightVariant
+	}
+	return strings.Compare(leftID, rightID)
+}
+
+func normalizeFlickerModelID(modelID string) string {
+	normalized := strings.ToLower(modelID)
+	normalized = strings.TrimPrefix(normalized, "claude-myflicker-")
+	return strings.ReplaceAll(normalized, "_", "-")
+}
+
+func flickerModelVendor(normalizedID string) string {
+	if normalizedID == "auto" {
+		return "auto"
+	}
+	for _, vendor := range []string{"claude", "gpt", "kimi", "glm", "deepseek", "gemini", "kat", "minimax", "qwen"} {
+		if strings.HasPrefix(normalizedID, vendor+"-") || normalizedID == vendor {
+			return vendor
+		}
+	}
+	if vendor, _, ok := strings.Cut(normalizedID, "-"); ok {
+		return vendor
+	}
+	return normalizedID
+}
+
+func flickerVendorRank(vendor string) int {
+	switch vendor {
+	case "claude":
+		return 0
+	case "gpt":
+		return 1
+	case "kimi":
+		return 2
+	case "glm":
+		return 3
+	case "deepseek":
+		return 4
+	case "auto":
+		return 6
+	default:
+		return 5
+	}
+}
+
+func flickerModelVersion(normalizedID string) []int {
+	parts := make([]int, 0, 2)
+	for index := 0; index < len(normalizedID); {
+		if normalizedID[index] < '0' || normalizedID[index] > '9' {
+			index++
+			continue
+		}
+		end := index + 1
+		for end < len(normalizedID) && normalizedID[end] >= '0' && normalizedID[end] <= '9' {
+			end++
+		}
+		value, err := strconv.Atoi(normalizedID[index:end])
+		if err == nil {
+			parts = append(parts, value)
+		}
+		index = end
+	}
+	return parts
+}
+
+func compareVersionParts(left, right []int) int {
+	length := max(len(left), len(right))
+	for index := 0; index < length; index++ {
+		var leftPart, rightPart int
+		if index < len(left) {
+			leftPart = left[index]
+		}
+		if index < len(right) {
+			rightPart = right[index]
+		}
+		if leftPart != rightPart {
+			return leftPart - rightPart
+		}
+	}
+	return 0
+}
+
+func flickerModelVariantRank(vendor, normalizedID string) int {
+	switch vendor {
+	case "claude":
+		switch {
+		case strings.Contains(normalizedID, "haiku"):
+			return 0
+		case strings.Contains(normalizedID, "sonnet"):
+			return 1
+		case strings.Contains(normalizedID, "opus"):
+			return 2
+		}
+	case "gpt":
+		switch {
+		case strings.Contains(normalizedID, "luna"):
+			return 0
+		case strings.Contains(normalizedID, "terra"):
+			return 1
+		case strings.Contains(normalizedID, "sol"):
+			return 2
+		}
+	case "deepseek":
+		if strings.Contains(normalizedID, "flash") {
+			return 0
+		}
+		if strings.Contains(normalizedID, "pro") {
+			return 1
+		}
+	}
+	return 0
 }
 
 // flickerModelDisplayName synthesizes an "MF ..."-style label for a model id not

@@ -5860,19 +5860,111 @@ func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 	}
 }
 
-func TestApplyFlickerModelsSynthesizesMissingTierLabel(t *testing.T) {
-	// OPUS_MODEL (CLAUDE_OPUS_4_8) is deliberately absent from the catalog, as
-	// happens when the bridge falls back to its builtin list (which tops out
-	// below 4.8). The tier label must still render a friendly name, not a bare id.
-	profile := claudeCompatibleProfile{settingsEnv: map[string]string{}}
+func TestApplyFlickerModelsFallsBackToStrongestAvailableClaudeModel(t *testing.T) {
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
 	applyFlickerModels(&profile, []claudeModelEntry{
 		{ID: "CLAUDE_4_6", Name: "MF Claude Sonnet 4.6"},
 	})
-	if got := profile.settingsEnv["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"]; got != "MF Claude Opus 4.8" {
-		t.Fatalf("opus tier label = %q, want synthesized %q", got, "MF Claude Opus 4.8")
+	if profile.defaultModel != "CLAUDE_4_6" {
+		t.Fatalf("default model = %q, want strongest available Claude id", profile.defaultModel)
+	}
+	if got := profile.settingsEnv["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"]; got != "MF Claude Sonnet 4.6" {
+		t.Fatalf("opus tier label = %q, want available model label %q", got, "MF Claude Sonnet 4.6")
 	}
 	if got := profile.settingsEnv["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"]; got != "MF Claude Sonnet 4.6" {
 		t.Fatalf("sonnet tier label = %q, want catalog name %q", got, "MF Claude Sonnet 4.6")
+	}
+}
+
+func TestApplyFlickerModelsUsesCurrentV2IDsForTierDefaults(t *testing.T) {
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+	applyFlickerModels(&profile, []claudeModelEntry{
+		{ID: "claude-haiku-4.5", Name: "Claude Haiku 4.5"},
+		{ID: "claude-4.8-opus", Name: "Claude Opus 4.8"},
+		{ID: "claude-4.6-sonnet", Name: "Claude Sonnet 4.6"},
+	})
+
+	if profile.defaultModel != "claude-4.8-opus" {
+		t.Fatalf("default model = %q, want current V2 opus id", profile.defaultModel)
+	}
+	wantEnv := map[string]string{
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":  "claude-4.8-opus",
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":   "claude-4.8-opus",
+		"ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-4.6-sonnet",
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  "claude-haiku-4.5",
+		"CLAUDE_CODE_SUBAGENT_MODEL":     "claude-4.6-sonnet",
+	}
+	for name, want := range wantEnv {
+		if got := profile.settingsEnv[name]; got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestApplyFlickerModelsSortsV2CatalogByVendorAndAscendingStrength(t *testing.T) {
+	inputIDs := []string{
+		"gpt-5.6-luna",
+		"gpt-5.5",
+		"claude-haiku-4.5",
+		"deepseek-v4-flash",
+		"kimi-k2.6",
+		"kimi-k2.5",
+		"minimax-m3",
+		"gpt-5.6-terra",
+		"auto",
+		"claude-4.8-opus",
+		"claude-4.5-sonnet",
+		"kat-coder-v2.5",
+		"claude-4.6-sonnet",
+		"deepseek-v4-pro",
+		"minimax-m2.7",
+		"glm-5.2",
+		"glm-5.1",
+		"gpt-5.6-sol",
+		"gpt-5.4",
+		"claude-4.7-opus",
+		"kimi-k3",
+		"qwen-3.7-max",
+		"kat-coder",
+	}
+	models := make([]claudeModelEntry, 0, len(inputIDs))
+	for _, id := range inputIDs {
+		models = append(models, claudeModelEntry{ID: id, Name: id})
+	}
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+	applyFlickerModels(&profile, models)
+
+	got := make([]string, 0, len(profile.staticModels))
+	for _, model := range profile.staticModels {
+		got = append(got, model.ID)
+	}
+	want := []string{
+		"claude-haiku-4.5",
+		"claude-4.5-sonnet",
+		"claude-4.6-sonnet",
+		"claude-4.7-opus",
+		"claude-4.8-opus",
+		"gpt-5.4",
+		"gpt-5.5",
+		"gpt-5.6-luna",
+		"gpt-5.6-terra",
+		"gpt-5.6-sol",
+		"kimi-k2.5",
+		"kimi-k2.6",
+		"kimi-k3",
+		"glm-5.1",
+		"glm-5.2",
+		"deepseek-v4-flash",
+		"deepseek-v4-pro",
+		"kat-coder",
+		"kat-coder-v2.5",
+		"minimax-m2.7",
+		"minimax-m3",
+		"qwen-3.7-max",
+		"auto",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("sorted model ids = %#v, want %#v", got, want)
 	}
 }
 
