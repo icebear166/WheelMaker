@@ -986,6 +986,7 @@ func (s *fakeFlickerBridgeModeStore) UpdateFlickerBridgeMode(mode hubconfig.Flic
 func TestFlickerBridgeManagerReportsConfiguredAndRunningModes(t *testing.T) {
 	store := &fakeFlickerBridgeModeStore{mode: hubconfig.FlickerBridgeModeV1}
 	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key", store)
+	manager.modeAvailable = func(flickerBridgeMode) error { return nil }
 	status := manager.Status(context.Background())
 	if status.Mode != flickerBridgeModeV1 || status.RunningMode != "" {
 		t.Fatalf("status = %+v", status)
