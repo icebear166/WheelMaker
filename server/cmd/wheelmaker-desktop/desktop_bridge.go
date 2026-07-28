@@ -20,6 +20,7 @@ const (
 	desktopShowProjectFileInFolderBinding = "__wheelMakerDesktopShowProjectFileInFolder"
 	desktopOpenFileInVSCodeBinding        = "__wheelMakerDesktopOpenFileInVSCode"
 	desktopShowFileInFolderBinding        = "__wheelMakerDesktopShowFileInFolder"
+	desktopCopyFileToClipboardBinding     = "__wheelMakerDesktopCopyFileToClipboard"
 	desktopBeginHTMLFileClipboardBinding  = "__wheelMakerDesktopBeginHTMLFileClipboard"
 	desktopAppendHTMLFileClipboardBinding = "__wheelMakerDesktopAppendHTMLFileClipboard"
 	desktopCommitHTMLFileClipboardBinding = "__wheelMakerDesktopCommitHTMLFileClipboard"
@@ -69,6 +70,7 @@ func desktopRuntimeInitScript() string {
 		showProjectFileInFolder: invoke('` + desktopShowProjectFileInFolderBinding + `'),
 		openFileInVSCode: invoke('` + desktopOpenFileInVSCodeBinding + `'),
 		showFileInFolder: invoke('` + desktopShowFileInFolderBinding + `'),
+		copyFileToClipboard: invoke('` + desktopCopyFileToClipboardBinding + `'),
 		beginHtmlFileClipboard: invoke('` + desktopBeginHTMLFileClipboardBinding + `'),
 		appendHtmlFileClipboard: invoke('` + desktopAppendHTMLFileClipboardBinding + `'),
 		commitHtmlFileClipboard: invoke('` + desktopCommitHTMLFileClipboardBinding + `'),

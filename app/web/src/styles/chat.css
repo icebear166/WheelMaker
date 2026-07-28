@@ -6565,26 +6565,35 @@
 .chat-file-link-context-menu {
   position: fixed;
   z-index: 140;
-  min-width: 196px;
+  min-width: 208px;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
-  border-radius: 7px;
-  background: var(--surface-panel);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
 }
 
 .chat-file-link-context-menu button {
-  width: 100%;
-  min-height: 28px;
   display: flex;
+  width: 100%;
+  min-height: 30px;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  padding: 0 8px;
   border: 0;
   border-radius: 5px;
-  padding: 0 8px;
   background: transparent;
   color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
   text-align: left;
+}
+
+.chat-file-link-context-menu button .sl-icon {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
 }
 
 .chat-file-link-context-menu button:hover {
@@ -6592,8 +6601,14 @@
 }
 
 .chat-file-link-context-menu button:focus-visible {
-  outline: 1px solid var(--focus-border);
-  outline-offset: -1px;
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.chat-file-link-context-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
 }
 
 .chat-hub-flicker-bridge {

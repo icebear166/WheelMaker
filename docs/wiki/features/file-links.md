@@ -1,10 +1,12 @@
-> 摘要：本页维护聊天文件链接的路径解析、项目外预览、右键菜单、Desktop 文件动作和 Markdown HTML 导出边界。
+> 摘要：本页维护聊天文件入口的路径解析、项目外预览、共享右键菜单、Desktop 文件动作与文件剪贴板，以及 Markdown HTML 导出边界。
 
 # File Links
 
 > 来源：[`docs/scope/2026-07-24-external-file-links/spec-external-file-links.md`](../../scope/2026-07-24-external-file-links/spec-external-file-links.md)
 
 > Markdown HTML 导出来源：[`docs/scope/2026-07-24-markdown-html-export/spec-markdown-html-export.md`](../../scope/2026-07-24-markdown-html-export/spec-markdown-html-export.md)
+
+> 共享文件菜单来源：[`docs/scope/2026-07-28-file-context-menu-actions/spec-file-context-menu-actions.md`](../../scope/2026-07-28-file-context-menu-actions/spec-file-context-menu-actions.md)
 
 ## 本地文件识别
 
@@ -27,27 +29,41 @@
 
 ## 文件链接菜单
 
-右键点击已识别的聊天文件链接会打开文件菜单：
+右键点击已识别的聊天文件链接或 Changed Files 中的单个文件行会打开共享文件菜单。Changed file 左键继续打开 diff，`Changed N files` 汇总按钮不接管右键菜单。
 
-- 项目内文件显示 `Copy relative path` 和 `Copy absolute path`。
-- 项目外文件只显示 `Copy absolute path`，不显示相对路径动作。
-- 复制结果只包含路径，不包含行号。
+菜单第一项固定为 `Preview file`，用于打开普通 file preview tab。文件已删除或读取失败时，预览 tab 使用现有错误状态说明原因。项目内文件显示 `Copy relative path` 和 `Copy absolute path`；项目外文件只显示 `Copy absolute path`。复制结果只包含路径，不包含链接中的行号。
+
+Desktop 菜单按打开、文件复制、路径复制分为三组，不显示分组标题：
+
+1. `Preview file`
+2. `Open with VS Code`
+3. `Show in File Explorer`
+4. `Copy file`
+5. `Copy file as HTML`（仅项目内 Markdown）
+6. `Copy relative path`（仅项目内文件）
+7. `Copy absolute path`
+
+两个文件复制动作和路径复制动作之间使用轻量分隔线；不可用动作隐藏后不保留多余分隔线。浏览器与 Android 不显示 `Copy file`，项目内 Markdown 使用 `Export as HTML`。
 
 点击空白处、按 Escape、选择动作、滚动或调整窗口尺寸会关闭菜单。普通网页链接、Relay 链接和无法识别的 URI 不受文件菜单接管。现有 preview 文件菜单及其动作继续保留。
 
+菜单使用现有线性图标体系和主题 token。浅色主题使用较低浓度阴影并保持清晰边界；深浅主题中的图标、分隔线、hover 和 focus-visible 状态都必须清晰。移动端不新增长按菜单。
+
 ## Desktop 文件动作
 
-`Open with VS Code` 和 `Show in File Explorer` 只在 WheelMaker Desktop 中显示；点击 preview 和复制路径在各端一致。
+`Open with VS Code`、`Show in File Explorer` 和 `Copy file` 只在 WheelMaker Desktop 中显示；点击 preview 和复制路径在各端一致。
 
 Desktop 使用可信页面授权保护的绝对文件 bridge。Bridge 只接受绝对路径，确认目标是现存普通文件后，启动固定的 VS Code 或 Windows File Explorer 进程。项目内和项目外链接均使用该动作；普通浏览器不获得启动本机程序的能力。
 
+`Copy file` 把 Desktop 主机上现存的普通文件作为 Windows 文件对象放入系统剪贴板，不复制文本内容。该动作沿用 VS Code / Explorer 的 Desktop 主机路径边界，不下载或同步远端 Hub 文件；目录、缺失路径、非绝对路径和未授权调用必须被拒绝。明确标记为已删除的 Changed file 不显示文件复制动作。
+
 ## Markdown HTML 导出
 
-项目 Markdown 文件可以从 preview 工作台的更多操作菜单导出为独立 HTML；聊天中已识别的项目 Markdown 文件链接也在右键菜单提供相同动作。非 Markdown 文件和项目外文件不提供该导出动作。
+项目 Markdown 文件可以从 preview 工作台的更多操作菜单导出为独立 HTML；聊天中已识别的项目 Markdown 文件链接和 Changed file 右键菜单也提供相同能力。非 Markdown 文件、项目外文件和明确标记为已删除的 Changed file 不提供该动作。
 
 导出网页内嵌核心排版、代码高亮和项目内相对图片，并跟随系统浅/深色主题。项目图片只能在项目根目录内按来源文件目录解析；远程图片尽力内嵌，失败时保留原 URL 并向用户提示。原始 Markdown HTML 经过安全清理，脚本、事件属性与危险 URL 不得进入导出页面。
 
-交付方式由运行环境决定：Desktop 把受控临时 `.html` 文件放入系统剪贴板，粘贴应得到文件而非源码文本；Android 通过系统分享面板交付临时文件；浏览器和 PWA 下载该文件。文件导出将 `.md` 后缀替换为 `.html`，回复导出使用带 turn 序号和时间戳的文件名。
+交付方式由运行环境决定：Desktop 右键菜单使用 `Copy file as HTML`，把受控临时 `.html` 文件放入系统剪贴板，粘贴应得到文件而非源码文本；Android、浏览器和 PWA 继续使用 `Export as HTML`，分别通过系统分享面板或下载交付文件。文件导出将 `.md` 后缀替换为 `.html`，回复导出使用带 turn 序号和时间戳的文件名。
 
 ## 兼容性
 

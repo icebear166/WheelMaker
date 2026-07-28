@@ -4,11 +4,17 @@ import type {PreviewFileLink} from '../preview/previewFileLink';
 import {ChatIcon, type ChatIconName} from './ChatIcon';
 
 export type ChatFileLinkMenuAction =
+  | 'preview'
   | 'vscode'
   | 'folder'
+  | 'copy-file'
   | 'copy-relative'
   | 'copy-absolute'
   | 'export-html';
+
+export type ChatFileLinkHtmlActionLabel =
+  | 'Copy file as HTML'
+  | 'Export as HTML';
 
 export type ChatFileLinkContextMenuProps = {
   x: number;
@@ -16,10 +22,25 @@ export type ChatFileLinkContextMenuProps = {
   link: PreviewFileLink;
   canOpenInVSCode: boolean;
   canShowInFolder: boolean;
-  canExportHtml: boolean;
+  canCopyFile: boolean;
+  htmlActionLabel: ChatFileLinkHtmlActionLabel | null;
   onAction: (action: ChatFileLinkMenuAction) => void;
   onClose: () => void;
 };
+
+type MenuEntry = {
+  action: ChatFileLinkMenuAction;
+  icon: ChatIconName;
+  label: string;
+};
+
+function isMenuEntry(entry: MenuEntry | null): entry is MenuEntry {
+  return entry !== null;
+}
+
+function menuGroup(...entries: Array<MenuEntry | null>): MenuEntry[] {
+  return entries.filter(isMenuEntry);
+}
 
 export function ChatFileLinkContextMenu({
   x,
@@ -27,7 +48,8 @@ export function ChatFileLinkContextMenu({
   link,
   canOpenInVSCode,
   canShowInFolder,
-  canExportHtml,
+  canCopyFile,
+  htmlActionLabel,
   onAction,
   onClose,
 }: ChatFileLinkContextMenuProps) {
@@ -68,11 +90,37 @@ export function ChatFileLinkContextMenu({
     icon: ChatIconName,
     label: string,
   ) => (
-    <button type="button" role="menuitem" onClick={() => onAction(action)}>
+    <button key={action} type="button" role="menuitem" onClick={() => onAction(action)}>
       <ChatIcon name={icon} />
       <span>{label}</span>
     </button>
   );
+
+  const actionGroups: MenuEntry[][] = [
+    menuGroup(
+      {action: 'preview', icon: 'eye', label: 'Preview file'},
+      canOpenInVSCode
+        ? {action: 'vscode', icon: 'code', label: 'Open with VS Code'}
+        : null,
+      canShowInFolder
+        ? {action: 'folder', icon: 'folderOpen', label: 'Show in File Explorer'}
+        : null,
+    ),
+    menuGroup(
+      canCopyFile
+        ? {action: 'copy-file', icon: 'copy', label: 'Copy file'}
+        : null,
+      htmlActionLabel
+        ? {action: 'export-html', icon: 'fileCode', label: htmlActionLabel}
+        : null,
+    ),
+    menuGroup(
+      link.relativePath !== null
+        ? {action: 'copy-relative', icon: 'fileSymlink', label: 'Copy relative path'}
+        : null,
+      {action: 'copy-absolute', icon: 'clipboard', label: 'Copy absolute path'},
+    ),
+  ].filter(group => group.length > 0);
 
   return (
     <div
@@ -82,19 +130,17 @@ export function ChatFileLinkContextMenu({
       role="menu"
       onKeyDown={event => handleMenuKeyDown(event, menuRef.current)}
     >
-      {canOpenInVSCode
-        ? item('vscode', 'code', 'Open with VS Code')
-        : null}
-      {canShowInFolder
-        ? item('folder', 'folderOpen', 'Show in File Explorer')
-        : null}
-      {canExportHtml
-        ? item('export-html', 'share', 'Export as HTML')
-        : null}
-      {link.relativePath !== null
-        ? item('copy-relative', 'copy', 'Copy relative path')
-        : null}
-      {item('copy-absolute', 'clipboard', 'Copy absolute path')}
+      {actionGroups.map((group, groupIndex) => (
+        <React.Fragment key={group[0].action}>
+          {groupIndex > 0 ? (
+            <div
+              className="chat-file-link-context-menu-separator"
+              role="separator"
+            />
+          ) : null}
+          {group.map(entry => item(entry.action, entry.icon, entry.label))}
+        </React.Fragment>
+      ))}
     </div>
   );
 }

@@ -98,3 +98,52 @@ describe('ChatTurnView session fork', () => {
     expect(text).toContain('Forked from Source session');
   });
 });
+
+describe('ChatTurnView Changed Files interactions', () => {
+  it('keeps left-click diff behavior and forwards only file-row context menus', async () => {
+    const onOpenPromptArtifact = jest.fn();
+    const onOpenPromptArtifactFileContextMenu = jest.fn();
+    const value = message('prompt_done', {
+      artifacts: [{
+        artifactId: 'artifact-1',
+        type: 'diff',
+        format: 'unified-diff',
+        fileCount: 1,
+        files: [{
+          path: 'src/main.ts',
+          status: 'M',
+          additions: 4,
+          deletions: 1,
+        }],
+      }],
+    });
+    const tree = await renderTurn(value, {
+      onOpenPromptArtifact,
+      onOpenPromptArtifactFileContextMenu,
+    });
+
+    const summary = tree.root.findByProps({className: 'chat-prompt-artifact-summary'});
+    const fileRow = tree.root.findByProps({className: 'chat-prompt-artifact-file'});
+    const contextEvent = {
+      clientX: 32,
+      clientY: 48,
+      preventDefault: jest.fn(),
+    };
+
+    await act(async () => fileRow.props.onClick());
+    expect(onOpenPromptArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({artifactId: 'artifact-1'}),
+      value,
+      'src/main.ts',
+    );
+
+    await act(async () => fileRow.props.onContextMenu(contextEvent));
+    expect(onOpenPromptArtifactFileContextMenu).toHaveBeenCalledWith(
+      expect.objectContaining({artifactId: 'artifact-1'}),
+      value,
+      expect.objectContaining({path: 'src/main.ts', status: 'M'}),
+      contextEvent,
+    );
+    expect(summary.props.onContextMenu).toBeUndefined();
+  });
+});

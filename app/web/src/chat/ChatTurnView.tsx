@@ -308,6 +308,12 @@ export type ChatTurnViewProps = {
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
   onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
+  onOpenPromptArtifactFileContextMenu?: (
+    artifact: RegistrySessionPromptArtifact,
+    message: RegistryChatMessage,
+    file: RegistrySessionPromptArtifactFile,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => void;
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
   highlightQuery?: string;
@@ -405,6 +411,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   resolvePromptAttachmentThumbnail,
   onLoadPromptAttachmentThumbnail,
   onOpenPromptArtifact,
+  onOpenPromptArtifactFileContextMenu,
   openingPromptArtifactKey = '',
   promptArtifactErrors = {},
   highlightQuery,
@@ -625,6 +632,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                           type="button"
                           className="chat-prompt-artifact-file"
                           onClick={() => onOpenPromptArtifact?.(artifact, message, file.path)}
+                          onContextMenu={event =>
+                            onOpenPromptArtifactFileContextMenu?.(artifact, message, file, event)
+                          }
                           title={file.path}
                         >
                           <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>

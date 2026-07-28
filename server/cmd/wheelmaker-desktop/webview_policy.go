@@ -34,6 +34,7 @@ const (
 	desktopBridgeShowProjectFileInFolder
 	desktopBridgeOpenFileInVSCode
 	desktopBridgeShowFileInFolder
+	desktopBridgeCopyFileToClipboard
 	desktopBridgeBeginHTMLFileClipboard
 	desktopBridgeAppendHTMLFileClipboard
 	desktopBridgeCommitHTMLFileClipboard
@@ -120,6 +121,7 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeShowProjectFileInFolder,
 		desktopBridgeOpenFileInVSCode,
 		desktopBridgeShowFileInFolder,
+		desktopBridgeCopyFileToClipboard,
 		desktopBridgeBeginHTMLFileClipboard,
 		desktopBridgeAppendHTMLFileClipboard,
 		desktopBridgeCommitHTMLFileClipboard,

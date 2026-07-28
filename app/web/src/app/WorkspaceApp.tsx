@@ -44,7 +44,9 @@ import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/deskt
 import {DesktopAppMenu} from '../shell/layouts/desktop/DesktopAppMenu';
 import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
 import {
+  canCopyDesktopFile,
   canInvokeDesktopFileAction,
+  copyDesktopFile,
   getDesktopWindowBridge,
   invokeDesktopFileAction,
   type DesktopProjectFileAction,
@@ -839,6 +841,7 @@ type ChatFileLinkMenuState = {
   projectId: string;
   projectRoot: string;
   link: PreviewFileLink;
+  fileAvailable: boolean;
 };
 
 function isAbortError(error: unknown): boolean {
@@ -16786,11 +16789,12 @@ export function App() {
               if (!targetFile) return;
               event.preventDefault();
               setChatFileLinkMenu({
-                x: Math.min(event.clientX, Math.max(8, window.innerWidth - 212)),
-                y: Math.min(event.clientY, Math.max(8, window.innerHeight - 140)),
+                x: Math.min(event.clientX, Math.max(8, window.innerWidth - 228)),
+                y: Math.min(event.clientY, Math.max(8, window.innerHeight - 280)),
                 projectId: linkProjectId,
                 projectRoot: linkProjectRoot,
                 link: targetFile,
+                fileAvailable: true,
               });
             }}
           >
@@ -17086,6 +17090,39 @@ export function App() {
     setExportingMarkdownHtmlKey('');
     setError(`Failed to export HTML: ${message}`);
   }, []);
+
+  const openPromptArtifactFileContextMenu = useCallback((
+    _artifact: RegistrySessionPromptArtifact,
+    _message: RegistryChatMessage,
+    file: RegistrySessionPromptArtifactFile,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    const targetProjectId =
+      selectedArchivedKey?.projectId ||
+      selectedChatKey?.projectId ||
+      projectId;
+    const targetProject = projects.find(project => project.projectId === targetProjectId);
+    const targetFile = targetProject
+      ? resolvePreviewFileLink(file.path, targetProject.path)
+      : null;
+    if (!targetProjectId || !targetProject || !targetFile) {
+      return;
+    }
+    event.preventDefault();
+    setChatFileLinkMenu({
+      x: Math.min(event.clientX, Math.max(8, window.innerWidth - 228)),
+      y: Math.min(event.clientY, Math.max(8, window.innerHeight - 280)),
+      projectId: targetProjectId,
+      projectRoot: targetProject.path,
+      link: targetFile,
+      fileAvailable: file.status.toUpperCase() !== 'D',
+    });
+  }, [
+    projectId,
+    projects,
+    selectedArchivedKey?.projectId,
+    selectedChatKey?.projectId,
+  ]);
 
   const openPromptArtifactDiff = useCallback(async (
     artifact: RegistrySessionPromptArtifact,
@@ -17517,6 +17554,11 @@ export function App() {
               ? openPromptArtifactDiff
               : undefined
           }
+          onOpenPromptArtifactFileContextMenu={
+            message.method === 'prompt_done'
+              ? openPromptArtifactFileContextMenu
+              : undefined
+          }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
           highlightQuery={turnIsChatSearchActive ? chatSearchQuery : undefined}
@@ -17543,6 +17585,7 @@ export function App() {
     latestSelectableOptionReplyMessageKey,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
+    openPromptArtifactFileContextMenu,
     openPromptArtifactDiff,
     openingPromptArtifactKey,
     promptArtifactErrors,
@@ -17582,6 +17625,11 @@ export function App() {
           resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
           onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
           onOpenPromptArtifact={message.method === 'prompt_done' ? openPromptArtifactDiff : undefined}
+          onOpenPromptArtifactFileContextMenu={
+            message.method === 'prompt_done'
+              ? openPromptArtifactFileContextMenu
+              : undefined
+          }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
         />
@@ -17593,6 +17641,7 @@ export function App() {
     chatMarkdownUrlTransform,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
+    openPromptArtifactFileContextMenu,
     openPromptArtifactDiff,
     openingPromptArtifactKey,
     promptArtifactErrors,
@@ -20133,8 +20182,13 @@ export function App() {
     const absolutePath = chatFileLinkMenu.link.absolutePath;
     const menuProjectId = chatFileLinkMenu.projectId;
     const menuFilePath = chatFileLinkMenu.link.path;
+    const menuLine = chatFileLinkMenu.link.line;
     setChatFileLinkMenu(null);
 
+    if (action === 'preview') {
+      openChatFilePeek(menuFilePath, menuLine, menuProjectId);
+      return;
+    }
     if (action === 'copy-relative') {
       if (relativePath === null) return;
       writeTextToClipboard(relativePath)
@@ -20151,6 +20205,17 @@ export function App() {
         .catch(err => {
           const reason = err instanceof Error ? err.message : String(err);
           setToastMessage(`Failed to copy absolute path: ${reason}`);
+        });
+      return;
+    }
+    if (action === 'copy-file') {
+      const desktopBridge = getDesktopWindowBridge();
+      if (!desktopBridge || !absolutePath) return;
+      copyDesktopFile(desktopBridge, absolutePath)
+        .then(() => setToastMessage('Copied file.'))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`Failed to copy file: ${reason}`);
         });
       return;
     }
@@ -20825,9 +20890,21 @@ export function App() {
         'folder',
         chatFileLinkDesktopTarget,
       )}
-      canExportHtml={
+      canCopyFile={
+        chatFileLinkMenu.fileAvailable &&
+        canCopyDesktopFile(
+          chatFileLinkDesktopBridge,
+          chatFileLinkMenu.link.absolutePath,
+        )
+      }
+      htmlActionLabel={
+        chatFileLinkMenu.fileAvailable &&
         chatFileLinkMenu.link.relativePath !== null &&
         isMarkdownPath(chatFileLinkMenu.link.path)
+          ? chatFileLinkDesktopBridge
+            ? 'Copy file as HTML'
+            : 'Export as HTML'
+          : null
       }
       onAction={handleChatFileLinkMenuAction}
       onClose={() => setChatFileLinkMenu(null)}

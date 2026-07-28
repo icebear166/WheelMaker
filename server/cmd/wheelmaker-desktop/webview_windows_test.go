@@ -39,10 +39,12 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 		"showProjectFileInFolder",
 		"openFileInVSCode",
 		"showFileInFolder",
+		"copyFileToClipboard",
 		desktopOpenProjectFileInVSCodeBinding,
 		desktopShowProjectFileInFolderBinding,
 		desktopOpenFileInVSCodeBinding,
 		desktopShowFileInFolderBinding,
+		desktopCopyFileToClipboardBinding,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("desktop runtime script missing %q", want)
@@ -63,6 +65,7 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 		desktopShowProjectFileInFolderBinding,
 		desktopOpenFileInVSCodeBinding,
 		desktopShowFileInFolderBinding,
+		desktopCopyFileToClipboardBinding,
 	} {
 		if strings.Contains(bootstrapSection, privateName) {
 			t.Errorf("bootstrap object exposes private file action binding %q", privateName)
@@ -81,6 +84,7 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 	for _, privateName := range []string{
 		desktopOpenFileInVSCodeBinding,
 		desktopShowFileInFolderBinding,
+		desktopCopyFileToClipboardBinding,
 	} {
 		if strings.Contains(localDevSection, privateName) {
 			t.Errorf("Local Dev object exposes absolute file action binding %q", privateName)
@@ -100,6 +104,8 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 		"newDefaultDesktopFileActionEnvironment().openFileInVSCode(absolutePath)",
 		"authorize(desktopBridgeShowFileInFolder)",
 		"newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)",
+		"authorize(desktopBridgeCopyFileToClipboard)",
+		"setDesktopFileClipboard(hwnd, absolutePath)",
 	} {
 		if !strings.Contains(string(source), want) {
 			t.Errorf("Windows desktop binding source missing %q", want)
