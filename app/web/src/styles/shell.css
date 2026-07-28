@@ -2,7 +2,7 @@
 
 .page,
 .workspace {
-  --desktop-window-controls-width: 176px;
+  --desktop-window-controls-width: 138px;
   --desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));
   --chat-session-panel-width: 360px;
   --chat-menu-header-height: 32px;
@@ -54,6 +54,7 @@
   justify-content: flex-end;
   color: var(--text-primary);
   background: var(--desktop-top-surface);
+  border-left: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   -webkit-touch-callout: none;
   -webkit-user-select: none;

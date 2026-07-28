@@ -86,7 +86,7 @@ export function DesktopWindowControls() {
         title="Maximize or restore"
         onClick={() => invokeDesktopAction(bridge.toggleMaximize)}
       >
-        <Icon name="maximize" />
+        <Icon name="square" />
       </button>
       <button
         type="button"

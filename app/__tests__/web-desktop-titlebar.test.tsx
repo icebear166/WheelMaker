@@ -67,7 +67,6 @@ describe('desktop window controls', () => {
     expect(root.findAllByProps({'data-desktop-titlebar': true})).toHaveLength(0);
     expect(root.findAllByProps({className: 'desktop-window-source-button'})).toHaveLength(0);
     expect(root.findAllByProps({className: 'desktop-titlebar-title-group'})).toHaveLength(0);
-
     const buttons = root.findAllByType('button');
     expect(buttons.map(button => button.props['aria-label']).filter(Boolean)).toEqual([
       'Minimize',
@@ -76,7 +75,7 @@ describe('desktop window controls', () => {
     ]);
     expect(buttons.map(button => button.findByType('svg').props['data-icon-name'])).toEqual([
       'minus',
-      'maximize',
+      'square',
       'x',
     ]);
 

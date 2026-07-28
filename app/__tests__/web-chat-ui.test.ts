@@ -2138,7 +2138,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.wide-project-session-nav {');
     expect(stylesCss).toContain('--desktop-side-surface: var(--desktop-top-surface);');
     expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));');
-    expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
+    expect(stylesCss).toContain('--desktop-window-controls-width: 138px;');
     expect(stylesCss).toContain('.desktop-window-controls {');
     expect(stylesCss).toContain('.desktop-window-source-button {');
     expect(stylesCss).toContain('.desktop-window-source-popover {');
