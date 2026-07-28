@@ -12,13 +12,19 @@ type SnapshotCollector interface {
 	Scan(context.Context) []ProviderSnapshot
 }
 
+type HistoryRecorder interface {
+	Record(time.Time, []ProviderSnapshot) error
+}
+
 type ServiceOptions struct {
-	HubID      string
-	Collector  SnapshotCollector
-	Interval   time.Duration
-	After      func(time.Duration) <-chan time.Time
-	Now        func() time.Time
-	OnSnapshot func(Snapshot)
+	HubID          string
+	Collector      SnapshotCollector
+	History        HistoryRecorder
+	Interval       time.Duration
+	After          func(time.Duration) <-chan time.Time
+	Now            func() time.Time
+	OnSnapshot     func(Snapshot)
+	OnHistoryError func(error)
 }
 
 type scanRun struct{ done chan struct{} }
@@ -131,6 +137,11 @@ func (s *Service) execute(ctx context.Context, run *scanRun) {
 	}
 	now := s.options.Now().UTC()
 	next := now.Add(s.options.Interval)
+	if s.options.History != nil {
+		if err := s.options.History.Record(now, providers); err != nil && s.options.OnHistoryError != nil {
+			s.options.OnHistoryError(err)
+		}
+	}
 	s.mu.Lock()
 	s.snapshot.Providers = mergeProviderSnapshots(s.snapshot.Providers, providers)
 	s.snapshot.UpdatedAt = &now

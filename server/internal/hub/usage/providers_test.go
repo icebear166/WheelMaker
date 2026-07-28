@@ -43,6 +43,9 @@ func TestFlickerScannerReadsMonthlyCreditWithoutPublishingCredential(t *testing.
 	if len(account.Limits) != 1 || account.Limits[0].ID != "month" || account.Limits[0].RemainingPercent != 50.38 {
 		t.Fatalf("limits=%+v", account.Limits)
 	}
+	if account.Limits[0].WindowKind != WindowCalendarMonth || account.Limits[0].ResetsAt == nil {
+		t.Fatalf("month window=%+v", account.Limits[0])
+	}
 	if authorization != "Bearer private-token" || takumiToken != "private-token" || version != "0.3.11" || userName != "tester" {
 		t.Fatalf("headers authorization=%q takumi=%q version=%q username=%q", authorization, takumiToken, version, userName)
 	}
@@ -105,6 +108,12 @@ func TestParseCodexRateLimitsByWindowDuration(t *testing.T) {
 	limits, err := parseCodexRateLimits(payload)
 	if err != nil || len(limits) != 2 || limits[0].RemainingPercent != 77 || limits[1].RemainingPercent != 42 {
 		t.Fatalf("limits=%+v err=%v", limits, err)
+	}
+	if limits[0].WindowKind != WindowFixed || limits[0].WindowDurationMins != 300 {
+		t.Fatalf("primary window=%+v", limits[0])
+	}
+	if limits[1].WindowKind != WindowFixed || limits[1].WindowDurationMins != 10080 {
+		t.Fatalf("secondary window=%+v", limits[1])
 	}
 }
 
@@ -194,6 +203,12 @@ func TestParseKimiUsageUsesLimitsAndWeeklyUsage(t *testing.T) {
 	if err != nil || len(limits) != 2 || limits[0].RemainingPercent != 91 || limits[1].RemainingPercent != 67 {
 		t.Fatalf("limits=%+v err=%v", limits, err)
 	}
+	if limits[0].WindowKind != WindowFixed || limits[0].WindowDurationMins != 300 {
+		t.Fatalf("five-hour window=%+v", limits[0])
+	}
+	if limits[1].WindowKind != WindowFixed || limits[1].WindowDurationMins != 10080 {
+		t.Fatalf("weekly window=%+v", limits[1])
+	}
 }
 
 func TestParseZAIQuotaUsesUnitsThreeSixAndFive(t *testing.T) {
@@ -205,6 +220,19 @@ func TestParseZAIQuotaUsesUnitsThreeSixAndFive(t *testing.T) {
 	limits, _, err := parseZAILimits(payload)
 	if err != nil || len(limits) != 3 || limits[0].RemainingPercent != 34 || limits[2].RemainingPercent != 88 {
 		t.Fatalf("limits=%+v err=%v", limits, err)
+	}
+	if limits[0].WindowDurationMins != 300 || limits[1].WindowDurationMins != 10080 || limits[2].WindowKind != WindowCalendarMonth {
+		t.Fatalf("window metadata=%+v", limits)
+	}
+}
+
+func TestMyFlickerMonthWindowUsesShanghaiCalendar(t *testing.T) {
+	now := time.Date(2026, 7, 31, 15, 30, 0, 0, time.UTC)
+	got := myFlickerMonthReset(now)
+	shanghai := time.FixedZone("Asia/Shanghai", 8*60*60)
+	want := time.Date(2026, 8, 1, 0, 0, 0, 0, shanghai)
+	if !got.Equal(want) {
+		t.Fatalf("reset=%s want=%s", got, want)
 	}
 }
 

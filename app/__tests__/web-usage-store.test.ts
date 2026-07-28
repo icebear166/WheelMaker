@@ -217,4 +217,31 @@ describe('UsageStore', () => {
     expect(account.limits[0].remainingPercent).toBe(60);
     expect(account.hubIds).toEqual(['hub-a', 'hub-b']);
   });
+
+  it('retains the local account reference for every merged Hub source', () => {
+    const store = new UsageStore();
+    store.replaceHub('hub-b', {
+      hubId: 'hub-b', generation: 1, status: 'ready',
+      updatedAt: '2026-07-28T01:10:00Z', providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+          localId: 'local-b', identity: {kind: 'email', value: 'user@example.com'}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 60}],
+        }],
+      }],
+    });
+    store.replaceHub('hub-a', {
+      hubId: 'hub-a', generation: 1, status: 'ready',
+      updatedAt: '2026-07-28T01:00:00Z', providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+          localId: 'local-a', identity: {kind: 'email', value: 'USER@example.com'}, status: 'ok',
+          limits: [{id: 'week', label: 'Week', remainingPercent: 65}],
+        }],
+      }],
+    });
+
+    expect(store.snapshot().providers[0].accounts[0].sources).toEqual([
+      {hubId: 'hub-a', accountLocalId: 'local-a', updatedAt: '2026-07-28T01:00:00Z'},
+      {hubId: 'hub-b', accountLocalId: 'local-b', updatedAt: '2026-07-28T01:10:00Z'},
+    ]);
+  });
 });

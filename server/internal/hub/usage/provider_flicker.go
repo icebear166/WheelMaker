@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -26,6 +27,7 @@ type FlickerScanner struct {
 	client     *http.Client
 	endpoint   string
 	version    string
+	now        func() time.Time
 }
 
 func NewFlickerScanner(credential FlickerCredential, client *http.Client, endpoint, version string) *FlickerScanner {
@@ -38,7 +40,7 @@ func NewFlickerScanner(credential FlickerCredential, client *http.Client, endpoi
 	if version == "" {
 		version = defaultFlickerVersion
 	}
-	return &FlickerScanner{credential: credential, client: client, endpoint: endpoint, version: version}
+	return &FlickerScanner{credential: credential, client: client, endpoint: endpoint, version: version, now: time.Now}
 }
 
 func (s *FlickerScanner) Scan(ctx context.Context) ProviderSnapshot {
@@ -51,7 +53,7 @@ func (s *FlickerScanner) Scan(ctx context.Context) ProviderSnapshot {
 	account := Account{LocalID: "myflicker", Identity: Identity{Kind: "source", Label: "Account"}, Limits: []Limit{}}
 	if message != "" {
 		account.Status, account.Message = ProviderError, message
-	} else if limits, userID, err := parseFlickerLimits(payload); err != nil {
+	} else if limits, userID, err := parseFlickerLimits(payload, s.now()); err != nil {
 		account.Status, account.Message = ProviderError, "invalid response"
 	} else {
 		account.Status, account.Limits = ProviderOK, limits
@@ -95,18 +97,28 @@ func (s *FlickerScanner) fetch(ctx context.Context) (map[string]any, string) {
 	return envelope.Data, ""
 }
 
-func parseFlickerLimits(data map[string]any) ([]Limit, string, error) {
+func parseFlickerLimits(data map[string]any, now time.Time) ([]Limit, string, error) {
 	total := number(data["creditTotal"])
 	if total <= 0 {
 		return nil, "", fmt.Errorf("limits missing")
 	}
 	remaining := number(data["availableRatio"])
-	limits := []Limit{{ID: "month", Label: "Month", RemainingPercent: clampPercent(remaining)}}
+	reset := myFlickerMonthReset(now)
+	limits := []Limit{{
+		ID: "month", Label: "Month", RemainingPercent: clampPercent(remaining),
+		WindowKind: WindowCalendarMonth, ResetsAt: &reset,
+	}}
 	userID := ""
 	if value := data["userId"]; value != nil {
 		userID = fmt.Sprint(value)
 	}
 	return limits, userID, nil
+}
+
+func myFlickerMonthReset(now time.Time) time.Time {
+	shanghai := time.FixedZone("Asia/Shanghai", 8*60*60)
+	local := now.In(shanghai)
+	return time.Date(local.Year(), local.Month()+1, 1, 0, 0, 0, 0, shanghai)
 }
 
 func readFlickerCredential(path string) FlickerCredential {

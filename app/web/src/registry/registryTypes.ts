@@ -148,6 +148,27 @@ export interface RegistryHubState {
   sections: Record<string, RegistryHubStateSection>;
 }
 
+export interface RegistryUsageHistorySample {
+  observedAtMillis: number;
+  remainingPercent: number;
+}
+
+export interface RegistryUsageHistoryLimit {
+  id: string;
+  label: string;
+  windowKind: 'fixed' | 'calendarMonth';
+  windowDurationMins?: number;
+  resetsAt?: string;
+  samples: RegistryUsageHistorySample[];
+}
+
+export interface RegistryUsageHistoryResponse {
+  hubId: string;
+  providerId: string;
+  accountLocalId: string;
+  limits: RegistryUsageHistoryLimit[];
+}
+
 export interface RegistryReleasePublishJob {
   id: string;
   hubId: string;

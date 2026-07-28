@@ -7,7 +7,7 @@ import {
   ModelEfficiencySnapshotContent,
 } from '../modelEfficiency/ModelEfficiencyContent';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
-import {UsageCompactContent, UsageDetailContent} from './UsageFeatureSurface';
+import {UsageCompactContent, UsageDetailContent, type UsageOpenHistory} from './UsageFeatureSurface';
 import {formatUpdatedAgo, type UsageViewSnapshot} from './usageTypes';
 
 type MonitorTab = 'limits' | 'iq';
@@ -18,6 +18,7 @@ type Props = {
   onRefreshLimits: () => void;
   onRefreshIq: () => void;
   onRequestHide: () => void;
+  onOpenHistory?: UsageOpenHistory;
 };
 
 export function MonitorSurface({
@@ -26,6 +27,7 @@ export function MonitorSurface({
   onRefreshLimits,
   onRefreshIq,
   onRequestHide,
+  onOpenHistory,
 }: Props) {
   const [activeTab, setActiveTab] = React.useState<MonitorTab>('limits');
   const [collapsed, setCollapsed] = React.useState(false);
@@ -120,8 +122,8 @@ export function MonitorSurface({
       >
         {activeTab === 'limits' ? (
           detail
-            ? <UsageDetailContent snapshot={usageSnapshot} />
-            : <UsageCompactContent snapshot={usageSnapshot} />
+            ? <UsageDetailContent snapshot={usageSnapshot} onOpenHistory={onOpenHistory} />
+            : <UsageCompactContent snapshot={usageSnapshot} onOpenHistory={onOpenHistory} />
         ) : (
           <ModelEfficiencySnapshotContent
             snapshot={efficiencySnapshot}

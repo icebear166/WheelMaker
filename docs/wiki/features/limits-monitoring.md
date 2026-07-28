@@ -1,8 +1,8 @@
-> 摘要：本页维护 Monitor 中 Limits 的数据所有权、刷新机制、Provider 范围和跨屏展示约定。
+> 摘要：本页维护 Monitor 中 Limits 的数据所有权、刷新与历史采样、趋势预测、Provider 范围和跨屏展示约定。
 
 # Limits 监控
 
-Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前额度或余额，不包含 Copilot、历史趋势和费用预测。
+Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前额度或余额，并为百分比额度提供最长 Limit 的近期剩余趋势与耗尽预测；不包含 Copilot、实际 Token 明细或费用预测。
 
 ## 数据所有权
 
@@ -14,11 +14,21 @@ Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前�
 - API key、access token 和密钥片段不得进入 HubState、Registry 消息、Web 状态、日志或错误文本。
 - Codex `app-server` 等辅助进程必须通过后台命令构造器启动；Windows 使用隐藏窗口配置。
 
+### 历史采样
+
+- Hub 在每次成功的自动或手动 Limits 扫描后记录 Provider 原始剩余百分比；扫描失败时为最新 Limits 保留的旧成功值不得生成历史采样。
+- 历史独立落在 `<stateDir>/db/usage-history.json`，不进入 Session `state.db`。文件按 Provider、Hub 本地账号和 Limit 保存平铺时间序列；采样点仅含 Unix 毫秒时间戳与剩余百分比，窗口元数据及最新 `resetAt` 每条序列只保存一次。
+- 固定周窗口最多保留 14 天，日历月保留当前月与上一个自然月；每条序列最多 10,000 点。历史文件通过原子替换写入，损坏、版本不支持或结构校验失败时删除并重建，不阻断 Hub 和最新 Limits。
+- 固定窗口的当前周期起点由最新 `resetAt` 与窗口长度推导。MyFlicker 月额度按 `Asia/Shanghai` 自然月划分，并以下月 1 日 00:00 作为重置时间。
+- Registry 不持有或聚合历史。Web 仅在打开曲线模态框时，通过只读 `usage.history.get` 分别向账号关联的在线 Hub 请求当前周期最近 7 天原始采样；常规 `hub.state.updated` 不携带历史。
+
 ## 同步边界
 
 Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get` 读取缓存、通过 `hub.state.refresh` 手动刷新，并通过通用 `hub.state.updated` 接收完整快照替换。Registry 只验证 Hub 身份和 scope、转发通用 HubState，不包含 Provider 业务或密钥注入逻辑。
 
 快照以 `generation` 原子替换，显式表达 `idle | scanning | ready | error` 扫描状态、Provider 的 `ok | unavailable | error` 状态、账号身份、额度窗口、完整 UTC reset timestamp 和可选余额。拿不到稳定账号身份时，不跨 Hub 合并账号。Kimi 以 usages 响应的 `user.userId` 作为稳定身份（`Identity{kind:"user"}`）：同一 userId 的多个凭证源（OpenCode、Kimi Code）在 Hub 扫描时合并为单个账户，全部源失败时才按源分别报错。
+
+账号聚合视图同时保留每个来源 Hub 的本地账号引用，供历史按需读取。Web 查询全部在线候选，但不跨 Hub 拼接采样；优先选择最新采样不超过 20 分钟且至少有 3 个点的数据，再依次比较覆盖跨度、点数和更新时间。
 
 ## 桌面端展示
 
@@ -30,6 +40,11 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 - Limits 内容行层级：Provider/账号名为 `text-primary` 650 的行锚点；数据值 11px tabular-nums；标签、后缀与空态为 `text-tertiary` 10px；hub pill 为 `text-tertiary` 10px mono、只留发丝边。
 - 正常态额度 rail 使用纯 `--accent-primary`，不与 `text-primary` 混色；警告/危险分别接 `--state-warning` / `--state-danger`，tone 行 label 同步染色，不保留双色值。
 - 详情模式保持相同宽度，展示聚合后的账号、所属 Hub、额度窗口、重置时间、余额和刷新状态；账号区块拍平为 hairline 分隔分区（标题行 + 额度行），不使用卡片套卡片。
+- 百分比额度账号的整行可打开曲线模态框；只有余额、没有百分比 Limit 的账号不提供入口。一个账号只展示周期最长的 Limit，不提供短周期切换。
+- 曲线纵轴固定为 0–100% 剩余额度，横轴从所选数据首个有效采样开始，到下次重置时间结束。真实采样用实线，Web 计算的未来趋势用虚线，重置时间使用独立参考线。
+- Web 对周额度近 24 小时、月额度近 72 小时的相邻采样区间做时间加权平均：平稳区间计入，近期区间权重更高，额度回升区间排除。至少 3 个有效点才输出预测。
+- 预计提前耗尽时显示耗尽时间；预计不会在重置前耗尽时，图表不延伸到重置以后，改为显示重置时预计剩余百分比。Canvas 图形旁必须提供包含相同结论的文字摘要。
+- 图表使用按需引入的 ECharts 6，并在首次打开模态框时动态加载，不进入普通页面首屏 chunk。模态框支持关闭按钮、遮罩点击和 `Escape`，关闭后焦点返回触发账号行。
 - 桌面 Chat 设置只保留 `Show Monitor`。新偏好键不存在时，旧 Limits 或 Model efficiency 任一显示偏好为 true 就迁移为显示；迁移后只写新键。标题栏隐藏仅关闭桌面 Monitor，可从该设置恢复。
 
 ## 移动端展示
@@ -51,4 +66,5 @@ Provider 扫描启动的所有辅助进程都必须使用统一后台命令配�
 - [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
 - [`../../scope/2026-07-22-monitor-card/spec-monitor-card.md`](../../scope/2026-07-22-monitor-card/spec-monitor-card.md)
 - [`../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md)
+- [`../../scope/2026-07-28-token-usage-curve/spec-token-usage-curve.md`](../../scope/2026-07-28-token-usage-curve/spec-token-usage-curve.md)
 - [`model-efficiency.md`](model-efficiency.md)

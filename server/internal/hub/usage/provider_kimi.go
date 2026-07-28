@@ -106,14 +106,20 @@ func parseKimiLimits(payload map[string]any) ([]Limit, error) {
 		total := decimal(detail["limit"])
 		used := decimal(detail["used"])
 		if total > 0 {
-			limits = append(limits, Limit{ID: "5h", Label: "5 hours", RemainingPercent: clampPercent(100 - used/total*100), ResetsAt: parseRFC3339(detail["resetTime"])})
+			limits = append(limits, Limit{
+				ID: "5h", Label: "5 hours", RemainingPercent: clampPercent(100 - used/total*100),
+				WindowKind: WindowFixed, WindowDurationMins: 300, ResetsAt: parseRFC3339(detail["resetTime"]),
+			})
 		}
 		break
 	}
 	usage, _ := payload["usage"].(map[string]any)
 	total, remaining := decimal(usage["limit"]), decimal(usage["remaining"])
 	if total > 0 {
-		limits = append(limits, Limit{ID: "week", Label: "Week", RemainingPercent: clampPercent(remaining / total * 100), ResetsAt: parseRFC3339(usage["resetTime"])})
+		limits = append(limits, Limit{
+			ID: "week", Label: "Week", RemainingPercent: clampPercent(remaining / total * 100),
+			WindowKind: WindowFixed, WindowDurationMins: 10080, ResetsAt: parseRFC3339(usage["resetTime"]),
+		})
 	}
 	if len(limits) == 0 {
 		return nil, fmt.Errorf("limits missing")

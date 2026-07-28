@@ -6,6 +6,8 @@ export interface UsageLimit {
   id: string;
   label: string;
   remainingPercent: number;
+  windowKind?: 'fixed' | 'calendarMonth';
+  windowDurationMins?: number;
   resetsAt?: string;
 }
 
@@ -58,6 +60,13 @@ export interface UsageHubSnapshot {
 
 export interface UsageViewAccount extends UsageAccount {
   hubIds: string[];
+  sources: UsageAccountSource[];
+}
+
+export interface UsageAccountSource {
+  hubId: string;
+  accountLocalId: string;
+  updatedAt?: string;
 }
 
 export interface UsageProviderView {

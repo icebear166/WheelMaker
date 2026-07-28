@@ -31,6 +31,8 @@ import type {
   RegistryHub,
   RegistryHubState,
   RegistryHubStateSectionName,
+  RegistryUsageHistoryLimit,
+  RegistryUsageHistoryResponse,
 	RegistryReleasePublishResponse,
   RegistryNpmCommandResponse,
   RegistryNpmHubSnapshot,
@@ -245,6 +247,60 @@ function releasePublishStateResponse(state: RegistryHubState): RegistryReleasePu
   }
   return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish')
     ?? {ok: false, status: 'missing_hub_state_response'};
+}
+
+function normalizeUsageHistoryLimit(raw: unknown): RegistryUsageHistoryLimit | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const input = raw as Record<string, unknown>;
+  const windowKind = input.windowKind;
+  if (
+    typeof input.id !== 'string'
+    || typeof input.label !== 'string'
+    || (windowKind !== 'fixed' && windowKind !== 'calendarMonth')
+    || !Array.isArray(input.samples)
+  ) {
+    return null;
+  }
+  const windowDurationMins = input.windowDurationMins;
+  if (
+    windowDurationMins !== undefined
+    && (typeof windowDurationMins !== 'number'
+      || !Number.isFinite(windowDurationMins)
+      || windowDurationMins <= 0)
+  ) {
+    return null;
+  }
+  if (windowKind === 'fixed' && windowDurationMins === undefined) return null;
+  const resetsAt = input.resetsAt;
+  if (resetsAt !== undefined && (typeof resetsAt !== 'string' || !Number.isFinite(Date.parse(resetsAt)))) {
+    return null;
+  }
+  const samples = input.samples.map(sample => {
+    if (!Array.isArray(sample) || sample.length !== 2) return null;
+    const [observedAtMillis, remainingPercent] = sample;
+    if (
+      typeof observedAtMillis !== 'number'
+      || !Number.isFinite(observedAtMillis)
+      || !Number.isInteger(observedAtMillis)
+      || observedAtMillis < 0
+      || typeof remainingPercent !== 'number'
+      || !Number.isFinite(remainingPercent)
+      || remainingPercent < 0
+      || remainingPercent > 100
+    ) {
+      return null;
+    }
+    return {observedAtMillis, remainingPercent};
+  });
+  if (samples.some(sample => sample === null)) return null;
+  return {
+    id: input.id,
+    label: input.label,
+    windowKind,
+    windowDurationMins,
+    resetsAt,
+    samples: samples.filter(sample => sample !== null),
+  };
 }
 
 export class RegistryRepository {
@@ -1999,6 +2055,42 @@ export class RegistryRepository {
     });
     const payload = (resp.payload ?? {}) as {state?: unknown};
     return this.normalizeHubState(payload.state, hubId);
+  }
+
+  async getUsageHistory(
+    hubId: string,
+    providerId: string,
+    accountLocalId: string,
+  ): Promise<RegistryUsageHistoryResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.UsageHistoryGet,
+      hubId,
+      payload: {providerId, accountLocalId},
+      timeoutMs: 15000,
+    });
+    const payload = resp.payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('invalid usage history response');
+    }
+    const input = payload as Record<string, unknown>;
+    if (
+      input.hubId !== hubId
+      || input.providerId !== providerId
+      || input.accountLocalId !== accountLocalId
+      || !Array.isArray(input.limits)
+    ) {
+      throw new Error('invalid usage history response');
+    }
+    const limits = input.limits.map(normalizeUsageHistoryLimit);
+    if (limits.some(limit => limit === null)) {
+      throw new Error('invalid usage history response');
+    }
+    return {
+      hubId,
+      providerId,
+      accountLocalId,
+      limits: limits.filter(limit => limit !== null),
+    };
   }
 
   async refreshHubState(

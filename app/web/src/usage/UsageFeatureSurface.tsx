@@ -2,6 +2,12 @@ import React from 'react';
 
 import {formatResetCountdown, formatResetUTC, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
 
+export type UsageOpenHistory = (
+  provider: UsageProviderView,
+  account: UsageViewAccount,
+  trigger: HTMLElement,
+) => void;
+
 function accountLabel(account: UsageProviderView['accounts'][number]): string {
   const label = account.identity.label || account.identity.value || account.localId;
   return account.identity.kind === 'source' || label.toLowerCase() === 'opencode' ? 'Account' : label;
@@ -44,19 +50,17 @@ function AccountRail({
   provider,
   account,
   displayName,
+  onOpenHistory,
 }: {
   provider: UsageProviderView;
   account: UsageViewAccount;
   displayName: string;
+  onOpenHistory?: UsageOpenHistory;
 }) {
   const limits = compactLimits(account);
   const balance = balanceSummary(account);
-  return (
-    <div
-      className="usage-provider-row"
-      data-usage-provider={provider.id}
-      data-usage-compact-account={`${provider.id}:${account.localId}`}
-    >
+  const content = (
+    <>
       <span className="usage-provider-name" title={displayName}>{displayName}</span>
       {limits.some(limit => limit !== null) ? (
         <span className="usage-provider-metrics">
@@ -81,59 +85,129 @@ function AccountRail({
       ) : (
         <span className="usage-provider-empty">{provider.status === 'error' ? 'Scan failed' : 'Not connected'}</span>
       )}
+    </>
+  );
+  if (account.limits.length > 0 && onOpenHistory) {
+    return (
+      <button
+        type="button"
+        role="button"
+        className="usage-provider-row usage-account-trigger"
+        data-usage-provider={provider.id}
+        data-usage-compact-account={`${provider.id}:${account.localId}`}
+        data-usage-account-trigger={`${provider.id}:${account.localId}`}
+        onClick={event => onOpenHistory(provider, account, event.currentTarget)}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div
+      className="usage-provider-row"
+      data-usage-provider={provider.id}
+      data-usage-compact-account={`${provider.id}:${account.localId}`}
+    >
+      {content}
     </div>
   );
 }
 
-function ProviderDetails({provider}: {provider: UsageProviderView}) {
+function AccountDetails({
+  provider,
+  account,
+}: {
+  provider: UsageProviderView;
+  account: UsageViewAccount;
+}) {
+  return (
+    <>
+      <div className="usage-account-heading">
+        <span className="usage-account-title">
+          <strong>{provider.name}</strong>
+          <span> / </span>
+          <span>{accountLabel(account)}</span>
+        </span>
+        <span className="usage-account-hubs">
+          {account.hubIds.map(hubId => <span className="usage-account-hub" data-usage-hub={true} key={hubId}>{hubId}</span>)}
+        </span>
+      </div>
+      {account.message ? <div className="usage-account-message">{account.message}</div> : null}
+      {account.limits.map(limit => (
+        <div
+          className={`usage-limit-line tone-${tightnessTone(limit.remainingPercent)}`}
+          data-usage-detail-limit={true}
+          key={limit.id}
+        >
+          <span className="usage-limit-label">{shortLimitLabel(limit)}</span>
+          <QuotaRail remainingPercent={limit.remainingPercent} />
+          <strong>{Math.round(limit.remainingPercent)}%</strong>
+          <span className="usage-limit-reset" title={formatResetUTC(limit.resetsAt)}>
+            {limit.resetsAt ? `Reset ${formatResetCountdown(limit.resetsAt)}` : 'No reset'}
+          </span>
+        </div>
+      ))}
+      {account.balance?.items.map(item => (
+        <div className="usage-limit-line balance" key={item.currency}>
+          <span className="usage-limit-label">{item.currency}</span>
+          <strong>{item.total}</strong>
+          <span className="usage-limit-reset">Balance</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ProviderDetails({
+  provider,
+  onOpenHistory,
+}: {
+  provider: UsageProviderView;
+  onOpenHistory?: UsageOpenHistory;
+}) {
   const accounts = provider.accounts.filter(account => account.status === 'ok');
   return (
     <section className="usage-detail-provider">
-      {accounts.map(account => (
-        <div
-          className="usage-account-card"
-          data-usage-account={`${provider.id}:${account.localId}`}
-          key={`${account.localId}:${account.hubIds.join(',')}`}
-        >
-          <div className="usage-account-heading">
-            <span className="usage-account-title">
-              <strong>{provider.name}</strong>
-              <span> / </span>
-              <span>{accountLabel(account)}</span>
-            </span>
-            <span className="usage-account-hubs">
-              {account.hubIds.map(hubId => <span className="usage-account-hub" data-usage-hub={true} key={hubId}>{hubId}</span>)}
-            </span>
+      {accounts.map(account => {
+        const key = `${account.localId}:${account.hubIds.join(',')}`;
+        return account.limits.length > 0 && onOpenHistory ? (
+          <div
+            role="button"
+            tabIndex={0}
+            className="usage-account-card usage-account-trigger"
+            data-usage-account={`${provider.id}:${account.localId}`}
+            data-usage-account-trigger={`${provider.id}:${account.localId}`}
+            key={key}
+            onClick={event => onOpenHistory(provider, account, event.currentTarget)}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              onOpenHistory(provider, account, event.currentTarget);
+            }}
+          >
+            <AccountDetails provider={provider} account={account} />
           </div>
-          {account.message ? <div className="usage-account-message">{account.message}</div> : null}
-          {account.limits.map(limit => (
-            <div
-              className={`usage-limit-line tone-${tightnessTone(limit.remainingPercent)}`}
-              data-usage-detail-limit={true}
-              key={limit.id}
-            >
-              <span className="usage-limit-label">{shortLimitLabel(limit)}</span>
-              <QuotaRail remainingPercent={limit.remainingPercent} />
-              <strong>{Math.round(limit.remainingPercent)}%</strong>
-              <span className="usage-limit-reset" title={formatResetUTC(limit.resetsAt)}>
-                {limit.resetsAt ? `Reset ${formatResetCountdown(limit.resetsAt)}` : 'No reset'}
-              </span>
-            </div>
-          ))}
-          {account.balance?.items.map(item => (
-            <div className="usage-limit-line balance" key={item.currency}>
-              <span className="usage-limit-label">{item.currency}</span>
-              <strong>{item.total}</strong>
-              <span className="usage-limit-reset">Balance</span>
-            </div>
-          ))}
-        </div>
-      ))}
+        ) : (
+          <div
+            className="usage-account-card"
+            data-usage-account={`${provider.id}:${account.localId}`}
+            key={key}
+          >
+            <AccountDetails provider={provider} account={account} />
+          </div>
+        );
+      })}
     </section>
   );
 }
 
-export function UsageDetailContent({snapshot}: {snapshot: UsageViewSnapshot}) {
+export function UsageDetailContent({
+  snapshot,
+  onOpenHistory,
+}: {
+  snapshot: UsageViewSnapshot;
+  onOpenHistory?: UsageOpenHistory;
+}) {
   if (snapshot.providers.length === 0) {
     return <div className="usage-feature-empty">Waiting for Hub limits</div>;
   }
@@ -143,12 +217,20 @@ export function UsageDetailContent({snapshot}: {snapshot: UsageViewSnapshot}) {
   }
   return (
     <div className="usage-detail-list">
-      {providers.map(provider => <ProviderDetails key={provider.id} provider={provider} />)}
+      {providers.map(provider => (
+        <ProviderDetails key={provider.id} provider={provider} onOpenHistory={onOpenHistory} />
+      ))}
     </div>
   );
 }
 
-export function UsageCompactContent({snapshot}: {snapshot: UsageViewSnapshot}) {
+export function UsageCompactContent({
+  snapshot,
+  onOpenHistory,
+}: {
+  snapshot: UsageViewSnapshot;
+  onOpenHistory?: UsageOpenHistory;
+}) {
   if (snapshot.providers.length === 0) {
     return <div className="usage-feature-empty">Waiting for Hub limits</div>;
   }
@@ -168,6 +250,7 @@ export function UsageCompactContent({snapshot}: {snapshot: UsageViewSnapshot}) {
           provider={provider}
           account={account}
           displayName={displayName}
+          onOpenHistory={onOpenHistory}
         />
       ))}
     </div>
