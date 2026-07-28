@@ -16765,7 +16765,7 @@ export function App() {
         codeLineHeight,
         codeTabSize,
         wrap: true,
-        lineNumbers: showLineNumbers,
+        lineNumbers: false,
         framed: true,
       });
     },
@@ -16776,7 +16776,6 @@ export function App() {
       codeFontSize,
       codeLineHeight,
       codeTabSize,
-      showLineNumbers,
       openChatPortRelayLink,
     ],
   );
