@@ -27,6 +27,7 @@ import type {
   RegistryHub,
   RegistryHubState,
   RegistryHubStateSectionName,
+  RegistryUsageHistoryResponse,
 	RegistryReleasePublishResponse,
   RegistryNpmCommandResponse,
   RegistryPortRelayEnablePayload,
@@ -888,6 +889,17 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.getHubState(hubId, sections);
+  }
+
+  async getUsageHistory(
+    hubId: string,
+    providerId: string,
+    accountLocalId: string,
+  ): Promise<RegistryUsageHistoryResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getUsageHistory(hubId, providerId, accountLocalId);
   }
 
   async refreshHubState(hubId: string, sections: RegistryHubStateSectionName[]): Promise<RegistryHubState> {

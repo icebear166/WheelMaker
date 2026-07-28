@@ -1,3 +1,4 @@
+import type {UsageViewAccount} from '../web/src/usage/usageTypes';
 import {formatResetCountdown, formatUpdatedAgo, tightnessTone} from '../web/src/usage/usageTypes';
 
 describe('usage formatters', () => {
@@ -12,5 +13,17 @@ describe('usage formatters', () => {
     expect(tightnessTone(8)).toBe('danger');
     expect(tightnessTone(24)).toBe('warning');
     expect(tightnessTone(60)).toBe('normal');
+  });
+
+  it('models the concrete Hub-local sources needed for history requests', () => {
+    const account: UsageViewAccount = {
+      localId: 'latest',
+      identity: {kind: 'email', value: 'user@example.com'},
+      status: 'ok',
+      limits: [],
+      hubIds: ['hub-a'],
+      sources: [{hubId: 'hub-a', accountLocalId: 'local-a'}],
+    };
+    expect(account.sources[0]).toEqual({hubId: 'hub-a', accountLocalId: 'local-a'});
   });
 });

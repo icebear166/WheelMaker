@@ -1,6 +1,8 @@
 import type {
   UsageAccount,
+  UsageAccountSource,
   UsageHubSnapshot,
+  UsageLimit,
   UsageProviderId,
   UsageProviderSnapshot,
   UsageProviderStatus,
@@ -87,13 +89,19 @@ export class UsageStore {
           const hubIds = existing
             ? Array.from(new Set([...existing.account.hubIds, hubId])).sort()
             : [hubId];
+          const sources = mergeAccountSources(existing?.account.sources ?? [], {
+            hubId,
+            accountLocalId: account.localId,
+            updatedAt: hub.updatedAt,
+          });
           if (!existing || isNewerSnapshotTime(hub.updatedAt, existing.updatedAt)) {
             aggregate.accounts.set(identityKey, {
-              account: {...account, hubIds},
+              account: {...account, hubIds, sources},
               updatedAt: hub.updatedAt,
             });
           } else {
             existing.account.hubIds = hubIds;
+            existing.account.sources = sources;
           }
         }
         providers.set(provider.id, aggregate);
@@ -173,7 +181,22 @@ function parseProvider(value: unknown): UsageProviderSnapshot | null {
     if (!isRecord(rawAccount) || typeof rawAccount.localId !== 'string' || !isRecord(rawAccount.identity) || !isProviderStatus(rawAccount.status) || !Array.isArray(rawAccount.limits)) return null;
     const limits = rawAccount.limits.map(rawLimit => {
       if (!isRecord(rawLimit) || typeof rawLimit.id !== 'string' || typeof rawLimit.label !== 'string' || typeof rawLimit.remainingPercent !== 'number') return null;
-      return {id: rawLimit.id, label: rawLimit.label, remainingPercent: rawLimit.remainingPercent, resetsAt: optionalString(rawLimit.resetsAt)};
+      const windowKind: UsageLimit['windowKind'] = rawLimit.windowKind === 'fixed' || rawLimit.windowKind === 'calendarMonth'
+        ? rawLimit.windowKind
+        : undefined;
+      const windowDurationMins = typeof rawLimit.windowDurationMins === 'number'
+        && Number.isFinite(rawLimit.windowDurationMins)
+        && rawLimit.windowDurationMins > 0
+        ? rawLimit.windowDurationMins
+        : undefined;
+      return {
+        id: rawLimit.id,
+        label: rawLimit.label,
+        remainingPercent: rawLimit.remainingPercent,
+        windowKind,
+        windowDurationMins,
+        resetsAt: optionalString(rawLimit.resetsAt),
+      };
     });
     if (limits.some(limit => limit === null)) return null;
     accounts.push({
@@ -229,4 +252,20 @@ function isNewerSnapshotTime(incoming?: string, existing?: string): boolean {
   if (incomingAt === null) return false;
   const existingAt = parseSnapshotTime(existing);
   return existingAt === null || incomingAt > existingAt;
+}
+
+function mergeAccountSources(
+  existing: UsageAccountSource[],
+  incoming: UsageAccountSource,
+): UsageAccountSource[] {
+  const sources = new Map<string, UsageAccountSource>();
+  for (const source of [...existing, incoming]) {
+    const key = `${source.hubId}\u0000${source.accountLocalId}`;
+    const current = sources.get(key);
+    if (!current || isNewerSnapshotTime(source.updatedAt, current.updatedAt)) {
+      sources.set(key, source);
+    }
+  }
+  return Array.from(sources.values()).sort((left, right) =>
+    left.hubId.localeCompare(right.hubId) || left.accountLocalId.localeCompare(right.accountLocalId));
 }
