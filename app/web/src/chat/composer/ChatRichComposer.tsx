@@ -491,12 +491,16 @@ function emitLexicalInsertion(
     emittedTokensRef.current = nextTokens;
     emitted = nextTokens;
     emittedCursor = insertion.cursor;
+  }, {
+    onUpdate: () => {
+      if (!emitted) {
+        return;
+      }
+      onTokensChange(emitted);
+      const serialized = serializeChatComposerTokens(emitted);
+      onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(emitted, emittedCursor));
+    },
   });
-  if (emitted) {
-    onTokensChange(emitted);
-    const serialized = serializeChatComposerTokens(emitted);
-    onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(emitted, emittedCursor));
-  }
 }
 
 function queueComposerEmission(

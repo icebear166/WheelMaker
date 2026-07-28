@@ -687,6 +687,47 @@ describe('ChatRichComposer', () => {
     });
   });
 
+  test('keeps the cursor after inserting a skill at a controlled cursor', async () => {
+    const initialTokens: ChatComposerToken[] = [
+      {type: 'text', text: 'before after'},
+    ];
+    const ref = React.createRef<ChatRichComposerHandle>();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState(initialTokens);
+      return (
+        <ChatRichComposer
+          ref={ref}
+          tokens={tokens}
+          onTokensChange={setTokens}
+          readOnly={false}
+        />
+      );
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editor = renderer!.root.findByType(EditorRefPlugin).props.editorRef.current;
+    await ReactTestRenderer.act(() => {
+      editor.update(() => {
+        $setComposerTokens(initialTokens, '', 'before '.length);
+      }, {discrete: true});
+    });
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertSkill({command: '/review', label: 'Review'});
+    });
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'text', text: 'before '},
+      {type: 'skill', id: expect.any(String), command: '/review', label: 'Review'},
+      {type: 'text', text: ' after'},
+    ]);
+    expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(9);
+  });
+
   test('keeps the cursor after typing following a controlled goal capsule', async () => {
     const initialTokens: ChatComposerToken[] = [
       {type: 'goal', id: 'g1', command: '/goal', label: 'Goal'},
