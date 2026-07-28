@@ -136,8 +136,8 @@ git commit -m "feat: add hub user config store"
 ### Task 2: Integrate the validated V2 bridge package and hidden command
 
 **Files:**
-- Create: `server/internal/flickerbridgev2/flicker_bridge.go`
-- Create: `server/internal/flickerbridgev2/flicker_bridge_test.go`
+- Create: `server/internal/flickerbridge/v2.go`
+- Modify: `server/internal/flickerbridge/flicker_bridge_test.go`
 - Modify: `server/cmd/wheelmaker/main.go`
 - Modify: `server/cmd/wheelmaker/main_test.go`
 - Source: `E:\_Code\kuaishou-misc-tools\tools\MyFlickerBridge\myflicker_wanqing_proxy.go`
@@ -177,21 +177,21 @@ func TestRunDispatchesFlickerBridgeV2Only(t *testing.T) {
 }
 ```
 
-In the new package test, assert `Probe()` reports unavailable for a missing node and returns sanitized details.
+In the existing `flickerbridge` package test, assert `ProbeV2()` reports unavailable for a missing node and returns sanitized details.
 
 - [ ] **Step 3: Run tests to verify RED**
 
 Run:
 
 ```powershell
-go test ./cmd/wheelmaker ./internal/flickerbridgev2 -run 'Test.*FlickerBridgeV2' -count=1
+go test ./cmd/wheelmaker ./internal/flickerbridge -run 'Test.*FlickerBridgeV2' -count=1
 ```
 
 Expected: FAIL because package, hidden flag and hooks are absent.
 
 - [ ] **Step 4: Adapt the standalone source into one package file**
 
-Copy the verified logic into `package flickerbridgev2` and expose:
+Copy the verified logic into `server/internal/flickerbridge/v2.go` under `package flickerbridge`. Prefix colliding private identifiers with `v2` and expose:
 
 ```go
 type ProbeResult struct {
@@ -201,8 +201,8 @@ type ProbeResult struct {
 	Error            string
 }
 
-func Probe() ProbeResult
-func Run(args []string) error
+func ProbeV2() V2ProbeResult
+func RunV2(args []string) error
 ```
 
 Remove the standalone `main()` and `//go:build ignore`; preserve all proxy, worker, model alias, self-test and fail-closed logic. Ensure Hub compatibility:
@@ -222,7 +222,7 @@ In `main.go`:
 const flickerBridgeV2Arg = "--flicker-bridge-v2"
 
 var runFlickerBridgeV1 = flickerbridge.Run
-var runFlickerBridgeV2 = flickerbridgev2.Run
+var runFlickerBridgeV2 = flickerbridge.RunV2
 
 func run() error {
 	if len(os.Args) > 1 {
@@ -242,7 +242,7 @@ func run() error {
 Run:
 
 ```powershell
-go test ./cmd/wheelmaker ./internal/flickerbridgev2 -count=1
+go test ./cmd/wheelmaker ./internal/flickerbridge -count=1
 go test ./... -count=1
 ```
 
@@ -251,7 +251,7 @@ Expected: PASS; existing V1 dispatcher test remains green.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add server/internal/flickerbridgev2 server/cmd/wheelmaker/main.go server/cmd/wheelmaker/main_test.go
+git add server/internal/flickerbridge/v2.go server/internal/flickerbridge/flicker_bridge_test.go server/cmd/wheelmaker/main.go server/cmd/wheelmaker/main_test.go
 git commit -m "feat: embed flicker bridge v2 runtime"
 ```
 

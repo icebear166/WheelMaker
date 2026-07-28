@@ -23,6 +23,13 @@ type failingResponseWriter struct {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("WHEELMAKER_V2_TEST_WORKER") == "1" {
+		if err := RunV2([]string{"--test-worker"}); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
 	if strings.EqualFold(filepath.Base(os.Args[0]), "powershell.exe") &&
 		os.Getenv("WHEELMAKER_TEST_POWERSHELL_PROBE") == "1" {
 		marker := os.Getenv("WHEELMAKER_TEST_POWERSHELL_MARKER")
@@ -76,6 +83,21 @@ func powerShellProbeCalls(t *testing.T, marker string) int {
 		t.Fatal(err)
 	}
 	return strings.Count(string(data), "call\n")
+}
+
+func TestProbeV2RejectsMissingNodeWithoutLeakingEnvironment(t *testing.T) {
+	t.Setenv("MYFLICKER_NODE", filepath.Join(t.TempDir(), "missing-node.exe"))
+	t.Setenv("MYFLICKER_WANQING_PROXY_KEY", "must-not-leak")
+	result := ProbeV2()
+	if result.Available {
+		t.Fatalf("ProbeV2()=%+v, want unavailable", result)
+	}
+	if result.Error == "" {
+		t.Fatalf("ProbeV2()=%+v, want sanitized error", result)
+	}
+	if strings.Contains(result.Error, "must-not-leak") {
+		t.Fatalf("ProbeV2() leaked the local key: %+v", result)
+	}
 }
 
 func (writer *failingResponseWriter) Header() http.Header {

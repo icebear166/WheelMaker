@@ -38,6 +38,15 @@ func TestRunFlickerBridgeSelfTestMode(t *testing.T) {
 	}
 }
 
+func TestRunFlickerBridgeV2SelfTestMode(t *testing.T) {
+	originalArgs := os.Args
+	t.Cleanup(func() { os.Args = originalArgs })
+	os.Args = []string{"wheelmaker", "--flicker-bridge-v2", "--self-test=settings"}
+	if err := run(); err != nil {
+		t.Fatalf("run Flicker Bridge V2 self-test mode: %v", err)
+	}
+}
+
 func TestLoadValidatedRuntimeConfigRejectsUnsafeRegistryToken(t *testing.T) {
 	for _, token := range []string{"", "wheelmaker-local-token"} {
 		t.Run(token, func(t *testing.T) {

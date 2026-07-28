@@ -11,7 +11,7 @@
 ## 决策
 
 - 当前 `server/internal/flickerbridge` 和隐藏入口 `--flicker-bridge` 保持为 V1，不改变其代理行为和兼容入口。
-- V2 经核心 spec 验证后，以独立 `server/internal/flickerbridgev2` 包集成进 WheelMaker，并通过新的隐藏入口 `--flicker-bridge-v2` 运行。发布产物不依赖外部代理 MJS；V2 仍依赖目标 Hub 机器上的 Node 和兼容版 npm `@myflicker/cli`。
+- V2 经核心 spec 验证后，以单独的 `server/internal/flickerbridge/v2.go` 文件集成进现有 `flickerbridge` 包，并通过新的隐藏入口 `--flicker-bridge-v2` 和 `flickerbridge.RunV2` 运行。V1 的 `flicker_bridge.go`、`Run` 入口和运行状态不复用 V2 私有实现。发布产物不依赖外部代理 MJS；V2 仍依赖目标 Hub 机器上的 Node 和兼容版 npm `@myflicker/cli`。
 - V1/V2 都监听 `127.0.0.1:17999`，复用 `api_keys.flicker` 作为本地门禁 key。`cc-flicker` 的 `ANTHROPIC_BASE_URL`、agent ID、`CLAUDE_CONFIG_DIR` 和 endpoint 不变。
 - 现有 Hub manager 从单版本生命周期管理扩展为模式感知管理；同一时刻只允许一个版本占用 17999。
 - 已有安装、缺失 `hub-config.json` 或缺失 `flickerBridge.mode` 时默认 V1。
