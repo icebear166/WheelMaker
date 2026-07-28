@@ -48,7 +48,7 @@ func (r *Reporter) refreshHubStateFlickerBridge(ctx context.Context, _ hubStateR
 	return r.flickerBridge.Status(ctx), nil
 }
 
-func (r *Reporter) actionHubStateFlickerBridge(ctx context.Context, action string, _ map[string]any) (any, error) {
+func (r *Reporter) actionHubStateFlickerBridge(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "start":
 		return r.flickerBridge.Start(ctx)
@@ -56,6 +56,12 @@ func (r *Reporter) actionHubStateFlickerBridge(ctx context.Context, action strin
 		return r.flickerBridge.Stop(ctx)
 	case "restart":
 		return r.flickerBridge.Restart(ctx)
+	case "switchMode":
+		mode, ok := params["mode"].(string)
+		if !ok || mode == "" {
+			return nil, fmt.Errorf("%s switchMode requires mode", hubStateSectionFlickerBridge)
+		}
+		return r.flickerBridge.SwitchMode(ctx, flickerBridgeMode(mode))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionFlickerBridge, action)
 	}

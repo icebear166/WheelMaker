@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/flickerbridge"
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	shared "github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -24,13 +26,29 @@ const (
 )
 
 type flickerBridgeStatus struct {
-	Configured bool   `json:"configured"`
-	Supported  bool   `json:"supported"`
-	State      string `json:"state"`
-	Endpoint   string `json:"endpoint"`
-	Port       int    `json:"port"`
-	PID        int    `json:"pid,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Configured     bool                         `json:"configured"`
+	Supported      bool                         `json:"supported"`
+	State          string                       `json:"state"`
+	Mode           flickerBridgeMode            `json:"mode"`
+	RunningMode    flickerBridgeMode            `json:"runningMode,omitempty"`
+	AvailableModes []flickerBridgeMode          `json:"availableModes"`
+	ModeErrors     map[flickerBridgeMode]string `json:"modeErrors,omitempty"`
+	Endpoint       string                       `json:"endpoint"`
+	Port           int                          `json:"port"`
+	PID            int                          `json:"pid,omitempty"`
+	Error          string                       `json:"error,omitempty"`
+}
+
+type flickerBridgeMode string
+
+const (
+	flickerBridgeModeV1 flickerBridgeMode = "v1"
+	flickerBridgeModeV2 flickerBridgeMode = "v2"
+)
+
+type flickerBridgeModeStore interface {
+	FlickerBridgeMode() (hubconfig.FlickerBridgeMode, error)
+	UpdateFlickerBridgeMode(hubconfig.FlickerBridgeMode) error
 }
 
 type flickerBridgeProcess interface {
@@ -65,20 +83,30 @@ func (p *execFlickerBridgeProcess) Wait() error {
 }
 
 type flickerBridgeManager struct {
-	mu         sync.Mutex
-	configured bool
-	supported  bool
-	state      string
-	errMessage string
-	apiKey     string
-	stateDir   string
+	mu          sync.Mutex
+	operationMu sync.Mutex
+	configured  bool
+	supported   bool
+	state       string
+	errMessage  string
+	apiKey      string
+	stateDir    string
+	mode        flickerBridgeMode
+	runningMode flickerBridgeMode
+	processMode flickerBridgeMode
+	modeStore   flickerBridgeModeStore
+	configError error
 
-	process      flickerBridgeProcess
-	done         chan struct{}
-	stopping     bool
-	executable   func() (string, error)
-	startProcess func(string, []string, []string, io.Writer) (flickerBridgeProcess, error)
-	health       func(context.Context) error
+	process             flickerBridgeProcess
+	done                chan struct{}
+	stopping            bool
+	executable          func() (string, error)
+	startProcess        func(string, []string, []string, io.Writer) (flickerBridgeProcess, error)
+	health              func(context.Context) error
+	modeAvailable       func(flickerBridgeMode) error
+	availabilityChecked bool
+	availableModes      []flickerBridgeMode
+	modeErrors          map[flickerBridgeMode]string
 
 	healthInterval       time.Duration
 	healthAttemptTimeout time.Duration
@@ -90,8 +118,15 @@ type flickerBridgeManager struct {
 	onReady func()
 }
 
-func newFlickerBridgeManager(stateDir, apiKey string) *flickerBridgeManager {
+func newFlickerBridgeManager(stateDir, apiKey string, stores ...flickerBridgeModeStore) *flickerBridgeManager {
 	apiKey = strings.TrimSpace(apiKey)
+	var modeStore flickerBridgeModeStore
+	if len(stores) > 0 {
+		modeStore = stores[0]
+	}
+	if modeStore == nil {
+		modeStore = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	}
 	manager := &flickerBridgeManager{
 		configured:           apiKey != "",
 		supported:            runtime.GOOS == "windows" && runtime.GOARCH == "amd64",
@@ -101,9 +136,19 @@ func newFlickerBridgeManager(stateDir, apiKey string) *flickerBridgeManager {
 		healthInterval:       250 * time.Millisecond,
 		healthAttemptTimeout: 750 * time.Millisecond,
 		healthTimeout:        5 * time.Minute,
+		mode:                 flickerBridgeModeV1,
+		modeStore:            modeStore,
+		modeErrors:           map[flickerBridgeMode]string{},
 	}
 	manager.startProcess = startFlickerBridgeProcess
 	manager.health = flickerBridgeHealth
+	manager.modeAvailable = manager.defaultModeAvailable
+	if mode, err := modeStore.FlickerBridgeMode(); err != nil {
+		manager.configError = err
+		manager.errMessage = err.Error()
+	} else {
+		manager.mode = flickerBridgeMode(mode)
+	}
 	if !manager.configured {
 		manager.state = "notConfigured"
 		return manager
@@ -114,6 +159,58 @@ func newFlickerBridgeManager(stateDir, apiKey string) *flickerBridgeManager {
 	}
 	manager.state = "stopped"
 	return manager
+}
+
+func (m *flickerBridgeManager) defaultModeAvailable(mode flickerBridgeMode) error {
+	if !m.supported {
+		return fmt.Errorf("Flicker Bridge is supported only on Windows x64")
+	}
+	if mode == flickerBridgeModeV1 {
+		return nil
+	}
+	if mode != flickerBridgeModeV2 {
+		return fmt.Errorf("unsupported Flicker Bridge mode %q", mode)
+	}
+	probe := flickerbridge.ProbeV2()
+	if !probe.Available {
+		if probe.Error == "" {
+			return fmt.Errorf("Flicker Bridge V2 is unavailable")
+		}
+		return fmt.Errorf("%s", probe.Error)
+	}
+	return nil
+}
+
+func (m *flickerBridgeManager) refreshModeAvailabilityLocked() {
+	if m.availabilityChecked {
+		return
+	}
+	m.availabilityChecked = true
+	m.availableModes = nil
+	m.modeErrors = map[flickerBridgeMode]string{}
+	for _, mode := range []flickerBridgeMode{flickerBridgeModeV1, flickerBridgeModeV2} {
+		if err := m.modeAvailable(mode); err != nil {
+			m.modeErrors[mode] = err.Error()
+			continue
+		}
+		m.availableModes = append(m.availableModes, mode)
+	}
+}
+
+func (m *flickerBridgeManager) requireModeAvailableLocked(mode flickerBridgeMode) error {
+	if mode != flickerBridgeModeV1 && mode != flickerBridgeModeV2 {
+		return fmt.Errorf("unsupported Flicker Bridge mode %q", mode)
+	}
+	m.refreshModeAvailabilityLocked()
+	for _, available := range m.availableModes {
+		if available == mode {
+			return nil
+		}
+	}
+	if message := m.modeErrors[mode]; message != "" {
+		return fmt.Errorf("%s", message)
+	}
+	return fmt.Errorf("Flicker Bridge mode %q is unavailable", mode)
 }
 
 func (m *flickerBridgeManager) localAPIKey() string {
@@ -153,6 +250,63 @@ func (m *flickerBridgeManager) Start(ctx context.Context) (flickerBridgeStatus, 
 	if m == nil {
 		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
 	}
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+	m.mu.Lock()
+	mode := m.mode
+	m.mu.Unlock()
+	return m.start(ctx, mode)
+}
+
+func (m *flickerBridgeManager) StartWithV2Fallback(ctx context.Context) (flickerBridgeStatus, error) {
+	if m == nil {
+		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+
+	m.mu.Lock()
+	mode := m.mode
+	m.mu.Unlock()
+	status, startErr := m.start(ctx, mode)
+	if mode != flickerBridgeModeV2 {
+		return status, startErr
+	}
+	if startErr == nil {
+		startErr = m.waitUntilRunning(ctx, flickerBridgeModeV2)
+	}
+	if startErr == nil {
+		return m.Status(ctx), nil
+	}
+
+	_, _ = m.stop(ctx)
+	if _, rollbackErr := m.start(ctx, flickerBridgeModeV1); rollbackErr != nil {
+		return m.Status(ctx), fmt.Errorf("start V2: %v; rollback to V1: %w", startErr, rollbackErr)
+	}
+	if rollbackErr := m.waitUntilRunning(ctx, flickerBridgeModeV1); rollbackErr != nil {
+		return m.Status(ctx), fmt.Errorf("start V2: %v; rollback to V1: %w", startErr, rollbackErr)
+	}
+	if persistErr := m.modeStore.UpdateFlickerBridgeMode(hubconfig.FlickerBridgeModeV1); persistErr != nil {
+		return m.Status(ctx), fmt.Errorf("start V2: %v; persist V1 rollback: %w", startErr, persistErr)
+	}
+
+	m.mu.Lock()
+	m.mode = flickerBridgeModeV1
+	m.errMessage = startErr.Error()
+	status = m.statusLocked()
+	stateChange := m.stateChange
+	m.mu.Unlock()
+	notifyFlickerBridgeState(stateChange, status)
+	return status, startErr
+}
+
+func (m *flickerBridgeManager) start(ctx context.Context, mode flickerBridgeMode) (flickerBridgeStatus, error) {
+	if m == nil {
+		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -169,6 +323,15 @@ func (m *flickerBridgeManager) Start(ctx context.Context) (flickerBridgeStatus, 
 		status := m.statusLocked()
 		m.mu.Unlock()
 		return status, fmt.Errorf("Flicker Bridge is supported only on Windows x64")
+	}
+	if err := m.requireModeAvailableLocked(mode); err != nil {
+		m.state = "failed"
+		m.errMessage = err.Error()
+		status := m.statusLocked()
+		stateChange := m.stateChange
+		m.mu.Unlock()
+		notifyFlickerBridgeState(stateChange, status)
+		return status, err
 	}
 	if m.process != nil {
 		status := m.statusLocked()
@@ -197,19 +360,15 @@ func (m *flickerBridgeManager) Start(ctx context.Context) (flickerBridgeStatus, 
 	if err != nil {
 		return m.failStartLocked(err)
 	}
-	logPath := filepath.Join(stateDir, "log", "flicker-bridge.log")
-	process, err := starter(executablePath, []string{
-		"--flicker-bridge", "--host", flickerBridgeHost, "--port", fmt.Sprint(flickerBridgePort),
-	}, append(os.Environ(),
-		"MYFLICKER_BRIDGE_API_KEY="+apiKey,
-		"MYFLICKER_BRIDGE_CACHE="+filepath.Join(stateDir, "flicker-bridge.json"),
-		"MYFLICKER_BRIDGE_LOG="+logPath,
-	), io.Discard)
+	args, environ := m.launchSpecLocked(mode, apiKey, stateDir)
+	process, err := starter(executablePath, args, environ, io.Discard)
 	if err != nil {
 		return m.failStartLocked(err)
 	}
 
 	m.process = process
+	m.processMode = mode
+	m.runningMode = ""
 	m.done = make(chan struct{})
 	m.stopping = false
 	m.state = "starting"
@@ -234,7 +393,33 @@ func (m *flickerBridgeManager) failStartLocked(err error) (flickerBridgeStatus, 
 	return status, err
 }
 
+func (m *flickerBridgeManager) launchSpecLocked(mode flickerBridgeMode, apiKey, stateDir string) ([]string, []string) {
+	baseArgs := []string{"--host", flickerBridgeHost, "--port", fmt.Sprint(flickerBridgePort)}
+	switch mode {
+	case flickerBridgeModeV2:
+		return append([]string{"--flicker-bridge-v2"}, baseArgs...), append(os.Environ(),
+			"MYFLICKER_WANQING_PROXY_KEY="+apiKey,
+		)
+	default:
+		logPath := filepath.Join(stateDir, "log", "flicker-bridge.log")
+		return append([]string{"--flicker-bridge"}, baseArgs...), append(os.Environ(),
+			"MYFLICKER_BRIDGE_API_KEY="+apiKey,
+			"MYFLICKER_BRIDGE_CACHE="+filepath.Join(stateDir, "flicker-bridge.json"),
+			"MYFLICKER_BRIDGE_LOG="+logPath,
+		)
+	}
+}
+
 func (m *flickerBridgeManager) Stop(ctx context.Context) (flickerBridgeStatus, error) {
+	if m == nil {
+		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
+	}
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+	return m.stop(ctx)
+}
+
+func (m *flickerBridgeManager) stop(ctx context.Context) (flickerBridgeStatus, error) {
 	if m == nil {
 		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
 	}
@@ -281,15 +466,145 @@ func (m *flickerBridgeManager) failStop(err error) (flickerBridgeStatus, error) 
 }
 
 func (m *flickerBridgeManager) Restart(ctx context.Context) (flickerBridgeStatus, error) {
-	if _, err := m.Stop(ctx); err != nil {
+	if m == nil {
+		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
+	}
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+	if _, err := m.stop(ctx); err != nil {
 		return m.Status(ctx), err
 	}
-	return m.Start(ctx)
+	m.mu.Lock()
+	mode := m.mode
+	m.mu.Unlock()
+	return m.start(ctx, mode)
+}
+
+func (m *flickerBridgeManager) SwitchMode(ctx context.Context, target flickerBridgeMode) (flickerBridgeStatus, error) {
+	if m == nil {
+		return flickerBridgeStatus{}, fmt.Errorf("Flicker Bridge manager is unavailable")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	m.operationMu.Lock()
+	defer m.operationMu.Unlock()
+
+	m.mu.Lock()
+	if err := m.requireModeAvailableLocked(target); err != nil {
+		status := m.statusLocked()
+		m.mu.Unlock()
+		return status, err
+	}
+	original := m.mode
+	running := m.process != nil
+	if target == original {
+		status := m.statusLocked()
+		m.mu.Unlock()
+		return status, nil
+	}
+	m.mu.Unlock()
+
+	if !running {
+		if err := m.modeStore.UpdateFlickerBridgeMode(hubconfig.FlickerBridgeMode(target)); err != nil {
+			return m.Status(ctx), err
+		}
+		m.mu.Lock()
+		m.mode = target
+		m.configError = nil
+		m.errMessage = ""
+		if m.configured && m.supported {
+			m.state = "stopped"
+		}
+		status := m.statusLocked()
+		stateChange := m.stateChange
+		m.mu.Unlock()
+		notifyFlickerBridgeState(stateChange, status)
+		return status, nil
+	}
+
+	if _, err := m.stop(ctx); err != nil {
+		return m.Status(ctx), err
+	}
+	if _, err := m.start(ctx, target); err != nil {
+		return m.rollbackModeSwitch(ctx, original, err)
+	}
+	if err := m.waitUntilRunning(ctx, target); err != nil {
+		return m.rollbackModeSwitch(ctx, original, err)
+	}
+	if err := m.modeStore.UpdateFlickerBridgeMode(hubconfig.FlickerBridgeMode(target)); err != nil {
+		return m.rollbackModeSwitch(ctx, original, fmt.Errorf("persist Flicker Bridge mode: %w", err))
+	}
+
+	m.mu.Lock()
+	m.mode = target
+	m.configError = nil
+	status := m.statusLocked()
+	stateChange := m.stateChange
+	m.mu.Unlock()
+	notifyFlickerBridgeState(stateChange, status)
+	return status, nil
+}
+
+func (m *flickerBridgeManager) rollbackModeSwitch(ctx context.Context, original flickerBridgeMode, switchErr error) (flickerBridgeStatus, error) {
+	_, _ = m.stop(ctx)
+	m.mu.Lock()
+	m.mode = original
+	m.mu.Unlock()
+
+	if _, rollbackErr := m.start(ctx, original); rollbackErr != nil {
+		return m.Status(ctx), fmt.Errorf("switch mode: %v; rollback to %s: %w", switchErr, original, rollbackErr)
+	}
+	if rollbackErr := m.waitUntilRunning(ctx, original); rollbackErr != nil {
+		return m.Status(ctx), fmt.Errorf("switch mode: %v; rollback to %s: %w", switchErr, original, rollbackErr)
+	}
+
+	m.mu.Lock()
+	m.errMessage = switchErr.Error()
+	status := m.statusLocked()
+	stateChange := m.stateChange
+	m.mu.Unlock()
+	notifyFlickerBridgeState(stateChange, status)
+	return status, switchErr
+}
+
+func (m *flickerBridgeManager) waitUntilRunning(ctx context.Context, expectedMode flickerBridgeMode) error {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		m.mu.Lock()
+		state := m.state
+		runningMode := m.runningMode
+		errMessage := m.errMessage
+		process := m.process
+		m.mu.Unlock()
+
+		if state == "running" && runningMode == expectedMode {
+			return nil
+		}
+		if state == "failed" || process == nil {
+			if errMessage == "" {
+				errMessage = "Flicker Bridge stopped before becoming healthy"
+			}
+			return fmt.Errorf("%s", errMessage)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func (m *flickerBridgeManager) Status(_ context.Context) flickerBridgeStatus {
 	if m == nil {
-		return flickerBridgeStatus{State: "unavailable", Endpoint: flickerBridgeEndpoint, Port: flickerBridgePort}
+		return flickerBridgeStatus{
+			State:          "unavailable",
+			Mode:           flickerBridgeModeV1,
+			AvailableModes: []flickerBridgeMode{},
+			Endpoint:       flickerBridgeEndpoint,
+			Port:           flickerBridgePort,
+		}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -297,13 +612,22 @@ func (m *flickerBridgeManager) Status(_ context.Context) flickerBridgeStatus {
 }
 
 func (m *flickerBridgeManager) statusLocked() flickerBridgeStatus {
+	m.refreshModeAvailabilityLocked()
+	modeErrors := make(map[flickerBridgeMode]string, len(m.modeErrors))
+	for mode, message := range m.modeErrors {
+		modeErrors[mode] = message
+	}
 	status := flickerBridgeStatus{
-		Configured: m.configured,
-		Supported:  m.supported,
-		State:      m.state,
-		Endpoint:   flickerBridgeEndpoint,
-		Port:       flickerBridgePort,
-		Error:      m.errMessage,
+		Configured:     m.configured,
+		Supported:      m.supported,
+		State:          m.state,
+		Mode:           m.mode,
+		RunningMode:    m.runningMode,
+		AvailableModes: append([]flickerBridgeMode(nil), m.availableModes...),
+		ModeErrors:     modeErrors,
+		Endpoint:       flickerBridgeEndpoint,
+		Port:           flickerBridgePort,
+		Error:          m.errMessage,
 	}
 	if m.process != nil {
 		status.PID = m.process.PID()
@@ -327,6 +651,8 @@ func (m *flickerBridgeManager) watch(process flickerBridgeProcess, done chan str
 	}
 	m.process = nil
 	m.done = nil
+	m.processMode = ""
+	m.runningMode = ""
 	if m.stopping {
 		m.state = "stopped"
 		m.errMessage = ""
@@ -389,6 +715,7 @@ func (m *flickerBridgeManager) waitForHealth(process flickerBridgeProcess, done 
 			if m.process == process && m.state == "starting" {
 				m.state = "running"
 				m.errMessage = ""
+				m.runningMode = m.processMode
 				status = m.statusLocked()
 				stateChange = m.stateChange
 				onReady = m.onReady
