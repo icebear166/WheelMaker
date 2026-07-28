@@ -3975,7 +3975,7 @@ export function App() {
 
   const chatSlashSkills = useMemo(() => {
     const currentProject = projects.find(item => item.projectId === projectId);
-    const deduped = new Map<string, string>();
+    const deduped = new Map<string, {name: string; description: string}>();
     for (const profile of currentProject?.agentProfiles ?? []) {
       for (const skill of profile.skills ?? []) {
         const normalized = (skill || '').trim();
@@ -3983,12 +3983,14 @@ export function App() {
           continue;
         }
         const key = normalized.toLowerCase();
-        if (!deduped.has(key)) {
-          deduped.set(key, normalized);
+        const description = profile.skillDescriptions?.[normalized]?.trim() ?? '';
+        const existing = deduped.get(key);
+        if (!existing || (!existing.description && description)) {
+          deduped.set(key, {name: normalized, description});
         }
       }
     }
-    return Array.from(deduped.values()).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }));
+    return Array.from(deduped.values()).sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
   }, [projects, projectId]);
 
   const chatSlashCommands = useMemo(

@@ -3943,6 +3943,39 @@ func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
 	}
 }
 
+func TestCollectProjectAgentProfilesIncludesSkillDescriptions(t *testing.T) {
+	projectPath := t.TempDir()
+	skillDir := filepath.Join(projectPath, ".agents", "skills", "dense-ui")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(skillDir, "SKILL.md"),
+		[]byte("---\nname: dense-ui\ndescription: Show more useful context in less space\n---\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+
+	profiles := collectProjectAgentProfiles("project", projectPath, []string{"codex"})
+	if len(profiles) != 1 {
+		t.Fatalf("profiles len = %d, want 1", len(profiles))
+	}
+	encoded, err := json.Marshal(profiles[0])
+	if err != nil {
+		t.Fatalf("Marshal profile: %v", err)
+	}
+	var profileFields struct {
+		SkillDescriptions map[string]string `json:"skillDescriptions"`
+	}
+	if err := json.Unmarshal(encoded, &profileFields); err != nil {
+		t.Fatalf("Unmarshal profile: %v", err)
+	}
+	if got := profileFields.SkillDescriptions["dense-ui"]; got != "Show more useful context in less space" {
+		t.Fatalf("skill description = %q", got)
+	}
+}
+
 func TestNewWiresDeepSeekAPIKeyIntoHubFactory(t *testing.T) {
 	binDir := t.TempDir()
 	binaryName := "claude-agent-acp"

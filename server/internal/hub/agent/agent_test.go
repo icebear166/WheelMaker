@@ -5513,7 +5513,7 @@ func TestListSkillsForPreset_ProjectDirUsesRelativeDirectoryName(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	skillFile := filepath.Join(skillDir, "SKILL.md")
-	content := "---\nname: fancy-ui\ndescription: test\n---\ncontent"
+	content := "---\nname: fancy-ui\ndescription: \"Build polished interfaces quickly\"\n---\ncontent"
 	if err := os.WriteFile(skillFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -5532,6 +5532,50 @@ func TestListSkillsForPreset_ProjectDirUsesRelativeDirectoryName(t *testing.T) {
 	}
 	if !strings.HasSuffix(skills[0].Path, filepath.Join("frontend-design", "SKILL.md")) {
 		t.Fatalf("skill path = %q", skills[0].Path)
+	}
+	encoded, err := json.Marshal(skills[0])
+	if err != nil {
+		t.Fatalf("Marshal skill: %v", err)
+	}
+	var skillFields map[string]string
+	if err := json.Unmarshal(encoded, &skillFields); err != nil {
+		t.Fatalf("Unmarshal skill: %v", err)
+	}
+	if skillFields["description"] != "Build polished interfaces quickly" {
+		t.Fatalf("skill description = %q, want parsed frontmatter description", skillFields["description"])
+	}
+}
+
+func TestListSkillsForPreset_FoldsMultilineDescriptionForMenuDisplay(t *testing.T) {
+	root := t.TempDir()
+	skillDir := filepath.Join(root, ".agents", "skills", "caveman")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(skillDir, "SKILL.md"),
+		[]byte("---\nname: caveman\ndescription: >\n  Use fewer words.\n  Keep technical accuracy.\n---\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	skills, err := listSkillsForPreset(context.Background(), ACPProviderPreset{
+		SkillProjectDirs: []string{".agents/skills"},
+	}, root)
+	if err != nil {
+		t.Fatalf("listSkillsForPreset: %v", err)
+	}
+	encoded, err := json.Marshal(skills[0])
+	if err != nil {
+		t.Fatalf("Marshal skill: %v", err)
+	}
+	var skillFields map[string]string
+	if err := json.Unmarshal(encoded, &skillFields); err != nil {
+		t.Fatalf("Unmarshal skill: %v", err)
+	}
+	if got := skillFields["description"]; got != "Use fewer words. Keep technical accuracy." {
+		t.Fatalf("skill description = %q", got)
 	}
 }
 

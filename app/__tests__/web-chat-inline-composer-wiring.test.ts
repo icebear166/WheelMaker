@@ -189,7 +189,7 @@ describe('composer menu exclusivity', () => {
       expect(rule).toContain('right: 0;');
       expect(rule).toContain('bottom: calc(100% + 8px);');
       expect(rule).toContain('border-radius: 8px;');
-      expect(rule).toContain('max-height: min(42vh, 280px);');
+      expect(rule).toContain('max-height: min(56dvh, 420px);');
       expect(rule).not.toContain('background');
       expect(rule).not.toContain('backdrop-filter');
     }

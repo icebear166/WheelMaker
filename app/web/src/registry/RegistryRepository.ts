@@ -829,7 +829,21 @@ export class RegistryRepository {
                       .map(skill => skill.trim())
                       .filter(skill => skill.length > 0)
                   : [];
-                return { name, skills };
+                const skillNamesByKey = new Map(skills.map(skill => [skill.toLowerCase(), skill]));
+                const skillDescriptions = item.skillDescriptions && typeof item.skillDescriptions === 'object'
+                  ? Object.fromEntries(Object.entries(item.skillDescriptions).flatMap(([skillName, description]) => {
+                      const normalizedName = skillNamesByKey.get(skillName.trim().toLowerCase());
+                      const normalizedDescription = typeof description === 'string' ? description.trim() : '';
+                      return normalizedName && normalizedDescription
+                        ? [[normalizedName, normalizedDescription]]
+                        : [];
+                    }))
+                  : {};
+                return {
+                  name,
+                  skills,
+                  ...(Object.keys(skillDescriptions).length > 0 ? {skillDescriptions} : {}),
+                };
               })
               .filter((item): item is RegistryProjectAgentProfile => !!item)
           : undefined,

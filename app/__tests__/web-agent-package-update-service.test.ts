@@ -29,6 +29,40 @@ describe('agent package update registry service', () => {
     });
   });
 
+  test('normalizes optional agent profile skill descriptions', async () => {
+    const client = {
+      request: jest.fn().mockResolvedValue({
+        type: 'response',
+        payload: {
+          projects: [{
+            projectId: 'hub-b:app',
+            name: 'app',
+            online: true,
+            path: '/app',
+            agentProfiles: [{
+              name: 'codex',
+              skills: ['baseline-ui'],
+              skillDescriptions: {
+                'baseline-ui': 'Fix spacing and typography',
+                invalid: 42,
+              },
+            }],
+          }],
+          hubs: [{hubId: 'hub-b'}],
+        },
+      }),
+    } as unknown as RegistryClient;
+    const repository = new RegistryRepository(client);
+
+    const result = await repository.listProjectSnapshot();
+
+    expect(result.projects[0].agentProfiles).toEqual([{
+      name: 'codex',
+      skills: ['baseline-ui'],
+      skillDescriptions: {'baseline-ui': 'Fix spacing and typography'},
+    }]);
+  });
+
   test('refreshes agentPackages HubState section with hubId and 60 second timeout', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({

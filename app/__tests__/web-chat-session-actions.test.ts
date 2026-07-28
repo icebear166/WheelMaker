@@ -59,6 +59,23 @@ describe('chat session action options', () => {
     expect(filterChatSessionActionOptions(options, 'debug').map(option => option.name)).toEqual(['/debug']);
   });
 
+  test('uses discovered skill descriptions without generic filler', () => {
+    const options = buildChatSessionActionOptions([
+      {name: 'baseline-ui', description: 'Fix spacing, hierarchy, and typography'},
+      {name: 'no-description'},
+    ], capabilities);
+
+    expect(options.find(option => option.name === '/baseline-ui')).toMatchObject({
+      description: 'Fix spacing, hierarchy, and typography',
+      kind: 'skill',
+    });
+    expect(options.find(option => option.name === '/no-description')).toMatchObject({
+      description: '',
+      kind: 'skill',
+    });
+    expect(options.some(option => option.description === 'Agent skill')).toBe(false);
+  });
+
   test('intercepts only standalone native commands and rejects args or attachments', () => {
     expect(resolveStandaloneSessionAction('/compact', 0)).toEqual({kind: 'compact'});
     expect(resolveStandaloneSessionAction('  /STATUS  ', 0)).toEqual({kind: 'status'});

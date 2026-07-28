@@ -28,8 +28,9 @@ type ProjectGitState struct {
 }
 
 type ProjectAgentProfile struct {
-	Name   string   `json:"name"`
-	Skills []string `json:"skills,omitempty"`
+	Name              string            `json:"name"`
+	Skills            []string          `json:"skills,omitempty"`
+	SkillDescriptions map[string]string `json:"skillDescriptions,omitempty"`
 }
 
 type ProjectInfo struct {

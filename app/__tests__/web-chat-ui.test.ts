@@ -2541,6 +2541,24 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-menu-hint kbd \{[\s\S]*border-radius: 4px;/);
   });
 
+  test('chat composer trigger menus show more rows with inline skill descriptions', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    for (const selector of ['.chat-slash-menu', '.chat-file-mention-menu']) {
+      const block = cssRuleBlock(stylesCss, selector);
+      expect(block).toContain('max-height: min(56dvh, 420px);');
+    }
+    expect(cssRuleBlock(stylesCss, '.chat-slash-item')).toContain('min-height: 30px;');
+    expect(cssRuleBlock(stylesCss, '.chat-file-mention-option')).toContain('min-height: 30px;');
+    const descriptionBlock = cssRuleBlock(stylesCss, '.chat-slash-description');
+    expect(descriptionBlock).toContain('flex: 1 1 auto;');
+    expect(descriptionBlock).toContain('text-align: left;');
+    expect(descriptionBlock).not.toContain('margin-left: auto;');
+    expect(mainTsx).toContain('skillDescriptions');
+  });
+
   test('chat composer uses compact file mention pins and running tools-slot cancel', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -2590,7 +2608,7 @@ describe('web chat integration', () => {
     expect(toolButtonBlock).not.toContain('border: 1px');
     expect(toolButtonBlock).not.toContain('color: color-mix(in srgb, var(--text-primary) 72%, var(--text-secondary));');
     expect(stylesCss).not.toContain('.chat-slash-button,\n.chat-file-mention-trigger-button,\n.chat-attachment-plus-button {');
-    expect(stylesCss).toMatch(/\.chat-file-mention-skeleton-row \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);[\s\S]*min-height: 34px;/);
+    expect(stylesCss).toMatch(/\.chat-file-mention-skeleton-row \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);[\s\S]*min-height: 30px;/);
     expect(stylesCss).toMatch(/\.chat-tool-button \{[\s\S]*display: inline-grid;[\s\S]*place-items: center;[\s\S]*\}/);
     expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text-primary));\n}');
     expect(stylesCss).not.toContain('.chat-attachment-action-button.file .codicon');

@@ -6,13 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 // SkillDescriptor describes one discovered skill for an agent provider.
 type SkillDescriptor struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Description string `json:"description,omitempty"`
 }
 
 // ListProviderSkills returns discovered skills for a provider name in cwd context.
@@ -241,7 +243,11 @@ func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {
 		if err != nil {
 			abs = path
 		}
-		emit(SkillDescriptor{Name: name, Path: abs})
+		emit(SkillDescriptor{
+			Name:        name,
+			Path:        abs,
+			Description: readSkillDescription(path),
+		})
 		return nil
 	}
 
@@ -253,6 +259,53 @@ func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {
 		_ = filepath.WalkDir(filepath.Join(root, entry.Name()), visit)
 	}
 	return nil
+}
+
+func readSkillDescription(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
+	if len(lines) == 0 || strings.TrimSpace(strings.TrimPrefix(lines[0], "\uFEFF")) != "---" {
+		return ""
+	}
+	for index, line := range lines[1:] {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
+			return ""
+		}
+		key, value, found := strings.Cut(trimmed, ":")
+		if !found || !strings.EqualFold(strings.TrimSpace(key), "description") {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == ">" || value == "|" {
+			parts := make([]string, 0, 2)
+			for _, continuation := range lines[index+2:] {
+				if strings.TrimSpace(continuation) == "---" {
+					break
+				}
+				if continuation != "" && continuation[0] != ' ' && continuation[0] != '\t' {
+					break
+				}
+				if part := strings.TrimSpace(continuation); part != "" {
+					parts = append(parts, part)
+				}
+			}
+			return strings.Join(parts, " ")
+		}
+		if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+			return strings.ReplaceAll(value[1:len(value)-1], "''", "'")
+		}
+		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+			if unquoted, unquoteErr := strconv.Unquote(value); unquoteErr == nil {
+				return strings.TrimSpace(unquoted)
+			}
+		}
+		return value
+	}
+	return ""
 }
 
 func skillNameFromRelativePath(root, skillFile string) string {

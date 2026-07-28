@@ -901,6 +901,7 @@ export interface RegistryGitRev {
 export interface RegistryProjectAgentProfile {
   name: string;
   skills?: string[];
+  skillDescriptions?: Record<string, string>;
 }
 
 export interface RegistryHub {

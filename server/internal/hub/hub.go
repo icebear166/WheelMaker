@@ -400,6 +400,7 @@ func collectProjectAgentProfiles(projectName, projectPath string, agentNames []s
 			hubLogger(projectName).Warn("list skills failed agent=%s err=%v", name, err)
 		}
 		skillNames := make([]string, 0, len(skills))
+		skillDescriptions := make(map[string]string)
 		seen := map[string]struct{}{}
 		for _, skill := range skills {
 			skillName := strings.TrimSpace(skill.Name)
@@ -412,11 +413,21 @@ func collectProjectAgentProfiles(projectName, projectPath string, agentNames []s
 			}
 			seen[key] = struct{}{}
 			skillNames = append(skillNames, skillName)
+			if description := strings.TrimSpace(skill.Description); description != "" {
+				skillDescriptions[skillName] = description
+			}
 		}
 		sort.Slice(skillNames, func(i, j int) bool {
 			return strings.ToLower(skillNames[i]) < strings.ToLower(skillNames[j])
 		})
-		profiles = append(profiles, rp.ProjectAgentProfile{Name: name, Skills: skillNames})
+		if len(skillDescriptions) == 0 {
+			skillDescriptions = nil
+		}
+		profiles = append(profiles, rp.ProjectAgentProfile{
+			Name:              name,
+			Skills:            skillNames,
+			SkillDescriptions: skillDescriptions,
+		})
 	}
 	return profiles
 }

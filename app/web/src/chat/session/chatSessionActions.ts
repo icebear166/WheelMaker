@@ -7,6 +7,11 @@ import {resolveChatSlashQuery} from '../composer/chatComposerTriggerQueries';
 
 export type ChatSessionActionKind = 'status' | 'compact' | 'fast';
 
+export type ChatSessionSkill = {
+  name: string;
+  description?: string;
+};
+
 export type ChatSessionSlashOption = {
   name: string;
   description: string;
@@ -28,7 +33,7 @@ export type StandaloneSessionActionResolution =
 const unsupportedReason = 'Current Agent does not support this action.';
 
 export function buildChatSessionActionOptions(
-  skills: string[],
+  skills: Array<string | ChatSessionSkill>,
   capabilities?: RegistrySessionActionCapabilities,
   configOptions: RegistrySessionConfigOption[] = [],
 ): ChatSessionSlashOption[] {
@@ -82,20 +87,25 @@ export function buildChatSessionActionOptions(
       checked,
     });
   }
-  const deduped = new Map<string, string>();
+  const deduped = new Map<string, ChatSessionSkill>();
   for (const rawSkill of skills) {
-    const skill = rawSkill.trim().replace(/^\/+/, '');
+    const skill = (typeof rawSkill === 'string' ? rawSkill : rawSkill.name).trim().replace(/^\/+/, '');
     if (!skill) continue;
     const key = skill.toLowerCase();
-    if (!deduped.has(key) && key !== 'status' && key !== 'compact' && key !== 'fast' && key !== 'goal') {
-      deduped.set(key, skill);
+    if (key === 'status' || key === 'compact' || key === 'fast' || key === 'goal') {
+      continue;
+    }
+    const description = typeof rawSkill === 'string' ? '' : (rawSkill.description ?? '').trim();
+    const existing = deduped.get(key);
+    if (!existing || (!existing.description && description)) {
+      deduped.set(key, {name: skill, description});
     }
   }
   const skillOptions = Array.from(deduped.values())
-    .sort((left, right) => left.localeCompare(right, undefined, {sensitivity: 'base'}))
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, {sensitivity: 'base'}))
     .map<ChatSessionSlashOption>(skill => ({
-      name: `/${skill}`,
-      description: 'Agent skill',
+      name: `/${skill.name}`,
+      description: skill.description ?? '',
       kind: 'skill',
       behavior: 'insert',
       icon: 'wand',

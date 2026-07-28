@@ -3908,7 +3908,7 @@
   left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  max-height: min(42vh, 280px);
+  max-height: min(56dvh, 420px);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 8px;
@@ -3924,7 +3924,7 @@
   left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  max-height: min(42vh, 280px);
+  max-height: min(56dvh, 420px);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 8px;
@@ -4008,14 +4008,14 @@
 .chat-slash-item {
   border: 0;
   border-radius: 8px;
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 30px;
+  padding: 4px 10px;
   background: transparent;
   color: var(--text-primary);
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   text-align: left;
   cursor: pointer;
 }
@@ -4047,6 +4047,8 @@
 }
 
 .chat-slash-name {
+  min-width: 0;
+  flex: 0 1 auto;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
@@ -4056,15 +4058,15 @@
 }
 
 .chat-slash-description {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.2;
-  margin-left: auto;
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 62%;
 }
 
 .chat-view-width-fixed-800-edge-surfaces {
@@ -6183,7 +6185,7 @@
   .chat-config-overflow-menu,
   .chat-config-value-menu {
     max-width: calc(100vw - 24px);
-    max-height: min(56vh, 420px);
+    max-height: min(56dvh, 420px);
   }
 
   .chat-config-overflow-menu,
