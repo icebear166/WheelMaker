@@ -159,13 +159,17 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     terminal.loadAddon(fitAddon);
     terminal.open(container);
     terminal.attachCustomKeyEventHandler(event => {
-      const isCopyShortcut = (
+      const isClipboardShortcut = (
         event.type === 'keydown' &&
         !event.altKey &&
-        (event.ctrlKey || event.metaKey) &&
+        (event.ctrlKey || event.metaKey)
+      );
+      const isCopyShortcut = (
+        isClipboardShortcut &&
         event.key.toLowerCase() === 'c'
       );
-      return !(isCopyShortcut && terminal.hasSelection());
+      const isPasteShortcut = isClipboardShortcut && event.key.toLowerCase() === 'v';
+      return !((isCopyShortcut && terminal.hasSelection()) || isPasteShortcut);
     });
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;

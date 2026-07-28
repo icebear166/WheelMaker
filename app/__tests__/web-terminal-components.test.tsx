@@ -230,6 +230,27 @@ describe('terminal components', () => {
     expect(onCopy).toHaveBeenCalledTimes(1);
   });
 
+  test('lets the browser paste Ctrl+V and Command+V into the terminal', async () => {
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    const ctrlV = {
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+    } as KeyboardEvent;
+    const commandV = {...ctrlV, ctrlKey: false, metaKey: true} as KeyboardEvent;
+
+    expect(xterm.keyEventHandler?.(ctrlV)).toBe(false);
+    expect(xterm.keyEventHandler?.(commandV)).toBe(false);
+  });
+
   test('shows Copy on right click when terminal text is selected', async () => {
     const writeText = jest.fn(() => Promise.resolve());
     const onCopy = jest.fn();
