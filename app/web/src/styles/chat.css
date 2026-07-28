@@ -4048,7 +4048,8 @@
 
 .chat-slash-name {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  max-width: 50%;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
@@ -4059,7 +4060,7 @@
 
 .chat-slash-description {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.2;

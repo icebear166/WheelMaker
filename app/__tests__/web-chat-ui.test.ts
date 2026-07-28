@@ -2552,8 +2552,12 @@ describe('web chat integration', () => {
     }
     expect(cssRuleBlock(stylesCss, '.chat-slash-item')).toContain('min-height: 30px;');
     expect(cssRuleBlock(stylesCss, '.chat-file-mention-option')).toContain('min-height: 30px;');
+    const nameBlock = cssRuleBlock(stylesCss, '.chat-slash-name');
+    expect(nameBlock).toContain('flex: 0 0 auto;');
+    expect(nameBlock).toContain('max-width: 50%;');
+    expect(nameBlock).not.toContain('flex: 0 1 auto;');
     const descriptionBlock = cssRuleBlock(stylesCss, '.chat-slash-description');
-    expect(descriptionBlock).toContain('flex: 1 1 auto;');
+    expect(descriptionBlock).toContain('flex: 1 1 0;');
     expect(descriptionBlock).toContain('text-align: left;');
     expect(descriptionBlock).not.toContain('margin-left: auto;');
     expect(mainTsx).toContain('skillDescriptions');
