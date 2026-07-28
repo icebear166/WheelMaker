@@ -220,7 +220,22 @@ test('helper wrappers keep only deploy, start, stop, and optional Desktop update
   assert.doesNotMatch(windows['deploy.bat'], /migrate|runtime|update/);
   assert.match(windows['deploy.bat'], /\r\npause\r\n/);
   assert.match(windows['start.bat'], /deploy\.mjs" runtime start/);
-  assert.match(windows['update_exe.bat'], /deploy\.mjs" desktop-update/);
+  const desktopUpdateWrapper = windows['update_exe.bat'];
+  assert.match(
+    desktopUpdateWrapper,
+    /^@REM WHEELMAKER_DESKTOP_SELF_UPDATE=1\r\n/,
+  );
+  assert.match(desktopUpdateWrapper, /if "%~1"=="" goto manual_update/);
+  assert.match(
+    desktopUpdateWrapper,
+    /desktop-self-update --parent-pid "%~1"/,
+  );
+  assert.match(desktopUpdateWrapper, /:manual_update/);
+  assert.match(desktopUpdateWrapper, /deploy\.mjs" desktop-update/);
+  assert.match(desktopUpdateWrapper, /set "_EXIT_CODE=%errorlevel%"/);
+  assert.match(desktopUpdateWrapper, /start WheelMakerDesktop\.exe manually/i);
+  assert.match(desktopUpdateWrapper, /\r\npause\r\n/);
+  assert.match(desktopUpdateWrapper, /exit \/b %_EXIT_CODE%/);
   assert.match(unix['deploy.sh'], /deploy\.mjs'\s*\n/);
   assert.doesNotMatch(unix['deploy.sh'], /migrate|runtime|update/);
   assert.match(unix['stop.sh'], /deploy\.mjs' runtime stop/);
@@ -546,6 +561,10 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
     join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'),
     'desktop',
   );
+  await writeFile(
+    join(fixture.home, 'desktop', 'update.exe'),
+    'legacy-updater',
+  );
   await writeFile(join(fixture.home, 'data', 'sessions.db'), 'db');
   await writeFile(join(fixture.home, 'logs', 'hub.log'), 'log');
   for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
@@ -566,7 +585,7 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   );
   assert.equal(
     await readFile(join(fixture.home, 'desktop', 'update.exe'), 'utf8'),
-    'new-updater',
+    'legacy-updater',
   );
   assert.equal(await readFile(join(fixture.home, 'data', 'sessions.db'), 'utf8'), 'db');
   assert.equal(await readFile(join(fixture.home, 'logs', 'hub.log'), 'utf8'), 'log');
@@ -587,6 +606,17 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.deepEqual(config.projects, []);
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
+});
+
+test('fresh Windows deploy does not create a Desktop updater binary', async (t) => {
+  const fixture = await installFixture(t);
+
+  await runCore([], fixture.deps);
+
+  assert.equal(
+    await exists(join(fixture.home, 'desktop', 'update.exe')),
+    false,
+  );
 });
 
 test('normal deploy migrates legacy config and secures it without losing user fields', async (t) => {
@@ -685,6 +715,194 @@ test('Unix package apply atomically renames the Hub without deleting its target 
   assert.equal(targetRemoveCalls, 0);
   assert.equal(targetRenameCalls, 1);
   assert.equal(await readFile(target, 'utf8'), 'new-hub');
+});
+
+async function createDesktopUpdateFixture(t, overrides = {}) {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-desktop-update-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = join(root, '.wheelmaker');
+  const target = join(home, 'desktop', 'WheelMakerDesktop.exe');
+  const desktop = overrides.desktop ?? Buffer.from('desktop-v1.2');
+  await mkdir(join(home, 'desktop'), { recursive: true });
+  await writeFile(target, 'old-desktop');
+
+  return {
+    desktop,
+    home,
+    target,
+    deps: {
+      fetchBytes: overrides.fetchBytes ?? (async () => desktop),
+      installDirectory: home,
+      isDesktopRunning: overrides.isDesktopRunning ?? (async () => false),
+      platform: 'win32',
+      trustedReleaseBaseUrl: 'https://release.example',
+      trustedStable: {
+        schema: 2,
+        version: 'v1.3',
+        desktopExe: {
+          version: 'v1.2',
+          path: '/releases/v1.2/WheelMakerDesktop.exe',
+          sha256: sha256Bytes(desktop),
+        },
+      },
+      ...(overrides.waitForDesktopExit
+        ? { waitForDesktopExit: overrides.waitForDesktopExit }
+        : {}),
+    },
+  };
+}
+
+test('Desktop self-update waits for the exact PID before checking other instances', async (t) => {
+  const events = [];
+  const desktop = Buffer.from('desktop-v1.2');
+  const fixture = await createDesktopUpdateFixture(t, {
+    desktop,
+    waitForDesktopExit: async (pid) => {
+      events.push(`wait:${pid}`);
+    },
+    isDesktopRunning: async () => {
+      events.push('check-running');
+      return false;
+    },
+    fetchBytes: async () => {
+      events.push('download');
+      return desktop;
+    },
+  });
+
+  await runCore(
+    ['desktop-self-update', '--parent-pid', '42'],
+    fixture.deps,
+  );
+
+  assert.deepEqual(events, ['wait:42', 'check-running', 'download']);
+});
+
+test('Desktop self-update stops when waiting for the parent PID fails', async (t) => {
+  let downloadCalls = 0;
+  const fixture = await createDesktopUpdateFixture(t, {
+    waitForDesktopExit: async () => {
+      throw new Error('wait failed');
+    },
+    fetchBytes: async () => {
+      downloadCalls += 1;
+      return Buffer.from('new-desktop');
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      runCore(
+        ['desktop-self-update', '--parent-pid', '42'],
+        fixture.deps,
+      ),
+    /wait failed/,
+  );
+  assert.equal(downloadCalls, 0);
+});
+
+test('Desktop self-update default adapter waits for the exact PID with PowerShell', async (t) => {
+  const fixture = await createDesktopUpdateFixture(t);
+  const runnerCalls = [];
+
+  await runCore(
+    ['desktop-self-update', '--parent-pid', '77'],
+    {
+      ...fixture.deps,
+      runner: async (command, args) => {
+        runnerCalls.push({ command, args });
+        return { code: 0, stderr: '', stdout: '' };
+      },
+    },
+  );
+
+  assert.equal(runnerCalls.length, 1);
+  assert.equal(runnerCalls[0].command, 'powershell');
+  assert.deepEqual(runnerCalls[0].args.slice(0, 2), [
+    '-NoProfile',
+    '-NonInteractive',
+  ]);
+  const script = runnerCalls[0].args.at(-1);
+  assert.match(script, /Get-Process -Id 77/);
+  assert.match(script, /Wait-Process -Id 77/);
+});
+
+test('Desktop self-update defensively rejects invalid parent PIDs', async () => {
+  for (const args of [
+    ['desktop-self-update'],
+    ['desktop-self-update', '--parent-pid', '0'],
+    ['desktop-self-update', '--parent-pid', 'abc'],
+    ['desktop-self-update', '--parent-pid', '42', 'extra'],
+  ]) {
+    await assert.rejects(
+      () => runCore(args, {}),
+      /parent PID must be a positive integer/,
+    );
+  }
+});
+
+test('legacy updater-driven desktop-update refreshes the capable BAT before replacement', async (t) => {
+  const desktop = Buffer.from('desktop-v1.2');
+  let wrapperAtDownload;
+  const fixture = await createDesktopUpdateFixture(t, {
+    desktop,
+    fetchBytes: async () => {
+      wrapperAtDownload = await readFile(
+        join(fixture.home, 'update_exe.bat'),
+        'utf8',
+      );
+      return desktop;
+    },
+  });
+
+  await runCore(['desktop-update'], {
+    ...fixture.deps,
+    isLegacyDesktopUpdaterParent: async () => true,
+  });
+
+  assert.match(
+    wrapperAtDownload,
+    /^@REM WHEELMAKER_DESKTOP_SELF_UPDATE=1\r\n/,
+  );
+});
+
+test('manual desktop-update does not rewrite its running BAT', async (t) => {
+  const fixture = await createDesktopUpdateFixture(t);
+  const wrapperPath = join(fixture.home, 'update_exe.bat');
+  await writeFile(wrapperPath, 'manual-wrapper');
+
+  await runCore(['desktop-update'], {
+    ...fixture.deps,
+    isLegacyDesktopUpdaterParent: async () => false,
+  });
+
+  assert.equal(await readFile(wrapperPath, 'utf8'), 'manual-wrapper');
+});
+
+test('desktop-update recognizes only the installed legacy helper parent', async (t) => {
+  const fixture = await createDesktopUpdateFixture(t);
+  const runnerCalls = [];
+
+  await runCore(['desktop-update'], {
+    ...fixture.deps,
+    parentPID: 123,
+    runner: async (command, args, options) => {
+      runnerCalls.push({ command, args, options });
+      return { code: 1, stderr: '', stdout: '' };
+    },
+  });
+
+  assert.equal(runnerCalls.length, 1);
+  assert.equal(runnerCalls[0].command, 'powershell');
+  assert.equal(runnerCalls[0].options.allowFailure, true);
+  const script = runnerCalls[0].args.at(-1);
+  assert.match(script, /ProcessId = 123/);
+  assert.match(script, /desktop[\\/]update\.exe/i);
+  assert.match(script, /OrdinalIgnoreCase/);
+  assert.equal(
+    await exists(join(fixture.home, 'update_exe.bat')),
+    false,
+  );
 });
 
 test('Desktop update follows carried stable pointer', async (t) => {
@@ -976,6 +1194,10 @@ test('successful internal update writes release schema v2 without registration c
   const fixture = await installFixture(t);
   await mkdir(join(fixture.home, 'desktop'), {recursive: true});
   await writeFile(join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'), 'desktop');
+  await writeFile(
+    join(fixture.home, 'desktop', 'update.exe'),
+    'legacy-updater',
+  );
   await acquireUpdateLease(join(fixture.home, 'staging'), {
     jobId: 'web-job',
     now: fixture.installedAt,
@@ -1003,7 +1225,7 @@ test('successful internal update writes release schema v2 without registration c
   );
   assert.equal(
     await readFile(join(fixture.home, 'desktop', 'update.exe'), 'utf8'),
-    'new-updater',
+    'legacy-updater',
   );
   assert.deepEqual(
     fixture.events.filter((event) => ['stop', 'start'].includes(event)),
@@ -1090,10 +1312,6 @@ async function installFixture(t, { hubRunning = true, platform = 'win32' } = {})
     'new-hub',
   );
   await writeFile(join(packageDirectory, 'web', 'index.html'), 'new-web');
-  if (platform === 'win32') {
-    await mkdir(join(packageDirectory, 'desktop'), {recursive: true});
-    await writeFile(join(packageDirectory, 'desktop', 'update.exe'), 'new-updater');
-  }
 
   const sourceSha = '1'.repeat(40);
   const manifestSha = '2'.repeat(64);

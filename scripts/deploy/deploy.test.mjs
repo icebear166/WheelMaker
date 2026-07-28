@@ -141,6 +141,43 @@ test('unknown commands fail before launcher files are mutated', async () => {
   assert.deepEqual(deps.events, []);
 });
 
+test('Desktop self-update accepts only a positive parent PID', () => {
+  assert.deepEqual(
+    parseDeployArgs(['desktop-self-update', '--parent-pid', '42']),
+    ['desktop-self-update', '--parent-pid', '42'],
+  );
+
+  for (const args of [
+    ['desktop-self-update'],
+    ['desktop-self-update', '--parent-pid'],
+    ['desktop-self-update', '--parent-pid', '0'],
+    ['desktop-self-update', '--parent-pid', '-1'],
+    ['desktop-self-update', '--parent-pid', '1.5'],
+    ['desktop-self-update', '--parent-pid', 'pid'],
+    ['desktop-self-update', '--parent-pid', '42', 'extra'],
+    ['desktop-self-update', '--other', '42'],
+  ]) {
+    assert.throws(() => parseDeployArgs(args), /unknown deploy command/);
+  }
+});
+
+test('launcher forwards Desktop self-update without owning its lifecycle', async () => {
+  const deps = launcherFixture({});
+  const statuses = [];
+  deps.reportStatus = (message) => statuses.push(message);
+
+  await runLauncher(
+    ['desktop-self-update', '--parent-pid', '42'],
+    deps,
+  );
+
+  assert.equal(
+    deps.events.at(-1),
+    'run-core:desktop-self-update,--parent-pid,42',
+  );
+  assert.match(statuses.at(-1), /Desktop self-update/);
+});
+
 test('HTTPS downloader rejects insecure URLs and redirect targets', async () => {
   await assert.rejects(() => fetchHttpsBytes('http://example.test/file'), /HTTPS/);
   await assert.rejects(

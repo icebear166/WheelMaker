@@ -773,6 +773,9 @@ export function darwinRuntimeFiles(paths) {
   };
 }
 
+export const DESKTOP_SELF_UPDATE_CAPABILITY =
+  '@REM WHEELMAKER_DESKTOP_SELF_UPDATE=1';
+
 export function windowsWrappers(paths) {
   return {
     'deploy.bat': `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)}\r\nset "_EXIT_CODE=%errorlevel%"\r\necho.\r\npause\r\nexit /b %_EXIT_CODE%\r\n`,
@@ -782,8 +785,15 @@ export function windowsWrappers(paths) {
         `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} runtime ${action} %*\r\nexit /b %errorlevel%\r\n`,
       ]),
     ),
-    'update_exe.bat': `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} desktop-update\r\nexit /b %errorlevel%\r\n`,
+    'update_exe.bat': `${DESKTOP_SELF_UPDATE_CAPABILITY}\r\n@echo off\r\nsetlocal\r\nif "%~1"=="" goto manual_update\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} desktop-self-update --parent-pid "%~1"\r\nset "_EXIT_CODE=%errorlevel%"\r\ngoto update_finished\r\n:manual_update\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} desktop-update\r\nset "_EXIT_CODE=%errorlevel%"\r\n:update_finished\r\necho.\r\nif "%_EXIT_CODE%"=="0" (\r\n  echo Desktop update completed. Close this window and start WheelMakerDesktop.exe manually.\r\n) else (\r\n  echo Desktop update failed with exit code %_EXIT_CODE%. Review the log above.\r\n)\r\necho.\r\npause\r\nexit /b %_EXIT_CODE%\r\n`,
   };
+}
+
+async function writeWindowsDesktopUpdateWrapper(paths) {
+  const body = windowsWrappers(paths)['update_exe.bat'];
+  const path = join(paths.home, 'update_exe.bat');
+  await atomicWrite(path, Buffer.from(body, 'utf8'), 0o644);
+  await chmod(path, 0o644);
 }
 
 export function unixWrappers(paths) {
@@ -1208,6 +1218,68 @@ async function detectDesktopRunning(platform, runner) {
       '-NoProfile',
       '-Command',
       "if (Get-Process -Name 'WheelMakerDesktop' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+    ],
+    { allowFailure: true },
+  );
+  return result.code === 0;
+}
+
+function parseDesktopSelfUpdatePID(args) {
+  if (
+    args.length !== 3 ||
+    args[0] !== 'desktop-self-update' ||
+    args[1] !== '--parent-pid' ||
+    !/^[1-9]\d*$/.test(args[2] ?? '')
+  ) {
+    throw new Error(
+      'Desktop self-update parent PID must be a positive integer',
+    );
+  }
+  const pid = Number(args[2]);
+  if (!Number.isSafeInteger(pid)) {
+    throw new Error(
+      'Desktop self-update parent PID must be a positive integer',
+    );
+  }
+  return pid;
+}
+
+async function waitForDesktopExit(pid, platform, runner) {
+  if (platform !== 'win32') {
+    throw new Error('WheelMaker Desktop update is supported on Windows only');
+  }
+  await runner('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `$process = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($null -ne $process) { Wait-Process -Id ${pid} -ErrorAction Stop }`,
+  ]);
+}
+
+async function detectLegacyDesktopUpdaterParent({
+  installDirectory,
+  parentPID = process.ppid,
+  platform,
+  runner,
+}) {
+  if (platform !== 'win32') return false;
+  const expected = join(
+    resolve(installDirectory),
+    'desktop',
+    'update.exe',
+  );
+  const result = await runner(
+    'powershell',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      [
+        `$expected = [IO.Path]::GetFullPath(${psQuote(expected)})`,
+        `$parent = Get-CimInstance Win32_Process -Filter "ProcessId = ${parentPID}" -ErrorAction SilentlyContinue`,
+        'if ($null -ne $parent.ExecutablePath -and [String]::Equals([IO.Path]::GetFullPath([string]$parent.ExecutablePath), $expected, [StringComparison]::OrdinalIgnoreCase)) { exit 0 }',
+        'exit 1',
+      ].join('; '),
     ],
     { allowFailure: true },
   );
@@ -1658,35 +1730,22 @@ async function applyStagedPackage({
   const binaryName = platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker';
   const sourceBinary = join(extractionDirectory, 'hub', binaryName);
   const sourceWeb = join(extractionDirectory, 'web');
-  const sourceUpdater = platform === 'win32'
-    ? join(extractionDirectory, 'desktop', 'update.exe')
-    : null;
   await access(sourceBinary);
   await access(sourceWeb);
-  if (sourceUpdater) await access(sourceUpdater);
 
   const binDirectory = join(home, 'bin');
   const targetBinary = join(binDirectory, binaryName);
   const temporaryBinary = join(binDirectory, `.${binaryName}.${jobId}.tmp`);
   const targetWeb = join(home, 'web');
   const temporaryWeb = join(home, `.web.${jobId}.tmp`);
-  const desktopDirectory = join(home, 'desktop');
-  const targetUpdater = join(desktopDirectory, 'update.exe');
-  const temporaryUpdater = join(desktopDirectory, `.update.exe.${jobId}.tmp`);
   await mkdir(binDirectory, { recursive: true });
-  if (sourceUpdater) await mkdir(desktopDirectory, { recursive: true });
   await rm(temporaryBinary, { force: true });
   await rm(temporaryWeb, { recursive: true, force: true });
-  if (sourceUpdater) await rm(temporaryUpdater, { force: true });
 
   try {
     await cp(sourceBinary, temporaryBinary);
     await chmod(temporaryBinary, 0o755);
     await cp(sourceWeb, temporaryWeb, { recursive: true });
-    if (sourceUpdater) {
-      await cp(sourceUpdater, temporaryUpdater);
-      await chmod(temporaryUpdater, 0o755);
-    }
     await replaceInstalledFile(temporaryBinary, targetBinary, {
       fileOperations,
       platform,
@@ -1694,17 +1753,9 @@ async function applyStagedPackage({
     });
     await rm(targetWeb, { recursive: true, force: true });
     await rename(temporaryWeb, targetWeb);
-    if (sourceUpdater) {
-      await replaceInstalledFile(temporaryUpdater, targetUpdater, {
-        fileOperations,
-        platform,
-        sleep: replaceSleep,
-      });
-    }
   } finally {
     await rm(temporaryBinary, { force: true });
     await rm(temporaryWeb, { recursive: true, force: true });
-    if (sourceUpdater) await rm(temporaryUpdater, { force: true });
   }
 }
 
@@ -1915,6 +1966,46 @@ export async function runCore(args, deps = {}) {
     return;
   }
   if (args.length === 1 && args[0] === 'desktop-update') {
+    if (!deps.installDirectory) {
+      throw new Error('deployment install directory is required');
+    }
+    const platform = deps.platform ?? process.platform;
+    const runner = deps.runner ?? runProcess;
+    const legacyParent =
+      deps.isLegacyDesktopUpdaterParent ??
+      (() =>
+        detectLegacyDesktopUpdaterParent({
+          installDirectory: deps.installDirectory,
+          parentPID: deps.parentPID ?? process.ppid,
+          platform,
+          runner,
+        }));
+    if (await legacyParent()) {
+      const paths = deploymentRuntimePaths({
+        installDirectory: deps.installDirectory,
+        nodePath: deps.nodePath ?? process.execPath,
+        platform,
+        uid: deps.uid,
+        userHome: deps.userHome ?? homedir(),
+      });
+      await writeWindowsDesktopUpdateWrapper(paths);
+    }
+    deps.reportStatus?.('Updating WheelMaker Desktop');
+    await executeDesktopUpdate(deps);
+    deps.reportStatus?.('Desktop update completed');
+    return;
+  }
+  if (args[0] === 'desktop-self-update') {
+    const parentPID = parseDesktopSelfUpdatePID(args);
+    const platform = deps.platform ?? process.platform;
+    const runner = deps.runner ?? runProcess;
+    const wait =
+      deps.waitForDesktopExit ??
+      ((pid) => waitForDesktopExit(pid, platform, runner));
+    deps.reportStatus?.(
+      `Waiting for WheelMaker Desktop process ${parentPID}`,
+    );
+    await wait(parentPID);
     deps.reportStatus?.('Updating WheelMaker Desktop');
     await executeDesktopUpdate(deps);
     deps.reportStatus?.('Desktop update completed');

@@ -3,17 +3,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
-
-	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 func newDesktopUpdaterCommand(path string, parentPID int) *exec.Cmd {
-	cmd := exec.Command(path, "--parent-pid", strconv.Itoa(parentPID))
-	shared.ConfigureBackgroundCommand(cmd)
-	return cmd
+	command := fmt.Sprintf(`call "%s" %d`, path, parentPID)
+	return exec.Command("cmd.exe", "/d", "/s", "/c", command)
 }
 
 func newWindowsDesktopUpdateController() *desktopUpdateController {
@@ -21,7 +18,7 @@ func newWindowsDesktopUpdateController() *desktopUpdateController {
 		userHome:   os.UserHomeDir,
 		executable: os.Executable,
 		hashFile:   sha256File,
-		stat:       os.Stat,
+		readFile:   os.ReadFile,
 		startUpdater: func(path string, parentPID int) error {
 			cmd := newDesktopUpdaterCommand(path, parentPID)
 			if err := cmd.Start(); err != nil {

@@ -62,14 +62,14 @@ npm ci --include=dev
 
 随后以最大并发数 3 执行平台和可选资产任务：
 
-- `windows-amd64`：交叉编译 `wheelmaker.exe` 和一次性 Desktop 更新器 `update.exe`，两者都使用 Windows GUI subsystem。
+- `windows-amd64`：交叉编译 Windows GUI subsystem 的 `wheelmaker.exe`。
 - `linux-amd64`：交叉编译 `wheelmaker`。
 - `darwin-amd64`：交叉编译 `wheelmaker`。
 - `darwin-arm64`：交叉编译 `wheelmaker`。
 - Desktop：可选，生成 Windows AMD64 GUI 程序 `WheelMakerDesktop.exe`。
 - Android：可选，生成已签名 APK 和 `android-release.json`。
 
-所有 Go 二进制（Hub、Desktop 与一次性更新器）都用 `CGO_ENABLED=0` 与 `-trimpath -ldflags=-s -w` 构建：剥离符号与 DWARF 以缩小体积，Windows 额外加 `-H windowsgui`；panic 堆栈仍保留函数名（pclntab 不被剥离）。四个 Hub 构建把同一份 `web-source` 复制到各平台目录。
+所有 Go 二进制（Hub 与 Desktop）都用 `CGO_ENABLED=0` 与 `-trimpath -ldflags=-s -w` 构建：剥离符号与 DWARF 以缩小体积，Windows 额外加 `-H windowsgui`；panic 堆栈仍保留函数名（pclntab 不被剥离）。四个 Hub 构建把同一份 `web-source` 复制到各平台目录。
 
 ## 产物
 
@@ -99,14 +99,7 @@ web/
 └─ 编译后的 Web 静态文件
 ```
 
-Windows 平台包额外包含：
-
-```text
-desktop/
-└─ update.exe
-```
-
-`update.exe` 每轮都构建，不受 `--with-desktop` 影响。`release-manifest.json` 记录各平台包的相对路径、大小和 SHA-256。`WheelMakerDesktop.exe` 和 Android 仍是独立可选资产，不放入 Hub/Web 平台包。完整的 Desktop 更新边界见 [`desktop-self-update.md`](desktop-self-update.md)。
+Windows 平台包不携带独立 Desktop updater 二进制；自更新由部署生成的 `update_exe.bat` 与已发布的 `deploy.mjs`/`deploy-core.mjs` 完成。`release-manifest.json` 记录各平台包的相对路径、大小和 SHA-256。`WheelMakerDesktop.exe` 和 Android 仍是独立可选资产，不放入 Hub/Web 平台包。完整的 Desktop 更新边界见 [`desktop-self-update.md`](desktop-self-update.md)。
 
 ## 工作目录和缓存
 

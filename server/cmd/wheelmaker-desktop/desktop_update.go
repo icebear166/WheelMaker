@@ -16,11 +16,13 @@ type desktopUpdateInfo struct {
 	UpdaterReady bool   `json:"updaterReady"`
 }
 
+const desktopSelfUpdateCapability = "@REM WHEELMAKER_DESKTOP_SELF_UPDATE=1"
+
 type desktopUpdateDependencies struct {
 	userHome     func() (string, error)
 	executable   func() (string, error)
 	hashFile     func(string) (string, error)
-	stat         func(string) (os.FileInfo, error)
+	readFile     func(string) ([]byte, error)
 	startUpdater func(string, int) error
 }
 
@@ -37,7 +39,8 @@ func (c *desktopUpdateController) paths() (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("resolve user home: %w", err)
 	}
-	expected := filepath.Join(home, ".wheelmaker", "desktop", "WheelMakerDesktop.exe")
+	root := filepath.Join(home, ".wheelmaker")
+	expected := filepath.Join(root, "desktop", "WheelMakerDesktop.exe")
 	current, err := c.deps.executable()
 	if err != nil {
 		return "", "", fmt.Errorf("resolve Desktop executable: %w", err)
@@ -45,7 +48,19 @@ func (c *desktopUpdateController) paths() (string, string, error) {
 	if !strings.EqualFold(filepath.Clean(current), filepath.Clean(expected)) {
 		return "", "", errors.New("Desktop self-update requires the standard install directory")
 	}
-	return expected, filepath.Join(filepath.Dir(expected), "update.exe"), nil
+	return expected, filepath.Join(root, "update_exe.bat"), nil
+}
+
+func (c *desktopUpdateController) updaterReady(path string) bool {
+	body, err := c.deps.readFile(path)
+	if err != nil {
+		return false
+	}
+	firstLine, _, _ := strings.Cut(
+		strings.ReplaceAll(string(body), "\r\n", "\n"),
+		"\n",
+	)
+	return firstLine == desktopSelfUpdateCapability
 }
 
 func (c *desktopUpdateController) Info() (desktopUpdateInfo, error) {
@@ -57,17 +72,22 @@ func (c *desktopUpdateController) Info() (desktopUpdateInfo, error) {
 	if err != nil {
 		return desktopUpdateInfo{}, fmt.Errorf("hash Desktop executable: %w", err)
 	}
-	_, statErr := c.deps.stat(updater)
-	return desktopUpdateInfo{SHA256: sha, UpdaterReady: statErr == nil}, nil
+	return desktopUpdateInfo{
+		SHA256:       sha,
+		UpdaterReady: c.updaterReady(updater),
+	}, nil
 }
 
 func (c *desktopUpdateController) Start(parentPID int) error {
+	if parentPID <= 0 {
+		return errors.New("Desktop parent PID must be positive")
+	}
 	_, updater, err := c.paths()
 	if err != nil {
 		return err
 	}
-	if _, err := c.deps.stat(updater); err != nil {
-		return fmt.Errorf("Desktop updater is unavailable: %w", err)
+	if !c.updaterReady(updater) {
+		return errors.New("Desktop updater is unavailable")
 	}
 	return c.deps.startUpdater(updater, parentPID)
 }

@@ -1,4 +1,4 @@
-> 摘要：本页维护 Windows Desktop 启动检查、红点交互、一次性更新器和可信更新边界。
+> 摘要：本页维护 Windows Desktop 启动检查、红点交互、脚本更新器和可信更新边界。
 
 # Windows Desktop 自更新
 
@@ -13,27 +13,37 @@ Web 使用当前 `WheelMakerDesktop.exe` 的 SHA-256 与 stable 指针比较，�
 自更新只支持固定目录：
 
 ```text
-~/.wheelmaker/desktop/
-├─ WheelMakerDesktop.exe
-└─ update.exe
+~/.wheelmaker/
+├─ deploy.mjs
+├─ deploy-core.mjs
+├─ update_exe.bat
+└─ desktop/
+   └─ WheelMakerDesktop.exe
 ```
 
-`update.exe` 随每个 Windows 平台包安装，与可选的 Desktop 发布资产是否在本轮生成无关。任意目录复制版和 Local Dev 不提供正式自更新能力。
+`update_exe.bat` 由 Windows 部署生成，同时承担标准自更新入口和无参数手动恢复入口。Windows 平台包不携带独立 Desktop updater 二进制。任意目录复制版和 Local Dev 不提供正式自更新能力。
 
 ## 可信更新流程
 
-Web 只能调用无参数的原生更新入口，不能传入命令、路径、URL、版本或哈希。原生层校验标准安装目录，启动固定的 `update.exe` 并只传递当前 Desktop PID；只有启动成功后才关闭 Desktop。
+Web 只能调用无参数的原生更新入口，不能传入命令、路径、URL、版本或哈希。原生层校验标准安装目录和固定 BAT 的 capability 标记，以可见 `cmd.exe` 启动 `update_exe.bat`，并只传递当前 Desktop PID；只有命令行成功启动后才关闭 Desktop。
 
-更新器等待旧进程退出，然后隐藏调用：
+BAT 调用：
 
 ```text
-node ~/.wheelmaker/deploy.mjs desktop-update
+node ~/.wheelmaker/deploy.mjs desktop-self-update --parent-pid <PID>
 ```
 
-下载、stable 验证、SHA-256 校验和原子替换继续由部署 MJS 负责。成功后更新器启动新版 Desktop；失败时旧 EXE 保持不变，更新器显示 Windows 原生错误并重新启动旧版。整个流程使用当前用户权限，不请求管理员提权。更新器不注册服务、计划任务或常驻进程，也不修改 Hub/Web。
+`deploy.mjs` 只校验固定命令形状、取得可信 stable 并加载最新 core；`deploy-core.mjs` 等待指定 PID 退出，再复用既有下载、SHA-256 校验和原子替换逻辑。命令行显示阶段、下载进度和完整错误，成功或失败后都执行 `pause`。更新完成后不自动启动 Desktop，用户关闭命令行并手动打开 EXE。
+
+整个流程使用当前用户权限，不请求管理员提权，不注册服务或计划任务，也不修改 Hub/Web。若还有其他 Desktop 实例，运行检查拒绝替换且不会创建新的 Desktop 进程。
 
 ## 兼容边界
 
-旧 Desktop 没有新增原生桥，不能仅靠远程 Web 获得自更新能力。它需要先通过现有 `update_exe.bat` 手动升级一次；该批处理文件继续作为首次升级和故障恢复入口。
+无参数运行 `update_exe.bat` 时继续调用 `node deploy.mjs desktop-update`，供用户先关闭全部 Desktop 后手动恢复。
 
-设计来源：[`spec-desktop-self-update.md`](../../scope/2026-07-18-desktop-self-update/spec-desktop-self-update.md)。
+升级机器已有的 `desktop/update.exe` 不由平台更新主动删除，旧 Desktop 仍可用它进入兼容的 `desktop-update` 链路。launcher 会先加载最新 core；core 在安装新版 Desktop 的同时刷新带 capability 标记的 BAT，使新版 Desktop 首次启动时即可切换到脚本更新。全新安装不创建 `desktop/update.exe`。
+
+设计来源：
+
+- [`spec-desktop-self-update.md`](../../scope/2026-07-18-desktop-self-update/spec-desktop-self-update.md)
+- [`spec-desktop-script-updater.md`](../../scope/2026-07-27-desktop-script-updater/spec-desktop-script-updater.md)

@@ -3,15 +3,21 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
-	"strconv"
 	"testing"
 )
 
-func TestWindowsDesktopUpdaterCommandUsesOnlyFixedArguments(t *testing.T) {
-	updater := filepath.Join(t.TempDir(), "update.exe")
+func TestWindowsDesktopUpdaterCommandUsesVisibleCMDWithFixedArguments(t *testing.T) {
+	updater := filepath.Join(t.TempDir(), "update_exe.bat")
 	cmd := newDesktopUpdaterCommand(updater, 42)
-	wantArgs := []string{updater, "--parent-pid", strconv.Itoa(42)}
+	wantArgs := []string{
+		"cmd.exe",
+		"/d",
+		"/s",
+		"/c",
+		fmt.Sprintf(`call "%s" 42`, updater),
+	}
 	if len(cmd.Args) != len(wantArgs) {
 		t.Fatalf("args=%v", cmd.Args)
 	}
@@ -20,7 +26,7 @@ func TestWindowsDesktopUpdaterCommandUsesOnlyFixedArguments(t *testing.T) {
 			t.Fatalf("args=%v want=%v", cmd.Args, wantArgs)
 		}
 	}
-	if cmd.SysProcAttr == nil || !cmd.SysProcAttr.HideWindow {
-		t.Fatal("Desktop updater command must stay hidden")
+	if cmd.SysProcAttr != nil && cmd.SysProcAttr.HideWindow {
+		t.Fatal("Desktop updater command must be visible")
 	}
 }

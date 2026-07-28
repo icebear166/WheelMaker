@@ -210,6 +210,15 @@ export function parseDeployArgs(args) {
   if (args.length === 2 && args[0] === 'runtime' && RUNTIME_ACTIONS.has(args[1])) {
     return ['runtime', args[1]];
   }
+  if (
+    args.length === 3 &&
+    args[0] === 'desktop-self-update' &&
+    args[1] === '--parent-pid' &&
+    /^[1-9]\d*$/.test(args[2]) &&
+    Number.isSafeInteger(Number(args[2]))
+  ) {
+    return [...args];
+  }
   if (args.length !== 1 || !ALLOWED_COMMANDS.has(args[0])) {
     throw new Error(`unknown deploy command: ${args.join(' ')}`);
   }
@@ -331,6 +340,8 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
         ? 'Starting legacy migration cleanup'
         : args[0] === 'desktop-update'
           ? 'Starting Desktop update'
+          : args[0] === 'desktop-self-update'
+            ? 'Starting Desktop self-update'
           : `Running ${args.join(' ')}`;
   deps.reportStatus?.(operation);
 

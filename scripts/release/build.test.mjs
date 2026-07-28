@@ -168,12 +168,7 @@ test('platform directories preserve the Hub and Web package layout', async () =>
       );
     }
 
-    const windows = result.platforms.find(platform => platform.key === 'windows-amd64');
-    assert.equal(
-      await readExists(join(windows.directory, 'desktop', 'update.exe')),
-      true,
-    );
-    for (const platform of result.platforms.filter(item => item.key !== 'windows-amd64')) {
+    for (const platform of result.platforms) {
       assert.equal(
         await readExists(join(platform.directory, 'desktop', 'update.exe')),
         false,
@@ -183,10 +178,7 @@ test('platform directories preserve the Hub and Web package layout', async () =>
       ({command, args}) =>
         command === 'go' && args.at(-1) === './cmd/wheelmaker-desktop-updater',
     );
-    assert.equal(updaterBuilds.length, 1);
-    assert.equal(updaterBuilds[0].options.env.GOOS, 'windows');
-    assert.equal(updaterBuilds[0].options.env.GOARCH, 'amd64');
-    assert.equal(updaterBuilds[0].args.includes('-ldflags=-s -w -H windowsgui'), true);
+    assert.equal(updaterBuilds.length, 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -233,7 +225,7 @@ test('release build routes Webpack and Go caches through the work root', async (
     const npmCalls = runner.calls.filter(({command}) => command === 'npm');
     const goCalls = runner.calls.filter(({command}) => command === 'go');
     assert.equal(npmCalls.length, 2);
-    assert.equal(goCalls.length, 5);
+    assert.equal(goCalls.length, 4);
     for (const call of npmCalls) {
       assert.equal(
         call.options.env.WHEELMAKER_WEBPACK_CACHE,

@@ -84,9 +84,10 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 | `node deploy.mjs runtime start` | 启动 Hub | 否 |
 | `node deploy.mjs runtime stop` | 停止 Hub | 否 |
 | `node deploy.mjs desktop-update` | 按 `stable.json` 指针更新 Desktop | 否 |
+| `node deploy.mjs desktop-self-update --parent-pid <PID>` | 等待当前 Desktop 退出后按 stable 指针更新 | 否 |
 | `node deploy.mjs migrate-uninstall` | 一次性清理旧部署模式 | 只删除旧注册 |
 
-完整安装生成当前平台的 `deploy`、`start` 和 `stop` 包装脚本。Windows 额外生成 `update_exe.bat`。`restart` 和 `status` 包装脚本已退役。
+完整安装生成当前平台的 `deploy`、`start` 和 `stop` 包装脚本。Windows 额外生成带 self-update capability 标记的 `update_exe.bat`。该 BAT 有 PID 时进入 `desktop-self-update`，无参数时保留 `desktop-update` 手动恢复语义。`restart` 和 `status` 包装脚本已退役。
 
 ## 完整安装状态机
 
@@ -101,7 +102,7 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 → 初始化或迁移 config.json
 → 进入 applying
 → 停止 Hub
-→ 替换 bin/wheelmaker(.exe)、web/ 和 Windows desktop/update.exe
+→ 替换 bin/wheelmaker(.exe) 和 web/
 → 写入 release.json
 → 配置当前平台运行时
 → 生成包装脚本
@@ -113,23 +114,28 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 
 状态写入 `~/.wheelmaker/staging/status.json`，更新租约写入 `lock.json`。主要状态包括 `queued`、`downloading`、`verifying`、`applying`、`restarting`、`succeeded` 和 `failed`。
 
-目标机替换 `bin/` 和 `web/`。Windows 平台还会把一次性 Desktop 更新器写入 `desktop/update.exe`，但不会清空或覆盖现有 `WheelMakerDesktop.exe`。Desktop 主程序仍通过独立的 `desktop-update` 命令更新，不随每次 Hub/Web 部署更新。
+目标机替换 `bin/` 和 `web/`，但不会清空或覆盖现有 `WheelMakerDesktop.exe`。Windows 平台包不再包含独立 Desktop updater；升级部署保留旧机器已有的 `desktop/update.exe`，全新安装不创建它。Desktop 主程序仍通过独立命令更新，不随每次 Hub/Web 部署更新。
 
 ## Windows Desktop 自更新边界
 
 标准安装目录中的 Desktop 使用以下固定布局：
 
 ```text
-~/.wheelmaker/desktop/
-├─ WheelMakerDesktop.exe
-└─ update.exe
+~/.wheelmaker/
+├─ deploy.mjs
+├─ deploy-core.mjs
+├─ update_exe.bat
+└─ desktop/
+   └─ WheelMakerDesktop.exe
 ```
 
-`update.exe` 是随每个 Windows 平台包部署的一次性 GUI 程序，使用当前用户权限，不请求管理员提权，也不注册服务、计划任务或常驻进程。Desktop 启动后由 Web 后台读取公共 stable 元数据，并通过受限原生桥比较当前 EXE SHA-256 与 `stable.desktopExe.sha256`。有更新时，Windows 扩展菜单显示红点和更新入口。
+Desktop 启动后由 Web 后台读取公共 stable 元数据，并通过受限原生桥比较当前 EXE SHA-256 与 `stable.desktopExe.sha256`。有更新时，Windows 扩展菜单显示红点和更新入口。
 
-用户确认更新后，原生层只允许启动固定目录的 `update.exe`，且只传入当前 Desktop PID。更新器等待 Desktop 退出，再隐藏调用 `node ~/.wheelmaker/deploy.mjs desktop-update`，复用部署 MJS 的下载、SHA 校验和原子替换逻辑。成功或失败都会重新打开 Desktop；失败时旧 EXE 保持不变并显示原生错误。
+用户确认更新后，原生层只允许以可见 `cmd.exe` 启动固定的 `update_exe.bat`，且只传入当前 Desktop PID。BAT 调用 `node ~/.wheelmaker/deploy.mjs desktop-self-update --parent-pid <PID>`；launcher 只做固定命令校验和可信 core 加载，core 等待 PID 退出后复用下载、SHA 校验和原子替换逻辑。
 
-自更新只支持标准安装目录，不接受 Web 提供的命令、路径或 URL。`update_exe.bat` 保留为旧 Desktop 第一次升级和故障恢复入口；旧版必须先手动更新到带原生自更新桥的 Desktop 一次。
+命令行显示更新阶段、下载进度和错误，完成后打印结果并 `pause`。更新链不自动重启 Desktop；用户关闭命令行后手动打开 EXE。失败时旧 EXE 保持不变，也不会创建新的 Desktop 进程。
+
+自更新只支持标准安装目录，不接受 Web 提供的命令、路径或 URL。无参数 `update_exe.bat` 保留手动恢复语义。升级机器已有的 `desktop/update.exe` 暂时保留供旧 Desktop 过渡；旧 helper 触发兼容 `desktop-update` 时，最新 core 会在安装新版 Desktop 的同一流程中刷新带 capability 标记的 BAT。新版 Desktop 只在标记匹配时报告 updater ready。
 
 Desktop 自更新的用户状态、固定路径和可信调用链详见 [`desktop-self-update.md`](desktop-self-update.md)。
 
