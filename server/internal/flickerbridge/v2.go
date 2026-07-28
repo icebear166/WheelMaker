@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -298,8 +297,6 @@ func (s *workerStream) close() {
 		close(s.frames)
 	}
 }
-
-const myFlickerBasePrompt = `You are MyFlicker, an interactive coding agent. Use the provided tools to inspect and modify the user's workspace. Follow project instructions, preserve unrelated work, and report results accurately.`
 
 const nodeWorkerSource = `
 const fs = require("node:fs");
@@ -1021,77 +1018,39 @@ func (i modelIndex) Resolve(requested string) (modelInfo, bool) {
 	return model, ok
 }
 
-func upstreamToolName(name string) string {
-	return v2ToolAliasTarget(name)
-}
-
-func reverseToolName(name string) string {
-	for _, alias := range v2ToolAliases {
-		if name == alias.MyFlicker {
-			return alias.Claude
-		}
-	}
-	return name
-}
-
-func normalizeTools(tools []anthropicTool) []anthropicTool {
-	return mapV2Tools(tools, buildV2ToolNameMapping(tools))
-}
-
-func normalizeSystemPrompt(system string) string {
-	return strings.Join(append([]string{myFlickerBasePrompt}, normalizedSystemParagraphs(system)...), "\n\n")
-}
-
-func normalizedSystemParagraphs(system string) []string {
-	normalized := strings.ReplaceAll(system, "\r\n", "\n")
-	paragraphs := regexp.MustCompile(`\n[ \t]*\n`).Split(normalized, -1)
-	result := make([]string, 0, len(paragraphs))
-	for _, paragraph := range paragraphs {
-		paragraph = strings.TrimSpace(paragraph)
-		if paragraph == "" || identityParagraph(paragraph) {
-			continue
-		}
-		for _, alias := range v2ToolAliases {
-			pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(alias.Claude) + `\b`)
-			paragraph = pattern.ReplaceAllString(paragraph, alias.MyFlicker)
-		}
-		result = append(result, paragraph)
-	}
-	return result
-}
-
-func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, error) {
+func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2ToolNameMapping, error) {
+	mapping := buildV2ToolNameMapping(request.Tools)
 	if request.MaxTokens <= 0 {
-		return nil, errors.New("max_tokens must be a positive integer")
+		return nil, mapping, errors.New("max_tokens must be a positive integer")
 	}
 	if len(request.Messages) == 0 {
-		return nil, errors.New("messages must not be empty")
+		return nil, mapping, errors.New("messages must not be empty")
 	}
 
 	toolNames := make(map[string]string)
 	for _, message := range request.Messages {
 		blocks, err := anthropicBlocks(message.Content)
 		if err != nil {
-			return nil, err
+			return nil, mapping, err
 		}
 		for _, block := range blocks {
 			if block.Type == "tool_use" {
-				toolNames[block.ID] = upstreamToolName(block.Name)
+				toolNames[block.ID] = mapping.Upstream(block.Name)
 			}
 		}
 	}
 
-	prompt, err := anthropicSystemToV3(request.System, true)
+	prompt, err := anthropicSystemToV3(request.System, mapping)
 	if err != nil {
-		return nil, err
+		return nil, mapping, err
 	}
 	for _, message := range request.Messages {
 		if message.Role != "system" {
 			continue
 		}
-		systemMessages, err := anthropicSystemToV3(message.Content, false)
+		systemMessages, err := anthropicSystemToV3(message.Content, mapping)
 		if err != nil {
-			return nil, err
+			return nil, mapping, err
 		}
 		prompt = append(prompt, systemMessages...)
 	}
@@ -1100,11 +1059,11 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 			continue
 		}
 		if message.Role != "user" && message.Role != "assistant" {
-			return nil, fmt.Errorf("unsupported message role %q", message.Role)
+			return nil, mapping, fmt.Errorf("unsupported message role %q", message.Role)
 		}
 		blocks, err := anthropicBlocks(message.Content)
 		if err != nil {
-			return nil, err
+			return nil, mapping, err
 		}
 		allToolResults := len(blocks) > 0
 		for _, block := range blocks {
@@ -1118,11 +1077,11 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 			for _, block := range blocks {
 				toolName, ok := toolNames[block.ToolUseID]
 				if !ok {
-					return nil, fmt.Errorf("tool_result %q has no matching tool_use", block.ToolUseID)
+					return nil, mapping, fmt.Errorf("tool_result %q has no matching tool_use", block.ToolUseID)
 				}
 				output, err := anthropicToolResultOutput(block.Content)
 				if err != nil {
-					return nil, err
+					return nil, mapping, err
 				}
 				part := map[string]any{
 					"type":       "tool-result",
@@ -1150,23 +1109,23 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 				converted = append(converted, part)
 			case "tool_use":
 				if message.Role != "assistant" {
-					return nil, errors.New("tool_use is only valid in assistant messages")
+					return nil, mapping, errors.New("tool_use is only valid in assistant messages")
 				}
 				input := any(map[string]any{})
 				if len(block.Input) != 0 {
 					if err := json.Unmarshal(block.Input, &input); err != nil {
-						return nil, fmt.Errorf("invalid tool input: %w", err)
+						return nil, mapping, fmt.Errorf("invalid tool input: %w", err)
 					}
 				}
 				converted = append(converted, map[string]any{
 					"type":       "tool-call",
 					"toolCallId": block.ID,
-					"toolName":   upstreamToolName(block.Name),
+					"toolName":   mapping.Upstream(block.Name),
 					"input":      input,
 				})
 			case "thinking":
 				if message.Role != "assistant" {
-					return nil, errors.New("thinking is only valid in assistant messages")
+					return nil, mapping, errors.New("thinking is only valid in assistant messages")
 				}
 				part := map[string]any{"type": "reasoning", "text": block.Thinking}
 				if block.Signature != "" {
@@ -1176,11 +1135,11 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 				}
 				converted = append(converted, part)
 			case "tool_result":
-				return nil, errors.New("tool_result blocks cannot be mixed with user text")
+				return nil, mapping, errors.New("tool_result blocks cannot be mixed with user text")
 			case "image", "document", "audio", "video":
-				return nil, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
+				return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
 			default:
-				return nil, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
+				return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
 			}
 		}
 		prompt = append(prompt, map[string]any{"role": message.Role, "content": converted})
@@ -1204,14 +1163,14 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 	}
 	if request.Tools != nil {
 		tools := make([]any, 0, len(request.Tools))
-		for _, tool := range request.Tools {
+		for _, tool := range mapV2Tools(request.Tools, mapping) {
 			var schema any
 			if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
-				return nil, fmt.Errorf("invalid input_schema for tool %q: %w", tool.Name, err)
+				return nil, mapping, fmt.Errorf("invalid input_schema for tool %q: %w", tool.Name, err)
 			}
 			converted := map[string]any{
 				"type":        "function",
-				"name":        upstreamToolName(tool.Name),
+				"name":        tool.Name,
 				"description": tool.Description,
 				"inputSchema": schema,
 			}
@@ -1225,7 +1184,7 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 		case "tool":
 			options["toolChoice"] = map[string]any{
 				"type":     "tool",
-				"toolName": upstreamToolName(request.ToolChoice.Name),
+				"toolName": mapping.Upstream(request.ToolChoice.Name),
 			}
 		case "any":
 			options["toolChoice"] = map[string]any{"type": "required"}
@@ -1234,13 +1193,13 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 		case "auto":
 			options["toolChoice"] = map[string]any{"type": "auto"}
 		default:
-			return nil, fmt.Errorf("unsupported tool_choice type %q", request.ToolChoice.Type)
+			return nil, mapping, fmt.Errorf("unsupported tool_choice type %q", request.ToolChoice.Type)
 		}
 	}
 	if len(request.Thinking) != 0 && string(request.Thinking) != "null" {
 		var thinking map[string]any
 		if err := json.Unmarshal(request.Thinking, &thinking); err != nil {
-			return nil, fmt.Errorf("invalid thinking config: %w", err)
+			return nil, mapping, fmt.Errorf("invalid thinking config: %w", err)
 		}
 		if thinking["type"] != "disabled" {
 			if budget, ok := thinking["budget_tokens"]; ok {
@@ -1252,45 +1211,33 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, err
 			}
 		}
 	}
-	return options, nil
+	return options, mapping, nil
 }
 
-func anthropicSystemToV3(raw json.RawMessage, includeBase bool) ([]any, error) {
-	result := make([]any, 0)
-	if includeBase {
-		result = append(result, map[string]any{"role": "system", "content": myFlickerBasePrompt})
-	}
+func anthropicSystemToV3(raw json.RawMessage, mapping v2ToolNameMapping) ([]any, error) {
 	if len(raw) == 0 || string(raw) == "null" {
-		return result, nil
+		return nil, nil
 	}
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
-		paragraphs := normalizedSystemParagraphs(text)
-		if includeBase {
-			paragraphs = append([]string{myFlickerBasePrompt}, paragraphs...)
-			result = result[:0]
-		}
-		if len(paragraphs) > 0 {
-			result = append(result, map[string]any{
-				"role":    "system",
-				"content": strings.Join(paragraphs, "\n\n"),
-			})
-		}
-		return result, nil
+		return []any{map[string]any{
+			"role":    "system",
+			"content": rewriteV2SystemText(text, mapping),
+		}}, nil
 	}
 	var blocks []anthropicContentBlock
 	if err := json.Unmarshal(raw, &blocks); err != nil {
 		return nil, errors.New("system must be a string or text block array")
 	}
+	result := make([]any, 0, len(blocks))
 	for _, block := range blocks {
 		if block.Type != "text" {
 			return nil, fmt.Errorf("unsupported Anthropic system block: %s", block.Type)
 		}
-		content := strings.Join(normalizedSystemParagraphs(block.Text), "\n\n")
-		if content == "" {
-			continue
+		message := map[string]any{
+			"role":    "system",
+			"content": rewriteV2SystemText(block.Text, mapping),
 		}
-		message := map[string]any{"role": "system", "content": content}
 		addCacheControl(message, block.CacheControl)
 		result = append(result, message)
 	}
@@ -1354,14 +1301,6 @@ func addCacheControl(target map[string]any, raw json.RawMessage) {
 	}
 }
 
-func normalizeToolReferences(text string) string {
-	for _, alias := range v2ToolAliases {
-		pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(alias.Claude) + `\b`)
-		text = pattern.ReplaceAllString(text, alias.MyFlicker)
-	}
-	return text
-}
-
 type outputBlockState struct {
 	Index       int
 	Type        string
@@ -1369,18 +1308,18 @@ type outputBlockState struct {
 	Block       map[string]any
 }
 
-func anthropicSSEFromV3(model string, frames <-chan workerFrame) (<-chan v2SSEEvent, <-chan error) {
+func anthropicSSEFromV3(model string, frames <-chan workerFrame, mapping v2ToolNameMapping) (<-chan v2SSEEvent, <-chan error) {
 	events := make(chan v2SSEEvent, 32)
 	errs := make(chan error, 1)
 	go func() {
 		defer close(events)
 		defer close(errs)
-		errs <- streamAnthropicSSE(model, frames, events)
+		errs <- streamAnthropicSSE(model, frames, events, mapping)
 	}()
 	return events, errs
 }
 
-func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events chan<- v2SSEEvent) error {
+func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events chan<- v2SSEEvent, mapping v2ToolNameMapping) error {
 	started := false
 	finished := false
 	messageID := newMessageID()
@@ -1508,7 +1447,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 					"content_block": map[string]any{
 						"type":  "tool_use",
 						"id":    partID,
-						"name":  reverseToolName(v2StringValue(part["toolName"])),
+						"name":  mapping.Claude(v2StringValue(part["toolName"])),
 						"input": map[string]any{},
 					},
 				},
@@ -1568,7 +1507,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 	return nil
 }
 
-func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame) (anthropicMessage, error) {
+func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame, mapping v2ToolNameMapping) (anthropicMessage, error) {
 	message := anthropicMessage{
 		ID:           newMessageID(),
 		Type:         "message",
@@ -1628,7 +1567,7 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame) (a
 			block := map[string]any{
 				"type":  "tool_use",
 				"id":    partID,
-				"name":  reverseToolName(v2StringValue(part["toolName"])),
+				"name":  mapping.Claude(v2StringValue(part["toolName"])),
 				"input": map[string]any{},
 			}
 			blocks[partID] = &outputBlockState{Type: "tool_use", Block: block}
@@ -1669,7 +1608,7 @@ func anthropicMessageFromV3(requestedModel string, frames <-chan workerFrame) (a
 			message.Content = append(message.Content, map[string]any{
 				"type":  "tool_use",
 				"id":    toolCallID,
-				"name":  reverseToolName(v2StringValue(part["toolName"])),
+				"name":  mapping.Claude(v2StringValue(part["toolName"])),
 				"input": input,
 			})
 			completedTools[toolCallID] = struct{}{}
@@ -1849,7 +1788,7 @@ func (s *proxyServer) handleMessages(response http.ResponseWriter, request *http
 		writeAnthropicError(response, http.StatusBadRequest, "unknown or unavailable model")
 		return
 	}
-	payload, err := anthropicRequestToV3(input)
+	payload, mapping, err := anthropicRequestToV3(input)
 	if err != nil {
 		writeAnthropicError(response, http.StatusBadRequest, err.Error())
 		return
@@ -1860,10 +1799,10 @@ func (s *proxyServer) handleMessages(response http.ResponseWriter, request *http
 		return
 	}
 	if input.Stream {
-		s.writeStream(response, request, model.ID, frames)
+		s.writeStream(response, request, model.ID, frames, mapping)
 		return
 	}
-	message, err := anthropicMessageFromV3(model.ID, frames)
+	message, err := anthropicMessageFromV3(model.ID, frames, mapping)
 	if err != nil {
 		writeAnthropicError(response, http.StatusBadGateway, sanitizeWorkerError(err))
 		return
@@ -1871,7 +1810,13 @@ func (s *proxyServer) handleMessages(response http.ResponseWriter, request *http
 	writeV2JSON(response, http.StatusOK, message)
 }
 
-func (s *proxyServer) writeStream(response http.ResponseWriter, request *http.Request, model string, frames <-chan workerFrame) {
+func (s *proxyServer) writeStream(
+	response http.ResponseWriter,
+	request *http.Request,
+	model string,
+	frames <-chan workerFrame,
+	mapping v2ToolNameMapping,
+) {
 	flusher, ok := response.(http.Flusher)
 	if !ok {
 		writeAnthropicError(response, http.StatusInternalServerError, "streaming is unavailable")
@@ -1882,7 +1827,7 @@ func (s *proxyServer) writeStream(response http.ResponseWriter, request *http.Re
 	response.Header().Set("Connection", "keep-alive")
 	response.Header().Set("X-Accel-Buffering", "no")
 	response.WriteHeader(http.StatusOK)
-	events, errs := anthropicSSEFromV3(model, frames)
+	events, errs := anthropicSSEFromV3(model, frames, mapping)
 	for event := range events {
 		encoded, err := json.Marshal(event.Data)
 		if err != nil {
@@ -2205,15 +2150,6 @@ func (w *workerClient) Close() error {
 	return nil
 }
 
-func identityParagraph(paragraph string) bool {
-	lower := strings.ToLower(paragraph)
-	brand := strings.Contains(lower, "claude code") || strings.Contains(lower, "anthropic")
-	identity := strings.Contains(lower, "you are") ||
-		strings.Contains(lower, "official cli") ||
-		strings.Contains(lower, "powered by")
-	return brand && identity
-}
-
 func selfTestSettings() error {
 	got, err := parseProxySettings(nil, map[string]string{})
 	if err != nil {
@@ -2288,37 +2224,46 @@ func selfTestModels() error {
 }
 
 func selfTestPrompt() error {
+	mapping := buildV2ToolNameMapping([]anthropicTool{
+		{Name: "Read", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "Write", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	})
 	input := `You are Claude Code, Anthropic's official CLI.
 
-Always inspect the workspace before editing. Use Read before Write.
+Always inspect the workspace before editing. Use ` + "`Read`" + ` before ` + "`Write`" + `.
 
 The user requires all output to remain concise.`
-	got := normalizeSystemPrompt(input)
-	if strings.Contains(strings.ToLower(got), "claude code") || strings.Contains(strings.ToLower(got), "anthropic") {
-		return fmt.Errorf("identity paragraph was retained: %q", got)
+	want := `You are myflicker, the best coding agent on the planet.
+
+Always inspect the workspace before editing. Use ` + "`read`" + ` before ` + "`write`" + `.
+
+The user requires all output to remain concise.`
+	if got := rewriteV2SystemText(input, mapping); got != want {
+		return fmt.Errorf("rewritten prompt = %q, want %q", got, want)
 	}
-	for _, required := range []string{
-		myFlickerBasePrompt,
-		"Always inspect the workspace before editing. Use read before write.",
-		"The user requires all output to remain concise.",
-	} {
-		if !strings.Contains(got, required) {
-			return fmt.Errorf("normalized prompt missing %q: %q", required, got)
-		}
+	nearMatch := "You are using Claude Code with Anthropic documentation."
+	if got := rewriteV2SystemText(nearMatch, mapping); got != nearMatch {
+		return fmt.Errorf("near-match prompt changed: %q", got)
 	}
 	return nil
 }
 
 func selfTestTools() error {
-	tools := normalizeTools([]anthropicTool{
+	input := []anthropicTool{
 		{Name: "Read", InputSchema: json.RawMessage(`{"type":"object"}`)},
 		{Name: "mcp__demo__lookup", InputSchema: json.RawMessage(`{"type":"object"}`)},
-	})
-	if len(tools) != 2 || tools[0].Name != "read" || tools[1].Name != "mcp__demo__lookup" {
+		{Name: "NotebookEdit", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	}
+	mapping := buildV2ToolNameMapping(input)
+	tools := mapV2Tools(input, mapping)
+	if len(tools) != 3 ||
+		tools[0].Name != "read" ||
+		tools[1].Name != "mcp__demo__lookup" ||
+		tools[2].Name != "NotebookEdit" {
 		return fmt.Errorf("normalized tools = %+v", tools)
 	}
-	if reverseToolName("read") != "Read" {
-		return fmt.Errorf("reverse read = %q", reverseToolName("read"))
+	if mapping.Claude("read") != "Read" {
+		return fmt.Errorf("reverse read = %q", mapping.Claude("read"))
 	}
 	return nil
 }
@@ -2509,7 +2454,7 @@ func selfTestLiveFormats() error {
 		}`), &request); err != nil {
 			return err
 		}
-		payload, err := anthropicRequestToV3(request)
+		payload, _, err := anthropicRequestToV3(request)
 		if err != nil {
 			return err
 		}
@@ -2583,7 +2528,7 @@ func selfTestRequestConversion() error {
 	if err := json.Unmarshal([]byte(`{
 		"model":"claude-sonnet-4-6",
 		"max_tokens":512,
-		"system":"You are Claude Code, Anthropic's official CLI.\n\nUse Read before Write.",
+		"system":"You are Claude Code, Anthropic's official CLI.\n\nUse `+"`Read`"+` before `+"`Write`"+`.",
 		"messages":[
 			{"role":"system","content":"Project policy: keep the answer concise."},
 			{"role":"user","content":"inspect"},
@@ -2605,7 +2550,7 @@ func selfTestRequestConversion() error {
 	}`), &request); err != nil {
 		return err
 	}
-	converted, err := anthropicRequestToV3(request)
+	converted, _, err := anthropicRequestToV3(request)
 	if err != nil {
 		return err
 	}
@@ -2623,8 +2568,8 @@ func selfTestRequestConversion() error {
 		`"toolName":"read"`,
 		`"type":"tool-result"`,
 		`"budgetTokens":256`,
-		myFlickerBasePrompt,
-		"Use read before write.",
+		myFlickerIdentityPrompt,
+		"Use `read` before `Write`.",
 		"Project policy: keep the answer concise.",
 	} {
 		if !strings.Contains(body, expected) {
@@ -2634,13 +2579,16 @@ func selfTestRequestConversion() error {
 	if strings.Contains(strings.ToLower(body), "claude code") {
 		return errors.New("converted request retained Claude Code identity")
 	}
-	if strings.Count(body, myFlickerBasePrompt) != 1 {
+	if strings.Count(body, myFlickerIdentityPrompt) != 1 {
 		return fmt.Errorf("converted request duplicated MyFlicker identity: %s", body)
 	}
 	return nil
 }
 
 func selfTestResponseConversion() error {
+	mapping := buildV2ToolNameMapping([]anthropicTool{
+		{Name: "Read", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	})
 	parts := []string{
 		`{"type":"response-metadata","id":"msg_1","modelId":"GLM-5.2"}`,
 		`{"type":"reasoning-start","id":"r1"}`,
@@ -2656,7 +2604,7 @@ func selfTestResponseConversion() error {
 		frames <- workerFrame{Type: "part", Part: json.RawMessage(part)}
 	}
 	close(frames)
-	events, errs := anthropicSSEFromV3("requested", frames)
+	events, errs := anthropicSSEFromV3("requested", frames, mapping)
 	var got []v2SSEEvent
 	for event := range events {
 		got = append(got, event)
@@ -2697,7 +2645,7 @@ func selfTestResponseConversion() error {
 		jsonFrames <- workerFrame{Type: "part", Part: json.RawMessage(part)}
 	}
 	close(jsonFrames)
-	message, err := anthropicMessageFromV3("requested", jsonFrames)
+	message, err := anthropicMessageFromV3("requested", jsonFrames, mapping)
 	if err != nil {
 		return err
 	}

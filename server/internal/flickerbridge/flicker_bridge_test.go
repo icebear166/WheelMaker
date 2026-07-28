@@ -149,6 +149,57 @@ func TestV2SystemRewriteChangesOnlyExactIdentityAndToolReferences(t *testing.T) 
 	}
 }
 
+func TestV2RequestMappingRoundTripsWithoutChangingToolSchemas(t *testing.T) {
+	var request anthropicMessagesRequest
+	err := json.Unmarshal([]byte(`{
+		"model":"claude-4.8-opus",
+		"max_tokens":128,
+		"system":[
+			{"type":"text","text":"You are Claude Code, Anthropic's official CLI.","cache_control":{"type":"ephemeral"}},
+			{"type":"text","text":"Use `+"`Read`"+`; leave Readable unchanged."}
+		],
+		"messages":[
+			{"role":"user","content":"inspect"},
+			{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"a.txt"}}]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"ok"}]}
+		],
+		"tools":[{"name":"Read","description":"exact description","input_schema":{"type":"object","required":["file_path"]},"cache_control":{"type":"ephemeral"}}],
+		"tool_choice":{"type":"tool","name":"Read"}
+	}`), &request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	converted, mapping, err := anthropicRequestToV3(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(converted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(encoded)
+	for _, expected := range []string{
+		myFlickerIdentityPrompt,
+		"`read`",
+		`"name":"read"`,
+		`"toolName":"read"`,
+		`"description":"exact description"`,
+		`"required":["file_path"]`,
+		`"cacheControl":{"type":"ephemeral"}`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("converted body missing %q: %s", expected, body)
+		}
+	}
+	const legacyBasePrompt = "You are MyFlicker, an interactive coding agent."
+	if strings.Contains(body, legacyBasePrompt) || !strings.Contains(body, "Readable unchanged") {
+		t.Fatalf("converted body changed unrelated system text: %s", body)
+	}
+	if mapping.Claude("read") != "Read" {
+		t.Fatalf("reverse mapping = %q", mapping.Claude("read"))
+	}
+}
+
 func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")
