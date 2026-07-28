@@ -6,6 +6,7 @@ type TestDesktopBridge = {
   enabled: true;
   openFileInVSCode?: (absolutePath: string) => Promise<void> | void;
   showFileInFolder?: (absolutePath: string) => Promise<void> | void;
+  copyFileToClipboard?: (absolutePath: string) => Promise<void> | void;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
 };
@@ -37,6 +38,14 @@ const runtime = desktopRuntime as unknown as {
     action: DesktopProjectFileAction,
     target: DesktopFileActionTarget,
   ) => boolean;
+  canCopyDesktopFile?: (
+    bridge: TestDesktopBridge | null,
+    absolutePath: string,
+  ) => boolean;
+  copyDesktopFile?: (
+    bridge: TestDesktopBridge,
+    absolutePath: string,
+  ) => Promise<void>;
 };
 
 function getInvoker(): DesktopProjectFileActionInvoker {
@@ -194,5 +203,27 @@ describe('desktop absolute file actions', () => {
       'folder',
       externalTarget,
     )).toBe(false);
+  });
+});
+
+describe('desktop file clipboard', () => {
+  test('reports capability and forwards the exact absolute path', async () => {
+    const copyFileToClipboard = jest.fn();
+    const bridge: TestDesktopBridge = {enabled: true, copyFileToClipboard};
+
+    expect(runtime.canCopyDesktopFile!(bridge, 'D:/repo/file name.txt')).toBe(true);
+    await runtime.copyDesktopFile!(bridge, 'D:/repo/file name.txt');
+
+    expect(copyFileToClipboard).toHaveBeenCalledWith('D:/repo/file name.txt');
+  });
+
+  test('rejects missing bindings and empty paths', async () => {
+    expect(runtime.canCopyDesktopFile!({enabled: true}, 'D:/repo/file.txt')).toBe(false);
+    expect(runtime.canCopyDesktopFile!({
+      enabled: true,
+      copyFileToClipboard: jest.fn(),
+    }, '')).toBe(false);
+    await expect(runtime.copyDesktopFile!({enabled: true}, 'D:/repo/file.txt'))
+      .rejects.toEqual(new Error('Desktop file clipboard is unavailable.'));
   });
 });

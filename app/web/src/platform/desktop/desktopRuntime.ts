@@ -14,6 +14,7 @@ export type DesktopWindowBridge = {
   localDev?: DesktopLocalDevBridge;
   openFileInVSCode?: (absolutePath: string) => Promise<void> | void;
   showFileInFolder?: (absolutePath: string) => Promise<void> | void;
+  copyFileToClipboard?: (absolutePath: string) => Promise<void> | void;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   beginHtmlFileClipboard?: (fileName: string, size: number) => Promise<string> | string;
@@ -113,4 +114,21 @@ export async function invokeDesktopFileAction(
     return;
   }
   throw new Error('Desktop file action is unavailable.');
+}
+
+export function canCopyDesktopFile(
+  bridge: DesktopWindowBridge | null,
+  absolutePath: string,
+): boolean {
+  return Boolean(bridge?.copyFileToClipboard && absolutePath);
+}
+
+export async function copyDesktopFile(
+  bridge: DesktopWindowBridge,
+  absolutePath: string,
+): Promise<void> {
+  if (!bridge.copyFileToClipboard || !absolutePath) {
+    throw new Error('Desktop file clipboard is unavailable.');
+  }
+  await bridge.copyFileToClipboard(absolutePath);
 }

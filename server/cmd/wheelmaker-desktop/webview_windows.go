@@ -240,6 +240,12 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			}
 			return newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)
 		}},
+		{desktopCopyFileToClipboardBinding, func(absolutePath string) error {
+			if err := authorize(desktopBridgeCopyFileToClipboard); err != nil {
+				return err
+			}
+			return setDesktopFileClipboard(hwnd, absolutePath)
+		}},
 		{desktopBeginHTMLFileClipboardBinding, func(fileName string, size int) (string, error) {
 			if err := authorize(desktopBridgeBeginHTMLFileClipboard); err != nil {
 				return "", err
