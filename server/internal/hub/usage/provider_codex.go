@@ -87,7 +87,10 @@ func parseCodexRateLimits(payload map[string]any) ([]Limit, error) {
 			value := time.Unix(seconds, 0).UTC()
 			reset = &value
 		}
-		limits = append(limits, Limit{ID: id, Label: label, RemainingPercent: clampPercent(100 - number(window["usedPercent"])), ResetsAt: reset})
+		limits = append(limits, Limit{
+			ID: id, Label: label, RemainingPercent: clampPercent(100 - number(window["usedPercent"])),
+			WindowKind: WindowFixed, WindowDurationMins: duration, ResetsAt: reset,
+		})
 	}
 	if len(limits) == 0 {
 		return nil, fmt.Errorf("rate limit windows missing")

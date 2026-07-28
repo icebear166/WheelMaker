@@ -57,13 +57,16 @@ func parseZAILimits(payload map[string]any) ([]Limit, string, error) {
 		kind, _ := item["type"].(string)
 		unit := int64(number(item["unit"]))
 		id, label := "", ""
+		windowKind := WindowFixed
+		windowDurationMins := int64(0)
 		switch {
 		case kind == "TOKENS_LIMIT" && unit == 3:
-			id, label = "5h", "5 hours"
+			id, label, windowDurationMins = "5h", "5 hours", 300
 		case kind == "TOKENS_LIMIT" && unit == 6:
-			id, label = "week", "Week"
+			id, label, windowDurationMins = "week", "Week", 10080
 		case kind == "TIME_LIMIT" && unit == 5:
 			id, label = "mcp-month", "MCP month"
+			windowKind = WindowCalendarMonth
 		default:
 			continue
 		}
@@ -73,7 +76,10 @@ func parseZAILimits(payload map[string]any) ([]Limit, string, error) {
 			value := time.UnixMilli(resetMillis).UTC()
 			reset = &value
 		}
-		limits = append(limits, Limit{ID: id, Label: label, RemainingPercent: clampPercent(100 - number(item["percentage"])), ResetsAt: reset})
+		limits = append(limits, Limit{
+			ID: id, Label: label, RemainingPercent: clampPercent(100 - number(item["percentage"])),
+			WindowKind: windowKind, WindowDurationMins: windowDurationMins, ResetsAt: reset,
+		})
 	}
 	if len(limits) == 0 {
 		return nil, "", fmt.Errorf("limits missing")

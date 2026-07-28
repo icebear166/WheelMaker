@@ -20,11 +20,20 @@ const (
 	ProviderError       ProviderStatus = "error"
 )
 
+type WindowKind string
+
+const (
+	WindowFixed         WindowKind = "fixed"
+	WindowCalendarMonth WindowKind = "calendarMonth"
+)
+
 type Limit struct {
-	ID               string     `json:"id"`
-	Label            string     `json:"label"`
-	RemainingPercent float64    `json:"remainingPercent"`
-	ResetsAt         *time.Time `json:"resetsAt,omitempty"`
+	ID                 string     `json:"id"`
+	Label              string     `json:"label"`
+	RemainingPercent   float64    `json:"remainingPercent"`
+	WindowKind         WindowKind `json:"windowKind"`
+	WindowDurationMins int64      `json:"windowDurationMins,omitempty"`
+	ResetsAt           *time.Time `json:"resetsAt,omitempty"`
 }
 
 type Identity struct {
