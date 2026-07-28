@@ -552,6 +552,13 @@ func (s *overlapDetectingToolCommandHandler) sawOverlap() bool {
 	return s.overlap
 }
 
+func TestReporterConfiguresUsageHistoryStore(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-usage-history", StateDir: t.TempDir()}, nil)
+	if reporter.usageHistory == nil {
+		t.Fatal("usage history store is nil")
+	}
+}
+
 func TestReporterRespondsToHubStateGet(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)

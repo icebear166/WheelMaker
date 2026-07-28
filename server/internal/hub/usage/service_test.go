@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,6 +112,72 @@ func (c *sequenceCollector) Scan(context.Context) []ProviderSnapshot {
 	result := c.results[c.index]
 	c.index++
 	return result
+}
+
+type historyRecorderStub struct {
+	at        []time.Time
+	providers [][]ProviderSnapshot
+	err       error
+}
+
+func (s *historyRecorderStub) Record(at time.Time, providers []ProviderSnapshot) error {
+	s.at = append(s.at, at)
+	s.providers = append(s.providers, append([]ProviderSnapshot(nil), providers...))
+	return s.err
+}
+
+func TestServiceRecordsRawHistoryBeforePreservingFailedSnapshot(t *testing.T) {
+	collector := &sequenceCollector{results: [][]ProviderSnapshot{
+		{{
+			ID: ProviderKimi, Name: "Kimi", Status: ProviderOK,
+			Accounts: []Account{{
+				LocalID: "opencode", Status: ProviderOK,
+				Limits: []Limit{{ID: "week", RemainingPercent: 66}},
+			}},
+		}},
+		{{
+			ID: ProviderKimi, Name: "Kimi", Status: ProviderError,
+			Accounts: []Account{{
+				LocalID: "opencode", Status: ProviderError, Limits: []Limit{},
+			}},
+		}},
+	}}
+	recorder := &historyRecorderStub{}
+	service := NewService(ServiceOptions{Collector: collector, History: recorder})
+
+	if _, err := service.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := service.Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recorder.providers) != 2 || recorder.providers[1][0].Accounts[0].Status != ProviderError {
+		t.Fatalf("recorded providers=%+v", recorder.providers)
+	}
+	if got.Providers[0].Accounts[0].Status != ProviderOK || got.Providers[0].Accounts[0].Limits[0].RemainingPercent != 66 {
+		t.Fatalf("visible snapshot=%+v", got.Providers)
+	}
+}
+
+func TestServiceHistoryWriteFailureDoesNotFailLimitsScan(t *testing.T) {
+	collector := &sequenceCollector{results: [][]ProviderSnapshot{{{
+		ID: ProviderKimi, Name: "Kimi", Status: ProviderOK, Accounts: []Account{},
+	}}}}
+	recorder := &historyRecorderStub{err: errors.New("disk full")}
+	var historyErr error
+	service := NewService(ServiceOptions{
+		Collector: collector, History: recorder,
+		OnHistoryError: func(err error) { historyErr = err },
+	})
+
+	got, err := service.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("refresh error=%v", err)
+	}
+	if got.Status != ScanReady || len(recorder.providers) != 1 || historyErr == nil || historyErr.Error() != "disk full" {
+		t.Fatalf("snapshot=%+v recorder=%+v historyErr=%v", got, recorder, historyErr)
+	}
 }
 
 func TestServiceKeepsPreviousProviderWhenRefreshFails(t *testing.T) {

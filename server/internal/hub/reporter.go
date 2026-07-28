@@ -128,6 +128,7 @@ type Reporter struct {
 	fileIndex       *projectFileIndexManager
 	hubStateManager *HubStateManager
 	usageService    *usage.Service
+	usageHistory    *usage.HistoryStore
 	terminalHandler TerminalHandler
 	hubEventSink    *hubEventSink
 	flickerBridge   *flickerBridgeManager
@@ -195,11 +196,12 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	collector.KimiAPIKey = cfg.APIKeys.Kimi
 	collector.ZAIAPIKey = cfg.APIKeys.ZAI
 	collector.DeepSeekAPIKey = cfg.APIKeys.DeepSeek
+	r.usageHistory = usage.NewHistoryStore(filepath.Join(stateDir, "db", "usage-history.json"))
 	r.usageService = usage.NewService(usage.ServiceOptions{
-		HubID:     r.cfg.HubID,
-		Collector: collector,
-		OnSnapshot: func(snapshot usage.Snapshot) {
-			r.updateUsageSnapshot(snapshot)
+		HubID: r.cfg.HubID, Collector: collector, History: r.usageHistory,
+		OnSnapshot: r.updateUsageSnapshot,
+		OnHistoryError: func(err error) {
+			hubLogger("").Warn("persist usage history failed err=%v", err)
 		},
 	})
 	r.requestSeq.Store(2)
