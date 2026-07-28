@@ -100,6 +100,55 @@ func TestProbeV2RejectsMissingNodeWithoutLeakingEnvironment(t *testing.T) {
 	}
 }
 
+func TestV2CompatibilityMappingPreservesToolsAndAvoidsCollisions(t *testing.T) {
+	tools := []anthropicTool{
+		{Name: "Read", Description: "claude read", InputSchema: json.RawMessage(`{"type":"object","properties":{"file_path":{"type":"string"}}}`)},
+		{Name: "mcp__demo__lookup", Description: "mcp", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "NotebookEdit", Description: "notebook", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	}
+	mapping := buildV2ToolNameMapping(tools)
+	got := mapV2Tools(tools, mapping)
+
+	if got[0].Name != "read" || got[1].Name != "mcp__demo__lookup" || got[2].Name != "NotebookEdit" {
+		t.Fatalf("mapped tool names = %q, %q, %q", got[0].Name, got[1].Name, got[2].Name)
+	}
+	for i := range tools {
+		if got[i].Description != tools[i].Description ||
+			string(got[i].InputSchema) != string(tools[i].InputSchema) {
+			t.Fatalf("tool %d metadata changed: got=%+v want=%+v", i, got[i], tools[i])
+		}
+	}
+
+	colliding := buildV2ToolNameMapping([]anthropicTool{
+		{Name: "Agent", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "Task", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "task", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	})
+	for _, name := range []string{"Agent", "Task", "task"} {
+		if got := colliding.Upstream(name); got != name {
+			t.Fatalf("collision mapped %q to %q", name, got)
+		}
+	}
+}
+
+func TestV2SystemRewriteChangesOnlyExactIdentityAndToolReferences(t *testing.T) {
+	mapping := buildV2ToolNameMapping([]anthropicTool{
+		{Name: "Read", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		{Name: "Write", InputSchema: json.RawMessage(`{"type":"object"}`)},
+	})
+	input := "You are Claude Code, Anthropic's official CLI.\n\nUse `Read` before `Write`.\n\nAnthropic documentation is readable."
+	got := rewriteV2SystemText(input, mapping)
+	want := "You are myflicker, the best coding agent on the planet.\n\nUse `read` before `write`.\n\nAnthropic documentation is readable."
+	if got != want {
+		t.Fatalf("rewriteV2SystemText() = %q, want %q", got, want)
+	}
+
+	nearMatch := "You are using Claude Code with Anthropic documentation."
+	if got := rewriteV2SystemText(nearMatch, mapping); got != nearMatch {
+		t.Fatalf("near-match changed: %q", got)
+	}
+}
+
 func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")

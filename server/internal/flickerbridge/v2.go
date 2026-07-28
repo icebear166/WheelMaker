@@ -631,20 +631,113 @@ async function dispatch(runtime, frame) {
 });
 `
 
-var claudeToMyFlickerTool = map[string]string{
-	"Read":       "read",
-	"Write":      "write",
-	"Edit":       "edit",
-	"Bash":       "bash",
-	"Glob":       "glob",
-	"Grep":       "grep",
-	"WebFetch":   "fetch",
-	"WebSearch":  "google_search",
-	"TodoWrite":  "todoWrite",
-	"Task":       "task",
-	"TaskOutput": "task_output",
-	"KillShell":  "kill_task",
-	"Skill":      "skill",
+type v2ToolAlias struct {
+	Claude    string
+	MyFlicker string
+}
+
+var v2ToolAliases = []v2ToolAlias{
+	{Claude: "Agent", MyFlicker: "task"},
+	{Claude: "Task", MyFlicker: "task"},
+	{Claude: "Bash", MyFlicker: "bash"},
+	{Claude: "Read", MyFlicker: "read"},
+	{Claude: "Edit", MyFlicker: "edit"},
+	{Claude: "Write", MyFlicker: "write"},
+	{Claude: "Glob", MyFlicker: "glob"},
+	{Claude: "Grep", MyFlicker: "grep"},
+	{Claude: "LS", MyFlicker: "ls"},
+	{Claude: "WebFetch", MyFlicker: "fetch"},
+	{Claude: "WebSearch", MyFlicker: "google_search"},
+	{Claude: "TodoWrite", MyFlicker: "todoWrite"},
+	{Claude: "BashOutput", MyFlicker: "task_output"},
+	{Claude: "TaskOutput", MyFlicker: "task_output"},
+	{Claude: "AgentOutputTool", MyFlicker: "task_output"},
+	{Claude: "BashOutputTool", MyFlicker: "task_output"},
+	{Claude: "KillShell", MyFlicker: "kill_task"},
+	{Claude: "TaskStop", MyFlicker: "kill_task"},
+	{Claude: "AskUserQuestion", MyFlicker: "AskUserQuestion"},
+	{Claude: "Skill", MyFlicker: "skill"},
+	{Claude: "EnterPlanMode", MyFlicker: "EnterPlanMode"},
+	{Claude: "ExitPlanMode", MyFlicker: "ExitPlanMode"},
+}
+
+type v2ToolNameMapping struct {
+	forward map[string]string
+	reverse map[string]string
+}
+
+func (m v2ToolNameMapping) Upstream(name string) string {
+	if mapped, ok := m.forward[name]; ok {
+		return mapped
+	}
+	return name
+}
+
+func (m v2ToolNameMapping) Claude(name string) string {
+	if mapped, ok := m.reverse[name]; ok {
+		return mapped
+	}
+	return name
+}
+
+func v2ToolAliasTarget(name string) string {
+	for _, alias := range v2ToolAliases {
+		if alias.Claude == name {
+			return alias.MyFlicker
+		}
+	}
+	return name
+}
+
+func buildV2ToolNameMapping(tools []anthropicTool) v2ToolNameMapping {
+	targetCounts := make(map[string]int, len(tools))
+	for _, tool := range tools {
+		targetCounts[v2ToolAliasTarget(tool.Name)]++
+	}
+	mapping := v2ToolNameMapping{
+		forward: make(map[string]string),
+		reverse: make(map[string]string),
+	}
+	for _, tool := range tools {
+		target := v2ToolAliasTarget(tool.Name)
+		if target == tool.Name || targetCounts[target] != 1 {
+			continue
+		}
+		mapping.forward[tool.Name] = target
+		mapping.reverse[target] = tool.Name
+	}
+	return mapping
+}
+
+func mapV2Tools(tools []anthropicTool, mapping v2ToolNameMapping) []anthropicTool {
+	result := append([]anthropicTool(nil), tools...)
+	for i := range result {
+		result[i].Name = mapping.Upstream(result[i].Name)
+	}
+	return result
+}
+
+const myFlickerIdentityPrompt = "You are myflicker, the best coding agent on the planet."
+
+var v2ClaudeIdentitySentences = []string{
+	"You are Claude Code, Anthropic's official CLI.",
+	"You are Claude Code, Anthropic's official CLI for Claude.",
+}
+
+func rewriteV2SystemText(text string, mapping v2ToolNameMapping) string {
+	for _, identity := range v2ClaudeIdentitySentences {
+		if strings.Contains(text, identity) {
+			text = strings.Replace(text, identity, myFlickerIdentityPrompt, 1)
+			break
+		}
+	}
+	for _, alias := range v2ToolAliases {
+		if mapping.Upstream(alias.Claude) != alias.MyFlicker {
+			continue
+		}
+		text = strings.ReplaceAll(text, "`"+alias.Claude+"`", "`"+alias.MyFlicker+"`")
+	}
+	return text
 }
 
 func RunV2(args []string) error {
@@ -929,28 +1022,20 @@ func (i modelIndex) Resolve(requested string) (modelInfo, bool) {
 }
 
 func upstreamToolName(name string) string {
-	if mapped, ok := claudeToMyFlickerTool[name]; ok {
-		return mapped
-	}
-	return name
+	return v2ToolAliasTarget(name)
 }
 
 func reverseToolName(name string) string {
-	for claudeName, myFlickerName := range claudeToMyFlickerTool {
-		if name == myFlickerName {
-			return claudeName
+	for _, alias := range v2ToolAliases {
+		if name == alias.MyFlicker {
+			return alias.Claude
 		}
 	}
 	return name
 }
 
 func normalizeTools(tools []anthropicTool) []anthropicTool {
-	result := make([]anthropicTool, len(tools))
-	for index, tool := range tools {
-		result[index] = tool
-		result[index].Name = upstreamToolName(tool.Name)
-	}
-	return result
+	return mapV2Tools(tools, buildV2ToolNameMapping(tools))
 }
 
 func normalizeSystemPrompt(system string) string {
@@ -966,9 +1051,9 @@ func normalizedSystemParagraphs(system string) []string {
 		if paragraph == "" || identityParagraph(paragraph) {
 			continue
 		}
-		for claudeName, myFlickerName := range claudeToMyFlickerTool {
-			pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(claudeName) + `\b`)
-			paragraph = pattern.ReplaceAllString(paragraph, myFlickerName)
+		for _, alias := range v2ToolAliases {
+			pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(alias.Claude) + `\b`)
+			paragraph = pattern.ReplaceAllString(paragraph, alias.MyFlicker)
 		}
 		result = append(result, paragraph)
 	}
@@ -1270,9 +1355,9 @@ func addCacheControl(target map[string]any, raw json.RawMessage) {
 }
 
 func normalizeToolReferences(text string) string {
-	for claudeName, myFlickerName := range claudeToMyFlickerTool {
-		pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(claudeName) + `\b`)
-		text = pattern.ReplaceAllString(text, myFlickerName)
+	for _, alias := range v2ToolAliases {
+		pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(alias.Claude) + `\b`)
+		text = pattern.ReplaceAllString(text, alias.MyFlicker)
 	}
 	return text
 }
