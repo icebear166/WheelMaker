@@ -100,6 +100,40 @@ func TestProbeV2RejectsMissingNodeWithoutLeakingEnvironment(t *testing.T) {
 	}
 }
 
+func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
+	root := t.TempDir()
+	binDir := filepath.Join(root, "bin")
+	packageDir := filepath.Join(binDir, "node_modules", "@myflicker", "cli")
+	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.12"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(v2BundleAnchor), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	nodePath := filepath.Join(root, "node.exe")
+	myFlickerPath := filepath.Join(binDir, "myflicker.cmd")
+	settings, err := parseProxySettingsWithLookPath(nil, map[string]string{}, func(name string) (string, error) {
+		switch name {
+		case "node":
+			return nodePath, nil
+		case "myflicker":
+			return myFlickerPath, nil
+		default:
+			return "", fmt.Errorf("unexpected binary lookup %q", name)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.MyFlickerDir != packageDir {
+		t.Fatalf("MyFlickerDir=%q, want agent-discovered package %q", settings.MyFlickerDir, packageDir)
+	}
+}
+
 func (writer *failingResponseWriter) Header() http.Header {
 	if writer.header == nil {
 		writer.header = make(http.Header)

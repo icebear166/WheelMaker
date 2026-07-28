@@ -110,11 +110,29 @@ func ProbeV2() V2ProbeResult {
 }
 
 func findV2PackageDir(explicit, nodePath string, environ map[string]string) string {
-	candidates := []string{
-		explicit,
+	return findV2PackageDirWithLookPath(explicit, nodePath, environ, exec.LookPath)
+}
+
+func findV2PackageDirWithLookPath(explicit, nodePath string, environ map[string]string, lookPath func(string) (string, error)) string {
+	candidates := []string{explicit}
+	// Keep this command-shim lookup aligned with agent.resolveFlickerCLIEntry.
+	if binaryPath, err := lookPath("myflicker"); err == nil {
+		extension := strings.ToLower(filepath.Ext(binaryPath))
+		if extension == ".mjs" || extension == ".js" {
+			candidates = append(candidates, filepath.Dir(binaryPath))
+		} else {
+			binDir := filepath.Dir(binaryPath)
+			candidates = append(candidates,
+				filepath.Join(binDir, "node_modules", "@myflicker", "cli"),
+				filepath.Join(binDir, "..", "lib", "node_modules", "@myflicker", "cli"),
+				filepath.Join(binDir, "..", "node_modules", "@myflicker", "cli"),
+			)
+		}
+	}
+	candidates = append(candidates,
 		filepath.Join(filepath.Dir(nodePath), "node_modules", "@myflicker", "cli"),
 		filepath.Join(environ["APPDATA"], "npm", "node_modules", "@myflicker", "cli"),
-	}
+	)
 	for _, entry := range filepath.SplitList(environ["PATH"]) {
 		candidates = append(candidates, filepath.Join(entry, "node_modules", "@myflicker", "cli"))
 	}
@@ -753,6 +771,10 @@ func runProxy(args []string) error {
 }
 
 func parseProxySettings(args []string, environ map[string]string) (proxySettings, error) {
+	return parseProxySettingsWithLookPath(args, environ, exec.LookPath)
+}
+
+func parseProxySettingsWithLookPath(args []string, environ map[string]string, lookPath func(string) (string, error)) (proxySettings, error) {
 	settings := proxySettings{
 		Host:           defaultProxyHost,
 		Port:           defaultProxyPort,
@@ -816,11 +838,14 @@ func parseProxySettings(args []string, environ map[string]string) (proxySettings
 	if settings.MaxRequestSize < minimumMaxRequestSize || settings.MaxRequestSize > maximumMaxRequestSize {
 		return proxySettings{}, fmt.Errorf("max request size %d is outside 1 KiB..32 MiB", settings.MaxRequestSize)
 	}
-	nodePath, err := resolveNode(settings.NodePath, exec.LookPath)
+	nodePath, err := resolveNode(settings.NodePath, lookPath)
 	if err != nil {
 		return proxySettings{}, err
 	}
 	settings.NodePath = nodePath
+	if packageDir := findV2PackageDirWithLookPath(settings.MyFlickerDir, nodePath, environ, lookPath); packageDir != "" {
+		settings.MyFlickerDir = packageDir
+	}
 	if settings.MyFlickerDir != "" {
 		absolute, err := filepath.Abs(settings.MyFlickerDir)
 		if err != nil {
