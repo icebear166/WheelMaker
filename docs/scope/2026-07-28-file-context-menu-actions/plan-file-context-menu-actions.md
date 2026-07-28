@@ -68,7 +68,7 @@ Expected: one commit containing only the approved spec, plan, and wiki update.
 - Modify: `server/cmd/wheelmaker-desktop/desktop_html_clipboard_windows.go`
 - Modify: `server/cmd/wheelmaker-desktop/desktop_html_clipboard_windows_test.go`
 
-- [ ] **Step 1: Write failing generic file clipboard tests**
+- [x] **Step 1: Write failing generic file clipboard tests**
 
 Create `desktop_file_clipboard_windows_test.go` with focused tests that do not touch the real system clipboard:
 
@@ -176,7 +176,7 @@ func TestSetDesktopFileClipboardRejectsInvalidTargets(t *testing.T) {
 
 Include `reflect` in the import list. Extend the existing HTML clipboard tests so their fake operation value uses the renamed `desktopFileClipboardOLEOperations` type. Do not change the HTML transfer-store tests or the 16 MiB generated-HTML limit.
 
-- [ ] **Step 2: Run the focused tests and confirm RED**
+- [x] **Step 2: Run the focused tests and confirm RED**
 
 From `server` run:
 
@@ -186,7 +186,7 @@ go test ./cmd/wheelmaker-desktop -run 'TestSetDesktop(FileClipboard|HTMLFileClip
 
 Expected: FAIL because `desktopFileClipboardOperations`, `desktopFileClipboardOLEOperations`, and the generic publication helpers do not exist.
 
-- [ ] **Step 3: Implement generic existing-file clipboard publication**
+- [x] **Step 3: Implement generic existing-file clipboard publication**
 
 Create `desktop_file_clipboard_windows.go`:
 
@@ -333,7 +333,7 @@ return publishDesktopFileClipboardWithOLEOperations(path, operations)
 
 This keeps one Shell/OLE publication implementation while preserving the HTML-only size checks and raw virtual-file fallback.
 
-- [ ] **Step 4: Format and run clipboard tests**
+- [x] **Step 4: Format and run clipboard tests**
 
 From `server` run:
 
@@ -344,7 +344,7 @@ go test ./cmd/wheelmaker-desktop -run 'Test(SetDesktop(FileClipboard|HTMLFileCli
 
 Expected: PASS. The generic raw fallback sets exactly `CF_HDROP` and `Preferred DropEffect`; existing HTML tests still set five formats.
 
-- [ ] **Step 5: Commit native clipboard publication**
+- [x] **Step 5: Commit native clipboard publication**
 
 ```powershell
 git add server/cmd/wheelmaker-desktop/desktop_file_clipboard_windows.go server/cmd/wheelmaker-desktop/desktop_file_clipboard_windows_test.go server/cmd/wheelmaker-desktop/desktop_html_clipboard_windows.go server/cmd/wheelmaker-desktop/desktop_html_clipboard_windows_test.go
@@ -363,7 +363,7 @@ git commit -m "feat(desktop): copy existing files to clipboard"
 - Modify: `app/web/src/platform/desktop/desktopRuntime.ts`
 - Modify: `app/__tests__/web-desktop-runtime.test.ts`
 
-- [ ] **Step 1: Write failing authorization and runtime tests**
+- [x] **Step 1: Write failing authorization and runtime tests**
 
 Extend `TestDesktopBridgeAuthorization` with these rows:
 
@@ -430,7 +430,7 @@ describe('desktop file clipboard', () => {
 });
 ```
 
-- [ ] **Step 2: Run bridge tests and confirm RED**
+- [x] **Step 2: Run bridge tests and confirm RED**
 
 Run:
 
@@ -444,7 +444,7 @@ Set-Location ..
 
 Expected: FAIL because the action, binding, and TypeScript helpers do not exist.
 
-- [ ] **Step 3: Implement the native binding and policy**
+- [x] **Step 3: Implement the native binding and policy**
 
 Add to `desktop_bridge.go`:
 
@@ -471,7 +471,7 @@ Add this binding in `bindDesktopWindowBridge`:
 }},
 ```
 
-- [ ] **Step 4: Implement the typed Web runtime helper**
+- [x] **Step 4: Implement the typed Web runtime helper**
 
 Add to `DesktopWindowBridge`:
 
@@ -500,7 +500,7 @@ export async function copyDesktopFile(
 }
 ```
 
-- [ ] **Step 5: Format, verify, and commit the bridge**
+- [x] **Step 5: Format, verify, and commit the bridge**
 
 Run:
 
@@ -528,7 +528,7 @@ git commit -m "feat(desktop): expose trusted file clipboard action"
 - Modify: `app/web/src/chat/ChatTurnView.tsx`
 - Modify: `app/web/src/chat/ChatTurnView.test.tsx`
 
-- [ ] **Step 1: Write a failing Changed Files interaction test**
+- [x] **Step 1: Write a failing Changed Files interaction test**
 
 Add to `ChatTurnView.test.tsx`:
 
@@ -583,7 +583,7 @@ describe('ChatTurnView Changed Files interactions', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and confirm RED**
+- [x] **Step 2: Run the test and confirm RED**
 
 From `app` run:
 
@@ -593,7 +593,7 @@ npm test -- --runInBand web/src/chat/ChatTurnView.test.tsx
 
 Expected: FAIL because file rows do not expose the context-menu callback.
 
-- [ ] **Step 3: Add the optional callback without changing click behavior**
+- [x] **Step 3: Add the optional callback without changing click behavior**
 
 Add this prop:
 
@@ -616,7 +616,7 @@ onContextMenu={event =>
 
 Do not add a context-menu handler to the summary button and do not call `preventDefault` inside the presentation component; `WorkspaceApp` owns whether it can resolve a valid target.
 
-- [ ] **Step 4: Verify and commit Changed Files presentation**
+- [x] **Step 4: Verify and commit Changed Files presentation**
 
 Run:
 
@@ -642,7 +642,7 @@ git commit -m "feat(app): expose changed file context intent"
 - Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
 - Modify: `app/web/src/styles/chat.css`
 
-- [ ] **Step 1: Write failing menu order, icon, separator, and platform-label tests**
+- [x] **Step 1: Write failing menu order, icon, separator, and platform-label tests**
 
 Replace the component-test fixture capabilities with:
 
@@ -752,7 +752,7 @@ and one separator. Verify clicking every visible item emits the matching action 
 
 for a fully capable Markdown menu.
 
-- [ ] **Step 2: Add failing Workspace integration and theme assertions**
+- [x] **Step 2: Add failing Workspace integration and theme assertions**
 
 Extend the existing file-link context-menu test in `web-chat-file-peek-viewer.test.ts` to require:
 
@@ -784,7 +784,7 @@ expect(stylesCss).toContain('color: var(--text-secondary);');
 expect(stylesCss).toContain('outline: 2px solid var(--focus-ring-color);');
 ```
 
-- [ ] **Step 3: Run focused UI tests and confirm RED**
+- [x] **Step 3: Run focused UI tests and confirm RED**
 
 From `app` run:
 
@@ -794,7 +794,7 @@ npm test -- --runInBand __tests__/web-chat-file-link-context-menu.test.tsx __tes
 
 Expected: FAIL because the new actions, groups, Changed file wiring, clipboard handler, and tokenized styles do not exist.
 
-- [ ] **Step 4: Implement capability-driven action groups**
+- [x] **Step 4: Implement capability-driven action groups**
 
 Update the action and prop contracts:
 
@@ -887,7 +887,7 @@ Render one separator only between adjacent non-empty groups:
 
 Keep the existing menu focus, Escape restoration, outside-click, scroll, resize, and arrow-key behavior unchanged.
 
-- [ ] **Step 5: Resolve Changed file targets and connect all actions**
+- [x] **Step 5: Resolve Changed file targets and connect all actions**
 
 Extend `ChatFileLinkMenuState`:
 
@@ -984,7 +984,7 @@ htmlActionLabel={
 
 Use `menuLine = chatFileLinkMenu.link.line` so ordinary links retain line-number preview jumps. Explicitly deleted Changed files still receive `Preview file`, Explorer, and path actions, but not `Copy file` or HTML output.
 
-- [ ] **Step 6: Apply menu visual baseline and light-theme tokens**
+- [x] **Step 6: Apply menu visual baseline and light-theme tokens**
 
 Replace the context-menu CSS block with token-driven geometry:
 
@@ -1041,7 +1041,7 @@ Replace the context-menu CSS block with token-driven geometry:
 
 Do not add animation, gradients, blur, new color literals, new icon assets, or a second menu primitive. The existing `ChatIcon` glyphs were verified against Lucide; retain their project-standard 1.5px stroke and `currentColor`.
 
-- [ ] **Step 7: Verify focused UI behavior and commit**
+- [x] **Step 7: Verify focused UI behavior and commit**
 
 Run from `app`:
 
@@ -1063,7 +1063,7 @@ git commit -m "feat(app): unify file context actions"
 
 - Verify all files changed by Tasks 1–5.
 
-- [ ] **Step 1: Run the complete affected Web test set**
+- [x] **Step 1: Run the complete affected Web test set**
 
 From `app` run:
 
@@ -1073,7 +1073,7 @@ npm test -- --runInBand web/src/chat/ChatTurnView.test.tsx __tests__/web-chat-fi
 
 Expected: PASS with no open handles.
 
-- [ ] **Step 2: Run type checking and the production Web build**
+- [x] **Step 2: Run type checking and the production Web build**
 
 ```powershell
 npm run tsc:web
@@ -1082,7 +1082,7 @@ npm run build:web
 
 Expected: both commands exit 0; the build writes the normal Web output outside `app/dist` according to repository rules.
 
-- [ ] **Step 3: Run Desktop package and server regression tests**
+- [x] **Step 3: Run Desktop package and server regression tests**
 
 From `server` run:
 
@@ -1093,7 +1093,7 @@ go test ./... -count=1
 
 Expected: PASS.
 
-- [ ] **Step 4: Inspect final theme and behavior invariants**
+- [x] **Step 4: Inspect final theme and behavior invariants**
 
 Run from the repository root:
 
@@ -1112,6 +1112,6 @@ Confirm from the diff:
 - `desktopBridgeCopyFileToClipboard` is remote-only;
 - no Registry method or protocol version changed.
 
-- [ ] **Step 5: Record completion in the plan**
+- [x] **Step 5: Record completion in the plan**
 
 Mark every completed checkbox in this plan as `[x]`. This final documentation update is intentionally left for the repository completion commit so the mandatory add/commit/push gate has a concrete tracked change.
