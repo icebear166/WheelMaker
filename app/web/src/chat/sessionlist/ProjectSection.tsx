@@ -55,6 +55,7 @@ export function ProjectSection({
               name={collapsed ? 'folder' : 'folderOpen'}
               size={15}
               className={`wide-project-folder-icon ${hubVariantClass}`}
+              style={hubAccentStyle}
             />
             {pinned ? (
               <SessionIcon name="pin" size={10} filled className="wide-project-pin-badge" />

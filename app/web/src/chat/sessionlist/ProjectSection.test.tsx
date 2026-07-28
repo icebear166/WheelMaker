@@ -47,6 +47,15 @@ describe('ProjectSection', () => {
     expect(tree.root.findByProps({title: 'Pin project to top'}).props.className).toContain('sl-action-secondary');
   });
 
+  it('applies the hub accent to the folder icon as well as the hub tag', async () => {
+    const {tree, props} = await renderSection();
+    const folderIcon = tree.root.findAll(
+      node => node.type === 'svg' && typeof node.props.className === 'string' && node.props.className.includes('wide-project-folder-icon'),
+    )[0];
+
+    expect(folderIcon.props.style).toEqual(props.hubAccentStyle);
+  });
+
   it('hides children when collapsed and shows pin badge when pinned', async () => {
     const collapsed = await renderSection({collapsed: true});
     expect(collapsed.tree.root.findAllByProps({className: 'child-row'})).toHaveLength(0);
