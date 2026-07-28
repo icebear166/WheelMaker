@@ -842,9 +842,10 @@ type fakeFlickerBridgeProcess struct {
 }
 
 type fakeFlickerBridgeModeStore struct {
-	mu   sync.Mutex
-	mode hubconfig.FlickerBridgeMode
-	err  error
+	mu        sync.Mutex
+	mode      hubconfig.FlickerBridgeMode
+	err       error
+	updateErr error
 }
 
 func (s *fakeFlickerBridgeModeStore) FlickerBridgeMode() (hubconfig.FlickerBridgeMode, error) {
@@ -862,6 +863,9 @@ func (s *fakeFlickerBridgeModeStore) FlickerBridgeMode() (hubconfig.FlickerBridg
 func (s *fakeFlickerBridgeModeStore) UpdateFlickerBridgeMode(mode hubconfig.FlickerBridgeMode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.updateErr != nil {
+		return s.updateErr
+	}
 	if s.err != nil {
 		return s.err
 	}
@@ -994,6 +998,119 @@ func TestFlickerBridgeManagerSwitchModeFailureRollsBackV1(t *testing.T) {
 	}
 	if _, stopErr := manager.Stop(context.Background()); stopErr != nil {
 		t.Fatal(stopErr)
+	}
+}
+
+func TestFlickerBridgeManagerSwitchModeSuccessCommitsV2(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	store := &fakeFlickerBridgeModeStore{mode: hubconfig.FlickerBridgeModeV1}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key", store)
+	manager.modeAvailable = func(flickerBridgeMode) error { return nil }
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.health = func(context.Context) error { return nil }
+	manager.healthInterval = time.Millisecond
+	first := newFakeFlickerBridgeProcess()
+	second := newFakeFlickerBridgeProcess()
+	processes := []*fakeFlickerBridgeProcess{first, second}
+	var starts atomic.Int32
+	manager.startProcess = func(string, []string, []string, io.Writer) (flickerBridgeProcess, error) {
+		return processes[int(starts.Add(1))-1], nil
+	}
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitForFlickerBridgeState(t, manager, "running")
+
+	status, err := manager.SwitchMode(context.Background(), flickerBridgeModeV2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Mode != flickerBridgeModeV2 || status.RunningMode != flickerBridgeModeV2 || status.State != "running" {
+		t.Fatalf("switch status = %+v", status)
+	}
+	if store.mode != hubconfig.FlickerBridgeModeV2 || starts.Load() != 2 || first.killed() != 1 {
+		t.Fatalf("persisted=%q starts=%d firstKills=%d", store.mode, starts.Load(), first.killed())
+	}
+	if _, stopErr := manager.Stop(context.Background()); stopErr != nil {
+		t.Fatal(stopErr)
+	}
+}
+
+func TestFlickerBridgeManagerSwitchModePersistFailureRollsBackV1(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	store := &fakeFlickerBridgeModeStore{
+		mode:      hubconfig.FlickerBridgeModeV1,
+		updateErr: errors.New("config disk unavailable"),
+	}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key", store)
+	manager.modeAvailable = func(flickerBridgeMode) error { return nil }
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.health = func(context.Context) error { return nil }
+	manager.healthInterval = time.Millisecond
+	var starts atomic.Int32
+	manager.startProcess = func(string, []string, []string, io.Writer) (flickerBridgeProcess, error) {
+		starts.Add(1)
+		return newFakeFlickerBridgeProcess(), nil
+	}
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitForFlickerBridgeState(t, manager, "running")
+
+	status, err := manager.SwitchMode(context.Background(), flickerBridgeModeV2)
+	if err == nil || !strings.Contains(err.Error(), "config disk unavailable") {
+		t.Fatalf("SwitchMode() error = %v", err)
+	}
+	if status.Mode != flickerBridgeModeV1 || status.RunningMode != flickerBridgeModeV1 || status.State != "running" {
+		t.Fatalf("rollback status = %+v", status)
+	}
+	if store.mode != hubconfig.FlickerBridgeModeV1 || starts.Load() != 3 {
+		t.Fatalf("persisted=%q starts=%d", store.mode, starts.Load())
+	}
+	if _, stopErr := manager.Stop(context.Background()); stopErr != nil {
+		t.Fatal(stopErr)
+	}
+}
+
+func TestFlickerBridgeManagerSwitchAndRollbackFailureRemainsFailedV1(t *testing.T) {
+	if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
+		t.Skip("Flicker Bridge child process is Windows x64-only")
+	}
+	store := &fakeFlickerBridgeModeStore{mode: hubconfig.FlickerBridgeModeV1}
+	manager := newFlickerBridgeManager(t.TempDir(), "configured-flicker-key", store)
+	manager.modeAvailable = func(flickerBridgeMode) error { return nil }
+	manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+	manager.health = func(context.Context) error { return nil }
+	manager.healthInterval = time.Millisecond
+	var starts atomic.Int32
+	manager.startProcess = func(string, []string, []string, io.Writer) (flickerBridgeProcess, error) {
+		switch starts.Add(1) {
+		case 1:
+			return newFakeFlickerBridgeProcess(), nil
+		case 2:
+			return nil, errors.New("target start failed")
+		default:
+			return nil, errors.New("rollback start failed")
+		}
+	}
+	if _, err := manager.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitForFlickerBridgeState(t, manager, "running")
+
+	status, err := manager.SwitchMode(context.Background(), flickerBridgeModeV2)
+	if err == nil || !strings.Contains(err.Error(), "target start failed") || !strings.Contains(err.Error(), "rollback start failed") {
+		t.Fatalf("SwitchMode() error = %v", err)
+	}
+	if status.Mode != flickerBridgeModeV1 || status.RunningMode != "" || status.State != "failed" {
+		t.Fatalf("failed rollback status = %+v", status)
+	}
+	if store.mode != hubconfig.FlickerBridgeModeV1 {
+		t.Fatalf("persisted mode = %q", store.mode)
 	}
 }
 
