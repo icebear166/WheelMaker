@@ -17,6 +17,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	"github.com/swm8023/wheelmaker/internal/hub/client"
 	terminalpkg "github.com/swm8023/wheelmaker/internal/hub/terminal"
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 )
@@ -32,6 +33,7 @@ type Hub struct {
 	regSync         *Reporter
 	terminalManager *terminalpkg.Manager
 	flickerBridge   *flickerBridgeManager
+	hubConfig       *hubconfig.Store
 	flickerModels   *agent.FlickerModelStore
 	clientsByName   map[string]*client.Client
 }
@@ -44,7 +46,8 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 	if cfg != nil {
 		apiKeys = cfg.APIKeys
 	}
-	flickerBridge := newFlickerBridgeManager(stateDir, apiKeys.Flicker)
+	hubConfig := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	flickerBridge := newFlickerBridgeManager(stateDir, apiKeys.Flicker, hubConfig)
 	flickerModels := agent.NewFlickerModelStore()
 	h := newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
 		StateDir:          stateDir,
@@ -56,6 +59,7 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		FlickerModelStore: flickerModels,
 	}))
 	h.flickerBridge = flickerBridge
+	h.hubConfig = hubConfig
 	h.flickerModels = flickerModels
 	return h
 }
@@ -80,7 +84,10 @@ func (h *Hub) Start(ctx context.Context) error {
 		if h.cfg != nil {
 			flickerKey = h.cfg.APIKeys.Flicker
 		}
-		h.flickerBridge = newFlickerBridgeManager(h.stateDir, flickerKey)
+		if h.hubConfig == nil {
+			h.hubConfig = hubconfig.New(filepath.Join(h.stateDir, "db", "hub-config.json"))
+		}
+		h.flickerBridge = newFlickerBridgeManager(h.stateDir, flickerKey, h.hubConfig)
 	}
 	hubLogger("").Info("start projects=%d", len(h.cfg.Projects))
 	if err := client.CheckStoreSchema(h.dbPath); err != nil {
@@ -112,7 +119,7 @@ func (h *Hub) Start(ctx context.Context) error {
 		if h.flickerModels != nil {
 			h.flickerBridge.setReadyHandler(h.flickerModels.Refresh)
 		}
-		if _, err := h.flickerBridge.Start(ctx); err != nil {
+		if _, err := h.flickerBridge.StartWithV2Fallback(ctx); err != nil {
 			hubLogger("").Warn("Flicker Bridge start failed err=%v", err)
 		}
 	}

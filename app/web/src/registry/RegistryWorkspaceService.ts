@@ -901,11 +901,12 @@ export class RegistryWorkspaceService {
     hubId: string,
     section: RegistryHubStateSectionName,
     action: string,
+    params: Record<string, unknown> = {},
   ): Promise<RegistryHubState> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.runHubStateAction(hubId, section, action);
+    return this.repository.runHubStateAction(hubId, section, action, params);
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {

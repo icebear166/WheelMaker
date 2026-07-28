@@ -929,10 +929,16 @@ export interface RegistryPortRelaySnapshot {
   error?: string;
 }
 
+export type RegistryFlickerBridgeMode = 'v1' | 'v2';
+
 export interface RegistryFlickerBridgeStatus {
   configured: boolean;
   supported: boolean;
   state: string;
+  mode: RegistryFlickerBridgeMode;
+  runningMode?: RegistryFlickerBridgeMode;
+  availableModes: RegistryFlickerBridgeMode[];
+  modeErrors: Partial<Record<RegistryFlickerBridgeMode, string>>;
   endpoint: string;
   port: number;
   pid?: number;

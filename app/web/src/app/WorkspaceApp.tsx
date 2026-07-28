@@ -4,10 +4,9 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import {resolveSessionsShortcutAction, resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
 import {
   applyFlickerBridgeHubStateEvent,
-  flickerBridgeActions,
-  flickerBridgeLabel,
   normalizeFlickerBridgeStatus,
 } from './flickerBridgeState';
+import {FlickerBridgeControl} from './FlickerBridgeControl';
 
 declare global {
   interface Window {
@@ -3582,13 +3581,14 @@ export function App() {
 
   const runChatHubFlickerBridgeAction = useCallback(async (
     hubId: string,
-    action: 'start' | 'stop' | 'restart',
+    action: 'start' | 'stop' | 'restart' | 'switchMode',
+    params: Record<string, unknown> = {},
   ): Promise<void> => {
     const generation = (chatHubFlickerBridgeRequestGenerationRef.current[hubId] ?? 0) + 1;
     chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
     setChatHubFlickerBridgeActionHubId(hubId);
     try {
-      const state = await service.runHubStateAction(hubId, 'flickerBridge', action);
+      const state = await service.runHubStateAction(hubId, 'flickerBridge', action, params);
       if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
         return;
       }
@@ -3597,6 +3597,14 @@ export function App() {
     } catch (error) {
       if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
         return;
+      }
+      if (action === 'switchMode') {
+        try {
+          await refreshChatHubFlickerBridge(hubId);
+          return;
+        } catch {
+          // Fall through to a local error state when the recovered Hub state is unavailable.
+        }
       }
       const message = error instanceof Error ? error.message : String(error);
       setChatHubFlickerBridgeStatuses(current => ({
@@ -3610,7 +3618,7 @@ export function App() {
     } finally {
       setChatHubFlickerBridgeActionHubId(current => current === hubId ? '' : current);
     }
-  }, []);
+  }, [refreshChatHubFlickerBridge]);
 
   useEffect(() => {
     if (!chatHubMenuOpen || !connected || registryHubs.length === 0) {
@@ -6589,13 +6597,7 @@ export function App() {
                 const currentHubHsv = hubColorToHsv(currentHubColor);
                 const currentHubHueColor = hubHsvToColor({h: currentHubHsv.h, s: 1, v: 1});
                 const flickerBridge = chatHubFlickerBridgeStatuses[hub.hubId];
-                const flickerBridgeState = flickerBridge?.state ?? 'loading';
                 const flickerBridgeBusy = chatHubFlickerBridgeActionHubId === hub.hubId;
-                const {
-                  canStart: flickerBridgeCanStart,
-                  canStop: flickerBridgeCanStop,
-                  canRestart: flickerBridgeCanRestart,
-                } = flickerBridgeActions(flickerBridge);
                 const customHubColorStyle = {
                   ...hubAccentStyle(hub.hubId),
                   '--hub-custom-hue': currentHubHueColor,
@@ -6631,30 +6633,12 @@ export function App() {
                         <SessionIcon name={expanded ? 'chevronDown' : 'chevronRight'} />
                       </button>
                     </div>
-                    <div className={`chat-hub-flicker-bridge state-${flickerBridgeState}`} aria-live="polite">
-                      <div className="chat-hub-flicker-bridge-summary">
-                        <span className="chat-hub-flicker-bridge-dot" aria-hidden="true" />
-                        <span className="chat-hub-flicker-bridge-name">Flicker Bridge</span>
-                        <span className="chat-hub-flicker-bridge-state" title={flickerBridge?.endpoint}>{flickerBridgeLabel(flickerBridge)}</span>
-                      </div>
-                      <div className="chat-hub-flicker-bridge-actions">
-                        {flickerBridgeCanStop ? (
-                          <button type="button" aria-label="Stop Flicker Bridge" disabled={flickerBridgeBusy} onClick={() => runChatHubFlickerBridgeAction(hub.hubId, 'stop')}>
-                            Stop
-                          </button>
-                        ) : (
-                          <button type="button" aria-label="Start Flicker Bridge" disabled={!flickerBridgeCanStart || flickerBridgeBusy} onClick={() => runChatHubFlickerBridgeAction(hub.hubId, 'start')}>
-                            Start
-                          </button>
-                        )}
-                        {flickerBridgeCanRestart ? (
-                          <button type="button" aria-label="Restart Flicker Bridge" disabled={flickerBridgeBusy} onClick={() => runChatHubFlickerBridgeAction(hub.hubId, 'restart')}>
-                            Restart
-                          </button>
-                        ) : null}
-                      </div>
-                      {flickerBridge?.error ? <span className="chat-hub-flicker-bridge-error" title={flickerBridge.error}>{flickerBridge.error}</span> : null}
-                    </div>
+                    <FlickerBridgeControl
+                      status={flickerBridge}
+                      busy={flickerBridgeBusy}
+                      onLifecycle={action => runChatHubFlickerBridgeAction(hub.hubId, action)}
+                      onSwitchMode={mode => runChatHubFlickerBridgeAction(hub.hubId, 'switchMode', {mode})}
+                    />
                     {colorMenuOpen ? (
                       <div className={`chat-hub-color-palette topbar-menu-surface${chatHubColorMenuExiting ? ' sl-menu-exit' : ''}`} aria-label={`Color options for ${hub.hubId}`}>
                         <div className="chat-hub-color-grid">

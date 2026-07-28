@@ -9,10 +9,27 @@ export type FlickerBridgeStatusByHub = Record<string, RegistryFlickerBridgeStatu
 export function normalizeFlickerBridgeStatus(value: unknown): RegistryFlickerBridgeStatus {
   const data = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const port = typeof data.port === 'number' && Number.isFinite(data.port) ? data.port : 17999;
+  const mode = data.mode === 'v2' ? 'v2' : 'v1';
+  const runningMode = data.runningMode === 'v1' || data.runningMode === 'v2'
+    ? data.runningMode
+    : undefined;
+  const availableModes: Array<'v1' | 'v2'> = Array.isArray(data.availableModes)
+    ? data.availableModes.filter((candidate): candidate is 'v1' | 'v2' => candidate === 'v1' || candidate === 'v2')
+    : ['v1'];
+  const rawModeErrors = data.modeErrors && typeof data.modeErrors === 'object'
+    ? data.modeErrors as Record<string, unknown>
+    : {};
   return {
     configured: data.configured === true,
     supported: data.supported !== false,
     state: typeof data.state === 'string' ? data.state : 'notConfigured',
+    mode,
+    runningMode,
+    availableModes,
+    modeErrors: {
+      ...(typeof rawModeErrors.v1 === 'string' ? {v1: rawModeErrors.v1} : {}),
+      ...(typeof rawModeErrors.v2 === 'string' ? {v2: rawModeErrors.v2} : {}),
+    },
     endpoint: typeof data.endpoint === 'string' ? data.endpoint : `http://127.0.0.1:${port}`,
     port,
     pid: typeof data.pid === 'number' ? data.pid : undefined,

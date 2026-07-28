@@ -1,4 +1,4 @@
-> 摘要：本页维护 WheelMaker App-only Session 运行时架构、组件职责和生命周期边界。
+> 摘要：本页维护 WheelMaker App-only Session 与 Hub 本地运行时架构、组件职责、配置所有权和生命周期边界。
 
 # Architecture 3.0
 
@@ -228,6 +228,27 @@ Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID
 
 来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
 
-## 9. Historical Context
+## 9. Hub-owned Runtime Configuration
+
+每台 Hub 的前端可写、Hub 本地生效的持久化配置统一由 Hub 自己保存到 `<stateDir>/db/hub-config.json`。该文件与 Registry 入口机拥有的 `db/server-data.json`、人工维护的 `config.json` 以及浏览器 LocalStorage 分离：Registry 不拥有远程 Hub 的配置，浏览器也不是实际运行状态的事实来源。
+
+`hub-config.json` 使用带 version 的 section schema。缺失文件返回默认值且不主动创建；首次成功修改才以私有权限原子写入。每个前端配置字段必须经过对应 Hub State action 的服务端校验，客户端不能提交整份任意 JSON。section 更新保留其他 section，使后续 Hub 功能可以共享存储而不互相覆盖；文件不得保存第三方密钥、PID、临时 action 或 Session 数据。
+
+Flicker Bridge mode 是首个使用该存储的配置：
+
+```json
+{
+  "version": 1,
+  "flickerBridge": {
+    "mode": "v1"
+  }
+}
+```
+
+Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前进程 `runningMode`。V1/V2 共用 `127.0.0.1:17999`，Start/Stop/Restart 作用于 selected mode；运行中切换须先健康启动目标模式再提交配置，失败则恢复原模式。Stopped 状态切换只保存选择，不启动进程。所有生命周期操作只管理 Hub 捕获的子进程，不结束非本 manager 所有的 listener。
+
+来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)。
+
+## 10. Historical Context
 
 The original Architecture 3.0 rollout used chat route keys and command routing while multi-session support was being introduced. That design has been retired. Current code should be read through the App-only Registry/session model above.

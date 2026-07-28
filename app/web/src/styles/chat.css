@@ -6631,6 +6631,13 @@
   min-width: 0;
 }
 
+.chat-hub-flicker-bridge-modes {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+}
+
 .chat-hub-flicker-bridge-name {
   color: var(--text-primary);
 }
@@ -6669,6 +6676,22 @@
   background: var(--hover);
   color: var(--text-primary);
   font: inherit;
+}
+
+.chat-hub-flicker-bridge-modes button {
+  border-radius: 0;
+  padding-inline: 5px;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.chat-hub-flicker-bridge-modes button + button {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.chat-hub-flicker-bridge-modes button.selected {
+  background: var(--hover);
+  color: var(--text-primary);
 }
 
 .chat-hub-flicker-bridge-actions button:hover:not(:disabled) {

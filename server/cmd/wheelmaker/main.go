@@ -26,6 +26,7 @@ const hubWorkerArg = "--hub-worker"
 const registryWorkerArg = "--registry-worker"
 const localDevArg = "--local-dev"
 const flickerBridgeArg = "--flicker-bridge"
+const flickerBridgeV2Arg = "--flicker-bridge-v2"
 const wheelmakerWindowsServiceName = "WheelMaker"
 const defaultRegistryAddr = "127.0.0.1:9630"
 
@@ -37,8 +38,13 @@ func main() {
 }
 
 func run() error {
-	if len(os.Args) > 1 && os.Args[1] == flickerBridgeArg {
-		return flickerbridge.Run(os.Args[2:])
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case flickerBridgeArg:
+			return flickerbridge.Run(os.Args[2:])
+		case flickerBridgeV2Arg:
+			return flickerbridge.RunV2(os.Args[2:])
+		}
 	}
 	fs := flag.NewFlagSet("wheelmaker", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)

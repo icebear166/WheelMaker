@@ -872,9 +872,10 @@ func validateHubStateAction(section string, action string) error {
 			"rebuild": {},
 		},
 		hubStateSectionFlickerBridge: {
-			"start":   {},
-			"stop":    {},
-			"restart": {},
+			"start":      {},
+			"stop":       {},
+			"restart":    {},
+			"switchMode": {},
 		},
 	}
 	sectionActions, ok := allowedActions[section]

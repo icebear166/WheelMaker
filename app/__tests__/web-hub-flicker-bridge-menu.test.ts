@@ -12,6 +12,10 @@ test('normalizes a Flicker Bridge lifecycle status', () => {
     endpoint: 'http://127.0.0.1:17999',
     port: 17999,
     pid: 42,
+    mode: 'v2',
+    runningMode: 'v2',
+    availableModes: ['v1', 'v2'],
+    modeErrors: {},
   })).toEqual({
     configured: true,
     supported: true,
@@ -20,6 +24,10 @@ test('normalizes a Flicker Bridge lifecycle status', () => {
     port: 17999,
     pid: 42,
     error: undefined,
+    mode: 'v2',
+    runningMode: 'v2',
+    availableModes: ['v1', 'v2'],
+    modeErrors: {},
   });
 });
 
