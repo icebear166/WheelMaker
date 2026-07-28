@@ -1,6 +1,7 @@
 package flickerbridge
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -241,6 +243,206 @@ func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 		t.Fatalf("hashes = %q, %q", first, second)
 	}
 }
+
+func TestV2ClaudeCodeSmoke(t *testing.T) {
+	if os.Getenv("WHEELMAKER_V2_CLAUDE_SMOKE") != "1" {
+		t.Skip("set WHEELMAKER_V2_CLAUDE_SMOKE=1 to run the live Claude Code smoke test")
+	}
+	settings, err := parseProxySettings(nil, environmentMap(os.Environ()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	worker, err := startWorker(ctx, settings.NodePath, nodeWorkerSource, []string{
+		"MYFLICKER_CLI_DIR=" + settings.MyFlickerDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer worker.Close()
+	ready, err := worker.Ready(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy, err := newProxyServer(settings, worker, ready.Catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := httptest.NewServer(proxy.Handler)
+	defer endpoint.Close()
+
+	claudePath, err := resolveV2ClaudeExecutable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configDir := t.TempDir()
+	environ := os.Environ()
+	for name, value := range map[string]string{
+		"ANTHROPIC_BASE_URL":                         endpoint.URL,
+		"ANTHROPIC_API_KEY":                          "wheelmaker-v2-smoke",
+		"CLAUDE_CONFIG_DIR":                          configDir,
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":   "1",
+		"CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
+	} {
+		environ = replaceV2EnvironmentValue(environ, name, value)
+	}
+
+	textOutput := runV2ClaudeSmokeCommand(
+		t,
+		ctx,
+		claudePath,
+		serverRoot,
+		environ,
+		"-p",
+		"--model", "claude-4.8-opus",
+		"--output-format", "json",
+		"--max-budget-usd", "0.20",
+		"Reply exactly V2-TEXT-OK without using tools.",
+	)
+	if !bytes.Contains(textOutput, []byte("V2-TEXT-OK")) {
+		t.Fatal("Claude Code text smoke response omitted its marker")
+	}
+
+	toolOutput := runV2ClaudeSmokeCommand(
+		t,
+		ctx,
+		claudePath,
+		serverRoot,
+		environ,
+		"-p",
+		"--model", "claude-4.8-opus",
+		"--output-format", "stream-json",
+		"--verbose",
+		"--tools=Glob",
+		"--allowedTools", "Glob",
+		"--max-budget-usd", "0.30",
+		"You must call the Glob tool with pattern **/go.mod before answering. After its result, reply exactly V2-TOOL-OK.",
+	)
+	hasGlobCall := bytes.Contains(toolOutput, []byte(`"name":"Glob"`))
+	hasMappedGlobCall := bytes.Contains(toolOutput, []byte(`"name":"glob"`))
+	hasToolMarker := bytes.Contains(toolOutput, []byte("V2-TOOL-OK"))
+	if !hasGlobCall || !hasToolMarker {
+		t.Fatalf(
+			"Claude Code built-in tool smoke did not complete its tool round trip (tool call=%t, mapped call=%t, marker=%t)",
+			hasGlobCall,
+			hasMappedGlobCall,
+			hasToolMarker,
+		)
+	}
+
+	mcpScript := filepath.Join(configDir, "mcp-smoke.mjs")
+	if err := os.WriteFile(mcpScript, []byte(v2MCPSmokeServer), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mcpConfig, err := json.Marshal(map[string]any{
+		"mcpServers": map[string]any{
+			"v2smoke": map[string]any{
+				"type":    "stdio",
+				"command": settings.NodePath,
+				"args":    []string{mcpScript},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcpOutput := runV2ClaudeSmokeCommand(
+		t,
+		ctx,
+		claudePath,
+		serverRoot,
+		environ,
+		"--bare", "-p",
+		"--model", "claude-4.8-opus",
+		"--output-format", "stream-json",
+		"--verbose",
+		"--strict-mcp-config",
+		"--mcp-config", string(mcpConfig),
+		"--allowedTools", "mcp__v2smoke__echo_marker",
+		"--max-budget-usd", "0.30",
+		"Call the v2smoke echo_marker MCP tool once, then reply exactly V2-MCP-OK.",
+	)
+	if !bytes.Contains(mcpOutput, []byte(`"name":"mcp__v2smoke__echo_marker"`)) ||
+		!bytes.Contains(mcpOutput, []byte("V2-MCP-OK")) {
+		t.Fatal("Claude Code MCP tool smoke did not complete its tool round trip")
+	}
+}
+
+func resolveV2ClaudeExecutable() (string, error) {
+	resolved, err := exec.LookPath("claude")
+	if err != nil {
+		return "", errors.New("Claude Code is unavailable")
+	}
+	if !strings.EqualFold(filepath.Ext(resolved), ".cmd") {
+		return resolved, nil
+	}
+	native := filepath.Join(
+		filepath.Dir(resolved),
+		"node_modules",
+		"@anthropic-ai",
+		"claude-code",
+		"bin",
+		"claude.exe",
+	)
+	if info, err := os.Stat(native); err == nil && !info.IsDir() {
+		return native, nil
+	}
+	return "", errors.New("Claude Code native executable is unavailable")
+}
+
+func runV2ClaudeSmokeCommand(
+	t *testing.T,
+	ctx context.Context,
+	executable, workingDirectory string,
+	environ []string,
+	args ...string,
+) []byte {
+	t.Helper()
+	command := exec.CommandContext(ctx, executable, args...)
+	command.Dir = workingDirectory
+	command.Env = environ
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Claude Code smoke command failed: %v", err)
+	}
+	return output
+}
+
+const v2MCPSmokeServer = `
+import readline from "node:readline";
+
+const lines = readline.createInterface({input: process.stdin});
+lines.on("line", (line) => {
+  const message = JSON.parse(line);
+  if (message.method === "notifications/initialized") return;
+  let result;
+  if (message.method === "initialize") {
+    result = {
+      protocolVersion: message.params?.protocolVersion || "2024-11-05",
+      capabilities: {tools: {}},
+      serverInfo: {name: "v2smoke", version: "1.0.0"},
+    };
+  } else if (message.method === "tools/list") {
+    result = {
+      tools: [{
+        name: "echo_marker",
+        description: "Return the fixed V2 MCP smoke marker.",
+        inputSchema: {type: "object", additionalProperties: false},
+      }],
+    };
+  } else if (message.method === "tools/call") {
+    result = {content: [{type: "text", text: "MCP-CALLED"}]};
+  } else {
+    result = {};
+  }
+  process.stdout.write(JSON.stringify({jsonrpc: "2.0", id: message.id, result}) + "\n");
+});
+`
 
 func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	root := t.TempDir()
