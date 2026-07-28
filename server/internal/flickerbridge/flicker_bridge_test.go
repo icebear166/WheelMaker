@@ -234,6 +234,14 @@ func TestV2RequestFieldsAreExplicitlyClassified(t *testing.T) {
 	}
 }
 
+func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
+	first := hashV2ProbeBody(json.RawMessage(`{"tools":[],"system":[{"type":"text","text":"stable"}],"model":"m"}`))
+	second := hashV2ProbeBody(json.RawMessage(`{"model":"m","system":[{"text":"stable","type":"text"}],"tools":[]}`))
+	if first == "" || first != second {
+		t.Fatalf("hashes = %q, %q", first, second)
+	}
+}
+
 func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")

@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -316,13 +318,31 @@ type workerFrame struct {
 }
 
 type outboundProbe struct {
-	RequestID   string   `json:"requestId"`
-	Model       string   `json:"model"`
-	APIFormat   string   `json:"apiFormat"`
-	URL         string   `json:"url"`
-	Method      string   `json:"method"`
-	HeaderNames []string `json:"headerNames"`
-	BodyKeys    []string `json:"bodyKeys"`
+	RequestID            string   `json:"requestId"`
+	Model                string   `json:"model"`
+	APIFormat            string   `json:"apiFormat"`
+	URL                  string   `json:"url"`
+	Method               string   `json:"method"`
+	HeaderNames          []string `json:"headerNames"`
+	BodyKeys             []string `json:"bodyKeys"`
+	BodyHash             string   `json:"bodyHash"`
+	SystemBlocks         int      `json:"systemBlocks"`
+	ToolNames            []string `json:"toolNames"`
+	HasMyFlickerIdentity bool     `json:"hasMyFlickerIdentity"`
+	HasClaudeIdentity    bool     `json:"hasClaudeIdentity"`
+}
+
+func hashV2ProbeBody(raw json.RawMessage) string {
+	var value any
+	if json.Unmarshal(raw, &value) != nil {
+		return ""
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }
 
 type workerClient struct {
@@ -365,7 +385,7 @@ const nodeWorkerSource = `
 const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
-const { randomBytes, randomUUID } = require("node:crypto");
+const { createHash, randomBytes, randomUUID } = require("node:crypto");
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { pathToFileURL } = require("node:url");
 const { registerHooks } = require("node:module");
@@ -542,6 +562,37 @@ function responsesFixture(model) {
   return events.map((event) => "event: " + event.type + "\ndata: " + JSON.stringify(event) + "\n\n").join("");
 }
 
+function stableJSON(value) {
+  if (Array.isArray(value)) {
+    return "[" + value.map(stableJSON).join(",") + "]";
+  }
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).sort().map(
+      (key) => JSON.stringify(key) + ":" + stableJSON(value[key]),
+    ).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+
+function probeSystem(body) {
+  if (body.system !== undefined) return body.system;
+  if (body.instructions !== undefined) return body.instructions;
+  if (Array.isArray(body.messages)) {
+    return body.messages.filter((message) => message && message.role === "system");
+  }
+  if (Array.isArray(body.input)) {
+    return body.input.filter((message) => message && message.role === "system");
+  }
+  return "";
+}
+
+function probeToolNames(body) {
+  if (!Array.isArray(body.tools)) return [];
+  return body.tools.map((tool) => String(
+    tool && (tool.name || tool.function && tool.function.name) || "",
+  )).filter(Boolean);
+}
+
 function installInterception() {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
@@ -559,6 +610,9 @@ function installInterception() {
     } else if (init.body instanceof Uint8Array) {
       body = JSON.parse(Buffer.from(init.body).toString("utf8"));
     }
+    const serializedSystem = stableJSON(probeSystem(body));
+    const system = probeSystem(body);
+    const toolNames = probeToolNames(body);
     emit({
       type:"probe",
       requestId:context.requestId,
@@ -570,6 +624,11 @@ function installInterception() {
         method:String(init.method || "GET").toUpperCase(),
         headerNames:headers,
         bodyKeys:Object.keys(body).sort(),
+        bodyHash:createHash("sha256").update(stableJSON(body)).digest("hex"),
+        systemBlocks:Array.isArray(system) ? system.length : system ? 1 : 0,
+        toolNames,
+        hasMyFlickerIdentity:serializedSystem.includes("You are myflicker, the best coding agent on the planet."),
+        hasClaudeIdentity:serializedSystem.includes("You are Claude Code, Anthropic's official CLI"),
       },
     });
     const model = String(body.model || context.model);
@@ -863,11 +922,12 @@ func runV2SelfTests(names []string) error {
 
 func runLiveSelfTests(names []string) error {
 	tests := map[string]func() error{
-		"catalog": selfTestLiveCatalog,
-		"formats": selfTestLiveFormats,
+		"catalog":          selfTestLiveCatalog,
+		"native-reference": selfTestLiveNativeReference,
+		"formats":          selfTestLiveFormats,
 	}
 	if len(names) == 1 && names[0] == "all" {
-		names = []string{"catalog", "formats"}
+		names = []string{"catalog", "native-reference", "formats"}
 	}
 	for _, name := range names {
 		test, ok := tests[name]
@@ -2481,6 +2541,170 @@ func selfTestLiveCatalog() error {
 	return nil
 }
 
+type v2NativeReference struct {
+	ProductName         string   `json:"productName"`
+	Version             string   `json:"version"`
+	BodyKeys            []string `json:"bodyKeys"`
+	ToolNames           []string `json:"toolNames"`
+	HasNativeIdentity   bool     `json:"hasNativeIdentity"`
+	HasClaudeIdentity   bool     `json:"hasClaudeIdentity"`
+	HasGatewayAuthToken bool     `json:"hasGatewayAuthToken"`
+}
+
+const v2NativeCaptureMarker = "WM_NATIVE_CAPTURE="
+
+const v2NativeCapturePreload = `
+const realFetch = globalThis.fetch;
+
+function nativeToolNames(body) {
+  if (!Array.isArray(body.tools)) return [];
+  return body.tools.map((tool) => {
+    if (tool && typeof tool.name === "string") return tool.name;
+    if (tool && tool.function && typeof tool.function.name === "string") return tool.function.name;
+    return "";
+  }).filter(Boolean);
+}
+
+globalThis.fetch = async (input, init) => {
+  const request = input instanceof Request ? input : new Request(input, init);
+  if (!request.url.includes("takumi.corp.kuaishou.com/rest/wanqing/api/gateway/")) {
+    return realFetch(input, init);
+  }
+  const bodyText = await request.clone().text();
+  const body = bodyText ? JSON.parse(bodyText) : {};
+  const system = JSON.stringify(
+    body.system !== undefined ? body.system :
+    body.instructions !== undefined ? body.instructions :
+    Array.isArray(body.messages) ? body.messages.filter((message) => message && message.role === "system") :
+    Array.isArray(body.input) ? body.input.filter((message) => message && message.role === "system") :
+    null
+  );
+  const headers = request.headers;
+  console.error("WM_NATIVE_CAPTURE=" + JSON.stringify({
+    productName: headers.get("x-takumi-product-name") || "",
+    version: headers.get("x-takumi-version") || "",
+    bodyKeys: Object.keys(body).sort(),
+    toolNames: nativeToolNames(body),
+    hasNativeIdentity: system.includes("You are myflicker, the best coding agent on the planet."),
+    hasClaudeIdentity: system.includes("You are Claude Code, Anthropic's official CLI"),
+    hasGatewayAuthToken: headers.has("x-takumi-token"),
+  }));
+  const model = String(body.model || "claude-4.8-opus");
+  const events = [
+    ["message_start", {type:"message_start",message:{id:"msg_native_capture",type:"message",role:"assistant",model,content:[],stop_reason:null,stop_sequence:null,usage:{input_tokens:1,output_tokens:0}}}],
+    ["content_block_start", {type:"content_block_start",index:0,content_block:{type:"text",text:""}}],
+    ["content_block_delta", {type:"content_block_delta",index:0,delta:{type:"text_delta",text:"capture-ok"}}],
+    ["content_block_stop", {type:"content_block_stop",index:0}],
+    ["message_delta", {type:"message_delta",delta:{stop_reason:"end_turn",stop_sequence:null},usage:{output_tokens:1}}],
+    ["message_stop", {type:"message_stop"}],
+  ];
+  const stream = events.map(([event, data]) =>
+    "event: " + event + "\n" + "data: " + JSON.stringify(data) + "\n\n"
+  ).join("");
+  return new Response(stream, {status:200,headers:{"content-type":"text/event-stream"}});
+};
+`
+
+func selfTestLiveNativeReference() error {
+	settings, err := parseProxySettings(nil, environmentMap(os.Environ()))
+	if err != nil {
+		return err
+	}
+	entry := filepath.Join(settings.MyFlickerDir, "cli.mjs")
+	if info, err := os.Stat(entry); err != nil || info.IsDir() {
+		return errors.New("MyFlicker package entry is unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	command := exec.CommandContext(
+		ctx,
+		settings.NodePath,
+		entry,
+		"-q",
+		"--no-rules",
+		"--approval-mode",
+		"dontAsk",
+		"--model",
+		"claude-4.8-opus",
+		"--output-format",
+		"json",
+		"Reply with capture-ok and do not use tools.",
+	)
+	preload := "data:text/javascript;base64," + base64.StdEncoding.EncodeToString([]byte(v2NativeCapturePreload))
+	command.Env = replaceV2EnvironmentValue(os.Environ(), "NODE_OPTIONS", "--import="+preload)
+	shared.ConfigureBackgroundCommand(command)
+	output, commandErr := command.CombinedOutput()
+	if ctx.Err() != nil {
+		return errors.New("native MyFlicker reference capture timed out")
+	}
+	var reference v2NativeReference
+	found := false
+	scanner := bufio.NewScanner(bytes.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		index := strings.Index(line, v2NativeCaptureMarker)
+		if index < 0 {
+			continue
+		}
+		encoded := line[index+len(v2NativeCaptureMarker):]
+		if err := json.Unmarshal([]byte(encoded), &reference); err != nil {
+			return errors.New("native MyFlicker reference capture was malformed")
+		}
+		found = true
+		break
+	}
+	if err := scanner.Err(); err != nil {
+		return errors.New("native MyFlicker reference capture could not be read")
+	}
+	if !found {
+		if commandErr != nil {
+			return errors.New("native MyFlicker reference command failed before request capture")
+		}
+		return errors.New("native MyFlicker reference did not issue a Wanqing request")
+	}
+	if commandErr != nil {
+		return errors.New("native MyFlicker reference failed after request capture")
+	}
+	if reference.ProductName != "myflicker" || reference.Version != "0.3.12" {
+		return fmt.Errorf("native MyFlicker product metadata = %q/%q", reference.ProductName, reference.Version)
+	}
+	if !reference.HasGatewayAuthToken {
+		return errors.New("native MyFlicker reference omitted the Wanqing authentication header")
+	}
+	if !reference.HasNativeIdentity || reference.HasClaudeIdentity {
+		return errors.New("native MyFlicker identity baseline was not present")
+	}
+	if len(reference.ToolNames) == 0 {
+		return errors.New("native MyFlicker reference did not expose its tool baseline")
+	}
+	for _, key := range []string{"messages", "model", "system", "tools"} {
+		if !containsString(reference.BodyKeys, key) {
+			return fmt.Errorf("native MyFlicker request omitted %q", key)
+		}
+	}
+	return nil
+}
+
+func replaceV2EnvironmentValue(environ []string, name, value string) []string {
+	result := make([]string, 0, len(environ)+1)
+	prefix := name + "="
+	replaced := false
+	for _, entry := range environ {
+		if strings.EqualFold(entry[:min(len(entry), len(prefix))], prefix) {
+			if !replaced {
+				result = append(result, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		result = append(result, entry)
+	}
+	if !replaced {
+		result = append(result, prefix+value)
+	}
+	return result
+}
+
 func selfTestLiveFormats() error {
 	settings, err := parseProxySettings(nil, environmentMap(os.Environ()))
 	if err != nil {
@@ -2514,7 +2738,14 @@ func selfTestLiveFormats() error {
 		var request anthropicMessagesRequest
 		if err := json.Unmarshal([]byte(`{
 			"max_tokens":16,
+			"system":"You are Claude Code, Anthropic's official CLI.",
 			"messages":[{"role":"user","content":"probe"}],
+			"tools":[{
+				"name":"Read",
+				"description":"Read a file",
+				"input_schema":{"type":"object","properties":{"file_path":{"type":"string"}}}
+			}],
+			"tool_choice":{"type":"auto"},
 			"stream":true
 		}`), &request); err != nil {
 			return err
@@ -2523,30 +2754,44 @@ func selfTestLiveFormats() error {
 		if err != nil {
 			return err
 		}
-		frames, err := worker.Request(ctx, model.ID, payload)
-		if err != nil {
-			return err
-		}
-		var probe *outboundProbe
-		finished := false
-		for frame := range frames {
-			if frame.Type == "error" {
-				return fmt.Errorf("%s intercepted request: %s", format, frame.Error)
+		probes := make([]*outboundProbe, 0, 2)
+		for attempt := 0; attempt < 2; attempt++ {
+			frames, err := worker.Request(ctx, model.ID, payload)
+			if err != nil {
+				return err
 			}
-			if frame.Type == "probe" {
-				probe = frame.Probe
-			}
-			if frame.Type == "part" {
-				part, err := decodeV3Part(frame.Part)
-				if err != nil {
-					return err
+			var probe *outboundProbe
+			finished := false
+			for frame := range frames {
+				if frame.Type == "error" {
+					return fmt.Errorf("%s intercepted request: %s", format, frame.Error)
 				}
-				finished = finished || v2StringValue(part["type"]) == "finish"
+				if frame.Type == "probe" {
+					probe = frame.Probe
+				}
+				if frame.Type == "part" {
+					part, err := decodeV3Part(frame.Part)
+					if err != nil {
+						return err
+					}
+					finished = finished || v2StringValue(part["type"]) == "finish"
+				}
 			}
+			if probe == nil || probe.APIFormat != format || probe.Model != model.ID ||
+				probe.Method != http.MethodPost || !finished {
+				return fmt.Errorf("%s probe=%+v finished=%t", format, probe, finished)
+			}
+			probes = append(probes, probe)
 		}
-		if probe == nil || probe.APIFormat != format || probe.Model != model.ID ||
-			probe.Method != http.MethodPost || !finished {
-			return fmt.Errorf("%s probe=%+v finished=%t", format, probe, finished)
+		probe := probes[0]
+		if probe.BodyHash == "" || probe.BodyHash != probes[1].BodyHash {
+			return fmt.Errorf("%s request body is not stable across equivalent requests", format)
+		}
+		if probe.SystemBlocks == 0 || !probe.HasMyFlickerIdentity || probe.HasClaudeIdentity {
+			return fmt.Errorf("%s request identity was not rewritten as expected", format)
+		}
+		if !containsString(probe.ToolNames, "read") {
+			return fmt.Errorf("%s request tool names = %v", format, probe.ToolNames)
 		}
 		if !strings.Contains(probe.URL, "takumi.corp.kuaishou.com/rest/wanqing/api/gateway/") {
 			return fmt.Errorf("%s used unexpected URL %q", format, probe.URL)
