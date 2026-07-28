@@ -710,6 +710,7 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionSkills, action: "uninstall"},
 		{section: hubStateSectionSkills, action: "update"},
 		{section: hubStateSectionSkills, action: "detail", params: map[string]any{"scope": "hub", "skillName": "debug"}},
+		{section: hubStateSectionSkills, action: "reindex"},
 		{section: "flickerBridge", action: "start"},
 		{section: "flickerBridge", action: "stop"},
 		{section: "flickerBridge", action: "restart"},
@@ -1411,6 +1412,75 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 				t.Fatalf("hubId=%v, want hub-state-adapter (payload=%s)", body["hubId"], payload)
 			}
 		})
+	}
+}
+
+func TestHubStateSkillsReindexRefreshesEveryProjectAgentProfile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	projectA := t.TempDir()
+	projectB := t.TempDir()
+	for root, skillName := range map[string]string{
+		projectA: "project-a-skill",
+		projectB: "project-b-skill",
+	} {
+		skillDir := filepath.Join(root, ".agents", "skills", skillName)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", skillName, err)
+		}
+		if err := os.WriteFile(
+			filepath.Join(skillDir, "SKILL.md"),
+			[]byte("---\nname: "+skillName+"\n---\n"),
+			0o644,
+		); err != nil {
+			t.Fatalf("WriteFile(%s): %v", skillName, err)
+		}
+	}
+
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-skills-reindex", StateDir: t.TempDir()},
+		[]ProjectInfo{
+			{Name: "project-a", Path: projectA, Online: true, Agents: []string{"codex"}},
+			{Name: "project-b", Path: projectB, Online: true, Agents: []string{"codex"}},
+		},
+	)
+	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
+	reporter.toolHandler = toolHandler
+
+	handler := reporter.hubStateSectionHandlers()[hubStateSectionSkills]
+	if _, err := handler.Action(context.Background(), "reindex", nil); err != nil {
+		t.Fatalf("reindex: %v", err)
+	}
+
+	method, payload, projects := toolHandler.snapshot()
+	if method != hubToolMethodSkills {
+		t.Fatalf("method=%q, want %q", method, hubToolMethodSkills)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(payload), &body); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if body["action"] != "scan" || body["hubId"] != "hub-skills-reindex" {
+		t.Fatalf("payload=%v, want skills scan for hub-skills-reindex", body)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("SetProjects projects=%d, want 2", len(projects))
+	}
+
+	refreshed := reporter.projectsSnapshot()
+	if len(refreshed) != 2 {
+		t.Fatalf("projects=%d, want 2", len(refreshed))
+	}
+	for _, project := range refreshed {
+		if len(project.AgentProfiles) != 1 {
+			t.Fatalf("%s profiles=%v, want one codex profile", project.Name, project.AgentProfiles)
+		}
+		wantSkill := project.Name + "-skill"
+		if got := project.AgentProfiles[0].Skills; !reflect.DeepEqual(got, []string{wantSkill}) {
+			t.Fatalf("%s skills=%v, want [%s]", project.Name, got, wantSkill)
+		}
 	}
 }
 

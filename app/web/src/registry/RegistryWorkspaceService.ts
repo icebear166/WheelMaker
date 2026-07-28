@@ -1002,6 +1002,13 @@ export class RegistryWorkspaceService {
     return this.repository.scanSkills(hubId);
   }
 
+  async reindexSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.reindexSkills(hubId);
+  }
+
   async listSkillsSource(hubId: string, source: string): Promise<RegistrySkillCommandResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');

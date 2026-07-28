@@ -89,6 +89,9 @@ type UpdateSettingsDetailProps = {
   setExpandedNpmUpdateHubIds: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   requestAgentPackageAction: (action: PackageAction, hubId: string, pkg: RegistryNpmPackage) => void;
   requestAgentPackageHubUpdate: (hubId: string, packages: NpmPackageUpdateTarget[]) => void;
+  skillIndexScanPendingByHubId: Record<string, boolean>;
+  skillIndexScanErrorByHubId: Record<string, string>;
+  handleScanSkills: (hubId: string) => Promise<void>;
   projectIndexLoading: boolean;
   projectIndexError: string;
   projectIndexScanPendingByProjectId: Record<string, boolean>;
@@ -140,6 +143,23 @@ function hubStatusLabel(
   return 'Update Hub';
 }
 
+function indexedSkillCount(projects: RegistryProject[], hubId: string): number {
+  const names = new Set<string>();
+  projects
+    .filter(project => (project.hubId || '').trim() === hubId)
+    .forEach(project => {
+      (project.agentProfiles ?? []).forEach(profile => {
+        (profile.skills ?? []).forEach(skill => {
+          const normalized = skill.trim().toLowerCase();
+          if (normalized) {
+            names.add(normalized);
+          }
+        });
+      });
+    });
+  return names.size;
+}
+
 export function UpdateSettingsDetail({
   androidApkUpdateSupported,
   androidApkLocalRelease,
@@ -166,6 +186,9 @@ export function UpdateSettingsDetail({
   setExpandedNpmUpdateHubIds,
   requestAgentPackageAction,
   requestAgentPackageHubUpdate,
+  skillIndexScanPendingByHubId,
+  skillIndexScanErrorByHubId,
+  handleScanSkills,
   projectIndexLoading,
   projectIndexError,
   projectIndexScanPendingByProjectId,
@@ -312,6 +335,9 @@ export function UpdateSettingsDetail({
           const npmExpanded = expandedNpmUpdateHubIds[card.hubId] === true;
           const npmHubUpdatePending = agentPackageHubUpdatePendingId === card.hubId;
           const npmActionDisabled = npmHubUpdatePending || operation?.running === true || agentCard?.loading === true || agentPackagesLoading;
+          const skillIndexCount = indexedSkillCount(projects, card.hubId);
+          const skillIndexScanPending = skillIndexScanPendingByHubId[card.hubId] === true;
+          const skillIndexScanError = skillIndexScanErrorByHubId[card.hubId] || '';
 
           const projectIndexFallbackProjects: RegistryFileIndexStatus[] = projects
             .filter(project => (project.hubId || '').trim() === card.hubId)
@@ -460,6 +486,24 @@ export function UpdateSettingsDetail({
                     </div>
                   </div>
                 ) : null}
+              </section>
+
+              <section className="set-disclosure">
+                <div className="set-disclosure-head">
+                  <div className="update-skills-summary">
+                    <span className="update-disclosure-scope">Skills</span>
+                    <span className="set-disclosure-count set-num">{skillIndexCount} indexed</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="set-btn"
+                    disabled={skillIndexScanPending}
+                    onClick={() => handleScanSkills(card.hubId)}
+                  >
+                    {skillIndexScanPending ? 'Scanning...' : 'Scan skills'}
+                  </button>
+                </div>
+                {skillIndexScanError ? <div className="set-error">{skillIndexScanError}</div> : null}
               </section>
 
               <section className="set-disclosure">

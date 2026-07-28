@@ -124,6 +124,16 @@ func (r *Reporter) refreshHubStateSkills(ctx context.Context, input hubStateRefr
 
 func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
+	case "reindex":
+		result, err := r.runHubStateTool(ctx, hubToolMethodSkills, map[string]any{
+			"action": "scan",
+			"hubId":  r.cfg.HubID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		r.refreshSkillsAgentProfiles("hub", "")
+		return result, nil
 	case "listSource":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
 	case "install":

@@ -36,6 +36,9 @@ function baseProps(overrides = {}) {
     setExpandedNpmUpdateHubIds: () => undefined,
     requestAgentPackageAction: () => undefined,
     requestAgentPackageHubUpdate: () => undefined,
+    skillIndexScanPendingByHubId: {},
+    skillIndexScanErrorByHubId: {},
+    handleScanSkills: async () => undefined,
     projectIndexLoading: false,
     projectIndexError: '',
     projectIndexScanPendingByProjectId: {},
@@ -146,6 +149,60 @@ test('project rows show Scan and omit path and fileCount', async () => {
   expect(json).toContain('Scan');
   expect(json).not.toContain('/secret/path');
   expect(json).not.toContain('42 files');
+});
+
+test('hub card shows a deduplicated skill count and scans that hub', async () => {
+  const handleScanSkills = jest.fn().mockResolvedValue(undefined);
+  let tree;
+  await act(async () => {
+    tree = create(<UpdateSettingsDetail {...baseProps({
+      updateHubCards: [hubCard('hub-1')],
+      projects: [
+        {
+          projectId: 'hub-1:project-a',
+          hubId: 'hub-1',
+          agentProfiles: [
+            {name: 'codex', skills: ['debug', 'scope']},
+            {name: 'claude', skills: ['debug', 'wiki']},
+          ],
+        },
+        {
+          projectId: 'hub-2:project-b',
+          hubId: 'hub-2',
+          agentProfiles: [{name: 'codex', skills: ['other-hub-skill']}],
+        },
+      ],
+      handleScanSkills,
+    })} />);
+  });
+
+  const json = JSON.stringify(tree!.toJSON());
+  expect(json).toContain('Skills');
+  expect(tree!.root.findAllByProps({className: 'set-disclosure-count set-num'})
+    .some(node => node.children.join('') === '3 indexed')).toBe(true);
+  const button = tree!.root.findAllByType('button').find(node => node.children.includes('Scan skills'));
+  expect(button).toBeDefined();
+  await act(async () => {
+    button!.props.onClick();
+  });
+  expect(handleScanSkills).toHaveBeenCalledWith('hub-1');
+});
+
+test('hub skill scan shows pending and hub-specific error states', async () => {
+  let tree;
+  await act(async () => {
+    tree = create(<UpdateSettingsDetail {...baseProps({
+      updateHubCards: [hubCard('hub-1'), hubCard('hub-2')],
+      skillIndexScanPendingByHubId: {'hub-1': true},
+      skillIndexScanErrorByHubId: {'hub-2': 'Skill scan failed.'},
+    })} />);
+  });
+
+  const buttons = tree!.root.findAllByType('button');
+  const pending = buttons.find(node => node.children.includes('Scanning...'));
+  expect(pending).toBeDefined();
+  expect(pending!.props.disabled).toBe(true);
+  expect(JSON.stringify(tree!.toJSON())).toContain('Skill scan failed.');
 });
 
 test('android card renders a single row with Download and Check, no meta grid', async () => {

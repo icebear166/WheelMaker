@@ -107,6 +107,26 @@ describe('skill management settings UI source structure', () => {
     expect(updateIndex).toBeGreaterThan(requestIndex);
   });
 
+  test('wires Update hub skill reindex to project profile refresh and per-hub state', () => {
+    expect(mainTsx).toContain('const [skillIndexScanPendingByHubId, setSkillIndexScanPendingByHubId]');
+    expect(mainTsx).toContain('const [skillIndexScanErrorByHubId, setSkillIndexScanErrorByHubId]');
+    expect(mainTsx).toContain('const handleScanSkills = useCallback(async (hubId: string) => {');
+    expect(mainTsx).toContain('const result = await service.reindexSkills(hubId);');
+    expect(mainTsx).toContain('const projectErrors = (result.projects ?? [])');
+    expect(mainTsx).toContain('await refreshProjectHubSnapshot();');
+    expect(mainTsx).toContain('skillIndexScanPendingByHubId={skillIndexScanPendingByHubId}');
+    expect(mainTsx).toContain('skillIndexScanErrorByHubId={skillIndexScanErrorByHubId}');
+    expect(mainTsx).toContain('handleScanSkills={handleScanSkills}');
+
+    const handlerStart = mainTsx.indexOf('const handleScanSkills = useCallback(async (hubId: string) => {');
+    const handlerEnd = mainTsx.indexOf('const handleScanProjectIndex = useCallback', handlerStart);
+    const handler = mainTsx.slice(handlerStart, handlerEnd);
+    expect(handler.indexOf('const result = await service.reindexSkills(hubId);'))
+      .toBeLessThan(handler.indexOf('await refreshProjectHubSnapshot();'));
+    expect(handler.indexOf('await refreshProjectHubSnapshot();'))
+      .toBeLessThan(handler.indexOf('if (!result.ok) {'));
+  });
+
   test('separates Skills scanning state from empty skill state', () => {
     expect(detailTsx).toContain('const skillHubCards = Object.values(skillHubs)');
     expect(detailTsx).toContain('const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);');

@@ -3057,6 +3057,8 @@ export function App() {
   const [projectIndexErrorByProjectId, setProjectIndexErrorByProjectId] = useState<Record<string, string>>({});
   const [projectIndexScanPendingByProjectId, setProjectIndexScanPendingByProjectId] = useState<Record<string, boolean>>({});
   const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
+  const [skillIndexScanPendingByHubId, setSkillIndexScanPendingByHubId] = useState<Record<string, boolean>>({});
+  const [skillIndexScanErrorByHubId, setSkillIndexScanErrorByHubId] = useState<Record<string, string>>({});
   const agentPackageScanPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const projectIndexPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [skillHubs, setSkillHubs] = useState<Record<string, SkillHubView>>({});
@@ -13745,6 +13747,33 @@ export function App() {
     service.queryReleasePublish(hubId, jobId)
   ), []);
 
+  const handleScanSkills = useCallback(async (hubId: string) => {
+    if (!hubId || skillIndexScanPendingByHubId[hubId]) {
+      return;
+    }
+    setSkillIndexScanPendingByHubId(prev => ({...prev, [hubId]: true}));
+    setSkillIndexScanErrorByHubId(prev => ({...prev, [hubId]: ''}));
+    try {
+      const result = await service.reindexSkills(hubId);
+      const projectErrors = (result.projects ?? [])
+        .filter(project => !!project.error)
+        .map(project => `${project.projectName}: ${project.error}`);
+      await refreshProjectHubSnapshot();
+      if (!result.ok) {
+        throw new Error(skillCommandErrorMessage(result));
+      }
+      if (projectErrors.length > 0) {
+        setSkillIndexScanErrorByHubId(prev => ({...prev, [hubId]: projectErrors.join(' · ')}));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setSkillIndexScanErrorByHubId(prev => ({...prev, [hubId]: message}));
+      setError(message);
+    } finally {
+      setSkillIndexScanPendingByHubId(prev => ({...prev, [hubId]: false}));
+    }
+  }, [refreshProjectHubSnapshot, skillIndexScanPendingByHubId]);
+
   const handleScanProjectIndex = useCallback(async (hubId: string, projectId: string) => {
     if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
       return;
@@ -15917,6 +15946,9 @@ export function App() {
           setExpandedNpmUpdateHubIds={setExpandedNpmUpdateHubIds}
           requestAgentPackageAction={requestAgentPackageAction}
           requestAgentPackageHubUpdate={requestAgentPackageHubUpdate}
+          skillIndexScanPendingByHubId={skillIndexScanPendingByHubId}
+          skillIndexScanErrorByHubId={skillIndexScanErrorByHubId}
+          handleScanSkills={handleScanSkills}
           projectIndexLoading={projectIndexLoading}
           projectIndexError={projectIndexError}
           projectIndexScanPendingByProjectId={projectIndexScanPendingByProjectId}

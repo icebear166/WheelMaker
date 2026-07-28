@@ -2187,6 +2187,15 @@ export class RegistryRepository {
     };
   }
 
+  async reindexSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
+    const state = await this.runHubStateAction(hubId, 'skills', 'reindex');
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
+  }
+
   async listSkillsSource(hubId: string, source: string): Promise<RegistrySkillCommandResponse> {
     const state = await this.runHubStateAction(hubId, 'skills', 'listSource', {source});
     return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {

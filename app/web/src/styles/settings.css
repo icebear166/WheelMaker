@@ -3347,6 +3347,16 @@ textarea,
   font-size: 11px;
 }
 
+.update-skills-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+}
+
 .update-apk-row {
   display: flex;
   align-items: center;

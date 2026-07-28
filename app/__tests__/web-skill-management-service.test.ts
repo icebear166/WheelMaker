@@ -63,6 +63,36 @@ describe('skill management registry service', () => {
     });
   });
 
+  test('runs skills reindex HubState action for one hub', async () => {
+    const client = {
+      request: jest.fn().mockResolvedValue({
+        type: 'response',
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              skills: {
+                status: 'ready',
+                data: {ok: true, hubId: 'hub-a', hubSkills: {scope: 'hub', skills: []}, projects: []},
+              },
+            },
+          },
+        },
+      }),
+    } as unknown as RegistryClient;
+    const repository = new RegistryRepository(client);
+
+    await repository.reindexSkills('hub-a');
+
+    expect(client.request).toHaveBeenCalledWith({
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'skills', action: 'reindex', params: {}},
+      timeoutMs: 60000,
+    });
+  });
+
   test('sends install uninstall and update without paths or raw args', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
