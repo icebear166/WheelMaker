@@ -57,9 +57,9 @@ export function UsageHistoryDialog({
     };
   }, []);
 
-  const heading = state.status === 'ready'
-    ? `${state.providerName} · ${state.limit.label}`
-    : `${state.providerName} usage history`;
+  const windowLabel = state.status === 'ready'
+    ? state.limit.label
+    : 'Usage history';
 
   return (
     <div
@@ -76,9 +76,17 @@ export function UsageHistoryDialog({
         aria-labelledby="usage-history-dialog-title"
       >
         <header className="usage-history-header">
-          <div className="usage-history-heading">
-            <h2 id="usage-history-dialog-title">{heading}</h2>
-            <p>{state.accountLabel}</p>
+          <div className="usage-history-title">
+            <span className="usage-history-title-icon">
+              <Icon name="activity" size={16} />
+            </span>
+            <div className="usage-history-heading">
+              <h2 id="usage-history-dialog-title">
+                <span>{state.providerName}</span>
+                <span className="usage-history-window">{windowLabel}</span>
+              </h2>
+              <p>{state.accountLabel}</p>
+            </div>
           </div>
           <button
             ref={closeButtonRef}
@@ -154,20 +162,23 @@ function UsageHistoryReady({
     <>
       <div className="usage-history-summary" aria-label="Usage history summary">
         <div className="usage-history-current">
-          <span>Current</span>
-          <strong>{formatPercent(latest.remainingPercent)} remaining</strong>
+          <span>Available now</span>
+          <strong>
+            <span>{formatPercent(latest.remainingPercent)}</span>
+            <small> remaining</small>
+          </strong>
         </div>
         <dl>
           <div>
-            <dt>Observed</dt>
+            <dt><Icon name="history" size={13} />Observed</dt>
             <dd>{formatLocalTime(first.observedAtMillis)} – {formatLocalTime(latest.observedAtMillis)}</dd>
           </div>
           <div>
-            <dt>Forecast</dt>
+            <dt><Icon name="activity" size={13} />Forecast</dt>
             <dd>{forecastSummary(forecast)}</dd>
           </div>
           <div>
-            <dt>Resets</dt>
+            <dt><Icon name="clock" size={13} />Resets</dt>
             <dd>{formatLocalTime(resetAtMillis)}</dd>
           </div>
         </dl>

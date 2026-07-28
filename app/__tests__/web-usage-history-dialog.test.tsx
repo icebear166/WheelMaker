@@ -107,6 +107,12 @@ describe('UsageHistoryDialog', () => {
     expect(renderedText(view!.toJSON())).toContain('Expected to run out');
     expect(renderedText(view!.toJSON())).toContain('Resets');
     expect(renderedText(view!.toJSON())).toContain('Loading chart');
+    expect(renderedText(
+      view!.root.findByProps({className: 'usage-history-window'}).children,
+    )).toBe('W');
+    expect(view!.root.findAllByProps({'data-icon-name': 'history'})).toHaveLength(1);
+    expect(view!.root.findAllByProps({'data-icon-name': 'activity'})).toHaveLength(2);
+    expect(view!.root.findAllByProps({'data-icon-name': 'clock'})).toHaveLength(1);
     await act(async () => {
       await Promise.resolve();
     });

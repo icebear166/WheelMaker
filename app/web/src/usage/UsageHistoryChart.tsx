@@ -114,6 +114,7 @@ export default function UsageHistoryChart({
           smoothMonotone: 'x',
           lineStyle: {color: accent, width: 2},
           itemStyle: {color: accent},
+          emphasis: {disabled: true},
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
               {offset: 0, color: withAlpha(accent, 0.22)},
@@ -135,6 +136,7 @@ export default function UsageHistoryChart({
           smoothMonotone: 'x',
           lineStyle: {color: accent, width: 2, type: 'dashed'},
           itemStyle: {color: accent},
+          emphasis: {disabled: true},
         },
       ],
     }, {notMerge: true});
