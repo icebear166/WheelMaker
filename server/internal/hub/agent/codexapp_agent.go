@@ -534,10 +534,8 @@ type codexappConn struct {
 }
 
 type codexappSteerTracker struct {
-	turnID   string
-	blocks   []protocol.ContentBlock
-	accepted chan struct{}
-	once     sync.Once
+	turnID string
+	blocks []protocol.ContentBlock
 }
 
 type codexappPromptResult struct {
@@ -961,13 +959,11 @@ func (c *codexappConn) SteerSession(
 		c.pendingSteers = make(map[string]*codexappSteerTracker)
 	}
 	tracker := &codexappSteerTracker{
-		turnID:   expectedTurnID,
-		blocks:   cloneCodexappContentBlocks(blocks),
-		accepted: make(chan struct{}),
+		turnID: expectedTurnID,
+		blocks: cloneCodexappContentBlocks(blocks),
 	}
 	c.pendingSteers[clientMessageID] = tracker
 	c.mu.Unlock()
-	defer c.removePendingSteer(clientMessageID, tracker)
 
 	var response appServerTurnSteerResponse
 	err = c.runtime.request(ctx, "turn/steer", appServerTurnSteerParams{
@@ -977,21 +973,18 @@ func (c *codexappConn) SteerSession(
 		Input:               input,
 	}, &response)
 	if err != nil {
+		c.removePendingSteer(clientMessageID, tracker)
 		return SessionSteerResult{}, classifyCodexappSteerError(err)
 	}
 	if strings.TrimSpace(response.TurnID) != expectedTurnID {
+		c.removePendingSteer(clientMessageID, tracker)
 		return SessionSteerResult{}, fmt.Errorf(
 			"codexapp turn/steer accepted turn %q, expected %q",
 			response.TurnID,
 			expectedTurnID,
 		)
 	}
-	select {
-	case <-tracker.accepted:
-		return SessionSteerResult{ProviderTurnID: response.TurnID}, nil
-	case <-ctx.Done():
-		return SessionSteerResult{}, ctx.Err()
-	}
+	return SessionSteerResult{ProviderTurnID: response.TurnID}, nil
 }
 
 func (c *codexappConn) removePendingSteer(clientMessageID string, tracker *codexappSteerTracker) {
@@ -1436,6 +1429,9 @@ func (c *codexappConn) handleSteerUserMessage(p appServerItemEventParams) bool {
 	}
 	c.mu.Lock()
 	tracker := c.pendingSteers[clientID]
+	if tracker != nil && tracker.turnID == strings.TrimSpace(p.TurnID) {
+		delete(c.pendingSteers, clientID)
+	}
 	c.mu.Unlock()
 	if tracker == nil || tracker.turnID != strings.TrimSpace(p.TurnID) {
 		return false
@@ -1446,7 +1442,6 @@ func (c *codexappConn) handleSteerUserMessage(p appServerItemEventParams) bool {
 		ClientMessageID: clientID,
 		Steered:         true,
 	})
-	tracker.once.Do(func() { close(tracker.accepted) })
 	return true
 }
 

@@ -123,6 +123,31 @@ export function hasSteeringChatPrompt(
   );
 }
 
+export function reconcileSteeredChatPrompts(
+  state: QueuedChatItemsByKey,
+  runtimeKey: string,
+  messages: RegistryChatMessage[],
+): QueuedChatItemsByKey {
+  const steeredIds = new Set(messages.flatMap(message => (
+    message.method === 'user_message_chunk' &&
+    message.param.steered === true &&
+    typeof message.param.clientMessageId === 'string' &&
+    message.param.clientMessageId
+      ? [message.param.clientMessageId]
+      : []
+  )));
+  if (steeredIds.size === 0) return state;
+
+  const current = state[runtimeKey] ?? [];
+  const next = current.filter(item => item.kind !== 'prompt' || !steeredIds.has(item.id));
+  if (next.length === current.length) return state;
+  if (next.length === 0) {
+    const {[runtimeKey]: _removed, ...rest} = state;
+    return rest;
+  }
+  return {...state, [runtimeKey]: next};
+}
+
 export function moveQueuedChatPromptToFront(
   state: QueuedChatItemsByKey,
   runtimeKey: string,

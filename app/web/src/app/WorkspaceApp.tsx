@@ -100,6 +100,7 @@ import {
   moveQueuedChatPromptToFront,
   moveQueuedChatPrompts,
   queuedChatPrompts,
+  reconcileSteeredChatPrompts,
   setQueuedChatPromptSteering,
   shiftNextQueuedChatItem,
   type QueuedChatCompact,
@@ -3497,7 +3498,6 @@ export function App() {
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
   const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});
   const chatSteerChainsByKeyRef = useRef<Record<string, Promise<void>>>({});
-  const chatAcceptedSteerIdsByKeyRef = useRef<Record<string, Set<string>>>({});
   const chatCompactingByKeyRef = useRef<Record<string, boolean>>({});
   const terminalCompactionOperationIdsRef = useRef<Set<string>>(new Set());
   const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});
@@ -9796,6 +9796,12 @@ export function App() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!selectedChatEncodedKey || selectedFullChatMessages.length === 0) return;
+    setQueuedPrompts(current =>
+      reconcileSteeredChatPrompts(current, selectedChatEncodedKey, selectedFullChatMessages));
+  }, [selectedChatEncodedKey, selectedFullChatMessages, setQueuedPrompts]);
+
   const enqueueSelectedChatPrompt = useCallback((runtimeKey: string, prompt: QueuedChatPrompt) => {
     setQueuedPrompts(current => enqueueChatPrompt(current, runtimeKey, prompt));
   }, [setQueuedPrompts]);
@@ -9971,10 +9977,14 @@ export function App() {
         if (!result.ok || !result.accepted) {
           throw new Error('session.steer returned accepted=false');
         }
-        setQueuedPrompts(current =>
-          cancelQueuedChatPrompt(current, runtimeKey, prompt.id));
+        if (result.outcome === 'sent') {
+          setQueuedPrompts(current =>
+            cancelQueuedChatPrompt(current, runtimeKey, prompt.id));
+        }
       } catch (errorValue) {
-        if (chatAcceptedSteerIdsByKeyRef.current[runtimeKey]?.has(prompt.id)) {
+        if (!(chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).some(
+          item => item.kind === 'prompt' && item.id === prompt.id,
+        )) {
           return;
         }
         setQueuedPrompts(current =>
@@ -9982,13 +9992,6 @@ export function App() {
         setError(errorValue instanceof Error ? errorValue.message : String(errorValue));
       }
     }).finally(() => {
-      const acceptedIds = chatAcceptedSteerIdsByKeyRef.current[runtimeKey];
-      acceptedIds?.delete(prompt.id);
-      if (acceptedIds?.size === 0) {
-        const remainingAccepted = {...chatAcceptedSteerIdsByKeyRef.current};
-        delete remainingAccepted[runtimeKey];
-        chatAcceptedSteerIdsByKeyRef.current = remainingAccepted;
-      }
       if (chatSteerChainsByKeyRef.current[runtimeKey] === next) {
         const remaining = {...chatSteerChainsByKeyRef.current};
         delete remaining[runtimeKey];
@@ -15614,19 +15617,6 @@ export function App() {
           typeof message.param.clientMessageId === 'string'
         ) {
           const clientMessageId = message.param.clientMessageId;
-          const pending = chatQueuedPromptsByKeyRef.current[runtimeKey] ?? [];
-          if (pending.some(
-            item => item.kind === 'prompt' &&
-              item.id === clientMessageId &&
-              item.status === 'steering',
-          )) {
-            const accepted = chatAcceptedSteerIdsByKeyRef.current[runtimeKey] ?? new Set<string>();
-            accepted.add(clientMessageId);
-            chatAcceptedSteerIdsByKeyRef.current = {
-              ...chatAcceptedSteerIdsByKeyRef.current,
-              [runtimeKey]: accepted,
-            };
-          }
           setQueuedPrompts(current => cancelQueuedChatPrompt(
             current,
             runtimeKey,

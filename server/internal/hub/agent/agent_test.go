@@ -2757,6 +2757,77 @@ func TestCodexAppSteerResponseBeforeUserMessage(t *testing.T) {
 	}
 }
 
+func TestCodexAppSteerReturnsAfterControlAcceptanceBeforeUserMessage(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	setActiveCodexPromptForTest(conn, "turn-1")
+	updates := make(chan protocol.SessionUpdateParams, 1)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	responseSent := make(chan struct{})
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "turn/steer" {
+			return
+		}
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{"turnId": "turn-1"}})
+		close(responseSent)
+	}
+
+	type steerCallResult struct {
+		result SessionSteerResult
+		err    error
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resultCh := make(chan steerCallResult, 1)
+	go func() {
+		result, err := conn.SteerSession(ctx, "thread-1", "queued-1", []protocol.ContentBlock{{
+			Type: protocol.ContentBlockTypeText,
+			Text: "steer me",
+		}})
+		resultCh <- steerCallResult{result: result, err: err}
+	}()
+
+	select {
+	case <-responseSent:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for turn/steer response")
+	}
+	select {
+	case got := <-resultCh:
+		if got.err != nil || got.result.ProviderTurnID != "turn-1" {
+			t.Fatalf("SteerSession() result=%#v err=%v", got.result, got.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SteerSession did not return after Codex accepted the control request")
+	}
+
+	if err := tr.emit(map[string]any{
+		"method": "item/started",
+		"params": map[string]any{
+			"threadId": "thread-1",
+			"turnId":   "turn-1",
+			"item": map[string]any{
+				"id":       "user-2",
+				"type":     "userMessage",
+				"clientId": "queued-1",
+				"content":  []any{map[string]any{"type": "text", "text": "steer me"}},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("emit item/started: %v", err)
+	}
+	update := waitForCodexappUpdate(t, updates)
+	if update.Update.SessionUpdate != protocol.SessionUpdateUserMessageChunk ||
+		update.Update.ClientMessageID != "queued-1" ||
+		!update.Update.Steered {
+		t.Fatalf("steer update = %#v", update.Update)
+	}
+}
+
 func TestCodexAppSteerKeepsSameTurnUpdatesFlowingBeforeAcceptance(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

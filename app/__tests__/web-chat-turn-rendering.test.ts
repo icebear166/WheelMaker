@@ -194,7 +194,15 @@ describe('web chat turn rendering', () => {
     expect(main).toContain("message.method === 'user_message_chunk'");
     expect(main).toContain("message.param.steered === true");
     expect(main).toContain('hasSteeringChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey)');
-    expect(main).toContain('chatAcceptedSteerIdsByKeyRef.current[runtimeKey]?.has(prompt.id)');
+    expect(main).toContain('(chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).some(');
+    expect(main).not.toContain('chatAcceptedSteerIdsByKeyRef');
+    expect(main).toContain('reconcileSteeredChatPrompts(current, selectedChatEncodedKey, selectedFullChatMessages)');
+    const steerStart = main.indexOf('const steerQueuedPrompt = useCallback((');
+    const steerEnd = main.indexOf('const clearPendingChatPromptTimer =', steerStart);
+    const steerBlock = main.slice(steerStart, steerEnd);
+    expect(steerStart).toBeGreaterThanOrEqual(0);
+    expect(steerEnd).toBeGreaterThan(steerStart);
+    expect(steerBlock).toContain("if (result.outcome === 'sent') {");
     expect(chatTurn).toContain('chat-prompt-status-queued');
     expect(chatTurn).toContain('Queued');
     expect(chatTurn).toContain('title="Steer"');

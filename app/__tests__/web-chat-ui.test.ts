@@ -494,7 +494,8 @@ describe('web chat integration', () => {
     expect(sendBlock).toContain("status: 'confirming',");
     expect(sendBlock).toContain('const result = await service.sendProjectSessionMessage(selectedProjectId, {');
     expect(mainTsx).toContain('const chatSteerChainsByKeyRef = useRef<Record<string, Promise<void>>>({});');
-    expect(mainTsx).toContain('const chatAcceptedSteerIdsByKeyRef = useRef<Record<string, Set<string>>>({});');
+    expect(mainTsx).not.toContain('chatAcceptedSteerIdsByKeyRef');
+    expect(mainTsx).toContain('(chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).some(');
     expect(mainTsx).toContain('service.steerProjectSession(');
     expect(mainTsx).toContain('onSteerQueuedPrompt=');
     expect(chatTurnTsx).toContain('aria-label="Steer"');

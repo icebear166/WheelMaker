@@ -7,12 +7,14 @@ import {
   hasQueuedChatCompact,
   moveQueuedChatPromptToFront,
   queuedChatPrompts,
+  reconcileSteeredChatPrompts,
   shiftNextQueuedChatItem,
   shiftNextQueuedChatPrompt,
   setQueuedChatPromptSteering,
   type QueuedChatCompact,
   type QueuedChatPrompt,
 } from '../web/src/chat/session/chatPromptQueue';
+import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
 const basePrompt = (id: string, text: string): QueuedChatPrompt => ({
   kind: 'prompt',
@@ -101,6 +103,25 @@ describe('chat prompt queue state', () => {
     expect(hasSteeringChatPrompt(state, runtimeKey)).toBe(true);
     expect(shiftNextQueuedChatItem(state, runtimeKey).item).toBeNull();
     expect(shiftNextQueuedChatPrompt(state, runtimeKey).prompt).toBeNull();
+  });
+
+  test('reconciles a steering prompt from persisted Steered history', () => {
+    const runtimeKey = 'project:sess-1';
+    const state = setQueuedChatPromptSteering({
+      [runtimeKey]: [basePrompt('1', 'first'), basePrompt('2', 'second'), baseCompact()],
+    }, runtimeKey, '2', true);
+    const messages: RegistryChatMessage[] = [{
+      sessionId: 'sess-1',
+      turnIndex: 2,
+      method: 'user_message_chunk',
+      param: {
+        clientMessageId: '2',
+        steered: true,
+      },
+      finished: false,
+    }];
+    const next = reconcileSteeredChatPrompts(state, runtimeKey, messages);
+    expect(next[runtimeKey].map(item => item.id)).toEqual(['1', 'compact-1']);
   });
 
   test('keeps prompt and compact work in one FIFO queue', () => {
