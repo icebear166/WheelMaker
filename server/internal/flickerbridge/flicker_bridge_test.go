@@ -200,6 +200,40 @@ func TestV2RequestMappingRoundTripsWithoutChangingToolSchemas(t *testing.T) {
 	}
 }
 
+func TestV2RequestFieldsAreExplicitlyClassified(t *testing.T) {
+	raw := json.RawMessage(`{
+		"model":"claude-4.8-opus",
+		"max_tokens":128,
+		"system":"system",
+		"messages":[{"role":"user","content":"hello"}],
+		"tools":[],
+		"tool_choice":{"type":"auto"},
+		"temperature":0.2,
+		"top_p":0.9,
+		"top_k":10,
+		"stop_sequences":["STOP"],
+		"thinking":{"type":"enabled","budget_tokens":64},
+		"stream":true,
+		"output_config":{"effort":"high"},
+		"metadata":{"user_id":"redacted"},
+		"service_tier":"auto",
+		"context_management":{"edits":[]}
+	}`)
+	classified, err := classifyV2RequestFields(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(classified.Unknown) != 0 {
+		t.Fatalf("unknown fields = %v", classified.Unknown)
+	}
+	if !slices.Contains(classified.ProviderGenerated, "output_config") ||
+		!slices.Contains(classified.Ignored, "metadata") ||
+		!slices.Contains(classified.Ignored, "service_tier") ||
+		!slices.Contains(classified.Ignored, "context_management") {
+		t.Fatalf("classification = %+v", classified)
+	}
+}
+
 func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	root := t.TempDir()
 	binDir := filepath.Join(root, "bin")

@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -206,6 +207,68 @@ type anthropicContentBlock struct {
 type anthropicToolChoice struct {
 	Type string `json:"type"`
 	Name string `json:"name,omitempty"`
+}
+
+type v2RequestFieldClassification struct {
+	Mapped            []string
+	ProviderGenerated []string
+	Ignored           []string
+	Unknown           []string
+}
+
+var v2MappedRequestFields = map[string]struct{}{
+	"model":          {},
+	"max_tokens":     {},
+	"system":         {},
+	"messages":       {},
+	"tools":          {},
+	"tool_choice":    {},
+	"temperature":    {},
+	"top_p":          {},
+	"top_k":          {},
+	"stop_sequences": {},
+	"thinking":       {},
+	"stream":         {},
+}
+
+var v2ProviderGeneratedRequestFields = map[string]struct{}{
+	"output_config": {},
+}
+
+var v2IntentionallyIgnoredRequestFields = map[string]struct{}{
+	"metadata":           {},
+	"service_tier":       {},
+	"context_management": {},
+}
+
+func classifyV2RequestFields(raw json.RawMessage) (v2RequestFieldClassification, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return v2RequestFieldClassification{}, err
+	}
+	var result v2RequestFieldClassification
+	for name := range fields {
+		switch {
+		case hasV2Field(v2MappedRequestFields, name):
+			result.Mapped = append(result.Mapped, name)
+		case hasV2Field(v2ProviderGeneratedRequestFields, name):
+			result.ProviderGenerated = append(result.ProviderGenerated, name)
+		case hasV2Field(v2IntentionallyIgnoredRequestFields, name):
+			result.Ignored = append(result.Ignored, name)
+		default:
+			result.Unknown = append(result.Unknown, name)
+		}
+	}
+	sort.Strings(result.Mapped)
+	sort.Strings(result.ProviderGenerated)
+	sort.Strings(result.Ignored)
+	sort.Strings(result.Unknown)
+	return result, nil
+}
+
+func hasV2Field(set map[string]struct{}, name string) bool {
+	_, ok := set[name]
+	return ok
 }
 
 type anthropicUsage struct {
@@ -769,6 +832,7 @@ func runV2SelfTests(names []string) error {
 		"worker-transport":    selfTestWorkerTransport,
 		"request-conversion":  selfTestRequestConversion,
 		"response-conversion": selfTestResponseConversion,
+		"field-audit":         selfTestFieldAudit,
 		"http":                selfTestHTTP,
 	}
 	if len(names) == 1 && names[0] == "all" {
@@ -780,6 +844,7 @@ func runV2SelfTests(names []string) error {
 			"worker-transport",
 			"request-conversion",
 			"response-conversion",
+			"field-audit",
 			"http",
 		}
 	}
@@ -2660,6 +2725,35 @@ func selfTestResponseConversion() error {
 	if !strings.Contains(string(encoded), `"name":"Read"`) ||
 		!strings.Contains(string(encoded), `"file_path":"x"`) {
 		return fmt.Errorf("message mapping = %s", encoded)
+	}
+	return nil
+}
+
+func selfTestFieldAudit() error {
+	raw := json.RawMessage(`{
+		"model":"claude-4.8-opus",
+		"max_tokens":128,
+		"system":"system",
+		"messages":[{"role":"user","content":"hello"}],
+		"tools":[],
+		"tool_choice":{"type":"auto"},
+		"temperature":0.2,
+		"top_p":0.9,
+		"top_k":10,
+		"stop_sequences":["STOP"],
+		"thinking":{"type":"enabled","budget_tokens":64},
+		"stream":true,
+		"output_config":{"effort":"high"},
+		"metadata":{"user_id":"redacted"},
+		"service_tier":"auto",
+		"context_management":{"edits":[]}
+	}`)
+	classified, err := classifyV2RequestFields(raw)
+	if err != nil {
+		return err
+	}
+	if len(classified.Unknown) != 0 {
+		return fmt.Errorf("unclassified request fields: %v", classified.Unknown)
 	}
 	return nil
 }
