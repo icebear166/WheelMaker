@@ -26,6 +26,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 const (
@@ -66,7 +68,7 @@ func ProbeV2() V2ProbeResult {
 	if err != nil || info.IsDir() {
 		return V2ProbeResult{NodePath: nodePath, Error: "Node.js is unavailable"}
 	}
-	versionOutput, err := exec.Command(nodePath, "--version").Output()
+	versionOutput, err := newV2NodeVersionCommand(nodePath).Output()
 	if err != nil {
 		return V2ProbeResult{NodePath: nodePath, Error: "Node.js version check failed"}
 	}
@@ -869,6 +871,12 @@ func resolveNode(explicit string, lookPath func(string) (string, error)) (string
 		return "", fmt.Errorf("find Node executable: %w", err)
 	}
 	return resolved, nil
+}
+
+func newV2NodeVersionCommand(nodePath string) *exec.Cmd {
+	command := exec.Command(nodePath, "--version")
+	shared.ConfigureBackgroundCommand(command)
+	return command
 }
 
 func isV2LoopbackHost(host string) bool {
@@ -1912,9 +1920,15 @@ func sanitizeWorkerError(_ error) string {
 }
 
 func startWorker(ctx context.Context, nodePath, source string, environ []string) (*workerClient, error) {
-	command := exec.CommandContext(ctx, nodePath, "-e", source)
+	command := newV2WorkerCommand(ctx, nodePath, source)
 	command.Env = append(os.Environ(), environ...)
 	return newWorkerClient(command)
+}
+
+func newV2WorkerCommand(ctx context.Context, nodePath, source string) *exec.Cmd {
+	command := exec.CommandContext(ctx, nodePath, "-e", source)
+	shared.ConfigureBackgroundCommand(command)
+	return command
 }
 
 func newWorkerClient(command *exec.Cmd) (*workerClient, error) {

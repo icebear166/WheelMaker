@@ -34,6 +34,35 @@ test('switches Flicker Bridge mode and exposes the selected segment', async () =
   expect(onSwitchMode).toHaveBeenCalledWith('v2');
 });
 
+test('highlights the actual running mode and explains it inline', async () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(
+      <FlickerBridgeControl
+        status={normalizeFlickerBridgeStatus({
+          configured: true,
+          supported: true,
+          state: 'running',
+          mode: 'v1',
+          runningMode: 'v2',
+          availableModes: ['v1', 'v2'],
+        })}
+        busy={false}
+        onLifecycle={jest.fn()}
+        onSwitchMode={jest.fn()}
+      />,
+    );
+  });
+
+  const v1 = renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V1'});
+  const v2 = renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V2'});
+  expect(v1.props.className).toContain('selected');
+  expect(v1.props.className).not.toContain('running');
+  expect(v2.props.className).toContain('running');
+  expect(renderer.root.findByProps({className: 'chat-hub-flicker-bridge-state'}).children)
+    .toEqual(['Running V2 · MyFlicker AI SDK']);
+});
+
 test('disables unavailable mode and all lifecycle actions while busy', async () => {
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -59,5 +88,7 @@ test('disables unavailable mode and all lifecycle actions while busy', async () 
     disabled: true,
     title: 'Node.js 22 is required',
   });
+  expect(renderer.root.findByProps({className: 'chat-hub-flicker-bridge-error'}).children)
+    .toEqual(['V2 unavailable · Node.js 22 is required']);
   expect(renderer.root.findAllByType('button').every(button => button.props.disabled)).toBe(true);
 });

@@ -6695,6 +6695,12 @@
   color: var(--text-primary);
 }
 
+.chat-hub-flicker-bridge-modes button.running {
+  background: color-mix(in srgb, var(--success, #4abf7a) 14%, transparent);
+  color: var(--success, #4abf7a);
+  font-weight: 600;
+}
+
 .chat-hub-flicker-bridge-actions button:hover:not(:disabled) {
   background: var(--surface-hover, var(--hover));
 }
@@ -6702,6 +6708,11 @@
 .chat-hub-flicker-bridge-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.chat-hub-flicker-bridge-modes button.running:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .chat-hub-flicker-bridge-error {

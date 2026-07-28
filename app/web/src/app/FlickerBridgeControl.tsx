@@ -23,6 +23,13 @@ export function FlickerBridgeControl({
 }: FlickerBridgeControlProps): React.JSX.Element {
   const state = status?.state ?? 'loading';
   const {canStart, canStop, canRestart} = flickerBridgeActions(status);
+  const unavailableMode = flickerBridgeModes.find(mode => status?.modeErrors[mode]);
+  const modeError = unavailableMode ? status?.modeErrors[unavailableMode] : undefined;
+  const inlineError = status?.error
+    ? status.error
+    : unavailableMode && modeError
+      ? `${unavailableMode.toUpperCase()} unavailable · ${modeError}`
+      : undefined;
 
   return (
     <div className={`chat-hub-flicker-bridge state-${state}`} aria-live="polite">
@@ -37,14 +44,16 @@ export function FlickerBridgeControl({
         <div className="chat-hub-flicker-bridge-modes" role="group" aria-label="Flicker Bridge mode">
           {flickerBridgeModes.map(mode => {
             const selected = status?.mode === mode;
+            const running = status?.runningMode === mode;
             const available = status?.availableModes.includes(mode) === true;
             return (
               <button
                 key={mode}
                 type="button"
-                className={selected ? 'selected' : ''}
+                className={`${selected ? 'selected' : ''}${running ? ' running' : ''}`.trim()}
                 aria-label={`Use Flicker Bridge ${mode.toUpperCase()}`}
                 aria-pressed={selected}
+                aria-current={running ? 'true' : undefined}
                 title={status?.modeErrors[mode]}
                 disabled={busy || selected || !available}
                 onClick={() => onSwitchMode(mode)}
@@ -84,9 +93,9 @@ export function FlickerBridgeControl({
           </button>
         ) : null}
       </div>
-      {status?.error ? (
-        <span className="chat-hub-flicker-bridge-error" title={status.error}>
-          {status.error}
+      {inlineError ? (
+        <span className="chat-hub-flicker-bridge-error" title={inlineError}>
+          {inlineError}
         </span>
       ) : null}
     </div>
