@@ -61,6 +61,11 @@ type hubStateActionPayload struct {
 	Params  map[string]any `json:"params,omitempty"`
 }
 
+type usageHistoryGetPayload struct {
+	ProviderID     usage.ProviderID `json:"providerId"`
+	AccountLocalID string           `json:"accountLocalId"`
+}
+
 type SessionHandler interface {
 	HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error)
 }
@@ -649,6 +654,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
+	case rp.RegistryMethodUsageHistoryGet:
+		r.replyUsageHistoryGet(conn, in)
 	case rp.RegistryMethodHubReleaseApply:
 		r.replyReleaseApply(conn, in)
 	case rp.RegistryMethodHubDebugWebReceiveStart, rp.RegistryMethodHubDebugWebReceiveChunk,
@@ -781,6 +788,42 @@ func (r *Reporter) replyHubStateGet(conn *websocket.Conn, req envelope) {
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
 		Payload:   rp.MustRaw(map[string]any{"state": state}),
+	})
+}
+
+func (r *Reporter) replyUsageHistoryGet(conn *websocket.Conn, req envelope) {
+	var payload usageHistoryGetPayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid usage.history.get payload")
+		return
+	}
+	payload.AccountLocalID = strings.TrimSpace(payload.AccountLocalID)
+	if !usage.IsKnownProviderID(payload.ProviderID) || payload.AccountLocalID == "" {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "providerId and accountLocalId are required")
+		return
+	}
+	if r.usageHistory == nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "usage history is unavailable")
+		return
+	}
+	history, err := r.usageHistory.Query(usage.HistoryQuery{
+		ProviderID: payload.ProviderID, AccountLocalID: payload.AccountLocalID, Now: time.Now().UTC(),
+	})
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read usage history")
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload: rp.MustRaw(map[string]any{
+			"hubId":          r.cfg.HubID,
+			"providerId":     history.ProviderID,
+			"accountLocalId": history.AccountLocalID,
+			"limits":         history.Limits,
+		}),
 	})
 }
 

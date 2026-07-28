@@ -52,6 +52,7 @@ const (
 	RegistryMethodHubStateRefresh           = "hub.state.refresh"
 	RegistryMethodHubStateAction            = "hub.state.action"
 	RegistryMethodHubStateUpdated           = "hub.state.updated"
+	RegistryMethodUsageHistoryGet           = "usage.history.get"
 	RegistryMethodHubReleaseNotify          = "hub.release.notify"
 	RegistryMethodHubReleaseApply           = "hub.release.apply"
 	RegistryMethodHubDebugWebTransferStart  = "hub.debugWeb.transfer.start"
@@ -177,6 +178,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubStateRefresh:                  registryHubStateMethod(RegistryMethodHubStateRefresh),
 	RegistryMethodHubStateAction:                   registryHubStateMethod(RegistryMethodHubStateAction),
 	RegistryMethodHubStateUpdated:                  registryMethod(RegistryMethodHubStateUpdated, RegistryRouteClientEvent, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodUsageHistoryGet:                  registryHubStateMethod(RegistryMethodUsageHistoryGet),
 	RegistryMethodHubReleaseNotify:                 registryHubReleaseNotifyMethod(RegistryMethodHubReleaseNotify),
 	RegistryMethodHubDebugWebTransferStart:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferStart),
 	RegistryMethodHubDebugWebTransferChunk:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferChunk),

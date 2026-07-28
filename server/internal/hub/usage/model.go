@@ -12,6 +12,15 @@ const (
 	ProviderDeepSeek ProviderID = "deepseek"
 )
 
+func IsKnownProviderID(id ProviderID) bool {
+	switch id {
+	case ProviderCodex, ProviderFlicker, ProviderKimi, ProviderZAI, ProviderDeepSeek:
+		return true
+	default:
+		return false
+	}
+}
+
 type ProviderStatus string
 
 const (

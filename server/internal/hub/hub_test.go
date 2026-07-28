@@ -14,6 +14,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
+	"github.com/swm8023/wheelmaker/internal/hub/usage"
 	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/registry"
@@ -603,6 +604,107 @@ func TestReporterRespondsToHubStateGet(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not receive hub.state.get response from reporter")
+	}
+}
+
+func TestReporterRespondsToUsageHistoryGet(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	now := time.Now().UTC().Truncate(time.Second)
+	stateDir := t.TempDir()
+
+	ts := newFakeReporterRegistry(t, "hub-usage-history-get", testEnvelope{
+		RequestID: 101,
+		Type:      "request",
+		Method:    rp.RegistryMethodUsageHistoryGet,
+		HubID:     "hub-usage-history-get",
+		Payload: map[string]any{
+			"providerId":     "codex",
+			"accountLocalId": "account-1",
+		},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-usage-history-get",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          stateDir,
+	}, nil)
+	resetAt := now.Add(24 * time.Hour)
+	if err := reporter.usageHistory.Record(now.Add(-time.Hour), []usage.ProviderSnapshot{{
+		ID: usage.ProviderCodex, Status: usage.ProviderOK, Accounts: []usage.Account{{
+			LocalID: "account-1", Status: usage.ProviderOK, Limits: []usage.Limit{{
+				ID: "weekly", Label: "W", RemainingPercent: 72,
+				WindowKind: usage.WindowFixed, WindowDurationMins: 7 * 24 * 60, ResetsAt: &resetAt,
+			}},
+		}},
+	}}); err != nil {
+		t.Fatalf("record usage history: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodUsageHistoryGet {
+			t.Fatalf("unexpected usage.history.get response: %#v", resp)
+		}
+		if resp.HubID != "hub-usage-history-get" || resp.Payload["hubId"] != "hub-usage-history-get" {
+			t.Fatalf("response hub identity=%#v", resp)
+		}
+		if resp.Payload["providerId"] != "codex" || resp.Payload["accountLocalId"] != "account-1" {
+			t.Fatalf("response account identity=%#v", resp.Payload)
+		}
+		limits, ok := resp.Payload["limits"].([]any)
+		if !ok || len(limits) != 1 {
+			t.Fatalf("response limits=%#v", resp.Payload["limits"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive usage.history.get response from reporter")
+	}
+}
+
+func TestReporterRejectsInvalidUsageHistoryGet(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := newFakeReporterRegistry(t, "hub-usage-history-invalid", testEnvelope{
+		RequestID: 102,
+		Type:      "request",
+		Method:    rp.RegistryMethodUsageHistoryGet,
+		HubID:     "hub-usage-history-invalid",
+		Payload: map[string]any{
+			"providerId":     "unknown",
+			"accountLocalId": "account-1",
+		},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-usage-history-invalid",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          t.TempDir(),
+	}, nil)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "error" || resp.Payload["code"] != rp.CodeInvalidArgument {
+			t.Fatalf("invalid request response=%#v", resp)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive invalid usage.history.get response")
 	}
 }
 

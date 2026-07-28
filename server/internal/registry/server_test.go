@@ -1617,6 +1617,66 @@ func TestHubStateGetForwardsByEnvelopeHubID(t *testing.T) {
 	}
 }
 
+func TestUsageHistoryGetForwardsByEnvelopeHubID(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-usage")
+	defer hub.Close()
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    rp.RegistryMethodUsageHistoryGet,
+		HubID:     "hub-usage",
+		Payload: map[string]any{
+			"providerId":     "codex",
+			"accountLocalId": "account-1",
+		},
+	})
+
+	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Type != "request" || forwarded.Method != rp.RegistryMethodUsageHistoryGet {
+		t.Fatalf("forwarded=%#v, want usage.history.get request", forwarded)
+	}
+	if forwarded.HubID != "hub-usage" {
+		t.Fatalf("forwarded.hubId=%q, want hub-usage", forwarded.HubID)
+	}
+	if forwarded.ProjectID != "" {
+		t.Fatalf("forwarded.projectId=%q, want empty", forwarded.ProjectID)
+	}
+	if forwarded.Payload["providerId"] != "codex" || forwarded.Payload["accountLocalId"] != "account-1" {
+		t.Fatalf("forwarded.payload=%#v", forwarded.Payload)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    rp.RegistryMethodUsageHistoryGet,
+		HubID:     "hub-usage",
+		Payload: map[string]any{
+			"hubId":          "hub-usage",
+			"providerId":     "codex",
+			"accountLocalId": "account-1",
+			"limits":         []any{},
+		},
+	})
+
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" || resp.Method != rp.RegistryMethodUsageHistoryGet {
+		t.Fatalf("client response=%#v, want usage.history.get response", resp)
+	}
+	if resp.HubID != "hub-usage" || resp.Payload["providerId"] != "codex" {
+		t.Fatalf("client response=%#v", resp)
+	}
+}
+
 func TestHubReleaseNotificationForwardsToTargetHub(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
