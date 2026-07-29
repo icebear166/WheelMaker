@@ -459,7 +459,6 @@ import {
   type WheelMakerReleaseHistoryEntry,
 } from '../settings/agentPackageUpdateView';
 import {
-  deriveSkillHubIds,
   groupSkillsByCategory,
   isSkillActionPendingForHub,
   parseSkillSourceInput,
@@ -3053,8 +3052,8 @@ export function App() {
   const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
   const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshWheelMakerUpdatesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
+  const refreshWheelMakerUpdatesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
+  const refreshAgentPackagesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshProjectFileIndexesRef = useRef<((hubIds: string | string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);
   const [agentPackageHubs, setAgentPackageHubs] = useState<Record<string, AgentPackageHubView>>({});
@@ -3305,6 +3304,8 @@ export function App() {
 
   const [projects, setProjects] = useState<RegistryProject[]>([]);
   const [registryHubs, setRegistryHubs] = useState<RegistryHub[]>([]);
+  const registryHubIdsKey = JSON.stringify(deriveRegistryHubIds(registryHubs));
+  const registryHubIds = useMemo<string[]>(() => JSON.parse(registryHubIdsKey), [registryHubIdsKey]);
   const usageStore = useMemo(() => new UsageStore(), []);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
   const usageHistoryRequestSeqRef = useRef(0);
@@ -3702,32 +3703,31 @@ export function App() {
   }, [service]);
 
   useEffect(() => {
-    if (!chatHubMenuOpen || !connected || registryHubs.length === 0) {
+    if (!chatHubMenuOpen || !connected || registryHubIds.length === 0) {
       return;
     }
     let cancelled = false;
-    for (const hub of registryHubs) {
-      refreshChatHubFlickerBridge(hub.hubId).catch(() => {
+    for (const hubId of registryHubIds) {
+      refreshChatHubFlickerBridge(hubId).catch(() => {
           if (cancelled) return;
           setChatHubFlickerBridgeStatuses(current => ({
             ...current,
-            [hub.hubId]: {
-              ...(current[hub.hubId] ?? normalizeFlickerBridgeStatus(null)),
+            [hubId]: {
+              ...(current[hubId] ?? normalizeFlickerBridgeStatus(null)),
               state: 'failed',
               error: 'Could not read Flicker Bridge status',
             },
           }));
       });
-      refreshChatHubConfig(hub.hubId).catch(() => undefined);
+      refreshChatHubConfig(hubId).catch(() => undefined);
     }
-    const hubIds = registryHubs.map(hub => hub.hubId);
-    refreshWheelMakerUpdatesRef.current?.({silent: true}).catch(() => undefined);
-    refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);
-    refreshProjectFileIndexesRef.current?.(hubIds, {silent: true}).catch(() => undefined);
+    refreshWheelMakerUpdatesRef.current?.(registryHubIds, {silent: true}).catch(() => undefined);
+    refreshAgentPackagesRef.current?.(registryHubIds, {silent: true}).catch(() => undefined);
+    refreshProjectFileIndexesRef.current?.(registryHubIds, {silent: true}).catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, refreshChatHubConfig, registryHubs]);
+  }, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, refreshChatHubConfig, registryHubIds]);
 
   useEffect(() => {
     if (!chatHubMenuOpen) {
@@ -12972,7 +12972,7 @@ export function App() {
     }
   }, [scheduleWheelMakerUpdatePoll]);
 
-  const refreshWheelMakerUpdates = useCallback(async (options: {silent?: boolean} = {}) => {
+  const refreshWheelMakerUpdates = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) => {
     const silent = options.silent === true;
     clearWheelMakerUpdatePollTimer();
     if (!silent) {
@@ -12980,7 +12980,6 @@ export function App() {
     }
     setWheelMakerUpdatesError('');
     try {
-      const hubIds = await refreshProjectHubSnapshot();
       try {
         setWheelMakerPublicMetadata(await fetchWheelMakerPublicMetadata());
       } catch (err) {
@@ -13038,7 +13037,7 @@ export function App() {
         setWheelMakerUpdatesLoading(false);
       }
     }
-  }, [clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, scheduleWheelMakerUpdatePoll]);
+  }, [clearWheelMakerUpdatePollTimer, scheduleWheelMakerUpdatePoll]);
 
   const refreshWheelMakerReleaseHistory = useCallback(async () => {
     setWheelMakerReleaseHistoryLoading(true);
@@ -13117,14 +13116,13 @@ export function App() {
     refreshWheelMakerUpdateHubRef.current = refreshWheelMakerUpdateHub;
   }, [refreshWheelMakerUpdateHub]);
 
-  const refreshAgentPackages = useCallback(async (options: {silent?: boolean} = {}) => {
+  const refreshAgentPackages = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) => {
     clearAgentPackageScanPollTimer();
     if (!options.silent) {
       setAgentPackagesLoading(true);
       setAgentPackagesError('');
     }
     try {
-      const hubIds = await refreshProjectHubSnapshot();
       if (hubIds.length === 0) {
         setAgentPackageHubs({});
         setAgentPackagesError('No hubs available.');
@@ -13196,7 +13194,7 @@ export function App() {
           if (!updateSurfaceActiveRef.current) {
             return;
           }
-          refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);
+          refreshAgentPackagesRef.current?.(Array.from(runningHubIds), {silent: true}).catch(() => undefined);
         }, 1000);
       }
     } catch (err) {
@@ -13207,7 +13205,7 @@ export function App() {
         setAgentPackagesLoading(false);
       }
     }
-  }, [clearAgentPackageScanPollTimer, refreshProjectHubSnapshot]);
+  }, [clearAgentPackageScanPollTimer]);
 
   const refreshProjectFileIndexes = useCallback(async (hubIds: string | string[], options: {silent?: boolean} = {}) => {
     const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
@@ -13297,19 +13295,17 @@ export function App() {
       clearProjectIndexPollTimer();
       return;
     }
-    refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);
+    refreshWheelMakerUpdatesRef.current?.(registryHubIds).catch(() => undefined);
     refreshWheelMakerReleaseHistory().catch(() => undefined);
-    refreshAgentPackagesRef.current?.().catch(() => undefined);
-    refreshProjectHubSnapshot()
-      .then(hubIds => refreshProjectFileIndexesRef.current?.(hubIds))
-      .catch(() => undefined);
+    refreshAgentPackagesRef.current?.(registryHubIds).catch(() => undefined);
+    refreshProjectFileIndexesRef.current?.(registryHubIds).catch(() => undefined);
     refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
     return () => {
       clearWheelMakerUpdatePollTimer();
       clearAgentPackageScanPollTimer();
       clearProjectIndexPollTimer();
     };
-  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, refreshWheelMakerReleaseHistory, settingsDetailView]);
+  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshWheelMakerReleaseHistory, registryHubIds, settingsDetailView]);
 
   useEffect(() => {
     if (!androidApkUpdateSupported) {
@@ -13396,17 +13392,11 @@ export function App() {
     }
   }, [scheduleSkillOperationPoll]);
 
-  const refreshSkillManagement = useCallback(async () => {
+  const refreshSkillManagement = useCallback(async (hubIds: string[]) => {
     clearSkillOperationPollTimer();
     setSkillsLoading(true);
     setSkillsError('');
     try {
-      const snapshot = await service.listProjectSnapshot();
-      if (snapshot.projects.length > 0) {
-        setProjects(snapshot.projects);
-      }
-      setRegistryHubs(snapshot.hubs);
-      const hubIds = deriveSkillHubIds(snapshot.hubs);
       if (hubIds.length === 0) {
         setSkillHubs({});
         setSkillsError('No hubs available.');
@@ -13474,8 +13464,8 @@ export function App() {
     if (settingsDetailView !== 'skills') {
       return;
     }
-    refreshSkillManagement().catch(() => undefined);
-  }, [settingsDetailView, refreshSkillManagement]);
+    refreshSkillManagement(registryHubIds).catch(() => undefined);
+  }, [settingsDetailView, refreshSkillManagement, registryHubIds]);
 
   const requestSkillInstall = useCallback((target: SkillInstallTarget) => {
     const sameTarget = sameSkillInstallTarget(skillInstallTarget, target);
@@ -14013,7 +14003,7 @@ export function App() {
       }));
       setConfirmTarget(null);
       setConfirmError('');
-      await refreshAgentPackages();
+      await refreshAgentPackages([target.hubId]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmError(message);
@@ -14043,7 +14033,7 @@ export function App() {
       }));
       setConfirmTarget(null);
       setConfirmError('');
-      await refreshAgentPackages();
+      await refreshAgentPackages([target.hubId]);
       if (!result.ok) {
         const message = result.operation?.errorSummary || result.operation?.message || 'Update request failed.';
         setAgentPackagesError(message);
@@ -15853,7 +15843,7 @@ export function App() {
         <button
           type="button"
           className="settings-detail-refresh"
-          onClick={() => refreshSkillManagement().catch(() => undefined)}
+          onClick={() => refreshSkillManagement(registryHubIds).catch(() => undefined)}
           disabled={skillsLoading}
         >
           {skillsLoading ? 'Refreshing...' : 'Refresh'}
@@ -15866,9 +15856,9 @@ export function App() {
           type="button"
           className="settings-detail-refresh"
           onClick={() => {
-            refreshWheelMakerUpdates().catch(() => undefined);
+            refreshWheelMakerUpdates(registryHubIds).catch(() => undefined);
             refreshWheelMakerReleaseHistory().catch(() => undefined);
-            refreshAgentPackages().catch(() => undefined);
+            refreshAgentPackages(registryHubIds).catch(() => undefined);
           }}
           disabled={wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading}
         >

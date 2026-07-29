@@ -107,6 +107,24 @@ describe('skill management settings UI source structure', () => {
     expect(updateIndex).toBeGreaterThan(requestIndex);
   });
 
+  test('scans Skills for the current Hub IDs without refreshing Hub topology', () => {
+    const normalizedMainTsx = mainTsx.replace(/\r\n/g, '\n');
+    const refreshStart = normalizedMainTsx.indexOf('const refreshSkillManagement = useCallback');
+    const refreshEnd = normalizedMainTsx.indexOf('refreshSkillManagementHubRef.current = refreshSkillManagementHub;', refreshStart);
+    const refreshBlock = normalizedMainTsx.slice(refreshStart, refreshEnd);
+
+    expect(refreshBlock).toContain('const refreshSkillManagement = useCallback(async (hubIds: string[]) =>');
+    expect(refreshBlock).not.toContain('service.listProjectSnapshot()');
+    expect(refreshBlock).not.toContain('setRegistryHubs(');
+
+    const entryEffectStart = normalizedMainTsx.indexOf("if (settingsDetailView !== 'skills') {");
+    const entryEffectEnd = normalizedMainTsx.indexOf('}, [settingsDetailView, refreshSkillManagement, registryHubIds]);', entryEffectStart);
+    expect(entryEffectStart).toBeGreaterThanOrEqual(0);
+    expect(entryEffectEnd).toBeGreaterThan(entryEffectStart);
+    expect(normalizedMainTsx.slice(entryEffectStart, entryEffectEnd))
+      .toContain('refreshSkillManagement(registryHubIds).catch(() => undefined);');
+  });
+
   test('wires Update hub skill reindex to project profile refresh and per-hub state', () => {
     expect(mainTsx).toContain('const [skillIndexScanPendingByHubId, setSkillIndexScanPendingByHubId]');
     expect(mainTsx).toContain('const [skillIndexScanErrorByHubId, setSkillIndexScanErrorByHubId]');

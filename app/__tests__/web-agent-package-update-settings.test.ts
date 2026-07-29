@@ -307,8 +307,8 @@ describe('agent package update settings UI source structure', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);');
-    expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const clearAgentPackageScanPollTimer = useCallback(() => {');
     expect(mainTsx).toContain('clearAgentPackageScanPollTimer();');
@@ -316,21 +316,51 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('loading: !options.silent,');
     expect(mainTsx).toContain('if (!updateSurfaceActiveRef.current) {');
     expect(mainTsx).toContain("updateSurfaceActiveRef.current = settingsDetailView === 'update' || chatHubMenuOpen;");
-    expect(mainTsx).toContain('refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);');
+    expect(mainTsx).toContain('refreshAgentPackagesRef.current?.(Array.from(runningHubIds), {silent: true}).catch(() => undefined);');
 
     const updateEntryEffectStart = mainTsx.indexOf("if (settingsDetailView !== 'update') {\n      clearWheelMakerUpdatePollTimer();\n      clearAgentPackageScanPollTimer();");
     expect(updateEntryEffectStart).toBeGreaterThanOrEqual(0);
-    const updateEntryEffectEnd = mainTsx.indexOf('}, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, refreshWheelMakerReleaseHistory, settingsDetailView]);', updateEntryEffectStart);
+    const updateEntryEffectEnd = mainTsx.indexOf('}, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshWheelMakerReleaseHistory, registryHubIds, settingsDetailView]);', updateEntryEffectStart);
     expect(updateEntryEffectEnd).toBeGreaterThan(updateEntryEffectStart);
     const updateEntryEffect = mainTsx.slice(updateEntryEffectStart, updateEntryEffectEnd);
-    expect(updateEntryEffect).toContain('refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);');
+    expect(updateEntryEffect).toContain('refreshWheelMakerUpdatesRef.current?.(registryHubIds).catch(() => undefined);');
     expect(updateEntryEffect).toContain('refreshWheelMakerReleaseHistory().catch(() => undefined);');
-    expect(updateEntryEffect).toContain('refreshAgentPackagesRef.current?.().catch(() => undefined);');
-    expect(updateEntryEffect).toContain('refreshProjectFileIndexesRef.current?.(hubIds)');
+    expect(updateEntryEffect).toContain('refreshAgentPackagesRef.current?.(registryHubIds).catch(() => undefined);');
+    expect(updateEntryEffect).toContain('refreshProjectFileIndexesRef.current?.(registryHubIds)');
+    expect(updateEntryEffect).not.toContain('refreshProjectHubSnapshot');
     expect(updateEntryEffect).toContain('refreshAndroidApkUpdateRef.current?.().catch(() => undefined);');
     expect(updateEntryEffect).not.toContain('refreshWheelMakerUpdates().catch(() => undefined);');
     expect(updateEntryEffect).not.toContain('refreshAgentPackages().catch(() => undefined);');
     expect(updateEntryEffect).not.toContain('refreshAndroidApkUpdate().catch(() => undefined);');
+  });
+
+  test('keeps Hub operation scans downstream of the current Hub list', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+
+    const menuEffectStart = mainTsx.indexOf("if (!chatHubMenuOpen || !connected || registryHubIds.length === 0) {");
+    const menuEffectEnd = mainTsx.indexOf('}, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, refreshChatHubConfig, registryHubIds]);', menuEffectStart);
+    expect(menuEffectStart).toBeGreaterThanOrEqual(0);
+    expect(menuEffectEnd).toBeGreaterThan(menuEffectStart);
+    const menuEffect = mainTsx.slice(menuEffectStart, menuEffectEnd);
+    expect(menuEffect).toContain('refreshWheelMakerUpdatesRef.current?.(registryHubIds, {silent: true})');
+    expect(menuEffect).toContain('refreshAgentPackagesRef.current?.(registryHubIds, {silent: true})');
+    expect(menuEffect).toContain('refreshProjectFileIndexesRef.current?.(registryHubIds, {silent: true})');
+    expect(menuEffect).not.toContain('refreshProjectHubSnapshot');
+
+    const wheelMakerStart = mainTsx.indexOf('const refreshWheelMakerUpdates = useCallback');
+    const wheelMakerEnd = mainTsx.indexOf('const refreshAndroidApkUpdate = useCallback', wheelMakerStart);
+    const wheelMakerBlock = mainTsx.slice(wheelMakerStart, wheelMakerEnd);
+    expect(wheelMakerBlock).toContain('const refreshWheelMakerUpdates = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) =>');
+    expect(wheelMakerBlock).not.toContain('refreshProjectHubSnapshot');
+
+    const agentStart = mainTsx.indexOf('const refreshAgentPackages = useCallback');
+    const agentEnd = mainTsx.indexOf('const refreshProjectFileIndexes = useCallback', agentStart);
+    const agentBlock = mainTsx.slice(agentStart, agentEnd);
+    expect(agentBlock).toContain('const refreshAgentPackages = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) =>');
+    expect(agentBlock).not.toContain('refreshProjectHubSnapshot');
   });
 
   test('updates each Update page hub scan section as its request settles', () => {
