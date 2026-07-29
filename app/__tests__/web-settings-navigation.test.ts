@@ -21,7 +21,6 @@ describe('settings navigation model', () => {
       'connectionStatus',
       'database',
       'debugLogs',
-      'releasePublish',
       'deviceSessions',
       'skillDetail',
     ]);
@@ -30,7 +29,6 @@ describe('settings navigation model', () => {
     expect(settingsPageKind('skills')).toBe('peer');
     expect(settingsPageKind('connectionStatus')).toBe('child');
     expect(settingsPageKind('database')).toBe('child');
-    expect(settingsPageKind('releasePublish')).toBe('child');
     expect(settingsPageKind('skillDetail')).toBe('child');
 
     expect(isSettingsPeerDetail('portRelay')).toBe(true);
@@ -53,7 +51,6 @@ describe('settings navigation model', () => {
     expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
-    expect(settingsDetailTitle('releasePublish')).toBe('Release publishing');
     expect(settingsDetailTitle('deviceSessions')).toBe('Devices');
     expect(settingsDetailTitle('skillDetail')).toBe('Skill Detail');
   });
@@ -67,15 +64,18 @@ describe('settings navigation model', () => {
     expect(surface).toContain('settings-workbench-panel');
     expect(surface).toContain('settings-workbench-nav');
     expect(surface).toContain('settings-workbench-detail-page');
-    expect(root).toContain("type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug' | 'android';");
+    expect(root).toContain("type SettingsSectionId = 'chat' | 'server' | 'connection' | 'code-display' | 'debug';");
     expect(root).toContain('settings-section-${id}');
-    for (const id of ['appearance', 'chat', 'server', 'connection', 'code-display', 'debug']) {
+    for (const id of ['chat', 'server', 'connection', 'code-display', 'debug']) {
       expect(root).toContain(`id: '${id}'`);
     }
-    expect(root.indexOf("id: 'appearance'")).toBeLessThan(root.indexOf("id: 'chat'"));
     expect(root.indexOf("id: 'chat'")).toBeLessThan(root.indexOf("id: 'connection'"));
     expect(root.indexOf("id: 'connection'")).toBeLessThan(root.indexOf("id: 'code-display'"));
     expect(root.indexOf("id: 'code-display'")).toBeLessThan(root.indexOf("id: 'debug'"));
+    expect(root).not.toContain('Dark Mode');
+    expect(root).not.toContain('Android APK');
+    expect(root).not.toContain('Release publishing');
+    expect(root).toContain('Code Theme');
   });
 
   test('lays out the desktop settings workbench without changing mobile navigation', () => {

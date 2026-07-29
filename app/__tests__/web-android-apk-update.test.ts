@@ -1,4 +1,6 @@
 import {
+  androidApkUpdateEventState,
+  checkAndroidApkUpdate,
   createAndroidApkUpdateBridge,
   normalizeSha256Digest,
   parseAndroidStableRelease,
@@ -7,6 +9,35 @@ import {
 import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('android apk update model', () => {
+  const stableResponse = {
+    ok: true,
+    json: async () => ({
+      schema: 2,
+      version: 'v1.9',
+      androidApk: {
+        version: 'v1.9',
+        versionName: '1.9',
+        versionCode: 9,
+        publishedAt: '2026-07-30T03:49:50Z',
+        sourceSha: 'a'.repeat(40),
+        path: '/releases/v1.9/WheelMakerAndroid.apk',
+        sha256: 'b'.repeat(64),
+        size: 5408163,
+      },
+    }),
+  } as Response;
+
+  test.each([
+    ['downloading', {status: 'updating', meta: 'Downloading…'}],
+    ['downloaded', {status: 'updating', meta: 'Downloaded'}],
+    ['installing', {status: 'updating', meta: 'Opening installer…'}],
+    ['permission_required', {status: 'failed'}],
+    ['failed', {status: 'failed'}],
+    ['other', null],
+  ])('maps native %s progress into the shared menu state', (status, expected) => {
+    expect(androidApkUpdateEventState({status})).toEqual(expected);
+  });
+
   test('parses carried Android APK pointer from stable metadata', () => {
     const latest = parseAndroidStableRelease({
       schema: 2,
@@ -83,5 +114,33 @@ describe('android apk update model', () => {
     expect(requests.map(request => request.action)).toEqual(['apk.getReleaseState', 'apk.install']);
 
     expect(createAndroidApkUpdateBridge({} as any).isSupported()).toBe(false);
+  });
+
+  test('checks the installed APK against stable and preserves both versions', async () => {
+    const bridge = {
+      isSupported: () => true,
+      getLocalRelease: async () => ({
+        supported: true,
+        packageName: 'com.wheelmaker.android',
+        versionName: '1.8',
+        versionCode: 8,
+        apkSha256: 'a'.repeat(64),
+        buildSha: '',
+        builtAt: '',
+        canRequestPackageInstalls: true,
+      }),
+      installLatest: jest.fn(),
+    };
+
+    await expect(
+      checkAndroidApkUpdate(bridge, jest.fn(async () => stableResponse) as unknown as typeof fetch),
+    ).resolves.toMatchObject({
+      state: {
+        status: 'available',
+        currentVersion: 'v1.8',
+        latestVersion: 'v1.9',
+      },
+      latest: {tagName: 'v1.9'},
+    });
   });
 });

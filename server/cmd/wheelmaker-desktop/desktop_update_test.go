@@ -21,6 +21,10 @@ func writeDesktopUpdateTestFile(t *testing.T, path string, content string) {
 }
 
 func TestDesktopUpdateInfoUsesOnlyStandardInstall(t *testing.T) {
+	oldVersion := desktopReleaseVersion
+	desktopReleaseVersion = "v1.42"
+	t.Cleanup(func() { desktopReleaseVersion = oldVersion })
+
 	home := t.TempDir()
 	exe := filepath.Join(home, ".wheelmaker", "desktop", "WheelMakerDesktop.exe")
 	updater := filepath.Join(home, ".wheelmaker", "update_exe.bat")
@@ -42,7 +46,7 @@ func TestDesktopUpdateInfoUsesOnlyStandardInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantSHA := sha256.Sum256([]byte("desktop"))
-	if info.SHA256 != hex.EncodeToString(wantSHA[:]) || !info.UpdaterReady {
+	if info.Version != "v1.42" || info.SHA256 != hex.EncodeToString(wantSHA[:]) || !info.UpdaterReady {
 		t.Fatalf("info=%+v", info)
 	}
 }

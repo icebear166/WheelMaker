@@ -232,7 +232,7 @@ describe('agent package update settings UI source structure', () => {
 
     expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);');
-    expect(mainTsx).toContain('const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);');
+    expect(mainTsx).not.toContain('refreshAndroidApkUpdateRef');
     expect(mainTsx).toContain('const clearAgentPackageScanPollTimer = useCallback(() => {');
     expect(mainTsx).toContain('clearAgentPackageScanPollTimer();');
     expect(mainTsx).toContain('if (!options.silent) {');
@@ -259,7 +259,7 @@ describe('agent package update settings UI source structure', () => {
     expect(menuEffect).not.toContain('refreshProjectHubSnapshot');
 
     const wheelMakerStart = mainTsx.indexOf('const refreshWheelMakerUpdates = useCallback');
-    const wheelMakerEnd = mainTsx.indexOf('const refreshAndroidApkUpdate = useCallback', wheelMakerStart);
+    const wheelMakerEnd = mainTsx.indexOf('const refreshAgentPackages = useCallback', wheelMakerStart);
     const wheelMakerBlock = mainTsx.slice(wheelMakerStart, wheelMakerEnd);
     expect(wheelMakerBlock).toContain('const refreshWheelMakerUpdates = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) =>');
     expect(wheelMakerBlock).not.toContain('refreshProjectHubSnapshot');
@@ -278,7 +278,7 @@ describe('agent package update settings UI source structure', () => {
       .replace(/\r\n/g, '\n');
 
     const wheelMakerStart = mainTsx.indexOf('const refreshWheelMakerUpdates = useCallback');
-    const wheelMakerEnd = mainTsx.indexOf('const refreshAndroidApkUpdate = useCallback', wheelMakerStart);
+    const wheelMakerEnd = mainTsx.indexOf('const refreshAgentPackages = useCallback', wheelMakerStart);
     expect(wheelMakerStart).toBeGreaterThanOrEqual(0);
     expect(wheelMakerEnd).toBeGreaterThan(wheelMakerStart);
     const wheelMakerBlock = mainTsx.slice(wheelMakerStart, wheelMakerEnd);
@@ -401,7 +401,7 @@ describe('agent package update settings UI source structure', () => {
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
     expect(chatSessionHeader).toContain('{!searchHeaderExpanded ? (');
     expect(chatSessionHeader).not.toContain('{renderChatMenuUsageButton()}');
-    expect(chatSessionHeader).toContain('renderChatMenuSettingsButton()');
+    expect(chatSessionHeader).toContain('renderWheelMakerAppMenu(true)');
     expect(chatSessionHeader).not.toContain('title="Update"');
     expect(chatSessionHeader).not.toContain('title="Port Relay"');
     expect(chatSessionHeader).not.toContain("openSettingsDetail('update')");

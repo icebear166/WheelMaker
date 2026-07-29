@@ -301,11 +301,6 @@ textarea,
     align-items: start;
   }
 
-  .desktop-settings-screen .settings-section-appearance {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
   .desktop-settings-screen .settings-section-chat {
     grid-column: 2;
     grid-row: 1 / span 2;
@@ -313,12 +308,12 @@ textarea,
 
   .desktop-settings-screen .settings-section-connection {
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 1;
   }
 
   .desktop-settings-screen .settings-section-code-display {
     grid-column: 1;
-    grid-row: 3;
+    grid-row: 2;
   }
 
   .desktop-settings-screen .settings-section-debug {
@@ -642,33 +637,6 @@ textarea,
 .wheelmaker-update-all-btn:disabled {
   cursor: default;
   opacity: 0.58;
-}
-
-.android-apk-update-card {
-  border-left: 3px solid color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 96%, var(--accent-primary)) 0%, var(--surface-raised) 58%, color-mix(in srgb, var(--surface-raised) 95%, var(--surface-panel)) 100%);
-  padding: 12px 13px;
-  gap: 10px;
-}
-
-.android-apk-update-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  padding-top: 2px;
-}
-
-.android-apk-update-action-btn {
-  min-width: 84px;
-  padding: 0 12px;
-}
-
-.android-apk-update-action-btn.primary {
-  min-width: 142px;
-  font-weight: 700;
 }
 
 .agent-package-hub-card {
@@ -2632,30 +2600,6 @@ textarea,
 .update-status-icon.is-failed { color: var(--state-danger); }
 .update-status-icon.is-missing { color: var(--text-secondary); }
 
-.android-apk-update-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.android-apk-update-row .wheelmaker-update-scope {
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.android-apk-update-versions {
-  color: var(--text-secondary);
-  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
-  font-size: 11px;
-}
-
-.android-apk-update-actions {
-  display: inline-flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
 .update-hub-row {
   display: flex;
   flex-wrap: wrap;
@@ -2725,10 +2669,6 @@ textarea,
 }
 
 @media (max-width: 640px) {
-  .android-apk-update-actions {
-    margin-left: 0;
-    flex: 1 1 100%;
-  }
   .update-hub-action-btn {
     margin-left: 0;
     flex: 1 1 100%;
@@ -3355,37 +3295,6 @@ textarea,
   align-items: center;
   gap: 8px;
   padding: 0 6px;
-}
-
-.update-apk-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.update-apk-icon {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-}
-
-.update-apk-scope {
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.update-apk-versions {
-  min-width: 0;
-  color: var(--text-secondary);
-  font-size: 11.5px;
-}
-
-.update-apk-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 /* NPM package row action line overrides legacy grid placement */

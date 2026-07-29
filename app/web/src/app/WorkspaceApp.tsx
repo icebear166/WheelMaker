@@ -58,7 +58,10 @@ import { writeTextToClipboard } from '../platform/clipboard';
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
-import {DesktopAppMenu} from '../shell/layouts/desktop/DesktopAppMenu';
+import {
+  WheelMakerAppMenu,
+  type ClientUpdateController,
+} from '../shell/WheelMakerAppMenu';
 import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
 import {
   canCopyDesktopFile,
@@ -68,6 +71,7 @@ import {
   invokeDesktopFileAction,
   type DesktopProjectFileAction,
 } from '../platform/desktop/desktopRuntime';
+import {checkDesktopUpdate} from '../platform/desktop/desktopUpdate';
 import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
 import {
   AppConfirmDialog,
@@ -333,14 +337,15 @@ import {
   type WheelMakerNotificationPermissionState,
 } from '../notifications/NotificationProvider';
 import {
+  checkAndroidApkUpdate,
   createAndroidApkUpdateBridge,
-  parseAndroidStableRelease,
-  resolveAndroidApkUpdateStatus,
-  type AndroidApkInstallResult,
+  subscribeAndroidApkUpdateEvents,
   type AndroidApkLatestRelease,
-  type AndroidApkLocalRelease,
-  type AndroidApkUpdateStatus,
 } from '../platform/android/androidApkUpdate';
+import {
+  createStandalonePageHistoryState,
+  isStandalonePageHistoryState,
+} from '../shell/mobileStandalonePageHistory';
 import {
   chatIndexProjectRefreshTargets,
   reconnectSessionRuntimeKeys,
@@ -1346,34 +1351,6 @@ function formatWheelMakerDateTime(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function androidApkUpdateStatusLabel(status: AndroidApkUpdateStatus): string {
-  switch (status) {
-    case 'up_to_date':
-      return 'Up to date';
-    case 'update_available':
-      return 'Update available';
-    default:
-      return 'Unknown';
-  }
-}
-
-function androidApkInstallStatusLabel(status: string): string {
-  switch (status) {
-    case 'permission_required':
-      return 'Install permission required';
-    case 'downloading':
-      return 'Downloading APK';
-    case 'downloaded':
-      return 'APK downloaded';
-    case 'installing':
-      return 'Opening installer';
-    case 'failed':
-      return 'Install failed';
-    default:
-      return status;
-  }
 }
 
 function clampFloatingTop(top: number, minTop: number, maxTop: number): number {
@@ -3024,10 +3001,13 @@ export function App() {
   const [databaseDumpText, setDatabaseDumpText] = useState('');
   const [databaseStorageStats, setDatabaseStorageStats] = useState<WorkspaceDatabaseStorageStats | null>(null);
   const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);
+  const [releasePublishingOpen, setReleasePublishingOpen] = useState(false);
   const mobileSettingsHistoryKeyRef = useRef<string | null>(null);
   const mobileSettingsReplaceRootHistoryRef = useRef(false);
+  const mobileReleasePublishingHistoryRef = useRef(false);
   const sidebarSettingsOpenRef = useRef(sidebarSettingsOpen);
   const settingsDetailViewRef = useRef<SettingsDetailView>(settingsDetailView);
+  const releasePublishingOpenRef = useRef(releasePublishingOpen);
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
   const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
@@ -3037,20 +3017,52 @@ export function App() {
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
   const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
-  const [androidApkUpdateSupported, setAndroidApkUpdateSupported] = useState(false);
-  const [androidApkLocalRelease, setAndroidApkLocalRelease] = useState<AndroidApkLocalRelease | null>(null);
-  const [androidApkLatestRelease, setAndroidApkLatestRelease] = useState<AndroidApkLatestRelease | null>(null);
-  const [androidApkUpdateLoading, setAndroidApkUpdateLoading] = useState(false);
-  const [androidApkUpdateError, setAndroidApkUpdateError] = useState('');
-  const [androidApkInstallStatus, setAndroidApkInstallStatus] = useState('');
-  const [androidApkInstallPending, setAndroidApkInstallPending] = useState(false);
+  const latestAndroidReleaseRef = useRef<AndroidApkLatestRelease | null>(null);
+  const desktopUpdateBridge = getDesktopWindowBridge();
+  const desktopUpdateController = useMemo<ClientUpdateController | null>(() => {
+    if (
+      !desktopUpdateBridge?.getDesktopUpdateInfo
+      || !desktopUpdateBridge.requestDesktopUpdate
+      || desktopUpdateBridge.localDev
+    ) {
+      return null;
+    }
+    return {
+      check: () => checkDesktopUpdate(desktopUpdateBridge),
+      start: async () => {
+        await desktopUpdateBridge.requestDesktopUpdate?.();
+      },
+    };
+  }, [desktopUpdateBridge]);
+  const androidUpdateController = useMemo<ClientUpdateController | null>(() => {
+    if (!androidApkUpdateBridge.isSupported()) return null;
+    return {
+      check: async () => {
+        const result = await checkAndroidApkUpdate(androidApkUpdateBridge);
+        latestAndroidReleaseRef.current = result.latest;
+        return result.state;
+      },
+      start: async () => {
+        const latest = latestAndroidReleaseRef.current;
+        if (!latest) throw new Error('Android release is unavailable.');
+        const result = await androidApkUpdateBridge.installLatest({
+          downloadUrl: latest.apk.downloadUrl,
+          expectedSha256: latest.apk.sha256,
+          expectedSize: latest.apk.size,
+          tagName: latest.tagName,
+        });
+        if (!result.ok) throw new Error(result.error || result.status);
+      },
+      subscribe: listener => subscribeAndroidApkUpdateEvents(listener),
+    };
+  }, [androidApkUpdateBridge]);
+  const clientUpdateController = desktopUpdateController ?? androidUpdateController;
   const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
   const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshWheelMakerUpdatesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshAgentPackagesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshProjectFileIndexesRef = useRef<((hubIds: string | string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);
   const [agentPackageHubs, setAgentPackageHubs] = useState<Record<string, AgentPackageHubView>>({});
   const [agentPackagesLoading, setAgentPackagesLoading] = useState(false);
   const [agentPackagesError, setAgentPackagesError] = useState('');
@@ -5850,6 +5862,9 @@ export function App() {
     settingsDetailViewRef.current = settingsDetailView;
   }, [settingsDetailView]);
   useEffect(() => {
+    releasePublishingOpenRef.current = releasePublishingOpen;
+  }, [releasePublishingOpen]);
+  useEffect(() => {
     const activeProjectId = projectId || projectIdRef.current;
     if (!connected || !activeProjectId) {
       return;
@@ -7186,9 +7201,31 @@ export function App() {
     setSidebarSettingsOpen(false);
   }, [setSidebarSettingsOpen]);
   const openSettingsRoot = useCallback(() => {
+    setReleasePublishingOpen(false);
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
   }, [setSidebarSettingsOpen]);
+  const openReleasePublishing = useCallback(() => {
+    closeSettingsPanel();
+    setDrawerOpen(false);
+    setReleasePublishingOpen(true);
+    if (!isWide && !mobileReleasePublishingHistoryRef.current) {
+      window.history.pushState(
+        createStandalonePageHistoryState(),
+        '',
+        window.location.href,
+      );
+      mobileReleasePublishingHistoryRef.current = true;
+    }
+  }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  const closeReleasePublishing = useCallback(() => {
+    if (!isWide && mobileReleasePublishingHistoryRef.current) {
+      window.history.back();
+      return;
+    }
+    mobileReleasePublishingHistoryRef.current = false;
+    setReleasePublishingOpen(false);
+  }, [isWide]);
   const openSettingsPeer = useCallback((detail: SettingsPeerDetail) => {
     if (isWide && sidebarSettingsOpen && settingsDetailView === detail) {
       closeSettingsPanel();
@@ -7275,6 +7312,20 @@ export function App() {
     window.addEventListener('popstate', handleMobileSettingsPopState);
     return () => window.removeEventListener('popstate', handleMobileSettingsPopState);
   }, [setSidebarSettingsOpen]);
+  useEffect(() => {
+    const handleReleasePublishingPopState = (event: PopStateEvent) => {
+      if (
+        !releasePublishingOpenRef.current
+        || isStandalonePageHistoryState(event.state)
+      ) {
+        return;
+      }
+      mobileReleasePublishingHistoryRef.current = false;
+      setReleasePublishingOpen(false);
+    };
+    window.addEventListener('popstate', handleReleasePublishingPopState);
+    return () => window.removeEventListener('popstate', handleReleasePublishingPopState);
+  }, []);
   const handleSettingsDetailBack = useCallback(() => {
     const currentKind = settingsPageKind(settingsDetailView);
     if (!isWide && sidebarSettingsOpen && currentKind === 'child' && mobileSettingsHistoryKeyRef.current !== null) {
@@ -7363,6 +7414,10 @@ export function App() {
       setChatHubColorMenu(null);
       return true;
     }
+    if (!isWide && releasePublishingOpenRef.current) {
+      closeReleasePublishing();
+      return true;
+    }
     if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return true;
@@ -7378,7 +7433,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatHubMenuOpen, chatPreviewOpen, closeChatPreview, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatHubMenuOpen, chatPreviewOpen, closeChatPreview, closeReleasePublishing, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -13094,67 +13149,6 @@ export function App() {
     }
   }, [clearWheelMakerUpdatePollTimer, scheduleWheelMakerUpdatePoll]);
 
-  const refreshAndroidApkUpdate = useCallback(async () => {
-    const supported = androidApkUpdateBridge.isSupported();
-    setAndroidApkUpdateSupported(supported);
-    if (!supported) {
-      setAndroidApkLocalRelease(null);
-      setAndroidApkLatestRelease(null);
-      setAndroidApkUpdateError('');
-      setAndroidApkInstallStatus('');
-      return;
-    }
-    setAndroidApkUpdateLoading(true);
-    setAndroidApkUpdateError('');
-    try {
-      setAndroidApkLocalRelease(await androidApkUpdateBridge.getLocalRelease());
-      setAndroidApkLatestRelease(
-        parseAndroidStableRelease(wheelMakerPublicMetadata?.stable),
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setAndroidApkUpdateError(message);
-    } finally {
-      setAndroidApkUpdateLoading(false);
-    }
-  }, [androidApkUpdateBridge, wheelMakerPublicMetadata?.stable]);
-
-  useEffect(() => {
-    setAndroidApkLatestRelease(
-      parseAndroidStableRelease(wheelMakerPublicMetadata?.stable),
-    );
-  }, [wheelMakerPublicMetadata]);
-
-  const requestAndroidApkInstall = useCallback(async () => {
-    if (!androidApkLatestRelease?.apk.downloadUrl) {
-      setAndroidApkUpdateError('Latest Android APK release asset not found.');
-      return;
-    }
-    setAndroidApkInstallPending(true);
-    setAndroidApkInstallStatus('');
-    setAndroidApkUpdateError('');
-    try {
-      const result: AndroidApkInstallResult = await androidApkUpdateBridge.installLatest({
-        downloadUrl: androidApkLatestRelease.apk.downloadUrl,
-        expectedSha256: androidApkLatestRelease.apk.sha256,
-        expectedSize: androidApkLatestRelease.apk.size,
-        tagName: androidApkLatestRelease.tagName,
-      });
-      setAndroidApkInstallStatus(result.status || '');
-      if (!result.ok) {
-        throw new Error(result.error || 'APK install request failed.');
-      }
-      if (result.status === 'permission_required') {
-        setAndroidApkInstallPending(false);
-        setAndroidApkUpdateError('Install permission required. Enable Install unknown apps, then retry.');
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setAndroidApkInstallPending(false);
-      setAndroidApkUpdateError(message);
-    }
-  }, [androidApkLatestRelease, androidApkUpdateBridge]);
-
   useEffect(() => {
     refreshWheelMakerUpdateHubRef.current = refreshWheelMakerUpdateHub;
   }, [refreshWheelMakerUpdateHub]);
@@ -13326,40 +13320,6 @@ export function App() {
   useEffect(() => {
     refreshProjectFileIndexesRef.current = refreshProjectFileIndexes;
   }, [refreshProjectFileIndexes]);
-
-  useEffect(() => {
-    refreshAndroidApkUpdateRef.current = refreshAndroidApkUpdate;
-  }, [refreshAndroidApkUpdate]);
-
-  useEffect(() => {
-    if (sidebarSettingsOpen) {
-      refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
-    }
-  }, [sidebarSettingsOpen]);
-
-  useEffect(() => {
-    if (!androidApkUpdateSupported) {
-      return undefined;
-    }
-    const listener = (event: Event) => {
-      const detail = (event as CustomEvent<{status?: string; error?: string}>).detail ?? {};
-      const status = detail.status || '';
-      if (status) {
-        setAndroidApkInstallStatus(status);
-      }
-      if (status === 'failed') {
-        setAndroidApkInstallPending(false);
-        setAndroidApkUpdateError(detail.error || 'APK install failed.');
-      } else if (status === 'permission_required') {
-        setAndroidApkInstallPending(false);
-        setAndroidApkUpdateError('Install permission required. Enable Install unknown apps, then retry.');
-      } else if (status === 'installing') {
-        setAndroidApkInstallPending(false);
-      }
-    };
-    window.addEventListener('wheelmaker:android-apk-update', listener);
-    return () => window.removeEventListener('wheelmaker:android-apk-update', listener);
-  }, [androidApkUpdateSupported]);
 
   const clearSkillOperationPollTimer = useCallback(() => {
     if (skillOperationPollTimerRef.current) {
@@ -16057,19 +16017,15 @@ export function App() {
       options,
     );
 
-  const renderReleasePublishSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
-      'Release publishing',
-      <React.Suspense fallback={null}>
-        <ReleasePublishSettings
-          hubIds={updateHubCards.map(card => card.hubId)}
-          start={startReleasePublish}
-          query={queryReleasePublish}
-        />
-      </React.Suspense>,
-      undefined,
-      options,
-    );
+  const renderReleasePublishContent = () => (
+    <React.Suspense fallback={null}>
+      <ReleasePublishSettings
+        hubIds={updateHubCards.map(card => card.hubId)}
+        start={startReleasePublish}
+        query={queryReleasePublish}
+      />
+    </React.Suspense>
+  );
 
   const renderConnectionStatusSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
@@ -16131,9 +16087,6 @@ export function App() {
     if (detail === 'debugLogs') {
       return renderDebugLogsSettingsDetail(options);
     }
-    if (detail === 'releasePublish') {
-      return renderReleasePublishSettingsDetail(options);
-    }
     return null;
   };
 
@@ -16141,8 +16094,6 @@ export function App() {
     <React.Suspense fallback={null}>
       <SettingsRootContent
         showSectionTitle={showSectionTitle}
-        themeMode={themeMode}
-        setThemeMode={setThemeMode}
         isWide={isWide}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
@@ -16178,16 +16129,6 @@ export function App() {
         setDisableFileCache={setDisableFileCache}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
-        androidApkUpdateSupported={androidApkUpdateSupported}
-        androidApkLocalRelease={androidApkLocalRelease}
-        androidApkLatestRelease={androidApkLatestRelease}
-        androidApkUpdateLoading={androidApkUpdateLoading}
-        androidApkUpdateError={androidApkUpdateError}
-        androidApkInstallStatus={androidApkInstallStatus}
-        androidApkInstallPending={androidApkInstallPending}
-        refreshAndroidApkUpdate={refreshAndroidApkUpdate}
-        requestAndroidApkInstall={requestAndroidApkInstall}
-        androidApkUpdateStatusLabel={androidApkUpdateStatusLabel}
       />
     </React.Suspense>
   );
@@ -16204,16 +16145,17 @@ export function App() {
     />
   );
 
-  const renderChatMenuSettingsButton = () => (
-    <button
-      type="button"
-      className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"
-      onClick={handleDesktopSettingsSelect}
-      title="Open settings"
-      aria-label="Open settings"
-    >
-      <img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />
-    </button>
+  const renderWheelMakerAppMenu = (mobile: boolean) => (
+    <WheelMakerAppMenu
+      themeMode={themeMode}
+      setThemeMode={setThemeMode}
+      onOpenSettings={handleDesktopSettingsSelect}
+      onOpenReleasePublishing={openReleasePublishing}
+      updateController={clientUpdateController}
+      triggerClassName={mobile
+        ? 'chat-menu-icon-button chat-menu-settings-button chat-menu-product-button'
+        : ''}
+    />
   );
 
   const renderChatSessionHeader = (mobile: boolean) => {
@@ -16222,9 +16164,9 @@ export function App() {
     const chatSessionHeaderContent = (
       <>
         {!searchHeaderExpanded ? (
-          mobile ? renderChatMenuSettingsButton() : (
+          mobile ? renderWheelMakerAppMenu(true) : (
             <>
-              <DesktopAppMenu onOpenSettings={handleDesktopSettingsSelect} />
+              {renderWheelMakerAppMenu(false)}
               {renderDesktopChatProjectSelector()}
             </>
           )
@@ -19851,6 +19793,30 @@ export function App() {
       {renderSettingsContent(false, { hideDetailHeader: true })}
     </MobileSettingsScreen>
   ) : null;
+  const desktopReleasePublishingScreen = isWide && releasePublishingOpen ? (
+    <SettingsScreen
+      className="desktop-settings-screen release-publishing-screen"
+      title="Release publishing"
+      actions={null}
+      backAriaLabel="Close release publishing"
+      shortcutBar={null}
+      onBack={closeReleasePublishing}
+      onBackdropClick={closeReleasePublishing}
+    >
+      {renderReleasePublishContent()}
+    </SettingsScreen>
+  ) : null;
+  const mobileReleasePublishingScreen = !isWide && releasePublishingOpen ? (
+    <MobileSettingsScreen
+      title="Release publishing"
+      actions={null}
+      backAriaLabel="Back to chat"
+      shortcutBar={null}
+      onBack={closeReleasePublishing}
+    >
+      {renderReleasePublishContent()}
+    </MobileSettingsScreen>
+  ) : null;
   const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
     <iframe
       title="Port Relay site data cleanup"
@@ -21200,14 +21166,14 @@ export function App() {
         desktopTopBar={desktopTopBar}
         desktopWindowControls={desktopWindowControls}
         desktopWindowControlsVisible={desktopWindowControlsVisible}
-        desktopSettingsScreen={desktopSettingsScreen}
+        desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopSettingsScreen}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
         desktopSidebarWidth={desktopLayoutSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
-        mobileSettingsScreen={mobileSettingsScreen}
+        mobileSettingsScreen={mobileReleasePublishingScreen ?? mobileSettingsScreen}
         mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}

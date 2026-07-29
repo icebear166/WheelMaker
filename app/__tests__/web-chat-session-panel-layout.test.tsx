@@ -47,7 +47,7 @@ describe('PC chat session-panel layout', () => {
     const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
     const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = (', headerStart);
     const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
-    const settingsIndex = headerSource.indexOf('<DesktopAppMenu onOpenSettings={handleDesktopSettingsSelect} />');
+    const settingsIndex = headerSource.indexOf('{renderWheelMakerAppMenu(false)}');
     const projectIndex = headerSource.indexOf('{renderDesktopChatProjectSelector()}');
     const hubsIndex = headerSource.indexOf('{renderChatHubSummary()}');
 

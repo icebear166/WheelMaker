@@ -150,6 +150,24 @@ describe('mobile settings system back', () => {
     expect(backBody.slice(hubClose, settingsBack)).toContain('return true;');
   });
 
+  test('returns from standalone Release Publishing before mobile Settings', () => {
+    const main = readMain();
+    const backStart = main.indexOf('const handleAndroidNativeBack = useCallback(() => {');
+    const backEnd = main.indexOf('const openMobileSettingsShortcutDetail =', backStart);
+    const backBody = main.slice(backStart, backEnd);
+    const releaseBack = backBody.indexOf('if (!isWide && releasePublishingOpenRef.current) {');
+    const settingsBack = backBody.indexOf('if (!isWide && sidebarSettingsOpenRef.current');
+
+    expect(main).toContain('window.history.pushState(\n        createStandalonePageHistoryState()');
+    expect(main).toContain("window.addEventListener('popstate', handleReleasePublishingPopState)");
+    expect(main).toContain('const mobileReleasePublishingScreen = !isWide && releasePublishingOpen ? (');
+    expect(main).toContain('onBack={closeReleasePublishing}');
+    expect(releaseBack).toBeGreaterThanOrEqual(0);
+    expect(releaseBack).toBeLessThan(settingsBack);
+    expect(backBody.slice(releaseBack, settingsBack)).toContain('closeReleasePublishing();');
+    expect(backBody.slice(releaseBack, settingsBack)).toContain('return true;');
+  });
+
   test('centers the mobile settings title independently from title bar actions', () => {
     const styles = readStyles();
 

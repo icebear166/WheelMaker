@@ -177,7 +177,7 @@ export async function buildRelease({
           [
             'build',
             '-trimpath',
-            '-ldflags=-s -w -H windowsgui',
+            `-ldflags=-s -w -H windowsgui -X main.desktopReleaseVersion=${version}`,
             '-o',
             desktopExe,
             './cmd/wheelmaker-desktop',
