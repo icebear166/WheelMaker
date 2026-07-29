@@ -4813,7 +4813,7 @@
   min-width: 0;
   flex: 1 1 0;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   line-height: 1.2;
   text-align: left;
   white-space: nowrap;

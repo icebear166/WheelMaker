@@ -955,6 +955,17 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('margin: 1px 0 3px 26px;');
   });
 
+  test('makes the Hub disclosure fill the row and pins its chevron to the end', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const disclosureBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const chevronBlock = stylesCss.match(/\.chat-hub-expand-button \.sl-icon \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(disclosureBlock).toContain('flex: 1 1 auto;');
+    expect(disclosureBlock).toContain('align-self: stretch;');
+    expect(chevronBlock).toContain('margin-left: auto;');
+  });
+
   test('does not render the retired File/Git drawer project header', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -2571,6 +2582,7 @@ describe('web chat integration', () => {
     expect(nameBlock).not.toContain('flex: 0 1 auto;');
     const descriptionBlock = cssRuleBlock(stylesCss, '.chat-slash-description');
     expect(descriptionBlock).toContain('flex: 1 1 0;');
+    expect(descriptionBlock).toContain('color: var(--text-tertiary);');
     expect(descriptionBlock).toContain('text-align: left;');
     expect(descriptionBlock).not.toContain('margin-left: auto;');
     expect(mainTsx).toContain('skillDescriptions');
