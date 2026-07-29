@@ -9,7 +9,7 @@ Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前�
 - Hub 是用量数据的唯一所有者，负责凭据发现、Provider 扫描、定时调度、singleflight 和完整快照缓存。
 - Hub 启动后立即扫描一次，之后从每轮完成时间起每 10 分钟扫描一次。
 - 前端不轮询 Provider，也不因客户端数量增加扫描次数；手动刷新对所有在线 Hub 发起，并复用 Hub 内正在运行的扫描。
-- Kimi、ZAI 和 DeepSeek 优先读取 Hub 已加载的 `config.json` `api_keys`，再发现外部凭据：三者均可读取 OpenCode auth，Kimi 还读取 Kimi Code CLI 本地凭据（`~/.kimi-code/credentials/kimi-code.json`，尊重 `KIMI_CODE_HOME`）中未过期的 `access_token`；不做 OAuth 刷新、不写凭据文件。每个 Provider 在发请求前按完整 credential 精确去重，保留最先出现的 config 来源；不同 credential 继续分别扫描并保留多账号语义。Codex 使用 Codex 自身凭据。
+- Kimi、ZAI 和 DeepSeek 读取 Hub 本地 `db/hub-config.json` 的 API Key，再发现外部凭据：三者均可读取 OpenCode auth，Kimi 还读取 Kimi Code CLI 本地凭据（`~/.kimi-code/credentials/kimi-code.json`，尊重 `KIMI_CODE_HOME`）中未过期的 `access_token`；不做 OAuth 刷新、不写凭据文件。每个 Provider 在发请求前按完整 credential 精确去重，保留最先出现的 Hub config 来源；不同 credential 继续分别扫描并保留多账号语义。Codex 使用 Codex 自身凭据。
 - MyFlicker 只读 `~/.myflicker/ai-token.json` 中的登录 token 和 username，调用 Takumi `GET /rest/codeflicker/credit-alert` 获取账号额度；当前只发布总额大于零的月度额度，周额度为零时不生成额度窗口。
 - API key、access token 和密钥片段不得进入 HubState、Registry 消息、Web 状态、日志或错误文本。
 - Codex `app-server` 等辅助进程必须通过后台命令构造器启动；Windows 使用隐藏窗口配置。

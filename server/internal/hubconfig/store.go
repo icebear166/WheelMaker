@@ -167,6 +167,26 @@ func (s *Store) APIKeyValue(name APIKeyName) (string, error) {
 	return section[string(name)].Value, nil
 }
 
+// APIKeyValues returns every stored API key without exposing them through a
+// serializable snapshot. Callers must keep the returned values inside the Hub.
+func (s *Store) APIKeyValues() (map[APIKeyName]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return nil, err
+	}
+	section, err := apiKeysSection(root)
+	if err != nil {
+		return nil, err
+	}
+	values := make(map[APIKeyName]string, len(APIKeyNames))
+	for _, name := range APIKeyNames {
+		values[name] = section[string(name)].Value
+	}
+	return values, nil
+}
+
 func (s *Store) UpdateAPIKey(name APIKeyName, action, value string, now time.Time) error {
 	if !ValidAPIKeyName(name) {
 		return fmt.Errorf("unsupported API key %q", name)

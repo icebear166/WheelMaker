@@ -47,11 +47,9 @@ type ProjectInfo = rp.ProjectInfo
 type envelope = rp.Envelope
 type errorPayload = rp.ErrorPayload
 
-// defaultFlickerBridgeAPIKey is the built-in Flicker Bridge credential used
-// when neither hub-config.json nor config.json provides one, so the bridge
-// works out of the box without asking users for a key.
-// TODO(release): fill in the production default key.
-const defaultFlickerBridgeAPIKey = ""
+// defaultFlickerBridgeAPIKey is the loopback-only placeholder shared by the
+// managed V1 bridge and cc-flicker. It is not a MyFlicker upstream credential.
+const defaultFlickerBridgeAPIKey = "00000000000000000000"
 
 type hubStateGetPayload struct {
 	Sections []string `json:"sections,omitempty"`
@@ -122,7 +120,7 @@ type ReporterConfig struct {
 	PingInterval      time.Duration
 	PongTimeout       time.Duration
 	StateDir          string
-	APIKeys           shared.APIKeysConfig
+	HubConfig         *hubconfig.Store
 	FlickerBridge     *flickerBridgeManager
 }
 
@@ -199,17 +197,12 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		relayClient:  portrelay.NewHubClient(),
 		fileIndex:    newProjectFileIndexManager(stateDir),
 	}
-	r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
-	resolveAPIKey := func(name hubconfig.APIKeyName, fallback string) string {
-		value, err := r.hubConfig.APIKeyValue(name)
-		if err != nil {
-			hubLogger("").Warn("read hub config API key %s failed: %v", name, err)
-		} else if trimmed := strings.TrimSpace(value); trimmed != "" {
-			return trimmed
-		}
-		return strings.TrimSpace(fallback)
+	r.hubConfig = cfg.HubConfig
+	if r.hubConfig == nil {
+		r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
 	}
-	flickerAPIKey := resolveAPIKey(hubconfig.APIKeyFlicker, cfg.APIKeys.Flicker)
+	apiKeys := readHubConfigAPIKeys(r.hubConfig)
+	flickerAPIKey := apiKeys[hubconfig.APIKeyFlicker]
 	if flickerAPIKey == "" {
 		flickerAPIKey = defaultFlickerBridgeAPIKey
 	}
@@ -232,9 +225,9 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		go r.autoStartFlickerBridge()
 	}
 	collector := usage.NewLocalCollector("")
-	collector.KimiAPIKey = resolveAPIKey(hubconfig.APIKeyKimi, cfg.APIKeys.Kimi)
-	collector.ZAIAPIKey = resolveAPIKey(hubconfig.APIKeyZAI, cfg.APIKeys.ZAI)
-	collector.DeepSeekAPIKey = resolveAPIKey(hubconfig.APIKeyDeepSeek, cfg.APIKeys.DeepSeek)
+	collector.KimiAPIKey = apiKeys[hubconfig.APIKeyKimi]
+	collector.ZAIAPIKey = apiKeys[hubconfig.APIKeyZAI]
+	collector.DeepSeekAPIKey = apiKeys[hubconfig.APIKeyDeepSeek]
 	r.usageHistory = usage.NewHistoryStore(filepath.Join(stateDir, "db", "usage-history.json"))
 	r.usageService = usage.NewService(usage.ServiceOptions{
 		HubID: r.cfg.HubID, Collector: collector, History: r.usageHistory,
@@ -995,38 +988,18 @@ func (r *Reporter) replyHubConfigGet(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
 		return
 	}
-	r.overlayHubConfigFallbacks(&snapshot)
+	r.overlayHubConfigDefaults(&snapshot)
 	r.writeHubConfigSnapshot(conn, req, snapshot)
 }
 
-// overlayHubConfigFallbacks marks keys as configured when they are not in the
-// hub config store but resolve from config.json api_keys (or the built-in
-// Flicker default), so the reported state matches what the hub actually uses.
-// Clearing a store override can therefore leave configured=true when a
-// config.json fallback remains; config.json itself is never edited remotely.
-func (r *Reporter) overlayHubConfigFallbacks(snapshot *hubconfig.Snapshot) {
-	fallbacks := map[hubconfig.APIKeyName]string{
-		hubconfig.APIKeyKimi:     r.cfg.APIKeys.Kimi,
-		hubconfig.APIKeyQwen:     r.cfg.APIKeys.Qwen,
-		hubconfig.APIKeyZAI:      r.cfg.APIKeys.ZAI,
-		hubconfig.APIKeyDeepSeek: r.cfg.APIKeys.DeepSeek,
-		hubconfig.APIKeyFlicker:  r.cfg.APIKeys.Flicker,
-	}
-	for name, fallback := range fallbacks {
-		fallback = strings.TrimSpace(fallback)
-		if name == hubconfig.APIKeyFlicker && fallback == "" {
-			fallback = defaultFlickerBridgeAPIKey
-		}
-		if fallback == "" {
-			continue
-		}
-		entry := snapshot.APIKeys[string(name)]
-		if entry.Configured {
-			continue
-		}
+// overlayHubConfigDefaults keeps the sanitized snapshot aligned with the
+// effective runtime. Flicker has a built-in loopback gate and needs no user key.
+func (r *Reporter) overlayHubConfigDefaults(snapshot *hubconfig.Snapshot) {
+	entry := snapshot.APIKeys[string(hubconfig.APIKeyFlicker)]
+	if !entry.Configured {
 		entry.Configured = true
 		entry.UpdatedAt = ""
-		snapshot.APIKeys[string(name)] = entry
+		snapshot.APIKeys[string(hubconfig.APIKeyFlicker)] = entry
 	}
 }
 
@@ -1048,7 +1021,7 @@ func (r *Reporter) replyHubConfigUpdate(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
 		return
 	}
-	r.overlayHubConfigFallbacks(&snapshot)
+	r.overlayHubConfigDefaults(&snapshot)
 	r.writeHubConfigSnapshot(conn, req, snapshot)
 }
 

@@ -5,13 +5,6 @@
       "path": "/path/to/WheelMaker"
     }
   ],
-  "api_keys": {
-    "deepseek": "",
-    "kimi": "",
-    "qwen": "",
-    "zai": "",
-    "flicker": ""
-  },
   "registry": {
     "listen": true,
     "port": 9630,

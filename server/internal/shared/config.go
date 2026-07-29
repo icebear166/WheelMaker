@@ -12,20 +12,11 @@ type AppConfig struct {
 	Projects []ProjectConfig `json:"projects"`
 	Registry RegistryConfig  `json:"registry,omitempty"`
 	Log      LogConfig       `json:"log,omitempty"`
-	APIKeys  APIKeysConfig   `json:"api_keys,omitempty"`
-}
-
-// APIKeysConfig contains provider credentials local to one Hub.
-type APIKeysConfig struct {
-	DeepSeek string `json:"deepseek,omitempty"`
-	Kimi     string `json:"kimi,omitempty"`
-	Qwen     string `json:"qwen,omitempty"`
-	ZAI      string `json:"zai,omitempty"`
-	Flicker  string `json:"flicker,omitempty"`
 }
 
 type rawAppConfig struct {
 	Version  json.RawMessage    `json:"version,omitempty"`
+	APIKeys  json.RawMessage    `json:"api_keys,omitempty"`
 	Projects []rawProjectConfig `json:"projects"`
 }
 
@@ -118,6 +109,9 @@ func validateRemovedLegacyFields(path string, data []byte) error {
 
 	if len(raw.Version) != 0 {
 		return fmt.Errorf("parse config %s: im.version has been removed; configure App sessions through registry settings", path)
+	}
+	if len(raw.APIKeys) != 0 {
+		return fmt.Errorf("parse config %s: api_keys has been removed; configure Hub API keys in the Hub settings", path)
 	}
 
 	for _, project := range raw.Projects {

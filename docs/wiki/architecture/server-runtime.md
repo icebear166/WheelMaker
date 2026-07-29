@@ -232,7 +232,7 @@ Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID
 
 每台 Hub 的前端可写、Hub 本地生效的持久化配置统一由 Hub 自己保存到 `<stateDir>/db/hub-config.json`。该文件与 Registry 入口机拥有的 `db/server-data.json`、人工维护的 `config.json` 以及浏览器 LocalStorage 分离：Registry 不拥有远程 Hub 的配置，浏览器也不是实际运行状态的事实来源。
 
-`hub-config.json` 使用带 version 的 section schema。缺失文件返回默认值且不主动创建；首次成功修改才以私有权限原子写入。每个前端配置字段必须经过对应 Hub State action 的服务端校验，客户端不能提交整份任意 JSON。section 更新保留其他 section，使后续 Hub 功能可以共享存储而不互相覆盖；文件不得保存第三方密钥、PID、临时 action 或 Session 数据。
+`hub-config.json` 使用带 version 的 section schema。缺失文件返回默认值且不主动创建；首次成功修改才以私有权限原子写入。每个前端配置字段必须经过对应 Hub Config update 的服务端校验，客户端不能提交整份任意 JSON。section 更新保留其他 section，使后续 Hub 功能可以共享存储而不互相覆盖；文件可以保存 Hub 本地第三方 API Key，但不得保存 PID、临时 action 或 Session 数据。Key 只通过脱敏 snapshot 暴露 `configured` / `updatedAt`，明文不得进入 Registry、日志或 Session 数据。
 
 Flicker Bridge mode 是首个使用该存储的配置：
 

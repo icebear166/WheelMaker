@@ -177,61 +177,31 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config.example.json: %v", err)
 	}
-	if !bytes.Contains(raw, []byte(`"deepseek": ""`)) {
-		t.Fatalf("config.example.json missing empty deepseek API key field")
+	if bytes.Contains(raw, []byte(`"api_keys"`)) {
+		t.Fatalf("config.example.json still contains removed api_keys field")
 	}
-	if !bytes.Contains(raw, []byte(`"qwen": ""`)) {
-		t.Fatalf("config.example.json missing empty qwen API key field")
-	}
-	if !bytes.Contains(raw, []byte(`"flicker": ""`)) {
-		t.Fatalf("config.example.json missing empty flicker API key field")
-	}
-	if !bytes.Contains(raw, []byte(`"api_keys"`)) {
-		t.Fatalf("config.example.json missing canonical api_keys field")
-	}
-	cfg, err := LoadConfig(path)
-	if err != nil {
+	if _, err := LoadConfig(path); err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
 	}
-	if cfg.APIKeys.Kimi != "" || cfg.APIKeys.Qwen != "" || cfg.APIKeys.ZAI != "" || cfg.APIKeys.Flicker != "" {
-		t.Fatalf("config.example.json contains credentials: %#v", cfg.APIKeys)
-	}
 }
 
-func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
+func TestLoadConfigRejectsDeprecatedAPIKeys(t *testing.T) {
 	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","qwen":"qwen-test-key","zai":"zai-test-key","flicker":"flicker-test-key"}}`)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.Qwen != "qwen-test-key" || cfg.APIKeys.ZAI != "zai-test-key" || cfg.APIKeys.Flicker != "flicker-test-key" {
-		t.Fatalf("APIKeys = %#v", cfg.APIKeys)
-	}
-	encoded, err := json.Marshal(cfg.APIKeys)
-	if err != nil {
-		t.Fatalf("json.Marshal(APIKeys) error = %v", err)
-	}
-	if !strings.Contains(string(encoded), `"deepseek":"deepseek-test-key"`) {
-		t.Fatalf("APIKeys JSON = %s, want deepseek key", encoded)
-	}
-	if !strings.Contains(string(encoded), `"qwen":"qwen-test-key"`) {
-		t.Fatalf("APIKeys JSON = %s, want qwen key", encoded)
+	_, err := LoadConfig(path)
+	if err == nil || !strings.Contains(err.Error(), "api_keys has been removed; configure Hub API keys in the Hub settings") {
+		t.Fatalf("LoadConfig() error = %v, want removed api_keys migration message", err)
 	}
 }
 
-func TestAppConfigMarshalsCanonicalAPIKeysField(t *testing.T) {
+func TestAppConfigDoesNotMarshalAPIKeysField(t *testing.T) {
 	encoded, err := json.Marshal(AppConfig{
 		Projects: []ProjectConfig{},
-		APIKeys:  APIKeysConfig{Qwen: "qwen-test-key", ZAI: "zai-test-key"},
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal(AppConfig) error = %v", err)
 	}
-	if !strings.Contains(string(encoded), `"api_keys":{"qwen":"qwen-test-key","zai":"zai-test-key"}`) {
-		t.Fatalf("AppConfig JSON = %s, want canonical api_keys field", encoded)
-	}
-	if strings.Contains(string(encoded), `"apiKeys"`) {
-		t.Fatalf("AppConfig JSON = %s, contains removed apiKeys field", encoded)
+	if strings.Contains(string(encoded), `"api_keys"`) || strings.Contains(string(encoded), `"apiKeys"`) {
+		t.Fatalf("AppConfig JSON = %s, contains removed API keys field", encoded)
 	}
 }
 
@@ -246,8 +216,8 @@ func TestLoadConfigRejectsRemovedAPIKeysField(t *testing.T) {
 func TestLoadConfigRejectsUnknownAPIKeyField(t *testing.T) {
 	path := writeTempConfig(t, `{"projects":[],"api_keys":{"unknown":"value"}}`)
 	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), `unknown field "unknown"`) {
-		t.Fatalf("LoadConfig() error = %v, want unknown nested API key field", err)
+	if err == nil || !strings.Contains(err.Error(), "api_keys has been removed; configure Hub API keys in the Hub settings") {
+		t.Fatalf("LoadConfig() error = %v, want removed api_keys migration message", err)
 	}
 }
 

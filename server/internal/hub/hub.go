@@ -42,19 +42,20 @@ type Hub struct {
 // hub.Start() must be called before hub.Run().
 func New(cfg *logger.AppConfig, dbPath string) *Hub {
 	stateDir := filepath.Dir(filepath.Dir(dbPath))
-	apiKeys := logger.APIKeysConfig{}
-	if cfg != nil {
-		apiKeys = cfg.APIKeys
-	}
 	hubConfig := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
-	flickerBridge := newFlickerBridgeManager(stateDir, apiKeys.Flicker, hubConfig)
+	apiKeys := readHubConfigAPIKeys(hubConfig)
+	flickerAPIKey := apiKeys[hubconfig.APIKeyFlicker]
+	if flickerAPIKey == "" {
+		flickerAPIKey = defaultFlickerBridgeAPIKey
+	}
+	flickerBridge := newFlickerBridgeManager(stateDir, flickerAPIKey, hubConfig)
 	flickerModels := agent.NewFlickerModelStore()
 	h := newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
 		StateDir:          stateDir,
-		DeepSeekAPIKey:    apiKeys.DeepSeek,
-		KimiAPIKey:        apiKeys.Kimi,
-		QwenAPIKey:        apiKeys.Qwen,
-		ZAIAPIKey:         apiKeys.ZAI,
+		DeepSeekAPIKey:    apiKeys[hubconfig.APIKeyDeepSeek],
+		KimiAPIKey:        apiKeys[hubconfig.APIKeyKimi],
+		QwenAPIKey:        apiKeys[hubconfig.APIKeyQwen],
+		ZAIAPIKey:         apiKeys[hubconfig.APIKeyZAI],
 		FlickerAPIKey:     flickerBridge.localAPIKey(),
 		FlickerModelStore: flickerModels,
 	}))
@@ -62,6 +63,18 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 	h.hubConfig = hubConfig
 	h.flickerModels = flickerModels
 	return h
+}
+
+func readHubConfigAPIKeys(store *hubconfig.Store) map[hubconfig.APIKeyName]string {
+	if store == nil {
+		return map[hubconfig.APIKeyName]string{}
+	}
+	values, err := store.APIKeyValues()
+	if err != nil {
+		hubLogger("").Warn("read hub config API keys failed: %v", err)
+		return map[hubconfig.APIKeyName]string{}
+	}
+	return values
 }
 
 func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPFactory) *Hub {
@@ -80,12 +93,12 @@ func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPF
 // Start validates config, creates one client.Client per project, and starts each client.
 func (h *Hub) Start(ctx context.Context) error {
 	if h.flickerBridge == nil {
-		flickerKey := ""
-		if h.cfg != nil {
-			flickerKey = h.cfg.APIKeys.Flicker
-		}
 		if h.hubConfig == nil {
 			h.hubConfig = hubconfig.New(filepath.Join(h.stateDir, "db", "hub-config.json"))
+		}
+		flickerKey := readHubConfigAPIKeys(h.hubConfig)[hubconfig.APIKeyFlicker]
+		if flickerKey == "" {
+			flickerKey = defaultFlickerBridgeAPIKey
 		}
 		h.flickerBridge = newFlickerBridgeManager(h.stateDir, flickerKey, h.hubConfig)
 	}
@@ -276,7 +289,7 @@ func (h *Hub) setupRegistrySync() {
 		HubID:             hubID,
 		ReconnectInterval: 2 * time.Second,
 		StateDir:          filepath.Dir(filepath.Dir(h.dbPath)),
-		APIKeys:           h.cfg.APIKeys,
+		HubConfig:         h.hubConfig,
 		FlickerBridge:     h.flickerBridge,
 	}, projects)
 	projectsByID := make(map[string]terminalpkg.Project, len(projects))

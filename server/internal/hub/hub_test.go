@@ -911,10 +911,15 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 }
 
 func TestReporterFlickerBridgeStateDoesNotExposeConfiguredKey(t *testing.T) {
+	stateDir := t.TempDir()
+	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	if err := store.UpdateAPIKey(hubconfig.APIKeyFlicker, "set", "flicker-enable-key", time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	reporter := NewReporter(ReporterConfig{
-		HubID:    "hub-flicker-bridge",
-		StateDir: t.TempDir(),
-		APIKeys:  logger.APIKeysConfig{Flicker: "flicker-enable-key"},
+		HubID:     "hub-flicker-bridge",
+		StateDir:  stateDir,
+		HubConfig: store,
 	}, nil)
 	if got := reporter.flickerBridge.localAPIKey(); got != "flicker-enable-key" {
 		t.Fatalf("Flicker Bridge local key = %q, want configured key", got)
@@ -1020,56 +1025,49 @@ func TestReporterHubConfigFlickerEnabledPersists(t *testing.T) {
 	}
 }
 
-func TestReporterHubConfigKeyResolutionPrefersHubConfigStore(t *testing.T) {
+func TestReporterHubConfigKeyResolutionUsesHubConfigStore(t *testing.T) {
 	stateDir := t.TempDir()
 	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
 	if err := store.UpdateAPIKey(hubconfig.APIKeyFlicker, "set", "db-flicker-key", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	reporter := NewReporter(ReporterConfig{
-		HubID:    "hub-config-resolution",
-		StateDir: stateDir,
-		APIKeys:  logger.APIKeysConfig{Flicker: "config-flicker-key"},
+		HubID:     "hub-config-resolution",
+		StateDir:  stateDir,
+		HubConfig: store,
 	}, nil)
 	if got := reporter.flickerBridge.localAPIKey(); got != "db-flicker-key" {
 		t.Fatalf("Flicker Bridge local key = %q, want hub config store key", got)
 	}
 }
 
-func TestReporterHubConfigKeyResolutionFallsBackToAppConfig(t *testing.T) {
+func TestReporterHubConfigKeyResolutionUsesBuiltInFlickerGate(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{
 		HubID:    "hub-config-fallback",
 		StateDir: t.TempDir(),
-		APIKeys:  logger.APIKeysConfig{Flicker: "config-flicker-key"},
 	}, nil)
-	if got := reporter.flickerBridge.localAPIKey(); got != "config-flicker-key" {
-		t.Fatalf("Flicker Bridge local key = %q, want config.json key", got)
+	if got := reporter.flickerBridge.localAPIKey(); got != defaultFlickerBridgeAPIKey {
+		t.Fatalf("Flicker Bridge local key = %q, want built-in local gate", got)
 	}
 }
 
-func TestReporterHubConfigOverlayMarksConfigJSONFallbacks(t *testing.T) {
+func TestReporterHubConfigOverlayMarksBuiltInFlickerGate(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{
 		HubID:    "hub-config-overlay",
 		StateDir: t.TempDir(),
-		APIKeys:  logger.APIKeysConfig{Kimi: "config-kimi-key", Flicker: "config-flicker-key"},
 	}, nil)
 	snapshot, err := reporter.ensureHubConfigStore().Snapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	reporter.overlayHubConfigFallbacks(&snapshot)
-	if !snapshot.APIKeys["kimi"].Configured || !snapshot.APIKeys["flicker"].Configured {
-		t.Fatalf("fallback keys not marked configured: %#v", snapshot.APIKeys)
-	}
-	if snapshot.APIKeys["kimi"].UpdatedAt != "" {
-		t.Fatalf("fallback key must not report updatedAt: %#v", snapshot.APIKeys["kimi"])
+	reporter.overlayHubConfigDefaults(&snapshot)
+	if snapshot.APIKeys["kimi"].Configured || !snapshot.APIKeys["flicker"].Configured {
+		t.Fatalf("default key state is wrong: %#v", snapshot.APIKeys)
 	}
 	if snapshot.APIKeys["qwen"].Configured {
 		t.Fatalf("qwen unexpectedly configured: %#v", snapshot.APIKeys["qwen"])
 	}
 
-	// A store override wins over the config.json fallback, and clearing the
-	// override falls back to the config.json value (still configured).
 	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
 		Section: "apiKeys", Field: "kimi", Action: "set", Value: "db-kimi-key",
 	}); err != nil {
@@ -1084,9 +1082,9 @@ func TestReporterHubConfigOverlayMarksConfigJSONFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reporter.overlayHubConfigFallbacks(&snapshot)
-	if !snapshot.APIKeys["kimi"].Configured {
-		t.Fatalf("cleared override should fall back to config.json: %#v", snapshot.APIKeys["kimi"])
+	reporter.overlayHubConfigDefaults(&snapshot)
+	if snapshot.APIKeys["kimi"].Configured {
+		t.Fatalf("cleared key should remain unset: %#v", snapshot.APIKeys["kimi"])
 	}
 }
 
@@ -1202,7 +1200,6 @@ func TestFlickerBridgeHubStateSwitchModeAction(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{
 		HubID:         "hub-flicker-switch",
 		StateDir:      t.TempDir(),
-		APIKeys:       logger.APIKeysConfig{Flicker: "configured-flicker-key"},
 		FlickerBridge: manager,
 	}, nil)
 
@@ -2598,22 +2595,20 @@ func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
 	}
 }
 
-func TestHubSetupRegistryPassesLimitsAPIKeysToReporter(t *testing.T) {
+func TestHubSetupRegistrySharesHubConfigStoreWithReporter(t *testing.T) {
 	projectRoot := t.TempDir()
+	stateDir := t.TempDir()
 	h := New(&logger.AppConfig{
 		Projects: []logger.ProjectConfig{{Name: "proj1", Path: projectRoot}},
 		Registry: logger.RegistryConfig{Server: "127.0.0.1", Port: 9630, HubID: "hub-usage-keys"},
-		APIKeys: logger.APIKeysConfig{
-			Kimi: "kimi-config-key", ZAI: "zai-config-key", DeepSeek: "deepseek-config-key",
-		},
-	}, filepath.Join(t.TempDir(), "state.db"))
+	}, filepath.Join(stateDir, "db", "client.sqlite3"))
 	h.setupRegistrySync()
 	defer h.Close()
 	if h.regSync == nil {
 		t.Fatal("registry reporter was not created")
 	}
-	if h.regSync.cfg.APIKeys.Kimi != "kimi-config-key" || h.regSync.cfg.APIKeys.ZAI != "zai-config-key" || h.regSync.cfg.APIKeys.DeepSeek != "deepseek-config-key" {
-		t.Fatalf("reporter api keys=%+v", h.regSync.cfg.APIKeys)
+	if h.regSync.hubConfig != h.hubConfig {
+		t.Fatal("registry reporter does not share the Hub config store")
 	}
 }
 
@@ -4562,7 +4557,6 @@ func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
 
 	cfg := &logger.AppConfig{
 		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
-		APIKeys:  logger.APIKeysConfig{Kimi: "kimi-test-key", Qwen: "qwen-test-key", ZAI: "zai-test-key"},
 	}
 	h := newHubWithFactory(cfg, dbPath, factory)
 	info := h.collectProjectInfo(cfg.Projects[0])
@@ -4624,7 +4618,7 @@ func TestCollectProjectAgentProfilesIncludesSkillDescriptions(t *testing.T) {
 	}
 }
 
-func TestNewWiresDeepSeekAPIKeyIntoHubFactory(t *testing.T) {
+func TestNewWiresHubConfigAPIKeysIntoHubFactory(t *testing.T) {
 	binDir := t.TempDir()
 	binaryName := "claude-agent-acp"
 	if runtime.GOOS == "windows" {
@@ -4635,27 +4629,37 @@ func TestNewWiresDeepSeekAPIKeyIntoHubFactory(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir)
 
+	stateDir := t.TempDir()
+	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	for name, value := range map[hubconfig.APIKeyName]string{
+		hubconfig.APIKeyDeepSeek: "deepseek-hub-key",
+		hubconfig.APIKeyKimi:     "kimi-hub-key",
+		hubconfig.APIKeyQwen:     "qwen-hub-key",
+		hubconfig.APIKeyZAI:      "zai-hub-key",
+		hubconfig.APIKeyFlicker:  "flicker-hub-key",
+	} {
+		if err := store.UpdateAPIKey(name, "set", value, time.Now()); err != nil {
+			t.Fatalf("set %s key: %v", name, err)
+		}
+	}
+
 	projectPath := t.TempDir()
 	cfg := &logger.AppConfig{
 		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
-		APIKeys:  logger.APIKeysConfig{DeepSeek: "deepseek-test-key"},
 	}
-	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
-	info := h.collectProjectInfo(cfg.Projects[0])
-
-	found := false
-	for _, name := range info.Agents {
-		if name == "cc-deepseek" {
-			found = true
-			break
+	h := New(cfg, filepath.Join(stateDir, "db", "client.sqlite3"))
+	names := h.agentFactory.Names()
+	for _, want := range []string{"cc-deepseek", "cc-flicker", "cc-glm", "cc-kimi", "cc-qwen"} {
+		if !slices.Contains(names, want) {
+			t.Fatalf("factory names = %v, want %s from hub-config.json", names, want)
 		}
 	}
-	if !found {
-		t.Fatalf("ProjectInfo.Agents = %v, want cc-deepseek", info.Agents)
+	if got := h.flickerBridge.localAPIKey(); got != "flicker-hub-key" {
+		t.Fatalf("Flicker Bridge local key = %q, want hub-config.json key", got)
 	}
 }
 
-func TestNewWiresQwenAPIKeyIntoHubFactory(t *testing.T) {
+func TestNewUsesDefaultFlickerAPIKeyWhenHubConfigKeyIsUnset(t *testing.T) {
 	binDir := t.TempDir()
 	binaryName := "claude-agent-acp"
 	if runtime.GOOS == "windows" {
@@ -4666,59 +4670,16 @@ func TestNewWiresQwenAPIKeyIntoHubFactory(t *testing.T) {
 	}
 	t.Setenv("PATH", binDir)
 
-	projectPath := t.TempDir()
+	stateDir := t.TempDir()
 	cfg := &logger.AppConfig{
-		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
-		APIKeys:  logger.APIKeysConfig{Qwen: "qwen-test-key"},
+		Projects: []logger.ProjectConfig{{Name: "project", Path: t.TempDir()}},
 	}
-	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
-	info := h.collectProjectInfo(cfg.Projects[0])
-
-	found := false
-	for _, name := range info.Agents {
-		if name == "cc-qwen" {
-			found = true
-			break
-		}
+	h := New(cfg, filepath.Join(stateDir, "db", "client.sqlite3"))
+	if got := h.flickerBridge.localAPIKey(); got != "00000000000000000000" {
+		t.Fatalf("Flicker Bridge local key = %q, want built-in local gate", got)
 	}
-	if !found {
-		t.Fatalf("ProjectInfo.Agents = %v, want cc-qwen", info.Agents)
-	}
-}
-
-func TestNewWiresFlickerAPIKeyIntoHubFactory(t *testing.T) {
-	binDir := t.TempDir()
-	binaryName := "claude-agent-acp"
-	if runtime.GOOS == "windows" {
-		binaryName += ".cmd"
-	}
-	if err := os.WriteFile(filepath.Join(binDir, binaryName), []byte("@exit /b 0\n"), 0o755); err != nil {
-		t.Fatalf("write fake claude-agent-acp: %v", err)
-	}
-	t.Setenv("PATH", binDir)
-
-	projectPath := t.TempDir()
-	cfg := &logger.AppConfig{
-		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
-		APIKeys:  logger.APIKeysConfig{Flicker: "flicker-test-key"},
-	}
-	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
-	info := h.collectProjectInfo(cfg.Projects[0])
-
-	found := false
-	for _, name := range info.Agents {
-		if name == "cc-flicker" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("ProjectInfo.Agents = %v, want cc-flicker", info.Agents)
-	}
-	if blob, err := json.Marshal(info); err != nil {
-		t.Fatalf("marshal ProjectInfo: %v", err)
-	} else if strings.Contains(string(blob), "flicker-test-key") {
-		t.Fatalf("ProjectInfo leaked flicker API key: %s", blob)
+	if names := h.agentFactory.Names(); !slices.Contains(names, "cc-flicker") {
+		t.Fatalf("factory names = %v, want cc-flicker with built-in local gate", names)
 	}
 }
 

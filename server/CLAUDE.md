@@ -41,6 +41,7 @@ Full design: [../docs/wiki/architecture/server-runtime.md](../docs/wiki/architec
 
 - `~/.wheelmaker/config.json` - project config (agent, working dir, registry settings)
 - `~/.wheelmaker/state.json` - runtime state (session IDs, agent metadata)
+- `~/.wheelmaker/db/hub-config.json` - Hub-owned API keys and runtime feature settings
 
 ## Dev Conventions
 

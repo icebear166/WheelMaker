@@ -411,7 +411,7 @@ HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-c
       "qwen": {"configured": false},
       "zai": {"configured": false},
       "deepSeek": {"configured": false},
-      "flicker": {"configured": false}
+      "flicker": {"configured": true}
     }
   }
 }
@@ -438,10 +438,10 @@ HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-c
 
 | Section | Field | Action | 说明 |
 | --- | --- | --- | --- |
-| `apiKeys` | `kimi` / `qwen` / `zai` / `deepSeek` / `flicker` | `set`（1 B–16 KiB）/ `clear` | 写入 Hub 本地 hub-config.json；**重启 Hub 后生效**。生效优先级：hub-config.json > config.json `api_keys.*`。`clear` 只删除 hub-config.json 覆盖层；config.json 仍有值时 `configured` 保持 true（回退到旧值），远程不会修改 config.json |
+| `apiKeys` | `kimi` / `qwen` / `zai` / `deepSeek` / `flicker` | `set`（1 B–16 KiB）/ `clear` | 写入 Hub 本地 hub-config.json；**重启 Hub 后生效**。hub-config.json 是唯一 Key 来源，`clear` 后对应 Key 立即显示为未配置；`config.json` 不再接受 `api_keys` |
 | `flickerBridge` | `enabled` | `set`（启用）/ `clear`（禁用） | 持久化开关，即时 start/stop bridge；Hub 启动时 enabled=true 会自动 start |
 
-Flicker Bridge 的 API key 不需要用户填写：两级配置都缺失时 Hub 使用内置默认 key。运行时的 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section。
+Flicker Bridge 的 API key 不需要用户填写：未显式设置 `apiKeys.flicker` 时，Hub 使用 loopback-only 的内置占位门禁 `00000000000000000000`。设置面板选择 V1/V2 会持久化 enabled 并启动对应模式，Off 会停止并取消下次启动；右侧运行开关只执行当前进程的 start/stop。运行时的 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section。
 
 ## 8. Session
 
