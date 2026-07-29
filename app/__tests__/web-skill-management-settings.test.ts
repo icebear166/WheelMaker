@@ -81,6 +81,17 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain("icon: 'trash'");
   });
 
+  test('keeps Hub menu skill updates scoped to global Hub skills', () => {
+    const summaryStart = mainTsx.indexOf('const renderChatHubSummary = () => {');
+    const summaryEnd = mainTsx.indexOf('const renderHiddenProjectRows =', summaryStart);
+    const summaryBlock = mainTsx.slice(summaryStart, summaryEnd);
+
+    expect(summaryStart).toBeGreaterThanOrEqual(0);
+    expect(summaryEnd).toBeGreaterThan(summaryStart);
+    expect(summaryBlock).toContain("scope: 'hub'");
+    expect(summaryBlock).toContain('includeProjects: false');
+  });
+
   test('keeps Skills pending and polling scoped to the affected hub', () => {
     expect(detailTsx).toContain('isSkillActionPendingForHub(skillsPendingKey, hubId)');
     expect(mainTsx).toContain('skillOperationPollHubIdsRef');

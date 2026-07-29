@@ -133,6 +133,23 @@ describe('mobile settings system back', () => {
     expect(main).not.toContain('mobileSettingsSwipe');
   });
 
+  test('lets the APK back gesture close the mobile Hub page first', () => {
+    const main = readMain();
+    const backStart = main.indexOf('const handleAndroidNativeBack = useCallback(() => {');
+    const backEnd = main.indexOf('const openMobileSettingsShortcutDetail =', backStart);
+    const backBody = main.slice(backStart, backEnd);
+    const hubClose = backBody.indexOf('if (!isWide && chatHubMenuOpen) {');
+    const settingsBack = backBody.indexOf('if (!isWide && sidebarSettingsOpenRef.current');
+
+    expect(backStart).toBeGreaterThanOrEqual(0);
+    expect(backEnd).toBeGreaterThan(backStart);
+    expect(hubClose).toBeGreaterThanOrEqual(0);
+    expect(hubClose).toBeLessThan(settingsBack);
+    expect(backBody.slice(hubClose, settingsBack)).toContain('setChatHubMenuOpen(false);');
+    expect(backBody.slice(hubClose, settingsBack)).toContain('setChatHubColorMenu(null);');
+    expect(backBody.slice(hubClose, settingsBack)).toContain('return true;');
+  });
+
   test('centers the mobile settings title independently from title bar actions', () => {
     const styles = readStyles();
 

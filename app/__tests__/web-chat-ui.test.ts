@@ -2966,6 +2966,18 @@ describe('top bar action entry points', () => {
     expect(captureEffect).toContain("target?.closest('.chat-title-prompt-icon-button, .chat-title-session-button')");
     expect(captureEffect).toContain('closeSidebarTransientMenus(keepOpen);');
   });
+
+  test('keeps the Hub menu open while using confirmation dialog buttons', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const selectorStart = mainTsx.indexOf('const SIDEBAR_TRANSIENT_MENU_SELECTOR = [');
+    const selectorEnd = mainTsx.indexOf("].join(', ');", selectorStart);
+    const selectorBlock = mainTsx.slice(selectorStart, selectorEnd);
+
+    expect(selectorStart).toBeGreaterThanOrEqual(0);
+    expect(selectorEnd).toBeGreaterThan(selectorStart);
+    expect(selectorBlock).toContain("'.app-confirm-dialog'");
+  });
 });
 
 describe('mobile project action sheet resume entry', () => {

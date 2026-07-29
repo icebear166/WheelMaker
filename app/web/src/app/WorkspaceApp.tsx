@@ -993,6 +993,7 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.chat-hub-page',
   '.chat-title-project-menu',
   '.chat-title-prompt-menu',
+  '.app-confirm-dialog',
 ].join(', ');
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_FIXED_VIEW_WIDTH = 800;
@@ -6656,6 +6657,7 @@ export function App() {
         onRequestSkillUpdate={(hubId, skillName) => requestSkillUpdate({
           hubId,
           scope: 'hub',
+          includeProjects: false,
           skills: skillName ? [skillName] : undefined,
         })}
         onRequestSkillUninstall={(hubId, skillName) => requestSkillUninstall({
@@ -7356,6 +7358,11 @@ export function App() {
       closeChatPreview();
       return true;
     }
+    if (!isWide && chatHubMenuOpen) {
+      setChatHubMenuOpen(false);
+      setChatHubColorMenu(null);
+      return true;
+    }
     if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return true;
@@ -7371,7 +7378,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatPreviewOpen, closeChatPreview, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatHubMenuOpen, chatPreviewOpen, closeChatPreview, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
