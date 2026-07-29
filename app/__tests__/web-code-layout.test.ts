@@ -45,6 +45,13 @@ describe('web code layout', () => {
     expect(shikiRenderer).toContain('createHighlighterCore');
     expect(shikiRenderer).toContain('SHIKI_THEME_LOADERS');
     expect(shikiRenderer).toContain('SHIKI_LANG_LOADERS');
+    expect(shikiRenderer).toContain("import('@shikijs/langs/hlsl')");
+    expect(shikiRenderer).toContain("import('@shikijs/langs/glsl')");
+    expect(mainTsx).toContain("case 'hlsl':");
+    expect(mainTsx).toContain("return 'hlsl';");
+    expect(mainTsx).toContain("case 'glsl':");
+    expect(mainTsx).toContain("case 'frag':");
+    expect(mainTsx).toContain("return 'glsl';");
     expect(mainTsx).toContain("case 'py':");
     expect(mainTsx).toContain("return 'python';");
     expect(mainTsx).toContain("case 'ps1':");

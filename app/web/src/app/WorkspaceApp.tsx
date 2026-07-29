@@ -1788,6 +1788,16 @@ function detectCodeLanguage(path: string): string {
       return 'cpp';
     case 'rs':
       return 'rust';
+    case 'hlsl':
+    case 'fx':
+    case 'fxh':
+      return 'hlsl';
+    case 'glsl':
+    case 'vert':
+    case 'frag':
+    case 'geom':
+    case 'comp':
+      return 'glsl';
     case 'sh':
     case 'bash':
       return 'shellscript';
