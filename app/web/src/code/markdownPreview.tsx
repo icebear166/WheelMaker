@@ -216,6 +216,7 @@ export const markdownCodeRenderer = ({
   codeTabSize,
   wrap,
   lineNumbers,
+  framed,
 }: {
   className?: string;
   children?: React.ReactNode;
@@ -227,6 +228,7 @@ export const markdownCodeRenderer = ({
   codeTabSize: number;
   wrap: boolean;
   lineNumbers: boolean;
+  framed?: boolean;
 }) => {
   const languageMatch = /language-([\w-]+)/.exec(className || '');
   const language = (languageMatch?.[1] || '').toLowerCase();
@@ -249,6 +251,7 @@ export const markdownCodeRenderer = ({
         codeFontSize={codeFontSize}
         codeLineHeight={codeLineHeight}
         codeTabSize={codeTabSize}
+        framed={framed}
       />
     );
   }
@@ -305,6 +308,7 @@ export const MarkdownPreview = React.memo(function MarkdownPreview({
           codeTabSize,
           wrap,
           lineNumbers,
+          framed: true,
         }),
       p: ({ node, children, ...props }) => (
         <p {...props} {...markdownSourceTargetProps(node, targetLine)}>

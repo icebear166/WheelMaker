@@ -22,6 +22,8 @@ type RenderShikiBaseOptions = {
   codeTabSize: number;
   wrap: boolean;
   highlightedLines?: Set<number>;
+  /** Rewrite the pre background to transparent so a surrounding frame surface shows through. */
+  transparentBackground?: boolean;
 };
 
 type RenderShikiOptions = RenderShikiBaseOptions & {
@@ -84,9 +86,13 @@ function resolveCodeBackground(codeTheme: CodeThemeId, background: string): stri
   return codeTheme === 'auto-plus' ? WORKSPACE_CONTENT_SURFACE : background;
 }
 
-function alignAutomaticThemeBackground(html: string, codeTheme: CodeThemeId): string {
+function alignAutomaticThemeBackground(
+  html: string,
+  codeTheme: CodeThemeId,
+  target: string = WORKSPACE_CONTENT_SURFACE,
+): string {
   if (codeTheme !== 'auto-plus') return html;
-  return html.replace(/background-color:[^;"]+/g, `background-color:${WORKSPACE_CONTENT_SURFACE}`);
+  return html.replace(/background-color:[^;"]+/g, `background-color:${target}`);
 }
 
 function resolveLanguage(language: string): string {
@@ -391,7 +397,11 @@ export async function renderShikiHtml(options: RenderShikiOptions): Promise<stri
         options.highlightedLines,
       );
       const output = options.mode === 'block'
-        ? alignAutomaticThemeBackground(html, options.codeTheme)
+        ? alignAutomaticThemeBackground(
+          html,
+          options.codeTheme,
+          options.transparentBackground ? 'transparent' : WORKSPACE_CONTENT_SURFACE,
+        )
         : html;
       if (options.mode === 'inline') {
         setInlineCache(inlineCacheKey, output);
@@ -635,11 +645,13 @@ export function renderChunkHtmlFromTokens(
   codeLineHeight: number,
   codeTabSize: number,
   highlightedLines?: Set<number>,
+  transparentBackground?: boolean,
 ): string {
   const fontFamily = resolveCodeFontFamily(codeFont);
   const fontSize = `${codeFontSize}px`;
   const preClass = `wm-shiki-pre ${wrap ? 'wm-shiki-wrap' : 'wm-shiki-nowrap'}`;
-  const preStyle = `margin:0;padding:0;border-radius:0;white-space:normal;overflow-x:${wrap ? 'hidden' : 'auto'};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};background-color:${bg};color:${fg};`;
+  const preBackground = transparentBackground ? 'transparent' : bg;
+  const preStyle = `margin:0;padding:0;border-radius:0;white-space:normal;overflow-x:${wrap ? 'hidden' : 'auto'};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};background-color:${preBackground};color:${fg};`;
   const codeStyle = wrap
     ? `display:block;min-width:100%;white-space:normal;tab-size:${codeTabSize};`
     : `display:block;min-width:100%;width:max-content;white-space:normal;tab-size:${codeTabSize};`;

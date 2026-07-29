@@ -241,6 +241,84 @@
   padding: 0;
 }
 
+/* Framed code block: one continuous card — header and body share the frame
+   surface (the pre background is transparent under the auto code theme). */
+.code-frame {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  overflow: hidden;
+}
+
+.code-frame-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 0 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 24px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.code-frame-language {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-frame-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.code-frame-copy:hover {
+  background: rgba(127, 127, 127, 0.16);
+  color: var(--text-primary);
+}
+
+.code-frame-copy:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: -1px;
+}
+
+.code-frame-body {
+  padding: 6px 14px 12px;
+}
+
+.code-frame .code-wrap {
+  margin: 0;
+}
+
+.markdown-preview .code-frame {
+  margin: 10px 0 12px;
+}
+
+.chat-main-message .code-frame {
+  margin: 6px 0 8px;
+}
+
+/* Static exports keep the frame but drop the interactive copy button. */
+.markdown-image-export-host .code-frame-copy {
+  display: none;
+}
+
 .diff-inline .wm-shiki-pre,
 .diff-inline .wm-shiki-code {
   min-width: 100%;

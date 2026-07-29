@@ -5,6 +5,7 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from './shikiSettings';
+import { CodeBlockFrame } from './CodeBlockFrame';
 import type {ThemedToken} from '@shikijs/types';
 
 type ThemeMode = 'dark' | 'light';
@@ -58,6 +59,8 @@ export type ShikiCodeBlockProps = {
   codeFontSize: number;
   codeLineHeight: number;
   codeTabSize: number;
+  /** Wrap the block in a framed card with a language label and copy button. */
+  framed?: boolean;
   highlightedLines?: Set<number>;
   onLineClick?: (line: number, event: MouseEvent) => void;
 };
@@ -153,6 +156,7 @@ function ShikiCodeBlockVirtualized({
   codeFontSize,
   codeLineHeight,
   codeTabSize,
+  framed,
   highlightedLines,
   onLineClick,
 }: ShikiCodeBlockProps) {
@@ -215,6 +219,9 @@ function ShikiCodeBlockVirtualized({
   }, [content, language, themeMode, codeTheme]);
 
   const lineHeightPx = Math.max(12, codeFontSize * codeLineHeight);
+  // Framed blocks on the automatic code theme drop the pre background so the
+  // frame surface shows through as one continuous card.
+  const transparentBackground = Boolean(framed && codeTheme === 'auto-plus');
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -271,6 +278,7 @@ function ShikiCodeBlockVirtualized({
           codeLineHeight,
           codeTabSize,
           highlightedLines,
+          transparentBackground,
         ));
       }
       if (cancelled) return;
@@ -292,7 +300,7 @@ function ShikiCodeBlockVirtualized({
     return () => {
       cancelled = true;
     };
-  }, [tokenChunks, visibleChunks, wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize, highlightedLines]);
+  }, [tokenChunks, visibleChunks, wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize, highlightedLines, transparentBackground]);
 
   const handleClick = useLineClick(onLineClick);
 
@@ -339,14 +347,20 @@ function ShikiCodeBlockVirtualized({
 export function ShikiCodeBlock(props: ShikiCodeBlockProps) {
   const lineCount = useMemo(() => countCodeLines(props.content), [props.content]);
 
-  if (
+  const block =
     lineCount >= VIRTUALIZE_LINE_THRESHOLD ||
     props.content.length >= INCREMENTAL_CHARACTER_THRESHOLD
-  ) {
-    return <ShikiCodeBlockVirtualized {...props} />;
-  }
+      ? <ShikiCodeBlockVirtualized {...props} />
+      : <ShikiCodeBlockSmall {...props} />;
 
-  return <ShikiCodeBlockSmall {...props} />;
+  if (!props.framed) {
+    return block;
+  }
+  return (
+    <CodeBlockFrame language={props.language} content={props.content}>
+      {block}
+    </CodeBlockFrame>
+  );
 }
 
 function ShikiCodeBlockSmall({
@@ -360,11 +374,13 @@ function ShikiCodeBlockSmall({
   codeFontSize,
   codeLineHeight,
   codeTabSize,
+  framed,
   highlightedLines,
   onLineClick,
 }: ShikiCodeBlockProps) {
   const [html, setHtml] = useState('');
   const [renderFailed, setRenderFailed] = useState(false);
+  const transparentBackground = Boolean(framed && codeTheme === 'auto-plus');
   const fallbackHtml = useMemo(
     () => renderPlainCodeFallbackHtml({
       content,
@@ -405,6 +421,7 @@ function ShikiCodeBlockSmall({
         lineNumbers,
         mode: 'block',
         highlightedLines,
+        transparentBackground,
       });
       if (!cancelled) {
         setHtml(nextHtml);
@@ -430,6 +447,7 @@ function ShikiCodeBlockSmall({
     wrap,
     lineNumbers,
     highlightedLines,
+    transparentBackground,
   ]);
 
   const handleClick = useLineClick(onLineClick);

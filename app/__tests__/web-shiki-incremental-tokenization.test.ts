@@ -36,6 +36,7 @@ jest.mock('@shikijs/themes/light-plus', () => ({__esModule: true, default: {name
 jest.mock('@shikijs/langs/typescript', () => ({__esModule: true, default: {name: 'typescript'}}));
 
 import {
+  renderChunkHtmlFromTokens,
   renderShikiHtml,
   tokenizeShikiCode,
   tokenizeShikiCodeInChunks,
@@ -97,6 +98,58 @@ describe('incremental Shiki tokenization', () => {
 
     expect(automaticHtml).toContain('background-color:var(--surface-workspace-content)');
     expect(explicitHtml).toContain('background-color:#background');
+  });
+
+  test('framed blocks drop the pre background so the frame surface shows through', async () => {
+    const framedHtml = await renderShikiHtml({
+      code: 'const value = 1;',
+      language: 'typescript',
+      themeMode: 'dark',
+      codeTheme: 'auto-plus',
+      codeFont: 'consolas',
+      codeFontSize: 13,
+      codeLineHeight: 1.5,
+      codeTabSize: 2,
+      wrap: true,
+      lineNumbers: false,
+      mode: 'block',
+      transparentBackground: true,
+    });
+    const explicitFramedHtml = await renderShikiHtml({
+      code: 'const value = 1;',
+      language: 'typescript',
+      themeMode: 'dark',
+      codeTheme: 'dark-plus',
+      codeFont: 'consolas',
+      codeFontSize: 13,
+      codeLineHeight: 1.5,
+      codeTabSize: 2,
+      wrap: true,
+      lineNumbers: false,
+      mode: 'block',
+      transparentBackground: true,
+    });
+
+    expect(framedHtml).toContain('background-color:transparent');
+    // Explicit code themes keep their own background inside the frame.
+    expect(explicitFramedHtml).toContain('background-color:#background');
+
+    const chunkHtml = renderChunkHtmlFromTokens(
+      [[{content: 'const value = 1;', fontStyle: 0, offset: 0}]],
+      0,
+      '#foreground',
+      '#background',
+      'test-theme',
+      true,
+      false,
+      'consolas',
+      13,
+      1.5,
+      2,
+      undefined,
+      true,
+    );
+    expect(chunkHtml).toContain('background-color:transparent');
   });
 
   test('the virtualized viewer publishes chunks progressively and aborts stale jobs', () => {
