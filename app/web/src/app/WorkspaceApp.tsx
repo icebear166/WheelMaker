@@ -446,8 +446,6 @@ import {
   npmPackageUpdateSummary,
   packageStatusLabel,
   shouldShowWheelMakerUpdateAction,
-  updateStatusDotVariant,
-  wheelMakerHubStatusIcon,
   wheelMakerUpdateErrorLabel,
   wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
@@ -12857,9 +12855,6 @@ export function App() {
             pending: pending || wheelMakerUpdateAllPending,
           }),
           updateAvailable: status === 'update_available',
-          dotVariant: updateStatusDotVariant(
-            wheelMakerHubStatusIcon(status, card.wheelMaker?.loading === true, jobActive),
-          ),
         },
         npm: {
           loading: card.agentPackage?.loading === true || agentPackagesLoading,

@@ -7,6 +7,8 @@ interface SecretEditorProps {
   configured: boolean;
   updatedAt?: string;
   busy: boolean;
+  /** Single-row layout: status icon + label + inline input + set/clear. */
+  compact?: boolean;
   onSet: (value: string) => Promise<void>;
   onClear: () => Promise<void>;
 }
@@ -16,7 +18,7 @@ interface SecretEditorProps {
  * backend only reports configured/updatedAt markers, so the editor always
  * starts empty: Set stores a new value, Replace overwrites, Clear removes.
  */
-export function SecretEditor({label, configured, updatedAt, busy, onSet, onClear}: SecretEditorProps): React.JSX.Element {
+export function SecretEditor({label, configured, updatedAt, busy, compact = false, onSet, onClear}: SecretEditorProps): React.JSX.Element {
   const [draft, setDraft] = React.useState('');
   const submit = async () => {
     const value = draft.trim();
@@ -30,6 +32,52 @@ export function SecretEditor({label, configured, updatedAt, busy, onSet, onClear
       // Parent exposes the failure while keeping this draft available for retry.
     }
   };
+  const clear = () => void onClear().catch(() => undefined);
+  if (compact) {
+    const configuredAt = configured && updatedAt ? new Date(updatedAt).toLocaleString() : '';
+    return (
+      <div className="secret-compact-row">
+        <span
+          className={`secret-compact-status${configured ? ' configured' : ''}`}
+          role="img"
+          aria-label={configured ? 'Configured' : 'Not configured'}
+          title={configured ? `Configured${configuredAt ? ` · ${configuredAt}` : ''}` : 'Not configured'}
+        >
+          <Icon name={configured ? 'check' : 'x'} />
+        </span>
+        <span className="secret-compact-label">{label}</span>
+        <input
+          type="password"
+          autoComplete="new-password"
+          className="secret-compact-input"
+          placeholder={configured ? 'Replace secret' : 'Enter secret'}
+          value={draft}
+          disabled={busy}
+          onChange={event => setDraft(event.target.value)}
+          aria-label={`${label} secret`}
+        />
+        <button
+          type="button"
+          className="secret-compact-set"
+          disabled={busy || !draft.trim()}
+          onClick={() => void submit()}
+        >
+          {configured ? 'Replace' : 'Set'}
+        </button>
+        {configured ? (
+          <button
+            type="button"
+            className="secret-compact-clear"
+            aria-label={`Clear ${label}`}
+            disabled={busy}
+            onClick={clear}
+          >
+            <Icon name="x" />
+          </button>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="voice-input-settings-nested">
       <div className="settings-row sidebar-setting-row voice-input-settings-child-row">
@@ -60,7 +108,7 @@ export function SecretEditor({label, configured, updatedAt, busy, onSet, onClear
             type="button"
             className="set-btn set-btn--danger"
             disabled={busy}
-            onClick={() => void onClear().catch(() => undefined)}
+            onClick={clear}
           >
             Clear
           </button>

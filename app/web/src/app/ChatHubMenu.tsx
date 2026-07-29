@@ -18,7 +18,7 @@ import {
   setHubColorPreference,
   type HubColorHsv,
 } from '../workspace/hubProjectPreferences';
-import {FlickerBridgeControl} from './FlickerBridgeControl';
+import {flickerBridgeActions} from './flickerBridgeState';
 
 export type ChatHubSectionId = 'settings' | 'ops' | 'projects';
 
@@ -41,7 +41,6 @@ export interface ChatHubOpsView {
     actionLabel: string;
     actionVisible: boolean;
     updateAvailable: boolean;
-    dotVariant: string;
   };
   npm: {
     loading: boolean;
@@ -69,10 +68,10 @@ export interface ChatHubConfigView {
 }
 
 const HUB_API_KEY_FIELDS: {name: string; label: string}[] = [
-  {name: 'kimi', label: 'Kimi API Key'},
-  {name: 'qwen', label: 'Qwen API Key'},
-  {name: 'zai', label: 'Z.AI API Key'},
-  {name: 'deepSeek', label: 'DeepSeek API Key'},
+  {name: 'kimi', label: 'Kimi'},
+  {name: 'qwen', label: 'Qwen'},
+  {name: 'zai', label: 'Z.AI'},
+  {name: 'deepSeek', label: 'DeepSeek'},
 ];
 
 const EMPTY_OPS_VIEW: ChatHubOpsView = {
@@ -83,7 +82,6 @@ const EMPTY_OPS_VIEW: ChatHubOpsView = {
     actionLabel: 'Update Hub',
     actionVisible: false,
     updateAvailable: false,
-    dotVariant: 'is-idle',
   },
   npm: {loading: false, pending: false, outdatedCount: 0},
   skills: {pending: false, error: ''},
@@ -133,14 +131,12 @@ function ChatHubSectionHeader({
   label,
   summary,
   expanded,
-  attention = false,
   onToggle,
 }: {
   icon: IconName;
   label: string;
-  summary: string;
+  summary: React.ReactNode;
   expanded: boolean;
-  attention?: boolean;
   onToggle: () => void;
 }): React.JSX.Element {
   return (
@@ -152,7 +148,6 @@ function ChatHubSectionHeader({
     >
       <Icon name={icon} className="chat-hub-section-icon" />
       <span className="chat-hub-section-label">{label}</span>
-      {attention ? <span className="chat-hub-section-badge" aria-label="Attention needed" /> : null}
       <span className="chat-hub-section-summary">{summary}</span>
       <Icon name={expanded ? 'chevronDown' : 'chevronRight'} className="chat-hub-section-chevron" />
     </button>
@@ -286,6 +281,102 @@ function ChatHubColorPalette({
   );
 }
 
+const flickerBridgeModes: RegistryFlickerBridgeMode[] = ['v1', 'v2'];
+
+function ChatHubFlickerRow({
+  hubId,
+  config,
+  configBusy,
+  onUpdateHubConfig,
+  flickerStatus,
+  flickerBusy,
+  onFlickerLifecycle,
+  onFlickerSwitchMode,
+}: {
+  hubId: string;
+  config: RegistryHubConfig | null;
+  configBusy: boolean;
+  onUpdateHubConfig: (hubId: string, update: RegistryHubConfigUpdatePayload) => Promise<void>;
+  flickerStatus: RegistryFlickerBridgeStatus | undefined;
+  flickerBusy: boolean;
+  onFlickerLifecycle: (action: 'start' | 'stop' | 'restart') => void;
+  onFlickerSwitchMode: (mode: RegistryFlickerBridgeMode) => void;
+}): React.JSX.Element {
+  const enabled = config?.flickerBridge.enabled === true;
+  const running = flickerStatus?.state === 'running' || flickerStatus?.state === 'starting';
+  const {canStart, canStop} = flickerBridgeActions(flickerStatus);
+  const busy = flickerBusy || configBusy;
+
+  const selectSegment = (segment: 'off' | RegistryFlickerBridgeMode) => {
+    if (segment === 'off') {
+      void onUpdateHubConfig(hubId, {section: 'flickerBridge', field: 'enabled', action: 'clear'})
+        .catch(() => undefined);
+      return;
+    }
+    if (!enabled) {
+      void onUpdateHubConfig(hubId, {section: 'flickerBridge', field: 'enabled', action: 'set'})
+        .catch(() => undefined);
+    }
+    if (flickerStatus?.mode !== segment) {
+      onFlickerSwitchMode(segment);
+    }
+  };
+
+  return (
+    <div className="chat-hub-flicker-row">
+      <span className="chat-hub-settings-label">
+        <Icon name="radioTower" className="chat-hub-settings-row-icon" />
+        Flicker
+      </span>
+      <span className="chat-hub-flicker-controls">
+        <span className="chat-hub-flicker-modes" role="group" aria-label="Flicker Bridge mode">
+          {config ? (
+            <button
+              type="button"
+              className={enabled ? '' : 'selected'}
+              aria-label="Disable Flicker Bridge"
+              aria-pressed={!enabled}
+              disabled={busy || !enabled}
+              onClick={() => selectSegment('off')}
+            >
+              Off
+            </button>
+          ) : null}
+          {flickerBridgeModes.map(mode => {
+            const selected = config ? enabled && flickerStatus?.mode === mode : flickerStatus?.mode === mode;
+            const available = flickerStatus?.availableModes.includes(mode) === true;
+            return (
+              <button
+                key={mode}
+                type="button"
+                className={selected ? 'selected' : ''}
+                aria-label={`Use Flicker Bridge ${mode.toUpperCase()}`}
+                aria-pressed={selected}
+                title={flickerStatus?.modeErrors[mode]}
+                disabled={busy || selected || !available}
+                onClick={() => selectSegment(mode)}
+              >
+                {mode.toUpperCase()}
+              </button>
+            );
+          })}
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={running}
+          aria-label={running ? 'Stop Flicker Bridge' : 'Start Flicker Bridge'}
+          className={`chat-hub-toggle${running ? ' on' : ''}`}
+          disabled={busy || (running ? !canStop : !canStart)}
+          onClick={() => onFlickerLifecycle(running ? 'stop' : 'start')}
+        >
+          <span className="chat-hub-toggle-thumb" aria-hidden="true" />
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function ChatHubSettingsSection({
   hubId,
   configView,
@@ -304,40 +395,29 @@ function ChatHubSettingsSection({
   onFlickerSwitchMode: (mode: RegistryFlickerBridgeMode) => void;
 }): React.JSX.Element {
   const config = configView?.data ?? null;
-  const flickerEnabled = config?.flickerBridge.enabled === true;
-  const enabledBusy = configView?.busyField === 'flickerBridge:enabled';
+  const unavailableMode = flickerBridgeModes.find(mode => flickerStatus?.modeErrors[mode]);
+  const modeError = unavailableMode ? flickerStatus?.modeErrors[unavailableMode] : undefined;
+  const inlineError = flickerStatus?.error
+    ? flickerStatus.error
+    : unavailableMode && modeError
+      ? `${unavailableMode.toUpperCase()} unavailable · ${modeError}`
+      : undefined;
+
   return (
     <div className="chat-hub-settings">
-      {config ? (
-        <div className="chat-hub-settings-row">
-          <span className="chat-hub-settings-label">
-            <Icon name="radioTower" className="chat-hub-settings-row-icon" />
-            Flicker Bridge
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={flickerEnabled}
-            aria-label="Enable Flicker Bridge"
-            className={`chat-hub-toggle${flickerEnabled ? ' on' : ''}`}
-            disabled={enabledBusy}
-            onClick={() => void onUpdateHubConfig(hubId, {
-              section: 'flickerBridge',
-              field: 'enabled',
-              action: flickerEnabled ? 'clear' : 'set',
-            }).catch(() => undefined)}
-          >
-            <span className="chat-hub-toggle-thumb" aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
-      <FlickerBridgeControl
-        status={flickerStatus}
-        busy={flickerBusy}
-        hideSummary
-        onLifecycle={onFlickerLifecycle}
-        onSwitchMode={onFlickerSwitchMode}
+      <ChatHubFlickerRow
+        hubId={hubId}
+        config={config}
+        configBusy={configView?.busyField === 'flickerBridge:enabled'}
+        onUpdateHubConfig={onUpdateHubConfig}
+        flickerStatus={flickerStatus}
+        flickerBusy={flickerBusy}
+        onFlickerLifecycle={onFlickerLifecycle}
+        onFlickerSwitchMode={onFlickerSwitchMode}
       />
+      {inlineError ? (
+        <div className="chat-hub-settings-hint error" title={inlineError}>{inlineError}</div>
+      ) : null}
       {configView?.loading && !config ? (
         <div className="chat-hub-settings-hint">Loading hub config…</div>
       ) : null}
@@ -352,6 +432,7 @@ function ChatHubSettingsSection({
               return (
                 <SecretEditor
                   key={`${hubId}:${field.name}`}
+                  compact
                   label={field.label}
                   configured={snapshot?.configured === true}
                   updatedAt={snapshot?.updatedAt}
@@ -482,12 +563,30 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const openSection = expandedSections[hubId] ?? null;
   const visibleProjectCount = treeItem.projects.filter(project => !hiddenProjectIdSet.has(project.projectId)).length;
 
-  const flickerSummary = (() => {
-    const state = flickerStatus?.state ?? 'loading';
-    const mode = flickerStatus?.mode ? flickerStatus.mode.toUpperCase() : '';
-    return mode ? `${mode} · ${state}` : state;
-  })();
-  const opsSummary = ops.wheelMaker.currentVersion;
+  const flickerConfig = configView?.data?.flickerBridge ?? null;
+  const flickerOn = flickerConfig
+    ? flickerConfig.enabled
+    : flickerStatus?.state === 'running' || flickerStatus?.state === 'starting';
+  const flickerMode = (flickerStatus?.mode ?? flickerConfig?.mode ?? '').toUpperCase();
+  const settingsSummary = flickerOn ? (
+    <>
+      {flickerMode || 'On'}
+      <Icon name="check" className="chat-hub-summary-mark ok" aria-label="Flicker Bridge on" />
+    </>
+  ) : (
+    <>
+      Off
+      <Icon name="x" className="chat-hub-summary-mark" aria-label="Flicker Bridge off" />
+    </>
+  );
+  const opsSummary = (
+    <span className="chat-hub-section-version">
+      {ops.wheelMaker.currentVersion}
+      {ops.wheelMaker.updateAvailable ? (
+        <span className="chat-hub-section-version-dot" role="img" aria-label="Update available" />
+      ) : null}
+    </span>
+  );
   const projectsSummary = `${visibleProjectCount}/${treeItem.projects.length} shown`;
 
   const toggleSection = (section: ChatHubSectionId) => onToggleSection(hubId, section);
@@ -531,7 +630,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
             <ChatHubSectionHeader
               icon="settings"
               label="Settings"
-              summary={flickerSummary}
+              summary={settingsSummary}
               expanded={openSection === 'settings'}
               onToggle={() => toggleSection('settings')}
             />
@@ -555,7 +654,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               label="Hub Ops"
               summary={opsSummary}
               expanded={openSection === 'ops'}
-              attention={ops.wheelMaker.updateAvailable || ops.npm.outdatedCount > 0}
               onToggle={() => toggleSection('ops')}
             />
             {openSection === 'ops' ? (

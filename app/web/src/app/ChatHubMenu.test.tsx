@@ -78,7 +78,6 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       actionLabel: 'Update Hub',
       actionVisible: true,
       updateAvailable: true,
-      dotVariant: 'is-warn',
     },
     npm: {loading: false, pending: false, outdatedCount: 2},
     skills: {pending: false, error: ''},
@@ -158,7 +157,6 @@ test('ops row disables actions that are unavailable', async () => {
           actionLabel: 'Restart',
           actionVisible: false,
           updateAvailable: false,
-          dotVariant: 'is-ok',
         },
         npm: {loading: false, pending: false, outdatedCount: 0},
       }),
@@ -175,9 +173,21 @@ test('ops row disables actions that are unavailable', async () => {
   expect(buttons[1].findByProps({className: 'chat-hub-ops-button-sub'}).children).toEqual(['Up to date']);
 });
 
-test('settings section renders API key editors and the restart hint from hub config', async () => {
+test('settings section renders the flicker segment row and compact key editors', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': 'settings'},
+    flickerStatuses: {
+      'hub-a': {
+        configured: true,
+        supported: true,
+        state: 'stopped',
+        mode: 'v1',
+        availableModes: ['v1', 'v2'],
+        modeErrors: {},
+        endpoint: 'http://127.0.0.1:17999',
+        port: 17999,
+      },
+    },
     hubConfigByHubId: {
       'hub-a': {
         loading: false,
@@ -197,17 +207,168 @@ test('settings section renders API key editors and the restart hint from hub con
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  expect(renderer.root.findByProps({role: 'switch'}).props['aria-checked']).toBe(true);
-  expect(renderer.root.findAllByType('input')).toHaveLength(4);
-  expect(renderer.root.findByProps({className: 'chat-hub-settings-hint'}).children)
-    .toEqual(['API keys take effect after the hub restarts.']);
-
-  act(() => renderer.root.findByProps({role: 'switch'}).props.onClick());
+  // Off/V1/V2 segmented control: enabled + mode v1 → V1 selected, Off clickable.
+  const off = renderer.root.findByProps({'aria-label': 'Disable Flicker Bridge'});
+  expect(off.props['aria-pressed']).toBe(false);
+  expect(renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V1'}).props['aria-pressed']).toBe(true);
+  act(() => off.props.onClick());
   expect(callbacks.onUpdateHubConfig).toHaveBeenCalledWith('hub-a', {
     section: 'flickerBridge',
     field: 'enabled',
     action: 'clear',
   });
+
+  // Mode switch while enabled goes through the flicker action path.
+  act(() => renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V2'}).props.onClick());
+  expect(callbacks.onFlickerSwitchMode).toHaveBeenCalledWith('hub-a', 'v2');
+
+  // Runtime stop/start toggle reflects the stopped state.
+  const runtimeToggle = renderer.root.findByProps({'aria-label': 'Start Flicker Bridge'});
+  expect(runtimeToggle.props['aria-checked']).toBe(false);
+  act(() => runtimeToggle.props.onClick());
+  expect(callbacks.onFlickerLifecycle).toHaveBeenCalledWith('hub-a', 'start');
+
+  // Compact key rows: status icon instead of a "Not configured" label line.
+  expect(renderer.root.findAllByType('input')).toHaveLength(4);
+  expect(renderer.root.findAll(
+    node => typeof node.props.className === 'string' && node.props.className.startsWith('secret-compact-status'),
+  )).toHaveLength(4);
+  expect(renderer.root.findAll(
+    node => node.children.includes('Not configured'),
+  )).toHaveLength(0);
+  expect(renderer.root.findByProps({className: 'chat-hub-settings-hint'}).children)
+    .toEqual(['API keys take effect after the hub restarts.']);
+});
+
+test('flicker segment disables unavailable modes and surfaces the inline error', async () => {
+  const {props} = createHarness({
+    expandedSections: {'hub-a': 'settings'},
+    flickerStatuses: {
+      'hub-a': {
+        configured: true,
+        supported: true,
+        state: 'running',
+        mode: 'v1',
+        runningMode: 'v1',
+        availableModes: ['v1'],
+        modeErrors: {v2: 'Node.js 22 is required'},
+        endpoint: 'http://127.0.0.1:17999',
+        port: 17999,
+      },
+    },
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {flickerBridge: {mode: 'v1', enabled: true}, apiKeys: {}},
+      },
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V2'}).props).toMatchObject({
+    disabled: true,
+    title: 'Node.js 22 is required',
+  });
+  expect(renderer.root.findByProps({className: 'chat-hub-settings-hint error'}).children)
+    .toEqual(['V2 unavailable · Node.js 22 is required']);
+  expect(renderer.root.findByProps({'aria-label': 'Stop Flicker Bridge'}).props['aria-checked']).toBe(true);
+});
+
+test('collapsed settings summary shows the flicker mode with a mark', async () => {
+  const enabled = createHarness({
+    flickerStatuses: {
+      'hub-a': {
+        configured: true,
+        supported: true,
+        state: 'running',
+        mode: 'v2',
+        runningMode: 'v2',
+        availableModes: ['v1', 'v2'],
+        modeErrors: {},
+        endpoint: 'http://127.0.0.1:17999',
+        port: 17999,
+      },
+    },
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {flickerBridge: {mode: 'v2', enabled: true}, apiKeys: {}},
+      },
+    },
+  });
+  let enabledRenderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    enabledRenderer = TestRenderer.create(<ChatHubMenu {...enabled.props} />);
+  });
+  const marks = enabledRenderer.root.findAll(
+    node => typeof node.type === 'string' &&
+      typeof node.props.className === 'string' && node.props.className.includes('chat-hub-summary-mark'),
+  );
+  expect(marks).toHaveLength(1);
+  expect(marks[0].props.className).toContain('ok');
+
+  const disabled = createHarness({
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {flickerBridge: {mode: 'v1', enabled: false}, apiKeys: {}},
+      },
+    },
+  });
+  let disabledRenderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    disabledRenderer = TestRenderer.create(<ChatHubMenu {...disabled.props} />);
+  });
+  const offHeader = disabledRenderer.root.findAll(
+    node => typeof node.props.className === 'string' && node.props.className.startsWith('chat-hub-section-summary'),
+  )[0];
+  expect(offHeader.children).toContain('Off');
+  const offMark = disabledRenderer.root.findAll(
+    node => typeof node.type === 'string' &&
+      typeof node.props.className === 'string' && node.props.className.includes('chat-hub-summary-mark'),
+  )[0];
+  expect(offMark.props.className).not.toContain('ok');
+});
+
+test('ops summary shows a red dot on the version only when an update is available', async () => {
+  const {props} = createHarness({opsByHubId: {'hub-a': opsView()}});
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+  expect(renderer.root.findByProps({className: 'chat-hub-section-version-dot'})).toBeTruthy();
+  expect(renderer.root.findAll(
+    node => typeof node.props.className === 'string' && node.props.className.includes('chat-hub-section-badge'),
+  )).toHaveLength(0);
+
+  const current = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        wheelMaker: {
+          loading: false,
+          pending: false,
+          currentVersion: 'v1.2',
+          actionLabel: 'Restart',
+          actionVisible: true,
+          updateAvailable: false,
+        },
+      }),
+    },
+  });
+  let currentRenderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    currentRenderer = TestRenderer.create(<ChatHubMenu {...current.props} />);
+  });
+  expect(currentRenderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);
 });
 
 test('settings section surfaces the unsupported-hub message', async () => {
@@ -225,7 +386,7 @@ test('settings section surfaces the unsupported-hub message', async () => {
   expect(renderer.root.findByProps({className: 'chat-hub-settings-hint error'}).children)
     .toEqual(['This hub does not support hub configuration yet.']);
   expect(renderer.root.findAllByType('input')).toHaveLength(0);
-  expect(renderer.root.findAllByProps({role: 'switch'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({'aria-label': 'Disable Flicker Bridge'})).toHaveLength(0);
 });
 
 test('projects section toggles project visibility', async () => {
