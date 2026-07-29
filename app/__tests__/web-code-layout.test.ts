@@ -47,6 +47,9 @@ describe('web code layout', () => {
     expect(shikiRenderer).toContain('SHIKI_LANG_LOADERS');
     expect(shikiRenderer).toContain("import('@shikijs/langs/hlsl')");
     expect(shikiRenderer).toContain("import('@shikijs/langs/glsl')");
+    expect(shikiRenderer).toContain("import('@shikijs/langs/lua')");
+    expect(mainTsx).toContain("case 'lua':");
+    expect(mainTsx).toContain("return 'lua';");
     expect(mainTsx).toContain("case 'hlsl':");
     expect(mainTsx).toContain("return 'hlsl';");
     expect(mainTsx).toContain("case 'glsl':");

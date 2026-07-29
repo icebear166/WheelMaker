@@ -58,6 +58,7 @@ const SHIKI_LANG_LOADERS: Record<string, () => Promise<LanguageInput>> = {
   cpp: async () => (await import('@shikijs/langs/cpp')).default,
   hlsl: async () => (await import('@shikijs/langs/hlsl')).default,
   glsl: async () => (await import('@shikijs/langs/glsl')).default,
+  lua: async () => (await import('@shikijs/langs/lua')).default,
   shellscript: async () => (await import('@shikijs/langs/shellscript')).default,
   yaml: async () => (await import('@shikijs/langs/yaml')).default,
   markdown: async () => (await import('@shikijs/langs/markdown')).default,

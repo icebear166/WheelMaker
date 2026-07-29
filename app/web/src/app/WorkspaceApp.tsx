@@ -1788,6 +1788,8 @@ function detectCodeLanguage(path: string): string {
       return 'cpp';
     case 'rs':
       return 'rust';
+    case 'lua':
+      return 'lua';
     case 'hlsl':
     case 'fx':
     case 'fxh':
