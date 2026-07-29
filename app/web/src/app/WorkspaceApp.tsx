@@ -8,8 +8,9 @@ import {
 } from './flickerBridgeState';
 import {
   ChatHubMenu,
+  type ChatHubDetailId,
+  type ChatHubNpmPackageView,
   type ChatHubOpsView,
-  type ChatHubSectionId,
 } from './ChatHubMenu';
 
 declare global {
@@ -375,6 +376,7 @@ import {
   resolveHubColor,
   resolveHubColorVariantIndex,
   splitProjectsByVisibility,
+  toggleHubVisibility,
   toggleProjectVisibility,
 } from '../workspace/hubProjectPreferences';
 import { triggerMobileHaptic } from '../shell/layouts/mobile/mobileHaptics';
@@ -444,7 +446,6 @@ import {
   deriveRegistryHubIds,
   deriveWheelMakerHubStatus,
   fetchWheelMakerPublicMetadata,
-  fetchWheelMakerReleaseHistory,
   hubStatusLabel,
   npmPackageUpdateSummary,
   packageStatusLabel,
@@ -456,7 +457,6 @@ import {
   withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
   type WheelMakerPublicMetadata,
-  type WheelMakerReleaseHistoryEntry,
 } from '../settings/agentPackageUpdateView';
 import {
   groupSkillsByCategory,
@@ -681,9 +681,6 @@ const DatabaseSettingsDetail = React.lazy(() => loadSettingsBundle().then(module
 })));
 const PortRelaySettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.PortRelaySettingsDetail,
-})));
-const UpdateSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
-  default: module.UpdateSettingsDetail,
 })));
 const ReleasePublishSettings = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.ReleasePublishSettings,
@@ -3038,9 +3035,6 @@ export function App() {
   const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
-  const [wheelMakerReleaseHistory, setWheelMakerReleaseHistory] = useState<WheelMakerReleaseHistoryEntry[]>([]);
-  const [wheelMakerReleaseHistoryLoading, setWheelMakerReleaseHistoryLoading] = useState(false);
-  const [wheelMakerReleaseHistoryError, setWheelMakerReleaseHistoryError] = useState('');
   const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
   const [androidApkUpdateSupported, setAndroidApkUpdateSupported] = useState(false);
   const [androidApkLocalRelease, setAndroidApkLocalRelease] = useState<AndroidApkLocalRelease | null>(null);
@@ -3061,8 +3055,6 @@ export function App() {
   const [agentPackagesError, setAgentPackagesError] = useState('');
   const [agentPackageActionPendingKey, setAgentPackageActionPendingKey] = useState('');
   const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');
-  const [expandedNpmUpdateHubIds, setExpandedNpmUpdateHubIds] = useState<Record<string, boolean>>({});
-  const [expandedProjectIndexHubIds, setExpandedProjectIndexHubIds] = useState<Record<string, boolean>>({});
   const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});
   const [projectIndexLoading, setProjectIndexLoading] = useState(false);
   const [projectIndexError, setProjectIndexError] = useState('');
@@ -3561,7 +3553,7 @@ export function App() {
   const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
   const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
   const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
-  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubSectionId | null>>({});
+  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubDetailId | null>>({});
   const [chatHubConfigByHubId, setChatHubConfigByHubId] = useState<Record<string, {
     loading: boolean;
     error: string;
@@ -6661,12 +6653,19 @@ export function App() {
         opsByHubId={chatHubOpsByHubId}
         onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
+        onPackageAction={handleChatHubPackageAction}
         onScanSkills={handleChatHubScanSkills}
         onScanAllIndexes={handleChatHubScanAllIndexes}
+        onScanProject={handleChatHubScanProject}
         hiddenProjectIdSet={hiddenProjectIdSet}
         onToggleProject={(projectId, visible) => {
           setHiddenProjectIds(current => toggleProjectVisibility(current, projectId, visible));
         }}
+        onToggleAllProjects={handleChatHubToggleAllProjects}
+        latestVersion={wheelMakerPublicMetadata?.stable.version || '-'}
+        updateAllAvailableCount={chatHubUpdateAllHubIds.length}
+        updateAllPending={wheelMakerUpdateAllPending}
+        onUpdateAllHubs={handleChatHubUpdateAllHubs}
       />
     );
   };
@@ -12817,7 +12816,21 @@ export function App() {
           (status === 'update_available' || status === 'up_to_date' || status === 'local_newer'),
       } : null;
       const npmUpdatable = deriveNpmUpdatableTargets(card.agentPackage?.hub?.packages ?? []);
+      const hubPackages = card.agentPackage?.hub?.packages ?? [];
       const indexTargets = chatHubProjectIndexTargets(card.hubId);
+      const indexedSkillNames = new Set<string>();
+      projects
+        .filter(project => (project.hubId || '').trim() === card.hubId)
+        .forEach(project => {
+          (project.agentProfiles ?? []).forEach(profile => {
+            (profile.skills ?? []).forEach(skill => {
+              const normalized = skill.trim().toLowerCase();
+              if (normalized) {
+                indexedSkillNames.add(normalized);
+              }
+            });
+          });
+        });
       views[card.hubId] = {
         wheelMaker: {
           loading: card.wheelMaker?.loading === true,
@@ -12842,24 +12855,44 @@ export function App() {
           loading: card.agentPackage?.loading === true || agentPackagesLoading,
           pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
           outdatedCount: npmUpdatable.length,
+          packages: hubPackages.map(pkg => ({
+            packageName: pkg.packageName,
+            displayName: pkg.displayName,
+            installedVersion: pkg.installedVersion,
+            latestVersion: pkg.latestVersion,
+            action: pkg.canUpdate ? 'update' as const : pkg.canInstall ? 'install' as const : null,
+            canUninstall: pkg.canUninstall === true,
+            pending: agentPackageActionPendingKey === agentPackageActionKey(card.hubId, pkg.packageName),
+          })),
         },
         skills: {
           pending: skillIndexScanPendingByHubId[card.hubId] === true,
           error: skillIndexScanErrorByHubId[card.hubId] || '',
+          count: indexedSkillNames.size,
         },
         index: {
           pending: projectIndexScanAllPendingByHubId[card.hubId] === true,
           indexedCount: indexTargets.filter(project => project.status === 'indexed').length,
           totalCount: indexTargets.length,
+          projects: indexTargets.map(project => ({
+            projectId: project.projectId,
+            name: project.name,
+            status: project.status,
+            pending: projectIndexScanPendingByProjectId[project.projectId] === true,
+          })),
         },
       };
     }
     return views;
   }, [
+    agentPackageActionKey,
+    agentPackageActionPendingKey,
     agentPackageHubUpdatePendingId,
     agentPackagesLoading,
     chatHubProjectIndexTargets,
     projectIndexScanAllPendingByHubId,
+    projectIndexScanPendingByProjectId,
+    projects,
     skillIndexScanErrorByHubId,
     skillIndexScanPendingByHubId,
     updateHubCards,
@@ -12903,13 +12936,12 @@ export function App() {
     }, 1000);
   }, []);
 
-  // Update-related poll timers must keep running while either the Update
-  // settings view or the chat hub menu (which also triggers hub updates) is
-  // open; previously both polls stopped unless the settings view was active.
+  // Update-related poll timers must keep running while the chat hub menu
+  // (which triggers hub updates) is open.
   const updateSurfaceActiveRef = useRef(false);
   useEffect(() => {
-    updateSurfaceActiveRef.current = settingsDetailView === 'update' || chatHubMenuOpen;
-  }, [settingsDetailView, chatHubMenuOpen]);
+    updateSurfaceActiveRef.current = chatHubMenuOpen;
+  }, [chatHubMenuOpen]);
 
   const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) => {
     const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
@@ -13038,18 +13070,6 @@ export function App() {
       }
     }
   }, [clearWheelMakerUpdatePollTimer, scheduleWheelMakerUpdatePoll]);
-
-  const refreshWheelMakerReleaseHistory = useCallback(async () => {
-    setWheelMakerReleaseHistoryLoading(true);
-    setWheelMakerReleaseHistoryError('');
-    try {
-      setWheelMakerReleaseHistory(await fetchWheelMakerReleaseHistory());
-    } catch (err) {
-      setWheelMakerReleaseHistoryError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWheelMakerReleaseHistoryLoading(false);
-    }
-  }, []);
 
   const refreshAndroidApkUpdate = useCallback(async () => {
     const supported = androidApkUpdateBridge.isSupported();
@@ -13289,23 +13309,10 @@ export function App() {
   }, [refreshAndroidApkUpdate]);
 
   useEffect(() => {
-    if (settingsDetailView !== 'update') {
-      clearWheelMakerUpdatePollTimer();
-      clearAgentPackageScanPollTimer();
-      clearProjectIndexPollTimer();
-      return;
+    if (sidebarSettingsOpen) {
+      refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
     }
-    refreshWheelMakerUpdatesRef.current?.(registryHubIds).catch(() => undefined);
-    refreshWheelMakerReleaseHistory().catch(() => undefined);
-    refreshAgentPackagesRef.current?.(registryHubIds).catch(() => undefined);
-    refreshProjectFileIndexesRef.current?.(registryHubIds).catch(() => undefined);
-    refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
-    return () => {
-      clearWheelMakerUpdatePollTimer();
-      clearAgentPackageScanPollTimer();
-      clearProjectIndexPollTimer();
-    };
-  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshWheelMakerReleaseHistory, registryHubIds, settingsDetailView]);
+  }, [sidebarSettingsOpen]);
 
   useEffect(() => {
     if (!androidApkUpdateSupported) {
@@ -13883,6 +13890,43 @@ export function App() {
   const handleChatHubScanAllIndexes = useCallback((hubId: string) => {
     void handleScanAllProjectIndexes(hubId, chatHubProjectIndexTargets(hubId));
   }, [chatHubProjectIndexTargets, handleScanAllProjectIndexes]);
+
+  const handleChatHubPackageAction = useCallback((
+    hubId: string,
+    action: 'install' | 'update' | 'uninstall',
+    pkg: ChatHubNpmPackageView,
+  ) => {
+    const fullPackage = updateHubCards
+      .find(card => card.hubId === hubId)
+      ?.agentPackage?.hub?.packages.find(item => item.packageName === pkg.packageName);
+    if (fullPackage) {
+      requestAgentPackageAction(action, hubId, fullPackage);
+    }
+  }, [requestAgentPackageAction, updateHubCards]);
+
+  const handleChatHubScanProject = useCallback((hubId: string, projectId: string) => {
+    void handleScanProjectIndex(hubId, projectId);
+  }, [handleScanProjectIndex]);
+
+  const handleChatHubToggleAllProjects = useCallback((hubId: string, visible: boolean) => {
+    const treeItem = chatHubTreeItems.find(item => item.hubId === hubId);
+    setHiddenProjectIds(current => toggleHubVisibility(current, treeItem?.projects ?? [], visible));
+  }, [chatHubTreeItems, setHiddenProjectIds]);
+
+  const chatHubUpdateAllHubIds = useMemo(() => {
+    const stableRelease = wheelMakerPublicMetadata?.stable ?? null;
+    return updateHubCards
+      .filter(card => deriveWheelMakerHubStatus(
+        card.wheelMaker?.data?.installed,
+        stableRelease,
+        card.wheelMaker?.data?.job,
+      ) === 'update_available')
+      .map(card => card.hubId);
+  }, [updateHubCards, wheelMakerPublicMetadata]);
+
+  const handleChatHubUpdateAllHubs = useCallback(() => {
+    requestWheelMakerUpdateAll(chatHubUpdateAllHubIds);
+  }, [chatHubUpdateAllHubIds, requestWheelMakerUpdateAll]);
 
   const handleWheelMakerUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdate'}>) => {
     setConfirmError('');
@@ -15850,22 +15894,6 @@ export function App() {
         </button>
       );
     }
-    if (detail === 'update') {
-      return (
-        <button
-          type="button"
-          className="settings-detail-refresh"
-          onClick={() => {
-            refreshWheelMakerUpdates(registryHubIds).catch(() => undefined);
-            refreshWheelMakerReleaseHistory().catch(() => undefined);
-            refreshAgentPackages(registryHubIds).catch(() => undefined);
-          }}
-          disabled={wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading}
-        >
-          {wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      );
-    }
     if (detail === 'database') {
       return (
         <button
@@ -15963,69 +15991,6 @@ export function App() {
       skillDetailTarget?.skillName || 'Skill Detail',
       renderSkillDetailPanel(),
       undefined,
-      options,
-    );
-
-  const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
-      'Update',
-      <React.Suspense fallback={null}>
-        <UpdateSettingsDetail
-          androidApkUpdateSupported={androidApkUpdateSupported}
-          androidApkLocalRelease={androidApkLocalRelease}
-          androidApkLatestRelease={androidApkLatestRelease}
-          androidApkUpdateLoading={androidApkUpdateLoading}
-          androidApkUpdateError={androidApkUpdateError}
-          androidApkInstallStatus={androidApkInstallStatus}
-          androidApkInstallPending={androidApkInstallPending}
-          refreshAndroidApkUpdate={refreshAndroidApkUpdate}
-          requestAndroidApkInstall={requestAndroidApkInstall}
-          updateHubCards={updateHubCards}
-          projectIndexByHubId={projectIndexByHubId}
-          projects={projects}
-          wheelMakerUpdatesLoading={wheelMakerUpdatesLoading}
-          wheelMakerUpdatesError={wheelMakerUpdatesError}
-          wheelMakerPublicMetadata={wheelMakerPublicMetadata}
-          wheelMakerUpdatePendingHubId={wheelMakerUpdatePendingHubId}
-          wheelMakerUpdateAllPending={wheelMakerUpdateAllPending}
-          wheelMakerReleaseHistory={wheelMakerReleaseHistory}
-          wheelMakerReleaseHistoryLoading={wheelMakerReleaseHistoryLoading}
-          wheelMakerReleaseHistoryError={wheelMakerReleaseHistoryError}
-          requestWheelMakerUpdate={requestWheelMakerUpdate}
-          requestWheelMakerUpdateAll={requestWheelMakerUpdateAll}
-          agentPackagesLoading={agentPackagesLoading}
-          agentPackagesError={agentPackagesError}
-          agentPackageActionPendingKey={agentPackageActionPendingKey}
-          agentPackageHubUpdatePendingId={agentPackageHubUpdatePendingId}
-          expandedNpmUpdateHubIds={expandedNpmUpdateHubIds}
-          setExpandedNpmUpdateHubIds={setExpandedNpmUpdateHubIds}
-          requestAgentPackageAction={requestAgentPackageAction}
-          requestAgentPackageHubUpdate={requestAgentPackageHubUpdate}
-          skillIndexScanPendingByHubId={skillIndexScanPendingByHubId}
-          skillIndexScanErrorByHubId={skillIndexScanErrorByHubId}
-          handleScanSkills={handleScanSkills}
-          projectIndexLoading={projectIndexLoading}
-          projectIndexError={projectIndexError}
-          projectIndexScanPendingByProjectId={projectIndexScanPendingByProjectId}
-          projectIndexScanAllPendingByHubId={projectIndexScanAllPendingByHubId}
-          expandedProjectIndexHubIds={expandedProjectIndexHubIds}
-          setExpandedProjectIndexHubIds={setExpandedProjectIndexHubIds}
-          handleScanProjectIndex={handleScanProjectIndex}
-          handleScanAllProjectIndexes={handleScanAllProjectIndexes}
-          tagVariantClass={tagVariantClass}
-          hubAccentStyle={hubAccentStyle}
-          shortDigest={shortDigest}
-          formatWheelMakerDateTime={formatWheelMakerDateTime}
-          formatChatAttachmentSize={formatChatAttachmentSize}
-          androidApkUpdateStatusLabel={androidApkUpdateStatusLabel}
-          androidApkInstallStatusLabel={androidApkInstallStatusLabel}
-          agentPackageActionForPackage={agentPackageActionForPackage}
-          agentPackageActionKey={agentPackageActionKey}
-          agentPackageActionLabel={agentPackageActionLabel}
-          projectFileIndexStatusLabel={projectFileIndexStatusLabel}
-        />
-      </React.Suspense>,
-      renderSettingsDetailActions('update'),
       options,
     );
 
@@ -16147,9 +16112,6 @@ export function App() {
     detail: SettingsDetailId,
     options: SettingsDetailShellOptions = {},
   ) => {
-    if (detail === 'update') {
-      return renderUpdateSettingsDetail(options);
-    }
     if (detail === 'skills') {
       return renderSkillsSettingsDetail(options);
     }
@@ -16218,6 +16180,16 @@ export function App() {
         setDisableFileCache={setDisableFileCache}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
+        androidApkUpdateSupported={androidApkUpdateSupported}
+        androidApkLocalRelease={androidApkLocalRelease}
+        androidApkLatestRelease={androidApkLatestRelease}
+        androidApkUpdateLoading={androidApkUpdateLoading}
+        androidApkUpdateError={androidApkUpdateError}
+        androidApkInstallStatus={androidApkInstallStatus}
+        androidApkInstallPending={androidApkInstallPending}
+        refreshAndroidApkUpdate={refreshAndroidApkUpdate}
+        requestAndroidApkInstall={requestAndroidApkInstall}
+        androidApkUpdateStatusLabel={androidApkUpdateStatusLabel}
       />
     </React.Suspense>
   );

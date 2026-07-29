@@ -27,6 +27,13 @@ import {
   type CodeThemeId,
 } from '../code/shikiSettings';
 import type {SettingsChildDetail} from './settingsNavigation';
+import {
+  resolveAndroidApkUpdateStatus,
+  type AndroidApkLatestRelease,
+  type AndroidApkLocalRelease,
+  type AndroidApkUpdateStatus,
+} from '../platform/android/androidApkUpdate';
+import {androidApkStatusIcon, updateStatusDotVariant} from './agentPackageUpdateView';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
 const CODE_LINE_HEIGHT_OPTIONS = [1.35, 1.45, 1.5, 1.6, 1.7] as const;
@@ -73,9 +80,19 @@ type SettingsRootContentProps = {
   setDisableFileCache: (value: boolean) => void;
   requestClearLocalCache: () => void;
   handleRegistryDebugLogout: () => void;
+  androidApkUpdateSupported: boolean;
+  androidApkLocalRelease: AndroidApkLocalRelease | null;
+  androidApkLatestRelease: AndroidApkLatestRelease | null;
+  androidApkUpdateLoading: boolean;
+  androidApkUpdateError: string;
+  androidApkInstallStatus: string;
+  androidApkInstallPending: boolean;
+  refreshAndroidApkUpdate: () => Promise<void>;
+  requestAndroidApkInstall: () => Promise<void>;
+  androidApkUpdateStatusLabel: (status: AndroidApkUpdateStatus) => string;
 };
 
-type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug';
+type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug' | 'android';
 
 type SettingsSectionOptions = {
   id: SettingsSectionId;
@@ -135,11 +152,66 @@ export function SettingsRootContent({
   setDisableFileCache,
   requestClearLocalCache,
   handleRegistryDebugLogout,
+  androidApkUpdateSupported,
+  androidApkLocalRelease,
+  androidApkLatestRelease,
+  androidApkUpdateLoading,
+  androidApkUpdateError,
+  androidApkInstallStatus,
+  androidApkInstallPending,
+  refreshAndroidApkUpdate,
+  requestAndroidApkInstall,
+  androidApkUpdateStatusLabel,
 }: SettingsRootContentProps) {
   return (
     <>
       {showSectionTitle ? <div className="section-title">SETTINGS</div> : null}
       <div className="settings-list">
+        {androidApkUpdateSupported ? renderSettingsSection({id: 'android', title: 'Android', icon: 'smartphone', rows: (
+        <div className="set-card set-card--tight update-apk-card">
+          <div className="update-apk-row">
+            <Icon name="smartphone" size={15} className="update-apk-icon" />
+            <span className="update-apk-scope">Android APK</span>
+            <span className="update-apk-versions set-mono set-num">
+              {androidApkLocalRelease?.versionName ? `v${androidApkLocalRelease.versionName}` : '-'}
+              {resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease) === 'update_available' && androidApkLatestRelease?.tagName
+                ? ` → ${androidApkLatestRelease.tagName}`
+                : ''}
+            </span>
+            <span
+              className={`set-status ${updateStatusDotVariant(androidApkStatusIcon(resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease), androidApkUpdateLoading))}`}
+              title={androidApkUpdateStatusLabel(resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease))}
+              aria-label={androidApkUpdateStatusLabel(resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease))}
+            />
+            <span className="set-card-spacer" />
+            <div className="update-apk-actions">
+              <button
+                type="button"
+                className="set-btn set-btn--primary"
+                disabled={androidApkInstallPending}
+                onClick={() => requestAndroidApkInstall().catch(() => undefined)}
+              >
+                {androidApkInstallPending ? 'Preparing...' : 'Download & Install'}
+              </button>
+              <button
+                type="button"
+                className="set-btn"
+                disabled={androidApkUpdateLoading}
+                onClick={() => refreshAndroidApkUpdate().catch(() => undefined)}
+              >
+                {androidApkUpdateLoading ? <Icon name="loader" spin size={13} /> : null}
+                {androidApkUpdateLoading ? 'Checking...' : 'Check'}
+              </button>
+            </div>
+          </div>
+          {androidApkUpdateError ? (
+            <div className="set-error">{androidApkUpdateError}</div>
+          ) : null}
+          {androidApkInstallStatus ? (
+            <div className="set-muted">{androidApkInstallStatus}</div>
+          ) : null}
+        </div>
+        )}) : null}
         {renderSettingsSection({id: 'appearance', title: 'Appearance', icon: 'palette', rows: (
         <>
           <label className="settings-row sidebar-setting-row">

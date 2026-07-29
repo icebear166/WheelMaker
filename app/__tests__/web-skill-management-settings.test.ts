@@ -132,9 +132,9 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain('const result = await service.reindexSkills(hubId);');
     expect(mainTsx).toContain('const projectErrors = (result.projects ?? [])');
     expect(mainTsx).toContain('await refreshProjectHubSnapshot();');
-    expect(mainTsx).toContain('skillIndexScanPendingByHubId={skillIndexScanPendingByHubId}');
-    expect(mainTsx).toContain('skillIndexScanErrorByHubId={skillIndexScanErrorByHubId}');
-    expect(mainTsx).toContain('handleScanSkills={handleScanSkills}');
+    expect(mainTsx).toContain('pending: skillIndexScanPendingByHubId[card.hubId] === true,');
+    expect(mainTsx).toContain("error: skillIndexScanErrorByHubId[card.hubId] || '',");
+    expect(mainTsx).toContain('onScanSkills={handleChatHubScanSkills}');
 
     const handlerStart = mainTsx.indexOf('const handleScanSkills = useCallback(async (hubId: string) => {');
     const handlerEnd = mainTsx.indexOf('const handleScanProjectIndex = useCallback', handlerStart);
