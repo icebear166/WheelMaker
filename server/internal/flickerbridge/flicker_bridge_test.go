@@ -244,6 +244,89 @@ func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 	}
 }
 
+func TestV2MixedToolResultAndTextAreSplitInBlockOrder(t *testing.T) {
+	var request anthropicMessagesRequest
+	if err := json.Unmarshal([]byte(`{
+		"max_tokens":128,
+		"messages":[
+			{"role":"assistant","content":[
+				{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"a.txt"}},
+				{"type":"tool_use","id":"toolu_write","name":"Write","input":{"file_path":"b.txt","content":"b"}}
+			]},
+			{"role":"user","content":[
+				{"type":"text","text":"before","cache_control":{"type":"ephemeral"}},
+				{"type":"tool_result","tool_use_id":"toolu_read","content":"read"},
+				{"type":"tool_result","tool_use_id":"toolu_write","content":"written","is_error":true},
+				{"type":"text","text":"after"}
+			]}
+		],
+		"tools":[
+			{"name":"Read","description":"read","input_schema":{"type":"object"}},
+			{"name":"Write","description":"write","input_schema":{"type":"object"}}
+		]
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	converted, _, err := anthropicRequestToV3(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, _ := converted["prompt"].([]any)
+	roles := make([]string, 0, len(prompt))
+	for _, rawMessage := range prompt {
+		message, _ := rawMessage.(map[string]any)
+		roles = append(roles, firstText(message["role"]))
+	}
+	if !slices.Equal(roles, []string{"assistant", "user", "tool", "user"}) {
+		t.Fatalf("roles = %v, want [assistant user tool user]", roles)
+	}
+	before := prompt[1].(map[string]any)["content"].([]any)
+	if firstText(before[0].(map[string]any)["text"]) != "before" ||
+		before[0].(map[string]any)["providerOptions"] == nil {
+		t.Fatalf("first user segment = %#v", before)
+	}
+	results := prompt[2].(map[string]any)["content"].([]any)
+	if len(results) != 2 ||
+		firstText(results[0].(map[string]any)["toolName"]) != "read" ||
+		firstText(results[1].(map[string]any)["toolName"]) != "write" {
+		t.Fatalf("tool segment = %#v", results)
+	}
+	after := prompt[3].(map[string]any)["content"].([]any)
+	if firstText(after[0].(map[string]any)["text"]) != "after" {
+		t.Fatalf("last user segment = %#v", after)
+	}
+}
+
+func TestV2ToolResultFollowedByUserTextDoesNotFail(t *testing.T) {
+	var request anthropicMessagesRequest
+	if err := json.Unmarshal([]byte(`{
+		"max_tokens":128,
+		"messages":[
+			{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"a.txt"}}]},
+			{"role":"user","content":[
+				{"type":"tool_result","tool_use_id":"toolu_1","content":"ok"},
+				{"type":"text","text":"continue"}
+			]}
+		],
+		"tools":[{"name":"Read","description":"read","input_schema":{"type":"object"}}]
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	converted, _, err := anthropicRequestToV3(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, _ := converted["prompt"].([]any)
+	roles := make([]string, 0, len(prompt))
+	for _, rawMessage := range prompt {
+		message, _ := rawMessage.(map[string]any)
+		roles = append(roles, firstText(message["role"]))
+	}
+	if !slices.Equal(roles, []string{"assistant", "tool", "user"}) {
+		t.Fatalf("roles = %v, want [assistant tool user]", roles)
+	}
+}
+
 func TestV2ClaudeCodeSmoke(t *testing.T) {
 	if os.Getenv("WHEELMAKER_V2_CLAUDE_SMOKE") != "1" {
 		t.Skip("set WHEELMAKER_V2_CLAUDE_SMOKE=1 to run the live Claude Code smoke test")

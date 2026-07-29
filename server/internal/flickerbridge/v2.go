@@ -1190,38 +1190,68 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 		if err != nil {
 			return nil, mapping, err
 		}
-		allToolResults := len(blocks) > 0
-		for _, block := range blocks {
-			if block.Type != "tool_result" {
-				allToolResults = false
-				break
+		if message.Role == "user" {
+			currentRole := ""
+			currentContent := make([]any, 0, len(blocks))
+			flush := func() {
+				if currentRole == "" {
+					return
+				}
+				prompt = append(prompt, map[string]any{
+					"role":    currentRole,
+					"content": currentContent,
+				})
+				currentRole = ""
+				currentContent = nil
 			}
-		}
-		if allToolResults {
-			converted := make([]any, 0, len(blocks))
+			appendPart := func(role string, part any) {
+				if currentRole != role {
+					flush()
+					currentRole = role
+				}
+				currentContent = append(currentContent, part)
+			}
 			for _, block := range blocks {
-				toolName, ok := toolNames[block.ToolUseID]
-				if !ok {
-					return nil, mapping, fmt.Errorf("tool_result %q has no matching tool_use", block.ToolUseID)
-				}
-				output, err := anthropicToolResultOutput(block.Content)
-				if err != nil {
-					return nil, mapping, err
-				}
-				part := map[string]any{
-					"type":       "tool-result",
-					"toolCallId": block.ToolUseID,
-					"toolName":   toolName,
-					"output":     output,
-				}
-				if block.IsError {
-					part["providerOptions"] = map[string]any{
-						"anthropic": map[string]any{"isError": true},
+				switch block.Type {
+				case "text":
+					part := map[string]any{"type": "text", "text": block.Text}
+					addCacheControl(part, block.CacheControl)
+					appendPart("user", part)
+				case "tool_result":
+					toolName, ok := toolNames[block.ToolUseID]
+					if !ok {
+						return nil, mapping, fmt.Errorf("tool_result %q has no matching tool_use", block.ToolUseID)
 					}
+					output, err := anthropicToolResultOutput(block.Content)
+					if err != nil {
+						return nil, mapping, err
+					}
+					part := map[string]any{
+						"type":       "tool-result",
+						"toolCallId": block.ToolUseID,
+						"toolName":   toolName,
+						"output":     output,
+					}
+					if block.IsError {
+						part["providerOptions"] = map[string]any{
+							"anthropic": map[string]any{"isError": true},
+						}
+					}
+					appendPart("tool", part)
+				case "tool_use":
+					return nil, mapping, errors.New("tool_use is only valid in assistant messages")
+				case "thinking":
+					return nil, mapping, errors.New("thinking is only valid in assistant messages")
+				case "image", "document", "audio", "video":
+					return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
+				default:
+					return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
 				}
-				converted = append(converted, part)
 			}
-			prompt = append(prompt, map[string]any{"role": "tool", "content": converted})
+			flush()
+			if len(blocks) == 0 {
+				prompt = append(prompt, map[string]any{"role": "user", "content": []any{}})
+			}
 			continue
 		}
 
@@ -1260,7 +1290,7 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 				}
 				converted = append(converted, part)
 			case "tool_result":
-				return nil, mapping, errors.New("tool_result blocks cannot be mixed with user text")
+				return nil, mapping, errors.New("tool_result is only valid in user messages")
 			case "image", "document", "audio", "video":
 				return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
 			default:
@@ -2739,7 +2769,14 @@ func selfTestLiveFormats() error {
 		if err := json.Unmarshal([]byte(`{
 			"max_tokens":16,
 			"system":"You are Claude Code, Anthropic's official CLI.",
-			"messages":[{"role":"user","content":"probe"}],
+			"messages":[
+				{"role":"user","content":"probe"},
+				{"role":"assistant","content":[{"type":"tool_use","id":"toolu_probe","name":"Read","input":{"file_path":"probe.txt"}}]},
+				{"role":"user","content":[
+					{"type":"tool_result","tool_use_id":"toolu_probe","content":"ok"},
+					{"type":"text","text":"continue"}
+				]}
+			],
 			"tools":[{
 				"name":"Read",
 				"description":"Read a file",
