@@ -5903,6 +5903,14 @@ func TestApplyFlickerModelsFallsBackToStrongestAvailableClaudeModel(t *testing.T
 	}
 }
 
+func TestClaudeCompatibleFlickerProfileEnablesACPConfigurableEffort(t *testing.T) {
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+
+	if got := profile.settingsEnv["CLAUDE_CODE_ALWAYS_ENABLE_EFFORT"]; got != "1" {
+		t.Fatalf("CLAUDE_CODE_ALWAYS_ENABLE_EFFORT = %q, want 1", got)
+	}
+}
+
 func TestApplyFlickerModelsUsesCurrentV2IDsForTierDefaults(t *testing.T) {
 	profile := claudeCompatibleFlickerProfile(t.TempDir())
 	applyFlickerModels(&profile, []claudeModelEntry{

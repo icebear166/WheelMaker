@@ -547,12 +547,16 @@ var flickerTierModels = struct {
 }
 
 func claudeCompatibleFlickerProfile(stateDir string) claudeCompatibleProfile {
+	// availableModels preserves the full Flicker catalog but drops custom-model
+	// effort metadata in claude-agent-acp. Keep its real SDK control available;
+	// flickerEffortInstance narrows the visible levels from the bridge catalog.
 	settingsEnv := map[string]string{
-		"ANTHROPIC_DEFAULT_FABLE_MODEL":  flickerTierModels.fable,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL":   flickerTierModels.opus,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL": flickerTierModels.sonnet,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL":  flickerTierModels.haiku,
-		"CLAUDE_CODE_SUBAGENT_MODEL":     flickerTierModels.sonnet,
+		"ANTHROPIC_DEFAULT_FABLE_MODEL":    flickerTierModels.fable,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL":     flickerTierModels.opus,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL":   flickerTierModels.sonnet,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL":    flickerTierModels.haiku,
+		"CLAUDE_CODE_SUBAGENT_MODEL":       flickerTierModels.sonnet,
+		"CLAUDE_CODE_ALWAYS_ENABLE_EFFORT": "1",
 	}
 	profile := claudeCompatibleProfile{
 		configDir:        filepath.Join(stateDir, ".data", ClaudeCompatibleFlickerProviderPreset.Name),
