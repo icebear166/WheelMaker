@@ -307,14 +307,15 @@ describe('agent package update settings UI source structure', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<(() => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const clearAgentPackageScanPollTimer = useCallback(() => {');
     expect(mainTsx).toContain('clearAgentPackageScanPollTimer();');
     expect(mainTsx).toContain('if (!options.silent) {');
     expect(mainTsx).toContain('loading: !options.silent,');
-    expect(mainTsx).toContain("if (settingsDetailViewRef.current !== 'update') {");
+    expect(mainTsx).toContain('if (!updateSurfaceActiveRef.current) {');
+    expect(mainTsx).toContain("updateSurfaceActiveRef.current = settingsDetailView === 'update' || chatHubMenuOpen;");
     expect(mainTsx).toContain('refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);');
 
     const updateEntryEffectStart = mainTsx.indexOf("if (settingsDetailView !== 'update') {\n      clearWheelMakerUpdatePollTimer();\n      clearAgentPackageScanPollTimer();");

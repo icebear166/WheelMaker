@@ -11,9 +11,11 @@ import {
   androidApkStatusIcon,
   deriveNpmUpdatableTargets,
   deriveWheelMakerHubStatus,
+  hubStatusLabel,
   packageStatusLabel,
   projectIndexStatusIcon,
   shouldShowWheelMakerUpdateAction,
+  updateStatusDotVariant,
   wheelMakerHubStatusIcon,
   wheelMakerUpdateErrorLabel,
   wheelMakerUpdateJobActive,
@@ -112,36 +114,6 @@ type UpdateSettingsDetailProps = {
   agentPackageActionLabel: (action: PackageAction) => string;
   projectFileIndexStatusLabel: (status: string) => string;
 };
-
-function updateStatusDotVariant(kind: 'update' | 'current' | 'checking' | 'failed' | 'missing'): string {
-  switch (kind) {
-    case 'current':
-      return 'is-ok';
-    case 'checking':
-      return 'is-running';
-    case 'failed':
-      return 'is-error';
-    case 'update':
-      return 'is-warn';
-    default:
-      return 'is-idle';
-  }
-}
-
-function hubStatusLabel(
-  pending: boolean,
-  jobActive: boolean,
-  jobFailed: boolean,
-  statusFailed: boolean,
-  restart: boolean,
-  jobState: string,
-): string {
-  if (pending) return 'Requesting...';
-  if (jobActive) return wheelMakerUpdateStatusLabel(jobState);
-  if (jobFailed || statusFailed) return 'Retry';
-  if (restart) return 'Restart';
-  return 'Update Hub';
-}
 
 function indexedSkillCount(projects: RegistryProject[], hubId: string): number {
   const names = new Set<string>();

@@ -21,14 +21,16 @@ describe('server settings', () => {
   });
 
   test('renders set-only password editors and never binds a server secret value', () => {
+    const editor = fs.readFileSync(path.join(root, 'web/src/common/SecretEditor.tsx'), 'utf8');
     const settings = fs.readFileSync(path.join(root, 'web/src/settings/SettingsRootContent.tsx'), 'utf8');
 
-    expect(settings).toContain('Configured');
-    expect(settings).toContain('Not configured');
-    expect(settings).toContain('type="password"');
-    expect(settings).toContain("useState('')");
-    expect(settings).not.toMatch(/(?:apiKey|accessToken|secret)\.value/);
-    expect(settings).not.toContain('BackendSecretEditor');
-    expect(settings).not.toContain('retryBackendSecretMigration');
+    expect(settings).toContain('SecretEditor');
+    expect(editor).toContain('Configured');
+    expect(editor).toContain('Not configured');
+    expect(editor).toContain('type="password"');
+    expect(editor).toContain("useState('')");
+    expect(editor).not.toMatch(/(?:apiKey|accessToken|secret)\.value/);
+    expect(editor).not.toContain('BackendSecretEditor');
+    expect(editor).not.toContain('retryBackendSecretMigration');
   });
 });

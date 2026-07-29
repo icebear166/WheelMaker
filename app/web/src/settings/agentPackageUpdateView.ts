@@ -126,6 +126,36 @@ export function deriveNpmPackageUpdateTargets(packages: RegistryNpmPackage[]): N
 
 export type UpdateStatusIconKind = 'update' | 'current' | 'checking' | 'failed' | 'missing';
 
+export function updateStatusDotVariant(kind: UpdateStatusIconKind): string {
+  switch (kind) {
+    case 'current':
+      return 'is-ok';
+    case 'checking':
+      return 'is-running';
+    case 'failed':
+      return 'is-error';
+    case 'update':
+      return 'is-warn';
+    default:
+      return 'is-idle';
+  }
+}
+
+export function hubStatusLabel(
+  pending: boolean,
+  jobActive: boolean,
+  jobFailed: boolean,
+  statusFailed: boolean,
+  restart: boolean,
+  jobState: string,
+): string {
+  if (pending) return 'Requesting...';
+  if (jobActive) return wheelMakerUpdateStatusLabel(jobState);
+  if (jobFailed || statusFailed) return 'Retry';
+  if (restart) return 'Restart';
+  return 'Update Hub';
+}
+
 export function wheelMakerHubStatusIcon(
   status: string,
   loading: boolean,

@@ -148,6 +148,31 @@ export interface RegistryHubState {
   sections: Record<string, RegistryHubStateSection>;
 }
 
+export interface RegistryHubConfigAPIKeySnapshot {
+  configured: boolean;
+  updatedAt?: string;
+}
+
+export interface RegistryHubConfigFlickerBridgeSnapshot {
+  mode: RegistryFlickerBridgeMode;
+  enabled: boolean;
+}
+
+/** Sanitized hub config snapshot — secret values never leave the hub. */
+export interface RegistryHubConfig {
+  flickerBridge: RegistryHubConfigFlickerBridgeSnapshot;
+  apiKeys: Record<string, RegistryHubConfigAPIKeySnapshot>;
+}
+
+export interface RegistryHubConfigResponse {
+  hubId: string;
+  config: RegistryHubConfig;
+}
+
+export type RegistryHubConfigUpdatePayload =
+  | {section: 'apiKeys'; field: string; action: 'set' | 'clear'; value?: string}
+  | {section: 'flickerBridge'; field: 'enabled'; action: 'set' | 'clear'};
+
 export interface RegistryUsageHistorySample {
   observedAtMillis: number;
   remainingPercent: number;

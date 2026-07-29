@@ -420,7 +420,10 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('const visibleProjectItems = visibility.visibleProjects;');
     expect(mainTsx).toContain('const hiddenProjectItems = visibility.hiddenProjects;');
     expect(mainTsx).toContain('className="chat-hidden-project-row"');
-    expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
+    const hubMenuTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+    expect(hubMenuTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
   });
 
   test('keeps mobile drawer open while toggling hub project visibility', () => {
@@ -434,9 +437,13 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain("options?: {reason?: 'chat' | 'manual'; keepMobileDrawerOpen?: boolean}");
     expect(mainTsx).toContain('keepMobileDrawerOpen: options?.keepMobileDrawerOpen,');
     expect(mainTsx).toContain("syncWorkspaceProject(nextProject.projectId, {reason: 'chat', keepMobileDrawerOpen: chatHubMenuOpen}).catch(() => undefined);");
-    expect(mainTsx).toContain('onClick={event => {');
-    expect(mainTsx).toContain('event.stopPropagation();');
-    expect(mainTsx).toContain('toggleProjectVisibility(current, projectItem.projectId, !visible)');
+    expect(mainTsx).toContain('toggleProjectVisibility(current, projectId, visible)');
+    const hubMenuTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+    expect(hubMenuTsx).toContain('onClick={event => {');
+    expect(hubMenuTsx).toContain('event.stopPropagation();');
+    expect(hubMenuTsx).toContain('onToggleProject(projectItem.projectId, !visible)');
     expect(mainTsx).not.toContain("syncWorkspaceProject(nextProject.projectId, {reason: 'chat'}).catch(() => undefined);");
   });
 
@@ -445,60 +452,63 @@ describe('web responsive ui state', () => {
     const mainTsx = fs
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
+    const hubMenuTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
     const stylesCss = readWebStyles(projectRoot);
 
-    const colorButtonIndex = mainTsx.indexOf('className="chat-hub-color-button"');
-    const hubNameIndex = mainTsx.indexOf('<span className="chat-hub-row-name">{hub.hubId}</span>', colorButtonIndex);
+    const colorButtonIndex = hubMenuTsx.indexOf('className="chat-hub-color-button"');
+    const hubNameIndex = hubMenuTsx.indexOf('<span className="chat-hub-row-name">{hubId}</span>', colorButtonIndex);
     expect(colorButtonIndex).toBeGreaterThanOrEqual(0);
     expect(hubNameIndex).toBeGreaterThanOrEqual(0);
     expect(hubNameIndex).toBeGreaterThan(colorButtonIndex);
-    expect(mainTsx).toContain('className="chat-hub-color-dot"');
-    expect(mainTsx).toContain('className="chat-hub-expand-button"');
-    expect(mainTsx).not.toContain('chat-hub-read-tag');
-    expect(mainTsx).not.toContain('className="chat-hub-color-trigger"');
-    expect(mainTsx).not.toContain('className={`chat-hub-visibility-check ${visibilityState}`}');
-    expect(mainTsx).not.toContain("const hubEnabled = visibilityState !== 'unchecked';");
-    expect(mainTsx).not.toContain('const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);');
-    expect(mainTsx).not.toContain('const hubToggleLabel = hubEnabled');
-    expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
-    expect(mainTsx).toContain("className={`chat-hub-project-row${visible ? '' : ' hidden'}`}");
-    expect(mainTsx).toContain('className="chat-hub-project-check"');
-    expect(mainTsx).toContain('style={hubAccentStyle(hub.hubId)}');
-    expect(mainTsx).not.toContain('className="chat-hub-disclosure"');
-    expect(mainTsx).not.toContain('className={`chat-hub-visibility-cube');
-    expect(mainTsx).not.toContain('aria-pressed={hubEnabled}');
-    expect(mainTsx).not.toContain('toggleHubVisibility(current, treeItem.projects');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-dot"');
+    expect(hubMenuTsx).toContain('className="chat-hub-expand-button"');
+    expect(hubMenuTsx).not.toContain('chat-hub-read-tag');
+    expect(hubMenuTsx).not.toContain('className="chat-hub-color-trigger"');
+    expect(hubMenuTsx).not.toContain('className={`chat-hub-visibility-check ${visibilityState}`}');
+    expect(hubMenuTsx).not.toContain("const hubEnabled = visibilityState !== 'unchecked';");
+    expect(hubMenuTsx).not.toContain('const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);');
+    expect(hubMenuTsx).not.toContain('const hubToggleLabel = hubEnabled');
+    expect(hubMenuTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
+    expect(hubMenuTsx).toContain("className={`chat-hub-project-row${visible ? '' : ' hidden'}`}");
+    expect(hubMenuTsx).toContain('className="chat-hub-project-check"');
+    expect(hubMenuTsx).toContain('style={hubAccentStyle(hubId)}');
+    expect(hubMenuTsx).not.toContain('className="chat-hub-disclosure"');
+    expect(hubMenuTsx).not.toContain('className={`chat-hub-visibility-cube');
+    expect(hubMenuTsx).not.toContain('aria-pressed={hubEnabled}');
+    expect(hubMenuTsx).not.toContain('toggleHubVisibility(current, treeItem.projects');
     expect(mainTsx).toContain('resolveHubColor,');
     expect(mainTsx).toContain('resolveHubColorVariantIndex,');
     expect(mainTsx).toContain("if (prefix === 'wide-project-hub') {");
     expect(mainTsx).not.toContain('token-stats-pill-hub');
     expect(mainTsx).toContain('return `${prefix}-${resolveHubColorVariantIndex(normalized)}`;');
     expect(mainTsx).toContain('const color = resolveHubColor(hubColors, hubId);');
-    expect(mainTsx).toContain('const currentHubColor = resolveHubColor(hubColors, hub.hubId);');
-    expect(mainTsx).toContain("style={{'--swatch-color': color} as React.CSSProperties}");
-    expect(mainTsx).not.toContain('className="chat-hub-color-toolbar"');
-    expect(mainTsx).not.toContain('className="chat-hub-color-title"');
-    expect(mainTsx).not.toContain('>Hub color</span>');
-    expect(mainTsx).toContain('const defaultHubColor = resolveDefaultHubColor(hub.hubId);');
-    expect(mainTsx).toContain('const defaultSwatch = color === defaultHubColor;');
-    expect(mainTsx).toContain("className={`chat-hub-color-swatch${currentHubColor === color ? ' selected' : ''}${defaultSwatch ? ' default' : ''}`}");
-    expect(mainTsx).toContain("setHubColorPreference(current, hub.hubId, defaultSwatch ? '' : color)");
-    expect(mainTsx).toContain('{defaultSwatch ? <span className="chat-hub-color-default-badge" aria-hidden="true">D</span> : null}');
-    expect(mainTsx).not.toContain('className="chat-hub-color-actions"');
-    expect(mainTsx).not.toContain('className={`chat-hub-color-default');
-    expect(mainTsx).not.toContain('className="chat-hub-color-default-swatch"');
-    expect(mainTsx).not.toContain('style={hubDefaultAccentStyle(hub.hubId)}');
-    expect(mainTsx).toContain('className="chat-hub-color-custom"');
-    expect(mainTsx).toContain('className="chat-hub-color-custom-header"');
-    expect(mainTsx).toContain('className="chat-hub-color-custom-preview"');
-    expect(mainTsx).toContain('className="chat-hub-color-sv"');
-    expect(mainTsx).toContain('className="chat-hub-color-sv-thumb"');
-    expect(mainTsx).toContain('className="chat-hub-color-hue"');
-    expect(mainTsx).toContain('className="chat-hub-color-hue-thumb"');
-    expect(mainTsx).toContain('applyHubColorSvPointer(hub.hubId, currentHubHsv, event)');
-    expect(mainTsx).toContain('applyHubColorHuePointer(hub.hubId, currentHubHsv, event)');
-    expect(mainTsx).not.toContain('type="color"');
-    expect(mainTsx).not.toContain('className={`chat-hub-color-mode chat-hub-color-custom');
+    expect(hubMenuTsx).toContain('const currentHubColor = resolveHubColor(hubColors, hubId);');
+    expect(hubMenuTsx).toContain("style={{'--swatch-color': color} as React.CSSProperties}");
+    expect(hubMenuTsx).not.toContain('className="chat-hub-color-toolbar"');
+    expect(hubMenuTsx).not.toContain('className="chat-hub-color-title"');
+    expect(hubMenuTsx).not.toContain('>Hub color</span>');
+    expect(hubMenuTsx).toContain('const defaultHubColor = resolveDefaultHubColor(hubId);');
+    expect(hubMenuTsx).toContain('const defaultSwatch = color === defaultHubColor;');
+    expect(hubMenuTsx).toContain("className={`chat-hub-color-swatch${currentHubColor === color ? ' selected' : ''}${defaultSwatch ? ' default' : ''}`}");
+    expect(hubMenuTsx).toContain("setHubColorPreference(current, hubId, defaultSwatch ? '' : color)");
+    expect(hubMenuTsx).toContain('{defaultSwatch ? <span className="chat-hub-color-default-badge" aria-hidden="true">D</span> : null}');
+    expect(hubMenuTsx).not.toContain('className="chat-hub-color-actions"');
+    expect(hubMenuTsx).not.toContain('className={`chat-hub-color-default');
+    expect(hubMenuTsx).not.toContain('className="chat-hub-color-default-swatch"');
+    expect(hubMenuTsx).not.toContain('style={hubDefaultAccentStyle(hub.hubId)}');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-custom"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-custom-header"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-custom-preview"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-sv"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-sv-thumb"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-hue"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-hue-thumb"');
+    expect(hubMenuTsx).toContain('applySvPointer(currentHubHsv, event)');
+    expect(hubMenuTsx).toContain('applyHuePointer(currentHubHsv, event)');
+    expect(hubMenuTsx).not.toContain('type="color"');
+    expect(hubMenuTsx).not.toContain('className={`chat-hub-color-mode chat-hub-color-custom');
     expect(mainTsx).toContain('!chatHubMenuRef.current?.contains(target) &&');
     expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
     expect(mainTsx).toContain('const [chatHubColorMenu, setChatHubColorMenu, chatHubColorMenuExiting] = useMenuExitState<{hubId: string}>();');
@@ -610,15 +620,15 @@ describe('web responsive ui state', () => {
 
   test('captures custom hub color before dispatching a deferred updater', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
+    const hubMenuTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    const customColorHandlerStart = mainTsx.indexOf('const nextColor = hubHsvToColor(', mainTsx.indexOf('const applyHubColorSvPointer = useCallback('));
+    const customColorHandlerStart = hubMenuTsx.indexOf('const nextColor = hubHsvToColor(', hubMenuTsx.indexOf('const applySvPointer = ('));
     expect(customColorHandlerStart).toBeGreaterThanOrEqual(0);
-    const customColorHandlerEnd = mainTsx.indexOf('setHubColors(current =>', customColorHandlerStart);
+    const customColorHandlerEnd = hubMenuTsx.indexOf('setHubColors(current =>', customColorHandlerStart);
     expect(customColorHandlerEnd).toBeGreaterThan(customColorHandlerStart);
-    const customColorHandler = mainTsx.slice(customColorHandlerStart, customColorHandlerEnd);
+    const customColorHandler = hubMenuTsx.slice(customColorHandlerStart, customColorHandlerEnd);
     expect(customColorHandler).toContain('const nextColor = hubHsvToColor(');
     expect(customColorHandler).not.toContain('event.currentTarget.value');
   });

@@ -27,6 +27,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	"github.com/swm8023/wheelmaker/internal/hub/usage"
+	"github.com/swm8023/wheelmaker/internal/hubconfig"
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/security"
@@ -46,6 +47,12 @@ type ProjectInfo = rp.ProjectInfo
 type envelope = rp.Envelope
 type errorPayload = rp.ErrorPayload
 
+// defaultFlickerBridgeAPIKey is the built-in Flicker Bridge credential used
+// when neither hub-config.json nor config.json provides one, so the bridge
+// works out of the box without asking users for a key.
+// TODO(release): fill in the production default key.
+const defaultFlickerBridgeAPIKey = ""
+
 type hubStateGetPayload struct {
 	Sections []string `json:"sections,omitempty"`
 }
@@ -59,6 +66,13 @@ type hubStateActionPayload struct {
 	Section string         `json:"section"`
 	Action  string         `json:"action"`
 	Params  map[string]any `json:"params,omitempty"`
+}
+
+type hubConfigUpdatePayload struct {
+	Section string `json:"section"`
+	Field   string `json:"field"`
+	Action  string `json:"action"`
+	Value   string `json:"value,omitempty"`
 }
 
 type usageHistoryGetPayload struct {
@@ -137,6 +151,7 @@ type Reporter struct {
 	terminalHandler TerminalHandler
 	hubEventSink    *hubEventSink
 	flickerBridge   *flickerBridgeManager
+	hubConfig       *hubconfig.Store
 }
 
 // NewReporter creates a Reporter.
@@ -184,9 +199,23 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		relayClient:  portrelay.NewHubClient(),
 		fileIndex:    newProjectFileIndexManager(stateDir),
 	}
+	r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	resolveAPIKey := func(name hubconfig.APIKeyName, fallback string) string {
+		value, err := r.hubConfig.APIKeyValue(name)
+		if err != nil {
+			hubLogger("").Warn("read hub config API key %s failed: %v", name, err)
+		} else if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+		return strings.TrimSpace(fallback)
+	}
+	flickerAPIKey := resolveAPIKey(hubconfig.APIKeyFlicker, cfg.APIKeys.Flicker)
+	if flickerAPIKey == "" {
+		flickerAPIKey = defaultFlickerBridgeAPIKey
+	}
 	r.flickerBridge = cfg.FlickerBridge
 	if r.flickerBridge == nil {
-		r.flickerBridge = newFlickerBridgeManager(stateDir, cfg.APIKeys.Flicker)
+		r.flickerBridge = newFlickerBridgeManager(stateDir, flickerAPIKey, r.hubConfig)
 	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
 		HubID:                 cfg.HubID,
@@ -197,10 +226,15 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
+	if enabled, err := r.hubConfig.FlickerBridgeEnabled(); err != nil {
+		hubLogger("").Warn("read Flicker Bridge enabled flag failed: %v", err)
+	} else if enabled {
+		go r.autoStartFlickerBridge()
+	}
 	collector := usage.NewLocalCollector("")
-	collector.KimiAPIKey = cfg.APIKeys.Kimi
-	collector.ZAIAPIKey = cfg.APIKeys.ZAI
-	collector.DeepSeekAPIKey = cfg.APIKeys.DeepSeek
+	collector.KimiAPIKey = resolveAPIKey(hubconfig.APIKeyKimi, cfg.APIKeys.Kimi)
+	collector.ZAIAPIKey = resolveAPIKey(hubconfig.APIKeyZAI, cfg.APIKeys.ZAI)
+	collector.DeepSeekAPIKey = resolveAPIKey(hubconfig.APIKeyDeepSeek, cfg.APIKeys.DeepSeek)
 	r.usageHistory = usage.NewHistoryStore(filepath.Join(stateDir, "db", "usage-history.json"))
 	r.usageService = usage.NewService(usage.ServiceOptions{
 		HubID: r.cfg.HubID, Collector: collector, History: r.usageHistory,
@@ -654,6 +688,10 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
+	case rp.RegistryMethodHubConfigGet:
+		r.replyHubConfigGet(conn, in)
+	case rp.RegistryMethodHubConfigUpdate:
+		r.replyHubConfigUpdate(conn, in)
 	case rp.RegistryMethodUsageHistoryGet:
 		r.replyUsageHistoryGet(conn, in)
 	case rp.RegistryMethodHubReleaseApply:
@@ -940,6 +978,146 @@ func (r *Reporter) ensureHubStateManager() *HubStateManager {
 		r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	}
 	return r.hubStateManager
+}
+
+func (r *Reporter) ensureHubConfigStore() *hubconfig.Store {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.hubConfig == nil {
+		r.hubConfig = hubconfig.New(filepath.Join(r.cfg.StateDir, "db", "hub-config.json"))
+	}
+	return r.hubConfig
+}
+
+func (r *Reporter) replyHubConfigGet(conn *websocket.Conn, req envelope) {
+	snapshot, err := r.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
+		return
+	}
+	r.overlayHubConfigFallbacks(&snapshot)
+	r.writeHubConfigSnapshot(conn, req, snapshot)
+}
+
+// overlayHubConfigFallbacks marks keys as configured when they are not in the
+// hub config store but resolve from config.json api_keys (or the built-in
+// Flicker default), so the reported state matches what the hub actually uses.
+// Clearing a store override can therefore leave configured=true when a
+// config.json fallback remains; config.json itself is never edited remotely.
+func (r *Reporter) overlayHubConfigFallbacks(snapshot *hubconfig.Snapshot) {
+	fallbacks := map[hubconfig.APIKeyName]string{
+		hubconfig.APIKeyKimi:     r.cfg.APIKeys.Kimi,
+		hubconfig.APIKeyQwen:     r.cfg.APIKeys.Qwen,
+		hubconfig.APIKeyZAI:      r.cfg.APIKeys.ZAI,
+		hubconfig.APIKeyDeepSeek: r.cfg.APIKeys.DeepSeek,
+		hubconfig.APIKeyFlicker:  r.cfg.APIKeys.Flicker,
+	}
+	for name, fallback := range fallbacks {
+		fallback = strings.TrimSpace(fallback)
+		if name == hubconfig.APIKeyFlicker && fallback == "" {
+			fallback = defaultFlickerBridgeAPIKey
+		}
+		if fallback == "" {
+			continue
+		}
+		entry := snapshot.APIKeys[string(name)]
+		if entry.Configured {
+			continue
+		}
+		entry.Configured = true
+		entry.UpdatedAt = ""
+		snapshot.APIKeys[string(name)] = entry
+	}
+}
+
+func (r *Reporter) replyHubConfigUpdate(conn *websocket.Conn, req envelope) {
+	var payload hubConfigUpdatePayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.config.update payload")
+		return
+	}
+	payload.Section = strings.TrimSpace(payload.Section)
+	payload.Field = strings.TrimSpace(payload.Field)
+	payload.Action = strings.TrimSpace(payload.Action)
+	if err := r.applyHubConfigUpdate(payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	snapshot, err := r.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to read hub config")
+		return
+	}
+	r.overlayHubConfigFallbacks(&snapshot)
+	r.writeHubConfigSnapshot(conn, req, snapshot)
+}
+
+func (r *Reporter) writeHubConfigSnapshot(conn *websocket.Conn, req envelope, snapshot hubconfig.Snapshot) {
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload: rp.MustRaw(map[string]any{
+			"hubId":  r.cfg.HubID,
+			"config": snapshot,
+		}),
+	})
+}
+
+func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
+	store := r.ensureHubConfigStore()
+	switch payload.Section {
+	case "apiKeys":
+		return store.UpdateAPIKey(hubconfig.APIKeyName(payload.Field), payload.Action, payload.Value, time.Now())
+	case "flickerBridge":
+		if payload.Field != "enabled" {
+			return fmt.Errorf("unsupported flickerBridge field %q", payload.Field)
+		}
+		var enabled bool
+		switch payload.Action {
+		case "set":
+			enabled = true
+		case "clear":
+			enabled = false
+		default:
+			return fmt.Errorf("unsupported flickerBridge action %q", payload.Action)
+		}
+		if err := store.UpdateFlickerBridgeEnabled(enabled); err != nil {
+			return err
+		}
+		r.applyFlickerBridgeEnabled(enabled)
+		return nil
+	default:
+		return fmt.Errorf("unsupported hub config section %q", payload.Section)
+	}
+}
+
+// applyFlickerBridgeEnabled mirrors the persisted enabled flag into the
+// runtime bridge state; failures surface through the bridge status instead.
+func (r *Reporter) applyFlickerBridgeEnabled(enabled bool) {
+	if r.flickerBridge == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if enabled {
+		if _, err := r.flickerBridge.Start(ctx); err != nil {
+			hubLogger("").Warn("start Flicker Bridge after enable failed: %v", err)
+		}
+		return
+	}
+	if _, err := r.flickerBridge.Stop(ctx); err != nil {
+		hubLogger("").Warn("stop Flicker Bridge after disable failed: %v", err)
+	}
+}
+
+func (r *Reporter) autoStartFlickerBridge() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if _, err := r.flickerBridge.Start(ctx); err != nil {
+		hubLogger("").Warn("auto-start Flicker Bridge failed: %v", err)
+	}
 }
 
 func (r *Reporter) replyRelayOpen(conn *websocket.Conn, req envelope) {

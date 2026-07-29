@@ -27,6 +27,8 @@ import type {
   RegistryHub,
   RegistryHubState,
   RegistryHubStateSectionName,
+  RegistryHubConfigResponse,
+  RegistryHubConfigUpdatePayload,
   RegistryUsageHistoryResponse,
 	RegistryReleasePublishResponse,
   RegistryNpmCommandResponse,
@@ -919,6 +921,23 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.runHubStateAction(hubId, section, action, params);
+  }
+
+  async getHubConfig(hubId: string): Promise<RegistryHubConfigResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getHubConfig(hubId);
+  }
+
+  async updateHubConfig(
+    hubId: string,
+    update: RegistryHubConfigUpdatePayload,
+  ): Promise<RegistryHubConfigResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.updateHubConfig(hubId, update);
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {

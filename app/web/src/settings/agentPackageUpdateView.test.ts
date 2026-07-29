@@ -2,7 +2,9 @@
 import {
   androidApkStatusIcon,
   deriveNpmUpdatableTargets,
+  hubStatusLabel,
   projectIndexStatusIcon,
+  updateStatusDotVariant,
   wheelMakerHubStatusIcon,
 } from './agentPackageUpdateView';
 
@@ -43,4 +45,21 @@ test('deriveNpmUpdatableTargets keeps only packages with an update', () => {
   ]);
   expect(targets.map(t => t.packageName)).toEqual(['a']);
   expect(targets[0].latestVersion).toBe('2');
+});
+
+test('hubStatusLabel covers pending / job / retry / restart / update branches', () => {
+  expect(hubStatusLabel(true, false, false, false, false, '')).toBe('Requesting...');
+  expect(hubStatusLabel(false, true, false, false, false, 'downloading')).toBe('Downloading');
+  expect(hubStatusLabel(false, false, true, false, false, 'failed')).toBe('Retry');
+  expect(hubStatusLabel(false, false, false, true, false, '')).toBe('Retry');
+  expect(hubStatusLabel(false, false, false, false, true, '')).toBe('Restart');
+  expect(hubStatusLabel(false, false, false, false, false, '')).toBe('Update Hub');
+});
+
+test('updateStatusDotVariant maps icon kinds to dot variants', () => {
+  expect(updateStatusDotVariant('current')).toBe('is-ok');
+  expect(updateStatusDotVariant('checking')).toBe('is-running');
+  expect(updateStatusDotVariant('failed')).toBe('is-error');
+  expect(updateStatusDotVariant('update')).toBe('is-warn');
+  expect(updateStatusDotVariant('missing')).toBe('is-idle');
 });

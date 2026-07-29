@@ -76,6 +76,8 @@ export const RegistryMethods = {
   HubStateRefresh: 'hub.state.refresh',
   HubStateAction: 'hub.state.action',
   HubStateUpdated: 'hub.state.updated',
+  HubConfigGet: 'hub.config.get',
+  HubConfigUpdate: 'hub.config.update',
   UsageHistoryGet: 'usage.history.get',
   SpeechStart: 'speech.start',
   SpeechChunk: 'speech.chunk',

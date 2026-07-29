@@ -111,7 +111,7 @@
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
-| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
+| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
 
@@ -380,6 +380,68 @@ HubState 变化事件由已认证且 `hubId` 匹配的 Hub 发出，Registry 按
 ```
 
 `tokenStats` 不接受 Provider action 或凭据参数。Kimi、ZAI、DeepSeek 凭据只在 Hub 本地从 OpenCode auth 读取；Registry 对 HubState payload 按字节透传，不注入、缓存或记录 Provider 密钥。
+
+## 7A. HubConfig
+
+HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-config.json`；Registry 同样只鉴权、路由、转发。所有 `hub.config.*` 请求要求 envelope 顶层 `hubId`（与 `hub.state.*` 同路由）。
+
+旧版 Hub 不支持这两个方法时会返回 unknown-method 错误，客户端应据此降级（隐藏或禁用对应设置项），protocol version 不因此变更。
+
+### `hub.config.get`
+
+读取配置的脱敏快照。**secret 值永不出 Hub**：每个 API key 只返回 `configured` / `updatedAt` 标记。
+
+```json
+{
+  "method": "hub.config.get",
+  "hubId": "hub-a",
+  "payload": {}
+}
+```
+
+响应：
+
+```json
+{
+  "hubId": "hub-a",
+  "config": {
+    "flickerBridge": {"mode": "v1", "enabled": true},
+    "apiKeys": {
+      "kimi": {"configured": true, "updatedAt": "2026-07-29T12:00:00Z"},
+      "qwen": {"configured": false},
+      "zai": {"configured": false},
+      "deepSeek": {"configured": false},
+      "flicker": {"configured": false}
+    }
+  }
+}
+```
+
+### `hub.config.update`
+
+单字段部分更新，响应与 get 相同（更新后的脱敏快照）：
+
+```json
+{
+  "method": "hub.config.update",
+  "hubId": "hub-a",
+  "payload": {
+    "section": "apiKeys",
+    "field": "kimi",
+    "action": "set",
+    "value": "sk-..."
+  }
+}
+```
+
+允许的 `section.field`：
+
+| Section | Field | Action | 说明 |
+| --- | --- | --- | --- |
+| `apiKeys` | `kimi` / `qwen` / `zai` / `deepSeek` / `flicker` | `set`（1 B–16 KiB）/ `clear` | 写入 Hub 本地 hub-config.json；**重启 Hub 后生效**。生效优先级：hub-config.json > config.json `api_keys.*`。`clear` 只删除 hub-config.json 覆盖层；config.json 仍有值时 `configured` 保持 true（回退到旧值），远程不会修改 config.json |
+| `flickerBridge` | `enabled` | `set`（启用）/ `clear`（禁用） | 持久化开关，即时 start/stop bridge；Hub 启动时 enabled=true 会自动 start |
+
+Flicker Bridge 的 API key 不需要用户填写：两级配置都缺失时 Hub 使用内置默认 key。运行时的 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section。
 
 ## 8. Session
 

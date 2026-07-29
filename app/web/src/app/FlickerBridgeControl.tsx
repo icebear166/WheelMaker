@@ -9,6 +9,8 @@ import {flickerBridgeActions} from './flickerBridgeState';
 interface FlickerBridgeControlProps {
   status?: RegistryFlickerBridgeStatus;
   busy: boolean;
+  /** Suppress the built-in summary row when a parent accordion header already shows it. */
+  hideSummary?: boolean;
   onLifecycle(action: 'start' | 'stop' | 'restart'): void;
   onSwitchMode(mode: RegistryFlickerBridgeMode): void;
 }
@@ -18,6 +20,7 @@ const flickerBridgeModes: RegistryFlickerBridgeMode[] = ['v1', 'v2'];
 export function FlickerBridgeControl({
   status,
   busy,
+  hideSummary = false,
   onLifecycle,
   onSwitchMode,
 }: FlickerBridgeControlProps): React.JSX.Element {
@@ -33,10 +36,12 @@ export function FlickerBridgeControl({
 
   return (
     <div className={`chat-hub-flicker-bridge state-${state}`} aria-live="polite">
-      <div className="chat-hub-flicker-bridge-summary">
-        <span className="chat-hub-flicker-bridge-dot" aria-hidden="true" />
-        <span className="chat-hub-flicker-bridge-name">Flicker Bridge</span>
-      </div>
+      {hideSummary ? null : (
+        <div className="chat-hub-flicker-bridge-summary">
+          <span className="chat-hub-flicker-bridge-dot" aria-hidden="true" />
+          <span className="chat-hub-flicker-bridge-name">Flicker Bridge</span>
+        </div>
+      )}
       <div className="chat-hub-flicker-bridge-actions">
         <div className="chat-hub-flicker-bridge-modes" role="group" aria-label="Flicker Bridge mode">
           {flickerBridgeModes.map(mode => {

@@ -6,7 +6,11 @@ import {
   applyFlickerBridgeHubStateEvent,
   normalizeFlickerBridgeStatus,
 } from './flickerBridgeState';
-import {FlickerBridgeControl} from './FlickerBridgeControl';
+import {
+  ChatHubMenu,
+  type ChatHubOpsView,
+  type ChatHubSectionId,
+} from './ChatHubMenu';
 
 declare global {
   interface Window {
@@ -364,17 +368,11 @@ import {
 } from '../terminal/terminalSync';
 import { sortProjectsByPin, togglePinnedProjectId } from '../workspace/projectNavigation';
 import {
-  HUB_COLOR_PRESETS,
   findNextVisibleProject,
-  hubColorToHsv,
-  hubHsvToColor,
-  resolveDefaultHubColor,
   resolveHubColor,
   resolveHubColorVariantIndex,
-  setHubColorPreference,
   splitProjectsByVisibility,
   toggleProjectVisibility,
-  type HubColorHsv,
 } from '../workspace/hubProjectPreferences';
 import { triggerMobileHaptic } from '../shell/layouts/mobile/mobileHaptics';
 import {
@@ -439,15 +437,21 @@ import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTy
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
+  deriveNpmUpdatableTargets,
   deriveRegistryHubIds,
+  deriveWheelMakerHubStatus,
   fetchWheelMakerPublicMetadata,
   fetchWheelMakerReleaseHistory,
+  hubStatusLabel,
   npmPackageUpdateSummary,
   packageStatusLabel,
   shouldShowWheelMakerUpdateAction,
+  updateStatusDotVariant,
+  wheelMakerHubStatusIcon,
   wheelMakerUpdateErrorLabel,
   wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
+  wheelMakerVersionCopy,
   withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
   type WheelMakerPublicMetadata,
@@ -651,6 +655,8 @@ import type {
   RegistryFileIndexStatus,
   RegistryFileIndexStatusResponse,
   RegistryFlickerBridgeStatus,
+  RegistryHubConfig,
+  RegistryHubConfigUpdatePayload,
   RegistryTerminal,
   RegistryTerminalChangedEvent,
   RegistryTerminalOutputEvent,
@@ -987,6 +993,7 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.mobile-project-sheet',
   '.session-archive-menu',
   '.chat-hub-popover',
+  '.chat-hub-page',
   '.chat-title-project-menu',
   '.chat-title-prompt-menu',
 ].join(', ');
@@ -3052,7 +3059,7 @@ export function App() {
   const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
   const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshWheelMakerUpdatesRef = useRef<(() => Promise<void>) | null>(null);
+  const refreshWheelMakerUpdatesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshProjectFileIndexesRef = useRef<((hubIds: string | string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);
@@ -3559,6 +3566,13 @@ export function App() {
   const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
   const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
   const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
+  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubSectionId | null>>({});
+  const [chatHubConfigByHubId, setChatHubConfigByHubId] = useState<Record<string, {
+    loading: boolean;
+    error: string;
+    data: RegistryHubConfig | null;
+    busyField: string;
+  }>>({});
   const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen, chatTitleProjectMenuExiting] = useMenuExitFlag();
   const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitleProjectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3635,6 +3649,64 @@ export function App() {
     }
   }, [refreshChatHubFlickerBridge]);
 
+  const refreshChatHubConfig = useCallback(async (hubId: string): Promise<void> => {
+    setChatHubConfigByHubId(current => ({
+      ...current,
+      [hubId]: {
+        loading: true,
+        error: '',
+        data: current[hubId]?.data ?? null,
+        busyField: current[hubId]?.busyField ?? '',
+      },
+    }));
+    try {
+      const result = await service.getHubConfig(hubId);
+      setChatHubConfigByHubId(current => ({
+        ...current,
+        [hubId]: {loading: false, error: '', data: result.config, busyField: current[hubId]?.busyField ?? ''},
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const friendly = /unknown|unsupported|not found|method/i.test(message)
+        ? 'This hub does not support hub configuration yet.'
+        : message;
+      setChatHubConfigByHubId(current => ({
+        ...current,
+        [hubId]: {loading: false, error: friendly, data: current[hubId]?.data ?? null, busyField: ''},
+      }));
+    }
+  }, [service]);
+
+  const updateChatHubConfig = useCallback(async (
+    hubId: string,
+    update: RegistryHubConfigUpdatePayload,
+  ): Promise<void> => {
+    const busyField = `${update.section}:${update.field}`;
+    setChatHubConfigByHubId(current => ({
+      ...current,
+      [hubId]: {
+        loading: false,
+        error: '',
+        data: current[hubId]?.data ?? null,
+        busyField,
+      },
+    }));
+    try {
+      const result = await service.updateHubConfig(hubId, update);
+      setChatHubConfigByHubId(current => ({
+        ...current,
+        [hubId]: {loading: false, error: '', data: result.config, busyField: ''},
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setChatHubConfigByHubId(current => ({
+        ...current,
+        [hubId]: {loading: false, error: message, data: current[hubId]?.data ?? null, busyField: ''},
+      }));
+      throw error;
+    }
+  }, [service]);
+
   useEffect(() => {
     if (!chatHubMenuOpen || !connected || registryHubs.length === 0) {
       return;
@@ -3652,11 +3724,22 @@ export function App() {
             },
           }));
       });
+      refreshChatHubConfig(hub.hubId).catch(() => undefined);
     }
+    const hubIds = registryHubs.map(hub => hub.hubId);
+    refreshWheelMakerUpdatesRef.current?.({silent: true}).catch(() => undefined);
+    refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);
+    refreshProjectFileIndexesRef.current?.(hubIds, {silent: true}).catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, registryHubs]);
+  }, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, refreshChatHubConfig, registryHubs]);
+
+  useEffect(() => {
+    if (!chatHubMenuOpen) {
+      setChatHubExpandedSections({});
+    }
+  }, [chatHubMenuOpen]);
 
   function knownChatSessionsForProject(targetProjectId: string): RegistryChatSession[] {
     const projectSessions = projectSessionsByProjectIdRef.current[targetProjectId] ?? [];
@@ -5333,45 +5416,6 @@ export function App() {
     const color = resolveHubColor(hubColors, hubId);
     return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
   }, [hubColors]);
-  const applyHubColorSvPointer = useCallback((
-    hubId: string,
-    hsv: HubColorHsv,
-    event: React.PointerEvent<HTMLElement>,
-  ) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
-      return;
-    }
-    event.preventDefault();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture may fail for synthetic or already-ended pointer events.
-    }
-    const saturation = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const brightness = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-    const nextColor = hubHsvToColor({h: hsv.h, s: saturation, v: brightness});
-    setHubColors(current => setHubColorPreference(current, hubId, nextColor));
-  }, [setHubColors]);
-  const applyHubColorHuePointer = useCallback((
-    hubId: string,
-    hsv: HubColorHsv,
-    event: React.PointerEvent<HTMLElement>,
-  ) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) {
-      return;
-    }
-    event.preventDefault();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture may fail for synthetic or already-ended pointer events.
-    }
-    const hueRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const nextColor = hubHsvToColor({h: hueRatio * 360, s: hsv.s || 1, v: hsv.v || 1});
-    setHubColors(current => setHubColorPreference(current, hubId, nextColor));
-  }, [setHubColors]);
   const sessionSearchSections = useMemo(
     () => buildSessionSearchSections({
       projects: visibleProjectItems,
@@ -5565,7 +5609,7 @@ export function App() {
     const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (target?.closest(
-        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-title-project-menu, .chat-title-prompt-menu',
+        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-hub-page, .chat-title-project-menu, .chat-title-prompt-menu',
       )) {
         return;
       }
@@ -6565,222 +6609,74 @@ export function App() {
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
-  const renderChatHubSummary = useCallback(() => {
+  const renderChatHubSummary = () => {
     const hubCount = registryHubs.length;
     const projectCount = projects.length;
     const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;
     const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;
     return (
-      <div ref={chatHubMenuRef} className="chat-hub-summary">
-        <button
-          type="button"
-          className="chat-hub-summary-button"
-          aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}
-          aria-haspopup="menu"
-          aria-expanded={chatHubMenuOpen}
-          onClick={() => {
-            setChatPromptMenuOpen(false);
-            setChatFileMentionMenuOpen(false);
-            setChatConfigMenuOptionId('');
-            setChatConfigOverflowOpen(false);
-            setChatHubColorMenu(null);
-    
-            setChatHubMenuOpen(open => !open);
-          }}
-        >
-          <span className="chat-hub-summary-copy">
-            <span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>
-            <span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>
-          </span>
-          <SessionIcon name="chevronDown" />
-        </button>
-        {chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(
-          <div
-            ref={chatHubPopoverRef}
-            className={`chat-hub-popover topbar-menu-surface${chatHubColorMenuHubId ? ' no-overflow' : ''}${chatHubMenuExiting ? ' sl-menu-exit' : ''}`}
-            role="dialog"
-            aria-label="Hub and project display preferences"
-            style={chatHubPopoverStyle}
-          >
-            {registryHubs.length > 0 ? (
-              registryHubs.map(hub => {
-                const treeItem = chatHubTreeItems.find(item => item.hubId === hub.hubId) ?? {hubId: hub.hubId, projects: []};
-                const expanded = effectiveExpandedHubIds.includes(hub.hubId);
-                const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
-                const currentHubColor = resolveHubColor(hubColors, hub.hubId);
-                const defaultHubColor = resolveDefaultHubColor(hub.hubId);
-                const currentHubHsv = hubColorToHsv(currentHubColor);
-                const currentHubHueColor = hubHsvToColor({h: currentHubHsv.h, s: 1, v: 1});
-                const flickerBridge = chatHubFlickerBridgeStatuses[hub.hubId];
-                const flickerBridgeBusy = chatHubFlickerBridgeActionHubId === hub.hubId;
-                const customHubColorStyle = {
-                  ...hubAccentStyle(hub.hubId),
-                  '--hub-custom-hue': currentHubHueColor,
-                  '--hub-custom-s': `${currentHubHsv.s * 100}%`,
-                  '--hub-custom-v': `${(1 - currentHubHsv.v) * 100}%`,
-                  '--hub-custom-h': `${(currentHubHsv.h / 360) * 100}%`,
-                } as React.CSSProperties;
-                    return (
-                      <div key={hub.hubId} className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
-                    <div className="chat-hub-row" style={hubAccentStyle(hub.hubId)}>
-                      <button
-                        type="button"
-                        className="chat-hub-color-button"
-                        aria-label={`Set color for ${hub.hubId}`}
-                        aria-expanded={colorMenuOpen}
-                        style={hubAccentStyle(hub.hubId)}
-                        onClick={() => setChatHubColorMenu(colorMenuOpen ? null : {hubId: hub.hubId})}
-                      >
-                        <span className="chat-hub-color-dot" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="chat-hub-expand-button"
-                        aria-expanded={expanded}
-                        onClick={() => {
-                          const next = expanded
-                            ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
-                            : [...effectiveExpandedHubIds, hub.hubId];
-                          setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
-                        }}
-                      >
-                        <span className="chat-hub-row-name">{hub.hubId}</span>
-                        <SessionIcon name={expanded ? 'chevronDown' : 'chevronRight'} />
-                      </button>
-                    </div>
-                    <FlickerBridgeControl
-                      status={flickerBridge}
-                      busy={flickerBridgeBusy}
-                      onLifecycle={action => runChatHubFlickerBridgeAction(hub.hubId, action)}
-                      onSwitchMode={mode => runChatHubFlickerBridgeAction(hub.hubId, 'switchMode', {mode})}
-                    />
-                    {colorMenuOpen ? (
-                      <div className={`chat-hub-color-palette topbar-menu-surface${chatHubColorMenuExiting ? ' sl-menu-exit' : ''}`} aria-label={`Color options for ${hub.hubId}`}>
-                        <div className="chat-hub-color-grid">
-                          {HUB_COLOR_PRESETS.map(color => {
-                            const defaultSwatch = color === defaultHubColor;
-                            return (
-                              <button
-                                key={`${hub.hubId}:${color}`}
-                                type="button"
-                                className={`chat-hub-color-swatch${currentHubColor === color ? ' selected' : ''}${defaultSwatch ? ' default' : ''}`}
-                                style={{'--swatch-color': color} as React.CSSProperties}
-                                aria-label={defaultSwatch ? `Restore default color for ${hub.hubId}` : `Set ${hub.hubId} color to ${color}`}
-                                onClick={() => setHubColors(current =>
-                                  setHubColorPreference(current, hub.hubId, defaultSwatch ? '' : color)
-                                )}
-                              >
-                                {defaultSwatch ? <span className="chat-hub-color-default-badge" aria-hidden="true">D</span> : null}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="chat-hub-color-custom" style={customHubColorStyle}>
-                          <div className="chat-hub-color-custom-header">
-                            <span className="chat-hub-color-custom-label">Custom</span>
-                            <span className="chat-hub-color-custom-preview" aria-hidden="true" />
-                          </div>
-                          <div
-                            className="chat-hub-color-sv"
-                            role="slider"
-                            tabIndex={0}
-                            aria-label={`Set saturation and brightness for ${hub.hubId}`}
-                            aria-valuetext={`${Math.round(currentHubHsv.s * 100)}% saturation, ${Math.round(currentHubHsv.v * 100)}% brightness`}
-                            onPointerDown={event => applyHubColorSvPointer(hub.hubId, currentHubHsv, event)}
-                            onPointerMove={event => {
-                              if (event.pointerType === 'mouse' && event.buttons === 0) {
-                                return;
-                              }
-                              applyHubColorSvPointer(hub.hubId, currentHubHsv, event);
-                            }}
-                          >
-                            <span className="chat-hub-color-sv-thumb" aria-hidden="true" />
-                          </div>
-                          <div
-                            className="chat-hub-color-hue"
-                            role="slider"
-                            tabIndex={0}
-                            aria-label={`Set hue for ${hub.hubId}`}
-                            aria-valuemin={0}
-                            aria-valuemax={360}
-                            aria-valuenow={currentHubHsv.h}
-                            onPointerDown={event => applyHubColorHuePointer(hub.hubId, currentHubHsv, event)}
-                            onPointerMove={event => {
-                              if (event.pointerType === 'mouse' && event.buttons === 0) {
-                                return;
-                              }
-                              applyHubColorHuePointer(hub.hubId, currentHubHsv, event);
-                            }}
-                          >
-                            <span className="chat-hub-color-hue-thumb" aria-hidden="true" />
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                    {expanded ? (
-                      <div className="chat-hub-project-list">
-                        {treeItem.projects.map(projectItem => {
-                          const visible = !hiddenProjectIdSet.has(projectItem.projectId);
-                          return (
-                            <button
-                              key={`${hub.hubId}:project:${projectItem.projectId}`}
-                              type="button"
-                              className={`chat-hub-project-row${visible ? '' : ' hidden'}`}
-                              role="checkbox"
-                              aria-checked={visible}
-                              onClick={event => {
-                                event.stopPropagation();
-                                setHiddenProjectIds(current =>
-                                  toggleProjectVisibility(current, projectItem.projectId, !visible),
-                                );
-                              }}
-                              title={projectItem.path || projectItem.projectId}
-                            >
-                              <span className="chat-hub-project-check" aria-hidden="true">
-                                {visible ? <SessionIcon name="check" /> : null}
-                              </span>
-                              <span className="chat-hub-project-name">{projectItem.name}</span>
-                            </button>
-                          );
-                        })}
-                        {treeItem.projects.length === 0 ? (
-                          <div className="chat-hub-project-empty">No projects</div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="chat-hub-empty">No hubs</div>
-            )}
-          </div>,
-          document.body,
-        ) : null}
-      </div>
+      <ChatHubMenu
+        mobile={!isWide}
+        open={chatHubMenuOpen}
+        exiting={chatHubMenuExiting}
+        summaryLabel={chatHubSummaryLabel}
+        projectLabel={chatHubProjectLabel}
+        hubIds={registryHubs.map(hub => hub.hubId)}
+        treeItems={chatHubTreeItems}
+        popoverStyle={chatHubPopoverStyle}
+        menuRef={chatHubMenuRef}
+        popoverRef={chatHubPopoverRef}
+        onToggle={() => {
+          setChatPromptMenuOpen(false);
+          setChatFileMentionMenuOpen(false);
+          setChatConfigMenuOptionId('');
+          setChatConfigOverflowOpen(false);
+          setChatHubColorMenu(null);
+          setChatHubMenuOpen(open => !open);
+        }}
+        onClose={() => {
+          setChatHubMenuOpen(false);
+          setChatHubColorMenu(null);
+        }}
+        expandedHubIds={effectiveExpandedHubIds}
+        onToggleHub={hubId => {
+          const expanded = effectiveExpandedHubIds.includes(hubId);
+          const next = expanded
+            ? effectiveExpandedHubIds.filter(id => id !== hubId)
+            : [...effectiveExpandedHubIds, hubId];
+          setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
+        }}
+        expandedSections={chatHubExpandedSections}
+        onToggleSection={(hubId, section) => {
+          setChatHubExpandedSections(current => ({
+            ...current,
+            [hubId]: current[hubId] === section ? null : section,
+          }));
+        }}
+        hubColors={hubColors}
+        setHubColors={setHubColors}
+        hubAccentStyle={hubAccentStyle}
+        colorMenuHubId={chatHubColorMenuHubId || null}
+        colorMenuExiting={chatHubColorMenuExiting}
+        onToggleColorMenu={hubId => setChatHubColorMenu(hubId ? {hubId} : null)}
+        flickerStatuses={chatHubFlickerBridgeStatuses}
+        flickerActionHubId={chatHubFlickerBridgeActionHubId}
+        onFlickerLifecycle={(hubId, action) => void runChatHubFlickerBridgeAction(hubId, action)}
+        onFlickerSwitchMode={(hubId, mode) => void runChatHubFlickerBridgeAction(hubId, 'switchMode', {mode})}
+        hubConfigByHubId={chatHubConfigByHubId}
+        onUpdateHubConfig={updateChatHubConfig}
+        opsByHubId={chatHubOpsByHubId}
+        onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
+        onRequestNpmUpdate={handleChatHubNpmUpdate}
+        onScanSkills={handleChatHubScanSkills}
+        onScanAllIndexes={handleChatHubScanAllIndexes}
+        hiddenProjectIdSet={hiddenProjectIdSet}
+        onToggleProject={(projectId, visible) => {
+          setHiddenProjectIds(current => toggleProjectVisibility(current, projectId, visible));
+        }}
+      />
     );
-  }, [
-    applyHubColorHuePointer,
-    applyHubColorSvPointer,
-    chatHubFlickerBridgeActionHubId,
-    chatHubFlickerBridgeStatuses,
-    chatHubColorMenuHubId,
-    chatHubColorMenuExiting,
-    chatHubMenuOpen,
-    chatHubPopoverStyle,
-    chatHubTreeItems,
-    effectiveExpandedHubIds,
-    hiddenProjectIdSet,
-    hubAccentStyle,
-    hubColors,
-    projects.length,
-    registryHubs,
-    runChatHubFlickerBridgeAction,
-    setChatConfigOverflowOpen,
-    setExpandedHubIds,
-    setHiddenProjectIds,
-    setHubColors,
-  ]);
+  };
   const renderHiddenProjectRows = (mobile = false) => {
     if (hiddenProjectItems.length === 0) {
       return null;
@@ -12909,6 +12805,92 @@ export function App() {
     });
   }, [agentPackageHubs]);
 
+  const chatHubProjectIndexTargets = useCallback((hubId: string): RegistryFileIndexStatus[] => {
+    const card = updateHubCards.find(item => item.hubId === hubId);
+    if (card?.projectIndex?.projects?.length) {
+      return card.projectIndex.projects;
+    }
+    return projects
+      .filter(project => (project.hubId || '').trim() === hubId)
+      .map(project => ({
+        projectId: project.projectId,
+        name: project.name,
+        path: project.path,
+        status: 'missing',
+        fileCount: 0,
+      }));
+  }, [projects, updateHubCards]);
+
+  const chatHubOpsByHubId = useMemo((): Record<string, ChatHubOpsView> => {
+    const stableRelease = wheelMakerPublicMetadata?.stable ?? null;
+    const views: Record<string, ChatHubOpsView> = {};
+    for (const card of updateHubCards) {
+      const wheelMakerData = card.wheelMaker?.data ?? null;
+      const status = deriveWheelMakerHubStatus(wheelMakerData?.installed, stableRelease, wheelMakerData?.job);
+      const jobActive = wheelMakerUpdateJobActive(wheelMakerData?.job);
+      const jobFailed = wheelMakerData?.job?.state === 'failed';
+      const pending = wheelMakerUpdatePendingHubId === card.hubId;
+      const viewData = wheelMakerData ? {
+        ...wheelMakerData,
+        status,
+        canRequestUpdate: wheelMakerData.canRequestUpdate === true &&
+          (status === 'update_available' || status === 'up_to_date' || status === 'local_newer'),
+      } : null;
+      const npmUpdatable = deriveNpmUpdatableTargets(card.agentPackage?.hub?.packages ?? []);
+      const indexTargets = chatHubProjectIndexTargets(card.hubId);
+      views[card.hubId] = {
+        wheelMaker: {
+          loading: card.wheelMaker?.loading === true,
+          pending: pending || wheelMakerUpdateAllPending,
+          currentVersion: wheelMakerVersionCopy(wheelMakerData, stableRelease).current,
+          actionLabel: hubStatusLabel(
+            pending,
+            jobActive,
+            jobFailed,
+            status === 'checking_failed',
+            status === 'up_to_date' || status === 'local_newer',
+            wheelMakerData?.job?.state || '',
+          ),
+          actionVisible: shouldShowWheelMakerUpdateAction({
+            data: viewData,
+            loading: card.wheelMaker?.loading === true,
+            pending: pending || wheelMakerUpdateAllPending,
+          }),
+          updateAvailable: status === 'update_available',
+          dotVariant: updateStatusDotVariant(
+            wheelMakerHubStatusIcon(status, card.wheelMaker?.loading === true, jobActive),
+          ),
+        },
+        npm: {
+          loading: card.agentPackage?.loading === true || agentPackagesLoading,
+          pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
+          outdatedCount: npmUpdatable.length,
+        },
+        skills: {
+          pending: skillIndexScanPendingByHubId[card.hubId] === true,
+          error: skillIndexScanErrorByHubId[card.hubId] || '',
+        },
+        index: {
+          pending: projectIndexScanAllPendingByHubId[card.hubId] === true,
+          indexedCount: indexTargets.filter(project => project.status === 'indexed').length,
+          totalCount: indexTargets.length,
+        },
+      };
+    }
+    return views;
+  }, [
+    agentPackageHubUpdatePendingId,
+    agentPackagesLoading,
+    chatHubProjectIndexTargets,
+    projectIndexScanAllPendingByHubId,
+    skillIndexScanErrorByHubId,
+    skillIndexScanPendingByHubId,
+    updateHubCards,
+    wheelMakerPublicMetadata,
+    wheelMakerUpdateAllPending,
+    wheelMakerUpdatePendingHubId,
+  ]);
+
   const clearWheelMakerUpdatePollTimer = useCallback(() => {
     if (wheelMakerUpdatePollTimerRef.current) {
       window.clearTimeout(wheelMakerUpdatePollTimerRef.current);
@@ -12944,6 +12926,14 @@ export function App() {
     }, 1000);
   }, []);
 
+  // Update-related poll timers must keep running while either the Update
+  // settings view or the chat hub menu (which also triggers hub updates) is
+  // open; previously both polls stopped unless the settings view was active.
+  const updateSurfaceActiveRef = useRef(false);
+  useEffect(() => {
+    updateSurfaceActiveRef.current = settingsDetailView === 'update' || chatHubMenuOpen;
+  }, [settingsDetailView, chatHubMenuOpen]);
+
   const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) => {
     const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
       .map(hubId => hubId.trim())
@@ -12960,7 +12950,7 @@ export function App() {
       wheelMakerUpdatePollTimerRef.current = null;
       const pendingHubIds = Array.from(wheelMakerUpdatePollHubIdsRef.current);
       wheelMakerUpdatePollHubIdsRef.current.clear();
-      if (settingsDetailViewRef.current !== 'update') {
+      if (!updateSurfaceActiveRef.current) {
         return;
       }
       Promise.all(pendingHubIds.map(hubId => refreshWheelMakerUpdateHubRef.current?.(hubId, {silent: true}))).catch(() => undefined);
@@ -13005,9 +12995,12 @@ export function App() {
     }
   }, [scheduleWheelMakerUpdatePoll]);
 
-  const refreshWheelMakerUpdates = useCallback(async () => {
+  const refreshWheelMakerUpdates = useCallback(async (options: {silent?: boolean} = {}) => {
+    const silent = options.silent === true;
     clearWheelMakerUpdatePollTimer();
-    setWheelMakerUpdatesLoading(true);
+    if (!silent) {
+      setWheelMakerUpdatesLoading(true);
+    }
     setWheelMakerUpdatesError('');
     try {
       const hubIds = await refreshProjectHubSnapshot();
@@ -13026,7 +13019,7 @@ export function App() {
         hubIds.forEach(hubId => {
           next[hubId] = {
             hubId,
-            loading: true,
+            loading: silent ? prev[hubId]?.loading === true : true,
             error: '',
             data: prev[hubId]?.data ?? null,
           };
@@ -13064,7 +13057,9 @@ export function App() {
       const message = err instanceof Error ? err.message : String(err);
       setWheelMakerUpdatesError(message);
     } finally {
-      setWheelMakerUpdatesLoading(false);
+      if (!silent) {
+        setWheelMakerUpdatesLoading(false);
+      }
     }
   }, [clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, scheduleWheelMakerUpdatePoll]);
 
@@ -13221,7 +13216,7 @@ export function App() {
       if (runningHubIds.size > 0) {
         agentPackageScanPollTimerRef.current = window.setTimeout(() => {
           agentPackageScanPollTimerRef.current = null;
-          if (settingsDetailViewRef.current !== 'update') {
+          if (!updateSurfaceActiveRef.current) {
             return;
           }
           refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);
@@ -13903,6 +13898,24 @@ export function App() {
       }));
     }
   }, [projectIndexScanAllPendingByHubId, refreshProjectFileIndexes, scheduleProjectIndexPoll]);
+
+  const handleChatHubWheelMakerUpdate = useCallback((hubId: string) => {
+    requestWheelMakerUpdate(hubId, wheelMakerUpdateHubs[hubId]?.data ?? null);
+  }, [requestWheelMakerUpdate, wheelMakerUpdateHubs]);
+
+  const handleChatHubNpmUpdate = useCallback((hubId: string) => {
+    const card = updateHubCards.find(item => item.hubId === hubId);
+    const targets = deriveNpmUpdatableTargets(card?.agentPackage?.hub?.packages ?? []);
+    requestAgentPackageHubUpdate(hubId, targets);
+  }, [requestAgentPackageHubUpdate, updateHubCards]);
+
+  const handleChatHubScanSkills = useCallback((hubId: string) => {
+    void handleScanSkills(hubId);
+  }, [handleScanSkills]);
+
+  const handleChatHubScanAllIndexes = useCallback((hubId: string) => {
+    void handleScanAllProjectIndexes(hubId, chatHubProjectIndexTargets(hubId));
+  }, [chatHubProjectIndexTargets, handleScanAllProjectIndexes]);
 
   const handleWheelMakerUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdate'}>) => {
     setConfirmError('');

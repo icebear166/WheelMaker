@@ -945,6 +945,151 @@ func TestReporterFlickerBridgeStateDoesNotExposeConfiguredKey(t *testing.T) {
 	}
 }
 
+func TestReporterHubConfigAPIKeyUpdateAndSnapshot(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-config", StateDir: t.TempDir()}, nil)
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "apiKeys", Field: "kimi", Action: "set", Value: "sk-kimi-secret",
+	}); err != nil {
+		t.Fatalf("set apiKeys.kimi: %v", err)
+	}
+	snapshot, err := reporter.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snapshot.APIKeys["kimi"].Configured {
+		t.Fatalf("kimi snapshot = %#v", snapshot.APIKeys["kimi"])
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "sk-kimi-secret") {
+		t.Fatalf("hub config snapshot leaked secret: %s", raw)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "apiKeys", Field: "kimi", Action: "clear",
+	}); err != nil {
+		t.Fatalf("clear apiKeys.kimi: %v", err)
+	}
+	snapshot, err = reporter.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.APIKeys["kimi"].Configured {
+		t.Fatalf("kimi snapshot after clear = %#v", snapshot.APIKeys["kimi"])
+	}
+}
+
+func TestReporterHubConfigUpdateRejectsInvalidInput(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-config-invalid", StateDir: t.TempDir()}, nil)
+	for name, payload := range map[string]hubConfigUpdatePayload{
+		"unknown-section": {Section: "projects", Field: "kimi", Action: "set", Value: "x"},
+		"unknown-key":     {Section: "apiKeys", Field: "openai", Action: "set", Value: "x"},
+		"bad-action":      {Section: "apiKeys", Field: "kimi", Action: "replace", Value: "x"},
+		"empty-value":     {Section: "apiKeys", Field: "kimi", Action: "set"},
+		"bad-field":       {Section: "flickerBridge", Field: "mode", Action: "set", Value: "v2"},
+		"bad-flag-action": {Section: "flickerBridge", Field: "enabled", Action: "toggle"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := reporter.applyHubConfigUpdate(payload); err == nil {
+				t.Fatalf("payload %#v was accepted", payload)
+			}
+		})
+	}
+}
+
+func TestReporterHubConfigFlickerEnabledPersists(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-config-flicker", StateDir: t.TempDir()}, nil)
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "flickerBridge", Field: "enabled", Action: "set",
+	}); err != nil {
+		t.Fatalf("enable flickerBridge: %v", err)
+	}
+	enabled, err := reporter.ensureHubConfigStore().FlickerBridgeEnabled()
+	if err != nil || !enabled {
+		t.Fatalf("enabled = %v, err = %v", enabled, err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "flickerBridge", Field: "enabled", Action: "clear",
+	}); err != nil {
+		t.Fatalf("disable flickerBridge: %v", err)
+	}
+	enabled, err = reporter.ensureHubConfigStore().FlickerBridgeEnabled()
+	if err != nil || enabled {
+		t.Fatalf("enabled after clear = %v, err = %v", enabled, err)
+	}
+}
+
+func TestReporterHubConfigKeyResolutionPrefersHubConfigStore(t *testing.T) {
+	stateDir := t.TempDir()
+	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	if err := store.UpdateAPIKey(hubconfig.APIKeyFlicker, "set", "db-flicker-key", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-config-resolution",
+		StateDir: stateDir,
+		APIKeys:  logger.APIKeysConfig{Flicker: "config-flicker-key"},
+	}, nil)
+	if got := reporter.flickerBridge.localAPIKey(); got != "db-flicker-key" {
+		t.Fatalf("Flicker Bridge local key = %q, want hub config store key", got)
+	}
+}
+
+func TestReporterHubConfigKeyResolutionFallsBackToAppConfig(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-config-fallback",
+		StateDir: t.TempDir(),
+		APIKeys:  logger.APIKeysConfig{Flicker: "config-flicker-key"},
+	}, nil)
+	if got := reporter.flickerBridge.localAPIKey(); got != "config-flicker-key" {
+		t.Fatalf("Flicker Bridge local key = %q, want config.json key", got)
+	}
+}
+
+func TestReporterHubConfigOverlayMarksConfigJSONFallbacks(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-config-overlay",
+		StateDir: t.TempDir(),
+		APIKeys:  logger.APIKeysConfig{Kimi: "config-kimi-key", Flicker: "config-flicker-key"},
+	}, nil)
+	snapshot, err := reporter.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reporter.overlayHubConfigFallbacks(&snapshot)
+	if !snapshot.APIKeys["kimi"].Configured || !snapshot.APIKeys["flicker"].Configured {
+		t.Fatalf("fallback keys not marked configured: %#v", snapshot.APIKeys)
+	}
+	if snapshot.APIKeys["kimi"].UpdatedAt != "" {
+		t.Fatalf("fallback key must not report updatedAt: %#v", snapshot.APIKeys["kimi"])
+	}
+	if snapshot.APIKeys["qwen"].Configured {
+		t.Fatalf("qwen unexpectedly configured: %#v", snapshot.APIKeys["qwen"])
+	}
+
+	// A store override wins over the config.json fallback, and clearing the
+	// override falls back to the config.json value (still configured).
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "apiKeys", Field: "kimi", Action: "set", Value: "db-kimi-key",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "apiKeys", Field: "kimi", Action: "clear",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = reporter.ensureHubConfigStore().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reporter.overlayHubConfigFallbacks(&snapshot)
+	if !snapshot.APIKeys["kimi"].Configured {
+		t.Fatalf("cleared override should fall back to config.json: %#v", snapshot.APIKeys["kimi"])
+	}
+}
+
 type fakeFlickerBridgeProcess struct {
 	done      chan struct{}
 	killCount int

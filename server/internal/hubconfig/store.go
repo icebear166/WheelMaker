@@ -5,18 +5,63 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type FlickerBridgeMode string
 
+type APIKeyName string
+
 const (
 	FlickerBridgeModeV1 FlickerBridgeMode = "v1"
 	FlickerBridgeModeV2 FlickerBridgeMode = "v2"
-	maxConfigBytes                        = 64 * 1024
-	configVersion                         = 1
+
+	APIKeyKimi     APIKeyName = "kimi"
+	APIKeyQwen     APIKeyName = "qwen"
+	APIKeyZAI      APIKeyName = "zai"
+	APIKeyDeepSeek APIKeyName = "deepSeek"
+	APIKeyFlicker  APIKeyName = "flicker"
+
+	maxConfigBytes = 64 * 1024
+	maxSecretBytes = 16 * 1024
+	configVersion  = 1
 )
+
+// APIKeyNames lists every API key manageable through the hub config store.
+var APIKeyNames = []APIKeyName{APIKeyKimi, APIKeyQwen, APIKeyZAI, APIKeyDeepSeek, APIKeyFlicker}
+
+func ValidAPIKeyName(name APIKeyName) bool {
+	for _, candidate := range APIKeyNames {
+		if name == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+type secretValue struct {
+	Value     string    `json:"value,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+}
+
+type APIKeySnapshot struct {
+	Configured bool   `json:"configured"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
+}
+
+type FlickerBridgeSnapshot struct {
+	Mode    FlickerBridgeMode `json:"mode"`
+	Enabled bool              `json:"enabled"`
+}
+
+// Snapshot is the sanitized view of the hub config: secret values never leave
+// the store, only their configured/updatedAt markers.
+type Snapshot struct {
+	FlickerBridge FlickerBridgeSnapshot     `json:"flickerBridge"`
+	APIKeys       map[string]APIKeySnapshot `json:"apiKeys"`
+}
 
 type Store struct {
 	mu        sync.Mutex
@@ -53,11 +98,9 @@ func (s *Store) UpdateFlickerBridgeMode(mode FlickerBridgeMode) error {
 	if err != nil {
 		return err
 	}
-	section := map[string]json.RawMessage{}
-	if raw := root["flickerBridge"]; len(raw) != 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &section); err != nil || section == nil {
-			return fmt.Errorf("parse hub config flickerBridge section")
-		}
+	section, err := flickerBridgeSection(root)
+	if err != nil {
+		return err
 	}
 	rawMode, err := json.Marshal(mode)
 	if err != nil {
@@ -69,6 +112,134 @@ func (s *Store) UpdateFlickerBridgeMode(mode FlickerBridgeMode) error {
 		return fmt.Errorf("encode Flicker Bridge section: %w", err)
 	}
 	root["flickerBridge"] = rawSection
+	return s.writeRootLocked(root)
+}
+
+func (s *Store) FlickerBridgeEnabled() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return false, err
+	}
+	return flickerBridgeEnabledFromRoot(root)
+}
+
+func (s *Store) UpdateFlickerBridgeEnabled(enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+	section, err := flickerBridgeSection(root)
+	if err != nil {
+		return err
+	}
+	rawEnabled, err := json.Marshal(enabled)
+	if err != nil {
+		return fmt.Errorf("encode Flicker Bridge enabled: %w", err)
+	}
+	section["enabled"] = rawEnabled
+	rawSection, err := json.Marshal(section)
+	if err != nil {
+		return fmt.Errorf("encode Flicker Bridge section: %w", err)
+	}
+	root["flickerBridge"] = rawSection
+	return s.writeRootLocked(root)
+}
+
+// APIKeyValue returns the stored secret for name, or "" when unset.
+func (s *Store) APIKeyValue(name APIKeyName) (string, error) {
+	if !ValidAPIKeyName(name) {
+		return "", fmt.Errorf("unsupported API key %q", name)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return "", err
+	}
+	section, err := apiKeysSection(root)
+	if err != nil {
+		return "", err
+	}
+	return section[string(name)].Value, nil
+}
+
+func (s *Store) UpdateAPIKey(name APIKeyName, action, value string, now time.Time) error {
+	if !ValidAPIKeyName(name) {
+		return fmt.Errorf("unsupported API key %q", name)
+	}
+	if action != "set" && action != "clear" {
+		return fmt.Errorf("unsupported API key action %q", action)
+	}
+	if action == "set" {
+		if value == "" {
+			return fmt.Errorf("API key value is required")
+		}
+		if len(value) > maxSecretBytes {
+			return fmt.Errorf("API key value exceeds 16 KiB")
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return err
+	}
+	section, err := apiKeysSection(root)
+	if err != nil {
+		return err
+	}
+	if action == "clear" {
+		delete(section, string(name))
+	} else {
+		section[string(name)] = secretValue{Value: value, UpdatedAt: now.UTC()}
+	}
+	rawSection, err := json.Marshal(section)
+	if err != nil {
+		return fmt.Errorf("encode apiKeys section: %w", err)
+	}
+	root["apiKeys"] = rawSection
+	return s.writeRootLocked(root)
+}
+
+func (s *Store) Snapshot() (Snapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root, _, err := s.loadLocked()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	mode, err := modeFromRoot(root)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	enabled, err := flickerBridgeEnabledFromRoot(root)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	keys, err := apiKeysSection(root)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	snapshot := Snapshot{
+		FlickerBridge: FlickerBridgeSnapshot{Mode: mode, Enabled: enabled},
+		APIKeys:       make(map[string]APIKeySnapshot, len(APIKeyNames)),
+	}
+	for _, name := range APIKeyNames {
+		entry := keys[string(name)]
+		keySnapshot := APIKeySnapshot{Configured: entry.Value != ""}
+		if !entry.UpdatedAt.IsZero() {
+			keySnapshot.UpdatedAt = entry.UpdatedAt.UTC().Format(time.RFC3339)
+		}
+		snapshot.APIKeys[string(name)] = keySnapshot
+	}
+	return snapshot, nil
+}
+
+func (s *Store) writeRootLocked(root map[string]json.RawMessage) error {
 	raw, err := json.MarshalIndent(root, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode hub config: %w", err)
@@ -147,4 +318,40 @@ func modeFromRoot(root map[string]json.RawMessage) (FlickerBridgeMode, error) {
 
 func validMode(mode FlickerBridgeMode) bool {
 	return mode == FlickerBridgeModeV1 || mode == FlickerBridgeModeV2
+}
+
+func flickerBridgeSection(root map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	section := map[string]json.RawMessage{}
+	if raw := root["flickerBridge"]; len(raw) != 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &section); err != nil || section == nil {
+			return nil, fmt.Errorf("parse hub config flickerBridge section")
+		}
+	}
+	return section, nil
+}
+
+func flickerBridgeEnabledFromRoot(root map[string]json.RawMessage) (bool, error) {
+	section, err := flickerBridgeSection(root)
+	if err != nil {
+		return false, err
+	}
+	raw := section["enabled"]
+	if len(raw) == 0 || string(raw) == "null" {
+		return false, nil
+	}
+	var enabled bool
+	if err := json.Unmarshal(raw, &enabled); err != nil {
+		return false, fmt.Errorf("parse Flicker Bridge enabled")
+	}
+	return enabled, nil
+}
+
+func apiKeysSection(root map[string]json.RawMessage) (map[string]secretValue, error) {
+	section := map[string]secretValue{}
+	if raw := root["apiKeys"]; len(raw) != 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &section); err != nil || section == nil {
+			return nil, fmt.Errorf("parse hub config apiKeys section")
+		}
+	}
+	return section, nil
 }

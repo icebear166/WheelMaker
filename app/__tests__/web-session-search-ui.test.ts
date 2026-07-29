@@ -107,14 +107,13 @@ describe('web session search UI wiring', () => {
 
     expect(main).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");
     expect(main).toContain("const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;");
-    const hubSummaryStart = main.indexOf('const renderChatHubSummary = useCallback(() => {');
-    const hubSummaryEnd = main.indexOf('const floatingBaseBounds = useMemo(() => {', hubSummaryStart);
+    const hubMenu = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'), 'utf8');
+    const hubSummaryStart = hubMenu.indexOf('export const ChatHubMenu = React.memo(function ChatHubMenu(');
     expect(hubSummaryStart).toBeGreaterThanOrEqual(0);
-    expect(hubSummaryEnd).toBeGreaterThan(hubSummaryStart);
-    const hubSummary = main.slice(hubSummaryStart, hubSummaryEnd);
+    const hubSummary = hubMenu.slice(hubSummaryStart);
     expect(hubSummary).toContain('<span className="chat-hub-summary-copy">');
-    expect(hubSummary.indexOf('<span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>')).toBeLessThan(
-      hubSummary.indexOf('<span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>'),
+    expect(hubSummary.indexOf('<span className="chat-hub-summary-label">{summaryLabel}</span>')).toBeLessThan(
+      hubSummary.indexOf('<span className="chat-hub-summary-project-label">{projectLabel}</span>'),
     );
     expect(hubSummary).not.toContain('{mobile ? (');
     expect(main).toContain('const sessionSearchProjectDoneCount = useMemo(');

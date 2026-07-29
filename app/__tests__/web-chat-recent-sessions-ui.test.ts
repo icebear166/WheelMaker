@@ -8,6 +8,7 @@ function readSourceText(filePath: string): string {
 describe('web chat recent sessions', () => {
   const projectRoot = path.join(__dirname, '..');
   const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+  const hubMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'));
   const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
   const sessionlistCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'sessionlist.css'));
   const surfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'));
@@ -205,8 +206,9 @@ describe('web chat recent sessions', () => {
 
   test('renders clipped hub and session action menus in the root overlay layer', () => {
     expect(mainTsx).toContain("import {createPortal} from 'react-dom';");
-    expect(mainTsx).toContain("chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(");
-    expect(mainTsx).toContain('document.body,');
+    expect(hubMenuTsx).toContain("import {createPortal} from 'react-dom';");
+    expect(hubMenuTsx).toContain("open && typeof document !== 'undefined' ? createPortal(");
+    expect(hubMenuTsx).toContain('document.body,');
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
     expect(mainTsx).toContain('{projectSessionActionMenuOverlay}');
     expect(mainTsx).not.toContain('{renderProjectSessionActionMenu(targetProjectId, session)}');

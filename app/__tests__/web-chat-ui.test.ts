@@ -825,13 +825,14 @@ describe('web chat integration', () => {
   test('chat drawer header keeps tools left and hub browser right', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const hubMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const [chatHubMenuOpen, setChatHubMenuOpen, chatHubMenuExiting] = useMenuExitFlag();');
     expect(mainTsx).toContain('const [chatHubColorMenu, setChatHubColorMenu, chatHubColorMenuExiting] = useMenuExitState<{hubId: string}>();');
     expect(mainTsx).toContain("const chatHubColorMenuHubId = chatHubColorMenu?.hubId ?? '';");
     expect(mainTsx).toContain('const chatHubMenuRef = useRef<HTMLDivElement | null>(null);');
-    expect(mainTsx).toContain('const renderChatHubSummary = useCallback(() => {');
+    expect(mainTsx).toContain('const renderChatHubSummary = () => {');
     expect(mainTsx).not.toContain('const renderChatHubSummary = useCallback((mobile = false) => {');
     expect(mainTsx).toContain('const hubCount = registryHubs.length;');
     expect(mainTsx).toContain('const projectCount = projects.length;');
@@ -842,22 +843,24 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
     expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-palette')");
     expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-button')");
-    expect(mainTsx).toContain("aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}");
-    expect(mainTsx).toContain('aria-expanded={chatHubMenuOpen}');
     expect(mainTsx).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");
     expect(mainTsx).toContain("const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;");
-    expect(mainTsx).toContain('<span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>');
-    expect(mainTsx).toContain('<span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>');
     expect(mainTsx).not.toContain('<span className="chat-hub-summary-count">{hubCount}</span>');
-    expect(mainTsx).toContain('{registryHubs.length > 0 ? (');
-    expect(mainTsx).toContain('registryHubs.map(hub => {');
-    expect(mainTsx).toContain('className="chat-hub-color-button"');
-    expect(mainTsx).toContain('className="chat-hub-color-dot"');
-    expect(mainTsx).toContain('className="chat-hub-expand-button"');
-    expect(mainTsx).toContain("<SessionIcon name={expanded ? 'chevronDown' : 'chevronRight'} />");
-    expect(mainTsx).toContain("className={`chat-hub-color-palette topbar-menu-surface${chatHubColorMenuExiting ? ' sl-menu-exit' : ''}`}");
-    expect(mainTsx).toContain('<span className="chat-hub-row-name">{hub.hubId}</span>');
-    expect(mainTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
+    expect(mainTsx).toContain('summaryLabel={chatHubSummaryLabel}');
+    expect(mainTsx).toContain('projectLabel={chatHubProjectLabel}');
+    expect(hubMenuTsx).toContain("aria-label={`Show connected hubs, ${summaryLabel}, ${projectLabel}`}");
+    expect(hubMenuTsx).toContain('aria-expanded={open}');
+    expect(hubMenuTsx).toContain('<span className="chat-hub-summary-label">{summaryLabel}</span>');
+    expect(hubMenuTsx).toContain('<span className="chat-hub-summary-project-label">{projectLabel}</span>');
+    expect(hubMenuTsx).toContain('hubIds.length > 0 ? (');
+    expect(hubMenuTsx).toContain('hubIds.map(hubId =>');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-button"');
+    expect(hubMenuTsx).toContain('className="chat-hub-color-dot"');
+    expect(hubMenuTsx).toContain('className="chat-hub-expand-button"');
+    expect(hubMenuTsx).toContain("<Icon name={expanded ? 'chevronDown' : 'chevronRight'}");
+    expect(hubMenuTsx).toContain("className={`chat-hub-color-palette topbar-menu-surface${inline ? ' inline' : ''}${exiting ? ' sl-menu-exit' : ''}`}");
+    expect(hubMenuTsx).toContain('<span className="chat-hub-row-name">{hubId}</span>');
+    expect(hubMenuTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
     expect(mainTsx).toContain('const renderChatSessionHeader = (mobile: boolean) => {');
     expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
     expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
@@ -1602,8 +1605,9 @@ describe('web chat integration', () => {
     expect(chatSection).not.toContain('type="password"');
     expect(chatSection).not.toContain('API Key');
     expect(chatSection).not.toContain('Volcengine API Key');
-    expect(settingsRootTsx).toContain('ServerSecretEditor');
-    expect(settingsRootTsx).toContain('type="password"');
+    expect(settingsRootTsx).toContain('SecretEditor');
+    const secretEditorTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'common', 'SecretEditor.tsx'));
+    expect(secretEditorTsx).toContain('type="password"');
     expect(chatSection).not.toContain('Speech Model');
     expect(chatSection).not.toContain("setSettingsDetailView('voiceInput')");
     expect(settingsRootTsx).toContain('Doubao Streaming ASR 2.0');
@@ -2398,6 +2402,7 @@ describe('web chat integration', () => {
   test('top bar menus share the session glass recipe and menu exit wiring', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const hubMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';");
@@ -2405,8 +2410,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();');
     expect(mainTsx).toContain("className={`chat-title-project-menu topbar-menu-surface${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain("className={`chat-title-prompt-menu topbar-menu-surface${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
-    expect(mainTsx).toContain("chatHubMenuExiting ? ' sl-menu-exit' : ''");
-    expect(mainTsx).toContain('chat-hub-popover topbar-menu-surface');
+    expect(mainTsx).toContain('exiting={chatHubMenuExiting}');
+    expect(hubMenuTsx).toContain("exiting ? ' sl-menu-exit' : ''");
+    expect(hubMenuTsx).toContain('chat-hub-popover topbar-menu-surface');
     const menuRule = cssRuleBlock(stylesCss, '.topbar-menu-surface');
     expect(menuRule).toContain('background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);');
     expect(menuRule).toContain('blur(12px) saturate(1.1)');

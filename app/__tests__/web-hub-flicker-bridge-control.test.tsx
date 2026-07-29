@@ -91,3 +91,28 @@ test('disables unavailable mode and all lifecycle actions while busy', async () 
     .toEqual(['V2 unavailable · Node.js 22 is required']);
   expect(renderer.root.findAllByType('button').every(button => button.props.disabled)).toBe(true);
 });
+
+test('hideSummary suppresses the summary row while actions still render', async () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(
+      <FlickerBridgeControl
+        status={normalizeFlickerBridgeStatus({
+          configured: true,
+          supported: true,
+          state: 'running',
+          mode: 'v1',
+          runningMode: 'v1',
+          availableModes: ['v1', 'v2'],
+        })}
+        busy={false}
+        hideSummary
+        onLifecycle={jest.fn()}
+        onSwitchMode={jest.fn()}
+      />,
+    );
+  });
+
+  expect(renderer.root.findAllByProps({className: 'chat-hub-flicker-bridge-summary'})).toHaveLength(0);
+  expect(renderer.root.findByProps({'aria-label': 'Stop Flicker Bridge'})).toBeTruthy();
+});

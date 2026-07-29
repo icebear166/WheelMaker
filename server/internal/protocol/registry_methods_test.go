@@ -528,6 +528,8 @@ func TestRegistryHubStateMethodsRequireHubID(t *testing.T) {
 		RegistryMethodHubStateGet,
 		RegistryMethodHubStateRefresh,
 		RegistryMethodHubStateAction,
+		RegistryMethodHubConfigGet,
+		RegistryMethodHubConfigUpdate,
 		RegistryMethodUsageHistoryGet,
 	}
 	for _, method := range methods {

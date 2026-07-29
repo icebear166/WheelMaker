@@ -29,6 +29,9 @@ import type {
   RegistryGitRev,
   RegistryGitStatus,
   RegistryHub,
+  RegistryHubConfig,
+  RegistryHubConfigResponse,
+  RegistryHubConfigUpdatePayload,
   RegistryHubState,
   RegistryHubStateSectionName,
   RegistryUsageHistoryLimit,
@@ -305,6 +308,37 @@ function normalizeUsageHistoryLimit(raw: unknown): RegistryUsageHistoryLimit | n
 
 export class RegistryRepository {
   constructor(private readonly client: RegistryClient) {}
+
+  private normalizeHubConfigResponse(raw: unknown, fallbackHubId: string): RegistryHubConfigResponse {
+    const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const configInput = input.config && typeof input.config === 'object' && !Array.isArray(input.config)
+      ? input.config as Record<string, unknown>
+      : {};
+    const flickerInput = configInput.flickerBridge && typeof configInput.flickerBridge === 'object'
+      ? configInput.flickerBridge as Record<string, unknown>
+      : {};
+    const apiKeysInput = configInput.apiKeys && typeof configInput.apiKeys === 'object' && !Array.isArray(configInput.apiKeys)
+      ? configInput.apiKeys as Record<string, unknown>
+      : {};
+    const apiKeys: RegistryHubConfig['apiKeys'] = {};
+    for (const [name, value] of Object.entries(apiKeysInput)) {
+      const entry = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+      apiKeys[name] = {
+        configured: entry.configured === true,
+        updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : undefined,
+      };
+    }
+    return {
+      hubId: typeof input.hubId === 'string' && input.hubId ? input.hubId : fallbackHubId,
+      config: {
+        flickerBridge: {
+          mode: flickerInput.mode === 'v2' ? 'v2' : 'v1',
+          enabled: flickerInput.enabled === true,
+        },
+        apiKeys,
+      },
+    };
+  }
 
   private normalizeHubState(raw: unknown, fallbackHubId: string): RegistryHubState {
     const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
@@ -2122,6 +2156,29 @@ export class RegistryRepository {
     });
     const payload = (resp.payload ?? {}) as {state?: unknown};
     return this.normalizeHubState(payload.state, hubId);
+  }
+
+  async getHubConfig(hubId: string): Promise<RegistryHubConfigResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.HubConfigGet,
+      hubId,
+      payload: {},
+      timeoutMs: 15000,
+    });
+    return this.normalizeHubConfigResponse(resp.payload, hubId);
+  }
+
+  async updateHubConfig(
+    hubId: string,
+    update: RegistryHubConfigUpdatePayload,
+  ): Promise<RegistryHubConfigResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.HubConfigUpdate,
+      hubId,
+      payload: update,
+      timeoutMs: 15000,
+    });
+    return this.normalizeHubConfigResponse(resp.payload, hubId);
   }
 
   async listTerminals(hubId: string): Promise<RegistryTerminalListResponse> {
