@@ -189,6 +189,7 @@ describe('web chat integration', () => {
     const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const chatTurnTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatTurnView.tsx'));
+    const markdownExportTs = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'export', 'markdownHtmlExport.ts'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
     const settingsSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'));
     const stylesCss = readWebStyles(projectRoot);
@@ -469,18 +470,23 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-prompt-actions {');
     expect(stylesCss).toContain('.chat-prompt-action-button {');
     expect(stylesCss).toContain('.markdown-image-export-host {');
-    expect(stylesCss).toContain('.markdown-image-export-surface {');
     expect(cssRuleBlock(stylesCss, '.markdown-image-export-host')).toContain('width: var(--markdown-image-export-width, 760px);');
     expect(cssRuleBlock(stylesCss, '.markdown-image-export-host')).not.toContain('max-width: calc(100vw - 32px);');
-    expect(cssRuleBlock(stylesCss, '.markdown-image-export-surface table')).toContain('table-layout: fixed;');
-    expect(cssRuleBlock(stylesCss, '.markdown-image-export-surface table')).toContain('max-width: 100%;');
-    const exportTableCellBlock = cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface th');
+    expect(mainTsx).toContain('<style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>');
+    expect(mainTsx).toContain('markdown-preview ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}');
+    const exportTableBlock = cssRuleBlocksContainingSelector(
+      markdownExportTs,
+      '.wheelmaker-markdown-export table',
+    ).find(block => block.includes('table-layout: fixed;')) ?? '';
+    expect(exportTableBlock).toContain('table-layout: fixed;');
+    expect(exportTableBlock).toContain('max-width: 100%;');
+    const exportTableCellBlock = cssRuleBlockContainingSelector(markdownExportTs, '.wheelmaker-markdown-export th');
     expect(exportTableCellBlock).toContain('overflow-wrap: anywhere;');
     expect(exportTableCellBlock).toContain('word-break: break-word;');
-    expect(exportTableCellBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface td'));
-    const exportLinkBlock = cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a');
+    expect(exportTableCellBlock).toBe(cssRuleBlockContainingSelector(markdownExportTs, '.wheelmaker-markdown-export td'));
+    const exportLinkBlock = cssRuleBlockContainingSelector(markdownExportTs, '.wheelmaker-markdown-export a');
     expect(exportLinkBlock).toContain('color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));');
-    expect(exportLinkBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a:visited'));
+    expect(exportLinkBlock).toBe(cssRuleBlockContainingSelector(markdownExportTs, '.wheelmaker-markdown-export a:visited'));
     expect(stylesCss).toContain('.app-toast {');
     const sendExistingStart = mainTsx.indexOf('const sendChatMessage = async');
     const sendEnd = mainTsx.indexOf('const sendChatMessageEvent = useStableEvent(sendChatMessage);', sendExistingStart);

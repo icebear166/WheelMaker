@@ -238,7 +238,7 @@ describe('web chat file peek viewer', () => {
     const hostRule = cssRuleBlock(stylesCss, '.markdown-html-export-host');
     expect(hostRule).toContain('left: -10000px;');
     expect(hostRule).toContain('pointer-events: none;');
-    expect(hostRule).toContain('width: 960px;');
+    expect(hostRule).toContain('width: 800px;');
   });
 
   test('prompt attachments open unified attachment tabs', () => {

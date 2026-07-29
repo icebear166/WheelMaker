@@ -18,7 +18,11 @@ import {
   type CodeThemeId,
 } from '../../code/shikiSettings';
 import {waitForMarkdownExportReady} from './chatMarkdownImageExport';
-import {buildStandaloneMarkdownHtmlDocument} from './markdownHtmlExport';
+import {
+  MARKDOWN_EXPORT_CONTENT_CLASS_NAME,
+  MARKDOWN_EXPORT_CONTENT_STYLE,
+  buildStandaloneMarkdownHtmlDocument,
+} from './markdownHtmlExport';
 
 type ThemeMode = 'dark' | 'light';
 
@@ -161,6 +165,7 @@ export function MarkdownHtmlExportDocument({
         codeTabSize,
         wrap: true,
         lineNumbers: false,
+        framed: true,
       }),
       img: ({node: _node, src, alt, ...props}) => (
         <MarkdownHtmlExportImage
@@ -194,7 +199,7 @@ export function MarkdownHtmlExportDocument({
 
   return (
     <div
-      className="markdown-preview markdown-html-export-document"
+      className={`markdown-preview markdown-html-export-document ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}
       data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
     >
       <ReactMarkdown
@@ -265,6 +270,7 @@ export function MarkdownHtmlExportSurface({
 
   return (
     <div className="markdown-html-export-host" aria-hidden="true">
+      <style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>
       <div ref={surfaceRef} className="markdown-html-export-surface">
         <MarkdownHtmlExportDocument
           content={request.content}

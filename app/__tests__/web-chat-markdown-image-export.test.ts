@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {
   buildPromptMarkdownImageFileName,
   resolveMarkdownImageExportWidth,
@@ -15,6 +18,18 @@ describe('web chat markdown image export', () => {
   test('uses stable desktop and mobile image export widths', () => {
     expect(resolveMarkdownImageExportWidth('desktop')).toBe(800);
     expect(resolveMarkdownImageExportWidth('mobile')).toBe(560);
+  });
+
+  test('uses the shared standalone markdown presentation', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('<style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>');
+    expect(source).toContain(
+      'className={`markdown-image-export-surface markdown-preview ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}',
+    );
   });
 
   test('waits for pending markdown images before capture', async () => {

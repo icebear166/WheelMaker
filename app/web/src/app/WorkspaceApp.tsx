@@ -288,6 +288,8 @@ import {
   type MarkdownHtmlImageResolution,
 } from '../chat/export/MarkdownHtmlExportDocument';
 import {
+  MARKDOWN_EXPORT_CONTENT_CLASS_NAME,
+  MARKDOWN_EXPORT_CONTENT_STYLE,
   buildMarkdownHtmlFileName,
   buildPromptMarkdownHtmlFileName,
   resolveProjectMarkdownImagePath,
@@ -2071,9 +2073,10 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
       style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}
       aria-hidden="true"
     >
+      <style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>
       <div
         ref={surfaceRef}
-        className="markdown-image-export-surface markdown-preview"
+        className={`markdown-image-export-surface markdown-preview ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}
         data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
       >
         <ReactMarkdown
