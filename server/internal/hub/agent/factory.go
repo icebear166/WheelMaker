@@ -184,6 +184,22 @@ func (f *ACPFactory) Clone() *ACPFactory {
 	return cp
 }
 
+// ReplaceFrom atomically replaces this factory's provider registry while
+// preserving the factory pointer shared by Hub clients and sessions.
+func (f *ACPFactory) ReplaceFrom(replacement *ACPFactory) {
+	if f == nil || replacement == nil || f == replacement {
+		return
+	}
+	snapshot := replacement.Clone()
+	if snapshot == nil {
+		return
+	}
+	f.mu.Lock()
+	f.creators = snapshot.creators
+	f.sessionActions = snapshot.sessionActions
+	f.mu.Unlock()
+}
+
 func (f *ACPFactory) RegisterSessionActions(provider protocol.ACPProvider, actions SessionActionSupport) {
 	if f == nil {
 		return

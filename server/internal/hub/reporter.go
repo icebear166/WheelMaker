@@ -112,16 +112,17 @@ type toolCommandHandler interface {
 
 // ReporterConfig controls hub->registry connection behavior.
 type ReporterConfig struct {
-	Server            string
-	Port              int
-	Token             string
-	HubID             string
-	ReconnectInterval time.Duration
-	PingInterval      time.Duration
-	PongTimeout       time.Duration
-	StateDir          string
-	HubConfig         *hubconfig.Store
-	FlickerBridge     *flickerBridgeManager
+	Server             string
+	Port               int
+	Token              string
+	HubID              string
+	ReconnectInterval  time.Duration
+	PingInterval       time.Duration
+	PongTimeout        time.Duration
+	StateDir           string
+	HubConfig          *hubconfig.Store
+	FlickerBridge      *flickerBridgeManager
+	ReloadAgentRuntime func(context.Context, map[hubconfig.APIKeyName]string) error
 }
 
 // Reporter keeps a long-lived hub connection and serves local project queries.
@@ -138,18 +139,20 @@ type Reporter struct {
 	requestSeq   atomic.Int64
 	updateSeq    atomic.Int64
 
-	connectionEpoch int64
-	toolHandlerMu   sync.Mutex
-	toolHandler     toolCommandHandler
-	relayClient     *portrelay.HubClient
-	fileIndex       *projectFileIndexManager
-	hubStateManager *HubStateManager
-	usageService    *usage.Service
-	usageHistory    *usage.HistoryStore
-	terminalHandler TerminalHandler
-	hubEventSink    *hubEventSink
-	flickerBridge   *flickerBridgeManager
-	hubConfig       *hubconfig.Store
+	connectionEpoch    int64
+	toolHandlerMu      sync.Mutex
+	toolHandler        toolCommandHandler
+	relayClient        *portrelay.HubClient
+	fileIndex          *projectFileIndexManager
+	hubStateManager    *HubStateManager
+	usageService       *usage.Service
+	usageHistory       *usage.HistoryStore
+	terminalHandler    TerminalHandler
+	hubEventSink       *hubEventSink
+	flickerBridge      *flickerBridgeManager
+	hubConfig          *hubconfig.Store
+	usageCollector     *usage.LocalCollector
+	reloadAgentRuntime func(context.Context, map[hubconfig.APIKeyName]string) error
 }
 
 // NewReporter creates a Reporter.
@@ -198,6 +201,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		fileIndex:    newProjectFileIndexManager(stateDir),
 	}
 	r.hubConfig = cfg.HubConfig
+	r.reloadAgentRuntime = cfg.ReloadAgentRuntime
 	if r.hubConfig == nil {
 		r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
 	}
@@ -214,15 +218,19 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		HubID:                 cfg.HubID,
 		Projects:              cp,
 		StateDir:              stateDir,
+		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
 	collector := usage.NewLocalCollector("")
-	collector.KimiAPIKey = apiKeys[hubconfig.APIKeyKimi]
-	collector.ZAIAPIKey = apiKeys[hubconfig.APIKeyZAI]
-	collector.DeepSeekAPIKey = apiKeys[hubconfig.APIKeyDeepSeek]
+	collector.UpdateAPIKeys(
+		apiKeys[hubconfig.APIKeyKimi],
+		apiKeys[hubconfig.APIKeyZAI],
+		apiKeys[hubconfig.APIKeyDeepSeek],
+	)
+	r.usageCollector = collector
 	r.usageHistory = usage.NewHistoryStore(filepath.Join(stateDir, "db", "usage-history.json"))
 	r.usageService = usage.NewService(usage.ServiceOptions{
 		HubID: r.cfg.HubID, Collector: collector, History: r.usageHistory,
@@ -251,6 +259,11 @@ func (r *Reporter) updateFlickerBridgeLifecycleState(status flickerBridgeStatus)
 	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
 		"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "lifecycle",
 	})
+	go func() {
+		if err := r.reloadAgentRuntimeFromStore(context.Background()); err != nil {
+			hubLogger("").Warn("reload agent runtime after Flicker Bridge state change failed: %v", err)
+		}
+	}()
 }
 
 // Run holds a persistent connection; reconnects on failure until ctx cancelled.
@@ -1037,7 +1050,10 @@ func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
 	store := r.ensureHubConfigStore()
 	switch payload.Section {
 	case "apiKeys":
-		return store.UpdateAPIKey(hubconfig.APIKeyName(payload.Field), payload.Action, payload.Value, time.Now())
+		if err := store.UpdateAPIKey(hubconfig.APIKeyName(payload.Field), payload.Action, payload.Value, time.Now()); err != nil {
+			return err
+		}
+		return r.reloadConfiguredRuntime(context.Background())
 	case "flickerBridge":
 		if payload.Field != "enabled" {
 			return fmt.Errorf("unsupported flickerBridge field %q", payload.Field)
@@ -1055,10 +1071,58 @@ func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
 			return err
 		}
 		r.applyFlickerBridgeEnabled(enabled)
-		return nil
+		return r.reloadAgentRuntimeFromStore(context.Background())
 	default:
 		return fmt.Errorf("unsupported hub config section %q", payload.Section)
 	}
+}
+
+func (r *Reporter) reloadConfiguredRuntime(ctx context.Context) error {
+	keys, err := r.ensureHubConfigStore().APIKeyValues()
+	if err != nil {
+		return err
+	}
+	if r.usageCollector != nil {
+		r.usageCollector.UpdateAPIKeys(
+			keys[hubconfig.APIKeyKimi],
+			keys[hubconfig.APIKeyZAI],
+			keys[hubconfig.APIKeyDeepSeek],
+		)
+	}
+	if r.reloadAgentRuntime != nil {
+		if err := r.reloadAgentRuntime(ctx, keys); err != nil {
+			return err
+		}
+	}
+	if r.usageService != nil {
+		go func() {
+			refreshCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			if _, err := r.usageService.Refresh(refreshCtx); err != nil {
+				hubLogger("").Warn("refresh limits after Hub config update failed: %v", err)
+			}
+		}()
+	}
+	return nil
+}
+
+func (r *Reporter) reloadAgentRuntimeFromStore(ctx context.Context) error {
+	if r.reloadAgentRuntime == nil {
+		return nil
+	}
+	keys, err := r.ensureHubConfigStore().APIKeyValues()
+	if err != nil {
+		return err
+	}
+	return r.reloadAgentRuntime(ctx, keys)
+}
+
+func (r *Reporter) reloadAgentRuntimeAfterNPMOperation() {
+	go func() {
+		if err := r.reloadAgentRuntimeFromStore(context.Background()); err != nil {
+			hubLogger("").Warn("reload agent runtime after npm operation failed: %v", err)
+		}
+	}()
 }
 
 // applyFlickerBridgeEnabled mirrors the persisted enabled flag into the
@@ -1489,6 +1553,7 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		HubID:                 r.cfg.HubID,
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
+		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 		ReleaseNotifier:       r,
 	})

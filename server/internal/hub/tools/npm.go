@@ -63,9 +63,10 @@ type NPMCommand struct {
 	now      func() time.Time
 	lookPath func(string) (string, error)
 
-	mu          sync.Mutex
-	operation   *npmOperationSnapshot
-	latestCache map[string]npmLatestCacheEntry
+	mu            sync.Mutex
+	operation     *npmOperationSnapshot
+	latestCache   map[string]npmLatestCacheEntry
+	operationDone func()
 }
 
 func NewNPMCommand() *NPMCommand {
@@ -77,10 +78,25 @@ func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
 		runner = execNPMCommandRunner{}
 	}
 	return &NPMCommand{
-		runner:   runner,
-		now:      func() time.Time { return time.Now().UTC() },
-		lookPath: exec.LookPath,
+		runner:      runner,
+		now:         func() time.Time { return time.Now().UTC() },
+		lookPath:    exec.LookPath,
 		latestCache: map[string]npmLatestCacheEntry{},
+	}
+}
+
+func (c *NPMCommand) setOperationDoneHandler(handler func()) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.operationDone = handler
+	c.mu.Unlock()
+}
+
+func (c *NPMCommand) notifyOperationDone(handler func()) {
+	if handler != nil {
+		handler()
 	}
 }
 
@@ -567,8 +583,8 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 	if commandFailed(uninstallResult) {
 		exitCode := uninstallResult.ExitCode
 		c.mu.Lock()
-		defer c.mu.Unlock()
 		if c.operation != operation {
+			c.mu.Unlock()
 			return
 		}
 		operation.Running = false
@@ -576,13 +592,14 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 		operation.ExitCode = &exitCode
 		operation.Status = "failed"
 		operation.ErrorSummary = formatNPMTaskErrorSummary(uninstallResult.ExitCode, uninstallResult.Stdout, uninstallResult.Stderr, uninstallResult.Err)
+		c.mu.Unlock()
 		return
 	}
 	installResult := c.runner.Run(context.Background(), "npm", "install", "-g", packageName+"@latest")
 	exitCode := installResult.ExitCode
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.operation != operation {
+		c.mu.Unlock()
 		return
 	}
 	operation.Running = false
@@ -591,10 +608,14 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 	if commandFailed(installResult) {
 		operation.Status = "failed"
 		operation.ErrorSummary = formatNPMTaskErrorSummary(installResult.ExitCode, installResult.Stdout, installResult.Stderr, installResult.Err)
+		c.mu.Unlock()
 		return
 	}
 	operation.Status = "succeeded"
 	operation.Message = c.installSuccessMessage(packageName, "latest")
+	done := c.operationDone
+	c.mu.Unlock()
+	c.notifyOperationDone(done)
 }
 
 func (c *NPMCommand) acceptOperation(action string, packageName string, version string, packageNames []string) (*npmOperationSnapshot, *npmCommandError) {
@@ -626,8 +647,8 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 	finishedAt := c.now().Format(time.RFC3339)
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.operation != operation {
+		c.mu.Unlock()
 		return
 	}
 	operation.Running = false
@@ -636,14 +657,18 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 	if commandFailed(result) {
 		operation.Status = "failed"
 		operation.ErrorSummary = formatNPMTaskErrorSummary(exitCode, result.Stdout, result.Stderr, result.Err)
+		c.mu.Unlock()
 		return
 	}
 	operation.Status = "succeeded"
 	if operation.Action == "uninstall" {
-		operation.Message = fmt.Sprintf("Uninstalled %s. Restart WheelMaker or start a new agent session for the change to take effect.", operation.PackageName)
+		operation.Message = fmt.Sprintf("Uninstalled %s. Agent availability is refreshing.", operation.PackageName)
 	} else {
 		operation.Message = c.installSuccessMessage(operation.PackageName, operation.Version)
 	}
+	done := c.operationDone
+	c.mu.Unlock()
+	c.notifyOperationDone(done)
 }
 
 func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, packageNames []string, version string) {
@@ -660,8 +685,8 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 	finishedAt := c.now().Format(time.RFC3339)
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.operation != operation {
+		c.mu.Unlock()
 		return
 	}
 	operation.Running = false
@@ -673,10 +698,14 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 	if len(failed) > 0 {
 		operation.Status = "failed"
 		operation.ErrorSummary = "Failed npm package installs: " + strings.Join(failed, "; ")
+		c.mu.Unlock()
 		return
 	}
 	operation.Status = "succeeded"
 	operation.Message = c.installManySuccessMessage(packageNames)
+	done := c.operationDone
+	c.mu.Unlock()
+	c.notifyOperationDone(done)
 }
 
 func (c *NPMCommand) currentOperationSnapshot() *npmOperationSnapshot {

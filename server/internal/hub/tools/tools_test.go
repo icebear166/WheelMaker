@@ -44,6 +44,22 @@ func TestManagerRoutesToolCommands(t *testing.T) {
 	}
 }
 
+func TestManagerWiresNPMOperationCallback(t *testing.T) {
+	called := false
+	manager := NewManager(ManagerConfig{
+		HubID: "hub-a",
+		OnNPMOperationDone: func() {
+			called = true
+		},
+	})
+
+	manager.npmCommand.notifyOperationDone(manager.npmCommand.operationDone)
+
+	if !called {
+		t.Fatal("npm operation callback was not wired")
+	}
+}
+
 func TestManagerRoutesReleaseCommand(t *testing.T) {
 	source := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
@@ -688,6 +704,31 @@ func TestNPMCommandAcceptsRuntimeInstallAndDeprecatedUninstall(t *testing.T) {
 	}
 }
 
+func TestNPMCommandNotifiesAfterSuccessfulRuntimeOperation(t *testing.T) {
+	cmd := newNPMCommandWithRunner(newFakeNPMRunner())
+	done := make(chan struct{}, 1)
+	cmd.setOperationDoneHandler(func() {
+		done <- struct{}{}
+	})
+
+	_, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+		"version":     "latest",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("install error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("successful npm operation did not notify runtime reload")
+	}
+}
+
 func TestNPMCommandAcceptsBulkRuntimeInstallAsSingleOperation(t *testing.T) {
 	runner := newFakeNPMRunner()
 	cmd := newNPMCommandWithRunner(runner)
@@ -766,7 +807,10 @@ func TestNPMCommandUninstallAcceptsRuntimePackages(t *testing.T) {
 	if body.Operation == nil || body.Operation.Action != "uninstall" {
 		t.Fatalf("runtime uninstall response=%#v", body)
 	}
-	waitForNPMTestOperation(t, cmd)
+	operation := waitForNPMTestOperation(t, cmd)
+	if operation.Message != "Uninstalled @openai/codex. Agent availability is refreshing." {
+		t.Fatalf("uninstall message = %q", operation.Message)
+	}
 	if !runner.hasCall("npm", "uninstall", "-g", "@openai/codex") {
 		t.Fatalf("runtime uninstall call not found: %#v", runner.calls)
 	}

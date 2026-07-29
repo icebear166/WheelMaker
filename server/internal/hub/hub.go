@@ -25,17 +25,19 @@ import (
 // Hub orchestrates one or more WheelMaker project clients.
 // Each project has its own client, agent session, and state partition.
 type Hub struct {
-	cfg             *logger.AppConfig
-	dbPath          string
-	stateDir        string
-	agentFactory    *agent.ACPFactory
-	clients         []*client.Client
-	regSync         *Reporter
-	terminalManager *terminalpkg.Manager
-	flickerBridge   *flickerBridgeManager
-	hubConfig       *hubconfig.Store
-	flickerModels   *agent.FlickerModelStore
-	clientsByName   map[string]*client.Client
+	cfg                 *logger.AppConfig
+	dbPath              string
+	stateDir            string
+	agentFactory        *agent.ACPFactory
+	agentFactoryBuilder func(agent.ACPFactoryOptions) *agent.ACPFactory
+	agentReloadMu       sync.Mutex
+	clients             []*client.Client
+	regSync             *Reporter
+	terminalManager     *terminalpkg.Manager
+	flickerBridge       *flickerBridgeManager
+	hubConfig           *hubconfig.Store
+	flickerModels       *agent.FlickerModelStore
+	clientsByName       map[string]*client.Client
 }
 
 // New creates a Hub from the given config and client DB path.
@@ -56,9 +58,9 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		KimiAPIKey:        apiKeys[hubconfig.APIKeyKimi],
 		QwenAPIKey:        apiKeys[hubconfig.APIKeyQwen],
 		ZAIAPIKey:         apiKeys[hubconfig.APIKeyZAI],
-		FlickerAPIKey:     flickerBridge.localAPIKey(),
 		FlickerModelStore: flickerModels,
 	}))
+	h.agentFactoryBuilder = agent.NewConfiguredACPFactory
 	h.flickerBridge = flickerBridge
 	h.hubConfig = hubConfig
 	h.flickerModels = flickerModels
@@ -82,12 +84,61 @@ func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPF
 		factory = agent.DefaultACPFactory()
 	}
 	return &Hub{
-		cfg:           cfg,
-		dbPath:        dbPath,
-		stateDir:      filepath.Dir(filepath.Dir(dbPath)),
-		agentFactory:  factory,
-		clientsByName: map[string]*client.Client{},
+		cfg:                 cfg,
+		dbPath:              dbPath,
+		stateDir:            filepath.Dir(filepath.Dir(dbPath)),
+		agentFactory:        factory,
+		agentFactoryBuilder: agent.NewConfiguredACPFactory,
+		clientsByName:       map[string]*client.Client{},
 	}
+}
+
+func (h *Hub) reloadAgentRuntime(ctx context.Context, apiKeys map[hubconfig.APIKeyName]string) error {
+	if h == nil {
+		return nil
+	}
+	h.agentReloadMu.Lock()
+	defer h.agentReloadMu.Unlock()
+
+	flickerAPIKey := ""
+	if h.hubConfig != nil && h.flickerBridge != nil {
+		enabled, err := h.hubConfig.FlickerBridgeEnabled()
+		if err != nil {
+			return fmt.Errorf("read Flicker Bridge enabled flag: %w", err)
+		}
+		if enabled && h.flickerBridge.Status(ctx).State == "running" {
+			flickerAPIKey = h.flickerBridge.localAPIKey()
+		}
+	}
+	builder := h.agentFactoryBuilder
+	if builder == nil {
+		builder = agent.NewConfiguredACPFactory
+	}
+	replacement := builder(agent.ACPFactoryOptions{
+		StateDir:          h.stateDir,
+		DeepSeekAPIKey:    apiKeys[hubconfig.APIKeyDeepSeek],
+		KimiAPIKey:        apiKeys[hubconfig.APIKeyKimi],
+		QwenAPIKey:        apiKeys[hubconfig.APIKeyQwen],
+		ZAIAPIKey:         apiKeys[hubconfig.APIKeyZAI],
+		FlickerAPIKey:     flickerAPIKey,
+		FlickerModelStore: h.flickerModels,
+	})
+	h.acpFactory().ReplaceFrom(replacement)
+	hubLogger("").Info("agent runtime reloaded agents=%v", h.acpFactory().Names())
+
+	if h.regSync == nil {
+		return nil
+	}
+	var firstErr error
+	for _, project := range h.cfg.Projects {
+		if err := h.regSync.UpdateProject(h.collectProjectInfo(project)); err != nil {
+			hubLogger(project.Name).Warn("publish reloaded agent runtime failed: %v", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 // Start validates config, creates one client.Client per project, and starts each client.
@@ -288,14 +339,15 @@ func (h *Hub) setupRegistrySync() {
 	}
 
 	rep := NewReporter(ReporterConfig{
-		Server:            host,
-		Port:              port,
-		Token:             cfg.Token,
-		HubID:             hubID,
-		ReconnectInterval: 2 * time.Second,
-		StateDir:          filepath.Dir(filepath.Dir(h.dbPath)),
-		HubConfig:         h.hubConfig,
-		FlickerBridge:     h.flickerBridge,
+		Server:             host,
+		Port:               port,
+		Token:              cfg.Token,
+		HubID:              hubID,
+		ReconnectInterval:  2 * time.Second,
+		StateDir:           filepath.Dir(filepath.Dir(h.dbPath)),
+		HubConfig:          h.hubConfig,
+		FlickerBridge:      h.flickerBridge,
+		ReloadAgentRuntime: h.reloadAgentRuntime,
 	}, projects)
 	projectsByID := make(map[string]terminalpkg.Project, len(projects))
 	for _, project := range projects {

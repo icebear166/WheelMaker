@@ -54,6 +54,7 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 9. Multiple Sessions can be Active concurrently; each has independent promptMu.
 10. Session persistence: Active -> Suspended -> Persisted (SQLite). Restore by `session.read` / `session.send` session id access.
 11. Provider 可用性依赖 Hub 本地运行时配置时，AgentFactory 必须是 Hub-scoped 实例；项目上报与 Session 创建必须使用同一个 Factory，不能从进程级全局 Factory 重新推导。
+12. Hub 配置或 Agent CLI 变化时，Hub 原子替换共享 AgentFactory 内的 provider 注册表，不替换 Client/Session 持有的 Factory 指针。已启动的 AgentInstance 保持运行并继续使用创建时的进程环境；新建、恢复或重新连接的 Session 使用刷新后的 provider 与 Key。
 
 ## 3. Responsibilities
 
@@ -103,6 +104,7 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 - If owned: each `CreateInstance` creates an independent AgentConn.
 - Own the Hub-local provider registry used by both project capability reporting and every project Client.
 - Keep runtime-configured credentials inside provider launch configuration; do not project them into Registry-facing provider metadata.
+- Support atomic registry replacement so Hub can reload provider availability without rebuilding project Clients or interrupting active AgentInstance objects.
 
 ### AgentInstance
 
@@ -234,6 +236,8 @@ Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID
 
 `hub-config.json` 使用带 version 的 section schema。缺失文件返回默认值且不主动创建；首次成功修改才以私有权限原子写入。每个前端配置字段必须经过对应 Hub Config update 的服务端校验，客户端不能提交整份任意 JSON。section 更新保留其他 section，使后续 Hub 功能可以共享存储而不互相覆盖；文件可以保存 Hub 本地第三方 API Key，但不得保存 PID、临时 action 或 Session 数据。Key 只通过脱敏 snapshot 暴露 `configured` / `updatedAt`，明文不得进入 Registry、日志或 Session 数据。
 
+API Key 成功更新后，Reporter 用同一次 `hub-config.json` 读取结果更新 Limits Collector 并请求立即扫描，同时要求 Hub 重建 Agent provider 集合。Hub 将新集合原子写入共享 Factory，再重新生成各项目的 `Agents` / `AgentProfiles` 并推送 Registry project update。因此 Key 变化无需重启 Hub；正在运行的 Agent 子进程不重启，新建、恢复或重连时才取得新 Key。npm Agent CLI 的安装、卸载或重装成功后也触发 Agent provider 重扫，但不触发无关的 Limits 扫描。
+
 Flicker Bridge mode 是首个使用该存储的配置：
 
 ```json
@@ -245,7 +249,7 @@ Flicker Bridge mode 是首个使用该存储的配置：
 }
 ```
 
-Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前进程 `runningMode`。V1/V2 共用 `127.0.0.1:17999`；Hub 启动时仅在持久化 `enabled=true` 时加载 Bridge，`enabled=false` 保持 stopped。运行中切换须先健康启动目标模式再提交配置，失败则恢复原模式；所有生命周期操作只管理 Hub 捕获的子进程，不结束非本 manager 所有的 listener。Web 以 Off/V1/V2 作为唯一生命周期控制，不暴露会制造持久化状态与运行状态分歧的独立 Start/Stop toggle。
+Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前进程 `runningMode`。V1/V2 共用 `127.0.0.1:17999`；Hub 启动时仅在持久化 `enabled=true` 时加载 Bridge，`enabled=false` 保持 stopped。`cc-flicker` 只有在 Bridge 已启用且健康状态为 `running` 时才进入可用 Agent 集合，Off、启动中、停止或失败时动态移除；已经启动的 `cc-flicker` Session 仍遵循不中断策略。原生 `flicker` provider 只依赖 `myflicker` CLI，与 Bridge 开关独立。运行中切换须先健康启动目标模式再提交配置，失败则恢复原模式；所有生命周期操作只管理 Hub 捕获的子进程，不结束非本 manager 所有的 listener。Web 以 Off/V1/V2 作为唯一生命周期控制，不暴露会制造持久化状态与运行状态分歧的独立 Start/Stop toggle。
 
 来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)。
 

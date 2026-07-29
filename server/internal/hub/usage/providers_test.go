@@ -314,6 +314,17 @@ func TestLocalCollectorUsesConfiguredKeysBeforeExternalCredentials(t *testing.T)
 	}
 }
 
+func TestLocalCollectorUpdateAPIKeysReplacesRuntimeCredentials(t *testing.T) {
+	collector := NewLocalCollector("")
+	collector.UpdateAPIKeys("kimi-old", "zai-old", "deepseek-old")
+	collector.UpdateAPIKeys("kimi-new", "", "deepseek-new")
+
+	kimi, zai, deepSeek := collector.apiKeysSnapshot()
+	if kimi != "kimi-new" || zai != "" || deepSeek != "deepseek-new" {
+		t.Fatalf("API key snapshot = (%q, %q, %q), want latest values", kimi, zai, deepSeek)
+	}
+}
+
 func TestKimiScannerDeduplicatesCredentialBeforeRequest(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

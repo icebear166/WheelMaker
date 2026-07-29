@@ -5814,6 +5814,33 @@ func TestFactoryCodexSupportsSessionActions(t *testing.T) {
 	}
 }
 
+func TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace(t *testing.T) {
+	original := NewACPFactory()
+	original.Register(protocol.ACPProviderClaude, func(context.Context, string) (Instance, error) {
+		return nil, nil
+	})
+	replacement := NewACPFactory()
+	replacement.Register(protocol.ACPProviderCodex, func(context.Context, string) (Instance, error) {
+		return nil, nil
+	})
+	replacement.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true})
+
+	original.ReplaceFrom(replacement)
+
+	if got := original.Names(); !reflect.DeepEqual(got, []string{"codex"}) {
+		t.Fatalf("Names() = %v, want [codex]", got)
+	}
+	if original.Creator(protocol.ACPProviderClaude) != nil {
+		t.Fatal("Claude creator survived replacement")
+	}
+	if original.Creator(protocol.ACPProviderCodex) == nil {
+		t.Fatal("Codex creator missing after replacement")
+	}
+	if got := original.SessionActions(protocol.ACPProviderCodex); !got.Status {
+		t.Fatalf("Codex session actions = %+v, want status support", got)
+	}
+}
+
 func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	tests := []struct {

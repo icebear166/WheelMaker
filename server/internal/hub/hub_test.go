@@ -950,6 +950,26 @@ func TestReporterFlickerBridgeStateDoesNotExposeConfiguredKey(t *testing.T) {
 	}
 }
 
+func TestReporterFlickerBridgeLifecycleReloadsAgentAvailability(t *testing.T) {
+	reloaded := make(chan struct{}, 1)
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-flicker-agent-reload",
+		StateDir: t.TempDir(),
+		ReloadAgentRuntime: func(context.Context, map[hubconfig.APIKeyName]string) error {
+			reloaded <- struct{}{}
+			return nil
+		},
+	}, nil)
+
+	reporter.updateFlickerBridgeLifecycleState(flickerBridgeStatus{State: "running"})
+
+	select {
+	case <-reloaded:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Flicker Bridge lifecycle change did not reload Agent availability")
+	}
+}
+
 func TestReporterHubConfigAPIKeyUpdateAndSnapshot(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{HubID: "hub-config", StateDir: t.TempDir()}, nil)
 	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
@@ -982,6 +1002,39 @@ func TestReporterHubConfigAPIKeyUpdateAndSnapshot(t *testing.T) {
 	}
 	if snapshot.APIKeys["kimi"].Configured {
 		t.Fatalf("kimi snapshot after clear = %#v", snapshot.APIKeys["kimi"])
+	}
+}
+
+func TestReporterHubConfigAPIKeyUpdateReloadsAgentsAndLimits(t *testing.T) {
+	var reloaded map[hubconfig.APIKeyName]string
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-config-reload",
+		StateDir: t.TempDir(),
+		ReloadAgentRuntime: func(_ context.Context, keys map[hubconfig.APIKeyName]string) error {
+			reloaded = keys
+			return nil
+		},
+	}, nil)
+	reporter.usageService = usage.NewService(usage.ServiceOptions{HubID: "hub-config-reload"})
+
+	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{
+		Section: "apiKeys", Field: "kimi", Action: "set", Value: "kimi-live-key",
+	}); err != nil {
+		t.Fatalf("set apiKeys.kimi: %v", err)
+	}
+
+	if reloaded[hubconfig.APIKeyKimi] != "kimi-live-key" {
+		t.Fatalf("agent reload keys = %#v, want latest Kimi key", reloaded)
+	}
+	if kimi := reporter.usageCollector.KimiAPIKey; kimi != "kimi-live-key" {
+		t.Fatalf("limits collector Kimi key = %q, want latest value", kimi)
+	}
+	deadline := time.Now().Add(time.Second)
+	for reporter.usageService.Snapshot().Generation == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := reporter.usageService.Snapshot().Generation; got == 0 {
+		t.Fatal("limits refresh was not triggered after API key update")
 	}
 }
 
@@ -4694,10 +4747,13 @@ func TestNewWiresHubConfigAPIKeysIntoHubFactory(t *testing.T) {
 	}
 	h := New(cfg, filepath.Join(stateDir, "db", "client.sqlite3"))
 	names := h.agentFactory.Names()
-	for _, want := range []string{"cc-deepseek", "cc-flicker", "cc-glm", "cc-kimi", "cc-qwen"} {
+	for _, want := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("factory names = %v, want %s from hub-config.json", names, want)
 		}
+	}
+	if slices.Contains(names, "cc-flicker") {
+		t.Fatalf("factory names = %v, cc-flicker must stay hidden while Bridge is off", names)
 	}
 	if got := h.flickerBridge.localAPIKey(); got != "flicker-hub-key" {
 		t.Fatalf("Flicker Bridge local key = %q, want hub-config.json key", got)
@@ -4723,8 +4779,57 @@ func TestNewUsesDefaultFlickerAPIKeyWhenHubConfigKeyIsUnset(t *testing.T) {
 	if got := h.flickerBridge.localAPIKey(); got != "00000000000000000000" {
 		t.Fatalf("Flicker Bridge local key = %q, want built-in local gate", got)
 	}
-	if names := h.agentFactory.Names(); !slices.Contains(names, "cc-flicker") {
-		t.Fatalf("factory names = %v, want cc-flicker with built-in local gate", names)
+	if names := h.agentFactory.Names(); slices.Contains(names, "cc-flicker") {
+		t.Fatalf("factory names = %v, cc-flicker must stay hidden while Bridge is off", names)
+	}
+}
+
+func TestHubReloadAgentRuntimePublishesCCFlickerOnlyWhileBridgeIsReady(t *testing.T) {
+	stateDir := t.TempDir()
+	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+	if err := store.UpdateFlickerBridgeEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	bridge := newFlickerBridgeManager(stateDir, defaultFlickerBridgeAPIKey, store)
+	bridge.supported = true
+	bridge.state = "running"
+
+	sharedFactory := agent.NewACPFactory()
+	h := newHubWithFactory(&logger.AppConfig{}, filepath.Join(stateDir, "db", "client.sqlite3"), sharedFactory)
+	h.hubConfig = store
+	h.flickerBridge = bridge
+	var options agent.ACPFactoryOptions
+	h.agentFactoryBuilder = func(input agent.ACPFactoryOptions) *agent.ACPFactory {
+		options = input
+		factory := agent.NewACPFactory()
+		if input.FlickerAPIKey != "" {
+			factory.Register(rp.ACPProviderCCFlicker, func(context.Context, string) (agent.Instance, error) {
+				return nil, nil
+			})
+		}
+		return factory
+	}
+
+	if err := h.reloadAgentRuntime(context.Background(), map[hubconfig.APIKeyName]string{
+		hubconfig.APIKeyKimi: "kimi-live-key",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if options.KimiAPIKey != "kimi-live-key" || options.FlickerAPIKey != defaultFlickerBridgeAPIKey {
+		t.Fatalf("factory options = %+v, want latest Kimi key and ready Flicker gate", options)
+	}
+	if !slices.Contains(sharedFactory.Names(), "cc-flicker") {
+		t.Fatalf("shared factory names = %v, want ready cc-flicker", sharedFactory.Names())
+	}
+
+	bridge.mu.Lock()
+	bridge.state = "stopped"
+	bridge.mu.Unlock()
+	if err := h.reloadAgentRuntime(context.Background(), map[hubconfig.APIKeyName]string{}); err != nil {
+		t.Fatal(err)
+	}
+	if options.FlickerAPIKey != "" || slices.Contains(sharedFactory.Names(), "cc-flicker") {
+		t.Fatalf("stopped Bridge reload kept cc-flicker: options=%+v names=%v", options, sharedFactory.Names())
 	}
 }
 

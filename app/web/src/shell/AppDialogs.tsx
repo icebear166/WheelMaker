@@ -232,10 +232,10 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     return 'The current turn will continue, but Goal will not start another turn. The objective and its saved progress will be removed.';
   }
   if (target.kind === 'npmPackage') {
-    return `Hub: ${target.hubId}. Package: ${target.packageName}. Installed: ${target.installedVersion || '-'}. Target: ${target.action === 'uninstall' ? 'remove deprecated package' : target.latestVersion || 'latest'}. Restart WheelMaker or start a new agent session for changes to take effect.`;
+    return `Hub: ${target.hubId}. Package: ${target.packageName}. Installed: ${target.installedVersion || '-'}. Target: ${target.action === 'uninstall' ? 'remove deprecated package' : target.latestVersion || 'latest'}. Agent availability refreshes automatically; running sessions are not interrupted.`;
   }
   if (target.kind === 'npmPackageHubUpdate') {
-    return `Runs latest install/update for ${target.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Restart WheelMaker or start a new agent session for changes to take effect.`;
+    return `Runs latest install/update for ${target.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Agent availability refreshes automatically; running sessions are not interrupted.`;
   }
   if (target.kind === 'wheelMakerUpdate') {
     return `Current: ${target.currentVersion || '-'}. Latest: ${target.latestVersion || '-'}. The current-user updater will download and verify the stable release, deploy it, and restart Hub.`;

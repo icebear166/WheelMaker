@@ -3,10 +3,12 @@ package usage
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 )
 
 type LocalCollector struct {
+	mu                      sync.RWMutex
 	AuthPath                string
 	FlickerCredentialPath   string
 	KimiCodeCredentialsPath string
@@ -26,7 +28,29 @@ func NewLocalCollector(authPath string) *LocalCollector {
 	}
 }
 
+// UpdateAPIKeys replaces the Hub-managed credentials used by future scans.
+func (c *LocalCollector) UpdateAPIKeys(kimi, zai, deepSeek string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.KimiAPIKey = kimi
+	c.ZAIAPIKey = zai
+	c.DeepSeekAPIKey = deepSeek
+	c.mu.Unlock()
+}
+
+func (c *LocalCollector) apiKeysSnapshot() (kimi, zai, deepSeek string) {
+	if c == nil {
+		return "", "", ""
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.KimiAPIKey, c.ZAIAPIKey, c.DeepSeekAPIKey
+}
+
 func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
+	kimiAPIKey, zaiAPIKey, deepSeekAPIKey := c.apiKeysSnapshot()
 	timeout := c.Timeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -43,8 +67,8 @@ func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
 	}
 	credentials := readOpenCodeCredentials(authPath)
 	kimiSources := make([]KimiCredentialSource, 0, 3)
-	if c.KimiAPIKey != "" {
-		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: c.KimiAPIKey})
+	if kimiAPIKey != "" {
+		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: kimiAPIKey})
 	}
 	if credential := credentials[ProviderKimi]; credential != "" {
 		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "opencode", Label: "OpenCode", Credential: credential})
@@ -61,11 +85,11 @@ func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
 		flickerPath = defaultFlickerCredentialPath()
 	}
 	zaiSources := []ProviderCredentialSource{
-		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: c.ZAIAPIKey},
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: zaiAPIKey},
 		{LocalID: "opencode", Label: "OpenCode", Credential: credentials[ProviderZAI]},
 	}
 	deepSeekSources := []ProviderCredentialSource{
-		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: c.DeepSeekAPIKey},
+		{LocalID: "wheelmaker-config", Label: "WheelMaker", Credential: deepSeekAPIKey},
 		{LocalID: "opencode", Label: "OpenCode", Credential: credentials[ProviderDeepSeek]},
 	}
 	return (Collector{Scanners: []ProviderScanner{

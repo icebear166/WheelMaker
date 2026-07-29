@@ -16,6 +16,7 @@ type ManagerConfig struct {
 	StateDir              string
 	GlobalLockPath        string
 	HomeDir               string
+	OnNPMOperationDone    func()
 	OnSkillsOperationDone func(scope, projectName string)
 	ReleaseCommand        *ReleaseCommand
 	ReleaseNotifier       ReleaseNotifier
@@ -72,9 +73,11 @@ func NewManager(config ManagerConfig) *Manager {
 	config.GlobalLockPath = strings.TrimSpace(config.GlobalLockPath)
 	config.HomeDir = strings.TrimSpace(config.HomeDir)
 	config.Projects = append([]ProjectInfo(nil), config.Projects...)
+	npmCommand := NewNPMCommand()
+	npmCommand.setOperationDoneHandler(config.OnNPMOperationDone)
 	return &Manager{
 		cfg:           config,
-		npmCommand:    NewNPMCommand(),
+		npmCommand:    npmCommand,
 		updateCommand: NewUpdateCommand(config.StateDir),
 		skillsCommand: NewSkillsCommand(skillsCommandConfig{
 			HubID:           config.HubID,
@@ -113,6 +116,7 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 	case "cmd.npm":
 		if m.npmCommand == nil {
 			m.npmCommand = NewNPMCommand()
+			m.npmCommand.setOperationDoneHandler(m.cfg.OnNPMOperationDone)
 		}
 		out, err := m.npmCommand.Handle(ctx, payload)
 		return out, npmErr(err)
