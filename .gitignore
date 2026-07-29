@@ -45,3 +45,5 @@ debug.log
 # Local git worktrees
 .worktree/
 .worktrees/
+
+.worktree/
