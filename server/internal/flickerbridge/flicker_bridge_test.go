@@ -228,11 +228,49 @@ func TestV2RequestFieldsAreExplicitlyClassified(t *testing.T) {
 	if len(classified.Unknown) != 0 {
 		t.Fatalf("unknown fields = %v", classified.Unknown)
 	}
-	if !slices.Contains(classified.ProviderGenerated, "output_config") ||
+	if !slices.Contains(classified.Mapped, "output_config") ||
 		!slices.Contains(classified.Ignored, "metadata") ||
 		!slices.Contains(classified.Ignored, "service_tier") ||
 		!slices.Contains(classified.Ignored, "context_management") {
 		t.Fatalf("classification = %+v", classified)
+	}
+}
+
+func TestV2ReadsClaudeCodeOutputEffort(t *testing.T) {
+	var request anthropicMessagesRequest
+	if err := json.Unmarshal([]byte(`{
+		"model":"gpt-5.6-sol",
+		"max_tokens":128,
+		"messages":[{"role":"user","content":"hello"}],
+		"output_config":{"effort":"xhigh"}
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+	if got := requestedAnthropicEffort(request); got != "xhigh" {
+		t.Fatalf("requested effort = %q, want xhigh", got)
+	}
+}
+
+func TestV2WorkerCatalogExportsModelEffortCapabilities(t *testing.T) {
+	for _, expected := range []string{
+		"effortLevels: Object.keys(variants)",
+		"defaultThinkingLevel: String(source.defaultThinkingLevel || \"\")",
+	} {
+		if !strings.Contains(nodeWorkerSource, expected) {
+			t.Fatalf("worker catalog is missing %q", expected)
+		}
+	}
+}
+
+func TestV2WorkerAppliesMyFlickerModelVariant(t *testing.T) {
+	for _, expected := range []string{
+		"function resolveModelEffort(metadata, requested)",
+		"const variant = variants[effort]",
+		"providerOptions.wanqing = {...wanqing, ...variant}",
+	} {
+		if !strings.Contains(nodeWorkerSource, expected) {
+			t.Fatalf("worker effort forwarding is missing %q", expected)
+		}
 	}
 }
 
@@ -242,6 +280,58 @@ func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 	if first == "" || first != second {
 		t.Fatalf("hashes = %q, %q", first, second)
 	}
+}
+
+func TestV2MessagesPassesOutputEffortToWorker(t *testing.T) {
+	worker := &effortCaptureWorker{}
+	proxy, err := newProxyServer(proxySettings{
+		Host:           "127.0.0.1",
+		Port:           17999,
+		MaxRequestSize: 1 << 20,
+	}, worker, []modelInfo{{
+		ID: "gpt-5.6-sol", Name: "GPT 5.6 Sol", APIFormat: "responses",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{
+		"model":"gpt-5.6-sol",
+		"max_tokens":32,
+		"messages":[{"role":"user","content":"hello"}],
+		"output_config":{"effort":"xhigh"}
+	}`))
+	response := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if worker.effort != "xhigh" {
+		t.Fatalf("worker effort = %q, want xhigh", worker.effort)
+	}
+}
+
+type effortCaptureWorker struct {
+	effort string
+}
+
+func (w *effortCaptureWorker) Request(
+	_ context.Context,
+	_, effort string,
+	_ any,
+) (<-chan workerFrame, error) {
+	w.effort = effort
+	frames := make(chan workerFrame, 8)
+	for _, part := range []string{
+		`{"type":"response-metadata","id":"msg_effort","modelId":"gpt-5.6-sol"}`,
+		`{"type":"text-start","id":"0"}`,
+		`{"type":"text-delta","id":"0","delta":"ok"}`,
+		`{"type":"text-end","id":"0"}`,
+		`{"type":"finish","finishReason":{"unified":"stop","raw":"stop"},"usage":{"inputTokens":{"total":1},"outputTokens":{"total":1}}}`,
+	} {
+		frames <- workerFrame{Type: "part", Part: json.RawMessage(part)}
+	}
+	close(frames)
+	return frames, nil
 }
 
 func TestV2MixedToolResultAndTextAreSplitInBlockOrder(t *testing.T) {

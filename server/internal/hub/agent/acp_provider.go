@@ -327,8 +327,10 @@ type claudeCompatibleProfile struct {
 
 // claudeModelEntry is one entry of the settings["models"] object array.
 type claudeModelEntry struct {
-	ID   string
-	Name string
+	ID            string
+	Name          string
+	EffortLevels  []string
+	DefaultEffort string
 }
 
 var claudeCompatibleConfigMu sync.Mutex
@@ -503,8 +505,12 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 	}
 	var payload struct {
 		Data []struct {
-			ID          string `json:"id"`
-			DisplayName string `json:"display_name"`
+			ID           string `json:"id"`
+			DisplayName  string `json:"display_name"`
+			Capabilities struct {
+				EffortLevels         []string `json:"effortLevels"`
+				DefaultThinkingLevel string   `json:"defaultThinkingLevel"`
+			} `json:"capabilities"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
@@ -519,7 +525,12 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 		if name == "" {
 			name = model.ID
 		}
-		models = append(models, claudeModelEntry{ID: model.ID, Name: name})
+		models = append(models, claudeModelEntry{
+			ID:            model.ID,
+			Name:          name,
+			EffortLevels:  append([]string(nil), model.Capabilities.EffortLevels...),
+			DefaultEffort: model.Capabilities.DefaultThinkingLevel,
+		})
 	}
 	return models
 }

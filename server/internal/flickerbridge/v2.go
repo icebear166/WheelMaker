@@ -184,7 +184,19 @@ type anthropicMessagesRequest struct {
 	TopK          *int                    `json:"top_k,omitempty"`
 	StopSequences []string                `json:"stop_sequences,omitempty"`
 	Thinking      json.RawMessage         `json:"thinking,omitempty"`
+	OutputConfig  *anthropicOutputConfig  `json:"output_config,omitempty"`
 	Stream        bool                    `json:"stream,omitempty"`
+}
+
+type anthropicOutputConfig struct {
+	Effort string `json:"effort,omitempty"`
+}
+
+func requestedAnthropicEffort(request anthropicMessagesRequest) string {
+	if request.OutputConfig == nil {
+		return ""
+	}
+	return strings.TrimSpace(request.OutputConfig.Effort)
 }
 
 type anthropicInputMessage struct {
@@ -230,12 +242,11 @@ var v2MappedRequestFields = map[string]struct{}{
 	"top_k":          {},
 	"stop_sequences": {},
 	"thinking":       {},
+	"output_config":  {},
 	"stream":         {},
 }
 
-var v2ProviderGeneratedRequestFields = map[string]struct{}{
-	"output_config": {},
-}
+var v2ProviderGeneratedRequestFields = map[string]struct{}{}
 
 var v2IntentionallyIgnoredRequestFields = map[string]struct{}{
 	"metadata":           {},
@@ -295,7 +306,7 @@ type v2SSEEvent struct {
 }
 
 type workerBackend interface {
-	Request(context.Context, string, any) (<-chan workerFrame, error)
+	Request(context.Context, string, string, any) (<-chan workerFrame, error)
 }
 
 type proxyServer struct {
@@ -309,6 +320,7 @@ type workerFrame struct {
 	Type             string          `json:"type"`
 	RequestID        string          `json:"requestId,omitempty"`
 	Model            string          `json:"model,omitempty"`
+	Effort           string          `json:"effort,omitempty"`
 	Payload          json.RawMessage `json:"payload,omitempty"`
 	Part             json.RawMessage `json:"part,omitempty"`
 	Error            string          `json:"error,omitempty"`
@@ -325,6 +337,7 @@ type outboundProbe struct {
 	Method               string   `json:"method"`
 	HeaderNames          []string `json:"headerNames"`
 	BodyKeys             []string `json:"bodyKeys"`
+	Effort               string   `json:"effort"`
 	BodyHash             string   `json:"bodyHash"`
 	SystemBlocks         int      `json:"systemBlocks"`
 	ToolNames            []string `json:"toolNames"`
@@ -482,7 +495,13 @@ function stringArray(value) {
 function catalogEntry(id, metadata) {
   const source = metadata && typeof metadata === "object" ? metadata : {};
   const aliases = stringArray(source.aliases || source.alias);
-  const capabilities = {};
+  const variants = source.variants && typeof source.variants === "object" && !Array.isArray(source.variants)
+    ? source.variants
+    : {};
+  const capabilities = {
+    effortLevels: Object.keys(variants),
+    defaultThinkingLevel: String(source.defaultThinkingLevel || ""),
+  };
   for (const key of ["contextWindow", "maxOutputTokens", "supportsReasoning", "supportsTools"]) {
     if (source[key] !== undefined &&
         (typeof source[key] === "string" || typeof source[key] === "number" || typeof source[key] === "boolean")) {
@@ -498,6 +517,49 @@ function catalogEntry(id, metadata) {
     hidden: Boolean(source.hidden || source.isHidden),
     metadata: capabilities,
   };
+}
+
+function modelVariants(metadata) {
+  return metadata && typeof metadata.variants === "object" && !Array.isArray(metadata.variants)
+    ? metadata.variants
+    : {};
+}
+
+function resolveModelEffort(metadata, requested) {
+  const variants = modelVariants(metadata);
+  const levels = Object.keys(variants);
+  if (levels.length === 0) return "";
+  let candidate = String(requested || "");
+  if (candidate === "maxOrXhigh") {
+    candidate = levels.includes("xhigh") ? "xhigh" : levels.includes("max") ? "max" : "";
+  }
+  if (candidate && candidate !== "default" && levels.includes(candidate)) return candidate;
+  const defaultLevel = String(metadata && metadata.defaultThinkingLevel || "");
+  if (defaultLevel && levels.includes(defaultLevel)) return defaultLevel;
+  return levels[0];
+}
+
+function applyModelVariant(metadata, payload, requested) {
+  const next = {...payload};
+  const providerOptions = {...(next.providerOptions || {})};
+  const wanqing = {...(providerOptions.wanqing || {})};
+  delete wanqing.thinking;
+  const effort = resolveModelEffort(metadata, requested);
+  if (effort) {
+    const variants = modelVariants(metadata);
+    const variant = variants[effort];
+    providerOptions.wanqing = {...wanqing, ...variant};
+  } else if (Object.keys(wanqing).length > 0) {
+    providerOptions.wanqing = wanqing;
+  } else {
+    delete providerOptions.wanqing;
+  }
+  if (Object.keys(providerOptions).length > 0) {
+    next.providerOptions = providerOptions;
+  } else {
+    delete next.providerOptions;
+  }
+  return next;
 }
 
 function anthropicFixture(model) {
@@ -593,6 +655,18 @@ function probeToolNames(body) {
   )).filter(Boolean);
 }
 
+function probeEffort(body) {
+  for (const value of [
+    body && body.effort,
+    body && body.reasoning_effort,
+    body && body.reasoning && body.reasoning.effort,
+    body && body.output_config && body.output_config.effort,
+  ]) {
+    if (typeof value === "string" && value) return value;
+  }
+  return "";
+}
+
 function installInterception() {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
@@ -624,6 +698,7 @@ function installInterception() {
         method:String(init.method || "GET").toUpperCase(),
         headerNames:headers,
         bodyKeys:Object.keys(body).sort(),
+        effort:probeEffort(body),
         bodyHash:createHash("sha256").update(stableJSON(body)).digest("hex"),
         systemBlocks:Array.isArray(system) ? system.length : system ? 1 : 0,
         toolNames,
@@ -704,13 +779,14 @@ async function dispatch(runtime, frame) {
       runtime.internals.setContext(nextContext(runtime.internals.getContext()));
       const model = await runtime.wanqing.createModel(frame.model, runtime.wanqing);
       const metadata = runtime.wanqing.models && runtime.wanqing.models[frame.model] || {};
+      const payload = applyModelVariant(metadata, frame.payload, frame.effort);
       return await probeContext.run(
         {
           requestId:frame.requestId,
           model:frame.model,
           apiFormat:String(metadata.apiFormat || ""),
         },
-        async () => await model.doStream({...frame.payload, abortSignal: controller.signal}),
+        async () => await model.doStream({...payload, abortSignal: controller.signal}),
       );
     });
     for await (const part of result.stream) {
@@ -1948,7 +2024,7 @@ func (s *proxyServer) handleMessages(response http.ResponseWriter, request *http
 		writeAnthropicError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	frames, err := s.worker.Request(request.Context(), model.ID, payload)
+	frames, err := s.worker.Request(request.Context(), model.ID, requestedAnthropicEffort(input), payload)
 	if err != nil {
 		writeAnthropicError(response, http.StatusBadGateway, "Wanqing worker request failed")
 		return
@@ -2202,7 +2278,7 @@ func (w *workerClient) route(frame workerFrame) {
 	}
 }
 
-func (w *workerClient) Request(ctx context.Context, model string, payload any) (<-chan workerFrame, error) {
+func (w *workerClient) Request(ctx context.Context, model, effort string, payload any) (<-chan workerFrame, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("encode worker request: %w", err)
@@ -2224,6 +2300,7 @@ func (w *workerClient) Request(ctx context.Context, model string, payload any) (
 		Type:      "request",
 		RequestID: requestID,
 		Model:     model,
+		Effort:    effort,
 		Payload:   encoded,
 	}); err != nil {
 		w.failRequest(requestID, "worker request could not be sent")
@@ -2444,11 +2521,11 @@ func selfTestWorkerTransport() error {
 	defer cancelA()
 	ctxB, cancelB := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelB()
-	partsA, err := client.Request(ctxA, "a", map[string]any{"value": "a"})
+	partsA, err := client.Request(ctxA, "a", "", map[string]any{"value": "a"})
 	if err != nil {
 		return err
 	}
-	partsB, err := client.Request(ctxB, "b", map[string]any{"value": "b"})
+	partsB, err := client.Request(ctxB, "b", "", map[string]any{"value": "b"})
 	if err != nil {
 		return err
 	}
@@ -2484,7 +2561,7 @@ func selfTestWorkerTransport() error {
 		return err
 	}
 	defer eofClient.Close()
-	eofFrames, err := eofClient.Request(context.Background(), "eof", map[string]any{"secret": "must-not-leak"})
+	eofFrames, err := eofClient.Request(context.Background(), "eof", "", map[string]any{"secret": "must-not-leak"})
 	if err != nil {
 		return err
 	}
@@ -2756,7 +2833,8 @@ func selfTestLiveFormats() error {
 	}
 	selected := make(map[string]modelInfo)
 	for _, model := range ready.Catalog {
-		if !model.Hidden && selected[model.APIFormat].ID == "" {
+		levels := v2StringSlice(model.Metadata["effortLevels"])
+		if !model.Hidden && containsString(levels, "high") && selected[model.APIFormat].ID == "" {
 			selected[model.APIFormat] = model
 		}
 	}
@@ -2787,13 +2865,14 @@ func selfTestLiveFormats() error {
 		}`), &request); err != nil {
 			return err
 		}
+		request.OutputConfig = &anthropicOutputConfig{Effort: "high"}
 		payload, _, err := anthropicRequestToV3(request)
 		if err != nil {
 			return err
 		}
 		probes := make([]*outboundProbe, 0, 2)
 		for attempt := 0; attempt < 2; attempt++ {
-			frames, err := worker.Request(ctx, model.ID, payload)
+			frames, err := worker.Request(ctx, model.ID, requestedAnthropicEffort(request), payload)
 			if err != nil {
 				return err
 			}
@@ -2823,6 +2902,44 @@ func selfTestLiveFormats() error {
 		probe := probes[0]
 		if probe.BodyHash == "" || probe.BodyHash != probes[1].BodyHash {
 			return fmt.Errorf("%s request body is not stable across equivalent requests", format)
+		}
+		// MyFlicker 0.3.12's Responses adapter applies the variant include
+		// option but does not serialize its reasoningEffort field. Keep that
+		// native behavior instead of rewriting the outbound request ourselves.
+		if format != "responses" && probe.Effort != "high" {
+			return fmt.Errorf("%s model %s request effort = %q, want high", format, model.ID, probe.Effort)
+		}
+		if format == "responses" && !containsString(probe.BodyKeys, "include") {
+			return fmt.Errorf("%s model %s omitted the variant include field", format, model.ID)
+		}
+		alternateEffort := ""
+		for _, level := range v2StringSlice(model.Metadata["effortLevels"]) {
+			if level != "high" {
+				alternateEffort = level
+				break
+			}
+		}
+		if alternateEffort == "" {
+			return fmt.Errorf("%s model %s has no alternate effort variant", format, model.ID)
+		}
+		alternateFrames, err := worker.Request(ctx, model.ID, alternateEffort, payload)
+		if err != nil {
+			return err
+		}
+		var alternateProbe *outboundProbe
+		for frame := range alternateFrames {
+			if frame.Type == "error" {
+				return fmt.Errorf("%s alternate effort request: %s", format, frame.Error)
+			}
+			if frame.Type == "probe" {
+				alternateProbe = frame.Probe
+			}
+		}
+		if alternateProbe == nil {
+			return fmt.Errorf("%s model %s alternate effort produced no request", format, model.ID)
+		}
+		if format != "responses" && alternateProbe.BodyHash == probe.BodyHash {
+			return fmt.Errorf("%s model %s effort variants produced the same request body", format, model.ID)
 		}
 		if probe.SystemBlocks == 0 || !probe.HasMyFlickerIdentity || probe.HasClaudeIdentity {
 			return fmt.Errorf("%s request identity was not rewritten as expected", format)
@@ -2857,6 +2974,20 @@ func containsString(values []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+func v2StringSlice(value any) []string {
+	raw, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if text, ok := item.(string); ok {
+			result = append(result, text)
+		}
+	}
+	return result
 }
 
 func environmentMap(environ []string) map[string]string {
@@ -3045,7 +3176,7 @@ type fakeWorkerBackend struct {
 	cancelled bool
 }
 
-func (f *fakeWorkerBackend) Request(ctx context.Context, _ string, _ any) (<-chan workerFrame, error) {
+func (f *fakeWorkerBackend) Request(ctx context.Context, _, _ string, _ any) (<-chan workerFrame, error) {
 	frames := make(chan workerFrame, 8)
 	context.AfterFunc(ctx, func() {
 		f.mu.Lock()

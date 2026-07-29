@@ -149,7 +149,10 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		registerConfiguredProvider(f, protocol.ACPProviderCCGLM, NewCCGLMProvider(options.StateDir, zaiKey), available)
 	}
 	if flickerKey := strings.TrimSpace(options.FlickerAPIKey); flickerKey != "" {
-		registerConfiguredProvider(f, protocol.ACPProviderCCFlicker, NewCCFlickerProvider(options.StateDir, flickerKey, options.FlickerModelStore), available)
+		flickerProvider := NewCCFlickerProvider(options.StateDir, flickerKey, options.FlickerModelStore)
+		if available(flickerProvider) {
+			f.Register(protocol.ACPProviderCCFlicker, ccFlickerInstanceCreator(flickerProvider))
+		}
 	}
 	if len(f.Names()) == 0 {
 		agentLogger().Warn("no available ACP providers detected")
@@ -311,6 +314,22 @@ func providerInstanceCreator(provider ACPProvider) InstanceCreator {
 			return nil, fmt.Errorf("connect %q: %w", provider.Name(), err)
 		}
 		return NewInstance(provider.Name(), conn), nil
+	}
+}
+
+func ccFlickerInstanceCreator(provider *acpProvider) InstanceCreator {
+	return func(_ context.Context, cwd string) (Instance, error) {
+		conn, err := NewOwnedProviderConn(provider, cwd)
+		if err != nil {
+			return nil, fmt.Errorf("connect %q: %w", provider.Name(), err)
+		}
+		base := NewInstance(provider.Name(), conn)
+		profile := provider.claudeSettings
+		var store *FlickerModelStore
+		if profile != nil {
+			store = profile.flickerStore
+		}
+		return newFlickerEffortInstance(base, store, profile), nil
 	}
 }
 

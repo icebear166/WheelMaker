@@ -5998,7 +5998,10 @@ func TestApplyFlickerModelsSortsV2CatalogByVendorAndAscendingStrength(t *testing
 func TestFlickerModelStoreRefreshFromEndpoint(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"id":"CLAUDE_OPUS_4_8","display_name":"MF Claude Opus 4.8"},{"id":"CLAUDE-MYFLICKER-GPT_5_4","display_name":"MF GPT-5.4"}]}`))
+		_, _ = w.Write([]byte(`{"data":[
+			{"id":"CLAUDE_OPUS_4_8","display_name":"MF Claude Opus 4.8","capabilities":{"effortLevels":["low","medium","high","max"],"defaultThinkingLevel":"medium"}},
+			{"id":"CLAUDE-MYFLICKER-GPT_5_4","display_name":"MF GPT-5.4","capabilities":{"effortLevels":["low","medium","high","xhigh"],"defaultThinkingLevel":"medium"}}
+		]}`))
 	}))
 	defer server.Close()
 
@@ -6006,12 +6009,190 @@ func TestFlickerModelStoreRefreshFromEndpoint(t *testing.T) {
 	store.Refresh()
 	got := store.Models()
 	want := []claudeModelEntry{
-		{ID: "CLAUDE_OPUS_4_8", Name: "MF Claude Opus 4.8"},
-		{ID: "CLAUDE-MYFLICKER-GPT_5_4", Name: "MF GPT-5.4"},
+		{ID: "CLAUDE_OPUS_4_8", Name: "MF Claude Opus 4.8", EffortLevels: []string{"low", "medium", "high", "max"}, DefaultEffort: "medium"},
+		{ID: "CLAUDE-MYFLICKER-GPT_5_4", Name: "MF GPT-5.4", EffortLevels: []string{"low", "medium", "high", "xhigh"}, DefaultEffort: "medium"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Models() = %#v, want %#v", got, want)
 	}
+}
+
+func TestNormalizeFlickerConfigOptionsUsesSelectedModelEfforts(t *testing.T) {
+	models := []claudeModelEntry{
+		{
+			ID:            "gpt-5.6-sol",
+			Name:          "GPT 5.6 Sol",
+			EffortLevels:  []string{"low", "medium", "high", "xhigh", "max"},
+			DefaultEffort: "medium",
+		},
+		{
+			ID:           "kimi-k3",
+			Name:         "Kimi K3",
+			EffortLevels: []string{"low", "high", "max"},
+		},
+		{ID: "minimax-m3", Name: "Minimax M3"},
+	}
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+	applyFlickerModels(&profile, models)
+
+	t.Run("synthesizes missing effort and selects model default", func(t *testing.T) {
+		options := normalizeFlickerConfigOptions([]protocol.ConfigOption{{
+			ID:           protocol.ConfigOptionIDModel,
+			Category:     protocol.ConfigOptionCategoryModel,
+			CurrentValue: "gpt-5.6-sol",
+		}}, models, profile)
+		effort := flickerConfigOption(options, "effort")
+		if effort == nil {
+			t.Fatal("effort option is missing")
+		}
+		if effort.CurrentValue != "medium" {
+			t.Fatalf("current effort = %q, want medium", effort.CurrentValue)
+		}
+		if got := configOptionValues(*effort); !reflect.DeepEqual(got, []string{"low", "medium", "high", "xhigh", "max"}) {
+			t.Fatalf("effort values = %v", got)
+		}
+	})
+
+	t.Run("removes default and falls back to first supported level", func(t *testing.T) {
+		options := normalizeFlickerConfigOptions([]protocol.ConfigOption{
+			{
+				ID:           protocol.ConfigOptionIDModel,
+				Category:     protocol.ConfigOptionCategoryModel,
+				CurrentValue: "kimi-k3",
+			},
+			{
+				ID:           "effort",
+				Category:     protocol.ConfigOptionCategoryThoughtLv,
+				CurrentValue: "medium",
+				Options: []protocol.ConfigOptionValue{
+					{Value: "default", Name: "Default"},
+					{Value: "low", Name: "Low"},
+					{Value: "medium", Name: "Medium"},
+					{Value: "high", Name: "High"},
+					{Value: "xhigh", Name: "Xhigh"},
+					{Value: "max", Name: "Max"},
+				},
+			},
+		}, models, profile)
+		effort := flickerConfigOption(options, "effort")
+		if effort == nil || effort.CurrentValue != "low" {
+			t.Fatalf("effort = %#v, want low", effort)
+		}
+		if got := configOptionValues(*effort); !reflect.DeepEqual(got, []string{"low", "high", "max"}) {
+			t.Fatalf("effort values = %v", got)
+		}
+	})
+
+	t.Run("hides effort for model without variants", func(t *testing.T) {
+		options := normalizeFlickerConfigOptions([]protocol.ConfigOption{
+			{ID: protocol.ConfigOptionIDModel, CurrentValue: "minimax-m3"},
+			{ID: "effort", CurrentValue: "high"},
+		}, models, profile)
+		if effort := flickerConfigOption(options, "effort"); effort != nil {
+			t.Fatalf("unexpected effort option = %#v", effort)
+		}
+	})
+}
+
+func TestFlickerEffortInstanceNormalizesSessionConfigOptions(t *testing.T) {
+	models := []claudeModelEntry{{
+		ID:            "gpt-5.6-sol",
+		Name:          "GPT 5.6 Sol",
+		EffortLevels:  []string{"low", "medium", "high", "xhigh", "max"},
+		DefaultEffort: "medium",
+	}}
+	store := &FlickerModelStore{models: models}
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+	applyFlickerModels(&profile, models)
+	baseConn := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, _ any, result any) error {
+			if method != protocol.MethodSessionNew {
+				t.Fatalf("method = %q, want session/new", method)
+			}
+			return assignResult(result, protocol.SessionNewResult{
+				SessionID: "session-1",
+				ConfigOptions: []protocol.ConfigOption{{
+					ID:           protocol.ConfigOptionIDModel,
+					Category:     protocol.ConfigOptionCategoryModel,
+					CurrentValue: "gpt-5.6-sol",
+				}},
+			})
+		},
+	}
+	instance := newFlickerEffortInstance(NewInstance("cc-flicker", baseConn), store, &profile)
+	result, err := instance.SessionNew(context.Background(), protocol.SessionNewParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	effort := flickerConfigOption(result.ConfigOptions, "effort")
+	if effort == nil || effort.CurrentValue != "medium" {
+		t.Fatalf("normalized effort = %#v", effort)
+	}
+}
+
+func TestFlickerEffortInstanceRetainsSupportedEffortAcrossModelSwitch(t *testing.T) {
+	models := []claudeModelEntry{
+		{ID: "gpt-5.6-sol", EffortLevels: []string{"low", "medium", "high", "xhigh", "max"}, DefaultEffort: "medium"},
+		{ID: "claude-4.8-opus", EffortLevels: []string{"low", "medium", "high", "max"}, DefaultEffort: "medium"},
+	}
+	store := &FlickerModelStore{models: models}
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+	applyFlickerModels(&profile, models)
+	baseConn := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, _ any, result any) error {
+			switch method {
+			case protocol.MethodSessionNew:
+				return assignResult(result, protocol.SessionNewResult{
+					SessionID: "session-1",
+					ConfigOptions: []protocol.ConfigOption{
+						{ID: protocol.ConfigOptionIDModel, CurrentValue: "gpt-5.6-sol"},
+						{ID: "effort", CurrentValue: "high"},
+					},
+				})
+			case protocol.MethodSetConfigOption:
+				return assignResult(result, []protocol.ConfigOption{{
+					ID:           protocol.ConfigOptionIDModel,
+					CurrentValue: "claude-4.8-opus",
+				}})
+			default:
+				t.Fatalf("unexpected method %q", method)
+				return nil
+			}
+		},
+	}
+	instance := newFlickerEffortInstance(NewInstance("cc-flicker", baseConn), store, &profile)
+	if _, err := instance.SessionNew(context.Background(), protocol.SessionNewParams{}); err != nil {
+		t.Fatal(err)
+	}
+	options, err := instance.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "session-1",
+		ConfigID:  protocol.ConfigOptionIDModel,
+		Value:     "claude-4.8-opus",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	effort := flickerConfigOption(options, "effort")
+	if effort == nil || effort.CurrentValue != "high" {
+		t.Fatalf("effort after model switch = %#v, want retained high", effort)
+	}
+}
+
+func flickerConfigOption(options []protocol.ConfigOption, id string) *protocol.ConfigOption {
+	for index := range options {
+		if strings.EqualFold(options[index].ID, id) {
+			return &options[index]
+		}
+	}
+	return nil
+}
+
+func configOptionValues(option protocol.ConfigOption) []string {
+	values := make([]string, 0, len(option.Options))
+	for _, item := range option.Options {
+		values = append(values, item.Value)
+	}
+	return values
 }
 
 func TestFlickerModelStoreRefreshKeepsPreviousOnFailure(t *testing.T) {
