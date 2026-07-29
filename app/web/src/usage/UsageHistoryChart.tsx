@@ -48,10 +48,18 @@ export default function UsageHistoryChart({
     const textSecondary = cssToken(styles, '--text-secondary', '#a3a3a3');
     const border = cssToken(styles, '--border-subtle', '#363636');
     const danger = cssToken(styles, '--state-danger', '#e2767f');
-    const observed = limit.samples.map(sample => [
-      sample.observedAtMillis,
-      clampPercent(sample.remainingPercent),
-    ]);
+    const observed: Array<[number, number | null]> = [];
+    limit.samples.forEach((sample, index) => {
+      const remaining = clampPercent(sample.remainingPercent);
+      const previous = limit.samples[index - 1];
+      if (previous && remaining > clampPercent(previous.remainingPercent)) {
+        observed.push([
+          previous.observedAtMillis + (sample.observedAtMillis - previous.observedAtMillis) / 2,
+          null,
+        ]);
+      }
+      observed.push([sample.observedAtMillis, remaining]);
+    });
     const projected = forecast.projection.map(sample => [
       sample.observedAtMillis,
       clampPercent(sample.remainingPercent),
@@ -109,6 +117,7 @@ export default function UsageHistoryChart({
           name: 'Observed',
           type: 'line',
           data: observed,
+          connectNulls: false,
           showSymbol: false,
           smooth: 0.2,
           smoothMonotone: 'x',

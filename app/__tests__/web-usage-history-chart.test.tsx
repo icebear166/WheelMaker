@@ -104,4 +104,44 @@ describe('UsageHistoryChart', () => {
     act(() => view!.unmount());
     expect(mockDispose).toHaveBeenCalledTimes(1);
   });
+
+  test('breaks the observed line when remaining quota increases', () => {
+    const refilledLimit: UsageHistoryLimit = {
+      ...limit,
+      samples: [
+        {observedAtMillis: base, remainingPercent: 86},
+        {observedAtMillis: base + HOUR, remainingPercent: 84},
+        {observedAtMillis: base + 2 * HOUR, remainingPercent: 100},
+        {observedAtMillis: base + 3 * HOUR, remainingPercent: 98},
+      ],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageHistoryChart
+          limit={refilledLimit}
+          forecast={forecast}
+          resetAtMillis={resetAtMillis}
+        />,
+        {createNodeMock: () => ({})},
+      );
+    });
+
+    const option = mockSetOption.mock.calls[0]?.[0] as {
+      series?: Array<{
+        connectNulls?: boolean;
+        data?: Array<[number, number | null]>;
+      }>;
+    };
+    expect(option.series?.[0]?.connectNulls).toBe(false);
+    expect(option.series?.[0]?.data).toEqual([
+      [base, 86],
+      [base + HOUR, 84],
+      [base + 1.5 * HOUR, null],
+      [base + 2 * HOUR, 100],
+      [base + 3 * HOUR, 98],
+    ]);
+
+    act(() => view!.unmount());
+  });
 });

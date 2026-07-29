@@ -179,14 +179,7 @@ func (s *HistoryStore) Query(input HistoryQuery) (HistoryResponse, error) {
 		if series.ProviderID != input.ProviderID || series.AccountLocalID != input.AccountLocalID {
 			continue
 		}
-		cycleStart, ok := currentWindowStart(series)
-		if !ok {
-			continue
-		}
 		cutoff := now.Add(-historyQueryRange)
-		if cycleStart.After(cutoff) {
-			cutoff = cycleStart
-		}
 		samples := make([]HistorySample, 0, len(series.Samples))
 		for _, sample := range series.Samples {
 			observedAt := time.UnixMilli(sample.ObservedAtMillis)
@@ -341,24 +334,6 @@ func pruneHistorySeries(series *historySeries) {
 	}
 	if len(series.Samples) > historyMaxPoints {
 		series.Samples = append([]HistorySample(nil), series.Samples[len(series.Samples)-historyMaxPoints:]...)
-	}
-}
-
-func currentWindowStart(series historySeries) (time.Time, bool) {
-	if series.ResetAt == nil || series.ResetAt.IsZero() {
-		return time.Time{}, false
-	}
-	switch series.WindowKind {
-	case WindowFixed:
-		if series.WindowDurationMins <= 0 {
-			return time.Time{}, false
-		}
-		return series.ResetAt.UTC().Add(-time.Duration(series.WindowDurationMins) * time.Minute), true
-	case WindowCalendarMonth:
-		reset := series.ResetAt.In(shanghaiLocation)
-		return time.Date(reset.Year(), reset.Month()-1, 1, 0, 0, 0, 0, shanghaiLocation), true
-	default:
-		return time.Time{}, false
 	}
 }
 

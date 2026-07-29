@@ -408,7 +408,7 @@ func TestHistoryStoreSkipsFailedRawAccounts(t *testing.T) {
 	}
 }
 
-func TestHistoryStoreQueryReturnsCurrentWindowRecentWeek(t *testing.T) {
+func TestHistoryStoreQueryReturnsRecentWeekAcrossCurrentWindowStart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "usage-history.json")
 	raw := `{"version":1,"series":[{"providerId":"codex","accountLocalId":"current","limitId":"week","limitLabel":"Week","windowKind":"fixed","windowDurationMins":10080,"resetAt":"2026-08-03T00:00:00Z","samples":[[1784851200000,95],[1785110400000,90],[1785283200000,80]]}]}`
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
@@ -422,10 +422,10 @@ func TestHistoryStoreQueryReturnsCurrentWindowRecentWeek(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Limits) != 1 || len(got.Limits[0].Samples) != 2 {
+	if len(got.Limits) != 1 || len(got.Limits[0].Samples) != 3 {
 		t.Fatalf("query=%+v", got)
 	}
-	if got.Limits[0].Samples[0].ObservedAtMillis != 1785110400000 {
+	if got.Limits[0].Samples[0].ObservedAtMillis != 1784851200000 {
 		t.Fatalf("samples=%+v", got.Limits[0].Samples)
 	}
 }
