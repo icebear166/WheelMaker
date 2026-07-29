@@ -697,3 +697,104 @@
 [data-session-list-density="compact"] .wide-project-session-list {
   margin-top: 1px;
 }
+
+/* ---------- mobile bottom sheets ---------- */
+/* Mobile session-list popups share one presentation: a bottom sheet with a
+   dimmed overlay, matching .mobile-project-sheet. Desktop keeps popovers. */
+.sl-sheet-overlay {
+  display: none;
+}
+@keyframes sl-sheet-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sl-sheet-out {
+  to { opacity: 0; transform: translateY(16px); }
+}
+@media (max-width: 900px) {
+  .sl-sheet-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(0, 0, 0, 0.42);
+    animation: sl-sheet-overlay-in 180ms var(--ease-out);
+  }
+  @keyframes sl-sheet-overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .project-session-action-menu.sl-sheet {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 71;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: min(72vh, 560px);
+    padding: 4px 10px calc(var(--wm-safe-area-bottom) + 14px);
+    border-radius: var(--radius-floating) var(--radius-floating) 0 0;
+    border-bottom: 0;
+    animation: sl-sheet-in 180ms var(--ease-out);
+  }
+  .project-session-action-menu.sl-sheet.sl-menu-exit {
+    animation: sl-sheet-out 120ms ease-in forwards;
+  }
+  .project-session-action-menu.sl-sheet .project-session-menu-btn {
+    min-height: 44px;
+    font-size: 14px;
+    padding: 6px 12px;
+  }
+  .project-session-action-menu.sl-sheet .project-session-mark-picker {
+    min-height: 40px;
+  }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .sl-sheet-overlay,
+  .project-session-action-menu.sl-sheet,
+  .project-session-action-menu.sl-sheet.sl-menu-exit {
+    animation: none;
+  }
+}
+
+/* Archive menu joins the same bottom-sheet presentation on mobile. The
+   panel-scoped selectors keep pace with the anchoring overrides in chat.css. */
+.session-archive-menu-grip {
+  display: none;
+}
+@media (max-width: 900px) {
+  .session-archive-menu,
+  .chat-session-panel-pinned .session-archive-menu,
+  .chat-session-panel-slideout .session-archive-menu {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 71;
+    width: auto;
+    max-width: none;
+    max-height: min(72vh, 560px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 10px calc(var(--wm-safe-area-bottom) + 14px);
+    border-radius: var(--radius-floating) var(--radius-floating) 0 0;
+    border-bottom: 0;
+    transform-origin: bottom center;
+    animation: sl-sheet-in 180ms var(--ease-out);
+  }
+  .session-archive-menu-grip {
+    display: block;
+    margin: 2px auto 4px;
+  }
+  .session-archive-menu .session-archive-menu-item {
+    min-height: 44px;
+  }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .session-archive-menu {
+    animation: none;
+  }
+}

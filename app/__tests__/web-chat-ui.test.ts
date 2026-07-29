@@ -2030,7 +2030,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className="project-session-more-btn"');
     expect(mainTsx).not.toContain('const openProjectSessionActionMenu = (');
     expect(sessionMenuTsx).toContain('project-session-action-menu');
-    expect(mainTsx).toContain('popoverStyle={projectSessionActionMenu.popover');
+    expect(mainTsx).toContain('popoverStyle={!sheet && projectSessionActionMenu.popover');
     expect(mainTsx).toContain("transform: projectSessionActionMenu.popover.placement === 'above'");
     expect(mainTsx).toContain('anchorRect: {');
     expect(mainTsx).toContain('left: event.clientX,');

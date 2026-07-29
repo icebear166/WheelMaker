@@ -7713,8 +7713,6 @@ export function App() {
       clearProjectSessionLongPress();
       projectSessionLongPressTargetRef.current = '';
       const target = event.currentTarget;
-      const pressX = event.clientX;
-      const pressY = event.clientY;
       if (target.setPointerCapture) {
         try {
           target.setPointerCapture(event.pointerId);
@@ -7729,22 +7727,11 @@ export function App() {
           sessionId,
         );
         triggerMobileHaptic();
+        // Mobile presents the menu as a bottom sheet, so no anchor placement.
         setProjectSessionActionMenu({
           projectId: targetProjectId,
           sessionId,
-          popover: resolveWideProjectActionPopoverPlacement({
-            anchorRect: {
-              left: pressX,
-              top: pressY,
-              right: pressX,
-              bottom: pressY,
-            },
-            viewportWidth: window.innerWidth,
-            viewportHeight: window.innerHeight,
-            preferredWidth: 156,
-            preferredMaxHeight: 190,
-            align: 'start',
-          }),
+          popover: null,
         });
       }, PROJECT_SESSION_LONG_PRESS_MS);
     },
@@ -14534,7 +14521,14 @@ export function App() {
           <SessionIcon name="archive" />
         </button>
         {sessionArchiveMenuOpen ? (
-          <div className="session-archive-menu" role="menu" aria-label="Archive sessions">
+          <>
+            <div
+              className="sl-sheet-overlay"
+              aria-hidden="true"
+              onPointerDown={() => setSessionArchiveMenuOpen(false)}
+            />
+            <div className="session-archive-menu" role="menu" aria-label="Archive sessions">
+            <div className="mobile-project-sheet-grip session-archive-menu-grip" aria-hidden="true" />
             <div className="session-archive-menu-title">Archive</div>
             <button
               type="button"
@@ -14579,7 +14573,8 @@ export function App() {
                 <span className="session-archive-menu-item-description">Browse and restore archived sessions</span>
               </span>
             </button>
-          </div>
+            </div>
+          </>
         ) : null}
       </div>
     );
@@ -15317,7 +15312,8 @@ export function App() {
     const renameActionDisabled = chatRenamingSessionId === sessionId;
     const pinActionDisabled = chatPinningSessionKey === projectSessionActionKey(targetProjectId, sessionId);
     const actionKey = projectSessionActionKey(targetProjectId, sessionId);
-    return (
+    const sheet = !isWide;
+    const menu = (
       <SessionMenu
         pinned={session.pinned === true}
         pinning={pinActionDisabled}
@@ -15336,7 +15332,8 @@ export function App() {
         onDelete={() => requestDeleteProjectSession(targetProjectId, session)}
         onClose={() => setProjectSessionActionMenu(null)}
         exiting={projectSessionActionMenuExiting}
-        popoverStyle={projectSessionActionMenu.popover
+        sheet={sheet}
+        popoverStyle={!sheet && projectSessionActionMenu.popover
           ? {
               top: `${projectSessionActionMenu.popover.top}px`,
               left: `${projectSessionActionMenu.popover.left}px`,
@@ -15348,6 +15345,19 @@ export function App() {
             }
           : undefined}
       />
+    );
+    if (!sheet) {
+      return menu;
+    }
+    return (
+      <>
+        <div
+          className="sl-sheet-overlay"
+          aria-hidden="true"
+          onPointerDown={() => setProjectSessionActionMenu(null)}
+        />
+        {menu}
+      </>
     );
   };
 

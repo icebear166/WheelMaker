@@ -22,10 +22,12 @@ export type SessionMenuProps = {
   onReload: () => void;
   onDelete: () => void;
   onClose: () => void;
-  /** Popover positioning style computed by the caller. */
+  /** Popover positioning style computed by the caller (ignored in sheet mode). */
   popoverStyle?: React.CSSProperties;
   /** When true, plays the exit animation (wired by the caller's close helper). */
   exiting?: boolean;
+  /** When true, renders as a mobile bottom sheet instead of an anchored popover. */
+  sheet?: boolean;
 };
 
 type MenuItem = {
@@ -57,6 +59,7 @@ export function SessionMenu({
   onClose,
   popoverStyle,
   exiting = false,
+  sheet = false,
 }: SessionMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -79,9 +82,9 @@ export function SessionMenu({
   return (
     <div
       ref={menuRef}
-      className={`project-session-action-menu${exiting ? ' sl-menu-exit' : ''}`}
+      className={`project-session-action-menu${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}`}
       role="menu"
-      style={popoverStyle}
+      style={sheet ? undefined : popoverStyle}
       onKeyDown={event => {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -92,6 +95,7 @@ export function SessionMenu({
         handleMenuKeyDown(event, menuRef.current);
       }}
     >
+      {sheet ? <div className="mobile-project-sheet-grip" aria-hidden="true" /> : null}
       {items.map(item =>
         item === 'separator' || item === 'mark-separator' ? (
           <div key={item} className="project-session-menu-separator" aria-hidden="true" />

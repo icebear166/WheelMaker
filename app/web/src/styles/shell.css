@@ -1822,3 +1822,34 @@
     -webkit-backdrop-filter: none;
   }
 }
+
+/* ---------- mobile bottom sheets ---------- */
+/* App dialogs (confirm / rename / goal edit / session status) present as
+   bottom sheets on mobile, matching the session-list sheets in
+   sessionlist.css. */
+@media (max-width: 900px) {
+  .app-confirm-backdrop {
+    place-items: end center;
+    padding: 0;
+  }
+  .app-confirm-dialog,
+  .app-session-status-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 85vh;
+    border-radius: var(--radius-floating) var(--radius-floating) 0 0;
+    border-bottom: 0;
+    padding-bottom: calc(var(--wm-safe-area-bottom) + 16px);
+    animation: sl-sheet-in 180ms var(--ease-out);
+  }
+  .app-confirm-dialog {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  .app-confirm-dialog,
+  .app-session-status-dialog {
+    animation: none;
+  }
+}

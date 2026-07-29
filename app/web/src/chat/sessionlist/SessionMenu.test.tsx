@@ -120,4 +120,22 @@ describe('SessionMenu', () => {
     expect(tree.root.findByProps({className: 'project-session-menu-btn delete'}).props.disabled).toBe(true);
     expect(tree.root.findByProps({className: 'project-session-menu-btn rename'}).props.disabled).toBe(false);
   });
+
+  it('renders as a bottom sheet with a grip and ignores popover positioning', async () => {
+    const {tree} = await renderMenu({
+      sheet: true,
+      popoverStyle: {top: '10px', left: '20px'},
+    });
+    const menu = tree.root.findByProps({role: 'menu'});
+    expect(menu.props.className).toContain('sl-sheet');
+    expect(menu.props.style).toBeUndefined();
+    expect(menu.findAllByProps({className: 'mobile-project-sheet-grip'})).toHaveLength(1);
+  });
+
+  it('keeps popover positioning when not in sheet mode', async () => {
+    const {tree} = await renderMenu({popoverStyle: {top: '10px', left: '20px'}});
+    const menu = tree.root.findByProps({role: 'menu'});
+    expect(menu.props.className).not.toContain('sl-sheet');
+    expect(menu.props.style).toEqual({top: '10px', left: '20px'});
+  });
 });
