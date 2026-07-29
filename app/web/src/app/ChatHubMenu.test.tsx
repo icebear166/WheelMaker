@@ -234,7 +234,7 @@ test('settings section renders the flicker segment row and compact key editors',
     node => node.children.includes('Not configured'),
   )).toHaveLength(0);
   expect(renderer.root.findByProps({className: 'chat-hub-settings-hint'}).children)
-    .toEqual(['API key changes apply immediately to new and reconnected agent sessions.']);
+    .toEqual(['Changes apply automatically.']);
 });
 
 test('flicker segment disables unavailable modes and surfaces the inline error', async () => {

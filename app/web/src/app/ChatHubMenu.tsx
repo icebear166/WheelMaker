@@ -431,7 +431,7 @@ function ChatHubSettingsSection({
               );
             })}
           </div>
-          <div className="chat-hub-settings-hint">API key changes apply immediately to new and reconnected agent sessions.</div>
+          <div className="chat-hub-settings-hint">Changes apply automatically.</div>
         </>
       ) : null}
     </div>
