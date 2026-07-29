@@ -951,7 +951,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-hub-expand-button {');
     const hubTreeBlock = stylesCss.match(/\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(hubTreeBlock).not.toContain('border-left:');
-    expect(stylesCss).toContain('margin: 1px 0 3px 26px;');
+    expect(stylesCss).toContain('margin: 0 4px 4px 12px;');
+    expect(stylesCss).not.toContain('margin: 1px 0 3px 26px;');
   });
 
   test('does not render the retired File/Git drawer project header', () => {

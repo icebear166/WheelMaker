@@ -1,5 +1,6 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
+import {Icon} from '../common/Icon';
 
 jest.mock('react-dom', () => ({
   ...jest.requireActual('react-dom'),
@@ -10,7 +11,12 @@ jest.mock('react-dom', () => ({
 // inline, so a minimal document stub satisfies the component's SSR guard.
 (globalThis as {document?: unknown}).document = {body: {}};
 
-import {ChatHubMenu, type ChatHubMenuProps, type ChatHubOpsView} from './ChatHubMenu';
+import {
+  ChatHubMenu,
+  toggleChatHubDetailSections,
+  type ChatHubMenuProps,
+  type ChatHubOpsView,
+} from './ChatHubMenu';
 
 function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
   const callbacks = {
@@ -25,6 +31,8 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
     onScanSkills: jest.fn(),
+    onRequestSkillUpdate: jest.fn(),
+    onRequestSkillUninstall: jest.fn(),
     onScanAllIndexes: jest.fn(),
     onScanProject: jest.fn(),
     onToggleAllProjects: jest.fn(),
@@ -75,19 +83,6 @@ function sectionHeaders(root: TestRenderer.ReactTestInstance) {
   );
 }
 
-function actionMains(root: TestRenderer.ReactTestInstance) {
-  return root.findAll(
-    node => typeof node.props.className === 'string' && node.props.className === 'chat-hub-action-main',
-  );
-}
-
-function actionMainByLabel(root: TestRenderer.ReactTestInstance, label: string) {
-  return actionMains(root).find(button =>
-    button.findAllByProps({className: 'chat-hub-action-label'})
-      .some(node => node.children.includes(label)),
-  );
-}
-
 function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
   return {
     wheelMaker: {
@@ -99,11 +94,20 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       updateAvailable: true,
     },
     npm: {loading: false, pending: false, outdatedCount: 2, packages: []},
-    skills: {pending: false, error: '', count: 0},
+    skills: {loading: false, pending: false, error: '', count: 0, items: []},
     index: {pending: false, indexedCount: 1, totalCount: 2, projects: []},
     ...patch,
   };
 }
+
+test('detail toggling is mutually exclusive only within its row group', () => {
+  expect(toggleChatHubDetailSections(['settings', 'npm', 'scan'], 'skills'))
+    .toEqual(['settings', 'skills', 'scan']);
+  expect(toggleChatHubDetailSections(['settings', 'skills', 'scan'], 'visibility'))
+    .toEqual(['settings', 'skills', 'visibility']);
+  expect(toggleChatHubDetailSections(['settings', 'skills', 'visibility'], 'settings'))
+    .toEqual(['skills', 'visibility']);
+});
 
 test('toggling the summary button calls onToggle and renders hub rows', async () => {
   const {props, callbacks} = createHarness();
@@ -124,7 +128,7 @@ test('toggling the summary button calls onToggle and renders hub rows', async ()
 });
 
 test('settings accordion delegates toggling and detail ids open their detail', async () => {
-  const {props, callbacks} = createHarness({expandedSections: {'hub-a': 'npm'}});
+  const {props, callbacks} = createHarness({expandedSections: {'hub-a': ['npm']}});
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
@@ -140,7 +144,7 @@ test('settings accordion delegates toggling and detail ids open their detail', a
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'settings');
 });
 
-test('hub row renders version summary and action buttons; main clicks fire actions without expanding', async () => {
+test('hub row uses one direct version action and whole-button NPM and Skills disclosures', async () => {
   const {props, callbacks} = createHarness({
     opsByHubId: {'hub-a': opsView()},
   });
@@ -149,26 +153,22 @@ test('hub row renders version summary and action buttons; main clicks fire actio
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  expect(renderer.root.findByProps({className: 'chat-hub-section-version-dot'})).toBeTruthy();
-  const mains = actionMains(renderer.root);
-  expect(mains[0].findByProps({className: 'chat-hub-action-label'}).children).toEqual(['Update Hub']);
-  const toggles = renderer.root.findAllByProps({className: 'chat-hub-action-toggle'});
-  expect(toggles.map(toggle => toggle.props['aria-label']))
-    .toEqual(['NPM details', 'Skills details', 'Visibility details', 'Scan details']);
-
-  act(() => mains[0].props.onClick());
+  expect(renderer.root.findAllByProps({className: 'chat-hub-action-toggle'})).toHaveLength(0);
+  const version = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  expect(version.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.2']);
+  expect(version.props['aria-label']).toBe('Update Hub v1.2');
+  act(() => version.props.onClick());
   expect(callbacks.onRequestWheelMakerUpdate).toHaveBeenCalledWith('hub-a');
   expect(callbacks.onToggleSection).not.toHaveBeenCalled();
 
-  const npmMain = actionMainByLabel(renderer.root, 'NPM');
-  act(() => npmMain!.props.onClick());
-  expect(callbacks.onRequestNpmUpdate).toHaveBeenCalledWith('hub-a');
-  const skillsMain = actionMainByLabel(renderer.root, 'Skills');
-  act(() => skillsMain!.props.onClick());
-  expect(callbacks.onScanSkills).toHaveBeenCalledWith('hub-a');
-
-  act(() => toggles[0].props.onClick());
+  const npm = renderer.root.findByProps({'aria-label': 'NPM details'});
+  const skills = renderer.root.findByProps({'aria-label': 'Skills details'});
+  act(() => npm.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'npm');
+  expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
+  act(() => skills.props.onClick());
+  expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
+  expect(callbacks.onScanSkills).not.toHaveBeenCalled();
 });
 
 test('hub row disables unavailable actions', async () => {
@@ -192,16 +192,39 @@ test('hub row disables unavailable actions', async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  const mains = actionMains(renderer.root);
-  expect(mains[0].findByProps({className: 'chat-hub-action-label'}).children).toEqual(['Restart']);
-  expect(mains[0].props.disabled).toBe(true);
-  const npmMain = actionMainByLabel(renderer.root, 'NPM');
-  expect(npmMain!.props.disabled).toBe(true);
+  const version = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  expect(version.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.2']);
+  expect(version.props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'NPM details'}).props.disabled).not.toBe(true);
 });
 
-test('npm detail lists packages with Update/Install plus Uninstall and no reinstall', async () => {
+test('version action is disabled while its update or restart request is pending', async () => {
+  const {props} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        wheelMaker: {
+          loading: false,
+          pending: true,
+          currentVersion: 'v1.2',
+          actionLabel: 'Updating Hub',
+          actionVisible: true,
+          updateAvailable: true,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'}).props.disabled)
+    .toBe(true);
+});
+
+test('npm detail aligns adaptive Install or Update and Uninstall icon slots', async () => {
   const {props, callbacks} = createHarness({
-    expandedSections: {'hub-a': 'npm'},
+    expandedSections: {'hub-a': ['npm']},
     opsByHubId: {
       'hub-a': opsView({
         npm: {
@@ -222,23 +245,110 @@ test('npm detail lists packages with Update/Install plus Uninstall and no reinst
   const rows = renderer.root.findAllByProps({className: 'chat-hub-npm-row'});
   expect(rows).toHaveLength(2);
   expect(rows[0].findByProps({className: 'chat-hub-npm-versions'}).children.join('')).toContain('1.0');
-  const rowButtons = rows.map(row => row.findAllByType('button').map(button => button.children.join('')));
-  expect(rowButtons[0][0]).toBe('Update');
-  expect(rowButtons[1][0]).toBe('Install');
-  expect(JSON.stringify(rowButtons)).not.toContain('Reinstall');
-  act(() => rows[0].findAllByType('button')[0].props.onClick());
+  const firstActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  const secondActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  expect(firstActions).toHaveLength(2);
+  expect(secondActions).toHaveLength(2);
+  expect(firstActions.map(button => button.props['aria-label'])).toEqual(['Update One', 'Uninstall One']);
+  expect(secondActions.map(button => button.props['aria-label'])).toEqual(['Install Two', 'Uninstall Two']);
+  expect(secondActions[1].props.disabled).toBe(true);
+  act(() => firstActions[0].props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'update', expect.objectContaining({packageName: '@a/one'}));
-  act(() => rows[1].findAllByType('button')[0].props.onClick());
+  act(() => secondActions[0].props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'install', expect.objectContaining({packageName: '@a/two'}));
-  expect(rows[0].findByProps({'aria-label': 'Uninstall One'})).toBeTruthy();
-  expect(rows[1].findAllByProps({'aria-label': 'Uninstall Two'})).toHaveLength(0);
   act(() => rows[0].findByProps({'aria-label': 'Uninstall One'}).props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'uninstall', expect.objectContaining({packageName: '@a/one'}));
+  const updateAll = renderer.root.findByProps({'aria-label': 'Update all NPM packages'});
+  act(() => updateAll.props.onClick());
+  expect(callbacks.onRequestNpmUpdate).toHaveBeenCalledWith('hub-a');
 });
 
-test('projects row split buttons drive visibility and scan', async () => {
+test('skills detail shows only hub-global skills with aligned update and uninstall actions', async () => {
   const {props, callbacks} = createHarness({
-    expandedSections: {'hub-a': 'scan'},
+    expandedSections: {'hub-a': ['skills']},
+    opsByHubId: {
+      'hub-a': opsView({
+        skills: {
+          loading: false,
+          pending: false,
+          error: '',
+          count: 2,
+          items: [
+            {name: 'baseline-ui', category: 'UI', managed: true, agents: ['codex'], pending: false},
+            {name: 'external-skill', category: 'External', managed: false, agents: [], pending: false},
+          ],
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const rows = renderer.root.findAllByProps({className: 'chat-hub-skill-row'});
+  expect(rows).toHaveLength(2);
+  expect(rows[0].findByProps({className: 'chat-hub-skill-name'}).children).toEqual(['baseline-ui']);
+  const managedActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  expect(managedActions.map(button => button.props['aria-label']))
+    .toEqual(['Update baseline-ui', 'Uninstall baseline-ui']);
+  act(() => managedActions[0].props.onClick());
+  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith('hub-a', 'baseline-ui');
+  act(() => managedActions[1].props.onClick());
+  expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith('hub-a', 'baseline-ui');
+
+  const externalActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  expect(externalActions).toHaveLength(2);
+  expect(externalActions.every(button => button.props.disabled)).toBe(true);
+  const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
+  act(() => updateAll.props.onClick());
+  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith('hub-a');
+});
+
+test('skills detail disables stale row actions while the Hub snapshot refreshes', async () => {
+  const {props} = createHarness({
+    expandedSections: {'hub-a': ['skills']},
+    opsByHubId: {
+      'hub-a': opsView({
+        skills: {
+          loading: true,
+          pending: false,
+          error: '',
+          count: 1,
+          items: [{name: 'baseline-ui', category: 'UI', managed: true, agents: [], pending: false}],
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const actions = renderer.root.findByProps({className: 'chat-hub-skill-row'})
+    .findByProps({className: 'chat-hub-row-actions'})
+    .findAllByType('button');
+  expect(actions.every(button => button.props.disabled)).toBe(true);
+});
+
+test('settings, one Hub detail, and one Projects detail may be open together', async () => {
+  const {props} = createHarness({
+    expandedSections: {'hub-a': ['settings', 'npm', 'scan']},
+    opsByHubId: {'hub-a': opsView()},
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findAllByProps({className: 'chat-hub-settings'})).toHaveLength(1);
+  expect(renderer.root.findAllByProps({'aria-label': 'Update all NPM packages'})).toHaveLength(1);
+  expect(renderer.root.findAllByProps({'aria-label': 'Scan all projects'})).toHaveLength(1);
+});
+
+test('projects row disclosures keep bulk visibility out of the title and scan all inside detail', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['scan']},
     hiddenProjectIdSet: new Set<string>(['hub-a:p2']),
     opsByHubId: {
       'hub-a': opsView({
@@ -257,9 +367,9 @@ test('projects row split buttons drive visibility and scan', async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  const toggles = renderer.root.findAllByProps({className: 'chat-hub-action-toggle'});
-  const labels = toggles.map(toggle => toggle.props['aria-label']);
-  expect(labels).toEqual(expect.arrayContaining(['Visibility details', 'Scan details']));
+  expect(renderer.root.findAllByProps({className: 'chat-hub-action-toggle'})).toHaveLength(0);
+  const visibility = renderer.root.findByProps({'aria-label': 'Visibility details'});
+  const scan = renderer.root.findByProps({'aria-label': 'Scan details'});
 
   const scanRows = renderer.root.findAllByProps({className: 'chat-hub-scan-row'});
   expect(scanRows).toHaveLength(2);
@@ -267,19 +377,21 @@ test('projects row split buttons drive visibility and scan', async () => {
   act(() => scanRows[0].findByProps({'aria-label': 'Scan p1'}).props.onClick());
   expect(callbacks.onScanProject).toHaveBeenCalledWith('hub-a', 'hub-a:p1');
 
-  const scanMain = actionMainByLabel(renderer.root, 'Scan');
-  act(() => scanMain!.props.onClick());
+  act(() => scan.props.onClick());
+  expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'scan');
+  expect(callbacks.onScanAllIndexes).not.toHaveBeenCalled();
+  const scanAll = renderer.root.findByProps({'aria-label': 'Scan all projects'});
+  act(() => scanAll.props.onClick());
   expect(callbacks.onScanAllIndexes).toHaveBeenCalledWith('hub-a');
 
-  const visibilityMain = actionMains(renderer.root)
-    .find(button => button.props['aria-label'] === 'Show all projects');
-  act(() => visibilityMain!.props.onClick());
-  expect(callbacks.onToggleAllProjects).toHaveBeenCalledWith('hub-a', true);
+  act(() => visibility.props.onClick());
+  expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'visibility');
+  expect(callbacks.onToggleAllProjects).not.toHaveBeenCalled();
 });
 
 test('visibility detail toggles project visibility', async () => {
   const {props, callbacks} = createHarness({
-    expandedSections: {'hub-a': 'visibility'},
+    expandedSections: {'hub-a': ['visibility']},
     hiddenProjectIdSet: new Set<string>(['hub-a:p2']),
   });
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -324,7 +436,7 @@ test('footer shows latest version and update-all action', async () => {
 
 test('settings section renders the flicker segment row and compact key editors', async () => {
   const {props, callbacks} = createHarness({
-    expandedSections: {'hub-a': 'settings'},
+    expandedSections: {'hub-a': ['settings']},
     flickerStatuses: {
       'hub-a': {
         configured: true,
@@ -389,7 +501,7 @@ test('settings section renders the flicker segment row and compact key editors',
 
 test('flicker segment disables unavailable modes and surfaces the inline error', async () => {
   const {props} = createHarness({
-    expandedSections: {'hub-a': 'settings'},
+    expandedSections: {'hub-a': ['settings']},
     flickerStatuses: {
       'hub-a': {
         configured: true,
@@ -486,16 +598,15 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
   expect(offMark.props.className).not.toContain('ok');
 });
 
-test('ops summary shows a red dot on the version only when an update is available', async () => {
+test('version action uses an update or restart icon instead of a detached status dot', async () => {
   const {props} = createHarness({opsByHubId: {'hub-a': opsView()}});
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
-  expect(renderer.root.findByProps({className: 'chat-hub-section-version-dot'})).toBeTruthy();
-  expect(renderer.root.findAll(
-    node => typeof node.props.className === 'string' && node.props.className.includes('chat-hub-section-badge'),
-  )).toHaveLength(0);
+  const updateAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  expect(updateAction.findByType(Icon).props.name).toBe('cloudDownload');
+  expect(renderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);
 
   const current = createHarness({
     opsByHubId: {
@@ -515,12 +626,13 @@ test('ops summary shows a red dot on the version only when an update is availabl
   await act(async () => {
     currentRenderer = TestRenderer.create(<ChatHubMenu {...current.props} />);
   });
-  expect(currentRenderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);
+  const restartAction = currentRenderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  expect(restartAction.findByType(Icon).props.name).toBe('refreshCw');
 });
 
 test('settings section surfaces the unsupported-hub message', async () => {
   const {props} = createHarness({
-    expandedSections: {'hub-a': 'settings'},
+    expandedSections: {'hub-a': ['settings']},
     hubConfigByHubId: {
       'hub-a': {loading: false, error: 'This hub does not support hub configuration yet.', busyField: '', data: null},
     },

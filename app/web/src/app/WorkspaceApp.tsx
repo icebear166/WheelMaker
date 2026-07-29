@@ -8,6 +8,7 @@ import {
 } from './flickerBridgeState';
 import {
   ChatHubMenu,
+  toggleChatHubDetailSections,
   type ChatHubDetailId,
   type ChatHubNpmPackageView,
   type ChatHubOpsView,
@@ -376,7 +377,6 @@ import {
   resolveHubColor,
   resolveHubColorVariantIndex,
   splitProjectsByVisibility,
-  toggleHubVisibility,
   toggleProjectVisibility,
 } from '../workspace/hubProjectPreferences';
 import { triggerMobileHaptic } from '../shell/layouts/mobile/mobileHaptics';
@@ -3061,8 +3061,6 @@ export function App() {
   const [projectIndexErrorByProjectId, setProjectIndexErrorByProjectId] = useState<Record<string, string>>({});
   const [projectIndexScanPendingByProjectId, setProjectIndexScanPendingByProjectId] = useState<Record<string, boolean>>({});
   const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
-  const [skillIndexScanPendingByHubId, setSkillIndexScanPendingByHubId] = useState<Record<string, boolean>>({});
-  const [skillIndexScanErrorByHubId, setSkillIndexScanErrorByHubId] = useState<Record<string, string>>({});
   const agentPackageScanPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const projectIndexPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [skillHubs, setSkillHubs] = useState<Record<string, SkillHubView>>({});
@@ -3553,7 +3551,7 @@ export function App() {
   const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
   const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
   const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
-  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubDetailId | null>>({});
+  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubDetailId[]>>({});
   const [chatHubConfigByHubId, setChatHubConfigByHubId] = useState<Record<string, {
     loading: boolean;
     error: string;
@@ -3716,6 +3714,7 @@ export function App() {
     refreshWheelMakerUpdatesRef.current?.(registryHubIds, {silent: true}).catch(() => undefined);
     refreshAgentPackagesRef.current?.(registryHubIds, {silent: true}).catch(() => undefined);
     refreshProjectFileIndexesRef.current?.(registryHubIds, {silent: true}).catch(() => undefined);
+    Promise.all(registryHubIds.map(hubId => refreshSkillManagementHubRef.current?.(hubId))).catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -6636,7 +6635,7 @@ export function App() {
         onToggleSection={(hubId, section) => {
           setChatHubExpandedSections(current => ({
             ...current,
-            [hubId]: current[hubId] === section ? null : section,
+            [hubId]: toggleChatHubDetailSections(current[hubId] ?? [], section),
           }));
         }}
         hubColors={hubColors}
@@ -6654,14 +6653,22 @@ export function App() {
         onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
         onPackageAction={handleChatHubPackageAction}
-        onScanSkills={handleChatHubScanSkills}
+        onRequestSkillUpdate={(hubId, skillName) => requestSkillUpdate({
+          hubId,
+          scope: 'hub',
+          skills: skillName ? [skillName] : undefined,
+        })}
+        onRequestSkillUninstall={(hubId, skillName) => requestSkillUninstall({
+          hubId,
+          scope: 'hub',
+          skillName,
+        })}
         onScanAllIndexes={handleChatHubScanAllIndexes}
         onScanProject={handleChatHubScanProject}
         hiddenProjectIdSet={hiddenProjectIdSet}
         onToggleProject={(projectId, visible) => {
           setHiddenProjectIds(current => toggleProjectVisibility(current, projectId, visible));
         }}
-        onToggleAllProjects={handleChatHubToggleAllProjects}
         latestVersion={wheelMakerPublicMetadata?.stable.version || '-'}
         updateAllAvailableCount={chatHubUpdateAllHubIds.length}
         updateAllPending={wheelMakerUpdateAllPending}
@@ -12763,6 +12770,7 @@ export function App() {
       ...Object.keys(wheelMakerUpdateHubs),
       ...Object.keys(agentPackageHubs),
       ...Object.keys(projectIndexByHubId),
+      ...Object.keys(skillHubs),
     ]);
     return Array.from(hubIds).sort((left, right) => {
       if (left < right) return -1;
@@ -12774,7 +12782,7 @@ export function App() {
       agentPackage: agentPackageHubs[hubId] ?? null,
       projectIndex: projectIndexByHubId[hubId] ?? null,
     }));
-  }, [agentPackageHubs, projectIndexByHubId, registryHubs, wheelMakerUpdateHubs]);
+  }, [agentPackageHubs, projectIndexByHubId, registryHubs, skillHubs, wheelMakerUpdateHubs]);
 
   const agentPackageHubCards = useMemo(() => {
     return Object.values(agentPackageHubs).sort((left, right) => {
@@ -12818,19 +12826,10 @@ export function App() {
       const npmUpdatable = deriveNpmUpdatableTargets(card.agentPackage?.hub?.packages ?? []);
       const hubPackages = card.agentPackage?.hub?.packages ?? [];
       const indexTargets = chatHubProjectIndexTargets(card.hubId);
-      const indexedSkillNames = new Set<string>();
-      projects
-        .filter(project => (project.hubId || '').trim() === card.hubId)
-        .forEach(project => {
-          (project.agentProfiles ?? []).forEach(profile => {
-            (profile.skills ?? []).forEach(skill => {
-              const normalized = skill.trim().toLowerCase();
-              if (normalized) {
-                indexedSkillNames.add(normalized);
-              }
-            });
-          });
-        });
+      const skillHub = skillHubs[card.hubId];
+      const hubSkills = skillHub?.data?.hubSkills?.skills ?? [];
+      const skillOperationRunning = skillHub?.data?.operation?.running === true;
+      const skillActionPending = isSkillActionPendingForHub(skillsPendingKey, card.hubId);
       views[card.hubId] = {
         wheelMaker: {
           loading: card.wheelMaker?.loading === true,
@@ -12866,9 +12865,27 @@ export function App() {
           })),
         },
         skills: {
-          pending: skillIndexScanPendingByHubId[card.hubId] === true,
-          error: skillIndexScanErrorByHubId[card.hubId] || '',
-          count: indexedSkillNames.size,
+          loading: skillHub?.loading === true,
+          pending: skillOperationRunning || skillActionPending,
+          error: skillHub?.error || skillHub?.data?.operation?.errorSummary || '',
+          count: hubSkills.length,
+          items: hubSkills.map(skill => ({
+            name: skill.name,
+            category: skill.category,
+            managed: skill.managed !== false,
+            agents: skill.agents ?? [],
+            pending: skillsPendingKey === skillActionPendingKey({
+              hubId: card.hubId,
+              scope: 'hub',
+              skillName: skill.name,
+              action: 'skillUpdate',
+            }) || skillsPendingKey === skillActionPendingKey({
+              hubId: card.hubId,
+              scope: 'hub',
+              skillName: skill.name,
+              action: 'skillUninstall',
+            }),
+          })),
         },
         index: {
           pending: projectIndexScanAllPendingByHubId[card.hubId] === true,
@@ -12892,9 +12909,8 @@ export function App() {
     chatHubProjectIndexTargets,
     projectIndexScanAllPendingByHubId,
     projectIndexScanPendingByProjectId,
-    projects,
-    skillIndexScanErrorByHubId,
-    skillIndexScanPendingByHubId,
+    skillHubs,
+    skillsPendingKey,
     updateHubCards,
     wheelMakerPublicMetadata,
     wheelMakerUpdateAllPending,
@@ -13638,7 +13654,13 @@ export function App() {
     }
   }, [isWide, setSidebarSettingsOpen, skillDetailCache]);
 
-  const requestSkillUpdate = useCallback((target: {hubId: string; scope: RegistrySkillScope; projectName?: string; includeProjects?: boolean}) => {
+  const requestSkillUpdate = useCallback((target: {
+    hubId: string;
+    scope: RegistrySkillScope;
+    projectName?: string;
+    includeProjects?: boolean;
+    skills?: string[];
+  }) => {
     setConfirmError('');
     setConfirmTarget({kind: 'skillUpdate', ...target});
   }, []);
@@ -13650,7 +13672,11 @@ export function App() {
       hubId: target.hubId,
       scope: target.scope,
       projectName: target.projectName,
-      skillName: target.kind === 'skillUninstall' ? target.skillName : undefined,
+      skillName: target.kind === 'skillUninstall'
+        ? target.skillName
+        : target.kind === 'skillUpdate' && target.skills?.length === 1
+          ? target.skills[0]
+          : undefined,
       action: target.kind,
     });
     setConfirmError('');
@@ -13685,6 +13711,7 @@ export function App() {
           scope: target.scope,
           projectName: target.projectName,
           includeProjects: target.includeProjects,
+          skills: target.skills,
         })];
       }
       const failed = results.find(result => !result.ok);
@@ -13767,33 +13794,6 @@ export function App() {
   const queryReleasePublish = useCallback((hubId: string, jobId: string) => (
     service.queryReleasePublish(hubId, jobId)
   ), []);
-
-  const handleScanSkills = useCallback(async (hubId: string) => {
-    if (!hubId || skillIndexScanPendingByHubId[hubId]) {
-      return;
-    }
-    setSkillIndexScanPendingByHubId(prev => ({...prev, [hubId]: true}));
-    setSkillIndexScanErrorByHubId(prev => ({...prev, [hubId]: ''}));
-    try {
-      const result = await service.reindexSkills(hubId);
-      const projectErrors = (result.projects ?? [])
-        .filter(project => !!project.error)
-        .map(project => `${project.projectName}: ${project.error}`);
-      await refreshProjectHubSnapshot();
-      if (!result.ok) {
-        throw new Error(skillCommandErrorMessage(result));
-      }
-      if (projectErrors.length > 0) {
-        setSkillIndexScanErrorByHubId(prev => ({...prev, [hubId]: projectErrors.join(' · ')}));
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setSkillIndexScanErrorByHubId(prev => ({...prev, [hubId]: message}));
-      setError(message);
-    } finally {
-      setSkillIndexScanPendingByHubId(prev => ({...prev, [hubId]: false}));
-    }
-  }, [refreshProjectHubSnapshot, skillIndexScanPendingByHubId]);
 
   const handleScanProjectIndex = useCallback(async (hubId: string, projectId: string) => {
     if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
@@ -13883,10 +13883,6 @@ export function App() {
     requestAgentPackageHubUpdate(hubId, targets);
   }, [requestAgentPackageHubUpdate, updateHubCards]);
 
-  const handleChatHubScanSkills = useCallback((hubId: string) => {
-    void handleScanSkills(hubId);
-  }, [handleScanSkills]);
-
   const handleChatHubScanAllIndexes = useCallback((hubId: string) => {
     void handleScanAllProjectIndexes(hubId, chatHubProjectIndexTargets(hubId));
   }, [chatHubProjectIndexTargets, handleScanAllProjectIndexes]);
@@ -13907,11 +13903,6 @@ export function App() {
   const handleChatHubScanProject = useCallback((hubId: string, projectId: string) => {
     void handleScanProjectIndex(hubId, projectId);
   }, [handleScanProjectIndex]);
-
-  const handleChatHubToggleAllProjects = useCallback((hubId: string, visible: boolean) => {
-    const treeItem = chatHubTreeItems.find(item => item.hubId === hubId);
-    setHiddenProjectIds(current => toggleHubVisibility(current, treeItem?.projects ?? [], visible));
-  }, [chatHubTreeItems, setHiddenProjectIds]);
 
   const chatHubUpdateAllHubIds = useMemo(() => {
     const stableRelease = wheelMakerPublicMetadata?.stable ?? null;
@@ -20995,7 +20986,8 @@ export function App() {
         hubId: skillConfirmTarget.hubId,
         scope: skillConfirmTarget.scope,
         projectName: skillConfirmTarget.projectName,
-        skillName: skillUninstallConfirmTarget?.skillName,
+        skillName: skillUninstallConfirmTarget?.skillName ??
+          (skillUpdateConfirmTarget?.skills?.length === 1 ? skillUpdateConfirmTarget.skills[0] : undefined),
         action: skillConfirmTarget.kind,
       })
     : '';

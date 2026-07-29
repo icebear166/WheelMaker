@@ -195,23 +195,30 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}');
     expect(mainTsx).toContain('onRequestNpmUpdate={handleChatHubNpmUpdate}');
     expect(mainTsx).toContain('onPackageAction={handleChatHubPackageAction}');
-    expect(mainTsx).toContain('onScanSkills={handleChatHubScanSkills}');
+    expect(mainTsx).toContain('onRequestSkillUpdate={(hubId, skillName) => requestSkillUpdate({');
+    expect(mainTsx).toContain('onRequestSkillUninstall={(hubId, skillName) => requestSkillUninstall({');
+    expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
     expect(mainTsx).toContain('onScanAllIndexes={handleChatHubScanAllIndexes}');
     expect(mainTsx).toContain('onScanProject={handleChatHubScanProject}');
-    expect(mainTsx).toContain('onToggleAllProjects={handleChatHubToggleAllProjects}');
+    expect(mainTsx).not.toContain('onToggleAllProjects={handleChatHubToggleAllProjects}');
     expect(mainTsx).toContain('onUpdateAllHubs={handleChatHubUpdateAllHubs}');
     expect(mainTsx).toContain('requestAgentPackageHubUpdate(hubId, targets);');
     expect(mainTsx).toContain('requestAgentPackageAction(action, hubId, fullPackage);');
 
-    expect(menuTsx).toContain('className="chat-hub-action-main"');
-    expect(menuTsx).toContain('className="chat-hub-action-toggle"');
+    expect(menuTsx).toContain('chat-hub-version-action');
+    expect(menuTsx).toContain('chat-hub-disclosure-action');
+    expect(menuTsx).not.toContain('className="chat-hub-action-toggle"');
     expect(menuTsx).toContain('className="chat-hub-npm-row"');
+    expect(menuTsx).toContain('className="chat-hub-skill-row"');
     expect(menuTsx).toContain('className="chat-hub-scan-row"');
     expect(menuTsx).toContain('className="chat-hub-footer"');
     expect(menuTsx).toContain('Update all hubs');
     expect(menuTsx).not.toContain('Reinstall');
 
-    expect(stylesCss).toContain('.chat-hub-action-main');
+    const hubActions = stylesCss.match(/\.chat-hub-hub-actions \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(hubActions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+    expect(stylesCss).toContain('.chat-hub-disclosure-action');
+    expect(stylesCss).toContain('.chat-hub-row-actions');
     expect(stylesCss).toContain('.chat-hub-detail');
     expect(stylesCss).toContain('.chat-hub-footer');
     expect(stylesCss).not.toContain('.chat-hub-ops-grid');

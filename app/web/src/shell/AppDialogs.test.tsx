@@ -49,3 +49,15 @@ test('bulk npm confirmation explains automatic Agent availability reload', () =>
   expect(copy).toContain('Agent availability refreshes automatically');
   expect(copy).not.toContain('Restart WheelMaker');
 });
+
+test('single-skill update confirmation names the selected skill', () => {
+  const copy = confirmCopy({
+    kind: 'skillUpdate',
+    hubId: 'hub-a',
+    scope: 'hub',
+    skills: ['baseline-ui'],
+  });
+
+  expect(copy).toContain('baseline-ui');
+  expect(copy).toContain('Hub: hub-a');
+});

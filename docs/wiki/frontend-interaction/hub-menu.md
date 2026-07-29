@@ -1,4 +1,4 @@
-> 摘要：本页维护 Chat 头部 hub 菜单作为 per-hub 操作中心的行模型、复合按钮、展开互斥、面板级全局操作条，以及桌面浮窗 / 移动端全屏页的双形态约定。
+> 摘要：本页维护 Chat 头部 hub 菜单作为 per-hub 操作中心的行模型、展开与直接动作语义、行内互斥、面板级全局操作条，以及桌面浮窗 / 移动端全屏页的双形态约定。
 
 # Hub 菜单
 
@@ -6,34 +6,42 @@ hub 菜单是唯一的 per-hub 操作中心：所有针对单个 hub 的配置�
 
 ## 面板结构
 
-每个 hub 是一个 `chat-hub-tree`：hub 行（颜色点 + 名称 + 手风琴 chevron，展开状态持久化）下方是三行操作区，面板底部是一条不属于任何 hub 的全局 footer。
+每个 hub 是一个 `chat-hub-tree`：hub 行（名称 + 紧邻名称的颜色点 + 手风琴 chevron，展开状态持久化）下方是三行操作区，面板底部是一条不属于任何 hub 的全局 footer。名称区域展开 hub，颜色点独立打开调色板。
 
 ```
-● hub-a ⌄
+hub-a ● ⌄
  ⚙ Settings      V2 ✓                                   ⌄
- ⛭ Hub        v1.2🔴  [Update]  [NPM ·2 ▾]  [Skills ·12 ▾]
- ▤ Projects             [👁 11/12 ▾]  [Scan 1/2 ▾]
+ ⛭ Hub        [v1.2 ↻]      [NPM ·2 ▾]      [Skills ·12 ▾]
+ ▤ Projects              [Visibility 11/12 ▾] [Scan 1/2 ▾]
  ──────────────────────────────────────────────────────
  Latest v1.3                              [Update all hubs]
 ```
 
 - **Settings 行**：唯一的整行手风琴（无复合按钮）。展开内容是 Flicker Bridge 段（Off/V1/V2 三段控件 = 持久 enable + 模式，右侧 Stop/Start 运行时 toggle）和紧凑单行 API key 编辑器（状态对勾/叉图标 + 行内密码输入 + Set/Replace + 图标 Clear）。收缩摘要显示 Flicker `V1`/`V2` + 绿勾或 `Off` + 灰叉。
-- **Hub 行**：摘要区显示当前版本号，可升级时版本右上角红点（不放按钮上，空间不足）。按钮组：
-  - `Update` / `Restart`：唯一的简单按钮（无 ▾），走 wheelmakerUpdate confirm 流程。
-  - `NPM ·n ▾`：主点击批量更新全部 outdated 包（0 时禁用）；▾ 展开逐包行。
-  - `Skills ·n ▾`：主点击 rescan hub skills；▾ 展开计数与扫描状态/错误。
-- **Projects 行**：`👁 x/y ▾`（主点击全显/全隐，本地偏好无 confirm；▾ 逐项目可见性勾选）+ `Scan x/y ▾`（主点击 scan all 项目索引；▾ 逐项目 index 状态 + 单项目 scan）。
+- **Hub 行**：三个按钮等宽，版本按钮是直接动作，NPM 与 Skills 是整按钮展开入口：
+  - `v1.2 ↻`：显示当前版本号与状态图标，无展开行为；有更新时执行 Update，已是最新版时执行 Restart，走 wheelmakerUpdate confirm 流程。
+  - `NPM ·n ▾`：整按钮只展开逐包列表。批量 `Update all` 位于 detail 顶部，标题按钮不执行更新。
+  - `Skills ·n ▾`：整按钮只展开当前 hub 的全局 Skills，不显示 Project Skills。批量 `Update all` 位于 detail 顶部，标题按钮不执行扫描或更新。
+- **Projects 行**：两个等宽展开按钮。`Visibility x/y ▾` 展开逐项目可见性勾选，不提供 Show All / Hide All；`Scan x/y ▾` 展开逐项目 index 状态与单项目 scan，批量 `Scan all` 位于 detail 顶部。
 - **footer**：Latest 稳定版本号 + `Update all hubs`（现有 confirm 与 pending 语义）。
 
-## 复合按钮（split button）
+## 按钮语义与展开互斥
 
-行不是整行按钮（按钮内不嵌按钮）。Hub / Projects 行没有独立 chevron，摘要区不可点击，展开完全由按钮右半的 `▾` 触发。按钮左半是动作 + 信息（计数、状态），右半 `▾` 只展开对应 detail。主点击不触发展开。
+Hub / Projects 行不使用 split button。带 chevron 的按钮整个点击区域都只负责展开或收起；只有无 chevron 的版本按钮执行直接动作。批量更新、批量扫描等动作放在展开 detail 内，避免标题区同时承担导航与动作语义。
 
-detail 渲染在所属行下方，detail id 为 `'settings' | 'npm' | 'skills' | 'visibility' | 'scan'`；**每个 hub 同时只开一个 detail**（含 Settings 展开），打开另一个会收起前一个，状态不持久化、菜单关闭即重置。
+detail 渲染在所属行下方。Settings 独立展开；Hub 行的 NPM / Skills 互斥；Projects 行的 Visibility / Scan 互斥。三个行组之间可同时展开，状态不持久化、菜单关闭即重置。
 
 ## 逐 npm 包行
 
-每行：包名、`installed → latest`、二选一主按钮（有更新 `Update` / 未安装 `Install`）+ `Uninstall`。**不提供 reinstall**。所有动作走现有 npmPackage confirm 流程。
+detail 顶部显示 `Update all`。每行采用固定网格：包名、`installed → latest`、Install/Update 图标槽、Uninstall 图标槽。未安装时第一槽为 Install；有更新时为 Update；已是最新版时保留禁用槽，保证整列对齐。第二槽始终是 Uninstall，不可卸载时禁用。**不提供 reinstall**。所有动作走现有 npmPackage confirm 流程。
+
+## Hub 全局 Skills
+
+Skills detail 复用现有 skill management 数据与动作，只读取当前 hub 的 `hubSkills.skills`。顶部提供 hub 范围的 `Update all`；逐项行显示名称与弱化的分类/来源信息，右侧使用固定对齐的 Update 与 Uninstall 图标槽。外部或不可管理 Skill 可显示但禁用动作；错误显示在对应动作或行附近。该入口不展示 Project Skills，也不引入新的 Registry protocol。
+
+## 密度与响应式
+
+detail 与项目列表相对所属行使用 12–16px 的紧凑缩进，不叠加 hub 标题颜色控件占用的宽度。桌面端列表保持单行网格和统一图标点击区；移动端允许版本或元信息换到名称下方，但操作图标列保持固定在右侧。版本和计数使用等宽数字，图标按钮都有可访问名称。
 
 ## 配置与降级
 

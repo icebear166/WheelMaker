@@ -125,24 +125,17 @@ describe('skill management settings UI source structure', () => {
       .toContain('refreshSkillManagement(registryHubIds).catch(() => undefined);');
   });
 
-  test('wires Update hub skill reindex to project profile refresh and per-hub state', () => {
-    expect(mainTsx).toContain('const [skillIndexScanPendingByHubId, setSkillIndexScanPendingByHubId]');
-    expect(mainTsx).toContain('const [skillIndexScanErrorByHubId, setSkillIndexScanErrorByHubId]');
-    expect(mainTsx).toContain('const handleScanSkills = useCallback(async (hubId: string) => {');
-    expect(mainTsx).toContain('const result = await service.reindexSkills(hubId);');
-    expect(mainTsx).toContain('const projectErrors = (result.projects ?? [])');
-    expect(mainTsx).toContain('await refreshProjectHubSnapshot();');
-    expect(mainTsx).toContain('pending: skillIndexScanPendingByHubId[card.hubId] === true,');
-    expect(mainTsx).toContain("error: skillIndexScanErrorByHubId[card.hubId] || '',");
-    expect(mainTsx).toContain('onScanSkills={handleChatHubScanSkills}');
-
-    const handlerStart = mainTsx.indexOf('const handleScanSkills = useCallback(async (hubId: string) => {');
-    const handlerEnd = mainTsx.indexOf('const handleScanProjectIndex = useCallback', handlerStart);
-    const handler = mainTsx.slice(handlerStart, handlerEnd);
-    expect(handler.indexOf('const result = await service.reindexSkills(hubId);'))
-      .toBeLessThan(handler.indexOf('await refreshProjectHubSnapshot();'));
-    expect(handler.indexOf('await refreshProjectHubSnapshot();'))
-      .toBeLessThan(handler.indexOf('if (!result.ok) {'));
+  test('wires the hub menu to hub-global skill management data and actions', () => {
+    expect(mainTsx).toContain('const skillHub = skillHubs[card.hubId];');
+    expect(mainTsx).toContain('const hubSkills = skillHub?.data?.hubSkills?.skills ?? [];');
+    expect(mainTsx).toContain('count: hubSkills.length,');
+    expect(mainTsx).toContain('items: hubSkills.map(skill => ({');
+    expect(mainTsx).toContain('onRequestSkillUpdate={(hubId, skillName) => requestSkillUpdate({');
+    expect(mainTsx).toContain('onRequestSkillUninstall={(hubId, skillName) => requestSkillUninstall({');
+    expect(mainTsx).toContain('skills: skillName ? [skillName] : undefined,');
+    expect(mainTsx).toContain('skills: target.skills,');
+    expect(mainTsx).toContain('refreshSkillManagementHubRef.current?.(hubId)');
+    expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
   });
 
   test('separates Skills scanning state from empty skill state', () => {

@@ -100,6 +100,7 @@ export type ConfirmTarget =
       scope: RegistrySkillScope;
       projectName?: string;
       includeProjects?: boolean;
+      skills?: string[];
     }
   | {
       kind: 'terminalClose';
@@ -205,7 +206,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'skillInstall') return skillScopeLabel(target);
   if (target.kind === 'skillUninstall') return target.skillName;
   if (target.kind === 'skillBatchUninstall') return `${target.skillNames.length} skills`;
-  if (target.kind === 'skillUpdate') return skillScopeLabel(target);
+  if (target.kind === 'skillUpdate') return target.skills?.length === 1 ? target.skills[0] : skillScopeLabel(target);
   return target.title || 'Untitled session';
 }
 
@@ -253,6 +254,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     return `Remove from ${skillScopeLabel(target)}: ${target.skillNames.join(', ')}.`;
   }
   if (target.kind === 'skillUpdate') {
+    if (target.skills?.length) {
+      return `Updates ${target.skills.join(', ')} in ${skillScopeLabel(target)}.`;
+    }
     return target.includeProjects
       ? 'Updates Hub Skills and online Project Skills on this Hub.'
       : `Updates installed skills in ${skillScopeLabel(target)}.`;

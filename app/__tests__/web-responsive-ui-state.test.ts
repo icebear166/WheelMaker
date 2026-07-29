@@ -457,11 +457,11 @@ describe('web responsive ui state', () => {
       .replace(/\r\n/g, '\n');
     const stylesCss = readWebStyles(projectRoot);
 
-    const colorButtonIndex = hubMenuTsx.indexOf('className="chat-hub-color-button"');
-    const hubNameIndex = hubMenuTsx.indexOf('<span className="chat-hub-row-name">{hubId}</span>', colorButtonIndex);
+    const hubNameIndex = hubMenuTsx.indexOf('<span className="chat-hub-row-name">{hubId}</span>');
+    const colorButtonIndex = hubMenuTsx.indexOf('className="chat-hub-color-button"', hubNameIndex);
     expect(colorButtonIndex).toBeGreaterThanOrEqual(0);
     expect(hubNameIndex).toBeGreaterThanOrEqual(0);
-    expect(hubNameIndex).toBeGreaterThan(colorButtonIndex);
+    expect(colorButtonIndex).toBeGreaterThan(hubNameIndex);
     expect(hubMenuTsx).toContain('className="chat-hub-color-dot"');
     expect(hubMenuTsx).toContain('className="chat-hub-expand-button"');
     expect(hubMenuTsx).not.toContain('chat-hub-read-tag');
@@ -538,10 +538,11 @@ describe('web responsive ui state', () => {
     const rowBlock = stylesCss.match(/\.chat-hub-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(rowBlock).toContain('display: flex;');
     const expandButtonBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(expandButtonBlock).toContain('flex: 1 1 auto;');
+    expect(expandButtonBlock).toContain('flex: 0 1 auto;');
     const colorButtonBlock = stylesCss.match(/\.chat-hub-color-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorButtonBlock).toContain('width: 24px;');
     expect(colorButtonBlock).toContain('height: 24px;');
+    expect(colorButtonBlock).toContain('flex: 0 0 24px;');
     const colorDotBlock = stylesCss.match(/\.chat-hub-color-dot \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorDotBlock).toContain('width: 8px;');
     expect(colorDotBlock).toContain('height: 8px;');
@@ -608,8 +609,8 @@ describe('web responsive ui state', () => {
 
     const projectListBlock = Array.from(stylesCss.matchAll(/\.chat-hub-project-list \{[\s\S]*?\n\}/g))
       .map(match => match[0])
-      .find(block => block.includes('margin: 1px 0 3px 26px;')) ?? '';
-    expect(projectListBlock).toContain('margin: 1px 0 3px 26px;');
+      .find(block => block.includes('margin: 1px 0 3px;')) ?? '';
+    expect(projectListBlock).toContain('margin: 1px 0 3px;');
     expect(projectListBlock).not.toContain('border-radius:');
     expect(projectListBlock).not.toContain('background:');
     expect(projectListBlock).not.toContain('box-shadow:');
