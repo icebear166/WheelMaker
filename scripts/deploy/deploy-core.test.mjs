@@ -801,7 +801,7 @@ test('Desktop self-update stops when waiting for the parent PID fails', async (t
   assert.equal(downloadCalls, 0);
 });
 
-test('Desktop self-update default adapter waits on the captured PowerShell process object', async (t) => {
+test('Desktop self-update treats a missing PID as exited and otherwise waits on the captured process', async (t) => {
   const fixture = await createDesktopUpdateFixture(t);
   const runnerCalls = [];
 
@@ -824,6 +824,7 @@ test('Desktop self-update default adapter waits on the captured PowerShell proce
   ]);
   const script = runnerCalls[0].args.at(-1);
   assert.match(script, /Get-Process -Id 77/);
+  assert.match(script, /if \(\$null -eq \$process\) { exit 0 }/);
   assert.match(script, /Wait-Process -InputObject \$process/);
   assert.doesNotMatch(script, /Wait-Process -Id/);
 });

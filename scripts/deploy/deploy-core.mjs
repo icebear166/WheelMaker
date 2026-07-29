@@ -1252,7 +1252,7 @@ async function waitForDesktopExit(pid, platform, runner) {
     '-NoProfile',
     '-NonInteractive',
     '-Command',
-    `$process = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($null -ne $process) { Wait-Process -InputObject $process -ErrorAction Stop }`,
+    `$process = Get-Process -Id ${pid} -ErrorAction SilentlyContinue; if ($null -eq $process) { exit 0 }; Wait-Process -InputObject $process -ErrorAction Stop`,
   ]);
 }
 
