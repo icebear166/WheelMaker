@@ -2007,7 +2007,7 @@ describe('web chat integration', () => {
     expect(projectSectionTsx).toContain('className="wide-project-hub-label"');
     expect(projectSectionTsx).toContain('wide-project-session-list');
     expect(projectSectionTsx).toContain('wide-project-action-btn sl-action-primary');
-    expect(mainTsx).toContain('wide-project-action-popover${wideProjectActionMenuExiting');
+    expect(mainTsx).toContain('wide-project-action-popover sl-session-list-popover${wideProjectActionMenuExiting');
     expect(mainTsx).toContain("import {resolveWideProjectActionPopoverPlacement");
     expect(mainTsx).toContain('style={actionMenu.popover');
     expect(mainTsx).toContain('className="wide-project-action-title"');

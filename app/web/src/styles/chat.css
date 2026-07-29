@@ -555,12 +555,7 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 95;
-  width: min(264px, calc(100vw - 18px));
-  padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-raised));
-  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+  width: min(260px, calc(100vw - 16px));
 }
 
 .session-archive-progress {
@@ -7304,10 +7299,10 @@
 }
 
 .session-archive-menu-title {
-  padding: 3px 8px 6px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
+  padding: 6px 8px 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
@@ -7320,19 +7315,21 @@
   gap: 8px;
   padding: 6px 8px;
   border: none;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
 .session-archive-menu-item:hover {
   background: var(--hover);
+  color: var(--text-primary);
 }
 
 .session-archive-menu-item:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
+  outline: 2px solid var(--focus-ring-color);
   outline-offset: 1px;
 }
 
@@ -7360,6 +7357,7 @@
 
 .session-archive-menu-item-label {
   overflow: hidden;
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -7378,7 +7376,7 @@
 .session-archive-menu-separator {
   height: 1px;
   margin: 4px 6px;
-  background: var(--border-subtle);
+  background: var(--border-faint);
 }
 .chat-file-link-context-menu {
   position: fixed;

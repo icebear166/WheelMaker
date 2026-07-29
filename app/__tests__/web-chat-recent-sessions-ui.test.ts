@@ -11,6 +11,7 @@ describe('web chat recent sessions', () => {
   const hubMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'));
   const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
   const sessionlistCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'sessionlist.css'));
+  const sessionMenuTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionMenu.tsx'));
   const surfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'));
   const recentSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'RecentSessionsSection.tsx'));
   const sessionRowTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
@@ -152,7 +153,7 @@ describe('web chat recent sessions', () => {
 
   test('renders the wide project action menu once outside transformed session panels', () => {
     expect(mainTsx).toContain('const renderWideProjectActionMenu = (');
-    expect(mainTsx.match(/wide-project-action-popover\$\{wideProjectActionMenuExiting/g)).toHaveLength(1);
+    expect(mainTsx.match(/wide-project-action-popover sl-session-list-popover\$\{wideProjectActionMenuExiting/g)).toHaveLength(1);
     expect(mainTsx).toContain('isWide ? renderWideProjectActionMenu() : null');
   });
 
@@ -242,12 +243,32 @@ describe('web chat recent sessions', () => {
   });
 
   test('styles the session context menu with the shared glass tokens', () => {
-    const menuBlock = sessionlistCss.match(/\.project-session-action-menu,\n\.wide-project-action-popover \{[\s\S]*?border: 1px solid var\(--border-faint\);[\s\S]*?\n\}/)?.[0] ?? '';
+    const menuBlock = sessionlistCss.match(/\.sl-session-list-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
 
     expect(menuBlock).toContain('border: 1px solid var(--border-faint);');
     expect(menuBlock).toContain('box-shadow: var(--shadow-overlay);');
     expect(menuBlock).toContain('backdrop-filter: blur(12px) saturate(1.1);');
     expect(sessionlistCss).toContain('prefers-reduced-transparency');
+  });
+
+  test('uses the Project add-session popover as the session-list menu visual baseline', () => {
+    const surfaceBlock = sessionlistCss.match(/\.sl-session-list-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(surfaceBlock).toContain('border: 1px solid var(--border-faint);');
+    expect(surfaceBlock).toContain('border-radius: var(--radius-panel);');
+    expect(surfaceBlock).toContain('background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);');
+    expect(surfaceBlock).toContain('box-shadow: var(--shadow-overlay);');
+    expect(surfaceBlock).toContain('padding: 4px;');
+    expect(surfaceBlock).toContain('backdrop-filter: blur(12px) saturate(1.1);');
+
+    expect(sessionMenuTsx).toContain('project-session-action-menu sl-session-list-popover');
+    expect(mainTsx).toContain('wide-project-action-popover sl-session-list-popover');
+    expect(mainTsx).toContain('session-archive-menu sl-session-list-popover');
+    expect(mainTsx).toContain('archived-session-restore-popover sl-session-list-popover');
+
+    const archiveItemBlock = chatCss.match(/\.session-archive-menu-item \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(archiveItemBlock).toContain('border-radius: var(--radius-control);');
+    expect(archiveItemBlock).toContain('transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);');
   });
 
   test('lets the pinned recent surface expand naturally at the standard session density', () => {

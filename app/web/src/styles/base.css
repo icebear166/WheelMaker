@@ -299,11 +299,6 @@ body,
   right: 4px;
   z-index: 8;
   width: 142px;
-  padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 97%, var(--surface-raised));
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
 }
 
 .wide-session-row.archived-session-row {

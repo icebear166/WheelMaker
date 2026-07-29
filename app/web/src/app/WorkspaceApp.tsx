@@ -14559,7 +14559,7 @@ export function App() {
               aria-hidden="true"
               onPointerDown={() => setSessionArchiveMenuOpen(false)}
             />
-            <div className="session-archive-menu" role="menu" aria-label="Archive sessions">
+            <div className="session-archive-menu sl-session-list-popover" role="menu" aria-label="Archive sessions">
             <div className="mobile-project-sheet-grip session-archive-menu-grip" aria-hidden="true" />
             <div className="session-archive-menu-title">Archive</div>
             <button
@@ -15115,7 +15115,7 @@ export function App() {
                         </span>
                       </button>
                       {selected ? (
-                        <div className="archived-session-restore-popover">
+                        <div className="archived-session-restore-popover sl-session-list-popover">
                           <button
                             type="button"
                             className="project-session-menu-btn restore"
@@ -16448,7 +16448,7 @@ export function App() {
     return (
       <div
         ref={wideProjectActionMenuRef}
-        className={`wide-project-action-popover${wideProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
+        className={`wide-project-action-popover sl-session-list-popover${wideProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
         style={actionMenu.popover
           ? {
               top: `${actionMenu.popover.top}px`,

@@ -82,7 +82,7 @@ export function SessionMenu({
   return (
     <div
       ref={menuRef}
-      className={`project-session-action-menu${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}`}
+      className={`project-session-action-menu sl-session-list-popover${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}`}
       role="menu"
       style={sheet ? undefined : popoverStyle}
       onKeyDown={event => {
