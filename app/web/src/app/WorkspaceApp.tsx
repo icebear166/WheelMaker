@@ -446,7 +446,6 @@ import {
   deriveRegistryHubIds,
   deriveWheelMakerHubStatus,
   fetchWheelMakerPublicMetadata,
-  fetchWheelMakerReleaseHistory,
   hubStatusLabel,
   npmPackageUpdateSummary,
   packageStatusLabel,
@@ -458,7 +457,6 @@ import {
   withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
   type WheelMakerPublicMetadata,
-  type WheelMakerReleaseHistoryEntry,
 } from '../settings/agentPackageUpdateView';
 import {
   groupSkillsByCategory,
@@ -683,9 +681,6 @@ const DatabaseSettingsDetail = React.lazy(() => loadSettingsBundle().then(module
 })));
 const PortRelaySettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.PortRelaySettingsDetail,
-})));
-const UpdateSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
-  default: module.UpdateSettingsDetail,
 })));
 const ReleasePublishSettings = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.ReleasePublishSettings,
@@ -3040,9 +3035,6 @@ export function App() {
   const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
-  const [wheelMakerReleaseHistory, setWheelMakerReleaseHistory] = useState<WheelMakerReleaseHistoryEntry[]>([]);
-  const [wheelMakerReleaseHistoryLoading, setWheelMakerReleaseHistoryLoading] = useState(false);
-  const [wheelMakerReleaseHistoryError, setWheelMakerReleaseHistoryError] = useState('');
   const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
   const [androidApkUpdateSupported, setAndroidApkUpdateSupported] = useState(false);
   const [androidApkLocalRelease, setAndroidApkLocalRelease] = useState<AndroidApkLocalRelease | null>(null);
@@ -3063,8 +3055,6 @@ export function App() {
   const [agentPackagesError, setAgentPackagesError] = useState('');
   const [agentPackageActionPendingKey, setAgentPackageActionPendingKey] = useState('');
   const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');
-  const [expandedNpmUpdateHubIds, setExpandedNpmUpdateHubIds] = useState<Record<string, boolean>>({});
-  const [expandedProjectIndexHubIds, setExpandedProjectIndexHubIds] = useState<Record<string, boolean>>({});
   const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});
   const [projectIndexLoading, setProjectIndexLoading] = useState(false);
   const [projectIndexError, setProjectIndexError] = useState('');
@@ -12946,13 +12936,12 @@ export function App() {
     }, 1000);
   }, []);
 
-  // Update-related poll timers must keep running while either the Update
-  // settings view or the chat hub menu (which also triggers hub updates) is
-  // open; previously both polls stopped unless the settings view was active.
+  // Update-related poll timers must keep running while the chat hub menu
+  // (which triggers hub updates) is open.
   const updateSurfaceActiveRef = useRef(false);
   useEffect(() => {
-    updateSurfaceActiveRef.current = settingsDetailView === 'update' || chatHubMenuOpen;
-  }, [settingsDetailView, chatHubMenuOpen]);
+    updateSurfaceActiveRef.current = chatHubMenuOpen;
+  }, [chatHubMenuOpen]);
 
   const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) => {
     const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
@@ -13081,18 +13070,6 @@ export function App() {
       }
     }
   }, [clearWheelMakerUpdatePollTimer, scheduleWheelMakerUpdatePoll]);
-
-  const refreshWheelMakerReleaseHistory = useCallback(async () => {
-    setWheelMakerReleaseHistoryLoading(true);
-    setWheelMakerReleaseHistoryError('');
-    try {
-      setWheelMakerReleaseHistory(await fetchWheelMakerReleaseHistory());
-    } catch (err) {
-      setWheelMakerReleaseHistoryError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setWheelMakerReleaseHistoryLoading(false);
-    }
-  }, []);
 
   const refreshAndroidApkUpdate = useCallback(async () => {
     const supported = androidApkUpdateBridge.isSupported();
@@ -13332,23 +13309,10 @@ export function App() {
   }, [refreshAndroidApkUpdate]);
 
   useEffect(() => {
-    if (settingsDetailView !== 'update') {
-      clearWheelMakerUpdatePollTimer();
-      clearAgentPackageScanPollTimer();
-      clearProjectIndexPollTimer();
-      return;
+    if (sidebarSettingsOpen) {
+      refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
     }
-    refreshWheelMakerUpdatesRef.current?.(registryHubIds).catch(() => undefined);
-    refreshWheelMakerReleaseHistory().catch(() => undefined);
-    refreshAgentPackagesRef.current?.(registryHubIds).catch(() => undefined);
-    refreshProjectFileIndexesRef.current?.(registryHubIds).catch(() => undefined);
-    refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
-    return () => {
-      clearWheelMakerUpdatePollTimer();
-      clearAgentPackageScanPollTimer();
-      clearProjectIndexPollTimer();
-    };
-  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshWheelMakerReleaseHistory, registryHubIds, settingsDetailView]);
+  }, [sidebarSettingsOpen]);
 
   useEffect(() => {
     if (!androidApkUpdateSupported) {
@@ -15930,22 +15894,6 @@ export function App() {
         </button>
       );
     }
-    if (detail === 'update') {
-      return (
-        <button
-          type="button"
-          className="settings-detail-refresh"
-          onClick={() => {
-            refreshWheelMakerUpdates(registryHubIds).catch(() => undefined);
-            refreshWheelMakerReleaseHistory().catch(() => undefined);
-            refreshAgentPackages(registryHubIds).catch(() => undefined);
-          }}
-          disabled={wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading}
-        >
-          {wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      );
-    }
     if (detail === 'database') {
       return (
         <button
@@ -16043,69 +15991,6 @@ export function App() {
       skillDetailTarget?.skillName || 'Skill Detail',
       renderSkillDetailPanel(),
       undefined,
-      options,
-    );
-
-  const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
-      'Update',
-      <React.Suspense fallback={null}>
-        <UpdateSettingsDetail
-          androidApkUpdateSupported={androidApkUpdateSupported}
-          androidApkLocalRelease={androidApkLocalRelease}
-          androidApkLatestRelease={androidApkLatestRelease}
-          androidApkUpdateLoading={androidApkUpdateLoading}
-          androidApkUpdateError={androidApkUpdateError}
-          androidApkInstallStatus={androidApkInstallStatus}
-          androidApkInstallPending={androidApkInstallPending}
-          refreshAndroidApkUpdate={refreshAndroidApkUpdate}
-          requestAndroidApkInstall={requestAndroidApkInstall}
-          updateHubCards={updateHubCards}
-          projectIndexByHubId={projectIndexByHubId}
-          projects={projects}
-          wheelMakerUpdatesLoading={wheelMakerUpdatesLoading}
-          wheelMakerUpdatesError={wheelMakerUpdatesError}
-          wheelMakerPublicMetadata={wheelMakerPublicMetadata}
-          wheelMakerUpdatePendingHubId={wheelMakerUpdatePendingHubId}
-          wheelMakerUpdateAllPending={wheelMakerUpdateAllPending}
-          wheelMakerReleaseHistory={wheelMakerReleaseHistory}
-          wheelMakerReleaseHistoryLoading={wheelMakerReleaseHistoryLoading}
-          wheelMakerReleaseHistoryError={wheelMakerReleaseHistoryError}
-          requestWheelMakerUpdate={requestWheelMakerUpdate}
-          requestWheelMakerUpdateAll={requestWheelMakerUpdateAll}
-          agentPackagesLoading={agentPackagesLoading}
-          agentPackagesError={agentPackagesError}
-          agentPackageActionPendingKey={agentPackageActionPendingKey}
-          agentPackageHubUpdatePendingId={agentPackageHubUpdatePendingId}
-          expandedNpmUpdateHubIds={expandedNpmUpdateHubIds}
-          setExpandedNpmUpdateHubIds={setExpandedNpmUpdateHubIds}
-          requestAgentPackageAction={requestAgentPackageAction}
-          requestAgentPackageHubUpdate={requestAgentPackageHubUpdate}
-          skillIndexScanPendingByHubId={skillIndexScanPendingByHubId}
-          skillIndexScanErrorByHubId={skillIndexScanErrorByHubId}
-          handleScanSkills={handleScanSkills}
-          projectIndexLoading={projectIndexLoading}
-          projectIndexError={projectIndexError}
-          projectIndexScanPendingByProjectId={projectIndexScanPendingByProjectId}
-          projectIndexScanAllPendingByHubId={projectIndexScanAllPendingByHubId}
-          expandedProjectIndexHubIds={expandedProjectIndexHubIds}
-          setExpandedProjectIndexHubIds={setExpandedProjectIndexHubIds}
-          handleScanProjectIndex={handleScanProjectIndex}
-          handleScanAllProjectIndexes={handleScanAllProjectIndexes}
-          tagVariantClass={tagVariantClass}
-          hubAccentStyle={hubAccentStyle}
-          shortDigest={shortDigest}
-          formatWheelMakerDateTime={formatWheelMakerDateTime}
-          formatChatAttachmentSize={formatChatAttachmentSize}
-          androidApkUpdateStatusLabel={androidApkUpdateStatusLabel}
-          androidApkInstallStatusLabel={androidApkInstallStatusLabel}
-          agentPackageActionForPackage={agentPackageActionForPackage}
-          agentPackageActionKey={agentPackageActionKey}
-          agentPackageActionLabel={agentPackageActionLabel}
-          projectFileIndexStatusLabel={projectFileIndexStatusLabel}
-        />
-      </React.Suspense>,
-      renderSettingsDetailActions('update'),
       options,
     );
 
@@ -16227,9 +16112,6 @@ export function App() {
     detail: SettingsDetailId,
     options: SettingsDetailShellOptions = {},
   ) => {
-    if (detail === 'update') {
-      return renderUpdateSettingsDetail(options);
-    }
     if (detail === 'skills') {
       return renderSkillsSettingsDetail(options);
     }
@@ -16298,6 +16180,16 @@ export function App() {
         setDisableFileCache={setDisableFileCache}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
+        androidApkUpdateSupported={androidApkUpdateSupported}
+        androidApkLocalRelease={androidApkLocalRelease}
+        androidApkLatestRelease={androidApkLatestRelease}
+        androidApkUpdateLoading={androidApkUpdateLoading}
+        androidApkUpdateError={androidApkUpdateError}
+        androidApkInstallStatus={androidApkInstallStatus}
+        androidApkInstallPending={androidApkInstallPending}
+        refreshAndroidApkUpdate={refreshAndroidApkUpdate}
+        requestAndroidApkInstall={requestAndroidApkInstall}
+        androidApkUpdateStatusLabel={androidApkUpdateStatusLabel}
       />
     </React.Suspense>
   );

@@ -53,12 +53,6 @@ type MobileSettingsShortcut = {
 
 export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
   {
-    detail: 'update',
-    title: 'Update',
-    label: 'Update',
-    icon: 'cloudDownload',
-  },
-  {
     detail: 'skills',
     title: 'Skills',
     label: 'Skills',
@@ -74,8 +68,6 @@ export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
 
 export function settingsDetailTitle(detail: SettingsDetailId): string {
   switch (detail) {
-    case 'update':
-      return 'Update';
     case 'skills':
       return 'Skills';
     case 'database':

@@ -1,5 +1,4 @@
 export type SettingsPeerDetail =
-  | 'update'
   | 'skills'
   | 'portRelay';
 
@@ -15,7 +14,6 @@ export type SettingsDetailId = SettingsPeerDetail | SettingsChildDetail;
 export type SettingsPageKind = 'root' | 'peer' | 'child';
 
 export const SETTINGS_PEER_DETAILS: readonly SettingsPeerDetail[] = [
-  'update',
   'skills',
   'portRelay',
 ];
@@ -66,12 +64,10 @@ export function mobileSettingsShortcutIndex(
   detail: SettingsDetailId | null | undefined,
 ): number {
   switch (detail) {
-    case 'update':
-      return 1;
     case 'skills':
-      return 2;
+      return 1;
     case 'portRelay':
-      return 3;
+      return 2;
     default:
       return 0;
   }
