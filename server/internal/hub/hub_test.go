@@ -1025,6 +1025,51 @@ func TestReporterHubConfigFlickerEnabledPersists(t *testing.T) {
 	}
 }
 
+func TestHubStartOnlyStartsFlickerBridgeWhenEnabled(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		enabled    bool
+		wantStarts int32
+	}{
+		{name: "off", enabled: false, wantStarts: 0},
+		{name: "enabled", enabled: true, wantStarts: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			stateDir := t.TempDir()
+			store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
+			if err := store.UpdateFlickerBridgeEnabled(tt.enabled); err != nil {
+				t.Fatal(err)
+			}
+			manager := newFlickerBridgeManager(stateDir, defaultFlickerBridgeAPIKey, store)
+			manager.supported = true
+			manager.state = "stopped"
+			manager.executable = func() (string, error) { return "wheelmaker.exe", nil }
+			manager.health = func(context.Context) error { return nil }
+			var starts atomic.Int32
+			manager.startProcess = func(_ string, _ []string, _ []string, _ io.Writer) (flickerBridgeProcess, error) {
+				starts.Add(1)
+				return newFakeFlickerBridgeProcess(), nil
+			}
+
+			h := newHubWithFactory(
+				&logger.AppConfig{Projects: []logger.ProjectConfig{}},
+				filepath.Join(stateDir, "db", "client.sqlite3"),
+				agent.NewACPFactory(),
+			)
+			h.hubConfig = store
+			h.flickerBridge = manager
+			defer h.Close()
+
+			if err := h.Start(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if got := starts.Load(); got != tt.wantStarts {
+				t.Fatalf("bridge starts = %d, want %d when enabled=%v", got, tt.wantStarts, tt.enabled)
+			}
+		})
+	}
+}
+
 func TestReporterHubConfigKeyResolutionUsesHubConfigStore(t *testing.T) {
 	stateDir := t.TempDir()
 	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))

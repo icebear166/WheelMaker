@@ -19,7 +19,6 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onToggleHub: jest.fn(),
     onToggleSection: jest.fn(),
     onToggleColorMenu: jest.fn(),
-    onFlickerLifecycle: jest.fn(),
     onFlickerSwitchMode: jest.fn(),
     onUpdateHubConfig: jest.fn().mockResolvedValue(undefined),
     onRequestWheelMakerUpdate: jest.fn(),
@@ -222,11 +221,9 @@ test('settings section renders the flicker segment row and compact key editors',
   act(() => renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V2'}).props.onClick());
   expect(callbacks.onFlickerSwitchMode).toHaveBeenCalledWith('hub-a', 'v2');
 
-  // Runtime stop/start toggle reflects the stopped state.
-  const runtimeToggle = renderer.root.findByProps({'aria-label': 'Start Flicker Bridge'});
-  expect(runtimeToggle.props['aria-checked']).toBe(false);
-  act(() => runtimeToggle.props.onClick());
-  expect(callbacks.onFlickerLifecycle).toHaveBeenCalledWith('hub-a', 'start');
+  // Off/V1/V2 is the only lifecycle control; no contradictory runtime toggle.
+  expect(renderer.root.findAllByProps({'aria-label': 'Start Flicker Bridge'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({'aria-label': 'Stop Flicker Bridge'})).toHaveLength(0);
 
   // Compact key rows: status icon instead of a "Not configured" label line.
   expect(renderer.root.findAllByType('input')).toHaveLength(4);
@@ -276,7 +273,7 @@ test('flicker segment disables unavailable modes and surfaces the inline error',
   });
   expect(renderer.root.findByProps({className: 'chat-hub-settings-hint error'}).children)
     .toEqual(['V2 unavailable · Node.js 22 is required']);
-  expect(renderer.root.findByProps({'aria-label': 'Stop Flicker Bridge'}).props['aria-checked']).toBe(true);
+  expect(renderer.root.findAllByProps({'aria-label': 'Stop Flicker Bridge'})).toHaveLength(0);
 });
 
 test('collapsed settings summary shows the flicker mode with a mark', async () => {

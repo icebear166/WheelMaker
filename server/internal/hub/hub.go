@@ -128,12 +128,17 @@ func (h *Hub) Start(ctx context.Context) error {
 		hubLogger(pc.Name).Info("client ready")
 	}
 	h.setupRegistrySync()
-	if h.flickerBridge != nil && h.flickerBridge.Status(ctx).Configured {
+	if h.flickerBridge != nil {
 		if h.flickerModels != nil {
 			h.flickerBridge.setReadyHandler(h.flickerModels.Refresh)
 		}
-		if _, err := h.flickerBridge.StartWithV2Fallback(ctx); err != nil {
-			hubLogger("").Warn("Flicker Bridge start failed err=%v", err)
+		enabled, err := h.hubConfig.FlickerBridgeEnabled()
+		if err != nil {
+			hubLogger("").Warn("read Flicker Bridge enabled flag failed: %v", err)
+		} else if enabled && h.flickerBridge.Status(ctx).Configured {
+			if _, err := h.flickerBridge.StartWithV2Fallback(ctx); err != nil {
+				hubLogger("").Warn("Flicker Bridge start failed err=%v", err)
+			}
 		}
 	}
 	hubLogger("").Info("start completed projects=%d", len(h.clients))

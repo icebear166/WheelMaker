@@ -245,7 +245,7 @@ Flicker Bridge mode 是首个使用该存储的配置：
 }
 ```
 
-Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前进程 `runningMode`。V1/V2 共用 `127.0.0.1:17999`，Start/Stop/Restart 作用于 selected mode；运行中切换须先健康启动目标模式再提交配置，失败则恢复原模式。Stopped 状态切换只保存选择，不启动进程。所有生命周期操作只管理 Hub 捕获的子进程，不结束非本 manager 所有的 listener。
+Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前进程 `runningMode`。V1/V2 共用 `127.0.0.1:17999`；Hub 启动时仅在持久化 `enabled=true` 时加载 Bridge，`enabled=false` 保持 stopped。运行中切换须先健康启动目标模式再提交配置，失败则恢复原模式；所有生命周期操作只管理 Hub 捕获的子进程，不结束非本 manager 所有的 listener。Web 以 Off/V1/V2 作为唯一生命周期控制，不暴露会制造持久化状态与运行状态分歧的独立 Start/Stop toggle。
 
 来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)。
 

@@ -441,7 +441,7 @@ HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-c
 | `apiKeys` | `kimi` / `qwen` / `zai` / `deepSeek` / `flicker` | `set`（1 B–16 KiB）/ `clear` | 写入 Hub 本地 hub-config.json；**重启 Hub 后生效**。hub-config.json 是唯一 Key 来源，`clear` 后对应 Key 立即显示为未配置；旧 `config.json` 中的 `api_keys` 仅为启动兼容而接受，加载时整体忽略并记录迁移 warning |
 | `flickerBridge` | `enabled` | `set`（启用）/ `clear`（禁用） | 持久化开关，即时 start/stop bridge；Hub 启动时 enabled=true 会自动 start |
 
-Flicker Bridge 的 API key 不需要用户填写：未显式设置 `apiKeys.flicker` 时，Hub 使用 loopback-only 的内置占位门禁 `00000000000000000000`。设置面板选择 V1/V2 会持久化 enabled 并启动对应模式，Off 会停止并取消下次启动；右侧运行开关只执行当前进程的 start/stop。运行时的 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section。
+Flicker Bridge 的 API key 不需要用户填写：未显式设置 `apiKeys.flicker` 时，Hub 使用 loopback-only 的内置占位门禁 `00000000000000000000`。设置面板只保留 Off/V1/V2：选择 V1/V2 会持久化 enabled 并立即启动对应模式，Off 会立即停止且 Hub 下次启动不会加载 Bridge。底层 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section，但 UI 不再提供独立的临时 Start/Stop toggle。
 
 ## 8. Session
 

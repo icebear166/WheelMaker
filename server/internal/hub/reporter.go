@@ -219,11 +219,6 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
-	if enabled, err := r.hubConfig.FlickerBridgeEnabled(); err != nil {
-		hubLogger("").Warn("read Flicker Bridge enabled flag failed: %v", err)
-	} else if enabled {
-		go r.autoStartFlickerBridge()
-	}
 	collector := usage.NewLocalCollector("")
 	collector.KimiAPIKey = apiKeys[hubconfig.APIKeyKimi]
 	collector.ZAIAPIKey = apiKeys[hubconfig.APIKeyZAI]
@@ -1082,14 +1077,6 @@ func (r *Reporter) applyFlickerBridgeEnabled(enabled bool) {
 	}
 	if _, err := r.flickerBridge.Stop(ctx); err != nil {
 		hubLogger("").Warn("stop Flicker Bridge after disable failed: %v", err)
-	}
-}
-
-func (r *Reporter) autoStartFlickerBridge() {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	if _, err := r.flickerBridge.Start(ctx); err != nil {
-		hubLogger("").Warn("auto-start Flicker Bridge failed: %v", err)
 	}
 }
 

@@ -18,8 +18,6 @@ import {
   setHubColorPreference,
   type HubColorHsv,
 } from '../workspace/hubProjectPreferences';
-import {flickerBridgeActions} from './flickerBridgeState';
-
 export type ChatHubSectionId = 'settings' | 'ops' | 'projects';
 
 export interface ChatHubProjectItem {
@@ -113,7 +111,6 @@ export interface ChatHubMenuProps {
   onToggleColorMenu: (hubId: string | null) => void;
   flickerStatuses: Record<string, RegistryFlickerBridgeStatus | undefined>;
   flickerActionHubId: string;
-  onFlickerLifecycle: (hubId: string, action: 'start' | 'stop' | 'restart') => void;
   onFlickerSwitchMode: (hubId: string, mode: RegistryFlickerBridgeMode) => void;
   hubConfigByHubId: Record<string, ChatHubConfigView | undefined>;
   onUpdateHubConfig: (hubId: string, update: RegistryHubConfigUpdatePayload) => Promise<void>;
@@ -290,7 +287,6 @@ function ChatHubFlickerRow({
   onUpdateHubConfig,
   flickerStatus,
   flickerBusy,
-  onFlickerLifecycle,
   onFlickerSwitchMode,
 }: {
   hubId: string;
@@ -299,12 +295,9 @@ function ChatHubFlickerRow({
   onUpdateHubConfig: (hubId: string, update: RegistryHubConfigUpdatePayload) => Promise<void>;
   flickerStatus: RegistryFlickerBridgeStatus | undefined;
   flickerBusy: boolean;
-  onFlickerLifecycle: (action: 'start' | 'stop' | 'restart') => void;
   onFlickerSwitchMode: (mode: RegistryFlickerBridgeMode) => void;
 }): React.JSX.Element {
   const enabled = config?.flickerBridge.enabled === true;
-  const running = flickerStatus?.state === 'running' || flickerStatus?.state === 'starting';
-  const {canStart, canStop} = flickerBridgeActions(flickerStatus);
   const busy = flickerBusy || configBusy;
 
   const selectSegment = (segment: 'off' | RegistryFlickerBridgeMode) => {
@@ -361,17 +354,6 @@ function ChatHubFlickerRow({
             );
           })}
         </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={running}
-          aria-label={running ? 'Stop Flicker Bridge' : 'Start Flicker Bridge'}
-          className={`chat-hub-toggle${running ? ' on' : ''}`}
-          disabled={busy || (running ? !canStop : !canStart)}
-          onClick={() => onFlickerLifecycle(running ? 'stop' : 'start')}
-        >
-          <span className="chat-hub-toggle-thumb" aria-hidden="true" />
-        </button>
       </span>
     </div>
   );
@@ -383,7 +365,6 @@ function ChatHubSettingsSection({
   onUpdateHubConfig,
   flickerStatus,
   flickerBusy,
-  onFlickerLifecycle,
   onFlickerSwitchMode,
 }: {
   hubId: string;
@@ -391,7 +372,6 @@ function ChatHubSettingsSection({
   onUpdateHubConfig: (hubId: string, update: RegistryHubConfigUpdatePayload) => Promise<void>;
   flickerStatus: RegistryFlickerBridgeStatus | undefined;
   flickerBusy: boolean;
-  onFlickerLifecycle: (action: 'start' | 'stop' | 'restart') => void;
   onFlickerSwitchMode: (mode: RegistryFlickerBridgeMode) => void;
 }): React.JSX.Element {
   const config = configView?.data ?? null;
@@ -412,7 +392,6 @@ function ChatHubSettingsSection({
         onUpdateHubConfig={onUpdateHubConfig}
         flickerStatus={flickerStatus}
         flickerBusy={flickerBusy}
-        onFlickerLifecycle={onFlickerLifecycle}
         onFlickerSwitchMode={onFlickerSwitchMode}
       />
       {inlineError ? (
@@ -541,7 +520,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onToggleColorMenu,
     flickerStatuses,
     flickerActionHubId,
-    onFlickerLifecycle,
     onFlickerSwitchMode,
     hubConfigByHubId,
     onUpdateHubConfig,
@@ -642,7 +620,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                   onUpdateHubConfig={onUpdateHubConfig}
                   flickerStatus={flickerStatus}
                   flickerBusy={flickerActionHubId === hubId}
-                  onFlickerLifecycle={action => onFlickerLifecycle(hubId, action)}
                   onFlickerSwitchMode={mode => onFlickerSwitchMode(hubId, mode)}
                 />
               </div>

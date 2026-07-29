@@ -37,20 +37,6 @@ export function normalizeFlickerBridgeStatus(value: unknown): RegistryFlickerBri
   };
 }
 
-export function flickerBridgeActions(status: RegistryFlickerBridgeStatus | undefined): {
-  canStart: boolean;
-  canStop: boolean;
-  canRestart: boolean;
-} {
-  const configured = status?.configured === true && status.supported !== false;
-  const hasLiveProcess = typeof status?.pid === 'number' && status.pid > 0;
-  return {
-    canStart: configured && (status?.state === 'stopped' || (status?.state === 'failed' && !hasLiveProcess)),
-    canStop: configured && (hasLiveProcess || status?.state === 'running' || status?.state === 'starting'),
-    canRestart: configured && (status?.state === 'running' || (status?.state === 'failed' && hasLiveProcess)),
-  };
-}
-
 export function applyFlickerBridgeHubStateEvent(
   current: FlickerBridgeStatusByHub,
   event: RegistryEnvelope,

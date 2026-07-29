@@ -6655,7 +6655,6 @@ export function App() {
         onToggleColorMenu={hubId => setChatHubColorMenu(hubId ? {hubId} : null)}
         flickerStatuses={chatHubFlickerBridgeStatuses}
         flickerActionHubId={chatHubFlickerBridgeActionHubId}
-        onFlickerLifecycle={(hubId, action) => void runChatHubFlickerBridgeAction(hubId, action)}
         onFlickerSwitchMode={(hubId, mode) => void runChatHubFlickerBridgeAction(hubId, 'switchMode', {mode})}
         hubConfigByHubId={chatHubConfigByHubId}
         onUpdateHubConfig={updateChatHubConfig}

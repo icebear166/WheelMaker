@@ -1,6 +1,5 @@
 import {
   applyFlickerBridgeHubStateEvent,
-  flickerBridgeActions,
   normalizeFlickerBridgeStatus,
 } from '../web/src/app/flickerBridgeState';
 
@@ -80,29 +79,4 @@ test('ignores unrelated Hub state events', () => {
       state: {hubId: 'hub-a', status: 'ready', sections: {}},
     },
   })).toBe(current);
-});
-
-test('failed live process remains stoppable and restartable', () => {
-  expect(flickerBridgeActions(normalizeFlickerBridgeStatus({
-    configured: true,
-    supported: true,
-    state: 'failed',
-    pid: 321,
-  }))).toEqual({
-    canStart: false,
-    canStop: true,
-    canRestart: true,
-  });
-});
-
-test('failed reaped process offers only start', () => {
-  expect(flickerBridgeActions(normalizeFlickerBridgeStatus({
-    configured: true,
-    supported: true,
-    state: 'failed',
-  }))).toEqual({
-    canStart: true,
-    canStop: false,
-    canRestart: false,
-  });
 });

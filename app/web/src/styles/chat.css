@@ -1851,45 +1851,6 @@
   color: var(--text-tertiary);
 }
 
-.chat-hub-toggle {
-  appearance: none;
-  border: none;
-  cursor: pointer;
-  position: relative;
-  flex: 0 0 auto;
-  width: 30px;
-  height: 17px;
-  border-radius: 999px;
-  padding: 0;
-  background: color-mix(in srgb, var(--border-subtle) 85%, transparent);
-  transition: background 140ms ease;
-}
-
-.chat-hub-toggle.on {
-  background: var(--accent-primary);
-}
-
-.chat-hub-toggle:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.chat-hub-toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 13px;
-  height: 13px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  transition: transform 140ms ease;
-}
-
-.chat-hub-toggle.on .chat-hub-toggle-thumb {
-  transform: translateX(13px);
-}
-
 .chat-hub-settings-keys {
   display: flex;
   flex-direction: column;
