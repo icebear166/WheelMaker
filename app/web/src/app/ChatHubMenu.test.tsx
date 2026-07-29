@@ -127,6 +127,26 @@ test('toggling the summary button calls onToggle and renders hub rows', async ()
     .map(label => label.children)).toEqual([['Hub'], ['Projects']]);
 });
 
+test('uses a full Hub row disclosure behind the independent color control', async () => {
+  const {props, callbacks} = createHarness();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const rowButtons = row.findAllByType('button');
+  expect(rowButtons.map(button => button.props.className)).toEqual([
+    'chat-hub-expand-button',
+    'chat-hub-color-button',
+    'chat-hub-action chat-hub-version-action',
+  ]);
+  expect(row.findByProps({className: 'chat-hub-expand-chevron'})).toBeTruthy();
+
+  act(() => rowButtons[0].props.onClick());
+  expect(callbacks.onToggleHub).toHaveBeenCalledWith('hub-a');
+});
+
 test('settings accordion delegates toggling and detail ids open their detail', async () => {
   const {props, callbacks} = createHarness({expandedSections: {'hub-a': ['npm']}});
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -146,7 +166,11 @@ test('settings accordion delegates toggling and detail ids open their detail', a
 
 test('hub row uses one direct version action and whole-button NPM and Skills disclosures', async () => {
   const {props, callbacks} = createHarness({
-    opsByHubId: {'hub-a': opsView()},
+    opsByHubId: {
+      'hub-a': opsView({
+        skills: {loading: false, pending: false, error: '', count: 3, items: []},
+      }),
+    },
   });
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -155,6 +179,8 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
 
   expect(renderer.root.findAllByProps({className: 'chat-hub-action-toggle'})).toHaveLength(0);
   const version = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  expect(renderer.root.findByProps({className: 'chat-hub-row'})
+    .findByProps({className: 'chat-hub-action chat-hub-version-action'})).toBe(version);
   expect(version.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.2']);
   expect(version.props['aria-label']).toBe('Update Hub v1.2');
   act(() => version.props.onClick());
@@ -163,6 +189,10 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
 
   const npm = renderer.root.findByProps({'aria-label': 'NPM details'});
   const skills = renderer.root.findByProps({'aria-label': 'Skills details'});
+  const hubActions = renderer.root.findByProps({className: 'chat-hub-line-actions chat-hub-hub-actions'});
+  expect(hubActions.findAllByType('button')).toEqual([npm, skills]);
+  expect(npm.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['2']);
+  expect(skills.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['3']);
   act(() => npm.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'npm');
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
@@ -244,7 +274,17 @@ test('npm detail aligns adaptive Install or Update and Uninstall icon slots', as
 
   const rows = renderer.root.findAllByProps({className: 'chat-hub-npm-row'});
   expect(rows).toHaveLength(2);
-  expect(rows[0].findByProps({className: 'chat-hub-npm-versions'}).children.join('')).toContain('1.0');
+  const installedVersions = rows[0].findByProps({className: 'chat-hub-npm-versions'});
+  const uninstalledVersions = rows[1].findByProps({className: 'chat-hub-npm-versions'});
+  expect(installedVersions.findByProps({className: 'chat-hub-npm-install-state installed'}).children)
+    .toEqual(['Installed']);
+  expect(installedVersions.findByProps({className: 'chat-hub-npm-version-copy'}).children)
+    .toEqual(['1.0 → 1.1']);
+  expect(uninstalledVersions.findByProps({className: 'chat-hub-npm-install-state not-installed'}).children)
+    .toEqual(['Not installed']);
+  const uninstalledVersionCopy = uninstalledVersions.findByProps({className: 'chat-hub-npm-version-copy'});
+  expect(uninstalledVersionCopy.children).toEqual(['Latest 2.0']);
+  expect(uninstalledVersionCopy.children.join('')).not.toContain('→');
   const firstActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
   const secondActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
   expect(firstActions).toHaveLength(2);

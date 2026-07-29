@@ -959,11 +959,27 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const disclosureBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const chevronBlock = stylesCss.match(/\.chat-hub-expand-button \.sl-icon \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const chevronBlock = stylesCss.match(/\.chat-hub-expand-chevron \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(disclosureBlock).toContain('flex: 1 1 auto;');
-    expect(disclosureBlock).toContain('align-self: stretch;');
+    expect(disclosureBlock).toContain('position: absolute;');
+    expect(disclosureBlock).toContain('inset: 0;');
     expect(chevronBlock).toContain('margin-left: auto;');
+  });
+
+  test('gives Hub counts and footer actions a clear visual hierarchy', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const countBlock = stylesCss.match(/\.chat-hub-action-info \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const footerBlock = stylesCss.match(/\.chat-hub-footer \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const versionBlock = stylesCss.match(/\.chat-hub-footer-version-value \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const updateBlock = stylesCss.match(/\.chat-hub-footer-update-all \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(countBlock).toContain('border-radius: 999px;');
+    expect(countBlock).toContain('font-variant-numeric: tabular-nums;');
+    expect(footerBlock).toContain('background: var(--surface-raised);');
+    expect(versionBlock).toContain('background: var(--accent-soft-bg);');
+    expect(updateBlock).toContain('background: var(--accent-primary);');
+    expect(updateBlock).toContain('color: var(--button-primary-text, #fff);');
   });
 
   test('does not render the retired File/Git drawer project header', () => {

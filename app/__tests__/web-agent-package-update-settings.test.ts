@@ -216,7 +216,7 @@ describe('agent package update settings UI source structure', () => {
     expect(menuTsx).not.toContain('Reinstall');
 
     const hubActions = stylesCss.match(/\.chat-hub-hub-actions \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(hubActions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+    expect(hubActions).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(stylesCss).toContain('.chat-hub-disclosure-action');
     expect(stylesCss).toContain('.chat-hub-row-actions');
     expect(stylesCss).toContain('.chat-hub-detail');

@@ -457,11 +457,11 @@ describe('web responsive ui state', () => {
       .replace(/\r\n/g, '\n');
     const stylesCss = readWebStyles(projectRoot);
 
-    const hubNameIndex = hubMenuTsx.indexOf('<span className="chat-hub-row-name">{hubId}</span>');
-    const colorButtonIndex = hubMenuTsx.indexOf('className="chat-hub-color-button"', hubNameIndex);
+    const colorButtonIndex = hubMenuTsx.indexOf('className="chat-hub-color-button"');
+    const hubNameIndex = hubMenuTsx.indexOf('<span className="chat-hub-row-name">{hubId}</span>', colorButtonIndex);
     expect(colorButtonIndex).toBeGreaterThanOrEqual(0);
     expect(hubNameIndex).toBeGreaterThanOrEqual(0);
-    expect(colorButtonIndex).toBeGreaterThan(hubNameIndex);
+    expect(colorButtonIndex).toBeLessThan(hubNameIndex);
     expect(hubMenuTsx).toContain('className="chat-hub-color-dot"');
     expect(hubMenuTsx).toContain('className="chat-hub-expand-button"');
     expect(hubMenuTsx).not.toContain('chat-hub-read-tag');
@@ -538,7 +538,8 @@ describe('web responsive ui state', () => {
     const rowBlock = stylesCss.match(/\.chat-hub-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(rowBlock).toContain('display: flex;');
     const expandButtonBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(expandButtonBlock).toContain('flex: 0 1 auto;');
+    expect(expandButtonBlock).toContain('position: absolute;');
+    expect(expandButtonBlock).toContain('inset: 0;');
     const colorButtonBlock = stylesCss.match(/\.chat-hub-color-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorButtonBlock).toContain('width: 24px;');
     expect(colorButtonBlock).toContain('height: 24px;');

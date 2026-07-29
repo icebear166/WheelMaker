@@ -1342,6 +1342,7 @@
 }
 
 .chat-hub-row {
+  position: relative;
   min-height: 32px;
   display: flex;
   align-items: center;
@@ -1381,6 +1382,8 @@
 
 .chat-hub-color-button {
   --hub-accent: var(--accent-primary);
+  position: relative;
+  z-index: 1;
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
@@ -1405,24 +1408,29 @@
 }
 
 .chat-hub-expand-button {
-  min-width: 0;
-  height: 24px;
-  flex: 0 1 auto;
-  justify-content: flex-start;
-  gap: 6px;
-  border-radius: 5px;
-  padding: 0 4px 0 2px;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  padding: 0;
   font: inherit;
-  text-align: left;
 }
 
-.chat-hub-expand-button .sl-icon {
+.chat-hub-expand-chevron {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
+  margin-left: auto;
   color: var(--text-tertiary);
   font-size: 14px;
+  pointer-events: none;
 }
 
 .chat-hub-row-name {
+  position: relative;
+  z-index: 1;
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -1430,6 +1438,7 @@
   white-space: nowrap;
   color: var(--text-primary);
   font-weight: 650;
+  pointer-events: none;
 }
 
 .chat-hub-color-palette {
@@ -1995,7 +2004,7 @@
 }
 
 .chat-hub-hub-actions {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .chat-hub-project-actions {
@@ -2046,8 +2055,15 @@
 
 .chat-hub-action-info {
   flex: 0 0 auto;
-  color: var(--text-tertiary);
-  font-weight: 500;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 16px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2058,6 +2074,13 @@
 
 .chat-hub-version-action .chat-hub-action-label {
   font-variant-numeric: tabular-nums;
+}
+
+.chat-hub-row > .chat-hub-version-action {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  min-height: 28px;
 }
 
 .chat-hub-detail {
@@ -2159,8 +2182,35 @@
 }
 
 .chat-hub-npm-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 10px;
   color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.chat-hub-npm-install-state {
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 58%, transparent);
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 14px;
+}
+
+.chat-hub-npm-install-state.installed {
+  border-color: transparent;
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
+}
+
+.chat-hub-npm-install-state.not-installed {
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+}
+
+.chat-hub-npm-version-copy {
   font-variant-numeric: tabular-nums;
 }
 
@@ -2238,9 +2288,11 @@
 }
 
 .chat-hub-footer {
-  margin-top: 4px;
-  padding: 6px 4px 2px;
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 40%, transparent);
+  margin: 8px 4px 2px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: 8px;
+  background: var(--surface-raised);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2248,38 +2300,50 @@
 }
 
 .chat-hub-footer-version {
-  font-size: 10px;
-  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .chat-hub-footer-version-value {
-  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .chat-hub-footer-update-all {
   appearance: none;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
-  background: transparent;
-  color: var(--text-secondary);
+  min-height: 28px;
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-primary);
+  color: var(--button-primary-text, #fff);
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font: inherit;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 650;
   border-radius: 6px;
-  padding: 3px 9px;
+  padding: 4px 10px;
   cursor: pointer;
 }
 
 .chat-hub-footer-update-all:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--hover) 80%, transparent);
+  color: var(--button-primary-text, #fff);
+  background: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .chat-hub-footer-update-all:disabled {
-  opacity: 0.45;
+  border-color: color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  background: var(--surface-panel);
+  color: var(--text-tertiary);
+  opacity: 0.72;
   cursor: default;
 }
 

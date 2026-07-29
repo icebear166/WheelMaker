@@ -578,7 +578,16 @@ function ChatHubNpmDetail({
         <div key={pkg.packageName} className="chat-hub-npm-row">
           <span className="chat-hub-npm-name" title={pkg.packageName}>{pkg.displayName}</span>
           <span className="chat-hub-npm-versions">
-            {pkg.installedVersion || '—'}{pkg.latestVersion ? ` → ${pkg.latestVersion}` : ''}
+            <span className={`chat-hub-npm-install-state ${pkg.installedVersion ? 'installed' : 'not-installed'}`}>
+              {pkg.installedVersion ? 'Installed' : 'Not installed'}
+            </span>
+            <span className="chat-hub-npm-version-copy">
+              {pkg.installedVersion
+                ? `${pkg.installedVersion}${pkg.latestVersion ? ` → ${pkg.latestVersion}` : ''}`
+                : pkg.latestVersion
+                  ? `Latest ${pkg.latestVersion}`
+                  : 'No version'}
+            </span>
           </span>
           <span className="chat-hub-row-actions">
             <button
@@ -782,12 +791,10 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
         <button
           type="button"
           className="chat-hub-expand-button"
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${hubId}`}
           aria-expanded={expanded}
           onClick={() => onToggleHub(hubId)}
-        >
-          <span className="chat-hub-row-name">{hubId}</span>
-          <Icon name={expanded ? 'chevronDown' : 'chevronRight'} />
-        </button>
+        />
         <button
           type="button"
           className="chat-hub-color-button"
@@ -798,6 +805,24 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
         >
           <span className="chat-hub-color-dot" aria-hidden="true" />
         </button>
+        <span className="chat-hub-row-name">{hubId}</span>
+        <button
+          type="button"
+          className="chat-hub-action chat-hub-version-action"
+          aria-label={`${ops.wheelMaker.actionLabel} ${ops.wheelMaker.currentVersion}`}
+          disabled={!ops.wheelMaker.actionVisible || ops.wheelMaker.pending}
+          onClick={() => onRequestWheelMakerUpdate(hubId)}
+        >
+          <span className="chat-hub-action-label">{ops.wheelMaker.currentVersion}</span>
+          <Icon
+            name={ops.wheelMaker.pending ? 'loader' : ops.wheelMaker.updateAvailable ? 'cloudDownload' : 'refreshCw'}
+            spin={ops.wheelMaker.pending}
+          />
+        </button>
+        <Icon
+          name={expanded ? 'chevronDown' : 'chevronRight'}
+          className="chat-hub-expand-chevron"
+        />
       </div>
       {colorMenuOpen ? (
         <ChatHubColorPalette
@@ -836,29 +861,16 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
             <span className="chat-hub-line-icon"><Icon name="serverCog" /></span>
             <span className="chat-hub-line-label">Hub</span>
             <span className="chat-hub-line-actions chat-hub-hub-actions">
-              <button
-                type="button"
-                className="chat-hub-action chat-hub-version-action"
-                aria-label={`${ops.wheelMaker.actionLabel} ${ops.wheelMaker.currentVersion}`}
-                disabled={!ops.wheelMaker.actionVisible || ops.wheelMaker.pending}
-                onClick={() => onRequestWheelMakerUpdate(hubId)}
-              >
-                <span className="chat-hub-action-label">{ops.wheelMaker.currentVersion}</span>
-                <Icon
-                  name={ops.wheelMaker.pending ? 'loader' : ops.wheelMaker.updateAvailable ? 'cloudDownload' : 'refreshCw'}
-                  spin={ops.wheelMaker.pending}
-                />
-              </button>
               <ChatHubDisclosureButton
                 label="NPM"
-                info={ops.npm.outdatedCount > 0 ? `·${ops.npm.outdatedCount}` : undefined}
+                info={ops.npm.outdatedCount > 0 ? `${ops.npm.outdatedCount}` : undefined}
                 pending={ops.npm.pending}
                 expanded={sectionOpen('npm')}
                 onToggle={() => toggleSection('npm')}
               />
               <ChatHubDisclosureButton
                 label="Skills"
-                info={ops.skills.count > 0 ? `·${ops.skills.count}` : undefined}
+                info={ops.skills.count > 0 ? `${ops.skills.count}` : undefined}
                 pending={ops.skills.loading || ops.skills.pending}
                 expanded={sectionOpen('skills')}
                 onToggle={() => toggleSection('skills')}
