@@ -30,6 +30,7 @@ import UsageHistoryChart from '../web/src/usage/UsageHistoryChart';
 import type {UsageForecast, UsageHistoryLimit} from '../web/src/usage/usageHistory';
 
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
 const base = Date.parse('2026-07-28T00:00:00Z');
 const resetAtMillis = base + 12 * HOUR;
 
@@ -141,6 +142,40 @@ describe('UsageHistoryChart', () => {
       [base + 2 * HOUR, 100],
       [base + 3 * HOUR, 98],
     ]);
+
+    act(() => view!.unmount());
+  });
+
+  test('uses uncluttered daily date labels on the weekly time axis', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageHistoryChart
+          limit={limit}
+          forecast={forecast}
+          resetAtMillis={resetAtMillis}
+        />,
+        {createNodeMock: () => ({})},
+      );
+    });
+
+    const option = mockSetOption.mock.calls[0]?.[0] as {
+      xAxis?: {
+        minInterval?: number;
+        axisLabel?: {
+          hideOverlap?: boolean;
+          formatter?: (value: number) => string;
+        };
+      };
+    };
+    expect(option.xAxis?.minInterval).toBe(DAY);
+    expect(option.xAxis?.axisLabel?.hideOverlap).toBe(true);
+    expect(option.xAxis?.axisLabel?.formatter?.(base)).toBe(
+      new Intl.DateTimeFormat(undefined, {
+        month: 'numeric',
+        day: 'numeric',
+      }).format(base),
+    );
 
     act(() => view!.unmount());
   });

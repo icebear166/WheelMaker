@@ -8,6 +8,8 @@ import type {UsageForecast, UsageHistoryLimit} from './usageHistory';
 
 echarts.use([LineChart, GridComponent, MarkLineComponent, TooltipComponent, CanvasRenderer]);
 
+const DAY_MILLIS = 24 * 60 * 60 * 1000;
+
 interface UsageHistoryChartProps {
   limit: UsageHistoryLimit;
   forecast: UsageForecast;
@@ -93,10 +95,12 @@ export default function UsageHistoryChart({
         type: 'time',
         min: firstMillis,
         max: resetAtMillis,
+        minInterval: DAY_MILLIS,
         axisLabel: {
           color: textSecondary,
           fontSize: 10,
-          formatter: (value: number) => formatAxisTime(value),
+          hideOverlap: true,
+          formatter: (value: number) => formatAxisDate(value),
         },
         axisLine: {lineStyle: {color: border}},
         splitLine: {show: false},
@@ -179,12 +183,10 @@ function withAlpha(color: string, alpha: number): string {
   return color;
 }
 
-function formatAxisTime(value: number): string {
+function formatAxisDate(value: number): string {
   return new Intl.DateTimeFormat(undefined, {
     month: 'numeric',
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   }).format(value);
 }
 
