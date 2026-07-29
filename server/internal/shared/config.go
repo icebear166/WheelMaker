@@ -14,9 +14,15 @@ type AppConfig struct {
 	Log      LogConfig       `json:"log,omitempty"`
 }
 
+type appConfigInput struct {
+	Projects          []ProjectConfig `json:"projects"`
+	Registry          RegistryConfig  `json:"registry,omitempty"`
+	Log               LogConfig       `json:"log,omitempty"`
+	DeprecatedAPIKeys json.RawMessage `json:"api_keys,omitempty"`
+}
+
 type rawAppConfig struct {
 	Version  json.RawMessage    `json:"version,omitempty"`
-	APIKeys  json.RawMessage    `json:"api_keys,omitempty"`
 	Projects []rawProjectConfig `json:"projects"`
 }
 
@@ -91,13 +97,20 @@ func LoadConfig(path string) (*AppConfig, error) {
 		return nil, err
 	}
 
-	var cfg AppConfig
+	var input appConfigInput
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cfg); err != nil {
+	if err := dec.Decode(&input); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
-	return &cfg, nil
+	if len(input.DeprecatedAPIKeys) != 0 {
+		Warn("config api_keys is deprecated and ignored; configure Hub API keys in Hub settings")
+	}
+	return &AppConfig{
+		Projects: input.Projects,
+		Registry: input.Registry,
+		Log:      input.Log,
+	}, nil
 }
 
 func validateRemovedLegacyFields(path string, data []byte) error {
@@ -110,10 +123,6 @@ func validateRemovedLegacyFields(path string, data []byte) error {
 	if len(raw.Version) != 0 {
 		return fmt.Errorf("parse config %s: im.version has been removed; configure App sessions through registry settings", path)
 	}
-	if len(raw.APIKeys) != 0 {
-		return fmt.Errorf("parse config %s: api_keys has been removed; configure Hub API keys in the Hub settings", path)
-	}
-
 	for _, project := range raw.Projects {
 		if len(project.Debug) != 0 {
 			return fmt.Errorf("parse config %s: projects[].debug has been removed", path)

@@ -185,11 +185,18 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsDeprecatedAPIKeys(t *testing.T) {
+func TestLoadConfigIgnoresDeprecatedAPIKeys(t *testing.T) {
 	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","qwen":"qwen-test-key","zai":"zai-test-key","flicker":"flicker-test-key"}}`)
-	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "api_keys has been removed; configure Hub API keys in the Hub settings") {
-		t.Fatalf("LoadConfig() error = %v, want removed api_keys migration message", err)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v, want deprecated api_keys ignored", err)
+	}
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("json.Marshal(AppConfig) error = %v", err)
+	}
+	if strings.Contains(string(encoded), "api_keys") || strings.Contains(string(encoded), "test-key") {
+		t.Fatalf("AppConfig retained deprecated API keys: %s", encoded)
 	}
 }
 
@@ -213,11 +220,10 @@ func TestLoadConfigRejectsRemovedAPIKeysField(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsUnknownAPIKeyField(t *testing.T) {
+func TestLoadConfigIgnoresUnknownDeprecatedAPIKeyField(t *testing.T) {
 	path := writeTempConfig(t, `{"projects":[],"api_keys":{"unknown":"value"}}`)
-	_, err := LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "api_keys has been removed; configure Hub API keys in the Hub settings") {
-		t.Fatalf("LoadConfig() error = %v, want removed api_keys migration message", err)
+	if _, err := LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig() error = %v, want deprecated api_keys section ignored", err)
 	}
 }
 
