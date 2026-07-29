@@ -8,8 +8,9 @@ import {
 } from './flickerBridgeState';
 import {
   ChatHubMenu,
+  type ChatHubDetailId,
+  type ChatHubNpmPackageView,
   type ChatHubOpsView,
-  type ChatHubSectionId,
 } from './ChatHubMenu';
 
 declare global {
@@ -375,6 +376,7 @@ import {
   resolveHubColor,
   resolveHubColorVariantIndex,
   splitProjectsByVisibility,
+  toggleHubVisibility,
   toggleProjectVisibility,
 } from '../workspace/hubProjectPreferences';
 import { triggerMobileHaptic } from '../shell/layouts/mobile/mobileHaptics';
@@ -3561,7 +3563,7 @@ export function App() {
   const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
   const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
   const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
-  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubSectionId | null>>({});
+  const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubDetailId | null>>({});
   const [chatHubConfigByHubId, setChatHubConfigByHubId] = useState<Record<string, {
     loading: boolean;
     error: string;
@@ -6661,12 +6663,19 @@ export function App() {
         opsByHubId={chatHubOpsByHubId}
         onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
+        onPackageAction={handleChatHubPackageAction}
         onScanSkills={handleChatHubScanSkills}
         onScanAllIndexes={handleChatHubScanAllIndexes}
+        onScanProject={handleChatHubScanProject}
         hiddenProjectIdSet={hiddenProjectIdSet}
         onToggleProject={(projectId, visible) => {
           setHiddenProjectIds(current => toggleProjectVisibility(current, projectId, visible));
         }}
+        onToggleAllProjects={handleChatHubToggleAllProjects}
+        latestVersion={wheelMakerPublicMetadata?.stable.version || '-'}
+        updateAllAvailableCount={chatHubUpdateAllHubIds.length}
+        updateAllPending={wheelMakerUpdateAllPending}
+        onUpdateAllHubs={handleChatHubUpdateAllHubs}
       />
     );
   };
@@ -12817,7 +12826,21 @@ export function App() {
           (status === 'update_available' || status === 'up_to_date' || status === 'local_newer'),
       } : null;
       const npmUpdatable = deriveNpmUpdatableTargets(card.agentPackage?.hub?.packages ?? []);
+      const hubPackages = card.agentPackage?.hub?.packages ?? [];
       const indexTargets = chatHubProjectIndexTargets(card.hubId);
+      const indexedSkillNames = new Set<string>();
+      projects
+        .filter(project => (project.hubId || '').trim() === card.hubId)
+        .forEach(project => {
+          (project.agentProfiles ?? []).forEach(profile => {
+            (profile.skills ?? []).forEach(skill => {
+              const normalized = skill.trim().toLowerCase();
+              if (normalized) {
+                indexedSkillNames.add(normalized);
+              }
+            });
+          });
+        });
       views[card.hubId] = {
         wheelMaker: {
           loading: card.wheelMaker?.loading === true,
@@ -12842,24 +12865,44 @@ export function App() {
           loading: card.agentPackage?.loading === true || agentPackagesLoading,
           pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
           outdatedCount: npmUpdatable.length,
+          packages: hubPackages.map(pkg => ({
+            packageName: pkg.packageName,
+            displayName: pkg.displayName,
+            installedVersion: pkg.installedVersion,
+            latestVersion: pkg.latestVersion,
+            action: pkg.canUpdate ? 'update' as const : pkg.canInstall ? 'install' as const : null,
+            canUninstall: pkg.canUninstall === true,
+            pending: agentPackageActionPendingKey === agentPackageActionKey(card.hubId, pkg.packageName),
+          })),
         },
         skills: {
           pending: skillIndexScanPendingByHubId[card.hubId] === true,
           error: skillIndexScanErrorByHubId[card.hubId] || '',
+          count: indexedSkillNames.size,
         },
         index: {
           pending: projectIndexScanAllPendingByHubId[card.hubId] === true,
           indexedCount: indexTargets.filter(project => project.status === 'indexed').length,
           totalCount: indexTargets.length,
+          projects: indexTargets.map(project => ({
+            projectId: project.projectId,
+            name: project.name,
+            status: project.status,
+            pending: projectIndexScanPendingByProjectId[project.projectId] === true,
+          })),
         },
       };
     }
     return views;
   }, [
+    agentPackageActionKey,
+    agentPackageActionPendingKey,
     agentPackageHubUpdatePendingId,
     agentPackagesLoading,
     chatHubProjectIndexTargets,
     projectIndexScanAllPendingByHubId,
+    projectIndexScanPendingByProjectId,
+    projects,
     skillIndexScanErrorByHubId,
     skillIndexScanPendingByHubId,
     updateHubCards,
@@ -13883,6 +13926,43 @@ export function App() {
   const handleChatHubScanAllIndexes = useCallback((hubId: string) => {
     void handleScanAllProjectIndexes(hubId, chatHubProjectIndexTargets(hubId));
   }, [chatHubProjectIndexTargets, handleScanAllProjectIndexes]);
+
+  const handleChatHubPackageAction = useCallback((
+    hubId: string,
+    action: 'install' | 'update' | 'uninstall',
+    pkg: ChatHubNpmPackageView,
+  ) => {
+    const fullPackage = updateHubCards
+      .find(card => card.hubId === hubId)
+      ?.agentPackage?.hub?.packages.find(item => item.packageName === pkg.packageName);
+    if (fullPackage) {
+      requestAgentPackageAction(action, hubId, fullPackage);
+    }
+  }, [requestAgentPackageAction, updateHubCards]);
+
+  const handleChatHubScanProject = useCallback((hubId: string, projectId: string) => {
+    void handleScanProjectIndex(hubId, projectId);
+  }, [handleScanProjectIndex]);
+
+  const handleChatHubToggleAllProjects = useCallback((hubId: string, visible: boolean) => {
+    const treeItem = chatHubTreeItems.find(item => item.hubId === hubId);
+    setHiddenProjectIds(current => toggleHubVisibility(current, treeItem?.projects ?? [], visible));
+  }, [chatHubTreeItems, setHiddenProjectIds]);
+
+  const chatHubUpdateAllHubIds = useMemo(() => {
+    const stableRelease = wheelMakerPublicMetadata?.stable ?? null;
+    return updateHubCards
+      .filter(card => deriveWheelMakerHubStatus(
+        card.wheelMaker?.data?.installed,
+        stableRelease,
+        card.wheelMaker?.data?.job,
+      ) === 'update_available')
+      .map(card => card.hubId);
+  }, [updateHubCards, wheelMakerPublicMetadata]);
+
+  const handleChatHubUpdateAllHubs = useCallback(() => {
+    requestWheelMakerUpdateAll(chatHubUpdateAllHubIds);
+  }, [chatHubUpdateAllHubIds, requestWheelMakerUpdateAll]);
 
   const handleWheelMakerUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdate'}>) => {
     setConfirmError('');
