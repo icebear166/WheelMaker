@@ -82,7 +82,7 @@ describe('UsageHistoryDialog', () => {
     expect(renderedText(view!.toJSON())).toContain('Loading history');
   });
 
-  test('shows accessible observed and early-depletion summaries outside the chart', async () => {
+  test('shows only remaining quota and reset time in one compact summary line', async () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
@@ -102,23 +102,23 @@ describe('UsageHistoryDialog', () => {
         />,
       );
     });
-    expect(renderedText(view!.toJSON())).toContain('82.4% remaining');
-    expect(renderedText(view!.toJSON())).toContain('Observed');
-    expect(renderedText(view!.toJSON())).toContain('Expected to run out');
-    expect(renderedText(view!.toJSON())).toContain('Resets');
+    const summary = view!.root.findByProps({'aria-label': 'Usage history summary'});
+    expect(renderedText(summary.children)).toMatch(
+      /^82\.4% Remaining, Resets at \d{1,2}\.\d{1,2} \d{2}:\d{2}$/,
+    );
+    expect(renderedText(view!.toJSON())).not.toContain('Observed');
+    expect(renderedText(view!.toJSON())).not.toContain('Expected to run out');
     expect(renderedText(view!.toJSON())).toContain('Loading chart');
     expect(renderedText(
       view!.root.findByProps({className: 'usage-history-window'}).children,
     )).toBe('W');
-    expect(view!.root.findAllByProps({'data-icon-name': 'history'})).toHaveLength(1);
-    expect(view!.root.findAllByProps({'data-icon-name': 'activity'})).toHaveLength(2);
-    expect(view!.root.findAllByProps({'data-icon-name': 'clock'})).toHaveLength(1);
+    expect(view!.root.findAllByProps({'data-icon-name': 'activity'})).toHaveLength(1);
     await act(async () => {
       await Promise.resolve();
     });
   });
 
-  test('shows safe-at-reset and insufficient-sample conclusions', () => {
+  test('omits safe forecast copy and still shows the insufficient-sample note', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
@@ -138,7 +138,7 @@ describe('UsageHistoryDialog', () => {
         />,
       );
     });
-    expect(renderedText(view!.toJSON())).toContain('72.4% expected at reset');
+    expect(renderedText(view!.toJSON())).not.toContain('72.4% expected at reset');
 
     act(() => {
       view!.update(
