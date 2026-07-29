@@ -160,29 +160,13 @@ function UsageHistoryReady({
 
   return (
     <>
-      <div className="usage-history-summary" aria-label="Usage history summary">
-        <div className="usage-history-current">
-          <span>Available now</span>
-          <strong>
-            <span>{formatPercent(latest.remainingPercent)}</span>
-            <small> remaining</small>
-          </strong>
-        </div>
-        <dl>
-          <div>
-            <dt><Icon name="history" size={13} />Observed</dt>
-            <dd>{formatLocalTime(first.observedAtMillis)} – {formatLocalTime(latest.observedAtMillis)}</dd>
-          </div>
-          <div>
-            <dt><Icon name="activity" size={13} />Forecast</dt>
-            <dd>{forecastSummary(forecast)}</dd>
-          </div>
-          <div>
-            <dt><Icon name="clock" size={13} />Resets</dt>
-            <dd>{formatLocalTime(resetAtMillis)}</dd>
-          </div>
-        </dl>
-      </div>
+      <p className="usage-history-summary" aria-label="Usage history summary">
+        <strong>{formatPercent(latest.remainingPercent)}</strong>
+        {' Remaining, Resets at '}
+        <time dateTime={new Date(resetAtMillis).toISOString()}>
+          {formatCompactLocalTime(resetAtMillis)}
+        </time>
+      </p>
       {forecast.status === 'insufficient' ? (
         <p className="usage-history-note">Trend needs at least 3 recent samples. The observed line is still shown.</p>
       ) : null}
@@ -199,26 +183,14 @@ function UsageHistoryReady({
   );
 }
 
-function forecastSummary(forecast: UsageForecast): string {
-  if (forecast.status === 'depletesBeforeReset' && forecast.depletionAtMillis !== undefined) {
-    return `Expected to run out ${formatLocalTime(forecast.depletionAtMillis)}`;
-  }
-  if (forecast.status === 'safeUntilReset' && forecast.remainingAtReset !== undefined) {
-    return `${formatPercent(forecast.remainingAtReset)} expected at reset`;
-  }
-  return 'Collecting trend data';
-}
-
 function formatPercent(value: number): string {
   const rounded = Math.round(value * 10) / 10;
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
 }
 
-function formatLocalTime(value: number): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(value);
+function formatCompactLocalTime(value: number): string {
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${date.getMonth() + 1}.${date.getDate()} ${hours}:${minutes}`;
 }
