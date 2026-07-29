@@ -2,11 +2,92 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
+
+const ccFlickerEffortLoaderSource = `
+import { Buffer } from "node:buffer";
+
+function isClaudeACPAgent(url) {
+  const normalized = decodeURIComponent(url).replace(/\\/g, "/");
+  return normalized.endsWith("/node_modules/@agentclientprotocol/claude-agent-acp/dist/acp-agent.js");
+}
+
+function sourceToString(source) {
+  if (typeof source === "string") {
+    return source;
+  }
+  if (source instanceof Uint8Array) {
+    return Buffer.from(source).toString("utf8");
+  }
+  return "";
+}
+
+function replaceOnce(source, needle, replacement, label) {
+  const index = source.indexOf(needle);
+  if (index < 0) {
+    throw new Error("WheelMaker cc-flicker effort patch failed: " + label + " not found");
+  }
+  if (source.indexOf(needle, index + needle.length) >= 0) {
+    throw new Error("WheelMaker cc-flicker effort patch failed: " + label + " matched more than once");
+  }
+  return source.slice(0, index) + replacement + source.slice(index + needle.length);
+}
+
+function patchClaudeACPAgent(source) {
+  const levels = '["low", "medium", "high", "xhigh", "max"]';
+  source = replaceOnce(
+    source,
+    "result.push({ ...sdkMatch, value: effective });",
+    "result.push({ ...sdkMatch, value: effective, supportsEffort: true, supportedEffortLevels: " + levels + " });",
+    "matched allowlist model"
+  );
+  return replaceOnce(
+    source,
+    'result.push({ value: effective, displayName: trimmed, description: "" });',
+    'result.push({ value: effective, displayName: trimmed, description: "", supportsEffort: true, supportedEffortLevels: ' + levels + " });",
+    "custom allowlist model"
+  );
+}
+
+export async function load(url, context, nextLoad) {
+  const result = await nextLoad(url, context);
+  if (!isClaudeACPAgent(url)) {
+    return result;
+  }
+  const source = sourceToString(result.source);
+  if (!source) {
+    return result;
+  }
+  return { ...result, source: patchClaudeACPAgent(source) };
+}
+`
+
+func ensureCCFlickerEffortLoader() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return "", err
+		}
+		cacheDir = filepath.Join(home, ".wheelmaker", "cache")
+	}
+	dir := filepath.Join(cacheDir, "wheelmaker")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create loader directory: %w", err)
+	}
+	path := filepath.Join(dir, "cc_flicker_effort_loader.mjs")
+	if err := os.WriteFile(path, []byte(ccFlickerEffortLoaderSource), 0o644); err != nil {
+		return "", fmt.Errorf("write loader: %w", err)
+	}
+	return path, nil
+}
 
 // flickerEffortInstance keeps Claude Code's session configuration aligned with
 // the model-specific effort variants published by the V2 Flicker bridge.

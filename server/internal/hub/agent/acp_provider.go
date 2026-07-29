@@ -171,6 +171,7 @@ type acpProvider struct {
 	resolveBinary       func(name, configuredPath, installHint string) (string, error)
 	lookPath            func(file string) (string, error)
 	ensureFlickerLoader func() (string, error)
+	ensureEffortLoader  func() (string, error)
 }
 
 // NewACPProvider creates a provider from preset.
@@ -180,6 +181,7 @@ func NewACPProvider(preset ACPProviderPreset) *acpProvider {
 		resolveBinary:       ResolveACPBinary,
 		lookPath:            exec.LookPath,
 		ensureFlickerLoader: ensureFlickerACPLoader,
+		ensureEffortLoader:  ensureCCFlickerEffortLoader,
 	}
 }
 
@@ -294,7 +296,43 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 			return "", nil, nil, fmt.Errorf("%s: prepare Claude settings: %w", p.preset.Name, err)
 		}
 	}
+	if p.preset.Name == ClaudeCompatibleFlickerProviderPreset.Name {
+		loaderPath, err := p.ensureEffortLoader()
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("%s: prepare effort loader: %w", p.preset.Name, err)
+		}
+		loaderURL, err := nodeFileURL(loaderPath)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("%s: resolve effort loader URL: %w", p.preset.Name, err)
+		}
+		defaultEnv = appendNodeImport(defaultEnv, nodeRegisterImportArg(loaderURL))
+	}
 	return exePath, defaultArgs, defaultEnv, nil
+}
+
+func appendNodeImport(env []string, importURL string) []string {
+	const name = "NODE_OPTIONS"
+	value := os.Getenv(name)
+	entryIndex := -1
+	for index, entry := range env {
+		entryName, entryValue, ok := strings.Cut(entry, "=")
+		if ok && strings.EqualFold(entryName, name) {
+			value = entryValue
+			entryIndex = index
+		}
+	}
+	option := "--import=" + importURL
+	if strings.TrimSpace(value) != "" {
+		value = strings.TrimSpace(value) + " " + option
+	} else {
+		value = option
+	}
+	entry := name + "=" + value
+	if entryIndex >= 0 {
+		env[entryIndex] = entry
+		return env
+	}
+	return append(env, entry)
 }
 
 // gatewayModelDiscoveryEnv toggles Claude Code CLI's gateway model discovery,

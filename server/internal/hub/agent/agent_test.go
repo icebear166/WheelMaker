@@ -793,6 +793,112 @@ func TestCCFlickerProviderLaunchErrorDoesNotLeakKey(t *testing.T) {
 	}
 }
 
+func TestCCFlickerProviderLaunchRegistersEffortCapabilityLoader(t *testing.T) {
+	provider := NewCCFlickerProvider(filepath.Join(t.TempDir(), "state"), "flicker-test-key", nil)
+	provider.resolveBinary = func(name, configuredPath, installHint string) (string, error) {
+		return "/usr/bin/claude-agent-acp", nil
+	}
+
+	_, _, env, err := provider.Launch()
+	if err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+	values := testEnvironmentMap(t, env)
+	if got := values["NODE_OPTIONS"]; !strings.Contains(got, "--import=data:text/javascript;base64,") {
+		t.Fatalf("NODE_OPTIONS = %q, want registered cc-flicker effort loader", got)
+	}
+}
+
+func TestCCFlickerEffortLoaderAddsCapabilitiesToAllowlistedModels(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skipf("node not available: %v", err)
+	}
+	tempDir := t.TempDir()
+	loaderPath := filepath.Join(tempDir, "cc_flicker_effort_loader.mjs")
+	if err := os.WriteFile(loaderPath, []byte(ccFlickerEffortLoaderSource), 0o644); err != nil {
+		t.Fatalf("write loader: %v", err)
+	}
+	fixturePath := filepath.Join(tempDir, "acp-agent.js")
+	fixture := `
+export function applyAvailableModelsAllowlist(sdkModels, allowlist, settingsModelOverrides) {
+  const defaultModel = sdkModels[0];
+  const result = [defaultModel];
+  const seen = new Set([defaultModel.value]);
+  const sdkModelsWithoutDefault = sdkModels.filter((m) => m.value !== "default");
+  for (const entry of allowlist) {
+    const trimmed = entry.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    const overridden = settingsModelOverrides?.[trimmed];
+    const effective = overridden ?? trimmed;
+    if (seen.has(effective)) continue;
+    const sdkMatch = sdkModelsWithoutDefault.find((model) => model.value === trimmed);
+    if (sdkMatch) {
+      result.push({ ...sdkMatch, value: effective });
+    }
+    else {
+      result.push({ value: effective, displayName: trimmed, description: "" });
+    }
+    seen.add(effective);
+  }
+  return result;
+}
+`
+	if err := os.WriteFile(fixturePath, []byte(fixture), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	runnerPath := filepath.Join(tempDir, "runner.mjs")
+	runner := `
+import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const loader = await import(pathToFileURL(process.argv[2]));
+const source = readFileSync(process.argv[3], "utf8");
+const patched = await loader.load(
+  "file:///tmp/node_modules/@agentclientprotocol/claude-agent-acp/dist/acp-agent.js",
+  {},
+  async () => ({ format: "module", source })
+);
+const moduleURL = "data:text/javascript;base64," + Buffer.from(patched.source).toString("base64");
+const module = await import(moduleURL);
+const models = module.applyAvailableModelsAllowlist(
+  [
+    { value: "default", displayName: "Default" },
+    { value: "claude-opus", displayName: "Claude Opus" }
+  ],
+  ["claude-opus", "kimi-k3"],
+  {}
+);
+process.stdout.write(JSON.stringify(models));
+`
+	if err := os.WriteFile(runnerPath, []byte(runner), 0o644); err != nil {
+		t.Fatalf("write runner: %v", err)
+	}
+	output, err := exec.Command(nodePath, runnerPath, loaderPath, fixturePath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("run loader fixture: %v\n%s", err, output)
+	}
+	var models []struct {
+		Value                 string   `json:"value"`
+		SupportsEffort        bool     `json:"supportsEffort"`
+		SupportedEffortLevels []string `json:"supportedEffortLevels"`
+	}
+	if err := json.Unmarshal(output, &models); err != nil {
+		t.Fatalf("decode patched models: %v\n%s", err, output)
+	}
+	wantLevels := []string{"low", "medium", "high", "xhigh", "max"}
+	if len(models) != 3 {
+		t.Fatalf("models = %#v, want default plus two allowlisted models", models)
+	}
+	for _, model := range models[1:] {
+		if !model.SupportsEffort || !reflect.DeepEqual(model.SupportedEffortLevels, wantLevels) {
+			t.Fatalf("model %q effort capabilities = %v/%v, want true/%v",
+				model.Value, model.SupportsEffort, model.SupportedEffortLevels, wantLevels)
+		}
+	}
+}
+
 func testEnvironmentMap(t *testing.T, values []string) map[string]string {
 	t.Helper()
 	result := make(map[string]string, len(values))
