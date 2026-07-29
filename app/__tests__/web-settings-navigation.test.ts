@@ -16,7 +16,7 @@ import {
 
 describe('settings navigation model', () => {
   test('classifies settings pages into root, peers, and children', () => {
-    expect(SETTINGS_PEER_DETAILS).toEqual(['update', 'skills', 'portRelay']);
+    expect(SETTINGS_PEER_DETAILS).toEqual(['skills', 'portRelay']);
     expect(SETTINGS_CHILD_DETAILS).toEqual([
       'connectionStatus',
       'database',
@@ -27,7 +27,7 @@ describe('settings navigation model', () => {
     ]);
 
     expect(settingsPageKind(null)).toBe('root');
-    expect(settingsPageKind('update')).toBe('peer');
+    expect(settingsPageKind('skills')).toBe('peer');
     expect(settingsPageKind('connectionStatus')).toBe('child');
     expect(settingsPageKind('database')).toBe('child');
     expect(settingsPageKind('releasePublish')).toBe('child');
@@ -41,15 +41,13 @@ describe('settings navigation model', () => {
 
   test('resolves mobile shortcut indexes for root and peer pages', () => {
     expect(mobileSettingsShortcutIndex(null)).toBe(0);
-    expect(mobileSettingsShortcutIndex('update')).toBe(1);
-    expect(mobileSettingsShortcutIndex('skills')).toBe(2);
-    expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
+    expect(mobileSettingsShortcutIndex('skills')).toBe(1);
+    expect(mobileSettingsShortcutIndex('portRelay')).toBe(2);
     expect(mobileSettingsShortcutIndex('database')).toBe(0);
   });
 
   test('keeps settings surface labels and mobile shortcut order together', () => {
     expect(MOBILE_SETTINGS_SHORTCUTS.map(shortcut => shortcut.detail)).toEqual(SETTINGS_PEER_DETAILS);
-    expect(settingsDetailTitle('update')).toBe('Update');
     expect(settingsDetailTitle('skills')).toBe('Skills');
     expect(settingsDetailTitle('portRelay')).toBe('Port Relay');
     expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
@@ -69,7 +67,7 @@ describe('settings navigation model', () => {
     expect(surface).toContain('settings-workbench-panel');
     expect(surface).toContain('settings-workbench-nav');
     expect(surface).toContain('settings-workbench-detail-page');
-    expect(root).toContain("type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug';");
+    expect(root).toContain("type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug' | 'android';");
     expect(root).toContain('settings-section-${id}');
     for (const id of ['appearance', 'chat', 'server', 'connection', 'code-display', 'debug']) {
       expect(root).toContain(`id: '${id}'`);
@@ -138,9 +136,8 @@ describe('settings navigation model', () => {
       'utf8',
     ).replace(/\r\n/g, '\n');
     expect(mobileSettingsShortcutIndex(null)).toBe(0);
-    expect(mobileSettingsShortcutIndex('update')).toBe(1);
-    expect(mobileSettingsShortcutIndex('skills')).toBe(2);
-    expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
+    expect(mobileSettingsShortcutIndex('skills')).toBe(1);
+    expect(mobileSettingsShortcutIndex('portRelay')).toBe(2);
     expect(css).toContain('.settings-workbench-screen {');
     expect(css).not.toContain('/* workspace-ui-targeted-evolution: settings */');
     expect(css).toContain('.settings-danger-row');

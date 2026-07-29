@@ -20,13 +20,13 @@ function readStyles(): string {
 describe('mobile settings system back', () => {
   test('marks and keys mobile settings history states', () => {
     const root = createMobileSettingsHistoryState(null);
-    const update = createMobileSettingsHistoryState('update');
+    const skills = createMobileSettingsHistoryState('skills');
 
     expect(isMobileSettingsHistoryState(root)).toBe(true);
-    expect(isMobileSettingsHistoryState(update)).toBe(true);
+    expect(isMobileSettingsHistoryState(skills)).toBe(true);
     expect(isMobileSettingsHistoryState({})).toBe(false);
     expect(mobileSettingsHistoryKey(null)).toBe('mobile-settings:root');
-    expect(mobileSettingsHistoryKey('update')).toBe('mobile-settings:update');
+    expect(mobileSettingsHistoryKey('skills')).toBe('mobile-settings:skills');
     expect(mobileSettingsHistoryKey('skillDetail')).toBe('mobile-settings:skillDetail');
   });
 
@@ -34,7 +34,7 @@ describe('mobile settings system back', () => {
     expect(resolveMobileSettingsPopAction({
       nextState: createMobileSettingsHistoryState(null),
       settingsOpen: true,
-      settingsDetailView: 'update',
+      settingsDetailView: 'skills',
     })).toBe('close-settings');
 
     expect(resolveMobileSettingsPopAction({
@@ -76,18 +76,18 @@ describe('mobile settings system back', () => {
 
     expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKey(null),
-      nextDetail: 'update',
+      nextDetail: 'skills',
     })).toBe('push');
 
     expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKey(null),
-      nextDetail: 'update',
+      nextDetail: 'skills',
       replaceRootWithDetail: true,
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('update'),
-      nextDetail: 'skills',
+      currentKey: mobileSettingsHistoryKey('skills'),
+      nextDetail: 'portRelay',
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
