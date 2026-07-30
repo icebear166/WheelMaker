@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -341,6 +342,7 @@ type proxyServer struct {
 	models           modelIndex
 	catalog          []modelInfo
 	myFlickerVersion string
+	diagnosticWriter io.Writer
 }
 
 type workerFrame struct {
@@ -351,9 +353,32 @@ type workerFrame struct {
 	Payload          json.RawMessage `json:"payload,omitempty"`
 	Part             json.RawMessage `json:"part,omitempty"`
 	Error            string          `json:"error,omitempty"`
+	ErrorName        string          `json:"errorName,omitempty"`
+	ErrorCode        string          `json:"errorCode,omitempty"`
+	ErrorStatus      int             `json:"errorStatus,omitempty"`
+	ErrorFingerprint string          `json:"errorFingerprint,omitempty"`
 	Catalog          []modelInfo     `json:"catalog,omitempty"`
 	MyFlickerVersion string          `json:"myFlickerVersion,omitempty"`
 	Probe            *outboundProbe  `json:"probe,omitempty"`
+}
+
+type workerRequestError struct {
+	frame workerFrame
+}
+
+func (e *workerRequestError) Error() string {
+	return e.frame.Error
+}
+
+type v2RequestDiagnostic struct {
+	Model          string
+	Effort         string
+	PayloadBytes   int
+	PromptMessages int
+	PromptParts    int
+	ImageParts     int
+	ImageDataChars int
+	ToolCount      int
 }
 
 type outboundProbe struct {
@@ -809,6 +834,64 @@ async function initialize() {
   return {internals, wanqing};
 }
 
+function diagnosticText(value) {
+  let text = String(value || "").replace(/[\r\n]+/g, " ");
+  text = text.replace(/Bearer\s+[^\s,;"']+/gi, "Bearer [redacted]");
+  text = text.replace(
+    /"(authorization|x-takumi-token|api[_-]?key|access[_-]?token)"\s*:\s*"[^"]*"/gi,
+    '"$1":"[redacted]"',
+  );
+  text = text.replace(/data:[^,;"']+;base64,[A-Za-z0-9+/_=-]+/gi, "[data-url]");
+  text = text.replace(/"data"\s*:\s*"[A-Za-z0-9+/_=-]{64,}"/gi, '"data":"[base64]"');
+  for (const marker of [" Request body:", " Request Body:", " Request body values:"]) {
+    const index = text.indexOf(marker);
+    if (index >= 0) text = text.slice(0, index);
+  }
+  return text.slice(0, 500);
+}
+
+function responseErrorMessage(error) {
+  let body = error && error.responseBody;
+  if (body instanceof Uint8Array) body = Buffer.from(body).toString("utf8");
+  if (typeof body === "string") {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      return "";
+    }
+  }
+  if (!body || typeof body !== "object") return "";
+  return String(
+    body.error && typeof body.error === "object" && body.error.message ||
+    body.message ||
+    "",
+  );
+}
+
+function diagnoseError(error) {
+  const rawMessage = String(error && error.message || "request failed");
+  const responseBody = error && error.responseBody;
+  const fingerprintSource = rawMessage + "|" + (
+    typeof responseBody === "string" ? responseBody : stableJSON(responseBody || "")
+  );
+  const status = Number(
+    error && (error.statusCode || error.status || error.response && error.response.status) || 0,
+  );
+  const code = String(
+    error && (error.code || error.data && error.data.code || error.cause && error.cause.code) || "",
+  );
+  const message = responseErrorMessage(error) ||
+    String(error && error.cause && error.cause.message || "") ||
+    rawMessage;
+  return {
+    name:diagnosticText(error && error.name || ""),
+    code:diagnosticText(code),
+    status:Number.isInteger(status) && status > 0 ? status : 0,
+    message:diagnosticText(message),
+    fingerprint:createHash("sha256").update(fingerprintSource).digest("hex").slice(0, 16),
+  };
+}
+
 async function dispatch(runtime, frame) {
   const controller = new AbortController();
   controllers.set(frame.requestId, controller);
@@ -832,7 +915,16 @@ async function dispatch(runtime, frame) {
     }
     emit({type: "done", requestId: frame.requestId});
   } catch (error) {
-    emit({type: "error", requestId: frame.requestId, error: String(error && error.message || "request failed")});
+    const diagnostic = diagnoseError(error);
+    emit({
+      type:"error",
+      requestId:frame.requestId,
+      error:diagnostic.message,
+      errorName:diagnostic.name,
+      errorCode:diagnostic.code,
+      errorStatus:diagnostic.status,
+      errorFingerprint:diagnostic.fingerprint,
+    });
   } finally {
     controllers.delete(frame.requestId);
   }
@@ -1650,7 +1742,7 @@ func streamAnthropicSSE(requestedModel string, frames <-chan workerFrame, events
 
 	for frame := range frames {
 		if frame.Type == "error" {
-			return errors.New(frame.Error)
+			return &workerRequestError{frame: frame}
 		}
 		if frame.Type != "part" {
 			continue
@@ -2012,6 +2104,7 @@ func newProxyServer(settings proxySettings, worker workerBackend, catalog []mode
 		models:           models,
 		catalog:          filtered,
 		myFlickerVersion: workerMyFlickerVersion(worker),
+		diagnosticWriter: os.Stderr,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", server.handleHealth)
@@ -2100,17 +2193,21 @@ func (s *proxyServer) handleMessages(response http.ResponseWriter, request *http
 		writeAnthropicError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	frames, err := s.worker.Request(request.Context(), model.ID, requestedAnthropicEffort(input), payload)
+	effort := requestedAnthropicEffort(input)
+	diagnostic := summarizeV2Request(model.ID, effort, payload)
+	frames, err := s.worker.Request(request.Context(), model.ID, effort, payload)
 	if err != nil {
+		logV2WorkerFailure(s.diagnosticWriter, diagnostic, err)
 		writeAnthropicError(response, http.StatusBadGateway, "Wanqing worker request failed")
 		return
 	}
 	if input.Stream {
-		s.writeStream(response, request, model.ID, frames, mapping)
+		s.writeStream(response, request, model.ID, frames, mapping, diagnostic)
 		return
 	}
 	message, err := anthropicMessageFromV3(model.ID, frames, mapping)
 	if err != nil {
+		logV2WorkerFailure(s.diagnosticWriter, diagnostic, err)
 		writeAnthropicError(response, http.StatusBadGateway, sanitizeWorkerError(err))
 		return
 	}
@@ -2123,6 +2220,7 @@ func (s *proxyServer) writeStream(
 	model string,
 	frames <-chan workerFrame,
 	mapping v2ToolNameMapping,
+	diagnostic v2RequestDiagnostic,
 ) {
 	flusher, ok := response.(http.Flusher)
 	if !ok {
@@ -2151,6 +2249,7 @@ func (s *proxyServer) writeStream(
 		}
 	}
 	if err := <-errs; err != nil && request.Context().Err() == nil {
+		logV2WorkerFailure(s.diagnosticWriter, diagnostic, err)
 		event := map[string]any{
 			"type": "error",
 			"error": map[string]any{
@@ -2253,6 +2352,99 @@ func writeV2JSON(response http.ResponseWriter, status int, value any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	response.WriteHeader(status)
 	_, _ = response.Write(encoded)
+}
+
+func summarizeV2Request(model, effort string, payload map[string]any) v2RequestDiagnostic {
+	diagnostic := v2RequestDiagnostic{Model: model, Effort: effort}
+	if encoded, err := json.Marshal(payload); err == nil {
+		diagnostic.PayloadBytes = len(encoded)
+	}
+	if tools, ok := payload["tools"].([]any); ok {
+		diagnostic.ToolCount = len(tools)
+	}
+	prompt, _ := payload["prompt"].([]any)
+	diagnostic.PromptMessages = len(prompt)
+	for _, rawMessage := range prompt {
+		message, _ := rawMessage.(map[string]any)
+		switch content := message["content"].(type) {
+		case string:
+			diagnostic.PromptParts++
+		case []any:
+			diagnostic.PromptParts += len(content)
+			for _, rawPart := range content {
+				part, _ := rawPart.(map[string]any)
+				if firstText(part["type"]) != "file" ||
+					!strings.HasPrefix(strings.ToLower(firstText(part["mediaType"])), "image/") {
+					continue
+				}
+				diagnostic.ImageParts++
+				diagnostic.ImageDataChars += len(firstText(part["data"]))
+			}
+		}
+	}
+	return diagnostic
+}
+
+var (
+	v2DiagnosticBearerPattern = regexp.MustCompile(`(?i)Bearer\s+[^\s,;"']+`)
+	v2DiagnosticSecretPattern = regexp.MustCompile(
+		`(?i)"(authorization|x-takumi-token|api[_-]?key|access[_-]?token)"\s*:\s*"[^"]*"`,
+	)
+	v2DiagnosticDataURLPattern = regexp.MustCompile(
+		`(?i)data:[^,;"']+;base64,[A-Za-z0-9+/_=-]+`,
+	)
+	v2DiagnosticBase64Pattern = regexp.MustCompile(
+		`(?i)"data"\s*:\s*"[A-Za-z0-9+/_=-]{64,}"`,
+	)
+)
+
+func sanitizeV2DiagnosticText(value string) string {
+	value = strings.NewReplacer("\r", " ", "\n", " ").Replace(value)
+	value = v2DiagnosticBearerPattern.ReplaceAllString(value, "Bearer [redacted]")
+	value = v2DiagnosticSecretPattern.ReplaceAllString(value, `"$1":"[redacted]"`)
+	value = v2DiagnosticDataURLPattern.ReplaceAllString(value, "[data-url]")
+	value = v2DiagnosticBase64Pattern.ReplaceAllString(value, `"data":"[base64]"`)
+	for _, marker := range []string{" Request body:", " Request Body:", " Request body values:"} {
+		if index := strings.Index(value, marker); index >= 0 {
+			value = value[:index]
+		}
+	}
+	runes := []rune(value)
+	if len(runes) > 500 {
+		value = string(runes[:500])
+	}
+	return value
+}
+
+func logV2WorkerFailure(writer io.Writer, diagnostic v2RequestDiagnostic, err error) {
+	if writer == nil || err == nil {
+		return
+	}
+	frame := workerFrame{Error: err.Error()}
+	var workerErr *workerRequestError
+	if errors.As(err, &workerErr) {
+		frame = workerErr.frame
+	}
+	fmt.Fprintf(
+		writer,
+		"[flicker-v2] worker request failed requestId=%q model=%q effort=%q "+
+			"payloadBytes=%d promptMessages=%d promptParts=%d imageParts=%d "+
+			"imageDataChars=%d tools=%d status=%d name=%q code=%q error=%q fingerprint=%q\n",
+		sanitizeV2DiagnosticText(frame.RequestID),
+		sanitizeV2DiagnosticText(diagnostic.Model),
+		sanitizeV2DiagnosticText(diagnostic.Effort),
+		diagnostic.PayloadBytes,
+		diagnostic.PromptMessages,
+		diagnostic.PromptParts,
+		diagnostic.ImageParts,
+		diagnostic.ImageDataChars,
+		diagnostic.ToolCount,
+		frame.ErrorStatus,
+		sanitizeV2DiagnosticText(frame.ErrorName),
+		sanitizeV2DiagnosticText(frame.ErrorCode),
+		sanitizeV2DiagnosticText(frame.Error),
+		sanitizeV2DiagnosticText(frame.ErrorFingerprint),
+	)
 }
 
 func sanitizeWorkerError(_ error) string {

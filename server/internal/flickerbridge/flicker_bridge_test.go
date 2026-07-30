@@ -441,6 +441,116 @@ func TestV2WorkerAppliesMyFlickerModelVariant(t *testing.T) {
 	}
 }
 
+func TestV2WorkerEmitsStructuredFailureDiagnostics(t *testing.T) {
+	for _, expected := range []string{
+		"function diagnoseError(error)",
+		"errorStatus:diagnostic.status",
+		"errorFingerprint:diagnostic.fingerprint",
+	} {
+		if !strings.Contains(nodeWorkerSource, expected) {
+			t.Fatalf("worker failure diagnostics are missing %q", expected)
+		}
+	}
+}
+
+func TestV2WorkerFailureDiagnosticSummarizesRequestAndRedactsSecrets(t *testing.T) {
+	payload := map[string]any{
+		"prompt": []any{
+			map[string]any{"role": "system", "content": "system"},
+			map[string]any{"role": "user", "content": []any{
+				map[string]any{"type": "text", "text": "inspect"},
+				map[string]any{
+					"type":      "file",
+					"mediaType": "image/png",
+					"data":      "QUJDREVGRw==",
+				},
+			}},
+		},
+		"tools": []any{map[string]any{"type": "function", "name": "read"}},
+	}
+	diagnostic := summarizeV2Request("kimi-k3", "max", payload)
+	if diagnostic.PromptMessages != 2 ||
+		diagnostic.PromptParts != 3 ||
+		diagnostic.ImageParts != 1 ||
+		diagnostic.ImageDataChars != 12 ||
+		diagnostic.ToolCount != 1 ||
+		diagnostic.PayloadBytes == 0 {
+		t.Fatalf("request diagnostic = %+v", diagnostic)
+	}
+
+	frame := workerFrame{
+		Type:             "error",
+		RequestID:        "req-19",
+		Error:            `upstream rejected Authorization: Bearer secret-token data:image/png;base64,QUJDREVGRw==`,
+		ErrorName:        "AI_APICallError",
+		ErrorCode:        "invalid_request",
+		ErrorStatus:      http.StatusBadRequest,
+		ErrorFingerprint: "abc123",
+	}
+	var output bytes.Buffer
+	logV2WorkerFailure(&output, diagnostic, &workerRequestError{frame: frame})
+	logged := output.String()
+	for _, expected := range []string{
+		"model=\"kimi-k3\"",
+		"effort=\"max\"",
+		"promptMessages=2",
+		"promptParts=3",
+		"imageParts=1",
+		"imageDataChars=12",
+		"tools=1",
+		"status=400",
+		"name=\"AI_APICallError\"",
+		"code=\"invalid_request\"",
+		"fingerprint=\"abc123\"",
+	} {
+		if !strings.Contains(logged, expected) {
+			t.Fatalf("diagnostic log missing %q: %s", expected, logged)
+		}
+	}
+	for _, secret := range []string{"secret-token", "QUJDREVGRw=="} {
+		if strings.Contains(logged, secret) {
+			t.Fatalf("diagnostic log leaked %q: %s", secret, logged)
+		}
+	}
+}
+
+func TestV2StreamFailureIsDetailedLocallyAndGenericToClaudeCode(t *testing.T) {
+	var diagnosticLog bytes.Buffer
+	server := &proxyServer{diagnosticWriter: &diagnosticLog}
+	frames := make(chan workerFrame, 1)
+	frames <- workerFrame{
+		Type:             "error",
+		RequestID:        "req-27",
+		Error:            "upstream rejected the final tool result",
+		ErrorName:        "AI_APICallError",
+		ErrorCode:        "invalid_request",
+		ErrorStatus:      http.StatusBadRequest,
+		ErrorFingerprint: "def456",
+	}
+	close(frames)
+
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	server.writeStream(
+		response,
+		request,
+		"kimi-k3",
+		frames,
+		v2ToolNameMapping{},
+		v2RequestDiagnostic{Model: "kimi-k3", Effort: "max", PayloadBytes: 512000},
+	)
+
+	clientBody := response.Body.String()
+	if !strings.Contains(clientBody, "Wanqing worker request failed") {
+		t.Fatalf("client error = %s", clientBody)
+	}
+	if strings.Contains(clientBody, "final tool result") ||
+		!strings.Contains(diagnosticLog.String(), "upstream rejected the final tool result") ||
+		!strings.Contains(diagnosticLog.String(), "status=400") {
+		t.Fatalf("client=%s diagnostic=%s", clientBody, diagnosticLog.String())
+	}
+}
+
 func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 	first := hashV2ProbeBody(json.RawMessage(`{"tools":[],"system":[{"type":"text","text":"stable"}],"model":"m"}`))
 	second := hashV2ProbeBody(json.RawMessage(`{"model":"m","system":[{"text":"stable","type":"text"}],"tools":[]}`))
