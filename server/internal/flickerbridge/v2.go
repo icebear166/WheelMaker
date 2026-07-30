@@ -222,6 +222,7 @@ type anthropicInputMessage struct {
 type anthropicContentBlock struct {
 	Type         string          `json:"type"`
 	Text         string          `json:"text,omitempty"`
+	Source       json.RawMessage `json:"source,omitempty"`
 	Thinking     string          `json:"thinking,omitempty"`
 	Signature    string          `json:"signature,omitempty"`
 	ID           string          `json:"id,omitempty"`
@@ -231,6 +232,12 @@ type anthropicContentBlock struct {
 	Content      json.RawMessage `json:"content,omitempty"`
 	IsError      bool            `json:"is_error,omitempty"`
 	CacheControl json.RawMessage `json:"cache_control,omitempty"`
+}
+
+type anthropicImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
 }
 
 type anthropicToolChoice struct {
@@ -363,6 +370,7 @@ type outboundProbe struct {
 	ToolNames            []string `json:"toolNames"`
 	HasMyFlickerIdentity bool     `json:"hasMyFlickerIdentity"`
 	HasClaudeIdentity    bool     `json:"hasClaudeIdentity"`
+	HasImage             bool     `json:"hasImage"`
 }
 
 func hashV2ProbeBody(raw json.RawMessage) string {
@@ -711,6 +719,7 @@ function installInterception() {
       body = JSON.parse(Buffer.from(init.body).toString("utf8"));
     }
     const serializedSystem = stableJSON(probeSystem(body));
+    const serializedBody = stableJSON(body);
     const system = probeSystem(body);
     const toolNames = probeToolNames(body);
     emit({
@@ -725,11 +734,14 @@ function installInterception() {
         headerNames:headers,
         bodyKeys:Object.keys(body).sort(),
         effort:probeEffort(body),
-        bodyHash:createHash("sha256").update(stableJSON(body)).digest("hex"),
+        bodyHash:createHash("sha256").update(serializedBody).digest("hex"),
         systemBlocks:Array.isArray(system) ? system.length : system ? 1 : 0,
         toolNames,
         hasMyFlickerIdentity:serializedSystem.includes("You are myflicker, the best coding agent on the planet."),
         hasClaudeIdentity:serializedSystem.includes("You are Claude Code, Anthropic's official CLI"),
+        hasImage:serializedBody.includes('"type":"image"') ||
+          serializedBody.includes('"type":"image_url"') ||
+          serializedBody.includes('"type":"input_image"'),
       },
     });
     const model = String(body.model || context.model);
@@ -1319,6 +1331,12 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 					part := map[string]any{"type": "text", "text": block.Text}
 					addCacheControl(part, block.CacheControl)
 					appendPart("user", part)
+				case "image":
+					part, err := anthropicImageToV3(block)
+					if err != nil {
+						return nil, mapping, err
+					}
+					appendPart("user", part)
 				case "tool_result":
 					toolName, ok := toolNames[block.ToolUseID]
 					if !ok {
@@ -1344,7 +1362,7 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 					return nil, mapping, errors.New("tool_use is only valid in assistant messages")
 				case "thinking":
 					return nil, mapping, errors.New("thinking is only valid in assistant messages")
-				case "image", "document", "audio", "video":
+				case "document", "audio", "video":
 					return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
 				default:
 					return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
@@ -1469,6 +1487,29 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 		}
 	}
 	return options, mapping, nil
+}
+
+func anthropicImageToV3(block anthropicContentBlock) (map[string]any, error) {
+	var source anthropicImageSource
+	if len(block.Source) == 0 || json.Unmarshal(block.Source, &source) != nil {
+		return nil, errors.New("invalid Anthropic image source")
+	}
+	if source.Type != "base64" {
+		return nil, fmt.Errorf("unsupported Anthropic image source type: %s", source.Type)
+	}
+	if !strings.HasPrefix(strings.ToLower(source.MediaType), "image/") {
+		return nil, fmt.Errorf("invalid Anthropic image media_type: %s", source.MediaType)
+	}
+	if source.Data == "" {
+		return nil, errors.New("Anthropic image data must not be empty")
+	}
+	part := map[string]any{
+		"type":      "file",
+		"mediaType": source.MediaType,
+		"data":      source.Data,
+	}
+	addCacheControl(part, block.CacheControl)
+	return part, nil
 }
 
 func anthropicSystemToV3(raw json.RawMessage, mapping v2ToolNameMapping) ([]any, error) {
@@ -2896,6 +2937,9 @@ func selfTestLiveFormats() error {
 		if !model.Hidden && containsString(levels, "high") && selected[model.APIFormat].ID == "" {
 			selected[model.APIFormat] = model
 		}
+		if model.ID == "kimi-k3" {
+			selected["anthropic"] = model
+		}
 	}
 	for _, format := range []string{"anthropic", "openai", "responses"} {
 		model := selected[format]
@@ -2907,7 +2951,14 @@ func selfTestLiveFormats() error {
 			"max_tokens":16,
 			"system":"You are Claude Code, Anthropic's official CLI.",
 			"messages":[
-				{"role":"user","content":"probe"},
+				{"role":"user","content":[
+					{"type":"text","text":"probe"},
+					{"type":"image","source":{
+						"type":"base64",
+						"media_type":"image/png",
+						"data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+					}}
+				]},
 				{"role":"assistant","content":[{"type":"tool_use","id":"toolu_probe","name":"Read","input":{"file_path":"probe.txt"}}]},
 				{"role":"user","content":[
 					{"type":"tool_result","tool_use_id":"toolu_probe","content":"ok"},
@@ -3002,6 +3053,9 @@ func selfTestLiveFormats() error {
 		}
 		if probe.SystemBlocks == 0 || !probe.HasMyFlickerIdentity || probe.HasClaudeIdentity {
 			return fmt.Errorf("%s request identity was not rewritten as expected", format)
+		}
+		if format == "anthropic" && model.ID == "kimi-k3" && !probe.HasImage {
+			return errors.New("kimi-k3 request omitted the input image")
 		}
 		if !containsString(probe.ToolNames, "read") {
 			return fmt.Errorf("%s request tool names = %v", format, probe.ToolNames)

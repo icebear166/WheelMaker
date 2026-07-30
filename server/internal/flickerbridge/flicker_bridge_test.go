@@ -628,6 +628,44 @@ func TestV2ToolResultFollowedByUserTextDoesNotFail(t *testing.T) {
 	}
 }
 
+func TestV2AnthropicBase64ImageMapsToV3FileInBlockOrder(t *testing.T) {
+	var request anthropicMessagesRequest
+	if err := json.Unmarshal([]byte(`{
+		"max_tokens":128,
+		"messages":[{
+			"role":"user",
+			"content":[
+				{"type":"text","text":"before"},
+				{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AA=="}},
+				{"type":"text","text":"after"}
+			]
+		}]
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+
+	converted, _, err := anthropicRequestToV3(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, _ := converted["prompt"].([]any)
+	if len(prompt) != 1 {
+		t.Fatalf("prompt length = %d, want 1", len(prompt))
+	}
+	content, _ := prompt[0].(map[string]any)["content"].([]any)
+	if len(content) != 3 {
+		t.Fatalf("content = %#v, want three ordered parts", content)
+	}
+	image, _ := content[1].(map[string]any)
+	if firstText(content[0].(map[string]any)["text"]) != "before" ||
+		firstText(image["type"]) != "file" ||
+		firstText(image["mediaType"]) != "image/png" ||
+		firstText(image["data"]) != "AA==" ||
+		firstText(content[2].(map[string]any)["text"]) != "after" {
+		t.Fatalf("content = %#v", content)
+	}
+}
+
 func TestV2ClaudeCodeSmoke(t *testing.T) {
 	if os.Getenv("WHEELMAKER_V2_CLAUDE_SMOKE") != "1" {
 		t.Skip("set WHEELMAKER_V2_CLAUDE_SMOKE=1 to run the live Claude Code smoke test")
