@@ -25,6 +25,7 @@ type queueExecutionInstance struct {
 	started         chan string
 	promptOutcomes  chan queuePromptOutcome
 	compactOutcomes chan error
+	steerErr        error
 }
 
 func newQueueExecutionSession(t *testing.T, id string) (*Session, *queueExecutionInstance) {
@@ -74,6 +75,24 @@ func (i *queueExecutionInstance) CompactSession(ctx context.Context, sessionID s
 		close(done)
 	}()
 	return done, nil
+}
+
+func (i *queueExecutionInstance) SteerSession(
+	context.Context,
+	string,
+	string,
+	[]acp.ContentBlock,
+) (agent.SessionSteerResult, error) {
+	i.mu.Lock()
+	err := i.steerErr
+	i.mu.Unlock()
+	return agent.SessionSteerResult{}, err
+}
+
+func (i *queueExecutionInstance) setSteerError(err error) {
+	i.mu.Lock()
+	i.steerErr = err
+	i.mu.Unlock()
 }
 
 func (i *queueExecutionInstance) recordStart(value string) {
@@ -450,4 +469,100 @@ func TestSessionQueueConcurrentEnqueueExecutesEachItemOnce(t *testing.T) {
 		}
 		seen[entry] = true
 	}
+}
+
+func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-steer")
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("active", "first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("steer-1", "change direction")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+
+	if err := s.steerQueueItem(context.Background(), "steer-1"); err != nil {
+		t.Fatal(err)
+	}
+	got := s.queueSnapshot(true)
+	if len(got.WaitingItems) != 1 || got.WaitingItems[0].Status != acp.SessionQueueItemStatusSteering {
+		t.Fatalf("queue = %#v", got)
+	}
+
+	s.SessionUpdate(acp.SessionUpdateParams{
+		SessionID: "sess-steer",
+		Update: acp.SessionUpdate{
+			SessionUpdate:   acp.SessionUpdateUserMessageChunk,
+			Steered:         true,
+			ClientMessageID: "different",
+		},
+	})
+	if len(s.queueSnapshot(true).WaitingItems) != 1 {
+		t.Fatal("unrelated transcript removed the item")
+	}
+	s.SessionUpdate(acp.SessionUpdateParams{
+		SessionID: "sess-steer",
+		Update: acp.SessionUpdate{
+			SessionUpdate:   acp.SessionUpdateUserMessageChunk,
+			Steered:         true,
+			ClientMessageID: "steer-1",
+		},
+	})
+	eventuallyQueue(t, func() bool { return len(s.queueSnapshot(true).WaitingItems) == 0 })
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+}
+
+func TestSessionQueueSteerInactiveMovesPromptToFront(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-steer-inactive")
+	for _, item := range []acp.SessionQueueEnqueueItem{
+		promptQueueItem("active", "first"),
+		promptQueueItem("before", "before"),
+		promptQueueItem("target", "target"),
+	} {
+		if _, _, err := s.enqueueAndScheduleQueueItem(item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+	instance.setSteerError(agent.ErrSessionSteerInactive)
+
+	if err := s.steerQueueItem(context.Background(), "target"); err != nil {
+		t.Fatal(err)
+	}
+	got := s.queueSnapshot(true)
+	if len(got.WaitingItems) != 2 || got.WaitingItems[0].ItemID != "target" ||
+		got.WaitingItems[0].Status != acp.SessionQueueItemStatusQueued {
+		t.Fatalf("queue = %#v", got)
+	}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+}
+
+func TestSessionQueueSteerFailureRestoresOriginalPosition(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-steer-error")
+	for _, item := range []acp.SessionQueueEnqueueItem{
+		promptQueueItem("active", "first"),
+		promptQueueItem("a", "a"),
+		promptQueueItem("target", "target"),
+		promptQueueItem("b", "b"),
+	} {
+		if _, _, err := s.enqueueAndScheduleQueueItem(item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+	instance.setSteerError(agent.ErrSessionActionUnsupported)
+
+	err := s.steerQueueItem(context.Background(), "target")
+	if !errors.Is(err, agent.ErrSessionActionUnsupported) {
+		t.Fatalf("error = %v, want unsupported", err)
+	}
+	got := s.queueSnapshot(true)
+	if len(got.WaitingItems) != 3 ||
+		got.WaitingItems[0].ItemID != "a" ||
+		got.WaitingItems[1].ItemID != "target" ||
+		got.WaitingItems[2].ItemID != "b" ||
+		got.WaitingItems[1].Status != acp.SessionQueueItemStatusQueued {
+		t.Fatalf("queue = %#v", got)
+	}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
 }

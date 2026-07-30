@@ -193,6 +193,98 @@ func (s *Session) retryQueueItem(itemID string) error {
 	return nil
 }
 
+func (s *Session) steerQueueItem(ctx context.Context, itemID string) error {
+	s.queueOpMu.Lock()
+	defer s.queueOpMu.Unlock()
+
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return sessionQueueRequestError(acp.CodeInvalidArgument, "itemId is required")
+	}
+
+	s.queueMu.Lock()
+	originalIndex := -1
+	var target *sessionQueueItem
+	for index, item := range s.queue.waiting {
+		if item.wire.ItemID == itemID {
+			originalIndex = index
+			target = item
+			break
+		}
+	}
+	if target == nil {
+		s.queueMu.Unlock()
+		return sessionQueueRequestError(acp.CodeNotFound, "waiting queue item was not found")
+	}
+	if target.wire.Kind != acp.SessionQueueItemKindPrompt || target.status != acp.SessionQueueItemStatusQueued {
+		s.queueMu.Unlock()
+		return sessionQueueRequestError(acp.CodeConflict, "only a queued waiting prompt can be steered")
+	}
+	target.status = acp.SessionQueueItemStatusSteering
+	blocks := cloneSessionContentBlocks(target.wire.Blocks)
+	s.bumpQueueRevisionLocked()
+	s.queueMu.Unlock()
+	s.publishQueueSnapshot()
+
+	attempt, err := s.trySteerQueuePrompt(ctx, itemID, blocks)
+
+	s.queueMu.Lock()
+	currentIndex := -1
+	for index, item := range s.queue.waiting {
+		if item == target {
+			currentIndex = index
+			break
+		}
+	}
+	if currentIndex < 0 {
+		s.queueMu.Unlock()
+		return err
+	}
+	if err == nil && attempt.outcome == sessionSteerAttemptTranscript {
+		s.queueMu.Unlock()
+		return nil
+	}
+
+	s.queue.waiting = append(s.queue.waiting[:currentIndex], s.queue.waiting[currentIndex+1:]...)
+	insertAt := originalIndex
+	if err == nil && attempt.outcome == sessionSteerAttemptFallback {
+		insertAt = 0
+	}
+	if insertAt < 0 {
+		insertAt = 0
+	}
+	if insertAt > len(s.queue.waiting) {
+		insertAt = len(s.queue.waiting)
+	}
+	s.queue.waiting = append(s.queue.waiting, nil)
+	copy(s.queue.waiting[insertAt+1:], s.queue.waiting[insertAt:])
+	s.queue.waiting[insertAt] = target
+	target.status = acp.SessionQueueItemStatusQueued
+	s.bumpQueueRevisionLocked()
+	s.queueMu.Unlock()
+	s.publishQueueSnapshot()
+	return err
+}
+
+func (s *Session) completeSteeredQueueItem(clientMessageID string) {
+	clientMessageID = strings.TrimSpace(clientMessageID)
+	if clientMessageID == "" {
+		return
+	}
+	s.queueMu.Lock()
+	for index, item := range s.queue.waiting {
+		if item.wire.ItemID != clientMessageID || item.status != acp.SessionQueueItemStatusSteering {
+			continue
+		}
+		s.queue.waiting = append(s.queue.waiting[:index], s.queue.waiting[index+1:]...)
+		s.bumpQueueRevisionLocked()
+		s.queueMu.Unlock()
+		s.publishQueueSnapshot()
+		return
+	}
+	s.queueMu.Unlock()
+}
+
 func (s *Session) resetQueue() acp.SessionQueueSnapshot {
 	s.queueOpMu.Lock()
 	defer s.queueOpMu.Unlock()
@@ -337,7 +429,7 @@ func (s *Session) drainQueue() {
 		var outcome sessionExecutionOutcome
 		switch item.wire.Kind {
 		case acp.SessionQueueItemKindPrompt:
-			outcome = s.runPromptBlocks(cloneSessionContentBlocks(item.wire.Blocks))
+			outcome = s.runPromptTurn(cloneSessionContentBlocks(item.wire.Blocks))
 		case acp.SessionQueueItemKindCompact:
 			outcome = s.runCompactionExecution(context.Background(), item.wire.ItemID)
 		default:

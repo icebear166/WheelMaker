@@ -1224,6 +1224,10 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	}
 
 	update := params.Update
+	if update.SessionUpdate == acp.SessionUpdateUserMessageChunk &&
+		update.Steered && strings.TrimSpace(update.ClientMessageID) != "" {
+		s.completeSteeredQueueItem(update.ClientMessageID)
+	}
 	if isGoalLifecycleUpdate(update.SessionUpdate) {
 		s.handleGoalLifecycleUpdate(update)
 		return
@@ -1370,45 +1374,29 @@ func (s *Session) runPromptExecution(initial []acp.ContentBlock) error {
 			s.endExecution()
 		}
 	}()
+	return s.runPromptTurn(cloneSessionContentBlocks(initial)).err
+}
+
+func (s *Session) runPromptTurn(blocks []acp.ContentBlock) sessionExecutionOutcome {
 	s.mu.Lock()
-	s.steerState.acceptingFallbacks = true
+	generation := s.beginPromptGenerationLocked()
 	s.mu.Unlock()
 
-	blocks := cloneSessionContentBlocks(initial)
-	for len(blocks) > 0 {
-		s.mu.Lock()
-		generation := s.beginPromptGenerationLocked()
-		s.mu.Unlock()
+	outcome := s.runPromptBlocks(blocks)
 
-		outcome := s.runPromptBlocks(blocks)
-		runErr := outcome.err
+	s.mu.Lock()
+	generation.completed = true
+	resolvePromptGenerationLocked(generation)
+	resolved := generation.resolved
+	s.mu.Unlock()
+	<-resolved
 
-		s.mu.Lock()
-		generation.completed = true
-		resolvePromptGenerationLocked(generation)
-		resolved := generation.resolved
-		s.mu.Unlock()
-		<-resolved
-
-		s.mu.Lock()
-		if s.steerState.active != generation {
-			s.steerState.acceptingFallbacks = false
-			s.mu.Unlock()
-			return runErr
-		}
-		s.steerState.priority = append(s.steerState.priority, generation.fallbacks...)
+	s.mu.Lock()
+	if s.steerState.active == generation {
 		s.steerState.active = nil
-		next, ok := s.shiftPriorityPromptLocked()
-		if !ok {
-			s.steerState.acceptingFallbacks = false
-		}
-		s.mu.Unlock()
-		if !ok {
-			return runErr
-		}
-		blocks = next.blocks
 	}
-	return nil
+	s.mu.Unlock()
+	return outcome
 }
 
 // runPromptBlocks executes one provider turn while promptMu is already owned.
