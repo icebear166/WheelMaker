@@ -559,7 +559,7 @@ describe('web chat integration', () => {
     expect(settingsSurfaceTsx).toContain('const handleBackdropClick = React.useCallback');
     expect(settingsSurfaceTsx).toContain('if (event.target !== event.currentTarget || !onBackdropClick) {');
     expect(settingsSurfaceTsx).toContain('onBackdropClick();');
-    expect(settingsSurfaceTsx).toContain('className={effectiveScreenClassName}');
+    expect(settingsSurfaceTsx).toContain('className={screenClassName}');
     expect(settingsSurfaceTsx).toContain('onClick={handleBackdropClick}');
     expect(settingsSurfaceTsx).toContain('className="mobile-settings-panel settings-workbench-panel"');
     expect(settingsSurfaceTsx).toContain('aria-modal="true"');

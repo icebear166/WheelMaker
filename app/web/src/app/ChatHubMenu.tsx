@@ -1029,7 +1029,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               <ChatHubDisclosureButton
                 label="Skills"
                 info={`${ops.skills.hubItems.length}`}
-                icon="sparkles"
+                icon="wand"
                 pending={ops.skills.loading || ops.skills.operationRunning}
                 expanded={sectionOpen('skills')}
                 onToggle={() => toggleSection('skills')}
@@ -1070,7 +1070,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 label="Skills"
                 ariaLabel="Project Skills details"
                 info={`${projectSkillTotal(ops.skills.projects)}`}
-                icon="sparkles"
+                icon="wand"
                 pending={ops.skills.loading || ops.skills.operationRunning}
                 expanded={sectionOpen('projectSkills')}
                 onToggle={() => toggleSection('projectSkills')}
