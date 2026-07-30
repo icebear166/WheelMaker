@@ -789,6 +789,80 @@ func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
 	}
 }
 
+// methodConcurrencyToolCommandHandler tracks in-flight Handle calls per method
+// to assert that same command types never overlap while distinct command types
+// run concurrently.
+type methodConcurrencyToolCommandHandler struct {
+	mu                  sync.Mutex
+	inFlight            map[string]int
+	sameMethodOverlap   bool
+	crossMethodParallel bool
+}
+
+func (h *methodConcurrencyToolCommandHandler) Handle(_ context.Context, method string, _ json.RawMessage) (any, *tools.CommandError) {
+	h.mu.Lock()
+	if h.inFlight[method] > 0 {
+		h.sameMethodOverlap = true
+	}
+	for other, count := range h.inFlight {
+		if other != method && count > 0 {
+			h.crossMethodParallel = true
+		}
+	}
+	h.inFlight[method]++
+	h.mu.Unlock()
+
+	time.Sleep(50 * time.Millisecond)
+
+	h.mu.Lock()
+	h.inFlight[method]--
+	h.mu.Unlock()
+	return map[string]any{"ok": true}, nil
+}
+
+func (h *methodConcurrencyToolCommandHandler) SetProjects([]ProjectInfo) {}
+
+func (h *methodConcurrencyToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ string) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
+
+func (h *methodConcurrencyToolCommandHandler) HandleDebugWebTransfer(_ string, _ json.RawMessage) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
+
+func TestHubStateToolHandlingParallelizesDistinctMethods(t *testing.T) {
+	handler := &methodConcurrencyToolCommandHandler{inFlight: map[string]int{}}
+	reporter := NewReporter(ReporterConfig{HubID: "hub-parallel-tools", StateDir: t.TempDir()}, nil)
+	reporter.toolHandler = handler
+
+	const workers = 4
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	run := func(method string) {
+		defer wg.Done()
+		<-start
+		_, _ = reporter.runHubStateTool(context.Background(), method, map[string]any{
+			"action": "scan",
+			"hubId":  "hub-parallel-tools",
+		})
+	}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go run(hubToolMethodNPM)
+		wg.Add(1)
+		go run(hubToolMethodSkills)
+	}
+	close(start)
+	wg.Wait()
+
+	if handler.sameMethodOverlap {
+		t.Fatal("same command type calls overlapped; want per-type serialization")
+	}
+	if !handler.crossMethodParallel {
+		t.Fatal("npm and skills did not run concurrently; want cross-type parallelism")
+	}
+}
+
 func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	root := t.TempDir()
 	reporter := NewReporter(

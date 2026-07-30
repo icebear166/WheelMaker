@@ -139,9 +139,17 @@ type Reporter struct {
 	requestSeq   atomic.Int64
 	updateSeq    atomic.Int64
 
-	connectionEpoch    int64
-	toolHandlerMu      sync.Mutex
-	toolHandler        toolCommandHandler
+	connectionEpoch int64
+	toolHandler     toolCommandHandler
+	// Per-command-type locks replace a single tool mutex so distinct tool
+	// commands (npm / update / skills / release) run concurrently while each
+	// command type stays serialized with itself.
+	npmToolMu          sync.Mutex
+	updateToolMu       sync.Mutex
+	skillsToolMu       sync.Mutex
+	releaseToolMu      sync.Mutex
+	miscToolMu         sync.Mutex
+	toolHandlerInitMu  sync.Mutex
 	relayClient        *portrelay.HubClient
 	fileIndex          *projectFileIndexManager
 	hubStateManager    *HubStateManager
@@ -760,10 +768,10 @@ func (r *Reporter) replyReleaseApply(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.release.apply payload")
 		return
 	}
-	r.toolHandlerMu.Lock()
+	r.updateToolMu.Lock()
 	handler := r.ensureToolHandler()
 	result, err := handler.ApplyRelease(context.Background(), payload.Kind, payload.BaseURL)
-	r.toolHandlerMu.Unlock()
+	r.updateToolMu.Unlock()
 	if err != nil {
 		_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
 		return
@@ -772,9 +780,9 @@ func (r *Reporter) replyReleaseApply(conn *websocket.Conn, req envelope) {
 }
 
 func (r *Reporter) replyDebugWebTransfer(conn *websocket.Conn, req envelope) {
-	r.toolHandlerMu.Lock()
+	r.miscToolMu.Lock()
 	result, _ := r.ensureToolHandler().HandleDebugWebTransfer(req.Method, req.Payload)
-	r.toolHandlerMu.Unlock()
+	r.miscToolMu.Unlock()
 	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
 }
 
@@ -1527,11 +1535,14 @@ func (r *Reporter) replyCmdToken(conn *websocket.Conn, req envelope) {
 }
 
 func (r *Reporter) replyToolCommand(conn *websocket.Conn, req envelope) {
-	r.toolHandlerMu.Lock()
-	defer r.toolHandlerMu.Unlock()
+	mu := r.toolMutexFor(req.Method)
+	mu.Lock()
+	defer mu.Unlock()
 
 	handler := r.ensureToolHandler()
-	handler.SetProjects(r.projectsSnapshot())
+	if req.Method == hubToolMethodSkills {
+		handler.SetProjects(r.projectsSnapshot())
+	}
 	payload, cmdErr := handler.Handle(context.Background(), req.Method, req.Payload)
 	if cmdErr != nil {
 		_ = r.writeError(conn, req.RequestID, cmdErr.Code, cmdErr.Message)
@@ -1545,7 +1556,30 @@ func (r *Reporter) replyToolCommand(conn *websocket.Conn, req envelope) {
 	})
 }
 
+// toolMutexFor picks the per-command-type lock for a tool method. Same method
+// always maps to the same lock (serialized), distinct methods map to distinct
+// locks (parallel).
+func (r *Reporter) toolMutexFor(method string) *sync.Mutex {
+	switch method {
+	case hubToolMethodNPM:
+		return &r.npmToolMu
+	case hubToolMethodUpdate:
+		return &r.updateToolMu
+	case hubToolMethodSkills:
+		return &r.skillsToolMu
+	case hubToolMethodRelease:
+		return &r.releaseToolMu
+	default:
+		return &r.miscToolMu
+	}
+}
+
 func (r *Reporter) ensureToolHandler() toolCommandHandler {
+	if r.toolHandler != nil {
+		return r.toolHandler
+	}
+	r.toolHandlerInitMu.Lock()
+	defer r.toolHandlerInitMu.Unlock()
 	if r.toolHandler != nil {
 		return r.toolHandler
 	}

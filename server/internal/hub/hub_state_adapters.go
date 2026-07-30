@@ -176,11 +176,14 @@ func (r *Reporter) actionHubStateFileIndex(ctx context.Context, action string, p
 }
 
 func (r *Reporter) runHubStateTool(ctx context.Context, method string, payload map[string]any) (any, error) {
-	r.toolHandlerMu.Lock()
-	defer r.toolHandlerMu.Unlock()
+	mu := r.toolMutexFor(method)
+	mu.Lock()
+	defer mu.Unlock()
 
 	handler := r.ensureToolHandler()
-	handler.SetProjects(r.projectsSnapshot())
+	if method == hubToolMethodSkills {
+		handler.SetProjects(r.projectsSnapshot())
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal hub state tool payload: %w", err)
