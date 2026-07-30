@@ -82,9 +82,12 @@ type Session struct {
 	mu              sync.Mutex
 	promptMu        sync.Mutex
 	steerMu         sync.Mutex
+	queueOpMu       sync.Mutex
+	queueMu         sync.Mutex
 	executionKind   string
 	executionLocked bool
 	steerState      sessionSteerState
+	queue           sessionQueueState
 	goal            sessionGoalState
 	permissions     sessionPermissionState
 }
@@ -107,6 +110,7 @@ func newSession(id, cwd, agentType string) (*Session, error) {
 		cwd:          cwd,
 		createdAt:    time.Now(),
 		prompt:       promptState{},
+		queue:        newSessionQueueState(),
 	}
 	s.initCond = sync.NewCond(&s.mu)
 	return s, nil
