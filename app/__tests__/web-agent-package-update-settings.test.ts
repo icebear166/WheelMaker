@@ -228,8 +228,8 @@ describe('agent package update settings UI source structure', () => {
     expect(menuTsx).toContain('Update all hubs');
     expect(menuTsx).not.toContain('Reinstall');
 
-    const hubActions = stylesCss.match(/\.chat-hub-hub-actions \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(hubActions).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+    const hubActions = stylesCss.match(/\.chat-hub-line-actions \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(hubActions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(stylesCss).toContain('.chat-hub-action-pending');
     expect(stylesCss).not.toContain('.chat-hub-disclosure-action .sl-icon');
     expect(stylesCss).toContain('.chat-hub-row-actions');

@@ -955,7 +955,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-hub-expand-button {');
     const hubTreeBlock = stylesCss.match(/\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(hubTreeBlock).not.toContain('border-left:');
-    expect(stylesCss).toContain('margin: 0 4px 4px 4px;');
+    expect(stylesCss).toContain('margin: 0 2px 5px;');
     expect(stylesCss).not.toContain('margin: 1px 0 3px 26px;');
   });
 
@@ -969,7 +969,11 @@ describe('web chat integration', () => {
     const footer = cssRuleBlock(stylesCss, '.chat-hub-footer');
     const versionAction = cssRuleBlock(stylesCss, '.chat-hub-row > .chat-hub-version-action');
     const detailToolbar = cssRuleBlock(stylesCss, '.chat-hub-detail-toolbar');
-    const npmRow = cssRuleBlock(stylesCss, '.chat-hub-npm-row');
+    const detailRows = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-npm-row')
+      .find(block => block.includes('height: 32px;')) ?? '';
+    const projectRow = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-project-row')
+      .find(block => block.includes('height: 32px;')) ?? '';
+    const sectionHeader = cssRuleBlock(stylesCss, '.chat-hub-section-header');
 
     expect(hubRow).toContain('height: 40px;');
     expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
@@ -980,7 +984,9 @@ describe('web chat integration', () => {
     expect(actions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(actions).not.toContain('border-radius: 7px;');
     expect(detailToolbar).toContain('height: 36px;');
-    expect(npmRow).toContain('height: 32px;');
+    expect(detailRows).toContain('height: 32px;');
+    expect(projectRow).toContain('height: 32px;');
+    expect(sectionHeader).toContain('height: 40px;');
     expect(versionAction).toContain('background: transparent;');
     expect(footer).not.toContain('position: sticky;');
     expect(footer).not.toContain('bottom: 0;');
@@ -1007,7 +1013,8 @@ describe('web chat integration', () => {
     const versionBlock = stylesCss.match(/\.chat-hub-footer-version-value \{[\s\S]*?\n\}/)?.[0] ?? '';
     const updateBlock = stylesCss.match(/\.chat-hub-footer-update-all \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(countBlock).toContain('border-radius: 999px;');
+    expect(countBlock).not.toContain('border-radius:');
+    expect(countBlock).not.toContain('background:');
     expect(countBlock).toContain('font-variant-numeric: tabular-nums;');
     expect(footerBlock).toContain('background: var(--surface-panel);');
     expect(footerBlock).not.toContain('position: sticky;');
