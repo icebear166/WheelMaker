@@ -2023,6 +2023,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('service.markProjectSession(targetProjectId, normalizedSessionId, markColor)');
     expect(mainTsx).toContain('markColor={session.markColor}');
     expect(mainTsx).toContain('marking={chatMarkingSessionKey === actionKey}');
+    expect(mainTsx).toContain('preferredWidth: 260');
+    expect(mainTsx).toContain('preferredMaxHeight: 320');
     expect(sessionMenuTsx).toContain('project-session-mark-picker');
     expect(sessionMenuTsx).toContain('name="ban"');
     expect(sessionListViewTsx).toContain('markColor={session.markColor}');

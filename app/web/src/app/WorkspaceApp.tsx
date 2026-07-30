@@ -7955,8 +7955,8 @@ export function App() {
         },
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
-        preferredWidth: 156,
-        preferredMaxHeight: 250,
+        preferredWidth: 260,
+        preferredMaxHeight: 320,
         align: 'start',
       }),
     });
