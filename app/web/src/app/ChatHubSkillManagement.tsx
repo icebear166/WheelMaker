@@ -221,7 +221,7 @@ export function ChatHubSkillScopeDetail({
                     />
                   ) : null}
                 </span>
-                <span className="chat-hub-skill-name">{skill.name}</span>
+                <span className="chat-hub-skill-name" title={skill.name}>{skill.name}</span>
                 {!managed ? (
                   <span className="chat-hub-skill-external" title="External skill">
                     <Icon name="link" />
@@ -232,30 +232,40 @@ export function ChatHubSkillScopeDetail({
                 <span
                   className={`chat-hub-skill-row-actions${selectionMode ? ' is-selection-mode' : ''}`}
                 >
-                  <button
-                    type="button"
-                    aria-label={`View ${skill.name} details`}
-                    disabled={loading || detailPending}
-                    onClick={() => actions.onDetail({...target, skillName: skill.name})}
-                  >
-                    <Icon name={detailPending ? 'loader' : 'info'} spin={detailPending} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Update ${skill.name}`}
-                    disabled={!managed || hubBusy}
-                    onClick={() => actions.onUpdate({...target, skills: [skill.name]})}
-                  >
-                    <Icon name={updatePending ? 'loader' : 'refreshCw'} spin={updatePending} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Uninstall ${skill.name}`}
-                    disabled={!managed || hubBusy}
-                    onClick={() => actions.onUninstall({...target, skillName: skill.name})}
-                  >
-                    <Icon name={uninstallPending ? 'loader' : 'trash'} spin={uninstallPending} />
-                  </button>
+                  <span className="chat-hub-action-slot">
+                    <button
+                      type="button"
+                      aria-label={`View ${skill.name} details`}
+                      disabled={loading || detailPending}
+                      onClick={() => actions.onDetail({...target, skillName: skill.name})}
+                    >
+                      <Icon name={detailPending ? 'loader' : 'info'} spin={detailPending} />
+                    </button>
+                  </span>
+                  <span className="chat-hub-action-slot">
+                    {managed ? (
+                      <button
+                        type="button"
+                        aria-label={`Update ${skill.name}`}
+                        disabled={hubBusy}
+                        onClick={() => actions.onUpdate({...target, skills: [skill.name]})}
+                      >
+                        <Icon name={updatePending ? 'loader' : 'refreshCw'} spin={updatePending} />
+                      </button>
+                    ) : null}
+                  </span>
+                  <span className="chat-hub-action-slot">
+                    {managed ? (
+                      <button
+                        type="button"
+                        aria-label={`Uninstall ${skill.name}`}
+                        disabled={hubBusy}
+                        onClick={() => actions.onUninstall({...target, skillName: skill.name})}
+                      >
+                        <Icon name={uninstallPending ? 'loader' : 'trash'} spin={uninstallPending} />
+                      </button>
+                    ) : null}
+                  </span>
                 </span>
               </div>
             );

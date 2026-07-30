@@ -141,6 +141,10 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
 test('detail toggling is mutually exclusive only within its row group', () => {
   expect(toggleChatHubDetailSections(['settings', 'npm', 'scan'], 'skills'))
     .toEqual(['settings', 'skills', 'scan']);
+  expect(toggleChatHubDetailSections(['settings', 'npm', 'scan'], 'mcp'))
+    .toEqual(['settings', 'mcp', 'scan']);
+  expect(toggleChatHubDetailSections(['settings', 'mcp', 'scan'], 'skills'))
+    .toEqual(['settings', 'skills', 'scan']);
   expect(toggleChatHubDetailSections(['settings', 'skills', 'scan'], 'visibility'))
     .toEqual(['settings', 'skills', 'visibility']);
   expect(toggleChatHubDetailSections(['settings', 'skills', 'scan'], 'projectSkills'))
@@ -206,7 +210,7 @@ test('settings accordion delegates toggling and detail ids open their detail', a
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'settings');
 });
 
-test('hub row uses one direct version action and whole-button NPM and Skills disclosures', async () => {
+test('hub row uses one direct version action and three icon-count Global disclosures', async () => {
   const {props, callbacks} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
@@ -242,10 +246,18 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
 
   const npm = renderer.root.findByProps({'aria-label': 'NPM details'});
   const hubActions = renderer.root.findByProps({className: 'chat-hub-line-actions chat-hub-hub-actions'});
+  const mcp = hubActions.findByProps({'aria-label': 'MCP details'});
   const skills = hubActions.findByProps({'aria-label': 'Skills details'});
-  expect(hubActions.findAllByType('button')).toEqual([npm, skills]);
+  expect(hubActions.findAllByType('button')).toEqual([npm, mcp, skills]);
+  const globalIcons = hubActions.findAll(
+    node => ['package', 'mcp', 'sparkles'].includes(node.props['data-icon-name']),
+  );
+  expect(globalIcons.map(node => node.props['data-icon-name'])).toEqual(['package', 'mcp', 'sparkles']);
+  expect(globalIcons.map(node => node.props.width)).toEqual([18, 18, 18]);
   expect(npm.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['2']);
+  expect(mcp.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['0']);
   expect(skills.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['3']);
+  expect(hubActions.findAllByProps({className: 'chat-hub-action-label'})).toHaveLength(0);
   expect(hubActions.findAll(
     node => node.props['data-icon-name'] === 'chevronRight'
       || node.props['data-icon-name'] === 'chevronDown',
@@ -253,8 +265,28 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
   act(() => npm.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'npm');
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
+  act(() => mcp.props.onClick());
+  expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'mcp');
   act(() => skills.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
+});
+
+test('MCP opens a local inline zero-state without dispatching an operation', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['mcp']},
+    opsByHubId: {'hub-a': opsView()},
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const detail = renderer.root.findByProps({className: 'chat-hub-detail chat-hub-mcp-detail'});
+  expect(detail.findByProps({className: 'chat-hub-detail-title'}).children).toEqual(['MCP servers']);
+  expect(detail.findByProps({className: 'chat-hub-detail-empty'}).children)
+    .toEqual(['No MCP servers configured.']);
+  expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
+  expect(callbacks.onRequestSkillUpdate).not.toHaveBeenCalled();
 });
 
 test('hub row disables unavailable actions', async () => {
@@ -308,7 +340,7 @@ test('version action is disabled while its update or restart request is pending'
     .toBe(true);
 });
 
-test('npm detail aligns adaptive Install or Update and Uninstall icon slots', async () => {
+test('npm detail uses single-line versions and hides unavailable actions in fixed slots', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['npm']},
     opsByHubId: {
@@ -318,6 +350,7 @@ test('npm detail aligns adaptive Install or Update and Uninstall icon slots', as
           packages: [
             {packageName: '@a/one', displayName: 'One', installedVersion: '1.0', latestVersion: '1.1', action: 'update', canUninstall: true, pending: false},
             {packageName: '@a/two', displayName: 'Two', installedVersion: '', latestVersion: '2.0', action: 'install', canUninstall: false, pending: false},
+            {packageName: '@a/three', displayName: 'Three', installedVersion: '3.0', latestVersion: '3.0', action: null, canUninstall: true, pending: false},
           ],
         },
       }),
@@ -329,25 +362,22 @@ test('npm detail aligns adaptive Install or Update and Uninstall icon slots', as
   });
 
   const rows = renderer.root.findAllByProps({className: 'chat-hub-npm-row'});
-  expect(rows).toHaveLength(2);
-  const installedVersions = rows[0].findByProps({className: 'chat-hub-npm-versions'});
-  const uninstalledVersions = rows[1].findByProps({className: 'chat-hub-npm-versions'});
-  expect(installedVersions.findByProps({className: 'chat-hub-npm-install-state installed'}).children)
-    .toEqual(['Installed']);
-  expect(installedVersions.findByProps({className: 'chat-hub-npm-version-copy'}).children)
-    .toEqual(['1.0 → 1.1']);
-  expect(uninstalledVersions.findByProps({className: 'chat-hub-npm-install-state not-installed'}).children)
-    .toEqual(['Not installed']);
-  const uninstalledVersionCopy = uninstalledVersions.findByProps({className: 'chat-hub-npm-version-copy'});
-  expect(uninstalledVersionCopy.children).toEqual(['Latest 2.0']);
-  expect(uninstalledVersionCopy.children.join('')).not.toContain('→');
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.findByProps({className: 'chat-hub-npm-version-copy'}).children))
+    .toEqual([['1.0 → 1.1'], ['Not installed · 2.0'], ['3.0']]);
+  expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-install-state installed'})))
+    .toHaveLength(0);
+  expect(rows.map(row => row.findAllByProps({className: 'chat-hub-action-slot'}).length))
+    .toEqual([2, 2, 2]);
   const firstActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
   const secondActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  const thirdActions = rows[2].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
   expect(firstActions).toHaveLength(2);
-  expect(secondActions).toHaveLength(2);
+  expect(secondActions).toHaveLength(1);
+  expect(thirdActions).toHaveLength(1);
   expect(firstActions.map(button => button.props['aria-label'])).toEqual(['Update One', 'Uninstall One']);
-  expect(secondActions.map(button => button.props['aria-label'])).toEqual(['Install Two', 'Uninstall Two']);
-  expect(secondActions[1].props.disabled).toBe(true);
+  expect(secondActions.map(button => button.props['aria-label'])).toEqual(['Install Two']);
+  expect(thirdActions.map(button => button.props['aria-label'])).toEqual(['Uninstall Three']);
   act(() => firstActions[0].props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'update', expect.objectContaining({packageName: '@a/one'}));
   act(() => secondActions[0].props.onClick());
@@ -409,9 +439,10 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
   });
 
   const externalActions = rows[1].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
-  expect(externalActions).toHaveLength(3);
+  expect(rows[1].findAllByProps({className: 'chat-hub-action-slot'})).toHaveLength(3);
+  expect(rows[1].findByProps({className: 'chat-hub-skill-name'}).props.title).toBe('external-skill');
+  expect(externalActions).toHaveLength(1);
   expect(externalActions[0].props.disabled).not.toBe(true);
-  expect(externalActions.slice(1).every(button => button.props.disabled)).toBe(true);
   const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
   act(() => updateAll.props.onClick());
   expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
@@ -519,10 +550,13 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   expect(projectButtons.map(button => (
     button.findAllByProps({className: 'chat-hub-action-label'}).length
   ))).toEqual([0, 0, 0]);
-  expect(projectButtons.map(button => button.findAll(
-    node => ['eye', 'search', 'sparkles'].includes(node.props['data-icon-name']),
-  ).map(node => node.props['data-icon-name'])))
-    .toEqual([['eye'], ['search'], ['sparkles']]);
+  const projectIcons = projectButtons.map(button => button.findAll(
+    node => ['eye', 'scanLine', 'sparkles'].includes(node.props['data-icon-name']),
+  ));
+  expect(projectIcons.map(icons => icons.map(node => node.props['data-icon-name'])))
+    .toEqual([['eye'], ['scanLine'], ['sparkles']]);
+  expect(projectIcons.map(icons => icons.map(node => node.props.width)))
+    .toEqual([[18], [18], [18]]);
   expect(projectButtons.map(button => button.findByProps({className: 'chat-hub-action-info'}).children))
     .toEqual([['1/2'], ['1/2'], ['3']]);
   expect(projectButtons.flatMap(button => button.findAll(
@@ -942,6 +976,7 @@ test('mobile renders the fullscreen page and back closes it', async () => {
   });
 
   expect(renderer.root.findByProps({className: 'chat-hub-page'})).toBeTruthy();
+  expect(renderer.root.findAllByProps({className: 'chat-hub-page-close'})).toHaveLength(0);
   act(() => renderer.root.findByProps({className: 'chat-hub-page-back'}).props.onClick());
   expect(callbacks.onClose).toHaveBeenCalled();
 });
@@ -980,8 +1015,7 @@ test('mobile renders a Skill detail as a child page and Back preserves the Hub p
   act(() => renderer.root.findByProps({className: 'chat-hub-page-back'}).props.onClick());
   expect(callbacks.onCloseSkillSurface).toHaveBeenCalled();
   expect(callbacks.onClose).not.toHaveBeenCalled();
-  act(() => renderer.root.findByProps({className: 'chat-hub-page-close'}).props.onClick());
-  expect(callbacks.onClose).toHaveBeenCalled();
+  expect(renderer.root.findAllByProps({className: 'chat-hub-page-close'})).toHaveLength(0);
 });
 
 test('desktop palette stays a flyout and forces popover no-overflow; mobile palette is inline', async () => {
