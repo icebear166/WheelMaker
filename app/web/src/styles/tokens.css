@@ -56,7 +56,7 @@
   --wm-safe-area-top: env(safe-area-inset-top, 0px);
   --wm-safe-area-right: env(safe-area-inset-right, 0px);
   --wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);
-  --mobile-floating-control-lane: 64px;
+  --mobile-floating-control-lane: 60px;
 }
 
 .theme-light {

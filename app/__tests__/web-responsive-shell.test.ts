@@ -229,14 +229,14 @@ describe('web responsive shell split', () => {
     expect(stylesCss).toContain('background: rgb(4 9 16 / 48%);');
   });
 
-  test('leaves a small inner gap between the mobile drawer and expanded floating navigation', () => {
+  test('keeps the mobile drawer flush with expanded floating navigation', () => {
     const projectRoot = path.join(__dirname, '..');
     const tokensCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'tokens.css'), 'utf8');
     const lane = Number(tokensCss.match(/--mobile-floating-control-lane:\s*(\d+)px;/)?.[1]);
 
     // The expanded card is 44px wide with 4px padding and 1px borders, while
     // the stack is inset 6px from the outside edge: 54px + 6px = 60px.
-    expect(lane).toBe(64);
-    expect(lane - 60).toBe(4);
+    expect(lane).toBe(60);
+    expect(lane - 60).toBe(0);
   });
 });

@@ -1682,7 +1682,7 @@ describe('web chat integration', () => {
     expect(backdropLayer).toBeLessThan(floatingLayer);
     expect(drawerLayer).toBeGreaterThan(floatingLayer);
     expect(mobileSettingsLayer).toBeGreaterThan(drawerLayer);
-    expect(stylesCss).toContain('--mobile-floating-control-lane: 64px;');
+    expect(stylesCss).toContain('--mobile-floating-control-lane: 60px;');
     expect(stylesCss).toMatch(
       /\.drawer-overlay \{[\s\S]*inset: 0;[\s\S]*z-index: 43;[\s\S]*\}/,
     );
