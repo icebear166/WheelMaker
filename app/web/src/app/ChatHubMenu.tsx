@@ -543,6 +543,7 @@ function ChatHubDisclosureButton({
   ariaLabel,
   info,
   icon,
+  updateAvailable = false,
   pending = false,
   expanded,
   onToggle,
@@ -551,6 +552,7 @@ function ChatHubDisclosureButton({
   ariaLabel?: string;
   info: string;
   icon: IconName;
+  updateAvailable?: boolean;
   pending?: boolean;
   expanded: boolean;
   onToggle: () => void;
@@ -566,6 +568,7 @@ function ChatHubDisclosureButton({
     >
       <Icon name={pending ? 'loader' : icon} size={18} spin={pending} />
       <span className="chat-hub-action-info">{info}</span>
+      {updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
     </button>
   );
 }
@@ -721,6 +724,7 @@ function ChatHubProjectSkillsDetail({
     [ops.skills.projects],
   );
   const [selectedProjectName, setSelectedProjectName] = React.useState('');
+  const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
   const selectedProject = projects.find(project => project.projectName === selectedProjectName)
     ?? projects.find(project => project.projectId === activeProjectId)
     ?? projects[0]
@@ -743,24 +747,58 @@ function ChatHubProjectSkillsDetail({
 
   return (
     <div className="chat-hub-detail chat-hub-project-skills-detail">
-      <div className="chat-hub-project-skill-picker" role="listbox" aria-label="Project">
-        {projects.map(project => {
-          const selected = project.projectName === selectedProject.projectName;
-          return (
-            <button
-              key={project.projectName}
-              type="button"
-              role="option"
-              aria-selected={selected}
-              className={`chat-hub-project-skill-option${selected ? ' selected' : ''}`}
-              data-project-name={project.projectName}
-              onClick={() => setSelectedProjectName(project.projectName)}
-            >
-              <span className="chat-hub-project-skill-name">{project.projectName}</span>
-              <span className="chat-hub-project-skill-count">{project.skills.length}</span>
-            </button>
-          );
-        })}
+      <div
+        className="chat-hub-project-skill-select"
+        onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setProjectPickerOpen(false);
+          }
+        }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            setProjectPickerOpen(false);
+          }
+        }}
+      >
+        <button
+          type="button"
+          className="chat-hub-project-skill-trigger"
+          aria-label={`Select project, ${selectedProject.projectName}`}
+          aria-haspopup="listbox"
+          aria-expanded={projectPickerOpen}
+          data-selected-project={selectedProject.projectName}
+          title={selectedProject.projectName}
+          onClick={() => setProjectPickerOpen(current => !current)}
+        >
+          <span className="chat-hub-project-skill-name">{selectedProject.projectName}</span>
+          <span className="chat-hub-project-skill-count">{selectedProject.skills.length}</span>
+          <Icon name={projectPickerOpen ? 'chevronUp' : 'chevronDown'} />
+        </button>
+        {projectPickerOpen ? (
+          <div className="chat-hub-project-skill-menu" role="listbox" aria-label="Project">
+            {projects.map(project => {
+              const selected = project.projectName === selectedProject.projectName;
+              return (
+                <button
+                  key={project.projectName}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`chat-hub-project-skill-option${selected ? ' selected' : ''}`}
+                  data-project-name={project.projectName}
+                  title={project.projectName}
+                  onClick={() => {
+                    setSelectedProjectName(project.projectName);
+                    setProjectPickerOpen(false);
+                  }}
+                >
+                  <span className="chat-hub-project-skill-name">{project.projectName}</span>
+                  <span className="chat-hub-project-skill-count">{project.skills.length}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
       <ChatHubSkillScopeDetail
         target={{
@@ -928,6 +966,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
             name={ops.wheelMaker.pending ? 'loader' : ops.wheelMaker.updateAvailable ? 'cloudDownload' : 'refreshCw'}
             spin={ops.wheelMaker.pending}
           />
+          {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
         </button>
         <Icon
           name={expanded ? 'chevronDown' : 'chevronRight'}
@@ -975,6 +1014,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 label="NPM"
                 info={`${ops.npm.outdatedCount}`}
                 icon="package"
+                updateAvailable={ops.npm.outdatedCount > 0}
                 pending={ops.npm.pending}
                 expanded={sectionOpen('npm')}
                 onToggle={() => toggleSection('npm')}

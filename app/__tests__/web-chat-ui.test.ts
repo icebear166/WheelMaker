@@ -1005,6 +1005,29 @@ describe('web chat integration', () => {
     expect(chevronBlock).toContain('justify-self: end;');
   });
 
+  test('keeps the Project Skills selector readable and update dots out of layout flow', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const selector = cssRuleBlock(stylesCss, '.chat-hub-project-skill-select');
+    const trigger = cssRuleBlock(stylesCss, '.chat-hub-project-skill-trigger');
+    const menu = cssRuleBlock(stylesCss, '.chat-hub-project-skill-menu');
+    const option = cssRuleBlock(stylesCss, '.chat-hub-project-skill-option');
+    const disclosure = cssRuleBlock(stylesCss, '.chat-hub-disclosure-action');
+    const updateDot = cssRuleBlock(stylesCss, '.chat-hub-update-dot');
+
+    expect(selector).toContain('position: relative;');
+    expect(trigger).toContain('width: 100%;');
+    expect(trigger).toContain('height: 32px;');
+    expect(menu).toContain('max-height: 192px;');
+    expect(menu).toContain('overflow-y: auto;');
+    expect(option).toContain('height: 32px;');
+    expect(stylesCss).not.toContain('.chat-hub-project-skill-picker {');
+    expect(disclosure).toContain('position: relative;');
+    expect(updateDot).toContain('position: absolute;');
+    expect(updateDot).toContain('background: var(--state-danger);');
+    expect(updateDot).toContain('pointer-events: none;');
+  });
+
   test('gives Hub counts and footer actions a clear visual hierarchy', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);

@@ -254,6 +254,10 @@ test('hub row uses one direct version action and three icon-count Global disclos
   );
   expect(globalIcons.map(node => node.props['data-icon-name'])).toEqual(['package', 'mcp', 'sparkles']);
   expect(globalIcons.map(node => node.props.width)).toEqual([18, 18, 18]);
+  expect(version.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
+  expect(npm.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
+  expect(mcp.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
+  expect(skills.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
   expect(npm.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['2']);
   expect(mcp.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['0']);
   expect(skills.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['3']);
@@ -313,6 +317,9 @@ test('hub row disables unavailable actions', async () => {
   const version = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
   expect(version.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.2']);
   expect(version.props.disabled).toBe(true);
+  expect(version.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
+  expect(renderer.root.findByProps({'aria-label': 'NPM details'})
+    .findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
   expect(renderer.root.findByProps({'aria-label': 'NPM details'}).props.disabled).not.toBe(true);
 });
 
@@ -607,6 +614,11 @@ test('Project Skills lists only online projects and keeps every action in the se
               online: false,
               skills: [{name: 'three', category: '', categoryKey: '', managed: true}],
             },
+            {
+              projectName: 'beta-project',
+              online: true,
+              skills: [{name: 'beta-skill', category: '', categoryKey: '', managed: true}],
+            },
           ],
         },
       }),
@@ -617,10 +629,14 @@ test('Project Skills lists only online projects and keeps every action in the se
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  expect(renderer.root.findAllByProps({role: 'option'}).map(option => option.props['data-project-name']))
+  const projectTrigger = renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'});
+  expect(projectTrigger.props['aria-expanded']).toBe(false);
+  expect(projectTrigger.props['data-selected-project']).toBe('alpha');
+  expect(projectTrigger.findByProps({className: 'chat-hub-project-skill-name'}).children)
     .toEqual(['alpha']);
-  expect(renderer.root.findByProps({className: 'chat-hub-project-skill-count'}).children)
+  expect(projectTrigger.findByProps({className: 'chat-hub-project-skill-count'}).children)
     .toEqual(['2']);
+  expect(renderer.root.findAllByProps({role: 'option'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({'data-project-name': 'offline'})).toHaveLength(0);
 
   act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
@@ -658,6 +674,23 @@ test('Project Skills lists only online projects and keeps every action in the se
     scope: 'project',
     projectName: 'alpha',
     skillNames: ['two'],
+  });
+
+  act(() => projectTrigger.props.onClick());
+  expect(renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'}).props['aria-expanded'])
+    .toBe(true);
+  expect(renderer.root.findAllByProps({role: 'option'}).map(option => option.props['data-project-name']))
+    .toEqual(['alpha', 'beta-project']);
+  act(() => renderer.root.findByProps({'data-project-name': 'beta-project'}).props.onClick());
+  const selectedBeta = renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'});
+  expect(selectedBeta.props['aria-expanded']).toBe(false);
+  expect(selectedBeta.props['data-selected-project']).toBe('beta-project');
+  expect(selectedBeta.props.title).toBe('beta-project');
+  act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
+  expect(callbacks.onRequestSkillInstall).toHaveBeenLastCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'beta-project',
   });
   expect(callbacks.onClose).not.toHaveBeenCalled();
 });
@@ -697,7 +730,8 @@ test('Project Skills defaults to the active chat project instead of the first pr
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  expect(renderer.root.findByProps({'data-project-name': 'zeta'}).props['aria-selected']).toBe(true);
+  expect(renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'})
+    .props['data-selected-project']).toBe('zeta');
   act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
   expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
     hubId: 'hub-a',

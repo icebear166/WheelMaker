@@ -22,9 +22,9 @@ Latest v1.3                                  Update all hubs
 ```
 
 - **Settings 行**：整行手风琴。展开内容是 Flicker Bridge 段（Off/V1/V2 是唯一生命周期与模式控件）和紧凑单行 API key 编辑器（状态图标 + 行内密码输入 + Set/Replace + Clear）。收缩摘要显示 Flicker `V1`/`V2` 或 `Off`，使用颜色点表达状态。
-- **Hub 标题行**：颜色点在名称前；版本按钮显示当前版本号与状态图标，无展开行为，有更新时执行 Update，已是最新版时执行 Restart，走 wheelmakerUpdate confirm 流程。版本按钮默认透明，仅 hover/focus/active 时出现背景。
+- **Hub 标题行**：颜色点在名称前；版本按钮显示当前版本号与状态图标，无展开行为，有更新时执行 Update，已是最新版时执行 Restart，走 wheelmakerUpdate confirm 流程。版本按钮默认透明，仅 hover/focus/active 时出现背景；存在新版本时显示不占布局空间的红色提示点。
 - **Global 行**：固定三个等宽入口，顺序为 NPM、MCP、Skills。入口都采用“图标 + 数量”，不显示文字标签和 disclosure chevron：
-  - NPM 使用 package 图标，数量沿用现有统计；展开逐包列表，批量 `Update all` 位于 detail 工具栏。
+  - NPM 使用 package 图标，数量沿用现有统计；存在可更新包时显示不占布局空间的红色提示点。展开逐包列表，批量 `Update all` 位于 detail 工具栏。
   - MCP 使用官方 MCP 图标，当前数量固定为 `0`；点击展开本地空态 `MCP servers` / `No MCP servers configured.`，不发起网络、API 或协议调用。
   - Skills 使用 sparkles 图标，只展示当前 Hub 的全局 Skills，不混入 Project Skills；批量 `Update all` 位于 detail 工具栏且只更新 Hub 全局 Skills。
 - **Projects 行**：固定三个等宽入口，顺序为 Visibility、Scan、Skills，同样只显示图标和数量：
@@ -57,7 +57,7 @@ Skills detail 复用现有 skill management 数据与动作，只读取当前 Hu
 
 ## Project Skills
 
-Project Skills 只存在于 Projects 行，不混入 Hub Skills。展开后顶部是固定 Project 选择器，默认选择第一个在线 Project，离线 Project 不显示；选择器选项带各自 Skill 数量。下方复用 Hub Skills 的 32px 单行扁平列表和管理动作，不为每个 Project 创建向下展开的分组。Project 范围的 Add Skill、逐项动作、批量卸载和 `Update all` 都只作用于当前选择的 Project。
+Project Skills 只存在于 Projects 行，不混入 Hub Skills。展开后顶部是单个全宽 Project 选择器，收起时显示当前 Project 的完整名称和 Skill 数量；打开后显示可滚动的在线 Project 列表，选择即切换并关闭列表，离线 Project 不显示。默认优先选择当前 Chat Project，否则选择第一个在线 Project。下方复用 Hub Skills 的 32px 单行扁平列表和管理动作，不为每个 Project 创建向下展开的分组。Project 范围的 Add Skill、逐项动作、批量卸载和 `Update all` 都只作用于当前选择的 Project。
 
 Hub 与 Project 的 Add Skill 均复用完整安装流程：source 输入、候选 Skill 选择/全选和确认。Marketplace 外链只放在安装界面，不占主列表工具栏。
 
