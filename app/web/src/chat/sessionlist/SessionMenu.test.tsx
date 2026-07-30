@@ -112,6 +112,14 @@ describe('SessionMenu', () => {
     expect(options[4].findByProps({'data-icon-name': 'ban'})).toBeTruthy();
   });
 
+  it('anchors the mark controls in a labeled row', async () => {
+    const {tree} = await renderMenu();
+    const picker = tree.root.findByProps({className: 'project-session-mark-picker'});
+
+    expect(picker.findByProps({className: 'project-session-mark-label'}).children.join('')).toBe('Mark');
+    expect(picker.findByProps({className: 'project-session-mark-options'})).toBeTruthy();
+  });
+
   it('routes a mark color and disables the whole palette while marking', async () => {
     const {tree, props} = await renderMenu();
     const stopPropagation = jest.fn();
