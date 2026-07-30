@@ -455,6 +455,7 @@ import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
   deriveNpmUpdatableTargets,
+  deriveOperationalHubIds,
   deriveRegistryHubIds,
   deriveWheelMakerHubStatus,
   fetchWheelMakerPublicMetadata,
@@ -3327,7 +3328,7 @@ export function App() {
 
   const [projects, setProjects] = useState<RegistryProject[]>([]);
   const [registryHubs, setRegistryHubs] = useState<RegistryHub[]>([]);
-  const registryHubIdsKey = JSON.stringify(deriveRegistryHubIds(registryHubs));
+  const registryHubIdsKey = JSON.stringify(deriveOperationalHubIds(registryHubs, projects));
   const registryHubIds = useMemo<string[]>(() => JSON.parse(registryHubIdsKey), [registryHubIdsKey]);
   const usageStore = useMemo(() => new UsageStore(), []);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});

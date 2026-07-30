@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 import {
+  deriveOperationalHubIds,
   deriveWheelMakerHubStatus,
   fetchWheelMakerPublicMetadata,
   fetchWheelMakerReleaseHistory,
@@ -15,6 +16,16 @@ import {
 } from '../web/src/settings/agentPackageUpdateView';
 import type {RegistryWheelMakerUpdateResponse} from '../web/src/registry/registryTypes';
 import {readWebStyles} from '../testHelpers/webStyles';
+
+test('includes Hubs discovered through online project reports in operation refreshes', () => {
+  expect(deriveOperationalHubIds(
+    [{hubId: 'snapshot-hub'}],
+    [
+      {hubId: 'reported-hub', online: true},
+      {hubId: 'offline-hub', online: false},
+    ],
+  )).toEqual(['reported-hub', 'snapshot-hub']);
+});
 
 test('renders installed and stable WheelMaker release versions', () => {
   const updateResponse: RegistryWheelMakerUpdateResponse = {
@@ -251,6 +262,9 @@ describe('agent package update settings UI source structure', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
+    expect(mainTsx).toContain(
+      'const registryHubIdsKey = JSON.stringify(deriveOperationalHubIds(registryHubs, projects));',
+    );
     const menuEffectStart = mainTsx.indexOf("if (!chatHubMenuOpen || !connected || registryHubIds.length === 0) {");
     const menuEffectEnd = mainTsx.indexOf('}, [chatHubMenuOpen, connected, refreshChatHubFlickerBridge, refreshChatHubConfig, registryHubIds]);', menuEffectStart);
     expect(menuEffectStart).toBeGreaterThanOrEqual(0);

@@ -2,6 +2,7 @@ import type {
   RegistryHub,
   RegistryNpmPackage,
   RegistryNpmPackageStatus,
+  RegistryProject,
   RegistryWheelMakerPublishStatus,
   RegistryWheelMakerInstalledRelease,
   RegistryWheelMakerStableRelease,
@@ -67,17 +68,33 @@ export type NpmPackageUpdateTarget = {
   latestVersion: string;
 };
 
+function compareHubIds(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
 export function deriveRegistryHubIds(hubs: RegistryHub[]): string[] {
   const hubIds = new Set<string>();
   hubs.forEach(hub => {
     const hubId = (hub.hubId || '').trim();
     if (hubId) hubIds.add(hubId);
   });
-  return Array.from(hubIds).sort((a, b) => {
-    if (a < b) return -1;
-    if (a > b) return 1;
-    return 0;
+  return Array.from(hubIds).sort(compareHubIds);
+}
+
+export function deriveOperationalHubIds(
+  hubs: RegistryHub[],
+  projects: Array<Pick<RegistryProject, 'hubId' | 'online'>>,
+): string[] {
+  const hubIds = new Set(deriveRegistryHubIds(hubs));
+  projects.forEach(project => {
+    const hubId = (project.hubId || '').trim();
+    if (project.online === true && hubId) {
+      hubIds.add(hubId);
+    }
   });
+  return Array.from(hubIds).sort(compareHubIds);
 }
 
 export function packageStatusLabel(status: RegistryNpmPackageStatus | string): string {
