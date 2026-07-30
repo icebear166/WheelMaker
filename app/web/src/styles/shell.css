@@ -42,6 +42,58 @@
   pointer-events: none;
 }
 
+.app-retry-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 241;
+  width: max-content;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px 6px 12px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--danger, #df6674) 45%, var(--border-subtle));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-canvas));
+  color: var(--text-primary);
+  box-shadow: 0 12px 28px color-mix(in srgb, #000 22%, transparent);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.app-retry-toast-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-retry-toast button {
+  appearance: none;
+  flex: 0 0 auto;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.app-retry-toast button:hover,
+.app-retry-toast button:focus-visible {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
 .desktop-window-controls {
   position: fixed;
   top: 0;

@@ -172,6 +172,7 @@ import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
 import {Icon} from '../common/Icon';
+import {RetryToast} from '../common/RetryToast';
 import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
@@ -797,6 +798,13 @@ type SkillDetailCacheEntry = {
   detail: RegistrySkillDetail | null;
 };
 type SkillSurfaceOwner = 'settings' | 'hub';
+type SkillConfirmedTarget = Extract<
+  ConfirmTarget,
+  {kind: 'skillInstall' | 'skillUninstall' | 'skillBatchUninstall' | 'skillUpdate'}
+>;
+type SkillRetryTarget =
+  | {kind: 'refresh'; hubId: string}
+  | {kind: 'action'; target: SkillConfirmedTarget};
 type ChatComposerDraft = {
   text: string;
   tokens: ChatComposerToken[];
@@ -3071,6 +3079,12 @@ export function App() {
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState('');
   const [skillsPendingKey, setSkillsPendingKey] = useState('');
+  const [skillRetryNotice, setSkillRetryNotice] = useState<{
+    message: string;
+    retry: SkillRetryTarget;
+  } | null>(null);
+  const skillActionByHubIdRef = useRef(new Map<string, SkillConfirmedTarget>());
+  const seenSkillOperationRef = useRef(new Map<string, string>());
   const skillOperationPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const skillOperationPollHubIdsRef = useRef<Set<string>>(new Set());
   const refreshSkillManagementHubRef = useRef<((hubId: string) => Promise<void>) | null>(null);
@@ -13369,6 +13383,46 @@ export function App() {
     }, 1000);
   }, []);
 
+  const observeSkillOperation = useCallback((
+    hubId: string,
+    operation: RegistrySkillCommandResponse['operation'],
+  ) => {
+    if (!operation || operation.running) {
+      return;
+    }
+    const operationKey = [
+      operation.action || '',
+      operation.startedAt || '',
+      operation.finishedAt || '',
+      operation.status || '',
+    ].join(':');
+    if (seenSkillOperationRef.current.get(hubId) === operationKey) {
+      return;
+    }
+    seenSkillOperationRef.current.set(hubId, operationKey);
+    if (operation.status === 'succeeded') {
+      skillActionByHubIdRef.current.delete(hubId);
+      setSkillRetryNotice(current => {
+        if (!current) return null;
+        const noticeHubId = current.retry.kind === 'action'
+          ? current.retry.target.hubId
+          : current.retry.hubId;
+        return noticeHubId === hubId ? null : current;
+      });
+      setToastMessage('Skill operation completed.');
+      return;
+    }
+    if (operation.status === 'failed') {
+      const target = skillActionByHubIdRef.current.get(hubId);
+      setSkillRetryNotice({
+        message: operation.errorSummary || operation.message || 'Skill operation failed.',
+        retry: target
+          ? {kind: 'action', target}
+          : {kind: 'refresh', hubId},
+      });
+    }
+  }, []);
+
   const refreshSkillManagementHub = useCallback(async (hubId: string) => {
     setSkillHubs(prev => ({
       ...prev,
@@ -13389,8 +13443,14 @@ export function App() {
           error: result.ok ? '' : skillCommandErrorMessage(result),
         },
       }));
+      observeSkillOperation(hubId, result.operation);
       if (result.operation?.running) {
         scheduleSkillOperationPoll(hubId);
+      } else if (!result.ok && !result.operation) {
+        setSkillRetryNotice({
+          message: skillCommandErrorMessage(result),
+          retry: {kind: 'refresh', hubId},
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -13402,8 +13462,12 @@ export function App() {
           error: message,
         },
       }));
+      setSkillRetryNotice({
+        message: message || 'Skills scan failed.',
+        retry: {kind: 'refresh', hubId},
+      });
     }
-  }, [scheduleSkillOperationPoll]);
+  }, [observeSkillOperation, scheduleSkillOperationPoll]);
 
   const refreshSkillManagement = useCallback(async (hubIds: string[]) => {
     clearSkillOperationPollTimer();
@@ -13440,8 +13504,14 @@ export function App() {
               data: result,
             },
           }));
+          observeSkillOperation(hubId, result.operation);
           if (result.operation?.running) {
             runningHubIds.add(hubId);
+          } else if (!result.ok && !result.operation) {
+            setSkillRetryNotice({
+              message: skillCommandErrorMessage(result),
+              retry: {kind: 'refresh', hubId},
+            });
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -13454,6 +13524,10 @@ export function App() {
               data: prev[hubId]?.data ?? null,
             },
           }));
+          setSkillRetryNotice({
+            message: message || 'Skills scan failed.',
+            retry: {kind: 'refresh', hubId},
+          });
         }
       }));
       if (runningHubIds.size > 0) {
@@ -13465,7 +13539,7 @@ export function App() {
     } finally {
       setSkillsLoading(false);
     }
-  }, [clearSkillOperationPollTimer, scheduleSkillOperationPoll]);
+  }, [clearSkillOperationPollTimer, observeSkillOperation, scheduleSkillOperationPoll]);
 
   refreshSkillManagementHubRef.current = refreshSkillManagementHub;
 
@@ -13671,7 +13745,7 @@ export function App() {
   }, []);
 
   const handleSkillConfirmedAction = useCallback(async (
-    target: Extract<ConfirmTarget, {kind: 'skillInstall' | 'skillUninstall' | 'skillBatchUninstall' | 'skillUpdate'}>,
+    target: SkillConfirmedTarget,
   ) => {
     const pendingKey = skillActionPendingKey({
       hubId: target.hubId,
@@ -13684,6 +13758,8 @@ export function App() {
           : undefined,
       action: target.kind,
     });
+    skillActionByHubIdRef.current.set(target.hubId, target);
+    setSkillRetryNotice(null);
     setConfirmError('');
     setSkillsPendingKey(pendingKey);
     try {
@@ -13723,23 +13799,60 @@ export function App() {
       if (failed) {
         throw new Error(skillCommandErrorMessage(failed));
       }
+      const terminalOperation = results
+        .map(result => result.operation)
+        .find(operation => operation && !operation.running);
+      const completedImmediately = results.every(
+        result => result.accepted !== true && result.operation?.running !== true,
+      );
       setConfirmTarget(null);
       setConfirmError('');
       if (target.kind === 'skillInstall') {
+        setSkillInstallOwner(null);
         setSkillInstallTarget(null);
         setSkillSourceCandidates([]);
         setSkillSourceSelectedNames([]);
       }
       await refreshSkillManagementHub(target.hubId);
+      if (terminalOperation) {
+        observeSkillOperation(target.hubId, terminalOperation);
+      } else if (completedImmediately) {
+        skillActionByHubIdRef.current.delete(target.hubId);
+        setToastMessage('Skill operation completed.');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setConfirmError(message);
-      setSkillsError(message);
-      setError(message);
+      setConfirmTarget(null);
+      setConfirmError('');
+      setSkillRetryNotice({
+        message,
+        retry: {kind: 'action', target},
+      });
     } finally {
       setSkillsPendingKey('');
     }
-  }, [refreshSkillManagementHub]);
+  }, [observeSkillOperation, refreshSkillManagementHub]);
+
+  const retrySkillNotice = useCallback(() => {
+    const retry = skillRetryNotice?.retry;
+    if (!retry) {
+      return;
+    }
+    setSkillRetryNotice(null);
+    if (retry.kind === 'refresh') {
+      refreshSkillManagementHubRef.current?.(retry.hubId).catch(() => undefined);
+      return;
+    }
+    handleSkillConfirmedAction(retry.target).catch(() => undefined);
+  }, [handleSkillConfirmedAction, skillRetryNotice]);
+
+  const dismissSkillRetryNotice = useCallback(() => {
+    const retry = skillRetryNotice?.retry;
+    if (retry?.kind === 'action') {
+      skillActionByHubIdRef.current.delete(retry.target.hubId);
+    }
+    setSkillRetryNotice(null);
+  }, [skillRetryNotice]);
 
   const requestAgentPackageAction = useCallback((
     action: 'install' | 'update' | 'uninstall' | 'reinstall',
@@ -21275,6 +21388,13 @@ export function App() {
           onComplete={completeMarkdownImageExport}
           onRenderError={failMarkdownImageExport}
           onShareError={failMarkdownImageShare}
+        />
+      ) : null}
+      {skillRetryNotice ? (
+        <RetryToast
+          message={skillRetryNotice.message}
+          onRetry={retrySkillNotice}
+          onDismiss={dismissSkillRetryNotice}
         />
       ) : null}
       {toastMessage ? (

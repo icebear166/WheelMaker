@@ -13,6 +13,9 @@ const contentPath = path.join(root, 'web/src/settings/SkillManagementContent.tsx
 const contentTsx = fs.existsSync(contentPath)
   ? fs.readFileSync(contentPath, 'utf8').replace(/\r\n/g, '\n')
   : '';
+const chatHubSkillTsx = fs
+  .readFileSync(path.join(root, 'web/src/app/ChatHubSkillManagement.tsx'), 'utf8')
+  .replace(/\r\n/g, '\n');
 const skillsDetailSource = `${mainTsx}\n${detailTsx}\n${contentTsx}`;
 const stylesCss = readWebStyles(root);
 
@@ -154,6 +157,14 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain('skills: target.skills,');
     expect(mainTsx).toContain('refreshSkillManagementHubRef.current?.(hubId)');
     expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
+  });
+
+  test('keeps Skill action feedback outside list layout and replayable', () => {
+    expect(mainTsx).toContain('<RetryToast');
+    expect(mainTsx).toContain("setToastMessage('Skill operation completed.')");
+    expect(mainTsx).toContain("retry: {kind: 'refresh', hubId}");
+    expect(chatHubSkillTsx).not.toContain('agent-package-task');
+    expect(chatHubSkillTsx).not.toContain('skillOperationStatusLabel');
   });
 
   test('separates Skills scanning state from empty skill state', () => {
