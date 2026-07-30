@@ -249,9 +249,11 @@ test('hub row uses one direct version action and three icon-count Global disclos
   const mcp = hubActions.findByProps({'aria-label': 'MCP details'});
   const skills = hubActions.findByProps({'aria-label': 'Skills details'});
   expect(hubActions.findAllByType('button')).toEqual([npm, mcp, skills]);
-  expect(hubActions.findAll(
+  const globalIcons = hubActions.findAll(
     node => ['package', 'mcp', 'sparkles'].includes(node.props['data-icon-name']),
-  ).map(node => node.props['data-icon-name'])).toEqual(['package', 'mcp', 'sparkles']);
+  );
+  expect(globalIcons.map(node => node.props['data-icon-name'])).toEqual(['package', 'mcp', 'sparkles']);
+  expect(globalIcons.map(node => node.props.width)).toEqual([18, 18, 18]);
   expect(npm.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['2']);
   expect(mcp.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['0']);
   expect(skills.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['3']);
@@ -548,10 +550,13 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   expect(projectButtons.map(button => (
     button.findAllByProps({className: 'chat-hub-action-label'}).length
   ))).toEqual([0, 0, 0]);
-  expect(projectButtons.map(button => button.findAll(
+  const projectIcons = projectButtons.map(button => button.findAll(
     node => ['eye', 'scanLine', 'sparkles'].includes(node.props['data-icon-name']),
-  ).map(node => node.props['data-icon-name'])))
+  ));
+  expect(projectIcons.map(icons => icons.map(node => node.props['data-icon-name'])))
     .toEqual([['eye'], ['scanLine'], ['sparkles']]);
+  expect(projectIcons.map(icons => icons.map(node => node.props.width)))
+    .toEqual([[18], [18], [18]]);
   expect(projectButtons.map(button => button.findByProps({className: 'chat-hub-action-info'}).children))
     .toEqual([['1/2'], ['1/2'], ['3']]);
   expect(projectButtons.flatMap(button => button.findAll(

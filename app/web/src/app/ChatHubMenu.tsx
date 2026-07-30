@@ -564,7 +564,7 @@ function ChatHubDisclosureButton({
       title={label}
       onClick={onToggle}
     >
-      <Icon name={pending ? 'loader' : icon} spin={pending} />
+      <Icon name={pending ? 'loader' : icon} size={18} spin={pending} />
       <span className="chat-hub-action-info">{info}</span>
     </button>
   );
