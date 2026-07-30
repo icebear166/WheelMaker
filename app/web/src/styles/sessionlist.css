@@ -443,10 +443,14 @@
 .project-session-mark-picker {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
   min-height: 40px;
   padding: 4px 8px;
+}
+.project-session-mark-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .project-session-mark-label {
   flex: 0 0 auto;
@@ -459,7 +463,6 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
   /* Neutral fallback inherited by the clear control; color classes on the
      option buttons override it, so it must not live on the button itself. */
   --session-mark-color: var(--text-tertiary);

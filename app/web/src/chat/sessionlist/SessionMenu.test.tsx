@@ -115,9 +115,10 @@ describe('SessionMenu', () => {
   it('anchors the mark controls in a labeled row', async () => {
     const {tree} = await renderMenu();
     const picker = tree.root.findByProps({className: 'project-session-mark-picker'});
+    const content = picker.findByProps({className: 'project-session-mark-content'});
 
-    expect(picker.findByProps({className: 'project-session-mark-label'}).children.join('')).toBe('Mark');
-    expect(picker.findByProps({className: 'project-session-mark-options'})).toBeTruthy();
+    expect(content.findByProps({className: 'project-session-mark-label'}).children.join('')).toBe('Mark');
+    expect(content.findByProps({className: 'project-session-mark-options'})).toBeTruthy();
   });
 
   it('routes a mark color and disables the whole palette while marking', async () => {
