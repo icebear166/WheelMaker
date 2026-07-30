@@ -47,6 +47,7 @@ const ChatHubSkillCompanion = React.lazy(
 export type ChatHubDetailId =
   | 'settings'
   | 'npm'
+  | 'mcp'
   | 'skills'
   | 'visibility'
   | 'scan'
@@ -54,7 +55,7 @@ export type ChatHubDetailId =
 
 function chatHubDetailGroup(section: ChatHubDetailId): 'settings' | 'hub' | 'projects' {
   if (section === 'settings') return 'settings';
-  if (section === 'npm' || section === 'skills') return 'hub';
+  if (section === 'npm' || section === 'mcp' || section === 'skills') return 'hub';
   return 'projects';
 }
 
@@ -542,16 +543,14 @@ function ChatHubDisclosureButton({
   ariaLabel,
   info,
   icon,
-  hideLabel = false,
   pending = false,
   expanded,
   onToggle,
 }: {
   label: string;
   ariaLabel?: string;
-  info?: string;
-  icon?: IconName;
-  hideLabel?: boolean;
+  info: string;
+  icon: IconName;
   pending?: boolean;
   expanded: boolean;
   onToggle: () => void;
@@ -565,10 +564,8 @@ function ChatHubDisclosureButton({
       title={label}
       onClick={onToggle}
     >
-      {icon ? <Icon name={pending ? 'loader' : icon} spin={pending} /> : null}
-      {!hideLabel ? <span className="chat-hub-action-label">{label}</span> : null}
-      {info ? <span className="chat-hub-action-info">{info}</span> : null}
-      {pending && !icon ? <Icon name="loader" className="chat-hub-action-pending" spin /> : null}
+      <Icon name={pending ? 'loader' : icon} spin={pending} />
+      <span className="chat-hub-action-info">{info}</span>
     </button>
   );
 }
@@ -686,6 +683,17 @@ function ChatHubSkillsDetail({
         pendingKey={ops.skills.pendingKey}
         actions={actions}
       />
+    </div>
+  );
+}
+
+function ChatHubMcpDetail(): React.JSX.Element {
+  return (
+    <div className="chat-hub-detail chat-hub-mcp-detail">
+      <div className="chat-hub-detail-toolbar">
+        <span className="chat-hub-detail-title">MCP servers</span>
+      </div>
+      <div className="chat-hub-detail-empty">No MCP servers configured.</div>
     </div>
   );
 }
@@ -958,14 +966,23 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
             <span className="chat-hub-line-actions chat-hub-hub-actions">
               <ChatHubDisclosureButton
                 label="NPM"
-                info={ops.npm.outdatedCount > 0 ? `${ops.npm.outdatedCount}` : undefined}
+                info={`${ops.npm.outdatedCount}`}
+                icon="package"
                 pending={ops.npm.pending}
                 expanded={sectionOpen('npm')}
                 onToggle={() => toggleSection('npm')}
               />
               <ChatHubDisclosureButton
+                label="MCP"
+                info="0"
+                icon="mcp"
+                expanded={sectionOpen('mcp')}
+                onToggle={() => toggleSection('mcp')}
+              />
+              <ChatHubDisclosureButton
                 label="Skills"
-                info={ops.skills.hubItems.length > 0 ? `${ops.skills.hubItems.length}` : undefined}
+                info={`${ops.skills.hubItems.length}`}
+                icon="sparkles"
                 pending={ops.skills.loading || ops.skills.operationRunning}
                 expanded={sectionOpen('skills')}
                 onToggle={() => toggleSection('skills')}
@@ -975,6 +992,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           {sectionOpen('npm') ? (
             <ChatHubNpmDetail hubId={hubId} ops={ops} onUpdateAll={onRequestNpmUpdate} onPackageAction={onPackageAction} />
           ) : null}
+          {sectionOpen('mcp') ? <ChatHubMcpDetail /> : null}
           {sectionOpen('skills') ? (
             <ChatHubSkillsDetail
               hubId={hubId}
@@ -990,15 +1008,13 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 label="Visibility"
                 info={`${visibleProjectCount}/${treeItem.projects.length}`}
                 icon="eye"
-                hideLabel
                 expanded={sectionOpen('visibility')}
                 onToggle={() => toggleSection('visibility')}
               />
               <ChatHubDisclosureButton
                 label="Scan"
                 info={`${ops.index.indexedCount}/${ops.index.totalCount}`}
-                icon="search"
-                hideLabel
+                icon="scanLine"
                 pending={ops.index.pending}
                 expanded={sectionOpen('scan')}
                 onToggle={() => toggleSection('scan')}
@@ -1008,7 +1024,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 ariaLabel="Project Skills details"
                 info={`${projectSkillTotal(ops.skills.projects)}`}
                 icon="sparkles"
-                hideLabel
                 pending={ops.skills.loading || ops.skills.operationRunning}
                 expanded={sectionOpen('projectSkills')}
                 onToggle={() => toggleSection('projectSkills')}
@@ -1152,9 +1167,6 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
                     : skillSurface.target.skillName
                   : 'Hubs'}
               </span>
-              <button type="button" className="chat-hub-page-close" aria-label="Close" onClick={onClose}>
-                <Icon name="x" />
-              </button>
             </div>
             <div className={`chat-hub-page-body${skillSurface ? ' skill-child' : ''}`}>
               {skillSurface ? (
