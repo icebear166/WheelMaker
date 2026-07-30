@@ -6644,7 +6644,8 @@ export function App() {
     setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
   const renderChatHubSummary = () => {
-    const hubCount = registryHubs.length;
+    const hubIds = chatHubTreeItems.map(item => item.hubId);
+    const hubCount = hubIds.length;
     const projectCount = projects.length;
     const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;
     const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;
@@ -6655,7 +6656,7 @@ export function App() {
         exiting={chatHubMenuExiting}
         summaryLabel={chatHubSummaryLabel}
         projectLabel={chatHubProjectLabel}
-        hubIds={registryHubs.map(hub => hub.hubId)}
+        hubIds={hubIds}
         treeItems={chatHubTreeItems}
         popoverStyle={chatHubPopoverStyle}
         menuRef={chatHubMenuRef}

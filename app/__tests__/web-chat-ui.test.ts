@@ -840,7 +840,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const chatHubMenuRef = useRef<HTMLDivElement | null>(null);');
     expect(mainTsx).toContain('const renderChatHubSummary = () => {');
     expect(mainTsx).not.toContain('const renderChatHubSummary = useCallback((mobile = false) => {');
-    expect(mainTsx).toContain('const hubCount = registryHubs.length;');
+    expect(mainTsx).toContain('const hubIds = chatHubTreeItems.map(item => item.hubId);');
+    expect(mainTsx).toContain('const hubCount = hubIds.length;');
+    expect(mainTsx).not.toContain('const hubCount = registryHubs.length;');
     expect(mainTsx).toContain('const projectCount = projects.length;');
     expect(mainTsx).toContain('if (!chatHubMenuOpen) return;');
     expect(mainTsx).toContain("if (event.key === 'Escape') {");
@@ -855,6 +857,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('<span className="chat-hub-summary-count">{hubCount}</span>');
     expect(mainTsx).toContain('summaryLabel={chatHubSummaryLabel}');
     expect(mainTsx).toContain('projectLabel={chatHubProjectLabel}');
+    expect(mainTsx).toContain('hubIds={hubIds}');
     expect(hubMenuTsx).toContain("aria-label={`Show connected hubs, ${summaryLabel}, ${projectLabel}`}");
     expect(hubMenuTsx).toContain('aria-expanded={open}');
     expect(hubMenuTsx).toContain('<span className="chat-hub-summary-label">{summaryLabel}</span>');
