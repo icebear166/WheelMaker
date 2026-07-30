@@ -756,10 +756,10 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   if (!text) {
     return null;
   }
-  const optionReplyParts = splitChatOptionReplyText(text);
+  const selectableOptionReplies = optionReplies.length > 0;
+  const optionReplyParts = selectableOptionReplies ? splitChatOptionReplyText(text) : [];
   const confirmationReplyParts = splitChatConfirmationReplyText(text);
   const hasOptionReplyParts = optionReplyParts.some(part => part.type === 'option');
-  const selectableOptionReplies = optionReplies.length > 0;
   const selectableConfirmationReply = optionReplies.length === 0 ? confirmationReply : null;
   const hasConfirmationReplyParts =
     !!selectableConfirmationReply &&
@@ -793,22 +793,16 @@ export const ChatTurnView = React.memo(function ChatTurnView({
           );
           return (
             <div key={`option:${part.reply.label}:${index}`} className="chat-option-reply-line">
-              {selectableOptionReplies ? (
-                <button
-                  type="button"
-                  className="chat-option-reply-inline-button"
-                  onClick={() => onSelectOptionReply?.(part.reply.label)}
-                  disabled={optionRepliesDisabled}
-                  title={part.reply.text}
-                  aria-label={`Reply ${part.reply.label}: ${part.reply.text}`}
-                >
-                  {optionContent}
-                </button>
-              ) : (
-                <div className="chat-option-reply-static" title={part.reply.text}>
-                  {optionContent}
-                </div>
-              )}
+              <button
+                type="button"
+                className="chat-option-reply-inline-button"
+                onClick={() => onSelectOptionReply?.(part.reply.label)}
+                disabled={optionRepliesDisabled}
+                title={part.reply.text}
+                aria-label={`Reply ${part.reply.label}: ${part.reply.text}`}
+              >
+                {optionContent}
+              </button>
             </div>
           );
         })

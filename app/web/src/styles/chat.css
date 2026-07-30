@@ -1,7 +1,5 @@
 .chat-main-message .chat-option-reply-inline-button,
 .chat-main-message .chat-option-reply-inline-button *,
-.chat-main-message .chat-option-reply-static,
-.chat-main-message .chat-option-reply-static *,
 .chat-main-message .chat-confirmation-reply-action,
 .chat-main-message .chat-confirmation-reply-action * {
   -webkit-touch-callout: none;
@@ -4302,10 +4300,9 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-option-reply-inline-button,
-.chat-option-reply-static,
 .chat-confirmation-reply-action {
   max-width: min(100%, 560px);
-  border: 1px solid transparent;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, var(--border-subtle));
   border-radius: 7px;
   background: transparent;
   color: inherit;
@@ -4343,15 +4340,10 @@ button.chat-hub-skill-name:disabled {
 
 .chat-option-reply-inline-button:disabled,
 .chat-confirmation-reply-action:disabled {
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
   background: transparent;
   cursor: default;
   opacity: 0.58;
-}
-
-.chat-option-reply-static {
-  background: transparent;
-  color: inherit;
 }
 
 .chat-confirmation-reply-line {

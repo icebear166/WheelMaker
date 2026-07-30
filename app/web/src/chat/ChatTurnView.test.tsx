@@ -99,6 +99,22 @@ describe('ChatTurnView session fork', () => {
   });
 });
 
+describe('ChatTurnView option replies', () => {
+  const optionText = [
+    'Pick one:',
+    '',
+    'A. Apply the change',
+    'B. Keep the current behavior',
+  ].join('\n');
+
+  it('renders historical option-looking text as ordinary markdown', async () => {
+    const tree = await renderTurn(message('agent_message_chunk', {text: optionText}));
+
+    expect(tree.root.findAllByProps({className: 'chat-option-reply-static'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({className: 'chat-option-reply-inline-button'})).toHaveLength(0);
+  });
+});
+
 describe('ChatTurnView Changed Files interactions', () => {
   it('keeps left-click diff behavior and forwards only file-row context menus', async () => {
     const onOpenPromptArtifact = jest.fn();
