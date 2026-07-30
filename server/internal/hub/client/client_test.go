@@ -1378,6 +1378,29 @@ func TestNewSession_RequiresNonEmptyACPID(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreUsesSynchronousNormal(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+	sqliteStore, ok := store.(*sqliteStore)
+	if !ok {
+		t.Fatalf("store type = %T, want *sqliteStore", store)
+	}
+	var synchronous int
+	if err := sqliteStore.db.QueryRowContext(ctx, `PRAGMA synchronous`).Scan(&synchronous); err != nil {
+		t.Fatalf("query PRAGMA synchronous: %v", err)
+	}
+	// 0=OFF, 1=NORMAL, 2=FULL. WAL + synchronous=NORMAL keeps commits durable
+	// across normal crashes while skipping the per-commit fsync; only the last
+	// transaction may be lost on power loss (no database corruption).
+	if synchronous != 1 {
+		t.Fatalf("PRAGMA synchronous = %d, want 1 (NORMAL)", synchronous)
+	}
+}
+
 func TestSQLiteStoreMigratesCodexAppIdentityOnce(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "client.sqlite3")
