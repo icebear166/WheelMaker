@@ -312,13 +312,19 @@ describe('UsageFeatureSurface', () => {
     });
 
     const container = detailView!.root.findByProps({'data-usage-reset-credits': true});
-    expect(renderedText(container)).toContain('Reset credits · 2');
+    expect(renderedText(container.findByProps({className: 'usage-reset-credits-label'}))).toBe('Reset credits');
+    expect(renderedText(container.findByProps({className: 'usage-reset-credits-count'}))).toBe('2 available');
     const rows = container.findAllByProps({className: 'usage-reset-credit-row'});
     expect(rows).toHaveLength(2);
-    const texts = rows.map(renderedText);
+    expect(rows.map(row => renderedText(row.findByProps({className: 'usage-reset-credit-label'}))))
+      .toEqual(['Expires', 'Expires']);
+    const timestamps = rows.map(row => row.findByType('time'));
+    const texts = timestamps.map(renderedText);
     for (const text of texts) {
       expect(text).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     }
+    expect(timestamps.map(timestamp => timestamp.props.dateTime))
+      .toEqual(['2026-07-31T00:00:00Z', '2026-08-01T00:00:00Z']);
     // ascending by expiry (same local zone => lexicographic order is chronological)
     expect(texts[0] < texts[1]).toBe(true);
 
