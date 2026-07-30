@@ -1048,7 +1048,6 @@ func (c *SkillsCommand) ensureSkillsNode(ctx context.Context) string {
 	if c.skillsNodeChecked {
 		return c.skillsNodeError
 	}
-	c.skillsNodeChecked = true
 
 	result := c.runner.Run(ctx, "", "node", "--version")
 	if skillsCommandFailed(result) {
@@ -1066,8 +1065,11 @@ func (c *SkillsCommand) ensureSkillsNode(ctx context.Context) string {
 		if version == "" {
 			version = "unknown version"
 		}
-		c.skillsNodeError = fmt.Sprintf("Skills require Node.js %d+; found %s. Update Node.js and restart WheelMaker.", skillsMinimumNodeMajor, version)
+		c.skillsNodeError = fmt.Sprintf("Skills require Node.js %d+; found %s. Update Node.js and retry.", skillsMinimumNodeMajor, version)
+		return c.skillsNodeError
 	}
+	c.skillsNodeChecked = true
+	c.skillsNodeError = ""
 	return c.skillsNodeError
 }
 

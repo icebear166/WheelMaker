@@ -159,10 +159,11 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
   });
 
-  test('keeps Skill action feedback outside list layout and replayable', () => {
+  test('keeps user-triggered Skill action feedback replayable without background retry popups', () => {
     expect(mainTsx).toContain('<RetryToast');
     expect(mainTsx).toContain("setToastMessage('Skill operation completed.')");
-    expect(mainTsx).toContain("retry: {kind: 'refresh', hubId}");
+    expect(mainTsx).toContain('setSkillRetryNotice(createSkillRetryNotice(message, target))');
+    expect(mainTsx).not.toContain("retry: {kind: 'refresh', hubId}");
     expect(chatHubSkillTsx).not.toContain('agent-package-task');
     expect(chatHubSkillTsx).not.toContain('skillOperationStatusLabel');
   });

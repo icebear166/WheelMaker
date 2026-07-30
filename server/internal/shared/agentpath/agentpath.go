@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +32,8 @@ type Resolver struct {
 	LookPath func(file string) (string, error)
 	// NpmPrefix returns npm's global prefix (`npm prefix -g`).
 	NpmPrefix func() (string, error)
+	// NodeVersion returns the version reported by a node executable.
+	NodeVersion func(path string) (string, error)
 }
 
 // DefaultResolver returns a Resolver bound to the current process environment.
@@ -44,6 +47,7 @@ func DefaultResolver() *Resolver {
 		EnvPath:         os.Getenv("PATH"),
 		LookPath:        exec.LookPath,
 		NpmPrefix:       defaultNpmGlobalPrefix,
+		NodeVersion:     defaultNodeVersion,
 	}
 }
 
@@ -53,6 +57,85 @@ func defaultNpmGlobalPrefix() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func defaultNodeVersion(path string) (string, error) {
+	out, err := exec.Command(path, "--version").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// CompatibleNodeDir returns the first PATH or platform fallback directory
+// containing a Node.js executable whose major version meets the minimum.
+func (r *Resolver) CompatibleNodeDir(minMajor int) string {
+	if r == nil || r.NodeVersion == nil {
+		return ""
+	}
+	goos := r.GOOS
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	executable := "node"
+	if goos == "windows" {
+		executable = "node.exe"
+	}
+	for _, dir := range r.nodeCandidateDirs(goos) {
+		version, err := r.NodeVersion(filepath.Join(dir, executable))
+		if err == nil && nodeMajor(version) >= minMajor {
+			return dir
+		}
+	}
+	return ""
+}
+
+func (r *Resolver) nodeCandidateDirs(goos string) []string {
+	dirs := splitPath(r.EnvPath, pathListSeparator(goos))
+	switch goos {
+	case "windows":
+		if r.HomeDir != "" {
+			dirs = append(dirs, filepath.Join(r.HomeDir, "scoop", "apps", "nodejs", "current"))
+		}
+		if r.ProgramFilesDir != "" {
+			dirs = append(dirs, filepath.Join(r.ProgramFilesDir, "nodejs"))
+		}
+	default:
+		dirs = append(dirs, "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin")
+	}
+	return uniqueDirs(dirs, goos)
+}
+
+func uniqueDirs(dirs []string, goos string) []string {
+	seen := make(map[string]bool, len(dirs))
+	result := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		key := filepath.Clean(dir)
+		if goos == "windows" {
+			key = strings.ToLower(key)
+		}
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		result = append(result, dir)
+	}
+	return result
+}
+
+func nodeMajor(version string) int {
+	majorText := strings.TrimPrefix(strings.TrimSpace(version), "v")
+	if dot := strings.IndexByte(majorText, '.'); dot >= 0 {
+		majorText = majorText[:dot]
+	}
+	major, err := strconv.Atoi(majorText)
+	if err != nil {
+		return -1
+	}
+	return major
 }
 
 // DiscoverExtraDirs returns the PATH entries the current environment is missing,
@@ -159,6 +242,39 @@ func AppendToPath(dirs []string) {
 		parts = append(parts, cur)
 	}
 	parts = append(parts, dirs...)
+	_ = os.Setenv("PATH", strings.Join(parts, string(os.PathListSeparator)))
+}
+
+// PrependToPath moves dirs to the front of PATH while removing duplicates.
+func PrependToPath(dirs []string) {
+	if len(dirs) == 0 {
+		return
+	}
+	key := func(path string) string {
+		cleaned := filepath.Clean(path)
+		if runtime.GOOS == "windows" {
+			return strings.ToLower(cleaned)
+		}
+		return cleaned
+	}
+	preferred := make(map[string]bool, len(dirs))
+	parts := make([]string, 0, len(dirs)+1)
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		dirKey := key(dir)
+		if preferred[dirKey] {
+			continue
+		}
+		preferred[dirKey] = true
+		parts = append(parts, dir)
+	}
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if !preferred[key(dir)] {
+			parts = append(parts, dir)
+		}
+	}
 	_ = os.Setenv("PATH", strings.Join(parts, string(os.PathListSeparator)))
 }
 

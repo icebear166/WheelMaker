@@ -1222,6 +1222,24 @@ func TestSkillsCommandRejectsOldNodeBeforeRunningCLI(t *testing.T) {
 	}
 }
 
+func TestSkillsCommandRechecksNodeAfterFailedCompatibilityCheck(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	runner.set("", "node", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "v12.22.9\n"})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+
+	if got := cmd.ensureSkillsNode(context.Background()); !strings.Contains(got, "found v12.22.9") {
+		t.Fatalf("first ensureSkillsNode()=%q, want old Node error", got)
+	}
+
+	runner.set("", "node", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "v22.20.0\n"})
+	if got := cmd.ensureSkillsNode(context.Background()); got != "" {
+		t.Fatalf("second ensureSkillsNode()=%q, want recovered compatibility check", got)
+	}
+	if got := countSkillsCalls(runner, "", "node", "--version"); got != 2 {
+		t.Fatalf("node version calls=%d, want 2", got)
+	}
+}
+
 func TestSkillsCommandReplacesMismatchedGlobalCLIWithPinnedFallback(t *testing.T) {
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "1.5.19\n"})

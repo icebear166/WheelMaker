@@ -157,6 +157,10 @@ func runHubWorker(stateDir string, localDev bool) error {
 	// the updater from a service context whose PATH lacks npm's global bin —
 	// without this, globally-installed CLIs like codex vanish after an update.
 	// Must run before hub.New/Start so the factory sees the augmented PATH.
+	if nodeDir := agentpath.DefaultResolver().CompatibleNodeDir(22); nodeDir != "" {
+		agentpath.PrependToPath([]string{nodeDir})
+		hubScopedLogger.Info("compatible node path prioritized dir=%s", nodeDir)
+	}
 	if extra := agentpath.DiscoverExtraDirs(); len(extra) > 0 {
 		agentpath.AppendToPath(extra)
 		hubScopedLogger.Info("agent path augmented dirs=%v", extra)

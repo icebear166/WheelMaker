@@ -174,6 +174,7 @@ import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
 import {Icon} from '../common/Icon';
 import {RetryToast} from '../common/RetryToast';
+import {createSkillRetryNotice, type SkillRetryNotice} from './skillRetryNotice';
 import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
@@ -803,9 +804,6 @@ type SkillConfirmedTarget = Extract<
   ConfirmTarget,
   {kind: 'skillInstall' | 'skillUninstall' | 'skillBatchUninstall' | 'skillUpdate'}
 >;
-type SkillRetryTarget =
-  | {kind: 'refresh'; hubId: string}
-  | {kind: 'action'; target: SkillConfirmedTarget};
 type ChatComposerDraft = {
   text: string;
   tokens: ChatComposerToken[];
@@ -3080,10 +3078,8 @@ export function App() {
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState('');
   const [skillsPendingKey, setSkillsPendingKey] = useState('');
-  const [skillRetryNotice, setSkillRetryNotice] = useState<{
-    message: string;
-    retry: SkillRetryTarget;
-  } | null>(null);
+  const [skillRetryNotice, setSkillRetryNotice] =
+    useState<SkillRetryNotice<SkillConfirmedTarget> | null>(null);
   const skillActionByHubIdRef = useRef(new Map<string, SkillConfirmedTarget>());
   const seenSkillOperationRef = useRef(new Map<string, string>());
   const skillOperationPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -13412,9 +13408,7 @@ export function App() {
       skillActionByHubIdRef.current.delete(hubId);
       setSkillRetryNotice(current => {
         if (!current) return null;
-        const noticeHubId = current.retry.kind === 'action'
-          ? current.retry.target.hubId
-          : current.retry.hubId;
+        const noticeHubId = current.retry.target.hubId;
         return noticeHubId === hubId ? null : current;
       });
       setToastMessage('Skill operation completed.');
@@ -13422,12 +13416,13 @@ export function App() {
     }
     if (operation.status === 'failed') {
       const target = skillActionByHubIdRef.current.get(hubId);
-      setSkillRetryNotice({
-        message: operation.errorSummary || operation.message || 'Skill operation failed.',
-        retry: target
-          ? {kind: 'action', target}
-          : {kind: 'refresh', hubId},
-      });
+      const notice = createSkillRetryNotice(
+        operation.errorSummary || operation.message || 'Skill operation failed.',
+        target,
+      );
+      if (notice) {
+        setSkillRetryNotice(notice);
+      }
     }
   }, []);
 
@@ -13454,11 +13449,6 @@ export function App() {
       observeSkillOperation(hubId, result.operation);
       if (result.operation?.running) {
         scheduleSkillOperationPoll(hubId);
-      } else if (!result.ok && !result.operation) {
-        setSkillRetryNotice({
-          message: skillCommandErrorMessage(result),
-          retry: {kind: 'refresh', hubId},
-        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -13470,10 +13460,6 @@ export function App() {
           error: message,
         },
       }));
-      setSkillRetryNotice({
-        message: message || 'Skills scan failed.',
-        retry: {kind: 'refresh', hubId},
-      });
     }
   }, [observeSkillOperation, scheduleSkillOperationPoll]);
 
@@ -13515,11 +13501,6 @@ export function App() {
           observeSkillOperation(hubId, result.operation);
           if (result.operation?.running) {
             runningHubIds.add(hubId);
-          } else if (!result.ok && !result.operation) {
-            setSkillRetryNotice({
-              message: skillCommandErrorMessage(result),
-              retry: {kind: 'refresh', hubId},
-            });
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -13532,10 +13513,6 @@ export function App() {
               data: prev[hubId]?.data ?? null,
             },
           }));
-          setSkillRetryNotice({
-            message: message || 'Skills scan failed.',
-            retry: {kind: 'refresh', hubId},
-          });
         }
       }));
       if (runningHubIds.size > 0) {
@@ -13832,10 +13809,7 @@ export function App() {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmTarget(null);
       setConfirmError('');
-      setSkillRetryNotice({
-        message,
-        retry: {kind: 'action', target},
-      });
+      setSkillRetryNotice(createSkillRetryNotice(message, target));
     } finally {
       setSkillsPendingKey('');
     }
@@ -13847,16 +13821,12 @@ export function App() {
       return;
     }
     setSkillRetryNotice(null);
-    if (retry.kind === 'refresh') {
-      refreshSkillManagementHubRef.current?.(retry.hubId).catch(() => undefined);
-      return;
-    }
     handleSkillConfirmedAction(retry.target).catch(() => undefined);
   }, [handleSkillConfirmedAction, skillRetryNotice]);
 
   const dismissSkillRetryNotice = useCallback(() => {
     const retry = skillRetryNotice?.retry;
-    if (retry?.kind === 'action') {
+    if (retry) {
       skillActionByHubIdRef.current.delete(retry.target.hubId);
     }
     setSkillRetryNotice(null);

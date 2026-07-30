@@ -118,3 +118,67 @@ func TestAppendToPath_NoopOnEmpty(t *testing.T) {
 		t.Fatalf("AppendToPath(nil) mutated PATH: %q", got)
 	}
 }
+
+func TestCompatibleNodeDirSkipsOldNodeEarlierOnPath(t *testing.T) {
+	oldBin := filepath.Join("C:", "old-node")
+	currentBin := filepath.Join("C:", "current-node")
+	r := &Resolver{
+		GOOS:    "windows",
+		EnvPath: oldBin + ";" + currentBin,
+		NodeVersion: func(path string) (string, error) {
+			switch filepath.Clean(path) {
+			case filepath.Join(oldBin, "node.exe"):
+				return "v12.22.9", nil
+			case filepath.Join(currentBin, "node.exe"):
+				return "v22.20.0", nil
+			default:
+				return "", errNotFound
+			}
+		},
+	}
+
+	if got := r.CompatibleNodeDir(22); got != currentBin {
+		t.Fatalf("CompatibleNodeDir(22)=%q want %q", got, currentBin)
+	}
+}
+
+func TestCompatibleNodeDirFindsScoopNodeMissingFromPath(t *testing.T) {
+	home := filepath.Join("C:", "Users", "me")
+	oldBin := filepath.Join("C:", "old-node")
+	scoopBin := filepath.Join(home, "scoop", "apps", "nodejs", "current")
+	r := &Resolver{
+		GOOS:    "windows",
+		HomeDir: home,
+		EnvPath: oldBin,
+		NodeVersion: func(path string) (string, error) {
+			switch filepath.Clean(path) {
+			case filepath.Join(oldBin, "node.exe"):
+				return "v12.22.9", nil
+			case filepath.Join(scoopBin, "node.exe"):
+				return "v22.20.0", nil
+			default:
+				return "", errNotFound
+			}
+		},
+	}
+
+	if got := r.CompatibleNodeDir(22); got != scoopBin {
+		t.Fatalf("CompatibleNodeDir(22)=%q want Scoop dir %q", got, scoopBin)
+	}
+}
+
+func TestPrependToPathMovesExistingDirectoryToFront(t *testing.T) {
+	orig := os.Getenv("PATH")
+	t.Cleanup(func() { _ = os.Setenv("PATH", orig) })
+
+	sep := string(os.PathListSeparator)
+	oldBin := filepath.Join(string(os.PathSeparator), "old-node")
+	currentBin := filepath.Join(string(os.PathSeparator), "current-node")
+	_ = os.Setenv("PATH", oldBin+sep+currentBin)
+
+	PrependToPath([]string{currentBin})
+
+	if got, want := os.Getenv("PATH"), currentBin+sep+oldBin; got != want {
+		t.Fatalf("PATH=%q want %q", got, want)
+	}
+}
