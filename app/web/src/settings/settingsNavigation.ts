@@ -1,19 +1,15 @@
-export type SettingsPeerDetail =
-  | 'skills'
-  | 'portRelay';
+export type SettingsPeerDetail = 'portRelay';
 
 export type SettingsChildDetail =
   | 'connectionStatus'
   | 'database'
   | 'debugLogs'
-  | 'deviceSessions'
-  | 'skillDetail';
+  | 'deviceSessions';
 
 export type SettingsDetailId = SettingsPeerDetail | SettingsChildDetail;
 export type SettingsPageKind = 'root' | 'peer' | 'child';
 
 export const SETTINGS_PEER_DETAILS: readonly SettingsPeerDetail[] = [
-  'skills',
   'portRelay',
 ];
 
@@ -22,7 +18,6 @@ export const SETTINGS_CHILD_DETAILS: readonly SettingsChildDetail[] = [
   'database',
   'debugLogs',
   'deviceSessions',
-  'skillDetail',
 ];
 
 export function isSettingsPeerDetail(
@@ -62,10 +57,8 @@ export function mobileSettingsShortcutIndex(
   detail: SettingsDetailId | null | undefined,
 ): number {
   switch (detail) {
-    case 'skills':
-      return 1;
     case 'portRelay':
-      return 2;
+      return 1;
     default:
       return 0;
   }

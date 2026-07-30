@@ -36,7 +36,6 @@ export type MobileSettingsScreenProps = {
   children: ReactNode;
   shortcutBar: ReactNode;
   onBack: () => void;
-  sidePanel?: ReactNode;
 };
 
 export type SettingsScreenProps = MobileSettingsScreenProps & {
@@ -53,12 +52,6 @@ type MobileSettingsShortcut = {
 
 export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
   {
-    detail: 'skills',
-    title: 'Skills',
-    label: 'Skills',
-    icon: 'package',
-  },
-  {
     detail: 'portRelay',
     title: 'Port Relay',
     label: 'Port Relay',
@@ -68,8 +61,6 @@ export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
 
 export function settingsDetailTitle(detail: SettingsDetailId): string {
   switch (detail) {
-    case 'skills':
-      return 'Skills';
     case 'database':
       return 'Database';
     case 'portRelay':
@@ -80,8 +71,6 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
       return 'Devices';
     case 'debugLogs':
       return 'Logs';
-    case 'skillDetail':
-      return 'Skill Detail';
   }
 }
 
@@ -174,14 +163,12 @@ export function SettingsScreen({
   children,
   shortcutBar,
   onBack,
-  sidePanel,
   className,
   onBackdropClick,
 }: SettingsScreenProps) {
   const screenClassName = className
     ? `settings-workbench-screen mobile-settings-screen ${className}`
     : 'settings-workbench-screen mobile-settings-screen';
-  const effectiveScreenClassName = sidePanel ? `${screenClassName} has-settings-side-panel` : screenClassName;
   const handleBackdropClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || !onBackdropClick) {
       return;
@@ -191,7 +178,7 @@ export function SettingsScreen({
 
   return (
     <div
-      className={effectiveScreenClassName}
+      className={screenClassName}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -217,7 +204,6 @@ export function SettingsScreen({
           </div>
           {shortcutBar}
         </div>
-        {sidePanel}
       </div>
     </div>
   );

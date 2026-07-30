@@ -2,14 +2,7 @@ import type {
   RegistryHub,
   RegistrySkillProjectSnapshot,
   RegistrySkillScope,
-  RegistrySkillSnapshot,
 } from '../registry/registryTypes';
-
-export interface SkillCategoryGroup {
-  category: string;
-  categoryKey: string;
-  skills: RegistrySkillSnapshot[];
-}
 
 export type SkillScopeTarget = {
   hubId: string;
@@ -144,27 +137,6 @@ function extractSkillNamesFromTokens(tokens: string[]): string[] {
   return Array.from(new Set(names.map(name => name.trim()).filter(Boolean)));
 }
 
-export function groupSkillsByCategory(skills: RegistrySkillSnapshot[]): SkillCategoryGroup[] {
-  const groups = new Map<string, SkillCategoryGroup>();
-  skills.forEach(skill => {
-    const categoryKey = (skill.categoryKey || '').trim() || 'general';
-    const category = (skill.category || '').trim() || 'General';
-    const existing = groups.get(categoryKey) ?? {category, categoryKey, skills: []};
-    existing.skills.push(skill);
-    groups.set(categoryKey, existing);
-  });
-  return Array.from(groups.values())
-    .map(group => ({
-      ...group,
-      skills: [...group.skills].sort((left, right) => left.name.localeCompare(right.name)),
-    }))
-    .sort((left, right) => {
-      if (left.categoryKey === 'general') return 1;
-      if (right.categoryKey === 'general') return -1;
-      return left.category.localeCompare(right.category);
-    });
-}
-
 export function sortSkillProjects(projects: RegistrySkillProjectSnapshot[]): RegistrySkillProjectSnapshot[] {
   return [...projects].sort((left, right) => {
     if (left.online !== right.online) return left.online ? -1 : 1;
@@ -206,19 +178,6 @@ export function sameSkillScopeTarget(
     && left.scope === right.scope
     && (left.projectName || '') === (right.projectName || ''),
   );
-}
-
-export function skillOperationStatusLabel(status: string): string {
-  switch (status) {
-    case 'running':
-      return 'Running';
-    case 'succeeded':
-      return 'Succeeded';
-    case 'failed':
-      return 'Failed';
-    default:
-      return status || 'Unknown';
-  }
 }
 
 export function skillScopeLabel(input: {scope: RegistrySkillScope; hubId: string; projectName?: string}): string {

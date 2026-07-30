@@ -22,21 +22,20 @@ function readStyles(): string {
 describe('mobile settings system back', () => {
   test('marks and keys mobile settings history states', () => {
     const root = createMobileSettingsHistoryState(null);
-    const skills = createMobileSettingsHistoryState('skills');
+    const portRelay = createMobileSettingsHistoryState('portRelay');
 
     expect(isMobileSettingsHistoryState(root)).toBe(true);
-    expect(isMobileSettingsHistoryState(skills)).toBe(true);
+    expect(isMobileSettingsHistoryState(portRelay)).toBe(true);
     expect(isMobileSettingsHistoryState({})).toBe(false);
     expect(mobileSettingsHistoryKey(null)).toBe('mobile-settings:root');
-    expect(mobileSettingsHistoryKey('skills')).toBe('mobile-settings:skills');
-    expect(mobileSettingsHistoryKey('skillDetail')).toBe('mobile-settings:skillDetail');
+    expect(mobileSettingsHistoryKey('portRelay')).toBe('mobile-settings:portRelay');
   });
 
   test('resolves native back actions for settings layers', () => {
     expect(resolveMobileSettingsPopAction({
       nextState: createMobileSettingsHistoryState(null),
       settingsOpen: true,
-      settingsDetailView: 'skills',
+      settingsDetailView: 'portRelay',
     })).toBe('close-settings');
 
     expect(resolveMobileSettingsPopAction({
@@ -78,33 +77,33 @@ describe('mobile settings system back', () => {
 
     expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKey(null),
-      nextDetail: 'skills',
+      nextDetail: 'portRelay',
     })).toBe('push');
 
     expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKey(null),
-      nextDetail: 'skills',
+      nextDetail: 'portRelay',
       replaceRootWithDetail: true,
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('skills'),
+      currentKey: mobileSettingsHistoryKey('connectionStatus'),
       nextDetail: 'portRelay',
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('skills'),
+      currentKey: mobileSettingsHistoryKey('portRelay'),
       nextDetail: null,
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('skills'),
-      nextDetail: 'skills',
+      currentKey: mobileSettingsHistoryKey('portRelay'),
+      nextDetail: 'portRelay',
     })).toBe('none');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('skills'),
-      nextDetail: 'skillDetail',
+      currentKey: mobileSettingsHistoryKey('portRelay'),
+      nextDetail: 'connectionStatus',
     })).toBe('push');
   });
 

@@ -16,43 +16,36 @@ import {
 
 describe('settings navigation model', () => {
   test('classifies settings pages into root, peers, and children', () => {
-    expect(SETTINGS_PEER_DETAILS).toEqual(['skills', 'portRelay']);
+    expect(SETTINGS_PEER_DETAILS).toEqual(['portRelay']);
     expect(SETTINGS_CHILD_DETAILS).toEqual([
       'connectionStatus',
       'database',
       'debugLogs',
       'deviceSessions',
-      'skillDetail',
     ]);
 
     expect(settingsPageKind(null)).toBe('root');
-    expect(settingsPageKind('skills')).toBe('peer');
     expect(settingsPageKind('connectionStatus')).toBe('child');
     expect(settingsPageKind('database')).toBe('child');
-    expect(settingsPageKind('skillDetail')).toBe('child');
 
     expect(isSettingsPeerDetail('portRelay')).toBe(true);
     expect(isSettingsPeerDetail('database')).toBe(false);
     expect(isSettingsChildDetail('debugLogs')).toBe(true);
-    expect(isSettingsChildDetail('skills')).toBe(false);
   });
 
   test('resolves mobile shortcut indexes for root and peer pages', () => {
     expect(mobileSettingsShortcutIndex(null)).toBe(0);
-    expect(mobileSettingsShortcutIndex('skills')).toBe(1);
-    expect(mobileSettingsShortcutIndex('portRelay')).toBe(2);
+    expect(mobileSettingsShortcutIndex('portRelay')).toBe(1);
     expect(mobileSettingsShortcutIndex('database')).toBe(0);
   });
 
   test('keeps settings surface labels and mobile shortcut order together', () => {
     expect(MOBILE_SETTINGS_SHORTCUTS.map(shortcut => shortcut.detail)).toEqual(SETTINGS_PEER_DETAILS);
-    expect(settingsDetailTitle('skills')).toBe('Skills');
     expect(settingsDetailTitle('portRelay')).toBe('Port Relay');
     expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
     expect(settingsDetailTitle('deviceSessions')).toBe('Devices');
-    expect(settingsDetailTitle('skillDetail')).toBe('Skill Detail');
   });
 
   test('keeps settings content stable while exposing workbench layout hooks', () => {
@@ -85,7 +78,9 @@ describe('settings navigation model', () => {
     ).replace(/\r\n/g, '\n');
 
     expect(css).toMatch(/\.desktop-settings-screen \.settings-workbench-panel \{[\s\S]*width: min\(920px, calc\(100vw - 56px\)\);[\s\S]*\}/);
-    expect(css).toMatch(/\.desktop-settings-screen\.has-settings-side-panel \.settings-screen-panel-row \{[\s\S]*width: min\(1440px, calc\(100vw - 56px\)\);[\s\S]*grid-template-columns: minmax\(0, 920px\) minmax\(360px, 500px\);[\s\S]*\}/);
+    expect(css).not.toContain('.desktop-settings-screen.has-settings-side-panel');
+    expect(css).not.toContain(".mobile-settings-shortcut-bar[data-active-index='2']");
+    expect(css).not.toContain(".mobile-settings-shortcut-bar[data-active-index='3']");
     expect(css).toMatch(/@media \(min-width: 860px\) \{[\s\S]*\.desktop-settings-screen \.settings-list \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*\}/);
     expect(css).toMatch(/\.desktop-settings-screen \.settings-section-chat \{[\s\S]*grid-column: 2;[\s\S]*grid-row: 1 \/ span 2;[\s\S]*\}/);
     expect(css).toMatch(/\.desktop-settings-screen \.settings-section-debug \{[\s\S]*grid-column: 2;[\s\S]*grid-row: 3;[\s\S]*\}/);
@@ -136,8 +131,7 @@ describe('settings navigation model', () => {
       'utf8',
     ).replace(/\r\n/g, '\n');
     expect(mobileSettingsShortcutIndex(null)).toBe(0);
-    expect(mobileSettingsShortcutIndex('skills')).toBe(1);
-    expect(mobileSettingsShortcutIndex('portRelay')).toBe(2);
+    expect(mobileSettingsShortcutIndex('portRelay')).toBe(1);
     expect(css).toContain('.settings-workbench-screen {');
     expect(css).not.toContain('/* workspace-ui-targeted-evolution: settings */');
     expect(css).toContain('.settings-danger-row');

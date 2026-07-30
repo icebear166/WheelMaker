@@ -473,15 +473,10 @@ import {
   type WheelMakerPublicMetadata,
 } from '../settings/agentPackageUpdateView';
 import {
-  groupSkillsByCategory,
-  isSkillActionPendingForHub,
   parseSkillSourceInput,
   sameSkillScopeTarget,
   skillActionPendingKey,
   skillDetailCacheKey,
-  skillOperationStatusLabel,
-  skillScopeLabel,
-  sortSkillProjects,
   type SkillBatchUninstallTarget,
   type SkillDetailTarget,
   type SkillInstallTarget,
@@ -706,12 +701,6 @@ const PortRelaySettingsDetail = React.lazy(() => loadSettingsBundle().then(modul
 const ReleasePublishSettings = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.ReleasePublishSettings,
 })));
-const SkillsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
-  default: module.SkillsSettingsDetail,
-})));
-const SkillDetailPanel = React.lazy(() => loadSettingsBundle().then(module => ({
-  default: module.SkillDetailPanel,
-})));
 const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SettingsRootContent,
 })));
@@ -801,7 +790,6 @@ type SkillDetailCacheEntry = {
   error: string;
   detail: RegistrySkillDetail | null;
 };
-type SkillSurfaceOwner = 'settings' | 'hub';
 type SkillConfirmedTarget = Extract<
   ConfirmTarget,
   {kind: 'skillInstall' | 'skillUninstall' | 'skillBatchUninstall' | 'skillUpdate'}
@@ -3087,8 +3075,6 @@ export function App() {
   const agentPackageScanPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const projectIndexPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [skillHubs, setSkillHubs] = useState<Record<string, SkillHubView>>({});
-  const [skillsLoading, setSkillsLoading] = useState(false);
-  const [skillsError, setSkillsError] = useState('');
   const [skillsPendingKey, setSkillsPendingKey] = useState('');
   const [skillRetryNotice, setSkillRetryNotice] =
     useState<SkillRetryNotice<SkillConfirmedTarget> | null>(null);
@@ -3098,29 +3084,25 @@ export function App() {
   const skillOperationPollHubIdsRef = useRef<Set<string>>(new Set());
   const refreshSkillManagementHubRef = useRef<((hubId: string) => Promise<void>) | null>(null);
   const [skillInstallTarget, setSkillInstallTarget] = useState<SkillInstallTarget | null>(null);
-  const [skillInstallOwner, setSkillInstallOwner] = useState<SkillSurfaceOwner | null>(null);
   const [skillSourceInput, setSkillSourceInput] = useState('');
   const [skillSourceCandidates, setSkillSourceCandidates] = useState<RegistrySkillSourceCandidate[]>([]);
   const [skillSourceSelectedNames, setSkillSourceSelectedNames] = useState<string[]>([]);
   const [skillSourceLoading, setSkillSourceLoading] = useState(false);
   const [skillSourceError, setSkillSourceError] = useState('');
   const [skillDetailTarget, setSkillDetailTarget] = useState<SkillDetailTarget | null>(null);
-  const [skillDetailOwner, setSkillDetailOwner] = useState<SkillSurfaceOwner | null>(null);
   const [skillDetailCache, setSkillDetailCache] = useState<Record<string, SkillDetailCacheEntry>>({});
   const chatHubSkillSurface = useMemo<ChatHubSkillSurface | null>(() => {
-    if (skillInstallOwner === 'hub' && skillInstallTarget) {
+    if (skillInstallTarget) {
       return {kind: 'install', target: skillInstallTarget};
     }
-    if (skillDetailOwner === 'hub' && skillDetailTarget) {
+    if (skillDetailTarget) {
       return {kind: 'detail', target: skillDetailTarget};
     }
     return null;
-  }, [skillDetailOwner, skillDetailTarget, skillInstallOwner, skillInstallTarget]);
+  }, [skillDetailTarget, skillInstallTarget]);
   const chatHubSkillSurfaceOpen = chatHubSkillSurface !== null;
   const closeChatHubSkillSurface = useCallback(() => {
-    setSkillInstallOwner(null);
     setSkillInstallTarget(null);
-    setSkillDetailOwner(null);
     setSkillDetailTarget(null);
   }, []);
   const [portRelaySnapshot, setPortRelaySnapshot] = useState<RegistryPortRelaySnapshot>(DEFAULT_PORT_RELAY_SNAPSHOT);
@@ -6727,8 +6709,8 @@ export function App() {
         onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
         onPackageAction={handleChatHubPackageAction}
-        onRequestSkillInstall={target => requestSkillInstall(target, 'hub')}
-        onRequestSkillDetail={target => requestSkillDetail(target, 'hub')}
+        onRequestSkillInstall={requestSkillInstall}
+        onRequestSkillDetail={requestSkillDetail}
         onRequestSkillUpdate={requestSkillUpdate}
         onRequestSkillUninstall={requestSkillUninstall}
         onRequestSkillBatchUninstall={requestSkillBatchUninstall}
@@ -7306,9 +7288,6 @@ export function App() {
       return;
     }
     setSidebarSettingsOpen(true);
-    if (detail === 'skills') {
-      setSkillsError('');
-    }
     if (detail === 'portRelay') {
       setPortRelayError('');
     }
@@ -13484,89 +13463,14 @@ export function App() {
     }
   }, [observeSkillOperation, scheduleSkillOperationPoll]);
 
-  const refreshSkillManagement = useCallback(async (hubIds: string[]) => {
-    clearSkillOperationPollTimer();
-    setSkillsLoading(true);
-    setSkillsError('');
-    try {
-      if (hubIds.length === 0) {
-        setSkillHubs({});
-        setSkillsError('No hubs available.');
-        return;
-      }
-      setSkillHubs(prev => {
-        const next: Record<string, SkillHubView> = {};
-        hubIds.forEach(hubId => {
-          next[hubId] = {
-            hubId,
-            loading: true,
-            error: '',
-            data: prev[hubId]?.data ?? null,
-          };
-        });
-        return next;
-      });
-      const runningHubIds = new Set<string>();
-      await Promise.all(hubIds.map(async hubId => {
-        try {
-          const result = await service.scanSkills(hubId);
-          setSkillHubs(prev => ({
-            ...prev,
-            [hubId]: {
-              hubId,
-              loading: false,
-              error: result.ok ? '' : skillCommandErrorMessage(result),
-              data: result,
-            },
-          }));
-          observeSkillOperation(hubId, result.operation);
-          if (result.operation?.running) {
-            runningHubIds.add(hubId);
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          setSkillHubs(prev => ({
-            ...prev,
-            [hubId]: {
-              hubId,
-              loading: false,
-              error: message || 'Skills scan failed.',
-              data: prev[hubId]?.data ?? null,
-            },
-          }));
-        }
-      }));
-      if (runningHubIds.size > 0) {
-        scheduleSkillOperationPoll(Array.from(runningHubIds));
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setSkillsError(message);
-    } finally {
-      setSkillsLoading(false);
-    }
-  }, [clearSkillOperationPollTimer, observeSkillOperation, scheduleSkillOperationPoll]);
-
   refreshSkillManagementHubRef.current = refreshSkillManagementHub;
 
   useEffect(() => () => {
     clearSkillOperationPollTimer();
   }, [clearSkillOperationPollTimer]);
 
-  useEffect(() => {
-    if (settingsDetailView !== 'skills') {
-      return;
-    }
-    refreshSkillManagement(registryHubIds).catch(() => undefined);
-  }, [settingsDetailView, refreshSkillManagement, registryHubIds]);
-
-  const requestSkillInstall = useCallback((
-    target: SkillInstallTarget,
-    owner: SkillSurfaceOwner = 'settings',
-  ) => {
+  const requestSkillInstall = useCallback((target: SkillInstallTarget) => {
     const sameTarget = sameSkillScopeTarget(skillInstallTarget, target);
-    setSkillInstallOwner(owner);
-    setSkillDetailOwner(null);
     setSkillDetailTarget(null);
     setSkillInstallTarget(target);
     if (!sameTarget) {
@@ -13575,14 +13479,6 @@ export function App() {
       setSkillSourceSelectedNames([]);
     }
   }, [skillInstallTarget]);
-
-  const closeSkillInstallPanel = useCallback(() => {
-    setSkillInstallOwner(null);
-    setSkillInstallTarget(null);
-    setSkillSourceError('');
-    setSkillSourceCandidates([]);
-    setSkillSourceSelectedNames([]);
-  }, []);
 
   const toggleSkillSourceCandidate = useCallback((name: string) => {
     setSkillSourceSelectedNames(prev => (
@@ -13679,14 +13575,6 @@ export function App() {
     setConfirmTarget({kind: 'skillBatchUninstall', ...target});
   }, []);
 
-  const closeSkillDetail = useCallback(() => {
-    setSkillDetailOwner(null);
-    setSkillDetailTarget(null);
-    if (!isWide && settingsDetailViewRef.current === 'skillDetail') {
-      setSettingsDetailView('skills');
-    }
-  }, [isWide]);
-
   const loadSkillDetail = useCallback(async (
     target: SkillDetailTarget,
     cacheKey: string,
@@ -13725,25 +13613,16 @@ export function App() {
     }
   }, []);
 
-  const requestSkillDetail = useCallback(async (
-    target: SkillDetailTarget,
-    owner: SkillSurfaceOwner = 'settings',
-  ) => {
+  const requestSkillDetail = useCallback(async (target: SkillDetailTarget) => {
     const cacheKey = skillDetailCacheKey(target);
-    setSkillDetailOwner(owner);
-    setSkillInstallOwner(null);
     setSkillInstallTarget(null);
     setSkillDetailTarget(target);
-    if (owner === 'settings' && !isWide) {
-      setSidebarSettingsOpen(true);
-      setSettingsDetailView('skillDetail');
-    }
     const cached = skillDetailCache[cacheKey];
     if (cached?.detail || cached?.loading) {
       return;
     }
     await loadSkillDetail(target, cacheKey);
-  }, [isWide, loadSkillDetail, setSidebarSettingsOpen, skillDetailCache]);
+  }, [loadSkillDetail, skillDetailCache]);
 
   const requestSkillUpdate = useCallback((target: SkillUpdateTarget) => {
     setConfirmError('');
@@ -13814,7 +13693,6 @@ export function App() {
       setConfirmTarget(null);
       setConfirmError('');
       if (target.kind === 'skillInstall') {
-        setSkillInstallOwner(null);
         setSkillInstallTarget(null);
         setSkillSourceCandidates([]);
         setSkillSourceSelectedNames([]);
@@ -15991,18 +15869,6 @@ export function App() {
   }, []);
 
   const renderSettingsDetailActions = (detail: SettingsDetailId): React.ReactNode => {
-    if (detail === 'skills') {
-      return (
-        <button
-          type="button"
-          className="settings-detail-refresh"
-          onClick={() => refreshSkillManagement(registryHubIds).catch(() => undefined)}
-          disabled={skillsLoading}
-        >
-          {skillsLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      );
-    }
     if (detail === 'database') {
       return (
         <button
@@ -16046,60 +15912,6 @@ export function App() {
       {content}
     </SettingsDetailShell>
   );
-
-  const renderSkillsSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
-      'Skills',
-      <React.Suspense fallback={null}>
-        <SkillsSettingsDetail
-          skillHubs={skillHubs}
-          skillsLoading={skillsLoading}
-          skillsError={skillsError}
-          skillsPendingKey={skillsPendingKey}
-          skillInstallTarget={skillInstallTarget}
-          sameSkillInstallTarget={sameSkillScopeTarget}
-          skillSourceInput={skillSourceInput}
-          setSkillSourceInput={setSkillSourceInput}
-          skillSourceLoading={skillSourceLoading}
-          skillSourceError={skillSourceError}
-          skillSourceCandidates={skillSourceCandidates}
-          skillSourceSelectedNames={skillSourceSelectedNames}
-          closeSkillInstallPanel={closeSkillInstallPanel}
-          listSkillSource={listSkillSource}
-          toggleAllSkillSourceCandidates={toggleAllSkillSourceCandidates}
-          toggleSkillSourceCandidate={toggleSkillSourceCandidate}
-          requestSkillInstallConfirm={requestSkillInstallConfirm}
-          requestSkillInstall={requestSkillInstall}
-          requestSkillUpdate={requestSkillUpdate}
-          requestSkillUninstall={requestSkillUninstall}
-          requestSkillBatchUninstall={requestSkillBatchUninstall}
-          requestSkillDetail={requestSkillDetail}
-          skillDetailTarget={skillDetailTarget}
-        />
-      </React.Suspense>,
-      renderSettingsDetailActions('skills'),
-      options,
-    );
-
-  const renderSkillDetailPanel = () => (
-    <React.Suspense fallback={null}>
-      <SkillDetailPanel
-        skillDetailTarget={skillDetailTarget}
-        skillDetailCache={skillDetailCache}
-        skillsPendingKey={skillsPendingKey}
-        closeSkillDetail={closeSkillDetail}
-        requestSkillUninstall={requestSkillUninstall}
-      />
-    </React.Suspense>
-  );
-
-  const renderSkillDetailSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
-      skillDetailTarget?.skillName || 'Skill Detail',
-      renderSkillDetailPanel(),
-      undefined,
-      options,
-    );
 
   const renderDatabaseSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
@@ -16215,12 +16027,6 @@ export function App() {
     detail: SettingsDetailId,
     options: SettingsDetailShellOptions = {},
   ) => {
-    if (detail === 'skills') {
-      return renderSkillsSettingsDetail(options);
-    }
-    if (detail === 'skillDetail') {
-      return renderSkillDetailSettingsDetail(options);
-    }
     if (detail === 'database') {
       return renderDatabaseSettingsDetail(options);
     }
@@ -19909,9 +19715,7 @@ export function App() {
   ) : null;
 
   const mobileSettingsTitle = settingsDetailView
-    ? settingsDetailView === 'skillDetail' && skillDetailTarget
-      ? skillDetailTarget.skillName
-      : settingsDetailTitle(settingsDetailView)
+    ? settingsDetailTitle(settingsDetailView)
     : 'Settings';
   const mobileSettingsActions = settingsDetailView
     ? renderSettingsDetailActions(settingsDetailView)
@@ -19928,10 +19732,6 @@ export function App() {
     />
   ) : null;
 
-  const desktopSkillDetailPanel = isWide && sidebarSettingsOpen && settingsDetailView === 'skills' && skillDetailTarget ? (
-    renderSkillDetailPanel()
-  ) : null;
-
   const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (
     <SettingsScreen
       className="desktop-settings-screen"
@@ -19941,7 +19741,6 @@ export function App() {
       shortcutBar={settingsShortcutBar}
       onBack={handleMobileSettingsBackButton}
       onBackdropClick={handleMobileSettingsBackButton}
-      sidePanel={desktopSkillDetailPanel}
     >
       {renderSettingsContent(false, { hideDetailHeader: true })}
     </SettingsScreen>

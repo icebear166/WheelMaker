@@ -1,6 +1,5 @@
 import {
   deriveSkillHubIds,
-  groupSkillsByCategory,
   isSkillActionPendingForHub,
   onlineSkillProjects,
   parseSkillSourceInput,
@@ -15,16 +14,6 @@ import {
 describe('skill management view helpers', () => {
   test('derives sorted hub ids from project.list hubs', () => {
     expect(deriveSkillHubIds([{hubId: 'hub-b'}, {hubId: ' '}, {hubId: 'hub-a'}])).toEqual(['hub-a', 'hub-b']);
-  });
-
-  test('groups skills by upstream category and keeps General last', () => {
-    const groups = groupSkillsByCategory([
-      {name: 'plain', category: '', categoryKey: '', agents: []},
-      {name: 'tdd', category: 'Mattpocock Skills', categoryKey: 'mattpocock-skills', agents: []},
-    ]);
-
-    expect(groups.map(group => group.category)).toEqual(['Mattpocock Skills', 'General']);
-    expect(groups[0].skills[0].name).toBe('tdd');
   });
 
   test('sorts projects by online state then name', () => {
