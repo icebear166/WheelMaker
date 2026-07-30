@@ -246,6 +246,10 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
   expect(hubActions.findAllByType('button')).toEqual([npm, skills]);
   expect(npm.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['2']);
   expect(skills.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['3']);
+  expect(hubActions.findAll(
+    node => node.props['data-icon-name'] === 'chevronRight'
+      || node.props['data-icon-name'] === 'chevronDown',
+  )).toHaveLength(0);
   act(() => npm.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'npm');
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
@@ -512,12 +516,19 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   expect(projectButtons).toHaveLength(3);
   expect(projectButtons.map(button => button.props['aria-label']))
     .toEqual(['Visibility details', 'Scan details', 'Project Skills details']);
-  expect(projectButtons[0].findByProps({'data-icon-name': 'eye'})).toBeTruthy();
-  expect(projectButtons[0].findAllByProps({className: 'chat-hub-action-label'})).toHaveLength(0);
-  expect(projectButtons[1].findByProps({className: 'chat-hub-action-label'}).children).toEqual(['Scan']);
-  expect(projectButtons[2].findByProps({className: 'chat-hub-action-label'}).children).toEqual(['Skills']);
-  expect(projectButtons[2].findByProps({className: 'chat-hub-action-info'}).children)
-    .toEqual(['3']);
+  expect(projectButtons.map(button => (
+    button.findAllByProps({className: 'chat-hub-action-label'}).length
+  ))).toEqual([0, 0, 0]);
+  expect(projectButtons.map(button => button.findAll(
+    node => ['eye', 'search', 'sparkles'].includes(node.props['data-icon-name']),
+  ).map(node => node.props['data-icon-name'])))
+    .toEqual([['eye'], ['search'], ['sparkles']]);
+  expect(projectButtons.map(button => button.findByProps({className: 'chat-hub-action-info'}).children))
+    .toEqual([['1/2'], ['1/2'], ['3']]);
+  expect(projectButtons.flatMap(button => button.findAll(
+    node => node.props['data-icon-name'] === 'chevronRight'
+      || node.props['data-icon-name'] === 'chevronDown',
+  ))).toHaveLength(0);
 
   const scanRows = renderer.root.findAllByProps({className: 'chat-hub-scan-row'});
   expect(scanRows).toHaveLength(2);

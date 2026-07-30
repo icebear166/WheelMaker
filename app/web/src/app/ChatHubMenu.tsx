@@ -565,10 +565,10 @@ function ChatHubDisclosureButton({
       title={label}
       onClick={onToggle}
     >
-      {icon ? <Icon name={icon} /> : null}
+      {icon ? <Icon name={pending ? 'loader' : icon} spin={pending} /> : null}
       {!hideLabel ? <span className="chat-hub-action-label">{label}</span> : null}
       {info ? <span className="chat-hub-action-info">{info}</span> : null}
-      <Icon name={pending ? 'loader' : expanded ? 'chevronDown' : 'chevronRight'} spin={pending} />
+      {pending && !icon ? <Icon name="loader" className="chat-hub-action-pending" spin /> : null}
     </button>
   );
 }
@@ -997,6 +997,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               <ChatHubDisclosureButton
                 label="Scan"
                 info={`${ops.index.indexedCount}/${ops.index.totalCount}`}
+                icon="search"
+                hideLabel
                 pending={ops.index.pending}
                 expanded={sectionOpen('scan')}
                 onToggle={() => toggleSection('scan')}
@@ -1004,9 +1006,9 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               <ChatHubDisclosureButton
                 label="Skills"
                 ariaLabel="Project Skills details"
-                info={projectSkillTotal(ops.skills.projects) > 0
-                  ? `${projectSkillTotal(ops.skills.projects)}`
-                  : undefined}
+                info={`${projectSkillTotal(ops.skills.projects)}`}
+                icon="sparkles"
+                hideLabel
                 pending={ops.skills.loading || ops.skills.operationRunning}
                 expanded={sectionOpen('projectSkills')}
                 onToggle={() => toggleSection('projectSkills')}

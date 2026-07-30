@@ -964,18 +964,23 @@ describe('web chat integration', () => {
     const stylesCss = readWebStyles(projectRoot);
     const hubRow = cssRuleBlock(stylesCss, '.chat-hub-row');
     const sections = cssRuleBlock(stylesCss, '.chat-hub-sections');
+    const line = cssRuleBlock(stylesCss, '.chat-hub-line');
     const actions = cssRuleBlock(stylesCss, '.chat-hub-line-actions');
     const projectActions = cssRuleBlock(stylesCss, '.chat-hub-project-actions');
     const footer = cssRuleBlock(stylesCss, '.chat-hub-footer');
+    const versionAction = cssRuleBlock(stylesCss, '.chat-hub-row > .chat-hub-version-action');
     const mobileHubRow = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-row')
       .find(block => block.includes('min-height: 44px')) ?? '';
 
     expect(hubRow).toContain('min-height: 32px;');
     expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
-    expect(sections).toContain('border-left: 1px solid');
+    expect(sections).not.toContain('border-left:');
+    expect(stylesCss).toContain('.chat-hub-sections::before {');
+    expect(line).toContain('grid-template-columns: 14px 44px minmax(0, 1fr);');
     expect(actions).toContain('overflow: hidden;');
     expect(actions).toContain('border-radius: 7px;');
     expect(projectActions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+    expect(versionAction).toContain('background: transparent;');
     expect(footer).toContain('position: sticky;');
     expect(footer).toContain('bottom: 0;');
     expect(mobileHubRow).toContain('min-height: 44px;');
@@ -1002,7 +1007,7 @@ describe('web chat integration', () => {
 
     expect(countBlock).toContain('border-radius: 999px;');
     expect(countBlock).toContain('font-variant-numeric: tabular-nums;');
-    expect(footerBlock).toContain('background: var(--surface-overlay);');
+    expect(footerBlock).toContain('background: var(--surface-panel);');
     expect(footerBlock).toContain('position: sticky;');
     expect(versionBlock).not.toContain('background:');
     expect(updateBlock).toContain('background: var(--accent-primary);');
