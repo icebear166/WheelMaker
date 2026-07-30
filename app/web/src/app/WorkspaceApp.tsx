@@ -7955,7 +7955,7 @@ export function App() {
         },
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
-        preferredWidth: 260,
+        preferredWidth: 224,
         preferredMaxHeight: 320,
         align: 'start',
       }),
