@@ -165,7 +165,7 @@ test('toggling the summary button calls onToggle and renders hub rows', async ()
   expect(sectionHeaders(renderer.root).map(header => header.findByProps({className: 'chat-hub-section-label'}).children))
     .toEqual([['Settings']]);
   expect(renderer.root.findAllByProps({className: 'chat-hub-line-label'})
-    .map(label => label.children)).toEqual([['Hub'], ['Projects']]);
+    .map(label => label.children)).toEqual([['Global'], ['Projects']]);
 });
 
 test('uses a full Hub row disclosure behind the independent color control', async () => {
@@ -240,8 +240,8 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
   expect(callbacks.onToggleSection).not.toHaveBeenCalled();
 
   const npm = renderer.root.findByProps({'aria-label': 'NPM details'});
-  const skills = renderer.root.findByProps({'aria-label': 'Skills details'});
   const hubActions = renderer.root.findByProps({className: 'chat-hub-line-actions chat-hub-hub-actions'});
+  const skills = hubActions.findByProps({'aria-label': 'Skills details'});
   expect(hubActions.findAllByType('button')).toEqual([npm, skills]);
   expect(npm.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['2']);
   expect(skills.findByProps({className: 'chat-hub-action-info'}).children).toEqual(['3']);
@@ -513,6 +513,8 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
     .toEqual(['Visibility details', 'Scan details', 'Project Skills details']);
   expect(projectButtons[0].findByProps({'data-icon-name': 'eye'})).toBeTruthy();
   expect(projectButtons[0].findAllByProps({className: 'chat-hub-action-label'})).toHaveLength(0);
+  expect(projectButtons[1].findByProps({className: 'chat-hub-action-label'}).children).toEqual(['Scan']);
+  expect(projectButtons[2].findByProps({className: 'chat-hub-action-label'}).children).toEqual(['Skills']);
   expect(projectButtons[2].findByProps({className: 'chat-hub-action-info'}).children)
     .toEqual(['3']);
 
@@ -791,12 +793,17 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
   await act(async () => {
     enabledRenderer = TestRenderer.create(<ChatHubMenu {...enabled.props} />);
   });
-  const marks = enabledRenderer.root.findAll(
-    node => typeof node.type === 'string' &&
-      typeof node.props.className === 'string' && node.props.className.includes('chat-hub-summary-mark'),
-  );
-  expect(marks).toHaveLength(1);
-  expect(marks[0].props.className).toContain('ok');
+  const enabledState = enabledRenderer.root.findByProps({
+    className: 'chat-hub-settings-state on',
+  });
+  expect(enabledState.children).toContain('V2');
+  expect(enabledState.findByProps({
+    className: 'chat-hub-settings-state-dot',
+  })).toBeTruthy();
+  expect(enabledRenderer.root.findAll(
+    node => typeof node.props.className === 'string'
+      && node.props.className.includes('chat-hub-summary-mark'),
+  )).toHaveLength(0);
 
   const disabled = createHarness({
     hubConfigByHubId: {
@@ -812,15 +819,13 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
   await act(async () => {
     disabledRenderer = TestRenderer.create(<ChatHubMenu {...disabled.props} />);
   });
-  const offHeader = disabledRenderer.root.findAll(
-    node => typeof node.props.className === 'string' && node.props.className.startsWith('chat-hub-section-summary'),
-  )[0];
-  expect(offHeader.children).toContain('Off');
-  const offMark = disabledRenderer.root.findAll(
-    node => typeof node.type === 'string' &&
-      typeof node.props.className === 'string' && node.props.className.includes('chat-hub-summary-mark'),
-  )[0];
-  expect(offMark.props.className).not.toContain('ok');
+  const offState = disabledRenderer.root.findByProps({
+    className: 'chat-hub-settings-state off',
+  });
+  expect(offState.children).toContain('Off');
+  expect(offState.findByProps({
+    className: 'chat-hub-settings-state-dot',
+  })).toBeTruthy();
 });
 
 test('version action uses an update or restart icon instead of a detached status dot', async () => {

@@ -538,6 +538,7 @@ function ChatHubSettingsSection({
 
 function ChatHubDisclosureButton({
   label,
+  ariaLabel,
   info,
   icon,
   hideLabel = false,
@@ -546,6 +547,7 @@ function ChatHubDisclosureButton({
   onToggle,
 }: {
   label: string;
+  ariaLabel?: string;
   info?: string;
   icon?: IconName;
   hideLabel?: boolean;
@@ -558,7 +560,8 @@ function ChatHubDisclosureButton({
       type="button"
       className={`chat-hub-action chat-hub-disclosure-action${expanded ? ' expanded' : ''}`}
       aria-expanded={expanded}
-      aria-label={`${label} details`}
+      aria-label={ariaLabel ?? `${label} details`}
+      title={label}
       onClick={onToggle}
     >
       {icon ? <Icon name={icon} /> : null}
@@ -862,22 +865,20 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     ? flickerConfig.enabled
     : flickerStatus?.state === 'running' || flickerStatus?.state === 'starting';
   const flickerMode = (flickerStatus?.mode ?? flickerConfig?.mode ?? '').toUpperCase();
-  const settingsSummary = flickerOn ? (
-    <>
-      {flickerMode || 'On'}
-      <Icon name="check" className="chat-hub-summary-mark ok" aria-label="Flicker Bridge on" />
-    </>
-  ) : (
-    <>
-      Off
-      <Icon name="x" className="chat-hub-summary-mark" aria-label="Flicker Bridge off" />
-    </>
+  const settingsSummary = (
+    <span className={`chat-hub-settings-state ${flickerOn ? 'on' : 'off'}`}>
+      <span className="chat-hub-settings-state-dot" aria-hidden="true" />
+      {flickerOn ? flickerMode || 'On' : 'Off'}
+    </span>
   );
 
   const toggleSection = (section: ChatHubDetailId) => onToggleSection(hubId, section);
   return (
-    <div className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
-      <div className="chat-hub-row" style={hubAccentStyle(hubId)}>
+    <div
+      className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}
+      style={hubAccentStyle(hubId)}
+    >
+      <div className="chat-hub-row">
         <button
           type="button"
           className="chat-hub-expand-button"
@@ -890,7 +891,6 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           className="chat-hub-color-button"
           aria-label={`Set color for ${hubId}`}
           aria-expanded={colorMenuOpen}
-          style={hubAccentStyle(hubId)}
           onClick={() => onToggleColorMenu(colorMenuOpen ? null : hubId)}
         >
           <span className="chat-hub-color-dot" aria-hidden="true" />
@@ -949,7 +949,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           </div>
           <div className="chat-hub-line">
             <span className="chat-hub-line-icon"><Icon name="serverCog" /></span>
-            <span className="chat-hub-line-label">Hub</span>
+            <span className="chat-hub-line-label">Global</span>
             <span className="chat-hub-line-actions chat-hub-hub-actions">
               <ChatHubDisclosureButton
                 label="NPM"
@@ -997,7 +997,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 onToggle={() => toggleSection('scan')}
               />
               <ChatHubDisclosureButton
-                label="Project Skills"
+                label="Skills"
+                ariaLabel="Project Skills details"
                 info={projectSkillTotal(ops.skills.projects) > 0
                   ? `${projectSkillTotal(ops.skills.projects)}`
                   : undefined}

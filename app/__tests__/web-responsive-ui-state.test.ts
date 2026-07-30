@@ -538,17 +538,19 @@ describe('web responsive ui state', () => {
     expect(stylesCss).not.toContain('.chat-hub-color-palette::before {');
 
     const rowBlock = stylesCss.match(/\.chat-hub-row \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(rowBlock).toContain('display: flex;');
+    expect(rowBlock).toContain('display: grid;');
+    expect(rowBlock).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
     const expandButtonBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(expandButtonBlock).toContain('position: absolute;');
     expect(expandButtonBlock).toContain('inset: 0;');
     const colorButtonBlock = stylesCss.match(/\.chat-hub-color-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorButtonBlock).toContain('width: 24px;');
     expect(colorButtonBlock).toContain('height: 24px;');
-    expect(colorButtonBlock).toContain('flex: 0 0 24px;');
+    expect(colorButtonBlock).not.toContain('flex: 0 0 24px;');
     const colorDotBlock = stylesCss.match(/\.chat-hub-color-dot \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorDotBlock).toContain('width: 8px;');
-    expect(colorDotBlock).toContain('height: 8px;');
+    expect(colorDotBlock).toContain('width: 10px;');
+    expect(colorDotBlock).toContain('height: 10px;');
+    expect(colorDotBlock).toContain('border: 1px solid');
 
     const swatchBlock = stylesCss.match(/\.chat-hub-color-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(swatchBlock).toContain('var(--swatch-color)');

@@ -955,8 +955,30 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-hub-expand-button {');
     const hubTreeBlock = stylesCss.match(/\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(hubTreeBlock).not.toContain('border-left:');
-    expect(stylesCss).toContain('margin: 0 4px 4px 12px;');
+    expect(stylesCss).toContain('margin: 0 4px 4px 4px;');
     expect(stylesCss).not.toContain('margin: 1px 0 3px 26px;');
+  });
+
+  test('Hub menu uses stable rows, segmented actions, hierarchy, and a sticky footer', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const hubRow = cssRuleBlock(stylesCss, '.chat-hub-row');
+    const sections = cssRuleBlock(stylesCss, '.chat-hub-sections');
+    const actions = cssRuleBlock(stylesCss, '.chat-hub-line-actions');
+    const projectActions = cssRuleBlock(stylesCss, '.chat-hub-project-actions');
+    const footer = cssRuleBlock(stylesCss, '.chat-hub-footer');
+    const mobileHubRow = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-row')
+      .find(block => block.includes('min-height: 44px')) ?? '';
+
+    expect(hubRow).toContain('min-height: 32px;');
+    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
+    expect(sections).toContain('border-left: 1px solid');
+    expect(actions).toContain('overflow: hidden;');
+    expect(actions).toContain('border-radius: 7px;');
+    expect(projectActions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
+    expect(footer).toContain('position: sticky;');
+    expect(footer).toContain('bottom: 0;');
+    expect(mobileHubRow).toContain('min-height: 44px;');
   });
 
   test('makes the Hub disclosure fill the row and pins its chevron to the end', () => {
@@ -967,7 +989,7 @@ describe('web chat integration', () => {
 
     expect(disclosureBlock).toContain('position: absolute;');
     expect(disclosureBlock).toContain('inset: 0;');
-    expect(chevronBlock).toContain('margin-left: auto;');
+    expect(chevronBlock).toContain('justify-self: end;');
   });
 
   test('gives Hub counts and footer actions a clear visual hierarchy', () => {
@@ -980,8 +1002,9 @@ describe('web chat integration', () => {
 
     expect(countBlock).toContain('border-radius: 999px;');
     expect(countBlock).toContain('font-variant-numeric: tabular-nums;');
-    expect(footerBlock).toContain('background: var(--surface-raised);');
-    expect(versionBlock).toContain('background: var(--accent-soft-bg);');
+    expect(footerBlock).toContain('background: var(--surface-overlay);');
+    expect(footerBlock).toContain('position: sticky;');
+    expect(versionBlock).not.toContain('background:');
     expect(updateBlock).toContain('background: var(--accent-primary);');
     expect(updateBlock).toContain('color: var(--button-primary-text, #fff);');
   });
