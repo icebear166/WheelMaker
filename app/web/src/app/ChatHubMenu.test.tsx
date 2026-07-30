@@ -57,6 +57,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     exiting: false,
     summaryLabel: '1 Hub',
     projectLabel: '2 Projects',
+    activeProjectId: 'hub-a:p1',
     hubIds: ['hub-a'],
     treeItems: [{
       hubId: 'hub-a',
@@ -614,6 +615,50 @@ test('Project Skills lists only online projects and keeps every action in the se
     skillNames: ['two'],
   });
   expect(callbacks.onClose).not.toHaveBeenCalled();
+});
+
+test('Project Skills defaults to the active chat project instead of the first project', async () => {
+  const {props, callbacks} = createHarness({
+    activeProjectId: 'hub-a:zeta',
+    expandedSections: {'hub-a': ['projectSkills']},
+    opsByHubId: {
+      'hub-a': opsView({
+        skills: {
+          loading: false,
+          operationRunning: false,
+          error: '',
+          pendingKey: '',
+          hubItems: [],
+          projects: [
+            {
+              projectId: 'hub-a:alpha',
+              projectName: 'alpha',
+              online: true,
+              skills: [],
+            },
+            {
+              projectId: 'hub-a:zeta',
+              projectName: 'zeta',
+              online: true,
+              skills: [],
+            },
+          ],
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({'data-project-name': 'zeta'}).props['aria-selected']).toBe(true);
+  act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
+  expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'zeta',
+  });
 });
 
 test('visibility detail toggles project visibility', async () => {

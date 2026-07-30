@@ -32,6 +32,20 @@ export type StandaloneSessionActionResolution =
 
 const unsupportedReason = 'Current Agent does not support this action.';
 
+export function resolveChatSkillProjectId<T extends {projectId: string}>(
+  projects: readonly T[],
+  selectedChatProjectId: string | undefined,
+  workspaceProjectId: string,
+): string {
+  if (
+    selectedChatProjectId &&
+    projects.some(project => project.projectId === selectedChatProjectId)
+  ) {
+    return selectedChatProjectId;
+  }
+  return workspaceProjectId;
+}
+
 export function buildChatSessionActionOptions(
   skills: Array<string | ChatSessionSkill>,
   capabilities?: RegistrySessionActionCapabilities,

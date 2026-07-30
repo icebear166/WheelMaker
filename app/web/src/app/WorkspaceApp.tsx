@@ -137,6 +137,7 @@ import {
   groupChatSlashMenuOptions,
   replaceActiveSlashQuery,
   removeActiveSlashQuery,
+  resolveChatSkillProjectId,
   resolveStandaloneSessionAction,
   type ChatSessionActionKind,
   type ChatSessionSlashOption,
@@ -4113,7 +4114,12 @@ export function App() {
   }, [chatComposerStatusCompact, selectedChatConfigOptions]);
 
   const chatSlashSkills = useMemo(() => {
-    const currentProject = projects.find(item => item.projectId === projectId);
+    const skillProjectId = resolveChatSkillProjectId(
+      projects,
+      selectedChatKey?.projectId,
+      projectId,
+    );
+    const currentProject = projects.find(item => item.projectId === skillProjectId);
     const deduped = new Map<string, {name: string; description: string}>();
     for (const profile of currentProject?.agentProfiles ?? []) {
       for (const skill of profile.skills ?? []) {
@@ -4130,7 +4136,7 @@ export function App() {
       }
     }
     return Array.from(deduped.values()).sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
-  }, [projects, projectId]);
+  }, [projects, projectId, selectedChatKey?.projectId]);
 
   const chatSlashCommands = useMemo(
     () => buildChatSessionActionOptions(
@@ -6656,6 +6662,7 @@ export function App() {
         exiting={chatHubMenuExiting}
         summaryLabel={chatHubSummaryLabel}
         projectLabel={chatHubProjectLabel}
+        activeProjectId={selectedChatKey?.projectId || projectId}
         hubIds={hubIds}
         treeItems={chatHubTreeItems}
         popoverStyle={chatHubPopoverStyle}

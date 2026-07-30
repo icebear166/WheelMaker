@@ -5,6 +5,7 @@ import {
   groupChatSlashMenuOptions,
   replaceActiveSlashQuery,
   removeActiveSlashQuery,
+  resolveChatSkillProjectId,
   resolveStandaloneSessionAction,
 } from '../web/src/chat/session/chatSessionActions';
 
@@ -109,6 +110,17 @@ describe('chat session action options', () => {
 
   test('removes only the active slash query for invoked commands', () => {
     expect(removeActiveSlashQuery('keep /sta tail', 9)).toEqual({text: 'keep  tail', cursor: 5});
+  });
+
+  test('uses the selected chat project for skills when workspace hydration points elsewhere', () => {
+    const projects = [{projectId: 'workspace-project'}, {projectId: 'chat-project'}];
+
+    expect(resolveChatSkillProjectId(projects, 'chat-project', 'workspace-project'))
+      .toBe('chat-project');
+    expect(resolveChatSkillProjectId(projects, 'stale-project', 'workspace-project'))
+      .toBe('workspace-project');
+    expect(resolveChatSkillProjectId(projects, undefined, 'workspace-project'))
+      .toBe('workspace-project');
   });
 });
 

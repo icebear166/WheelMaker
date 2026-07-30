@@ -175,6 +175,7 @@ export interface ChatHubMenuProps {
   exiting: boolean;
   summaryLabel: string;
   projectLabel: string;
+  activeProjectId: string;
   hubIds: string[];
   treeItems: ChatHubTreeItem[];
   popoverStyle: React.CSSProperties | undefined;
@@ -691,10 +692,12 @@ function ChatHubSkillsDetail({
 
 function ChatHubProjectSkillsDetail({
   hubId,
+  activeProjectId,
   ops,
   actions,
 }: {
   hubId: string;
+  activeProjectId: string;
   ops: ChatHubOpsView;
   actions: ChatHubSkillActions;
 }): React.JSX.Element {
@@ -704,6 +707,7 @@ function ChatHubProjectSkillsDetail({
   );
   const [selectedProjectName, setSelectedProjectName] = React.useState('');
   const selectedProject = projects.find(project => project.projectName === selectedProjectName)
+    ?? projects.find(project => project.projectId === activeProjectId)
     ?? projects[0]
     ?? null;
 
@@ -840,6 +844,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onScanProject,
     hiddenProjectIdSet,
     onToggleProject,
+    activeProjectId,
     mobile,
   } = props;
   const treeItem = treeItems.find(item => item.hubId === hubId) ?? {hubId, projects: []};
@@ -1043,7 +1048,12 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
             <ChatHubScanDetail hubId={hubId} ops={ops} onScanAll={onScanAllIndexes} onScanProject={onScanProject} />
           ) : null}
           {sectionOpen('projectSkills') ? (
-            <ChatHubProjectSkillsDetail hubId={hubId} ops={ops} actions={skillActions} />
+            <ChatHubProjectSkillsDetail
+              hubId={hubId}
+              activeProjectId={activeProjectId}
+              ops={ops}
+              actions={skillActions}
+            />
           ) : null}
         </div>
       ) : null}
