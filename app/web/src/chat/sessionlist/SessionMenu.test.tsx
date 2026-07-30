@@ -38,7 +38,7 @@ describe('SessionMenu', () => {
     const labels = tree.root
       .findAll(node => node.type === 'span' && typeof node.props.className === 'string' && node.props.className.includes('project-session-menu-label'))
       .map(node => node.children.join(''));
-    expect(labels).toEqual(['Pin', 'Rename', 'Archive', 'Reload', 'Delete']);
+    expect(labels).toEqual(['Pin', 'Rename', 'Reload', 'Archive', 'Delete']);
     expect(
       menu.findByProps({className: 'session-menu-body'}).children
         .filter(child => typeof child !== 'string')
@@ -48,17 +48,26 @@ describe('SessionMenu', () => {
       'project-session-menu-separator',
       'project-session-menu-btn pin',
       'project-session-menu-btn rename',
-      'project-session-menu-btn archive',
-      'project-session-menu-separator',
       'project-session-menu-btn reload',
+      'project-session-menu-separator',
+      'project-session-menu-btn archive',
       'project-session-menu-btn delete',
     ]);
     // every item has an svg icon
     expect(tree.root.findAllByType('svg').length).toBeGreaterThanOrEqual(5);
   });
 
-  it('uses the Add session hierarchy for the session action surface', async () => {
+  it('desktop renders a compact eyebrow instead of the full sheet header', async () => {
     const {tree} = await renderMenu();
+    expect(tree.root.findAll(node =>
+      typeof node.props.className === 'string' && node.props.className.includes('session-menu-header'),
+    )).toHaveLength(0);
+    const eyebrow = tree.root.findByProps({className: 'session-menu-eyebrow'});
+    expect(eyebrow.children.join('')).toBe('Example session');
+  });
+
+  it('uses the Add session hierarchy for the session action surface', async () => {
+    const {tree} = await renderMenu({sheet: true});
     const menu = tree.root.findByProps({role: 'menu'});
     const header = menu.find(node =>
       typeof node.props.className === 'string' && node.props.className.includes('session-menu-header'),

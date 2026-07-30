@@ -1326,13 +1326,7 @@
   cursor: default;
 }
 
-.mobile-project-sheet-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.42);
-  z-index: 70;
-  animation: mobile-sheet-overlay-in 200ms ease;
-}
+/* Sheet dimmed overlays share .sl-sheet-overlay (sessionlist.css). */
 
 .mobile-project-sheet {
   position: fixed;
@@ -1344,12 +1338,12 @@
   flex-direction: column;
   gap: 6px;
   max-height: min(72vh, 560px);
-  padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 14px);
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
-  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  padding: 4px 10px calc(var(--wm-safe-area-bottom) + 14px);
+  border-top-left-radius: var(--radius-floating);
+  border-top-right-radius: var(--radius-floating);
+  /* Opaque surface: the sheet sits above a dimmed overlay, where a backdrop
+     blur would be invisible. */
+  background: var(--surface-panel);
   border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-bottom: 0;
   box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
@@ -1357,7 +1351,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mobile-project-sheet-overlay,
   .mobile-project-sheet { animation: none; }
 }
 
@@ -1439,7 +1432,7 @@
 }
 
 .mobile-project-sheet-item {
-  min-height: 48px;
+  min-height: 44px;
   font-size: 14px;
   border-radius: 8px;
   padding: 0 12px;

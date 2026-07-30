@@ -1174,11 +1174,6 @@
   padding: 9px 7px calc(env(safe-area-inset-bottom, 0px) + 18px);
 }
 
-@keyframes mobile-sheet-overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 @keyframes mobile-sheet-slide-up {
   from { transform: translateY(102%); }
   to { transform: translateY(0); }
@@ -2862,9 +2857,17 @@ button.chat-hub-skill-name:disabled {
   animation: mobile-sheet-slide-down 100ms ease-in forwards;
 }
 
+/* Bottom sheets share the slide-down exit; the generic sl-menu-out
+   fade+scale does not match their slide-up entry. */
+.mobile-project-sheet.sl-menu-exit {
+  animation: mobile-sheet-slide-down 100ms ease-in forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-hub-page,
-  .chat-hub-page.sl-menu-exit {
+  .chat-hub-page.sl-menu-exit,
+  .mobile-project-sheet,
+  .mobile-project-sheet.sl-menu-exit {
     animation: none;
   }
 }
@@ -7276,39 +7279,6 @@ button.chat-hub-skill-name:disabled {
   }
 }
 
-.project-session-action-menu,
-.session-archive-menu {
-  transform-origin: top center;
-  animation: workspaceMenuEnter var(--motion-standard) var(--ease-out) both;
-}
-
-.mobile-project-sheet {
-  transform-origin: bottom center;
-  animation: workspaceSheetEnter var(--motion-standard) var(--ease-out) both;
-}
-
-@keyframes workspaceMenuEnter {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes workspaceSheetEnter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .chat-turn-entry,
   .chat-hub-popover,
@@ -7671,7 +7641,8 @@ button.chat-hub-skill-name:disabled {
 
 
 .session-archive-menu {
-  transform-origin: top left;
+  /* Anchored at the Archive button's bottom-right corner. */
+  transform-origin: top right;
 }
 
 .session-archive-menu-title {
@@ -7679,8 +7650,6 @@ button.chat-hub-skill-name:disabled {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
 }
 
 .session-archive-menu-item {
@@ -7699,9 +7668,11 @@ button.chat-hub-skill-name:disabled {
   transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
-.session-archive-menu-item:hover {
-  background: var(--hover);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .session-archive-menu-item:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+  }
 }
 
 .session-archive-menu-item:focus-visible {

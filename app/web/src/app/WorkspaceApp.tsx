@@ -170,6 +170,7 @@ import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
 import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
+import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
@@ -3436,7 +3437,13 @@ export function App() {
   const [olderSessionsExpandedByProjectId, setOlderSessionsExpandedByProjectId] = useState<Record<string, boolean>>(
     () => readOlderSessionsExpanded(typeof window !== 'undefined' ? window.sessionStorage : null),
   );
-  const [sessionArchiveMenuOpen, setSessionArchiveMenuOpen] = useState(false);
+  const [sessionArchiveMenuOpen, setSessionArchiveMenuOpen, sessionArchiveMenuExiting] = useMenuExitFlag();
+  const sessionArchiveMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (sessionArchiveMenuOpen) {
+      focusFirstMenuItem(sessionArchiveMenuRef.current);
+    }
+  }, [sessionArchiveMenuOpen]);
   const [archiveBatchProgress, setArchiveBatchProgress] = useState<ArchiveBatchProgress | null>(null);
   const [archiveBatchSummary, setArchiveBatchSummary] = useState('');
   const [archivedMode, setArchivedMode] = useState(false);
@@ -10429,6 +10436,15 @@ export function App() {
       return;
     }
     setError('');
+    // Optimistic: marking is low-risk, so apply the color and close the menu
+    // immediately instead of freezing the picker for a server round trip.
+    const previousSession = knownChatSessionsForProject(targetProjectId)
+      .find(item => item.sessionId === normalizedSessionId);
+    setProjectSessionActionMenu(null);
+    rememberChatSessionSummary(targetProjectId, {
+      sessionId: normalizedSessionId,
+      markColor: markColor || undefined,
+    });
     setChatMarkingSessionKey(actionKey);
     try {
       const result = await service.markProjectSession(targetProjectId, normalizedSessionId, markColor);
@@ -10442,8 +10458,13 @@ export function App() {
         mergeKnownChatSessionForProject(targetProjectId, result.session),
         {turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? 0},
       );
-      setProjectSessionActionMenu(null);
     } catch (err) {
+      if (previousSession) {
+        rememberChatSessionSummary(targetProjectId, {
+          sessionId: normalizedSessionId,
+          markColor: previousSession.markColor,
+        });
+      }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setChatMarkingSessionKey(current => current === actionKey ? '' : current);
@@ -14543,11 +14564,24 @@ export function App() {
         {sessionArchiveMenuOpen ? (
           <>
             <div
-              className="sl-sheet-overlay"
+              className={`sl-sheet-overlay${sessionArchiveMenuExiting ? ' sl-menu-exit' : ''}`}
               aria-hidden="true"
               onPointerDown={() => setSessionArchiveMenuOpen(false)}
             />
-            <div className="session-archive-menu sl-session-list-popover" role="menu" aria-label="Archive sessions">
+            <div
+              ref={sessionArchiveMenuRef}
+              className={`session-archive-menu sl-session-list-popover${sessionArchiveMenuExiting ? ' sl-menu-exit' : ''}`}
+              role="menu"
+              aria-label="Archive sessions"
+              onKeyDown={event => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setSessionArchiveMenuOpen(false);
+                  return;
+                }
+                handleMenuKeyDown(event, sessionArchiveMenuRef.current);
+              }}
+            >
             <div className="mobile-project-sheet-grip session-archive-menu-grip" aria-hidden="true" />
             <div className="session-archive-menu-title">Archive</div>
             <button
@@ -15360,9 +15394,9 @@ export function App() {
               left: `${projectSessionActionMenu.popover.left}px`,
               width: `${projectSessionActionMenu.popover.width}px`,
               maxHeight: `${projectSessionActionMenu.popover.maxHeight}px`,
-              transform: projectSessionActionMenu.popover.placement === 'above'
-                ? 'translateY(-100%)'
-                : undefined,
+              ...(projectSessionActionMenu.popover.placement === 'above'
+                ? {'--sl-popover-shift': 'translateY(-100%)'} as React.CSSProperties
+                : {}),
             }
           : undefined}
       />
@@ -15373,7 +15407,7 @@ export function App() {
     return (
       <>
         <div
-          className="sl-sheet-overlay"
+          className={`sl-sheet-overlay${projectSessionActionMenuExiting ? ' sl-menu-exit' : ''}`}
           aria-hidden="true"
           onPointerDown={() => setProjectSessionActionMenu(null)}
         />
@@ -16188,7 +16222,7 @@ export function App() {
     return (
       <>
         <div
-          className="mobile-project-sheet-overlay"
+          className={`sl-sheet-overlay${mobileProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
           onClick={() => setMobileProjectActionMenu(null)}
           aria-hidden="true"
         />
@@ -16314,7 +16348,7 @@ export function App() {
                   : null}
                 {!resumeLoading && resumeSessions.length === 0 ? (
                   <div className="wide-project-action-empty">
-                    <SessionIcon name="import" />
+                    <SessionIcon name="inbox" />
                     <span>No resumable sessions.</span>
                   </div>
                 ) : null}
@@ -16352,9 +16386,9 @@ export function App() {
               left: `${actionMenu.popover.left}px`,
               width: `${actionMenu.popover.width}px`,
               maxHeight: `${actionMenu.popover.maxHeight}px`,
-              transform: actionMenu.popover.placement === 'above'
-                ? 'translateY(-100%)'
-                : undefined,
+              ...(actionMenu.popover.placement === 'above'
+                ? {'--sl-popover-shift': 'translateY(-100%)'} as React.CSSProperties
+                : {}),
             }
           : undefined}
       >
@@ -16429,7 +16463,7 @@ export function App() {
             )) : null}
             {!resumeLoading && resumeSessions.length === 0 ? (
               <div className="wide-project-action-empty">
-                <SessionIcon name="import" />
+                <SessionIcon name="inbox" />
                 <span>No resumable sessions.</span>
               </div>
             ) : null}
@@ -19657,7 +19691,7 @@ export function App() {
   const mobileRelayTargetSheetNode = !isWide && mobileRelayTargetSheet ? (
     <>
       <div
-        className="mobile-project-sheet-overlay"
+        className={`sl-sheet-overlay${mobileRelayTargetSheetExiting ? ' sl-menu-exit' : ''}`}
         onClick={() => setMobileRelayTargetSheet(null)}
         aria-hidden="true"
       />

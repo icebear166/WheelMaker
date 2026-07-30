@@ -3,6 +3,7 @@ import {focusFirstMenuItem, handleMenuKeyDown} from '../../common/menuKeyboardNa
 import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
 import {SessionIcon, type SessionIconName} from './SessionIcon';
 import {SESSION_MARK_OPTIONS, sessionMarkColorClass} from './sessionMark';
+import {useSheetDragToDismiss} from './sheetDragDismiss';
 
 export type SessionMenuProps = {
   pinned: boolean;
@@ -65,28 +66,44 @@ export function SessionMenu({
 }: SessionMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const {dragOffset, dragging, handleProps} = useSheetDragToDismiss(onClose);
   useEffect(() => {
     previouslyFocusedRef.current = typeof document !== 'undefined' && typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
     focusFirstMenuItem(menuRef.current);
   }, []);
+  // Drag handles must not hijack taps on the close button inside the header.
+  const dragHandleProps = {
+    ...handleProps,
+    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      if ((event.target as HTMLElement | null)?.closest('button')) {
+        return;
+      }
+      handleProps.onPointerDown(event);
+    },
+  };
   const items: Array<MenuItem | 'mark' | 'mark-separator' | 'separator'> = [
     'mark',
     'mark-separator',
     {key: 'pin', className: 'pin', icon: 'pin', label: pinned ? 'Unpin' : 'Pin', disabled: pinning, busy: pinning, onSelect: onTogglePin},
     {key: 'rename', className: 'rename', icon: 'pencil', label: 'Rename', disabled: renaming, busy: renaming, onSelect: onRename},
-    {key: 'archive', className: 'archive', icon: 'archive', label: 'Archive', disabled: actionDisabled, busy: archiving, onSelect: onArchive},
-    'separator',
     {key: 'reload', className: 'reload', icon: 'refreshCw', label: 'Reload', disabled: actionDisabled, busy: reloading, onSelect: onReload},
+    'separator',
+    {key: 'archive', className: 'archive', icon: 'archive', label: 'Archive', disabled: actionDisabled, busy: archiving, onSelect: onArchive},
     {key: 'delete', className: 'delete', icon: 'trash', label: 'Delete', disabled: actionDisabled, busy: deleting, onSelect: onDelete},
   ];
   return (
     <div
       ref={menuRef}
-      className={`project-session-action-menu sl-session-list-popover${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}`}
+      className={`project-session-action-menu sl-session-list-popover${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}${dragging ? ' dragging' : ''}`}
       role="menu"
-      style={sheet ? undefined : popoverStyle}
+      aria-label="Session actions"
+      style={sheet
+        ? dragOffset > 0
+          ? {transform: `translateY(${dragOffset}px)`}
+          : undefined
+        : popoverStyle}
       onKeyDown={event => {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -97,24 +114,30 @@ export function SessionMenu({
         handleMenuKeyDown(event, menuRef.current);
       }}
     >
-      {sheet ? <div className="mobile-project-sheet-grip" aria-hidden="true" /> : null}
-      <div className="session-menu-header wide-project-action-title">
-        <SessionIcon name="list" className="session-menu-header-icon" />
-        <span className="wide-project-action-title-copy">
-          <span className="wide-project-action-title-main">Session actions</span>
-          {sessionTitle ? <span className="wide-project-action-title-sub">{sessionTitle}</span> : null}
-        </span>
-        <button
-          type="button"
-          className="session-menu-close"
-          data-menu-close="true"
-          aria-label="Close session actions"
-          title="Close"
-          onClick={onClose}
-        >
-          <SessionIcon name="x" />
-        </button>
-      </div>
+      {sheet ? <div className="mobile-project-sheet-grip" aria-hidden="true" {...dragHandleProps} /> : null}
+      {sheet ? (
+        <div className="session-menu-header wide-project-action-title" {...dragHandleProps}>
+          <SessionIcon name="list" className="session-menu-header-icon" />
+          <span className="wide-project-action-title-copy">
+            <span className="wide-project-action-title-main">Session actions</span>
+            {sessionTitle ? <span className="wide-project-action-title-sub">{sessionTitle}</span> : null}
+          </span>
+          <button
+            type="button"
+            className="session-menu-close"
+            data-menu-close="true"
+            aria-label="Close session actions"
+            title="Close"
+            onClick={onClose}
+          >
+            <SessionIcon name="x" />
+          </button>
+        </div>
+      ) : sessionTitle ? (
+        /* Desktop popover: the row the user clicked is the context, so the
+           header shrinks to a quiet eyebrow with just the session title. */
+        <div className="session-menu-eyebrow" title={sessionTitle}>{sessionTitle}</div>
+      ) : null}
       <div className="session-menu-body">
         {items.map(item =>
           item === 'separator' || item === 'mark-separator' ? (

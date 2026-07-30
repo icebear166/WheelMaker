@@ -1686,7 +1686,7 @@ describe('web chat integration', () => {
 
     expect(pickerBlock).toContain('justify-content: flex-start;');
     expect(pickerBlock).toContain('min-height: 32px;');
-    expect(pickerBlock).toContain('padding: 0 6px 4px;');
+    expect(pickerBlock).toContain('padding: 0 6px 4px 1px;');
     expect(optionBlock).toContain('width: 28px;');
     expect(optionBlock).toContain('height: 28px;');
     expect(bodyBlock).toContain('gap: 0;');
@@ -2142,7 +2142,8 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('const openProjectSessionActionMenu = (');
     expect(sessionMenuTsx).toContain('project-session-action-menu');
     expect(mainTsx).toContain('popoverStyle={!sheet && projectSessionActionMenu.popover');
-    expect(mainTsx).toContain("transform: projectSessionActionMenu.popover.placement === 'above'");
+    expect(mainTsx).toContain("projectSessionActionMenu.popover.placement === 'above'");
+    expect(mainTsx).toContain("'--sl-popover-shift': 'translateY(-100%)'");
     expect(mainTsx).toContain('anchorRect: {');
     expect(mainTsx).toContain('left: event.clientX,');
     expect(mainTsx).toContain('top: event.clientY,');
@@ -2165,9 +2166,9 @@ describe('web chat integration', () => {
     const reloadMenuIndex = sessionMenuTsx.indexOf("label: 'Reload'");
     const deleteMenuIndex = sessionMenuTsx.indexOf("label: 'Delete'");
     expect(renameMenuIndex).toBeGreaterThanOrEqual(0);
-    expect(archiveMenuIndex).toBeGreaterThan(renameMenuIndex);
-    expect(reloadMenuIndex).toBeGreaterThan(archiveMenuIndex);
-    expect(deleteMenuIndex).toBeGreaterThan(reloadMenuIndex);
+    expect(reloadMenuIndex).toBeGreaterThan(renameMenuIndex);
+    expect(archiveMenuIndex).toBeGreaterThan(reloadMenuIndex);
+    expect(deleteMenuIndex).toBeGreaterThan(archiveMenuIndex);
     expect(mainTsx).toContain("if (target?.closest('.project-session-action-menu')) {");
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
     expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');

@@ -338,15 +338,19 @@
 }
 
 /* ---------- menu enter/exit ---------- */
+/* Popovers anchored above their trigger carry translateY(-100%) in
+   --sl-popover-shift; the keyframes must keep that shift or the menu would
+   detach from its anchor while animating. */
 @keyframes sl-menu-in {
-  from { opacity: 0; transform: translateY(-2px) scale(0.98); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; transform: var(--sl-popover-shift, translateY(0)) translateY(-2px) scale(0.98); }
+  to { opacity: 1; transform: var(--sl-popover-shift, translateY(0)); }
 }
 @keyframes sl-menu-out {
-  to { opacity: 0; transform: translateY(-2px) scale(0.98); }
+  to { opacity: 0; transform: var(--sl-popover-shift, translateY(0)) translateY(-2px) scale(0.98); }
 }
 .project-session-action-menu,
-.wide-project-action-popover {
+.wide-project-action-popover,
+.session-archive-menu {
   animation: sl-menu-in 140ms var(--ease-out);
 }
 .sl-menu-exit {
@@ -370,6 +374,9 @@
 }
 
 /* ---------- menus (context / action popover) ---------- */
+/* Overlay stacking for session-list surfaces:
+   70 sheet dim overlay < 71 mobile bottom sheets < 86 hub popover/page <
+   90 desktop popovers (these) < 95 archive menu (may open above a popover). */
 .project-session-action-menu,
 .wide-project-action-popover {
   position: fixed;
@@ -379,6 +386,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   max-width: calc(100vw - 16px);
+  /* Static counterpart of the keyframe shift: keeps an above-anchored menu in
+     place once the enter animation ends. */
+  transform: var(--sl-popover-shift, translateY(0));
 }
 .sl-session-list-popover {
   background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
@@ -414,10 +424,6 @@
   user-select: none;
   transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
-.project-session-menu-btn:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--text-primary);
-}
 .project-session-menu-btn:disabled {
   opacity: 0.45;
   cursor: default;
@@ -425,14 +431,25 @@
 .project-session-menu-btn .sl-icon {
   color: var(--text-secondary);
 }
-.project-session-menu-btn:hover:not(:disabled) .sl-icon {
-  color: var(--text-primary);
+/* The destructive entry announces itself before hover. */
+.project-session-menu-btn.delete .sl-icon {
+  color: color-mix(in srgb, var(--state-danger) 78%, var(--text-secondary));
 }
-.project-session-menu-btn.delete:hover:not(:disabled) {
-  color: var(--state-danger);
-}
-.project-session-menu-btn.delete:hover:not(:disabled) .sl-icon {
-  color: var(--state-danger);
+/* Hover styles only where hover exists: on touch they would stick after tap. */
+@media (hover: hover) {
+  .project-session-menu-btn:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text-primary);
+  }
+  .project-session-menu-btn:hover:not(:disabled) .sl-icon {
+    color: var(--text-primary);
+  }
+  .project-session-menu-btn.delete:hover:not(:disabled) {
+    color: var(--state-danger);
+  }
+  .project-session-menu-btn.delete:hover:not(:disabled) .sl-icon {
+    color: var(--state-danger);
+  }
 }
 .project-session-menu-label {
   min-width: 0;
@@ -445,7 +462,8 @@
   align-items: center;
   justify-content: flex-start;
   min-height: 32px;
-  padding: 0 6px 4px;
+  /* Left inset aligns the first dot's center with the menu icon column. */
+  padding: 0 6px 4px 1px;
 }
 .project-session-mark-options {
   flex: 0 0 auto;
@@ -477,11 +495,13 @@
   background: var(--session-mark-color);
   transition: box-shadow var(--motion-fast) var(--ease-standard);
 }
-.project-session-mark-option:hover:not(:disabled) {
-  background: var(--hover);
-}
-.project-session-mark-option:hover:not(:disabled)::before {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 38%, transparent);
+@media (hover: hover) {
+  .project-session-mark-option:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .project-session-mark-option:hover:not(:disabled)::before {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 38%, transparent);
+  }
 }
 .project-session-mark-option:focus-visible {
   outline: 2px solid var(--focus-ring-color);
@@ -491,8 +511,10 @@
 .project-session-mark-option[aria-checked='true']::before {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 72%, transparent);
 }
-.project-session-mark-option[aria-checked='true']:hover:not(:disabled)::before {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 88%, transparent);
+@media (hover: hover) {
+  .project-session-mark-option[aria-checked='true']:hover:not(:disabled)::before {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--session-mark-color) 88%, transparent);
+  }
 }
 .project-session-mark-option:disabled {
   opacity: 0.45;
@@ -511,14 +533,20 @@
 .project-session-mark-clear::before {
   display: none;
 }
-.project-session-mark-clear:hover:not(:disabled) {
-  color: var(--text-primary);
+@media (hover: hover) {
+  .project-session-mark-clear:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
 }
-.project-session-mark-clear[aria-checked='true'],
-.project-session-mark-clear[aria-checked='true']:hover:not(:disabled) {
-  box-shadow: none;
+.project-session-mark-clear[aria-checked='true'] {
   background: var(--hover);
   color: var(--text-primary);
+}
+@media (hover: hover) {
+  .project-session-mark-clear[aria-checked='true']:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--text-primary);
+  }
 }
 .project-session-menu-separator {
   height: 1px;
@@ -566,6 +594,14 @@
 .session-menu-header {
   padding-bottom: 6px;
 }
+.session-menu-eyebrow {
+  padding: 4px 8px 2px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .session-menu-close {
   display: none;
   flex: 0 0 auto;
@@ -606,10 +642,12 @@
   cursor: pointer;
   text-align: left;
 }
-.wide-project-action-menu-item:hover,
-.wide-project-action-back:hover {
-  background: var(--hover);
-  color: var(--text-primary);
+@media (hover: hover) {
+  .wide-project-action-menu-item:hover,
+  .wide-project-action-back:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+  }
 }
 .wide-project-action-empty {
   display: flex;
@@ -641,8 +679,10 @@
   cursor: pointer;
   transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
 }
-.agent-choice-pill:hover {
-  background: color-mix(in srgb, var(--agent-accent, #666) 20%, transparent);
+@media (hover: hover) {
+  .agent-choice-pill:hover {
+    background: color-mix(in srgb, var(--agent-accent, #666) 20%, transparent);
+  }
 }
 .agent-choice-pill.active {
   border-color: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 65%, transparent);
@@ -756,6 +796,12 @@
 @keyframes sl-sheet-out {
   to { opacity: 0; transform: translateY(16px); }
 }
+@keyframes sl-sheet-overlay-out {
+  to { opacity: 0; }
+}
+.sl-sheet-overlay.sl-menu-exit {
+  animation: sl-sheet-overlay-out 100ms ease-in forwards;
+}
 @media (max-width: 900px) {
   .sl-sheet-overlay {
     display: block;
@@ -782,6 +828,12 @@
     padding: 4px 10px calc(var(--wm-safe-area-bottom) + 14px);
     border-radius: var(--radius-floating) var(--radius-floating) 0 0;
     border-bottom: 0;
+    /* Sheets sit above a dimmed overlay, so the popover's blur is invisible
+       there; use an opaque surface and a shadow that points up. */
+    background: var(--surface-panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
     animation: sl-sheet-in 180ms var(--ease-out);
   }
   .project-session-action-menu.sl-sheet .session-menu-header {
@@ -790,6 +842,18 @@
     gap: 10px;
     padding: 4px 4px 8px;
     border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  }
+  /* Drag-to-dismiss: the sheet springs back unless released past the
+     threshold; while dragging it tracks the finger exactly. */
+  .project-session-action-menu.sl-sheet {
+    transition: transform 160ms var(--ease-out);
+  }
+  .project-session-action-menu.sl-sheet.dragging {
+    transition: none;
+  }
+  .project-session-action-menu.sl-sheet .mobile-project-sheet-grip,
+  .project-session-action-menu.sl-sheet .session-menu-header {
+    touch-action: none;
   }
   .project-session-action-menu.sl-sheet .session-menu-header-icon {
     width: 17px;
@@ -813,7 +877,8 @@
     padding: 4px 0;
   }
   .project-session-action-menu.sl-sheet.sl-menu-exit {
-    animation: sl-sheet-out 120ms ease-in forwards;
+    /* Must fit MENU_EXIT_MS (100ms) or the portal unmounts mid-animation. */
+    animation: sl-sheet-out 100ms ease-in forwards;
   }
   .project-session-action-menu.sl-sheet .project-session-menu-btn {
     min-height: 44px;
@@ -834,6 +899,7 @@
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) {
   .sl-sheet-overlay,
+  .sl-sheet-overlay.sl-menu-exit,
   .project-session-action-menu.sl-sheet,
   .project-session-action-menu.sl-sheet.sl-menu-exit {
     animation: none;
@@ -863,6 +929,10 @@
     padding: 4px 10px calc(var(--wm-safe-area-bottom) + 14px);
     border-radius: var(--radius-floating) var(--radius-floating) 0 0;
     border-bottom: 0;
+    background: var(--surface-panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
     transform-origin: bottom center;
     animation: sl-sheet-in 180ms var(--ease-out);
   }
@@ -872,6 +942,9 @@
   }
   .session-archive-menu .session-archive-menu-item {
     min-height: 44px;
+  }
+  .session-archive-menu.sl-menu-exit {
+    animation: sl-sheet-out 100ms ease-in forwards;
   }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) {

@@ -75,6 +75,6 @@ describe('session archive UI source integration', () => {
     expect(styles).toContain('.session-archive-menu-item-icon');
     expect(styles).toContain('.session-archive-menu-item-description');
     expect(styles).toContain('.session-archive-menu-separator');
-    expect(styles).toContain('transform-origin: top left;');
+    expect(styles).toContain('transform-origin: top right;');
   });
 });
