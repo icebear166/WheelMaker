@@ -863,7 +863,8 @@ describe('web chat integration', () => {
     expect(hubMenuTsx).toContain('className="chat-hub-color-button"');
     expect(hubMenuTsx).toContain('className="chat-hub-color-dot"');
     expect(hubMenuTsx).toContain('className="chat-hub-expand-button"');
-    expect(hubMenuTsx).toContain("<Icon name={expanded ? 'chevronDown' : 'chevronRight'}");
+    expect(hubMenuTsx).toContain('name="chevronRight"');
+    expect(hubMenuTsx).not.toContain("name={expanded ? 'chevronDown' : 'chevronRight'}");
     expect(hubMenuTsx).toContain("className={`chat-hub-color-palette topbar-menu-surface${inline ? ' inline' : ''}${exiting ? ' sl-menu-exit' : ''}`}");
     expect(hubMenuTsx).toContain('<span className="chat-hub-row-name">{hubId}</span>');
     expect(hubMenuTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
@@ -1003,7 +1004,7 @@ describe('web chat integration', () => {
     expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
     expect(sections).not.toContain('border-left:');
     expect(stylesCss).not.toContain('.chat-hub-sections::before {');
-    expect(line).toContain('grid-template-columns: 14px 44px minmax(0, 1fr);');
+    expect(line).toContain('grid-template-columns: 14px minmax(44px, max-content) minmax(0, 1fr);');
     expect(line).toContain('height: 40px;');
     expect(actions).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(actions).not.toContain('border-radius: 7px;');
@@ -1048,7 +1049,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-hub-project-skill-picker {');
     expect(disclosure).toContain('position: relative;');
     expect(updateDot).toContain('position: absolute;');
-    expect(updateDot).toContain('background: var(--state-danger);');
+    expect(updateDot).toContain('background: var(--accent-primary);');
     expect(updateDot).toContain('pointer-events: none;');
   });
 

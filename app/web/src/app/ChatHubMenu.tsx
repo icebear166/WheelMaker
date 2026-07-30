@@ -246,7 +246,7 @@ function ChatHubSectionHeader({
       <Icon name={icon} className="chat-hub-section-icon" />
       <span className="chat-hub-section-label">{label}</span>
       <span className="chat-hub-section-summary">{summary}</span>
-      <Icon name={expanded ? 'chevronDown' : 'chevronRight'} className="chat-hub-section-chevron" />
+      <Icon name="chevronRight" className="chat-hub-section-chevron" />
     </button>
   );
 }
@@ -310,8 +310,55 @@ function ChatHubColorPalette({
     setHubColors(current => setHubColorPreference(current, hubId, nextColor));
   };
 
+  // Keyboard support for the two role="slider" pickers: arrows nudge, Shift
+  // widens the step, Home/End jump to the hue extremes.
+  const nudgeSv = (hsv: HubColorHsv, event: React.KeyboardEvent<HTMLElement>) => {
+    const step = event.shiftKey ? 0.1 : 0.02;
+    let saturation = hsv.s;
+    let brightness = hsv.v;
+    if (event.key === 'ArrowLeft') saturation -= step;
+    else if (event.key === 'ArrowRight') saturation += step;
+    else if (event.key === 'ArrowUp') brightness += step;
+    else if (event.key === 'ArrowDown') brightness -= step;
+    else return;
+    event.preventDefault();
+    const nextColor = hubHsvToColor({
+      h: hsv.h,
+      s: Math.max(0, Math.min(1, saturation)),
+      v: Math.max(0, Math.min(1, brightness)),
+    });
+    setHubColors(current => setHubColorPreference(current, hubId, nextColor));
+  };
+  const nudgeHue = (hsv: HubColorHsv, event: React.KeyboardEvent<HTMLElement>) => {
+    const step = event.shiftKey ? 15 : 3;
+    let hue = hsv.h;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') hue -= step;
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') hue += step;
+    else if (event.key === 'Home') hue = 0;
+    else if (event.key === 'End') hue = 360;
+    else return;
+    event.preventDefault();
+    const nextColor = hubHsvToColor({
+      h: Math.max(0, Math.min(360, hue)),
+      s: hsv.s || 1,
+      v: hsv.v || 1,
+    });
+    setHubColors(current => setHubColorPreference(current, hubId, nextColor));
+  };
+
+  // The desktop palette renders below the hub row inside the scrollable
+  // popover; make sure it is revealed when it opens.
+  const paletteRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (inline) {
+      return;
+    }
+    paletteRef.current?.scrollIntoView?.({block: 'nearest'});
+  }, [inline]);
+
   return (
     <div
+      ref={paletteRef}
       className={`chat-hub-color-palette topbar-menu-surface${inline ? ' inline' : ''}${exiting ? ' sl-menu-exit' : ''}`}
       aria-label={`Color options for ${hubId}`}
     >
@@ -344,7 +391,11 @@ function ChatHubColorPalette({
           role="slider"
           tabIndex={0}
           aria-label={`Set saturation and brightness for ${hubId}`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(currentHubHsv.s * 100)}
           aria-valuetext={`${Math.round(currentHubHsv.s * 100)}% saturation, ${Math.round(currentHubHsv.v * 100)}% brightness`}
+          onKeyDown={event => nudgeSv(currentHubHsv, event)}
           onPointerDown={event => applySvPointer(currentHubHsv, event)}
           onPointerMove={event => {
             if (event.pointerType === 'mouse' && event.buttons === 0) {
@@ -362,7 +413,8 @@ function ChatHubColorPalette({
           aria-label={`Set hue for ${hubId}`}
           aria-valuemin={0}
           aria-valuemax={360}
-          aria-valuenow={currentHubHsv.h}
+          aria-valuenow={Math.round(currentHubHsv.h)}
+          onKeyDown={event => nudgeHue(currentHubHsv, event)}
           onPointerDown={event => applyHuePointer(currentHubHsv, event)}
           onPointerMove={event => {
             if (event.pointerType === 'mouse' && event.buttons === 0) {
@@ -566,7 +618,7 @@ function ChatHubDisclosureButton({
       title={label}
       onClick={onToggle}
     >
-      <Icon name={pending ? 'loader' : icon} size={18} spin={pending} />
+      <Icon name={pending ? 'loader' : icon} spin={pending} />
       <span className="chat-hub-action-info">{info}</span>
       {updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
     </button>
@@ -725,6 +777,7 @@ function ChatHubProjectSkillsDetail({
   );
   const [selectedProjectName, setSelectedProjectName] = React.useState('');
   const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
+  const projectPickerMenuRef = React.useRef<HTMLDivElement>(null);
   const selectedProject = projects.find(project => project.projectName === selectedProjectName)
     ?? projects.find(project => project.projectId === activeProjectId)
     ?? projects[0]
@@ -736,6 +789,33 @@ function ChatHubProjectSkillsDetail({
       setSelectedProjectName(nextName);
     }
   }, [selectedProject?.projectName, selectedProjectName]);
+
+  // Move focus into the listbox when it opens so arrow keys work immediately.
+  React.useEffect(() => {
+    if (!projectPickerOpen) {
+      return;
+    }
+    const menu = projectPickerMenuRef.current;
+    const target = menu?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')
+      ?? menu?.querySelector<HTMLElement>('[role="option"]');
+    target?.focus();
+  }, [projectPickerOpen]);
+
+  const moveProjectOptionFocus = (delta: number | 'first' | 'last') => {
+    const options = projectPickerMenuRef.current
+      ? Array.from(projectPickerMenuRef.current.querySelectorAll<HTMLElement>('[role="option"]'))
+      : [];
+    if (options.length === 0) {
+      return;
+    }
+    const currentIndex = options.indexOf(document.activeElement as HTMLElement);
+    const nextIndex = delta === 'first'
+      ? 0
+      : delta === 'last'
+        ? options.length - 1
+        : Math.max(0, Math.min(options.length - 1, (currentIndex < 0 ? 0 : currentIndex) + delta));
+    options[nextIndex]?.focus();
+  };
 
   if (projects.length === 0 || !selectedProject) {
     return (
@@ -757,6 +837,18 @@ function ChatHubProjectSkillsDetail({
         onKeyDown={event => {
           if (event.key === 'Escape') {
             setProjectPickerOpen(false);
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            moveProjectOptionFocus(1);
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            moveProjectOptionFocus(-1);
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            moveProjectOptionFocus('first');
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            moveProjectOptionFocus('last');
           }
         }}
       >
@@ -772,10 +864,10 @@ function ChatHubProjectSkillsDetail({
         >
           <span className="chat-hub-project-skill-name">{selectedProject.projectName}</span>
           <span className="chat-hub-project-skill-count">{selectedProject.skills.length}</span>
-          <Icon name={projectPickerOpen ? 'chevronUp' : 'chevronDown'} />
+          <Icon name="chevronDown" className="chat-hub-project-skill-chevron" />
         </button>
         {projectPickerOpen ? (
-          <div className="chat-hub-project-skill-menu" role="listbox" aria-label="Project">
+          <div className="chat-hub-project-skill-menu" role="listbox" aria-label="Project" ref={projectPickerMenuRef}>
             {projects.map(project => {
               const selected = project.projectName === selectedProject.projectName;
               return (
@@ -969,7 +1061,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
         </button>
         <Icon
-          name={expanded ? 'chevronDown' : 'chevronRight'}
+          name="chevronRight"
           className="chat-hub-expand-chevron"
         />
       </div>
@@ -1138,7 +1230,6 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
     popoverRef,
     onToggle,
     onClose,
-    colorMenuHubId,
     latestVersion,
     updateAllAvailableCount,
     updateAllPending,
@@ -1235,7 +1326,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
             style={popoverStyle}
           >
             <div
-              className={`chat-hub-popover topbar-menu-surface${colorMenuHubId ? ' no-overflow' : ''}${exiting ? ' sl-menu-exit' : ''}`}
+              className={`chat-hub-popover topbar-menu-surface${exiting ? ' sl-menu-exit' : ''}`}
               role="dialog"
               aria-label="Hub and project display preferences"
             >

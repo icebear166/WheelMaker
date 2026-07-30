@@ -253,7 +253,7 @@ test('hub row uses one direct version action and three icon-count Global disclos
     node => ['package', 'mcp', 'wand'].includes(node.props['data-icon-name']),
   );
   expect(globalIcons.map(node => node.props['data-icon-name'])).toEqual(['package', 'mcp', 'wand']);
-  expect(globalIcons.map(node => node.props.width)).toEqual([18, 18, 18]);
+  expect(globalIcons.map(node => node.props.width)).toEqual([14, 14, 14]);
   expect(version.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
   expect(npm.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
   expect(mcp.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
@@ -565,7 +565,7 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   expect(projectIcons.map(icons => icons.map(node => node.props['data-icon-name'])))
     .toEqual([['eye'], ['scanLine'], ['wand']]);
   expect(projectIcons.map(icons => icons.map(node => node.props.width)))
-    .toEqual([[18], [18], [18]]);
+    .toEqual([[14], [14], [14]]);
   expect(projectButtons.map(button => button.findByProps({className: 'chat-hub-action-info'}).children))
     .toEqual([['1/2'], ['1/2'], ['3']]);
   expect(projectButtons.flatMap(button => button.findAll(
@@ -1054,7 +1054,7 @@ test('mobile renders a Skill detail as a child page and Back preserves the Hub p
   expect(renderer.root.findAllByProps({className: 'chat-hub-page-close'})).toHaveLength(0);
 });
 
-test('desktop palette stays a flyout and forces popover no-overflow; mobile palette is inline', async () => {
+test('desktop palette stays a flyout inside the scrollable popover; mobile palette is inline', async () => {
   const desktop = createHarness({colorMenuHubId: 'hub-a'});
   let desktopRenderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -1064,7 +1064,7 @@ test('desktop palette stays a flyout and forces popover no-overflow; mobile pale
     node => typeof node.props.className === 'string' &&
       node.props.className.startsWith('chat-hub-popover topbar-menu-surface'),
   );
-  expect(popover.props.className).toContain('no-overflow');
+  expect(popover.props.className).not.toContain('no-overflow');
   const flyout = desktopRenderer.root.find(
     node => typeof node.props.className === 'string' && node.props.className.includes('chat-hub-color-palette'),
   );

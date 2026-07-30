@@ -1308,6 +1308,9 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  /* The skill companion widens the stack and shifts `left`; glide instead of
+     jumping when it opens or closes. */
+  transition: left 180ms var(--ease-out);
 }
 
 .chat-hub-popover {
@@ -1333,10 +1336,6 @@
   backdrop-filter: blur(12px) saturate(1.1);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
   animation: sl-menu-in 140ms var(--ease-out);
-}
-
-.chat-hub-popover.no-overflow {
-  overflow: visible;
 }
 
 .chat-hub-tree + .chat-hub-tree {
@@ -1447,6 +1446,11 @@
   color: var(--text-tertiary);
   font-size: 14px;
   pointer-events: none;
+  transition: transform 150ms var(--ease-out);
+}
+
+.chat-hub-tree.expanded .chat-hub-expand-chevron {
+  transform: rotate(90deg);
 }
 
 .chat-hub-row-name {
@@ -1717,6 +1721,32 @@
   padding: 0;
 }
 
+/* Expanded regions mount on demand, so the best we can do without keeping
+   them mounted is a short glide-in; height changes stay instant. */
+@keyframes chat-hub-region-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.chat-hub-sections,
+.chat-hub-section-body,
+.chat-hub-detail {
+  animation: chat-hub-region-in 150ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-hub-sections,
+  .chat-hub-section-body,
+  .chat-hub-detail,
+  .chat-hub-expand-chevron,
+  .chat-hub-section-chevron,
+  .chat-hub-project-skill-trigger > .sl-icon,
+  .chat-hub-popover-stack {
+    animation: none;
+    transition: none;
+  }
+}
+
 .chat-hub-section + .chat-hub-section {
   border-top: 1px solid color-mix(in srgb, var(--border-subtle) 30%, transparent);
 }
@@ -1796,6 +1826,11 @@
 .chat-hub-section-chevron {
   flex: 0 0 auto;
   color: var(--text-tertiary);
+  transition: transform 150ms var(--ease-out);
+}
+
+.chat-hub-section-header.expanded .chat-hub-section-chevron {
+  transform: rotate(90deg);
 }
 
 .chat-hub-section-body {
@@ -2007,7 +2042,7 @@
   height: 40px;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 14px 44px minmax(0, 1fr);
+  grid-template-columns: 14px minmax(44px, max-content) minmax(0, 1fr);
   align-items: center;
   gap: 5px;
   padding: 0 6px;
@@ -2029,6 +2064,10 @@
 }
 
 .chat-hub-line-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -2081,9 +2120,21 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: var(--state-danger);
+  background: var(--accent-primary);
   box-shadow: 0 0 0 1px var(--surface-panel);
   pointer-events: none;
+  animation: chat-hub-dot-in 140ms var(--ease-out);
+}
+
+@keyframes chat-hub-dot-in {
+  from { transform: scale(0); }
+  to { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-hub-update-dot {
+    animation: none;
+  }
 }
 
 .chat-hub-action:hover:not(:disabled),
@@ -2102,6 +2153,46 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Shared hover/focus easing for every ghost control in the hub menu so state
+   changes never snap. */
+.chat-hub-row,
+.chat-hub-color-button,
+.chat-hub-section-header,
+.chat-hub-action,
+.chat-hub-icon-btn,
+.chat-hub-detail-action,
+.chat-hub-project-row,
+.chat-hub-project-skill-trigger,
+.chat-hub-project-skill-option,
+.chat-hub-flicker-modes button,
+.chat-hub-skill-icon-button,
+.chat-hub-skill-toolbar-button,
+.chat-hub-skill-update-all,
+.chat-hub-skill-row-actions button,
+button.chat-hub-skill-name {
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-hub-row,
+  .chat-hub-color-button,
+  .chat-hub-section-header,
+  .chat-hub-action,
+  .chat-hub-icon-btn,
+  .chat-hub-detail-action,
+  .chat-hub-project-row,
+  .chat-hub-project-skill-trigger,
+  .chat-hub-project-skill-option,
+  .chat-hub-flicker-modes button,
+  .chat-hub-skill-icon-button,
+  .chat-hub-skill-toolbar-button,
+  .chat-hub-skill-update-all,
+  .chat-hub-skill-row-actions button,
+  button.chat-hub-skill-name {
+    transition: none;
+  }
 }
 
 .chat-hub-action-info {
@@ -2131,6 +2222,16 @@
   padding: 2px 6px;
   border-color: transparent;
   background: transparent;
+}
+
+/* The version readout is status, not an action: keep it legible when no
+   update action is available and only quiet the icon. */
+.chat-hub-row > .chat-hub-version-action:disabled {
+  opacity: 1;
+}
+
+.chat-hub-row > .chat-hub-version-action:disabled .sl-icon {
+  opacity: 0.45;
 }
 
 .chat-hub-detail {
@@ -2374,8 +2475,14 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-skill-toolbar-button.is-danger,
-.chat-hub-skill-row-actions .chat-hub-action-slot:last-child button {
+.chat-hub-skill-row-actions button.is-danger {
   color: var(--danger, #df6674);
+}
+
+.chat-hub-skill-row-actions button.is-danger:hover:not(:disabled),
+.chat-hub-skill-row-actions button.is-danger:focus-visible {
+  color: var(--danger, #df6674);
+  background: color-mix(in srgb, var(--danger, #df6674) 10%, transparent);
 }
 
 .chat-hub-skill-update-all {
@@ -2476,6 +2583,11 @@ button.chat-hub-skill-name:disabled {
 
 .chat-hub-project-skill-trigger > .sl-icon {
   color: var(--text-tertiary);
+  transition: transform 150ms var(--ease-out);
+}
+
+.chat-hub-project-skill-trigger[aria-expanded="true"] > .sl-icon {
+  transform: rotate(180deg);
 }
 
 .chat-hub-project-skill-menu {
@@ -2748,8 +2860,20 @@ button.chat-hub-skill-name:disabled {
   animation: mobile-sheet-slide-up 260ms cubic-bezier(0.2, 0.85, 0.3, 1);
 }
 
+@keyframes mobile-sheet-slide-down {
+  from { transform: translateY(0); }
+  to { transform: translateY(102%); }
+}
+
+/* Exit mirrors entry: the page slides back down instead of fading. Keep at
+   MENU_EXIT_MS (100ms) so the portal unmounts after the animation. */
+.chat-hub-page.sl-menu-exit {
+  animation: mobile-sheet-slide-down 100ms ease-in forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .chat-hub-page {
+  .chat-hub-page,
+  .chat-hub-page.sl-menu-exit {
     animation: none;
   }
 }

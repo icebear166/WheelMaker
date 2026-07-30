@@ -252,6 +252,7 @@ export function ChatHubSkillScopeDetail({
                     {managed ? (
                       <button
                         type="button"
+                        className="is-danger"
                         aria-label={`Uninstall ${skill.name}`}
                         disabled={hubBusy}
                         onClick={() => actions.onUninstall({...target, skillName: skill.name})}
