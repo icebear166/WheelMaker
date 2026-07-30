@@ -58,6 +58,7 @@ type sessionViewSummary struct {
 	PendingPermissionCount int                           `json:"pendingPermissionCount"`
 	ForkedFrom             *acp.SessionForkOrigin        `json:"forkedFrom,omitempty"`
 	Goal                   *acp.SessionGoal              `json:"goal,omitempty"`
+	Queue                  *acp.SessionQueueSnapshot     `json:"queue,omitempty"`
 }
 
 type sessionTitleFacts struct {
@@ -138,6 +139,7 @@ type SessionRecorder struct {
 
 	modelLookup  func(sessionID string) string
 	actionLookup func(agentType string) acp.SessionActionCapabilities
+	queueLookup  func(sessionID string, full bool) *acp.SessionQueueSnapshot
 }
 
 func newSessionRecorder(projectName string, store Store, listSessions func(context.Context) ([]SessionRecord, error)) *SessionRecorder {
@@ -763,7 +765,11 @@ func (r *SessionRecorder) ListSessionViews(ctx context.Context) ([]sessionViewSu
 	}
 	out := make([]sessionViewSummary, 0, len(entries))
 	for _, entry := range entries {
-		out = append(out, r.sessionViewSummaryFromRecord(entry))
+		summary := r.sessionViewSummaryFromRecord(entry)
+		if r.queueLookup != nil {
+			summary.Queue = r.queueLookup(entry.ID, false)
+		}
+		out = append(out, summary)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].UpdatedAt > out[j].UpdatedAt
@@ -1301,6 +1307,9 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 	}
 	if r.actionLookup != nil {
 		summary.SessionActions = r.actionLookup(summary.AgentType)
+	}
+	if r.queueLookup != nil {
+		summary.Queue = r.queueLookup(rec.ID, true)
 	}
 	summary.PendingPermissionCount = pendingPermissionCountFromPromptState(r.promptState[rec.ID])
 	return summary

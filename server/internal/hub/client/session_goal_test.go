@@ -32,15 +32,15 @@ func newGoalTestClient(t *testing.T, sessionID string) (*Client, *Session, *test
 	return client, session, runtime
 }
 
-func TestSessionSendGoalRecordsRawCommandWithoutPromptingAgent(t *testing.T) {
+func TestSessionGoalCreateRecordsCommandWithoutPromptingAgent(t *testing.T) {
 	client, session, runtime := newGoalTestClient(t, "session-goal-command")
-	raw := "/goal  Ship release  "
-	_, err := client.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(mustJSON(map[string]any{
+	raw := "/goal Ship release"
+	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionGoalCreate, "test", json.RawMessage(mustJSON(map[string]any{
 		"sessionId": "session-goal-command",
-		"text":      raw,
+		"objective": "Ship release",
 	})))
 	if err != nil {
-		t.Fatalf("session.send: %v", err)
+		t.Fatalf("session.goal.create: %v", err)
 	}
 	if len(runtime.goalSetCalls) != 1 {
 		t.Fatalf("goal set calls = %d", len(runtime.goalSetCalls))
@@ -90,12 +90,12 @@ func TestSessionGoalCreateRejectsNonPositiveBudget(t *testing.T) {
 
 func TestSessionGoalDoesNotBecomeIdleBetweenNativeTurns(t *testing.T) {
 	client, session, _ := newGoalTestClient(t, "session-goal-turns")
-	_, err := client.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(mustJSON(map[string]any{
+	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionGoalCreate, "test", json.RawMessage(mustJSON(map[string]any{
 		"sessionId": "session-goal-turns",
-		"text":      "/goal ship",
+		"objective": "ship",
 	})))
 	if err != nil {
-		t.Fatalf("session.send: %v", err)
+		t.Fatalf("session.goal.create: %v", err)
 	}
 
 	session.SessionUpdate(acp.SessionUpdateParams{
@@ -287,12 +287,12 @@ func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
 
 func TestClientRecoversActiveGoalAfterAgentRuntimeStops(t *testing.T) {
 	client, session, stoppedRuntime := newGoalTestClient(t, "goal-runtime-reconnect")
-	_, err := client.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(mustJSON(map[string]any{
+	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionGoalCreate, "test", json.RawMessage(mustJSON(map[string]any{
 		"sessionId": "goal-runtime-reconnect",
-		"text":      "/goal ship",
+		"objective": "ship",
 	})))
 	if err != nil {
-		t.Fatalf("session.send: %v", err)
+		t.Fatalf("session.goal.create: %v", err)
 	}
 	session.SessionUpdate(acp.SessionUpdateParams{
 		SessionID: "goal-runtime-reconnect",

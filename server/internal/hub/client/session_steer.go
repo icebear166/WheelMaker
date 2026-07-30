@@ -109,25 +109,3 @@ func (s *Session) trySteerQueuePrompt(
 	}
 	return sessionSteerAttempt{outcome: sessionSteerAttemptTranscript}, nil
 }
-
-// Steer is retained only until the request router is switched to session.queue.
-func (s *Session) Steer(
-	ctx context.Context,
-	params acp.SessionSteerParams,
-) (acp.SessionSteerAccepted, error) {
-	attempt, err := s.trySteerQueuePrompt(ctx, params.ClientMessageID, params.Blocks)
-	if err != nil {
-		return acp.SessionSteerAccepted{}, err
-	}
-	outcome := acp.SessionSteerOutcomeSteered
-	if attempt.outcome == sessionSteerAttemptFallback {
-		outcome = acp.SessionSteerOutcomeSent
-	}
-	return acp.SessionSteerAccepted{
-		OK:              true,
-		Accepted:        true,
-		SessionID:       s.acpSessionID,
-		ClientMessageID: strings.TrimSpace(params.ClientMessageID),
-		Outcome:         outcome,
-	}, nil
-}

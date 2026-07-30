@@ -2,8 +2,10 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
@@ -130,6 +132,43 @@ func eventuallyQueue(t *testing.T, check func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("condition was not met before timeout")
+}
+
+func addPersistedQueueRuntimeSession(
+	t *testing.T,
+	c *Client,
+	sessionID string,
+) (*Session, *queueExecutionInstance) {
+	t.Helper()
+	now := time.Now().UTC()
+	addRuntimeSession(c, sessionID, "Queue", "codex", now, now)
+	if err := c.store.SaveSession(context.Background(), &SessionRecord{
+		ID:           sessionID,
+		ProjectName:  c.projectName,
+		Status:       SessionActive,
+		AgentType:    "codex",
+		AgentJSON:    `{}`,
+		Title:        "Queue",
+		CreatedAt:    now,
+		LastActiveAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := c.SessionForTest(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := &queueExecutionInstance{
+		testInjectedInstance: &testInjectedInstance{name: "queue-test", sessionID: sessionID, alive: true, callbacks: sess},
+		started:              make(chan string, 16),
+		promptOutcomes:       make(chan queuePromptOutcome, 16),
+		compactOutcomes:      make(chan error, 16),
+	}
+	sess.mu.Lock()
+	sess.instance = instance
+	sess.ready = true
+	sess.mu.Unlock()
+	return sess, instance
 }
 
 func mustNewSessionForQueueTest(t *testing.T, id string) *Session {
@@ -488,6 +527,9 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 	if len(got.WaitingItems) != 1 || got.WaitingItems[0].Status != acp.SessionQueueItemStatusSteering {
 		t.Fatalf("queue = %#v", got)
 	}
+	if err := s.prioritizeQueueItem("steer-1"); err == nil {
+		t.Fatal("steering item was prioritized")
+	}
 
 	s.SessionUpdate(acp.SessionUpdateParams{
 		SessionID: "sess-steer",
@@ -565,4 +607,166 @@ func TestSessionQueueSteerFailureRestoresOriginalPosition(t *testing.T) {
 		t.Fatalf("queue = %#v", got)
 	}
 	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+}
+
+func TestHandleSessionQueueReturnsLatestFullSnapshot(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	sess, instance := addPersistedQueueRuntimeSession(t, c, "sess-queue-request")
+
+	resp, err := c.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionQueue,
+		"proj1",
+		json.RawMessage(mustJSON(map[string]any{
+			"sessionId": "sess-queue-request",
+			"action":    acp.SessionQueueActionEnqueue,
+			"item": map[string]any{
+				"itemId":    "item-1",
+				"kind":      "prompt",
+				"createdAt": "2026-07-31T10:00:00Z",
+				"blocks":    []map[string]any{{"type": "text", "text": "hello"}},
+			},
+		})),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, ok := resp.(map[string]any)
+	if !ok {
+		t.Fatalf("response = %T, want map", resp)
+	}
+	summary, ok := body["session"].(sessionViewSummary)
+	if !ok || summary.Queue == nil || summary.Queue.Generation == "" ||
+		(summary.Queue.ActiveItem == nil && len(summary.Queue.WaitingItems) == 0) {
+		t.Fatalf("response = %#v", body)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:hello")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	eventuallyQueue(t, func() bool { return !sess.queuePinsMemory() })
+}
+
+func TestSessionQueueProjectionIsFullForReadAndSummaryOnlyForList(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	sess, _ := addPersistedQueueRuntimeSession(t, c, "sess-queue-projection")
+	if _, _, err := sess.enqueueQueueItem(promptQueueItem("item-1", "private blocks")); err != nil {
+		t.Fatal(err)
+	}
+
+	readResp, err := c.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionRead,
+		"proj1",
+		json.RawMessage(`{"sessionId":"sess-queue-projection"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readSummary := readResp.(map[string]any)["session"].(sessionViewSummary)
+	if readSummary.Queue == nil || len(readSummary.Queue.WaitingItems) != 1 ||
+		len(readSummary.Queue.WaitingItems[0].Blocks) != 1 {
+		t.Fatalf("read queue = %#v", readSummary.Queue)
+	}
+
+	listResp, err := c.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionList,
+		"proj1",
+		json.RawMessage(`{}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := listResp.(map[string]any)["sessions"].([]sessionViewSummary)
+	if len(sessions) != 1 || sessions[0].Queue == nil ||
+		sessions[0].Queue.WaitingCount != 1 ||
+		sessions[0].Queue.ActiveItem != nil ||
+		sessions[0].Queue.WaitingItems != nil {
+		t.Fatalf("list sessions = %#v", sessions)
+	}
+}
+
+func TestHandleSessionQueueRejectsInvalidActions(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	addPersistedQueueRuntimeSession(t, c, "sess-invalid-action")
+	for _, payload := range []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-invalid-action","action":"unknown","itemId":"item-1"}`),
+		json.RawMessage(`{"sessionId":"sess-invalid-action","action":"cancel"}`),
+		json.RawMessage(`{"sessionId":"sess-invalid-action","action":"enqueue","itemId":"item-1"}`),
+		json.RawMessage(`{"sessionId":"sess-invalid-action","action":"cancel","itemId":"item-1","legacy":true}`),
+	} {
+		_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
+		var registryErr *acp.RegistryRequestError
+		if !errors.As(err, &registryErr) || registryErr.Code != acp.CodeInvalidArgument {
+			t.Fatalf("payload %s error = %#v, want INVALID_ARGUMENT", payload, err)
+		}
+	}
+}
+
+func TestEvictSuspendedSessionWithQueueKeepsItInMemory(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	sess, _ := addPersistedQueueRuntimeSession(t, c, "sess-queue-pinned")
+	sess.mu.Lock()
+	sess.Status = SessionSuspended
+	sess.lastActiveAt = time.Now().Add(-time.Hour)
+	sess.mu.Unlock()
+	if _, _, err := sess.enqueueQueueItem(promptQueueItem("item-1", "waiting")); err != nil {
+		t.Fatal(err)
+	}
+	c.suspendTimeout = time.Millisecond
+
+	c.evictSuspendedSessions()
+	if !c.HasSessionInMemoryForTest("sess-queue-pinned") {
+		t.Fatal("nonempty queue did not pin the suspended session in memory")
+	}
+}
+
+func TestSessionQueueIsNotRecoveredFromSQLite(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "client.sqlite3")
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := New(store, "proj1", t.TempDir())
+	sess, _ := addPersistedQueueRuntimeSession(t, c, "sess-queue-restart")
+	if _, _, err := sess.enqueueQueueItem(promptQueueItem("item-1", "ephemeral")); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.persistSession(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopenedStore, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened := New(reopenedStore, "proj1", t.TempDir())
+	t.Cleanup(func() { _ = reopened.Close() })
+	reloaded, err := reopened.SessionForTest("sess-queue-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := reloaded.queueSnapshot(true)
+	if got.Generation == "" || got.ActiveItem != nil || len(got.WaitingItems) != 0 {
+		t.Fatalf("recovered queue = %#v", got)
+	}
+}
+
+func TestSessionQueueLifecycleDeleteClearsLiveState(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	sess, _ := addPersistedQueueRuntimeSession(t, c, "sess-queue-delete")
+	if _, _, err := sess.enqueueQueueItem(promptQueueItem("item-1", "discard me")); err != nil {
+		t.Fatal(err)
+	}
+	before := sess.queueSnapshot(true)
+
+	if err := c.DeleteSession(context.Background(), "sess-queue-delete"); err != nil {
+		t.Fatal(err)
+	}
+	after := sess.queueSnapshot(true)
+	if after.Generation == before.Generation || after.ActiveItem != nil || len(after.WaitingItems) != 0 {
+		t.Fatalf("queue after delete = %#v", after)
+	}
 }

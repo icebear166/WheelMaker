@@ -158,6 +158,9 @@ func (s *Session) prioritizeQueueItem(itemID string) error {
 		if item.wire.ItemID != itemID {
 			continue
 		}
+		if item.status != acp.SessionQueueItemStatusQueued {
+			return sessionQueueRequestError(acp.CodeConflict, "only a queued waiting item can be prioritized")
+		}
 		if i == 0 {
 			return nil
 		}

@@ -122,6 +122,11 @@ func (r *sessionRecovery) ReloadSession(ctx context.Context, sessionID string) (
 	if r.client.sessionIsRunning(sessionID) {
 		return nil, fmt.Errorf("session %s is running", sessionID)
 	}
+	sess, err := r.client.SessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve session: %w", err)
+	}
+	sess.resetQueue()
 	rec, err := r.client.store.LoadSession(ctx, r.client.projectName, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("load session: %w", err)
@@ -140,10 +145,6 @@ func (r *sessionRecovery) ReloadSession(ctx context.Context, sessionID string) (
 		if err := r.client.sessionRecorder.ResetSessionTurns(ctx, sessionID); err != nil {
 			return nil, fmt.Errorf("reset session turns: %w", err)
 		}
-	}
-	sess, err := r.client.SessionByID(ctx, sessionID)
-	if err != nil {
-		return nil, fmt.Errorf("resolve session: %w", err)
 	}
 	if err := sess.Suspend(ctx); err != nil {
 		return nil, fmt.Errorf("suspend session: %w", err)
