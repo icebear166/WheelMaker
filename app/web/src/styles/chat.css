@@ -2887,8 +2887,6 @@
 .chat-prompt-user {
   display: inline-block;
   align-self: flex-start;
-  /* Reserve room for the trailing status chip (e.g. the responding dots) so
-     it stays on the prompt's line instead of wrapping under flex-wrap. */
   max-width: min(920px, calc(100% - 28px));
   padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--accent-primary) 72%, var(--border-subtle));
@@ -2906,6 +2904,7 @@
   align-items: flex-end;
   flex-wrap: wrap;
   gap: 6px 8px;
+  width: 100%;
   max-width: min(920px, 100%);
 }
 
