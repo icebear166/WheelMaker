@@ -126,42 +126,39 @@ export function SessionMenu({
               role="group"
               aria-label="Mark session"
             >
-              <span className="project-session-mark-content">
-                <span className="project-session-mark-label">Mark</span>
-                <span className="project-session-mark-options">
-                  {SESSION_MARK_OPTIONS.map(option => (
-                    <button
-                      key={option.color}
-                      type="button"
-                      className={`project-session-mark-option ${sessionMarkColorClass(option.color)}`}
-                      role="menuitemradio"
-                      aria-label={`Mark ${option.color}`}
-                      aria-checked={markColor === option.color}
-                      title={`${option.label} mark`}
-                      disabled={marking}
-                      onClick={event => {
-                        event.stopPropagation();
-                        onSetMark(option.color);
-                      }}
-                    />
-                  ))}
-                  <span className="project-session-mark-divider" aria-hidden="true" />
+              <span className="project-session-mark-options">
+                {SESSION_MARK_OPTIONS.map(option => (
                   <button
+                    key={option.color}
                     type="button"
-                    className="project-session-mark-option project-session-mark-clear"
+                    className={`project-session-mark-option ${sessionMarkColorClass(option.color)}`}
                     role="menuitemradio"
-                    aria-label="Clear mark"
-                    aria-checked={!markColor}
-                    title="Clear mark"
+                    aria-label={`Mark ${option.color}`}
+                    aria-checked={markColor === option.color}
+                    title={`${option.label} mark`}
                     disabled={marking}
                     onClick={event => {
                       event.stopPropagation();
-                      onSetMark('');
+                      onSetMark(option.color);
                     }}
-                  >
-                    <SessionIcon name="ban" size={12} />
-                  </button>
-                </span>
+                  />
+                ))}
+                <span className="project-session-mark-divider" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="project-session-mark-option project-session-mark-clear"
+                  role="menuitemradio"
+                  aria-label="Clear mark"
+                  aria-checked={!markColor}
+                  title="Clear mark"
+                  disabled={marking}
+                  onClick={event => {
+                    event.stopPropagation();
+                    onSetMark('');
+                  }}
+                >
+                  <SessionIcon name="eraser" size={13} />
+                </button>
               </span>
             </div>
           ) : (

@@ -444,19 +444,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  min-height: 40px;
-  padding: 4px 8px;
-}
-.project-session-mark-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.project-session-mark-label {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.2;
+  min-height: 32px;
+  padding: 0 6px 4px;
 }
 .project-session-mark-options {
   flex: 0 0 auto;
@@ -468,8 +457,8 @@
   --session-mark-color: var(--text-tertiary);
 }
 .project-session-mark-option {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -482,8 +471,8 @@
 }
 .project-session-mark-option::before {
   content: '';
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--session-mark-color);
   transition: box-shadow var(--motion-fast) var(--ease-standard);
@@ -517,25 +506,23 @@
 }
 .project-session-mark-clear {
   background: transparent;
-  border: 1px solid var(--border-subtle);
+  border: 0;
 }
 .project-session-mark-clear::before {
   display: none;
 }
 .project-session-mark-clear:hover:not(:disabled) {
-  border-color: var(--text-tertiary);
   color: var(--text-primary);
 }
 .project-session-mark-clear[aria-checked='true'],
 .project-session-mark-clear[aria-checked='true']:hover:not(:disabled) {
   box-shadow: none;
-  border-color: var(--text-secondary);
   background: var(--hover);
   color: var(--text-primary);
 }
 .project-session-menu-separator {
   height: 1px;
-  margin: 4px 6px;
+  margin: 2px 6px;
   background: var(--border-faint);
 }
 @media (prefers-reduced-transparency: reduce) {
@@ -576,6 +563,9 @@
 .session-menu-header-icon {
   color: var(--text-tertiary);
 }
+.session-menu-header {
+  padding-bottom: 6px;
+}
 .session-menu-close {
   display: none;
   flex: 0 0 auto;
@@ -598,8 +588,8 @@
 .session-menu-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-bottom: 4px;
+  gap: 0;
+  padding-bottom: 2px;
 }
 .wide-project-action-menu-item,
 .wide-project-action-back {
@@ -832,6 +822,14 @@
   }
   .project-session-action-menu.sl-sheet .project-session-mark-picker {
     min-height: 48px;
+  }
+  .project-session-action-menu.sl-sheet .project-session-mark-option {
+    width: 40px;
+    height: 40px;
+  }
+  .project-session-action-menu.sl-sheet .project-session-mark-option::before {
+    width: 16px;
+    height: 16px;
   }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) {

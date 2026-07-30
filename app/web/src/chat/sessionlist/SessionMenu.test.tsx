@@ -109,16 +109,16 @@ describe('SessionMenu', () => {
       ]),
     );
     expect(options[1].props['aria-checked']).toBe(true);
-    expect(options[4].findByProps({'data-icon-name': 'ban'})).toBeTruthy();
+    expect(options[4].findByProps({'data-icon-name': 'eraser'})).toBeTruthy();
   });
 
-  it('anchors the mark controls in a labeled row', async () => {
+  it('renders the palette without a redundant Mark label or wrapper', async () => {
     const {tree} = await renderMenu();
     const picker = tree.root.findByProps({className: 'project-session-mark-picker'});
-    const content = picker.findByProps({className: 'project-session-mark-content'});
 
-    expect(content.findByProps({className: 'project-session-mark-label'}).children.join('')).toBe('Mark');
-    expect(content.findByProps({className: 'project-session-mark-options'})).toBeTruthy();
+    expect(picker.findAllByProps({className: 'project-session-mark-label'})).toHaveLength(0);
+    expect(picker.findAllByProps({className: 'project-session-mark-content'})).toHaveLength(0);
+    expect(picker.findByProps({className: 'project-session-mark-options'})).toBeTruthy();
   });
 
   it('routes a mark color and disables the whole palette while marking', async () => {

@@ -1709,12 +1709,20 @@ describe('web chat integration', () => {
     );
   });
 
-  test('keeps the session mark control group aligned with action rows', () => {
+  test('keeps the desktop session mark palette compact and aligned with action rows', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const pickerBlock = cssRuleBlock(stylesCss, '.project-session-mark-picker');
+    const optionBlock = cssRuleBlock(stylesCss, '.project-session-mark-option');
+    const bodyBlock = cssRuleBlock(stylesCss, '.session-menu-body');
 
     expect(pickerBlock).toContain('justify-content: flex-start;');
+    expect(pickerBlock).toContain('min-height: 32px;');
+    expect(pickerBlock).toContain('padding: 0 6px 4px;');
+    expect(optionBlock).toContain('width: 28px;');
+    expect(optionBlock).toContain('height: 28px;');
+    expect(bodyBlock).toContain('gap: 0;');
+    expect(bodyBlock).toContain('padding-bottom: 2px;');
   });
 
   test('wires speech input settings and composer voice controls through split modules', () => {
@@ -2026,7 +2034,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('preferredWidth: 260');
     expect(mainTsx).toContain('preferredMaxHeight: 320');
     expect(sessionMenuTsx).toContain('project-session-mark-picker');
-    expect(sessionMenuTsx).toContain('name="ban"');
+    expect(sessionMenuTsx).toContain('name="eraser"');
     expect(sessionListViewTsx).toContain('markColor={session.markColor}');
     expect(sessionRowTsx).toContain('wide-session-mark');
 
