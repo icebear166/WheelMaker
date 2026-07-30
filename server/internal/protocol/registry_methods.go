@@ -115,13 +115,10 @@ const (
 	RegistryMethodSessionRename              = "session.rename"
 	RegistryMethodSessionPin                 = "session.pin"
 	RegistryMethodSessionMark                = "session.mark"
-	RegistryMethodSessionSend                = "session.send"
-	RegistryMethodSessionCancel              = "session.cancel"
+	RegistryMethodSessionQueue               = "session.queue"
 	RegistryMethodSessionMarkRead            = "session.markRead"
 	RegistryMethodSessionConfig              = "session.config"
 	RegistryMethodSessionStatus              = "session.status"
-	RegistryMethodSessionCompact             = "session.compact"
-	RegistryMethodSessionSteer               = "session.steer"
 	RegistryMethodSessionFork                = "session.fork"
 	RegistryMethodSessionGoalCreate          = "session.goal.create"
 	RegistryMethodSessionGoalGet             = "session.goal.get"
@@ -237,13 +234,10 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionRename:              registryProjectMethod(RegistryMethodSessionRename, RegistryRouteSessionForward),
 	RegistryMethodSessionPin:                 registryProjectMethod(RegistryMethodSessionPin, RegistryRouteSessionForward),
 	RegistryMethodSessionMark:                registryProjectMethod(RegistryMethodSessionMark, RegistryRouteSessionForward),
-	RegistryMethodSessionSend:                registryProjectMethod(RegistryMethodSessionSend, RegistryRouteSessionForward),
-	RegistryMethodSessionCancel:              registryProjectMethod(RegistryMethodSessionCancel, RegistryRouteSessionForward),
+	RegistryMethodSessionQueue:               registryProjectMethod(RegistryMethodSessionQueue, RegistryRouteSessionForward),
 	RegistryMethodSessionMarkRead:            registryProjectMethod(RegistryMethodSessionMarkRead, RegistryRouteSessionForward),
 	RegistryMethodSessionConfig:              registryProjectMethod(RegistryMethodSessionConfig, RegistryRouteSessionForward),
 	RegistryMethodSessionStatus:              registryProjectMethod(RegistryMethodSessionStatus, RegistryRouteSessionForward),
-	RegistryMethodSessionCompact:             registryProjectMethod(RegistryMethodSessionCompact, RegistryRouteSessionForward),
-	RegistryMethodSessionSteer:               registryProjectMethod(RegistryMethodSessionSteer, RegistryRouteSessionForward),
 	RegistryMethodSessionFork:                registryProjectMethod(RegistryMethodSessionFork, RegistryRouteSessionForward),
 	RegistryMethodSessionGoalCreate:          registryProjectMethod(RegistryMethodSessionGoalCreate, RegistryRouteSessionForward),
 	RegistryMethodSessionGoalGet:             registryProjectMethod(RegistryMethodSessionGoalGet, RegistryRouteSessionForward),

@@ -1050,7 +1050,7 @@ func TestRegistryUpdateProjectBroadcastsEvents(t *testing.T) {
 	}
 }
 
-func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
+func TestServerForwardsSessionQueueAndSessionEventBroadcast(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -1104,38 +1104,46 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "session.send",
+		Method:    "session.queue",
 		ProjectID: "hub-a:server",
 		Payload: map[string]any{
 			"sessionId": "sess-1",
-			"text":      "hello registry session",
+			"action":    "enqueue",
+			"item": map[string]any{
+				"itemId":    "item-1",
+				"kind":      "prompt",
+				"createdAt": "2026-07-31T10:00:00Z",
+				"blocks":    []map[string]any{{"type": "text", "text": "hello registry session"}},
+			},
 		},
 	})
 
 	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Method != "session.send" {
-		t.Fatalf("forwarded.method=%q, want session.send", forwarded.Method)
+	if forwarded.Method != "session.queue" {
+		t.Fatalf("forwarded.method=%q, want session.queue", forwarded.Method)
 	}
 	if forwarded.ProjectID != "hub-a:server" {
 		t.Fatalf("forwarded.projectId=%q, want hub-a:server", forwarded.ProjectID)
 	}
 	forwardPayload := forwarded.Payload
-	if forwardPayload["sessionId"] != "sess-1" || forwardPayload["text"] != "hello registry session" {
+	item, _ := forwardPayload["item"].(map[string]any)
+	if forwardPayload["sessionId"] != "sess-1" || forwardPayload["action"] != "enqueue" ||
+		item["itemId"] != "item-1" || item["kind"] != "prompt" {
 		t.Fatalf("forwarded payload=%v", forwardPayload)
 	}
 
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: forwarded.RequestID,
 		Type:      "response",
-		Method:    "session.send",
+		Method:    "session.queue",
 		ProjectID: forwarded.ProjectID,
 		Payload: map[string]any{
 			"ok": true,
 		},
 	})
 	sendResp := mustReadEnvelope(t, client)
-	if sendResp.Type != "response" || sendResp.Method != "session.send" {
-		t.Fatalf("unexpected session.send response: %#v", sendResp)
+	if sendResp.Type != "response" || sendResp.Method != "session.queue" {
+		t.Fatalf("unexpected session.queue response: %#v", sendResp)
 	}
 
 	mustWriteJSON(t, client, testEnvelope{

@@ -220,7 +220,7 @@ func TestSessionMarkIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 }
 
 func TestRegistrySessionActionMethods(t *testing.T) {
-	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact, RegistryMethodSessionSteer, RegistryMethodSessionFork} {
+	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionQueue, RegistryMethodSessionFork} {
 		desc, ok := RegistryMethod(method)
 		if !ok {
 			t.Fatalf("method %q is not registered", method)
@@ -234,13 +234,18 @@ func TestRegistrySessionActionMethods(t *testing.T) {
 	}
 }
 
-func TestRegistrySessionSteerDescriptor(t *testing.T) {
-	desc, ok := RegistryMethod(RegistryMethodSessionSteer)
+func TestRegistrySessionQueueReplacesLegacyMethods(t *testing.T) {
+	desc, ok := RegistryMethod(RegistryMethodSessionQueue)
 	if !ok {
-		t.Fatal("session.steer descriptor missing")
+		t.Fatal("session.queue descriptor missing")
 	}
 	if !desc.RequiresProjectID || desc.Route != RegistryRouteSessionForward {
-		t.Fatalf("session.steer descriptor = %+v", desc)
+		t.Fatalf("session.queue descriptor = %+v", desc)
+	}
+	for _, removed := range []string{"session.send", "session.compact", "session.cancel", "session.steer"} {
+		if _, exists := RegistryMethod(removed); exists {
+			t.Fatalf("%s must not remain registered", removed)
+		}
 	}
 	if DefaultProtocolVersion != "2.6" {
 		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
@@ -350,8 +355,8 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if RegistryMethodAllowed(string(RegistryRoleClient), RegistryMethodHubReportProjects) {
 		t.Fatal("client should not be allowed to report projects")
 	}
-	if !RegistryClientForwardMethod(RegistryMethodSessionSend) {
-		t.Fatal("session.send should be a client forward method")
+	if !RegistryClientForwardMethod(RegistryMethodSessionQueue) {
+		t.Fatal("session.queue should be a client forward method")
 	}
 	if !RegistryClientForwardMethod(RegistryMethodSessionArtifactRead) {
 		t.Fatalf("%s should be forwarded to the hub session route", RegistryMethodSessionArtifactRead)
