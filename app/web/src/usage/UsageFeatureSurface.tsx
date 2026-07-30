@@ -1,6 +1,6 @@
 import React from 'react';
 
-import {formatResetCountdown, formatResetUTC, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
+import {formatResetCountdown, formatResetLocalSecond, formatResetUTC, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
 
 export type UsageOpenHistory = (
   provider: UsageProviderView,
@@ -154,6 +154,19 @@ function AccountDetails({
           <span className="usage-limit-reset">Balance</span>
         </div>
       ))}
+      {account.resetCredits?.credits?.length ? (
+        <div className="usage-reset-credits" data-usage-reset-credits={true}>
+          <div className="usage-reset-credits-heading">Reset credits · {account.resetCredits.availableCount}</div>
+          {account.resetCredits.credits
+            .filter(credit => credit.expiresAt)
+            .sort((a, b) => String(a.expiresAt).localeCompare(String(b.expiresAt)))
+            .map((credit, index) => (
+              <div className="usage-reset-credit-row" key={credit.id ?? index}>
+                {formatResetLocalSecond(credit.expiresAt)}
+              </div>
+            ))}
+        </div>
+      ) : null}
     </>
   );
 }

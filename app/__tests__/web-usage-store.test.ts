@@ -244,4 +244,39 @@ describe('UsageStore', () => {
       {hubId: 'hub-b', accountLocalId: 'local-b', updatedAt: '2026-07-28T01:10:00Z'},
     ]);
   });
+
+  it('preserves Codex reset credits through normalization', () => {
+    const store = new UsageStore();
+    expect(store.ingest({
+      method: 'hub.state.updated',
+      payload: {
+        sections: ['tokenStats'],
+        state: {sections: {tokenStats: {data: {
+          hubId: 'hub-a', generation: 1, status: 'ready', providers: [{
+            id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+              localId: 'current',
+              identity: {kind: 'email', value: 'user@example.com', label: 'user@example.com'},
+              status: 'ok',
+              limits: [{id: 'week', label: 'Week', remainingPercent: 80}],
+              resetCredits: {
+                availableCount: 2,
+                credits: [
+                  {id: 'RateLimitResetCredit_b', expiresAt: '2026-08-01T00:00:00Z'},
+                  {id: 'RateLimitResetCredit_a', expiresAt: '2026-07-31T00:00:00Z'},
+                  {id: 'RateLimitResetCredit_c'},
+                ],
+              },
+            }],
+          }],
+        }}}},
+      },
+    })).toBe(true);
+
+    const account = store.snapshot().providers[0].accounts[0];
+    expect(account.resetCredits?.availableCount).toBe(2);
+    expect(account.resetCredits?.credits).toEqual([
+      {id: 'RateLimitResetCredit_b', expiresAt: '2026-08-01T00:00:00Z'},
+      {id: 'RateLimitResetCredit_a', expiresAt: '2026-07-31T00:00:00Z'},
+    ]);
+  });
 });

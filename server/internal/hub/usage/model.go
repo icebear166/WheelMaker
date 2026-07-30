@@ -63,14 +63,25 @@ type Balance struct {
 	Items       []BalanceItem `json:"items"`
 }
 
+type ResetCredit struct {
+	ID        string     `json:"id,omitempty"`
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+}
+
+type ResetCredits struct {
+	AvailableCount int           `json:"availableCount"`
+	Credits        []ResetCredit `json:"credits,omitempty"`
+}
+
 type Account struct {
 	LocalID  string         `json:"localId"`
 	Identity Identity       `json:"identity"`
 	Status   ProviderStatus `json:"status"`
 	Plan     string         `json:"plan,omitempty"`
 	Message  string         `json:"message,omitempty"`
-	Limits   []Limit        `json:"limits"`
-	Balance  *Balance       `json:"balance,omitempty"`
+	Limits       []Limit        `json:"limits"`
+	Balance      *Balance       `json:"balance,omitempty"`
+	ResetCredits *ResetCredits  `json:"resetCredits,omitempty"`
 }
 
 type ProviderSnapshot struct {

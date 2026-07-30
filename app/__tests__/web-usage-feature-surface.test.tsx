@@ -286,6 +286,49 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(view!.root)).not.toContain('not authenticated');
   });
 
+  it('renders Codex reset credits as one local-time row per card in detail mode', () => {
+    const snapshot: UsageViewSnapshot = {
+      refreshing: false,
+      providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accountCount: 1, remainingPercent: 80,
+        accounts: [{
+          localId: 'current', identity: {kind: 'email', value: 'a@example.com', label: 'a@example.com'},
+          status: 'ok', hubIds: ['hub-a'],
+          limits: [{id: 'week', label: 'Week', remainingPercent: 80}],
+          resetCredits: {
+            availableCount: 2,
+            credits: [
+              {id: 'RateLimitResetCredit_b', expiresAt: '2026-08-01T00:00:00Z'},
+              {id: 'RateLimitResetCredit_a', expiresAt: '2026-07-31T00:00:00Z'},
+            ],
+          },
+        }],
+      }],
+    };
+
+    let detailView: TestRenderer.ReactTestRenderer;
+    act(() => {
+      detailView = TestRenderer.create(<UsageDetailContent snapshot={snapshot} />);
+    });
+
+    const container = detailView!.root.findByProps({'data-usage-reset-credits': true});
+    expect(renderedText(container)).toContain('Reset credits · 2');
+    const rows = container.findAllByProps({className: 'usage-reset-credit-row'});
+    expect(rows).toHaveLength(2);
+    const texts = rows.map(renderedText);
+    for (const text of texts) {
+      expect(text).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }
+    // ascending by expiry (same local zone => lexicographic order is chronological)
+    expect(texts[0] < texts[1]).toBe(true);
+
+    let compactView: TestRenderer.ReactTestRenderer;
+    act(() => {
+      compactView = TestRenderer.create(<UsageCompactContent snapshot={snapshot} />);
+    });
+    expect(compactView!.root.findAllByProps({'data-usage-reset-credits': true})).toHaveLength(0);
+  });
+
   it('keeps the compact quota windows visible beside both remaining values', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {

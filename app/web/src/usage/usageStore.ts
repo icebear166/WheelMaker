@@ -7,6 +7,7 @@ import type {
   UsageProviderSnapshot,
   UsageProviderStatus,
   UsageProviderView,
+  UsageResetCredits,
   UsageViewAccount,
   UsageViewSnapshot,
 } from './usageTypes';
@@ -209,9 +210,21 @@ function parseProvider(value: unknown): UsageProviderSnapshot | null {
       balance: isRecord(rawAccount.balance) && typeof rawAccount.balance.isAvailable === 'boolean' && Array.isArray(rawAccount.balance.items)
         ? {isAvailable: rawAccount.balance.isAvailable, items: rawAccount.balance.items.filter(isRecord).map(item => ({currency: optionalString(item.currency) ?? '', total: optionalString(item.total) ?? '', granted: optionalString(item.granted), toppedUp: optionalString(item.toppedUp)}))}
         : undefined,
+      resetCredits: parseResetCredits(rawAccount.resetCredits),
     });
   }
   return {id: value.id, name: value.name, status: value.status, message: optionalString(value.message), accounts};
+}
+
+function parseResetCredits(value: unknown): UsageResetCredits | undefined {
+  if (!isRecord(value) || typeof value.availableCount !== 'number') return undefined;
+  const credits = Array.isArray(value.credits)
+    ? value.credits
+        .filter(isRecord)
+        .map(credit => ({id: optionalString(credit.id), expiresAt: optionalString(credit.expiresAt)}))
+        .filter(credit => credit.expiresAt)
+    : undefined;
+  return {availableCount: value.availableCount, credits: credits && credits.length ? credits : undefined};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

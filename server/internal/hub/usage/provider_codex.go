@@ -41,7 +41,9 @@ func (s *CodexScanner) Scan(ctx context.Context) ProviderSnapshot {
 		return result
 	}
 	result.Status = ProviderOK
-	result.Accounts = []Account{codexAccount(payload.Account, limits)}
+	account := codexAccount(payload.Account, limits)
+	account.ResetCredits = parseCodexResetCredits(payload.RateLimits)
+	result.Accounts = []Account{account}
 	return result
 }
 
@@ -96,6 +98,35 @@ func parseCodexRateLimits(payload map[string]any) ([]Limit, error) {
 		return nil, fmt.Errorf("rate limit windows missing")
 	}
 	return limits, nil
+}
+
+func parseCodexResetCredits(payload map[string]any) *ResetCredits {
+	raw, ok := payload["rateLimitResetCredits"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	credits := []ResetCredit{}
+	if entries, ok := raw["credits"].([]any); ok {
+		for _, entry := range entries {
+			card, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			credit := ResetCredit{}
+			if id, _ := card["id"].(string); id != "" {
+				credit.ID = id
+			}
+			if seconds := int64(number(card["expiresAt"])); seconds > 0 {
+				value := time.Unix(seconds, 0).UTC()
+				credit.ExpiresAt = &value
+			}
+			credits = append(credits, credit)
+		}
+	}
+	return &ResetCredits{
+		AvailableCount: int(number(raw["availableCount"])),
+		Credits:        credits,
+	}
 }
 
 func fetchCodexUsage(ctx context.Context, binary string) (codexUsagePayload, error) {

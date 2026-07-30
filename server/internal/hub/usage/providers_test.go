@@ -117,6 +117,34 @@ func TestParseCodexRateLimitsByWindowDuration(t *testing.T) {
 	}
 }
 
+func TestParseCodexResetCredits(t *testing.T) {
+	payload := map[string]any{"rateLimitResetCredits": map[string]any{
+		"availableCount": float64(2),
+		"credits": []any{
+			map[string]any{"id": "RateLimitResetCredit_a", "expiresAt": float64(1785528461)},
+			map[string]any{"id": "RateLimitResetCredit_b", "expiresAt": float64(1786482562)},
+			map[string]any{"id": "", "expiresAt": nil}, // skipped expiry but still listed
+		},
+	}}
+	credits := parseCodexResetCredits(payload)
+	if credits == nil || credits.AvailableCount != 2 || len(credits.Credits) != 3 {
+		t.Fatalf("reset credits=%+v", credits)
+	}
+	if credits.Credits[0].ID != "RateLimitResetCredit_a" || credits.Credits[1].ID != "RateLimitResetCredit_b" {
+		t.Fatalf("credit ids=%+v", credits.Credits)
+	}
+	want := time.Unix(1785528461, 0).UTC()
+	if credits.Credits[0].ExpiresAt == nil || !credits.Credits[0].ExpiresAt.Equal(want) {
+		t.Fatalf("first expiry=%v want %v", credits.Credits[0].ExpiresAt, want)
+	}
+	if credits.Credits[2].ExpiresAt != nil {
+		t.Fatalf("missing expiry should stay nil, got %v", credits.Credits[2].ExpiresAt)
+	}
+	if got := parseCodexResetCredits(map[string]any{}); got != nil {
+		t.Fatalf("expected nil when rateLimitResetCredits missing, got %+v", got)
+	}
+}
+
 func TestCodexScannerReadsStableEmailWithoutPublishingCredential(t *testing.T) {
 	previousCommand := newBackgroundCommand
 	defer func() { newBackgroundCommand = previousCommand }()
@@ -136,6 +164,14 @@ func TestCodexScannerReadsStableEmailWithoutPublishingCredential(t *testing.T) {
 	}
 	if account.Plan != "plus" {
 		t.Fatalf("plan=%q", account.Plan)
+	}
+	if account.ResetCredits == nil || account.ResetCredits.AvailableCount != 2 || len(account.ResetCredits.Credits) != 2 {
+		t.Fatalf("reset credits=%+v", account.ResetCredits)
+	}
+	wantExpiry := time.Unix(1785528461, 0).UTC()
+	first := account.ResetCredits.Credits[0]
+	if first.ID != "RateLimitResetCredit_x" || first.ExpiresAt == nil || !first.ExpiresAt.Equal(wantExpiry) {
+		t.Fatalf("first credit=%+v want id=RateLimitResetCredit_x expiry=%v", first, wantExpiry)
 	}
 	raw, err := json.Marshal(got)
 	if err != nil {
@@ -180,6 +216,12 @@ func TestCodexAppServerHelperProcess(t *testing.T) {
 			}
 			result = map[string]any{"rateLimits": map[string]any{
 				"primary": map[string]any{"windowDurationMins": float64(300), "usedPercent": float64(23)},
+			}, "rateLimitResetCredits": map[string]any{
+				"availableCount": float64(2),
+				"credits": []any{
+					map[string]any{"id": "RateLimitResetCredit_x", "expiresAt": float64(1785528461)},
+					map[string]any{"id": "RateLimitResetCredit_y", "expiresAt": float64(1786482562)},
+				},
 			}}
 		default:
 			os.Exit(5)

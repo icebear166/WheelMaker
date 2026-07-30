@@ -29,6 +29,16 @@ export interface UsageBalance {
   items: UsageBalanceItem[];
 }
 
+export interface UsageResetCredit {
+  id?: string;
+  expiresAt?: string;
+}
+
+export interface UsageResetCredits {
+  availableCount: number;
+  credits?: UsageResetCredit[];
+}
+
 export interface UsageAccount {
   localId: string;
   identity: UsageIdentity;
@@ -37,6 +47,7 @@ export interface UsageAccount {
   message?: string;
   limits: UsageLimit[];
   balance?: UsageBalance;
+  resetCredits?: UsageResetCredits;
 }
 
 export interface UsageProviderSnapshot {
@@ -120,4 +131,11 @@ export function formatUpdatedAgo(updatedAt?: string, now = Date.now()): string {
 export function formatResetUTC(resetsAt?: string): string {
   if (!resetsAt || !Number.isFinite(Date.parse(resetsAt))) return '';
   return resetsAt.replace('T', ' ').replace(/\.000Z$/, 'Z').replace(/Z$/, ' UTC');
+}
+
+export function formatResetLocalSecond(resetsAt?: string): string {
+  if (!resetsAt || !Number.isFinite(Date.parse(resetsAt))) return '';
+  const date = new Date(resetsAt);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
