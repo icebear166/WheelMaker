@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  buildMarkdownHtmlFileNameFromStem,
   buildMarkdownHtmlFileName,
-  buildPromptMarkdownHtmlFileName,
+  buildPromptMarkdownHtmlFileStem,
   buildStandaloneMarkdownHtmlDocument,
   resolveProjectMarkdownImagePath,
+  validateMarkdownHtmlFileStem,
 } from '../web/src/chat/export/markdownHtmlExport';
 
 function readMarkdownHtmlExportDocumentSource(): string {
@@ -27,8 +29,16 @@ describe('markdown HTML export', () => {
   test('uses deterministic HTML export names', () => {
     expect(buildMarkdownHtmlFileName('docs/README.MD')).toBe('README.html');
     expect(
-      buildPromptMarkdownHtmlFileName(7, new Date('2026-07-24T08:09:10.123Z')),
-    ).toBe('wheelmaker-response-turn-7-2026-07-24T08-09-10-123Z.html');
+      buildPromptMarkdownHtmlFileStem(new Date(2026, 6, 30, 15, 42, 8)),
+    ).toBe('2026-07-30_15-42-08');
+    expect(buildMarkdownHtmlFileNameFromStem(' Project recap ')).toBe('Project recap.html');
+  });
+
+  test('validates HTML file name stems before export', () => {
+    expect(validateMarkdownHtmlFileStem('')).toBe('Enter a file name.');
+    expect(validateMarkdownHtmlFileStem('report:final')).toContain('cannot include');
+    expect(validateMarkdownHtmlFileStem('CON')).toBe('Choose a different file name.');
+    expect(validateMarkdownHtmlFileStem('Project recap')).toBe('');
   });
 
   test('accepts only project-contained image paths', () => {

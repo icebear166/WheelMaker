@@ -345,6 +345,31 @@ body,
   box-shadow: 0 0 0 2px color-mix(in srgb, #8a63d2 18%, transparent);
 }
 
+.app-html-export-name-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 10px;
+}
+
+.app-html-export-name-input {
+  margin-top: 0;
+  border-radius: 7px 0 0 7px;
+}
+
+.app-html-export-name-suffix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-left: 0;
+  border-radius: 0 7px 7px 0;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  user-select: none;
+}
+
 .label {
   min-width: 0;
   overflow: hidden;

@@ -214,17 +214,21 @@ describe('web chat file peek viewer', () => {
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
 
     expect(mainTsx).toContain('buildMarkdownHtmlFileName,');
-    expect(mainTsx).toContain('buildPromptMarkdownHtmlFileName,');
+    expect(mainTsx).toContain('buildPromptMarkdownHtmlFileStem,');
+    expect(mainTsx).toContain('buildMarkdownHtmlFileNameFromStem,');
+    expect(mainTsx).toContain('validateMarkdownHtmlFileStem,');
     expect(mainTsx).toContain('resolveProjectMarkdownImagePath,');
     expect(mainTsx).toContain('outputMarkdownHtml,');
     expect(mainTsx).toContain('reserveMarkdownHtmlShare,');
     expect(mainTsx).toContain('const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest]');
+    expect(mainTsx).toContain('const [promptMarkdownHtmlExportDraft, setPromptMarkdownHtmlExportDraft]');
     expect(mainTsx).toContain("if (action === 'export-html')");
     expect(mainTsx).toContain('service.readProjectFile(relativePath, menuProjectId)');
     expect(mainTsx).toContain('const startMarkdownHtmlExport = async');
     expect(mainTsx).toContain('image.encoding !== \'base64\'');
     expect(mainTsx).toContain('data:${mimeType};base64,${image.content}');
     expect(mainTsx).toContain('exportPromptDoneMarkdownHtmlEvent(doneTurnIndex)');
+    expect(mainTsx).toContain('<AppHtmlExportNameDialog');
     expect(mainTsx).toContain('<MarkdownHtmlExportSurface');
     expect(mainTsx).toContain("'HTML file copied to clipboard.'");
     expect(mainTsx).toContain("'HTML file shared.'");

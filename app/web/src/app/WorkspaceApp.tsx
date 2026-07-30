@@ -72,6 +72,7 @@ import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nati
 import {
   AppConfirmDialog,
   AppGoalEditDialog,
+  AppHtmlExportNameDialog,
   AppRenameDialog,
   AppSessionStatusDialog,
   type ConfirmTarget,
@@ -292,9 +293,11 @@ import {
 import {
   MARKDOWN_EXPORT_CONTENT_CLASS_NAME,
   MARKDOWN_EXPORT_CONTENT_STYLE,
+  buildMarkdownHtmlFileNameFromStem,
   buildMarkdownHtmlFileName,
-  buildPromptMarkdownHtmlFileName,
+  buildPromptMarkdownHtmlFileStem,
   resolveProjectMarkdownImagePath,
+  validateMarkdownHtmlFileStem,
 } from '../chat/export/markdownHtmlExport';
 import {
   outputMarkdownHtml,
@@ -1984,6 +1987,10 @@ type StartMarkdownHtmlExportInput = {
   key: string;
 };
 
+type PromptMarkdownHtmlExportDraft = Omit<StartMarkdownHtmlExportInput, 'fileName'> & {
+  fileNameStem: string;
+};
+
 type MarkdownImageExportSurfaceProps = {
   request: MarkdownImageExportRequest;
   exportMode: MarkdownImageExportMode;
@@ -3495,6 +3502,7 @@ export function App() {
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
   const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
   const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest] = useState<MarkdownHtmlExportRequest | null>(null);
+  const [promptMarkdownHtmlExportDraft, setPromptMarkdownHtmlExportDraft] = useState<PromptMarkdownHtmlExportDraft | null>(null);
   const [exportingMarkdownHtmlKey, setExportingMarkdownHtmlKey] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const markdownImageExportIdRef = useRef(0);
@@ -17070,10 +17078,10 @@ export function App() {
     if (!result.ok) {
       return;
     }
-    await startMarkdownHtmlExport({
+    setPromptMarkdownHtmlExportDraft({
       content: result.markdown,
       title: `WheelMaker response ${doneTurnIndex}`,
-      fileName: buildPromptMarkdownHtmlFileName(doneTurnIndex),
+      fileNameStem: buildPromptMarkdownHtmlFileStem(),
       projectId: selectedChatKey?.projectId || projectId,
       sourcePath: '',
       key: `prompt:${selectedChatEncodedKey}:${doneTurnIndex}`,
@@ -17140,6 +17148,22 @@ export function App() {
     setExportingMarkdownHtmlKey('');
     setError(`Failed to export HTML: ${message}`);
   }, []);
+
+  const promptMarkdownHtmlExportNameError = promptMarkdownHtmlExportDraft
+    ? validateMarkdownHtmlFileStem(promptMarkdownHtmlExportDraft.fileNameStem)
+    : '';
+  const submitPromptMarkdownHtmlExport = () => {
+    const draft = promptMarkdownHtmlExportDraft;
+    if (!draft || promptMarkdownHtmlExportNameError) {
+      return;
+    }
+    const {fileNameStem, ...request} = draft;
+    setPromptMarkdownHtmlExportDraft(null);
+    startMarkdownHtmlExport({
+      ...request,
+      fileName: buildMarkdownHtmlFileNameFromStem(fileNameStem),
+    }).catch(() => undefined);
+  };
 
   const openPromptArtifactFileContextMenu = useCallback((
     _artifact: RegistrySessionPromptArtifact,
@@ -21137,6 +21161,18 @@ export function App() {
       onSubmit={submitRenameTarget}
     />
   );
+  const appHtmlExportNameDialog = (
+    <AppHtmlExportNameDialog
+      open={promptMarkdownHtmlExportDraft !== null}
+      nameStem={promptMarkdownHtmlExportDraft?.fileNameStem ?? ''}
+      error={promptMarkdownHtmlExportNameError}
+      onNameStemChange={fileNameStem => {
+        setPromptMarkdownHtmlExportDraft(current => current ? {...current, fileNameStem} : current);
+      }}
+      onCancel={() => setPromptMarkdownHtmlExportDraft(null)}
+      onSubmit={submitPromptMarkdownHtmlExport}
+    />
+  );
   const appGoalEditDialog = (
     <AppGoalEditDialog
       goal={goalEditTarget?.goal ?? null}
@@ -21252,6 +21288,7 @@ export function App() {
           {toastMessage}
         </div>
       ) : null}
+      {appHtmlExportNameDialog}
       {appRenameDialog}
       {appGoalEditDialog}
       {appConfirmDialog}

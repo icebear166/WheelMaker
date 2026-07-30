@@ -1,7 +1,11 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
-import {AppConfirmDialog, type ConfirmTarget} from './AppDialogs';
+import {
+  AppConfirmDialog,
+  AppHtmlExportNameDialog,
+  type ConfirmTarget,
+} from './AppDialogs';
 
 function confirmCopy(target: ConfirmTarget): string {
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -60,4 +64,58 @@ test('single-skill update confirmation names the selected skill', () => {
 
   expect(copy).toContain('baseline-ui');
   expect(copy).toContain('Hub: hub-a');
+});
+
+test('HTML export name dialog presents an editable stem with a fixed extension', () => {
+  const onCancel = jest.fn();
+  const onSubmit = jest.fn();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppHtmlExportNameDialog
+        open
+        nameStem="2026-07-30_15-42-08"
+        error=""
+        onNameStemChange={() => undefined}
+        onCancel={onCancel}
+        onSubmit={onSubmit}
+      />,
+    );
+  });
+
+  const input = renderer.root.findByProps({'aria-label': 'HTML file name'});
+  expect(input.props.value).toBe('2026-07-30_15-42-08');
+  expect(renderer.root.findByProps({className: 'app-html-export-name-suffix'}).children)
+    .toEqual(['.html']);
+
+  act(() => {
+    input.props.onKeyDown({key: 'Enter', preventDefault: jest.fn()});
+  });
+  expect(onSubmit).toHaveBeenCalledTimes(1);
+
+  act(() => {
+    input.props.onKeyDown({key: 'Escape', preventDefault: jest.fn()});
+  });
+  expect(onCancel).toHaveBeenCalledTimes(1);
+});
+
+test('HTML export name dialog disables export for an invalid stem', () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppHtmlExportNameDialog
+        open
+        nameStem=""
+        error="Enter a file name."
+        onNameStemChange={() => undefined}
+        onCancel={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+  });
+
+  expect(renderer.root.findByProps({className: 'app-confirm-btn primary'}).props.disabled)
+    .toBe(true);
+  expect(renderer.root.findByProps({className: 'app-confirm-error'}).children)
+    .toEqual(['Enter a file name.']);
 });

@@ -128,6 +128,15 @@ type AppRenameDialogProps = {
   onSubmit: () => void;
 };
 
+type AppHtmlExportNameDialogProps = {
+  open: boolean;
+  nameStem: string;
+  error: string;
+  onNameStemChange: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+};
+
 type AppGoalEditDialogProps = {
   goal: RegistrySessionGoal | null;
   busy: boolean;
@@ -465,6 +474,89 @@ export function AppRenameDialog({
           >
             <Icon name={busy ? 'loader' : 'check'} spin={busy} />
             Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AppHtmlExportNameDialog({
+  open,
+  nameStem,
+  error,
+  onNameStemChange,
+  onCancel,
+  onSubmit,
+}: AppHtmlExportNameDialogProps) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="app-confirm-backdrop"
+      role="presentation"
+      onPointerDown={onCancel}
+    >
+      <div
+        className="app-confirm-dialog app-rename-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-html-export-name-title"
+        onPointerDown={event => event.stopPropagation()}
+      >
+        <div className="app-confirm-icon">
+          <Icon name="fileCode" size={17} />
+        </div>
+        <div className="app-confirm-content">
+          <div id="app-html-export-name-title" className="app-confirm-title">
+            Name HTML file
+          </div>
+          <div className="app-confirm-copy">Choose a name for this exported response.</div>
+          <div className="app-html-export-name-field">
+            <input
+              className="app-rename-input app-html-export-name-input"
+              type="text"
+              value={nameStem}
+              maxLength={155}
+              autoFocus
+              aria-label="HTML file name"
+              aria-describedby={error ? 'app-html-export-name-error' : undefined}
+              onChange={event => onNameStemChange(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  if (!error) {
+                    onSubmit();
+                  }
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  onCancel();
+                }
+              }}
+            />
+            <span className="app-html-export-name-suffix" aria-hidden="true">.html</span>
+          </div>
+          {error ? (
+            <div id="app-html-export-name-error" className="app-confirm-error">{error}</div>
+          ) : null}
+        </div>
+        <div className="app-confirm-actions">
+          <button
+            type="button"
+            className="app-confirm-btn secondary"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="app-confirm-btn primary"
+            disabled={Boolean(error)}
+            onClick={onSubmit}
+          >
+            <Icon name="fileCode" />
+            Export
           </button>
         </div>
       </div>

@@ -151,13 +151,44 @@ export function buildMarkdownHtmlFileName(path: string): string {
   return `${base.replace(/\.md$/i, '') || 'document'}.html`;
 }
 
-export function buildPromptMarkdownHtmlFileName(
-  doneTurnIndex: number,
-  now = new Date(),
-): string {
-  const safeTurnIndex = Math.max(0, Math.trunc(doneTurnIndex || 0));
-  const timestamp = now.toISOString().replace(/[:.]/g, '-');
-  return `wheelmaker-response-turn-${safeTurnIndex}-${timestamp}.html`;
+function twoDigitDatePart(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+export function buildPromptMarkdownHtmlFileStem(now = new Date()): string {
+  return [
+    now.getFullYear(),
+    twoDigitDatePart(now.getMonth() + 1),
+    twoDigitDatePart(now.getDate()),
+  ].join('-') + '_' + [
+    twoDigitDatePart(now.getHours()),
+    twoDigitDatePart(now.getMinutes()),
+    twoDigitDatePart(now.getSeconds()),
+  ].join('-');
+}
+
+export function buildMarkdownHtmlFileNameFromStem(stem: string): string {
+  return `${stem.trim()}.html`;
+}
+
+export function validateMarkdownHtmlFileStem(stem: string): string {
+  const normalized = stem.trim();
+  if (!normalized) {
+    return 'Enter a file name.';
+  }
+  if (/[<>:"/\\|?*\u0000-\u001f]/.test(normalized)) {
+    return 'File names cannot include < > : " / \\ | ? *.';
+  }
+  if (normalized.endsWith('.')) {
+    return 'File names cannot end with a period.';
+  }
+  if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(normalized)) {
+    return 'Choose a different file name.';
+  }
+  if (new TextEncoder().encode(`${normalized}.html`).length > 160) {
+    return 'File name is too long.';
+  }
+  return '';
 }
 
 export function resolveProjectMarkdownImagePath(
