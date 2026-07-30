@@ -1494,6 +1494,9 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 				if message.Role != "assistant" {
 					return nil, mapping, errors.New("thinking is only valid in assistant messages")
 				}
+				if block.Thinking == "" && block.Signature == "" {
+					continue
+				}
 				part := map[string]any{"type": "reasoning", "text": block.Thinking}
 				if block.Signature != "" {
 					part["providerOptions"] = map[string]any{
@@ -1508,6 +1511,9 @@ func anthropicRequestToV3(request anthropicMessagesRequest) (map[string]any, v2T
 			default:
 				return nil, mapping, fmt.Errorf("unsupported Anthropic content block: %s", block.Type)
 			}
+		}
+		if len(converted) == 0 {
+			continue
 		}
 		prompt = append(prompt, map[string]any{"role": message.Role, "content": converted})
 	}

@@ -738,6 +738,47 @@ func TestV2ToolResultFollowedByUserTextDoesNotFail(t *testing.T) {
 	}
 }
 
+func TestV2DropsEmptyThinkingHistoryWithoutChangingSemanticContent(t *testing.T) {
+	var request anthropicMessagesRequest
+	if err := json.Unmarshal([]byte(`{
+		"max_tokens":128,
+		"messages":[
+			{"role":"user","content":"before"},
+			{"role":"assistant","content":[{"type":"thinking","thinking":"","signature":""}]},
+			{"role":"user","content":"after"},
+			{"role":"assistant","content":[
+				{"type":"thinking","thinking":"","signature":""},
+				{"type":"text","text":"kept"}
+			]}
+		]
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+
+	converted, _, err := anthropicRequestToV3(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, _ := converted["prompt"].([]any)
+	if len(prompt) != 3 {
+		t.Fatalf("prompt = %#v, want empty-thinking-only assistant omitted", prompt)
+	}
+	roles := make([]string, 0, len(prompt))
+	for _, rawMessage := range prompt {
+		message, _ := rawMessage.(map[string]any)
+		roles = append(roles, firstText(message["role"]))
+	}
+	if !slices.Equal(roles, []string{"user", "user", "assistant"}) {
+		t.Fatalf("roles = %v, want [user user assistant]", roles)
+	}
+	assistant := prompt[2].(map[string]any)["content"].([]any)
+	if len(assistant) != 1 ||
+		firstText(assistant[0].(map[string]any)["type"]) != "text" ||
+		firstText(assistant[0].(map[string]any)["text"]) != "kept" {
+		t.Fatalf("assistant content = %#v, want only semantic text", assistant)
+	}
+}
+
 func TestV2AnthropicBase64ImageMapsToV3FileInBlockOrder(t *testing.T) {
 	var request anthropicMessagesRequest
 	if err := json.Unmarshal([]byte(`{
