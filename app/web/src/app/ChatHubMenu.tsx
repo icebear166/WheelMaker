@@ -624,36 +624,43 @@ function ChatHubNpmDetail({
         <div key={pkg.packageName} className="chat-hub-npm-row">
           <span className="chat-hub-npm-name" title={pkg.packageName}>{pkg.displayName}</span>
           <span className="chat-hub-npm-versions">
-            <span className={`chat-hub-npm-install-state ${pkg.installedVersion ? 'installed' : 'not-installed'}`}>
-              {pkg.installedVersion ? 'Installed' : 'Not installed'}
-            </span>
             <span className="chat-hub-npm-version-copy">
               {pkg.installedVersion
-                ? `${pkg.installedVersion}${pkg.latestVersion ? ` → ${pkg.latestVersion}` : ''}`
+                ? pkg.action === 'update' && pkg.latestVersion
+                  ? `${pkg.installedVersion} → ${pkg.latestVersion}`
+                  : pkg.installedVersion
                 : pkg.latestVersion
-                  ? `Latest ${pkg.latestVersion}`
-                  : 'No version'}
+                  ? `Not installed · ${pkg.latestVersion}`
+                  : 'Not installed'}
             </span>
           </span>
           <span className="chat-hub-row-actions">
-            <button
-              type="button"
-              className="chat-hub-icon-btn"
-              aria-label={pkg.action ? `${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}` : `${pkg.displayName} is up to date`}
-              disabled={!pkg.action || pkg.pending}
-              onClick={() => pkg.action && onPackageAction(hubId, pkg.action, pkg)}
-            >
-              <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
-            </button>
-            <button
-              type="button"
-              className="chat-hub-icon-btn danger"
-              aria-label={`Uninstall ${pkg.displayName}`}
-              disabled={!pkg.canUninstall || pkg.pending}
-              onClick={() => onPackageAction(hubId, 'uninstall', pkg)}
-            >
-              <Icon name="trash" />
-            </button>
+            <span className="chat-hub-action-slot">
+              {pkg.action ? (
+                <button
+                  type="button"
+                  className="chat-hub-icon-btn"
+                  aria-label={`${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}`}
+                  disabled={pkg.pending}
+                  onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
+                >
+                  <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
+                </button>
+              ) : null}
+            </span>
+            <span className="chat-hub-action-slot">
+              {pkg.canUninstall ? (
+                <button
+                  type="button"
+                  className="chat-hub-icon-btn danger"
+                  aria-label={`Uninstall ${pkg.displayName}`}
+                  disabled={pkg.pending}
+                  onClick={() => onPackageAction(hubId, 'uninstall', pkg)}
+                >
+                  <Icon name={pkg.pending ? 'loader' : 'trash'} spin={pkg.pending} />
+                </button>
+              ) : null}
+            </span>
           </span>
         </div>
       ))}

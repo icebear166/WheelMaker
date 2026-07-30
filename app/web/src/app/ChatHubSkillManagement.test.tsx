@@ -54,7 +54,7 @@ async function renderScope(options: {
   return {renderer, actions};
 }
 
-test('renders flat stable rows with detail, update, and uninstall actions', async () => {
+test('renders flat stable rows with fixed slots and only available actions', async () => {
   const {renderer, actions} = await renderScope({});
 
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row'})).toHaveLength(2);
@@ -68,7 +68,8 @@ test('renders flat stable rows with detail, update, and uninstall actions', asyn
   )).toBe(true);
   expect(renderer.root.findAllByProps({'aria-label': 'Refresh skills'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row-actions'})
-    .every(rowActions => rowActions.findAllByType('button').length === 3)).toBe(true);
+    .every(rowActions => rowActions.findAllByProps({className: 'chat-hub-action-slot'}).length === 3))
+    .toBe(true);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-category'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-meta'})).toHaveLength(0);
 
@@ -76,13 +77,14 @@ test('renders flat stable rows with detail, update, and uninstall actions', asyn
   expect(managed.findAllByType('button').map(button => button.props['aria-label']))
     .toEqual(['View baseline-ui details', 'Update baseline-ui', 'Uninstall baseline-ui']);
   expect(managed.findByProps({className: 'chat-hub-skill-name'}).type).toBe('span');
+  expect(managed.findByProps({className: 'chat-hub-skill-name'}).props.title).toBe('baseline-ui');
 
   const external = renderer.root.findByProps({'data-skill-name': 'external-skill'});
   expect(external.findByProps({'data-icon-name': 'link'})).toBeTruthy();
   expect(external.findByProps({'aria-label': 'View external-skill details'}).props.disabled)
     .not.toBe(true);
-  expect(external.findByProps({'aria-label': 'Update external-skill'}).props.disabled).toBe(true);
-  expect(external.findByProps({'aria-label': 'Uninstall external-skill'}).props.disabled).toBe(true);
+  expect(external.findAllByProps({'aria-label': 'Update external-skill'})).toHaveLength(0);
+  expect(external.findAllByProps({'aria-label': 'Uninstall external-skill'})).toHaveLength(0);
 
   act(() => managed.findByProps({'aria-label': 'View baseline-ui details'}).props.onClick());
   expect(actions.onDetail).toHaveBeenCalledWith({...hubTarget, skillName: 'baseline-ui'});

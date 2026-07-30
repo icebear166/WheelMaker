@@ -338,7 +338,7 @@ test('version action is disabled while its update or restart request is pending'
     .toBe(true);
 });
 
-test('npm detail aligns adaptive Install or Update and Uninstall icon slots', async () => {
+test('npm detail uses single-line versions and hides unavailable actions in fixed slots', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['npm']},
     opsByHubId: {
@@ -348,6 +348,7 @@ test('npm detail aligns adaptive Install or Update and Uninstall icon slots', as
           packages: [
             {packageName: '@a/one', displayName: 'One', installedVersion: '1.0', latestVersion: '1.1', action: 'update', canUninstall: true, pending: false},
             {packageName: '@a/two', displayName: 'Two', installedVersion: '', latestVersion: '2.0', action: 'install', canUninstall: false, pending: false},
+            {packageName: '@a/three', displayName: 'Three', installedVersion: '3.0', latestVersion: '3.0', action: null, canUninstall: true, pending: false},
           ],
         },
       }),
@@ -359,25 +360,22 @@ test('npm detail aligns adaptive Install or Update and Uninstall icon slots', as
   });
 
   const rows = renderer.root.findAllByProps({className: 'chat-hub-npm-row'});
-  expect(rows).toHaveLength(2);
-  const installedVersions = rows[0].findByProps({className: 'chat-hub-npm-versions'});
-  const uninstalledVersions = rows[1].findByProps({className: 'chat-hub-npm-versions'});
-  expect(installedVersions.findByProps({className: 'chat-hub-npm-install-state installed'}).children)
-    .toEqual(['Installed']);
-  expect(installedVersions.findByProps({className: 'chat-hub-npm-version-copy'}).children)
-    .toEqual(['1.0 → 1.1']);
-  expect(uninstalledVersions.findByProps({className: 'chat-hub-npm-install-state not-installed'}).children)
-    .toEqual(['Not installed']);
-  const uninstalledVersionCopy = uninstalledVersions.findByProps({className: 'chat-hub-npm-version-copy'});
-  expect(uninstalledVersionCopy.children).toEqual(['Latest 2.0']);
-  expect(uninstalledVersionCopy.children.join('')).not.toContain('→');
+  expect(rows).toHaveLength(3);
+  expect(rows.map(row => row.findByProps({className: 'chat-hub-npm-version-copy'}).children))
+    .toEqual([['1.0 → 1.1'], ['Not installed · 2.0'], ['3.0']]);
+  expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-install-state installed'})))
+    .toHaveLength(0);
+  expect(rows.map(row => row.findAllByProps({className: 'chat-hub-action-slot'}).length))
+    .toEqual([2, 2, 2]);
   const firstActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
   const secondActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  const thirdActions = rows[2].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
   expect(firstActions).toHaveLength(2);
-  expect(secondActions).toHaveLength(2);
+  expect(secondActions).toHaveLength(1);
+  expect(thirdActions).toHaveLength(1);
   expect(firstActions.map(button => button.props['aria-label'])).toEqual(['Update One', 'Uninstall One']);
-  expect(secondActions.map(button => button.props['aria-label'])).toEqual(['Install Two', 'Uninstall Two']);
-  expect(secondActions[1].props.disabled).toBe(true);
+  expect(secondActions.map(button => button.props['aria-label'])).toEqual(['Install Two']);
+  expect(thirdActions.map(button => button.props['aria-label'])).toEqual(['Uninstall Three']);
   act(() => firstActions[0].props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'update', expect.objectContaining({packageName: '@a/one'}));
   act(() => secondActions[0].props.onClick());
@@ -439,9 +437,10 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
   });
 
   const externalActions = rows[1].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
-  expect(externalActions).toHaveLength(3);
+  expect(rows[1].findAllByProps({className: 'chat-hub-action-slot'})).toHaveLength(3);
+  expect(rows[1].findByProps({className: 'chat-hub-skill-name'}).props.title).toBe('external-skill');
+  expect(externalActions).toHaveLength(1);
   expect(externalActions[0].props.disabled).not.toBe(true);
-  expect(externalActions.slice(1).every(button => button.props.disabled)).toBe(true);
   const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
   act(() => updateAll.props.onClick());
   expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
