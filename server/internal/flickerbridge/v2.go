@@ -55,7 +55,7 @@ type V2ProbeResult struct {
 	Error            string `json:"error,omitempty"`
 }
 
-const v2BundleAnchor = `j0();var mm1=PA(q1(),1);import fJ4 from"fs";`
+const v2BundleAnchor = `g0();var Ld1=jA(O1(),1);import rF4 from"fs";`
 
 type v2BundleContract struct {
 	Anchor  string
@@ -63,12 +63,8 @@ type v2BundleContract struct {
 }
 
 var v2BundleContracts = map[string]v2BundleContract{
-	"0.3.12": {
-		Anchor:  v2BundleAnchor,
-		Exports: "j0();\nexport{$M0 as wanqingPlugin,FB as models,Qj as createOpenAI,Ct as createAnthropic,Kt6 as login,K7 as setContext,pQ as getContext};",
-	},
 	"0.3.13": {
-		Anchor:  `g0();var Ld1=jA(O1(),1);import rF4 from"fs";`,
+		Anchor:  v2BundleAnchor,
 		Exports: "g0();\nexport{xw0 as wanqingPlugin,FB as models,gj as createOpenAI,Ns as createAnthropic,TB4 as login,d9 as setContext,vQ as getContext};",
 	},
 }
@@ -429,10 +425,6 @@ const { pathToFileURL } = require("node:url");
 const { registerHooks } = require("node:module");
 
 const BUNDLE_CONTRACTS = {
-  "0.3.12": {
-    anchor: 'j0();var mm1=PA(q1(),1);import fJ4 from"fs";',
-    exports: 'j0();\nexport{$M0 as wanqingPlugin,FB as models,Qj as createOpenAI,Ct as createAnthropic,Kt6 as login,K7 as setContext,pQ as getContext};',
-  },
   "0.3.13": {
     anchor: 'g0();var Ld1=jA(O1(),1);import rF4 from"fs";',
     exports: 'g0();\nexport{xw0 as wanqingPlugin,FB as models,gj as createOpenAI,Ns as createAnthropic,TB4 as login,d9 as setContext,vQ as getContext};',

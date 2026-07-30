@@ -134,6 +134,38 @@ func TestProbeV2AcceptsMyFlicker0313Bundle(t *testing.T) {
 	}
 }
 
+func TestProbeV2RejectsMyFlicker0312(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skipf("node is unavailable: %v", err)
+	}
+	packageDir := filepath.Join(t.TempDir(), "node_modules", "@myflicker", "cli")
+	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "package.json"),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.12"}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "dist", "cli.mjs"),
+		[]byte(`j0();var mm1=PA(q1(),1);import fJ4 from"fs";`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MYFLICKER_NODE", nodePath)
+	t.Setenv("MYFLICKER_CLI_DIR", packageDir)
+
+	result := ProbeV2()
+	if result.Available || result.Error != "unsupported @myflicker/cli version" {
+		t.Fatalf("ProbeV2() = %+v, want MyFlicker 0.3.12 rejected", result)
+	}
+}
+
 func TestV2WorkerLoadsMyFlicker0313BundleContract(t *testing.T) {
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
@@ -803,7 +835,7 @@ func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.12"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.13"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(v2BundleAnchor), 0o644); err != nil {
