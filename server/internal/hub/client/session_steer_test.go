@@ -500,7 +500,7 @@ func TestHandleSessionSteerPreparesBlocksAndReturnsOutcome(t *testing.T) {
 
 	response, err := client.HandleSessionRequest(
 		context.Background(),
-		acp.RegistryMethodSessionSteer,
+		"session.steer",
 		"test",
 		mustJSON(acp.SessionSteerParams{
 			SessionID:       "sess-1",
@@ -541,7 +541,7 @@ func TestHandleSessionSteerValidatesRequiredFields(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, err := client.HandleSessionRequest(
 				context.Background(),
-				acp.RegistryMethodSessionSteer,
+				"session.steer",
 				"test",
 				json.RawMessage(testCase.payload),
 			)
@@ -560,7 +560,7 @@ func TestHandleSessionSteerRejectsUnsupportedProvider(t *testing.T) {
 	})
 	_, err := client.HandleSessionRequest(
 		context.Background(),
-		acp.RegistryMethodSessionSteer,
+		"session.steer",
 		"test",
 		json.RawMessage(`{"sessionId":"sess-1","clientMessageId":"queued-1","blocks":[{"type":"text","text":"change"}]}`),
 	)
@@ -582,7 +582,7 @@ func TestHandleSessionSteerInactiveReturnsSentOutcome(t *testing.T) {
 
 	response, err := client.HandleSessionRequest(
 		context.Background(),
-		acp.RegistryMethodSessionSteer,
+		"session.steer",
 		"test",
 		json.RawMessage(`{"sessionId":"sess-1","clientMessageId":"queued-1","blocks":[{"type":"text","text":"fallback"}]}`),
 	)
@@ -625,7 +625,7 @@ func TestHandleSessionSteerMarksAttachmentOnlyAfterAcceptedOwnership(t *testing.
 
 			_, gotErr := client.HandleSessionRequest(
 				context.Background(),
-				acp.RegistryMethodSessionSteer,
+				"session.steer",
 				"test",
 				mustJSON(acp.SessionSteerParams{
 					SessionID:       "sess-1",

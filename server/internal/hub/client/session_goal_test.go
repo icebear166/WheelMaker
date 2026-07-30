@@ -35,7 +35,7 @@ func newGoalTestClient(t *testing.T, sessionID string) (*Client, *Session, *test
 func TestSessionSendGoalRecordsRawCommandWithoutPromptingAgent(t *testing.T) {
 	client, session, runtime := newGoalTestClient(t, "session-goal-command")
 	raw := "/goal  Ship release  "
-	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(mustJSON(map[string]any{
+	_, err := client.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(mustJSON(map[string]any{
 		"sessionId": "session-goal-command",
 		"text":      raw,
 	})))
@@ -90,7 +90,7 @@ func TestSessionGoalCreateRejectsNonPositiveBudget(t *testing.T) {
 
 func TestSessionGoalDoesNotBecomeIdleBetweenNativeTurns(t *testing.T) {
 	client, session, _ := newGoalTestClient(t, "session-goal-turns")
-	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(mustJSON(map[string]any{
+	_, err := client.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(mustJSON(map[string]any{
 		"sessionId": "session-goal-turns",
 		"text":      "/goal ship",
 	})))
@@ -287,7 +287,7 @@ func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
 
 func TestClientRecoversActiveGoalAfterAgentRuntimeStops(t *testing.T) {
 	client, session, stoppedRuntime := newGoalTestClient(t, "goal-runtime-reconnect")
-	_, err := client.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(mustJSON(map[string]any{
+	_, err := client.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(mustJSON(map[string]any{
 		"sessionId": "goal-runtime-reconnect",
 		"text":      "/goal ship",
 	})))

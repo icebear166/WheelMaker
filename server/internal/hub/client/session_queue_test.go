@@ -1,12 +1,117 @@
 package client
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	acp "github.com/swm8023/wheelmaker/internal/protocol"
 )
+
+type queuePromptOutcome struct {
+	result acp.SessionPromptResult
+	err    error
+}
+
+type queueExecutionInstance struct {
+	*testInjectedInstance
+	mu              sync.Mutex
+	order           []string
+	started         chan string
+	promptOutcomes  chan queuePromptOutcome
+	compactOutcomes chan error
+}
+
+func newQueueExecutionSession(t *testing.T, id string) (*Session, *queueExecutionInstance) {
+	t.Helper()
+	s := mustNewSessionForQueueTest(t, id)
+	instance := &queueExecutionInstance{
+		testInjectedInstance: &testInjectedInstance{name: "queue-test", sessionID: id, alive: true, callbacks: s},
+		started:              make(chan string, 16),
+		promptOutcomes:       make(chan queuePromptOutcome, 16),
+		compactOutcomes:      make(chan error, 16),
+	}
+	s.mu.Lock()
+	s.instance = instance
+	s.ready = true
+	s.viewSink = &recordingSessionViewSink{}
+	s.mu.Unlock()
+	return s, instance
+}
+
+func (i *queueExecutionInstance) SessionPrompt(ctx context.Context, params acp.SessionPromptParams) (acp.SessionPromptResult, error) {
+	text := ""
+	for _, block := range params.Prompt {
+		if block.Type == acp.ContentBlockTypeText {
+			text = block.Text
+			break
+		}
+	}
+	i.recordStart("prompt:" + text)
+	select {
+	case outcome := <-i.promptOutcomes:
+		return outcome.result, outcome.err
+	case <-ctx.Done():
+		return acp.SessionPromptResult{}, ctx.Err()
+	}
+}
+
+func (i *queueExecutionInstance) CompactSession(ctx context.Context, sessionID string) (<-chan agent.SessionCompactResult, error) {
+	i.recordStart("compact:" + sessionID)
+	done := make(chan agent.SessionCompactResult, 1)
+	go func() {
+		select {
+		case err := <-i.compactOutcomes:
+			done <- agent.SessionCompactResult{Err: err}
+		case <-ctx.Done():
+			done <- agent.SessionCompactResult{Err: ctx.Err()}
+		}
+		close(done)
+	}()
+	return done, nil
+}
+
+func (i *queueExecutionInstance) recordStart(value string) {
+	i.mu.Lock()
+	i.order = append(i.order, value)
+	i.mu.Unlock()
+	i.started <- value
+}
+
+func (i *queueExecutionInstance) executionOrder() []string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return append([]string(nil), i.order...)
+}
+
+func awaitQueueExecutionStart(t *testing.T, instance *queueExecutionInstance, want string) {
+	t.Helper()
+	select {
+	case got := <-instance.started:
+		if got != want {
+			t.Fatalf("execution start = %q, want %q", got, want)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatalf("timed out waiting for %q", want)
+	}
+}
+
+func eventuallyQueue(t *testing.T, check func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if check() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("condition was not met before timeout")
+}
 
 func mustNewSessionForQueueTest(t *testing.T, id string) *Session {
 	t.Helper()
@@ -217,5 +322,132 @@ func TestSessionQueueSummaryOmitsLiveItemsAndBlocks(t *testing.T) {
 	got := s.queueSnapshot(false)
 	if got.WaitingCount != 1 || got.ActiveItem != nil || got.WaitingItems != nil {
 		t.Fatalf("summary = %#v", got)
+	}
+}
+
+func TestSessionQueueDrainsPromptCompactPromptInOrder(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-drain")
+	for _, item := range []acp.SessionQueueEnqueueItem{
+		promptQueueItem("p1", "first"),
+		compactQueueItem("c1"),
+		promptQueueItem("p2", "second"),
+	} {
+		if _, _, err := s.enqueueAndScheduleQueueItem(item); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	awaitQueueExecutionStart(t, instance, "compact:sess-drain")
+	instance.compactOutcomes <- nil
+	awaitQueueExecutionStart(t, instance, "prompt:second")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+
+	eventuallyQueue(t, func() bool {
+		got := s.queueSnapshot(true)
+		return got.ActiveItem == nil && len(got.WaitingItems) == 0
+	})
+	want := []string{"prompt:first", "compact:sess-drain", "prompt:second"}
+	if got := instance.executionOrder(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("execution order = %v, want %v", got, want)
+	}
+}
+
+func TestSessionQueueFailurePausesUntilRetry(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-retry-drain")
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p2", "second")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+	instance.promptOutcomes <- queuePromptOutcome{err: errors.New("provider failed")}
+	eventuallyQueue(t, func() bool {
+		got := s.queueSnapshot(true)
+		return got.Paused && got.ActiveItem != nil &&
+			got.ActiveItem.ItemID == "p1" &&
+			got.ActiveItem.Status == acp.SessionQueueItemStatusFailed &&
+			got.ActiveItem.Error != ""
+	})
+	if got := instance.executionOrder(); !reflect.DeepEqual(got, []string{"prompt:first"}) {
+		t.Fatalf("execution order while paused = %v", got)
+	}
+
+	if err := s.retryQueueItem("p1"); err != nil {
+		t.Fatal(err)
+	}
+	s.scheduleQueueDrain()
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	awaitQueueExecutionStart(t, instance, "prompt:second")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
+}
+
+func TestSessionQueueEnqueueReturnsBeforeExecutionCompletes(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-async")
+	started := time.Now()
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "slow")); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("enqueue blocked for %s", elapsed)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:slow")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+}
+
+func TestSessionQueueCancelActivePromptWaitsForOfficialOutcome(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-cancel")
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "cancel me")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:cancel me")
+	if err := s.cancelQueueItem("p1"); err != nil {
+		t.Fatal(err)
+	}
+	got := s.queueSnapshot(true)
+	if got.ActiveItem == nil || got.ActiveItem.Status != acp.SessionQueueItemStatusCancelling {
+		t.Fatalf("queue after cancel = %#v", got)
+	}
+	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
+}
+
+func TestSessionQueueConcurrentEnqueueExecutesEachItemOnce(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-concurrent")
+	const count = 12
+	var wg sync.WaitGroup
+	for index := 0; index < count; index++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			item := promptQueueItem(fmt.Sprintf("p-%02d", index), fmt.Sprintf("%02d", index))
+			if _, _, err := s.enqueueAndScheduleQueueItem(item); err != nil {
+				t.Errorf("enqueue %d: %v", index, err)
+			}
+		}(index)
+	}
+	wg.Wait()
+	for index := 0; index < count; index++ {
+		select {
+		case <-instance.started:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timed out waiting for execution %d", index)
+		}
+		instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	}
+	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
+	order := instance.executionOrder()
+	if len(order) != count {
+		t.Fatalf("execution count = %d, want %d (%v)", len(order), count, order)
+	}
+	seen := make(map[string]bool, count)
+	for _, entry := range order {
+		if seen[entry] {
+			t.Fatalf("duplicate execution %q in %v", entry, order)
+		}
+		seen[entry] = true
 	}
 }

@@ -1111,7 +1111,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, fmt.Errorf("%w: status", agent.ErrSessionActionUnsupported)
 		}
 		return sess.SessionStatus(ctx)
-	case acp.RegistryMethodSessionCompact:
+	case "session.compact":
 		var req struct {
 			SessionID string `json:"sessionId"`
 		}
@@ -1148,7 +1148,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, fmt.Errorf("invalid session.fork payload: %w", err)
 		}
 		return c.forkSessionAtTurn(ctx, req.SessionID, req.TurnIndex)
-	case acp.RegistryMethodSessionSteer:
+	case "session.steer":
 		var req acp.SessionSteerParams
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.steer payload: %w", err)
@@ -1184,7 +1184,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return accepted, nil
-	case acp.RegistryMethodSessionSend:
+	case "session.send":
 		var req struct {
 			SessionID string             `json:"sessionId"`
 			Text      string             `json:"text,omitempty"`
@@ -1234,7 +1234,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return map[string]any{"ok": true, "sessionId": strings.TrimSpace(req.SessionID)}, nil
-	case acp.RegistryMethodSessionCancel:
+	case "session.cancel":
 		var req struct {
 			SessionID string `json:"sessionId"`
 		}

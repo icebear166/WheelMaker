@@ -9347,7 +9347,7 @@ func TestHandleSessionRequestSessionCompactRejectsBusyPrompt(t *testing.T) {
 	c := newTestClient(t, mock)
 	sendDone := make(chan error, 1)
 	go func() {
-		_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(`{"sessionId":"sess-compact-busy","text":"working"}`))
+		_, err := c.HandleSessionRequest(context.Background(), "session.send", "test", json.RawMessage(`{"sessionId":"sess-compact-busy","text":"working"}`))
 		sendDone <- err
 	}()
 	select {
@@ -9355,7 +9355,7 @@ func TestHandleSessionRequestSessionCompactRejectsBusyPrompt(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("prompt did not start")
 	}
-	_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionCompact, "test", json.RawMessage(`{"sessionId":"sess-compact-busy"}`))
+	_, err := c.HandleSessionRequest(context.Background(), "session.compact", "test", json.RawMessage(`{"sessionId":"sess-compact-busy"}`))
 	if !errors.Is(err, agent.ErrSessionBusy) {
 		t.Fatalf("session.compact err = %v, want busy", err)
 	}
@@ -9385,7 +9385,7 @@ func TestHandleSessionRequestSessionCompactAcceptsAndBlocksPrompt(t *testing.T) 
 	inst := sess.instance.(*testInjectedInstance)
 	inst.compactDone = make(chan agent.SessionCompactResult, 1)
 
-	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionCompact, "test", json.RawMessage(`{"sessionId":"sess-compact"}`))
+	response, err := c.HandleSessionRequest(ctx, "session.compact", "test", json.RawMessage(`{"sessionId":"sess-compact"}`))
 	if err != nil {
 		t.Fatalf("session.compact: %v", err)
 	}
@@ -9393,7 +9393,7 @@ func TestHandleSessionRequestSessionCompactAcceptsAndBlocksPrompt(t *testing.T) 
 	if !ok || !accepted.OK || !accepted.Accepted || accepted.OperationID == "" {
 		t.Fatalf("compact response = %#v", response)
 	}
-	_, err = c.HandleSessionRequest(ctx, acp.RegistryMethodSessionSend, "test", json.RawMessage(`{"sessionId":"sess-compact","text":"must not overlap"}`))
+	_, err = c.HandleSessionRequest(ctx, "session.send", "test", json.RawMessage(`{"sessionId":"sess-compact","text":"must not overlap"}`))
 	if !errors.Is(err, agent.ErrSessionBusy) {
 		t.Fatalf("session.send err = %v, want busy", err)
 	}
