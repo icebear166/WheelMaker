@@ -2,7 +2,7 @@ import type {KeyboardEvent as ReactKeyboardEvent} from 'react';
 
 function enabledMenuItems(container: HTMLElement | null): HTMLButtonElement[] {
   if (!container || typeof container.querySelectorAll !== 'function') return [];
-  return Array.from(container.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+  return Array.from(container.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([data-menu-close])'));
 }
 
 export function focusFirstMenuItem(container: HTMLElement | null): void {

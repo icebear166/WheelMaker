@@ -20,6 +20,9 @@ describe('menu keyboard navigation', () => {
     expect(sessionMenu).toContain('focusFirstMenuItem(menuRef.current);');
     expect(sessionMenu).toContain('handleMenuKeyDown(event, menuRef.current)');
     expect(sessionMenu).toContain('previouslyFocusedRef.current?.focus();');
+    expect(sessionMenu).toContain('data-menu-close="true"');
+    const navigation = read('common/menuKeyboardNavigation.ts');
+    expect(navigation).toContain('button:not(:disabled):not([data-menu-close])');
   });
 
   test('gives the shared application menu the same arrow-key behavior', () => {

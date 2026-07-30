@@ -396,6 +396,7 @@
   width: min(260px, calc(100vw - 16px));
 }
 .project-session-menu-btn {
+  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -422,7 +423,7 @@
   cursor: default;
 }
 .project-session-menu-btn .sl-icon {
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .project-session-menu-btn:hover:not(:disabled) .sl-icon {
   color: var(--text-primary);
@@ -546,6 +547,34 @@
   white-space: nowrap;
   font-size: 11px;
   color: var(--text-tertiary);
+}
+.session-menu-header-icon {
+  color: var(--text-tertiary);
+}
+.session-menu-close {
+  display: none;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.session-menu-close:hover,
+.session-menu-close:focus-visible {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+.session-menu-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 4px;
 }
 .wide-project-action-menu-item,
 .wide-project-action-back {
@@ -740,6 +769,34 @@
     border-bottom: 0;
     animation: sl-sheet-in 180ms var(--ease-out);
   }
+  .project-session-action-menu.sl-sheet .session-menu-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 4px 4px 8px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  }
+  .project-session-action-menu.sl-sheet .session-menu-header-icon {
+    width: 17px;
+    height: 17px;
+    color: var(--accent-primary);
+  }
+  .project-session-action-menu.sl-sheet .wide-project-action-title-main {
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  .project-session-action-menu.sl-sheet .wide-project-action-title-sub {
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.2;
+  }
+  .project-session-action-menu.sl-sheet .session-menu-close {
+    display: inline-flex;
+  }
+  .project-session-action-menu.sl-sheet .session-menu-body {
+    padding: 4px 0;
+  }
   .project-session-action-menu.sl-sheet.sl-menu-exit {
     animation: sl-sheet-out 120ms ease-in forwards;
   }
@@ -749,7 +806,7 @@
     padding: 6px 12px;
   }
   .project-session-action-menu.sl-sheet .project-session-mark-picker {
-    min-height: 40px;
+    min-height: 48px;
   }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) {

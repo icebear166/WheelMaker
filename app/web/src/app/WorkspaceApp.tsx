@@ -7938,7 +7938,7 @@ export function App() {
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
         preferredWidth: 156,
-        preferredMaxHeight: 190,
+        preferredMaxHeight: 250,
         align: 'start',
       }),
     });
@@ -15442,6 +15442,7 @@ export function App() {
         pinned={session.pinned === true}
         pinning={pinActionDisabled}
         markColor={session.markColor}
+        sessionTitle={resolveSessionDisplayTitle(session) || sessionId}
         marking={chatMarkingSessionKey === actionKey}
         renaming={renameActionDisabled}
         actionDisabled={sessionActionDisabled}

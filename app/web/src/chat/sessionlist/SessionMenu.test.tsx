@@ -14,6 +14,7 @@ async function renderMenu(extra?: Partial<React.ComponentProps<typeof SessionMen
     archiving: false,
     reloading: false,
     deleting: false,
+    sessionTitle: 'Example session',
     onTogglePin: jest.fn(),
     onSetMark: jest.fn(),
     onRename: jest.fn(),
@@ -39,7 +40,7 @@ describe('SessionMenu', () => {
       .map(node => node.children.join(''));
     expect(labels).toEqual(['Pin', 'Rename', 'Archive', 'Reload', 'Delete']);
     expect(
-      menu.children
+      menu.findByProps({className: 'session-menu-body'}).children
         .filter(child => typeof child !== 'string')
         .map(child => child.props.className),
     ).toEqual([
@@ -54,6 +55,22 @@ describe('SessionMenu', () => {
     ]);
     // every item has an svg icon
     expect(tree.root.findAllByType('svg').length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('uses the Add session hierarchy for the session action surface', async () => {
+    const {tree} = await renderMenu();
+    const menu = tree.root.findByProps({role: 'menu'});
+    const header = menu.find(node =>
+      typeof node.props.className === 'string' && node.props.className.includes('session-menu-header'),
+    );
+
+    expect(header.props.className).toContain('wide-project-action-title');
+    expect(header.findByProps({className: 'wide-project-action-title-main'}).children.join('')).toBe('Session actions');
+    expect(header.findByProps({className: 'wide-project-action-title-sub'}).children.join('')).toBe('Example session');
+    expect(menu.findByProps({className: 'session-menu-body'})).toBeTruthy();
+    const closeButton = menu.findByProps({className: 'session-menu-close'});
+    expect(closeButton.props['aria-label']).toBe('Close session actions');
+    expect(closeButton.props['data-menu-close']).toBe('true');
   });
 
   it('shows Unpin when pinned and routes callbacks', async () => {
