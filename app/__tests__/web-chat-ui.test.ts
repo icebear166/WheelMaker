@@ -1382,23 +1382,25 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-confirmation-reply-action {');
     expect(stylesCss).toContain('.chat-confirmation-reply-check {');
     expect(stylesCss).toContain('.chat-confirmation-reply-text {');
-    expect(stylesCss).toMatch(
-      /\.chat-confirmation-reply-action \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent-primary\) 22%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent-primary\)\);[\s\S]*padding: 4px 8px;[\s\S]*\}/,
-    );
-    expect(stylesCss).toMatch(
-      /\.chat-option-reply-inline-button \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 22%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent-primary\)\);/,
-    );
-    expect(stylesCss).toMatch(
-      /\.chat-option-reply-inline-button,\s*\.chat-scroll-bottom-button \{[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,
-    );
+    const replySurfaceBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-option-reply-inline-button');
+    expect(replySurfaceBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.chat-option-reply-static'));
+    expect(replySurfaceBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.chat-confirmation-reply-action'));
+    expect(replySurfaceBlock).toContain('border: 1px solid transparent;');
+    expect(replySurfaceBlock).toContain('min-height: 30px;');
+    expect(replySurfaceBlock).toContain('padding: 5px 9px 5px 8px;');
+    expect(replySurfaceBlock).toContain('line-height: 1.35;');
+    const interactiveReplyBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-option-reply-inline-button');
+    expect(interactiveReplyBlock).toContain('background: transparent;');
+    expect(interactiveReplyBlock).not.toContain('background: color-mix');
+    expect(stylesCss).toContain('.chat-option-reply-inline-button:hover,\n.chat-confirmation-reply-action:hover {');
+    expect(stylesCss).not.toContain('.chat-option-reply-inline-button,\n.chat-scroll-bottom-button {');
     const historicalOptionBlocks = stylesCss.match(/\.chat-option-reply-static \{[\s\S]*?\n\}/g) ?? [];
     const historicalOptionBlock = historicalOptionBlocks[historicalOptionBlocks.length - 1] ?? '';
-    expect(historicalOptionBlock).toContain('border-color: var(--border-subtle);');
     expect(historicalOptionBlock).toContain('background: transparent;');
+    expect(historicalOptionBlock).toContain('color: inherit;');
+    expect(historicalOptionBlock).not.toContain('border-color:');
     expect(historicalOptionBlock).not.toContain('background: color-mix');
-    expect(stylesCss).toMatch(
-      /\.chat-option-reply-static \.chat-option-reply-label \{[\s\S]*color: var\(--text-secondary\);[\s\S]*\}/,
-    );
+    expect(stylesCss).not.toContain('.chat-option-reply-static .chat-option-reply-label {');
     expect(stylesCss).not.toContain('.chat-option-replies {');
     expect(stylesCss).not.toContain('.chat-option-reply-button {');
     expect(stylesCss).toMatch(

@@ -4302,10 +4302,12 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-option-reply-inline-button,
-.chat-option-reply-static {
+.chat-option-reply-static,
+.chat-confirmation-reply-action {
   max-width: min(100%, 560px);
-  border: 1px solid;
+  border: 1px solid transparent;
   border-radius: 7px;
+  background: transparent;
   color: inherit;
   min-height: 30px;
   padding: 5px 9px 5px 8px;
@@ -4317,40 +4319,39 @@ button.chat-hub-skill-name:disabled {
   line-height: 1.35;
 }
 
-.chat-option-reply-inline-button,
 .chat-scroll-bottom-button {
   backdrop-filter: blur(1px);
 }
 
 .chat-option-reply-inline-button {
-  border-color: color-mix(in srgb, var(--accent-primary) 22%, var(--border-subtle));
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent-primary));
   cursor: pointer;
 }
 
-.chat-option-reply-inline-button:hover {
+.chat-option-reply-inline-button:hover,
+.chat-confirmation-reply-action:hover {
   border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
   background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent-primary));
 }
 
-.chat-option-reply-inline-button:focus-visible {
+.chat-option-reply-inline-button:focus-visible,
+.chat-confirmation-reply-action:focus-visible {
+  border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent-primary));
   outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
 }
 
-.chat-option-reply-inline-button:disabled {
+.chat-option-reply-inline-button:disabled,
+.chat-confirmation-reply-action:disabled {
+  border-color: transparent;
+  background: transparent;
   cursor: default;
   opacity: 0.58;
 }
 
 .chat-option-reply-static {
-  border-color: var(--border-subtle);
   background: transparent;
-  color: color-mix(in srgb, var(--text-primary) 72%, var(--text-secondary));
-}
-
-.chat-option-reply-static .chat-option-reply-label {
-  color: var(--text-secondary);
+  color: inherit;
 }
 
 .chat-confirmation-reply-line {
@@ -4358,18 +4359,7 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-confirmation-reply-action {
-  max-width: min(100%, 620px);
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-subtle));
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent-primary));
-  color: inherit;
-  padding: 4px 8px;
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 6px;
-  text-align: left;
-  font: inherit;
-  line-height: 1.45;
+  text-wrap: pretty;
   cursor: pointer;
 }
 
@@ -4387,22 +4377,6 @@ button.chat-hub-skill-name:disabled {
 
 .chat-confirmation-reply-text {
   color: inherit;
-}
-
-.chat-confirmation-reply-action:hover {
-  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
-  background: color-mix(in srgb, var(--surface-panel) 80%, var(--accent-primary));
-}
-
-.chat-confirmation-reply-action:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
-  outline-offset: 2px;
-  border-radius: 7px;
-}
-
-.chat-confirmation-reply-action:disabled {
-  cursor: default;
-  opacity: 0.58;
 }
 
 .chat-option-reply-label {
