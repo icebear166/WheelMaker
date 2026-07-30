@@ -373,6 +373,16 @@ test('optional Desktop is built once outside platform packages', async () => {
     });
 
     assert.equal(await readExists(result.desktopExe), true);
+    const desktopBuild = runner.calls.find(
+      ({command, args}) =>
+        command === 'go' && args.at(-1) === './cmd/wheelmaker-desktop',
+    );
+    assert.equal(
+      desktopBuild.args.includes(
+        '-ldflags=-s -w -H windowsgui -X main.desktopReleaseVersion=v1.8',
+      ),
+      true,
+    );
     assert.equal(
       runner.calls.filter(
         ({ command, args }) =>

@@ -3,6 +3,8 @@ import {
   type AndroidNativeMessageEnvironment,
 } from './androidNativeMessageBridge';
 import {wheelMakerReleaseUrl} from '../../settings/releaseChannel';
+import {WHEELMAKER_STABLE_URL} from '../../settings/agentPackageUpdateView';
+import type {ClientUpdateState} from '../clientUpdate';
 
 export type AndroidApkLocalRelease = {
   supported: boolean;
@@ -47,6 +49,49 @@ export type AndroidApkUpdateBridge = {
   getLocalRelease(): Promise<AndroidApkLocalRelease>;
   installLatest(request: AndroidApkInstallRequest): Promise<AndroidApkInstallResult>;
 };
+
+export type AndroidApkUpdateCheck = {
+  state: ClientUpdateState;
+  latest: AndroidApkLatestRelease | null;
+};
+
+export type AndroidApkUpdateEventDetail = {
+  status?: string;
+};
+
+export const androidApkUpdateEvent = 'wheelmaker:android-apk-update';
+
+export function androidApkUpdateEventState(
+  detail: AndroidApkUpdateEventDetail,
+): ClientUpdateState | null {
+  switch (detail.status) {
+    case 'downloading':
+      return {status: 'updating', meta: 'Downloading…'};
+    case 'downloaded':
+      return {status: 'updating', meta: 'Downloaded'};
+    case 'installing':
+      return {status: 'updating', meta: 'Opening installer…'};
+    case 'permission_required':
+    case 'failed':
+      return {status: 'failed'};
+    default:
+      return null;
+  }
+}
+
+export function subscribeAndroidApkUpdateEvents(
+  listener: (state: ClientUpdateState) => void,
+  target: Pick<Window, 'addEventListener' | 'removeEventListener'> = window,
+): () => void {
+  const handleUpdate = (event: Event) => {
+    const state = androidApkUpdateEventState(
+      (event as CustomEvent<AndroidApkUpdateEventDetail>).detail ?? {},
+    );
+    if (state) listener(state);
+  };
+  target.addEventListener(androidApkUpdateEvent, handleUpdate);
+  return () => target.removeEventListener(androidApkUpdateEvent, handleUpdate);
+}
 
 export function normalizeSha256Digest(value: string | undefined): string {
   return (value || '')
@@ -104,6 +149,38 @@ export function resolveAndroidApkUpdateStatus(
     return 'unknown';
   }
   return localSha === latestSha ? 'up_to_date' : 'update_available';
+}
+
+export async function checkAndroidApkUpdate(
+  bridge: AndroidApkUpdateBridge,
+  request: typeof fetch = globalThis.fetch.bind(globalThis),
+): Promise<AndroidApkUpdateCheck> {
+  try {
+    const [local, response] = await Promise.all([
+      bridge.getLocalRelease(),
+      request(WHEELMAKER_STABLE_URL, {cache: 'no-store'}),
+    ]);
+    const latest = response.ok
+      ? parseAndroidStableRelease(await response.json())
+      : null;
+    const status = resolveAndroidApkUpdateStatus(local, latest);
+    if (!latest || status === 'unknown') {
+      return {state: {status: 'failed'}, latest: null};
+    }
+    const currentVersion = local.versionName ? `v${local.versionName}` : '';
+    return {
+      state: status === 'up_to_date'
+        ? {status: 'current', currentVersion}
+        : {
+            status: 'available',
+            currentVersion,
+            latestVersion: latest.tagName,
+          },
+      latest,
+    };
+  } catch {
+    return {state: {status: 'failed'}, latest: null};
+  }
 }
 
 function parseJsonObject<T>(raw: string | undefined, fallback: T): T {

@@ -3,12 +3,9 @@ import {
   WHEELMAKER_STABLE_URL,
 } from '../../settings/agentPackageUpdateView';
 import type {DesktopWindowBridge} from './desktopRuntime';
+import type {ClientUpdateState} from '../clientUpdate';
 
-export type DesktopUpdateCheck =
-  | {status: 'checking'}
-  | {status: 'current'; version: string}
-  | {status: 'available'; version: string}
-  | {status: 'failed'};
+export type DesktopUpdateCheck = ClientUpdateState;
 
 export async function checkDesktopUpdate(
   bridge: DesktopWindowBridge,
@@ -29,9 +26,16 @@ export async function checkDesktopUpdate(
     if (!pointer) {
       return {status: 'failed'};
     }
+    if (info.sha256 === pointer.sha256) {
+      return {
+        status: 'current',
+        currentVersion: info.version || '',
+      };
+    }
     return {
-      status: info.sha256 === pointer.sha256 ? 'current' : 'available',
-      version: pointer.version,
+      status: 'available',
+      currentVersion: info.version || '',
+      latestVersion: pointer.version,
     };
   } catch {
     return {status: 'failed'};

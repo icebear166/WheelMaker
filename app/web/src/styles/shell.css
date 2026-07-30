@@ -1563,12 +1563,12 @@
   animation: sl-menu-in 140ms var(--ease-out);
 }
 
-.desktop-app-menu-root {
+.app-menu-root {
   position: relative;
   flex: 0 0 auto;
 }
 
-.desktop-app-menu-trigger {
+.app-menu-trigger {
   position: relative;
   width: 30px;
   height: 30px;
@@ -1582,9 +1582,9 @@
   cursor: pointer;
 }
 
-.desktop-app-menu-trigger:hover,
-.desktop-app-menu-trigger:focus-visible,
-.desktop-app-menu-trigger[aria-expanded='true'] {
+.app-menu-trigger:hover,
+.app-menu-trigger:focus-visible,
+.app-menu-trigger[aria-expanded='true'] {
   background: var(--hover);
   color: var(--text-primary);
   outline: none;
@@ -1596,7 +1596,7 @@
   display: block;
 }
 
-.desktop-app-menu-trigger .app-product-mark {
+.app-menu-trigger .app-product-mark {
   width: 19px;
   height: 19px;
 }
@@ -1619,33 +1619,29 @@
   box-shadow: 0 0 0 2px var(--surface-panel);
 }
 
-.desktop-update-dot-app-menu {
+.app-menu-update-dot {
   position: absolute;
   top: 3px;
   right: 3px;
 }
 
-.desktop-update-dot-menu {
-  margin-inline: 4px 3px;
-  box-shadow: none;
-}
-
-.desktop-app-menu {
+.app-menu-surface {
   position: fixed;
   z-index: 100;
-  width: 220px;
+  width: min(272px, calc(100vw - 16px));
   transform-origin: top left;
 }
 
-.desktop-app-menu button {
+.app-menu-surface > button {
   width: 100%;
-  min-height: 30px;
+  min-height: 38px;
   border: 0;
   border-radius: 5px;
-  padding: 0 9px;
-  display: flex;
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: transparent;
   color: var(--text-primary);
   font: inherit;
@@ -1654,26 +1650,55 @@
   cursor: pointer;
 }
 
-.desktop-app-menu button:hover,
-.desktop-app-menu button:focus-visible {
+.app-menu-surface > button:hover,
+.app-menu-surface > button:focus-visible {
   background: var(--hover);
   outline: none;
 }
 
-.desktop-app-menu button:disabled {
+.app-menu-surface > button:disabled {
   color: var(--text-secondary);
   cursor: default;
   opacity: 0.72;
 }
 
-.desktop-app-menu button:disabled:hover {
+.app-menu-surface > button:disabled:hover {
   background: transparent;
 }
 
-.desktop-app-menu-leading-slot {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+.app-menu-icon-slot {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.app-menu-row-update-dot {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  box-shadow: 0 0 0 2px var(--surface-overlay);
+}
+
+.app-menu-label,
+.app-menu-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-menu-meta {
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-menu-divider {
+  height: 1px;
+  margin: 5px 8px;
+  background: var(--border-subtle);
 }
 
 .local-dev-entry-backdrop {

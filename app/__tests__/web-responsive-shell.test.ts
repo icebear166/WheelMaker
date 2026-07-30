@@ -75,11 +75,11 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('desktopWindowControls={desktopWindowControls}');
     expect(mainTsx).toContain('desktopWindowControlsVisible={desktopWindowControlsVisible}');
     expect(mainTsx).toContain('desktopTopBar={desktopTopBar}');
-    expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
+    expect(mainTsx).toContain('desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopSettingsScreen}');
     expect(mainTsx).toContain('desktopChatPreviewOpen={isWide && chatPreviewOpen}');
     expect(mainTsx).not.toContain('desktopActivityBar={desktopActivityBar}');
     expect(mainTsx).toContain('floatingControlStack={floatingControlStack}');
-    expect(mainTsx).toContain('mobileSettingsScreen={mobileSettingsScreen}');
+    expect(mainTsx).toContain('mobileSettingsScreen={mobileReleasePublishingScreen ?? mobileSettingsScreen}');
     expect(mainTsx).toContain('sidebar={renderSidebar()}');
     expect(mainTsx).toContain('main={renderMain()}');
 

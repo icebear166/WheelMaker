@@ -12,11 +12,14 @@ import (
 )
 
 type desktopUpdateInfo struct {
+	Version      string `json:"version"`
 	SHA256       string `json:"sha256"`
 	UpdaterReady bool   `json:"updaterReady"`
 }
 
 const desktopSelfUpdateCapability = "@REM WHEELMAKER_DESKTOP_SELF_UPDATE=1"
+
+var desktopReleaseVersion string
 
 type desktopUpdateDependencies struct {
 	userHome     func() (string, error)
@@ -73,6 +76,7 @@ func (c *desktopUpdateController) Info() (desktopUpdateInfo, error) {
 		return desktopUpdateInfo{}, fmt.Errorf("hash Desktop executable: %w", err)
 	}
 	return desktopUpdateInfo{
+		Version:      desktopReleaseVersion,
 		SHA256:       sha,
 		UpdaterReady: c.updaterReady(updater),
 	}, nil

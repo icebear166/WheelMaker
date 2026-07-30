@@ -868,8 +868,8 @@ describe('web chat integration', () => {
     expect(hubMenuTsx).toContain('<span className="chat-hub-row-name">{hubId}</span>');
     expect(hubMenuTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
     expect(mainTsx).toContain('const renderChatSessionHeader = (mobile: boolean) => {');
-    expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
-    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
+    expect(mainTsx).toContain('const renderWheelMakerAppMenu = (mobile: boolean) => (');
+    expect(mainTsx).toContain("'chat-menu-icon-button chat-menu-settings-button chat-menu-product-button'");
     expect(mainTsx).not.toContain('<span className="mobile-chat-drawer-title">Chats</span>');
     expect(mainTsx).toContain('{renderChatSessionHeader(true)}');
     expect(mainTsx).toContain('renderChatSessionHeader(false)');
@@ -886,8 +886,8 @@ describe('web chat integration', () => {
     const chatSessionHeaderBlock = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
     expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
-    expect(chatSessionHeaderBlock).toContain('mobile ? renderChatMenuSettingsButton() : (');
-    expect(chatSessionHeaderBlock).toContain('<DesktopAppMenu onOpenSettings={handleDesktopSettingsSelect} />');
+    expect(chatSessionHeaderBlock).toContain('mobile ? renderWheelMakerAppMenu(true) : (');
+    expect(chatSessionHeaderBlock).toContain('{renderWheelMakerAppMenu(false)}');
     expect(chatSessionHeaderBlock).toContain('{renderDesktopChatProjectSelector()}');
     expect(chatSessionHeaderBlock).toContain('<div className="chat-sidebar-title-actions">');
     expect(chatSessionHeaderBlock).toContain('{renderChatHubSummary()}');
@@ -1778,7 +1778,7 @@ describe('web chat integration', () => {
     expect(settingsBundleTs).not.toContain('UpdateSettingsDetail');
     expect(settingsBundleTs).toContain("export { DebugLogsSettingsDetail } from './DebugLogsSettingsDetail';");
     expect(settingsRootTsx).toContain('function renderSettingsSection');
-    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'appearance'");
+    expect(settingsRootTsx).not.toContain("renderSettingsSection({id: 'appearance'");
     expect(settingsRootTsx).not.toContain('Inactive Visibility');
     expect(settingsRootTsx).not.toContain('floatingControlIdleOpacityPercent');
     expect(settingsRootTsx).not.toContain('setFloatingControlIdleOpacity');
@@ -1786,14 +1786,9 @@ describe('web chat integration', () => {
     expect(settingsRootTsx).toContain("renderSettingsSection({id: 'code-display'");
     expect(settingsRootTsx).toContain("renderSettingsSection({id: 'debug'");
     expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
-    const appearanceSettingsIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'appearance'");
     const chatSettingsIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
     const codeDisplaySettingsIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'");
     const debugSettingsIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
-    expect(appearanceSettingsIndex).toBeLessThan(chatSettingsIndex);
-    const appearanceSection = settingsRootTsx.slice(appearanceSettingsIndex, chatSettingsIndex);
-    expect(appearanceSection).not.toContain('!isWide ? (');
-    expect(appearanceSection).not.toContain('Inactive Visibility');
     expect(chatSettingsIndex).toBeLessThan(codeDisplaySettingsIndex);
     expect(codeDisplaySettingsIndex).toBeLessThan(debugSettingsIndex);
     expect(settingsRootTsx).toContain("openSettingsChild('database')");
@@ -2098,15 +2093,15 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('chatSidebarTitleSearchOpen');
     expect(mainTsx).not.toContain('const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {');
     expect(mainTsx).toContain('const handleDesktopSettingsSelect = useCallback(() => {');
-    expect(mainTsx).toContain("import {DesktopAppMenu} from '../shell/layouts/desktop/DesktopAppMenu';");
+    expect(mainTsx).toContain("from '../shell/WheelMakerAppMenu';");
     expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';");
     expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
     expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
     expect(mainTsx).toContain('<DesktopWindowControls />');
-    expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
-    expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
-    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
-    expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
+    expect(mainTsx).toContain('desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopSettingsScreen}');
+    expect(mainTsx).toContain('const renderWheelMakerAppMenu = (mobile: boolean) => (');
+    expect(mainTsx).toContain("'chat-menu-icon-button chat-menu-settings-button chat-menu-product-button'");
+    expect(mainTsx).toContain('onOpenSettings={handleDesktopSettingsSelect}');
     expect(mainTsx).toContain('<DesktopDragRegion className="sidebar-title-row">');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
     expect(mainTsx).not.toContain('chat-sidebar-toggle');
@@ -2958,14 +2953,14 @@ describe('Agent choice menu', () => {
 });
 
 describe('top bar action entry points', () => {
-  test('uses the product mark for the mobile Settings shortcut without changing its direct action', () => {
+  test('uses the product mark for the shared mobile App Menu trigger', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button chat-menu-product-button"');
-    expect(mainTsx).toContain('<img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />');
-    expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
-    expect(mainTsx).toContain('aria-label="Open settings"');
+    expect(mainTsx).toContain("'chat-menu-icon-button chat-menu-settings-button chat-menu-product-button'");
+    expect(mainTsx).toContain('<WheelMakerAppMenu');
+    expect(mainTsx).toContain('onOpenSettings={handleDesktopSettingsSelect}');
+    expect(mainTsx).toContain('onOpenReleasePublishing={openReleasePublishing}');
   });
 
   test('leaves title project dismissal to its dedicated outside-click handler', () => {

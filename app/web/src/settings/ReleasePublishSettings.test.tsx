@@ -3,14 +3,6 @@ import React from 'react';
 import {act, create} from 'react-test-renderer';
 
 import {ReleasePublishSettings} from './ReleasePublishSettings';
-import {settingsDetailTitle} from './SettingsSurface';
-import {isSettingsChildDetail, isSettingsDetailId} from './settingsNavigation';
-
-test('exposes release publishing as a dedicated Debug detail', () => {
-  expect(isSettingsDetailId('releasePublish')).toBe(true);
-  expect(isSettingsChildDetail('releasePublish')).toBe(true);
-  expect(settingsDetailTitle('releasePublish')).toBe('Release publishing');
-});
 
 test('restores browser-only publishing settings without token or URL controls', async () => {
   const values = new Map<string, string>();

@@ -2,426 +2,187 @@ import fs from 'fs';
 import path from 'path';
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import {DesktopAppMenu} from '../web/src/shell/layouts/desktop/DesktopAppMenu';
+import {WheelMakerAppMenu} from '../web/src/shell/WheelMakerAppMenu';
 import {
   DesktopDragRegion,
   DesktopWindowControls,
 } from '../web/src/shell/layouts/desktop/DesktopTitleBar';
 
-describe('desktop window controls', () => {
-  const originalWindow = (global as typeof globalThis & { window?: unknown }).window;
-  const originalFetch = global.fetch;
+describe('desktop title bar', () => {
+  const originalWindow = (global as typeof globalThis & {window?: unknown}).window;
 
   afterEach(() => {
-    (global as typeof globalThis & { window?: unknown }).window = originalWindow;
-    global.fetch = originalFetch;
+    (global as typeof globalThis & {window?: unknown}).window = originalWindow;
+    jest.useRealTimers();
   });
 
-  const stableResponse = (sha256: string) => ({
-    ok: true,
-    status: 200,
-    json: async () => ({
-      schema: 2,
-      version: 'v1.24',
-      publishedAt: '2026-07-18T09:00:00Z',
-      sourceSha: 'a'.repeat(40),
-      desktopExe: {
-        version: 'v1.22',
-        path: '/releases/v1.22/WheelMakerDesktop.exe',
-        sha256,
-      },
-    }),
-  }) as Response;
-
-  test('renders nothing outside the desktop WebView runtime', async () => {
-    (global as typeof globalThis & { window?: unknown }).window = {};
-
+  test('renders window controls only in the desktop runtime', async () => {
+    (global as typeof globalThis & {window?: unknown}).window = {};
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(<DesktopWindowControls />);
     });
-
     expect(renderer!.toJSON()).toBeNull();
-  });
 
-  test('renders frameless window actions without a Web source chooser', async () => {
     const minimize = jest.fn();
     const toggleMaximize = jest.fn();
     const close = jest.fn();
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        minimize,
-        toggleMaximize,
-        close,
-      },
+    (global as typeof globalThis & {window?: unknown}).window = {
+      WheelMakerDesktop: {enabled: true, minimize, toggleMaximize, close},
     };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
+    await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(<DesktopWindowControls />);
     });
-
     const root = renderer!.root;
-    expect(root.findByProps({'data-desktop-window-controls': true})).toBeDefined();
-    expect(root.findAllByProps({'data-desktop-titlebar': true})).toHaveLength(0);
-    expect(root.findAllByProps({className: 'desktop-window-source-button'})).toHaveLength(0);
-    expect(root.findAllByProps({className: 'desktop-titlebar-title-group'})).toHaveLength(0);
-    const buttons = root.findAllByType('button');
-    expect(buttons.map(button => button.props['aria-label']).filter(Boolean)).toEqual([
-      'Minimize',
-      'Maximize or restore',
-      'Close',
-    ]);
-    expect(buttons.map(button => button.findByType('svg').props['data-icon-name'])).toEqual([
-      'minus',
-      'square',
-      'x',
-    ]);
-
-    root.findByProps({'aria-label': 'Minimize'}).props.onClick();
-    root.findByProps({'aria-label': 'Maximize or restore'}).props.onClick();
-    root.findByProps({'aria-label': 'Close'}).props.onClick();
-
-    expect(minimize).toHaveBeenCalled();
-    expect(toggleMaximize).toHaveBeenCalled();
-    expect(close).toHaveBeenCalled();
+    for (const label of ['Minimize', 'Maximize or restore', 'Close']) {
+      root.findByProps({'aria-label': label}).props.onClick();
+    }
+    expect(minimize).toHaveBeenCalledTimes(1);
+    expect(toggleMaximize).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
-  test('opens a Settings-first WheelMaker menu and keeps native actions conditional', async () => {
-    const onOpenSettings = jest.fn();
-    (global as typeof globalThis & { window?: unknown }).window = {
+  test('uses the shared app menu with Desktop-only Dev Mode last', async () => {
+    const check = jest.fn(async () => ({
+      status: 'available' as const,
+      currentVersion: 'v1.8',
+      latestVersion: 'v1.9',
+    }));
+    const start = jest.fn(async () => undefined);
+    (global as typeof globalThis & {window?: unknown}).window = {
       WheelMakerDesktop: {enabled: true, requestLocalDevMode: jest.fn()},
     };
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={onOpenSettings} />);
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <WheelMakerAppMenu
+          themeMode="dark"
+          setThemeMode={jest.fn()}
+          onOpenSettings={jest.fn()}
+          onOpenReleasePublishing={jest.fn()}
+          updateController={{check, start}}
+        />,
+      );
     });
-    const root = renderer!.root;
     await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
+      renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
 
-    const actions = root.findAll(node => typeof node.props['data-desktop-app-action'] === 'string');
-    expect(actions.map(action => action.props['data-desktop-app-action'])).toEqual(['settings', 'local-dev']);
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-app-action': 'settings'}).props.onClick();
-    });
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    const actions = renderer!.root.findAll(
+      node => typeof node.props['data-app-menu-action'] === 'string',
+    );
+    expect(actions.map(action => action.props['data-app-menu-action'])).toEqual([
+      'settings',
+      'theme',
+      'update',
+      'release-publish',
+      'local-dev',
+    ]);
+    expect(renderer!.root.findByProps({role: 'menuitemcheckbox'}).props['aria-checked']).toBe(false);
   });
 
-  test('ports the application menu outside the clipped desktop title bar', () => {
+  test('portals the menu and keeps focus trapped in the Local Dev dialog', () => {
     const source = fs.readFileSync(
-      path.join(__dirname, '..', 'web', 'src', 'shell', 'layouts', 'desktop', 'DesktopAppMenu.tsx'),
+      path.join(__dirname, '..', 'web', 'src', 'shell', 'WheelMakerAppMenu.tsx'),
       'utf8',
     );
-
     expect(source).toContain("import {createPortal} from 'react-dom';");
-    expect(source).toContain('ref={menuRef}');
-    expect(source).toContain('menuRef.current?.contains(target)');
     expect(source).toContain('createPortal(appMenu, document.body)');
-  });
-
-  test('plays the exit animation before unmounting the application menu', async () => {
-    jest.useFakeTimers();
-    const matchMedia = ((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      dispatchEvent: () => false,
-    })) as typeof window.matchMedia;
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {enabled: true, requestLocalDevMode: jest.fn()},
-      matchMedia,
-    };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
-    });
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
-    });
-    expect(root.findAllByProps({role: 'menu'})).toHaveLength(1);
-
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({className: 'desktop-app-menu-trigger'}).props.onClick();
-    });
-    const menu = root.findByProps({role: 'menu'});
-    expect(menu.props.className).toContain('sl-menu-exit');
-
-    await ReactTestRenderer.act(async () => {
-      jest.advanceTimersByTime(100);
-    });
-    expect(root.findAllByProps({role: 'menu'})).toHaveLength(0);
-    jest.useRealTimers();
-  });
-
-  test('opens a separate Local Dev configuration dialog from the application menu', async () => {
-	const requestLocalDevMode = jest.fn();
-	(global as typeof globalThis & { window?: unknown }).window = {
-		WheelMakerDesktop: {enabled: true, requestLocalDevMode},
-	};
-
-	let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-	await ReactTestRenderer.act(async () => {
-		renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
-	});
-	const root = renderer!.root;
-	const labels = root.findAllByType('button').map(button => button.props['aria-label']).filter(Boolean);
-	expect(labels).toEqual(['Open WheelMaker menu']);
-	await ReactTestRenderer.act(async () => {
-		root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
-	});
-	const menuItem = root.findByProps({role: 'menuitemcheckbox'});
-	expect(menuItem.props['aria-checked']).toBe(false);
-	expect(menuItem.findAllByType('span').some(span => span.children.includes('Dev Mode'))).toBe(true);
-	expect(root.findAllByProps({className: 'desktop-app-menu-source'})).toHaveLength(0);
-	await ReactTestRenderer.act(async () => {
-		menuItem.props.onClick();
-	});
-	expect(requestLocalDevMode).not.toHaveBeenCalled();
-	const dialog = root.findByProps({'aria-label': 'Configure Local Dev'});
-	const sourceInput = dialog.findByProps({'aria-label': 'WheelMaker source directory'});
-	await ReactTestRenderer.act(async () => {
-		sourceInput.props.onChange({target: {value: 'E:\\_Code\\WheelMaker'}});
-	});
-	await ReactTestRenderer.act(async () => {
-		root.findByProps({'data-local-dev-enter': true}).props.onClick();
-	});
-	expect(requestLocalDevMode).toHaveBeenCalledWith('E:\\_Code\\WheelMaker');
-  });
-
-  test('keeps focus inside the Local Dev dialog and restores it on close', () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'web', 'src', 'shell', 'layouts', 'desktop', 'DesktopAppMenu.tsx'),
-      'utf8',
-    );
-
-    expect(source).toContain('const localDevDialogRef = useRef<HTMLElement | null>(null);');
-    expect(source).toContain("if (event.key === 'Escape' && !localDevBusyRef.current)");
     expect(source).toContain("if (event.key !== 'Tab') return;");
     expect(source).toContain('previouslyFocused?.focus();');
   });
 
-  test('marks Dev Mode as checked when the local native bridge is active', async () => {
-    global.fetch = jest.fn() as unknown as typeof fetch;
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        localDev: {
-          getState: jest.fn(),
-          saveSource: jest.fn(),
-          run: jest.fn(),
-        },
-        getDesktopUpdateInfo: jest.fn(),
-        requestDesktopUpdate: jest.fn(),
-      },
-      dispatchEvent: jest.fn(),
+  test('plays the exit animation before unmounting the menu', async () => {
+    jest.useFakeTimers();
+    (global as typeof globalThis & {window?: unknown}).window = {
+      WheelMakerDesktop: {enabled: true, requestLocalDevMode: jest.fn()},
+      matchMedia: () => ({
+        matches: false,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
     };
-
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <WheelMakerAppMenu
+          themeMode="dark"
+          setThemeMode={jest.fn()}
+          onOpenSettings={jest.fn()}
+          onOpenReleasePublishing={jest.fn()}
+        />,
+      );
     });
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
+    const trigger = renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'});
+    await ReactTestRenderer.act(() => trigger.props.onClick());
+    await ReactTestRenderer.act(() => trigger.props.onClick());
+    expect(renderer!.root.findByProps({role: 'menu'}).props.className).toContain('sl-menu-exit');
+    await ReactTestRenderer.act(() => {
+      jest.advanceTimersByTime(100);
     });
-    const menuItem = root.findByProps({role: 'menuitemcheckbox'});
-    expect(menuItem.props['aria-checked']).toBe(true);
-    expect(menuItem.findByProps({'data-icon-name': 'check'})).toBeDefined();
-    expect(root.findAllByProps({'data-desktop-app-action': 'desktop-update'})).toHaveLength(0);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(renderer!.root.findAllByProps({role: 'menu'})).toHaveLength(0);
   });
 
-  test('checks once and shows the Desktop update directly after Dev Mode', async () => {
-    let resolveStable: ((response: Response) => void) | undefined;
-    global.fetch = jest.fn(() => new Promise<Response>((resolve) => {
-      resolveStable = resolve;
-    })) as unknown as typeof fetch;
-    const requestDesktopUpdate = jest.fn(async () => undefined);
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        requestLocalDevMode: jest.fn(),
-        getDesktopUpdateInfo: jest.fn(async () => ({
-          sha256: 'a'.repeat(64),
-          updaterReady: true,
-        })),
-        requestDesktopUpdate,
-      },
+  test('opens the legacy Local Dev configuration dialog', async () => {
+    const requestLocalDevMode = jest.fn();
+    (global as typeof globalThis & {window?: unknown}).window = {
+      WheelMakerDesktop: {enabled: true, requestLocalDevMode},
     };
-
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <WheelMakerAppMenu
+          themeMode="light"
+          setThemeMode={jest.fn()}
+          onOpenSettings={jest.fn()}
+          onOpenReleasePublishing={jest.fn()}
+        />,
+      );
     });
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
     });
-    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
-      'Checking Desktop update…',
-    );
-
-    await ReactTestRenderer.act(async () => {
-      resolveStable!(stableResponse('b'.repeat(64)));
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({role: 'menuitemcheckbox'}).props.onClick();
     });
-
-    const menuItems = root.findAll(node =>
-      typeof node.props['data-desktop-app-action'] === 'string',
-    );
-    expect(menuItems.map(item => item.props['data-desktop-app-action'])).toEqual(['settings', 'local-dev', 'desktop-update']);
-    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
-      'Update Desktop to v1.22',
-    );
-    expect(root.findByProps({'data-desktop-update-dot': 'app-menu'})).toBeDefined();
-    expect(root.findByProps({'data-desktop-update-dot': 'menu'})).toBeDefined();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-app-action': 'desktop-update'}).props.onClick();
+    const input = renderer!.root.findByProps({'aria-label': 'WheelMaker source directory'});
+    await ReactTestRenderer.act(() => {
+      input.props.onChange({target: {value: 'E:\\Code\\WheelMaker'}});
     });
-    expect(requestDesktopUpdate).toHaveBeenCalledTimes(1);
-  });
-
-  test('shows the current Desktop without an update dot when SHA matches', async () => {
-    global.fetch = jest.fn(async () => stableResponse('a'.repeat(64))) as unknown as typeof fetch;
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        getDesktopUpdateInfo: jest.fn(async () => ({
-          sha256: 'a'.repeat(64),
-          updaterReady: true,
-        })),
-        requestDesktopUpdate: jest.fn(),
-      },
-    };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
+    await ReactTestRenderer.act(() => {
+      renderer!.root.findByProps({'data-local-dev-enter': true}).props.onClick();
     });
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
-    });
-    const updateButton = root.findByProps({'data-desktop-app-action': 'desktop-update'});
-    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
-      'Desktop is up to date',
-    );
-    expect(updateButton.props.disabled).toBe(true);
-    expect(root.findAll(node => node.props['data-desktop-update-dot'] !== undefined)).toHaveLength(0);
-  });
-
-  test('retries a failed Desktop check from the menu', async () => {
-    global.fetch = jest.fn()
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce(stableResponse('a'.repeat(64))) as unknown as typeof fetch;
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        getDesktopUpdateInfo: jest.fn(async () => ({
-          sha256: 'a'.repeat(64),
-          updaterReady: true,
-        })),
-        requestDesktopUpdate: jest.fn(),
-      },
-    };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
-    });
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
-    });
-    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
-      'Check failed · Retry',
-    );
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-app-action': 'desktop-update'}).props.onClick();
-    });
-    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
-      'Desktop is up to date',
-    );
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  test('keeps the Desktop open and returns to retry when updater launch fails', async () => {
-    global.fetch = jest.fn(async () => stableResponse('b'.repeat(64))) as unknown as typeof fetch;
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        getDesktopUpdateInfo: jest.fn(async () => ({
-          sha256: 'a'.repeat(64),
-          updaterReady: true,
-        })),
-        requestDesktopUpdate: jest.fn(async () => {
-          throw new Error('start failed');
-        }),
-      },
-    };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopAppMenu onOpenSettings={jest.fn()} />);
-    });
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
-    });
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({'data-desktop-app-action': 'desktop-update'}).props.onClick();
-    });
-    expect(root.findByProps({className: 'desktop-app-menu-root'})).toBeDefined();
-    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
-      'Check failed · Retry',
-    );
+    expect(requestLocalDevMode).toHaveBeenCalledWith('E:\\Code\\WheelMaker');
   });
 
   test('drags desktop title rows except interactive targets', async () => {
     const startDrag = jest.fn();
     const toggleMaximize = jest.fn();
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        startDrag,
-        toggleMaximize,
-      },
+    (global as typeof globalThis & {window?: unknown}).window = {
+      WheelMakerDesktop: {enabled: true, startDrag, toggleMaximize},
     };
-
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
+    await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <DesktopDragRegion className="block-title chat-title-bar">
+        <DesktopDragRegion className="chat-title-bar">
           <span>Title</span>
           <button type="button">Action</button>
         </DesktopDragRegion>,
       );
     });
-
     const region = renderer!.root.findByProps({'data-desktop-drag-region': true});
-    const dragTarget = {closest: () => null};
-    const buttonTarget = {closest: (selector: string) => selector.includes('button') ? ({} as Element) : null};
     const preventDefault = jest.fn();
-
+    const dragTarget = {closest: () => null};
     region.props.onMouseDown({button: 0, detail: 1, target: dragTarget, preventDefault});
-    expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(startDrag).toHaveBeenCalledTimes(1);
-
     region.props.onMouseDown({button: 0, detail: 2, target: dragTarget, preventDefault});
-    expect(toggleMaximize).toHaveBeenCalledTimes(1);
-
-    region.props.onMouseDown({button: 0, detail: 1, target: buttonTarget, preventDefault});
+    region.props.onMouseDown({
+      button: 0,
+      detail: 1,
+      target: {closest: () => ({})},
+      preventDefault,
+    });
     expect(startDrag).toHaveBeenCalledTimes(1);
+    expect(toggleMaximize).toHaveBeenCalledTimes(1);
   });
 });

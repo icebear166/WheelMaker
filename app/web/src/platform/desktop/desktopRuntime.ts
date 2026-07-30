@@ -1,4 +1,5 @@
 export type DesktopUpdateInfo = {
+  version?: string;
   sha256: string;
   updaterReady: boolean;
 };

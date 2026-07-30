@@ -22,10 +22,10 @@ describe('menu keyboard navigation', () => {
     expect(sessionMenu).toContain('previouslyFocusedRef.current?.focus();');
   });
 
-  test('gives the desktop application menu the same arrow-key behavior', () => {
-    const desktopMenu = read('shell/layouts/desktop/DesktopAppMenu.tsx');
+  test('gives the shared application menu the same arrow-key behavior', () => {
+    const desktopMenu = read('shell/WheelMakerAppMenu.tsx');
 
-    expect(desktopMenu).toContain("from '../../../common/menuKeyboardNavigation'");
+    expect(desktopMenu).toContain("from '../common/menuKeyboardNavigation'");
     expect(desktopMenu).toContain('focusFirstMenuItem(menuRef.current);');
     expect(desktopMenu).toContain('handleMenuKeyDown(event, menuRef.current)');
   });

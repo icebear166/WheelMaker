@@ -4,6 +4,7 @@
 
 ## 页面
 
+- [`app-menu.md`](app-menu.md)：WheelMaker 图标菜单在浏览器、APK 与 EXE 中的统一项目、主题切换、客户端更新和独立发布入口约定。
 - [`pc-chat-sidebar-modes.md`](pc-chat-sidebar-modes.md)：PC 端 Chat 侧边栏的浮动/pin 双模式、两条常驻标题栏、滑出会话导航和 800px 对话列连续对齐规则。
 - [`hub-menu.md`](hub-menu.md)：hub 菜单作为 per-hub 操作中心的行模型、复合按钮、展开互斥、全局 footer 与桌面浮窗 / 移动端全屏页双形态约定。
 - [`chat-turn-presentation.md`](chat-turn-presentation.md)：Thinking 与连续 Tool Call 在虚拟聊天列表中的折叠、聚合、状态和固定高度规则。
