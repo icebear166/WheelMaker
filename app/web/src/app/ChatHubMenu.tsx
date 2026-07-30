@@ -8,7 +8,18 @@ import type {
   RegistryFlickerBridgeStatus,
   RegistryHubConfig,
   RegistryHubConfigUpdatePayload,
+  RegistrySkillProjectSnapshot,
+  RegistrySkillSnapshot,
 } from '../registry/registryTypes';
+import {
+  onlineSkillProjects,
+  projectSkillTotal,
+  type SkillBatchUninstallTarget,
+  type SkillDetailTarget,
+  type SkillInstallTarget,
+  type SkillUninstallTarget,
+  type SkillUpdateTarget,
+} from '../settings/skillManagementView';
 import {
   HUB_COLOR_PRESETS,
   hubColorToHsv,
@@ -18,7 +29,18 @@ import {
   setHubColorPreference,
   type HubColorHsv,
 } from '../workspace/hubProjectPreferences';
-export type ChatHubDetailId = 'settings' | 'npm' | 'skills' | 'visibility' | 'scan';
+import {
+  ChatHubSkillScopeDetail,
+  type ChatHubSkillActions,
+} from './ChatHubSkillManagement';
+
+export type ChatHubDetailId =
+  | 'settings'
+  | 'npm'
+  | 'skills'
+  | 'visibility'
+  | 'scan'
+  | 'projectSkills';
 
 function chatHubDetailGroup(section: ChatHubDetailId): 'settings' | 'hub' | 'projects' {
   if (section === 'settings') return 'settings';
@@ -69,14 +91,6 @@ export interface ChatHubIndexProjectView {
   pending: boolean;
 }
 
-export interface ChatHubSkillView {
-  name: string;
-  category: string;
-  managed: boolean;
-  agents: string[];
-  pending: boolean;
-}
-
 export interface ChatHubOpsView {
   wheelMaker: {
     loading: boolean;
@@ -94,10 +108,11 @@ export interface ChatHubOpsView {
   };
   skills: {
     loading: boolean;
-    pending: boolean;
+    operationRunning: boolean;
     error: string;
-    count: number;
-    items: ChatHubSkillView[];
+    pendingKey: string;
+    hubItems: RegistrySkillSnapshot[];
+    projects: RegistrySkillProjectSnapshot[];
   };
   index: {
     pending: boolean;
@@ -133,7 +148,14 @@ const EMPTY_OPS_VIEW: ChatHubOpsView = {
     updateAvailable: false,
   },
   npm: {loading: false, pending: false, outdatedCount: 0, packages: []},
-  skills: {loading: false, pending: false, error: '', count: 0, items: []},
+  skills: {
+    loading: false,
+    operationRunning: false,
+    error: '',
+    pendingKey: '',
+    hubItems: [],
+    projects: [],
+  },
   index: {pending: false, indexedCount: 0, totalCount: 0, projects: []},
 };
 
@@ -169,8 +191,12 @@ export interface ChatHubMenuProps {
   onRequestWheelMakerUpdate: (hubId: string) => void;
   onRequestNpmUpdate: (hubId: string) => void;
   onPackageAction: (hubId: string, action: 'install' | 'update' | 'uninstall', pkg: ChatHubNpmPackageView) => void;
-  onRequestSkillUpdate: (hubId: string, skillName?: string) => void;
-  onRequestSkillUninstall: (hubId: string, skillName: string) => void;
+  onRequestSkillInstall: (target: SkillInstallTarget) => void;
+  onRequestSkillDetail: (target: SkillDetailTarget) => void;
+  onRequestSkillUpdate: (target: SkillUpdateTarget) => void;
+  onRequestSkillUninstall: (target: SkillUninstallTarget) => void;
+  onRequestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
+  onRetrySkills: (hubId: string) => void;
   onScanAllIndexes: (hubId: string) => void;
   onScanProject: (hubId: string, projectId: string) => void;
   hiddenProjectIdSet: Set<string>;
@@ -499,12 +525,16 @@ function ChatHubSettingsSection({
 function ChatHubDisclosureButton({
   label,
   info,
+  icon,
+  hideLabel = false,
   pending = false,
   expanded,
   onToggle,
 }: {
   label: string;
   info?: string;
+  icon?: IconName;
+  hideLabel?: boolean;
   pending?: boolean;
   expanded: boolean;
   onToggle: () => void;
@@ -517,7 +547,8 @@ function ChatHubDisclosureButton({
       aria-label={`${label} details`}
       onClick={onToggle}
     >
-      <span className="chat-hub-action-label">{label}</span>
+      {icon ? <Icon name={icon} /> : null}
+      {!hideLabel ? <span className="chat-hub-action-label">{label}</span> : null}
       {info ? <span className="chat-hub-action-info">{info}</span> : null}
       <Icon name={pending ? 'loader' : expanded ? 'chevronDown' : 'chevronRight'} spin={pending} />
     </button>
@@ -619,63 +650,96 @@ function ChatHubNpmDetail({
 function ChatHubSkillsDetail({
   hubId,
   ops,
-  onUpdate,
-  onUninstall,
+  actions,
 }: {
   hubId: string;
   ops: ChatHubOpsView;
-  onUpdate: ChatHubMenuProps['onRequestSkillUpdate'];
-  onUninstall: ChatHubMenuProps['onRequestSkillUninstall'];
+  actions: ChatHubSkillActions;
 }): React.JSX.Element {
   return (
     <div className="chat-hub-detail">
-      <ChatHubDetailToolbar
+      <ChatHubSkillScopeDetail
+        target={{hubId, scope: 'hub'}}
         label="Global skills"
-        actionLabel="Update all Hub skills"
-        pending={ops.skills.pending}
-        disabled={ops.skills.loading || ops.skills.items.every(skill => !skill.managed)}
-        onAction={() => onUpdate(hubId)}
+        skills={ops.skills.hubItems}
+        loading={ops.skills.loading}
+        error={ops.skills.error}
+        operationRunning={ops.skills.operationRunning}
+        pendingKey={ops.skills.pendingKey}
+        actions={actions}
       />
-      {ops.skills.items.map(skill => {
-        const disabled = !skill.managed || ops.skills.loading || ops.skills.pending || skill.pending;
-        return (
-          <div key={skill.name} className="chat-hub-skill-row">
-            <span className="chat-hub-skill-main">
-              <span className="chat-hub-skill-name" title={skill.name}>{skill.name}</span>
-              <span className="chat-hub-skill-meta">
-                {skill.category}{skill.agents.length > 0 ? ` · ${skill.agents.join(', ')}` : ''}
-              </span>
-            </span>
-            <span className="chat-hub-row-actions">
-              <button
-                type="button"
-                className="chat-hub-icon-btn"
-                aria-label={`Update ${skill.name}`}
-                disabled={disabled}
-                onClick={() => onUpdate(hubId, skill.name)}
-              >
-                <Icon name={skill.pending ? 'loader' : 'refreshCw'} spin={skill.pending} />
-              </button>
-              <button
-                type="button"
-                className="chat-hub-icon-btn danger"
-                aria-label={`Uninstall ${skill.name}`}
-                disabled={disabled}
-                onClick={() => onUninstall(hubId, skill.name)}
-              >
-                <Icon name="trash" />
-              </button>
-            </span>
-          </div>
-        );
-      })}
-      {ops.skills.loading && ops.skills.items.length === 0 ? (
-        <div className="chat-hub-detail-empty"><Icon name="loader" spin /> Loading skills…</div>
-      ) : null}
-      {!ops.skills.loading && ops.skills.items.length === 0 && !ops.skills.error ? (
-        <div className="chat-hub-detail-empty">No global skills</div>
-      ) : null}
-      {ops.skills.error ? <div className="chat-hub-ops-error">{ops.skills.error}</div> : null}
+    </div>
+  );
+}
+
+function ChatHubProjectSkillsDetail({
+  hubId,
+  ops,
+  actions,
+}: {
+  hubId: string;
+  ops: ChatHubOpsView;
+  actions: ChatHubSkillActions;
+}): React.JSX.Element {
+  const projects = React.useMemo(
+    () => onlineSkillProjects(ops.skills.projects),
+    [ops.skills.projects],
+  );
+  const [selectedProjectName, setSelectedProjectName] = React.useState('');
+  const selectedProject = projects.find(project => project.projectName === selectedProjectName)
+    ?? projects[0]
+    ?? null;
+
+  React.useEffect(() => {
+    const nextName = selectedProject?.projectName ?? '';
+    if (nextName !== selectedProjectName) {
+      setSelectedProjectName(nextName);
+    }
+  }, [selectedProject?.projectName, selectedProjectName]);
+
+  if (projects.length === 0 || !selectedProject) {
+    return (
+      <div className="chat-hub-detail">
+        <div className="chat-hub-detail-empty">No online projects</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="chat-hub-detail chat-hub-project-skills-detail">
+      <div className="chat-hub-project-skill-picker" role="listbox" aria-label="Project">
+        {projects.map(project => {
+          const selected = project.projectName === selectedProject.projectName;
+          return (
+            <button
+              key={project.projectName}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              className={`chat-hub-project-skill-option${selected ? ' selected' : ''}`}
+              data-project-name={project.projectName}
+              onClick={() => setSelectedProjectName(project.projectName)}
+            >
+              <span className="chat-hub-project-skill-name">{project.projectName}</span>
+              <span className="chat-hub-project-skill-count">{project.skills.length}</span>
+            </button>
+          );
+        })}
+      </div>
+      <ChatHubSkillScopeDetail
+        target={{
+          hubId,
+          scope: 'project',
+          projectName: selectedProject.projectName,
+        }}
+        label="Project skills"
+        skills={selectedProject.skills}
+        loading={ops.skills.loading}
+        error={selectedProject.error || ops.skills.error}
+        operationRunning={ops.skills.operationRunning}
+        pendingKey={ops.skills.pendingKey}
+        actions={actions}
+      />
     </div>
   );
 }
@@ -749,8 +813,12 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onRequestWheelMakerUpdate,
     onRequestNpmUpdate,
     onPackageAction,
+    onRequestSkillInstall,
+    onRequestSkillDetail,
     onRequestSkillUpdate,
     onRequestSkillUninstall,
+    onRequestSkillBatchUninstall,
+    onRetrySkills,
     onScanAllIndexes,
     onScanProject,
     hiddenProjectIdSet,
@@ -766,6 +834,14 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const openSections = expandedSections[hubId] ?? [];
   const sectionOpen = (section: ChatHubDetailId) => openSections.includes(section);
   const visibleProjectCount = treeItem.projects.filter(project => !hiddenProjectIdSet.has(project.projectId)).length;
+  const skillActions: ChatHubSkillActions = {
+    onAdd: onRequestSkillInstall,
+    onDetail: onRequestSkillDetail,
+    onUpdate: onRequestSkillUpdate,
+    onUninstall: onRequestSkillUninstall,
+    onBatchUninstall: onRequestSkillBatchUninstall,
+    onRetry: onRetrySkills,
+  };
 
   const flickerConfig = configView?.data?.flickerBridge ?? null;
   const flickerOn = flickerConfig
@@ -870,8 +946,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               />
               <ChatHubDisclosureButton
                 label="Skills"
-                info={ops.skills.count > 0 ? `${ops.skills.count}` : undefined}
-                pending={ops.skills.loading || ops.skills.pending}
+                info={ops.skills.hubItems.length > 0 ? `${ops.skills.hubItems.length}` : undefined}
+                pending={ops.skills.loading || ops.skills.operationRunning}
                 expanded={sectionOpen('skills')}
                 onToggle={() => toggleSection('skills')}
               />
@@ -884,8 +960,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
             <ChatHubSkillsDetail
               hubId={hubId}
               ops={ops}
-              onUpdate={onRequestSkillUpdate}
-              onUninstall={onRequestSkillUninstall}
+              actions={skillActions}
             />
           ) : null}
           <div className="chat-hub-line">
@@ -895,6 +970,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               <ChatHubDisclosureButton
                 label="Visibility"
                 info={`${visibleProjectCount}/${treeItem.projects.length}`}
+                icon="eye"
+                hideLabel
                 expanded={sectionOpen('visibility')}
                 onToggle={() => toggleSection('visibility')}
               />
@@ -904,6 +981,15 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 pending={ops.index.pending}
                 expanded={sectionOpen('scan')}
                 onToggle={() => toggleSection('scan')}
+              />
+              <ChatHubDisclosureButton
+                label="Project Skills"
+                info={projectSkillTotal(ops.skills.projects) > 0
+                  ? `${projectSkillTotal(ops.skills.projects)}`
+                  : undefined}
+                pending={ops.skills.loading || ops.skills.operationRunning}
+                expanded={sectionOpen('projectSkills')}
+                onToggle={() => toggleSection('projectSkills')}
               />
             </span>
           </div>
@@ -940,6 +1026,9 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           ) : null}
           {sectionOpen('scan') ? (
             <ChatHubScanDetail hubId={hubId} ops={ops} onScanAll={onScanAllIndexes} onScanProject={onScanProject} />
+          ) : null}
+          {sectionOpen('projectSkills') ? (
+            <ChatHubProjectSkillsDetail hubId={hubId} ops={ops} actions={skillActions} />
           ) : null}
         </div>
       ) : null}

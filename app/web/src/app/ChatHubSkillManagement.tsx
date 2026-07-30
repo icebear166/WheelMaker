@@ -60,7 +60,9 @@ export function ChatHubSkillScopeDetail({
   );
   const managedSkills = sortedSkills.filter(skill => skill.managed);
   const scopeLabel = target.scope === 'hub' ? 'Hub' : 'Project';
-  const hubBusy = operationRunning || isSkillActionPendingForHub(pendingKey, target.hubId);
+  const hubBusy = loading
+    || operationRunning
+    || isSkillActionPendingForHub(pendingKey, target.hubId);
   const updateAllPending = actionPending(pendingKey, {
     ...target,
     action: 'skillUpdate',

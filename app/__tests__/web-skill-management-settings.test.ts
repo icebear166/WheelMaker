@@ -93,8 +93,7 @@ describe('skill management settings UI source structure', () => {
 
     expect(summaryStart).toBeGreaterThanOrEqual(0);
     expect(summaryEnd).toBeGreaterThan(summaryStart);
-    expect(summaryBlock).toContain("scope: 'hub'");
-    expect(summaryBlock).toContain('includeProjects: false');
+    expect(summaryBlock).not.toContain('includeProjects: true');
   });
 
   test('keeps Skills pending and polling scoped to the affected hub', () => {
@@ -141,14 +140,17 @@ describe('skill management settings UI source structure', () => {
       .toContain('refreshSkillManagement(registryHubIds).catch(() => undefined);');
   });
 
-  test('wires the hub menu to hub-global skill management data and actions', () => {
+  test('wires the hub menu to scoped Hub and Project skill management data and actions', () => {
     expect(mainTsx).toContain('const skillHub = skillHubs[card.hubId];');
     expect(mainTsx).toContain('const hubSkills = skillHub?.data?.hubSkills?.skills ?? [];');
-    expect(mainTsx).toContain('count: hubSkills.length,');
-    expect(mainTsx).toContain('items: hubSkills.map(skill => ({');
-    expect(mainTsx).toContain('onRequestSkillUpdate={(hubId, skillName) => requestSkillUpdate({');
-    expect(mainTsx).toContain('onRequestSkillUninstall={(hubId, skillName) => requestSkillUninstall({');
-    expect(mainTsx).toContain('skills: skillName ? [skillName] : undefined,');
+    expect(mainTsx).toContain('const skillProjects = skillHub?.data?.projects ?? [];');
+    expect(mainTsx).toContain('hubItems: hubSkills,');
+    expect(mainTsx).toContain('projects: skillProjects,');
+    expect(mainTsx).toContain('pendingKey: skillsPendingKey,');
+    expect(mainTsx).toContain("onRequestSkillInstall={target => requestSkillInstall(target, 'hub')}");
+    expect(mainTsx).toContain("onRequestSkillDetail={target => requestSkillDetail(target, 'hub')}");
+    expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');
+    expect(mainTsx).toContain('onRequestSkillBatchUninstall={requestSkillBatchUninstall}');
     expect(mainTsx).toContain('skills: target.skills,');
     expect(mainTsx).toContain('refreshSkillManagementHubRef.current?.(hubId)');
     expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
@@ -302,7 +304,7 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).not.toContain('settings-skills-detail-placement-');
     expect(detailTsx).toContain('requestSkillDetail(target).catch(() => undefined);');
     expect(detailTsx).not.toContain('{renderSkillDetailPanel()}');
-    expect(mainTsx).toContain("if (!isWide) {\n      setSidebarSettingsOpen(true);\n      setSettingsDetailView('skillDetail');\n    }");
+    expect(mainTsx).toContain("if (owner === 'settings' && !isWide) {\n      setSidebarSettingsOpen(true);\n      setSettingsDetailView('skillDetail');\n    }");
     expect(mainTsx).toContain('const desktopSkillDetailPanel = isWide && sidebarSettingsOpen && settingsDetailView === \'skills\' && skillDetailTarget ? (');
     expect(mainTsx).toContain('sidePanel={desktopSkillDetailPanel}');
     expect(settingsSurfaceTsx).toContain('sidePanel?: ReactNode;');

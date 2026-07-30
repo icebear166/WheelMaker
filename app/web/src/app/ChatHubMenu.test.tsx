@@ -30,9 +30,12 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onRequestWheelMakerUpdate: jest.fn(),
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
-    onScanSkills: jest.fn(),
+    onRequestSkillInstall: jest.fn(),
+    onRequestSkillDetail: jest.fn(),
     onRequestSkillUpdate: jest.fn(),
     onRequestSkillUninstall: jest.fn(),
+    onRequestSkillBatchUninstall: jest.fn(),
+    onRetrySkills: jest.fn(),
     onScanAllIndexes: jest.fn(),
     onScanProject: jest.fn(),
     onToggleAllProjects: jest.fn(),
@@ -94,7 +97,14 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       updateAvailable: true,
     },
     npm: {loading: false, pending: false, outdatedCount: 2, packages: []},
-    skills: {loading: false, pending: false, error: '', count: 0, items: []},
+    skills: {
+      loading: false,
+      operationRunning: false,
+      error: '',
+      pendingKey: '',
+      hubItems: [],
+      projects: [],
+    },
     index: {pending: false, indexedCount: 1, totalCount: 2, projects: []},
     ...patch,
   };
@@ -104,6 +114,10 @@ test('detail toggling is mutually exclusive only within its row group', () => {
   expect(toggleChatHubDetailSections(['settings', 'npm', 'scan'], 'skills'))
     .toEqual(['settings', 'skills', 'scan']);
   expect(toggleChatHubDetailSections(['settings', 'skills', 'scan'], 'visibility'))
+    .toEqual(['settings', 'skills', 'visibility']);
+  expect(toggleChatHubDetailSections(['settings', 'skills', 'scan'], 'projectSkills'))
+    .toEqual(['settings', 'skills', 'projectSkills']);
+  expect(toggleChatHubDetailSections(['settings', 'skills', 'projectSkills'], 'visibility'))
     .toEqual(['settings', 'skills', 'visibility']);
   expect(toggleChatHubDetailSections(['settings', 'skills', 'visibility'], 'settings'))
     .toEqual(['skills', 'visibility']);
@@ -168,7 +182,18 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
   const {props, callbacks} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
-        skills: {loading: false, pending: false, error: '', count: 3, items: []},
+        skills: {
+          loading: false,
+          operationRunning: false,
+          error: '',
+          pendingKey: '',
+          hubItems: [
+            {name: 'one', category: '', categoryKey: '', managed: true},
+            {name: 'two', category: '', categoryKey: '', managed: true},
+            {name: 'three', category: '', categoryKey: '', managed: true},
+          ],
+          projects: [],
+        },
       }),
     },
   });
@@ -198,7 +223,6 @@ test('hub row uses one direct version action and whole-button NPM and Skills dis
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
   act(() => skills.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
-  expect(callbacks.onScanSkills).not.toHaveBeenCalled();
 });
 
 test('hub row disables unavailable actions', async () => {
@@ -303,20 +327,21 @@ test('npm detail aligns adaptive Install or Update and Uninstall icon slots', as
   expect(callbacks.onRequestNpmUpdate).toHaveBeenCalledWith('hub-a');
 });
 
-test('skills detail shows only hub-global skills with aligned update and uninstall actions', async () => {
+test('skills detail shows only Hub-global skills with scoped actions', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['skills']},
     opsByHubId: {
       'hub-a': opsView({
         skills: {
           loading: false,
-          pending: false,
+          operationRunning: false,
           error: '',
-          count: 2,
-          items: [
-            {name: 'baseline-ui', category: 'UI', managed: true, agents: ['codex'], pending: false},
-            {name: 'external-skill', category: 'External', managed: false, agents: [], pending: false},
+          pendingKey: '',
+          hubItems: [
+            {name: 'baseline-ui', category: 'UI', categoryKey: 'ui', managed: true},
+            {name: 'external-skill', category: 'External', categoryKey: 'external', managed: false},
           ],
+          projects: [],
         },
       }),
     },
@@ -329,20 +354,39 @@ test('skills detail shows only hub-global skills with aligned update and uninsta
   const rows = renderer.root.findAllByProps({className: 'chat-hub-skill-row'});
   expect(rows).toHaveLength(2);
   expect(rows[0].findByProps({className: 'chat-hub-skill-name'}).children).toEqual(['baseline-ui']);
-  const managedActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
+  const managedActions = rows[0].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
   expect(managedActions.map(button => button.props['aria-label']))
-    .toEqual(['Update baseline-ui', 'Uninstall baseline-ui']);
+    .toEqual(['View baseline-ui details', 'Update baseline-ui', 'Uninstall baseline-ui']);
   act(() => managedActions[0].props.onClick());
-  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith('hub-a', 'baseline-ui');
+  expect(callbacks.onRequestSkillDetail).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'hub',
+    skillName: 'baseline-ui',
+  });
   act(() => managedActions[1].props.onClick());
-  expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith('hub-a', 'baseline-ui');
+  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'hub',
+    skills: ['baseline-ui'],
+  });
+  act(() => managedActions[2].props.onClick());
+  expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'hub',
+    skillName: 'baseline-ui',
+  });
 
-  const externalActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
-  expect(externalActions).toHaveLength(2);
-  expect(externalActions.every(button => button.props.disabled)).toBe(true);
+  const externalActions = rows[1].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
+  expect(externalActions).toHaveLength(3);
+  expect(externalActions[0].props.disabled).not.toBe(true);
+  expect(externalActions.slice(1).every(button => button.props.disabled)).toBe(true);
   const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
   act(() => updateAll.props.onClick());
-  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith('hub-a');
+  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'hub',
+    includeProjects: false,
+  });
 });
 
 test('skills detail disables stale row actions while the Hub snapshot refreshes', async () => {
@@ -352,10 +396,11 @@ test('skills detail disables stale row actions while the Hub snapshot refreshes'
       'hub-a': opsView({
         skills: {
           loading: true,
-          pending: false,
+          operationRunning: false,
           error: '',
-          count: 1,
-          items: [{name: 'baseline-ui', category: 'UI', managed: true, agents: [], pending: false}],
+          pendingKey: '',
+          hubItems: [{name: 'baseline-ui', category: 'UI', categoryKey: 'ui', managed: true}],
+          projects: [],
         },
       }),
     },
@@ -366,7 +411,7 @@ test('skills detail disables stale row actions while the Hub snapshot refreshes'
   });
 
   const actions = renderer.root.findByProps({className: 'chat-hub-skill-row'})
-    .findByProps({className: 'chat-hub-row-actions'})
+    .findByProps({className: 'chat-hub-skill-row-actions'})
     .findAllByType('button');
   expect(actions.every(button => button.props.disabled)).toBe(true);
 });
@@ -392,6 +437,28 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
     hiddenProjectIdSet: new Set<string>(['hub-a:p2']),
     opsByHubId: {
       'hub-a': opsView({
+        skills: {
+          loading: false,
+          operationRunning: false,
+          error: '',
+          pendingKey: '',
+          hubItems: [],
+          projects: [
+            {
+              projectName: 'alpha',
+              online: true,
+              skills: [
+                {name: 'one', category: '', categoryKey: '', managed: true},
+                {name: 'two', category: '', categoryKey: '', managed: true},
+              ],
+            },
+            {
+              projectName: 'offline',
+              online: false,
+              skills: [{name: 'three', category: '', categoryKey: '', managed: true}],
+            },
+          ],
+        },
         index: {
           pending: false, indexedCount: 1, totalCount: 2,
           projects: [
@@ -410,6 +477,16 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   expect(renderer.root.findAllByProps({className: 'chat-hub-action-toggle'})).toHaveLength(0);
   const visibility = renderer.root.findByProps({'aria-label': 'Visibility details'});
   const scan = renderer.root.findByProps({'aria-label': 'Scan details'});
+  const projectButtons = renderer.root
+    .findByProps({className: 'chat-hub-line-actions chat-hub-project-actions'})
+    .findAllByType('button');
+  expect(projectButtons).toHaveLength(3);
+  expect(projectButtons.map(button => button.props['aria-label']))
+    .toEqual(['Visibility details', 'Scan details', 'Project Skills details']);
+  expect(projectButtons[0].findByProps({'data-icon-name': 'eye'})).toBeTruthy();
+  expect(projectButtons[0].findAllByProps({className: 'chat-hub-action-label'})).toHaveLength(0);
+  expect(projectButtons[2].findByProps({className: 'chat-hub-action-info'}).children)
+    .toEqual(['3']);
 
   const scanRows = renderer.root.findAllByProps({className: 'chat-hub-scan-row'});
   expect(scanRows).toHaveLength(2);
@@ -427,6 +504,85 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   act(() => visibility.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'visibility');
   expect(callbacks.onToggleAllProjects).not.toHaveBeenCalled();
+});
+
+test('Project Skills lists only online projects and keeps every action in the selected project', async () => {
+  const {props, callbacks} = createHarness({
+    expandedSections: {'hub-a': ['projectSkills']},
+    opsByHubId: {
+      'hub-a': opsView({
+        skills: {
+          loading: false,
+          operationRunning: false,
+          error: '',
+          pendingKey: '',
+          hubItems: [],
+          projects: [
+            {
+              projectName: 'alpha',
+              online: true,
+              skills: [
+                {name: 'one', category: '', categoryKey: '', managed: true},
+                {name: 'two', category: '', categoryKey: '', managed: true},
+              ],
+            },
+            {
+              projectName: 'offline',
+              online: false,
+              skills: [{name: 'three', category: '', categoryKey: '', managed: true}],
+            },
+          ],
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findAllByProps({role: 'option'}).map(option => option.props['data-project-name']))
+    .toEqual(['alpha']);
+  expect(renderer.root.findByProps({className: 'chat-hub-project-skill-count'}).children)
+    .toEqual(['2']);
+  expect(renderer.root.findAllByProps({'data-project-name': 'offline'})).toHaveLength(0);
+
+  act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
+  expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+  });
+  act(() => renderer.root.findByProps({'aria-label': 'View one details'}).props.onClick());
+  expect(callbacks.onRequestSkillDetail).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+    skillName: 'one',
+  });
+  act(() => renderer.root.findByProps({'aria-label': 'Update one'}).props.onClick());
+  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+    skills: ['one'],
+  });
+  act(() => renderer.root.findByProps({'aria-label': 'Uninstall one'}).props.onClick());
+  expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+    skillName: 'one',
+  });
+  act(() => renderer.root.findByProps({'aria-label': 'Select Project skills'}).props.onClick());
+  act(() => renderer.root.findByProps({'aria-label': 'Select two'}).props.onChange());
+  act(() => renderer.root.findByProps({'aria-label': 'Uninstall selected Project skills'}).props.onClick());
+  expect(callbacks.onRequestSkillBatchUninstall).toHaveBeenCalledWith({
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+    skillNames: ['two'],
+  });
 });
 
 test('visibility detail toggles project visibility', async () => {
