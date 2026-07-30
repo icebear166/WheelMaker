@@ -54,7 +54,7 @@ async function renderScope(options: {
   return {renderer, actions};
 }
 
-test('renders flat stable rows with fixed slots and only available actions', async () => {
+test('aligns skill rows, opens details from the name, and keeps External beside the name', async () => {
   const {renderer, actions} = await renderScope({});
 
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row'})).toHaveLength(2);
@@ -68,25 +68,27 @@ test('renders flat stable rows with fixed slots and only available actions', asy
   )).toBe(true);
   expect(renderer.root.findAllByProps({'aria-label': 'Refresh skills'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row-actions'})
-    .every(rowActions => rowActions.findAllByProps({className: 'chat-hub-action-slot'}).length === 3))
+    .every(rowActions => rowActions.findAllByProps({className: 'chat-hub-action-slot'}).length === 2))
     .toBe(true);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-category'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-meta'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({'data-icon-name': 'info'})).toHaveLength(0);
 
   const managed = renderer.root.findByProps({'data-skill-name': 'baseline-ui'});
   expect(managed.findAllByType('button').map(button => button.props['aria-label']))
     .toEqual(['View baseline-ui details', 'Update baseline-ui', 'Uninstall baseline-ui']);
-  expect(managed.findByProps({className: 'chat-hub-skill-name'}).type).toBe('span');
+  expect(managed.findByProps({className: 'chat-hub-skill-name'}).type).toBe('button');
   expect(managed.findByProps({className: 'chat-hub-skill-name'}).props.title).toBe('baseline-ui');
 
   const external = renderer.root.findByProps({'data-skill-name': 'external-skill'});
-  expect(external.findByProps({'data-icon-name': 'link'})).toBeTruthy();
-  expect(external.findByProps({'aria-label': 'View external-skill details'}).props.disabled)
-    .not.toBe(true);
+  const externalNameCell = external.findByProps({className: 'chat-hub-skill-name-cell'});
+  expect(externalNameCell.findByProps({'aria-label': 'View external-skill details'}).type).toBe('button');
+  expect(externalNameCell.findByProps({className: 'chat-hub-skill-external'})
+    .findByProps({'data-icon-name': 'link'})).toBeTruthy();
   expect(external.findAllByProps({'aria-label': 'Update external-skill'})).toHaveLength(0);
   expect(external.findAllByProps({'aria-label': 'Uninstall external-skill'})).toHaveLength(0);
 
-  act(() => managed.findByProps({'aria-label': 'View baseline-ui details'}).props.onClick());
+  act(() => managed.findByProps({className: 'chat-hub-skill-name'}).props.onClick());
   expect(actions.onDetail).toHaveBeenCalledWith({...hubTarget, skillName: 'baseline-ui'});
 });
 
@@ -129,7 +131,7 @@ test('keeps Project update-all and selection-mode uninstall inside selected Proj
   });
 });
 
-test('replaces only the pending action icon while preserving all action slots', async () => {
+test('replaces only the pending update icon while preserving aligned action slots', async () => {
   const pendingKey = skillActionPendingKey({
     ...hubTarget,
     skillName: 'baseline-ui',
@@ -141,8 +143,7 @@ test('replaces only the pending action icon while preserving all action slots', 
     .findByProps({className: 'chat-hub-skill-row-actions'})
     .findAllByType('button');
 
-  expect(actionButtons).toHaveLength(3);
-  expect(actionButtons[0].findByType('svg').props['data-icon-name']).toBe('info');
-  expect(actionButtons[1].findByType('svg').props['data-icon-name']).toBe('loader');
-  expect(actionButtons[2].findByType('svg').props['data-icon-name']).toBe('trash');
+  expect(actionButtons).toHaveLength(2);
+  expect(actionButtons[0].findByType('svg').props['data-icon-name']).toBe('loader');
+  expect(actionButtons[1].findByType('svg').props['data-icon-name']).toBe('trash');
 });

@@ -187,11 +187,6 @@ export function ChatHubSkillScopeDetail({
           {sortedSkills.map(skill => {
             const managed = Boolean(skill.managed);
             const selected = selectedNames.includes(skill.name);
-            const detailPending = actionPending(pendingKey, {
-              ...target,
-              skillName: skill.name,
-              action: 'skillDetail',
-            });
             const updatePending = actionPending(pendingKey, {
               ...target,
               skillName: skill.name,
@@ -221,27 +216,26 @@ export function ChatHubSkillScopeDetail({
                     />
                   ) : null}
                 </span>
-                <span className="chat-hub-skill-name" title={skill.name}>{skill.name}</span>
-                {!managed ? (
-                  <span className="chat-hub-skill-external" title="External skill">
-                    <Icon name="link" />
-                  </span>
-                ) : (
-                  <span className="chat-hub-skill-external" aria-hidden="true" />
-                )}
+                <span className="chat-hub-skill-name-cell">
+                  <button
+                    type="button"
+                    className="chat-hub-skill-name"
+                    aria-label={`View ${skill.name} details`}
+                    title={skill.name}
+                    disabled={loading || selectionMode}
+                    onClick={() => actions.onDetail({...target, skillName: skill.name})}
+                  >
+                    {skill.name}
+                  </button>
+                  {!managed ? (
+                    <span className="chat-hub-skill-external" title="External skill">
+                      <Icon name="link" />
+                    </span>
+                  ) : null}
+                </span>
                 <span
                   className={`chat-hub-skill-row-actions${selectionMode ? ' is-selection-mode' : ''}`}
                 >
-                  <span className="chat-hub-action-slot">
-                    <button
-                      type="button"
-                      aria-label={`View ${skill.name} details`}
-                      disabled={loading || detailPending}
-                      onClick={() => actions.onDetail({...target, skillName: skill.name})}
-                    >
-                      <Icon name={detailPending ? 'loader' : 'info'} spin={detailPending} />
-                    </button>
-                  </span>
                   <span className="chat-hub-action-slot">
                     {managed ? (
                       <button

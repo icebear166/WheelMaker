@@ -24,3 +24,19 @@ test('keeps an error visible and exposes retry and dismiss actions', async () =>
   expect(onRetry).toHaveBeenCalled();
   expect(onDismiss).toHaveBeenCalled();
 });
+
+test('can remain part of the Hub interaction surface while retrying a Hub skill action', async () => {
+  const props = {
+    message: 'Skill update failed',
+    onRetry: () => undefined,
+    onDismiss: () => undefined,
+    preserveChatHubMenu: true,
+  } as React.ComponentProps<typeof RetryToast> & {preserveChatHubMenu: boolean};
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<RetryToast {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'app-retry-toast'}).props)
+    .toMatchObject({'data-chat-hub-owned-overlay': 'true'});
+});

@@ -66,6 +66,27 @@ test('single-skill update confirmation names the selected skill', () => {
   expect(copy).toContain('Hub: hub-a');
 });
 
+test('marks a Hub-owned confirmation as part of the Hub interaction surface', () => {
+  const props = {
+    target: {
+      kind: 'wheelMakerUpdateAll',
+      hubIds: ['hub-a'],
+    } satisfies ConfirmTarget,
+    busy: false,
+    error: '',
+    onCancel: () => undefined,
+    onPrimary: () => undefined,
+    preserveChatHubMenu: true,
+  } as React.ComponentProps<typeof AppConfirmDialog> & {preserveChatHubMenu: boolean};
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(<AppConfirmDialog {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'app-confirm-backdrop'}).props)
+    .toMatchObject({'data-chat-hub-owned-overlay': 'true'});
+});
+
 test('HTML export name dialog presents an editable stem with a fixed extension', () => {
   const onCancel = jest.fn();
   const onSubmit = jest.fn();

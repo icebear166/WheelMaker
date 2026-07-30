@@ -422,23 +422,24 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
 
   const rows = renderer.root.findAllByProps({className: 'chat-hub-skill-row'});
   expect(rows).toHaveLength(2);
-  expect(rows[0].findByProps({className: 'chat-hub-skill-name'}).children).toEqual(['baseline-ui']);
+  const managedName = rows[0].findByProps({className: 'chat-hub-skill-name'});
+  expect(managedName.children).toEqual(['baseline-ui']);
   const managedActions = rows[0].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
   expect(managedActions.map(button => button.props['aria-label']))
-    .toEqual(['View baseline-ui details', 'Update baseline-ui', 'Uninstall baseline-ui']);
-  act(() => managedActions[0].props.onClick());
+    .toEqual(['Update baseline-ui', 'Uninstall baseline-ui']);
+  act(() => managedName.props.onClick());
   expect(callbacks.onRequestSkillDetail).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
     skillName: 'baseline-ui',
   });
-  act(() => managedActions[1].props.onClick());
+  act(() => managedActions[0].props.onClick());
   expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
     skills: ['baseline-ui'],
   });
-  act(() => managedActions[2].props.onClick());
+  act(() => managedActions[1].props.onClick());
   expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
@@ -446,10 +447,11 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
   });
 
   const externalActions = rows[1].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
-  expect(rows[1].findAllByProps({className: 'chat-hub-action-slot'})).toHaveLength(3);
-  expect(rows[1].findByProps({className: 'chat-hub-skill-name'}).props.title).toBe('external-skill');
-  expect(externalActions).toHaveLength(1);
-  expect(externalActions[0].props.disabled).not.toBe(true);
+  expect(rows[1].findAllByProps({className: 'chat-hub-action-slot'})).toHaveLength(2);
+  const externalName = rows[1].findByProps({className: 'chat-hub-skill-name'});
+  expect(externalName.props.title).toBe('external-skill');
+  expect(externalName.props.disabled).not.toBe(true);
+  expect(externalActions).toHaveLength(0);
   const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
   act(() => updateAll.props.onClick());
   expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({

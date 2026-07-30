@@ -114,6 +114,7 @@ type AppConfirmDialogProps = {
   target: ConfirmTarget | null;
   busy: boolean;
   error: string;
+  preserveChatHubMenu?: boolean;
   onCancel: () => void;
   onPrimary: () => void;
 };
@@ -327,6 +328,7 @@ export function AppConfirmDialog({
   target,
   busy,
   error,
+  preserveChatHubMenu = false,
   onCancel,
   onPrimary,
 }: AppConfirmDialogProps) {
@@ -348,6 +350,7 @@ export function AppConfirmDialog({
     <div
       className="app-confirm-backdrop"
       role="presentation"
+      data-chat-hub-owned-overlay={preserveChatHubMenu ? 'true' : undefined}
       onPointerDown={() => {
         if (!busy) {
           onCancel();

@@ -991,6 +991,16 @@ const CHAT_KEYBOARD_INSET_SETTLE_DELAY_MS = 120;
 const CHAT_PENDING_CONFIRM_TIMEOUT_MS = 5000;
 const CHAT_ATTACHMENT_CHUNK_SIZE = 1024 * 1024;
 const HUB_TREE_EMPTY_EXPANDED_SENTINEL = '__hub_tree_empty__';
+const CHAT_HUB_INTERACTION_SURFACE_SELECTOR = [
+  '.chat-hub-popover-stack',
+  '.chat-hub-page',
+  '[data-chat-hub-owned-overlay="true"]',
+].join(', ');
+
+function isChatHubInteractionSurface(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(CHAT_HUB_INTERACTION_SURFACE_SELECTOR));
+}
+
 function estimateSessionReadPayloadBytes(result: RegistrySessionReadResponse): number {
   try {
     return new TextEncoder().encode(JSON.stringify(result)).length;
@@ -1007,8 +1017,7 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.project-session-action-menu',
   '.mobile-project-sheet',
   '.session-archive-menu',
-  '.chat-hub-popover',
-  '.chat-hub-page',
+  CHAT_HUB_INTERACTION_SURFACE_SELECTOR,
   '.chat-title-project-menu',
   '.chat-title-prompt-menu',
   '.app-confirm-dialog',
@@ -5632,6 +5641,9 @@ export function App() {
     if (target === chatScrollRef.current) {
       return;
     }
+    if (isChatHubInteractionSurface(target)) {
+      return;
+    }
     if (target instanceof Element && target.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)) {
       return;
     }
@@ -5644,9 +5656,10 @@ export function App() {
   useEffect(() => {
     const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {
       const target = event.target as Element | null;
-      if (target?.closest(
-        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-hub-page, .chat-title-project-menu, .chat-title-prompt-menu',
-      )) {
+      if (isChatHubInteractionSurface(target)) {
+        return;
+      }
+      if (target?.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)) {
         return;
       }
       if (target?.closest('button, [role="button"]')) {
@@ -6366,13 +6379,18 @@ export function App() {
     if (!chatHubMenuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
+      const inHubInteractionSurface = isChatHubInteractionSurface(event.target);
       if (
         !chatHubMenuRef.current?.contains(target) &&
-        !chatHubPopoverRef.current?.contains(target)
+        !chatHubPopoverRef.current?.contains(target) &&
+        !inHubInteractionSurface
       ) {
         setChatHubMenuOpen(false);
         setChatHubColorMenu(null);
 
+        return;
+      }
+      if (!chatHubMenuRef.current?.contains(target) && !chatHubPopoverRef.current?.contains(target)) {
         return;
       }
       const targetElement = event.target instanceof Element ? event.target : null;
@@ -21228,6 +21246,7 @@ export function App() {
       target={confirmTarget}
       busy={confirmBusy}
       error={confirmError}
+      preserveChatHubMenu={chatHubMenuOpen}
       onCancel={() => {
         setConfirmError('');
         setConfirmTarget(null);
@@ -21375,6 +21394,7 @@ export function App() {
       {skillRetryNotice ? (
         <RetryToast
           message={skillRetryNotice.message}
+          preserveChatHubMenu={chatHubMenuOpen && skillRetryNotice.retry.target.hubId !== ''}
           onRetry={retrySkillNotice}
           onDismiss={dismissSkillRetryNotice}
         />

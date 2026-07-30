@@ -959,6 +959,34 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('margin: 1px 0 3px 26px;');
   });
 
+  test('keeps every Hub-owned portal surface inside the Hub dismissal boundary', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('const CHAT_HUB_INTERACTION_SURFACE_SELECTOR = [');
+    expect(mainTsx).toContain("'.chat-hub-popover-stack'");
+    expect(mainTsx).toContain(`'[data-chat-hub-owned-overlay="true"]'`);
+    expect(mainTsx).toContain('function isChatHubInteractionSurface(target: EventTarget | null): boolean {');
+    expect(mainTsx).toContain('if (isChatHubInteractionSurface(target)) {');
+    expect(mainTsx).toContain('preserveChatHubMenu={chatHubMenuOpen}');
+    expect(mainTsx).toContain('preserveChatHubMenu={chatHubMenuOpen && skillRetryNotice.retry.target');
+  });
+
+  test('uses one aligned skill-row grid with detail on the name and External inline', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const skillTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubSkillManagement.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+    const row = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-skill-row').join('\n');
+    const actions = cssRuleBlock(stylesCss, '.chat-hub-skill-row-actions');
+
+    expect(row).toContain('grid-template-columns: 18px minmax(0, 1fr) 52px;');
+    expect(actions).toContain('grid-template-columns: repeat(2, 24px);');
+    expect(skillTsx).toContain('className="chat-hub-skill-name-cell"');
+    expect(skillTsx).toContain('className="chat-hub-skill-name"');
+    expect(skillTsx).toContain('aria-label={`View ${skill.name} details`}');
+    expect(skillTsx).not.toContain("name={detailPending ? 'loader' : 'info'}");
+  });
+
   test('Hub menu uses one compact row system and a normal-flow footer on every screen size', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);

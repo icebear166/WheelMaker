@@ -2216,7 +2216,7 @@
 }
 
 .chat-hub-skill-row {
-  grid-template-columns: 18px minmax(0, 1fr) 16px 78px;
+  grid-template-columns: 18px minmax(0, 1fr) 52px;
 }
 
 .chat-hub-scan-row {
@@ -2238,6 +2238,35 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-hub-skill-name-cell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+button.chat-hub-skill-name {
+  appearance: none;
+  display: block;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 2px 3px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.chat-hub-skill-name:hover:not(:disabled),
+button.chat-hub-skill-name:focus-visible {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--hover) 64%, transparent);
+}
+
+button.chat-hub-skill-name:disabled {
+  cursor: default;
 }
 
 .chat-hub-npm-versions {
@@ -2356,8 +2385,7 @@
   padding-inline: 6px;
 }
 
-.chat-hub-skill-checkbox-slot,
-.chat-hub-skill-external {
+.chat-hub-skill-checkbox-slot {
   width: 16px;
   height: 24px;
   display: inline-flex;
@@ -2378,13 +2406,19 @@
 }
 
 .chat-hub-skill-external {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-tertiary);
 }
 
 .chat-hub-skill-row-actions {
-  width: 78px;
+  width: 52px;
   display: grid;
-  grid-template-columns: repeat(3, 24px);
+  grid-template-columns: repeat(2, 24px);
   gap: 2px;
 }
 
