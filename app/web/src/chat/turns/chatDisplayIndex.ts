@@ -1,6 +1,5 @@
 import type {RegistryChatMessage} from '../../registry/registryTypes';
 import type {ChatPromptStatus} from './chatPromptStatus';
-import {normalizeChatOptionMarkdown} from '../chatOptionReplies';
 import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 import type {ChatPermissionState} from '../permission/chatPermissionState';
 
@@ -248,7 +247,7 @@ function estimateMarkdownTextHeight(text: string, metrics: ChatTurnHeightMetrics
 }
 
 function estimateAssistantTextHeight(text: string, metrics: ChatTurnHeightMetrics): number {
-  return estimateMarkdownTextHeight(normalizeChatOptionMarkdown(text), metrics);
+  return estimateMarkdownTextHeight(text, metrics);
 }
 
 function estimatePromptStartHeight(

@@ -172,28 +172,6 @@ export function splitChatOptionReplyText(text: string): ChatOptionReplyTextPart[
   return parts;
 }
 
-export function normalizeChatOptionMarkdown(text: string): string {
-  if (!/(?:^|\r?\n)\s*A\.\s+/.test(text)) {
-    return text;
-  }
-  const parts = splitChatOptionReplyText(text);
-  const letterOptionParts = parts.filter(
-    (part): part is Extract<ChatOptionReplyTextPart, {type: 'option'}> =>
-      part.type === 'option' && /^[A-H]$/.test(part.reply.label),
-  );
-  if (letterOptionParts.length < 2) {
-    return text;
-  }
-  return parts
-    .map(part =>
-      part.type === 'markdown'
-        ? part.text
-        : `${part.reply.label}. ${part.reply.text}`,
-    )
-    .filter(Boolean)
-    .join('\n\n');
-}
-
 export function chatOptionReplyLabelsByLine(text: string): ReadonlyMap<number, string> {
   const labelsByLine = new Map<number, string>();
   for (const entry of findLatestOptionReplyBlock(text)?.entries ?? []) {

@@ -85,13 +85,26 @@ jest.mock('../web/src/code/markdownPreview', () => ({
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 import {ChatTurnView} from '../web/src/chat/ChatTurnView';
 
-const optionText = [
+const malformedOptionText = [
   '**下一项决策：Session API 暴露多少 queue 信息？**',
   '',
   'A. **列表给摘要，详情给完整状态（推荐）**  ',
   '   - `session.list/session.updated`：`queueCount`、`queuePaused`、`queueRevision`。  ',
   '   - `session.read`：完整 `activeItem + waitingItems`。  ',
   'B. `session.list/session.updated/session.read` 都携带完整 queue。  ',
+  'C. Session 信息只带 revision，完整 queue 必须另调接口读取。',
+].join('\n');
+
+const optionText = [
+  '**下一项决策：Session API 暴露多少 queue 信息？**',
+  '',
+  'A. **列表给摘要，详情给完整状态（推荐）**',
+  '',
+  '- `session.list/session.updated`：`queueCount`、`queuePaused`、`queueRevision`。',
+  '- `session.read`：完整 `activeItem + waitingItems`。',
+  '',
+  'B. `session.list/session.updated/session.read` 都携带完整 queue。',
+  '',
   'C. Session 信息只带 revision，完整 queue 必须另调接口读取。',
 ].join('\n');
 
@@ -169,22 +182,14 @@ function renderedMarkdownBlocks(tree: ReactTestRenderer): Array<{type: string; t
 }
 
 describe('ChatTurnView Markdown reply structure', () => {
-  it('gives ReactMarkdown one source where alphabetic choices have stable block boundaries', async () => {
-    const tree = await renderTurn(optionText);
+  it('passes stored Markdown through without repairing alphabetic choice boundaries', async () => {
+    const tree = await renderTurn(malformedOptionText);
     const sources = markdownSources(tree);
 
-    expect(sources).toHaveLength(1);
-    const markup = renderWithRealReactMarkdown(sources[0]);
-    expect(markup).toMatch(
-      /<p>A\. <strong>列表给摘要，详情给完整状态（推荐）<\/strong><\/p>\n<ul>/,
+    expect(sources).toEqual([malformedOptionText]);
+    expect(renderWithRealReactMarkdown(sources[0])).toBe(
+      renderWithRealReactMarkdown(malformedOptionText),
     );
-    expect(markup).toMatch(
-      /<\/ul>\n<p>B\. <code>session\.list\/session\.updated\/session\.read<\/code> 都携带完整 queue。<\/p>/,
-    );
-    expect(markup).toContain(
-      '</p>\n<p>C. Session 信息只带 revision，完整 queue 必须另调接口读取。</p>',
-    );
-    expect(markup).not.toMatch(/<br\/>\n[BC]\./);
   });
 
   it('adds interaction without changing Markdown blocks or source formatting', async () => {
@@ -194,7 +199,8 @@ describe('ChatTurnView Markdown reply structure', () => {
       onSelectOptionReply: jest.fn(),
     });
 
-    expect(markdownSources(selectable)).toEqual(markdownSources(historical));
+    expect(markdownSources(selectable)).toEqual([optionText]);
+    expect(markdownSources(historical)).toEqual([optionText]);
     expect(renderedMarkdownBlocks(selectable)).toEqual(renderedMarkdownBlocks(historical));
     expect(selectable.root.findAllByType('button')).toHaveLength(0);
     expect(selectable.root.findAllByProps({className: 'chat-reply-target'})).toHaveLength(3);

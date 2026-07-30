@@ -23,7 +23,6 @@ import {
 } from './composer/chatPromptInlineParts';
 import {
   chatOptionReplyLabelsByLine,
-  normalizeChatOptionMarkdown,
   type ChatConfirmationReply,
   type ChatOptionReply,
 } from './chatOptionReplies';
@@ -434,9 +433,8 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   highlightQuery,
 }: ChatTurnViewProps) {
   const text = msgText(message.method, message.param).trim();
-  const markdownText = React.useMemo(() => normalizeChatOptionMarkdown(text), [text]);
   const kind = msgKind(message.method);
-  const markdownCapabilities = useMarkdownCapabilityPlugins(markdownText);
+  const markdownCapabilities = useMarkdownCapabilityPlugins(text);
   const highlightRehypePlugins = React.useMemo(
     () => highlightQuery
       ? [...markdownCapabilities.rehypePlugins, createChatSearchHighlightPlugin(highlightQuery)]
@@ -449,7 +447,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     }
     const BaseParagraph = markdownComponents.p;
     const BaseListItem = markdownComponents.li;
-    const optionReplyLabelsByLine = chatOptionReplyLabelsByLine(markdownText);
+    const optionReplyLabelsByLine = chatOptionReplyLabelsByLine(text);
     const resolveReply = (
       node: {position?: {start?: {line?: number}}} | undefined,
       children: React.ReactNode,
@@ -582,11 +580,11 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   }, [
     confirmationReply,
     markdownComponents,
-    markdownText,
     onSelectConfirmationReply,
     onSelectOptionReply,
     optionReplies,
     optionRepliesDisabled,
+    text,
   ]);
 
   if (message.method === 'permission_request' && permissionRecord && permissionRecord.status !== 'pending') {
@@ -930,7 +928,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
         rehypePlugins={highlightRehypePlugins}
         components={interactiveMarkdownComponents}
       >
-        {markdownText}
+        {text}
       </ReactMarkdown>
     </div>
   );

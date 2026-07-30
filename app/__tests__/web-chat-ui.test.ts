@@ -1161,7 +1161,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<VoiceRecordingBar');
     expect(mainTsx).toContain('extractChatOptionReplies(text)');
     expect(mainTsx).toContain('extractChatConfirmationReply(text)');
-    expect(chatTurnTsx).toContain('normalizeChatOptionMarkdown(text)');
+    expect(chatTurnTsx).not.toContain('normalizeChatOptionMarkdown');
+    expect(chatTurnTsx).toContain('const markdownCapabilities = useMarkdownCapabilityPlugins(text);');
     expect(chatTurnTsx).toContain('components={interactiveMarkdownComponents}');
     expect(chatTurnTsx).toContain("'data-chat-reply-value': reply.value");
     expect(chatTurnTsx).toContain("role: 'button'");

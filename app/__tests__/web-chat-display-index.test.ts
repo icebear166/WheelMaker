@@ -121,17 +121,13 @@ describe('chat display index', () => {
 
   test('uses ordinary Markdown height for recognized choices and confirmations', () => {
     const choiceText = [
-      'A. Alpha',
-      '',
-      'B. Bravo',
-      '',
+      'A. Alpha  ',
+      'B. Bravo  ',
       'C. Cedar',
     ].join('\n');
     const sameShapeText = [
-      'X. Alpha',
-      '',
-      'Y. Bravo',
-      '',
+      'X. Alpha  ',
+      'Y. Bravo  ',
       'Z. Cedar',
     ].join('\n');
     const confirmationText = '确认继续吗？';
