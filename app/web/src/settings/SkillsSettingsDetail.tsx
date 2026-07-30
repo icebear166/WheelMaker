@@ -1,8 +1,10 @@
 import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 import {Icon, type IconName} from '../common/Icon';
+import {
+  SkillDetailContent,
+  SkillInstallContent,
+} from './SkillManagementContent';
 import {
   groupSkillsByCategory,
   isSkillActionPendingForHub,
@@ -24,11 +26,7 @@ import type {
   RegistrySkillScope,
   RegistrySkillSnapshot,
   RegistrySkillSourceCandidate,
-  RegistrySkillSupportingFile,
 } from '../registry/registryTypes';
-
-const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
-const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 
 type SkillHubView = {
   hubId: string;
@@ -77,13 +75,6 @@ type SkillDetailPanelProps = {
   requestSkillUninstall: (target: SkillUninstallTarget) => void;
 };
 
-function formatSkillFileSize(size?: number): string {
-  if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '-';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function renderSkillIconButton(options: {
   label: string;
   icon: IconName;
@@ -103,28 +94,6 @@ function renderSkillIconButton(options: {
     >
       <Icon name={options.pending ? 'loader' : options.icon} spin={options.pending} size={13} />
     </button>
-  );
-}
-
-function renderSkillDetailMetaRow(label: string, value?: string) {
-  if (!value) {
-    return null;
-  }
-  return (
-    <div className="settings-skills-detail-meta-row">
-      <span>{label}</span>
-      <span title={value}>{value}</span>
-    </div>
-  );
-}
-
-function renderSupportingFile(file: RegistrySkillSupportingFile) {
-  return (
-    <div key={file.relativePath} className="settings-skills-detail-file">
-      <Icon name={file.directory ? 'folder' : 'file'} size={13} />
-      <span title={file.relativePath}>{file.relativePath}</span>
-      <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
-    </div>
   );
 }
 
@@ -153,8 +122,6 @@ export function SkillDetailPanel({
   const pending = skillsPendingKey === pendingKey;
   const hubActionPending = isSkillActionPendingForHub(skillsPendingKey, skillDetailTarget.hubId);
   const managed = detail?.managed !== false;
-  const supportingFiles = [...(detail?.supportingFiles ?? [])]
-    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 
   return (
     <aside className="settings-skills-detail-panel" aria-label="Skill detail">
@@ -174,70 +141,23 @@ export function SkillDetailPanel({
           <Icon name="x" size={14} />
         </button>
       </div>
-      {loading ? (
-        <div className="settings-skills-detail-status" role="status">
-          <Icon name="loader" spin size={13} />
-          <span>Loading skill detail...</span>
+      <SkillDetailContent loading={loading} error={error} detail={detail} />
+      {detail && managed ? (
+        <div className="settings-skills-detail-footer">
+          <button
+            type="button"
+            className="set-btn set-btn--danger"
+            disabled={hubActionPending}
+            onClick={() => requestSkillUninstall({
+              hubId: skillDetailTarget.hubId,
+              scope: skillDetailTarget.scope,
+              projectName: skillDetailTarget.projectName,
+              skillName: skillDetailTarget.skillName,
+            })}
+          >
+            {pending ? 'Removing...' : 'Uninstall'}
+          </button>
         </div>
-      ) : null}
-      {error ? <div className="set-error">{error}</div> : null}
-      {detail ? (
-        <div className="settings-skills-detail-body">
-          <section className="settings-skills-detail-section">
-            <div className="settings-skills-detail-section-title">Install</div>
-            <div className="settings-skills-detail-meta">
-              {renderSkillDetailMetaRow('Source', detail.source)}
-              {renderSkillDetailMetaRow('Source URL', detail.sourceUrl)}
-              {renderSkillDetailMetaRow('Source type', detail.sourceType)}
-              {renderSkillDetailMetaRow('Ref', detail.ref)}
-              {renderSkillDetailMetaRow('Skill path', detail.skillPath)}
-              {renderSkillDetailMetaRow('Plugin', detail.pluginName)}
-              {renderSkillDetailMetaRow('Installed', detail.installedAt)}
-              {renderSkillDetailMetaRow('Updated', detail.updatedAt)}
-              {renderSkillDetailMetaRow('Local path', detail.path)}
-              {detail.agents?.length ? renderSkillDetailMetaRow('Agents', detail.agents.join(', ')) : null}
-              <div className="settings-skills-detail-meta-row">
-                <span>Status</span>
-                <span>{managed ? 'Managed' : 'External'}</span>
-              </div>
-            </div>
-            {managed ? (
-              <button
-                type="button"
-                className="set-btn set-btn--danger"
-                disabled={hubActionPending}
-                onClick={() => requestSkillUninstall({
-                  hubId: skillDetailTarget.hubId,
-                  scope: skillDetailTarget.scope,
-                  projectName: skillDetailTarget.projectName,
-                  skillName: skillDetailTarget.skillName,
-                })}
-              >
-                {pending ? 'Removing...' : 'Uninstall'}
-              </button>
-            ) : null}
-          </section>
-          <section className="settings-skills-detail-section">
-            <div className="settings-skills-detail-section-title">Skill.md</div>
-            <div className="settings-skills-detail-markdown markdown-preview">
-              <ReactMarkdown remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}>
-                {detail.skillMarkdown}
-              </ReactMarkdown>
-            </div>
-          </section>
-          <section className="settings-skills-detail-section">
-            <div className="settings-skills-detail-section-title">Supporting files</div>
-            {supportingFiles.length > 0 ? (
-              <div className="settings-skills-detail-files">
-                {supportingFiles.map(renderSupportingFile)}
-              </div>
-            ) : (
-              <div className="settings-skills-empty">No supporting files.</div>
-            )}
-          </section>
-        </div>
-      ) : !loading && !error ? (
-        <div className="settings-skills-empty">No detail loaded.</div>
       ) : null}
     </aside>
   );
@@ -332,11 +252,6 @@ export function SkillsSettingsDetail({
     if (!activeInstallTarget || !sameSkillInstallTarget(activeInstallTarget, target)) {
       return null;
     }
-    const selected = new Set(skillSourceSelectedNames);
-    const candidateNames = Array.from(new Set(skillSourceCandidates
-      .map(candidate => candidate.name)
-      .filter(Boolean)));
-    const allCandidatesSelected = candidateNames.length > 0 && candidateNames.every(name => selected.has(name));
     return (
       <section className="settings-skills-install-panel">
         <div className="settings-skills-scope-header">
@@ -349,67 +264,18 @@ export function SkillsSettingsDetail({
             Close
           </button>
         </div>
-        <div className="settings-skills-source-row">
-          <input
-            className="settings-skills-source-input"
-            value={skillSourceInput}
-            onChange={event => setSkillSourceInput(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                listSkillSource().catch(() => undefined);
-              }
-            }}
-            placeholder="owner/repo or npx skills add ... --skill name"
-          />
-          <button
-            type="button"
-            className="set-btn"
-            disabled={skillSourceLoading}
-            onClick={() => listSkillSource().catch(() => undefined)}
-          >
-            {skillSourceLoading ? 'Listing...' : 'List'}
-          </button>
-        </div>
-        {skillSourceError ? (
-          <div className="set-error">{skillSourceError}</div>
-        ) : null}
-        {candidateNames.length > 0 ? (
-          <div className="settings-skills-candidates">
-            <label className="settings-skill-row settings-skill-candidate-row settings-skill-select-all-row">
-              <input
-                type="checkbox"
-                checked={allCandidatesSelected}
-                onChange={toggleAllSkillSourceCandidates}
-              />
-              <span className="settings-skill-row-main">
-                <span className="settings-skill-name">Select all</span>
-              </span>
-            </label>
-            {candidateNames.map(skillName => (
-              <label key={`candidate:${skillName}`} className="settings-skill-row settings-skill-candidate-row">
-                <input
-                  type="checkbox"
-                  checked={selected.has(skillName)}
-                  onChange={() => toggleSkillSourceCandidate(skillName)}
-                />
-                <span className="settings-skill-row-main">
-                  <span className="settings-skill-name">{skillName}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        ) : null}
-        <div className="settings-skills-install-actions">
-          <span className="settings-skill-meta">Selected: {skillSourceSelectedNames.length}</span>
-          <button
-            type="button"
-            className="set-btn set-btn--primary"
-            disabled={skillSourceSelectedNames.length === 0}
-            onClick={requestSkillInstallConfirm}
-          >
-            Install
-          </button>
-        </div>
+        <SkillInstallContent
+          sourceInput={skillSourceInput}
+          onSourceInputChange={setSkillSourceInput}
+          sourceLoading={skillSourceLoading}
+          sourceError={skillSourceError}
+          candidates={skillSourceCandidates}
+          selectedNames={skillSourceSelectedNames}
+          onList={listSkillSource}
+          onToggleAll={toggleAllSkillSourceCandidates}
+          onToggleCandidate={toggleSkillSourceCandidate}
+          onInstall={requestSkillInstallConfirm}
+        />
       </section>
     );
   };
@@ -697,18 +563,6 @@ export function SkillsSettingsDetail({
     <div className="settings-skills-page">
       <div className="settings-skills-fixed-controls">
         {renderSkillHubPicker()}
-        <a
-          className="settings-skills-marketplace-link"
-          href={SKILLS_MARKETPLACE_URL}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="settings-skills-marketplace-main">
-            <span className="settings-skills-marketplace-label">Marketplace</span>
-            <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
-          </span>
-          <Icon name="externalLink" size={13} />
-        </a>
       </div>
       <div className="settings-skills-list">
         {skillsScanning ? (

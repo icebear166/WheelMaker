@@ -9,7 +9,11 @@ const detailPath = path.join(root, 'web/src/settings/SkillsSettingsDetail.tsx');
 const detailTsx = fs.existsSync(detailPath)
   ? fs.readFileSync(detailPath, 'utf8').replace(/\r\n/g, '\n')
   : '';
-const skillsDetailSource = `${mainTsx}\n${detailTsx}`;
+const contentPath = path.join(root, 'web/src/settings/SkillManagementContent.tsx');
+const contentTsx = fs.existsSync(contentPath)
+  ? fs.readFileSync(contentPath, 'utf8').replace(/\r\n/g, '\n')
+  : '';
+const skillsDetailSource = `${mainTsx}\n${detailTsx}\n${contentTsx}`;
 const stylesCss = readWebStyles(root);
 
 describe('skill management settings UI source structure', () => {
@@ -55,8 +59,9 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain("kind: 'skillInstall'");
     expect(mainTsx).toContain("kind: 'skillUninstall'");
     expect(mainTsx).toContain("kind: 'skillUpdate'");
-    expect(detailTsx).toContain("const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';");
-    expect(detailTsx).toContain('settings-skills-marketplace-link');
+    expect(contentTsx).toContain("export const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';");
+    expect(contentTsx).toContain('className="skill-install-marketplace"');
+    expect(detailTsx).not.toContain('settings-skills-marketplace-link');
   });
 
   test('renders skill rows without linked agent labels', () => {
@@ -161,7 +166,7 @@ describe('skill management settings UI source structure', () => {
     expect(stylesCss).toContain('.settings-skills-scan-status');
   });
 
-  test('keeps Skills hub picker and Marketplace fixed above the scrolling skill list', () => {
+  test('keeps the Skills hub picker fixed above the scrolling skill list', () => {
     expect(detailTsx).toContain('const skillHubIds = skillHubCards.map(hub => hub.hubId);');
     expect(detailTsx).toContain('const [activeSkillHubId, setActiveSkillHubId] = React.useState');
     expect(detailTsx).toContain('const [skillHubMenuOpen, setSkillHubMenuOpen] = React.useState(false);');
@@ -173,14 +178,13 @@ describe('skill management settings UI source structure', () => {
     const pageIndex = detailTsx.indexOf('className="settings-skills-page"');
     const controlsIndex = detailTsx.indexOf('className="settings-skills-fixed-controls"');
     const pickerIndex = detailTsx.indexOf('{renderSkillHubPicker()}', controlsIndex);
-    const marketplaceIndex = detailTsx.indexOf('className="settings-skills-marketplace-link"', controlsIndex);
     const listIndex = detailTsx.indexOf('className="settings-skills-list"', controlsIndex);
     expect(pageIndex).toBeGreaterThanOrEqual(0);
     expect(controlsIndex).toBeGreaterThanOrEqual(0);
     expect(controlsIndex).toBeGreaterThan(pageIndex);
     expect(pickerIndex).toBeGreaterThan(controlsIndex);
-    expect(marketplaceIndex).toBeGreaterThan(pickerIndex);
-    expect(listIndex).toBeGreaterThan(marketplaceIndex);
+    expect(listIndex).toBeGreaterThan(pickerIndex);
+    expect(detailTsx).not.toContain('className="settings-skills-marketplace-link"');
     expect(detailTsx).toContain('className="settings-skills-hub-picker"');
     expect(detailTsx).toContain('className="settings-skills-hub-picker-button"');
     expect(detailTsx).toContain('className="settings-skills-hub-menu"');
@@ -244,9 +248,10 @@ describe('skill management settings UI source structure', () => {
   });
 
   test('expands skill install controls inline with select all', () => {
-    expect(mainTsx).toContain('sameSkillInstallTarget');
+    expect(mainTsx).toContain('sameSkillInstallTarget={sameSkillScopeTarget}');
     expect(mainTsx).toContain('toggleAllSkillSourceCandidates');
-    expect(detailTsx).toContain('Select all');
+    expect(contentTsx).toContain('Select all');
+    expect(detailTsx).toContain('<SkillInstallContent');
     expect(detailTsx).toContain('renderSkillInstallPanel({hubId, scope: options.scope, projectName: options.projectName})');
     expect(skillsDetailSource).not.toContain('renderSkillInstallPanel()}');
     expect(skillsDetailSource).not.toContain('candidate?.description');
@@ -258,7 +263,7 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain('parseSkillSourceInput(skillSourceInput)');
     expect(mainTsx).toContain('sourceInput.skillNames');
     expect(mainTsx).toContain('Skill not found in source:');
-    expect(detailTsx).toContain('owner/repo or npx skills add ... --skill name');
+    expect(contentTsx).toContain('owner/repo or npx skills add --skill name');
   });
 
   test('loads skill details on demand into the shared settings detail panel', () => {
@@ -274,15 +279,16 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('settings-skills-detail-panel');
     expect(detailTsx).not.toContain('settings-skills-detail-popover');
     expect(detailTsx).not.toContain('settings-skills-detail-mobile-header');
-    expect(detailTsx).toContain('Skill.md');
-    expect(detailTsx).toContain("import ReactMarkdown from 'react-markdown';");
-    expect(detailTsx).toContain("import remarkGfm from 'remark-gfm';");
-    expect(detailTsx).toContain('const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];');
-    expect(detailTsx).toContain('className="settings-skills-detail-markdown markdown-preview"');
-    expect(detailTsx).toContain('remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}');
-    expect(detailTsx).toContain('<ReactMarkdown');
-    expect(detailTsx).not.toContain('<pre className="settings-skills-detail-markdown">{detail.skillMarkdown}</pre>');
-    expect(detailTsx).toContain('Supporting files');
+    expect(detailTsx).toContain('<SkillDetailContent loading={loading} error={error} detail={detail} />');
+    expect(contentTsx).toContain('Skill.md');
+    expect(contentTsx).toContain("import ReactMarkdown from 'react-markdown';");
+    expect(contentTsx).toContain("import remarkGfm from 'remark-gfm';");
+    expect(contentTsx).toContain('const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];');
+    expect(contentTsx).toContain('className="skill-detail-markdown markdown-preview"');
+    expect(contentTsx).toContain('remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}');
+    expect(contentTsx).toContain('<ReactMarkdown');
+    expect(contentTsx).not.toContain('<pre className="settings-skills-detail-markdown">{detail.skillMarkdown}</pre>');
+    expect(contentTsx).toContain('Supporting files');
     expect(stylesCss).toContain('.settings-skills-detail-panel');
     expect(stylesCss).not.toContain('.settings-skills-detail-popover');
     expect(stylesCss).not.toContain('.settings-skills-detail-mobile-header');
@@ -318,7 +324,7 @@ describe('skill management settings UI source structure', () => {
     expect(stylesCss).toContain('grid-template-columns: minmax(0, 920px) minmax(360px, 500px);');
     expect(stylesCss).toContain('width: min(1440px, calc(100vw - 56px));');
 
-    const markdownStart = stylesCss.indexOf('.settings-skills-detail-markdown {', panelStart);
+    const markdownStart = stylesCss.indexOf('.skill-detail-markdown {', panelStart);
     const markdownEnd = stylesCss.indexOf('.settings-skills-detail-files {', markdownStart);
     expect(markdownStart).toBeGreaterThanOrEqual(0);
     expect(markdownEnd).toBeGreaterThan(markdownStart);
@@ -342,7 +348,7 @@ describe('skill management settings UI source structure', () => {
 
   test('uses compact settings skill styles', () => {
     expect(stylesCss).toContain('.settings-skills-hub');
-    expect(stylesCss).toContain('.settings-skills-marketplace-link');
+    expect(stylesCss).toContain('.skill-install-marketplace');
     expect(stylesCss).toContain('.settings-skill-row');
     expect(stylesCss).toContain('.settings-skill-category');
     expect(stylesCss).toContain('.settings-skill-icon-btn');
