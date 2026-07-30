@@ -9,7 +9,7 @@ WheelMaker 图标是跨端一致的应用级菜单入口，不直接打开 Setti
 主项目顺序固定：
 
 1. `Settings`：关闭菜单并打开 Settings 首页。
-2. `Theme`：在应用整体 Light/Dark 间立即切换；右侧显示点击后的目标主题。
+2. `Theme`：在应用整体 Light/Dark 间立即切换；右侧文字和图标显示当前主题。
 3. `Update`：只在 APK/EXE 原生客户端显示。
 
 主项目后使用分隔线。所有端都显示 `Release publishing`，它打开独立发布页面，不属于 Settings；页面返回后回到 Chat。支持 Desktop 本地开发能力时，`Dev Mode` 紧随其后。

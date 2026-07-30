@@ -23,7 +23,7 @@ const baseProps = {
   onOpenReleasePublishing: jest.fn(),
 };
 
-test('browser menu exposes Settings, Theme, and standalone Release Publishing', async () => {
+test('browser menu exposes Settings, the current Theme, and standalone Release Publishing', async () => {
   (global as typeof globalThis & {window?: unknown}).window = {};
   const setThemeMode = jest.fn();
   const onOpenReleasePublishing = jest.fn();
@@ -43,12 +43,31 @@ test('browser menu exposes Settings, Theme, and standalone Release Publishing', 
   });
 
   expect(actionNames(renderer!.root)).toEqual(['settings', 'theme', 'release-publish']);
-  expect(renderer!.root.findByProps({'data-app-menu-action': 'theme'}).props['data-app-menu-meta'])
-    .toBe('Light');
+  let theme = renderer!.root.findByProps({'data-app-menu-action': 'theme'});
+  expect(theme.props['data-app-menu-meta']).toBe('Dark');
+  expect(theme.findByProps({'data-icon-name': 'moon'})).toBeDefined();
   await ReactTestRenderer.act(async () => {
-    renderer!.root.findByProps({'data-app-menu-action': 'theme'}).props.onClick();
+    theme.props.onClick();
   });
   expect(setThemeMode).toHaveBeenCalledWith('light');
+
+  await ReactTestRenderer.act(async () => {
+    renderer!.update(
+      <WheelMakerAppMenu
+        {...baseProps}
+        themeMode="light"
+        setThemeMode={setThemeMode}
+        onOpenReleasePublishing={onOpenReleasePublishing}
+      />,
+    );
+  });
+  theme = renderer!.root.findByProps({'data-app-menu-action': 'theme'});
+  expect(theme.props['data-app-menu-meta']).toBe('Light');
+  expect(theme.findByProps({'data-icon-name': 'sun'})).toBeDefined();
+  await ReactTestRenderer.act(async () => {
+    theme.props.onClick();
+  });
+  expect(setThemeMode).toHaveBeenLastCalledWith('dark');
 
   await ReactTestRenderer.act(async () => {
     renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();

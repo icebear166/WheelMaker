@@ -12,7 +12,7 @@
 - 主菜单项固定依次为 `Settings`、`Theme`、`Update`；`Update` 只在 APK/EXE 原生环境出现。
 - 菜单使用等高单行、左侧图标与名称、右侧状态的统一结构，不为 Update 单独使用双行样式。
 - `Settings` 点击后关闭菜单并进入 Settings 首页。
-- `Theme` 点击后立即在应用整体 Light/Dark 间切换并沿用现有持久化；右侧显示点击后的目标主题，即当前为 Dark 时显示 `Light`，当前为 Light 时显示 `Dark`。
+- `Theme` 点击后立即在应用整体 Light/Dark 间切换并沿用现有持久化；右侧显示当前主题，即当前为 Dark 时显示月亮图标与 `Dark`，当前为 Light 时显示太阳图标与 `Light`。
 - `Update` 右侧在有新版时显示 `当前版本 → 最新版本` 并显示更新红点；最新版显示 `当前版本 · Current`。
 - 每次菜单从关闭变为打开时检查客户端更新。检查中禁用 Update；最新版时保持禁用；检查失败时右侧显示 `Retry`，点击仅重新检查。
 - 有新版时点击 Update 立即调用 APK 或 EXE 现有自动更新流程，不再跳转到 Settings 页面。
@@ -53,7 +53,7 @@ Desktop 本地信息需要补充可展示的发布版本。正式发布构建把
 - EXE、APK、移动 Web 和桌面浏览器点击 WheelMaker 图标都打开菜单。
 - 各端菜单前两项严格为 Settings、Theme；APK/EXE 第三项为 Update，浏览器/PWA 不出现 Update。
 - 主项目后存在分隔线；所有端都在分隔线后显示 Release Publishing，支持时 Dev Mode 紧随其后。
-- Theme 右侧始终显示目标主题，点击后立即切换、持久化并更新目标文字。
+- Theme 右侧文字和图标始终显示当前主题，点击后立即切换、持久化并更新当前状态。
 - APK/EXE 每次打开菜单都重新检查 stable 发布状态。
 - 有更新时 Update 显示本地到最新版本、红点且可点击；点击只触发一次对应平台更新。
 - 最新版时 Update 显示当前版本与 Current 且不可点击。
@@ -67,7 +67,7 @@ Desktop 本地信息需要补充可展示的发布版本。正式发布构建把
 
 ### 测试
 
-- App/Web 单元测试覆盖共享菜单项目顺序、平台可见性、Theme 目标与切换、Release Publishing 打开/返回、菜单开关触发检查，以及所有更新状态到文案/禁用/红点的映射。
+- App/Web 单元测试覆盖共享菜单项目顺序、平台可见性、Theme 当前状态与切换、Release Publishing 打开/返回、菜单开关触发检查，以及所有更新状态到文案/禁用/红点的映射。
 - Desktop 测试覆盖发布版本注入和 bridge 返回值、摘要比较、旧 EXE 无版本回退、更新单次触发及现有 Dev Mode 行为。
 - Android/Web 桥测试覆盖本地版本显示、stable 比较、安装单次触发、原生状态事件和检查失败重试。
 - Settings 结构测试确认 APK 卡片、Dark Mode 和 Release Publishing 已移除，Code Theme 与现有 Update peer 仍存在。

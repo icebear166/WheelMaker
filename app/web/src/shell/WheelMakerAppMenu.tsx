@@ -108,7 +108,7 @@ export function WheelMakerAppMenu({
     desktopBridge?.requestLocalDevMode || desktopBridge?.localDev,
   );
   const updateView = clientUpdateView(updateState);
-  const targetTheme = themeMode === 'dark' ? 'Light' : 'Dark';
+  const currentTheme = themeMode === 'dark' ? 'Dark' : 'Light';
 
   useEffect(() => {
     localDevBusyRef.current = localDevBusy;
@@ -301,9 +301,9 @@ export function WheelMakerAppMenu({
       />
       <MenuRow
         action="theme"
-        icon={themeMode === 'dark' ? 'sun' : 'moon'}
+        icon={themeMode === 'dark' ? 'moon' : 'sun'}
         label="Theme"
-        meta={targetTheme}
+        meta={currentTheme}
         onClick={() => {
           setThemeMode(themeMode === 'dark' ? 'light' : 'dark');
         }}

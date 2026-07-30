@@ -394,7 +394,7 @@ expect(actions(desktopRoot)).toEqual([
 Also assert:
 
 ```ts
-expect(root.findByProps({'data-app-menu-action': 'theme'}).props['data-app-menu-meta']).toBe('Light');
+expect(root.findByProps({'data-app-menu-action': 'theme'}).props['data-app-menu-meta']).toBe('Dark');
 expect(check).toHaveBeenCalledTimes(1);
 expect(root.findByProps({'data-app-menu-action': 'update'}).props.disabled).toBe(true);
 ```
