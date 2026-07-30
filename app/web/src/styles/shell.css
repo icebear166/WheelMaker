@@ -1367,7 +1367,7 @@
   height: 4px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text-secondary) 55%, transparent);
-  margin: 2px 0 4px;
+  margin: 2px auto 4px;
 }
 
 .mobile-project-sheet-header {

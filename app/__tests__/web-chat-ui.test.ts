@@ -1935,6 +1935,15 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.settings-database-dump {');
   });
 
+  test('centers the shared mobile sheet grip without relying on a flex parent', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const gripBlock = cssRuleBlock(stylesCss, '.mobile-project-sheet-grip');
+
+    expect(gripBlock).toContain('margin: 2px auto 4px;');
+    expect(gripBlock).not.toContain('margin: 2px 0 4px;');
+  });
+
   test('drawer session rails use slim flush scrollbars without reserved right gutter', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
