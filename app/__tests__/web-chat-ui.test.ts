@@ -1067,7 +1067,8 @@ describe('web chat integration', () => {
     expect(countBlock).not.toContain('border-radius:');
     expect(countBlock).not.toContain('background:');
     expect(countBlock).toContain('font-variant-numeric: tabular-nums;');
-    expect(footerBlock).toContain('background: var(--surface-panel);');
+    expect(footerBlock).toContain('background: transparent;');
+    expect(footerBlock).toContain('border-top: 1px solid');
     expect(footerBlock).not.toContain('position: sticky;');
     expect(versionBlock).not.toContain('background:');
     expect(updateBlock).toContain('background: var(--accent-primary);');
