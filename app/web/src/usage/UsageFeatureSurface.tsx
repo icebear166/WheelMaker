@@ -156,13 +156,17 @@ function AccountDetails({
       ))}
       {account.resetCredits?.credits?.length ? (
         <div className="usage-reset-credits" data-usage-reset-credits={true}>
-          <div className="usage-reset-credits-heading">Reset credits · {account.resetCredits.availableCount}</div>
+          <div className="usage-reset-credits-heading">
+            <span className="usage-reset-credits-label">Reset credits</span>
+            <span className="usage-reset-credits-count">{account.resetCredits.availableCount} available</span>
+          </div>
           {account.resetCredits.credits
             .filter(credit => credit.expiresAt)
             .sort((a, b) => String(a.expiresAt).localeCompare(String(b.expiresAt)))
             .map((credit, index) => (
               <div className="usage-reset-credit-row" key={credit.id ?? index}>
-                {formatResetLocalSecond(credit.expiresAt)}
+                <span className="usage-reset-credit-label">Expires</span>
+                <time dateTime={credit.expiresAt}>{formatResetLocalSecond(credit.expiresAt)}</time>
               </div>
             ))}
         </div>
