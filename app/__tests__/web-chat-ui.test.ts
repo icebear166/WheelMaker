@@ -144,12 +144,6 @@ describe('web chat integration', () => {
     }
 
     const nonContentSelectors = [
-      '.chat-main-message .chat-option-reply-inline-button',
-      '.chat-main-message .chat-option-reply-inline-button *',
-      '.chat-main-message .chat-confirmation-reply-action',
-      '.chat-main-message .chat-confirmation-reply-action *',
-      '.chat-option-reply-inline-button',
-      '.chat-confirmation-reply-action',
       '.chat-prompt-attachment-strip',
       '.diff-inline .wm-shiki-diff-gutter',
     ];
@@ -160,19 +154,9 @@ describe('web chat integration', () => {
       expect(block).not.toContain('user-select: text;');
     }
 
-    const chatReplyChromeSelectors = [
-      '.chat-main-message .chat-option-reply-inline-button',
-      '.chat-main-message .chat-option-reply-inline-button *',
-      '.chat-main-message .chat-confirmation-reply-action',
-      '.chat-main-message .chat-confirmation-reply-action *',
-    ];
-
-    for (const selector of chatReplyChromeSelectors) {
-      const block = cssRuleBlockContainingSelector(stylesCss, selector);
-      expect(block).toContain('-webkit-touch-callout: none;');
-      expect(block).toContain('-webkit-user-select: none;');
-      expect(block).toContain('user-select: none;');
-    }
+    const replyTargetBlock = cssRuleBlock(stylesCss, '.chat-reply-target');
+    expect(replyTargetBlock).not.toContain('-webkit-user-select: none;');
+    expect(replyTargetBlock).not.toContain('user-select: none;');
 
     expect(shikiRenderer).toContain("className: ['wm-shiki-line-number']");
     expect(shikiRenderer).toContain('user-select:none');
@@ -1177,23 +1161,16 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<VoiceRecordingBar');
     expect(mainTsx).toContain('extractChatOptionReplies(text)');
     expect(mainTsx).toContain('extractChatConfirmationReply(text)');
-    expect(chatTurnTsx).toContain('splitChatOptionReplyText(text)');
-    expect(chatTurnTsx).toContain('splitChatConfirmationReplyText(text)');
-    expect(chatTurnTsx).toContain(
-      'const optionReplyParts = selectableOptionReplies ? splitChatOptionReplyText(text) : [];',
-    );
-    expect(chatTurnTsx).toContain('const confirmationReplyParts = splitChatConfirmationReplyText(text);');
-    expect(chatTurnTsx).toContain("const hasOptionReplyParts = optionReplyParts.some(part => part.type === 'option');");
-    expect(chatTurnTsx).toContain('const selectableOptionReplies = optionReplies.length > 0;');
-    expect(chatTurnTsx).toContain('const selectableConfirmationReply = optionReplies.length === 0 ? confirmationReply : null;');
-    expect(chatTurnTsx).toContain('className="chat-option-reply-line"');
-    expect(chatTurnTsx).toContain('className="chat-option-reply-inline-button"');
+    expect(chatTurnTsx).toContain('normalizeChatOptionMarkdown(text)');
+    expect(chatTurnTsx).toContain('components={interactiveMarkdownComponents}');
+    expect(chatTurnTsx).toContain("'data-chat-reply-value': reply.value");
+    expect(chatTurnTsx).toContain("role: 'button'");
+    expect(chatTurnTsx).toContain("className: [props.className, 'chat-reply-target']");
+    expect(chatTurnTsx).not.toContain('className="chat-option-reply-line"');
+    expect(chatTurnTsx).not.toContain('className="chat-option-reply-inline-button"');
     expect(chatTurnTsx).not.toContain('className="chat-option-reply-static"');
-    expect(chatTurnTsx).toContain('className="chat-confirmation-reply-line"');
-    expect(chatTurnTsx).toContain('className="chat-confirmation-reply-action"');
-    expect(chatTurnTsx).toContain('className="chat-confirmation-reply-check"');
-    expect(chatTurnTsx).toContain('className="chat-confirmation-reply-text"');
-    expect(chatTurnTsx).toContain('onClick={() => onSelectConfirmationReply?.(part.reply.replyText)}');
+    expect(chatTurnTsx).not.toContain('className="chat-confirmation-reply-line"');
+    expect(chatTurnTsx).not.toContain('className="chat-confirmation-reply-action"');
     expect(mainTsx).not.toContain('className="chat-option-replies"');
     expect(chatTurnTsx).toContain('onSelectOptionReply?: (label: string) => void;');
     expect(chatTurnTsx).toContain('onSelectConfirmationReply?: (replyText: string) => void;');
@@ -1374,26 +1351,22 @@ describe('web chat integration', () => {
     expect(cssRuleBlock(stylesCss, '.chat-slash-menu-body,\n.chat-file-mention-menu-body')).toContain('overflow-y: auto;');
     expect(cssRuleBlock(stylesCss, '.chat-menu-footer')).toContain('flex: 0 0 auto;');
     expect(stylesCss).toContain('.chat-file-mention-empty {');
-    expect(stylesCss).toContain('.chat-option-reply-line {');
-    expect(stylesCss).toContain('.chat-option-reply-inline-button {');
+    expect(stylesCss).toContain('.chat-reply-target {');
+    const replyTargetBlocks = cssRuleBlocksContainingSelector(stylesCss, '.chat-reply-target');
+    expect(replyTargetBlocks.join('\n')).toContain('outline: 1px solid');
+    for (const block of replyTargetBlocks) {
+      expect(block).not.toMatch(/(?:^|\n)\s*(?:border|padding|margin|min-height|height|font|font-size|font-weight|line-height|letter-spacing|color|display|width)\s*:/);
+    }
+    expect(stylesCss).toContain('.chat-reply-target:hover {');
+    expect(stylesCss).toContain('.chat-reply-target:focus-visible {');
+    expect(stylesCss).not.toContain('.chat-option-reply-line');
+    expect(stylesCss).not.toContain('.chat-option-reply-inline-button');
     expect(stylesCss).not.toContain('.chat-option-reply-static');
-    expect(stylesCss).toContain('.chat-confirmation-reply-line {');
-    expect(stylesCss).toContain('.chat-confirmation-reply-action {');
-    expect(stylesCss).toContain('.chat-confirmation-reply-check {');
-    expect(stylesCss).toContain('.chat-confirmation-reply-text {');
-    const replySurfaceBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-option-reply-inline-button');
-    expect(replySurfaceBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.chat-confirmation-reply-action'));
-    expect(replySurfaceBlock).toContain(
-      'border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, var(--border-subtle));',
-    );
-    expect(replySurfaceBlock).toContain('min-height: 30px;');
-    expect(replySurfaceBlock).toContain('padding: 5px 9px 5px 8px;');
-    expect(replySurfaceBlock).toContain('line-height: 1.35;');
-    const interactiveReplyBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-option-reply-inline-button');
-    expect(interactiveReplyBlock).toContain('background: transparent;');
-    expect(interactiveReplyBlock).not.toContain('background: color-mix');
-    expect(stylesCss).toContain('.chat-option-reply-inline-button:hover,\n.chat-confirmation-reply-action:hover {');
-    expect(stylesCss).not.toContain('.chat-option-reply-inline-button,\n.chat-scroll-bottom-button {');
+    expect(stylesCss).not.toContain('.chat-confirmation-reply-line');
+    expect(stylesCss).not.toContain('.chat-confirmation-reply-action');
+    expect(stylesCss).not.toContain('.chat-confirmation-reply-check');
+    expect(stylesCss).not.toContain('.chat-confirmation-reply-text');
+    expect(stylesCss).not.toContain('.chat-reply-target,\n.chat-scroll-bottom-button {');
     expect(stylesCss).not.toContain('.chat-option-replies {');
     expect(stylesCss).not.toContain('.chat-option-reply-button {');
     expect(stylesCss).toMatch(

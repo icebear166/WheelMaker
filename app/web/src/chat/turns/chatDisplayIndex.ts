@@ -1,9 +1,6 @@
 import type {RegistryChatMessage} from '../../registry/registryTypes';
 import type {ChatPromptStatus} from './chatPromptStatus';
-import {
-  splitChatConfirmationReplyText,
-  splitChatOptionReplyText,
-} from '../chatOptionReplies';
+import {normalizeChatOptionMarkdown} from '../chatOptionReplies';
 import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 import type {ChatPermissionState} from '../permission/chatPermissionState';
 
@@ -36,10 +33,6 @@ export type ChatTurnHeightMetrics = {
   promptMaxWidth: number;
   toolLineHeight: number;
   thoughtCollapsedHeight: number;
-  optionButtonMinHeight: number;
-  optionButtonMaxWidth: number;
-  confirmationButtonMinHeight: number;
-  confirmationButtonMaxWidth: number;
   imageStripHeight: number;
   attachmentChipHeight: number;
 };
@@ -74,10 +67,6 @@ export const DEFAULT_CHAT_TURN_HEIGHT_METRICS: ChatTurnHeightMetrics = {
   promptMaxWidth: 920,
   toolLineHeight: 28,
   thoughtCollapsedHeight: 28,
-  optionButtonMinHeight: 30,
-  optionButtonMaxWidth: 560,
-  confirmationButtonMinHeight: 32,
-  confirmationButtonMaxWidth: 620,
   imageStripHeight: 232,
   attachmentChipHeight: 34,
 };
@@ -258,38 +247,8 @@ function estimateMarkdownTextHeight(text: string, metrics: ChatTurnHeightMetrics
   return rows * metrics.textLineHeight + Math.max(0, blocks.length - 1) * metrics.paragraphGap;
 }
 
-function estimateOptionLineHeight(text: string, metrics: ChatTurnHeightMetrics): number {
-  const width = Math.max(120, Math.min(metrics.contentWidth, metrics.optionButtonMaxWidth) - 42);
-  const rows = estimateWrappedRows(text, width, metrics.textFontSize);
-  return Math.max(metrics.optionButtonMinHeight, rows * metrics.textLineHeight * 0.9 + 12) + 6;
-}
-
-function estimateConfirmationLineHeight(text: string, metrics: ChatTurnHeightMetrics): number {
-  const width = Math.max(120, Math.min(metrics.contentWidth, metrics.confirmationButtonMaxWidth) - 48);
-  const rows = estimateWrappedRows(text, width, metrics.textFontSize);
-  return Math.max(metrics.confirmationButtonMinHeight, rows * metrics.textLineHeight * 0.95 + 10) + 6;
-}
-
 function estimateAssistantTextHeight(text: string, metrics: ChatTurnHeightMetrics): number {
-  const optionParts = splitChatOptionReplyText(text);
-  if (optionParts.some(part => part.type === 'option')) {
-    return optionParts.reduce((sum, part) => {
-      if (part.type === 'markdown') {
-        return sum + estimateMarkdownTextHeight(part.text, metrics);
-      }
-      return sum + estimateOptionLineHeight(part.reply.text, metrics);
-    }, 0);
-  }
-  const confirmationParts = splitChatConfirmationReplyText(text);
-  if (confirmationParts.some(part => part.type === 'confirmation')) {
-    return confirmationParts.reduce((sum, part) => {
-      if (part.type === 'markdown') {
-        return sum + estimateMarkdownTextHeight(part.text, metrics);
-      }
-      return sum + estimateConfirmationLineHeight(part.reply.sentence, metrics);
-    }, 0);
-  }
-  return estimateMarkdownTextHeight(text, metrics);
+  return estimateMarkdownTextHeight(normalizeChatOptionMarkdown(text), metrics);
 }
 
 function estimatePromptStartHeight(

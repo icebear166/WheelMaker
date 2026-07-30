@@ -1,12 +1,3 @@
-.chat-main-message .chat-option-reply-inline-button,
-.chat-main-message .chat-option-reply-inline-button *,
-.chat-main-message .chat-confirmation-reply-action,
-.chat-main-message .chat-confirmation-reply-action * {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
 .chat-sidebar-title-actions {
   min-width: 0;
   margin-left: auto;
@@ -4419,94 +4410,38 @@ button.chat-hub-skill-name:disabled {
   opacity: 0.86;
 }
 
-.chat-option-reply-line {
-  margin: 2px 0 4px;
-}
-
-.chat-option-reply-inline-button,
-.chat-confirmation-reply-action {
-  max-width: min(100%, 560px);
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, var(--border-subtle));
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  min-height: 30px;
-  padding: 5px 9px 5px 8px;
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 7px;
-  text-align: left;
-  font: inherit;
-  line-height: 1.35;
-}
-
 .chat-scroll-bottom-button {
   backdrop-filter: blur(1px);
 }
 
-.chat-option-reply-inline-button {
+.chat-reply-target {
+  outline: 1px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-subtle));
+  outline-offset: 3px;
+  border-radius: 4px;
+  background: transparent;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    outline-color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
 }
 
-.chat-option-reply-inline-button:hover,
-.chat-confirmation-reply-action:hover {
-  border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
-  background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent-primary));
+.chat-reply-target:hover {
+  outline-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
 }
 
-.chat-option-reply-inline-button:focus-visible,
-.chat-confirmation-reply-action:focus-visible {
-  border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
-  background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent-primary));
+.chat-reply-target:focus-visible {
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 
-.chat-option-reply-inline-button:disabled,
-.chat-confirmation-reply-action:disabled {
-  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+.chat-reply-target[aria-disabled='true'] {
+  outline-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
   background: transparent;
   cursor: default;
-  opacity: 0.58;
-}
-
-.chat-confirmation-reply-line {
-  margin: 2px 0 4px;
-}
-
-.chat-confirmation-reply-action {
-  text-wrap: pretty;
-  cursor: pointer;
-}
-
-.chat-confirmation-reply-check {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chat-confirmation-reply-text {
-  color: inherit;
-}
-
-.chat-option-reply-label {
-  flex: 0 0 auto;
-  min-width: 1.5em;
-  color: color-mix(in srgb, var(--accent-primary) 78%, var(--text-primary));
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.chat-option-reply-text {
-  min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 .chat-main-message a:hover,
 .chat-main-message a:focus-visible {

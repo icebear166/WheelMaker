@@ -119,6 +119,41 @@ describe('chat display index', () => {
     expect(narrow.items[0].estimatedHeight).toBeGreaterThan(wide.items[0].estimatedHeight);
   });
 
+  test('uses ordinary Markdown height for recognized choices and confirmations', () => {
+    const choiceText = [
+      'A. Alpha',
+      '',
+      'B. Bravo',
+      '',
+      'C. Cedar',
+    ].join('\n');
+    const sameShapeText = [
+      'X. Alpha',
+      '',
+      'Y. Bravo',
+      '',
+      'Z. Cedar',
+    ].join('\n');
+    const confirmationText = '确认继续吗？';
+    const sameLengthText = '现在继续吧。';
+
+    const choice = buildChatDisplayIndex([
+      message(1, 'agent_message_chunk', choiceText),
+    ]);
+    const sameShape = buildChatDisplayIndex([
+      message(1, 'agent_message_chunk', sameShapeText),
+    ]);
+    const confirmation = buildChatDisplayIndex([
+      message(1, 'agent_message_chunk', confirmationText),
+    ]);
+    const sameLength = buildChatDisplayIndex([
+      message(1, 'agent_message_chunk', sameLengthText),
+    ]);
+
+    expect(choice.items[0].estimatedHeight).toBe(sameShape.items[0].estimatedHeight);
+    expect(confirmation.items[0].estimatedHeight).toBe(sameLength.items[0].estimatedHeight);
+  });
+
   test('groups consecutive tool calls with a stable first-turn key and fixed estimate', () => {
     const source = [
       message(1, 'prompt_request', 'hello'),

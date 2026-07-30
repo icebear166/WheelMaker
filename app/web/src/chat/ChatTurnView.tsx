@@ -22,8 +22,8 @@ import {
   type ChatPromptInlinePart,
 } from './composer/chatPromptInlineParts';
 import {
-  splitChatConfirmationReplyText,
-  splitChatOptionReplyText,
+  chatOptionReplyLabelsByLine,
+  normalizeChatOptionMarkdown,
   type ChatConfirmationReply,
   type ChatOptionReply,
 } from './chatOptionReplies';
@@ -46,6 +46,23 @@ function renderChatTextWithHighlight(text: string, query: string | undefined) {
       <span key={index}>{segment.text}</span>
     ),
   );
+}
+
+function collectMarkdownText(node: React.ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node);
+  }
+  if (Array.isArray(node)) {
+    return node.map(collectMarkdownText).join('');
+  }
+  if (React.isValidElement<{children?: React.ReactNode}>(node)) {
+    return collectMarkdownText(node.props.children);
+  }
+  return '';
+}
+
+function normalizeRenderedReplyText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 function msgKind(method: string): string {
@@ -417,14 +434,160 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   highlightQuery,
 }: ChatTurnViewProps) {
   const text = msgText(message.method, message.param).trim();
+  const markdownText = React.useMemo(() => normalizeChatOptionMarkdown(text), [text]);
   const kind = msgKind(message.method);
-  const markdownCapabilities = useMarkdownCapabilityPlugins(text);
+  const markdownCapabilities = useMarkdownCapabilityPlugins(markdownText);
   const highlightRehypePlugins = React.useMemo(
     () => highlightQuery
       ? [...markdownCapabilities.rehypePlugins, createChatSearchHighlightPlugin(highlightQuery)]
       : markdownCapabilities.rehypePlugins,
     [markdownCapabilities.rehypePlugins, highlightQuery],
   );
+  const interactiveMarkdownComponents = React.useMemo<Components>(() => {
+    if (!onSelectOptionReply && !onSelectConfirmationReply) {
+      return markdownComponents;
+    }
+    const BaseParagraph = markdownComponents.p;
+    const BaseListItem = markdownComponents.li;
+    const optionReplyLabelsByLine = chatOptionReplyLabelsByLine(markdownText);
+    const resolveReply = (
+      node: {position?: {start?: {line?: number}}} | undefined,
+      children: React.ReactNode,
+    ): {
+      value: string;
+      label: string;
+      submit: () => void;
+    } | null => {
+      const renderedText = normalizeRenderedReplyText(collectMarkdownText(children));
+      const sourceLine = node?.position?.start?.line;
+      const sourceLabel = sourceLine
+        ? optionReplyLabelsByLine.get(sourceLine) ?? ''
+        : '';
+      const visibleLabel = sourceLine
+        ? ''
+        : /^([A-H1-9])\.\s+/.exec(renderedText)?.[1]?.toUpperCase() ?? '';
+      const optionLabel = sourceLabel || visibleLabel;
+      const optionReply = optionLabel
+        ? optionReplies.find(reply => reply.label === optionLabel)
+        : undefined;
+      if (optionReply && onSelectOptionReply) {
+        return {
+          value: optionReply.label,
+          label: `Reply ${optionReply.label}: ${renderedText}`,
+          submit: () => onSelectOptionReply(optionReply.label),
+        };
+      }
+      const confirmationSentence = confirmationReply
+        ? normalizeRenderedReplyText(confirmationReply.sentence)
+        : '';
+      if (
+        confirmationReply &&
+        onSelectConfirmationReply &&
+        confirmationSentence &&
+        (renderedText === confirmationSentence || renderedText.endsWith(confirmationSentence))
+      ) {
+        return {
+          value: confirmationReply.replyText,
+          label: `Reply ${confirmationReply.replyText}: ${confirmationReply.sentence}`,
+          submit: () => onSelectConfirmationReply(confirmationReply.replyText),
+        };
+      }
+      return null;
+    };
+    const renderParagraph: NonNullable<Components['p']> = ({node, children, ...props}) => {
+      const reply = resolveReply(node, children);
+      const activate = () => {
+        if (!optionRepliesDisabled) {
+          reply?.submit();
+        }
+      };
+      const paragraphProps = reply
+        ? {
+            ...props,
+            className: [props.className, 'chat-reply-target'].filter(Boolean).join(' '),
+            'data-chat-reply-value': reply.value,
+            role: 'button',
+            tabIndex: 0,
+            'aria-disabled': optionRepliesDisabled || undefined,
+            'aria-label': reply.label,
+            onClick: (event: React.MouseEvent<HTMLParagraphElement>) => {
+              props.onClick?.(event);
+              activate();
+            },
+            onKeyDown: (event: React.KeyboardEvent<HTMLParagraphElement>) => {
+              props.onKeyDown?.(event);
+              if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) {
+                return;
+              }
+              event.preventDefault();
+              activate();
+            },
+          }
+        : props;
+      return BaseParagraph ? (
+        React.createElement(
+          BaseParagraph as React.ElementType,
+          {node, ...paragraphProps},
+          children,
+        )
+      ) : (
+        <p {...paragraphProps}>{children}</p>
+      );
+    };
+    const renderListItem: NonNullable<Components['li']> = ({node, children, ...props}) => {
+      const reply = resolveReply(node, children);
+      const activate = () => {
+        if (!optionRepliesDisabled) {
+          reply?.submit();
+        }
+      };
+      const listItemProps = reply
+        ? {
+            ...props,
+            className: [props.className, 'chat-reply-target'].filter(Boolean).join(' '),
+            'data-chat-reply-value': reply.value,
+            role: 'button',
+            tabIndex: 0,
+            'aria-disabled': optionRepliesDisabled || undefined,
+            'aria-label': reply.label,
+            onClick: (event: React.MouseEvent<HTMLLIElement>) => {
+              props.onClick?.(event);
+              activate();
+            },
+            onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {
+              props.onKeyDown?.(event);
+              if (event.defaultPrevented || (event.key !== 'Enter' && event.key !== ' ')) {
+                return;
+              }
+              event.preventDefault();
+              activate();
+            },
+          }
+        : props;
+      return BaseListItem ? (
+        React.createElement(
+          BaseListItem as React.ElementType,
+          {node, ...listItemProps},
+          children,
+        )
+      ) : (
+        <li {...listItemProps}>{children}</li>
+      );
+    };
+    return {
+      ...markdownComponents,
+      p: renderParagraph,
+      li: renderListItem,
+    };
+  }, [
+    confirmationReply,
+    markdownComponents,
+    markdownText,
+    onSelectConfirmationReply,
+    onSelectOptionReply,
+    optionReplies,
+    optionRepliesDisabled,
+  ]);
 
   if (message.method === 'permission_request' && permissionRecord && permissionRecord.status !== 'pending') {
     const reasonLabels: Record<NonNullable<ChatPermissionRecord['unansweredReason']>, string> = {
@@ -756,99 +919,19 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   if (!text) {
     return null;
   }
-  const selectableOptionReplies = optionReplies.length > 0;
-  const optionReplyParts = selectableOptionReplies ? splitChatOptionReplyText(text) : [];
-  const confirmationReplyParts = splitChatConfirmationReplyText(text);
-  const hasOptionReplyParts = optionReplyParts.some(part => part.type === 'option');
-  const selectableConfirmationReply = optionReplies.length === 0 ? confirmationReply : null;
-  const hasConfirmationReplyParts =
-    !!selectableConfirmationReply &&
-    !hasOptionReplyParts &&
-    confirmationReplyParts.some(part => part.type === 'confirmation');
   return (
     <div
       className="chat-main-message"
       data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
     >
-      {hasOptionReplyParts ? (
-        optionReplyParts.map((part, index) => {
-          if (part.type === 'markdown') {
-            return part.text ? (
-              <ReactMarkdown
-                key={`markdown:${index}`}
-                remarkPlugins={markdownCapabilities.remarkPlugins}
-                urlTransform={markdownUrlTransform}
-                rehypePlugins={highlightRehypePlugins}
-                components={markdownComponents}
-              >
-                {part.text}
-              </ReactMarkdown>
-            ) : null;
-          }
-          const optionContent = (
-            <>
-              <span className="chat-option-reply-label">{part.reply.label}.</span>
-              <span className="chat-option-reply-text">{part.reply.text}</span>
-            </>
-          );
-          return (
-            <div key={`option:${part.reply.label}:${index}`} className="chat-option-reply-line">
-              <button
-                type="button"
-                className="chat-option-reply-inline-button"
-                onClick={() => onSelectOptionReply?.(part.reply.label)}
-                disabled={optionRepliesDisabled}
-                title={part.reply.text}
-                aria-label={`Reply ${part.reply.label}: ${part.reply.text}`}
-              >
-                {optionContent}
-              </button>
-            </div>
-          );
-        })
-      ) : hasConfirmationReplyParts ? (
-        confirmationReplyParts.map((part, index) => {
-          if (part.type === 'markdown') {
-            return part.text ? (
-              <ReactMarkdown
-                key={`markdown:${index}`}
-                remarkPlugins={markdownCapabilities.remarkPlugins}
-                urlTransform={markdownUrlTransform}
-                rehypePlugins={highlightRehypePlugins}
-                components={markdownComponents}
-              >
-                {part.text}
-              </ReactMarkdown>
-            ) : null;
-          }
-          return (
-            <div key={`confirmation:${index}`} className="chat-confirmation-reply-line">
-              <button
-                type="button"
-                className="chat-confirmation-reply-action"
-                onClick={() => onSelectConfirmationReply?.(part.reply.replyText)}
-                disabled={optionRepliesDisabled}
-                title={part.reply.replyText}
-                aria-label={`Reply ${part.reply.replyText}: ${part.reply.sentence}`}
-              >
-                <span className="chat-confirmation-reply-check" aria-hidden="true">
-                  <ChatIcon name="check" />
-                </span>
-                <span className="chat-confirmation-reply-text">{part.reply.sentence}</span>
-              </button>
-            </div>
-          );
-        })
-      ) : (
-        <ReactMarkdown
-          remarkPlugins={markdownCapabilities.remarkPlugins}
-          urlTransform={markdownUrlTransform}
-          rehypePlugins={highlightRehypePlugins}
-          components={markdownComponents}
-        >
-          {text}
-        </ReactMarkdown>
-      )}
+      <ReactMarkdown
+        remarkPlugins={markdownCapabilities.remarkPlugins}
+        urlTransform={markdownUrlTransform}
+        rehypePlugins={highlightRehypePlugins}
+        components={interactiveMarkdownComponents}
+      >
+        {markdownText}
+      </ReactMarkdown>
     </div>
   );
 });
