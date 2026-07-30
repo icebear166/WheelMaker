@@ -102,6 +102,141 @@ func TestProbeV2RejectsMissingNodeWithoutLeakingEnvironment(t *testing.T) {
 	}
 }
 
+func TestProbeV2AcceptsMyFlicker0313Bundle(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skipf("node is unavailable: %v", err)
+	}
+	packageDir := filepath.Join(t.TempDir(), "node_modules", "@myflicker", "cli")
+	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "package.json"),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.13"}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "dist", "cli.mjs"),
+		[]byte(`g0();var Ld1=jA(O1(),1);import rF4 from"fs";`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MYFLICKER_NODE", nodePath)
+	t.Setenv("MYFLICKER_CLI_DIR", packageDir)
+
+	result := ProbeV2()
+	if !result.Available || result.MyFlickerVersion != "0.3.13" {
+		t.Fatalf("ProbeV2() = %+v, want available MyFlicker 0.3.13", result)
+	}
+}
+
+func TestV2WorkerLoadsMyFlicker0313BundleContract(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skipf("node is unavailable: %v", err)
+	}
+	packageDir := filepath.Join(t.TempDir(), "node_modules", "@myflicker", "cli")
+	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "package.json"),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.13","type":"module"}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	bundle := `
+let appContext = {};
+function g0() {}
+const vQ = () => appContext;
+const d9 = (value) => { appContext = value; };
+async function TB4() {
+  return {login: {}, userInfo: {token: "test-token"}};
+}
+const FB = {};
+function gj() {}
+function Ns() {}
+const xw0 = {
+  async initialized() {},
+  provider() {
+    return {
+      wanqing: {
+        models: {
+          "claude-opus-5": {
+            name: "Claude Opus 5",
+            apiFormat: "anthropic",
+            defaultThinkingLevel: "medium",
+            variants: {
+              low: {effort: "low"},
+              medium: {effort: "medium"},
+              high: {effort: "high"},
+              xhigh: {effort: "xhigh"},
+              max: {effort: "max"}
+            }
+          },
+          "claude-5-sonnet": {
+            name: "Claude Sonnet 5",
+            apiFormat: "anthropic",
+            hidden: true,
+            variants: {
+              low: {effort: "low"},
+              medium: {effort: "medium"},
+              high: {effort: "high"},
+              max: {effort: "max"}
+            }
+          }
+        },
+        async createModel() {
+          return {};
+        }
+      }
+    };
+  }
+};
+g0();var Ld1=jA(O1(),1);import rF4 from"fs";
+`
+	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(bundle), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	worker, err := startWorker(ctx, nodePath, nodeWorkerSource, []string{
+		"MYFLICKER_CLI_DIR=" + packageDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer worker.Close()
+	ready, err := worker.Ready(ctx)
+	if err != nil {
+		t.Fatalf("worker Ready: %v", err)
+	}
+	if ready.MyFlickerVersion != "0.3.13" {
+		t.Fatalf("worker version = %q, want 0.3.13", ready.MyFlickerVersion)
+	}
+	if len(ready.Catalog) != 2 ||
+		ready.Catalog[0].ID != "claude-opus-5" ||
+		!slices.Equal(v2StringSlice(ready.Catalog[0].Metadata["effortLevels"]), []string{"low", "medium", "high", "xhigh", "max"}) {
+		t.Fatalf("worker catalog = %#v, want visible Claude Opus 5 with all effort levels", ready.Catalog)
+	}
+	index, err := buildModelIndex(ready.Catalog, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := index.Resolve("claude-opus-5"); !ok {
+		t.Fatal("Claude Opus 5 is missing from the exposed model index")
+	}
+	if _, ok := index.Resolve("claude-5-sonnet"); ok {
+		t.Fatal("hidden Claude Sonnet 5 was exposed")
+	}
+}
+
 func TestV2CompatibilityMappingPreservesToolsAndAvoidsCollisions(t *testing.T) {
 	tools := []anthropicTool{
 		{Name: "Read", Description: "claude read", InputSchema: json.RawMessage(`{"type":"object","properties":{"file_path":{"type":"string"}}}`)},
@@ -280,6 +415,50 @@ func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 	if first == "" || first != second {
 		t.Fatalf("hashes = %q, %q", first, second)
 	}
+}
+
+func TestV2HealthReportsLoadedMyFlickerVersion(t *testing.T) {
+	worker := &versionedHealthWorker{version: "0.3.13"}
+	proxy, err := newProxyServer(proxySettings{
+		Host:           "127.0.0.1",
+		Port:           17999,
+		ModelBlacklist: map[string]struct{}{},
+	}, worker, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/_myflicker/health", nil)
+	response := httptest.NewRecorder()
+	proxy.Handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("health status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		MyFlickerVersion string `json:"myflickerVersion"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.MyFlickerVersion != "0.3.13" {
+		t.Fatalf("health version = %q, want loaded worker version 0.3.13", payload.MyFlickerVersion)
+	}
+}
+
+type versionedHealthWorker struct {
+	version string
+}
+
+func (*versionedHealthWorker) Request(
+	context.Context,
+	string,
+	string,
+	any,
+) (<-chan workerFrame, error) {
+	return nil, errors.New("unexpected request")
+}
+
+func (w *versionedHealthWorker) MyFlickerVersion() string {
+	return w.version
 }
 
 func TestV2MessagesPassesOutputEffortToWorker(t *testing.T) {

@@ -57,6 +57,22 @@ type V2ProbeResult struct {
 
 const v2BundleAnchor = `j0();var mm1=PA(q1(),1);import fJ4 from"fs";`
 
+type v2BundleContract struct {
+	Anchor  string
+	Exports string
+}
+
+var v2BundleContracts = map[string]v2BundleContract{
+	"0.3.12": {
+		Anchor:  v2BundleAnchor,
+		Exports: "j0();\nexport{$M0 as wanqingPlugin,FB as models,Qj as createOpenAI,Ct as createAnthropic,Kt6 as login,K7 as setContext,pQ as getContext};",
+	},
+	"0.3.13": {
+		Anchor:  `g0();var Ld1=jA(O1(),1);import rF4 from"fs";`,
+		Exports: "g0();\nexport{xw0 as wanqingPlugin,FB as models,gj as createOpenAI,Ns as createAnthropic,TB4 as login,d9 as setContext,vQ as getContext};",
+	},
+}
+
 func ProbeV2() V2ProbeResult {
 	environ := environmentMap(os.Environ())
 	nodePath, err := resolveNode(environ["MYFLICKER_NODE"], exec.LookPath)
@@ -91,12 +107,15 @@ func ProbeV2() V2ProbeResult {
 		Version string `json:"version"`
 	}
 	if json.Unmarshal(rawPackage, &packageInfo) != nil ||
-		packageInfo.Name != "@myflicker/cli" ||
-		packageInfo.Version != "0.3.12" {
+		packageInfo.Name != "@myflicker/cli" {
+		return V2ProbeResult{NodePath: nodePath, Error: "unsupported @myflicker/cli version"}
+	}
+	contract, supported := v2BundleContracts[packageInfo.Version]
+	if !supported {
 		return V2ProbeResult{NodePath: nodePath, Error: "unsupported @myflicker/cli version"}
 	}
 	bundle, err := os.ReadFile(filepath.Join(packageDir, "dist", "cli.mjs"))
-	if err != nil || bytes.Count(bundle, []byte(v2BundleAnchor)) != 1 {
+	if err != nil || bytes.Count(bundle, []byte(contract.Anchor)) != 1 {
 		return V2ProbeResult{
 			NodePath:         nodePath,
 			MyFlickerVersion: packageInfo.Version,
@@ -309,11 +328,16 @@ type workerBackend interface {
 	Request(context.Context, string, string, any) (<-chan workerFrame, error)
 }
 
+type workerVersionReporter interface {
+	MyFlickerVersion() string
+}
+
 type proxyServer struct {
-	settings proxySettings
-	worker   workerBackend
-	models   modelIndex
-	catalog  []modelInfo
+	settings         proxySettings
+	worker           workerBackend
+	models           modelIndex
+	catalog          []modelInfo
+	myFlickerVersion string
 }
 
 type workerFrame struct {
@@ -369,6 +393,7 @@ type workerClient struct {
 	done      chan struct{}
 	closeOnce sync.Once
 	nextID    uint64
+	version   string
 }
 
 type workerStream struct {
@@ -403,8 +428,16 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const { pathToFileURL } = require("node:url");
 const { registerHooks } = require("node:module");
 
-const BOOT_ANCHOR = 'j0();var mm1=PA(q1(),1);import fJ4 from"fs";';
-const EXPORTS = 'j0();\nexport{$M0 as wanqingPlugin,FB as models,Qj as createOpenAI,Ct as createAnthropic,Kt6 as login,K7 as setContext,pQ as getContext};';
+const BUNDLE_CONTRACTS = {
+  "0.3.12": {
+    anchor: 'j0();var mm1=PA(q1(),1);import fJ4 from"fs";',
+    exports: 'j0();\nexport{$M0 as wanqingPlugin,FB as models,Qj as createOpenAI,Ct as createAnthropic,Kt6 as login,K7 as setContext,pQ as getContext};',
+  },
+  "0.3.13": {
+    anchor: 'g0();var Ld1=jA(O1(),1);import rF4 from"fs";',
+    exports: 'g0();\nexport{xw0 as wanqingPlugin,FB as models,gj as createOpenAI,Ns as createAnthropic,TB4 as login,d9 as setContext,vQ as getContext};',
+  },
+};
 const controllers = new Map();
 const probeContext = new AsyncLocalStorage();
 let dispatchTail = Promise.resolve();
@@ -417,12 +450,12 @@ function fail(message) {
   emit({type: "error", error: String(message || "worker failure")});
 }
 
-function patchBundle(source) {
-  const first = source.indexOf(BOOT_ANCHOR);
-  if (first < 0 || source.indexOf(BOOT_ANCHOR, first + BOOT_ANCHOR.length) >= 0) {
+function patchBundle(source, contract) {
+  const first = source.indexOf(contract.anchor);
+  if (first < 0 || source.indexOf(contract.anchor, first + contract.anchor.length) >= 0) {
     throw new Error("unsupported @myflicker/cli bundle anchor");
   }
-  return source.slice(0, first) + EXPORTS;
+  return source.slice(0, first) + contract.exports;
 }
 
 function packageDirectory() {
@@ -445,7 +478,8 @@ function packageDirectory() {
 
 async function loadInternals(packageDir) {
   const packageJSON = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
-  if (packageJSON.name !== "@myflicker/cli" || packageJSON.version !== "0.3.12") {
+  const contract = BUNDLE_CONTRACTS[packageJSON.version];
+  if (packageJSON.name !== "@myflicker/cli" || !contract) {
     throw new Error("unsupported @myflicker/cli package or version");
   }
   const bundlePath = fs.realpathSync(path.join(packageDir, "dist", "cli.mjs"));
@@ -461,7 +495,7 @@ async function loadInternals(packageDir) {
       const source = typeof result.source === "string"
         ? result.source
         : Buffer.from(result.source).toString("utf8");
-      return {...result, source: patchBundle(source)};
+      return {...result, source: patchBundle(source, contract)};
     },
   });
   const originalArgv = process.argv;
@@ -1940,10 +1974,11 @@ func newProxyServer(settings proxySettings, worker workerBackend, catalog []mode
 		filtered = append(filtered, model)
 	}
 	server := &proxyServer{
-		settings: settings,
-		worker:   worker,
-		models:   models,
-		catalog:  filtered,
+		settings:         settings,
+		worker:           worker,
+		models:           models,
+		catalog:          filtered,
+		myFlickerVersion: workerMyFlickerVersion(worker),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", server.handleHealth)
@@ -1966,9 +2001,17 @@ func (s *proxyServer) handleHealth(response http.ResponseWriter, request *http.R
 	writeV2JSON(response, http.StatusOK, map[string]any{
 		"ok":               true,
 		"mode":             "myflicker-wanqing-provider",
-		"myflickerVersion": "0.3.12",
+		"myflickerVersion": s.myFlickerVersion,
 		"models":           len(s.catalog),
 	})
+}
+
+func workerMyFlickerVersion(worker workerBackend) string {
+	reporter, ok := worker.(workerVersionReporter)
+	if !ok {
+		return ""
+	}
+	return reporter.MyFlickerVersion()
 }
 
 func (s *proxyServer) handleModels(response http.ResponseWriter, request *http.Request) {
@@ -2238,6 +2281,9 @@ func (w *workerClient) readLoop(stdout io.Reader) {
 			return
 		}
 		if frame.Type == "ready" {
+			w.mu.Lock()
+			w.version = frame.MyFlickerVersion
+			w.mu.Unlock()
 			select {
 			case w.ready <- frame:
 			default:
@@ -2255,6 +2301,12 @@ func (w *workerClient) readLoop(stdout io.Reader) {
 		return
 	}
 	w.finish(errors.New("worker output closed"))
+}
+
+func (w *workerClient) MyFlickerVersion() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.version
 }
 
 func (w *workerClient) route(frame workerFrame) {
@@ -2635,8 +2687,8 @@ func selfTestLiveCatalog() error {
 	if err != nil {
 		return err
 	}
-	if ready.MyFlickerVersion != "0.3.12" {
-		return fmt.Errorf("version = %q", ready.MyFlickerVersion)
+	if _, supported := v2BundleContracts[ready.MyFlickerVersion]; !supported {
+		return fmt.Errorf("unsupported loaded version = %q", ready.MyFlickerVersion)
 	}
 	index, err := buildModelIndex(ready.Catalog, settings.ModelBlacklist)
 	if err != nil {
@@ -2717,6 +2769,21 @@ func selfTestLiveNativeReference() error {
 	if err != nil {
 		return err
 	}
+	rawPackage, err := os.ReadFile(filepath.Join(settings.MyFlickerDir, "package.json"))
+	if err != nil {
+		return errors.New("MyFlicker package metadata is unavailable")
+	}
+	var packageInfo struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(rawPackage, &packageInfo) != nil ||
+		packageInfo.Name != "@myflicker/cli" {
+		return errors.New("MyFlicker package metadata is invalid")
+	}
+	if _, supported := v2BundleContracts[packageInfo.Version]; !supported {
+		return fmt.Errorf("unsupported MyFlicker version %q", packageInfo.Version)
+	}
 	entry := filepath.Join(settings.MyFlickerDir, "cli.mjs")
 	if info, err := os.Stat(entry); err != nil || info.IsDir() {
 		return errors.New("MyFlicker package entry is unavailable")
@@ -2772,7 +2839,7 @@ func selfTestLiveNativeReference() error {
 	if commandErr != nil {
 		return errors.New("native MyFlicker reference failed after request capture")
 	}
-	if reference.ProductName != "myflicker" || reference.Version != "0.3.12" {
+	if reference.ProductName != "myflicker" || reference.Version != packageInfo.Version {
 		return fmt.Errorf("native MyFlicker product metadata = %q/%q", reference.ProductName, reference.Version)
 	}
 	if !reference.HasGatewayAuthToken {
@@ -2903,9 +2970,9 @@ func selfTestLiveFormats() error {
 		if probe.BodyHash == "" || probe.BodyHash != probes[1].BodyHash {
 			return fmt.Errorf("%s request body is not stable across equivalent requests", format)
 		}
-		// MyFlicker 0.3.12's Responses adapter applies the variant include
-		// option but does not serialize its reasoningEffort field. Keep that
-		// native behavior instead of rewriting the outbound request ourselves.
+		// MyFlicker's Responses adapter applies the variant include option but
+		// does not serialize its reasoningEffort field. Keep that native
+		// behavior instead of rewriting the outbound request ourselves.
 		if format != "responses" && probe.Effort != "high" {
 			return fmt.Errorf("%s model %s request effort = %q, want high", format, model.ID, probe.Effort)
 		}

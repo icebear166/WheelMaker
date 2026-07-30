@@ -6021,6 +6021,7 @@ func TestApplyFlickerModelsUsesCurrentV2IDsForTierDefaults(t *testing.T) {
 	profile := claudeCompatibleFlickerProfile(t.TempDir())
 	applyFlickerModels(&profile, []claudeModelEntry{
 		{ID: "claude-haiku-4.5", Name: "Claude Haiku 4.5"},
+		{ID: "claude-opus-5", Name: "Claude Opus 5"},
 		{ID: "claude-4.8-opus", Name: "Claude Opus 4.8"},
 		{ID: "claude-4.6-sonnet", Name: "Claude Sonnet 4.6"},
 	})
@@ -6054,6 +6055,7 @@ func TestApplyFlickerModelsSortsV2CatalogByVendorAndAscendingStrength(t *testing
 		"gpt-5.6-terra",
 		"auto",
 		"claude-4.8-opus",
+		"claude-opus-5",
 		"claude-4.5-sonnet",
 		"kat-coder-v2.5",
 		"claude-4.6-sonnet",
@@ -6085,6 +6087,7 @@ func TestApplyFlickerModelsSortsV2CatalogByVendorAndAscendingStrength(t *testing
 		"claude-4.6-sonnet",
 		"claude-4.7-opus",
 		"claude-4.8-opus",
+		"claude-opus-5",
 		"gpt-5.4",
 		"gpt-5.5",
 		"gpt-5.6-luna",
