@@ -323,6 +323,7 @@
   td code, th code { font-size: 12px; }
   .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .badge.done { background: var(--ok-bg); color: var(--ok); }
+  .fixed-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); border: 1px solid var(--ok); margin-left: 8px; vertical-align: middle; white-space: nowrap; }
   .badge.no { background: var(--high-bg); color: var(--high); }
   .badge.partial { background: var(--med-bg); color: var(--med); }
   .badge.na { background: var(--surface-2); color: var(--text-faint); }
@@ -483,7 +484,7 @@
       <p class="section-lede">性能瓶颈高度集中在<strong>同一条路径</strong>——流式 token 转发。这恰好是 AI 工具最关键的用户体验路径（看输出流），而前后端犯了同一个结构性错误：<strong>把"每个 token"当成了"一次全量操作"</strong>。</p>
 
       <div class="summary-cards">
-        <div class="stat"><div class="num high">11</div><div class="label">高优先问题（两端合计）</div></div>
+        <div class="stat"><div class="num high">11</div><div class="label">高优先问题（1 已修复 / 10 待办）</div></div>
         <div class="stat"><div class="num med">12</div><div class="label">中优先问题</div></div>
         <div class="stat"><div class="num low">9</div><div class="label">低优先 / 规范问题</div></div>
         <div class="stat"><div class="num" style="color:var(--text-faint)">0</div><div class="label">运行时性能基线（pprof / 渲染计时）</div></div>
@@ -627,7 +628,7 @@ case <span class="mk">&lt;-</span>time.After(10 * time.Second): <span class="cmt
         <div class="finding-head">
           <span class="sev">高</span>
           <div>
-            <div class="finding-id">B-H3</div>
+            <div class="finding-id">B-H3 <span class="fixed-tag">✓ 已修复 · commit 50517709</span></div>
             <h3>SQLiteSessionStore：缺 synchronous=NORMAL，每次提交 fsync；SaveSession 双往返</h3>
             <div class="loc">📍 sqlite_store.go</div>
           </div>
@@ -649,14 +650,14 @@ case <span class="mk">&lt;-</span>time.After(10 * time.Second): <span class="cmt
           <div class="block">
             <h4>修复方案</h4>
             <ul>
-              <li>DSN 加 <code class="inline">&amp;_pragma=synchronous(NORMAL)</code>——<strong>一行改动</strong>。WAL 模式下提交持久性几乎不变（仅断电可能丢最后一个事务），写延迟通常降一个数量级。</li>
+              <li><span class="fixed-tag" style="margin-left:0;margin-right:6px;">✓ 已落地</span>DSN 加 <code class="inline">&amp;_pragma=synchronous(NORMAL)</code>（commit 50517709，<code class="inline">NewStore</code> 与 <code class="inline">CheckStoreSchema</code> 两处 DSN 同步修改）。WAL 模式下提交持久性几乎不变（仅断电可能丢最后一个事务），写延迟通常降一个数量级。</li>
               <li>把 <code class="inline">loadSessionByID</code> 的 merge 折进 UPSERT 的 <code class="inline">CASE</code>（<code class="inline">title</code> 字段已这么做，扩展到 <code class="inline">created_at</code> / <code class="inline">session_sync_json</code>）。</li>
               <li>对非关键写（title/info 更新）按 turn 防抖合并。</li>
             </ul>
           </div>
           <div class="block">
             <h4>预期收益</h4>
-            <div class="gain"><b>估算：</b>写延迟降一个数量级；每个 prompt turn 的 3-5 次 SaveSession 往返减半。<b>零风险一行改动即可拿走大部分收益。</b></div>
+            <div class="gain"><b>估算：</b>写延迟降一个数量级；每个 prompt turn 的 3-5 次 SaveSession 往返减半。<br><b style="color:var(--ok)">✅ 主项已落地（commit 50517709）：</b>synchronous=NORMAL 完成，含 <code class="inline">PRAGMA synchronous</code> 验证测试；SaveSession 折叠 SELECT 与写防抖仍为待办。</div>
           </div>
         </div>
       </article>
@@ -1234,7 +1235,7 @@ private emitEvent(event: RegistryEnvelope): void {
         <tbody>
           <tr><td>1</td><td>挂 <code class="inline">net/http/pprof</code>，前端加渲染/长任务观测</td><td><a href="#b-l1">B-L1</a></td><td>小</td><td>使后续所有优化可度量（前提）</td></tr>
           <tr><td>2</td><td>Go 流式管线：去 ACK 同步 + 文本 Builder + 结构化 payload + AgentMessage 节流</td><td><a href="#b-h1">B-H1</a></td><td>中</td><td>全栈最大单点瓶颈</td></tr>
-          <tr><td>3</td><td>SQLite <code class="inline">synchronous=NORMAL</code> + SaveSession 折叠 SELECT</td><td><a href="#b-h3">B-H3</a></td><td>极小</td><td>写延迟降一个数量级</td></tr>
+          <tr><td>3</td><td>SQLite <code class="inline">synchronous=NORMAL</code> + SaveSession 折叠 SELECT</td><td><a href="#b-h3">B-H3</a> <span class="fixed-tag" style="margin-left:4px;">部分完成</span></td><td>极小</td><td>写延迟降一个数量级</td></tr>
           <tr><td>4</td><td>前端 <code class="inline">&lt;ChatSurface&gt;</code> 隔离 + Markdown/Shiki 流式闸门</td><td><a href="#f-h1">F-H1</a> / <a href="#f-h2">F-H2</a> / <a href="#f-h3">F-H3</a></td><td>中</td><td>消除流式期整树每帧 reconcile + O(text²)</td></tr>
           <tr><td>5</td><td>会话列表虚拟化 + Registry selector</td><td><a href="#f-h4">F-H4</a> / <a href="#f-h5">F-H5</a></td><td>中小</td><td>消除 idle/流式期会话列表线性开销</td></tr>
           <tr><td>6</td><td>flicker bridge typed struct + 去 deepCopyJSON</td><td><a href="#b-h2">B-H2</a> / <a href="#b-m2">B-M2</a></td><td>中</td><td>砍掉绝大部分 per-token CPU/GC</td></tr>
@@ -1244,13 +1245,14 @@ private emitEvent(event: RegistryEnvelope): void {
       </table>
       </div>
       <div class="callout">
-        <b>起步建议：</b>后端从 <a href="#b-h3">B-H3</a>（SQLite 一行改动，零风险立刻见效）或 <a href="#b-h1">B-H1</a>（流式管线，全栈最大瓶颈）切入；前端从 <a href="#f-h1">F-H1</a>（<code class="inline">&lt;ChatSurface&gt;</code> 隔离）切入。
+        <b>起步建议：</b><a href="#b-h3">B-H3</a>（SQLite synchronous=NORMAL）已落地（commit 50517709）。下一步后端从 <a href="#b-h1">B-H1</a>（流式管线，全栈最大瓶颈）切入；前端从 <a href="#f-h1">F-H1</a>（<code class="inline">&lt;ChatSurface&gt;</code> 隔离）切入。
       </div>
     </section>
 
     <footer class="report-foot">
       <p><strong>方法与限值：</strong>本报告基于静态代码审查，未运行 profiling。所有"预期收益"为基于代码结构的估算，真实量级需在补齐 <a href="#b-l1">B-L1</a> 度量基线后验证。代码片段均取自 2026-07-30 的源码状态，行号可能随后续提交漂移。</p>
       <p>生成于 2026-07-30 · 范围：server (Go ~6 万行) + app/web (React ~6.4 万行) · WheelMaker 性能审查。</p>
+      <p><strong>更新记录：</strong>2026-07-30 — <a href="#b-h3">B-H3</a> 主项（SQLite synchronous=NORMAL）落地于 commit <code class="inline">50517709</code>，含 <code class="inline">PRAGMA synchronous</code> 验证测试。</p>
     </footer>
 
   </main>
