@@ -11,6 +11,36 @@ export interface SkillCategoryGroup {
   skills: RegistrySkillSnapshot[];
 }
 
+export type SkillScopeTarget = {
+  hubId: string;
+  scope: RegistrySkillScope;
+  projectName?: string;
+};
+
+export type SkillInstallTarget = SkillScopeTarget;
+
+export type SkillDetailTarget = SkillScopeTarget & {
+  skillName: string;
+};
+
+export type SkillUpdateTarget = SkillScopeTarget & {
+  includeProjects?: boolean;
+  skills?: string[];
+};
+
+export type SkillUninstallTarget = SkillScopeTarget & {
+  skillName: string;
+};
+
+export type SkillBatchUninstallTarget = SkillScopeTarget & {
+  skillNames: string[];
+};
+
+export type SkillPendingKeyInput = SkillScopeTarget & {
+  skillName?: string;
+  action: string;
+};
+
 export interface ParsedSkillSourceInput {
   source: string;
   skillNames: string[];
@@ -140,6 +170,42 @@ export function sortSkillProjects(projects: RegistrySkillProjectSnapshot[]): Reg
     if (left.online !== right.online) return left.online ? -1 : 1;
     return left.projectName.localeCompare(right.projectName);
   });
+}
+
+export function onlineSkillProjects(
+  projects: RegistrySkillProjectSnapshot[],
+): RegistrySkillProjectSnapshot[] {
+  return sortSkillProjects(projects).filter(project => project.online);
+}
+
+export function projectSkillTotal(projects: RegistrySkillProjectSnapshot[]): number {
+  return projects.reduce((total, project) => total + project.skills.length, 0);
+}
+
+export function skillScopeSelectionKey(input: SkillScopeTarget): string {
+  return [input.hubId, input.scope, input.projectName || ''].join(':');
+}
+
+export function skillActionPendingKey(input: SkillPendingKeyInput): string {
+  return [
+    input.hubId,
+    input.scope,
+    input.projectName || '',
+    input.skillName || '',
+    input.action,
+  ].join(':');
+}
+
+export function sameSkillScopeTarget(
+  left: SkillScopeTarget | null,
+  right: SkillScopeTarget,
+): boolean {
+  return Boolean(
+    left
+    && left.hubId === right.hubId
+    && left.scope === right.scope
+    && (left.projectName || '') === (right.projectName || ''),
+  );
 }
 
 export function skillOperationStatusLabel(status: string): string {

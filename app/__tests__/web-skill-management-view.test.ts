@@ -2,8 +2,13 @@ import {
   deriveSkillHubIds,
   groupSkillsByCategory,
   isSkillActionPendingForHub,
+  onlineSkillProjects,
   parseSkillSourceInput,
+  projectSkillTotal,
+  sameSkillScopeTarget,
+  skillActionPendingKey,
   skillScopeLabel,
+  skillScopeSelectionKey,
   sortSkillProjects,
 } from '../web/src/settings/skillManagementView';
 
@@ -27,6 +32,36 @@ describe('skill management view helpers', () => {
       {projectName: 'zeta', online: false, skills: []},
       {projectName: 'alpha', online: true, skills: []},
     ]).map(project => project.projectName)).toEqual(['alpha', 'zeta']);
+  });
+
+  test('keeps all-project counts separate from online project selection', () => {
+    const projects = [
+      {
+        projectName: 'offline',
+        online: false,
+        skills: [{name: 'one', category: '', categoryKey: '', managed: true}],
+      },
+      {
+        projectName: 'beta',
+        online: true,
+        skills: [{name: 'two', category: '', categoryKey: '', managed: true}],
+      },
+      {projectName: 'alpha', online: true, skills: []},
+    ];
+
+    expect(projectSkillTotal(projects)).toBe(2);
+    expect(onlineSkillProjects(projects).map(project => project.projectName))
+      .toEqual(['alpha', 'beta']);
+  });
+
+  test('builds stable Skill scope and action identities', () => {
+    const target = {hubId: 'hub-a', scope: 'project' as const, projectName: 'WheelMaker'};
+
+    expect(skillScopeSelectionKey(target)).toBe('hub-a:project:WheelMaker');
+    expect(skillActionPendingKey({...target, skillName: 'scope', action: 'skillUpdate'}))
+      .toBe('hub-a:project:WheelMaker:scope:skillUpdate');
+    expect(sameSkillScopeTarget(target, {...target})).toBe(true);
+    expect(sameSkillScopeTarget(target, {hubId: 'hub-a', scope: 'hub'})).toBe(false);
   });
 
   test('formats scope labels', () => {

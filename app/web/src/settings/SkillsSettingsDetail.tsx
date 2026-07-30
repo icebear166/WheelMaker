@@ -6,10 +6,17 @@ import {Icon, type IconName} from '../common/Icon';
 import {
   groupSkillsByCategory,
   isSkillActionPendingForHub,
+  skillActionPendingKey,
   skillDetailCacheKey,
   skillOperationStatusLabel,
   skillScopeLabel,
+  skillScopeSelectionKey,
   sortSkillProjects,
+  type SkillBatchUninstallTarget,
+  type SkillDetailTarget,
+  type SkillInstallTarget,
+  type SkillUninstallTarget,
+  type SkillUpdateTarget,
 } from './skillManagementView';
 import type {
   RegistrySkillCommandResponse,
@@ -23,12 +30,6 @@ import type {
 const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
 const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 
-export type SkillInstallTarget = {
-  hubId: string;
-  scope: RegistrySkillScope;
-  projectName?: string;
-};
-
 type SkillHubView = {
   hubId: string;
   loading: boolean;
@@ -36,34 +37,10 @@ type SkillHubView = {
   data: RegistrySkillCommandResponse | null;
 };
 
-export type SkillUninstallTarget = SkillInstallTarget & {
-  skillName: string;
-};
-
-export type SkillBatchUninstallTarget = SkillInstallTarget & {
-  skillNames: string[];
-};
-
-export type SkillDetailTarget = SkillInstallTarget & {
-  skillName: string;
-};
-
 export type SkillDetailCacheEntry = {
   loading: boolean;
   error: string;
   detail: RegistrySkillDetail | null;
-};
-
-export type SkillUpdateTarget = SkillInstallTarget & {
-  includeProjects?: boolean;
-};
-
-type SkillPendingKeyInput = {
-  hubId: string;
-  scope: RegistrySkillScope;
-  projectName?: string;
-  skillName?: string;
-  action: string;
 };
 
 type SkillsSettingsDetailProps = {
@@ -90,7 +67,6 @@ type SkillsSettingsDetailProps = {
   requestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
   requestSkillDetail: (target: SkillDetailTarget) => Promise<void>;
   skillDetailTarget: SkillDetailTarget | null;
-  skillActionPendingKey: (input: SkillPendingKeyInput) => string;
 };
 
 type SkillDetailPanelProps = {
@@ -99,12 +75,7 @@ type SkillDetailPanelProps = {
   skillsPendingKey: string;
   closeSkillDetail: () => void;
   requestSkillUninstall: (target: SkillUninstallTarget) => void;
-  skillActionPendingKey: (input: SkillPendingKeyInput) => string;
 };
-
-function skillScopeSelectionKey(input: {hubId: string; scope: RegistrySkillScope; projectName?: string}): string {
-  return [input.hubId, input.scope, input.projectName || ''].join(':');
-}
 
 function formatSkillFileSize(size?: number): string {
   if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '-';
@@ -163,7 +134,6 @@ export function SkillDetailPanel({
   skillsPendingKey,
   closeSkillDetail,
   requestSkillUninstall,
-  skillActionPendingKey,
 }: SkillDetailPanelProps) {
   if (!skillDetailTarget) {
     return null;
@@ -297,7 +267,6 @@ export function SkillsSettingsDetail({
   requestSkillBatchUninstall,
   requestSkillDetail,
   skillDetailTarget,
-  skillActionPendingKey,
 }: SkillsSettingsDetailProps) {
   const skillHubCards = Object.values(skillHubs).sort((left, right) => left.hubId.localeCompare(right.hubId));
   const skillHubIds = skillHubCards.map(hub => hub.hubId);

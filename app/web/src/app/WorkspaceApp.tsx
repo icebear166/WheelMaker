@@ -470,10 +470,14 @@ import {
   groupSkillsByCategory,
   isSkillActionPendingForHub,
   parseSkillSourceInput,
+  sameSkillScopeTarget,
+  skillActionPendingKey,
   skillDetailCacheKey,
   skillOperationStatusLabel,
   skillScopeLabel,
   sortSkillProjects,
+  type SkillDetailTarget,
+  type SkillInstallTarget,
 } from '../settings/skillManagementView';
 import {
   DEFAULT_CODE_FONT,
@@ -782,14 +786,6 @@ type SkillHubView = {
   loading: boolean;
   error: string;
   data: RegistrySkillCommandResponse | null;
-};
-type SkillInstallTarget = {
-  hubId: string;
-  scope: RegistrySkillScope;
-  projectName?: string;
-};
-type SkillDetailTarget = SkillInstallTarget & {
-  skillName: string;
 };
 type SkillDetailCacheEntry = {
   loading: boolean;
@@ -1315,23 +1311,6 @@ function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall' | 'r
     default:
       return 'Install';
   }
-}
-
-function skillActionPendingKey(input: {hubId: string; scope: RegistrySkillScope; projectName?: string; skillName?: string; action: string}): string {
-  return [
-    input.hubId,
-    input.scope,
-    input.projectName || '',
-    input.skillName || '',
-    input.action,
-  ].join(':');
-}
-
-function sameSkillInstallTarget(left: SkillInstallTarget | null, right: SkillInstallTarget): boolean {
-  return !!left &&
-    left.hubId === right.hubId &&
-    left.scope === right.scope &&
-    (left.projectName || '') === (right.projectName || '');
 }
 
 function skillCommandErrorMessage(result: RegistrySkillCommandResponse): string {
@@ -13466,7 +13445,7 @@ export function App() {
   }, [settingsDetailView, refreshSkillManagement, registryHubIds]);
 
   const requestSkillInstall = useCallback((target: SkillInstallTarget) => {
-    const sameTarget = sameSkillInstallTarget(skillInstallTarget, target);
+    const sameTarget = sameSkillScopeTarget(skillInstallTarget, target);
     setSkillInstallTarget(target);
     if (!sameTarget) {
       setSkillSourceError('');
@@ -15914,7 +15893,7 @@ export function App() {
           skillsError={skillsError}
           skillsPendingKey={skillsPendingKey}
           skillInstallTarget={skillInstallTarget}
-          sameSkillInstallTarget={sameSkillInstallTarget}
+          sameSkillInstallTarget={sameSkillScopeTarget}
           skillSourceInput={skillSourceInput}
           setSkillSourceInput={setSkillSourceInput}
           skillSourceLoading={skillSourceLoading}
@@ -15932,7 +15911,6 @@ export function App() {
           requestSkillBatchUninstall={requestSkillBatchUninstall}
           requestSkillDetail={requestSkillDetail}
           skillDetailTarget={skillDetailTarget}
-          skillActionPendingKey={skillActionPendingKey}
         />
       </React.Suspense>,
       renderSettingsDetailActions('skills'),
@@ -15947,7 +15925,6 @@ export function App() {
         skillsPendingKey={skillsPendingKey}
         closeSkillDetail={closeSkillDetail}
         requestSkillUninstall={requestSkillUninstall}
-        skillActionPendingKey={skillActionPendingKey}
       />
     </React.Suspense>
   );
