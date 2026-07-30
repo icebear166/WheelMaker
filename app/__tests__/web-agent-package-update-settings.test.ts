@@ -189,14 +189,16 @@ describe('agent package update settings UI source structure', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const menuTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubMenu.tsx'), 'utf8');
+    const skillTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'ChatHubSkillManagement.tsx'), 'utf8');
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('opsByHubId={chatHubOpsByHubId}');
     expect(mainTsx).toContain('onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}');
     expect(mainTsx).toContain('onRequestNpmUpdate={handleChatHubNpmUpdate}');
     expect(mainTsx).toContain('onPackageAction={handleChatHubPackageAction}');
-    expect(mainTsx).toContain('onRequestSkillUpdate={(hubId, skillName) => requestSkillUpdate({');
-    expect(mainTsx).toContain('onRequestSkillUninstall={(hubId, skillName) => requestSkillUninstall({');
+    expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');
+    expect(mainTsx).toContain('onRequestSkillUninstall={requestSkillUninstall}');
+    expect(mainTsx).toContain('onRequestSkillBatchUninstall={requestSkillBatchUninstall}');
     expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
     expect(mainTsx).toContain('onScanAllIndexes={handleChatHubScanAllIndexes}');
     expect(mainTsx).toContain('onScanProject={handleChatHubScanProject}');
@@ -209,7 +211,7 @@ describe('agent package update settings UI source structure', () => {
     expect(menuTsx).toContain('chat-hub-disclosure-action');
     expect(menuTsx).not.toContain('className="chat-hub-action-toggle"');
     expect(menuTsx).toContain('className="chat-hub-npm-row"');
-    expect(menuTsx).toContain('className="chat-hub-skill-row"');
+    expect(skillTsx).toContain('className="chat-hub-skill-row"');
     expect(menuTsx).toContain('className="chat-hub-scan-row"');
     expect(menuTsx).toContain('className="chat-hub-footer"');
     expect(menuTsx).toContain('Update all hubs');

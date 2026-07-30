@@ -515,12 +515,14 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('setChatHubColorMenu(null);');
     expect(mainTsx).not.toContain('chat-hub-color-square');
 
-    const popoverBlock = Array.from(stylesCss.matchAll(/\.chat-hub-popover \{[\s\S]*?\n\}/g))
+    const stackBlock = stylesCss.match(/\.chat-hub-popover-stack \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const popoverBlock = Array.from(stylesCss.matchAll(/(?:^|\n)\.chat-hub-popover \{[\s\S]*?\n\}/g))
       .map(match => match[0])
-      .find(block => block.includes('position: fixed;')) ?? '';
+      .find(block => block.includes('width: min(340px')) ?? '';
+    expect(stackBlock).toContain('position: fixed;');
+    expect(stackBlock).toContain('--chat-hub-popover-viewport-offset: 96px;');
     expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
     expect(popoverBlock).toContain('min-width: 0;');
-    expect(popoverBlock).toContain('--chat-hub-popover-viewport-offset: 96px;');
     expect(popoverBlock).toContain('max-height: calc(100vh - var(--chat-hub-popover-viewport-offset));');
     expect(popoverBlock).toContain('max-height: calc(100dvh - var(--chat-hub-popover-viewport-offset));');
     expect(popoverBlock).toContain('overflow: auto;');

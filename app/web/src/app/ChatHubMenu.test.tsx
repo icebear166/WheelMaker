@@ -414,6 +414,7 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
     scope: 'hub',
     includeProjects: false,
   });
+  expect(callbacks.onClose).not.toHaveBeenCalled();
 });
 
 test('skills detail disables stale row actions while the Hub snapshot refreshes', async () => {
@@ -610,6 +611,7 @@ test('Project Skills lists only online projects and keeps every action in the se
     projectName: 'alpha',
     skillNames: ['two'],
   });
+  expect(callbacks.onClose).not.toHaveBeenCalled();
 });
 
 test('visibility detail toggles project visibility', async () => {
@@ -917,6 +919,8 @@ test('mobile renders a Skill detail as a child page and Back preserves the Hub p
   act(() => renderer.root.findByProps({className: 'chat-hub-page-back'}).props.onClick());
   expect(callbacks.onCloseSkillSurface).toHaveBeenCalled();
   expect(callbacks.onClose).not.toHaveBeenCalled();
+  act(() => renderer.root.findByProps({className: 'chat-hub-page-close'}).props.onClick());
+  expect(callbacks.onClose).toHaveBeenCalled();
 });
 
 test('desktop palette stays a flyout and forces popover no-overflow; mobile palette is inline', async () => {

@@ -1334,6 +1334,7 @@
   box-shadow: var(--shadow-overlay);
   backdrop-filter: blur(12px) saturate(1.1);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  animation: sl-menu-in 140ms var(--ease-out);
 }
 
 .chat-hub-popover.no-overflow {
@@ -2369,6 +2370,11 @@
   margin-left: auto;
 }
 
+.chat-hub-skill-state button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .chat-hub-project-skill-picker {
   display: flex;
   align-items: center;
@@ -2398,6 +2404,12 @@
   border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
   background: var(--accent-soft-bg);
   color: var(--accent-primary);
+}
+
+.chat-hub-project-skill-option:hover,
+.chat-hub-project-skill-option:focus-visible {
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
+  color: var(--text-primary);
 }
 
 .chat-hub-project-skill-name {
@@ -2670,7 +2682,9 @@
 }
 
 .chat-hub-page-back:hover,
-.chat-hub-page-close:hover {
+.chat-hub-page-close:hover,
+.chat-hub-page-back:focus-visible,
+.chat-hub-page-close:focus-visible {
   background: var(--hover);
   color: var(--text-primary);
 }
@@ -2698,6 +2712,10 @@
 }
 
 @media (max-width: 899px) {
+  .chat-hub-page-body.skill-child .chat-hub-skill-companion-content {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   .chat-hub-row {
     min-height: 44px;
   }
@@ -2780,6 +2798,12 @@
 
   .chat-hub-flicker-row {
     min-height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-hub-skill-companion.desktop {
+    animation: none;
   }
 }
 

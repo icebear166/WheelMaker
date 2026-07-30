@@ -58,6 +58,17 @@ test('renders flat stable rows with detail, update, and uninstall actions', asyn
   const {renderer, actions} = await renderScope({});
 
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row'})).toHaveLength(2);
+  const skillRows = renderer.root.findAllByProps({className: 'chat-hub-skill-row'});
+  expect(skillRows.map(row => row.props.className)).toEqual([
+    'chat-hub-skill-row',
+    'chat-hub-skill-row',
+  ]);
+  expect(skillRows.every(
+    row => row.findAllByProps({className: 'chat-hub-skill-meta'}).length === 0,
+  )).toBe(true);
+  expect(renderer.root.findAllByProps({'aria-label': 'Refresh skills'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row-actions'})
+    .every(rowActions => rowActions.findAllByType('button').length === 3)).toBe(true);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-category'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-meta'})).toHaveLength(0);
 
