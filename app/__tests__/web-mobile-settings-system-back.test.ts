@@ -140,11 +140,16 @@ describe('mobile settings system back', () => {
     const backStart = main.indexOf('const handleAndroidNativeBack = useCallback(() => {');
     const backEnd = main.indexOf('const openMobileSettingsShortcutDetail =', backStart);
     const backBody = main.slice(backStart, backEnd);
+    const skillChildBack = backBody.indexOf('if (!isWide && chatHubMenuOpen && chatHubSkillSurfaceOpen) {');
     const hubClose = backBody.indexOf('if (!isWide && chatHubMenuOpen) {');
     const settingsBack = backBody.indexOf('if (!isWide && sidebarSettingsOpenRef.current');
 
     expect(backStart).toBeGreaterThanOrEqual(0);
     expect(backEnd).toBeGreaterThan(backStart);
+    expect(skillChildBack).toBeGreaterThanOrEqual(0);
+    expect(skillChildBack).toBeLessThan(hubClose);
+    expect(backBody.slice(skillChildBack, hubClose)).toContain('closeChatHubSkillSurface();');
+    expect(backBody.slice(skillChildBack, hubClose)).toContain('return true;');
     expect(hubClose).toBeGreaterThanOrEqual(0);
     expect(hubClose).toBeLessThan(settingsBack);
     expect(backBody.slice(hubClose, settingsBack)).toContain('setChatHubMenuOpen(false);');

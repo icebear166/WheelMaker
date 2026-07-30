@@ -13,6 +13,7 @@ import {
   type ChatHubNpmPackageView,
   type ChatHubOpsView,
 } from './ChatHubMenu';
+import type {ChatHubSkillSurface} from './ChatHubSkillCompanion';
 
 declare global {
   interface Window {
@@ -3083,6 +3084,22 @@ export function App() {
   const [skillDetailTarget, setSkillDetailTarget] = useState<SkillDetailTarget | null>(null);
   const [skillDetailOwner, setSkillDetailOwner] = useState<SkillSurfaceOwner | null>(null);
   const [skillDetailCache, setSkillDetailCache] = useState<Record<string, SkillDetailCacheEntry>>({});
+  const chatHubSkillSurface = useMemo<ChatHubSkillSurface | null>(() => {
+    if (skillInstallOwner === 'hub' && skillInstallTarget) {
+      return {kind: 'install', target: skillInstallTarget};
+    }
+    if (skillDetailOwner === 'hub' && skillDetailTarget) {
+      return {kind: 'detail', target: skillDetailTarget};
+    }
+    return null;
+  }, [skillDetailOwner, skillDetailTarget, skillInstallOwner, skillInstallTarget]);
+  const chatHubSkillSurfaceOpen = chatHubSkillSurface !== null;
+  const closeChatHubSkillSurface = useCallback(() => {
+    setSkillInstallOwner(null);
+    setSkillInstallTarget(null);
+    setSkillDetailOwner(null);
+    setSkillDetailTarget(null);
+  }, []);
   const [portRelaySnapshot, setPortRelaySnapshot] = useState<RegistryPortRelaySnapshot>(DEFAULT_PORT_RELAY_SNAPSHOT);
   const [portRelayLoading, setPortRelayLoading] = useState(false);
   const [portRelayError, setPortRelayError] = useState('');
@@ -3554,6 +3571,11 @@ export function App() {
   const chatHubColorMenuHubId = chatHubColorMenu?.hubId ?? '';
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const chatHubPopoverRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!chatHubMenuOpen && chatHubSkillSurfaceOpen) {
+      closeChatHubSkillSurface();
+    }
+  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, closeChatHubSkillSurface]);
   const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
   const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
   const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
@@ -3942,13 +3964,17 @@ export function App() {
     }
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
     const menuWidth = Math.min(340, Math.max(0, viewportWidth - 24));
-    const left = Math.max(12, Math.min(anchor.right - menuWidth, viewportWidth - menuWidth - 12));
+    const companionWidth = Math.min(520, Math.max(380, viewportWidth * 0.4));
+    const stackWidth = menuWidth + (chatHubSkillSurfaceOpen ? companionWidth + 8 : 0);
+    const left = Math.max(12, Math.min(
+      anchor.right - menuWidth,
+      viewportWidth - stackWidth - 12,
+    ));
     return {
       left,
       top: Math.max(12, anchor.bottom + 6),
-      width: menuWidth,
     };
-  }, [chatHubMenuOpen, isWide]);
+  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, isWide]);
 
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
@@ -6670,6 +6696,25 @@ export function App() {
         onRetrySkills={hubId => {
           refreshSkillManagementHubRef.current?.(hubId).catch(() => undefined);
         }}
+        skillSurface={chatHubSkillSurface}
+        skillInstall={{
+          sourceInput: skillSourceInput,
+          onSourceInputChange: setSkillSourceInput,
+          sourceLoading: skillSourceLoading,
+          sourceError: skillSourceError,
+          candidates: skillSourceCandidates,
+          selectedNames: skillSourceSelectedNames,
+          onList: listSkillSource,
+          onToggleAll: toggleAllSkillSourceCandidates,
+          onToggleCandidate: toggleSkillSourceCandidate,
+          onInstall: requestSkillInstallConfirm,
+        }}
+        skillDetail={{
+          entries: skillDetailCache,
+          pendingKey: skillsPendingKey,
+          onUninstall: requestSkillUninstall,
+        }}
+        onCloseSkillSurface={closeChatHubSkillSurface}
         onScanAllIndexes={handleChatHubScanAllIndexes}
         onScanProject={handleChatHubScanProject}
         hiddenProjectIdSet={hiddenProjectIdSet}
@@ -7399,6 +7444,10 @@ export function App() {
       closeChatPreview();
       return true;
     }
+    if (!isWide && chatHubMenuOpen && chatHubSkillSurfaceOpen) {
+      closeChatHubSkillSurface();
+      return true;
+    }
     if (!isWide && chatHubMenuOpen) {
       setChatHubMenuOpen(false);
       setChatHubColorMenu(null);
@@ -7423,7 +7472,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatHubMenuOpen, chatPreviewOpen, closeChatPreview, closeReleasePublishing, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closeReleasePublishing, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,

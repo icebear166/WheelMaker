@@ -6,6 +6,14 @@ jest.mock('react-dom', () => ({
   ...jest.requireActual('react-dom'),
   createPortal: (node: React.ReactNode) => node,
 }));
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({children}: {children?: React.ReactNode}) => <>{children}</>,
+}));
+jest.mock('remark-gfm', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
 
 // The suite runs in the node environment; createPortal is mocked to render
 // inline, so a minimal document stub satisfies the component's SSR guard.
@@ -22,6 +30,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
   const callbacks = {
     onToggle: jest.fn(),
     onClose: jest.fn(),
+    onCloseSkillSurface: jest.fn(),
     onToggleHub: jest.fn(),
     onToggleSection: jest.fn(),
     onToggleColorMenu: jest.fn(),
@@ -74,6 +83,24 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     latestVersion: '-',
     updateAllAvailableCount: 0,
     updateAllPending: false,
+    skillSurface: null,
+    skillInstall: {
+      sourceInput: '',
+      onSourceInputChange: jest.fn(),
+      sourceLoading: false,
+      sourceError: '',
+      candidates: [],
+      selectedNames: [],
+      onList: jest.fn().mockResolvedValue(undefined),
+      onToggleAll: jest.fn(),
+      onToggleCandidate: jest.fn(),
+      onInstall: jest.fn(),
+    },
+    skillDetail: {
+      entries: {},
+      pendingKey: '',
+      onUninstall: jest.fn(),
+    },
     ...callbacks,
     ...overrides,
   };
@@ -856,6 +883,42 @@ test('mobile renders the fullscreen page and back closes it', async () => {
   expect(callbacks.onClose).toHaveBeenCalled();
 });
 
+test('desktop keeps Skill detail in a companion inside the shared outside-click boundary', async () => {
+  const target = {hubId: 'hub-a', scope: 'hub' as const, skillName: 'baseline-ui'};
+  const {props, callbacks} = createHarness({
+    skillSurface: {kind: 'detail', target},
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'chat-hub-popover-stack'})).toBeTruthy();
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-companion desktop'})).toBeTruthy();
+  act(() => renderer.root.findByProps({'aria-label': 'Close Skill details'}).props.onClick());
+  expect(callbacks.onCloseSkillSurface).toHaveBeenCalled();
+  expect(callbacks.onClose).not.toHaveBeenCalled();
+});
+
+test('mobile renders a Skill detail as a child page and Back preserves the Hub page', async () => {
+  const target = {hubId: 'hub-a', scope: 'hub' as const, skillName: 'baseline-ui'};
+  const {props, callbacks} = createHarness({
+    mobile: true,
+    skillSurface: {kind: 'detail', target},
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'chat-hub-page-title'}).children)
+    .toEqual(['baseline-ui']);
+  expect(renderer.root.findByProps({className: 'chat-hub-page-body skill-child'})).toBeTruthy();
+  act(() => renderer.root.findByProps({className: 'chat-hub-page-back'}).props.onClick());
+  expect(callbacks.onCloseSkillSurface).toHaveBeenCalled();
+  expect(callbacks.onClose).not.toHaveBeenCalled();
+});
+
 test('desktop palette stays a flyout and forces popover no-overflow; mobile palette is inline', async () => {
   const desktop = createHarness({colorMenuHubId: 'hub-a'});
   let desktopRenderer!: TestRenderer.ReactTestRenderer;
@@ -863,7 +926,8 @@ test('desktop palette stays a flyout and forces popover no-overflow; mobile pale
     desktopRenderer = TestRenderer.create(<ChatHubMenu {...desktop.props} />);
   });
   const popover = desktopRenderer.root.find(
-    node => typeof node.props.className === 'string' && node.props.className.includes('chat-hub-popover'),
+    node => typeof node.props.className === 'string' &&
+      node.props.className.startsWith('chat-hub-popover topbar-menu-surface'),
   );
   expect(popover.props.className).toContain('no-overflow');
   const flyout = desktopRenderer.root.find(

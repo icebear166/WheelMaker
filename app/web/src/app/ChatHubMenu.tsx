@@ -33,6 +33,16 @@ import {
   ChatHubSkillScopeDetail,
   type ChatHubSkillActions,
 } from './ChatHubSkillManagement';
+import type {
+  ChatHubSkillCompanionProps,
+  ChatHubSkillSurface,
+} from './ChatHubSkillCompanion';
+
+const ChatHubSkillCompanion = React.lazy(
+  () => import('./ChatHubSkillCompanion').then(module => ({
+    default: module.ChatHubSkillCompanion,
+  })),
+);
 
 export type ChatHubDetailId =
   | 'settings'
@@ -197,6 +207,10 @@ export interface ChatHubMenuProps {
   onRequestSkillUninstall: (target: SkillUninstallTarget) => void;
   onRequestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
   onRetrySkills: (hubId: string) => void;
+  skillSurface: ChatHubSkillSurface | null;
+  skillInstall: ChatHubSkillCompanionProps['install'];
+  skillDetail: ChatHubSkillCompanionProps['detail'];
+  onCloseSkillSurface: () => void;
   onScanAllIndexes: (hubId: string) => void;
   onScanProject: (hubId: string, projectId: string) => void;
   hiddenProjectIdSet: Set<string>;
@@ -1054,6 +1068,10 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
     updateAllAvailableCount,
     updateAllPending,
     onUpdateAllHubs,
+    skillSurface,
+    skillInstall,
+    skillDetail,
+    onCloseSkillSurface,
   } = props;
 
   const panel = (
@@ -1106,25 +1124,63 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
             aria-label="Hub settings"
           >
             <div className="chat-hub-page-header">
-              <button type="button" className="chat-hub-page-back" aria-label="Back" onClick={onClose}>
+              <button
+                type="button"
+                className="chat-hub-page-back"
+                aria-label="Back"
+                onClick={skillSurface ? onCloseSkillSurface : onClose}
+              >
                 <Icon name="arrowLeft" />
               </button>
-              <span className="chat-hub-page-title">Hubs</span>
+              <span className="chat-hub-page-title">
+                {skillSurface
+                  ? skillSurface.kind === 'install'
+                    ? 'Add Skill'
+                    : skillSurface.target.skillName
+                  : 'Hubs'}
+              </span>
               <button type="button" className="chat-hub-page-close" aria-label="Close" onClick={onClose}>
                 <Icon name="x" />
               </button>
             </div>
-            <div className="chat-hub-page-body">{panel}</div>
+            <div className={`chat-hub-page-body${skillSurface ? ' skill-child' : ''}`}>
+              {skillSurface ? (
+                <React.Suspense fallback={null}>
+                  <ChatHubSkillCompanion
+                    surface={skillSurface}
+                    install={skillInstall}
+                    detail={skillDetail}
+                    onClose={onCloseSkillSurface}
+                  />
+                </React.Suspense>
+              ) : panel}
+            </div>
           </div>
         ) : (
           <div
             ref={popoverRef}
-            className={`chat-hub-popover topbar-menu-surface${colorMenuHubId ? ' no-overflow' : ''}${exiting ? ' sl-menu-exit' : ''}`}
-            role="dialog"
-            aria-label="Hub and project display preferences"
+            className="chat-hub-popover-stack"
             style={popoverStyle}
           >
-            {panel}
+            <div
+              className={`chat-hub-popover topbar-menu-surface${colorMenuHubId ? ' no-overflow' : ''}${exiting ? ' sl-menu-exit' : ''}`}
+              role="dialog"
+              aria-label="Hub and project display preferences"
+            >
+              {panel}
+            </div>
+            {skillSurface ? (
+              <aside className="chat-hub-skill-companion desktop">
+                <React.Suspense fallback={null}>
+                  <ChatHubSkillCompanion
+                    surface={skillSurface}
+                    install={skillInstall}
+                    detail={skillDetail}
+                    onClose={onCloseSkillSurface}
+                  />
+                </React.Suspense>
+              </aside>
+            ) : null}
           </div>
         ),
         document.body,
