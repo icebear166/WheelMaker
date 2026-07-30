@@ -6247,6 +6247,59 @@ func TestFlickerEffortInstanceNormalizesSessionConfigOptions(t *testing.T) {
 	}
 }
 
+func TestFlickerEffortInstanceUsesCatalogModelDisplayNames(t *testing.T) {
+	models := []claudeModelEntry{
+		{ID: "claude-opus-5", Name: "Claude Opus 5"},
+		{ID: "gpt-5.6-sol", Name: "GPT-5.6 Sol"},
+	}
+	store := &FlickerModelStore{models: models}
+	profile := claudeCompatibleFlickerProfile(t.TempDir())
+	applyFlickerModels(&profile, models)
+	baseConn := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, _ any, result any) error {
+			if method != protocol.MethodSessionNew {
+				t.Fatalf("method = %q, want session/new", method)
+			}
+			return assignResult(result, protocol.SessionNewResult{
+				SessionID: "session-1",
+				ConfigOptions: []protocol.ConfigOption{{
+					ID:           protocol.ConfigOptionIDModel,
+					Category:     protocol.ConfigOptionCategoryModel,
+					CurrentValue: "claude-opus-5",
+					Options: []protocol.ConfigOptionValue{
+						{Value: "default", Name: "Default (recommended)"},
+						{Value: "claude-opus-5", Name: "claude-opus-5"},
+						{Value: "gpt-5.6-sol", Name: "gpt-5.6-sol"},
+						{Value: "unlisted-model", Name: "unlisted-model"},
+					},
+				}},
+			})
+		},
+	}
+	instance := newFlickerEffortInstance(NewInstance("cc-flicker", baseConn), store, &profile)
+	result, err := instance.SessionNew(context.Background(), protocol.SessionNewParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modelOption := flickerConfigOption(result.ConfigOptions, protocol.ConfigOptionIDModel)
+	if modelOption == nil {
+		t.Fatal("model option is missing")
+	}
+	got := make(map[string]string, len(modelOption.Options))
+	for _, option := range modelOption.Options {
+		got[option.Value] = option.Name
+	}
+	want := map[string]string{
+		"default":        "Default (recommended)",
+		"claude-opus-5":  "Claude Opus 5",
+		"gpt-5.6-sol":    "GPT-5.6 Sol",
+		"unlisted-model": "unlisted-model",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("model option names = %#v, want %#v", got, want)
+	}
+}
+
 func TestFlickerEffortInstanceRetainsSupportedEffortAcrossModelSwitch(t *testing.T) {
 	models := []claudeModelEntry{
 		{ID: "gpt-5.6-sol", EffortLevels: []string{"low", "medium", "high", "xhigh", "max"}, DefaultEffort: "medium"},

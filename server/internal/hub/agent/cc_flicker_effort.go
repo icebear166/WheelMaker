@@ -214,6 +214,19 @@ func normalizeFlickerConfigOptions(
 	profile claudeCompatibleProfile,
 ) []protocol.ConfigOption {
 	normalized := cloneConfigOptions(options)
+	for optionIndex := range normalized {
+		if !strings.EqualFold(normalized[optionIndex].ID, protocol.ConfigOptionIDModel) &&
+			!strings.EqualFold(normalized[optionIndex].Category, protocol.ConfigOptionCategoryModel) {
+			continue
+		}
+		for valueIndex := range normalized[optionIndex].Options {
+			model, found := findFlickerModel(models, normalized[optionIndex].Options[valueIndex].Value)
+			if found && model.Name != "" {
+				normalized[optionIndex].Options[valueIndex].Name = model.Name
+			}
+		}
+		break
+	}
 	modelID, modelOptionIndex := selectedFlickerModel(normalized, profile)
 	model, found := findFlickerModel(models, modelID)
 	if !found {
