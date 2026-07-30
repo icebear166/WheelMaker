@@ -443,7 +443,7 @@
 .project-session-mark-picker {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   min-height: 40px;
   padding: 4px 8px;
 }

@@ -1657,6 +1657,14 @@ describe('web chat integration', () => {
     );
   });
 
+  test('keeps the session mark control group aligned with action rows', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const pickerBlock = cssRuleBlock(stylesCss, '.project-session-mark-picker');
+
+    expect(pickerBlock).toContain('justify-content: flex-start;');
+  });
+
   test('wires speech input settings and composer voice controls through split modules', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
