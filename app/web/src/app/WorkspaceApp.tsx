@@ -86,6 +86,7 @@ import {
 import { installDesktopZoomGuard } from '../shell/desktopZoomGuard';
 import { installPageRefreshGuard } from '../shell/pageRefreshGuard';
 import { ResponsiveShell } from '../shell/ResponsiveShell';
+import {applyDocumentTheme} from '../theme/documentTheme';
 import {
   getLatestSessionReadCursor,
   isFinishedChatMessage,
@@ -2622,6 +2623,7 @@ export function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(
     persistedGlobal.themeMode === 'light' ? 'light' : 'dark',
   );
+  useLayoutEffect(() => applyDocumentTheme(document.documentElement, themeMode), [themeMode]);
   const [codeTheme, setCodeTheme] = useState<CodeThemeId>(
     typeof persistedGlobal.codeTheme === 'string' &&
       isCodeThemeId(persistedGlobal.codeTheme)
