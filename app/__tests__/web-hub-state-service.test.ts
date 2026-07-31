@@ -8,7 +8,7 @@ describe('hub state registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', status: 'empty', sections: {}},
+          state: {hubId: 'hub-a', instanceId: 'instance-a', sections: {}},
         },
       }),
     } as unknown as RegistryClient;
@@ -30,7 +30,7 @@ describe('hub state registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', status: 'refreshing', sections: {}},
+          state: {hubId: 'hub-a', instanceId: 'instance-a', sections: {}},
         },
       }),
     } as unknown as RegistryClient;
@@ -51,7 +51,7 @@ describe('hub state registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', status: 'ready', sections: {}},
+          state: {hubId: 'hub-a', instanceId: 'instance-a', sections: {}},
         },
       }),
     } as unknown as RegistryClient;
@@ -81,11 +81,11 @@ describe('hub state registry service', () => {
         payload: {
           state: {
             hubId: 'hub-a',
-            status: 'ready',
+            instanceId: 'instance-a',
             sections: {
               tokenStats: null,
               skills: {data: {ok: true}},
-              fileIndex: {status: 123, error: 5},
+              fileIndex: {availability: 123, updateStatus: 5, revision: 'old'},
             },
           },
         },
@@ -95,11 +95,15 @@ describe('hub state registry service', () => {
 
     const state = await repository.getHubState('hub-a');
 
-    expect(state.sections.tokenStats.status).toBe('empty');
-    expect(state.sections.skills.status).toBe('empty');
+    expect(state.instanceId).toBe('instance-a');
+    expect(state.sections.tokenStats.availability).toBe('empty');
+    expect(state.sections.tokenStats.updateStatus).toBe('idle');
+    expect(state.sections.tokenStats.revision).toBe(0);
+    expect(state.sections.skills.availability).toBe('empty');
     expect(state.sections.skills.data).toEqual({ok: true});
-    expect(state.sections.fileIndex.status).toBe('empty');
-    expect(state.sections.fileIndex.error).toBeUndefined();
+    expect(state.sections.fileIndex.availability).toBe('empty');
+    expect(state.sections.fileIndex.updateStatus).toBe('idle');
+    expect(state.sections.fileIndex.lastError).toBeUndefined();
   });
 
   test('gets and normalizes compact usage history samples', async () => {

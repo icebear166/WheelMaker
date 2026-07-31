@@ -242,7 +242,11 @@ function hubStateSectionData<T>(state: RegistryHubState, section: RegistryHubSta
 }
 
 function releasePublishStateResponse(state: RegistryHubState): RegistryReleasePublishResponse {
-  const section = state.sections.releasePublish;
+  const section = state.sections.releasePublish as unknown as {
+    status?: string;
+    error?: string;
+    action?: {status?: string; error?: string};
+  } | undefined;
   const error = section?.action?.status === 'failed'
     ? section.action.error || section.error
     : section?.status === 'error'
@@ -351,25 +355,29 @@ export class RegistryRepository {
     const sections: RegistryHubState['sections'] = {};
     for (const [name, value] of Object.entries(sectionsInput)) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        sections[name] = {status: 'empty'};
+        sections[name] = {availability: 'empty', updateStatus: 'idle', revision: 0};
         continue;
       }
       const sectionInput = value as Record<string, unknown>;
       sections[name] = {
-        status: typeof sectionInput.status === 'string' ? sectionInput.status : 'empty',
+        availability: sectionInput.availability === 'ready' ? 'ready' : 'empty',
+        updateStatus: sectionInput.updateStatus === 'queued' || sectionInput.updateStatus === 'updating'
+          ? sectionInput.updateStatus
+          : 'idle',
+        revision: typeof sectionInput.revision === 'number'
+          && Number.isSafeInteger(sectionInput.revision)
+          && sectionInput.revision >= 0
+          ? sectionInput.revision
+          : 0,
         updatedAt: typeof sectionInput.updatedAt === 'string' ? sectionInput.updatedAt : undefined,
-        startedAt: typeof sectionInput.startedAt === 'string' ? sectionInput.startedAt : undefined,
-        error: typeof sectionInput.error === 'string' ? sectionInput.error : undefined,
+        lastAttemptAt: typeof sectionInput.lastAttemptAt === 'string' ? sectionInput.lastAttemptAt : undefined,
+        lastError: typeof sectionInput.lastError === 'string' ? sectionInput.lastError : undefined,
         data: sectionInput.data,
-        action: sectionInput.action && typeof sectionInput.action === 'object' && !Array.isArray(sectionInput.action)
-          ? sectionInput.action as RegistryHubState['sections'][string]['action']
-          : undefined,
       };
     }
     return {
       hubId: typeof input.hubId === 'string' && input.hubId ? input.hubId : fallbackHubId,
-      status: typeof input.status === 'string' ? input.status : 'empty',
-      updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
+      instanceId: typeof input.instanceId === 'string' ? input.instanceId : '',
       sections,
     };
   }

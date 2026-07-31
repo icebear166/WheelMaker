@@ -29,6 +29,42 @@ func TestHubStateUpdatedAllowsHubOrigin(t *testing.T) {
 	}
 }
 
+func TestReleasePublishMethodsAreRegisteredWithoutVersionBump(t *testing.T) {
+	for _, method := range []string{
+		RegistryMethodReleasePublishStart,
+		RegistryMethodReleasePublishGet,
+		RegistryMethodReleasePublishUpdated,
+	} {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("%s is not registered", method)
+		}
+		if !desc.RequiresHubID {
+			t.Fatalf("%s must require hubId", method)
+		}
+	}
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
+	}
+}
+
+func TestHubStateSectionWireShape(t *testing.T) {
+	raw, err := json.Marshal(HubStateSection{
+		Availability: HubStateAvailabilityReady,
+		UpdateStatus: HubStateUpdateIdle,
+		Revision:     4,
+		Data:         map[string]any{"ok": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"availability":"ready"`, `"updateStatus":"idle"`, `"revision":4`} {
+		if !bytes.Contains(raw, []byte(field)) {
+			t.Fatalf("section missing %s: %s", field, raw)
+		}
+	}
+}
+
 func TestHubReleaseNotifyAllowsOnlyHubOriginWithoutProtocolVersionChange(t *testing.T) {
 	descriptor, ok := RegistryMethod(RegistryMethodHubReleaseNotify)
 	if !ok {

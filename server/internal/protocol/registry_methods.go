@@ -23,6 +23,7 @@ const (
 	RegistryRouteHubControl             RegistryRouteKind = "hub_control"
 	RegistryRouteHubReport              RegistryRouteKind = "hub_report"
 	RegistryRouteHubState               RegistryRouteKind = "hub_state"
+	RegistryRouteReleasePublish         RegistryRouteKind = "release_publish"
 	RegistryRouteHubReleaseNotify       RegistryRouteKind = "hub_release_notify"
 	RegistryRouteHubDebugWebTransfer    RegistryRouteKind = "hub_debug_web_transfer"
 	RegistryRouteHubSessionEvent        RegistryRouteKind = "hub_session_event"
@@ -55,6 +56,9 @@ const (
 	RegistryMethodHubConfigGet              = "hub.config.get"
 	RegistryMethodHubConfigUpdate           = "hub.config.update"
 	RegistryMethodUsageHistoryGet           = "usage.history.get"
+	RegistryMethodReleasePublishStart       = "release.publish.start"
+	RegistryMethodReleasePublishGet         = "release.publish.get"
+	RegistryMethodReleasePublishUpdated     = "release.publish.updated"
 	RegistryMethodHubReleaseNotify          = "hub.release.notify"
 	RegistryMethodHubReleaseApply           = "hub.release.apply"
 	RegistryMethodHubDebugWebTransferStart  = "hub.debugWeb.transfer.start"
@@ -180,6 +184,9 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubConfigGet:                     registryHubStateMethod(RegistryMethodHubConfigGet),
 	RegistryMethodHubConfigUpdate:                  registryHubStateMethod(RegistryMethodHubConfigUpdate),
 	RegistryMethodUsageHistoryGet:                  registryHubStateMethod(RegistryMethodUsageHistoryGet),
+	RegistryMethodReleasePublishStart:              registryReleasePublishMethod(RegistryMethodReleasePublishStart, RegistryRoleClient, RegistryRouteReleasePublish),
+	RegistryMethodReleasePublishGet:                registryReleasePublishMethod(RegistryMethodReleasePublishGet, RegistryRoleClient, RegistryRouteReleasePublish),
+	RegistryMethodReleasePublishUpdated:            registryReleasePublishMethod(RegistryMethodReleasePublishUpdated, RegistryRoleHub, RegistryRouteClientEvent),
 	RegistryMethodHubReleaseNotify:                 registryHubReleaseNotifyMethod(RegistryMethodHubReleaseNotify),
 	RegistryMethodHubDebugWebTransferStart:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferStart),
 	RegistryMethodHubDebugWebTransferChunk:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferChunk),
@@ -301,6 +308,12 @@ func registryHubCommandMethod(method string) RegistryMethodDescriptor {
 
 func registryHubStateMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubState, []RegistryRole{RegistryRoleClient})
+	desc.RequiresHubID = true
+	return desc
+}
+
+func registryReleasePublishMethod(method string, role RegistryRole, route RegistryRouteKind) RegistryMethodDescriptor {
+	desc := registryMethod(method, route, []RegistryRole{role})
 	desc.RequiresHubID = true
 	return desc
 }
