@@ -2,11 +2,15 @@
 
 # WheelMaker Registry Protocol 2.6
 
-> 来源：本页由原路径 `docs/registry-protocol.md` 于 2026-07-17 全文迁入 wiki；本次迁移未修改协议版本或 payload。
+> 来源：本页由原路径 `docs/registry-protocol.md` 于 2026-07-17 全文迁入 wiki。
 >
-> Session Queue 决策来源：[`../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
+> Session Queue 决策来源：[`Server-owned Session Queue spec`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
+>
+> HubState 当前契约同步自：[`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)
 
 本文定义 WheelMaker Registry 2.6 协议。2.6 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.6`，不保留旧端兼容入口。
+
+HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh、Skills 所有权和 Release Job 方法同样按硬切契约发布；Hub 与 Web 必须配套部署，不保留旧 `agentProfiles` 或旧 HubState payload fallback。
 
 ## 0. 单一来源
 
@@ -103,6 +107,7 @@
 | `connect.*` | 连接层 | 初始化、关闭事件 |
 | `registry.*` | Registry | Registry 自有目录、Project 报告事件、Relay 控制 |
 | `hub.*` | Hub | Hub 报告、HubState、Hub 内部 Relay |
+| `release.*` | Release Job | Hub 驱动的版本发布与临时 Web 发布任务 |
 | `project.*` | Project | 文件、Git |
 | `session.*` | Session | 会话、归档、附件、配置、会话事件 |
 | `speech.*` | Registry speech | 语音输入流式通道 |
@@ -113,9 +118,9 @@
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
-| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
+| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`release.publish.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
 
-事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
+事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`release.publish.updated`、`session.message`、`session.updated`、`connect.close`。
 
 ## 4. Hub 上报
 
@@ -175,6 +180,8 @@ Hub 建连后必须先发全量项目报告，后续按需发单项目报告。�
 ```
 
 Registry 使用 `connectionEpoch` 和 per-project `seq` 拒绝旧连接或乱序更新。Hub 断开、重连、单项目变化后，Registry 对 App 广播 `registry.project.report`，payload 包含完整 project snapshot。
+
+Project report 只承载 Project、Git、Session 与 Agent 配置元数据，不承载 Skills inventory 或 `agentProfiles`。Project Skills 统一属于 HubState `skills` Section。
 
 ## 5. Registry 项目目录
 
@@ -301,6 +308,27 @@ HubState 是 Hub 内存缓存；Registry 只鉴权、路由、转发，不缓存
 
 所有 `hub.state.*` 请求要求 envelope 顶层 `hubId`。
 
+HubState 包含 Hub 进程级 `instanceId` 和 Section map。Section 使用独立 revision；每次事件都携带完整 Section，不传局部 patch：
+
+```json
+{
+  "hubId": "hub-a",
+  "instanceId": "hub-state-instance",
+  "sections": {
+    "skills": {
+      "availability": "ready",
+      "updateStatus": "idle",
+      "revision": 7,
+      "updatedAt": "2026-07-31T10:00:00Z",
+      "lastAttemptAt": "2026-07-31T10:00:00Z",
+      "data": {}
+    }
+  }
+}
+```
+
+`availability` 为 `empty | ready`，`updateStatus` 为 `idle | queued | updating`。更新期间保留最近成功的 `data`；失败通过 `lastError` 表达，不清空旧数据。普通 queued、非 Usage 扫描开始和无变化成功结果不要求产生事件；`tokenStats` 保留 scanning/terminal 可见状态。
+
 ### `hub.state.get`
 
 读取缓存，不触发刷新：
@@ -317,7 +345,7 @@ HubState 是 Hub 内存缓存；Registry 只鉴权、路由、转发，不缓存
 
 ### `hub.state.refresh`
 
-刷新指定 section：
+异步刷新指定 Section。请求只负责入队，不等待扫描完成：
 
 ```json
 {
@@ -330,9 +358,27 @@ HubState 是 Hub 内存缓存；Registry 只鉴权、路由、转发，不缓存
 }
 ```
 
+响应立即返回当前状态和每个 Section 的入队结果：
+
+```json
+{
+  "accepted": true,
+  "updates": [
+    {
+      "section": "tokenStats",
+      "updateId": "tokenStats:42",
+      "status": "queued"
+    }
+  ],
+  "state": {}
+}
+```
+
+同一 Section 已 queued/updating 时返回合并后的现有任务；`force=true` 在当前任务运行期间最多安排一次补跑。最终成功或失败通过 `hub.state.updated` 通知。
+
 ### `hub.state.action`
 
-执行受控 section action：
+执行受控 Section Action：
 
 ```json
 {
@@ -346,6 +392,8 @@ HubState 是 Hub 内存缓存；Registry 只鉴权、路由、转发，不缓存
 }
 ```
 
+Action 的接收结果、详情查询和来源搜索结果放在 action response 中，不覆盖 Section `data`。异步 Action 最终完成后，Hub 重新采集或直接通知对应完整 Section。
+
 ### `hub.state.updated`
 
 HubState 变化事件由已认证且 `hubId` 匹配的 Hub 发出，Registry 按客户端 scope 通用转发：
@@ -356,22 +404,32 @@ HubState 变化事件由已认证且 `hubId` 匹配的 Hub 发出，Registry 按
   "method": "hub.state.updated",
   "hubId": "hub-a",
   "payload": {
-    "state": {},
-    "sections": ["skills"],
+    "instanceId": "hub-state-instance",
+    "sections": {
+      "skills": {
+        "availability": "ready",
+        "updateStatus": "idle",
+        "revision": 8,
+        "data": {}
+      }
+    },
     "reason": "action.completed"
   }
 }
 ```
+
+Hub 启动运行态初始化结束和 Registry 重连时可发送一次完整 HubState。普通事件只发送发生变化的完整 Section。Registry 断线期间不保留事件历史；Web 重新发现 Hub 后通过 `hub.state.get` 读取当前内存快照。
 
 ### Sections
 
 | Section | Refresh | Actions |
 | --- | --- | --- |
 | `agentPackages` | 扫描 agent npm 包 | `install`、`installMany`、`uninstall`、`reinstall` |
-| `wheelmakerUpdate` | 查询 WheelMaker 发布状态 | `updatePublish` |
-| `skills` | 扫描已安装 skills | `listSource`、`install`、`uninstall`、`update` |
-| `tokenStats` | 返回 Hub 所有的完整 Limits 快照；自动扫描由 Hub 调度，手动 refresh 会等待同一轮扫描 | 无 |
+| `wheelmakerUpdate` | 查询 WheelMaker 当前安装与发布状态 | `requestUpdate` |
+| `skills` | 扫描 Hub inventory、Project inventory 和 effective Skills | `reindex`、`listSource`、`detail`、`install`、`uninstall`、`update` |
+| `tokenStats` | 请求 Usage Service 刷新完整 Limits 快照 | 无 |
 | `fileIndex` | 查询 Hub 内项目索引状态 | `rebuild` |
+| `flickerBridge` | 查询 Bridge 配置能力与运行态 | `start`、`stop`、`restart`、`switchMode` |
 
 `fileIndex.rebuild` 参数：
 
@@ -381,7 +439,9 @@ HubState 变化事件由已认证且 `hubId` 匹配的 Hub 发出，Registry 按
 }
 ```
 
-`tokenStats` 不接受 Provider action 或凭据参数。Kimi、ZAI、DeepSeek 凭据只在 Hub 本地从 OpenCode auth 读取；Registry 对 HubState payload 按字节透传，不注入、缓存或记录 Provider 密钥。
+`tokenStats` 不接受 Provider action 或凭据参数。Usage Service 负责 Hub 启动扫描、10 分钟周期扫描、API Key 变更扫描和手动 refresh singleflight；HubState 不重复调度启动扫描。Kimi、ZAI、DeepSeek 凭据只在 Hub 本地读取；Registry 对 HubState payload 按字节透传，不注入、缓存或记录 Provider 密钥。
+
+`skills` 是 Hub 菜单、Project Skills 与 Composer 自动提示的唯一来源。Project report 不再提供 `agentProfiles`。`.agents` / `.claude` inventory 差异属于 `skills` 数据中的非敏感诊断，不触发 Registry 业务处理。
 
 ## 7A. HubConfig
 
@@ -444,6 +504,68 @@ HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-c
 | `flickerBridge` | `enabled` | `set`（启用）/ `clear`（禁用） | 持久化开关，即时 start/stop bridge；Hub 启动时 enabled=true 会自动 start |
 
 Flicker Bridge 的 API key 不需要用户填写：未显式设置 `apiKeys.flicker` 时，Hub 使用 loopback-only 的内置占位门禁 `00000000000000000000`。设置面板只保留 Off/V1/V2：选择 V1/V2 会持久化 enabled 并立即启动对应模式，Off 会立即停止且 Hub 下次启动不会加载 Bridge。底层 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section，但 UI 不再提供独立的临时 Start/Stop toggle。
+
+## 7B. Release Publishing
+
+Release Publishing 是持久化长任务，不属于 HubState。所有 `release.publish.*` 请求要求 envelope 顶层 `hubId`，表示拥有源码 checkout 并执行发布命令的 Publishing Hub。
+
+### `release.publish.start`
+
+创建 `version` 或 `debugWeb` Job：
+
+```json
+{
+  "method": "release.publish.start",
+  "hubId": "publisher-hub",
+  "payload": {
+    "kind": "version",
+    "sourcePath": "D:/Code/WheelMaker",
+    "baseUrl": "https://release.wheelmaker.top",
+    "desktop": true,
+    "android": false,
+    "targetHubId": "server-hub",
+    "autoPull": true
+  }
+}
+```
+
+`debugWeb` 使用 `webHubId` 指定接收临时 Web 的在线 Hub。响应立即返回 accepted Job；任务状态和日志继续由 Publishing Hub 持久化。
+
+### `release.publish.get`
+
+按 Publishing Hub 和 `jobId` 读取任务：
+
+```json
+{
+  "method": "release.publish.get",
+  "hubId": "publisher-hub",
+  "payload": {
+    "jobId": "release-job-id"
+  }
+}
+```
+
+### `release.publish.updated`
+
+Publishing Hub 在 Job 阶段或终态变化时发送：
+
+```json
+{
+  "type": "event",
+  "method": "release.publish.updated",
+  "hubId": "publisher-hub",
+  "payload": {
+    "job": {
+      "id": "release-job-id",
+      "kind": "version",
+      "status": "success",
+      "targetState": "success"
+    }
+  }
+}
+```
+
+Release Publishing 页面通过 `start/get/updated` 工作，不通过 HubState Action，也不以 2 秒轮询维持进度。正式版本发布后的 Hub 通知仍使用内部 `hub.release.notify/apply`；临时 Debug Web 仍使用第 10 节的分块传输方法。
 
 ## 8. Session
 

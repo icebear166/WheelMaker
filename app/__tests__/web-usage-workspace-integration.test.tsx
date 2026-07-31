@@ -5,14 +5,19 @@ import {loadUsageHistoryFromSources} from '../web/src/usage/usageHistory';
 describe('limits workspace integration', () => {
   const root = path.join(__dirname, '..');
   const main = fs.readFileSync(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+  const workspaceService = fs.readFileSync(
+    path.join(root, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'),
+    'utf8',
+  );
   const settings = fs.readFileSync(path.join(root, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
   const persistence = fs.readFileSync(path.join(root, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'), 'utf8');
   const dialogs = fs.readFileSync(path.join(root, 'web', 'src', 'shell', 'AppDialogs.tsx'), 'utf8');
   const settingsCss = fs.readFileSync(path.join(root, 'web', 'src', 'styles', 'settings.css'), 'utf8');
 
   test('loads cached tokenStats after Registry connection and never creates a usage interval', () => {
-    expect(main).toContain("getHubState(hub.hubId, ['tokenStats'])");
-    expect(main).toContain('RegistryMethods.HubStateUpdated');
+    expect(workspaceService).toContain('await this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId))');
+    expect(main).toContain('usageStore.bindHubStore(service.hubStore)');
+    expect(main).not.toContain('RegistryMethods.HubStateUpdated');
     expect(main).not.toContain('setInterval(refreshUsageAcrossHubs');
     expect(main).not.toContain('renderChatMenuUsageButton');
   });

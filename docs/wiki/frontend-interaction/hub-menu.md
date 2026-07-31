@@ -2,7 +2,10 @@
 
 # Hub 菜单
 
-来源：[Hub Menu Unified Layout spec](../../scope/2026-07-30-hub-menu-unified-layout/spec-hub-menu-unified-layout.md)
+来源：
+
+- [Hub Menu Unified Layout spec](../../scope/2026-07-30-hub-menu-unified-layout/spec-hub-menu-unified-layout.md)
+- [Hub State Unification spec](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)
 
 Hub 菜单是唯一的 per-hub 操作中心：所有针对单个 Hub 的配置与维护动作都收口在这里，不再设置平行的 per-hub 设置页。桌面端是锚定在 Chat 头部摘要按钮下的浮窗（`chat-hub-popover`），移动端是带返回栏的全屏宿主（`chat-hub-page`）。宿主形式不同，但内部结构、尺寸和交互保持一致。
 
@@ -33,6 +36,23 @@ Latest v1.3                                  Update all hubs
   - Skills 使用与 Global Skills 相同的 sparkles 图标，数量是所有 Projects 的 Skill 总数。
 - **footer**：Latest 稳定版本号 + `Update all hubs`（现有 confirm 与 pending 语义）。footer 位于所有 Hub 后的正常文档流，不 sticky/fixed。
 
+## 数据读取与更新触发
+
+Hub 菜单只读取统一 HubStore，不为 WheelMaker Update、NPM、Skills、File Index 或 Flicker 建立独立 Hub 缓存。菜单触发遵循可见层级：
+
+| UI 边沿 | 行为 |
+| --- | --- |
+| 打开 Hub 菜单 | 对显示中的 Hub refresh `wheelmakerUpdate`，用于标题行版本 |
+| 展开某个 Hub | 对该 Hub refresh `flickerBridge`、`agentPackages`、`skills`、`fileIndex` |
+| 展开 Settings | 独立读取 HubConfig，不重复 refresh HubState |
+| 展开 NPM、Global Skills、Project Skills、Scan | 只消费展开 Hub 时取得的数据，不重复 refresh |
+| 展开 Visibility 或 MCP | 不触发 HubState |
+| 打开 Skill Detail / Add Skill | 只做详情或候选查询，不覆盖或 refresh `skills` |
+
+请求只能由 closed→open 或 collapsed→expanded 边沿触发，不能因 render、effect 依赖变化或 detail 切换重复发送。同一 Section 已 queued/updating 时复用既有任务。关闭菜单、收起 Hub 或关闭 companion surface 不取消 Hub 已接受的更新。
+
+Composer Slash Menu 和聊天文件 `@mention` 不因打开而刷新 HubState：前者读取当前 Project/Agent 的 effective Skills，后者查询既有 File Index。Limits Monitor 是独立常驻数据面；它继续消费 Usage Service 的启动扫描和 10 分钟周期 `tokenStats` 更新，打开 Monitor 本身不触发刷新。
+
 ## 按钮语义与展开互斥
 
 Global / Projects 的入口整个点击区域只负责展开或收起；只有 Hub 标题里的版本按钮执行直接动作。批量更新、批量扫描等动作放在展开 detail 内。三个入口使用轻分隔线组成一体化三列，不做三个厚重的输入框式圆角按钮；展开态通过背景变化表达。
@@ -51,15 +71,19 @@ detail 工具栏显示 `NPM packages` 与 `Update all`。每行是 32px 单行�
 
 ## Hub 全局 Skills
 
-Skills detail 复用现有 skill management 数据与动作，只读取当前 Hub 的 `hubSkills.skills`。工具栏提供 Add Skill、选择模式和带文字的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。现有 snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。
+Skills detail 只读取当前 Hub 的 HubState `skills.hubInventory`。工具栏提供 Add Skill、选择模式和带文字的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。
+
+`.agents` / `.claude` inventory 存在差异时，Skills 入口显示黄色数量提示，具体 Skill 行显示 `.agents only`、`.claude only` 或 `content differs`。这是非阻塞诊断，不使用全局 Toast，也不自动复制或覆盖目录。
 
 批量卸载只在显式选择模式中显示复选框。无常驻手动刷新按钮：打开 detail 和完成安装、更新、卸载后自动同步，失败时提供重试。单项 loading 原位替换操作图标，全量或批量 loading 原位替换工具栏按钮；成功使用短暂 Toast，失败使用带重试的常驻 Toast，任何状态变化都不改变列表行高或位置。
 
 ## Project Skills
 
-Project Skills 只存在于 Projects 行，不混入 Hub Skills。展开后顶部是单个全宽 Project 选择器，收起时显示当前 Project 的完整名称和 Skill 数量；打开后显示可滚动的在线 Project 列表，选择即切换并关闭列表，离线 Project 不显示。默认优先选择当前 Chat Project，否则选择第一个在线 Project。下方复用 Hub Skills 的 32px 单行扁平列表和管理动作，不为每个 Project 创建向下展开的分组。Project 范围的 Add Skill、逐项动作、批量卸载和 `Update all` 都只作用于当前选择的 Project。
+Project Skills 只存在于 Projects 行，不混入 Hub Skills。展开后顶部是单个全宽 Project 选择器，收起时显示当前 Project 的完整名称和 Skill 数量；打开后显示可滚动的在线 Project 列表，选择即切换并关闭列表，离线 Project 不显示。默认优先选择当前 Chat Project，否则选择第一个在线 Project。下方读取 HubState `skills.effectiveSkills[projectId]`，复用 Hub Skills 的 32px 单行扁平列表和管理动作，不为每个 Project 创建向下展开的分组。Project 范围的 Add Skill、逐项动作、批量卸载和 `Update all` 都只作用于当前选择的 Project。
 
 Hub 与 Project 的 Add Skill 均复用完整安装流程：source 输入、候选 Skill 选择/全选和确认。Marketplace 外链只放在安装界面，不占主列表工具栏。
+
+Project Snapshot 不再提供 `agentProfiles`。Hub 菜单和 Composer 使用同一个 `skills` Section revision；Hub/Project Skill 更新后，服务端原子提交完整 Section，两个界面同时切换。Composer 按当前 Agent 的实际可见 inventory 生成提示；目录不一致时在 Slash Menu 中显示非阻塞说明。
 
 ## Skill 详情与安装 surface
 
@@ -75,4 +99,6 @@ Hub 菜单是唯一的 Skills 管理入口：Hub 全局 Skills 位于各 Hub 的
 
 ## 配置与降级
 
-hub 级配置走 `hub.config.get/update`（写 hub 本地 `db/hub-config.json`，secret 永不回显；config.json `api_keys.*` 作为回退并 overlay 到 configured 标记）。老 hub / 老 registry 不支持时该行显示降级文案，其余功能不受影响。更新类轮询在菜单打开期间通过 `updateSurfaceActiveRef` 保活（不再只绑 Update 设置视图）。
+Hub 级配置走 `hub.config.get/update`，写 Hub 本地 `db/hub-config.json`，secret 永不回显。HubConfig 是持久化配置，HubState 是运行态；两者可以由统一 HubStore 组织，但不得互相复制为第二份权威。
+
+Registry Protocol 保持 2.6 并在当前 HubState schema 内硬切，Hub 与 Web 配套发布，不保留旧 HubState 或 `agentProfiles` 降级分支。菜单不通过轮询维持 WheelMaker Update、NPM、Skills、File Index 或 Flicker；异步 Action 完成后由 Hub 主动发布对应完整 Section。

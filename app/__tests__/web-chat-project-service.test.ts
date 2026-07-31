@@ -33,6 +33,11 @@ describe('registry workspace project-scoped chat service methods', () => {
         projects: [],
         hubs: [{hubId: 'hub-empty'}],
       }),
+      getHubState: jest.fn().mockResolvedValue({
+        hubId: 'hub-empty',
+        instanceId: 'instance-empty',
+        sections: {},
+      }),
       listFiles: jest.fn(),
       onEvent: jest.fn(() => () => undefined),
       onClose: jest.fn(() => () => undefined),

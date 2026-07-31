@@ -7,6 +7,8 @@ import {RegistryRequestError} from './RegistryClient';
 import type {RegistryDebugSink} from './RegistryClient';
 import {RegistryMethods} from './registryMethods';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
+import {HubStore} from '../hubState/hubStore';
+import {ReleasePublishStore} from './releasePublishStore';
 import type {ServerSettings, ServerSettingsUpdate, SpeechModelId} from '../settings/serverSettings';
 import type {
   RegistryEnvelope,
@@ -26,6 +28,8 @@ import type {
   RegistryGitStatus,
   RegistryHub,
   RegistryHubState,
+  RegistryHubStateActionResponse,
+  RegistryHubStateRefreshResponse,
   RegistryHubStateSectionName,
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
@@ -122,6 +126,8 @@ export function translateExternalFileError(error: unknown): never {
 }
 
 export class RegistryWorkspaceService {
+  readonly hubStore: HubStore;
+  readonly releasePublishStore = new ReleasePublishStore();
   private repository: RegistryRepository | null = null;
   private session: WorkspaceSession | null = null;
   private eventListeners = new Set<(event: RegistryEnvelope) => void>();
@@ -134,6 +140,13 @@ export class RegistryWorkspaceService {
   constructor(private readonly debugSink?: RegistryDebugSink, options: RegistryWorkspaceServiceOptions = {}) {
     this.createRepository = options.createRepository ?? createRegistryRepository;
     this.clientName = options.clientName ?? 'wheelmaker-web';
+    this.hubStore = new HubStore({
+      get: hubId => this.getHubState(hubId),
+      refresh: (hubId, sections, force) => {
+        if (!this.repository) throw new Error('session is not ready');
+        return this.repository.refreshHubState(hubId, sections, {force});
+      },
+    });
   }
 
   async connect(wsUrl: string): Promise<WorkspaceSession> {
@@ -149,6 +162,7 @@ export class RegistryWorkspaceService {
       previousRepository?.close();
       this.repository = repository;
       this.session = {...snapshot, selectedProjectId, fileEntries};
+      await this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId));
       return this.session;
     } catch (error) {
       this.unbindRepository();
@@ -160,6 +174,25 @@ export class RegistryWorkspaceService {
   private bindRepository(repository: RegistryRepository): void {
     this.unbindRepository();
     this.unsubscribeRepositoryEvent = repository.onEvent(event => {
+      this.releasePublishStore.ingest(event);
+      if (event.method === RegistryMethods.HubStateUpdated && event.hubId) {
+        const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+          ? event.payload as {instanceId?: unknown; sections?: unknown; reason?: unknown}
+          : {};
+        const state = repository.normalizeHubState({
+          hubId: event.hubId,
+          instanceId: payload.instanceId,
+          sections: payload.sections,
+        }, event.hubId);
+        this.hubStore.ingest({
+          ...event,
+          payload: {
+            instanceId: state.instanceId,
+            sections: state.sections,
+            reason: payload.reason,
+          },
+        });
+      }
       this.eventListeners.forEach(listener => listener(event));
     });
     this.unsubscribeRepositoryClose = repository.onClose(() => {
@@ -900,11 +933,15 @@ export class RegistryWorkspaceService {
     return this.repository.getUsageHistory(hubId, providerId, accountLocalId);
   }
 
-  async refreshHubState(hubId: string, sections: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
+  async refreshHubState(
+    hubId: string,
+    sections: RegistryHubStateSectionName[],
+    force = false,
+  ): Promise<RegistryHubStateRefreshResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.refreshHubState(hubId, sections);
+    return this.hubStore.refresh(hubId, sections, force);
   }
 
   async runHubStateAction(
@@ -912,7 +949,7 @@ export class RegistryWorkspaceService {
     section: RegistryHubStateSectionName,
     action: string,
     params: Record<string, unknown> = {},
-  ): Promise<RegistryHubState> {
+  ): Promise<RegistryHubStateActionResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }

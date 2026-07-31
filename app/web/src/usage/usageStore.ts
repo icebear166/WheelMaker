@@ -11,6 +11,7 @@ import type {
   UsageViewAccount,
   UsageViewSnapshot,
 } from './usageTypes';
+import type {HubStore} from '../hubState/hubStore';
 
 const providerOrder: UsageProviderId[] = ['codex', 'flicker', 'kimi', 'zai', 'deepseek'];
 
@@ -54,6 +55,17 @@ export class UsageStore {
     if (!parsed) return false;
     this.replaceHub(parsed.hubId, parsed);
     return true;
+  }
+
+  bindHubStore(hubStore: HubStore): () => void {
+    return hubStore.subscribe(snapshot => {
+      const next = new Map<string, UsageHubSnapshot>();
+      for (const [hubId, hub] of Object.entries(snapshot.hubs)) {
+        const parsed = parseHubSnapshot(hub.sections.tokenStats?.data);
+        if (parsed) next.set(hubId, parsed);
+      }
+      this.replaceAll(next);
+    });
   }
 
   snapshot(): UsageViewSnapshot {
@@ -127,6 +139,23 @@ export class UsageStore {
   private emit(): void {
     const snapshot = this.snapshot();
     for (const listener of this.listeners) listener(snapshot);
+  }
+
+  private replaceAll(next: Map<string, UsageHubSnapshot>): void {
+    let changed = false;
+    for (const hubId of this.hubs.keys()) {
+      if (!next.has(hubId)) {
+        this.hubs.delete(hubId);
+        changed = true;
+      }
+    }
+    for (const [hubId, snapshot] of next) {
+      const existing = this.hubs.get(hubId);
+      if (existing && isOlderSnapshot(existing, snapshot)) continue;
+      this.hubs.set(hubId, snapshot);
+      changed = true;
+    }
+    if (changed) this.emit();
   }
 }
 

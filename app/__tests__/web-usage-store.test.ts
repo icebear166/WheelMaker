@@ -1,6 +1,89 @@
 import {UsageStore, summarizeProvider} from '../web/src/usage/usageStore';
+import {HubStore} from '../web/src/hubState/hubStore';
 
 describe('UsageStore', () => {
+  it('drops Usage projections for Hubs removed from the latest discovery snapshot', async () => {
+    const hubs = new HubStore({
+      get: async hubId => ({
+        hubId,
+        instanceId: `instance-${hubId}`,
+        sections: {
+          tokenStats: {
+            availability: 'ready',
+            updateStatus: 'idle',
+            revision: 1,
+            data: {
+              hubId,
+              generation: 1,
+              status: 'ready',
+              providers: [{
+                id: 'codex',
+                name: 'Codex',
+                status: 'ok',
+                accounts: [{
+                  localId: hubId,
+                  identity: {},
+                  status: 'ok',
+                  limits: [],
+                }],
+              }],
+            },
+          },
+        },
+      }),
+    });
+    const store = new UsageStore();
+    const unsubscribe = store.bindHubStore(hubs);
+    await hubs.discover(['hub-a', 'hub-b']);
+    await hubs.discover(['hub-b']);
+
+    expect(store.snapshot().providers.flatMap(provider => provider.hubs.map(hub => hub.hubId)))
+      .not.toContain('hub-a');
+    unsubscribe();
+  });
+
+  it('projects tokenStats from HubStore and keeps newer generations', () => {
+    const hubs = new HubStore();
+    const store = new UsageStore();
+    const unsubscribe = store.bindHubStore(hubs);
+    const snapshot = (generation: number, remainingPercent: number) => ({
+      hubId: 'hub-a',
+      generation,
+      status: 'ready' as const,
+      providers: [{
+        id: 'codex',
+        name: 'Codex',
+        status: 'ok' as const,
+        accounts: [{
+          localId: 'current',
+          identity: {},
+          status: 'ok' as const,
+          limits: [{id: 'week', label: 'Week', remainingPercent}],
+        }],
+      }],
+    });
+    hubs.replace({
+      hubId: 'hub-a',
+      instanceId: 'instance-a',
+      sections: {
+        tokenStats: {availability: 'ready', updateStatus: 'idle', revision: 1, data: snapshot(4, 75)},
+      },
+    });
+    hubs.ingest({
+      type: 'event',
+      method: 'hub.state.updated',
+      hubId: 'hub-a',
+      payload: {
+        instanceId: 'instance-a',
+        sections: {
+          tokenStats: {availability: 'ready', updateStatus: 'idle', revision: 2, data: snapshot(5, 60)},
+        },
+      },
+    });
+    expect(store.snapshot().providers[0].remainingPercent).toBe(60);
+    unsubscribe();
+  });
+
   it('accepts MyFlicker monthly limits from HubState', () => {
     const store = new UsageStore();
     expect(store.ingest({

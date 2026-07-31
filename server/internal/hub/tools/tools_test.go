@@ -129,6 +129,45 @@ func TestReleaseCommandStartsVersionPublishAfterRequestReturns(t *testing.T) {
 	assertReleaseStatus(t, command, accepted.Job.ID, "success")
 }
 
+func TestReleaseCommandPublishesPersistedTransitionsButNotLogWrites(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+	updates := make(chan ReleasePublishJob, 4)
+	command.SetJobUpdatedHandler(func(job ReleasePublishJob) {
+		updates <- job
+	})
+
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	jobID := response.(releaseCommandResponse).Job.ID
+	if got := (<-updates).Status; got != "running" {
+		t.Fatalf("first update status=%q, want running", got)
+	}
+	call := <-runner.calls
+	call.Log("build output\n")
+	select {
+	case update := <-updates:
+		t.Fatalf("log write published update=%#v", update)
+	case <-time.After(50 * time.Millisecond):
+	}
+	runner.complete(nil)
+	if got := (<-updates).Status; got != "success" {
+		t.Fatalf("terminal update status=%q, want success", got)
+	}
+	assertReleaseStatus(t, command, jobID, "success")
+}
+
 func TestReleaseCommandRejectsMissingSourceEntryAndRedactsLogs(t *testing.T) {
 	command := newReleaseCommandWithDependencies(t.TempDir(), newBlockingReleaseRunner(), nil)
 	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
@@ -189,6 +228,7 @@ func TestReleaseCommandDoesNotPersistSourcePathOrToken(t *testing.T) {
 	}
 	<-runner.calls
 	runner.complete(nil)
+	assertReleaseStatus(t, command, jobID, "success")
 }
 
 func TestReleaseCommandNotifiesTargetOnlyAfterSuccessfulAutoPullPublish(t *testing.T) {
@@ -1526,15 +1566,17 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 
 	callbackDone := make(chan struct{})
 	var callbackScope, callbackProject string
+	var callbackOperation SkillsOperationSnapshot
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
 		HubID: "hub-a",
 		Projects: []ProjectInfo{{
 			Name: "proj",
 			Path: projectRoot,
 		}},
-		OnOperationDone: func(scope, projectName string) {
+		OnOperationDone: func(scope, projectName string, operation SkillsOperationSnapshot) {
 			callbackScope = scope
 			callbackProject = projectName
+			callbackOperation = operation
 			close(callbackDone)
 		},
 	})
@@ -1562,9 +1604,12 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 	if callbackProject != "proj" {
 		t.Fatalf("callback projectName = %q, want %q", callbackProject, "proj")
 	}
+	if callbackOperation.Running || callbackOperation.Status != "succeeded" {
+		t.Fatalf("callback operation = %+v, want terminal success", callbackOperation)
+	}
 }
 
-func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
+func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
 		ExitCode: 1,
@@ -1578,7 +1623,10 @@ func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
 	callbackCalled := make(chan struct{}, 1)
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
 		HubID: "hub-a",
-		OnOperationDone: func(scope, projectName string) {
+		OnOperationDone: func(scope, projectName string, operation SkillsOperationSnapshot) {
+			if operation.Running || operation.Status != "failed" {
+				t.Errorf("callback operation = %+v, want terminal failure", operation)
+			}
 			callbackCalled <- struct{}{}
 		},
 	})
@@ -1598,8 +1646,8 @@ func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
 
 	select {
 	case <-callbackCalled:
-		t.Fatal("OnOperationDone should not be called on failure")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnOperationDone callback not called after failure")
 	}
 }
 
@@ -2038,6 +2086,43 @@ func TestUpdateRequestCreatesOneQueuedJob(t *testing.T) {
 	}
 	if status.JobID != first.JobID || status.State != "queued" {
 		t.Fatalf("status=%+v", status)
+	}
+}
+
+func TestUpdateCommandNotifiesOnceWhenExternalUpdaterReachesTerminalState(t *testing.T) {
+	baseDir := t.TempDir()
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
+	done := make(chan struct{}, 2)
+	cmd.setOperationDoneHandler(func() {
+		done <- struct{}{}
+	})
+	response := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if response.JobID == "" {
+		t.Fatal("request did not create a job")
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     response.JobID,
+		State:     "failed",
+		StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		ErrorCode: "download_failed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("update completion callback was not called")
+	}
+	select {
+	case <-done:
+		t.Fatal("update completion callback was called more than once")
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 

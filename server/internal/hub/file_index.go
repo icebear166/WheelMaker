@@ -43,6 +43,7 @@ type projectFileIndexManager struct {
 
 	scanFilesForTest func(context.Context, projectFileIndexProject) ([]string, error)
 	now              func() time.Time
+	operationDone    func(projectID string)
 }
 
 type projectFileIndexProject struct {
@@ -196,7 +197,11 @@ func (m *projectFileIndexManager) startRebuild(ctx context.Context, project proj
 		}
 		m.running[project.ProjectID] = false
 		m.clearQuerySessionsLocked(project.ProjectID)
+		done := m.operationDone
 		m.mu.Unlock()
+		if done != nil {
+			done(project.ProjectID)
+		}
 	}()
 
 	return projectFileIndexRebuildResponse{
@@ -206,6 +211,12 @@ func (m *projectFileIndexManager) startRebuild(ctx context.Context, project proj
 		ProjectID: project.ProjectID,
 		Status:    projectFileIndexStatusScanning,
 	}
+}
+
+func (m *projectFileIndexManager) setOperationDoneHandler(handler func(projectID string)) {
+	m.mu.Lock()
+	m.operationDone = handler
+	m.mu.Unlock()
 }
 
 func (m *projectFileIndexManager) rebuildNow(ctx context.Context, project projectFileIndexProject) (projectFileIndexSnapshot, error) {

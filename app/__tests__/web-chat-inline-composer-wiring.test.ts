@@ -174,6 +174,8 @@ describe('composer menu exclusivity', () => {
     expect(mainTsx).toContain('chat-slash-section');
     expect(mainTsx).toContain('chatSlashOptionDisplayName(option.name)');
     expect(mainTsx).not.toContain('<span className="chat-slash-name">{option.name}</span>');
+    expect(mainTsx).toContain('selectComposerDiagnostic(hubStoreSnapshot, skillProjectId)');
+    expect(mainTsx).toContain('className="chat-slash-diagnostic"');
   });
 
   test('slash and file-mention menus share the same geometry', () => {

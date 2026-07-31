@@ -2694,7 +2694,7 @@ describe('web chat integration', () => {
     expect(descriptionBlock).toContain('color: var(--text-tertiary);');
     expect(descriptionBlock).toContain('text-align: left;');
     expect(descriptionBlock).not.toContain('margin-left: auto;');
-    expect(mainTsx).toContain('skillDescriptions');
+    expect(mainTsx).toContain('selectComposerSkills(hubStoreSnapshot, skillProjectId, agent)');
   });
 
   test('chat composer uses compact file mention pins and running tools-slot cancel', () => {

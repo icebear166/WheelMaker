@@ -108,9 +108,8 @@ export interface RegistryEnvelope<TPayload = unknown> {
   payload?: TPayload;
 }
 
-export type RegistryHubStateStatus = 'empty' | 'ready' | 'refreshing' | 'partial' | 'error' | string;
-export type RegistryHubStateSectionStatus = 'empty' | 'ready' | 'refreshing' | 'error' | string;
-export type RegistryHubStateActionStatus = 'running' | 'succeeded' | 'failed' | string;
+export type RegistryHubStateAvailability = 'empty' | 'ready';
+export type RegistryHubStateUpdateStatus = 'idle' | 'queued' | 'updating';
 export type RegistryHubStateSectionName =
   | 'agentPackages'
   | 'wheelmakerUpdate'
@@ -118,34 +117,38 @@ export type RegistryHubStateSectionName =
   | 'flickerBridge'
   | 'tokenStats'
   | 'fileIndex'
-	  | 'releasePublish'
   | string;
 
-export interface RegistryHubStateAction {
-  id: string;
-  name: string;
-  status: RegistryHubStateActionStatus;
-  startedAt: string;
-  finishedAt?: string;
-  error?: string;
-  params?: Record<string, unknown>;
-  result?: unknown;
-}
-
 export interface RegistryHubStateSection<TData = unknown> {
-  status: RegistryHubStateSectionStatus;
+  availability: RegistryHubStateAvailability;
+  updateStatus: RegistryHubStateUpdateStatus;
+  revision: number;
   updatedAt?: string;
-  startedAt?: string;
-  error?: string;
+  lastAttemptAt?: string;
+  lastError?: string;
   data?: TData;
-  action?: RegistryHubStateAction;
 }
 
 export interface RegistryHubState {
   hubId: string;
-  status: RegistryHubStateStatus;
-  updatedAt?: string;
+  instanceId: string;
   sections: Record<string, RegistryHubStateSection>;
+}
+
+export interface RegistryHubStateRefreshResponse {
+  accepted: boolean;
+  updates: Array<{
+    section: RegistryHubStateSectionName;
+    updateId: string;
+    status: string;
+  }>;
+  state: RegistryHubState;
+}
+
+export interface RegistryHubStateActionResponse {
+  accepted?: boolean;
+  result?: unknown;
+  operation?: unknown;
 }
 
 export interface RegistryHubConfigAPIKeySnapshot {
@@ -827,6 +830,8 @@ export interface RegistrySkillSnapshot {
   categoryKey: string;
   managed?: boolean;
   agents?: string[];
+  locations?: Record<string, {path?: string; resolvedPath?: string; fingerprint?: string}>;
+  sync?: {status?: 'aligned' | 'agentsOnly' | 'claudeOnly' | 'contentMismatch' | 'unknown'};
 }
 
 export interface RegistrySkillSupportingFile {
@@ -967,12 +972,6 @@ export interface RegistryGitRev {
   worktreeRev: string;
 }
 
-export interface RegistryProjectAgentProfile {
-  name: string;
-  skills?: string[];
-  skillDescriptions?: Record<string, string>;
-}
-
 export interface RegistryHub {
   hubId: string;
 }
@@ -1030,7 +1029,6 @@ export interface RegistryProject {
   hubId?: string;
   agent?: string;
   agents?: string[];
-  agentProfiles?: RegistryProjectAgentProfile[];
   projectRev?: string;
   git?: RegistryProjectGitState;
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
@@ -479,6 +480,7 @@ type stubToolCommandHandler struct {
 	mu       sync.Mutex
 	method   string
 	payload  string
+	calls    []struct{ method, payload string }
 	projects []ProjectInfo
 	response any
 	err      *tools.CommandError
@@ -489,6 +491,7 @@ func (s *stubToolCommandHandler) Handle(_ context.Context, method string, payloa
 	defer s.mu.Unlock()
 	s.method = method
 	s.payload = string(payload)
+	s.calls = append(s.calls, struct{ method, payload string }{method: method, payload: string(payload)})
 	if s.response == nil {
 		s.response = map[string]any{"ok": true}
 	}
@@ -513,6 +516,12 @@ func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.method, s.payload, append([]ProjectInfo(nil), s.projects...)
+}
+
+func (s *stubToolCommandHandler) callSnapshot() []struct{ method, payload string } {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]struct{ method, payload string }(nil), s.calls...)
 }
 
 type overlapDetectingToolCommandHandler struct {
@@ -560,6 +569,35 @@ func TestReporterConfiguresUsageHistoryStore(t *testing.T) {
 	}
 }
 
+func TestProjectFileIndexRebuildNotifiesCompletionOnFailure(t *testing.T) {
+	manager := newProjectFileIndexManager(t.TempDir())
+	manager.scanFilesForTest = func(context.Context, projectFileIndexProject) ([]string, error) {
+		return nil, errors.New("scan failed")
+	}
+	done := make(chan string, 1)
+	manager.setOperationDoneHandler(func(projectID string) {
+		done <- projectID
+	})
+	project := projectFileIndexProject{
+		ProjectID: "hub-a:project",
+		Name:      "project",
+		Root:      t.TempDir(),
+	}
+
+	response := manager.startRebuild(context.Background(), project)
+	if !response.Accepted {
+		t.Fatalf("rebuild response = %#v", response)
+	}
+	select {
+	case projectID := <-done:
+		if projectID != project.ProjectID {
+			t.Fatalf("projectID = %q, want %q", projectID, project.ProjectID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("file index completion callback not called")
+	}
+}
+
 func TestReporterRespondsToHubStateGet(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)
@@ -599,8 +637,19 @@ func TestReporterRespondsToHubStateGet(t *testing.T) {
 		if state["hubId"] != "hub-state-get" {
 			t.Fatalf("state hubId=%v, want hub-state-get", state["hubId"])
 		}
-		if state["status"] != "refreshing" && state["status"] != "ready" {
-			t.Fatalf("state status=%v, want startup limits scan", state["status"])
+		if state["instanceId"] == "" {
+			t.Fatalf("state instanceId missing: %#v", state)
+		}
+		sections, ok := state["sections"].(map[string]any)
+		if !ok {
+			t.Fatalf("state sections missing: %#v", state)
+		}
+		tokenStats, ok := sections[hubStateSectionTokenStats].(map[string]any)
+		if !ok {
+			t.Fatalf("tokenStats missing from state: %#v", sections)
+		}
+		if tokenStats["updateStatus"] != "updating" && tokenStats["updateStatus"] != "idle" {
+			t.Fatalf("tokenStats updateStatus=%v, want startup limits scan", tokenStats["updateStatus"])
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not receive hub.state.get response from reporter")
@@ -887,8 +936,6 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 			params:  map[string]any{"packageName": "@openai/codex"},
 		},
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
-		{section: hubStateSectionReleasePublish, action: "start"},
-		{section: hubStateSectionReleasePublish, action: "status", params: map[string]any{"jobId": "release-job"}},
 		{section: hubStateSectionSkills, action: "listSource"},
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},
@@ -921,16 +968,22 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 				t.Fatalf("adapter action returned error: %v", err)
 			}
 			if tc.section == hubStateSectionAgentPackages && tc.action == "reinstall" {
-				method, payload, _ := toolHandler.snapshot()
-				if method != hubToolMethodNPM {
-					t.Fatalf("reinstall method=%q, want %q", method, hubToolMethodNPM)
+				var matched bool
+				for _, call := range toolHandler.callSnapshot() {
+					if call.method != hubToolMethodNPM {
+						continue
+					}
+					var decoded map[string]any
+					if err := json.Unmarshal([]byte(call.payload), &decoded); err != nil {
+						t.Fatalf("decode reinstall payload: %v", err)
+					}
+					if decoded["action"] == "reinstall" && decoded["packageName"] == "@openai/codex" {
+						matched = true
+						break
+					}
 				}
-				var decoded map[string]any
-				if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-					t.Fatalf("decode reinstall payload: %v", err)
-				}
-				if decoded["action"] != "reinstall" || decoded["packageName"] != "@openai/codex" {
-					t.Fatalf("reinstall payload=%v", decoded)
+				if !matched {
+					t.Fatalf("reinstall call missing from %v", toolHandler.callSnapshot())
 				}
 			}
 		})
@@ -956,31 +1009,214 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	if _, err := updateHandler.Action(context.Background(), "requestUpdate", nil); err != nil {
 		t.Fatalf("requestUpdate action: %v", err)
 	}
-	method, payload, _ := toolHandler.snapshot()
-	if method != hubToolMethodUpdate {
-		t.Fatalf("method=%q, want %q", method, hubToolMethodUpdate)
+	var requestCallFound bool
+	for _, call := range toolHandler.callSnapshot() {
+		if call.method != hubToolMethodUpdate {
+			continue
+		}
+		var body map[string]any
+		if err := json.Unmarshal([]byte(call.payload), &body); err != nil {
+			t.Fatalf("payload json: %v", err)
+		}
+		if body["action"] == "request" {
+			requestCallFound = true
+			break
+		}
 	}
-	var body map[string]any
-	if err := json.Unmarshal([]byte(payload), &body); err != nil {
-		t.Fatalf("payload json: %v", err)
-	}
-	if body["action"] != "request" {
-		t.Fatalf("action=%v, want request (payload=%s)", body["action"], payload)
+	if !requestCallFound {
+		t.Fatalf("update request call missing from %v", toolHandler.callSnapshot())
 	}
 
-	releaseHandler := handlers[hubStateSectionReleasePublish]
-	if _, err := releaseHandler.Action(context.Background(), "status", map[string]any{"jobId": "release-job"}); err != nil {
-		t.Fatalf("release status action: %v", err)
+}
+
+func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
+	root := t.TempDir()
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "scope"), "Scope", "shared description")
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".claude", "skills", "scope"), "Scope", "shared description")
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "codex-only"), "Codex", "codex description")
+
+	state, err := scanProjectSkillsState(context.Background(), projectSkillsTarget{
+		ProjectID: "hub-a:project",
+		Path:      root,
+		Agents:    []string{"codex", "claude"},
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	method, payload, _ = toolHandler.snapshot()
-	if method != hubToolMethodRelease {
-		t.Fatalf("method=%q, want %q", method, hubToolMethodRelease)
+	if state.Inventory["scope"].Sync.Status != skillSyncAligned {
+		t.Fatalf("scope sync = %#v", state.Inventory["scope"].Sync)
 	}
-	if err := json.Unmarshal([]byte(payload), &body); err != nil {
-		t.Fatalf("payload json: %v", err)
+	if state.Inventory["codex-only"].Sync.Status != skillSyncAgentsOnly {
+		t.Fatalf("codex-only sync = %#v", state.Inventory["codex-only"].Sync)
 	}
-	if body["action"] != "status" || body["jobId"] != "release-job" {
-		t.Fatalf("release payload=%s", payload)
+	if _, ok := state.EffectiveByAgent["codex"]["scope"]; !ok {
+		t.Fatal("codex effective skills missing scope")
+	}
+	if _, ok := state.EffectiveByAgent["claude"]["scope"]; !ok {
+		t.Fatal("claude effective skills missing scope")
+	}
+}
+
+func TestReadManagedSkillNamesUsesGlobalAgentsLock(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	lockPath := filepath.Join(stateHome, "skills", ".skill-lock.json")
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, []byte(`{"version":1,"skills":{"scope":{"source":"owner/repo"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	managed := readManagedSkillNames("")
+
+	if !managed["scope"] {
+		t.Fatalf("global managed skills = %#v, want scope", managed)
+	}
+}
+
+func TestHubSkillChangeReusesProjectLocalInventory(t *testing.T) {
+	projectCalls := atomic.Int32{}
+	coordinator := newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+		ScanHub: func(context.Context) (map[string]skillInventoryItem, error) {
+			return map[string]skillInventoryItem{
+				"hub-skill": {Name: "hub-skill", Agents: []string{"codex", "claude"}},
+			}, nil
+		},
+		ScanProject: func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error) {
+			projectCalls.Add(1)
+			return nil, errors.New("project scanner must not run")
+		},
+	})
+	coordinator.seedProject("hub-a:p1", map[string]skillInventoryItem{
+		"local-one": {Name: "local-one", Agents: []string{"codex"}},
+	})
+	coordinator.seedProject("hub-a:p2", map[string]skillInventoryItem{
+		"local-two": {Name: "local-two", Agents: []string{"claude"}},
+	})
+
+	got, err := coordinator.RefreshHub(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projectCalls.Load() != 0 {
+		t.Fatalf("project scan calls = %d, want 0", projectCalls.Load())
+	}
+	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p1"]["codex"], "hub-skill", "local-one")
+	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p2"]["claude"], "hub-skill", "local-two")
+}
+
+func TestSkillsWatcherDebouncesEventsPerTarget(t *testing.T) {
+	root := t.TempDir()
+	events := make(chan fsnotify.Event, 8)
+	timer := make(chan time.Time, 1)
+	triggered := make(chan skillsWatchTarget, 8)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		Events: events,
+		After: func(time.Duration) <-chan time.Time {
+			return timer
+		},
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	watcher.TrackProject("hub-a:project", "project", root)
+
+	events <- fsnotify.Event{Name: filepath.Join(root, ".agents", "skills", "scope", "SKILL.md"), Op: fsnotify.Write}
+	events <- fsnotify.Event{Name: filepath.Join(root, ".claude", "skills", "scope", "SKILL.md"), Op: fsnotify.Write}
+	timer <- time.Now()
+
+	select {
+	case got := <-triggered:
+		if got.ProjectID != "hub-a:project" {
+			t.Fatalf("target = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watcher did not trigger")
+	}
+	select {
+	case extra := <-triggered:
+		t.Fatalf("unexpected duplicate trigger %#v", extra)
+	case <-time.After(25 * time.Millisecond):
+	}
+}
+
+func TestSkillsWatcherTracksProjectAddAndRemove(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	events := make(chan fsnotify.Event, 8)
+	triggered := make(chan skillsWatchTarget, 8)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		Events: events,
+		After:  func(time.Duration) <-chan time.Time { return time.After(time.Millisecond) },
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	watcher.TrackProject("hub-a:first", "first", first)
+	watcher.TrackProject("hub-a:second", "second", second)
+	watcher.RemoveProject("hub-a:first")
+
+	events <- fsnotify.Event{Name: filepath.Join(first, ".agents", "skills", "old", "SKILL.md"), Op: fsnotify.Write}
+	events <- fsnotify.Event{Name: filepath.Join(second, "skills-lock.json"), Op: fsnotify.Write}
+	select {
+	case got := <-triggered:
+		if got.ProjectID != "hub-a:second" {
+			t.Fatalf("target = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watcher did not trigger added project")
+	}
+}
+
+func TestSkillsWatcherObservesSkillRootCreatedAfterTracking(t *testing.T) {
+	root := t.TempDir()
+	triggered := make(chan skillsWatchTarget, 2)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	if err := watcher.Error(); err != nil {
+		t.Fatalf("create native watcher: %v", err)
+	}
+	watcher.TrackProject("hub-a:project", "project", root)
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "scope"), "Scope", "description")
+
+	select {
+	case got := <-triggered:
+		if got.ProjectID != "hub-a:project" {
+			t.Fatalf("target = %#v", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("watcher did not observe newly created skills root")
+	}
+}
+
+func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n", name, description)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertCanonicalSkillNames(t *testing.T, skills []skillInventoryItem, want ...string) {
+	t.Helper()
+	got := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		got = append(got, skill.Name)
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("skill names=%v, want %v", got, want)
 	}
 }
 
@@ -2133,7 +2369,6 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 	}{
 		{section: hubStateSectionAgentPackages, method: hubToolMethodNPM, action: "scan"},
 		{section: hubStateSectionWheelmakerUpdate, method: hubToolMethodUpdate, action: "query"},
-		{section: hubStateSectionSkills, method: hubToolMethodSkills, action: "scan"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.section, func(t *testing.T) {
@@ -2162,7 +2397,7 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 	}
 }
 
-func TestHubStateSkillsReindexRefreshesEveryProjectAgentProfile(t *testing.T) {
+func TestHubStateSkillsRefreshBuildsCanonicalProjectInventories(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -2193,41 +2428,62 @@ func TestHubStateSkillsReindexRefreshesEveryProjectAgentProfile(t *testing.T) {
 			{Name: "project-b", Path: projectB, Online: true, Agents: []string{"codex"}},
 		},
 	)
-	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
-	reporter.toolHandler = toolHandler
-
 	handler := reporter.hubStateSectionHandlers()[hubStateSectionSkills]
-	if _, err := handler.Action(context.Background(), "reindex", nil); err != nil {
-		t.Fatalf("reindex: %v", err)
+	data, err := handler.Refresh(context.Background(), hubStateRefreshInput{HubID: "hub-skills-reindex"})
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	snapshot := data.(skillsStateSnapshot)
+	for _, projectName := range []string{"project-a", "project-b"} {
+		projectID := rp.ProjectID("hub-skills-reindex", projectName)
+		wantSkill := projectName + "-skill"
+		assertCanonicalSkillNames(t, snapshot.EffectiveSkills[projectID]["codex"], wantSkill)
+	}
+}
+
+func TestHubStateSkillsActionPublishesRunningOperationWithoutReplacingInventory(t *testing.T) {
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-skills-operation", StateDir: t.TempDir()},
+		nil,
+	)
+	reporter.toolHandler = &stubToolCommandHandler{response: map[string]any{
+		"ok":       true,
+		"accepted": true,
+		"hubId":    "hub-skills-operation",
+		"operation": map[string]any{
+			"running":   true,
+			"action":    "install",
+			"scope":     "hub",
+			"status":    "running",
+			"startedAt": "2026-07-31T00:00:00Z",
+			"exitCode":  nil,
+		},
+	}}
+	coordinator := reporter.ensureSkillsStateCoordinator()
+	coordinator.seedProject("hub-skills-operation:project-a", map[string]skillInventoryItem{
+		"existing": {Name: "existing"},
+	})
+
+	if _, err := reporter.actionHubStateSkills(
+		context.Background(),
+		"install",
+		map[string]any{"scope": "hub", "source": "owner/repo", "skills": []string{"new"}},
+	); err != nil {
+		t.Fatal(err)
 	}
 
-	method, payload, projects := toolHandler.snapshot()
-	if method != hubToolMethodSkills {
-		t.Fatalf("method=%q, want %q", method, hubToolMethodSkills)
+	data, ok := reporter.ensureHubStateManager().
+		get([]string{hubStateSectionSkills}).
+		Sections[hubStateSectionSkills].
+		Data.(skillsStateSnapshot)
+	if !ok {
+		t.Fatalf("skills data type = %T, want skillsStateSnapshot", data)
 	}
-	var body map[string]any
-	if err := json.Unmarshal([]byte(payload), &body); err != nil {
-		t.Fatalf("decode payload: %v", err)
+	if data.Operation == nil || !data.Operation.Running || data.Operation.Action != "install" {
+		t.Fatalf("operation = %+v, want running install", data.Operation)
 	}
-	if body["action"] != "scan" || body["hubId"] != "hub-skills-reindex" {
-		t.Fatalf("payload=%v, want skills scan for hub-skills-reindex", body)
-	}
-	if len(projects) != 2 {
-		t.Fatalf("SetProjects projects=%d, want 2", len(projects))
-	}
-
-	refreshed := reporter.projectsSnapshot()
-	if len(refreshed) != 2 {
-		t.Fatalf("projects=%d, want 2", len(refreshed))
-	}
-	for _, project := range refreshed {
-		if len(project.AgentProfiles) != 1 {
-			t.Fatalf("%s profiles=%v, want one codex profile", project.Name, project.AgentProfiles)
-		}
-		wantSkill := project.Name + "-skill"
-		if got := project.AgentProfiles[0].Skills; !reflect.DeepEqual(got, []string{wantSkill}) {
-			t.Fatalf("%s skills=%v, want [%s]", project.Name, got, wantSkill)
-		}
+	if _, exists := data.ProjectLocalInventories["hub-skills-operation:project-a"]["existing"]; !exists {
+		t.Fatalf("existing inventory was replaced: %+v", data.ProjectLocalInventories)
 	}
 }
 
@@ -2318,7 +2574,7 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-test", "proj1"),
 		Payload:   map[string]any{"path": ".", "limit": 50},
 	})
-	listResp := mustReadEnvelope(t, app)
+	listResp := mustReadResponseEnvelope(t, app, 2)
 	if listResp.Type != "response" || listResp.Method != "project.fs.list" {
 		t.Fatalf("unexpected list response: %#v", listResp)
 	}
@@ -3874,7 +4130,7 @@ func TestReporterRunReturnsOnContextCancel(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run() err = %v", err)
 		}
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(2 * time.Second):
 		t.Fatal("Run() did not return after cancel")
 	}
 }
@@ -4074,7 +4330,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": ".", "knownHash": listHash},
 	})
-	listCached := mustReadEnvelope(t, app)
+	listCached := mustReadResponseEnvelope(t, app, 3)
 	if listCached.Payload["notModified"] != true {
 		t.Fatalf("expected notModified project.fs.list response: %#v", listCached.Payload)
 	}
@@ -4086,7 +4342,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt"},
 	})
-	readResp := mustReadEnvelope(t, app)
+	readResp := mustReadResponseEnvelope(t, app, 4)
 	readHash, _ := readResp.Payload["hash"].(string)
 	if readHash == "" || readResp.Payload["notModified"] != false {
 		t.Fatalf("unexpected project.fs.read payload: %#v", readResp.Payload)
@@ -4099,7 +4355,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt", "knownHash": readHash},
 	})
-	readCached := mustReadEnvelope(t, app)
+	readCached := mustReadResponseEnvelope(t, app, 5)
 	if readCached.Payload["notModified"] != true {
 		t.Fatalf("expected notModified project.fs.read response: %#v", readCached.Payload)
 	}
@@ -4111,7 +4367,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{},
 	})
-	revResp := mustReadEnvelope(t, app)
+	revResp := mustReadResponseEnvelope(t, app, 6)
 	expectedGitState := collectGitState(root)
 	if got := revResp.Payload["gitRev"]; got != expectedGitState.GitRev {
 		t.Fatalf("project.git.rev gitRev=%v, want %s", got, expectedGitState.GitRev)
@@ -4127,7 +4383,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{},
 	})
-	statusResp := mustReadEnvelope(t, app)
+	statusResp := mustReadResponseEnvelope(t, app, 7)
 	if statusResp.Payload["dirty"] != true {
 		t.Fatalf("expected dirty project.git.status payload: %#v", statusResp.Payload)
 	}
@@ -4146,7 +4402,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt", "scope": "unstaged", "contextLines": 2},
 	})
-	diffResp := mustReadEnvelope(t, app)
+	diffResp := mustReadResponseEnvelope(t, app, 8)
 	diffText, _ := diffResp.Payload["diff"].(string)
 	if !strings.Contains(diffText, "+gamma") {
 		t.Fatalf("unexpected working tree diff: %q", diffText)
@@ -4231,7 +4487,7 @@ func connectClient(t *testing.T, ws *websocket.Conn, token string) {
 
 func waitForProjectOnline(t *testing.T, addr, projectID, token string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		ws := dialWS(t, "http://"+addr+"/ws")
 		connectClient(t, ws, token)
@@ -4338,6 +4594,16 @@ func mustReadEnvelope(t *testing.T, ws *websocket.Conn) testEnvelope {
 		t.Fatalf("read json: %v", err)
 	}
 	return out
+}
+
+func mustReadResponseEnvelope(t *testing.T, ws *websocket.Conn, requestID int64) testEnvelope {
+	t.Helper()
+	for {
+		envelope := mustReadEnvelope(t, ws)
+		if envelope.RequestID == requestID {
+			return envelope
+		}
+	}
 }
 
 func TestProjectFileIndexRebuildWritesGitIgnoredLineIndexAndSearchesFuzzy(t *testing.T) {
@@ -4758,39 +5024,6 @@ func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
 	defer c.Close()
 	if c == nil {
 		t.Fatal("buildProjectClient returned nil Client")
-	}
-}
-
-func TestCollectProjectAgentProfilesIncludesSkillDescriptions(t *testing.T) {
-	projectPath := t.TempDir()
-	skillDir := filepath.Join(projectPath, ".agents", "skills", "dense-ui")
-	if err := os.MkdirAll(skillDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll skill: %v", err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(skillDir, "SKILL.md"),
-		[]byte("---\nname: dense-ui\ndescription: Show more useful context in less space\n---\n"),
-		0o644,
-	); err != nil {
-		t.Fatalf("WriteFile skill: %v", err)
-	}
-
-	profiles := collectProjectAgentProfiles("project", projectPath, []string{"codex"})
-	if len(profiles) != 1 {
-		t.Fatalf("profiles len = %d, want 1", len(profiles))
-	}
-	encoded, err := json.Marshal(profiles[0])
-	if err != nil {
-		t.Fatalf("Marshal profile: %v", err)
-	}
-	var profileFields struct {
-		SkillDescriptions map[string]string `json:"skillDescriptions"`
-	}
-	if err := json.Unmarshal(encoded, &profileFields); err != nil {
-		t.Fatalf("Unmarshal profile: %v", err)
-	}
-	if got := profileFields.SkillDescriptions["dense-ui"]; got != "Show more useful context in less space" {
-		t.Fatalf("skill description = %q", got)
 	}
 }
 

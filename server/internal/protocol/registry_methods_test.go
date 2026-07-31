@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -13,6 +14,14 @@ import (
 func TestTokenStatsUpdateMethodIsRemoved(t *testing.T) {
 	if descriptor, ok := RegistryMethod("tokenStats.update"); ok {
 		t.Fatalf("removed tokenStats.update method is still registered: %+v", descriptor)
+	}
+}
+
+func TestProjectProtocolTypesHaveNoLegacyProfileField(t *testing.T) {
+	for _, value := range []any{ProjectInfo{}, ProjectListItem{}} {
+		if _, ok := reflect.TypeOf(value).FieldByName("Agent" + "Profiles"); ok {
+			t.Fatalf("%T still exposes the legacy profile field", value)
+		}
 	}
 }
 
@@ -26,6 +35,42 @@ func TestHubStateUpdatedAllowsHubOrigin(t *testing.T) {
 	}
 	if descriptor.Route != RegistryRouteClientEvent {
 		t.Fatalf("route=%q", descriptor.Route)
+	}
+}
+
+func TestReleasePublishMethodsAreRegisteredWithoutVersionBump(t *testing.T) {
+	for _, method := range []string{
+		RegistryMethodReleasePublishStart,
+		RegistryMethodReleasePublishGet,
+		RegistryMethodReleasePublishUpdated,
+	} {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("%s is not registered", method)
+		}
+		if !desc.RequiresHubID {
+			t.Fatalf("%s must require hubId", method)
+		}
+	}
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
+	}
+}
+
+func TestHubStateSectionWireShape(t *testing.T) {
+	raw, err := json.Marshal(HubStateSection{
+		Availability: HubStateAvailabilityReady,
+		UpdateStatus: HubStateUpdateIdle,
+		Revision:     4,
+		Data:         map[string]any{"ok": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{`"availability":"ready"`, `"updateStatus":"idle"`, `"revision":4`} {
+		if !bytes.Contains(raw, []byte(field)) {
+			t.Fatalf("section missing %s: %s", field, raw)
+		}
 	}
 }
 

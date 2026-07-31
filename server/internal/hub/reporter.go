@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -144,23 +145,40 @@ type Reporter struct {
 	// Per-command-type locks replace a single tool mutex so distinct tool
 	// commands (npm / update / skills / release) run concurrently while each
 	// command type stays serialized with itself.
-	npmToolMu          sync.Mutex
-	updateToolMu       sync.Mutex
-	skillsToolMu       sync.Mutex
-	releaseToolMu      sync.Mutex
-	miscToolMu         sync.Mutex
-	toolHandlerInitMu  sync.Mutex
-	relayClient        *portrelay.HubClient
-	fileIndex          *projectFileIndexManager
-	hubStateManager    *HubStateManager
-	usageService       *usage.Service
-	usageHistory       *usage.HistoryStore
-	terminalHandler    TerminalHandler
-	hubEventSink       *hubEventSink
-	flickerBridge      *flickerBridgeManager
-	hubConfig          *hubconfig.Store
-	usageCollector     *usage.LocalCollector
-	reloadAgentRuntime func(context.Context, map[hubconfig.APIKeyName]string) error
+	npmToolMu               sync.Mutex
+	updateToolMu            sync.Mutex
+	skillsToolMu            sync.Mutex
+	releaseToolMu           sync.Mutex
+	miscToolMu              sync.Mutex
+	toolHandlerInitMu       sync.Mutex
+	skillsStateInitMu       sync.Mutex
+	relayClient             *portrelay.HubClient
+	fileIndex               *projectFileIndexManager
+	hubStateManager         *HubStateManager
+	skillsState             *skillsStateCoordinator
+	skillsWatcher           *skillsWatcher
+	skillsWatcherMu         sync.Mutex
+	skillsWatcherOnce       sync.Once
+	usageService            *usage.Service
+	usageHistory            *usage.HistoryStore
+	terminalHandler         TerminalHandler
+	hubEventSink            *hubEventSink
+	flickerBridge           *flickerBridgeManager
+	hubConfig               *hubconfig.Store
+	usageCollector          *usage.LocalCollector
+	reloadAgentRuntime      func(context.Context, map[hubconfig.APIKeyName]string) error
+	hubStateBootstrapOnce   sync.Once
+	hubStateBootstrapDone   chan struct{}
+	hubStateBootstrapActive atomic.Bool
+	hubStateConnections     atomic.Int64
+}
+
+var bootstrapHubStateSections = []string{
+	hubStateSectionAgentPackages,
+	hubStateSectionWheelmakerUpdate,
+	hubStateSectionSkills,
+	hubStateSectionFileIndex,
+	hubStateSectionFlickerBridge,
 }
 
 // NewReporter creates a Reporter.
@@ -200,16 +218,18 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	}
 	cfg.StateDir = stateDir
 	r := &Reporter{
-		cfg:          cfg,
-		projects:     cp,
-		projectsByID: byID,
-		sessionByID:  make(map[string]SessionHandler),
-		pending:      make(map[int64]chan envelope),
-		relayClient:  portrelay.NewHubClient(),
-		fileIndex:    newProjectFileIndexManager(stateDir),
+		cfg:                   cfg,
+		projects:              cp,
+		projectsByID:          byID,
+		sessionByID:           make(map[string]SessionHandler),
+		pending:               make(map[int64]chan envelope),
+		relayClient:           portrelay.NewHubClient(),
+		fileIndex:             newProjectFileIndexManager(stateDir),
+		hubStateBootstrapDone: make(chan struct{}),
 	}
 	r.hubConfig = cfg.HubConfig
 	r.reloadAgentRuntime = cfg.ReloadAgentRuntime
+	r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
 	if r.hubConfig == nil {
 		r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
 	}
@@ -226,11 +246,14 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		HubID:                 cfg.HubID,
 		Projects:              cp,
 		StateDir:              stateDir,
-		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
-		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnUpdateOperationDone: r.onUpdateOperationDone,
+		OnSkillsOperationDone: r.onSkillsOperationDone,
+		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
 	})
-	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+	r.hubStateManager = r.newHubStateManager()
+	r.fileIndex.setOperationDoneHandler(r.onFileIndexOperationDone)
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
 	collector := usage.NewLocalCollector("")
 	collector.UpdateAPIKeys(
@@ -252,21 +275,13 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 }
 
 func (r *Reporter) updateFlickerBridgeLifecycleState(status flickerBridgeStatus) {
-	sectionStatus := hubStateSectionStatusReady
-	if status.State == "starting" {
-		sectionStatus = hubStateSectionStatusRefreshing
-	} else if status.State == "failed" {
-		sectionStatus = hubStateSectionStatusError
-	}
-	state := r.ensureHubStateManager().replaceSection(hubStateSectionFlickerBridge, hubStateSection{
-		Status:    sectionStatus,
-		UpdatedAt: formatHubStateTime(time.Now().UTC()),
-		Error:     status.Error,
-		Data:      status,
-	})
-	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
-		"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "lifecycle",
-	})
+	r.ensureHubStateManager().notify(
+		hubStateSectionFlickerBridge,
+		status,
+		rp.HubStateAvailabilityReady,
+		status.Error,
+		"lifecycle",
+	)
 	go func() {
 		if err := r.reloadAgentRuntimeFromStore(context.Background()); err != nil {
 			hubLogger("").Warn("reload agent runtime after Flicker Bridge state change failed: %v", err)
@@ -292,34 +307,22 @@ func (r *Reporter) Run(ctx context.Context) error {
 }
 
 func (r *Reporter) updateUsageSnapshot(snapshot usage.Snapshot) {
-	section := hubStateSection{
-		Status: usageSectionStatus(snapshot.Status),
-		Data:   snapshot,
-		Error:  snapshot.Message,
+	updateStatus := rp.HubStateUpdateIdle
+	if snapshot.Status == usage.ScanScanning {
+		updateStatus = rp.HubStateUpdateUpdating
 	}
-	if snapshot.StartedAt != nil {
-		section.StartedAt = formatHubStateTime(*snapshot.StartedAt)
+	availability := rp.HubStateAvailabilityReady
+	if snapshot.Generation == 0 && len(snapshot.Providers) == 0 {
+		availability = rp.HubStateAvailabilityEmpty
 	}
-	if snapshot.UpdatedAt != nil {
-		section.UpdatedAt = formatHubStateTime(*snapshot.UpdatedAt)
-	}
-	state := r.ensureHubStateManager().replaceSection(hubStateSectionTokenStats, section)
-	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
-		"state": state, "sections": []string{hubStateSectionTokenStats}, "reason": "snapshot",
-	})
-}
-
-func usageSectionStatus(status usage.ScanStatus) hubStateSectionStatus {
-	switch status {
-	case usage.ScanScanning:
-		return hubStateSectionStatusRefreshing
-	case usage.ScanReady:
-		return hubStateSectionStatusReady
-	case usage.ScanError:
-		return hubStateSectionStatusError
-	default:
-		return hubStateSectionStatusEmpty
-	}
+	r.ensureHubStateManager().notifyWithStatus(
+		hubStateSectionTokenStats,
+		snapshot,
+		availability,
+		updateStatus,
+		snapshot.Message,
+		"snapshot",
+	)
 }
 
 // SetDebugLogger sets an optional writer for debug logging of registry envelopes.
@@ -359,6 +362,9 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 
 	r.mu.Lock()
 	previous := r.projectsByID[project.Name]
+	pathChanged := previous.Name == "" ||
+		strings.TrimSpace(previous.Path) != strings.TrimSpace(project.Path)
+	skillTargetsChanged := pathChanged || !sameProjectAgents(previous.Agents, project.Agents)
 	if previous.Name != "" {
 		changedDomains = diffProjectDomains(previous, project)
 		if len(changedDomains) == 0 {
@@ -370,6 +376,25 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	connectionEpoch := r.connectionEpoch
 	r.mu.Unlock()
 
+	if skillTargetsChanged {
+		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
+	}
+	if pathChanged {
+		r.updateSkillsWatcherProjects()
+	}
+	if skillTargetsChanged || pathChanged {
+		sections := make([]string, 0, 2)
+		if skillTargetsChanged {
+			sections = append(sections, hubStateSectionSkills)
+		}
+		if pathChanged {
+			sections = append(sections, hubStateSectionFileIndex)
+		}
+		_, _ = r.ensureHubStateManager().enqueueRefresh(
+			sections,
+			true,
+		)
+	}
 	if conn == nil || connectionEpoch == 0 {
 		return nil
 	}
@@ -632,6 +657,7 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	go func() {
 		select {
 		case <-ctx.Done():
+			_ = conn.SetReadDeadline(time.Now())
 			_ = conn.Close()
 		case <-stop:
 		}
@@ -641,6 +667,8 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	if err := r.handshake(conn); err != nil {
 		return err
 	}
+	r.startHubStateBootstrap(ctx)
+	r.startSkillsWatcher(ctx)
 	sink := newHubEventSink()
 	r.mu.Lock()
 	r.hubEventSink = sink
@@ -654,6 +682,7 @@ func (r *Reporter) runSession(ctx context.Context) error {
 		r.mu.Unlock()
 	}()
 	go r.runHubEventSink(conn, sink)
+	r.publishHubStateAfterConnect(ctx)
 
 	keepaliveDone := make(chan struct{})
 	defer close(keepaliveDone)
@@ -697,6 +726,10 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
+	case rp.RegistryMethodReleasePublishStart:
+		r.replyReleasePublish(conn, in, "start")
+	case rp.RegistryMethodReleasePublishGet:
+		r.replyReleasePublish(conn, in, "status")
 	case rp.RegistryMethodHubConfigGet:
 		r.replyHubConfigGet(conn, in)
 	case rp.RegistryMethodHubConfigUpdate:
@@ -880,7 +913,7 @@ func (r *Reporter) replyHubStateRefresh(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.state.refresh payload")
 		return
 	}
-	state, err := r.ensureHubStateManager().refresh(context.Background(), payload.Sections, payload.Force)
+	response, err := r.ensureHubStateManager().enqueueRefresh(payload.Sections, payload.Force)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
@@ -890,10 +923,7 @@ func (r *Reporter) replyHubStateRefresh(conn *websocket.Conn, req envelope) {
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"state":    state,
-			"sections": payload.Sections,
-		}),
+		Payload:   rp.MustRaw(response),
 	})
 }
 
@@ -909,25 +939,50 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
 	}
-	state, err := r.ensureHubStateManager().action(context.Background(), payload.Section, payload.Action, payload.Params)
+	response, err := r.ensureHubStateManager().action(context.Background(), payload.Section, payload.Action, payload.Params)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
-	}
-	if payload.Section == hubStateSectionFlickerBridge {
-		_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
-			"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "action",
-		})
 	}
 	_ = r.writeJSON(conn, "->", envelope{
 		RequestID: req.RequestID,
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"state":   state,
-			"section": payload.Section,
-		}),
+		Payload:   rp.MustRaw(response),
+	})
+}
+
+func (r *Reporter) replyReleasePublish(conn *websocket.Conn, req envelope, action string) {
+	var payload map[string]any
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid release publish payload")
+		return
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["action"] = action
+	payload["hubId"] = r.cfg.HubID
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid release publish payload")
+		return
+	}
+	mu := r.toolMutexFor(hubToolMethodRelease)
+	mu.Lock()
+	result, cmdErr := r.ensureToolHandler().Handle(context.Background(), hubToolMethodRelease, raw)
+	mu.Unlock()
+	if cmdErr != nil {
+		_ = r.writeError(conn, req.RequestID, cmdErr.Code, cmdErr.Message)
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload:   rp.MustRaw(result),
 	})
 }
 
@@ -947,10 +1002,6 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionWheelmakerUpdate: {
 			"requestUpdate": {},
-		},
-		hubStateSectionReleasePublish: {
-			"start":  {},
-			"status": {},
 		},
 		hubStateSectionSkills: {
 			"listSource": {},
@@ -984,9 +1035,181 @@ func (r *Reporter) ensureHubStateManager() *HubStateManager {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.hubStateManager == nil {
-		r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+		r.hubStateManager = r.newHubStateManager()
 	}
 	return r.hubStateManager
+}
+
+func (r *Reporter) newHubStateManager() *HubStateManager {
+	instanceID := newHubStateInstanceID()
+	return newHubStateManager(
+		r.cfg.HubID,
+		instanceID,
+		r.hubStateSectionHandlers(),
+		func(reason string, sections map[string]rp.HubStateSection) {
+			if r.hubStateBootstrapActive.Load() {
+				return
+			}
+			_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+				"instanceId": instanceID,
+				"sections":   sections,
+				"reason":     reason,
+			})
+		},
+	)
+}
+
+func (r *Reporter) startHubStateBootstrap(ctx context.Context) {
+	r.hubStateBootstrapOnce.Do(func() {
+		if r.hubStateBootstrapDone == nil {
+			r.hubStateBootstrapDone = make(chan struct{})
+		}
+		r.hubStateBootstrapActive.Store(true)
+		go func() {
+			defer close(r.hubStateBootstrapDone)
+			r.bootstrapHubState(ctx)
+			r.hubStateBootstrapActive.Store(false)
+		}()
+	})
+}
+
+func (r *Reporter) bootstrapHubState(ctx context.Context) {
+	manager := r.ensureHubStateManager()
+	if _, err := manager.enqueueRefresh(bootstrapHubStateSections, false); err != nil {
+		hubLogger("").Warn("bootstrap HubState failed: %v", err)
+		return
+	}
+	for _, section := range bootstrapHubStateSections {
+		if err := manager.waitForIdle(ctx, section); err != nil {
+			return
+		}
+	}
+}
+
+func (r *Reporter) publishHubStateAfterConnect(ctx context.Context) {
+	connection := r.hubStateConnections.Add(1)
+	if connection > 1 {
+		r.publishCurrentHubState("reconnect")
+		return
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-r.hubStateBootstrapDone:
+			r.publishCurrentHubState("bootstrap")
+		}
+	}()
+}
+
+func (r *Reporter) publishCurrentHubState(reason string) {
+	state := r.ensureHubStateManager().get(nil)
+	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+		"instanceId": state.InstanceID,
+		"sections":   state.Sections,
+		"reason":     reason,
+	})
+}
+
+func (r *Reporter) onNPMOperationDone() {
+	r.reloadAgentRuntimeAfterNPMOperation()
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionAgentPackages},
+		true,
+	)
+}
+
+func (r *Reporter) onUpdateOperationDone() {
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionWheelmakerUpdate},
+		true,
+	)
+}
+
+func (r *Reporter) onSkillsOperationDone(
+	scope,
+	projectName string,
+	operation tools.SkillsOperationSnapshot,
+) {
+	r.ensureSkillsStateCoordinator().SetOperation(&operation)
+	go r.refreshSkillsStateTarget(scope, projectName)
+}
+
+func (r *Reporter) refreshSkillsStateTarget(scope, projectName string) {
+	var (
+		snapshot skillsStateSnapshot
+		err      error
+	)
+	if scope == "project" && strings.TrimSpace(projectName) != "" {
+		snapshot, err = r.ensureSkillsStateCoordinator().RefreshProject(
+			context.Background(),
+			rp.ProjectID(r.cfg.HubID, projectName),
+		)
+	} else {
+		snapshot, err = r.ensureSkillsStateCoordinator().RefreshHub(context.Background())
+	}
+	if err != nil {
+		r.ensureHubStateManager().notify(
+			hubStateSectionSkills,
+			r.ensureSkillsStateCoordinator().Snapshot(),
+			rp.HubStateAvailabilityReady,
+			err.Error(),
+			"skills.refresh.failed",
+		)
+		return
+	}
+	r.ensureHubStateManager().notify(
+		hubStateSectionSkills,
+		snapshot,
+		rp.HubStateAvailabilityReady,
+		"",
+		"skills.changed",
+	)
+}
+
+func (r *Reporter) startSkillsWatcher(ctx context.Context) {
+	r.skillsWatcherOnce.Do(func() {
+		go func() {
+			watcher := newSkillsWatcher(skillsWatcherOptions{
+				OnChange: func(target skillsWatchTarget) {
+					r.refreshSkillsStateTarget(target.Scope, target.ProjectName)
+				},
+			})
+			if err := watcher.Error(); err != nil {
+				hubLogger("").Warn("start skills watcher failed: %v", err)
+			}
+			if home, err := os.UserHomeDir(); err == nil {
+				watcher.TrackHub(home)
+			}
+			watcher.ReplaceProjects(r.skillsTargets())
+			r.skillsWatcherMu.Lock()
+			r.skillsWatcher = watcher
+			r.skillsWatcherMu.Unlock()
+			<-ctx.Done()
+			_ = watcher.Close()
+		}()
+	})
+}
+
+func (r *Reporter) updateSkillsWatcherProjects() {
+	r.skillsWatcherMu.Lock()
+	watcher := r.skillsWatcher
+	r.skillsWatcherMu.Unlock()
+	if watcher != nil {
+		watcher.ReplaceProjects(r.skillsTargets())
+	}
+}
+
+func (r *Reporter) onReleaseJobUpdated(job tools.ReleasePublishJob) {
+	_ = r.publishHubEvent(rp.RegistryMethodReleasePublishUpdated, map[string]any{
+		"job": job,
+	})
+}
+
+func (r *Reporter) onFileIndexOperationDone(string) {
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionFileIndex},
+		true,
+	)
 }
 
 func (r *Reporter) ensureHubConfigStore() *hubconfig.Store {
@@ -1588,29 +1811,27 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
 		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
-		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		OnUpdateOperationDone: r.onUpdateOperationDone,
+		OnSkillsOperationDone: r.onSkillsOperationDone,
+		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
 	})
 	return r.toolHandler
 }
 
-func (r *Reporter) refreshSkillsAgentProfiles(scope, projectName string) {
-	projects := r.projectsSnapshot()
-	for _, project := range projects {
-		if scope == "project" && projectName != "" && strings.TrimSpace(project.Name) != strings.TrimSpace(projectName) {
-			continue
-		}
-		path := strings.TrimSpace(project.Path)
-		if path == "" {
-			continue
-		}
-		newProfiles := collectProjectAgentProfiles(project.Name, path, project.Agents)
-		updated := project
-		updated.AgentProfiles = newProfiles
-		if err := r.UpdateProject(updated); err != nil {
-			registryLogger(project.Name).Warn("refresh skills agent profiles failed: %v", err)
-		}
+func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
+	r.skillsStateInitMu.Lock()
+	defer r.skillsStateInitMu.Unlock()
+	if r.skillsState == nil {
+		r.skillsState = newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+			ScanHub: func(ctx context.Context) (map[string]skillInventoryItem, error) {
+				return scanHubSkillsInventory(ctx, r.skillsAgents())
+			},
+			ScanProject: scanProjectSkillsInventory,
+			Targets:     r.skillsTargets,
+		})
 	}
+	return r.skillsState
 }
 
 func (r *Reporter) replySession(conn *websocket.Conn, req envelope) {
@@ -2668,6 +2889,123 @@ func (r *Reporter) projectsSnapshot() []ProjectInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return append([]ProjectInfo(nil), r.projects...)
+}
+
+func (r *Reporter) skillsTargets() []projectSkillsTarget {
+	projects := r.projectsSnapshot()
+	targets := make([]projectSkillsTarget, 0, len(projects))
+	for _, project := range projects {
+		name := strings.TrimSpace(project.Name)
+		if name == "" || strings.TrimSpace(project.Path) == "" {
+			continue
+		}
+		targets = append(targets, projectSkillsTarget{
+			ProjectID: rp.ProjectID(r.cfg.HubID, name),
+			Path:      project.Path,
+			Agents:    append([]string(nil), project.Agents...),
+		})
+	}
+	return targets
+}
+
+func (r *Reporter) skillsAgents() []string {
+	var agents []string
+	for _, target := range r.skillsTargets() {
+		agents = appendUniqueFold(agents, target.Agents...)
+	}
+	return agents
+}
+
+func (r *Reporter) replaceProjects(projects []ProjectInfo) {
+	next := append([]ProjectInfo(nil), projects...)
+	sort.Slice(next, func(i, j int) bool {
+		return strings.ToLower(next[i].Name) < strings.ToLower(next[j].Name)
+	})
+	nextByID := make(map[string]ProjectInfo, len(next)*2)
+	for _, project := range next {
+		name := strings.TrimSpace(project.Name)
+		if name == "" {
+			continue
+		}
+		nextByID[name] = project
+		nextByID[rp.ProjectID(r.cfg.HubID, name)] = project
+	}
+
+	r.mu.Lock()
+	pathsChanged := projectPathTopologyChanged(r.projects, next)
+	skillTargetsChanged := projectSkillTargetsChanged(r.projects, next)
+	r.projects = next
+	r.projectsByID = nextByID
+	handler := r.toolHandler
+	r.mu.Unlock()
+	if handler != nil {
+		handler.SetProjects(next)
+	}
+	if skillTargetsChanged {
+		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
+	}
+	if pathsChanged {
+		r.updateSkillsWatcherProjects()
+	}
+	if skillTargetsChanged || pathsChanged {
+		sections := make([]string, 0, 2)
+		if skillTargetsChanged {
+			sections = append(sections, hubStateSectionSkills)
+		}
+		if pathsChanged {
+			sections = append(sections, hubStateSectionFileIndex)
+		}
+		_, _ = r.ensureHubStateManager().enqueueRefresh(
+			sections,
+			true,
+		)
+	}
+}
+
+func projectPathTopologyChanged(previous, current []ProjectInfo) bool {
+	paths := func(projects []ProjectInfo) map[string]string {
+		out := make(map[string]string, len(projects))
+		for _, project := range projects {
+			name := strings.TrimSpace(project.Name)
+			if name != "" {
+				out[name] = strings.TrimSpace(project.Path)
+			}
+		}
+		return out
+	}
+	return !reflect.DeepEqual(paths(previous), paths(current))
+}
+
+func projectSkillTargetsChanged(previous, current []ProjectInfo) bool {
+	targets := func(projects []ProjectInfo) map[string]projectSkillsTarget {
+		out := make(map[string]projectSkillsTarget, len(projects))
+		for _, project := range projects {
+			name := strings.TrimSpace(project.Name)
+			if name == "" {
+				continue
+			}
+			agents := normalizedProjectAgents(project.Agents)
+			out[name] = projectSkillsTarget{
+				Path:   strings.TrimSpace(project.Path),
+				Agents: agents,
+			}
+		}
+		return out
+	}
+	return !reflect.DeepEqual(targets(previous), targets(current))
+}
+
+func sameProjectAgents(left, right []string) bool {
+	return reflect.DeepEqual(normalizedProjectAgents(left), normalizedProjectAgents(right))
+}
+
+func normalizedProjectAgents(agents []string) []string {
+	out := appendUniqueFold(nil, agents...)
+	for index := range out {
+		out[index] = strings.ToLower(out[index])
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (r *Reporter) setProjectLocked(project ProjectInfo) {

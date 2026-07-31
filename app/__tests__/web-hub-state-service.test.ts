@@ -1,14 +1,28 @@
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import type {RegistryClient} from '../web/src/registry/RegistryClient';
 import {RegistryMethods} from '../web/src/registry/registryMethods';
+import fs from 'fs';
+import path from 'path';
 
 describe('hub state registry service', () => {
+  test('Workspace projects operational UI directly from HubStore without legacy poll caches', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('deriveHubOperationalViews(hubStoreSnapshot)');
+    expect(source).not.toMatch(/set(?:WheelMakerUpdateHubs|AgentPackageHubs|ProjectIndexByHubId|SkillHubs|ChatHubFlickerBridgeStatuses)/);
+    expect(source).not.toMatch(/wheelMakerUpdatePoll|projectIndexPoll|handleWheelMakerUpdatePending|handleProjectIndexPending/);
+    expect(source).not.toMatch(/service\.(?:queryWheelMakerUpdate|scanSkills|getFileIndexStatus|scanNpmPackages)/);
+  });
+
   test('gets hub state with envelope hubId', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', status: 'empty', sections: {}},
+          state: {hubId: 'hub-a', instanceId: 'instance-a', sections: {}},
         },
       }),
     } as unknown as RegistryClient;
@@ -30,7 +44,7 @@ describe('hub state registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', status: 'refreshing', sections: {}},
+          state: {hubId: 'hub-a', instanceId: 'instance-a', sections: {}},
         },
       }),
     } as unknown as RegistryClient;
@@ -51,17 +65,19 @@ describe('hub state registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', status: 'ready', sections: {}},
+          accepted: true,
+          result: {operation: {id: 'npm-1'}},
         },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
 
-    await repository.runHubStateAction('hub-a', 'agentPackages', 'install', {
+    const result = await repository.runHubStateAction('hub-a', 'agentPackages', 'install', {
       packageName: '@openai/codex',
       version: 'latest',
     });
 
+    expect(result).toEqual({accepted: true, result: {operation: {id: 'npm-1'}}});
     expect(client.request).toHaveBeenCalledWith({
       method: RegistryMethods.HubStateAction,
       hubId: 'hub-a',
@@ -81,11 +97,11 @@ describe('hub state registry service', () => {
         payload: {
           state: {
             hubId: 'hub-a',
-            status: 'ready',
+            instanceId: 'instance-a',
             sections: {
               tokenStats: null,
               skills: {data: {ok: true}},
-              fileIndex: {status: 123, error: 5},
+              fileIndex: {availability: 123, updateStatus: 5, revision: 'old'},
             },
           },
         },
@@ -95,11 +111,15 @@ describe('hub state registry service', () => {
 
     const state = await repository.getHubState('hub-a');
 
-    expect(state.sections.tokenStats.status).toBe('empty');
-    expect(state.sections.skills.status).toBe('empty');
+    expect(state.instanceId).toBe('instance-a');
+    expect(state.sections.tokenStats.availability).toBe('empty');
+    expect(state.sections.tokenStats.updateStatus).toBe('idle');
+    expect(state.sections.tokenStats.revision).toBe(0);
+    expect(state.sections.skills.availability).toBe('empty');
     expect(state.sections.skills.data).toEqual({ok: true});
-    expect(state.sections.fileIndex.status).toBe('empty');
-    expect(state.sections.fileIndex.error).toBeUndefined();
+    expect(state.sections.fileIndex.availability).toBe('empty');
+    expect(state.sections.fileIndex.updateStatus).toBe('idle');
+    expect(state.sections.fileIndex.lastError).toBeUndefined();
   });
 
   test('gets and normalizes compact usage history samples', async () => {
