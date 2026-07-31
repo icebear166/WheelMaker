@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -249,6 +250,7 @@ type Server struct {
 	hubs               map[string]rp.HubSnapshot
 	projectToHub       map[string]string
 	hubPeers           map[string]*peerConn
+	hubDescriptors     map[string]rp.HubListItem
 	clientPeers        map[string]*connectionState
 	debugWebTransferMu sync.Mutex
 	debugWebTransfers  map[string]debugWebTransferSession
@@ -281,6 +283,8 @@ type connectionState struct {
 	browserSession  bool
 	browserDeviceID string
 	clientName      string
+	protocolVersion string
+	connectionMode  rp.RegistryConnectionMode
 	seenRequestIDs  *requestIDWindow
 	lastProjectSeq  map[string]int64
 }
@@ -386,6 +390,7 @@ func New(cfg Config) *Server {
 		hubs:              make(map[string]rp.HubSnapshot),
 		projectToHub:      make(map[string]string),
 		hubPeers:          make(map[string]*peerConn),
+		hubDescriptors:    make(map[string]rp.HubListItem),
 		clientPeers:       make(map[string]*connectionState),
 		debugWebTransfers: make(map[string]debugWebTransferSession),
 		webSessions: newWebSessionStore(
@@ -548,6 +553,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "event must not include requestId", nil)
 				continue
 			}
+			if state.role == string(rp.RegistryRoleHub) && state.connectionMode == rp.RegistryConnectionModeUpdateOnly {
+				continue
+			}
+			if state.role == string(rp.RegistryRoleClient) && s.isUpdateOnlyHub(in.HubID) {
+				_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hub is update-only", map[string]any{"hubId": in.HubID})
+				continue
+			}
 			if !methodAllowed(state.role, in.Method) {
 				_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "event method not allowed for role", map[string]any{"role": state.role})
 				continue
@@ -587,6 +599,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeForbidden, "method not allowed for role", map[string]any{"role": state.role})
 			continue
 		}
+		if s.handleUpdateOnlyHubRequest(state, in) {
+			continue
+		}
+		if state.role == string(rp.RegistryRoleClient) && s.isUpdateOnlyHub(in.HubID) && !updateOnlyHubRequestAllowed(in) {
+			_ = s.writeError(state.peer, in.RequestID, in.Method, codeForbidden, "hub is update-only", map[string]any{"hubId": in.HubID})
+			continue
+		}
 
 		if shouldHandleRegistryRequestAsync(in.Method) {
 			if !dispatcher.dispatch(in) {
@@ -595,6 +614,69 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		s.handleRequest(state, in)
+	}
+}
+
+func (s *Server) handleUpdateOnlyHubRequest(state *connectionState, in envelope) bool {
+	if state.role != string(rp.RegistryRoleHub) || state.connectionMode != rp.RegistryConnectionModeUpdateOnly {
+		return false
+	}
+	_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
+	return true
+}
+
+func (s *Server) isUpdateOnlyHub(hubID string) bool {
+	hubID = strings.TrimSpace(hubID)
+	if hubID == "" {
+		return false
+	}
+	s.mu.RLock()
+	descriptor := s.hubDescriptors[hubID]
+	s.mu.RUnlock()
+	return descriptor.ConnectionMode == rp.RegistryConnectionModeUpdateOnly
+}
+
+func updateOnlyHubRequestAllowed(in envelope) bool {
+	var payload map[string]json.RawMessage
+	if err := decodePayload(in.Payload, &payload); err != nil || payload == nil {
+		return false
+	}
+	switch in.Method {
+	case rp.RegistryMethodHubStateRefresh:
+		if len(payload) != 1 {
+			return false
+		}
+		var sections []string
+		if err := json.Unmarshal(payload["sections"], &sections); err != nil {
+			return false
+		}
+		return len(sections) == 1 && sections[0] == "wheelmakerUpdate"
+	case rp.RegistryMethodHubStateAction:
+		if len(payload) < 2 || len(payload) > 3 {
+			return false
+		}
+		for key := range payload {
+			if key != "section" && key != "action" && key != "params" {
+				return false
+			}
+		}
+		var section string
+		var action string
+		if err := json.Unmarshal(payload["section"], &section); err != nil {
+			return false
+		}
+		if err := json.Unmarshal(payload["action"], &action); err != nil {
+			return false
+		}
+		if paramsRaw, ok := payload["params"]; ok {
+			var params map[string]json.RawMessage
+			if err := json.Unmarshal(paramsRaw, &params); err != nil || len(params) != 0 {
+				return false
+			}
+		}
+		return section == "wheelmakerUpdate" && action == "requestUpdate"
+	default:
+		return false
 	}
 }
 
@@ -804,6 +886,9 @@ func (s *Server) forwardRelayHubRequest(ctx context.Context, hubID string, metho
 	if hubID == "" {
 		return portrelay.ControlResult{Code: codeInvalidArgument, Message: "hubId is required"}
 	}
+	if s.isUpdateOnlyHub(hubID) {
+		return portrelay.ControlResult{Code: codeForbidden, Message: "hub is update-only", Details: map[string]any{"hubId": hubID}}
+	}
 	s.mu.RLock()
 	hub := s.hubs[hubID]
 	hubPeer := s.hubPeers[hubID]
@@ -884,21 +969,41 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 		_ = s.writeError(peer, in.RequestID, in.Method, codeUnauthorized, "invalid token", nil)
 		return false
 	}
-	if strings.TrimSpace(payload.ProtocolVersion) != s.cfg.ProtocolVersion {
+	protocolVersion := strings.TrimSpace(payload.ProtocolVersion)
+	comparison, comparable := compareProtocolVersions(protocolVersion, s.cfg.ProtocolVersion)
+	if role == string(rp.RegistryRoleClient) {
+		comparable = protocolVersion == s.cfg.ProtocolVersion
+		comparison = 0
+	}
+	if !comparable || comparison > 0 {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported protocolVersion", map[string]any{"protocolVersion": payload.ProtocolVersion, "supported": s.cfg.ProtocolVersion})
 		return true
 	}
 
+	connectionMode := rp.RegistryConnectionModeNormal
+	if role == string(rp.RegistryRoleHub) && comparison < 0 {
+		connectionMode = rp.RegistryConnectionModeUpdateOnly
+	}
 	state.initialized = true
 	state.clientName = clientName
 	state.role = role
 	state.hubID = strings.TrimSpace(payload.HubID)
 	state.scopeHubID = strings.TrimSpace(payload.HubID)
+	state.protocolVersion = protocolVersion
+	state.connectionMode = connectionMode
 	state.connectionEpoch = s.nextConnEpoch.Add(1)
 	peer.setMeta(state.role, state.hubID)
 	if state.role == string(rp.RegistryRoleClient) {
 		s.mu.Lock()
 		s.clientPeers[state.id] = state
+		s.mu.Unlock()
+	} else {
+		s.mu.Lock()
+		s.hubPeers[state.hubID] = peer
+		s.hubDescriptors[state.hubID] = rp.HubListItem{
+			HubID:          state.hubID,
+			ConnectionMode: state.connectionMode,
+		}
 		s.mu.Unlock()
 	}
 
@@ -923,6 +1028,54 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 	}
 	_ = s.writeResponse(peer, in.RequestID, in.Method, "", resp)
 	return true
+}
+
+func compareProtocolVersions(left, right string) (int, bool) {
+	parse := func(value string) ([]int, bool) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return nil, false
+		}
+		parts := strings.Split(value, ".")
+		components := make([]int, len(parts))
+		for index, part := range parts {
+			if part == "" {
+				return nil, false
+			}
+			component, err := strconv.Atoi(part)
+			if err != nil || component < 0 {
+				return nil, false
+			}
+			components[index] = component
+		}
+		return components, true
+	}
+	leftComponents, leftOK := parse(left)
+	rightComponents, rightOK := parse(right)
+	if !leftOK || !rightOK {
+		return 0, false
+	}
+	length := len(leftComponents)
+	if len(rightComponents) > length {
+		length = len(rightComponents)
+	}
+	for index := 0; index < length; index++ {
+		leftComponent := 0
+		if index < len(leftComponents) {
+			leftComponent = leftComponents[index]
+		}
+		rightComponent := 0
+		if index < len(rightComponents) {
+			rightComponent = rightComponents[index]
+		}
+		if leftComponent < rightComponent {
+			return -1, true
+		}
+		if leftComponent > rightComponent {
+			return 1, true
+		}
+	}
+	return 0, true
 }
 
 func (s *Server) handleHubReportProjects(peer *peerConn, state *connectionState, in envelope) {
@@ -951,8 +1104,13 @@ func (s *Server) handleHubReportProjects(peer *peerConn, state *connectionState,
 	}
 
 	s.mu.RLock()
+	currentPeer := s.hubPeers[payload.HubID]
 	currentHubSnapshot, hasCurrentHubSnapshot := s.hubs[payload.HubID]
 	s.mu.RUnlock()
+	if currentPeer != peer {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeConflict, "stale hub connection", map[string]any{"hubId": payload.HubID})
+		return
+	}
 	if hasCurrentHubSnapshot && payload.ConnectionEpoch < currentHubSnapshot.ConnectionEpoch {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeConflict, "stale connectionEpoch", map[string]any{
 			"hubId":           payload.HubID,
@@ -1019,6 +1177,13 @@ func (s *Server) handleHubUpdateProject(peer *peerConn, state *connectionState, 
 	payload.HubID = envelopeHubID
 	if payload.ConnectionEpoch != state.connectionEpoch {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeConflict, "connectionEpoch mismatch", nil)
+		return
+	}
+	s.mu.RLock()
+	currentPeer := s.hubPeers[payload.HubID]
+	s.mu.RUnlock()
+	if currentPeer != peer {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeConflict, "stale hub connection", map[string]any{"hubId": payload.HubID})
 		return
 	}
 	if payload.Seq < 1 {
@@ -1207,16 +1372,10 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 	}
 	preparedPayload := s.prepareHubStatePayload(in)
 	s.mu.RLock()
-	hub := s.hubs[hubID]
 	hubPeer := s.hubPeers[hubID]
 	s.mu.RUnlock()
-	if hub.HubID == "" {
-		resp := s.errorEnvelope(in.Method, codeNotFound, "hub not found", map[string]any{"hubId": hubID})
-		resp.HubID = hubID
-		return resp
-	}
 	if hubPeer == nil {
-		resp := s.errorEnvelope(in.Method, codeUnavailable, "hub offline", map[string]any{"hubId": hubID})
+		resp := s.errorEnvelope(in.Method, codeNotFound, "hub not found", map[string]any{"hubId": hubID})
 		resp.HubID = hubID
 		return resp
 	}
@@ -1373,12 +1532,12 @@ func (s *Server) snapshotProjectListHubs(scopeHubID string) []rp.HubListItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	items := make([]rp.HubListItem, 0, len(s.hubPeers))
-	for hubID := range s.hubPeers {
+	items := make([]rp.HubListItem, 0, len(s.hubDescriptors))
+	for hubID, descriptor := range s.hubDescriptors {
 		if scopeHubID != "" && hubID != scopeHubID {
 			continue
 		}
-		items = append(items, rp.HubListItem{HubID: hubID})
+		items = append(items, descriptor)
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].HubID < items[j].HubID
@@ -1480,6 +1639,7 @@ func (s *Server) unregisterHub(peer *peerConn, state *connectionState) {
 	}
 	projects := append([]rp.ProjectInfo(nil), s.hubs[state.hubID].Projects...)
 	delete(s.hubPeers, state.hubID)
+	delete(s.hubDescriptors, state.hubID)
 	delete(s.hubs, state.hubID)
 	for projectID, hubID := range s.projectToHub {
 		if hubID == state.hubID {

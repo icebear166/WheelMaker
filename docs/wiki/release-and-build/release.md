@@ -89,6 +89,18 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 
 完整安装生成当前平台的 `deploy`、`start` 和 `stop` 包装脚本。Windows 额外生成带 self-update capability 标记的 `update_exe.bat`。该 BAT 有 PID 时进入 `desktop-self-update`，无参数时保留 `desktop-update` 手动恢复语义。`restart` 和 `status` 包装脚本已退役。
 
+## 主协议不兼容时的受限更新
+
+Registry 主协议硬切不能切断 Web 主动更新旧 Hub 的唯一通道。Hub 主协议较旧时，Registry 允许它以 `update_only` 模式保持连接。认证、Token 和 Hub ID 校验不降级；Hub 比 Registry 更新、协议格式无效或 Client 协议不匹配时仍拒绝连接。
+
+该兼容完全由 Registry 实现，不增加维护版本、专用 RPC 或 Hub 端握手分支。旧 Hub 仍按原流程报告 Project；Registry 成功应答但丢弃这些报告，所以 Hub 保持在线、App 项目数为零。Registry 在现有 Hub descriptor 中标记 `connectionMode: "update_only"`，App 只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，不承担权限控制。
+
+Registry 只向受限 Hub 放行现有 `hub.state.refresh` 的 `wheelmakerUpdate` section，以及 `hub.state.action` 的 `wheelmakerUpdate/requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。Hub 内部仍复用既有 UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。受限连接成功不会自动开始更新。
+
+请求被接受后，Hub 在 `applying` 阶段断开属于预期行为；新 Hub 重启并以当前主协议重新握手后恢复完整业务模式。若更新失败但旧 Hub 重新启动，它会再次进入 `update_only`，允许用户查询失败状态并重试。从该能力发布起，Registry 长期保持上述更新 HubState wire 子集兼容，使后续主协议升级继续沿用同一受限路径。
+
+> 决策来源：[`docs/scope/2026-07-31-update-only-hub/spec-update-only-hub.md`](../../scope/2026-07-31-update-only-hub/spec-update-only-hub.md)
+
 ## 完整安装状态机
 
 完整安装不会为了下载而提前停止 Hub。当前顺序为：

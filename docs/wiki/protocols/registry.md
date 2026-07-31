@@ -8,7 +8,7 @@
 >
 > HubState 当前契约同步自：[`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)
 
-本文定义 WheelMaker Registry 2.6 协议。2.6 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.6`，不保留旧端兼容入口。
+本文定义 WheelMaker Registry 2.6 主协议。App 与 Registry 的 `connect.init.payload.protocolVersion` 必须一致。Hub 主协议相同时获得完整业务能力；较旧 Hub 可以保持 `update_only` 连接，以便通过现有 HubState 更新路径升级。
 
 HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh、Skills 所有权和 Release Job 方法同样按硬切契约发布；Hub 与 Web 必须配套部署，不保留旧 `agentProfiles` 或旧 HubState payload fallback。
 
@@ -96,9 +96,16 @@ HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh�
 - `role` 只能是 `hub`、`client`。
 - `role=hub` 必须在 payload 中携带 `hubId`。
 - `role=client` 可选携带 `hubId`；携带后 client scope 限定在该 Hub。
-- `protocolVersion` 必须等于 `2.6`。
+- `role=client` 的 `protocolVersion` 必须等于 Registry 当前主协议版本。
+- `role=hub` 主协议相同时进入 `normal`；主协议较旧时进入 `update_only`；Hub 主协议较新时仍拒绝。
 - 配置了 token 时必须携带并匹配。
 - 所有非 `connect.*` 业务请求必须在 `connect.init` 成功后发送。
+
+认证、Hub ID 和角色校验始终先于连接模式判定，`update_only` 不降低认证要求。主协议版本按数值组件比较，不按普通字符串顺序比较。握手 wire contract 不增加维护版本或连接模式字段；旧 Hub 不需要感知受限状态。Registry 在连接内部记录模式，并通过项目列表的 Hub descriptor 向 App 暴露可选的 `connectionMode`。
+
+Hub 只有断开并以当前主协议重新握手后才能从 `update_only` 进入 `normal`，不能通过业务消息提升连接模式。
+
+> 决策来源：[`docs/scope/2026-07-31-update-only-hub/spec-update-only-hub.md`](../../scope/2026-07-31-update-only-hub/spec-update-only-hub.md)
 
 ## 3. 方法域与白名单
 
@@ -117,14 +124,15 @@ HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh�
 
 | 角色 | 允许请求 |
 | --- | --- |
-| `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
+| `hub`（`normal`） | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
+| `hub`（`update_only`） | `hub.ping`；业务上报由 Registry 确认后丢弃 |
 | `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`release.publish.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`release.publish.updated`、`session.message`、`session.updated`、`connect.close`。
 
 ## 4. Hub 上报
 
-Hub 建连后必须先发全量项目报告，后续按需发单项目报告。两个方法都要求 envelope 顶层 `hubId`。
+`normal` Hub 建连后必须先发全量项目报告，后续按需发单项目报告。两个方法都要求 envelope 顶层 `hubId`。旧 Hub 不知道 `update_only`，仍会发送全量项目报告；Registry 必须返回成功响应但丢弃 payload，否则旧 Reporter 会把握手视为失败。受限连接的后续业务报告和事件同样不进入业务路由，不创建 Project snapshot，也不广播状态。
 
 ### `hub.report.projects`
 
@@ -216,11 +224,16 @@ Client 读取 Registry 当前项目目录。返回范围受 client scope 限制�
       }
     ],
     "hubs": [
-      {"hubId": "hub-a"}
+      {
+        "hubId": "hub-a",
+        "connectionMode": "normal"
+      }
     ]
   }
 }
 ```
+
+Hub 目录与 Project snapshot 分离。Registry 在 Hub 握手成功时登记连接，而不是等到首次项目报告。`update_only` Hub 会出现在 `hubs` 中并携带 `connectionMode: "update_only"`，但不会在 `projects` 中产生空项目或伪造项目状态。字段缺失时 App 按 `normal` 处理。
 
 ### `registry.project.report`
 
@@ -566,6 +579,17 @@ Publishing Hub 在 Job 阶段或终态变化时发送：
 ```
 
 Release Publishing 页面通过 `start/get/updated` 工作，不通过 HubState Action，也不以 2 秒轮询维持进度。正式版本发布后的 Hub 通知仍使用内部 `hub.release.notify/apply`；临时 Debug Web 仍使用第 10 节的分块传输方法。
+
+## 7C. Update-only Hub
+
+`update_only` 是 Registry 的永久兼容状态，不是独立协议。Registry 对目标受限 Hub 只放行既有 HubState 更新子集：
+
+- `hub.state.refresh`，且 `sections` 必须只包含 `wheelmakerUpdate`。
+- `hub.state.action`，且 `section=wheelmakerUpdate`、`action=requestUpdate`。
+
+方法与 payload 必须同时匹配；`hub.state.get`、其他 section、其他 action 及 Project、Session、文件、Git、Terminal、HubConfig、Skills、发布、Debug Web 和 Relay 请求统一返回 `FORBIDDEN`。App 不承担此权限判断，只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，并继续复用现有更新状态和按钮。
+
+Hub 内部仍使用既有 WheelMaker Update HubState adapter、UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。用户必须明确触发更新；受限握手本身不启动更新。该 HubState wire 子集从本能力发布起保持兼容，不增加 maintenance version 或平行 RPC。
 
 ## 8. Session
 

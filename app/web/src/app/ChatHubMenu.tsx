@@ -83,6 +83,7 @@ export interface ChatHubProjectItem {
 export interface ChatHubTreeItem {
   hubId: string;
   projects: ChatHubProjectItem[];
+  connectionMode?: 'normal' | 'update_only';
 }
 
 export interface ChatHubNpmPackageView {
@@ -992,7 +993,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     activeProjectId,
     mobile,
   } = props;
-  const treeItem = treeItems.find(item => item.hubId === hubId) ?? {hubId, projects: []};
+  const treeItem = treeItems.find(item => item.hubId === hubId) ?? {hubId, projects: [], connectionMode: undefined};
   const expanded = expandedHubIds.includes(hubId);
   const colorMenuOpen = colorMenuHubId === hubId;
   const flickerStatus = flickerStatuses[hubId];
@@ -1077,6 +1078,9 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
       ) : null}
       {expanded ? (
         <div className="chat-hub-sections">
+          {treeItem.connectionMode === 'update_only' ? (
+            <div className="chat-hub-protocol-mismatch">Protocol mismatch · Update only</div>
+          ) : null}
           <div className="chat-hub-section">
             <ChatHubSectionHeader
               icon="settings"

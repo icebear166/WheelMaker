@@ -344,6 +344,330 @@ func TestConnectInitRejectsLegacyProtocolVersion24(t *testing.T) {
 	}
 }
 
+func TestCompareProtocolVersions(t *testing.T) {
+	tests := []struct {
+		name         string
+		left         string
+		right        string
+		wantOrdering int
+		wantOK       bool
+	}{
+		{name: "equal", left: "2.6", right: "2.6", wantOrdering: 0, wantOK: true},
+		{name: "older", left: "2.5", right: "2.6", wantOrdering: -1, wantOK: true},
+		{name: "numeric components", left: "2.10", right: "2.9", wantOrdering: 1, wantOK: true},
+		{name: "trailing zero", left: "2.6.0", right: "2.6", wantOrdering: 0, wantOK: true},
+		{name: "invalid", left: "2.x", right: "2.6", wantOrdering: 0, wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ordering, ok := compareProtocolVersions(tt.left, tt.right)
+			if ordering != tt.wantOrdering || ok != tt.wantOK {
+				t.Fatalf("compareProtocolVersions(%q, %q)=(%d, %v), want (%d, %v)",
+					tt.left, tt.right, ordering, ok, tt.wantOrdering, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestConnectInitAcceptsOlderHubProtocolOnly(t *testing.T) {
+	s := New(Config{ProtocolVersion: "2.7"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	tests := []struct {
+		name            string
+		role            string
+		protocolVersion string
+		wantResponse    bool
+	}{
+		{name: "older hub", role: "hub", protocolVersion: "2.6", wantResponse: true},
+		{name: "newer hub", role: "hub", protocolVersion: "2.8", wantResponse: false},
+		{name: "invalid hub", role: "hub", protocolVersion: "2.x", wantResponse: false},
+		{name: "older client", role: "client", protocolVersion: "2.6", wantResponse: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ws := dialWS(t, ts.URL+"/ws")
+			defer ws.Close()
+			payload := map[string]any{
+				"clientName":      "compat-test",
+				"clientVersion":   "0.1.0",
+				"protocolVersion": tt.protocolVersion,
+				"role":            tt.role,
+			}
+			if tt.role == "hub" {
+				payload["hubId"] = "hub-" + strings.ReplaceAll(tt.name, " ", "-")
+			}
+			mustWriteJSON(t, ws, testEnvelope{
+				RequestID: 1,
+				Type:      "request",
+				Method:    rp.RegistryMethodConnectInit,
+				Payload:   payload,
+			})
+			resp := mustReadEnvelope(t, ws)
+			if tt.wantResponse {
+				if resp.Type != rp.RegistryEnvelopeTypeResponse {
+					t.Fatalf("response=%#v, want successful connect.init", resp)
+				}
+				return
+			}
+			message, _ := resp.Payload["message"].(string)
+			if resp.Type != rp.RegistryEnvelopeTypeError || !strings.Contains(message, "unsupported protocolVersion") {
+				t.Fatalf("response=%#v, want unsupported protocolVersion", resp)
+			}
+		})
+	}
+}
+
+func TestUpdateOnlyHubReportsAreAcknowledgedAndDiscarded(t *testing.T) {
+	s := New(Config{ProtocolVersion: "2.7"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialWS(t, ts.URL+"/ws")
+	defer hub.Close()
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 1,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodConnectInit,
+		Payload: map[string]any{
+			"clientName":      "wheelmaker-hub",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": "2.6",
+			"role":            "hub",
+			"hubId":           "hub-old",
+		},
+	})
+	initResp := mustReadEnvelope(t, hub)
+	principal, _ := initResp.Payload["principal"].(map[string]any)
+	connectionEpoch, _ := principal["connectionEpoch"].(float64)
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 2,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodHubReportProjects,
+		HubID:     "hub-old",
+		Payload: map[string]any{
+			"connectionEpoch": int64(connectionEpoch),
+			"projects": []map[string]any{
+				{"name": "secret-project", "path": "D:/secret", "online": true},
+			},
+		},
+	})
+	if resp := mustReadEnvelope(t, hub); resp.Type != rp.RegistryEnvelopeTypeResponse {
+		t.Fatalf("hub.report.projects response=%#v, want success", resp)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 3,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodHubReportProject,
+		HubID:     "hub-old",
+		Payload: map[string]any{
+			"connectionEpoch": int64(connectionEpoch),
+			"seq":             1,
+			"updatedAt":       "2026-07-31T10:00:00Z",
+			"project":         map[string]any{"name": "another-project", "path": "D:/another", "online": true},
+		},
+	})
+	if resp := mustReadEnvelope(t, hub); resp.Type != rp.RegistryEnvelopeTypeResponse {
+		t.Fatalf("hub.report.project response=%#v, want success", resp)
+	}
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryPeerVersion(t, client, "client", "", "2.7")
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodRegistryProjectList,
+		Payload:   map[string]any{},
+	})
+	listResp := mustReadEnvelope(t, client)
+	projects, _ := listResp.Payload["projects"].([]any)
+	if len(projects) != 0 {
+		t.Fatalf("projects=%#v, want no projects from update-only Hub", projects)
+	}
+	hubs, _ := listResp.Payload["hubs"].([]any)
+	if len(hubs) != 1 {
+		t.Fatalf("hubs=%#v, want one update-only Hub", hubs)
+	}
+	hubDescriptor, _ := hubs[0].(map[string]any)
+	if hubDescriptor["hubId"] != "hub-old" || hubDescriptor["connectionMode"] != "update_only" {
+		t.Fatalf("hub descriptor=%#v, want update_only hub-old", hubDescriptor)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		Type:   rp.RegistryEnvelopeTypeEvent,
+		Method: rp.RegistryMethodHubStateUpdated,
+		HubID:  "hub-old",
+		Payload: map[string]any{
+			"sections": []string{"skills"},
+		},
+	})
+	_ = client.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	var unexpected testEnvelope
+	if err := client.ReadJSON(&unexpected); err == nil {
+		t.Fatalf("received restricted Hub event: %#v", unexpected)
+	}
+}
+
+func TestUpdateOnlyHubRequestAllowedRequiresExactUpdatePayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		method  string
+		payload map[string]any
+		want    bool
+	}{
+		{
+			name:    "refresh wheelmaker update",
+			method:  rp.RegistryMethodHubStateRefresh,
+			payload: map[string]any{"sections": []string{"wheelmakerUpdate"}},
+			want:    true,
+		},
+		{
+			name:   "request update",
+			method: rp.RegistryMethodHubStateAction,
+			payload: map[string]any{
+				"section": "wheelmakerUpdate",
+				"action":  "requestUpdate",
+				"params":  map[string]any{},
+			},
+			want: true,
+		},
+		{
+			name:    "get is not update query",
+			method:  rp.RegistryMethodHubStateGet,
+			payload: map[string]any{"sections": []string{"wheelmakerUpdate"}},
+			want:    false,
+		},
+		{
+			name:    "multiple refresh sections",
+			method:  rp.RegistryMethodHubStateRefresh,
+			payload: map[string]any{"sections": []string{"wheelmakerUpdate", "skills"}},
+			want:    false,
+		},
+		{
+			name:    "different refresh section",
+			method:  rp.RegistryMethodHubStateRefresh,
+			payload: map[string]any{"sections": []string{"skills"}},
+			want:    false,
+		},
+		{
+			name:   "different action",
+			method: rp.RegistryMethodHubStateAction,
+			payload: map[string]any{
+				"section": "wheelmakerUpdate",
+				"action":  "updatePublish",
+				"params":  map[string]any{},
+			},
+			want: false,
+		},
+		{
+			name:   "request update with injected params",
+			method: rp.RegistryMethodHubStateAction,
+			payload: map[string]any{
+				"section": "wheelmakerUpdate",
+				"action":  "requestUpdate",
+				"params":  map[string]any{"releaseURL": "https://example.invalid"},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := envelope{Method: tt.method, Payload: rp.MustRaw(tt.payload)}
+			if got := updateOnlyHubRequestAllowed(in); got != tt.want {
+				t.Fatalf("updateOnlyHubRequestAllowed(%s, %#v)=%v, want %v", tt.method, tt.payload, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdateOnlyHubAllowsOnlyWheelMakerUpdateRequests(t *testing.T) {
+	t.Run("forwards update refresh", func(t *testing.T) {
+		s := New(Config{ProtocolVersion: "2.7"})
+		ts := httptest.NewServer(s.Handler())
+		t.Cleanup(ts.Close)
+
+		hub := dialWS(t, ts.URL+"/ws")
+		defer hub.Close()
+		connectRegistryPeerVersion(t, hub, "hub", "hub-old", "2.6")
+
+		client := dialWS(t, ts.URL+"/ws")
+		defer client.Close()
+		connectRegistryPeerVersion(t, client, "client", "", "2.7")
+		mustWriteJSON(t, client, testEnvelope{
+			RequestID: 2,
+			Type:      rp.RegistryEnvelopeTypeRequest,
+			Method:    rp.RegistryMethodHubStateRefresh,
+			HubID:     "hub-old",
+			Payload:   map[string]any{"sections": []string{"wheelmakerUpdate"}},
+		})
+		forwarded := mustReadEnvelope(t, hub)
+		if forwarded.Method != rp.RegistryMethodHubStateRefresh || forwarded.HubID != "hub-old" {
+			t.Fatalf("forwarded=%#v, want wheelmaker update refresh", forwarded)
+		}
+		mustWriteJSON(t, hub, testEnvelope{
+			RequestID: forwarded.RequestID,
+			Type:      rp.RegistryEnvelopeTypeResponse,
+			Method:    forwarded.Method,
+			HubID:     "hub-old",
+			Payload:   map[string]any{"state": map[string]any{"hubId": "hub-old"}},
+		})
+		if resp := mustReadEnvelope(t, client); resp.Type != rp.RegistryEnvelopeTypeResponse {
+			t.Fatalf("client response=%#v, want update response", resp)
+		}
+	})
+
+	t.Run("rejects other Hub request", func(t *testing.T) {
+		s := New(Config{ProtocolVersion: "2.7"})
+		ts := httptest.NewServer(s.Handler())
+		t.Cleanup(ts.Close)
+
+		hub := dialWS(t, ts.URL+"/ws")
+		defer hub.Close()
+		connectRegistryPeerVersion(t, hub, "hub", "hub-old", "2.6")
+
+		client := dialWS(t, ts.URL+"/ws")
+		defer client.Close()
+		connectRegistryPeerVersion(t, client, "client", "", "2.7")
+		mustWriteJSON(t, client, testEnvelope{
+			RequestID: 2,
+			Type:      rp.RegistryEnvelopeTypeRequest,
+			Method:    rp.RegistryMethodHubConfigGet,
+			HubID:     "hub-old",
+			Payload:   map[string]any{},
+		})
+		_ = client.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+		var resp testEnvelope
+		if err := client.ReadJSON(&resp); err != nil {
+			t.Fatalf("read denied response: %v", err)
+		}
+		if resp.Type != rp.RegistryEnvelopeTypeError || resp.Payload["code"] != codeForbidden {
+			t.Fatalf("response=%#v, want FORBIDDEN", resp)
+		}
+	})
+}
+
+func TestUpdateOnlyHubRejectsRelayForwarding(t *testing.T) {
+	s := New(Config{})
+	s.hubDescriptors["hub-old"] = rp.HubListItem{
+		HubID:          "hub-old",
+		ConnectionMode: rp.RegistryConnectionModeUpdateOnly,
+	}
+
+	result := s.forwardRelayHubRequest(
+		context.Background(),
+		"hub-old",
+		rp.RegistryMethodHubRelayOpen,
+		map[string]any{},
+	)
+	if result.Code != codeForbidden {
+		t.Fatalf("relay result=%#v, want FORBIDDEN", result)
+	}
+}
+
 func TestRegistryProtocolDomainAcceptsNewAndRejectsOldProjectRoutes(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
@@ -3183,18 +3507,30 @@ func TestRelayEnableForwardsInternalOpenToHub(t *testing.T) {
 
 func connectRegistryClient(t *testing.T, ws *websocket.Conn) {
 	t.Helper()
+	connectRegistryPeerVersion(t, ws, "client", "", rp.DefaultProtocolVersion)
+}
+
+func connectRegistryPeerVersion(t *testing.T, ws *websocket.Conn, role, hubID, protocolVersion string) int64 {
+	t.Helper()
+	payload := map[string]any{
+		"clientName":      "compat-test",
+		"clientVersion":   "0.1.0",
+		"protocolVersion": protocolVersion,
+		"role":            role,
+	}
+	if hubID != "" {
+		payload["hubId"] = hubID
+	}
 	mustWriteJSON(t, ws, testEnvelope{
 		RequestID: 1,
 		Type:      "request",
 		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-		},
+		Payload:   payload,
 	})
-	_ = mustReadEnvelope(t, ws)
+	initResp := mustReadEnvelope(t, ws)
+	principal, _ := initResp.Payload["principal"].(map[string]any)
+	connectionEpoch, _ := principal["connectionEpoch"].(float64)
+	return int64(connectionEpoch)
 }
 
 func connectRegistryHub(t *testing.T, ws *websocket.Conn, hubID string) int64 {
