@@ -3165,8 +3165,12 @@ func writeClaudeSessionFixtureAtProjectsDir(t *testing.T, projectsDir, projectDi
 
 func writeCodexSessionFixture(t *testing.T, homeDir, sessionID, cwd, title, assistant string) {
 	t.Helper()
-	codexDir := filepath.Join(homeDir, ".codex")
-	sessionDir := filepath.Join(codexDir, "sessions", "2026", "05", "12")
+	writeCodexSessionFixtureAtHome(t, filepath.Join(homeDir, ".codex"), sessionID, cwd, title, assistant)
+}
+
+func writeCodexSessionFixtureAtHome(t *testing.T, codexHome, sessionID, cwd, title, assistant string) {
+	t.Helper()
+	sessionDir := filepath.Join(codexHome, "sessions", "2026", "05", "12")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%q): %v", sessionDir, err)
 	}
@@ -3178,7 +3182,7 @@ func writeCodexSessionFixture(t *testing.T, homeDir, sessionID, cwd, title, assi
 	if err != nil {
 		t.Fatalf("marshal codex index: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(codexDir, "session_index.jsonl"), append(indexLine, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(codexHome, "session_index.jsonl"), append(indexLine, '\n'), 0o644); err != nil {
 		t.Fatalf("WriteFile codex index: %v", err)
 	}
 
@@ -7013,6 +7017,49 @@ func TestSessionReadEnrichesLegacyCodexPromptDoneWithoutRewritingWMT2(t *testing
 	}
 }
 
+func TestSessionReadCXDeepSeekEnrichesLegacyForkPointWithProviderIdentity(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	ctx := context.Background()
+	sessionID := "sess-cx-legacy-fork"
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sessionID, "CX Legacy Fork", string(acp.ACPProviderCXDeepSeek))); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent(sessionID, "legacy prompt", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent(sessionID, acp.StopReasonEndTurn)); err != nil {
+		t.Fatalf("RecordEvent prompt finished: %v", err)
+	}
+	c.InjectForwarder(string(acp.ACPProviderCXDeepSeek), sessionID, nil, nil)
+	runtime := c.sessions[sessionID].instance.(*testInjectedInstance)
+	resolveCalls := 0
+	runtime.resolveForkFn = func(_ context.Context, gotSessionID string, prompts []acp.SessionForkPrompt) (map[int64]acp.SessionForkPoint, error) {
+		resolveCalls++
+		if gotSessionID != sessionID || len(prompts) != 1 || prompts[0].DoneTurnIndex != 2 {
+			t.Fatalf("resolve input session=%q prompts=%#v", gotSessionID, prompts)
+		}
+		return map[int64]acp.SessionForkPoint{
+			2: {Provider: string(acp.ACPProviderCXDeepSeek), Ref: "turn-cx-legacy-1"},
+		}, nil
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"sess-cx-legacy-fork"}`))
+	if err != nil {
+		t.Fatalf("session.read: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	responseTurns := responseTurnsForTest(t, body["turns"])
+	point := promptDoneForkPointForTest(t, responseTurns[len(responseTurns)-1])
+	if point == nil || point.Provider != string(acp.ACPProviderCXDeepSeek) || point.Ref != "turn-cx-legacy-1" {
+		t.Fatalf("response forkPoint = %#v", point)
+	}
+	if resolveCalls != 1 {
+		t.Fatalf("resolve calls = %d, want 1", resolveCalls)
+	}
+}
+
 func TestSessionReadLeavesLegacyPromptDoneUnforkableWhenProviderCannotMatch(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(t.TempDir())
@@ -7125,6 +7172,87 @@ func TestHandleSessionForkCreatesIndependentTargetHistory(t *testing.T) {
 	}
 	if len(sourceTurns) != 4 {
 		t.Fatalf("source turns len = %d, want unchanged 4", len(sourceTurns))
+	}
+}
+
+func TestHandleCXDeepSeekSessionForkPreservesProviderIdentity(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	c.registry = agent.NewACPFactory()
+	c.registry.RegisterSessionActions(acp.ACPProviderCXDeepSeek, agent.SessionActionSupport{Fork: true})
+	ctx := context.Background()
+	sourceID := "sess-cx-fork-source"
+	targetID := "sess-cx-fork-target"
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "CX Source", string(acp.ACPProviderCXDeepSeek))); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	recordPromptWithProviderForkPointForTest(t, c, sourceID, "first", string(acp.ACPProviderCXDeepSeek), "source-cx-turn-1")
+	c.InjectForwarder(string(acp.ACPProviderCXDeepSeek), sourceID, nil, nil)
+	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
+	runtime.forkSessionFn = func(_ context.Context, gotSessionID string, lastTurnID string, prompts []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
+		if gotSessionID != sourceID || lastTurnID != "source-cx-turn-1" || len(prompts) != 1 {
+			t.Fatalf("fork input session=%q lastTurnID=%q prompts=%#v", gotSessionID, lastTurnID, prompts)
+		}
+		return acp.SessionForkResult{
+			SessionID: targetID,
+			Title:     "CX Forked",
+			ForkPoints: map[int64]acp.SessionForkPoint{
+				2: {Provider: string(acp.ACPProviderCXDeepSeek), Ref: "target-cx-turn-1"},
+			},
+		}, nil
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-cx-fork-source","turnIndex":2}`))
+	if err != nil {
+		t.Fatalf("session.fork: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	summaryRaw, err := json.Marshal(body["session"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summary sessionViewSummary
+	if err := json.Unmarshal(summaryRaw, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.SessionID != targetID || summary.AgentType != string(acp.ACPProviderCXDeepSeek) {
+		t.Fatalf("target summary = %#v", summary)
+	}
+	record, err := c.store.LoadSession(ctx, c.projectName, targetID)
+	if err != nil || record == nil || record.AgentType != string(acp.ACPProviderCXDeepSeek) {
+		t.Fatalf("target record = %#v, err=%v", record, err)
+	}
+	_, targetTurns, err := c.sessionRecorder.ReadSessionTurns(ctx, targetID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	point := promptDoneForkPointForTest(t, targetTurns[1])
+	if point == nil || point.Provider != string(acp.ACPProviderCXDeepSeek) || point.Ref != "target-cx-turn-1" {
+		t.Fatalf("target fork point = %#v", point)
+	}
+}
+
+func TestHandleCXDeepSeekSessionForkRejectsMismatchedPointProvider(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	c.registry = agent.NewACPFactory()
+	c.registry.RegisterSessionActions(acp.ACPProviderCXDeepSeek, agent.SessionActionSupport{Fork: true})
+	ctx := context.Background()
+	sessionID := "sess-cx-fork-mismatch"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sessionID, "CX Mismatch", string(acp.ACPProviderCXDeepSeek))); err != nil {
+		t.Fatal(err)
+	}
+	recordPromptWithProviderForkPointForTest(t, c, sessionID, "first", string(acp.ACPProviderCodex), "wrong-provider-turn")
+	c.InjectForwarder(string(acp.ACPProviderCXDeepSeek), sessionID, nil, nil)
+	c.sessions[sessionID].instance.(*testInjectedInstance).forkSessionFn = func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
+		t.Fatal("provider fork must not be called for mismatched fork point")
+		return acp.SessionForkResult{}, nil
+	}
+
+	_, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-cx-fork-mismatch","turnIndex":2}`))
+	if err == nil || !strings.Contains(err.Error(), "does not match source agent") {
+		t.Fatalf("session.fork error = %v, want provider mismatch", err)
 	}
 }
 
@@ -7336,11 +7464,16 @@ func TestForkHistoryCopiesArtifactsAndReferencedAttachments(t *testing.T) {
 
 func recordPromptWithForkPointForTest(t *testing.T, c *Client, sessionID, text, nativeTurnID string) {
 	t.Helper()
+	recordPromptWithProviderForkPointForTest(t, c, sessionID, text, string(acp.ACPProviderCodex), nativeTurnID)
+}
+
+func recordPromptWithProviderForkPointForTest(t *testing.T, c *Client, sessionID, text, provider, nativeTurnID string) {
+	t.Helper()
 	if err := c.RecordEvent(context.Background(), sessionViewPromptEvent(sessionID, text, nil)); err != nil {
 		t.Fatalf("RecordEvent prompt: %v", err)
 	}
 	done := sessionViewPromptFinishedEvent(sessionID, acp.StopReasonEndTurn)
-	done.ForkPoint = &acp.SessionForkPoint{Provider: string(acp.ACPProviderCodex), Ref: nativeTurnID}
+	done.ForkPoint = &acp.SessionForkPoint{Provider: provider, Ref: nativeTurnID}
 	if err := c.RecordEvent(context.Background(), done); err != nil {
 		t.Fatalf("RecordEvent done: %v", err)
 	}
@@ -8742,6 +8875,48 @@ func TestArchiveSessionNativeWarningDoesNotRollbackWheelMakerArchive(t *testing.
 	}
 }
 
+func TestCXDeepSeekNativeArchiveSyncUsesCXCreator(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		archived bool
+	}{
+		{name: "archive", archived: true},
+		{name: "unarchive", archived: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			c := newSessionViewTestClient(t)
+			factory := agent.NewACPFactory()
+			inst := &testInjectedInstance{name: string(acp.ACPProviderCXDeepSeek), alive: true}
+			creatorCalls := 0
+			factory.Register(acp.ACPProviderCXDeepSeek, func(ctx context.Context, cwd string) (agent.Instance, error) {
+				creatorCalls++
+				if projectName := agent.ProjectNameFromContext(ctx); projectName != c.projectName {
+					t.Fatalf("creator project = %q, want %q", projectName, c.projectName)
+				}
+				if cwd != c.cwd {
+					t.Fatalf("creator cwd = %q, want %q", cwd, c.cwd)
+				}
+				return inst, nil
+			})
+			c.registry = factory
+
+			update := c.syncNativeArchiveState(context.Background(), string(acp.ACPProviderCXDeepSeek), "cx-native-session", test.archived)
+			if creatorCalls != 1 || update.NativeSyncWarning != "" {
+				t.Fatalf("creator calls = %d, update = %#v", creatorCalls, update)
+			}
+			if test.archived {
+				if !reflect.DeepEqual(inst.archiveCalls, []string{"cx-native-session"}) || update.NativeArchivedAt == "" {
+					t.Fatalf("archive calls = %#v, update = %#v", inst.archiveCalls, update)
+				}
+				return
+			}
+			if !reflect.DeepEqual(inst.unarchiveCalls, []string{"cx-native-session"}) || update.NativeUnarchivedAt == "" {
+				t.Fatalf("unarchive calls = %#v, update = %#v", inst.unarchiveCalls, update)
+			}
+		})
+	}
+}
+
 func TestSessionResumeListExcludesArchivedUnrestoredSessions(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
@@ -8951,12 +9126,61 @@ func TestCodexRecoveryListMatchesEquivalentWindowsCWDSeparators(t *testing.T) {
 	t.Setenv("USERPROFILE", homeDir)
 	writeCodexSessionFixture(t, homeDir, "sess-mixed-cwd", `D:\Code\WheelMaker\`, "Resume me", "assistant preview")
 
-	items, err := codexRecoverySource{}.List("D:/Code/WheelMaker/", nil)
+	items, err := (codexRecoverySource{agentType: "codex", homeDir: filepath.Join(homeDir, ".codex")}).List("D:/Code/WheelMaker/", nil)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if len(items) != 1 || items[0].SessionID != "sess-mixed-cwd" {
 		t.Fatalf("items = %+v, want sess-mixed-cwd", items)
+	}
+}
+
+func TestCodexFamilyRecoveryUsesIsolatedHomes(t *testing.T) {
+	userDir := t.TempDir()
+	stateDir := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", userDir)
+	t.Setenv("USERPROFILE", userDir)
+	nativeHome := filepath.Join(userDir, ".codex")
+	cxHome := filepath.Join(stateDir, ".data", "cx-deepseek")
+	writeCodexSessionFixtureAtHome(t, nativeHome, "native-session", cwd, "Native", "native reply")
+	writeCodexSessionFixtureAtHome(t, cxHome, "cx-session", cwd, "DeepSeek", "cx reply")
+
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := NewWithRuntime(store, "project", cwd, RuntimeConfig{StateDir: stateDir})
+	t.Cleanup(func() { _ = client.Close() })
+
+	native, err := client.recovery().ListResumableSessions(context.Background(), "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cx, err := client.recovery().ListResumableSessions(context.Background(), "cx-deepseek")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRecoverySessionIDs(t, native, "native-session")
+	assertRecoverySessionIDs(t, cx, "cx-session")
+	if sessions := cx["sessions"].([]recoverySession); sessions[0].AgentType != "cx-deepseek" {
+		t.Fatalf("cx session AgentType = %q", sessions[0].AgentType)
+	}
+
+	withoutState := &sessionRecovery{client: &Client{}}
+	if _, err := withoutState.sourceFor("cx-deepseek"); err == nil || !strings.Contains(err.Error(), "state directory") {
+		t.Fatalf("sourceFor(cx-deepseek) error = %v, want missing state directory", err)
+	}
+}
+
+func assertRecoverySessionIDs(t *testing.T, response map[string]any, want string) {
+	t.Helper()
+	sessions, ok := response["sessions"].([]recoverySession)
+	if !ok {
+		t.Fatalf("sessions = %#v, want []recoverySession", response["sessions"])
+	}
+	if len(sessions) != 1 || sessions[0].SessionID != want {
+		t.Fatalf("sessions = %#v, want only %q", sessions, want)
 	}
 }
 

@@ -833,7 +833,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			}
 			return nil, err
 		}
-		if strings.EqualFold(summary.AgentType, string(acp.ACPProviderCodex)) {
+		if isCodexAppAgentType(summary.AgentType) {
 			enriched, enrichErr := c.enrichLegacySessionForkPoints(ctx, sessionID, latestTurnIndex, turns)
 			if enrichErr == nil {
 				turns = enriched
@@ -1412,7 +1412,8 @@ func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, 
 	if err != nil {
 		return nil, err
 	}
-	if !strings.EqualFold(sourceSummary.AgentType, string(acp.ACPProviderCodex)) {
+	sourceAgentType := strings.ToLower(normalizeAgentType(sourceSummary.AgentType))
+	if !isCodexAppAgentType(sourceAgentType) {
 		return nil, fmt.Errorf("%w: fork", agent.ErrSessionActionUnsupported)
 	}
 	sourceSession, err := c.SessionByID(ctx, sourceSessionID)
@@ -1430,8 +1431,8 @@ func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, 
 	if selectedPoint == nil {
 		return nil, fmt.Errorf("fork point is not available for turn %d", turnIndex)
 	}
-	if !strings.EqualFold(selectedPoint.Provider, string(acp.ACPProviderCodex)) {
-		return nil, fmt.Errorf("unsupported fork point provider: %s", selectedPoint.Provider)
+	if !strings.EqualFold(selectedPoint.Provider, sourceAgentType) {
+		return nil, fmt.Errorf("fork point provider %s does not match source agent %s", selectedPoint.Provider, sourceAgentType)
 	}
 	prompts := mappedSessionForkPromptsThroughTurn(sourceTurns, turnIndex)
 	if len(prompts) == 0 {
@@ -2177,7 +2178,7 @@ func (c *Client) syncNativeArchiveState(ctx context.Context, agentType, sessionI
 	if agentType == "" || sessionID == "" || c == nil || c.registry == nil {
 		return update
 	}
-	if agentType != string(acp.ACPProviderCodex) {
+	if !isCodexAppAgentType(agentType) {
 		return update
 	}
 	creator := c.registry.CreatorByName(agentType)
@@ -2229,6 +2230,15 @@ func (c *Client) syncNativeArchiveState(ctx context.Context, agentType, sessionI
 		update.NativeUnarchivedAt = now
 	}
 	return update
+}
+
+func isCodexAppAgentType(agentType string) bool {
+	switch strings.ToLower(normalizeAgentType(agentType)) {
+	case string(acp.ACPProviderCodex), string(acp.ACPProviderCXDeepSeek):
+		return true
+	default:
+		return false
+	}
 }
 
 func nativeArchiveWarning(archived bool, err error) string {

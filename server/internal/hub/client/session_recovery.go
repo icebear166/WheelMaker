@@ -203,7 +203,19 @@ func (r *sessionRecovery) sourceFor(agentType string) (recoverySource, error) {
 			projectsDir: filepath.Join(r.client.stateDir, ".data", agentType, "projects"),
 		}, nil
 	case "codex":
-		return codexRecoverySource{}, nil
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		return codexRecoverySource{agentType: agentType, homeDir: filepath.Join(home, ".codex")}, nil
+	case "cx-deepseek":
+		if r.client.stateDir == "" {
+			return nil, fmt.Errorf("state directory is required for %s recovery", agentType)
+		}
+		return codexRecoverySource{
+			agentType: agentType,
+			homeDir:   filepath.Join(r.client.stateDir, ".data", agentType),
+		}, nil
 	case "copilot":
 		return copilotRecoverySource{}, nil
 	default:
@@ -595,20 +607,19 @@ func cleanClaudeRecoveryReply(s string) string {
 	return strings.TrimSpace(s)
 }
 
-type codexRecoverySource struct{}
+type codexRecoverySource struct {
+	agentType string
+	homeDir   string
+}
 
-func (codexRecoverySource) AgentType() string { return "codex" }
+func (s codexRecoverySource) AgentType() string { return s.agentType }
 
-func (codexRecoverySource) List(projectCWD string, managedIDs map[string]bool) ([]recoverySession, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, nil
-	}
+func (s codexRecoverySource) List(projectCWD string, managedIDs map[string]bool) ([]recoverySession, error) {
 	indexEntries := make(map[string]struct {
 		Title     string `json:"thread_name"`
 		UpdatedAt string `json:"updated_at"`
 	})
-	indexPath := filepath.Join(home, ".codex", "session_index.jsonl")
+	indexPath := filepath.Join(s.homeDir, "session_index.jsonl")
 	indexData, _ := os.ReadFile(indexPath)
 	for _, line := range strings.Split(string(indexData), "\n") {
 		line = strings.TrimSpace(line)
@@ -629,7 +640,7 @@ func (codexRecoverySource) List(projectCWD string, managedIDs map[string]bool) (
 	}
 	normalizedCWD := normalizeRecoveryCWD(projectCWD)
 	var results []recoverySession
-	sessionsDir := filepath.Join(home, ".codex", "sessions")
+	sessionsDir := filepath.Join(s.homeDir, "sessions")
 	_ = filepath.WalkDir(sessionsDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
 			return nil
@@ -648,7 +659,7 @@ func (codexRecoverySource) List(projectCWD string, managedIDs map[string]bool) (
 		title := firstNonEmpty(strings.TrimSpace(entry.Title), sessionID)
 		results = append(results, recoverySession{
 			SessionID: sessionID,
-			AgentType: "codex",
+			AgentType: s.agentType,
 			Title:     title,
 			Preview:   readCodexRecoverySessionPreview(path, title),
 			UpdatedAt: updatedAt,
