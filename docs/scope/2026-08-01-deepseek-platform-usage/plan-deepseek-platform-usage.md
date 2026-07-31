@@ -21,7 +21,7 @@
 - Modify: `app/web/src/styles/usage.css`
 - Test: `app/__tests__/web-deepseek-usage-dialog.test.tsx`
 
-- [ ] **Step 1: Write the failing dialog state and accessibility tests**
+- [x] **Step 1: Write the failing dialog state and accessibility tests**
 
 Create `app/__tests__/web-deepseek-usage-dialog.test.tsx`:
 
@@ -132,7 +132,7 @@ test('expired state keeps stale data and offers re-login', () => {
 });
 ```
 
-- [ ] **Step 2: Run the dialog tests and verify RED**
+- [x] **Step 2: Run the dialog tests and verify RED**
 
 Run:
 
@@ -142,7 +142,7 @@ npm --prefix app test -- --runInBand __tests__/web-deepseek-usage-dialog.test.ts
 
 Expected: FAIL because the dialog and chart modules do not exist.
 
-- [ ] **Step 3: Add the native login capability to the bridge type**
+- [x] **Step 3: Add the native login capability to the bridge type**
 
 In `app/web/src/platform/native/nativeRuntime.ts`, extend `NativeRuntimeBridge`:
 
@@ -181,7 +181,7 @@ export function requestNativeDeepSeekLogin(): Promise<string> {
 }
 ```
 
-- [ ] **Step 4: Implement the lazy chart boundary**
+- [x] **Step 4: Implement the lazy chart boundary**
 
 Create `app/web/src/usage/DeepSeekUsageChart.tsx`:
 
@@ -352,7 +352,7 @@ function formatTooltip(params: unknown, view: DeepSeekUsageView): string {
 }
 ```
 
-- [ ] **Step 5: Implement the dialog**
+- [x] **Step 5: Implement the dialog**
 
 Create `app/web/src/usage/DeepSeekUsageDialog.tsx`:
 
@@ -603,7 +603,7 @@ function DeepSeekUsageReady({view}: {view: DeepSeekUsageView}) {
 
 `arrowLeft` and `chevronRight` both exist in `app/web/src/common/Icon.tsx`; keep the tests unchanged.
 
-- [ ] **Step 6: Add dialog styles**
+- [x] **Step 6: Add dialog styles**
 
 Append to `app/web/src/styles/usage.css`:
 
@@ -684,7 +684,7 @@ Append to `app/web/src/styles/usage.css`:
 }
 ```
 
-- [ ] **Step 7: Run the dialog tests and TypeScript**
+- [x] **Step 7: Run the dialog tests and TypeScript**
 
 Run:
 
@@ -695,7 +695,7 @@ npm --prefix app run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add app/web/src/platform/native/nativeRuntime.ts app/web/src/usage/deepSeekLogin.ts app/web/src/usage/DeepSeekUsageDialog.tsx app/web/src/usage/DeepSeekUsageChart.tsx app/web/src/styles/usage.css app/__tests__/web-deepseek-usage-dialog.test.tsx
@@ -716,7 +716,7 @@ git commit -m "feat(app): add deepseek platform usage dialog"
 - Test: `server/cmd/wheelmaker-desktop/webview_policy_test.go`
 - Test: `server/cmd/wheelmaker-desktop/deepseek_login_test.go`
 
-- [ ] **Step 1: Write the failing policy and session tests**
+- [x] **Step 1: Write the failing policy and session tests**
 
 Add to `server/cmd/wheelmaker-desktop/webview_policy_test.go`:
 
@@ -780,7 +780,7 @@ func TestDeepSeekLoginSessionPollsUntilToken(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -790,7 +790,7 @@ go -C server test ./cmd/wheelmaker-desktop -run 'Test(TrustedPageAllowsDeepSeekL
 
 Expected: FAIL because the action, constants, and functions do not exist.
 
-- [ ] **Step 3: Add the bridge action and binding**
+- [x] **Step 3: Add the bridge action and binding**
 
 In `webview_policy.go`, add to `desktopBridgeAction`:
 
@@ -823,7 +823,7 @@ In `webview_windows.go`'s `bindings` list, add:
 		}},
 ```
 
-- [ ] **Step 4: Implement the pure session helpers**
+- [x] **Step 4: Implement the pure session helpers**
 
 Create `server/cmd/wheelmaker-desktop/deepseek_login.go`:
 
@@ -896,7 +896,7 @@ func (s *deepSeekLoginSession) Poll() (string, bool) {
 }
 ```
 
-- [ ] **Step 5: Implement the Windows login window**
+- [x] **Step 5: Implement the Windows login window**
 
 Create `server/cmd/wheelmaker-desktop/deepseek_login_windows.go` with build tag `//go:build windows`:
 
@@ -978,7 +978,7 @@ Add a small `stringifyEvalResult` helper in the same file that converts the libr
 
 The `installDesktopWebViewPolicyAdapter` call is what enforces the acceptance criterion that the login window only allows `platform.deepseek.com`; the adapter reuses the existing policy machinery and blocks other hosts and certificate errors.
 
-- [ ] **Step 6: Run the tests and build**
+- [x] **Step 6: Run the tests and build**
 
 Run:
 
@@ -990,7 +990,7 @@ go -C server build ./cmd/wheelmaker-desktop
 
 Expected: PASS and the desktop binary builds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add server/cmd/wheelmaker-desktop
@@ -1007,7 +1007,7 @@ git commit -m "feat(desktop): embedded deepseek platform login"
 - Create: `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`
 - Test: `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 Create `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`:
 
@@ -1029,7 +1029,7 @@ class DeepSeekLoginProtocolTest {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -1041,7 +1041,7 @@ Expected: FAIL because `extractDeepSeekToken` is undefined.
 
 This repo does not commit a Gradle wrapper; use the system `gradle` command from `mobile/android` (Gradle 9.5.1 is already used by this project's local build state).
 
-- [ ] **Step 3: Implement the token extraction and login dialog**
+- [x] **Step 3: Implement the token extraction and login dialog**
 
 Create `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`:
 
@@ -1125,7 +1125,7 @@ class DeepSeekLoginDialog(
 }
 ```
 
-- [ ] **Step 4: Wire the bridge RPC**
+- [x] **Step 4: Wire the bridge RPC**
 
 In `WheelMakerBridge.kt`, add a case in the RPC dispatch next to `diagnostics.setLogLevel`:
 
@@ -1148,7 +1148,7 @@ Add the handler method that shows the dialog on the main thread (use the existin
 
 Add `deepSeekLogin` to the native bridge interface that `WheelMakerBridge.kt` already defines for `MainActivity` (the interface field named `host`), with signature `fun runOnUiThread(action: Runnable)` and `fun <T> runOnUiThread(action: () -> T): T` variants matching the file's existing helpers.
 
-- [ ] **Step 5: Run the Android unit tests**
+- [x] **Step 5: Run the Android unit tests**
 
 Run:
 
@@ -1158,7 +1158,7 @@ Set-Location mobile/android; gradle testDebugUnitTest
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add mobile/android/app/src/main/java/com/wheelmaker/android/WheelMakerBridge.kt mobile/android/app/src/main/java/com/wheelmaker/android/MainActivity.kt mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt
@@ -1174,7 +1174,7 @@ git commit -m "feat(android): embedded deepseek platform login"
 - Modify if stable behavior differs: `docs/wiki/features/limits-monitoring.md`
 - Update checklist: `docs/scope/2026-08-01-deepseek-platform-usage/plan-deepseek-platform-usage.md`
 
-- [ ] **Step 1: Format Go and run server package tests**
+- [x] **Step 1: Format Go and run server package tests**
 
 Run:
 
@@ -1185,7 +1185,7 @@ go -C server test ./...
 
 Expected: PASS.
 
-- [ ] **Step 2: Run all App usage tests and TypeScript**
+- [x] **Step 2: Run all App usage tests and TypeScript**
 
 Run:
 
@@ -1196,7 +1196,7 @@ npm --prefix app run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 3: Run the full server and App regression suites**
+- [x] **Step 3: Run the full server and App regression suites**
 
 Run:
 
@@ -1208,7 +1208,7 @@ Set-Location mobile/android; gradle testDebugUnitTest
 
 Expected: PASS.
 
-- [ ] **Step 4: Build production Web into an isolated target**
+- [x] **Step 4: Build production Web into an isolated target**
 
 Run:
 
@@ -1220,7 +1220,7 @@ Get-ChildItem -LiteralPath $env:WHEELMAKER_WEB_TARGET -File | Select-Object Name
 
 Expected: PASS; output contains a separately named `deepseek-usage-chart.<hash>.js` async chunk and the main bundle does not inline the ECharts module.
 
-- [ ] **Step 5: Check documentation and working tree**
+- [x] **Step 5: Check documentation and working tree**
 
 Run:
 
@@ -1232,7 +1232,7 @@ git status --short
 
 Expected: no placeholders, no whitespace errors, and only intended feature files changed.
 
-- [ ] **Step 6: Rebase and rerun smoke tests if HEAD changes**
+- [x] **Step 6: Rebase and rerun smoke tests if HEAD changes**
 
 Run:
 
@@ -1245,7 +1245,7 @@ npm --prefix app test -- --runInBand __tests__/web-deepseek-usage.test.ts __test
 
 Expected: rebase and tests pass.
 
-- [ ] **Step 7: Mark the plan complete and execute the repository completion gate**
+- [x] **Step 7: Mark the plan complete and execute the repository completion gate**
 
 Update every completed plan checkbox to `[x]`, then execute this exact tail:
 
@@ -1259,11 +1259,13 @@ Expected: commit succeeds and the remote feature branch is updated.
 
 ### Verification record
 
-- Full server regression: PASS.
-- Full App regression: PASS.
-- Web TypeScript: PASS.
-- Production Web build: PASS with an isolated `deepseek-usage-chart.<hash>.js` async chunk.
-- Desktop build and Android unit tests: PASS.
+- Full server regression: `go -C server test ./...` PASS (25 packages).
+- Full App regression: `npm --prefix app test -- --runInBand` PASS (257 suites, 1546 tests).
+- Web TypeScript: `npm --prefix app run tsc:web` PASS.
+- Production Web build: PASS; the renderer entry is `deepseek-usage-chart.599fa4b5bb6d3b880573.js` (3251 bytes) and ECharts stays out of the main bundle.
+- Desktop package tests and `go build ./cmd/wheelmaker-desktop`: PASS.
+- Android unit tests: `gradle testDebugUnitTest` PASS.
+- Rebase onto `origin/main` (`a9ca8d48`) applied cleanly; smoke tests PASS.
 
 ### Task 8: Open the dialog from DeepSeek account rows
 
@@ -1275,7 +1277,7 @@ Expected: commit succeeds and the remote feature branch is updated.
 - Test: `app/__tests__/web-usage-feature-surface.test.tsx`
 - Test: `app/__tests__/web-usage-workspace-integration.test.tsx`
 
-- [ ] **Step 1: Write the failing row activation tests**
+- [x] **Step 1: Write the failing row activation tests**
 
 Add to `app/__tests__/web-usage-feature-surface.test.tsx`:
 
@@ -1300,7 +1302,7 @@ In `app/__tests__/web-usage-workspace-integration.test.tsx`, add a case that ope
 
 In the same integration test, add a second case that types a token into the paste form, submits it, and asserts `updateHubConfig` is called with `{section: 'deepSeekPlatform', field: 'token', action: 'set', value: 'pasted-token'}` followed by a reload of `getDeepSeekUsage`.
 
-- [ ] **Step 2: Run the activation tests and verify RED**
+- [x] **Step 2: Run the activation tests and verify RED**
 
 Run:
 
@@ -1310,7 +1312,7 @@ npm --prefix app test -- --runInBand __tests__/web-usage-feature-surface.test.ts
 
 Expected: FAIL because DeepSeek rows are not clickable and the dialog is not wired.
 
-- [ ] **Step 3: Make DeepSeek balance rows clickable**
+- [x] **Step 3: Make DeepSeek balance rows clickable**
 
 In `app/web/src/usage/UsageFeatureSurface.tsx`, change both activation conditions from:
 
@@ -1326,7 +1328,7 @@ if ((account.limits.length > 0 || provider.id === 'deepseek') && onOpenHistory) 
 
 There are two places: `AccountRail` (compact) and `ProviderDetails` (detail). Keep `data-usage-account-trigger` keys unchanged.
 
-- [ ] **Step 4: Add the dialog state to WorkspaceApp**
+- [x] **Step 4: Add the dialog state to WorkspaceApp**
 
 In `app/web/src/app/WorkspaceApp.tsx`:
 
@@ -1475,7 +1477,7 @@ const deepSeekUsageOverlay = deepSeekUsageDialogView ? (
 ) : null;
 ```
 
-- [ ] **Step 5: Run the activation and integration tests**
+- [x] **Step 5: Run the activation and integration tests**
 
 Run:
 
@@ -1486,7 +1488,7 @@ npm --prefix app run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add app/web/src/usage/UsageFeatureSurface.tsx app/web/src/usage/MonitorSurface.tsx app/web/src/usage/MobileUsageDialog.tsx app/web/src/app/WorkspaceApp.tsx app/__tests__/web-usage-feature-surface.test.tsx app/__tests__/web-usage-workspace-integration.test.tsx
@@ -1502,7 +1504,7 @@ git commit -m "feat(app): open deepseek usage from monitor rows"
 - Modify: `server/internal/protocol/registry_methods_test.go`
 - Modify: `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: Write the failing descriptor test**
+- [x] **Step 1: Write the failing descriptor test**
 
 Add to `server/internal/protocol/registry_methods_test.go`:
 
@@ -1515,7 +1517,7 @@ func TestDeepSeekUsageGetDescriptor(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the descriptor test and verify RED**
+- [x] **Step 2: Run the descriptor test and verify RED**
 
 Run:
 
@@ -1525,7 +1527,7 @@ go -C server test ./internal/protocol -run TestDeepSeekUsageGetDescriptor -count
 
 Expected: FAIL because `RegistryMethodDeepSeekUsageGet` is undefined.
 
-- [ ] **Step 3: Register the additive method**
+- [x] **Step 3: Register the additive method**
 
 In `server/internal/protocol/registry_methods.go`, add to the method constants:
 
@@ -1543,7 +1545,7 @@ Add to the descriptors map next to the usage history entry:
 
 Do not edit the protocol version constant or compatibility docs.
 
-- [ ] **Step 4: Run the descriptor test and verify GREEN**
+- [x] **Step 4: Run the descriptor test and verify GREEN**
 
 Run:
 
@@ -1553,7 +1555,7 @@ go -C server test ./internal/protocol -run 'Test(DeepSeekUsageGetDescriptor|Usag
 
 Expected: PASS.
 
-- [ ] **Step 5: Add the Registry forwarding test**
+- [x] **Step 5: Add the Registry forwarding test**
 
 Add to `server/internal/registry/server_test.go`, following the existing `usage.history.get` forwarding test in that file:
 
@@ -1577,7 +1579,7 @@ func TestServerForwardsDeepSeekUsageGet(t *testing.T) {
 
 If the file has no shared `runHubStateForwardingTest` helper, copy the exact structure of the existing `usage.history.get` forwarding test instead and replace the method/payload/assertions.
 
-- [ ] **Step 6: Run the forwarding test and verify GREEN**
+- [x] **Step 6: Run the forwarding test and verify GREEN**
 
 Run:
 
@@ -1587,7 +1589,7 @@ go -C server test ./internal/registry -run TestServerForwardsDeepSeekUsageGet -c
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add server/internal/protocol/registry_methods.go server/internal/protocol/registry_methods_test.go server/internal/registry/server_test.go
@@ -1602,7 +1604,7 @@ git commit -m "feat(protocol): expose deepseek usage read method"
 - Modify: `server/internal/hub/reporter.go`
 - Test: `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: Write the failing handler tests**
+- [x] **Step 1: Write the failing handler tests**
 
 Add to `server/internal/hub/hub_test.go`, following the existing `TestReporterRespondsToUsageHistoryGet` pattern (fake registry + `NewReporter` + `Run`):
 
@@ -1703,7 +1705,7 @@ func TestReporterRejectsInvalidDeepSeekUsageGet(t *testing.T) {
 
 Check `hub_test.go` imports for `context`; add it if missing.
 
-- [ ] **Step 2: Run the handler tests and verify RED**
+- [x] **Step 2: Run the handler tests and verify RED**
 
 Run:
 
@@ -1713,7 +1715,7 @@ go -C server test ./internal/hub -run 'TestReporter(RespondsTo|RejectsInvalid)De
 
 Expected: FAIL because `deepSeekUsage` and `replyDeepSeekUsageGet` do not exist.
 
-- [ ] **Step 3: Add the store and handler to the Reporter**
+- [x] **Step 3: Add the store and handler to the Reporter**
 
 In `server/internal/hub/reporter.go`:
 
@@ -1796,7 +1798,7 @@ func (r *Reporter) replyDeepSeekUsageGet(conn *websocket.Conn, req envelope) {
 }
 ```
 
-- [ ] **Step 4: Handle the `deepSeekPlatform` config section**
+- [x] **Step 4: Handle the `deepSeekPlatform` config section**
 
 In `applyHubConfigUpdate`, add a case before `default:`:
 
@@ -1818,7 +1820,7 @@ In `applyHubConfigUpdate`, add a case before `default:`:
 		return nil
 ```
 
-- [ ] **Step 5: Run the handler tests and verify GREEN**
+- [x] **Step 5: Run the handler tests and verify GREEN**
 
 Run:
 
@@ -1828,7 +1830,7 @@ go -C server test ./internal/hub -run 'TestReporter(RespondsTo|RejectsInvalid)De
 
 Expected: PASS.
 
-- [ ] **Step 6: Run gofmt and package tests**
+- [x] **Step 6: Run gofmt and package tests**
 
 Run:
 
@@ -1839,7 +1841,7 @@ go -C server test ./internal/hub ./internal/hubconfig ./internal/protocol ./inte
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add server/internal/hub/reporter.go server/internal/hub/hub_test.go
@@ -1857,7 +1859,7 @@ git commit -m "feat(hub): serve deepseek platform usage"
 - Modify: `app/web/src/registry/RegistryWorkspaceService.ts`
 - Test: `app/__tests__/web-hub-state-service.test.ts`
 
-- [ ] **Step 1: Write the failing transport assertions**
+- [x] **Step 1: Write the failing transport assertions**
 
 Add to `app/__tests__/web-hub-state-service.test.ts` (follow the existing `getUsageHistory` request assertion in that file):
 
@@ -1891,7 +1893,7 @@ test('requests deepseek usage with month params', async () => {
 
 `RegistryClient` is already imported at the top of the file. The repository returns the normalized payload directly, so the assertion uses `repository.getDeepSeekUsage` rather than a service-level call.
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -1901,7 +1903,7 @@ npm --prefix app test -- --runInBand __tests__/web-hub-state-service.test.ts
 
 Expected: FAIL because the method, DTOs, and service function do not exist.
 
-- [ ] **Step 3: Add the method constant**
+- [x] **Step 3: Add the method constant**
 
 In `app/web/src/registry/registryMethods.ts`, next to `UsageHistoryGet`:
 
@@ -1909,7 +1911,7 @@ In `app/web/src/registry/registryMethods.ts`, next to `UsageHistoryGet`:
   DeepSeekUsageGet: 'deepseek.usage.get',
 ```
 
-- [ ] **Step 4: Add the TypeScript DTOs**
+- [x] **Step 4: Add the TypeScript DTOs**
 
 In `app/web/src/registry/registryTypes.ts`:
 
@@ -1966,7 +1968,7 @@ export type RegistryHubConfigUpdatePayload =
   | {section: 'deepSeekPlatform'; field: 'token'; action: 'set' | 'clear'; value?: string};
 ```
 
-- [ ] **Step 5: Add repository normalization and request**
+- [x] **Step 5: Add repository normalization and request**
 
 In `app/web/src/registry/RegistryRepository.ts`, add near `normalizeUsageHistoryLimit`:
 
@@ -2050,7 +2052,7 @@ async getDeepSeekUsage(hubId: string, year: number, month: number, force = false
 }
 ```
 
-- [ ] **Step 6: Add the workspace service method**
+- [x] **Step 6: Add the workspace service method**
 
 In `app/web/src/registry/RegistryWorkspaceService.ts`, next to `getUsageHistory`:
 
@@ -2062,7 +2064,7 @@ async getDeepSeekUsage(hubId: string, year: number, month: number, force = false
 
 Add `RegistryDeepSeekUsageResponse` to the file's type imports.
 
-- [ ] **Step 7: Run the Web tests and TypeScript**
+- [x] **Step 7: Run the Web tests and TypeScript**
 
 Run:
 
@@ -2073,7 +2075,7 @@ npm --prefix app run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add app/web/src/registry app/__tests__/web-hub-state-service.test.ts
@@ -2088,7 +2090,7 @@ git commit -m "feat(app): transport deepseek platform usage"
 - Create: `app/web/src/usage/deepSeekUsage.ts`
 - Test: `app/__tests__/web-deepseek-usage.test.ts`
 
-- [ ] **Step 1: Write the failing pure-function tests**
+- [x] **Step 1: Write the failing pure-function tests**
 
 Create `app/__tests__/web-deepseek-usage.test.ts`:
 
@@ -2150,7 +2152,7 @@ test('month helpers round-trip', () => {
 
 Note: import the registry response type through `RegistryDeepSeekUsageResponse` in the normalization signature.
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -2160,7 +2162,7 @@ npm --prefix app test -- --runInBand __tests__/web-deepseek-usage.test.ts
 
 Expected: FAIL because `deepSeekUsage.ts` does not exist.
 
-- [ ] **Step 3: Implement the helpers**
+- [x] **Step 3: Implement the helpers**
 
 Create `app/web/src/usage/deepSeekUsage.ts`:
 
@@ -2237,7 +2239,7 @@ export function previousDeepSeekMonth(year: number, month: number): {year: numbe
 }
 ```
 
-- [ ] **Step 4: Run the tests and TypeScript**
+- [x] **Step 4: Run the tests and TypeScript**
 
 Run:
 
@@ -2248,7 +2250,7 @@ npm --prefix app run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/web/src/usage/deepSeekUsage.ts app/__tests__/web-deepseek-usage.test.ts
@@ -2290,7 +2292,7 @@ git commit -m "feat(app): normalize deepseek platform usage views"
 - Modify: `server/internal/hubconfig/store.go`
 - Test: `server/internal/hubconfig/store_test.go`
 
-- [ ] **Step 1: Write the failing store test**
+- [x] **Step 1: Write the failing store test**
 
 Add to `server/internal/hubconfig/store_test.go`:
 
@@ -2322,7 +2324,7 @@ func TestStoreDeepSeekPlatformTokenRoundTrip(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -2332,7 +2334,7 @@ go -C server test ./internal/hubconfig -run TestStoreDeepSeekPlatformTokenRoundT
 
 Expected: FAIL because `DeepSeekPlatformToken` / `UpdateDeepSeekPlatformToken` do not exist.
 
-- [ ] **Step 3: Implement the secret section**
+- [x] **Step 3: Implement the secret section**
 
 In `server/internal/hubconfig/store.go`, add:
 
@@ -2422,7 +2424,7 @@ In `Snapshot()`, populate the new field:
 
 Check that `strings` is imported in `store.go`; add it if missing.
 
-- [ ] **Step 4: Run the store test and verify GREEN**
+- [x] **Step 4: Run the store test and verify GREEN**
 
 Run:
 
@@ -2432,7 +2434,7 @@ go -C server test ./internal/hubconfig -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add server/internal/hubconfig/store.go server/internal/hubconfig/store_test.go
@@ -2447,7 +2449,7 @@ git commit -m "feat(hubconfig): store deepseek platform session token"
 - Create: `server/internal/hub/usage/deepseek_platform.go`
 - Test: `server/internal/hub/usage/deepseek_platform_test.go`
 
-- [ ] **Step 1: Write the failing client, parser, and cache tests**
+- [x] **Step 1: Write the failing client, parser, and cache tests**
 
 Create `server/internal/hub/usage/deepseek_platform_test.go`:
 
@@ -2623,7 +2625,7 @@ func asMap(t *testing.T, raw string) map[string]any {
 }
 ```
 
-- [ ] **Step 2: Run the tests and verify RED**
+- [x] **Step 2: Run the tests and verify RED**
 
 Run:
 
@@ -2633,7 +2635,7 @@ go -C server test ./internal/hub/usage -run 'Test(ParseDeepSeekPlatform|DeepSeek
 
 Expected: FAIL because `deepseek_platform.go` does not exist.
 
-- [ ] **Step 3: Implement the client, parsers, and cache**
+- [x] **Step 3: Implement the client, parsers, and cache**
 
 Create `server/internal/hub/usage/deepseek_platform.go`:
 
@@ -3137,7 +3139,7 @@ func cacheFresh(entry deepSeekPlatformCacheEntry, now time.Time, year, month int
 }
 ```
 
-- [ ] **Step 4: Run the tests and verify GREEN**
+- [x] **Step 4: Run the tests and verify GREEN**
 
 Run:
 
@@ -3147,7 +3149,7 @@ go -C server test ./internal/hub/usage -run 'Test(ParseDeepSeekPlatform|DeepSeek
 
 Expected: PASS.
 
-- [ ] **Step 5: Run gofmt and the full usage package**
+- [x] **Step 5: Run gofmt and the full usage package**
 
 Run:
 
@@ -3158,7 +3160,7 @@ go -C server test ./internal/hub/usage -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add server/internal/hub/usage/deepseek_platform.go server/internal/hub/usage/deepseek_platform_test.go
