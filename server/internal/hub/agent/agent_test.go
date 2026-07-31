@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1405,6 +1406,329 @@ func TestCodexAppProviderLaunchUsesAppServerStdio(t *testing.T) {
 	}
 	if len(env) != 0 {
 		t.Fatalf("env=%v, want empty", env)
+	}
+}
+
+func TestCXDeepSeekProviderLaunchUsesResponsesOverridesAndProcessOnlyKey(t *testing.T) {
+	stateDir := t.TempDir()
+	homeDir := filepath.Join(stateDir, ".data", "cx-deepseek")
+	configPath := filepath.Join(homeDir, "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configBefore := []byte("[projects.'D:\\\\Code\\\\WheelMaker']\ntrust_level = \"trusted\"\n")
+	if err := os.WriteFile(configPath, configBefore, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := NewCXDeepSeekProvider(stateDir, "secret-deepseek-key")
+	provider.lookPath = func(string) (string, error) { return `C:\bin\codex.exe`, nil }
+	provider.versionOutput = func(string) ([]byte, error) { return []byte("codex-cli 0.145.0\n"), nil }
+	provider.materializeCatalog = func(home string) (string, error) {
+		if home != homeDir {
+			t.Fatalf("materialize home = %q, want %q", home, homeDir)
+		}
+		return filepath.Join(home, "models.json"), nil
+	}
+
+	exe, args, env, err := provider.Launch()
+	if err != nil {
+		t.Fatalf("Launch() error = %v", err)
+	}
+	if exe != `C:\bin\codex.exe` || provider.Name() != "cx-deepseek" {
+		t.Fatalf("launch identity = %q %q", provider.Name(), exe)
+	}
+	for _, want := range []string{
+		"app-server", "--listen", "stdio://",
+		`model="deepseek-v4-flash"`,
+		`model_provider="deepseek"`,
+		`model_reasoning_effort="high"`,
+		`model_catalog_json="` + strings.ReplaceAll(filepath.Join(homeDir, "models.json"), `\`, `\\`) + `"`,
+		`model_providers.deepseek.name="deepseek"`,
+		`model_providers.deepseek.base_url="https://api.deepseek.com/"`,
+		`model_providers.deepseek.wire_api="responses"`,
+		`model_providers.deepseek.env_key="DEEPSEEK_API_KEY"`,
+		`model_providers.deepseek.requires_openai_auth=false`,
+		`model_providers.deepseek.supports_websockets=false`,
+	} {
+		if !slices.Contains(args, want) {
+			t.Fatalf("args = %v, missing %q", args, want)
+		}
+	}
+	if !slices.Contains(env, "CODEX_HOME="+homeDir) ||
+		!slices.Contains(env, "DEEPSEEK_API_KEY=secret-deepseek-key") {
+		t.Fatalf("env = %v", env)
+	}
+	if strings.Contains(strings.Join(args, "\n"), "secret-deepseek-key") {
+		t.Fatal("API key leaked into launch arguments")
+	}
+	configAfter, err := os.ReadFile(configPath)
+	if err != nil || !bytes.Equal(configAfter, configBefore) {
+		t.Fatalf("config.toml changed: %q, %v", configAfter, err)
+	}
+}
+
+func TestCXDeepSeekCodexVersionGate(t *testing.T) {
+	tests := []struct {
+		name       string
+		output     string
+		versionErr error
+		wantErr    bool
+	}{
+		{name: "below minimum", output: "codex-cli 0.143.9\n", wantErr: true},
+		{name: "minimum", output: "codex-cli 0.144.0\n"},
+		{name: "new major", output: "codex-cli 1.0.0\n"},
+		{name: "malformed", output: "codex development build\n", wantErr: true},
+		{name: "command failure", versionErr: errors.New("version failed"), wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := NewCXDeepSeekProvider(t.TempDir(), "secret-deepseek-key")
+			provider.lookPath = func(string) (string, error) { return "/bin/codex", nil }
+			provider.versionOutput = func(string) ([]byte, error) {
+				return []byte(test.output), test.versionErr
+			}
+			materializeCalls := 0
+			provider.materializeCatalog = func(home string) (string, error) {
+				materializeCalls++
+				return filepath.Join(home, "models.json"), nil
+			}
+
+			availabilityErr := provider.CheckAvailable()
+			if materializeCalls != 0 {
+				t.Fatalf("CheckAvailable() materialized catalog %d times", materializeCalls)
+			}
+			_, _, _, launchErr := provider.Launch()
+			if test.wantErr {
+				if availabilityErr == nil || launchErr == nil {
+					t.Fatalf("errors = (%v, %v), want availability and launch failure", availabilityErr, launchErr)
+				}
+				for _, err := range []error{availabilityErr, launchErr} {
+					message := err.Error()
+					if !strings.Contains(message, "cx-deepseek") || strings.Contains(message, "secret-deepseek-key") {
+						t.Fatalf("unsafe or unidentified error = %q", message)
+					}
+				}
+				return
+			}
+			if availabilityErr != nil || launchErr != nil {
+				t.Fatalf("errors = (%v, %v), want nil", availabilityErr, launchErr)
+			}
+			if materializeCalls != 1 {
+				t.Fatalf("Launch() materialized catalog %d times, want 1", materializeCalls)
+			}
+		})
+	}
+}
+
+func TestCXDeepSeekCodexBridgeUsesProviderIdentityAndTextOnlyCapability(t *testing.T) {
+	transport := newFakeCodexappTransport()
+	runtime := newCodexappRuntimeWithTransport(transport)
+	t.Cleanup(func() { _ = runtime.close() })
+	mapPath := filepath.Join(t.TempDir(), "cx-session-map.json")
+	conn := newCodexappConnWithRuntimeAndProfile(runtime, t.TempDir(), "proj", codexappConnProfile{
+		Provider:       protocol.ACPProviderCXDeepSeek,
+		Title:          "DeepSeek Codex",
+		AllowImages:    false,
+		SessionMapPath: func() (string, error) { return mapPath, nil },
+	})
+
+	type initializeOutcome struct {
+		result protocol.InitializeResult
+		err    error
+	}
+	done := make(chan initializeOutcome, 1)
+	go func() {
+		var result protocol.InitializeResult
+		err := conn.Send(context.Background(), protocol.MethodInitialize, protocol.InitializeParams{}, &result)
+		done <- initializeOutcome{result: result, err: err}
+	}()
+	request := transport.nextSent(t)
+	if request["method"] != "initialize" {
+		t.Fatalf("first app-server message = %#v", request)
+	}
+	if err := transport.emit(map[string]any{"id": request["id"], "result": map[string]any{}}); err != nil {
+		t.Fatal(err)
+	}
+	if notification := transport.nextSent(t); notification["method"] != "initialized" {
+		t.Fatalf("initialized notification = %#v", notification)
+	}
+	outcome := <-done
+	if outcome.err != nil {
+		t.Fatal(outcome.err)
+	}
+	result := outcome.result
+	if result.AgentInfo == nil || result.AgentInfo.Name != "cx-deepseek" || result.AgentInfo.Title != "DeepSeek Codex" {
+		t.Fatalf("agent info = %#v", result.AgentInfo)
+	}
+	if result.AgentCapabilities.PromptCapabilities == nil || result.AgentCapabilities.PromptCapabilities.Image {
+		t.Fatalf("prompt capabilities = %#v", result.AgentCapabilities.PromptCapabilities)
+	}
+}
+
+func TestCXDeepSeekCodexBridgeRejectsImageInputsBeforeTurnStart(t *testing.T) {
+	tests := []struct {
+		name  string
+		block protocol.ContentBlock
+	}{
+		{
+			name:  "image block",
+			block: protocol.ContentBlock{Type: protocol.ContentBlockTypeImage, MimeType: "image/png", Data: "aW1hZ2U="},
+		},
+		{
+			name: "image resource link",
+			block: protocol.ContentBlock{
+				Type:     protocol.ContentBlockTypeResourceLink,
+				URI:      "file:///D:/tmp/pixel.png",
+				MimeType: "image/png",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			transport := newFakeCodexappTransport()
+			runtime := newCodexappRuntimeWithTransport(transport)
+			t.Cleanup(func() { _ = runtime.close() })
+			turnStarted := false
+			transport.onSend = func(msg map[string]any) {
+				if msg["method"] == "turn/start" {
+					turnStarted = true
+				}
+			}
+			mapPath := filepath.Join(t.TempDir(), "map.json")
+			conn := newCodexappConnWithRuntimeAndProfile(runtime, t.TempDir(), "proj", codexappConnProfile{
+				Provider:       protocol.ACPProviderCXDeepSeek,
+				Title:          "DeepSeek Codex",
+				AllowImages:    false,
+				SessionMapPath: func() (string, error) { return mapPath, nil },
+			})
+			conn.BindSessionID("thread-1")
+			var result protocol.SessionPromptResult
+			err := conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+				SessionID: "thread-1",
+				Prompt: []protocol.ContentBlock{
+					{Type: protocol.ContentBlockTypeText, Text: "describe"},
+					test.block,
+				},
+			}, &result)
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), "image") {
+				t.Fatalf("SessionPrompt() error = %v, want image rejection", err)
+			}
+			if turnStarted {
+				t.Fatal("turn/start was sent for a text-only provider")
+			}
+		})
+	}
+}
+
+func TestCXDeepSeekCodexBridgeSendsTextAndPreservesForkProvider(t *testing.T) {
+	transport := newFakeCodexappTransport()
+	runtime := newCodexappRuntimeWithTransport(transport)
+	t.Cleanup(func() { _ = runtime.close() })
+	transport.onSend = func(msg map[string]any) {
+		if msg["method"] != "turn/start" {
+			t.Errorf("unexpected app-server method %q", msg["method"])
+			return
+		}
+		params := msg["params"].(map[string]any)
+		input := params["input"].([]any)
+		if len(input) != 1 || input[0].(map[string]any)["text"] != "hello" {
+			t.Errorf("turn/start input = %#v", input)
+		}
+		_ = transport.emit(map[string]any{"id": msg["id"], "result": map[string]any{
+			"turn": map[string]any{"id": "turn-cx"},
+		}})
+		_ = transport.emit(map[string]any{
+			"method": "turn/completed",
+			"params": map[string]any{
+				"threadId": "thread-cx",
+				"turn":     map[string]any{"id": "turn-cx", "status": "completed"},
+			},
+		})
+	}
+	mapPath := filepath.Join(t.TempDir(), "map.json")
+	conn := newCodexappConnWithRuntimeAndProfile(runtime, t.TempDir(), "proj", codexappConnProfile{
+		Provider:       protocol.ACPProviderCXDeepSeek,
+		Title:          "DeepSeek Codex",
+		AllowImages:    false,
+		SessionMapPath: func() (string, error) { return mapPath, nil },
+	})
+	conn.BindSessionID("thread-cx")
+	var result protocol.SessionPromptResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+		SessionID: "thread-cx",
+		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "hello"}},
+	}, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.ForkPoint == nil || result.ForkPoint.Provider != "cx-deepseek" || result.ForkPoint.Ref != "turn-cx" {
+		t.Fatalf("fork point = %#v", result.ForkPoint)
+	}
+
+	var turn appServerTurn
+	if err := remarshal(codexappTestPromptTurn("turn-native", "hello"), &turn); err != nil {
+		t.Fatal(err)
+	}
+	points, matched, err := conn.matchForkPromptTurns("thread-cx", []protocol.SessionForkPrompt{{
+		DoneTurnIndex: 3,
+		ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "hello"}},
+	}}, []appServerTurn{turn})
+	if err != nil || !matched || points[3].Provider != "cx-deepseek" || points[3].Ref != "turn-native" {
+		t.Fatalf("matched fork points = (%#v, %v, %v)", points, matched, err)
+	}
+}
+
+func TestCXDeepSeekCodexBridgeUsesOnlyInjectedSessionMap(t *testing.T) {
+	nativePath := filepath.Join(t.TempDir(), "native.json")
+	cxPath := filepath.Join(t.TempDir(), "cx.json")
+	oldMapPath := codexappSessionMapPathFunc
+	codexappSessionMapPathFunc = func() (string, error) { return nativePath, nil }
+	t.Cleanup(func() { codexappSessionMapPathFunc = oldMapPath })
+	writeMap := func(path string, sessions map[string]string) {
+		t.Helper()
+		raw, err := json.Marshal(codexappSessionMapFile{Sessions: sessions})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeMap(nativePath, map[string]string{"stable": "native-thread"})
+	writeMap(cxPath, map[string]string{"stable": "cx-thread"})
+
+	nativeConn := newCodexappConnWithRuntime(nil, t.TempDir())
+	cxConn := newCodexappConnWithRuntimeAndProfile(nil, t.TempDir(), "proj", codexappConnProfile{
+		Provider:       protocol.ACPProviderCXDeepSeek,
+		Title:          "DeepSeek Codex",
+		AllowImages:    false,
+		SessionMapPath: func() (string, error) { return cxPath, nil },
+	})
+	if got := nativeConn.mappedThreadID("stable"); got != "native-thread" {
+		t.Fatalf("native mapped thread = %q", got)
+	}
+	if got := cxConn.mappedThreadID("stable"); got != "cx-thread" {
+		t.Fatalf("cx mapped thread = %q", got)
+	}
+	cxConn.storeThreadMapping("new-stable", "new-cx-thread")
+
+	readMap := func(path string) codexappSessionMapFile {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var file codexappSessionMapFile
+		if err := json.Unmarshal(raw, &file); err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	if _, exists := readMap(nativePath).Sessions["new-stable"]; exists {
+		t.Fatal("cx mapping leaked into native map")
+	}
+	if got := readMap(cxPath).Sessions["new-stable"]; got != "new-cx-thread" {
+		t.Fatalf("cx stored mapping = %q", got)
 	}
 }
 

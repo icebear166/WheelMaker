@@ -21,52 +21,157 @@ import (
 var codexappANSIEscapePattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 // codexAppProvider launches the native Codex app-server ACP bridge.
-type codexAppProvider struct {
-	lookPath func(file string) (string, error)
+type codexAppProviderOptions struct {
+	Provider       protocol.ACPProvider
+	Title          string
+	AllowImages    bool
+	CodexHome      string
+	SessionMapPath string
+	Environment    []string
 }
 
-func NewCodexAppProvider() *codexAppProvider {
+type codexAppProvider struct {
+	options            codexAppProviderOptions
+	lookPath           func(file string) (string, error)
+	minimumVersion     string
+	versionOutput      func(string) ([]byte, error)
+	materializeCatalog func(string) (string, error)
+	configArgs         func(string) []string
+	configurationErr   error
+	availabilityOnce   sync.Once
+	availabilityErr    error
+	resolvedExecutable string
+}
+
+func newCodexAppProvider(options codexAppProviderOptions) *codexAppProvider {
 	return &codexAppProvider{
+		options:  options,
 		lookPath: exec.LookPath,
 	}
 }
 
+func NewCodexAppProvider() *codexAppProvider {
+	return newCodexAppProvider(codexAppProviderOptions{
+		Provider:    protocol.ACPProviderCodex,
+		Title:       "Codex App Server",
+		AllowImages: true,
+	})
+}
+
 func (p *codexAppProvider) Name() string {
-	return string(protocol.ACPProviderCodex)
+	return string(p.options.Provider)
+}
+
+func (p *codexAppProvider) CheckAvailable() error {
+	p.availabilityOnce.Do(func() {
+		if p.configurationErr != nil {
+			p.availabilityErr = p.configurationErr
+			return
+		}
+		lookPath := p.lookPath
+		if lookPath == nil {
+			lookPath = exec.LookPath
+		}
+		executable, err := lookPath("codex")
+		if err != nil {
+			if p.minimumVersion != "" {
+				p.availabilityErr = fmt.Errorf("%s requires Codex CLI >= %s; codex not found: %w", p.Name(), p.minimumVersion, err)
+			} else {
+				p.availabilityErr = fmt.Errorf("%s: codex not found: %w", p.Name(), err)
+			}
+			return
+		}
+		p.resolvedExecutable = executable
+		if p.minimumVersion == "" {
+			return
+		}
+		output, err := p.versionOutput(executable)
+		if err != nil {
+			p.availabilityErr = fmt.Errorf("%s requires Codex CLI >= %s; codex --version failed: %w", p.Name(), p.minimumVersion, err)
+			return
+		}
+		version, err := parseCodexCLIVersion(output)
+		if err != nil {
+			p.availabilityErr = fmt.Errorf("%s requires Codex CLI >= %s: %w", p.Name(), p.minimumVersion, err)
+			return
+		}
+		minimum, err := parseSemanticVersion(p.minimumVersion)
+		if err != nil {
+			p.availabilityErr = fmt.Errorf("%s: invalid minimum Codex version: %w", p.Name(), err)
+			return
+		}
+		if version.lessThan(minimum) {
+			p.availabilityErr = fmt.Errorf("%s requires Codex CLI >= %s; found %s", p.Name(), p.minimumVersion, version)
+		}
+	})
+	return p.availabilityErr
 }
 
 func (p *codexAppProvider) Launch() (string, []string, []string, error) {
-	lookPath := p.lookPath
-	if lookPath == nil {
-		lookPath = exec.LookPath
+	if err := p.CheckAvailable(); err != nil {
+		return "", nil, nil, err
 	}
-	exe, err := lookPath("codex")
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("codex: codex not found: %w", err)
+	args := []string{"app-server", "--listen", "stdio://"}
+	if p.materializeCatalog != nil {
+		catalogPath, err := p.materializeCatalog(p.options.CodexHome)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("%s: prepare model catalog: %w", p.Name(), err)
+		}
+		if p.configArgs == nil {
+			return "", nil, nil, fmt.Errorf("%s: model provider overrides are unavailable", p.Name())
+		}
+		args = append(args, p.configArgs(catalogPath)...)
 	}
-	return exe, []string{"app-server", "--listen", "stdio://"}, nil, nil
+	return p.resolvedExecutable, args, append([]string(nil), p.options.Environment...), nil
 }
 
 func codexappInstanceCreator(provider *codexAppProvider) InstanceCreator {
+	return codexappInstanceCreatorWithStarter(provider, nil)
+}
+
+func codexappInstanceCreatorWithStarter(provider *codexAppProvider, starter codexappRuntimeStarter) InstanceCreator {
 	if provider == nil {
 		provider = NewCodexAppProvider()
 	}
-	pool := newCodexappRuntimePool(func(_ context.Context, cwd string, projectName string) (*codexappRuntime, error) {
-		return newCodexappRuntime(provider, cwd, projectName)
-	})
+	if starter == nil {
+		starter = func(_ context.Context, cwd string, projectName string) (*codexappRuntime, error) {
+			return newCodexappRuntime(provider, cwd, projectName)
+		}
+	}
+	pool := newCodexappRuntimePool(starter)
 	return func(ctx context.Context, cwd string) (Instance, error) {
 		exe, args, _, err := provider.Launch()
 		if err != nil {
 			return nil, err
 		}
-		lease, err := pool.acquire(ctx, ProjectNameFromContext(ctx), cwd, codexappLaunchFingerprint(exe, args))
+		projectName := ProjectNameFromContext(ctx)
+		lease, err := pool.acquire(ctx, projectName, cwd, codexappLaunchFingerprint(exe, args))
 		if err != nil {
 			return nil, err
 		}
-		conn := newCodexappConnWithRuntimeAndProject(lease.Runtime(), cwd, ProjectNameFromContext(ctx))
+		conn := newCodexappConnWithRuntimeAndProfile(lease.Runtime(), cwd, projectName, provider.connectionProfile())
 		conn.lease = lease
 		return NewInstance(provider.Name(), conn), nil
 	}
+}
+
+func (p *codexAppProvider) connectionProfile() codexappConnProfile {
+	profile := nativeCodexappConnProfile()
+	if p == nil {
+		return profile
+	}
+	if p.options.Provider != "" {
+		profile.Provider = p.options.Provider
+	}
+	if strings.TrimSpace(p.options.Title) != "" {
+		profile.Title = p.options.Title
+	}
+	profile.AllowImages = p.options.AllowImages
+	if strings.TrimSpace(p.options.SessionMapPath) != "" {
+		path := p.options.SessionMapPath
+		profile.SessionMapPath = func() (string, error) { return path, nil }
+	}
+	return profile
 }
 
 type codexappTransport interface {
@@ -85,16 +190,35 @@ var codexappSessionMapPathFunc = func() (string, error) {
 	return filepath.Join(home, ".wheelmaker", "codexapp-sessions.json"), nil
 }
 
+type codexappConnProfile struct {
+	Provider       protocol.ACPProvider
+	Title          string
+	AllowImages    bool
+	SessionMapPath func() (string, error)
+}
+
+func nativeCodexappConnProfile() codexappConnProfile {
+	return codexappConnProfile{
+		Provider:       protocol.ACPProviderCodex,
+		Title:          "Codex App Server",
+		AllowImages:    true,
+		SessionMapPath: codexappSessionMapPathFunc,
+	}
+}
+
 type codexappSessionMapFile struct {
 	Sessions map[string]string `json:"sessions"`
 }
 
-func codexappMappedThreadID(acpSessionID string) string {
+func codexappMappedThreadID(sessionMapPath func() (string, error), acpSessionID string) string {
 	acpSessionID = strings.TrimSpace(acpSessionID)
 	if acpSessionID == "" {
 		return ""
 	}
-	path, err := codexappSessionMapPathFunc()
+	if sessionMapPath == nil {
+		return ""
+	}
+	path, err := sessionMapPath()
 	if err != nil || strings.TrimSpace(path) == "" {
 		return ""
 	}
@@ -109,13 +233,16 @@ func codexappMappedThreadID(acpSessionID string) string {
 	return strings.TrimSpace(file.Sessions[acpSessionID])
 }
 
-func codexappStoreThreadMapping(acpSessionID string, runtimeThreadID string) {
+func codexappStoreThreadMapping(sessionMapPath func() (string, error), acpSessionID string, runtimeThreadID string) {
 	acpSessionID = strings.TrimSpace(acpSessionID)
 	runtimeThreadID = strings.TrimSpace(runtimeThreadID)
 	if acpSessionID == "" || runtimeThreadID == "" || acpSessionID == runtimeThreadID {
 		return
 	}
-	path, err := codexappSessionMapPathFunc()
+	if sessionMapPath == nil {
+		return
+	}
+	path, err := sessionMapPath()
 	if err != nil || strings.TrimSpace(path) == "" {
 		return
 	}
@@ -142,7 +269,7 @@ func newOwnedCodexappConn(provider *codexAppProvider, cwd string, projectName st
 	if err != nil {
 		return nil, err
 	}
-	return newCodexappConnWithRuntimeAndProject(runtime, cwd, projectName), nil
+	return newCodexappConnWithRuntimeAndProfile(runtime, cwd, projectName, provider.connectionProfile()), nil
 }
 
 func newCodexappRuntime(provider *codexAppProvider, cwd string, projectName string) (*codexappRuntime, error) {
@@ -505,6 +632,7 @@ func (r *codexappRuntime) connForThread(threadID string) *codexappConn {
 type codexappConn struct {
 	runtime   *codexappRuntime
 	lease     *codexappRuntimeLease
+	profile   codexappConnProfile
 	cwd       string
 	closeOnce sync.Once
 	closeErr  error
@@ -553,11 +681,67 @@ func newCodexappConnWithRuntime(runtime *codexappRuntime, cwd string) *codexappC
 }
 
 func newCodexappConnWithRuntimeAndProject(runtime *codexappRuntime, cwd string, projectName string) *codexappConn {
+	return newCodexappConnWithRuntimeAndProfile(runtime, cwd, projectName, nativeCodexappConnProfile())
+}
+
+func newCodexappConnWithRuntimeAndProfile(runtime *codexappRuntime, cwd string, projectName string, profile codexappConnProfile) *codexappConn {
+	if profile.Provider == "" {
+		profile = nativeCodexappConnProfile()
+	} else {
+		if strings.TrimSpace(profile.Title) == "" {
+			profile.Title = string(profile.Provider)
+		}
+		if profile.SessionMapPath == nil {
+			profile.SessionMapPath = codexappSessionMapPathFunc
+		}
+	}
 	return &codexappConn{
 		runtime:     runtime,
+		profile:     profile,
 		cwd:         cwd,
 		projectName: strings.TrimSpace(projectName),
 		config:      newCodexappConfigState(),
+	}
+}
+
+func (c *codexappConn) mappedThreadID(acpSessionID string) string {
+	return codexappMappedThreadID(c.profile.SessionMapPath, acpSessionID)
+}
+
+func (c *codexappConn) storeThreadMapping(acpSessionID, runtimeThreadID string) {
+	codexappStoreThreadMapping(c.profile.SessionMapPath, acpSessionID, runtimeThreadID)
+}
+
+func (c *codexappConn) promptToInputWithArtifacts(sessionID string, blocks []protocol.ContentBlock) ([]appServerUserInput, error) {
+	if !c.profile.AllowImages {
+		for _, block := range blocks {
+			usesImage, err := codexappPromptBlockUsesImage(block)
+			if err != nil {
+				return nil, err
+			}
+			if usesImage {
+				return nil, fmt.Errorf("%s does not support image prompt content", c.profile.Provider)
+			}
+		}
+	}
+	return codexappPromptToInputWithArtifacts(c.projectName, sessionID, blocks)
+}
+
+func codexappPromptBlockUsesImage(block protocol.ContentBlock) (bool, error) {
+	switch block.Type {
+	case protocol.ContentBlockTypeImage:
+		return true, nil
+	case protocol.ContentBlockTypeResourceLink:
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(block.MimeType)), "image/") {
+			return true, nil
+		}
+		path, isFile, err := codexappResourceLinkFilePath(block)
+		if err != nil {
+			return false, err
+		}
+		return isFile && codexappResourceLinkIsImage(block, path), nil
+	default:
+		return false, nil
 	}
 }
 
@@ -724,11 +908,11 @@ func (c *codexappConn) sendInitialize(ctx context.Context, result any) error {
 	}
 	out := protocol.InitializeResult{
 		ProtocolVersion: json.Number("1"),
-		AgentInfo:       &protocol.AgentInfo{Name: string(protocol.ACPProviderCodex), Title: "Codex App Server"},
+		AgentInfo:       &protocol.AgentInfo{Name: string(c.profile.Provider), Title: c.profile.Title},
 		AgentCapabilities: protocol.AgentCapabilities{
 			LoadSession: true,
 			PromptCapabilities: &protocol.PromptCapabilities{
-				Image:           true,
+				Image:           c.profile.AllowImages,
 				Audio:           false,
 				EmbeddedContext: false,
 			},
@@ -775,7 +959,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 		return err
 	}
 	cwd := firstNonEmptyString(p.CWD, c.cwd)
-	runtimeThreadID := firstNonEmptyString(codexappMappedThreadID(acpSessionID), acpSessionID)
+	runtimeThreadID := firstNonEmptyString(c.mappedThreadID(acpSessionID), acpSessionID)
 	// Resume can immediately emit Goal and Turn notifications. Register the
 	// stable/runtime mapping before the request so those notifications are not
 	// dropped by the shared runtime dispatcher.
@@ -809,7 +993,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 		}
 	}
 	c.bindSessionIDs(acpSessionID, runtimeThreadID)
-	codexappStoreThreadMapping(acpSessionID, runtimeThreadID)
+	c.storeThreadMapping(acpSessionID, runtimeThreadID)
 	threadTitle := strings.TrimSpace(resp.Thread.displayTitle())
 	if threadTitle != "" {
 		c.emitSessionUpdate(protocol.SessionUpdateParams{
@@ -851,7 +1035,7 @@ func (c *codexappConn) UnarchiveSession(ctx context.Context, sessionID string) e
 
 func (c *codexappConn) SessionGoalSet(ctx context.Context, params protocol.SessionGoalSetParams) (protocol.SessionGoal, error) {
 	sessionID := strings.TrimSpace(params.SessionID)
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), sessionID)
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID), sessionID)
 	if threadID == "" {
 		return protocol.SessionGoal{}, errors.New("codexapp goal set requires sessionId")
 	}
@@ -874,7 +1058,7 @@ func (c *codexappConn) SessionGoalSet(ctx context.Context, params protocol.Sessi
 
 func (c *codexappConn) SessionGoalGet(ctx context.Context, sessionID string) (*protocol.SessionGoal, error) {
 	sessionID = strings.TrimSpace(sessionID)
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), sessionID)
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID), sessionID)
 	if threadID == "" {
 		return nil, errors.New("codexapp goal get requires sessionId")
 	}
@@ -891,7 +1075,7 @@ func (c *codexappConn) SessionGoalGet(ctx context.Context, sessionID string) (*p
 
 func (c *codexappConn) SessionGoalClear(ctx context.Context, sessionID string) error {
 	sessionID = strings.TrimSpace(sessionID)
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), sessionID)
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID), sessionID)
 	if threadID == "" {
 		return errors.New("codexapp goal clear requires sessionId")
 	}
@@ -914,7 +1098,7 @@ func normalizeCodexappGoal(goal appServerThreadGoal, sessionID string) protocol.
 
 func (c *codexappConn) sendThreadArchiveState(ctx context.Context, sessionID string, archived bool) error {
 	sessionID = strings.TrimSpace(sessionID)
-	threadID := firstNonEmptyString(codexappMappedThreadID(sessionID), c.runtimeThreadIDForSession(sessionID), sessionID)
+	threadID := firstNonEmptyString(c.mappedThreadID(sessionID), c.runtimeThreadIDForSession(sessionID), sessionID)
 	if threadID == "" {
 		return errors.New("codexapp archive requires sessionId")
 	}
@@ -944,7 +1128,7 @@ func (c *codexappConn) SteerSession(
 	if threadID == "" {
 		return SessionSteerResult{}, errors.New("codexapp steer requires sessionId")
 	}
-	input, err := codexappPromptToInputWithArtifacts(c.projectName, sessionID, blocks)
+	input, err := c.promptToInputWithArtifacts(sessionID, blocks)
 	if err != nil {
 		return SessionSteerResult{}, err
 	}
@@ -1013,7 +1197,7 @@ func classifyCodexappSteerError(err error) error {
 }
 
 func (c *codexappConn) CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error) {
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID))
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID))
 	if strings.TrimSpace(threadID) == "" {
 		return nil, errors.New("codexapp compact requires sessionId")
 	}
@@ -1040,7 +1224,7 @@ func (c *codexappConn) CompactSession(ctx context.Context, sessionID string) (<-
 }
 
 func (c *codexappConn) ResolveForkPoints(ctx context.Context, sessionID string, prompts []protocol.SessionForkPrompt) (map[int64]protocol.SessionForkPoint, error) {
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), strings.TrimSpace(sessionID))
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID), strings.TrimSpace(sessionID))
 	if threadID == "" {
 		return nil, errors.New("codexapp fork point resolution requires sessionId")
 	}
@@ -1062,7 +1246,7 @@ func (c *codexappConn) ResolveForkPoints(ctx context.Context, sessionID string, 
 }
 
 func (c *codexappConn) ForkSession(ctx context.Context, sessionID string, lastTurnID string, prompts []protocol.SessionForkPrompt) (protocol.SessionForkResult, error) {
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID), strings.TrimSpace(sessionID))
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID), strings.TrimSpace(sessionID))
 	lastTurnID = strings.TrimSpace(lastTurnID)
 	if threadID == "" || lastTurnID == "" {
 		return protocol.SessionForkResult{}, errors.New("codexapp fork requires sessionId and last turn id")
@@ -1130,7 +1314,7 @@ func (c *codexappConn) matchForkPromptTurns(sessionID string, prompts []protocol
 		if prompt.DoneTurnIndex <= 0 {
 			return map[int64]protocol.SessionForkPoint{}, false, nil
 		}
-		expected, err := codexappPromptToInputWithArtifacts(c.projectName, sessionID, prompt.ContentBlocks)
+		expected, err := c.promptToInputWithArtifacts(sessionID, prompt.ContentBlocks)
 		if err != nil {
 			return nil, false, err
 		}
@@ -1146,7 +1330,7 @@ func (c *codexappConn) matchForkPromptTurns(sessionID string, prompts []protocol
 			return map[int64]protocol.SessionForkPoint{}, false, nil
 		}
 		points[prompt.DoneTurnIndex] = protocol.SessionForkPoint{
-			Provider: string(protocol.ACPProviderCodex),
+			Provider: string(c.profile.Provider),
 			Ref:      nativeTurnIDs[index],
 		}
 	}
@@ -1175,7 +1359,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 	if threadID == "" {
 		return errors.New("codexapp session/prompt requires sessionId")
 	}
-	input, err := codexappPromptToInputWithArtifacts(c.projectName, p.SessionID, p.Prompt)
+	input, err := c.promptToInputWithArtifacts(p.SessionID, p.Prompt)
 	if err != nil {
 		return err
 	}
@@ -1210,7 +1394,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 			StopReason: promptResult.stopReason,
 			Artifacts:  promptResult.artifacts,
 			ForkPoint: &protocol.SessionForkPoint{
-				Provider: string(protocol.ACPProviderCodex),
+				Provider: string(c.profile.Provider),
 				Ref:      promptResult.turnID,
 			},
 		})
