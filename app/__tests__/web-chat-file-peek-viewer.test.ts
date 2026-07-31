@@ -576,6 +576,21 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('z-index: 11;');
   });
 
+  test('keeps Preview tab semantics on the open button instead of wrapping the close button', () => {
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const tabStart = chromeTsx.indexOf('className={`chat-file-workbench-tab preview-workbench-tab');
+    const tabEnd = chromeTsx.indexOf('</div>', tabStart);
+    const tabMarkup = chromeTsx.slice(tabStart, tabEnd);
+    const openButtonElementStart = tabMarkup.indexOf('<button');
+    const openButtonStart = tabMarkup.indexOf('className="chat-file-workbench-tab-open"');
+    const closeButtonStart = tabMarkup.indexOf('className="chat-file-workbench-tab-close"');
+
+    expect(tabMarkup.slice(0, openButtonElementStart)).not.toContain('role="tab"');
+    expect(tabMarkup.slice(openButtonElementStart, closeButtonStart)).toContain('role="tab"');
+    expect(tabMarkup.slice(openButtonElementStart, closeButtonStart)).toContain('aria-selected={active}');
+    expect(closeButtonStart).toBeGreaterThan(openButtonStart);
+  });
+
   test('preview workbench closes open file-tree popovers on outside interactions', () => {
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const mainTsx = readSourceText(mainPath);

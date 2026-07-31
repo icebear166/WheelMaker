@@ -37,7 +37,6 @@ export function MobileUsageDialog({
       className="usage-mobile-overlay"
       data-mobile-usage-overlay={true}
       role="dialog"
-      aria-modal="true"
       aria-label="Monitor"
       onPointerDown={onClose}
     >

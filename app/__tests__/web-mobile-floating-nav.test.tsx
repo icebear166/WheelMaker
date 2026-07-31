@@ -20,10 +20,7 @@ function renderNav(extra?: Partial<React.ComponentProps<typeof MobileFloatingNav
   const props: React.ComponentProps<typeof MobileFloatingNav> = {
     expanded: false,
     current: 'chat',
-    previewActive: false,
     previewTabCount: 0,
-    terminalActive: false,
-    monitorActive: false,
     chatUnread: false,
     relay: relayOff,
     onSelect: jest.fn(),
@@ -93,6 +90,21 @@ describe('MobileFloatingNav', () => {
     });
     expect(onCurrentSelect).toHaveBeenCalledTimes(1);
   });
+
+  test('exposes a navigation landmark and marks only the current surface', () => {
+    const {tree} = renderNav({
+      expanded: true,
+      current: 'settings',
+      relay: {frameOpen: true, enabled: true, active: true},
+    });
+
+    expect(tree.root.findByProps({role: 'navigation'}).props['aria-label']).toBe('Surface navigation');
+    const items = tree.root.findAllByProps({className: 'floating-nav-card-item'});
+    expect(items.filter(item => item.props['data-active'] === true)).toHaveLength(1);
+    expect(items.find(item => item.props['aria-current'] === 'page')?.props.title).toBe('Close navigation');
+    expect(tree.root.findAllByProps({role: 'menuitem'})).toHaveLength(0);
+    expect(items.some(item => item.props['aria-pressed'] !== undefined)).toBe(false);
+  });
 });
 
 
@@ -114,6 +126,7 @@ describe('mobile floating nav model', () => {
   test('reserves right-edge workbench controls below the floating nav', () => {
     expect(resolveFloatingNavReservedBottomInset('chat', 20)).toBe(0);
     expect(resolveFloatingNavReservedBottomInset('preview', 20)).toBe(64);
+    expect(resolveFloatingNavReservedBottomInset('relay', 20)).toBe(64);
     expect(resolveFloatingNavReservedBottomInset('terminal', 20)).toBe(135);
   });
 
@@ -203,6 +216,44 @@ describe('floating nav wiring', () => {
     expect(selectBody).toContain('setPortRelayScreenOpen(false);');
     expect(selectBody).not.toContain('setPreviewWorkbenchFullscreen(false)');
     expect(selectBody).not.toContain('setTerminalFullscreen(false)');
+  });
+
+  test('hides Preview without closing its tabs before every non-Preview destination', () => {
+    const main = readMain();
+    const hideStart = main.indexOf('const hideChatPreviewSurface = useCallback(');
+    const hideEnd = main.indexOf('const closeChatPreview = useCallback(', hideStart);
+    const hideBody = main.slice(hideStart, hideEnd);
+    const selectStart = main.indexOf('const handleFloatingNavSelect = useCallback(');
+    const selectEnd = main.indexOf('const toggleTerminalFromTitle', selectStart);
+    const selectBody = main.slice(selectStart, selectEnd);
+    const hideCall = selectBody.indexOf('hideChatPreviewSurface();');
+    const relayBranch = selectBody.indexOf("if (destination === 'relay')");
+
+    expect(hideStart).toBeGreaterThanOrEqual(0);
+    expect(hideBody).toContain('setChatPreviewManualOpen(false);');
+    expect(hideBody).toContain('setChatPreviewManualCollapsed(true);');
+    expect(hideBody).not.toContain('closeChatAttachmentPreview()');
+    expect(hideBody).not.toContain('closeChatPromptArtifactPreview()');
+    expect(hideBody).not.toContain('closeChatPortRelayPreview()');
+    expect(hideCall).toBeGreaterThanOrEqual(0);
+    expect(hideCall).toBeLessThan(relayBranch);
+    expect(selectBody).not.toContain('closeChatPreview();');
+  });
+
+  test('keeps primary mobile surfaces non-modal so the sibling global navigation stays reachable', () => {
+    const main = readMain();
+    const previewStart = main.indexOf('const chatPreviewMobileOverlay');
+    const previewEnd = main.indexOf('const usageHistoryOverlay', previewStart);
+    const terminalStart = main.indexOf('const terminalMobileOverlay');
+    const terminalEnd = main.indexOf('const quickFileProjectName', terminalStart);
+    const usage = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'usage', 'MobileUsageDialog.tsx'),
+      'utf8',
+    );
+
+    expect(main.slice(previewStart, previewEnd)).not.toContain('aria-modal');
+    expect(main.slice(terminalStart, terminalEnd)).not.toContain('aria-modal');
+    expect(usage).not.toContain('aria-modal');
   });
 
   test('relay frame chrome uses lucide icons', () => {

@@ -519,7 +519,7 @@ describe('UsageFeatureSurface', () => {
 
     const overlay = view!.root.findByProps({'data-mobile-usage-overlay': true});
     expect(overlay.props.role).toBe('dialog');
-    expect(overlay.props['aria-modal']).toBe('true');
+    expect(overlay.props['aria-modal']).toBeUndefined();
     expect(overlay.props['aria-label']).toBe('Monitor');
     const header = view!.root.findByProps({className: 'usage-mobile-header'});
     expect(renderedText(header.findByProps({className: 'usage-mobile-title'}))).toBe('Monitor');

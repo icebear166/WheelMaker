@@ -153,7 +153,8 @@ describe('limits workspace integration', () => {
     expect(selectBody).toContain("destination === 'monitor'");
     expect(selectBody).toContain('setMobileUsageOpen(true);');
     expect(selectBody).toContain('setTerminalOpen(false);');
-    expect(selectBody).toContain('closeChatPreview();');
+    expect(selectBody).toContain('hideChatPreviewSurface();');
+    expect(selectBody).not.toContain('closeChatPreview();');
     expect(selectBody).not.toContain('refreshUsageAcrossHubs');
 
     const backStart = main.indexOf('const handleAndroidNativeBack');

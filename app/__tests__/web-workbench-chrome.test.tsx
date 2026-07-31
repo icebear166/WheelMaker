@@ -70,9 +70,11 @@ describe('WorkbenchChrome', () => {
   test('requests controlled fullscreen without hiding the footer', () => {
     const {tree, onFullscreenChange} = renderChrome(true);
     const frame = tree.root.findByProps({'data-mobile-fullscreen': true});
+    const toggle = frame.findByProps({'aria-label': 'Exit workbench fullscreen'});
 
     expect(frame.findByProps({className: 'test-footer'})).toBeTruthy();
-    act(() => frame.findByProps({'aria-label': 'Exit workbench fullscreen'}).props.onClick());
+    expect(toggle.props['aria-pressed']).toBe(true);
+    act(() => toggle.props.onClick());
     expect(onFullscreenChange).toHaveBeenCalledWith(false);
   });
 });

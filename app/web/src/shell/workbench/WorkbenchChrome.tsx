@@ -91,6 +91,7 @@ export function WorkbenchChrome({
           type="button"
           className="workbench-chrome-fullscreen-toggle"
           aria-label={mobileFullscreen ? 'Exit workbench fullscreen' : 'Enter workbench fullscreen'}
+          aria-pressed={mobileFullscreen}
           title={mobileFullscreen ? 'Show toolbar and tabs' : 'Hide toolbar and tabs'}
           onClick={() => onMobileFullscreenChange(!mobileFullscreen)}
         >

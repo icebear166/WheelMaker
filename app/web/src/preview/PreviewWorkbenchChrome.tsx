@@ -166,11 +166,15 @@ export function PreviewWorkbenchChrome({
           <div
             key={`preview-tab:${tab.projectId}:${tab.id}`}
             className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
-            role="tab"
-            aria-selected={active}
             title={tooltip}
           >
-            <button type="button" className="chat-file-workbench-tab-open" onClick={() => onTabSelect(tab.id)}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className="chat-file-workbench-tab-open"
+              onClick={() => onTabSelect(tab.id)}
+            >
               <Icon name={previewWorkbenchTabIcon(tab.type)} className="preview-workbench-tab-icon" />
               <span className="preview-workbench-tab-label">{tab.title}</span>
             </button>

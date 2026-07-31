@@ -41,7 +41,7 @@ export function resolveFloatingNavReservedBottomInset(
   current: FloatingNavDestination,
   safeAreaBottomInset: number,
 ): number {
-  if (current === 'preview') {
+  if (current === 'preview' || current === 'relay') {
     return Math.max(WORKBENCH_FULLSCREEN_EDGE_PX, safeAreaBottomInset)
       + WORKBENCH_FULLSCREEN_BUTTON_SIZE_PX
       + WORKBENCH_FULLSCREEN_NAV_GAP_PX;

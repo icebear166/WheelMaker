@@ -9,10 +9,7 @@ import {
 export type MobileFloatingNavProps = {
   expanded: boolean;
   current: FloatingNavDestination;
-  previewActive: boolean;
   previewTabCount: number;
-  terminalActive: boolean;
-  monitorActive: boolean;
   chatUnread: boolean;
   relay: FloatingNavRelayState;
   onSelect: (destination: FloatingNavDestination) => void;
@@ -23,10 +20,7 @@ export type MobileFloatingNavProps = {
 export function MobileFloatingNav({
   expanded,
   current,
-  previewActive,
   previewTabCount,
-  terminalActive,
-  monitorActive,
   chatUnread,
   relay,
   onSelect,
@@ -63,29 +57,21 @@ export function MobileFloatingNav({
     <div className="floating-nav-expanded-anchor">
       <div
         className="floating-nav-card"
-        role="menu"
-        aria-label="Navigate"
+        role="navigation"
+        aria-label="Surface navigation"
         onPointerDown={onButtonPointerDown}
       >
       {FLOATING_NAV_ITEMS.map(item => {
         const isCurrent = item.id === current;
-        const active = item.id === 'preview'
-          ? previewActive
-          : item.id === 'terminal'
-            ? terminalActive
-            : item.id === 'monitor'
-              ? monitorActive
-              : item.id === 'relay'
-                ? relay.active
-                : isCurrent;
         return (
           <button
             key={item.id}
             type="button"
-            role="menuitem"
             className="floating-nav-card-item"
-            data-active={active}
+            data-active={isCurrent}
             data-enabled={item.id === 'relay' ? relay.enabled : true}
+            aria-current={isCurrent ? 'page' : undefined}
+            autoFocus={isCurrent}
             onPointerDown={event => event.stopPropagation()}
             onClick={() => {
               if (isCurrent) {
@@ -95,8 +81,7 @@ export function MobileFloatingNav({
               onSelect(item.id);
             }}
             title={isCurrent ? 'Close navigation' : item.label}
-            aria-label={isCurrent ? 'Close navigation' : item.label}
-            aria-pressed={active}
+            aria-label={isCurrent ? `${item.label}, current surface` : item.label}
           >
             <Icon name={item.icon} size={20} />
             {item.id === 'preview' ? previewBadge : null}

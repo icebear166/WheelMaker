@@ -7549,6 +7549,10 @@ export function App() {
     }
     setPreviewWorkbench(current => closePreviewTab(current, tab.projectId, tab.id));
   }, []);
+  const hideChatPreviewSurface = useCallback(() => {
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(true);
+  }, []);
   const closeChatPreview = useCallback(() => {
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(true);
@@ -17310,10 +17314,6 @@ export function App() {
       setMobileUsageOpen(false);
       setSidebarSettingsOpen(false);
       setTerminalOpen(false);
-      if (destination === 'relay') {
-        handleFloatingNavRelayOpen();
-        return;
-      }
       if (destination === 'preview') {
         setPreviewWorkbench(current => {
           const activeProjectId = current.activeProjectId;
@@ -17334,7 +17334,11 @@ export function App() {
         setChatPreviewManualOpen(true);
         return;
       }
-      closeChatPreview();
+      hideChatPreviewSurface();
+      if (destination === 'relay') {
+        handleFloatingNavRelayOpen();
+        return;
+      }
       if (destination === 'terminal') {
         setTerminalOpen(true);
       } else if (destination === 'monitor') {
@@ -17346,9 +17350,9 @@ export function App() {
     },
     [
       cancelGestureNavigation,
-      closeChatPreview,
       closeMobileDrawerCompanionOverlays,
       handleFloatingNavRelayOpen,
+      hideChatPreviewSurface,
       openSettingsRoot,
       setSidebarSettingsOpen,
     ],
@@ -19190,10 +19194,7 @@ export function App() {
         <MobileFloatingNav
           expanded={gestureNavigationExpanded}
           current={floatingNavCurrent}
-          previewActive={chatPreviewOpen && !mobilePortRelayFrameOpen}
           previewTabCount={previewTabCount}
-          terminalActive={terminalOpen}
-          monitorActive={mobileUsageOpen}
           chatUnread={hasCompletedUnreadChatSessionIndicator}
           relay={floatingNavRelayState}
           onSelect={handleFloatingNavSelect}
@@ -20283,7 +20284,6 @@ export function App() {
       hidden={!chatPreviewOpen}
       aria-hidden={chatPreviewOpen ? undefined : true}
       role="dialog"
-      aria-modal="true"
       aria-label="Chat preview"
     >
       {renderPreviewWorkbenchSurface('mobile')}
@@ -20313,7 +20313,6 @@ export function App() {
       hidden={!terminalOpen}
       aria-hidden={terminalOpen ? undefined : true}
       role="dialog"
-      aria-modal="true"
       aria-label="Terminal"
     >
       <TerminalWorkbench mode="mobile"
