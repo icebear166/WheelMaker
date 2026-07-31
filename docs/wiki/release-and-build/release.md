@@ -89,6 +89,23 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 
 完整安装生成当前平台的 `deploy`、`start` 和 `stop` 包装脚本。Windows 额外生成带 self-update capability 标记的 `update_exe.bat`。该 BAT 有 PID 时进入 `desktop-self-update`，无参数时保留 `desktop-update` 手动恢复语义。`restart` 和 `status` 包装脚本已退役。
 
+## 主协议不兼容时的受限更新
+
+Registry 主协议硬切不能切断 Web 主动更新旧 Hub 的唯一通道。Hub 与 Registry 因主协议不一致而无法进入完整业务模式时，如果 Hub 主协议较旧且双方支持 maintenance protocol v1，Registry 允许该 Hub 以 `update_only` 模式保持连接。认证、Token 和 Hub ID 校验不降级；Hub 比 Registry 更新、未声明 maintenance v1 或 maintenance version 不匹配时仍拒绝连接。
+
+`update_only` Hub 只开放心跳、更新状态查询和用户触发的更新请求。它不报告 Project，也不能访问 Session、文件、Git、HubState、HubConfig、Skills、发布、Debug Web 或 Relay。App 在 Hub 目录中显示“版本不兼容，需要更新”，但只提供刷新更新状态和手动更新动作；受限连接成功不会自动开始更新。
+
+维护请求使用稳定的 `hub.maintenance.update.query` / `hub.maintenance.update.request`，Hub 内部仍复用既有 UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。请求被接受后，Hub 在 `applying` 阶段断开属于预期行为；新 Hub 重启并以当前主协议重新握手后恢复完整业务模式。若更新失败但旧 Hub 重新启动，它会再次进入 `update_only`，允许用户查询失败状态并重试。
+
+主协议升级必须采用两阶段发布：
+
+1. 在当前主协议版本中先增量发布 maintenance v1 和 `update_only` 能力，不提升主协议版本。
+2. 确认当前 Hub 已有机会获得 maintenance v1 后，才在独立发布决策中提升主协议版本。
+
+更早且没有 maintenance v1 的存量 Hub 不做推断式兼容，继续依赖每天 03:00 的平台 updater 或重新运行完整安装命令恢复。maintenance v1 一经发布保持 wire-compatible；维护协议若需要破坏性调整则新增版本。
+
+> 决策来源：[`docs/scope/2026-07-31-update-only-hub/spec-update-only-hub.md`](../../scope/2026-07-31-update-only-hub/spec-update-only-hub.md)
+
 ## 完整安装状态机
 
 完整安装不会为了下载而提前停止 Hub。当前顺序为：
