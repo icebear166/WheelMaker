@@ -17501,29 +17501,33 @@ export function App() {
         >
           <SessionIcon name="search" />
         </button>
-        <button
-          type="button"
-          className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
-          onClick={toggleTerminalFromTitle}
-          title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
-          aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
-          aria-pressed={terminalOpen}
-        >
-          <SessionIcon name="terminal" />
-        </button>
-        <button
-          type="button"
-          className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
-          onClick={toggleChatPreviewFromTitle}
-          title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-          aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-          aria-pressed={chatPreviewOpen}
-        >
-          <SessionIcon name="appWindow" />
-          {!chatPreviewOpen && previewTabCount > 0 ? (
-            <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
-          ) : null}
-        </button>
+        {!mobile ? (
+          <>
+            <button
+              type="button"
+              className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
+              onClick={toggleTerminalFromTitle}
+              title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+              aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+              aria-pressed={terminalOpen}
+            >
+              <SessionIcon name="terminal" />
+            </button>
+            <button
+              type="button"
+              className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
+              onClick={toggleChatPreviewFromTitle}
+              title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+              aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+              aria-pressed={chatPreviewOpen}
+            >
+              <SessionIcon name="appWindow" />
+              {!chatPreviewOpen && previewTabCount > 0 ? (
+                <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
+              ) : null}
+            </button>
+          </>
+        ) : null}
       </div>
     </DesktopDragRegion>
   );
@@ -19125,6 +19129,7 @@ export function App() {
           expanded={gestureNavigationExpanded}
           current={floatingNavCurrent}
           previewActive={chatPreviewOpen && !mobilePortRelayFrameOpen}
+          previewTabCount={previewTabCount}
           terminalActive={terminalOpen}
           monitorActive={mobileUsageOpen}
           chatUnread={hasCompletedUnreadChatSessionIndicator}

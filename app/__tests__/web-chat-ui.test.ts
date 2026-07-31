@@ -2450,6 +2450,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(mainTsx).toContain('className="chat-title-actions"');
+    expect(mainTsx).toContain('{!mobile ? (\n          <>');
     expect(mainTsx).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
     expect(mainTsx).toContain('title={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
     expect(mainTsx).toContain('aria-label={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');

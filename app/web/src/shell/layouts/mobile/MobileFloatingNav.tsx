@@ -10,6 +10,7 @@ export type MobileFloatingNavProps = {
   expanded: boolean;
   current: FloatingNavDestination;
   previewActive: boolean;
+  previewTabCount: number;
   terminalActive: boolean;
   monitorActive: boolean;
   chatUnread: boolean;
@@ -23,6 +24,7 @@ export function MobileFloatingNav({
   expanded,
   current,
   previewActive,
+  previewTabCount,
   terminalActive,
   monitorActive,
   chatUnread,
@@ -31,6 +33,11 @@ export function MobileFloatingNav({
   onCurrentSelect,
   onButtonPointerDown,
 }: MobileFloatingNavProps) {
+  const previewBadge = previewTabCount > 0 ? (
+    <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>
+      {previewTabCount}
+    </span>
+  ) : null;
   if (!expanded) {
     const currentItem = FLOATING_NAV_ITEMS.find(item => item.id === current)
       ?? FLOATING_NAV_ITEMS[FLOATING_NAV_ITEMS.length - 1];
@@ -47,6 +54,7 @@ export function MobileFloatingNav({
         aria-expanded={false}
       >
         <Icon name={currentItem.icon} size={20} />
+        {current === 'preview' ? previewBadge : null}
         {chatUnread ? <span className="floating-nav-unread-dot" aria-hidden="true" /> : null}
       </button>
     );
@@ -91,6 +99,7 @@ export function MobileFloatingNav({
             aria-pressed={active}
           >
             <Icon name={item.icon} size={20} />
+            {item.id === 'preview' ? previewBadge : null}
             {item.id === 'chat' && chatUnread ? (
               <span className="floating-nav-unread-dot" aria-hidden="true" />
             ) : null}

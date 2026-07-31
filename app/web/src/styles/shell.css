@@ -666,6 +666,7 @@
   color: #fff;
   font-size: 8px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 12px;
   text-align: center;
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--surface-panel) 78%, transparent);

@@ -19,6 +19,7 @@ function renderNav(extra?: Partial<React.ComponentProps<typeof MobileFloatingNav
     expanded: false,
     current: 'chat',
     previewActive: false,
+    previewTabCount: 0,
     terminalActive: false,
     monitorActive: false,
     chatUnread: false,
@@ -51,6 +52,22 @@ describe('MobileFloatingNav', () => {
     expect(items).toHaveLength(6);
     const withRelay = renderNav({expanded: true, relay: relayOn});
     expect(withRelay.tree.root.findAllByProps({className: 'floating-nav-card-item'})).toHaveLength(6);
+  });
+
+  test('expanded shows the preview tab count on the Preview shortcut', () => {
+    const {tree} = renderNav({expanded: true, previewTabCount: 3});
+    const previewItem = tree.root.findByProps({title: 'Preview'});
+    const badge = previewItem.findByProps({className: 'chat-preview-badge'});
+
+    expect(badge.props['aria-label']).toBe('3 preview tabs');
+    expect(badge.children).toEqual(['3']);
+  });
+
+  test('does not show a Preview badge when there are no preview tabs', () => {
+    const {tree} = renderNav({expanded: true, previewTabCount: 0});
+    const previewItem = tree.root.findByProps({title: 'Preview'});
+
+    expect(previewItem.findAllByProps({className: 'chat-preview-badge'})).toHaveLength(0);
   });
 
   test('relay item dims when the frame cannot open and shows a status dot', () => {
@@ -143,6 +160,12 @@ describe('floating nav wiring', () => {
     expect(main).toContain('handleFloatingNavSelect');
     expect(main).toContain('mobileRelayTargetSheet');
     expect(main).toContain('useMenuExitState');
+  });
+
+  test('moves the preview tab count into the mobile Preview shortcut', () => {
+    const main = readMain();
+
+    expect(main).toContain('previewTabCount={previewTabCount}');
   });
 
   test('relay frame chrome uses lucide icons', () => {
