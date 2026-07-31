@@ -233,8 +233,16 @@ type ProjectListItem struct {
 }
 
 type HubListItem struct {
-	HubID string `json:"hubId"`
+	HubID          string                 `json:"hubId"`
+	ConnectionMode RegistryConnectionMode `json:"connectionMode,omitempty"`
 }
+
+type RegistryConnectionMode string
+
+const (
+	RegistryConnectionModeNormal     RegistryConnectionMode = "normal"
+	RegistryConnectionModeUpdateOnly RegistryConnectionMode = "update_only"
+)
 
 func ProjectID(hubID, projectName string) string {
 	hubID = strings.TrimSpace(hubID)
