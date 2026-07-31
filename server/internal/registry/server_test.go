@@ -650,6 +650,24 @@ func TestUpdateOnlyHubAllowsOnlyWheelMakerUpdateRequests(t *testing.T) {
 	})
 }
 
+func TestUpdateOnlyHubRejectsRelayForwarding(t *testing.T) {
+	s := New(Config{})
+	s.hubDescriptors["hub-old"] = rp.HubListItem{
+		HubID:          "hub-old",
+		ConnectionMode: rp.RegistryConnectionModeUpdateOnly,
+	}
+
+	result := s.forwardRelayHubRequest(
+		context.Background(),
+		"hub-old",
+		rp.RegistryMethodHubRelayOpen,
+		map[string]any{},
+	)
+	if result.Code != codeForbidden {
+		t.Fatalf("relay result=%#v, want FORBIDDEN", result)
+	}
+}
+
 func TestRegistryProtocolDomainAcceptsNewAndRejectsOldProjectRoutes(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())

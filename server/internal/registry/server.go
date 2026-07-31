@@ -881,6 +881,9 @@ func (s *Server) forwardRelayHubRequest(ctx context.Context, hubID string, metho
 	if hubID == "" {
 		return portrelay.ControlResult{Code: codeInvalidArgument, Message: "hubId is required"}
 	}
+	if s.isUpdateOnlyHub(hubID) {
+		return portrelay.ControlResult{Code: codeForbidden, Message: "hub is update-only", Details: map[string]any{"hubId": hubID}}
+	}
 	s.mu.RLock()
 	hub := s.hubs[hubID]
 	hubPeer := s.hubPeers[hubID]
