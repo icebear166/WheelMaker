@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,12 +276,12 @@ func (w *skillsWatcher) reconcileWatches() {
 			root := filepath.Join(target.Root, relative)
 			addExistingWatchDir(desired, root)
 			if strings.HasSuffix(filepath.ToSlash(relative), "/skills") {
-				_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-					if err == nil && entry != nil && entry.IsDir() {
-						addExistingWatchDir(desired, path)
+				entries, _ := os.ReadDir(root)
+				for _, entry := range entries {
+					if entry.IsDir() {
+						addExistingWatchDir(desired, filepath.Join(root, entry.Name()))
 					}
-					return nil
-				})
+				}
 			}
 		}
 	}

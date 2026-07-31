@@ -1142,22 +1142,22 @@ func (r *Reporter) refreshSkillsStateTarget(scope, projectName string) {
 
 func (r *Reporter) startSkillsWatcher(ctx context.Context) {
 	r.skillsWatcherOnce.Do(func() {
-		watcher := newSkillsWatcher(skillsWatcherOptions{
-			OnChange: func(target skillsWatchTarget) {
-				r.refreshSkillsStateTarget(target.Scope, target.ProjectName)
-			},
-		})
-		if err := watcher.Error(); err != nil {
-			hubLogger("").Warn("start skills watcher failed: %v", err)
-		}
-		if home, err := os.UserHomeDir(); err == nil {
-			watcher.TrackHub(home)
-		}
-		watcher.ReplaceProjects(r.skillsTargets())
-		r.skillsWatcherMu.Lock()
-		r.skillsWatcher = watcher
-		r.skillsWatcherMu.Unlock()
 		go func() {
+			watcher := newSkillsWatcher(skillsWatcherOptions{
+				OnChange: func(target skillsWatchTarget) {
+					r.refreshSkillsStateTarget(target.Scope, target.ProjectName)
+				},
+			})
+			if err := watcher.Error(); err != nil {
+				hubLogger("").Warn("start skills watcher failed: %v", err)
+			}
+			if home, err := os.UserHomeDir(); err == nil {
+				watcher.TrackHub(home)
+			}
+			watcher.ReplaceProjects(r.skillsTargets())
+			r.skillsWatcherMu.Lock()
+			r.skillsWatcher = watcher
+			r.skillsWatcherMu.Unlock()
 			<-ctx.Done()
 			_ = watcher.Close()
 		}()
@@ -1805,25 +1805,6 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 		})
 	}
 	return r.skillsState
-}
-
-func (r *Reporter) refreshSkillsAgentProfiles(scope, projectName string) {
-	projects := r.projectsSnapshot()
-	for _, project := range projects {
-		if scope == "project" && projectName != "" && strings.TrimSpace(project.Name) != strings.TrimSpace(projectName) {
-			continue
-		}
-		path := strings.TrimSpace(project.Path)
-		if path == "" {
-			continue
-		}
-		newProfiles := collectProjectAgentProfiles(project.Name, path, project.Agents)
-		updated := project
-		updated.AgentProfiles = newProfiles
-		if err := r.UpdateProject(updated); err != nil {
-			registryLogger(project.Name).Warn("refresh skills agent profiles failed: %v", err)
-		}
-	}
 }
 
 func (r *Reporter) replySession(conn *websocket.Conn, req envelope) {

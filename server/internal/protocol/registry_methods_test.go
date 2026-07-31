@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -13,6 +14,14 @@ import (
 func TestTokenStatsUpdateMethodIsRemoved(t *testing.T) {
 	if descriptor, ok := RegistryMethod("tokenStats.update"); ok {
 		t.Fatalf("removed tokenStats.update method is still registered: %+v", descriptor)
+	}
+}
+
+func TestProjectProtocolTypesHaveNoAgentProfilesField(t *testing.T) {
+	for _, value := range []any{ProjectInfo{}, ProjectListItem{}} {
+		if _, ok := reflect.TypeOf(value).FieldByName("AgentProfiles"); ok {
+			t.Fatalf("%T still exposes AgentProfiles", value)
+		}
 	}
 }
 

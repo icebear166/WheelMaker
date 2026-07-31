@@ -1351,17 +1351,15 @@ func (s *Server) snapshotProjects(scopeHubID string) []rp.ProjectListItem {
 		}
 		for _, p := range hub.Projects {
 			agents := append([]string(nil), p.Agents...)
-			agentProfiles := append([]rp.ProjectAgentProfile(nil), p.AgentProfiles...)
 			items = append(items, rp.ProjectListItem{
-				ProjectID:     rp.ProjectID(hubID, p.Name),
-				Name:          strings.TrimSpace(p.Name),
-				Path:          strings.TrimSpace(p.Path),
-				Online:        p.Online,
-				Agent:         p.Agent,
-				Agents:        agents,
-				AgentProfiles: agentProfiles,
-				ProjectRev:    p.ProjectRev,
-				Git:           p.Git,
+				ProjectID:  rp.ProjectID(hubID, p.Name),
+				Name:       strings.TrimSpace(p.Name),
+				Path:       strings.TrimSpace(p.Path),
+				Online:     p.Online,
+				Agent:      p.Agent,
+				Agents:     agents,
+				ProjectRev: p.ProjectRev,
+				Git:        p.Git,
 			})
 		}
 	}
