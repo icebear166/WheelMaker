@@ -5,7 +5,6 @@ const (
 	SessionQueueActionCancel     = "cancel"
 	SessionQueueActionPrioritize = "prioritize"
 	SessionQueueActionSteer      = "steer"
-	SessionQueueActionRetry      = "retry"
 
 	SessionQueueItemKindPrompt  = "prompt"
 	SessionQueueItemKindCompact = "compact"
@@ -14,7 +13,6 @@ const (
 	SessionQueueItemStatusRunning    = "running"
 	SessionQueueItemStatusCancelling = "cancelling"
 	SessionQueueItemStatusSteering   = "steering"
-	SessionQueueItemStatusFailed     = "failed"
 )
 
 type SessionQueueEnqueueItem struct {
@@ -38,13 +36,11 @@ type SessionQueueItem struct {
 	CreatedAt       string         `json:"createdAt"`
 	Blocks          []ContentBlock `json:"blocks,omitempty"`
 	CancelSupported bool           `json:"cancelSupported"`
-	Error           string         `json:"error,omitempty"`
 }
 
 type SessionQueueSnapshot struct {
 	Generation   string             `json:"generation"`
 	Revision     uint64             `json:"revision"`
-	Paused       bool               `json:"paused"`
 	ActiveKind   string             `json:"activeKind,omitempty"`
 	WaitingCount int                `json:"waitingCount"`
 	ActiveItem   *SessionQueueItem  `json:"activeItem,omitempty"`

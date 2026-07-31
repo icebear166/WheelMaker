@@ -322,42 +322,6 @@ func TestSessionQueuePrioritizeAndWaitingCancel(t *testing.T) {
 	}
 }
 
-func TestSessionQueueFailedRetryMovesItemToFront(t *testing.T) {
-	s := mustNewSessionForQueueTest(t, "sess-retry")
-	s.queueMu.Lock()
-	s.queue.active = &sessionQueueItem{wire: promptQueueItem("failed", "one"), status: acp.SessionQueueItemStatusFailed, errMessage: "failed"}
-	s.queue.waiting = []*sessionQueueItem{{wire: promptQueueItem("next", "two"), status: acp.SessionQueueItemStatusQueued}}
-	s.queue.paused = true
-	s.queueMu.Unlock()
-
-	if err := s.retryQueueItem("failed"); err != nil {
-		t.Fatal(err)
-	}
-	got := s.queueSnapshot(true)
-	if got.Paused || got.ActiveItem != nil || len(got.WaitingItems) != 2 ||
-		got.WaitingItems[0].ItemID != "failed" || got.WaitingItems[0].Error != "" ||
-		got.WaitingItems[0].Status != acp.SessionQueueItemStatusQueued {
-		t.Fatalf("snapshot = %#v", got)
-	}
-}
-
-func TestSessionQueueFailedCancelResumesWaitingItems(t *testing.T) {
-	s := mustNewSessionForQueueTest(t, "sess-failed")
-	s.queueMu.Lock()
-	s.queue.active = &sessionQueueItem{wire: promptQueueItem("failed", "one"), status: acp.SessionQueueItemStatusFailed}
-	s.queue.waiting = []*sessionQueueItem{{wire: promptQueueItem("next", "two"), status: acp.SessionQueueItemStatusQueued}}
-	s.queue.paused = true
-	s.queueMu.Unlock()
-
-	if err := s.cancelQueueItem("failed"); err != nil {
-		t.Fatal(err)
-	}
-	got := s.queueSnapshot(true)
-	if got.Paused || got.ActiveItem != nil || len(got.WaitingItems) != 1 {
-		t.Fatalf("snapshot = %#v", got)
-	}
-}
-
 func TestSessionQueueActiveCompactCannotBeCancelled(t *testing.T) {
 	s := mustNewSessionForQueueTest(t, "sess-compact")
 	s.queueMu.Lock()
@@ -381,7 +345,7 @@ func TestSessionQueueResetChangesGenerationAndClearsState(t *testing.T) {
 	before := s.queueSnapshot(true)
 	after := s.resetQueue()
 	if after.Generation == "" || after.Generation == before.Generation || after.Revision != 0 ||
-		after.Paused || after.ActiveItem != nil || len(after.WaitingItems) != 0 || s.queuePinsMemory() {
+		after.ActiveItem != nil || len(after.WaitingItems) != 0 || s.queuePinsMemory() {
 		t.Fatalf("after reset = %#v", after)
 	}
 	if _, duplicate, err := s.enqueueQueueItem(item); err != nil || duplicate {
@@ -456,8 +420,8 @@ func TestSessionQueuePromptTranscriptCarriesQueueItemIdentity(t *testing.T) {
 	t.Fatalf("prompt transcript events do not carry queue item identity: %#v", sink.events)
 }
 
-func TestSessionQueueFailurePausesUntilRetry(t *testing.T) {
-	s, instance := newQueueExecutionSession(t, "sess-retry-drain")
+func TestSessionQueueFailureDequeuesAndContinues(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-failure-drain")
 	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "first")); err != nil {
 		t.Fatal(err)
 	}
@@ -466,26 +430,15 @@ func TestSessionQueueFailurePausesUntilRetry(t *testing.T) {
 	}
 	awaitQueueExecutionStart(t, instance, "prompt:first")
 	instance.promptOutcomes <- queuePromptOutcome{err: errors.New("provider failed")}
-	eventuallyQueue(t, func() bool {
-		got := s.queueSnapshot(true)
-		return got.Paused && got.ActiveItem != nil &&
-			got.ActiveItem.ItemID == "p1" &&
-			got.ActiveItem.Status == acp.SessionQueueItemStatusFailed &&
-			got.ActiveItem.Error != ""
-	})
-	if got := instance.executionOrder(); !reflect.DeepEqual(got, []string{"prompt:first"}) {
-		t.Fatalf("execution order while paused = %v", got)
-	}
-
-	if err := s.retryQueueItem("p1"); err != nil {
-		t.Fatal(err)
-	}
-	s.scheduleQueueDrain()
-	awaitQueueExecutionStart(t, instance, "prompt:first")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
 	awaitQueueExecutionStart(t, instance, "prompt:second")
 	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
-	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
+	eventuallyQueue(t, func() bool {
+		got := s.queueSnapshot(true)
+		return got.ActiveItem == nil && len(got.WaitingItems) == 0
+	})
+	if got, want := instance.executionOrder(), []string{"prompt:first", "prompt:second"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("execution order = %v, want %v", got, want)
+	}
 }
 
 func TestSessionQueueEnqueueReturnsBeforeExecutionCompletes(t *testing.T) {

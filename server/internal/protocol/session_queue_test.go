@@ -22,16 +22,14 @@ func TestSessionQueueSnapshotRoundTrip(t *testing.T) {
 	snapshot := SessionQueueSnapshot{
 		Generation:   "generation-1",
 		Revision:     4,
-		Paused:       true,
 		ActiveKind:   SessionQueueItemKindPrompt,
 		WaitingCount: 1,
 		ActiveItem: &SessionQueueItem{
 			ItemID:          "active-1",
 			Kind:            SessionQueueItemKindPrompt,
-			Status:          SessionQueueItemStatusFailed,
+			Status:          SessionQueueItemStatusRunning,
 			CreatedAt:       "2026-07-31T10:00:00Z",
 			CancelSupported: true,
-			Error:           "provider failed",
 		},
 		WaitingItems: []SessionQueueItem{{
 			ItemID:          "waiting-1",
@@ -50,7 +48,7 @@ func TestSessionQueueSnapshotRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Generation != snapshot.Generation || got.Revision != snapshot.Revision ||
-		got.ActiveItem == nil || got.ActiveItem.Error != "provider failed" ||
+		got.ActiveItem == nil || got.ActiveItem.Status != SessionQueueItemStatusRunning ||
 		len(got.WaitingItems) != 1 || got.WaitingItems[0].Kind != SessionQueueItemKindCompact {
 		t.Fatalf("snapshot = %#v", got)
 	}

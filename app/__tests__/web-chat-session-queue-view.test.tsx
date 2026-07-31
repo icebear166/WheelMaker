@@ -61,7 +61,6 @@ function buttonLabels(renderer: ReactTestRenderer.ReactTestRenderer): string[] {
 async function renderPrompt(
   status: RegistrySessionQueueItemStatus,
   queueActions: ChatQueueActions,
-  error = '',
 ) {
   let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
   await ReactTestRenderer.act(() => {
@@ -69,7 +68,6 @@ async function renderPrompt(
       <ChatTurnView
         message={promptMessage()}
         queueItemStatus={status}
-        queueItemError={error}
         queueActions={queueActions}
         markdownComponents={markdownComponents}
         markdownUrlTransform={markdownUrlTransform}
@@ -98,17 +96,6 @@ describe('authoritative session queue views', () => {
     });
 
     expect(buttonLabels(renderer)).toEqual(['Cancel']);
-  });
-
-  test('failed prompt shows the server error and retry/cancel', async () => {
-    const renderer = await renderPrompt(
-      'failed',
-      {retry: jest.fn(), cancel: jest.fn()},
-      'provider failed',
-    );
-
-    expect(buttonLabels(renderer)).toEqual(['Retry', 'Cancel']);
-    expect(renderer.root.findByProps({role: 'alert'}).children).toContain('provider failed');
   });
 
   test('cancelling prompt has no second action', async () => {

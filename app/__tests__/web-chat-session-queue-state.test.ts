@@ -14,7 +14,6 @@ const snapshot = (
 ): RegistrySessionQueueSnapshot => ({
   generation,
   revision,
-  paused: false,
   activeKind: 'prompt',
   waitingCount: 1,
   waitingItems: [{
@@ -42,31 +41,20 @@ describe('server session queue projection', () => {
     expect(fullQueueSnapshot({
       generation: 'g1',
       revision: 2,
-      paused: false,
       waitingCount: 2,
     })).toBeUndefined();
     expect(fullQueueSnapshot({
       generation: 'g1',
       revision: 3,
-      paused: false,
       waitingCount: 0,
     })).toMatchObject({generation: 'g1', revision: 3});
   });
 
-  test('renders active failure followed by waiting items using cloned blocks', () => {
+  test('returns cloned waiting item blocks for display', () => {
     const queue = snapshot('g1', 4);
-    queue.activeItem = {
-      itemId: 'failed',
-      kind: 'prompt',
-      status: 'failed',
-      createdAt: '2026-07-31T09:00:00Z',
-      blocks: [{type: 'text', text: 'failed'}],
-      cancelSupported: true,
-      error: 'provider failed',
-    };
     const items = queueDisplayItems(queue);
-    expect(items.map(item => item.itemId)).toEqual(['failed', 'item-1']);
-    items[1].blocks![0].text = 'mutated';
+
+    items[0].blocks![0].text = 'mutated';
     expect(queue.waitingItems![0].blocks![0].text).toBe('item-1');
   });
 
@@ -95,10 +83,6 @@ describe('server session queue projection', () => {
       cancelSupported: true,
     };
     expect(queueDisplayItems(cancelling, new Set(['prompt-1']))).toEqual([]);
-
-    cancelling.activeItem.status = 'failed';
-    expect(queueDisplayItems(cancelling, new Set(['prompt-1'])))
-      .toEqual([expect.objectContaining({itemId: 'prompt-1', status: 'failed'})]);
   });
 
   test('collects queue identities from prompt and operation transcript rows', () => {

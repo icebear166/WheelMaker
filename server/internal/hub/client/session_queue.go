@@ -29,7 +29,6 @@ type sessionExecutionOutcome struct {
 type sessionQueueItem struct {
 	wire            acp.SessionQueueEnqueueItem
 	status          string
-	errMessage      string
 	payloadHash     [sha256.Size]byte
 	steerCancel     context.CancelFunc
 	executionCtx    context.Context
@@ -39,7 +38,6 @@ type sessionQueueItem struct {
 type sessionQueueState struct {
 	generation string
 	revision   uint64
-	paused     bool
 	active     *sessionQueueItem
 	waiting    []*sessionQueueItem
 	outcomes   map[string][sha256.Size]byte
@@ -123,13 +121,6 @@ func (s *Session) cancelQueueItem(itemID string) error {
 
 	s.queueMu.Lock()
 	if active := s.queue.active; active != nil && active.wire.ItemID == itemID {
-		if active.status == acp.SessionQueueItemStatusFailed {
-			s.queue.active = nil
-			s.queue.paused = false
-			s.bumpQueueRevisionLocked()
-			s.queueMu.Unlock()
-			return nil
-		}
 		if active.wire.Kind == acp.SessionQueueItemKindCompact {
 			s.queueMu.Unlock()
 			return agent.ErrSessionActionUnsupported
@@ -197,30 +188,6 @@ func (s *Session) prioritizeQueueItem(itemID string) error {
 		return nil
 	}
 	return sessionQueueRequestError(acp.CodeNotFound, "waiting queue item was not found")
-}
-
-func (s *Session) retryQueueItem(itemID string) error {
-	s.queueOpMu.Lock()
-	defer s.queueOpMu.Unlock()
-
-	itemID = strings.TrimSpace(itemID)
-	if itemID == "" {
-		return sessionQueueRequestError(acp.CodeInvalidArgument, "itemId is required")
-	}
-
-	s.queueMu.Lock()
-	defer s.queueMu.Unlock()
-	active := s.queue.active
-	if active == nil || active.wire.ItemID != itemID || active.status != acp.SessionQueueItemStatusFailed {
-		return sessionQueueRequestError(acp.CodeConflict, "only the active failed queue item can be retried")
-	}
-	active.status = acp.SessionQueueItemStatusQueued
-	active.errMessage = ""
-	s.queue.active = nil
-	s.queue.waiting = append([]*sessionQueueItem{active}, s.queue.waiting...)
-	s.queue.paused = false
-	s.bumpQueueRevisionLocked()
-	return nil
 }
 
 func (s *Session) steerQueueItem(ctx context.Context, itemID string) error {
@@ -360,7 +327,6 @@ func (s *Session) queueSnapshotLocked(full bool) acp.SessionQueueSnapshot {
 	snapshot := acp.SessionQueueSnapshot{
 		Generation:   s.queue.generation,
 		Revision:     s.queue.revision,
-		Paused:       s.queue.paused,
 		WaitingCount: len(s.queue.waiting),
 	}
 	if s.queue.active != nil {
@@ -432,8 +398,7 @@ func queueItemSnapshot(item *sessionQueueItem, active bool) acp.SessionQueueItem
 		Status:          item.status,
 		CreatedAt:       item.wire.CreatedAt,
 		Blocks:          cloneSessionContentBlocks(item.wire.Blocks),
-		CancelSupported: !active || item.status == acp.SessionQueueItemStatusFailed || item.wire.Kind == acp.SessionQueueItemKindPrompt,
-		Error:           item.errMessage,
+		CancelSupported: !active || item.wire.Kind == acp.SessionQueueItemKindPrompt,
 	}
 }
 
@@ -443,7 +408,7 @@ func sessionQueueRequestError(code, message string) error {
 
 func (s *Session) scheduleQueueDrain() {
 	s.queueMu.Lock()
-	if s.queueClosing || s.queue.draining || s.queue.paused || s.queue.active != nil || len(s.queue.waiting) == 0 {
+	if s.queueClosing || s.queue.draining || s.queue.active != nil || len(s.queue.waiting) == 0 {
 		s.queueMu.Unlock()
 		return
 	}
@@ -459,7 +424,7 @@ func (s *Session) scheduleQueueDrain() {
 func (s *Session) drainQueue() {
 	for {
 		s.queueMu.Lock()
-		if s.queueClosing || s.queue.paused || s.queue.active != nil || len(s.queue.waiting) == 0 {
+		if s.queueClosing || s.queue.active != nil || len(s.queue.waiting) == 0 {
 			s.queue.draining = false
 			s.queueMu.Unlock()
 			return
@@ -484,47 +449,39 @@ func (s *Session) drainQueue() {
 		}
 		s.publishQueueSnapshot()
 
-		var outcome sessionExecutionOutcome
 		switch item.wire.Kind {
 		case acp.SessionQueueItemKindPrompt:
-			outcome = s.runPromptTurnWithContext(
+			s.runPromptTurnWithContext(
 				item.executionCtx,
 				cloneSessionContentBlocks(item.wire.Blocks),
 				item.wire.ItemID,
 			)
 		case acp.SessionQueueItemKindCompact:
-			outcome = s.runCompactionExecution(item.executionCtx, item.wire.ItemID)
+			s.runCompactionExecution(item.executionCtx, item.wire.ItemID)
 		default:
-			outcome = sessionExecutionOutcome{status: sessionExecutionFailed, err: fmt.Errorf("unsupported queue item kind %q", item.wire.Kind)}
+			hubLogger(s.projectName).Error("unsupported queue item kind session=%s kind=%q", s.acpSessionID, item.wire.Kind)
 		}
-		s.finishActiveQueueItem(item.wire.ItemID, outcome)
+		s.finishActiveQueueItem(item.wire.ItemID)
 		s.endExecution()
-		if outcome.status == sessionExecutionFailed {
-			s.queueMu.Lock()
-			s.queue.draining = false
-			s.queueMu.Unlock()
-			return
-		}
 	}
 }
 
 func (s *Session) promoteNextQueueItem() (*sessionQueueItem, bool) {
 	s.queueMu.Lock()
 	defer s.queueMu.Unlock()
-	if s.queue.paused || s.queue.active != nil || len(s.queue.waiting) == 0 {
+	if s.queue.active != nil || len(s.queue.waiting) == 0 {
 		return nil, false
 	}
 	item := s.queue.waiting[0]
 	s.queue.waiting = s.queue.waiting[1:]
 	item.status = acp.SessionQueueItemStatusRunning
-	item.errMessage = ""
 	item.executionCtx, item.executionCancel = context.WithCancel(context.Background())
 	s.queue.active = item
 	s.bumpQueueRevisionLocked()
 	return item, true
 }
 
-func (s *Session) finishActiveQueueItem(itemID string, outcome sessionExecutionOutcome) {
+func (s *Session) finishActiveQueueItem(itemID string) {
 	s.queueMu.Lock()
 	active := s.queue.active
 	if active == nil || active.wire.ItemID != itemID {
@@ -534,17 +491,7 @@ func (s *Session) finishActiveQueueItem(itemID string, outcome sessionExecutionO
 	executionCancel := active.executionCancel
 	active.executionCtx = nil
 	active.executionCancel = nil
-	if outcome.status == sessionExecutionFailed {
-		active.status = acp.SessionQueueItemStatusFailed
-		active.errMessage = "queue execution failed"
-		if outcome.err != nil {
-			active.errMessage = outcome.err.Error()
-		}
-		s.queue.paused = true
-	} else {
-		s.queue.active = nil
-		s.queue.paused = false
-	}
+	s.queue.active = nil
 	s.bumpQueueRevisionLocked()
 	s.queueMu.Unlock()
 	if executionCancel != nil {

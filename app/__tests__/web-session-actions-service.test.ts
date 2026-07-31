@@ -71,7 +71,6 @@ describe('web session action protocol', () => {
           queue: {
             generation: 'generation-1',
             revision: 3.9,
-            paused: false,
             activeKind: 'prompt',
             waitingCount: 1.8,
             waitingItems: [{
@@ -98,7 +97,7 @@ describe('web session action protocol', () => {
         blocks: [{type: 'text', text: 'hello'}],
       },
     });
-    for (const action of ['cancel', 'prioritize', 'steer', 'retry'] as const) {
+    for (const action of ['cancel', 'prioritize', 'steer'] as const) {
       await repository.mutateSessionQueue('project-a', {
         sessionId: 'stable-session',
         action,
@@ -111,7 +110,6 @@ describe('web session action protocol', () => {
       ['session.queue', {sessionId: 'stable-session', action: 'cancel', itemId: 'item-1'}],
       ['session.queue', {sessionId: 'stable-session', action: 'prioritize', itemId: 'item-1'}],
       ['session.queue', {sessionId: 'stable-session', action: 'steer', itemId: 'item-1'}],
-      ['session.queue', {sessionId: 'stable-session', action: 'retry', itemId: 'item-1'}],
     ]);
     await expect(repository.mutateSessionQueue('project-a', {
       sessionId: 'stable-session',
@@ -297,7 +295,6 @@ describe('web session action protocol', () => {
     await service.cancelProjectSessionQueueItem('project-a', 's1', 'item-1');
     await service.prioritizeProjectSessionQueueItem('project-a', 's1', 'item-1');
     await service.steerProjectSessionQueueItem('project-a', 's1', 'item-1');
-    await service.retryProjectSessionQueueItem('project-a', 's1', 'item-1');
     await service.pinProjectSession('project-a', 's1', true);
     await service.markProjectSession('project-a', 's1', 'green');
 
@@ -307,7 +304,6 @@ describe('web session action protocol', () => {
       ['project-a', {sessionId: 's1', action: 'cancel', itemId: 'item-1'}],
       ['project-a', {sessionId: 's1', action: 'prioritize', itemId: 'item-1'}],
       ['project-a', {sessionId: 's1', action: 'steer', itemId: 'item-1'}],
-      ['project-a', {sessionId: 's1', action: 'retry', itemId: 'item-1'}],
     ]);
     expect(repository.pinSession).toHaveBeenCalledWith('project-a', 's1', true);
     expect(repository.markSession).toHaveBeenCalledWith('project-a', 's1', 'green');

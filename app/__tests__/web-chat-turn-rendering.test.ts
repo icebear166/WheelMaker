@@ -190,7 +190,8 @@ describe('web chat turn rendering', () => {
     expect(chatTurn).toContain('queueActions?: ChatQueueActions;');
     expect(chatTurn).toContain('export const ChatQueueCompactView = React.memo');
     expect(main).toContain('service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId)');
-    expect(main).toContain('service.retryProjectSessionQueueItem(projectId, key.sessionId, itemId)');
+    expect(main).toContain('retryFailedChatPrompt(promptRequest)');
+    expect(main).not.toContain('service.retryProjectSessionQueueItem');
     expect(main).toContain('mergeChatSessionQueueProjection(current[runtimeKey], incoming)');
     expect(main).toContain(
       'queueDisplayItems(selectedSessionQueue, selectedTranscriptQueueItemIDs)',

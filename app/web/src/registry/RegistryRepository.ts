@@ -631,7 +631,7 @@ export class RegistryRepository {
     const itemId = typeof input.itemId === 'string' ? input.itemId.trim() : '';
     const createdAt = typeof input.createdAt === 'string' ? input.createdAt.trim() : '';
     const kind = input.kind === 'prompt' || input.kind === 'compact' ? input.kind : undefined;
-    const status = ['queued', 'running', 'cancelling', 'steering', 'failed'].includes(String(input.status))
+    const status = ['queued', 'running', 'cancelling', 'steering'].includes(String(input.status))
       ? input.status as RegistrySessionQueueItem['status']
       : undefined;
     if (!itemId || !createdAt || !kind || !status) {
@@ -642,7 +642,6 @@ export class RegistryRepository {
       createdAt,
       status,
       cancelSupported: input.cancelSupported === true,
-      error: typeof input.error === 'string' && input.error.trim() ? input.error : undefined,
     };
     if (kind === 'compact') {
       if (Array.isArray(input.blocks) && input.blocks.length > 0) {
@@ -700,7 +699,6 @@ export class RegistryRepository {
       revision: typeof input.revision === 'number' && Number.isFinite(input.revision)
         ? Math.max(0, Math.trunc(input.revision))
         : 0,
-      paused: input.paused === true,
       activeKind: input.activeKind === 'prompt' || input.activeKind === 'compact'
         ? input.activeKind
         : undefined,

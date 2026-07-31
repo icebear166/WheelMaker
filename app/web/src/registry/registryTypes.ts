@@ -478,9 +478,9 @@ export interface RegistrySessionGoalClearResponse {
   cleared: boolean;
 }
 
-export type RegistrySessionQueueAction = 'enqueue' | 'cancel' | 'prioritize' | 'steer' | 'retry';
+export type RegistrySessionQueueAction = 'enqueue' | 'cancel' | 'prioritize' | 'steer';
 export type RegistrySessionQueueItemKind = 'prompt' | 'compact';
-export type RegistrySessionQueueItemStatus = 'queued' | 'running' | 'cancelling' | 'steering' | 'failed';
+export type RegistrySessionQueueItemStatus = 'queued' | 'running' | 'cancelling' | 'steering';
 
 export type RegistrySessionQueueEnqueueItem =
   | {
@@ -498,13 +498,11 @@ export type RegistrySessionQueueEnqueueItem =
 export type RegistrySessionQueueItem = RegistrySessionQueueEnqueueItem & {
   status: RegistrySessionQueueItemStatus;
   cancelSupported: boolean;
-  error?: string;
 };
 
 export interface RegistrySessionQueueSnapshot {
   generation: string;
   revision: number;
-  paused: boolean;
   activeKind?: RegistrySessionQueueItemKind;
   waitingCount: number;
   activeItem?: RegistrySessionQueueItem;

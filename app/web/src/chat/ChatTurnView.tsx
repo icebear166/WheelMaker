@@ -318,8 +318,8 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
+  onRetryFailedPrompt?: () => void;
   queueItemStatus?: RegistrySessionQueueItemStatus;
-  queueItemError?: string;
   queueActions?: ChatQueueActions;
   onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
@@ -340,7 +340,6 @@ export type ChatQueueActions = {
   cancel?: () => void;
   prioritize?: () => void;
   steer?: () => void;
-  retry?: () => void;
 };
 
 type PromptAttachmentChipProps = {
@@ -427,8 +426,8 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onSelectConfirmationReply,
   onRetryPendingPrompt,
   onEditPendingPrompt,
+  onRetryFailedPrompt,
   queueItemStatus,
-  queueItemError = '',
   queueActions,
   onOpenPromptAttachment,
   resolvePromptAttachmentThumbnail,
@@ -634,9 +633,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const queueStatus = queueItemStatus ?? (
       promptStatus === 'queued' || promptStatus === 'steering' ? promptStatus : undefined
     );
-    const queueStatusLabel = queueStatus === 'failed'
-      ? 'Failed'
-      : queueStatus === 'cancelling'
+    const queueStatusLabel = queueStatus === 'cancelling'
         ? 'Cancelling'
         : queueStatus === 'steering'
           ? 'Steering'
@@ -684,17 +681,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
             {queueStatus && queueStatus !== 'cancelling' && queueStatus !== 'running' ? (
               <div className="chat-prompt-queue-actions">
-                {queueStatus === 'failed' && queueActions?.retry ? (
-                  <button
-                    type="button"
-                    className="chat-prompt-queue-action"
-                    title="Retry"
-                    aria-label="Retry"
-                    onClick={queueActions.retry}
-                  >
-                    <ChatIcon name="refreshCw" size={12} />
-                  </button>
-                ) : null}
                 {queueStatus === 'queued' && queueActions?.steer ? (
                   <button
                     type="button"
@@ -731,9 +717,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               </div>
             ) : null}
           </div>
-        ) : null}
-        {queueStatus === 'failed' && queueItemError ? (
-          <div className="chat-queue-item-error" role="alert">{queueItemError}</div>
         ) : null}
         {imageBlocks.length > 0 ? (
           <div className="chat-image-strip">
@@ -862,6 +845,17 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
           </span>
           <div className="chat-prompt-actions" aria-label="Prompt actions">
+            {doneStatus?.kind === 'failed' && onRetryFailedPrompt ? (
+              <button
+                type="button"
+                className="chat-prompt-action-button"
+                onClick={onRetryFailedPrompt}
+                title="Retry failed prompt"
+                aria-label="Retry failed prompt"
+              >
+                <ChatIcon name="refreshCw" size={13} />
+              </button>
+            ) : null}
             {canFork ? (
               <button
                 type="button"
@@ -975,9 +969,7 @@ export const ChatQueueCompactView = React.memo(function ChatQueueCompactView({
   item: RegistrySessionQueueItem & {kind: 'compact'};
   actions: ChatQueueActions;
 }) {
-  const label = item.status === 'failed'
-    ? 'Context compaction failed'
-    : item.status === 'running'
+  const label = item.status === 'running'
       ? 'Compressing context'
       : item.status === 'cancelling'
         ? 'Cancelling context compaction'
@@ -985,24 +977,18 @@ export const ChatQueueCompactView = React.memo(function ChatQueueCompactView({
   return (
     <div className={`chat-queue-compact-row ${item.status}`} role="status">
       <ChatIcon
-        name={item.status === 'failed' ? 'circleX' : item.status === 'running' ? 'loader' : 'circle'}
+        name={item.status === 'running' ? 'loader' : 'circle'}
         spin={item.status === 'running'}
         className="chat-session-operation-icon"
       />
       <span className="chat-session-operation-label">{label}</span>
-      {item.error ? <span className="chat-queue-item-error">{item.error}</span> : null}
       <span className="chat-prompt-queue-actions">
-        {item.status === 'failed' && actions.retry ? (
-          <button type="button" className="chat-prompt-queue-action" aria-label="Retry" onClick={actions.retry}>
-            <ChatIcon name="refreshCw" size={12} />
-          </button>
-        ) : null}
         {item.status === 'queued' && actions.prioritize ? (
           <button type="button" className="chat-prompt-queue-action" aria-label="Prioritize" onClick={actions.prioritize}>
             <ChatIcon name="arrowUpToLine" size={12} />
           </button>
         ) : null}
-        {(item.status === 'queued' || item.status === 'failed') && actions.cancel ? (
+        {item.status === 'queued' && actions.cancel ? (
           <button type="button" className="chat-prompt-queue-action danger" aria-label="Cancel" onClick={actions.cancel}>
             <ChatIcon name="x" size={12} />
           </button>

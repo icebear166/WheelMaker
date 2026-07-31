@@ -99,6 +99,20 @@ describe('ChatTurnView session fork', () => {
   });
 });
 
+describe('ChatTurnView failed prompt retry', () => {
+  it('offers retry from the terminal transcript turn', async () => {
+    const onRetryFailedPrompt = jest.fn();
+    const tree = await renderTurn(message('prompt_done', {
+      stopReason: 'failed',
+      message: 'provider failed',
+    }), {onRetryFailedPrompt});
+
+    const retryButton = tree.root.findByProps({'aria-label': 'Retry failed prompt'});
+    await act(async () => retryButton.props.onClick());
+    expect(onRetryFailedPrompt).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ChatTurnView option replies', () => {
   const optionText = [
     'Pick one:',

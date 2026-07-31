@@ -10030,7 +10030,7 @@ export function App() {
     projectId: string,
     runtimeKey: string,
     itemId: string,
-    action: 'cancel' | 'prioritize' | 'steer' | 'retry',
+    action: 'cancel' | 'prioritize' | 'steer',
   ) => {
     const key = decodeChatSessionKey(runtimeKey);
     if (!key?.sessionId) return;
@@ -10039,9 +10039,7 @@ export function App() {
         ? await service.cancelProjectSessionQueueItem(projectId, key.sessionId, itemId)
         : action === 'prioritize'
           ? await service.prioritizeProjectSessionQueueItem(projectId, key.sessionId, itemId)
-          : action === 'steer'
-            ? await service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId)
-            : await service.retryProjectSessionQueueItem(projectId, key.sessionId, itemId);
+          : await service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId);
       if (!result.ok) {
         throw new Error(`session.queue ${action} returned ok=false`);
       }
@@ -10879,6 +10877,16 @@ export function App() {
   };
 
   const sendChatMessageEvent = useStableEvent(sendChatMessage);
+  const retryFailedChatPrompt = useCallback((promptRequest: RegistryChatMessage) => {
+    if (promptRequest.method !== 'prompt_request') return;
+    const blocks = msgBlocks(promptRequest.method, promptRequest.param).map(block => ({...block}));
+    if (blocks.length === 0) return;
+    sendChatMessageEvent({
+      attachmentsOverride: [],
+      blocksOverride: blocks,
+      preserveComposer: true,
+    }).catch(() => undefined);
+  }, [sendChatMessageEvent]);
   const sendDirectChatText = useCallback(async (text: string) => {
     const normalizedText = text.trim();
     if (!normalizedText) {
@@ -16912,6 +16920,9 @@ export function App() {
       ? buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex)
       : null;
     const promptStatus = selectedPromptTurnStatusIndex.statusFor(message);
+    const promptRequest = message.method === 'prompt_done'
+      ? findPromptRequestForDone(doneTurnIndex)
+      : undefined;
     const text = msgText(message.method, message.param).trim();
     const optionReplies =
       message.method === 'agent_message_chunk' &&
@@ -16945,7 +16956,7 @@ export function App() {
         <ChatTurnView
           message={message}
           permissionRecord={permissionRecord}
-          promptRequest={message.method === 'prompt_done' ? findPromptRequestForDone(doneTurnIndex) : undefined}
+          promptRequest={promptRequest}
           promptStatus={promptStatus}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
@@ -16977,6 +16988,11 @@ export function App() {
           onForkPromptDone={
             message.method === 'prompt_done'
               ? () => forkPromptDoneEvent(doneTurnIndex).catch(() => undefined)
+              : undefined
+          }
+          onRetryFailedPrompt={
+            message.method === 'prompt_done' && promptRequest
+              ? () => retryFailedChatPrompt(promptRequest)
               : undefined
           }
           ttsState={message.method === 'prompt_done' && ttsActiveTurnIndexRef.current === doneTurnIndex ? ttsState : 'idle'}
@@ -17030,6 +17046,7 @@ export function App() {
     openingPromptArtifactKey,
     promptArtifactErrors,
     readAloudPromptDoneEvent,
+    retryFailedChatPrompt,
     resolvePromptAttachmentThumbnail,
     selectedChatEncodedKey,
     selectedChatSession?.sessionActions?.fork?.supported,
@@ -17125,14 +17142,6 @@ export function App() {
             queuedItem.itemId,
           )}
         : {}),
-      ...(queuedItem.status === 'failed'
-        ? {retry: () => mutateQueuedPrompt(
-            selectedChatKeyRef.current?.projectId ?? '',
-            selectedChatEncodedKey,
-            queuedItem.itemId,
-            'retry',
-          )}
-        : {}),
     } satisfies ChatQueueActions : {};
     const toolGroupSearchHighlighted =
       sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
@@ -17159,7 +17168,6 @@ export function App() {
             queuedPromptTurnIndex(queuedItemIndex),
           )}
           queueItemStatus={queuedItem.status}
-          queueItemError={queuedItem.error}
           queueActions={queuedItemActions}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}

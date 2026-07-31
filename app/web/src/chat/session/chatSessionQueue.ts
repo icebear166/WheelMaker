@@ -58,7 +58,6 @@ export function queueDisplayItems(
       (activeItem.kind === 'compact' && activeItem.status === 'running')
     );
   const activeDisplay = activeItem && (
-    activeItem.status === 'failed' ||
     activeItem.status === 'cancelling' ||
     activeItem.kind === 'compact'
   ) && !representedByTranscript

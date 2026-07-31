@@ -603,13 +603,6 @@ export class RegistryWorkspaceService {
     return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'steer', itemId});
   }
 
-  async retryProjectSessionQueueItem(projectId: string, sessionId: string, itemId: string): Promise<RegistrySessionQueueResponse> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'retry', itemId});
-  }
-
   async statusProjectSession(projectId: string, sessionId: string): Promise<RegistrySessionStatusResult> {
     if (!this.repository) {
       throw new Error('session is not ready');

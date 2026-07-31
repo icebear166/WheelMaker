@@ -771,15 +771,6 @@ func (c *Client) handleSessionQueueRequest(ctx context.Context, req acp.SessionQ
 		if err := sess.steerQueueItem(ctx, req.ItemID); err != nil {
 			return nil, err
 		}
-	case acp.SessionQueueActionRetry:
-		if req.Item != nil || strings.TrimSpace(req.ItemID) == "" {
-			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "retry requires itemId")
-		}
-		if err := sess.retryQueueItem(req.ItemID); err != nil {
-			return nil, err
-		}
-		sess.publishQueueSnapshot()
-		sess.scheduleQueueDrain()
 	default:
 		return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "unknown session.queue action")
 	}
