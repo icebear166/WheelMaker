@@ -49,8 +49,15 @@ export function fullQueueSnapshot(
 export function queueDisplayItems(
   queue: RegistrySessionQueueSnapshot | undefined,
 ): RegistrySessionQueueItem[] {
-  const activeFailure = queue?.activeItem?.status === 'failed' ? [queue.activeItem] : [];
-  return [...activeFailure, ...(queue?.waitingItems ?? [])].map(cloneQueueItem);
+  const activeItem = queue?.activeItem;
+  const activeDisplay = activeItem && (
+    activeItem.status === 'failed' ||
+    activeItem.status === 'cancelling' ||
+    activeItem.kind === 'compact'
+  )
+    ? [activeItem]
+    : [];
+  return [...activeDisplay, ...(queue?.waitingItems ?? [])].map(cloneQueueItem);
 }
 
 export function makeSessionQueueItemID(): string {

@@ -69,7 +69,7 @@ describe('web chat turn rendering', () => {
     const main = readMain();
     const chatTurn = readChatTurnView();
 
-    expect(main).toContain("import { ChatTurnView } from '../chat/ChatTurnView';");
+    expect(main).toContain("import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';");
     expect(chatTurn).toContain('export const ChatTurnView = React.memo');
     expect(main).toContain('const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages');
     expect(main).toContain('<ChatVirtuosoTurnList');
@@ -170,7 +170,7 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('chatMessages.length === 0 && !selectedPendingPrompt');
 
     const pendingIndex = main.indexOf('rememberPendingChatPrompt(runtimeKey, {');
-    const sendIndex = main.indexOf('const result = await service.sendProjectSessionMessage(selectedProjectId, {');
+    const sendIndex = main.indexOf('const result = await service.enqueueProjectSessionItem(selectedProjectId, sessionId, {');
     expect(pendingIndex).toBeGreaterThanOrEqual(0);
     expect(sendIndex).toBeGreaterThan(pendingIndex);
   });
@@ -185,30 +185,22 @@ describe('web chat turn rendering', () => {
     expect(displayIndex).toContain('queuedKeys?: string[];');
     expect(displayIndex).toContain("kind: 'queued'");
     expect(chatTurn).toContain("'queued'");
-    expect(chatTurn).toContain('onCancelQueuedPrompt?: () => void;');
-    expect(chatTurn).toContain('onPrioritizeQueuedPrompt?: () => void;');
-    expect(chatTurn).toContain('onSteerQueuedPrompt?: () => void;');
-    expect(chatTurn).toContain('queuedPromptSteering?: boolean;');
-    expect(main).toContain('service.steerProjectSession(');
-    expect(main).toContain('setQueuedChatPromptSteering(current, runtimeKey, prompt.id, true)');
-    expect(main).toContain("message.method === 'user_message_chunk'");
-    expect(main).toContain("message.param.steered === true");
-    expect(main).toContain('hasSteeringChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey)');
-    expect(main).toContain('(chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).some(');
-    expect(main).not.toContain('chatAcceptedSteerIdsByKeyRef');
-    expect(main).toContain('reconcileSteeredChatPrompts(current, selectedChatEncodedKey, selectedFullChatMessages)');
-    const steerStart = main.indexOf('const steerQueuedPrompt = useCallback((');
-    const steerEnd = main.indexOf('const clearPendingChatPromptTimer =', steerStart);
-    const steerBlock = main.slice(steerStart, steerEnd);
-    expect(steerStart).toBeGreaterThanOrEqual(0);
-    expect(steerEnd).toBeGreaterThan(steerStart);
-    expect(steerBlock).toContain("if (result.outcome === 'sent') {");
+    expect(chatTurn).toContain('export type ChatQueueActions = {');
+    expect(chatTurn).toContain('queueItemStatus?: RegistrySessionQueueItemStatus;');
+    expect(chatTurn).toContain('queueActions?: ChatQueueActions;');
+    expect(chatTurn).toContain('export const ChatQueueCompactView = React.memo');
+    expect(main).toContain('service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId)');
+    expect(main).toContain('service.retryProjectSessionQueueItem(projectId, key.sessionId, itemId)');
+    expect(main).toContain('mergeChatSessionQueueProjection(current[runtimeKey], incoming)');
+    expect(main).toContain('queueDisplayItems(selectedSessionQueue)');
+    expect(main).not.toContain('chatQueuedPromptsByKey');
+    expect(main).not.toContain('reconcileSteeredChatPrompts');
     expect(chatTurn).toContain('chat-prompt-status-queued');
     expect(chatTurn).toContain('Queued');
     expect(chatTurn).toContain('title="Steer"');
     expect(chatTurn).toContain('aria-label="Steer"');
     expect(chatTurn).toContain('<ChatIcon name="cornerDownLeft"');
-    expect(chatTurn).toContain('title="Next"');
+    expect(chatTurn).toContain('aria-label="Prioritize"');
     expect(chatTurn).toContain('<ChatIcon name="arrowUpToLine"');
     expect(chatTurn).toContain('title="Cancel"');
     expect(chatTurn).not.toContain('Send next');
@@ -265,11 +257,11 @@ describe('web chat turn rendering', () => {
     const main = readMain();
 
     expect(main).toContain('const selectedChatPromptRunning =');
-    expect(main).toContain('selectedChatSession?.running === true');
+    expect(main).toContain("selectedQueueActivePrompt?.status === 'running'");
     expect(main).not.toContain('chatRunningSessionFlags[selectedChatEncodedKey] === true');
     expect(main).toContain('const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState');
     expect(main).toContain('const cancelSelectedChatPrompt = async () => {');
-    expect(main).toContain('service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId)');
+    expect(main).toContain('service.cancelProjectSessionQueueItem(');
     expect(main).toContain('className="chat-composer-input-row"');
     expect(main).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(main).toContain('chat-composer-stop-slot${chatStopPillExiting');
