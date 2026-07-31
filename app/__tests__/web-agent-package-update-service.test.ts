@@ -11,7 +11,11 @@ describe('agent package update registry service', () => {
         type: 'response',
         payload: {
           projects: [{projectId: 'hub-b:app', name: 'app', online: true, path: '/app'}],
-          hubs: [{hubId: 'hub-b', online: true}, {hubId: ' '}],
+          hubs: [
+            {hubId: 'hub-b', online: true},
+            {hubId: 'hub-old', connectionMode: 'update_only'},
+            {hubId: ' '},
+          ],
         },
       }),
     } as unknown as RegistryClient;
@@ -22,7 +26,10 @@ describe('agent package update registry service', () => {
     expect(result.projects).toEqual([
       expect.objectContaining({projectId: 'hub-b:app', hubId: 'hub-b'}),
     ]);
-    expect(result.hubs).toEqual([{hubId: 'hub-b'}]);
+    expect(result.hubs).toEqual([
+      {hubId: 'hub-b'},
+      {hubId: 'hub-old', connectionMode: 'update_only'},
+    ]);
     expect(client.request).toHaveBeenCalledWith({
       method: RegistryMethods.RegistryProjectList,
       payload: {},

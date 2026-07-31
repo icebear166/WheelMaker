@@ -975,6 +975,7 @@ export interface RegistryProjectAgentProfile {
 
 export interface RegistryHub {
   hubId: string;
+  connectionMode?: 'normal' | 'update_only';
 }
 
 export interface RegistryProjectListResponse {

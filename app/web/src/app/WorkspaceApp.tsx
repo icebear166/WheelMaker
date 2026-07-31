@@ -5417,10 +5417,14 @@ export function App() {
     };
     registryHubs.forEach(hub => addHubId(hub.hubId));
     sortedProjectItems.forEach(projectItem => addHubId(projectHubId(projectItem)));
-    return hubIds.map(hubId => ({
-      hubId,
-      projects: sortedProjectItems.filter(projectItem => projectHubId(projectItem) === hubId),
-    }));
+    return hubIds.map(hubId => {
+      const descriptor = registryHubs.find(hub => hub.hubId === hubId);
+      return {
+        hubId,
+        projects: sortedProjectItems.filter(projectItem => projectHubId(projectItem) === hubId),
+        connectionMode: descriptor?.connectionMode,
+      };
+    });
   }, [registryHubs, sortedProjectItems]);
   const defaultExpandedHubIds = useMemo(() => {
     const next = new Set<string>();

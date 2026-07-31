@@ -1707,6 +1707,13 @@
   padding: 0;
 }
 
+.chat-hub-protocol-mismatch {
+  padding: 6px 30px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 /* Expanded regions mount on demand, so the best we can do without keeping
    them mounted is a short glide-in; height changes stay instant. */
 @keyframes chat-hub-region-in {

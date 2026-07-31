@@ -155,6 +155,26 @@ test('detail toggling is mutually exclusive only within its row group', () => {
     .toEqual(['skills', 'visibility']);
 });
 
+test('expanded update-only hub shows protocol mismatch without hiding controls', async () => {
+  const {props} = createHarness({
+    hubIds: ['hub-old'],
+    treeItems: [{
+      hubId: 'hub-old',
+      projects: [],
+      connectionMode: 'update_only',
+    }],
+    expandedHubIds: ['hub-old'],
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'chat-hub-protocol-mismatch'}).children)
+    .toEqual(['Protocol mismatch · Update only']);
+  expect(sectionHeaders(renderer.root).length).toBeGreaterThan(0);
+});
+
 test('toggling the summary button calls onToggle and renders hub rows', async () => {
   const {props, callbacks} = createHarness();
   let renderer!: TestRenderer.ReactTestRenderer;

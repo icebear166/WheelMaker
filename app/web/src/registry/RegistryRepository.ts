@@ -1052,6 +1052,7 @@ export class RegistryRepository {
     const hubs = (payload.hubs ?? [])
       .map((hub): RegistryHub => ({
         hubId: typeof hub?.hubId === 'string' ? hub.hubId.trim() : '',
+        ...(hub?.connectionMode === 'update_only' ? {connectionMode: 'update_only' as const} : {}),
       }))
       .filter(hub => {
         if (!hub.hubId || seenHubIds.has(hub.hubId)) {
