@@ -74,6 +74,7 @@ function mergeSessionSummary(
     sessionActions: next.sessionActions ?? existing?.sessionActions,
     goal: hasGoal ? next.goal : existing?.goal,
     forkedFrom: next.forkedFrom ?? existing?.forkedFrom,
+    queue: next.queue ?? existing?.queue,
   };
 }
 
