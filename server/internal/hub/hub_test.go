@@ -560,6 +560,35 @@ func TestReporterConfiguresUsageHistoryStore(t *testing.T) {
 	}
 }
 
+func TestProjectFileIndexRebuildNotifiesCompletionOnFailure(t *testing.T) {
+	manager := newProjectFileIndexManager(t.TempDir())
+	manager.scanFilesForTest = func(context.Context, projectFileIndexProject) ([]string, error) {
+		return nil, errors.New("scan failed")
+	}
+	done := make(chan string, 1)
+	manager.setOperationDoneHandler(func(projectID string) {
+		done <- projectID
+	})
+	project := projectFileIndexProject{
+		ProjectID: "hub-a:project",
+		Name:      "project",
+		Root:      t.TempDir(),
+	}
+
+	response := manager.startRebuild(context.Background(), project)
+	if !response.Accepted {
+		t.Fatalf("rebuild response = %#v", response)
+	}
+	select {
+	case projectID := <-done:
+		if projectID != project.ProjectID {
+			t.Fatalf("projectID = %q, want %q", projectID, project.ProjectID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("file index completion callback not called")
+	}
+}
+
 func TestReporterRespondsToHubStateGet(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)

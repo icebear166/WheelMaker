@@ -592,7 +592,9 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 		operation.ExitCode = &exitCode
 		operation.Status = "failed"
 		operation.ErrorSummary = formatNPMTaskErrorSummary(uninstallResult.ExitCode, uninstallResult.Stdout, uninstallResult.Stderr, uninstallResult.Err)
+		done := c.operationDone
 		c.mu.Unlock()
+		c.notifyOperationDone(done)
 		return
 	}
 	installResult := c.runner.Run(context.Background(), "npm", "install", "-g", packageName+"@latest")
@@ -608,7 +610,9 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 	if commandFailed(installResult) {
 		operation.Status = "failed"
 		operation.ErrorSummary = formatNPMTaskErrorSummary(installResult.ExitCode, installResult.Stdout, installResult.Stderr, installResult.Err)
+		done := c.operationDone
 		c.mu.Unlock()
+		c.notifyOperationDone(done)
 		return
 	}
 	operation.Status = "succeeded"
@@ -657,7 +661,9 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 	if commandFailed(result) {
 		operation.Status = "failed"
 		operation.ErrorSummary = formatNPMTaskErrorSummary(exitCode, result.Stdout, result.Stderr, result.Err)
+		done := c.operationDone
 		c.mu.Unlock()
+		c.notifyOperationDone(done)
 		return
 	}
 	operation.Status = "succeeded"
@@ -698,7 +704,9 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 	if len(failed) > 0 {
 		operation.Status = "failed"
 		operation.ErrorSummary = "Failed npm package installs: " + strings.Join(failed, "; ")
+		done := c.operationDone
 		c.mu.Unlock()
+		c.notifyOperationDone(done)
 		return
 	}
 	operation.Status = "succeeded"

@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -144,23 +145,35 @@ type Reporter struct {
 	// Per-command-type locks replace a single tool mutex so distinct tool
 	// commands (npm / update / skills / release) run concurrently while each
 	// command type stays serialized with itself.
-	npmToolMu          sync.Mutex
-	updateToolMu       sync.Mutex
-	skillsToolMu       sync.Mutex
-	releaseToolMu      sync.Mutex
-	miscToolMu         sync.Mutex
-	toolHandlerInitMu  sync.Mutex
-	relayClient        *portrelay.HubClient
-	fileIndex          *projectFileIndexManager
-	hubStateManager    *HubStateManager
-	usageService       *usage.Service
-	usageHistory       *usage.HistoryStore
-	terminalHandler    TerminalHandler
-	hubEventSink       *hubEventSink
-	flickerBridge      *flickerBridgeManager
-	hubConfig          *hubconfig.Store
-	usageCollector     *usage.LocalCollector
-	reloadAgentRuntime func(context.Context, map[hubconfig.APIKeyName]string) error
+	npmToolMu               sync.Mutex
+	updateToolMu            sync.Mutex
+	skillsToolMu            sync.Mutex
+	releaseToolMu           sync.Mutex
+	miscToolMu              sync.Mutex
+	toolHandlerInitMu       sync.Mutex
+	relayClient             *portrelay.HubClient
+	fileIndex               *projectFileIndexManager
+	hubStateManager         *HubStateManager
+	usageService            *usage.Service
+	usageHistory            *usage.HistoryStore
+	terminalHandler         TerminalHandler
+	hubEventSink            *hubEventSink
+	flickerBridge           *flickerBridgeManager
+	hubConfig               *hubconfig.Store
+	usageCollector          *usage.LocalCollector
+	reloadAgentRuntime      func(context.Context, map[hubconfig.APIKeyName]string) error
+	hubStateBootstrapOnce   sync.Once
+	hubStateBootstrapDone   chan struct{}
+	hubStateBootstrapActive atomic.Bool
+	hubStateConnections     atomic.Int64
+}
+
+var bootstrapHubStateSections = []string{
+	hubStateSectionAgentPackages,
+	hubStateSectionWheelmakerUpdate,
+	hubStateSectionSkills,
+	hubStateSectionFileIndex,
+	hubStateSectionFlickerBridge,
 }
 
 // NewReporter creates a Reporter.
@@ -200,13 +213,14 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	}
 	cfg.StateDir = stateDir
 	r := &Reporter{
-		cfg:          cfg,
-		projects:     cp,
-		projectsByID: byID,
-		sessionByID:  make(map[string]SessionHandler),
-		pending:      make(map[int64]chan envelope),
-		relayClient:  portrelay.NewHubClient(),
-		fileIndex:    newProjectFileIndexManager(stateDir),
+		cfg:                   cfg,
+		projects:              cp,
+		projectsByID:          byID,
+		sessionByID:           make(map[string]SessionHandler),
+		pending:               make(map[int64]chan envelope),
+		relayClient:           portrelay.NewHubClient(),
+		fileIndex:             newProjectFileIndexManager(stateDir),
+		hubStateBootstrapDone: make(chan struct{}),
 	}
 	r.hubConfig = cfg.HubConfig
 	r.reloadAgentRuntime = cfg.ReloadAgentRuntime
@@ -226,11 +240,12 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		HubID:                 cfg.HubID,
 		Projects:              cp,
 		StateDir:              stateDir,
-		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
-		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnSkillsOperationDone: r.onSkillsOperationDone,
 		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = r.newHubStateManager()
+	r.fileIndex.setOperationDoneHandler(r.onFileIndexOperationDone)
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
 	collector := usage.NewLocalCollector("")
 	collector.UpdateAPIKeys(
@@ -271,6 +286,7 @@ func (r *Reporter) Run(ctx context.Context) error {
 	if r.usageService != nil {
 		r.usageService.Start(ctx)
 	}
+	r.startHubStateBootstrap(ctx)
 	for {
 		if err := r.runSession(ctx); err != nil && ctx.Err() == nil {
 			registryLogger("").Warn("reporter session ended: %v", err)
@@ -339,6 +355,8 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 
 	r.mu.Lock()
 	previous := r.projectsByID[project.Name]
+	topologyChanged := previous.Name == "" ||
+		strings.TrimSpace(previous.Path) != strings.TrimSpace(project.Path)
 	if previous.Name != "" {
 		changedDomains = diffProjectDomains(previous, project)
 		if len(changedDomains) == 0 {
@@ -350,6 +368,12 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	connectionEpoch := r.connectionEpoch
 	r.mu.Unlock()
 
+	if topologyChanged {
+		_, _ = r.ensureHubStateManager().enqueueRefresh(
+			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
+			true,
+		)
+	}
 	if conn == nil || connectionEpoch == 0 {
 		return nil
 	}
@@ -634,6 +658,7 @@ func (r *Reporter) runSession(ctx context.Context) error {
 		r.mu.Unlock()
 	}()
 	go r.runHubEventSink(conn, sink)
+	r.publishHubStateAfterConnect(ctx)
 
 	keepaliveDone := make(chan struct{})
 	defer close(keepaliveDone)
@@ -965,12 +990,89 @@ func (r *Reporter) newHubStateManager() *HubStateManager {
 		instanceID,
 		r.hubStateSectionHandlers(),
 		func(reason string, sections map[string]rp.HubStateSection) {
+			if r.hubStateBootstrapActive.Load() {
+				return
+			}
 			_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
 				"instanceId": instanceID,
 				"sections":   sections,
 				"reason":     reason,
 			})
 		},
+	)
+}
+
+func (r *Reporter) startHubStateBootstrap(ctx context.Context) {
+	r.hubStateBootstrapOnce.Do(func() {
+		if r.hubStateBootstrapDone == nil {
+			r.hubStateBootstrapDone = make(chan struct{})
+		}
+		r.hubStateBootstrapActive.Store(true)
+		go func() {
+			defer close(r.hubStateBootstrapDone)
+			r.bootstrapHubState(ctx)
+			r.hubStateBootstrapActive.Store(false)
+		}()
+	})
+}
+
+func (r *Reporter) bootstrapHubState(ctx context.Context) {
+	manager := r.ensureHubStateManager()
+	if _, err := manager.enqueueRefresh(bootstrapHubStateSections, false); err != nil {
+		hubLogger("").Warn("bootstrap HubState failed: %v", err)
+		return
+	}
+	for _, section := range bootstrapHubStateSections {
+		if err := manager.waitForIdle(ctx, section); err != nil {
+			return
+		}
+	}
+}
+
+func (r *Reporter) publishHubStateAfterConnect(ctx context.Context) {
+	connection := r.hubStateConnections.Add(1)
+	if connection > 1 {
+		r.publishCurrentHubState("reconnect")
+		return
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-r.hubStateBootstrapDone:
+			r.publishCurrentHubState("bootstrap")
+		}
+	}()
+}
+
+func (r *Reporter) publishCurrentHubState(reason string) {
+	state := r.ensureHubStateManager().get(nil)
+	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+		"instanceId": state.InstanceID,
+		"sections":   state.Sections,
+		"reason":     reason,
+	})
+}
+
+func (r *Reporter) onNPMOperationDone() {
+	r.reloadAgentRuntimeAfterNPMOperation()
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionAgentPackages},
+		true,
+	)
+}
+
+func (r *Reporter) onSkillsOperationDone(scope, projectName string) {
+	r.refreshSkillsAgentProfiles(scope, projectName)
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionSkills},
+		true,
+	)
+}
+
+func (r *Reporter) onFileIndexOperationDone(string) {
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionFileIndex},
+		true,
 	)
 }
 
@@ -2653,6 +2755,52 @@ func (r *Reporter) projectsSnapshot() []ProjectInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return append([]ProjectInfo(nil), r.projects...)
+}
+
+func (r *Reporter) replaceProjects(projects []ProjectInfo) {
+	next := append([]ProjectInfo(nil), projects...)
+	sort.Slice(next, func(i, j int) bool {
+		return strings.ToLower(next[i].Name) < strings.ToLower(next[j].Name)
+	})
+	nextByID := make(map[string]ProjectInfo, len(next)*2)
+	for _, project := range next {
+		name := strings.TrimSpace(project.Name)
+		if name == "" {
+			continue
+		}
+		nextByID[name] = project
+		nextByID[rp.ProjectID(r.cfg.HubID, name)] = project
+	}
+
+	r.mu.Lock()
+	changed := projectTopologyChanged(r.projects, next)
+	r.projects = next
+	r.projectsByID = nextByID
+	handler := r.toolHandler
+	r.mu.Unlock()
+	if handler != nil {
+		handler.SetProjects(next)
+	}
+	if changed {
+		_, _ = r.ensureHubStateManager().enqueueRefresh(
+			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
+			true,
+		)
+	}
+}
+
+func projectTopologyChanged(previous, current []ProjectInfo) bool {
+	paths := func(projects []ProjectInfo) map[string]string {
+		out := make(map[string]string, len(projects))
+		for _, project := range projects {
+			name := strings.TrimSpace(project.Name)
+			if name != "" {
+				out[name] = strings.TrimSpace(project.Path)
+			}
+		}
+		return out
+	}
+	return !reflect.DeepEqual(paths(previous), paths(current))
 }
 
 func (r *Reporter) setProjectLocked(project ProjectInfo) {

@@ -615,7 +615,7 @@ func (c *SkillsCommand) finishOperation(operation *skillsOperationSnapshot, stat
 	done := c.onOperationDone
 	c.mu.Unlock()
 
-	if status == "succeeded" && done != nil {
+	if done != nil {
 		done(scope, projectName)
 	}
 }

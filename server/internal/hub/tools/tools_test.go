@@ -1564,7 +1564,7 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 	}
 }
 
-func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
+func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
 		ExitCode: 1,
@@ -1598,8 +1598,8 @@ func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
 
 	select {
 	case <-callbackCalled:
-		t.Fatal("OnOperationDone should not be called on failure")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnOperationDone callback not called after failure")
 	}
 }
 
