@@ -132,6 +132,7 @@ type SessionActionStatusAccount struct {
 type SessionActionStatusResult struct {
 	OK        bool                        `json:"ok"`
 	SessionID string                      `json:"sessionId"`
+	AgentType string                      `json:"agentType,omitempty"`
 	Context   *SessionActionStatusContext `json:"context,omitempty"`
 	Limits    []SessionActionRateLimit    `json:"limits"`
 	Account   *SessionActionStatusAccount `json:"account,omitempty"`

@@ -58,7 +58,7 @@
 - Modify: `server/internal/protocol/session_actions.go` (`SessionActionStatusResult`)
 - Test: `server/internal/protocol/registry_methods_test.go`
 
-- [ ] **Step 1: Write the failing protocol test**
+- [x] **Step 1: Write the failing protocol test**
 
 Append this test to `server/internal/protocol/registry_methods_test.go`. The file already imports `bytes` and `encoding/json`.
 
@@ -105,7 +105,7 @@ func TestSessionActionStatusResultSessionLocalJSON(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -116,7 +116,7 @@ go test ./internal/protocol/ -run TestSessionActionStatusResultSessionLocalJSON 
 
 Expected: compile failure containing `unknown field AgentType in struct literal of type SessionActionStatusResult`.
 
-- [ ] **Step 3: Add the optional protocol field**
+- [x] **Step 3: Add the optional protocol field**
 
 Replace `SessionActionStatusResult` in `server/internal/protocol/session_actions.go` with:
 
@@ -134,7 +134,7 @@ type SessionActionStatusResult struct {
 
 Do not remove or rename `Limits`, `Account`, or `UpdatedAt`; older clients and payloads still know those fields even though the new `session.status` producer will not populate provider data.
 
-- [ ] **Step 4: Format and rerun the protocol test**
+- [x] **Step 4: Format and rerun the protocol test**
 
 Run:
 
@@ -146,7 +146,7 @@ go test ./internal/protocol/ -run TestSessionActionStatusResultSessionLocalJSON 
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the protocol change**
+- [x] **Step 5: Commit the protocol change**
 
 ```powershell
 git add server/internal/protocol/session_actions.go server/internal/protocol/registry_methods_test.go

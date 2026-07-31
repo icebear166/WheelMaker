@@ -614,3 +614,32 @@ func TestDeepSeekUsageGetDescriptor(t *testing.T) {
 		t.Fatalf("descriptor=%+v ok=%v", got, ok)
 	}
 }
+
+func TestSessionActionStatusResultSessionLocalJSON(t *testing.T) {
+	encoded, err := json.Marshal(SessionActionStatusResult{
+		OK:        true,
+		SessionID: "sess-1",
+		AgentType: "codex",
+		Limits:    []SessionActionRateLimit{},
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !bytes.Contains(encoded, []byte(`"agentType":"codex"`)) {
+		t.Fatalf("expected agentType in json, got %s", encoded)
+	}
+	if !bytes.Contains(encoded, []byte(`"limits":[]`)) {
+		t.Fatalf("expected empty limits array, got %s", encoded)
+	}
+	if bytes.Contains(encoded, []byte(`"account"`)) {
+		t.Fatalf("expected account to be omitted, got %s", encoded)
+	}
+
+	var decoded SessionActionStatusResult
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.AgentType != "codex" {
+		t.Fatalf("agentType=%q, want codex", decoded.AgentType)
+	}
+}
