@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os/exec"
 	"strings"
 	"sync"
@@ -59,9 +61,12 @@ func (execNPMCommandRunner) Run(ctx context.Context, name string, args ...string
 }
 
 type NPMCommand struct {
-	runner   npmCommandRunner
-	now      func() time.Time
-	lookPath func(string) (string, error)
+	runner       npmCommandRunner
+	now          func() time.Time
+	lookPath     func(string) (string, error)
+	flickerProbe func(context.Context) bool
+	flickerOnce  sync.Once
+	flickerReady bool
 
 	mu            sync.Mutex
 	operation     *npmOperationSnapshot
@@ -70,19 +75,85 @@ type NPMCommand struct {
 }
 
 func NewNPMCommand() *NPMCommand {
-	return newNPMCommandWithRunner(execNPMCommandRunner{})
+	return newNPMCommandWithRunnerAndProbe(execNPMCommandRunner{}, probeMyFlickerRegistry)
 }
 
 func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
+	return newNPMCommandWithRunnerAndProbe(runner, func(context.Context) bool { return true })
+}
+
+func newNPMCommandWithRunnerAndProbe(runner npmCommandRunner, flickerProbe func(context.Context) bool) *NPMCommand {
 	if runner == nil {
 		runner = execNPMCommandRunner{}
 	}
-	return &NPMCommand{
-		runner:      runner,
-		now:         func() time.Time { return time.Now().UTC() },
-		lookPath:    exec.LookPath,
-		latestCache: map[string]npmLatestCacheEntry{},
+	if flickerProbe == nil {
+		flickerProbe = probeMyFlickerRegistry
 	}
+	return &NPMCommand{
+		runner:       runner,
+		now:          func() time.Time { return time.Now().UTC() },
+		lookPath:     exec.LookPath,
+		flickerProbe: flickerProbe,
+		latestCache:  map[string]npmLatestCacheEntry{},
+	}
+}
+
+const (
+	myFlickerPackageName         = "@myflicker/cli"
+	myFlickerRegistry            = "https://npm.corp.kuaishou.com"
+	myFlickerRegistryMetadataURL = myFlickerRegistry + "/@myflicker%2fcli"
+	myFlickerProbeTimeout        = 5 * time.Second
+)
+
+type npmRegistryPackageMetadata struct {
+	Name     string            `json:"name"`
+	DistTags map[string]string `json:"dist-tags"`
+}
+
+func probeMyFlickerRegistry(ctx context.Context) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, myFlickerProbeTimeout)
+	defer cancel()
+	return probeNPMRegistryPackage(probeCtx, http.DefaultClient, myFlickerRegistryMetadataURL, myFlickerPackageName)
+}
+
+func probeNPMRegistryPackage(ctx context.Context, client *http.Client, metadataURL, packageName string) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
+	if err != nil {
+		return false
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return false
+	}
+	var metadata npmRegistryPackageMetadata
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&metadata); err != nil {
+		return false
+	}
+	return metadata.Name == packageName && strings.TrimSpace(metadata.DistTags["latest"]) != ""
+}
+
+func (c *NPMCommand) myFlickerRegistryAvailable() bool {
+	c.flickerOnce.Do(func() {
+		probe := c.flickerProbe
+		if probe == nil {
+			probe = probeMyFlickerRegistry
+		}
+		c.flickerReady = probe(context.Background())
+	})
+	return c.flickerReady
 }
 
 func (c *NPMCommand) setOperationDoneHandler(handler func()) {
@@ -113,7 +184,13 @@ func (c *NPMCommand) resolveLookPath() func(string) (string, error) {
 // package with a resolvable binary.
 func npmPackageBinaryName(packageName string) string {
 	for _, pkg := range runtimeNPMPackages {
-		if pkg.PackageName == packageName && len(pkg.AgentTypes) > 0 {
+		if pkg.PackageName != packageName {
+			continue
+		}
+		if pkg.BinaryName != "" {
+			return pkg.BinaryName
+		}
+		if len(pkg.AgentTypes) > 0 {
 			return pkg.AgentTypes[0]
 		}
 	}
@@ -247,11 +324,11 @@ func (e *npmCommandError) commandMessage() string {
 }
 
 type npmPackagePolicy struct {
-	PackageName          string
-	DisplayName          string
-	AgentTypes           []string
-	Kind                 string
-	HiddenFromUpdateList bool
+	PackageName string
+	DisplayName string
+	AgentTypes  []string
+	BinaryName  string
+	Kind        string
 }
 
 var runtimeNPMPackages = []npmPackagePolicy{
@@ -261,7 +338,7 @@ var runtimeNPMPackages = []npmPackagePolicy{
 	{PackageName: "@github/copilot", DisplayName: "Copilot CLI", AgentTypes: []string{"copilot"}, Kind: "runtime"},
 	{PackageName: "opencode-ai", DisplayName: "OpenCode CLI", AgentTypes: []string{"opencode"}, Kind: "runtime"},
 	{PackageName: "@tencent-ai/codebuddy-code", DisplayName: "CodeBuddy CLI", AgentTypes: []string{"codebuddy"}, Kind: "runtime"},
-	{PackageName: "@myflicker/cli", DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, Kind: "runtime", HiddenFromUpdateList: true},
+	{PackageName: myFlickerPackageName, DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, BinaryName: "myflicker", Kind: "runtime"},
 }
 
 var deprecatedNPMPackages = []npmPackagePolicy{
@@ -302,6 +379,7 @@ func (c *NPMCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *npm
 func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse {
 	now := c.now()
 	updatedAt := now.Format(time.RFC3339)
+	flickerAvailable := c.myFlickerRegistryAvailable()
 	hub := npmHubSnapshot{
 		HubID:    hubID,
 		Packages: []npmPackageStatus{},
@@ -318,7 +396,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 		return npmCommandResponse{OK: false, UpdatedAt: updatedAt, Hub: hub, Operation: c.currentOperationSnapshot()}
 	}
 
-	latest, missingLatest := c.latestResultsForScan(now)
+	latest, missingLatest := c.latestResultsForScan(now, flickerAvailable)
 	operation := c.currentOperationSnapshot()
 	if len(missingLatest) > 0 && (operation == nil || !operation.Running) {
 		started, cmdErr := c.acceptOperation("scan_latest", "", "", nil)
@@ -327,7 +405,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 			go c.runLatestOperation(started, missingLatest)
 		}
 	}
-	for _, policy := range updateListRuntimeNPMPackages() {
+	for _, policy := range runtimeNPMPackagesForScan(flickerAvailable) {
 		installedVersion := installed[policy.PackageName]
 		row := npmPackageStatus{
 			PackageName:      policy.PackageName,
@@ -374,10 +452,10 @@ func cloneNPMStringSlice(values []string) []string {
 	return append([]string(nil), values...)
 }
 
-func updateListRuntimeNPMPackages() []npmPackagePolicy {
+func runtimeNPMPackagesForScan(flickerAvailable bool) []npmPackagePolicy {
 	out := make([]npmPackagePolicy, 0, len(runtimeNPMPackages))
 	for _, policy := range runtimeNPMPackages {
-		if policy.HiddenFromUpdateList {
+		if policy.PackageName == myFlickerPackageName && !flickerAvailable {
 			continue
 		}
 		out = append(out, policy)
@@ -417,6 +495,23 @@ const (
 	npmLatestFailureTTL = 5 * time.Minute
 )
 
+func npmRegistryArgs(packageName string) []string {
+	if packageName == myFlickerPackageName {
+		return []string{"--registry=" + myFlickerRegistry}
+	}
+	return nil
+}
+
+func npmViewArgs(packageName string) []string {
+	args := []string{"view", packageName, "version"}
+	return append(args, npmRegistryArgs(packageName)...)
+}
+
+func npmInstallArgs(packageName, version string) []string {
+	args := []string{"install", "-g", packageName + "@" + version}
+	return append(args, npmRegistryArgs(packageName)...)
+}
+
 func (c *NPMCommand) lookupLatestVersions(ctx context.Context, packageNames []string) map[string]npmLatestResult {
 	out := make(map[string]npmLatestResult, len(packageNames))
 	var mu sync.Mutex
@@ -426,7 +521,7 @@ func (c *NPMCommand) lookupLatestVersions(ctx context.Context, packageNames []st
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := c.runner.Run(ctx, "npm", "view", packageName, "version")
+			result := c.runner.Run(ctx, "npm", npmViewArgs(packageName)...)
 			next := npmLatestResult{version: firstNonEmptyLine(result.Stdout)}
 			if commandFailed(result) || next.version == "" {
 				next.version = ""
@@ -441,11 +536,11 @@ func (c *NPMCommand) lookupLatestVersions(ctx context.Context, packageNames []st
 	return out
 }
 
-func (c *NPMCommand) latestResultsForScan(now time.Time) (map[string]npmLatestResult, []string) {
+func (c *NPMCommand) latestResultsForScan(now time.Time, flickerAvailable bool) (map[string]npmLatestResult, []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	packages := updateListRuntimeNPMPackages()
+	packages := runtimeNPMPackagesForScan(flickerAvailable)
 	out := make(map[string]npmLatestResult, len(packages))
 	var missing []string
 	for _, policy := range packages {
@@ -520,7 +615,7 @@ func (c *NPMCommand) startInstall(payload npmCommandPayload) (any, *npmCommandEr
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
-	go c.runCommandOperation(operation, "npm", "install", "-g", payload.PackageName+"@"+version)
+	go c.runCommandOperation(operation, "npm", npmInstallArgs(payload.PackageName, version)...)
 	return npmCommandResponse{OK: true, Accepted: true, Operation: cloneNPMOperation(operation)}, nil
 }
 
@@ -597,7 +692,7 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 		c.notifyOperationDone(done)
 		return
 	}
-	installResult := c.runner.Run(context.Background(), "npm", "install", "-g", packageName+"@latest")
+	installResult := c.runner.Run(context.Background(), "npm", npmInstallArgs(packageName, "latest")...)
 	exitCode := installResult.ExitCode
 	c.mu.Lock()
 	if c.operation != operation {
@@ -681,7 +776,7 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 	var failed []string
 	var exitCode *int
 	for _, packageName := range packageNames {
-		result := c.runner.Run(context.Background(), "npm", "install", "-g", packageName+"@"+version)
+		result := c.runner.Run(context.Background(), "npm", npmInstallArgs(packageName, version)...)
 		if commandFailed(result) {
 			code := result.ExitCode
 			exitCode = &code

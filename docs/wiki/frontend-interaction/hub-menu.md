@@ -69,6 +69,8 @@ detail 工具栏显示 `NPM packages` 与 `Update all`。每行是 32px 单行�
 
 不可用操作不渲染图标，但固定槽位仍保留以保证整列对齐。**不提供 reinstall**。所有动作走现有 npmPackage confirm 流程。
 
+MyFlicker 的 `@myflicker/cli` 仅在 Hub 首次 NPM 扫描时能从 `https://npm.corp.kuaishou.com` 读取到匹配的有效包元数据时显示；源不可达、返回非包元数据或缺少 latest 版本时整行省略。该包的 latest 查询、安装和更新命令只在对应的单次 npm 调用上附加 `--registry=https://npm.corp.kuaishou.com`，不修改其他包或用户的 npm 配置。
+
 ## Hub 全局 Skills
 
 Skills detail 只读取当前 Hub 的 HubState `skills.hubInventory`。工具栏提供 Add Skill、选择模式和带文字的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。

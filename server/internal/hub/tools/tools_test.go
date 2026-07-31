@@ -484,7 +484,7 @@ func (f *fakeNPMRunner) Run(ctx context.Context, name string, args ...string) np
 	if ok {
 		return result
 	}
-	if name == "npm" && len(args) == 3 && args[0] == "view" && args[2] == "version" {
+	if name == "npm" && len(args) >= 3 && args[0] == "view" && args[2] == "version" {
 		return npmCommandResult{Stdout: "9.9.9\n", ExitCode: 0}
 	}
 	return npmCommandResult{Stdout: "", ExitCode: 0}
@@ -583,13 +583,14 @@ func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
 	}
 }
 
-func TestNPMCommandScanExcludesMyFlickerFromUpdateList(t *testing.T) {
+func TestNPMCommandScanIncludesMyFlickerFromPrivateRegistry(t *testing.T) {
 	runner := newFakeNPMRunner()
 	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
 		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"},"@openai/codex":{"version":"0.129.0"}}}`,
 		ExitCode: 0,
 	})
 	runner.set("npm", []string{"view", "@openai/codex", "version"}, npmCommandResult{Stdout: "0.130.0\n", ExitCode: 0})
+	runner.set("npm", []string{"view", "@myflicker/cli", "version", "--registry=https://npm.corp.kuaishou.com"}, npmCommandResult{Stdout: "1.1.0\n", ExitCode: 0})
 
 	cmd := newNPMCommandWithRunner(runner)
 	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
@@ -600,8 +601,12 @@ func TestNPMCommandScanExcludesMyFlickerFromUpdateList(t *testing.T) {
 		t.Fatalf("Handle scan error: %#v", cmdErr)
 	}
 	body := resp.(npmCommandResponse)
-	if hasNPMTestPackage(body.Hub.Packages, "@myflicker/cli") {
-		t.Fatalf("scan packages include @myflicker/cli: %#v", body.Hub.Packages)
+	myFlicker := findNPMTestPackage(t, body.Hub.Packages, "@myflicker/cli")
+	if myFlicker.Status != "checking_latest" || myFlicker.InstalledVersion != "1.0.0" {
+		t.Fatalf("myflicker package before latest=%#v", myFlicker)
+	}
+	if !reflect.DeepEqual(myFlicker.AgentTypes, []string{"flicker"}) || !myFlicker.CanUninstall {
+		t.Fatalf("myflicker package metadata=%#v", myFlicker)
 	}
 
 	waitForNPMTestOperation(t, cmd)
@@ -612,11 +617,12 @@ func TestNPMCommandScanExcludesMyFlickerFromUpdateList(t *testing.T) {
 	if cmdErr != nil {
 		t.Fatalf("Handle second scan error: %#v", cmdErr)
 	}
-	if hasNPMTestPackage(resp.(npmCommandResponse).Hub.Packages, "@myflicker/cli") {
-		t.Fatalf("second scan packages include @myflicker/cli: %#v", resp.(npmCommandResponse).Hub.Packages)
+	myFlicker = findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@myflicker/cli")
+	if myFlicker.Status != "update_available" || myFlicker.LatestVersion != "1.1.0" || !myFlicker.CanUpdate {
+		t.Fatalf("myflicker package=%#v", myFlicker)
 	}
-	if runner.hasCall("npm", "view", "@myflicker/cli", "version") {
-		t.Fatalf("scan should not query latest for @myflicker/cli: %#v", runner.calls)
+	if !runner.hasCall("npm", "view", "@myflicker/cli", "version", "--registry=https://npm.corp.kuaishou.com") {
+		t.Fatalf("scan should query MyFlicker latest through its private registry: %#v", runner.calls)
 	}
 }
 
