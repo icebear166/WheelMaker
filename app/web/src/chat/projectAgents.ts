@@ -11,6 +11,8 @@ export function agentDisplayLabel(agentType?: string | null): string {
   switch (normalized.toLowerCase()) {
     case 'claude':
       return 'claude';
+    case 'cx-deepseek':
+      return 'cx.deepseek';
     case 'cc-deepseek':
       return 'cc · deepseek';
     case 'cc-glm':
