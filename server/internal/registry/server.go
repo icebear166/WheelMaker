@@ -266,6 +266,7 @@ type Server struct {
 	ipLocation                 IPLocationResolver
 	serverData                 ServerDataStore
 	codexRadarEfficiencyLoader func(context.Context) (json.RawMessage, error)
+	codexRadarEfficiencyCache  codexRadarEfficiencyCache
 
 	speech *speechService
 	tts    *ttsService

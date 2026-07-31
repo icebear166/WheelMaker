@@ -48,16 +48,10 @@ func (s *Server) handleCodexRadarEfficiencyGet(peer *peerConn, in envelope) {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInternal, "CodexRadar efficiency is unavailable", nil)
 		return
 	}
-	raw, err := s.codexRadarEfficiencyLoader(context.Background())
+	snapshot, err := s.codexRadarEfficiencyCache.get(context.Background(), s.codexRadarEfficiencyLoader)
 	if err != nil {
 		registryLogger("").Warn("CodexRadar efficiency fetch failed: %v", err)
 		_ = s.writeError(peer, in.RequestID, in.Method, codeUnavailable, "fetch CodexRadar efficiency failed", nil)
-		return
-	}
-	snapshot, err := decodeCodexRadarEfficiency(raw)
-	if err != nil {
-		registryLogger("").Warn("CodexRadar efficiency decode failed: %v", err)
-		_ = s.writeError(peer, in.RequestID, in.Method, codeInternal, "decode CodexRadar efficiency failed", nil)
 		return
 	}
 	_ = s.writeResponse(peer, in.RequestID, in.Method, "", snapshot)

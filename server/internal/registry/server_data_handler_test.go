@@ -15,6 +15,14 @@ import (
 	"github.com/swm8023/wheelmaker/internal/serverdata"
 )
 
+const codexRadarEfficiencyCacheFixture = `{
+	"combos": [{"model":"gpt-5.6-sol","effort":"low"}],
+	"tasks": [{"id":"task-a"}],
+	"cells": {
+		"task-a|gpt-5.6-sol|low": {"ran_by":[{"passed":true,"duration_sec":60,"actual_cost_usd":1,"graded_at":"2026-07-31T10:00:00Z"}]}
+	}
+}`
+
 func TestCodexRadarEfficiencyGetAggregatesLiveTable(t *testing.T) {
 	server := New(Config{})
 	server.codexRadarEfficiencyLoader = func(context.Context) (json.RawMessage, error) {
@@ -90,6 +98,80 @@ func TestCodexRadarEfficiencyFetcherLoadsLiveEndpoint(t *testing.T) {
 	}
 	if string(raw) != body {
 		t.Fatalf("raw body = %q, want %q", raw, body)
+	}
+}
+
+func TestCodexRadarEfficiencyCacheLimitsUpstreamRequestsAndServesStaleData(t *testing.T) {
+	cache := codexRadarEfficiencyCache{}
+	var calls int
+	loader := func(context.Context) (json.RawMessage, error) {
+		calls++
+		if calls == 1 {
+			return json.RawMessage(codexRadarEfficiencyCacheFixture), nil
+		}
+		return nil, errors.New("upstream unavailable")
+	}
+
+	first, err := cache.get(context.Background(), loader)
+	if err != nil {
+		t.Fatalf("first get() error = %v", err)
+	}
+	second, err := cache.get(context.Background(), loader)
+	if err != nil {
+		t.Fatalf("second get() error = %v", err)
+	}
+	if calls != 1 || first.SourceUpdatedAt != second.SourceUpdatedAt {
+		t.Fatalf("cache calls=%d first=%+v second=%+v", calls, first, second)
+	}
+
+	cache.cachedAt = time.Now().Add(-codexRadarEfficiencyCacheTTL - time.Second)
+	cache.lastAttemptAt = cache.cachedAt
+	stale, err := cache.get(context.Background(), loader)
+	if err != nil {
+		t.Fatalf("stale get() error = %v", err)
+	}
+	if calls != 2 || stale.SourceUpdatedAt != first.SourceUpdatedAt {
+		t.Fatalf("stale fallback calls=%d stale=%+v", calls, stale)
+	}
+	if _, err := cache.get(context.Background(), loader); err != nil {
+		t.Fatalf("cached failure get() error = %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("cached failure retried upstream: calls=%d", calls)
+	}
+}
+
+func TestCodexRadarEfficiencyCacheCoalescesConcurrentFetches(t *testing.T) {
+	cache := codexRadarEfficiencyCache{}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls int
+	loader := func(context.Context) (json.RawMessage, error) {
+		calls++
+		close(started)
+		<-release
+		return json.RawMessage(codexRadarEfficiencyCacheFixture), nil
+	}
+
+	results := make(chan error, 2)
+	go func() {
+		_, err := cache.get(context.Background(), loader)
+		results <- err
+	}()
+	<-started
+	go func() {
+		_, err := cache.get(context.Background(), loader)
+		results <- err
+	}()
+	close(release)
+
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("concurrent get() error = %v", err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("concurrent upstream calls=%d, want 1", calls)
 	}
 }
 

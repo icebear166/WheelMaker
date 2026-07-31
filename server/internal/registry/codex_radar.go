@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
 const (
 	codexRadarEfficiencyEndpoint = "https://codexradar.com/api/intelligence-efficiency"
 	maxCodexRadarResponseBytes   = 8 * 1024 * 1024
+	codexRadarEfficiencyCacheTTL = 10 * time.Minute
 )
 
 type codexRadarEfficiencyFetcher struct {
@@ -54,6 +56,101 @@ func (f *codexRadarEfficiencyFetcher) load(ctx context.Context) (json.RawMessage
 		return nil, errors.New("CodexRadar efficiency response is too large")
 	}
 	return json.RawMessage(body), nil
+}
+
+type codexRadarEfficiencyCache struct {
+	mu sync.Mutex
+
+	snapshot      codexRadarEfficiencySnapshot
+	hasSnapshot   bool
+	cachedAt      time.Time
+	lastAttemptAt time.Time
+	lastError     error
+
+	fetching bool
+	wait     chan struct{}
+}
+
+func (c *codexRadarEfficiencyCache) get(
+	ctx context.Context,
+	loader func(context.Context) (json.RawMessage, error),
+) (codexRadarEfficiencySnapshot, error) {
+	if c == nil {
+		return codexRadarEfficiencySnapshot{}, errors.New("CodexRadar efficiency cache is not configured")
+	}
+	if loader == nil {
+		return codexRadarEfficiencySnapshot{}, errors.New("CodexRadar efficiency loader is not configured")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	for {
+		now := time.Now()
+		c.mu.Lock()
+		if c.hasSnapshot && now.Sub(c.cachedAt) < codexRadarEfficiencyCacheTTL {
+			snapshot := c.snapshot
+			c.mu.Unlock()
+			return snapshot, nil
+		}
+		if c.fetching {
+			wait := c.wait
+			c.mu.Unlock()
+			select {
+			case <-wait:
+				continue
+			case <-ctx.Done():
+				return codexRadarEfficiencySnapshot{}, ctx.Err()
+			}
+		}
+		if !c.lastAttemptAt.IsZero() && now.Sub(c.lastAttemptAt) < codexRadarEfficiencyCacheTTL {
+			snapshot, hasSnapshot := c.snapshot, c.hasSnapshot
+			err := c.lastError
+			c.mu.Unlock()
+			if hasSnapshot {
+				return snapshot, nil
+			}
+			if err != nil {
+				return codexRadarEfficiencySnapshot{}, err
+			}
+			return codexRadarEfficiencySnapshot{}, errors.New("CodexRadar efficiency refresh is throttled")
+		}
+		c.fetching = true
+		c.wait = make(chan struct{})
+		wait := c.wait
+		c.lastAttemptAt = now
+		c.mu.Unlock()
+
+		raw, err := loader(ctx)
+		var snapshot codexRadarEfficiencySnapshot
+		if err == nil {
+			snapshot, err = decodeCodexRadarEfficiency(raw)
+		}
+
+		c.mu.Lock()
+		if err == nil {
+			c.snapshot = snapshot
+			c.hasSnapshot = true
+			c.cachedAt = time.Now()
+			c.lastAttemptAt = c.cachedAt
+			c.lastError = nil
+		} else {
+			c.lastError = err
+		}
+		c.fetching = false
+		close(wait)
+		stale, hasStale := c.snapshot, c.hasSnapshot
+		c.mu.Unlock()
+
+		if err == nil {
+			return snapshot, nil
+		}
+		if hasStale {
+			registryLogger("").Warn("CodexRadar refresh failed; serving cached snapshot: %v", err)
+			return stale, nil
+		}
+		return codexRadarEfficiencySnapshot{}, err
+	}
 }
 
 type codexRadarTablePayload struct {
