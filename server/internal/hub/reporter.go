@@ -315,7 +315,7 @@ func (r *Reporter) updateUsageSnapshot(snapshot usage.Snapshot) {
 	if snapshot.Generation == 0 && len(snapshot.Providers) == 0 {
 		availability = rp.HubStateAvailabilityEmpty
 	}
-	r.ensureHubStateManager().notifyWithStatus(
+	r.ensureHubStateManager().notifyRefreshProgress(
 		hubStateSectionTokenStats,
 		snapshot,
 		availability,

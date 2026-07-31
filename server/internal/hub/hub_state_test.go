@@ -111,6 +111,61 @@ func TestHubStateForceDuringRunSchedulesOnlyOneRerun(t *testing.T) {
 	}
 }
 
+func TestHubStateRefreshAbsorbsMatchingProgressNotificationWithoutRerun(t *testing.T) {
+	var calls atomic.Int32
+	var manager *HubStateManager
+	var publishedMu sync.Mutex
+	var published []rp.HubStateSection
+	ready := map[string]any{"generation": 1, "status": "ready"}
+	manager = newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionTokenStats: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				if calls.Add(1) == 1 {
+					manager.notifyRefreshProgress(
+						hubStateSectionTokenStats,
+						map[string]any{"generation": 1, "status": "scanning"},
+						rp.HubStateAvailabilityReady,
+						rp.HubStateUpdateUpdating,
+						"",
+						"snapshot",
+					)
+					manager.notifyRefreshProgress(
+						hubStateSectionTokenStats,
+						ready,
+						rp.HubStateAvailabilityReady,
+						rp.HubStateUpdateIdle,
+						"",
+						"snapshot",
+					)
+				}
+				return ready, nil
+			},
+		},
+	}, func(_ string, sections map[string]rp.HubStateSection) {
+		publishedMu.Lock()
+		published = append(published, sections[hubStateSectionTokenStats])
+		publishedMu.Unlock()
+	})
+
+	if _, err := manager.enqueueRefresh([]string{hubStateSectionTokenStats}, true); err != nil {
+		t.Fatal(err)
+	}
+	waitHubStateSectionIdle(t, manager, hubStateSectionTokenStats)
+
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("refresh calls = %d, want 1", got)
+	}
+	final := manager.get([]string{hubStateSectionTokenStats}).Sections[hubStateSectionTokenStats]
+	if final.UpdateStatus != rp.HubStateUpdateIdle {
+		t.Fatalf("final update status = %q, want idle", final.UpdateStatus)
+	}
+	publishedMu.Lock()
+	defer publishedMu.Unlock()
+	if len(published) == 0 || published[len(published)-1].UpdateStatus != rp.HubStateUpdateIdle {
+		t.Fatalf("last published section = %#v, want idle", published)
+	}
+}
+
 func TestHubStateNotificationWinsOverOlderScan(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{}, 2)

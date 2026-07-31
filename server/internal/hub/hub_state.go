@@ -295,6 +295,47 @@ func (m *HubStateManager) notifyWithStatus(
 	lastError string,
 	reason string,
 ) rp.HubState {
+	return m.notifySection(
+		name,
+		data,
+		availability,
+		updateStatus,
+		lastError,
+		reason,
+		false,
+	)
+}
+
+func (m *HubStateManager) notifyRefreshProgress(
+	name string,
+	data any,
+	availability rp.HubStateAvailability,
+	updateStatus rp.HubStateUpdateStatus,
+	lastError string,
+	reason string,
+) rp.HubState {
+	// Refresh-owned snapshots advance the active update instead of invalidating
+	// it. External notifications still use notifyWithStatus and schedule a rerun.
+	return m.notifySection(
+		name,
+		data,
+		availability,
+		updateStatus,
+		lastError,
+		reason,
+		true,
+	)
+}
+
+func (m *HubStateManager) notifySection(
+	name string,
+	data any,
+	availability rp.HubStateAvailability,
+	updateStatus rp.HubStateUpdateStatus,
+	lastError string,
+	reason string,
+	refreshProgress bool,
+) rp.HubState {
 	controller, ok := m.sections[name]
 	if !ok {
 		return m.get(nil)
@@ -315,10 +356,13 @@ func (m *HubStateManager) notifyWithStatus(
 		if availability == rp.HubStateAvailabilityReady {
 			controller.section.UpdatedAt = formatHubStateTime(now)
 		}
-		if controller.active == nil {
+		if controller.active == nil || refreshProgress {
 			controller.section.UpdateStatus = updateStatus
 		} else {
 			controller.pendingRerun = true
+		}
+		if refreshProgress && controller.active != nil {
+			controller.active.baseRevision = controller.section.Revision
 		}
 		controller.signalLocked()
 	}
