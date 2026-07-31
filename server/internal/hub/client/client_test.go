@@ -54,6 +54,7 @@ type testInjectedInstance struct {
 	unarchiveCalls []string
 	initCalls      int
 	loadCalls      int
+	statusCalls    int
 	statusResult   acp.SessionActionStatusResult
 	statusErr      error
 	compactDone    chan agent.SessionCompactResult
@@ -274,6 +275,7 @@ func (i *testInjectedInstance) UnarchiveSession(_ context.Context, sessionID str
 }
 
 func (i *testInjectedInstance) SessionStatus(context.Context) (acp.SessionActionStatusResult, error) {
+	i.statusCalls++
 	return i.statusResult, i.statusErr
 }
 
@@ -9528,58 +9530,106 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 	}
 }
 
-func TestHandleSessionRequestSessionStatusInitializesWithoutLoading(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.SaveSession(ctx, &SessionRecord{
-		ID:           "sess-status",
-		ProjectName:  "proj1",
-		AgentType:    string(acp.ACPProviderCodex),
-		AgentJSON:    `{"usage":{"used":42000,"size":258400,"updatedAt":"2026-07-14T10:00:00Z"}}`,
-		CreatedAt:    time.Now().Add(-time.Hour),
-		LastActiveAt: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatalf("SaveSession: %v", err)
-	}
+func TestHandleSessionRequestSessionStatusUsesPersistedStateWithoutAgent(t *testing.T) {
+	for _, agentType := range []string{
+		string(acp.ACPProviderCodex),
+		string(acp.ACPProviderCXDeepSeek),
+		string(acp.ACPProviderClaude),
+		"unknown-agent",
+	} {
+		t.Run(agentType, func(t *testing.T) {
+			store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+			if err != nil {
+				t.Fatalf("NewStore: %v", err)
+			}
+			ctx := context.Background()
+			if err := store.SaveSession(ctx, &SessionRecord{
+				ID:           "sess-status",
+				ProjectName:  "proj1",
+				Status:       SessionPersisted,
+				AgentType:    agentType,
+				AgentJSON:    `{"usage":{"used":9000,"size":128000,"updatedAt":"2026-07-30T10:00:00Z"}}`,
+				CreatedAt:    time.Now().Add(-time.Hour),
+				LastActiveAt: time.Now().Add(-time.Minute),
+			}); err != nil {
+				t.Fatalf("SaveSession: %v", err)
+			}
 
-	inst := &testInjectedInstance{
-		name:      string(acp.ACPProviderCodex),
-		sessionID: "sess-status",
-		alive:     true,
-		initResult: acp.InitializeResult{
-			ProtocolVersion: "1",
-			AgentCapabilities: acp.AgentCapabilities{
-				LoadSession: true,
-			},
-		},
-		statusResult: acp.SessionActionStatusResult{
-			OK:        true,
-			Limits:    []acp.SessionActionRateLimit{{ID: "codex:primary", Name: "Codex primary", UsedPercent: 37, RemainingPercent: 63}},
-			UpdatedAt: "2026-07-14T10:00:01Z",
-		},
-	}
-	c := New(store, "proj1", t.TempDir())
-	c.registry = agent.DefaultACPFactory().Clone()
-	c.registry.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) { return inst, nil })
-	c.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{Compact: true})
-	t.Cleanup(func() { _ = c.Close() })
+			inst := &testInjectedInstance{
+				name:      agentType,
+				sessionID: "sess-status",
+				alive:     true,
+				statusResult: acp.SessionActionStatusResult{
+					OK: true,
+					Limits: []acp.SessionActionRateLimit{{
+						ID:               "provider-limit",
+						Name:             "Must not appear",
+						UsedPercent:      1,
+						RemainingPercent: 99,
+					}},
+					Account: &acp.SessionActionStatusAccount{PlanType: "provider-plan"},
+				},
+			}
+			creatorCalls := 0
+			c := New(store, "proj1", t.TempDir())
+			c.registry = agent.NewACPFactory()
+			if provider, ok := acp.ParseACPProvider(agentType); ok {
+				c.registry.Register(provider, func(context.Context, string) (agent.Instance, error) {
+					creatorCalls++
+					return inst, nil
+				})
+			}
+			t.Cleanup(func() { _ = c.Close() })
 
-	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionStatus, "proj1", json.RawMessage(`{"sessionId":"sess-status"}`))
-	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.status): %v", err)
-	}
-	status, ok := response.(acp.SessionActionStatusResult)
-	if !ok {
-		t.Fatalf("status response type = %T", response)
-	}
-	if status.SessionID != "sess-status" || status.Context == nil || status.Context.Used != 42000 || status.Context.Size == nil || *status.Context.Size != 258400 {
-		t.Fatalf("status response = %+v", status)
-	}
-	if inst.initCalls != 1 || inst.loadCalls != 0 {
-		t.Fatalf("initialize calls=%d load calls=%d", inst.initCalls, inst.loadCalls)
+			response, err := c.HandleSessionRequest(
+				ctx,
+				acp.RegistryMethodSessionStatus,
+				"proj1",
+				json.RawMessage(`{"sessionId":"sess-status"}`),
+			)
+			if err != nil {
+				t.Fatalf("HandleSessionRequest(session.status): %v", err)
+			}
+			status, ok := response.(acp.SessionActionStatusResult)
+			if !ok {
+				t.Fatalf("status response type = %T", response)
+			}
+			if !status.OK || status.SessionID != "sess-status" || status.AgentType != agentType {
+				t.Fatalf("status identity = %+v", status)
+			}
+			if status.Context == nil ||
+				status.Context.Used != 9000 ||
+				status.Context.Size == nil ||
+				*status.Context.Size != 128000 ||
+				status.Context.UpdatedAt != "2026-07-30T10:00:00Z" {
+				t.Fatalf("status context = %+v", status.Context)
+			}
+			if status.Limits == nil || len(status.Limits) != 0 {
+				t.Fatalf("status limits = %#v, want non-nil empty slice", status.Limits)
+			}
+			if status.Account != nil {
+				t.Fatalf("status account = %+v, want nil", status.Account)
+			}
+			if creatorCalls != 0 || inst.initCalls != 0 || inst.loadCalls != 0 || inst.statusCalls != 0 {
+				t.Fatalf(
+					"calls creator=%d initialize=%d load=%d providerStatus=%d",
+					creatorCalls,
+					inst.initCalls,
+					inst.loadCalls,
+					inst.statusCalls,
+				)
+			}
+			encoded, err := json.Marshal(status)
+			if err != nil {
+				t.Fatalf("marshal status: %v", err)
+			}
+			if !bytes.Contains(encoded, []byte(`"limits":[]`)) {
+				t.Fatalf("status json = %s, want limits:[]", encoded)
+			}
+			if bytes.Contains(encoded, []byte(`"account"`)) {
+				t.Fatalf("status json = %s, want account omitted", encoded)
+			}
+		})
 	}
 }
 

@@ -397,7 +397,7 @@ git commit -m "feat(hub): make session status universally available"
 - Modify: `server/internal/hub/client/session.go` (`SessionStatus`)
 - Modify: `server/internal/hub/client/client_test.go` (test spy and persisted-session test)
 
-- [ ] **Step 1: Turn the test instance into a provider-status trap**
+- [x] **Step 1: Turn the test instance into a provider-status trap**
 
 In `testInjectedInstance` in `server/internal/hub/client/client_test.go`, add:
 
@@ -414,7 +414,7 @@ func (i *testInjectedInstance) SessionStatus(context.Context) (acp.SessionAction
 }
 ```
 
-- [ ] **Step 2: Replace the old Codex live-status test with a failing provider matrix**
+- [x] **Step 2: Replace the old Codex live-status test with a failing provider matrix**
 
 Delete `TestHandleSessionRequestSessionStatusInitializesWithoutLoading` and add:
 
@@ -523,7 +523,7 @@ func TestHandleSessionRequestSessionStatusUsesPersistedStateWithoutAgent(t *test
 }
 ```
 
-- [ ] **Step 3: Run the matrix to verify it fails**
+- [x] **Step 3: Run the matrix to verify it fails**
 
 Run:
 
@@ -534,7 +534,7 @@ go test ./internal/hub/client/ -run TestHandleSessionRequestSessionStatusUsesPer
 
 Expected: FAIL because the current implementation creates/initializes a known provider instance, calls provider status, or cannot serve the unknown provider.
 
-- [ ] **Step 4: Replace `Session.SessionStatus` with one locked local snapshot**
+- [x] **Step 4: Replace `Session.SessionStatus` with one locked local snapshot**
 
 Replace the entire method in `server/internal/hub/client/session.go`:
 
@@ -573,7 +573,7 @@ func (s *Session) SessionStatus(_ context.Context) (acp.SessionActionStatusResul
 
 Do not call `persistSessionBestEffort`: status is read-only and the snapshot already came from session state.
 
-- [ ] **Step 5: Format and run the session-local tests**
+- [x] **Step 5: Format and run the session-local tests**
 
 Run:
 
@@ -585,7 +585,7 @@ go test ./internal/hub/client/ -run "TestHandleSessionRequestSessionStatusUsesPe
 
 Expected: PASS for Codex, CX DeepSeek, Claude, and unknown-agent subtests; every call counter remains zero.
 
-- [ ] **Step 6: Commit the session-local implementation**
+- [x] **Step 6: Commit the session-local implementation**
 
 ```powershell
 git add server/internal/hub/client/session.go server/internal/hub/client/client_test.go

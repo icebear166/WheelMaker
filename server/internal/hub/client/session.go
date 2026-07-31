@@ -519,42 +519,34 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	return nil
 }
 
-func (s *Session) SessionStatus(ctx context.Context) (acp.SessionActionStatusResult, error) {
-	if err := s.ensureInstance(ctx); err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-	if _, err := s.ensureInitialized(ctx); err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-
+func (s *Session) SessionStatus(_ context.Context) (acp.SessionActionStatusResult, error) {
 	s.mu.Lock()
-	inst := s.instance
 	sessionID := s.acpSessionID
-	usage := s.agentState.Usage
+	agentType := s.agentType
+	var usage *acp.SessionUsage
+	if s.agentState.Usage != nil {
+		value := *s.agentState.Usage
+		usage = &value
+	}
 	s.mu.Unlock()
-	provider, ok := inst.(agent.SessionStatusProvider)
-	if !ok {
-		return acp.SessionActionStatusResult{}, agent.ErrSessionActionUnsupported
+
+	result := acp.SessionActionStatusResult{
+		OK:        true,
+		SessionID: sessionID,
+		AgentType: agentType,
+		Limits:    []acp.SessionActionRateLimit{},
 	}
-	result, err := provider.SessionStatus(ctx)
-	if err != nil {
-		return acp.SessionActionStatusResult{}, err
+	if usage == nil {
+		return result, nil
 	}
-	result.OK = true
-	result.SessionID = sessionID
-	if usage != nil {
-		var size *int64
-		if usage.Size > 0 {
-			value := usage.Size
-			size = &value
-		}
-		result.Context = &acp.SessionActionStatusContext{
-			Used:      usage.Used,
-			Size:      size,
-			UpdatedAt: usage.UpdatedAt,
-		}
+	result.Context = &acp.SessionActionStatusContext{
+		Used:      usage.Used,
+		UpdatedAt: usage.UpdatedAt,
 	}
-	s.persistSessionBestEffort()
+	if usage.Size > 0 {
+		size := usage.Size
+		result.Context.Size = &size
+	}
 	return result, nil
 }
 
