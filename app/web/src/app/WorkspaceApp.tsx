@@ -406,6 +406,7 @@ import {
   FLOATING_NAV_BUTTON_SIZE_PX,
   FLOATING_NAV_EXPANDED_OVERFLOW_PX,
   resolveFloatingNavCurrent,
+  resolveFloatingNavReservedBottomInset,
   resolveFloatingNavRelayState,
   type FloatingNavDestination,
 } from '../shell/layouts/mobile/mobileFloatingNavModel';
@@ -6900,6 +6901,13 @@ export function App() {
       </div>
     );
   };
+  const floatingNavCurrent = resolveFloatingNavCurrent({
+    relayFrameOpen: mobilePortRelayFrameOpen,
+    settingsOpen: sidebarSettingsOpen,
+    usageOpen: mobileUsageOpen,
+    terminalOpen,
+    previewOpen: chatPreviewOpen && !mobilePortRelayFrameOpen,
+  });
   const floatingBaseBounds = useMemo(() => {
     if (isWide) {
       return { minTop: 0, maxTop: 0 };
@@ -6934,13 +6942,18 @@ export function App() {
       stackHeight: floatingControlStackHeight,
       safeAreaBottomInset,
       composerTop: chatComposerTop,
+      reservedBottomInset: floatingControlSide === 'right'
+        ? resolveFloatingNavReservedBottomInset(floatingNavCurrent, safeAreaBottomInset)
+        : 0,
     });
   }, [
     chatComposerTop,
     floatingBaseBounds.maxTop,
     floatingBaseBounds.minTop,
     floatingControlStackHeight,
+    floatingControlSide,
     floatingKeyboardOffset,
+    floatingNavCurrent,
     isWide,
     safeAreaBottomInset,
     windowHeight,
@@ -17246,13 +17259,6 @@ export function App() {
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
   }, [chatPreviewOpen, isWide, setSidebarSettingsOpen]);
-  const floatingNavCurrent = resolveFloatingNavCurrent({
-    relayFrameOpen: mobilePortRelayFrameOpen,
-    settingsOpen: sidebarSettingsOpen,
-    usageOpen: mobileUsageOpen,
-    terminalOpen: terminalOpen,
-    previewOpen: chatPreviewOpen && !mobilePortRelayFrameOpen,
-  });
   const floatingNavRelayState = resolveFloatingNavRelayState({
     ready: portRelayReady,
     frameUrl: portRelayFrameUrl,

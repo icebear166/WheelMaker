@@ -105,6 +105,15 @@ describe('web responsive ui state', () => {
       safeAreaBottomInset: 0,
       composerTop: null,
     })).toEqual(defaultBounds);
+    expect(resolveFloatingControlAvoidanceBounds({
+      defaultBounds: {minTop: 6, maxTop: 746},
+      viewportHeight: 800,
+      keyboardOffset: 0,
+      stackHeight: 48,
+      safeAreaBottomInset: 0,
+      composerTop: null,
+      reservedBottomInset: 64,
+    })).toEqual({minTop: 6, maxTop: 688});
     expect(floatingControlYRatioFromLegacySlot('upper')).toBe(0);
     expect(floatingControlYRatioFromLegacySlot('upper-middle')).toBe(0.25);
     expect(floatingControlYRatioFromLegacySlot('center')).toBe(0.5);

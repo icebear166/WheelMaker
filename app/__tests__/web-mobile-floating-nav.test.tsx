@@ -7,6 +7,7 @@ import {
   FLOATING_NAV_CARD_HEIGHT_PX,
   FLOATING_NAV_EXPANDED_OVERFLOW_PX,
   FLOATING_NAV_ITEMS,
+  resolveFloatingNavReservedBottomInset,
   resolveFloatingNavCurrent,
   resolveFloatingNavRelayState,
 } from '../web/src/shell/layouts/mobile/mobileFloatingNavModel';
@@ -107,6 +108,12 @@ describe('mobile floating nav model', () => {
   test('card geometry reserves overflow above the collapsed button', () => {
     expect(FLOATING_NAV_CARD_HEIGHT_PX).toBe(272);
     expect(FLOATING_NAV_EXPANDED_OVERFLOW_PX).toBe(224);
+  });
+
+  test('reserves right-edge workbench controls below the floating nav', () => {
+    expect(resolveFloatingNavReservedBottomInset('chat', 20)).toBe(0);
+    expect(resolveFloatingNavReservedBottomInset('preview', 20)).toBe(64);
+    expect(resolveFloatingNavReservedBottomInset('terminal', 20)).toBe(135);
   });
 
   test('resolves the current surface by priority', () => {

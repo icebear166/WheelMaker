@@ -130,6 +130,7 @@ export function resolveFloatingControlAvoidanceBounds({
   safeAreaBottomInset,
   composerTop,
   composerGap = FLOATING_CONTROL_COMPOSER_GAP_PX,
+  reservedBottomInset = 0,
 }: {
   defaultBounds: FloatingControlVerticalBounds;
   viewportHeight: number;
@@ -138,17 +139,21 @@ export function resolveFloatingControlAvoidanceBounds({
   safeAreaBottomInset: number;
   composerTop: number | null;
   composerGap?: number;
+  reservedBottomInset?: number;
 }): FloatingControlVerticalBounds {
   const bottomInset = Math.max(safeAreaBottomInset + 6, 6);
   const viewportMaxTop = viewportHeight - keyboardOffset - stackHeight - bottomInset;
   const composerMaxTop = composerTop === null
     ? viewportMaxTop
     : composerTop - stackHeight - composerGap;
+  const reservedMaxTop = reservedBottomInset > 0
+    ? viewportHeight - keyboardOffset - stackHeight - reservedBottomInset
+    : defaultBounds.maxTop;
   return {
     minTop: defaultBounds.minTop,
     maxTop: Math.max(
       defaultBounds.minTop,
-      Math.min(defaultBounds.maxTop, viewportMaxTop, composerMaxTop),
+      Math.min(defaultBounds.maxTop, viewportMaxTop, composerMaxTop, reservedMaxTop),
     ),
   };
 }
