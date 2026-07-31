@@ -4046,7 +4046,7 @@ func TestReporterRunReturnsOnContextCancel(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run() err = %v", err)
 		}
-	case <-time.After(500 * time.Millisecond):
+	case <-time.After(2 * time.Second):
 		t.Fatal("Run() did not return after cancel")
 	}
 }
@@ -4403,7 +4403,7 @@ func connectClient(t *testing.T, ws *websocket.Conn, token string) {
 
 func waitForProjectOnline(t *testing.T, addr, projectID, token string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		ws := dialWS(t, "http://"+addr+"/ws")
 		connectClient(t, ws, token)

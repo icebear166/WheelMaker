@@ -228,6 +228,7 @@ func TestReleaseCommandDoesNotPersistSourcePathOrToken(t *testing.T) {
 	}
 	<-runner.calls
 	runner.complete(nil)
+	assertReleaseStatus(t, command, jobID, "success")
 }
 
 func TestReleaseCommandNotifiesTargetOnlyAfterSuccessfulAutoPullPublish(t *testing.T) {

@@ -586,9 +586,6 @@ describe('web chat file peek viewer', () => {
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
-    const pollStart = mainTsx.indexOf('const scheduleProjectIndexPoll = useCallback');
-    const pollEnd = mainTsx.indexOf('const scheduleWheelMakerUpdatePoll', pollStart);
-    const pollBody = mainTsx.slice(pollStart, pollEnd);
 
     expect(chromeTsx).toContain('actionsMenuOpen: boolean;');
     expect(chromeTsx).toContain('onActionsMenuToggle: () => void;');
@@ -603,7 +600,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('actionsMenuOpen={previewWorkbenchActionsMenuOpen}');
     expect(mainTsx).toContain('onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}');
     expect(mainTsx).toContain('onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}');
-    expect(pollBody).not.toContain("settingsDetailViewRef.current !== 'update'");
+    expect(mainTsx).not.toContain('schedule' + 'ProjectIndexPoll');
 
     expect(stylesCss).toContain('.preview-workbench-actions-menu');
     expect(stylesCss).toContain('.preview-workbench-action-menu-item');

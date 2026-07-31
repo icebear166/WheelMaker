@@ -293,8 +293,6 @@ func (r *Reporter) Run(ctx context.Context) error {
 	if r.usageService != nil {
 		r.usageService.Start(ctx)
 	}
-	r.startHubStateBootstrap(ctx)
-	r.startSkillsWatcher(ctx)
 	for {
 		if err := r.runSession(ctx); err != nil && ctx.Err() == nil {
 			registryLogger("").Warn("reporter session ended: %v", err)
@@ -646,6 +644,7 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	go func() {
 		select {
 		case <-ctx.Done():
+			_ = conn.SetReadDeadline(time.Now())
 			_ = conn.Close()
 		case <-stop:
 		}
@@ -655,6 +654,8 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	if err := r.handshake(conn); err != nil {
 		return err
 	}
+	r.startHubStateBootstrap(ctx)
+	r.startSkillsWatcher(ctx)
 	sink := newHubEventSink()
 	r.mu.Lock()
 	r.hubEventSink = sink

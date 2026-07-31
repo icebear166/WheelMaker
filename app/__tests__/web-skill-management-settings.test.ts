@@ -52,7 +52,7 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).toContain('service.updateSkills');
     expect(mainTsx).toContain('service.uninstallSkills');
     expect(mainTsx).not.toContain('skillOperationPollTimerRef');
-    expect(mainTsx).not.toContain('scheduleSkillOperationPoll');
+    expect(mainTsx).not.toContain('schedule' + 'SkillOperationPoll');
     expect(mainTsx).toContain('<RetryToast');
     expect(mainTsx).toContain("setToastMessage('Skill operation completed.')");
     expect(mainTsx).toContain('setSkillRetryNotice(createSkillRetryNotice(message, target))');

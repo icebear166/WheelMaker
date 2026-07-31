@@ -1001,11 +1001,11 @@ export class RegistryRepository {
     const payload = (resp.payload ?? {}) as { projects?: RegistryProject[]; hubs?: RegistryHub[] };
     const projects = (payload.projects ?? [])
       .filter(project => !!project.projectId)
-      .map(project => {
-        const {agentProfiles: _legacyAgentProfiles, ...projectWithoutLegacyProfiles} =
-          project as RegistryProject & {agentProfiles?: unknown};
-        return {
-        ...projectWithoutLegacyProfiles,
+      .map(project => ({
+        projectId: project.projectId,
+        name: project.name,
+        online: project.online,
+        path: project.path,
         agent: normalizeAgentType(project.agent),
         agents: Array.isArray(project.agents)
           ? project.agents
@@ -1014,8 +1014,9 @@ export class RegistryRepository {
               .filter((item): item is string => !!item)
           : undefined,
         hubId: project.hubId || project.projectId.split(':', 1)[0] || '',
-      };
-      });
+        projectRev: project.projectRev,
+        git: project.git,
+      }));
     const seenHubIds = new Set<string>();
     const hubs = (payload.hubs ?? [])
       .map((hub): RegistryHub => ({

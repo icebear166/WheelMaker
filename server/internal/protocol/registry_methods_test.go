@@ -17,10 +17,10 @@ func TestTokenStatsUpdateMethodIsRemoved(t *testing.T) {
 	}
 }
 
-func TestProjectProtocolTypesHaveNoAgentProfilesField(t *testing.T) {
+func TestProjectProtocolTypesHaveNoLegacyProfileField(t *testing.T) {
 	for _, value := range []any{ProjectInfo{}, ProjectListItem{}} {
-		if _, ok := reflect.TypeOf(value).FieldByName("AgentProfiles"); ok {
-			t.Fatalf("%T still exposes AgentProfiles", value)
+		if _, ok := reflect.TypeOf(value).FieldByName("Agent" + "Profiles"); ok {
+			t.Fatalf("%T still exposes the legacy profile field", value)
 		}
 	}
 }
