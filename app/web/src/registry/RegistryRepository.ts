@@ -34,6 +34,7 @@ import type {
   RegistryHubConfigUpdatePayload,
   RegistryHubState,
   RegistryHubStateActionResponse,
+  RegistryHubStateRefreshResponse,
   RegistryHubStateSectionName,
   RegistryUsageHistoryLimit,
   RegistryUsageHistoryResponse,
@@ -334,7 +335,7 @@ export class RegistryRepository {
     };
   }
 
-  private normalizeHubState(raw: unknown, fallbackHubId: string): RegistryHubState {
+  normalizeHubState(raw: unknown, fallbackHubId: string): RegistryHubState {
     const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
     const sectionsInput = input.sections && typeof input.sections === 'object' && !Array.isArray(input.sections)
       ? input.sections as Record<string, unknown>
@@ -1323,8 +1324,8 @@ export class RegistryRepository {
   }
 
   async getFileIndexStatus(hubId: string): Promise<RegistryFileIndexStatusResponse> {
-    const state = await this.refreshHubState(hubId, ['fileIndex']);
-    const payload = hubStateSectionData<RegistryFileIndexStatusResponse>(state, 'fileIndex') ?? {
+    const response = await this.refreshHubState(hubId, ['fileIndex']);
+    const payload = hubStateSectionData<RegistryFileIndexStatusResponse>(response.state, 'fileIndex') ?? {
       hubId,
       projects: [],
     };
@@ -2175,15 +2176,39 @@ export class RegistryRepository {
     hubId: string,
     sections: RegistryHubStateSectionName[],
     options: {force?: boolean} = {},
-  ): Promise<RegistryHubState> {
+  ): Promise<RegistryHubStateRefreshResponse> {
     const resp = await this.client.request({
       method: RegistryMethods.HubStateRefresh,
       hubId,
       payload: options.force === true ? {sections, force: true} : {sections},
       timeoutMs: 60000,
     });
-    const payload = (resp.payload ?? {}) as {state?: unknown};
-    return this.normalizeHubState(payload.state, hubId);
+    const payload = (resp.payload ?? {}) as {
+      accepted?: unknown;
+      updates?: unknown;
+      state?: unknown;
+    };
+    const updates = Array.isArray(payload.updates)
+      ? payload.updates.flatMap(item => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+          const update = item as Record<string, unknown>;
+          if (
+            typeof update.section !== 'string'
+            || typeof update.updateId !== 'string'
+            || typeof update.status !== 'string'
+          ) return [];
+          return [{
+            section: update.section,
+            updateId: update.updateId,
+            status: update.status,
+          }];
+        })
+      : [];
+    return {
+      accepted: payload.accepted === true,
+      updates,
+      state: this.normalizeHubState(payload.state, hubId),
+    };
   }
 
   async runHubStateAction(
@@ -2292,8 +2317,8 @@ export class RegistryRepository {
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {
-    const state = await this.refreshHubState(hubId, ['agentPackages']);
-    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
+    const response = await this.refreshHubState(hubId, ['agentPackages']);
+    return normalizeNpmCommandResponse(hubStateSectionData(response.state, 'agentPackages'), hubId);
   }
 
   async installNpmPackage(hubId: string, packageName: string, version = 'latest'): Promise<RegistryNpmCommandResponse> {
@@ -2323,8 +2348,8 @@ export class RegistryRepository {
   }
 
   async queryWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
-    const state = await this.refreshHubState(hubId, ['wheelmakerUpdate']);
-    return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
+    const response = await this.refreshHubState(hubId, ['wheelmakerUpdate']);
+    return hubStateSectionData<RegistryWheelMakerUpdateResponse>(response.state, 'wheelmakerUpdate') ?? {
       ok: false,
       status: 'checking_failed',
       hubId,
@@ -2378,8 +2403,8 @@ export class RegistryRepository {
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
-    const state = await this.refreshHubState(hubId, ['skills']);
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.refreshHubState(hubId, ['skills']);
+    return hubStateSectionData<RegistrySkillCommandResponse>(response.state, 'skills') ?? {
       ok: false,
       hubId,
       errorSummary: 'missing hub state response',

@@ -3607,7 +3607,7 @@ export function App() {
     chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
     let state;
     try {
-      state = await service.refreshHubState(hubId, ['flickerBridge']);
+      state = (await service.refreshHubState(hubId, ['flickerBridge'])).state;
     } catch (error) {
       if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
         return;
@@ -12239,8 +12239,8 @@ export function App() {
 
   const refreshUsageAcrossHubs = useCallback(() => {
     return Promise.allSettled(registryHubs.map(hub =>
-      service.refreshHubState(hub.hubId, ['tokenStats']).then(state => {
-        const snapshot = parseHubSnapshot(state.sections.tokenStats?.data);
+      service.refreshHubState(hub.hubId, ['tokenStats']).then(response => {
+        const snapshot = parseHubSnapshot(response.state.sections.tokenStats?.data);
         if (snapshot) usageStore.replaceHub(hub.hubId, snapshot);
       }),
     ));
