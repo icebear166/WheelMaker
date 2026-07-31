@@ -2,51 +2,85 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `/status` (`session.status`) work for every agent, not just codex, by adding a provider-neutral fallback that surfaces the WheelMaker session id, agent type, and token usage without spawning the agent subprocess.
+**Goal:** Make `/status` a universal, provider-independent view of the current WheelMaker session—stable session id, agent type, and session token usage—with one-click session-id copy and no agent subprocess or provider limits request.
 
-**Architecture:** `status` becomes a universal WheelMaker-layer capability. Two capability gates (`actionLookup` feeding the session summary, and `sessionSupportsAction` guarding dispatch) always report status supported. `Session.SessionStatus` reads the factory's status flag to decide: codex (flag set) keeps its live `ensureInstance` + provider path; every other provider takes a new persisted-state fallback (`s.acpSessionID` + `s.agentType` + `s.agentState.Usage`) that never calls `ensureInstance`. A new optional `agentType` response field carries the agent type to the existing dialog, which renders it and already degrades gracefully when codex-only `limits`/`account` are absent.
+**Architecture:** Both session-action capability gates always allow status. `Session.SessionStatus` takes one locked snapshot of `s.acpSessionID`, `s.agentType`, and `s.agentState.Usage` and returns it with `limits: []`; it never touches the agent factory, instance, `SessionStatusProvider`, Monitor, or HubState. The Web dialog renders the same Session ID/Agent/Context layout for every provider, ignores legacy limits/account fields, and copies the exact session id through the existing clipboard abstraction.
 
-**Tech Stack:** Go (server `internal/hub/client` + `internal/hub/agent` + `internal/protocol`), TypeScript/React (app/web), Jest + react-test-renderer, `go test`.
-
-**Working location:** All work happens in the existing worktree on branch `feat/universal-session-status` at `.worktree/feat/universal-session-status/`. Run server Go commands from `server/` and web commands from `app/` inside that worktree.
+**Tech Stack:** Go (`server/internal/protocol`, `server/internal/hub/client`, `server/internal/hub/agent`), TypeScript/React (`app/web`), SQLite-backed session tests, Jest + react-test-renderer, `go test`.
 
 ---
+
+## Execution Preconditions
+
+- Work only in `D:\Code\WheelMaker\.worktree\feat\universal-session-status` on branch `feat/universal-session-status`.
+- Read the root, `server/`, and `app/` `CLAUDE.md` files before implementation.
+- The plan was rewritten against current `main` at `560ed9ed`. Do not implement against the worktree's old base `84609d23`. Before Task 1, commit the reviewed spec/plan documentation, fetch `origin`, and rebase the feature branch onto current `origin/main` according to `docs/user/git-preferences.md`. If updating the already-published feature branch would require a force push, stop and obtain explicit approval before `--force-with-lease`.
+- Run Go commands from `server/` and Web commands from `app/`.
+- Do not change the registry protocol version.
+- Keep Monitor/HubState `tokenStats` code out of scope.
 
 ## File Structure
 
-**Server (Go):**
-- `server/internal/protocol/session_actions.go` — add optional `AgentType` field to `SessionActionStatusResult`.
-- `server/internal/protocol/registry_methods_test.go` — JSON round-trip test for the new field.
-- `server/internal/hub/client/client.go` — `actionLookup` (status always supported) and `sessionSupportsAction` (status always true).
-- `server/internal/hub/client/client_test.go` — capability + generic-fallback dispatch tests.
-- `server/internal/hub/client/session.go` — restructure `Session.SessionStatus` into live vs generic paths; add `liveStatusSupported`, `genericSessionStatusResult`, `statusContextFromUsage` helpers.
+**Protocol contract**
 
-**Web (TypeScript/React):**
-- `app/web/src/registry/registryTypes.ts` — add `agentType?` to `RegistrySessionStatusResult`.
-- `app/web/src/registry/RegistryRepository.ts` — parse `agentType` in `statusSession`.
-- `app/web/src/shell/AppDialogs.tsx` — render agent type row in `AppSessionStatusDialog`.
-- `app/__tests__/web-session-status-dialog.test.tsx` — non-codex rendering test + codex agent-type assertion.
+- Modify `server/internal/protocol/session_actions.go` — add optional `AgentType` while retaining legacy `Limits`/`Account` response fields for wire compatibility.
+- Modify `server/internal/protocol/registry_methods_test.go` — test `agentType` JSON behavior and the required empty-array shape of `limits`.
 
----
+**Universal capability and local session snapshot**
 
-## Task 1: Add optional `AgentType` to the status result (protocol)
+- Modify `server/internal/hub/client/client.go` — make the summary and dispatch status gates universal.
+- Modify `server/internal/hub/client/session.go` — replace live provider status with one session-local snapshot.
+- Modify `server/internal/hub/client/client_test.go` — cover known/unknown agents, nil registry, persisted usage, exact empty limits, and zero creator/initialize/provider-status calls.
+
+**Remove the retired provider-status path**
+
+- Modify `server/internal/hub/agent/factory.go` — remove provider-level `SessionActionSupport.Status` and status registrations.
+- Modify `server/internal/hub/agent/instance.go` — remove `SessionStatusProvider` and `instance.SessionStatus`.
+- Modify `server/internal/hub/agent/codexapp_agent.go` — remove the session-status `account/rateLimits/read` adapter.
+- Modify `server/internal/hub/agent/codexapp_convert.go` — remove its now-dead response types and normalization helpers.
+- Modify `server/internal/hub/agent/agent_test.go` — remove the retired rate-limit adapter test and update factory action assertions.
+
+**Web normalization and uniform dialog**
+
+- Modify `app/web/src/registry/registryTypes.ts` — add optional `agentType` to `RegistrySessionStatusResult`.
+- Modify `app/web/src/registry/RegistryRepository.ts` — normalize `agentType` while retaining tolerant legacy field parsing.
+- Modify `app/web/src/shell/AppDialogs.tsx` — render Session ID/Agent/Context only, add copy button, and use generic loading text.
+- Modify `app/web/src/styles/shell.css` — style the copy affordance and remove dead rate-limit/account dialog styles.
+- Modify `app/web/src/chat/session/chatSessionActions.ts` — remove rate-limit wording from `/status`.
+- Modify `app/__tests__/web-session-actions-service.test.ts` — verify repository normalization of `agentType` and empty limits.
+- Modify `app/__tests__/web-session-status-dialog.test.tsx` — verify uniform rendering, ignored legacy limits/account, generic loading text, accessibility, and clipboard behavior.
+- Modify `app/__tests__/web-chat-session-actions.test.ts` — verify the provider-neutral slash description.
+
+## Task 1: Extend the session status response contract
 
 **Files:**
-- Modify: `server/internal/protocol/session_actions.go` (the `SessionActionStatusResult` struct, currently around line 132)
+
+- Modify: `server/internal/protocol/session_actions.go` (`SessionActionStatusResult`)
 - Test: `server/internal/protocol/registry_methods_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing protocol test**
 
-Append to `server/internal/protocol/registry_methods_test.go` (this file is `package protocol`, so reference the type without a package prefix). If `encoding/json` or `strings` are not already imported, add them to the import block.
+Append this test to `server/internal/protocol/registry_methods_test.go`. The file already imports `bytes` and `encoding/json`.
 
 ```go
-func TestSessionActionStatusResultAgentTypeJSON(t *testing.T) {
-	encoded, err := json.Marshal(SessionActionStatusResult{OK: true, SessionID: "sess-1", AgentType: "codex"})
+func TestSessionActionStatusResultSessionLocalJSON(t *testing.T) {
+	encoded, err := json.Marshal(SessionActionStatusResult{
+		OK:        true,
+		SessionID: "sess-1",
+		AgentType: "codex",
+		Limits:    []SessionActionRateLimit{},
+	})
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if !strings.Contains(string(encoded), `"agentType":"codex"`) {
+	if !bytes.Contains(encoded, []byte(`"agentType":"codex"`)) {
 		t.Fatalf("expected agentType in json, got %s", encoded)
+	}
+	if !bytes.Contains(encoded, []byte(`"limits":[]`)) {
+		t.Fatalf("expected empty limits array, got %s", encoded)
+	}
+	if bytes.Contains(encoded, []byte(`"account"`)) {
+		t.Fatalf("expected account to be omitted, got %s", encoded)
 	}
 
 	var decoded SessionActionStatusResult
@@ -57,24 +91,34 @@ func TestSessionActionStatusResultAgentTypeJSON(t *testing.T) {
 		t.Fatalf("decoded agentType = %q", decoded.AgentType)
 	}
 
-	empty, err := json.Marshal(SessionActionStatusResult{OK: true, SessionID: "sess-1"})
+	withoutAgent, err := json.Marshal(SessionActionStatusResult{
+		OK:        true,
+		SessionID: "sess-1",
+		Limits:    []SessionActionRateLimit{},
+	})
 	if err != nil {
-		t.Fatalf("marshal empty: %v", err)
+		t.Fatalf("marshal without agent: %v", err)
 	}
-	if strings.Contains(string(empty), "agentType") {
-		t.Fatalf("expected omitempty, got %s", empty)
+	if bytes.Contains(withoutAgent, []byte(`"agentType"`)) {
+		t.Fatalf("expected agentType omitempty, got %s", withoutAgent)
 	}
 }
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd server && go test ./internal/protocol/ -run TestSessionActionStatusResultAgentTypeJSON -v`
-Expected: compile error `unknown field 'AgentType' in struct literal of type SessionActionStatusResult`.
+Run:
 
-- [ ] **Step 3: Add the field**
+```powershell
+cd server
+go test ./internal/protocol/ -run TestSessionActionStatusResultSessionLocalJSON -v
+```
 
-In `server/internal/protocol/session_actions.go`, add `AgentType` to `SessionActionStatusResult` (keep existing fields and order; insert the new line after `SessionID`):
+Expected: compile failure containing `unknown field AgentType in struct literal of type SessionActionStatusResult`.
+
+- [ ] **Step 3: Add the optional protocol field**
+
+Replace `SessionActionStatusResult` in `server/internal/protocol/session_actions.go` with:
 
 ```go
 type SessionActionStatusResult struct {
@@ -88,29 +132,37 @@ type SessionActionStatusResult struct {
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+Do not remove or rename `Limits`, `Account`, or `UpdatedAt`; older clients and payloads still know those fields even though the new `session.status` producer will not populate provider data.
 
-Run: `cd server && go test ./internal/protocol/ -run TestSessionActionStatusResultAgentTypeJSON -v`
-Expected: PASS.
+- [ ] **Step 4: Format and rerun the protocol test**
 
-- [ ] **Step 5: Commit**
+Run:
 
-```bash
-git add server/internal/protocol/session_actions.go server/internal/protocol/registry_methods_test.go
-git commit -m "feat(protocol): add agentType to session status result
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```powershell
+cd server
+gofmt -w internal/protocol/session_actions.go internal/protocol/registry_methods_test.go
+go test ./internal/protocol/ -run TestSessionActionStatusResultSessionLocalJSON -v
 ```
 
----
+Expected: PASS.
 
-## Task 2: Make the `status` capability universally supported (server gating)
+- [ ] **Step 5: Commit the protocol change**
+
+```powershell
+git add server/internal/protocol/session_actions.go server/internal/protocol/registry_methods_test.go
+git commit -m "feat(protocol): add agent type to session status"
+```
+
+## Task 2: Make status universal and remove the provider status bit
 
 **Files:**
-- Modify: `server/internal/hub/client/client.go` — `actionLookup` (around line 132) and `sessionSupportsAction` (around line 1711)
-- Test: `server/internal/hub/client/client_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- Modify: `server/internal/hub/client/client.go` (`actionLookup`, `sessionSupportsAction`)
+- Modify: `server/internal/hub/client/client_test.go`
+- Modify: `server/internal/hub/agent/factory.go` (`SessionActionSupport` and registrations)
+- Modify: `server/internal/hub/agent/agent_test.go`
+
+- [ ] **Step 1: Write the failing universal-capability test**
 
 Append to `server/internal/hub/client/client_test.go`:
 
@@ -122,72 +174,108 @@ func TestSessionStatusActionAlwaysSupported(t *testing.T) {
 	}
 	c := New(store, "proj1", t.TempDir())
 	c.registry = agent.NewACPFactory()
+	c.registry.RegisterSessionActions(acp.ACPProviderClaude, agent.SessionActionSupport{Compact: true})
 	t.Cleanup(func() { _ = c.Close() })
 
-	// status is universal: supported for known providers without status
-	// capability, and for unparseable agent types.
-	for _, agentType := range []string{"claude", "kimi", "unknown-agent"} {
-		caps := c.sessionRecorder.actionLookup(agentType)
-		if !caps.Status.Supported {
-			t.Fatalf("agentType %q: status not supported", agentType)
-		}
+	known := c.sessionRecorder.actionLookup(string(acp.ACPProviderClaude))
+	if !known.Status.Supported {
+		t.Fatal("known provider status should be supported")
+	}
+	if !known.Compact.Supported {
+		t.Fatal("known provider compact support was lost")
 	}
 
-	// non-status actions stay unsupported for an unregistered provider.
-	if c.sessionRecorder.actionLookup("claude").Compact.Supported {
-		t.Fatalf("claude: compact should be unsupported")
+	unknown := c.sessionRecorder.actionLookup("unknown-agent")
+	if !unknown.Status.Supported {
+		t.Fatal("unknown provider status should be supported")
+	}
+	if unknown.Compact.Supported {
+		t.Fatal("unknown provider compact should stay unsupported")
 	}
 
-	// dispatch gate agrees for a real session.
-	sess := &Session{agentType: "claude"}
+	sess := &Session{agentType: "unknown-agent"}
 	if !c.sessionSupportsAction(sess, acp.SessionActionStatus) {
-		t.Fatalf("sessionSupportsAction(status) should be true for claude")
+		t.Fatal("unknown provider dispatch should allow status")
+	}
+	if c.sessionSupportsAction(sess, acp.SessionActionCompact) {
+		t.Fatal("unknown provider dispatch should reject compact")
+	}
+
+	c.registry = nil
+	if !c.sessionRecorder.actionLookup("unknown-agent").Status.Supported {
+		t.Fatal("nil registry summary should still allow status")
+	}
+	if !c.sessionSupportsAction(sess, acp.SessionActionStatus) {
+		t.Fatal("nil registry dispatch should still allow status")
+	}
+	if c.sessionSupportsAction(sess, acp.SessionActionCompact) {
+		t.Fatal("nil registry dispatch should reject compact")
 	}
 }
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd server && go test ./internal/hub/client/ -run TestSessionStatusActionAlwaysSupported -v`
-Expected: FAIL — `status not supported` for `"claude"` (and `"unknown-agent"`).
+Run:
 
-- [ ] **Step 3: Make `actionLookup` always report status supported**
-
-Replace the `c.sessionRecorder.actionLookup = func(...)` body in `server/internal/hub/client/client.go` (currently around line 132-160). The status line is removed from the struct literal and applied once at the end so it also covers the unknown-provider branch:
-
-```go
-	c.sessionRecorder.actionLookup = func(agentType string) acp.SessionActionCapabilities {
-		var caps acp.SessionActionCapabilities
-		provider, ok := acp.ParseACPProvider(agentType)
-		if !ok || c.registry == nil {
-			caps = unsupportedSessionActions("Current Agent does not support this action.")
-		} else {
-			support := c.registry.SessionActions(provider)
-			caps = acp.SessionActionCapabilities{
-				Compact: acp.SessionActionCapability{Supported: support.Compact, Reason: unsupportedSessionActionReason(support.Compact)},
-				Steer:   acp.SessionActionCapability{Supported: support.Steer, Reason: unsupportedSessionActionReason(support.Steer)},
-				Fork:    acp.SessionActionCapability{Supported: support.Fork, Reason: unsupportedSessionActionReason(support.Fork)},
-				Goal:    acp.SessionActionCapability{Supported: support.Goal, Reason: unsupportedSessionActionReason(support.Goal)},
-			}
-		}
-		// status is a universal WheelMaker-layer capability (DB identity +
-		// token usage), independent of provider support.
-		caps.Status = acp.SessionActionCapability{Supported: true}
-		return caps
-	}
+```powershell
+cd server
+go test ./internal/hub/client/ -run TestSessionStatusActionAlwaysSupported -v
 ```
 
-- [ ] **Step 4: Make `sessionSupportsAction` always allow status**
+Expected: FAIL at the unknown-provider status assertion because current `actionLookup` returns every action unsupported.
 
-In `server/internal/hub/client/client.go`, edit `sessionSupportsAction` (currently around line 1711). Add the status short-circuit right after the nil-guard, and remove the now-dead `SessionActionStatus` case from the switch:
+- [ ] **Step 3: Make summary status universal**
+
+Replace the `c.sessionRecorder.actionLookup` closure in `server/internal/hub/client/client.go` with:
+
+```go
+c.sessionRecorder.actionLookup = func(agentType string) acp.SessionActionCapabilities {
+	var caps acp.SessionActionCapabilities
+	provider, ok := acp.ParseACPProvider(agentType)
+	if !ok || c.registry == nil {
+		caps = unsupportedSessionActions("Current Agent does not support this action.")
+	} else {
+		support := c.registry.SessionActions(provider)
+		caps = acp.SessionActionCapabilities{
+			Compact: acp.SessionActionCapability{
+				Supported: support.Compact,
+				Reason:    unsupportedSessionActionReason(support.Compact),
+			},
+			Steer: acp.SessionActionCapability{
+				Supported: support.Steer,
+				Reason:    unsupportedSessionActionReason(support.Steer),
+			},
+			Fork: acp.SessionActionCapability{
+				Supported: support.Fork,
+				Reason:    unsupportedSessionActionReason(support.Fork),
+			},
+			Goal: acp.SessionActionCapability{
+				Supported: support.Goal,
+				Reason:    unsupportedSessionActionReason(support.Goal),
+			},
+		}
+	}
+	caps.Status = acp.SessionActionCapability{Supported: true}
+	return caps
+}
+```
+
+- [ ] **Step 4: Make dispatch status universal with one normalization boundary**
+
+Replace `sessionSupportsAction` in `server/internal/hub/client/client.go` with:
 
 ```go
 func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
-	if c == nil || c.registry == nil || sess == nil {
+	if c == nil || sess == nil {
 		return false
 	}
-	if strings.TrimSpace(action) == acp.SessionActionStatus {
+	action = strings.TrimSpace(action)
+	if action == acp.SessionActionStatus {
 		return true
+	}
+	if c.registry == nil {
+		return false
 	}
 	sess.mu.Lock()
 	agentType := sess.agentType
@@ -197,7 +285,7 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 		return false
 	}
 	support := c.registry.SessionActions(provider)
-	switch strings.TrimSpace(action) {
+	switch action {
 	case acp.SessionActionCompact:
 		return support.Compact
 	case acp.SessionActionSteer:
@@ -212,279 +300,565 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 5: Remove provider-level `Status` support**
 
-Run: `cd server && go test ./internal/hub/client/ -run TestSessionStatusActionAlwaysSupported -v`
-Expected: PASS.
-
-- [ ] **Step 6: Confirm no existing capability test regressed**
-
-Run: `cd server && go test ./internal/hub/client/ -run "SessionAction|SessionStatus|Status" -v`
-Expected: PASS — including the existing codex summary assertion at `client_test.go:9270` (codex status stays supported) and the codex dispatch test `TestHandleSessionRequestSessionStatusInitializesWithoutLoading`.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add server/internal/hub/client/client.go server/internal/hub/client/client_test.go
-git commit -m "feat(hub): make session status a universal capability
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
-```
-
----
-
-## Task 3: Generic `Session.SessionStatus` fallback without spawning (server)
-
-**Files:**
-- Modify: `server/internal/hub/client/session.go` — `SessionStatus` (line 503) + new helpers
-- Test: `server/internal/hub/client/client_test.go`
-
-- [ ] **Step 1: Write the failing test**
-
-Append to `server/internal/hub/client/client_test.go`. This provider is registered with a creator but NO `RegisterSessionActions`, so the factory status flag is false → generic path. The stub's `Limits` must NOT appear, and the instance must NOT be initialized (no spawn):
+Change `SessionActionSupport` in `server/internal/hub/agent/factory.go` to:
 
 ```go
-func TestHandleSessionRequestSessionStatusGenericWithoutSpawn(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.SaveSession(ctx, &SessionRecord{
-		ID:          "sess-gen",
-		ProjectName: "proj1",
-		AgentType:   string(acp.ACPProviderClaude),
-		AgentJSON:   `{"usage":{"used":9000,"size":128000,"updatedAt":"2026-07-30T10:00:00Z"}}`,
-		CreatedAt:   time.Now().Add(-time.Hour),
-		LastActiveAt: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatalf("SaveSession: %v", err)
-	}
+type SessionActionSupport struct {
+	Compact bool
+	Steer   bool
+	Fork    bool
+	Goal    bool
+}
+```
 
-	inst := &testInjectedInstance{
-		name:      string(acp.ACPProviderClaude),
-		sessionID: "sess-gen",
-		alive:     true,
-		statusResult: acp.SessionActionStatusResult{
-			OK: true,
-			Limits: []acp.SessionActionRateLimit{{ID: "should-not-leak", Name: "Should not appear", UsedPercent: 1, RemainingPercent: 99}},
-		},
-	}
-	c := New(store, "proj1", t.TempDir())
-	c.registry = agent.NewACPFactory()
-	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) { return inst, nil })
-	t.Cleanup(func() { _ = c.Close() })
+Update the Codex registration to:
 
-	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionStatus, "proj1", json.RawMessage(`{"sessionId":"sess-gen"}`))
-	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.status): %v", err)
-	}
-	status, ok := response.(acp.SessionActionStatusResult)
-	if !ok {
-		t.Fatalf("status response type = %T", response)
-	}
-	if status.SessionID != "sess-gen" {
-		t.Fatalf("SessionID = %q", status.SessionID)
-	}
-	if status.AgentType != string(acp.ACPProviderClaude) {
-		t.Fatalf("AgentType = %q", status.AgentType)
-	}
-	if status.Context == nil || status.Context.Used != 9000 || status.Context.Size == nil || *status.Context.Size != 128000 {
-		t.Fatalf("Context = %+v", status.Context)
-	}
-	if len(status.Limits) != 0 {
-		t.Fatalf("Limits should be empty on generic path, got %+v", status.Limits)
-	}
-	if inst.initCalls != 0 {
-		t.Fatalf("generic status must not spawn the agent, initCalls=%d", inst.initCalls)
+```go
+f.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{
+	Compact: true,
+	Steer:   true,
+	Fork:    true,
+	Goal:    true,
+})
+```
+
+Update the CX DeepSeek registration to:
+
+```go
+f.RegisterSessionActions(protocol.ACPProviderCXDeepSeek, SessionActionSupport{
+	Compact: true,
+	Steer:   true,
+	Fork:    true,
+	Goal:    true,
+})
+```
+
+Remove `Status: true` from the existing Codex fixture in `server/internal/hub/client/client_test.go`.
+
+In `server/internal/hub/agent/agent_test.go`:
+
+- make `TestFactorySessionActionsAreProviderSpecific` assert only `Compact`;
+- make `TestFactoryCodexSupportsSessionActions` assert `Compact`, `Steer`, `Fork`, and `Goal`;
+- make `TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey` assert those same four fields;
+- make `TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace` register/assert `Compact` instead of `Status`.
+
+The updated core assertions are:
+
+```go
+if got := factory.SessionActions(protocol.ACPProviderCodex); !got.Compact {
+	t.Fatalf("codex session actions = %+v", got)
+}
+if got := factory.SessionActions(protocol.ACPProviderClaude); got.Compact {
+	t.Fatalf("claude session actions = %+v", got)
+}
+if got := cloned.SessionActions(protocol.ACPProviderCodex); !got.Compact {
+	t.Fatalf("cloned codex session actions = %+v", got)
+}
+```
+
+```go
+if !got.Compact || !got.Steer || !got.Fork || !got.Goal {
+	t.Fatalf("Codex session actions = %+v", got)
+}
+```
+
+```go
+if !actions.Compact || !actions.Steer || !actions.Fork || !actions.Goal {
+	t.Fatalf("cx-deepseek session actions = %+v", actions)
+}
+```
+
+- [ ] **Step 6: Format and run capability/factory tests**
+
+Run:
+
+```powershell
+cd server
+gofmt -w internal/hub/client/client.go internal/hub/client/client_test.go internal/hub/agent/factory.go internal/hub/agent/agent_test.go
+go test ./internal/hub/client/ -run "TestSessionStatusActionAlwaysSupported|TestHandleSessionRequest_SessionListIncludesUsage" -v
+go test ./internal/hub/agent/ -run "TestFactorySessionActionsAreProviderSpecific|TestFactoryCodexSupportsSessionActions|TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey|TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace" -v
+```
+
+Expected: all selected tests PASS. The existing session-list test continues to report status supported even though factory support no longer contains a `Status` field.
+
+- [ ] **Step 7: Commit the universal capability**
+
+```powershell
+git add server/internal/hub/client/client.go server/internal/hub/client/client_test.go server/internal/hub/agent/factory.go server/internal/hub/agent/agent_test.go
+git commit -m "feat(hub): make session status universally available"
+```
+
+## Task 3: Return only the persisted session snapshot without spawning
+
+**Files:**
+
+- Modify: `server/internal/hub/client/session.go` (`SessionStatus`)
+- Modify: `server/internal/hub/client/client_test.go` (test spy and persisted-session test)
+
+- [ ] **Step 1: Turn the test instance into a provider-status trap**
+
+In `testInjectedInstance` in `server/internal/hub/client/client_test.go`, add:
+
+```go
+statusCalls int
+```
+
+Replace its `SessionStatus` method with:
+
+```go
+func (i *testInjectedInstance) SessionStatus(context.Context) (acp.SessionActionStatusResult, error) {
+	i.statusCalls++
+	return i.statusResult, i.statusErr
+}
+```
+
+- [ ] **Step 2: Replace the old Codex live-status test with a failing provider matrix**
+
+Delete `TestHandleSessionRequestSessionStatusInitializesWithoutLoading` and add:
+
+```go
+func TestHandleSessionRequestSessionStatusUsesPersistedStateWithoutAgent(t *testing.T) {
+	for _, agentType := range []string{
+		string(acp.ACPProviderCodex),
+		string(acp.ACPProviderCXDeepSeek),
+		string(acp.ACPProviderClaude),
+		"unknown-agent",
+	} {
+		t.Run(agentType, func(t *testing.T) {
+			store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+			if err != nil {
+				t.Fatalf("NewStore: %v", err)
+			}
+			ctx := context.Background()
+			if err := store.SaveSession(ctx, &SessionRecord{
+				ID:           "sess-status",
+				ProjectName:  "proj1",
+				Status:       SessionPersisted,
+				AgentType:    agentType,
+				AgentJSON:    `{"usage":{"used":9000,"size":128000,"updatedAt":"2026-07-30T10:00:00Z"}}`,
+				CreatedAt:    time.Now().Add(-time.Hour),
+				LastActiveAt: time.Now().Add(-time.Minute),
+			}); err != nil {
+				t.Fatalf("SaveSession: %v", err)
+			}
+
+			inst := &testInjectedInstance{
+				name:      agentType,
+				sessionID: "sess-status",
+				alive:     true,
+				statusResult: acp.SessionActionStatusResult{
+					OK: true,
+					Limits: []acp.SessionActionRateLimit{{
+						ID:               "provider-limit",
+						Name:             "Must not appear",
+						UsedPercent:      1,
+						RemainingPercent: 99,
+					}},
+					Account: &acp.SessionActionStatusAccount{PlanType: "provider-plan"},
+				},
+			}
+			creatorCalls := 0
+			c := New(store, "proj1", t.TempDir())
+			c.registry = agent.NewACPFactory()
+			if provider, ok := acp.ParseACPProvider(agentType); ok {
+				c.registry.Register(provider, func(context.Context, string) (agent.Instance, error) {
+					creatorCalls++
+					return inst, nil
+				})
+			}
+			t.Cleanup(func() { _ = c.Close() })
+
+			response, err := c.HandleSessionRequest(
+				ctx,
+				acp.RegistryMethodSessionStatus,
+				"proj1",
+				json.RawMessage(`{"sessionId":"sess-status"}`),
+			)
+			if err != nil {
+				t.Fatalf("HandleSessionRequest(session.status): %v", err)
+			}
+			status, ok := response.(acp.SessionActionStatusResult)
+			if !ok {
+				t.Fatalf("status response type = %T", response)
+			}
+			if !status.OK || status.SessionID != "sess-status" || status.AgentType != agentType {
+				t.Fatalf("status identity = %+v", status)
+			}
+			if status.Context == nil ||
+				status.Context.Used != 9000 ||
+				status.Context.Size == nil ||
+				*status.Context.Size != 128000 ||
+				status.Context.UpdatedAt != "2026-07-30T10:00:00Z" {
+				t.Fatalf("status context = %+v", status.Context)
+			}
+			if status.Limits == nil || len(status.Limits) != 0 {
+				t.Fatalf("status limits = %#v, want non-nil empty slice", status.Limits)
+			}
+			if status.Account != nil {
+				t.Fatalf("status account = %+v, want nil", status.Account)
+			}
+			if creatorCalls != 0 || inst.initCalls != 0 || inst.loadCalls != 0 || inst.statusCalls != 0 {
+				t.Fatalf(
+					"calls creator=%d initialize=%d load=%d providerStatus=%d",
+					creatorCalls,
+					inst.initCalls,
+					inst.loadCalls,
+					inst.statusCalls,
+				)
+			}
+			encoded, err := json.Marshal(status)
+			if err != nil {
+				t.Fatalf("marshal status: %v", err)
+			}
+			if !bytes.Contains(encoded, []byte(`"limits":[]`)) {
+				t.Fatalf("status json = %s, want limits:[]", encoded)
+			}
+			if bytes.Contains(encoded, []byte(`"account"`)) {
+				t.Fatalf("status json = %s, want account omitted", encoded)
+			}
+		})
 	}
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [ ] **Step 3: Run the matrix to verify it fails**
 
-Run: `cd server && go test ./internal/hub/client/ -run TestHandleSessionRequestSessionStatusGenericWithoutSpawn -v`
-Expected: FAIL — either `initCalls` is 1 (current code always `ensureInstance`s), or an `unsupported` error (current `!ok` branch returns `ErrSessionActionUnsupported`).
+Run:
 
-- [ ] **Step 3: Restructure `SessionStatus` and add helpers**
+```powershell
+cd server
+go test ./internal/hub/client/ -run TestHandleSessionRequestSessionStatusUsesPersistedStateWithoutAgent -v
+```
 
-Replace the whole `Session.SessionStatus` function in `server/internal/hub/client/session.go` (currently lines 503-540) with the version below, and append the three helper funcs immediately after it:
+Expected: FAIL because the current implementation creates/initializes a known provider instance, calls provider status, or cannot serve the unknown provider.
+
+- [ ] **Step 4: Replace `Session.SessionStatus` with one locked local snapshot**
+
+Replace the entire method in `server/internal/hub/client/session.go`:
 
 ```go
-func (s *Session) SessionStatus(ctx context.Context) (acp.SessionActionStatusResult, error) {
+func (s *Session) SessionStatus(_ context.Context) (acp.SessionActionStatusResult, error) {
 	s.mu.Lock()
 	sessionID := s.acpSessionID
 	agentType := s.agentType
-	usage := s.agentState.Usage
-	factory := s.registry
+	var usage *acp.SessionUsage
+	if s.agentState.Usage != nil {
+		value := *s.agentState.Usage
+		usage = &value
+	}
 	s.mu.Unlock()
 
-	// status is universal: providers without rich live status (everything
-	// except codex today) get a provider-neutral result built from persisted
-	// state, without spawning the agent subprocess.
-	if !liveStatusSupported(factory, agentType) {
-		return genericSessionStatusResult(sessionID, agentType, usage), nil
-	}
-
-	// Rich live status path: connect/spawn and query the provider.
-	if err := s.ensureInstance(ctx); err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-	if err := s.ensureInitialized(ctx); err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-	s.mu.Lock()
-	inst := s.instance
-	s.mu.Unlock()
-	provider, ok := inst.(agent.SessionStatusProvider)
-	if !ok {
-		return genericSessionStatusResult(sessionID, agentType, usage), nil
-	}
-	result, err := provider.SessionStatus(ctx)
-	if err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-	result.OK = true
-	result.SessionID = sessionID
-	result.AgentType = agentType
-	if usage != nil {
-		result.Context = statusContextFromUsage(usage)
-	}
-	s.persistSessionBestEffort()
-	return result, nil
-}
-
-// liveStatusSupported reports whether the provider offers rich live status
-// (rate limits / account). The factory status flag no longer gates whether
-// status is available; it only marks providers whose status requires a live
-// agent connection. Only codex sets it today.
-func liveStatusSupported(factory *agent.ACPFactory, agentType string) bool {
-	if factory == nil {
-		return false
-	}
-	provider, ok := acp.ParseACPProvider(agentType)
-	if !ok {
-		return false
-	}
-	return factory.SessionActions(provider).Status
-}
-
-// genericSessionStatusResult builds the universal provider-neutral status from
-// persisted session state, with no agent subprocess interaction.
-func genericSessionStatusResult(sessionID, agentType string, usage *acp.SessionUsage) acp.SessionActionStatusResult {
-	return acp.SessionActionStatusResult{
+	result := acp.SessionActionStatusResult{
 		OK:        true,
 		SessionID: sessionID,
 		AgentType: agentType,
-		Context:   statusContextFromUsage(usage),
+		Limits:    []acp.SessionActionRateLimit{},
 	}
-}
-
-// statusContextFromUsage projects persisted token usage onto the status context.
-// Returns nil when there is no usage recorded.
-func statusContextFromUsage(usage *acp.SessionUsage) *acp.SessionActionStatusContext {
 	if usage == nil {
-		return nil
+		return result, nil
 	}
-	context := &acp.SessionActionStatusContext{
+	result.Context = &acp.SessionActionStatusContext{
 		Used:      usage.Used,
 		UpdatedAt: usage.UpdatedAt,
 	}
 	if usage.Size > 0 {
 		size := usage.Size
-		context.Size = &size
+		result.Context.Size = &size
 	}
-	return context
+	return result, nil
 }
 ```
 
-Notes for the implementer:
-- The original inline `Context` construction is replaced by `statusContextFromUsage`; behavior for the codex path is preserved because `result.Context` is only reassigned `if usage != nil` (a nil usage leaves any provider-supplied context untouched, as before).
-- `agent.ErrSessionActionUnsupported` is no longer returned from this function; it remains used by the other session actions, so no import changes are needed.
+Do not call `persistSessionBestEffort`: status is read-only and the snapshot already came from session state.
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- [ ] **Step 5: Format and run the session-local tests**
 
-Run: `cd server && go test ./internal/hub/client/ -run TestHandleSessionRequestSessionStatusGenericWithoutSpawn -v`
-Expected: PASS.
+Run:
 
-- [ ] **Step 5: Confirm the codex live path still works**
-
-Run: `cd server && go test ./internal/hub/client/ -run TestHandleSessionRequestSessionStatusInitializesWithoutLoading -v`
-Expected: PASS — codex still initializes the instance (`initCalls == 1`), returns its limits, and enriches context from usage.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add server/internal/hub/client/session.go server/internal/hub/client/client_test.go
-git commit -m "feat(hub): generic session status fallback without agent spawn
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```powershell
+cd server
+gofmt -w internal/hub/client/session.go internal/hub/client/client_test.go
+go test ./internal/hub/client/ -run "TestHandleSessionRequestSessionStatusUsesPersistedStateWithoutAgent|TestSessionStatusActionAlwaysSupported|TestHandleSessionRequest_SessionListIncludesUsage" -v
 ```
 
----
+Expected: PASS for Codex, CX DeepSeek, Claude, and unknown-agent subtests; every call counter remains zero.
 
-## Task 4: Surface agent type in the status dialog (web)
+- [ ] **Step 6: Commit the session-local implementation**
+
+```powershell
+git add server/internal/hub/client/session.go server/internal/hub/client/client_test.go
+git commit -m "feat(hub): return session-local status without spawning"
+```
+
+## Task 4: Remove the dead provider live-status adapter
 
 **Files:**
-- Modify: `app/web/src/registry/registryTypes.ts` (`RegistrySessionStatusResult`, line 528)
-- Modify: `app/web/src/registry/RegistryRepository.ts` (`statusSession`, line 1535)
-- Modify: `app/web/src/shell/AppDialogs.tsx` (`AppSessionStatusDialog` header, around line 750)
+
+- Modify: `server/internal/hub/agent/instance.go`
+- Modify: `server/internal/hub/agent/codexapp_agent.go`
+- Modify: `server/internal/hub/agent/codexapp_convert.go`
+- Modify: `server/internal/hub/agent/agent_test.go`
+
+- [ ] **Step 1: Confirm the production call chain is now dead**
+
+Run:
+
+```powershell
+cd server
+rg -n "SessionStatusProvider|func .*SessionStatus|account/rateLimits/read|normalizeCodexappRateLimits" internal/hub/agent --glob "!**/*_test.go"
+```
+
+Expected before cleanup: matches only the interface/wrapper in `instance.go`, the Codex app-server adapter in `codexapp_agent.go`, and rate-limit conversion code in `codexapp_convert.go`. There must be no Monitor or `tokenStats` call site in this package.
+
+- [ ] **Step 2: Remove the agent status interface and wrapper**
+
+Delete this interface from `server/internal/hub/agent/instance.go`:
+
+```go
+type SessionStatusProvider interface {
+	SessionStatus(ctx context.Context) (protocol.SessionActionStatusResult, error)
+}
+```
+
+Delete the entire `func (i *instance) SessionStatus(...)` method from the same file.
+
+- [ ] **Step 3: Remove the Codex app-server session-status RPC**
+
+Delete this method from `server/internal/hub/agent/codexapp_agent.go`:
+
+```go
+func (c *codexappConn) SessionStatus(ctx context.Context) (protocol.SessionActionStatusResult, error) {
+	var response appServerGetAccountRateLimitsResponse
+	if err := c.runtime.request(ctx, "account/rateLimits/read", nil, &response); err != nil {
+		return protocol.SessionActionStatusResult{}, err
+	}
+	return normalizeCodexappRateLimits(response, time.Now()), nil
+}
+```
+
+Keep Monitor collectors unchanged; this deletes only the obsolete `session.status` adapter.
+
+- [ ] **Step 4: Remove the now-unused conversion model and helpers**
+
+From `server/internal/hub/agent/codexapp_convert.go`, delete these exact declarations and functions:
+
+```text
+appServerGetAccountRateLimitsResponse
+appServerRateLimitSnapshot
+appServerRateLimitWindow
+appServerCreditsSnapshot
+appServerSpendControlSnapshot
+appServerRateLimitResetCredits
+codexappNamedRateLimitSnapshot
+normalizeCodexappRateLimits
+clampCodexappPercent
+codexappUnixTime
+```
+
+Remove the `sort` import when it becomes unused. Keep `time` because timestamp conversion elsewhere in the file still uses it.
+
+- [ ] **Step 5: Remove the obsolete adapter test**
+
+Delete `TestCodexappSessionStatusNormalizesRateLimits` from `server/internal/hub/agent/agent_test.go`. Do not delete Monitor limits tests; this test specifically exercises the retired `codexappConn.SessionStatus` method.
+
+- [ ] **Step 6: Format, prove the symbols are gone, and run agent/client tests**
+
+Run:
+
+```powershell
+cd server
+gofmt -w internal/hub/agent/instance.go internal/hub/agent/codexapp_agent.go internal/hub/agent/codexapp_convert.go internal/hub/agent/agent_test.go
+rg -n "SessionStatusProvider|account/rateLimits/read|normalizeCodexappRateLimits" internal/hub/agent --glob "!**/*_test.go"
+go test ./internal/hub/agent/ ./internal/hub/client/
+```
+
+Expected: `rg` exits with no matches; both Go packages PASS.
+
+- [ ] **Step 7: Commit the dead-path cleanup**
+
+```powershell
+git add server/internal/hub/agent/instance.go server/internal/hub/agent/codexapp_agent.go server/internal/hub/agent/codexapp_convert.go server/internal/hub/agent/agent_test.go
+git commit -m "refactor(agent): remove provider session status adapter"
+```
+
+## Task 5: Render one uniform status dialog with session-id copy
+
+**Files:**
+
+- Modify: `app/web/src/registry/registryTypes.ts`
+- Modify: `app/web/src/registry/RegistryRepository.ts`
+- Modify: `app/web/src/shell/AppDialogs.tsx`
+- Modify: `app/web/src/styles/shell.css`
+- Modify: `app/web/src/chat/session/chatSessionActions.ts`
+- Test: `app/__tests__/web-session-actions-service.test.ts`
 - Test: `app/__tests__/web-session-status-dialog.test.tsx`
+- Test: `app/__tests__/web-chat-session-actions.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Add the failing repository expectation**
 
-In `app/__tests__/web-session-status-dialog.test.tsx`, add a non-codex test inside the existing `describe` block, and add `agentType: 'codex'` to the second test's `status` fixture (around line 44) so codex also renders its agent type:
+In the first test in `app/__tests__/web-session-actions-service.test.ts`:
 
-Add to the codex `status` object in the "renders normalized limit windows..." test:
+- add `agentType: ' codex '` to the mocked payload;
+- add `agentType: 'codex'` after `sessionId` in the expected normalized result;
+- change the mocked `limits` to `[]` and remove the mocked `account`;
+- expect `limits: []` and omit `account` in the normalized result.
+
+The status portion should be:
+
 ```ts
-            agentType: 'codex',
-```
-and extend that test's assertions (after the existing `expect(text).toContain('Pro')` line) with:
-```ts
-    expect(text).toContain('codex');
+payload: {
+  ok: true,
+  sessionId: 'runtime-thread-must-not-win',
+  agentType: ' codex ',
+  context: {used: 42000.8, size: 258400.2, updatedAt: '2026-07-14T10:00:00Z', private: true},
+  limits: [],
+  updatedAt: '',
+  runtimeThreadId: 'hidden',
+},
 ```
 
-Then append this new test at the end of the `describe` block:
+```ts
+await expect(repository.statusSession('project-a', 'stable-session')).resolves.toEqual({
+  ok: true,
+  sessionId: 'stable-session',
+  agentType: 'codex',
+  context: {used: 42000, size: 258400, updatedAt: '2026-07-14T10:00:00Z'},
+  limits: [],
+  account: undefined,
+  updatedAt: '',
+});
+```
+
+- [ ] **Step 2: Replace the dialog tests with uniform-layout and copy tests**
+
+At the top of `app/__tests__/web-session-status-dialog.test.tsx`, add:
 
 ```tsx
-  test('renders agent type and context for non-codex sessions without limits or account', () => {
-    let renderer: TestRenderer.ReactTestRenderer;
-    act(() => {
-      renderer = TestRenderer.create(
-        <AppSessionStatusDialog
-          sessionId="stable-session"
-          status={{
-            ok: true,
-            sessionId: 'stable-session',
-            agentType: 'claude',
-            context: {used: 7000, size: 200000},
-            limits: [],
-            updatedAt: '2026-07-30T10:00:00Z',
-          }}
-          loading={false}
-          error=""
-          onClose={() => undefined}
-          onRefresh={() => undefined}
-        />,
-      );
-    });
-    const text = renderedText(renderer!.toJSON());
-    expect(text).toContain('claude');
-    expect(text).toContain('7,000');
-    expect(text).not.toContain('Rate limits');
-    expect(text).not.toContain('Account');
-    expect(renderer!.root.findByProps({'data-testid': 'session-status-agent'})).toBeTruthy();
-  });
+import {writeTextToClipboard} from '../web/src/platform/clipboard';
+
+jest.mock('../web/src/platform/clipboard', () => ({
+  writeTextToClipboard: jest.fn(() => Promise.resolve()),
+}));
+
+const mockedWriteTextToClipboard = writeTextToClipboard as jest.MockedFunction<
+  typeof writeTextToClipboard
+>;
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+Inside the describe block, add:
 
-Run: `cd app && npx jest web-session-status-dialog`
-Expected: FAIL — TypeScript error `Property 'agentType' does not exist on type 'RegistrySessionStatusResult'`, and the new test cannot find `session-status-agent`.
+```tsx
+beforeEach(() => {
+  mockedWriteTextToClipboard.mockClear();
+});
+```
 
-- [ ] **Step 3: Add `agentType` to the web result type**
+Rename the first test to `shows cached context immediately while status is loading` and add:
 
-In `app/web/src/registry/registryTypes.ts`, add the field to `RegistrySessionStatusResult` (after `sessionId`):
+```tsx
+expect(renderedText(renderer!.toJSON())).toContain('Refreshing status…');
+```
+
+Replace the existing limits/account rendering test with:
+
+```tsx
+test('renders the same session-local fields and ignores legacy provider data', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppSessionStatusDialog
+        sessionId="stable-session"
+        cachedUsage={{used: 1, size: 2}}
+        status={{
+          ok: true,
+          sessionId: 'stable-session',
+          agentType: 'codex',
+          context: {used: 50000, size: 258400},
+          limits: [
+            {id: 'legacy', name: 'Legacy limit', usedPercent: 37, remainingPercent: 63},
+          ],
+          account: {
+            planType: 'legacy-plan',
+            credits: {hasCredits: true, unlimited: false, balance: '12.50'},
+          },
+          updatedAt: '',
+        }}
+        loading={false}
+        error="Refresh failed; showing the last result."
+        onClose={() => undefined}
+        onRefresh={() => undefined}
+      />,
+    );
+  });
+  const text = renderedText(renderer!.toJSON());
+  expect(text).toContain('stable-session');
+  expect(text).toContain('codex');
+  expect(text).toContain('50,000');
+  expect(text).toContain('Refresh failed; showing the last result.');
+  expect(text).not.toContain('Legacy limit');
+  expect(text).not.toContain('legacy-plan');
+  expect(text).not.toContain('12.50');
+  expect(text).not.toContain('Rate limits');
+  expect(text).not.toContain('Account');
+  expect(renderer!.root.findByProps({'data-testid': 'session-status-agent'})).toBeTruthy();
+});
+```
+
+Append:
+
+```tsx
+test('copies the exact session id from an accessible icon button', () => {
+  let renderer: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppSessionStatusDialog
+        sessionId="stable-session"
+        status={null}
+        loading={false}
+        error=""
+        onClose={() => undefined}
+        onRefresh={() => undefined}
+      />,
+    );
+  });
+
+  const copyButton = renderer!.root.findByProps({'aria-label': 'Copy session ID'});
+  act(() => {
+    copyButton.props.onClick();
+  });
+  expect(mockedWriteTextToClipboard).toHaveBeenCalledTimes(1);
+  expect(mockedWriteTextToClipboard).toHaveBeenCalledWith('stable-session');
+});
+```
+
+- [ ] **Step 3: Add the failing provider-neutral slash-description assertion**
+
+In the first test in `app/__tests__/web-chat-session-actions.test.ts`, extend the status option assertion to:
+
+```ts
+expect(options[1]).toMatchObject({
+  enabled: true,
+  icon: 'layoutDashboard',
+  description: 'Show session ID, agent type, and context usage',
+});
+```
+
+- [ ] **Step 4: Run the three Web suites to verify they fail**
+
+Run:
+
+```powershell
+cd app
+npx jest web-session-actions-service web-session-status-dialog web-chat-session-actions
+```
+
+Expected: FAIL because `agentType` is not typed/normalized, the dialog still renders legacy limits/account and has no copy button, loading still says limits, and the slash description mentions rate limits.
+
+- [ ] **Step 5: Add and normalize `agentType`**
+
+Add `agentType` after `sessionId` in `RegistrySessionStatusResult` in `app/web/src/registry/registryTypes.ts`:
 
 ```ts
 export interface RegistrySessionStatusResult {
@@ -498,89 +872,209 @@ export interface RegistrySessionStatusResult {
 }
 ```
 
-- [ ] **Step 4: Parse `agentType` in the repository**
-
-In `app/web/src/registry/RegistryRepository.ts`, add `agentType` to the object returned by `statusSession` (currently line 1545-1556). Insert one line after `sessionId,`:
+In `RegistryRepository.statusSession`, add this property after `sessionId`:
 
 ```ts
-    return {
-      ok: body.ok === true,
-      sessionId,
-      agentType: typeof body.agentType === 'string' ? body.agentType : undefined,
-      context: this.normalizeSessionStatusContext(body.context),
+agentType: typeof body.agentType === 'string' && body.agentType.trim()
+  ? body.agentType.trim()
+  : undefined,
 ```
 
-- [ ] **Step 5: Render the agent type row in the dialog**
+Keep the existing tolerant `limits` and `account` normalization so the Web client remains compatible with older Hub responses; the dialog will intentionally ignore those fields.
 
-In `app/web/src/shell/AppDialogs.tsx`, inside `AppSessionStatusDialog`, add the agent row immediately after the `session-status-id` div in the header (currently around line 753-756). Reuse the existing `app-session-status-id` class so it matches the Session ID row's styling:
+- [ ] **Step 6: Replace the dialog's provider-specific rendering**
+
+In `app/web/src/shell/AppDialogs.tsx`:
+
+1. import the clipboard abstraction:
+
+```ts
+import {writeTextToClipboard} from '../platform/clipboard';
+```
+
+2. delete `formatStatusPlan` and `formatStatusReset`;
+3. remove the local `account` and `plan` constants from `AppSessionStatusDialog`;
+4. replace the identity portion of the header with:
 
 ```tsx
-            <div className="app-session-status-id" data-testid="session-status-id">
-              <span>Session ID</span>
-              <code>{sessionId}</code>
-            </div>
-            {status?.agentType ? (
-              <div className="app-session-status-id" data-testid="session-status-agent">
-                <span>Agent</span>
-                <code>{status.agentType}</code>
-              </div>
-            ) : null}
+<div className="app-session-status-id" data-testid="session-status-id">
+  <span>Session ID</span>
+  <span className="app-session-status-id-value">
+    <code>{sessionId}</code>
+    <button
+      type="button"
+      className="app-session-status-copy"
+      aria-label="Copy session ID"
+      title="Copy session ID"
+      onClick={() => {
+        void writeTextToClipboard(sessionId).catch(() => undefined);
+      }}
+    >
+      <Icon name="copy" />
+    </button>
+  </span>
+</div>
+{status?.agentType ? (
+  <div className="app-session-status-id" data-testid="session-status-agent">
+    <span>Agent</span>
+    <code>{status.agentType}</code>
+  </div>
+) : null}
 ```
 
-- [ ] **Step 6: Run the test to verify it passes**
+5. delete the entire Rate limits and Account sections;
+6. replace `Refreshing limits…` with:
 
-Run: `cd app && npx jest web-session-status-dialog`
-Expected: PASS — all three tests green (the first test passes `status={null}`, so no agent row; the codex test now shows `codex`; the new test shows `claude` and no limits/account).
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add app/web/src/registry/registryTypes.ts app/web/src/registry/RegistryRepository.ts app/web/src/shell/AppDialogs.tsx app/__tests__/web-session-status-dialog.test.tsx
-git commit -m "feat(app): show agent type in session status dialog
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```tsx
+Refreshing status…
 ```
 
----
+The Context section, cached-usage fallback, refresh error, Refresh button, and Close button stay unchanged.
 
-## Task 5: Full verification + completion gate
+- [ ] **Step 7: Add copy styles and remove dead provider-status styles**
 
-**Files:** none (verification only)
+Add after `.app-session-status-id code` in `app/web/src/styles/shell.css`:
 
-- [ ] **Step 1: Run the full Go test suite**
+```css
+.app-session-status-id-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
 
-Run: `cd server && go test ./...`
-Expected: PASS — all packages green, including `internal/protocol`, `internal/hub/client`, `internal/hub/agent`.
+.app-session-status-copy {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-tertiary);
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
 
-- [ ] **Step 2: Web type-check and production build**
+.app-session-status-copy:hover {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
 
-Run: `cd app && npm run tsc:web && npm run build:web`
-Expected: PASS — `tsc:web` reports no type errors; `build:web` completes a clean production build.
+.app-session-status-copy:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+```
 
-- [ ] **Step 3: Run the broader web test suites touched by the change**
+Delete the unused `.app-session-status-limits`, `.app-session-status-limit-*`, and `.app-session-status-account` rule blocks, including the account-only mobile media rules. Keep the general status dialog, context, muted/loading, actions, and mobile max-height styles.
 
-Run: `cd app && npx jest web-session-status-dialog web-session-actions-service`
-Expected: PASS. `web-session-actions-service` confirms `/status` is enabled for all agents now that the summary reports `status.supported === true` (no code change needed in `chatSessionActions.ts`; it already gates on `status?.supported === true`).
+- [ ] **Step 8: Make the slash description provider-neutral**
 
-- [ ] **Step 4: Completion gate**
+In `app/web/src/chat/session/chatSessionActions.ts`, replace the `/status` description with:
 
-Per the repo `CLAUDE.md` completion gate, from the worktree root:
+```ts
+description: 'Show session ID, agent type, and context usage',
+```
 
-```bash
+- [ ] **Step 9: Run targeted Web tests and type-check**
+
+Run:
+
+```powershell
+cd app
+npx jest web-session-actions-service web-session-status-dialog web-chat-session-actions
+npm run tsc:web
+```
+
+Expected: all three Jest suites PASS and TypeScript reports no errors.
+
+- [ ] **Step 10: Commit the uniform Web status**
+
+```powershell
+git add app/web/src/registry/registryTypes.ts app/web/src/registry/RegistryRepository.ts app/web/src/shell/AppDialogs.tsx app/web/src/styles/shell.css app/web/src/chat/session/chatSessionActions.ts app/__tests__/web-session-actions-service.test.ts app/__tests__/web-session-status-dialog.test.tsx app/__tests__/web-chat-session-actions.test.ts
+git commit -m "feat(app): show uniform session status with copy"
+```
+
+## Task 6: Full verification and completion gate
+
+**Files:**
+
+- Modify: `docs/scope/2026-07-30-universal-session-status/plan-universal-session-status.md` (final verification record only)
+
+- [ ] **Step 1: Run the complete Go suite**
+
+Run:
+
+```powershell
+cd server
+go test ./...
+```
+
+Expected: PASS for every Go package, including `internal/protocol`, `internal/hub/client`, and `internal/hub/agent`.
+
+- [ ] **Step 2: Run Web tests, type-check, and production build**
+
+Run:
+
+```powershell
+cd app
+npx jest web-session-actions-service web-session-status-dialog web-chat-session-actions
+npm run tsc:web
+npm run build:web
+```
+
+Expected: all selected Jest suites PASS, TypeScript reports no errors, and webpack completes the production build to the configured `~/.wheelmaker/web` destination.
+
+- [ ] **Step 3: Check formatting, scope, and retired-symbol absence**
+
+From the worktree root, run:
+
+```powershell
+git diff --check
+rg -n "SessionStatusProvider|account/rateLimits/read|normalizeCodexappRateLimits" server/internal/hub/agent --glob "!**/*_test.go"
+git status --short
+```
+
+Expected:
+
+- `git diff --check` exits successfully;
+- `rg` returns no production matches;
+- `git status --short` contains no unexpected files or generated `dist` output.
+
+- [ ] **Step 4: Record verification so the final completion-gate commit is real**
+
+Append this record after every command in Steps 1–3 has passed. Do not pre-mark the completion-gate step as finished:
+
+```markdown
+## Verification Record
+
+- `cd server && go test ./...` — PASS
+- `cd app && npx jest web-session-actions-service web-session-status-dialog web-chat-session-actions` — PASS
+- `cd app && npm run tsc:web` — PASS
+- `cd app && npm run build:web` — PASS
+- `git diff --check` — PASS
+- Retired provider session-status symbols — absent
+```
+
+- [ ] **Step 5: Execute the exact repository completion gate**
+
+From the worktree root, run this exact tail sequence with no `|| echo` fallback:
+
+```powershell
 git add -A
-git commit -m "feat: universal session status for all agents
-
-Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>" || echo "nothing to commit"
+git commit -m "docs(scope): record universal session status verification"
 git push origin feat/universal-session-status
 ```
 
-Then, per the user's git preferences: if local `main` is clean, merge `feat/universal-session-status` into `main`, push `main`, and clean up the worktree/branch. If `main` has unrelated changes (e.g. the in-progress hub-menu work), leave the feature branch pushed and do not merge.
-
----
+Expected: all three commands succeed. If push requires history rewriting because the branch was rebased, stop and obtain explicit approval before using `--force-with-lease`; do not claim completion with an unpushed branch.
 
 ## Self-Review Notes
 
-- **Spec coverage:** Universal capability (Task 2), generic no-spawn fallback from `acpSessionID`/`agentType`/`Usage` (Task 3), optional `agentType` protocol field without version bump (Task 1), dialog renders agent type and degrades without limits/account (Task 4), cold/persisted session queryable (Task 3 test asserts `initCalls == 0`), codex unchanged (Task 3 Step 5 regression). All spec acceptance criteria mapped.
-- **No placeholders:** every code step contains the actual code; no "TODO"/"similar to"/"add error handling".
-- **Type/name consistency:** `AgentType` (Go field) ↔ `agentType` (JSON + TS) used consistently across all tasks; `liveStatusSupported` / `genericSessionStatusResult` / `statusContextFromUsage` defined in Task 3 and not referenced elsewhere; `s.acpSessionID` is the WheelMaker stable id (set once at `newSession`, never reassigned in production) — used in both live and generic paths.
-```
+- **Spec coverage:** Universal capability is Task 2; session-local id/agent/usage and zero-spawn behavior are Task 3; removal of provider limits/account RPC is Task 4; consistent UI, copy accessibility, generic text, and ignored legacy provider data are Task 5; protocol compatibility and `limits: []` are Tasks 1 and 3; full validation is Task 6.
+- **Monitor boundary:** No task changes Monitor, HubState, `tokenStats`, usage history, provider credentials, or scan cadence. Task 4 removes only the obsolete session-specific Codex adapter.
+- **No protocol bump:** Task 1 adds one optional response field and retains legacy response fields.
+- **No placeholders:** Every production/test edit names exact symbols and provides the intended code or exact deletion list.
+- **Type consistency:** Go `AgentType` serializes as `agentType`; TypeScript uses `RegistrySessionStatusResult.agentType`; the dialog consumes that same field. The copy action always receives the `sessionId` prop used by the visible code element.
+- **No-spawn proof:** The server matrix separately counts creator, initialize, load, and provider-status calls for Codex, CX DeepSeek, Claude, and an unknown provider.
