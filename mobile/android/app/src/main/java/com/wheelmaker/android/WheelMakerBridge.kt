@@ -4,6 +4,23 @@ import android.os.SystemClock
 import android.os.Build
 import org.json.JSONObject
 
+interface DeepSeekLoginHost {
+    fun showLogin(onResult: (token: String?) -> Unit)
+}
+
+class BridgeReply(
+    private val requestId: String,
+    private val send: (JSONObject) -> Unit,
+) {
+    fun success(result: JSONObject) {
+        send(JSONObject().put("requestId", requestId).put("ok", true).put("result", result))
+    }
+
+    fun error(message: String) {
+        send(JSONObject().put("requestId", requestId).put("ok", false).put("error", message))
+    }
+}
+
 class WheelMakerBridge(
     private val androidSpeechRuntime: AndroidSpeechRuntime,
     private val androidNotificationRuntime: AndroidNotificationRuntime,
@@ -13,15 +30,17 @@ class WheelMakerBridge(
     private val androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore,
-    private val trustedNativeActionGrantStore: TrustedNativeActionGrantStore
+    private val trustedNativeActionGrantStore: TrustedNativeActionGrantStore,
+    private val deepSeekLoginHost: DeepSeekLoginHost
 ) {
-	fun dispatch(capability: TrustedNativeCapability, payload: JSONObject): String {
+	fun dispatch(capability: TrustedNativeCapability, payload: JSONObject, reply: BridgeReply? = null): String? {
 		val action = capability.action
 		if (!capability.allows(action, SystemClock.elapsedRealtime())) {
 			throw SecurityException("expired native capability")
 		}
 		return when (action) {
         "userAction.reserve" -> reserveUserAction(payload)
+        "deepseek.login" -> deepSeekLogin(reply)
         "device.getName" -> JSONObject.quote(Build.MODEL.trim().ifBlank { "Android" }.take(80))
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
         "diagnostics.setLogLevel" -> setDiagnosticLogLevel(payload.optString("logLevel"))
@@ -58,6 +77,16 @@ class WheelMakerBridge(
     private fun reserveUserAction(payload: JSONObject): String = JSONObject()
         .put("token", trustedNativeActionGrantStore.issue(payload.optString("action")))
         .toString()
+
+    private fun deepSeekLogin(reply: BridgeReply?): String? {
+        if (reply == null) {
+            throw IllegalArgumentException("deepseek.login requires an async reply")
+        }
+        deepSeekLoginHost.showLogin { token ->
+            reply.success(JSONObject().put("token", token ?: JSONObject.NULL))
+        }
+        return null
+    }
 
     private fun startSpeech(payload: JSONObject): String {
         if (!trustedNativeActionGrantStore.consume(
