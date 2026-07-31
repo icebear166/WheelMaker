@@ -74,7 +74,7 @@ type releaseCommandPayload struct {
 	AutoPull    bool   `json:"autoPull,omitempty"`
 }
 
-type releasePublishJob struct {
+type ReleasePublishJob struct {
 	Schema      int    `json:"schema"`
 	ID          string `json:"id"`
 	HubID       string `json:"hubId"`
@@ -92,7 +92,7 @@ type releaseCommandResponse struct {
 	OK       bool               `json:"ok"`
 	Accepted bool               `json:"accepted,omitempty"`
 	Status   string             `json:"status"`
-	Job      *releasePublishJob `json:"job,omitempty"`
+	Job      *ReleasePublishJob `json:"job,omitempty"`
 }
 
 type releaseCommandError struct {
@@ -108,9 +108,10 @@ type ReleaseCommand struct {
 	notifier ReleaseNotifier
 	now      func() time.Time
 
-	mu      sync.Mutex
-	buildMu sync.Mutex
-	jobs    map[string]*releasePublishJob
+	mu           sync.Mutex
+	buildMu      sync.Mutex
+	jobs         map[string]*ReleasePublishJob
+	onJobUpdated func(ReleasePublishJob)
 }
 
 func NewReleaseCommand(stateDir string) *ReleaseCommand {
@@ -126,8 +127,14 @@ func newReleaseCommandWithDependencies(stateDir string, runner releaseRunner, no
 		runner:   runner,
 		notifier: notifier,
 		now:      func() time.Time { return time.Now().UTC() },
-		jobs:     map[string]*releasePublishJob{},
+		jobs:     map[string]*ReleasePublishJob{},
 	}
+}
+
+func (c *ReleaseCommand) SetJobUpdatedHandler(handler func(ReleasePublishJob)) {
+	c.mu.Lock()
+	c.onJobUpdated = handler
+	c.mu.Unlock()
 }
 
 func (c *ReleaseCommand) Handle(_ context.Context, raw json.RawMessage) (any, *releaseCommandError) {
@@ -181,7 +188,7 @@ func (c *ReleaseCommand) start(payload releaseCommandPayload) (releaseCommandRes
 		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInternal, Message: "failed to allocate release job"}
 	}
 	now := c.now().UTC().Format(time.RFC3339Nano)
-	job := &releasePublishJob{Schema: 1, ID: jobID, HubID: payload.HubID, Kind: payload.Kind, Status: "running", StartedAt: now, UpdatedAt: now}
+	job := &ReleasePublishJob{Schema: 1, ID: jobID, HubID: payload.HubID, Kind: payload.Kind, Status: "running", StartedAt: now, UpdatedAt: now}
 	c.mu.Lock()
 	c.jobs[jobID] = job
 	if err := c.writeJobLocked(job); err != nil {
@@ -189,7 +196,9 @@ func (c *ReleaseCommand) start(payload releaseCommandPayload) (releaseCommandRes
 		c.mu.Unlock()
 		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInternal, Message: "failed to persist release job"}
 	}
+	snapshot := cloneReleaseJob(job)
 	c.mu.Unlock()
+	c.notifyJobUpdated(snapshot)
 	go c.run(jobID, payload, sourcePath)
 	return releaseCommandResponse{OK: true, Accepted: true, Status: "running", Job: cloneReleaseJob(job)}, nil
 }
@@ -240,9 +249,9 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 		return
 	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	job := c.jobs[jobID]
 	if job == nil {
+		c.mu.Unlock()
 		return
 	}
 	job.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
@@ -256,11 +265,14 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 		if payload.AutoPull && strings.TrimSpace(payload.TargetHubID) != "" && c.notifier != nil {
 			job.Status = "notifying"
 			_ = c.writeJobLocked(job)
+			notifyingSnapshot := cloneReleaseJob(job)
 			c.mu.Unlock()
+			c.notifyJobUpdated(notifyingSnapshot)
 			target, notifyErr := c.notifier.NotifyRelease(context.Background(), strings.TrimSpace(payload.TargetHubID), payload.Kind, strings.TrimSpace(payload.BaseURL))
 			c.mu.Lock()
 			job = c.jobs[jobID]
 			if job == nil {
+				c.mu.Unlock()
 				return
 			}
 			if notifyErr != nil {
@@ -273,6 +285,9 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 		}
 	}
 	_ = c.writeJobLocked(job)
+	snapshot := cloneReleaseJob(job)
+	c.mu.Unlock()
+	c.notifyJobUpdated(snapshot)
 }
 
 func (c *ReleaseCommand) completeDebugWeb(jobID string, payload releaseCommandPayload, buildErr error) {
@@ -296,7 +311,9 @@ func (c *ReleaseCommand) completeDebugWeb(jobID string, payload releaseCommandPa
 	job.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
 	c.appendLogLocked(job, "transferring debug web to "+payload.WebHubID+"\n")
 	_ = c.writeJobLocked(job)
+	snapshot := cloneReleaseJob(job)
 	c.mu.Unlock()
+	c.notifyJobUpdated(snapshot)
 	if c.notifier == nil {
 		c.finishDebugWebJob(jobID, "failed", "debug_web_transfer_unavailable", "failed", "registry transfer is unavailable\n")
 		return
@@ -319,9 +336,9 @@ func (c *ReleaseCommand) completeDebugWeb(jobID string, payload releaseCommandPa
 
 func (c *ReleaseCommand) finishDebugWebJob(jobID, status, errorCode, targetState, log string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	job := c.jobs[jobID]
 	if job == nil {
+		c.mu.Unlock()
 		return
 	}
 	job.Status = status
@@ -331,6 +348,9 @@ func (c *ReleaseCommand) finishDebugWebJob(jobID, status, errorCode, targetState
 	job.FinishedAt = job.UpdatedAt
 	c.appendLogLocked(job, log)
 	_ = c.writeJobLocked(job)
+	snapshot := cloneReleaseJob(job)
+	c.mu.Unlock()
+	c.notifyJobUpdated(snapshot)
 }
 
 func (c *ReleaseCommand) debugWebArchivePath(jobID string) string {
@@ -391,7 +411,7 @@ func (c *ReleaseCommand) appendLog(jobID, text string) {
 	_ = c.writeJobLocked(job)
 }
 
-func (c *ReleaseCommand) appendLogLocked(job *releasePublishJob, text string) {
+func (c *ReleaseCommand) appendLogLocked(job *ReleasePublishJob, text string) {
 	text = releaseLogSecretPattern.ReplaceAllString(text, "$1[REDACTED]")
 	job.Log += text
 	if len(job.Log) > 48*1024 {
@@ -403,7 +423,7 @@ func (c *ReleaseCommand) jobPath(jobID string) string {
 	return filepath.Join(c.stateDir, releaseJobDirectoryName, jobID+".json")
 }
 
-func (c *ReleaseCommand) writeJobLocked(job *releasePublishJob) error {
+func (c *ReleaseCommand) writeJobLocked(job *ReleasePublishJob) error {
 	raw, err := json.MarshalIndent(job, "", "  ")
 	if err != nil {
 		return err
@@ -411,22 +431,34 @@ func (c *ReleaseCommand) writeJobLocked(job *releasePublishJob) error {
 	return replaceUpdateFile(c.jobPath(job.ID), append(raw, '\n'), 0o600)
 }
 
-func (c *ReleaseCommand) readJobLocked(jobID string) (*releasePublishJob, error) {
+func (c *ReleaseCommand) readJobLocked(jobID string) (*ReleasePublishJob, error) {
 	raw, err := os.ReadFile(c.jobPath(jobID))
 	if err != nil {
 		return nil, err
 	}
-	var job releasePublishJob
+	var job ReleasePublishJob
 	if err := json.Unmarshal(raw, &job); err != nil || job.Schema != 1 || job.ID != jobID || job.HubID == "" || job.Status == "" {
 		return nil, errors.New("invalid release job")
 	}
 	return &job, nil
 }
 
-func cloneReleaseJob(job *releasePublishJob) *releasePublishJob {
+func cloneReleaseJob(job *ReleasePublishJob) *ReleasePublishJob {
 	if job == nil {
 		return nil
 	}
 	copy := *job
 	return &copy
+}
+
+func (c *ReleaseCommand) notifyJobUpdated(job *ReleasePublishJob) {
+	if job == nil {
+		return
+	}
+	c.mu.Lock()
+	handler := c.onJobUpdated
+	c.mu.Unlock()
+	if handler != nil {
+		handler(*job)
+	}
 }

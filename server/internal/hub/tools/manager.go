@@ -18,6 +18,7 @@ type ManagerConfig struct {
 	HomeDir               string
 	OnNPMOperationDone    func()
 	OnSkillsOperationDone func(scope, projectName string)
+	OnReleaseJobUpdated   func(ReleasePublishJob)
 	ReleaseCommand        *ReleaseCommand
 	ReleaseNotifier       ReleaseNotifier
 }
@@ -75,6 +76,9 @@ func NewManager(config ManagerConfig) *Manager {
 	config.Projects = append([]ProjectInfo(nil), config.Projects...)
 	npmCommand := NewNPMCommand()
 	npmCommand.setOperationDoneHandler(config.OnNPMOperationDone)
+	if config.ReleaseCommand != nil {
+		config.ReleaseCommand.SetJobUpdatedHandler(config.OnReleaseJobUpdated)
+	}
 	return &Manager{
 		cfg:           config,
 		npmCommand:    npmCommand,
@@ -142,6 +146,7 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 	case "cmd.release":
 		if m.releaseCommand == nil {
 			m.releaseCommand = newReleaseCommandWithDependencies(m.cfg.StateDir, execReleaseRunner{}, m.cfg.ReleaseNotifier)
+			m.releaseCommand.SetJobUpdatedHandler(m.cfg.OnReleaseJobUpdated)
 		}
 		out, err := m.releaseCommand.Handle(ctx, payload)
 		return out, releaseErr(err)

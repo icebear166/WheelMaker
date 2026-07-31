@@ -242,6 +242,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		StateDir:              stateDir,
 		OnNPMOperationDone:    r.onNPMOperationDone,
 		OnSkillsOperationDone: r.onSkillsOperationDone,
+		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = r.newHubStateManager()
@@ -702,6 +703,10 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
+	case rp.RegistryMethodReleasePublishStart:
+		r.replyReleasePublish(conn, in, "start")
+	case rp.RegistryMethodReleasePublishGet:
+		r.replyReleasePublish(conn, in, "status")
 	case rp.RegistryMethodHubConfigGet:
 		r.replyHubConfigGet(conn, in)
 	case rp.RegistryMethodHubConfigUpdate:
@@ -925,6 +930,39 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 	})
 }
 
+func (r *Reporter) replyReleasePublish(conn *websocket.Conn, req envelope, action string) {
+	var payload map[string]any
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid release publish payload")
+		return
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	payload["action"] = action
+	payload["hubId"] = r.cfg.HubID
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid release publish payload")
+		return
+	}
+	mu := r.toolMutexFor(hubToolMethodRelease)
+	mu.Lock()
+	result, cmdErr := r.ensureToolHandler().Handle(context.Background(), hubToolMethodRelease, raw)
+	mu.Unlock()
+	if cmdErr != nil {
+		_ = r.writeError(conn, req.RequestID, cmdErr.Code, cmdErr.Message)
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload:   rp.MustRaw(result),
+	})
+}
+
 func validateHubStateAction(section string, action string) error {
 	if section == "" {
 		return fmt.Errorf("action requires section")
@@ -941,10 +979,6 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionWheelmakerUpdate: {
 			"requestUpdate": {},
-		},
-		hubStateSectionReleasePublish: {
-			"start":  {},
-			"status": {},
 		},
 		hubStateSectionSkills: {
 			"listSource": {},
@@ -1067,6 +1101,12 @@ func (r *Reporter) onSkillsOperationDone(scope, projectName string) {
 		[]string{hubStateSectionSkills},
 		true,
 	)
+}
+
+func (r *Reporter) onReleaseJobUpdated(job tools.ReleasePublishJob) {
+	_ = r.publishHubEvent(rp.RegistryMethodReleasePublishUpdated, map[string]any{
+		"job": job,
+	})
 }
 
 func (r *Reporter) onFileIndexOperationDone(string) {
@@ -1676,6 +1716,7 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		StateDir:              r.cfg.StateDir,
 		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
 	})
 	return r.toolHandler

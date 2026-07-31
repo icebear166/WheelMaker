@@ -129,6 +129,45 @@ func TestReleaseCommandStartsVersionPublishAfterRequestReturns(t *testing.T) {
 	assertReleaseStatus(t, command, accepted.Job.ID, "success")
 }
 
+func TestReleaseCommandPublishesPersistedTransitionsButNotLogWrites(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+	updates := make(chan ReleasePublishJob, 4)
+	command.SetJobUpdatedHandler(func(job ReleasePublishJob) {
+		updates <- job
+	})
+
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	jobID := response.(releaseCommandResponse).Job.ID
+	if got := (<-updates).Status; got != "running" {
+		t.Fatalf("first update status=%q, want running", got)
+	}
+	call := <-runner.calls
+	call.Log("build output\n")
+	select {
+	case update := <-updates:
+		t.Fatalf("log write published update=%#v", update)
+	case <-time.After(50 * time.Millisecond):
+	}
+	runner.complete(nil)
+	if got := (<-updates).Status; got != "success" {
+		t.Fatalf("terminal update status=%q, want success", got)
+	}
+	assertReleaseStatus(t, command, jobID, "success")
+}
+
 func TestReleaseCommandRejectsMissingSourceEntryAndRedactsLogs(t *testing.T) {
 	command := newReleaseCommandWithDependencies(t.TempDir(), newBlockingReleaseRunner(), nil)
 	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{

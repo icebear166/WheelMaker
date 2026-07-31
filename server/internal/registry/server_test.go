@@ -1625,6 +1625,49 @@ func TestHubStateGetForwardsByEnvelopeHubID(t *testing.T) {
 	}
 }
 
+func TestReleasePublishRequestRoutesToPublishingHub(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "publisher")
+	defer hub.Close()
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := map[string]any{"kind": "version", "sourcePath": "D:/Code/WheelMaker"}
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    rp.RegistryMethodReleasePublishStart,
+		HubID:     "publisher",
+		Payload:   payload,
+	})
+	_ = hub.SetReadDeadline(time.Now().Add(2 * time.Second))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Method != rp.RegistryMethodReleasePublishStart || forwarded.HubID != "publisher" {
+		t.Fatalf("forwarded = %#v", forwarded)
+	}
+	if !reflect.DeepEqual(forwarded.Payload, payload) {
+		t.Fatalf("forwarded payload = %#v, want %#v", forwarded.Payload, payload)
+	}
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    rp.RegistryMethodReleasePublishStart,
+		HubID:     "publisher",
+		Payload:   map[string]any{"accepted": true, "job": map[string]any{"id": "job-1"}},
+	})
+	response := mustReadEnvelope(t, client)
+	if response.RequestID != 2 || response.Method != rp.RegistryMethodReleasePublishStart {
+		t.Fatalf("response = %#v", response)
+	}
+	if response.Payload["accepted"] != true {
+		t.Fatalf("response payload = %#v", response.Payload)
+	}
+}
+
 func TestUsageHistoryGetForwardsByEnvelopeHubID(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
@@ -3292,6 +3335,35 @@ func TestHubStateUpdatedIsForwardedWithoutMutation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(forwarded.Payload, payload) {
 		t.Fatalf("Registry mutated HubState event:\n got: %#v\nwant: %#v", forwarded.Payload, payload)
+	}
+}
+
+func TestReleasePublishUpdatedIsForwardedWithoutMutation(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	hub := dialReportedHub(t, ts.URL+"/ws", "publisher")
+	defer hub.Close()
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := map[string]any{
+		"job": map[string]any{"id": "job-1", "status": "success"},
+	}
+	mustWriteJSON(t, hub, testEnvelope{
+		Type:    "event",
+		Method:  rp.RegistryMethodReleasePublishUpdated,
+		HubID:   "publisher",
+		Payload: payload,
+	})
+	_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
+	forwarded := mustReadEnvelope(t, client)
+	if forwarded.Method != rp.RegistryMethodReleasePublishUpdated || forwarded.HubID != "publisher" {
+		t.Fatalf("forwarded = %#v", forwarded)
+	}
+	if !reflect.DeepEqual(forwarded.Payload, payload) {
+		t.Fatalf("forwarded payload = %#v, want %#v", forwarded.Payload, payload)
 	}
 }
 

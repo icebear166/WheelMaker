@@ -604,7 +604,9 @@ func shouldHandleRegistryRequestAsync(method string) bool {
 		rp.RegistryTTSMethod(method) ||
 		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubReleaseNotify) ||
 		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubDebugWebTransfer) ||
-		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
+		rp.RegistryHubStateMethod(method) ||
+		rp.RegistryMethodHasRoute(method, rp.RegistryRouteReleasePublish) ||
+		isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
 
@@ -645,7 +647,9 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleHubDebugWebTransfer(state.peer, state, in)
 	case rp.RegistryRelayControlMethod(in.Method):
 		s.handleRelayRequest(state.peer, state, in)
-	case rp.RegistryHubStateMethod(in.Method) || isTerminalHubRequestMethod(in.Method):
+	case rp.RegistryHubStateMethod(in.Method) ||
+		rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteReleasePublish) ||
+		isTerminalHubRequestMethod(in.Method):
 		s.handleHubStateForwardRequest(state.peer, state, in)
 	case isSpeechRequestMethod(in.Method):
 		s.speech.handleRequest(state.peer, state, in)
@@ -700,7 +704,8 @@ func (s *Server) handleTerminalEvent(state *connectionState, in envelope) {
 	switch in.Method {
 	case rp.RegistryMethodTerminalInput:
 		s.forwardTerminalInput(state, in)
-	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged, rp.RegistryMethodHubStateUpdated:
+	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged,
+		rp.RegistryMethodHubStateUpdated, rp.RegistryMethodReleasePublishUpdated:
 		s.broadcastHubEvent(state, in)
 	default:
 		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "unsupported event method", map[string]any{"method": in.Method})

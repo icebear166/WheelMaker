@@ -927,8 +927,6 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 			params:  map[string]any{"packageName": "@openai/codex"},
 		},
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
-		{section: hubStateSectionReleasePublish, action: "start"},
-		{section: hubStateSectionReleasePublish, action: "status", params: map[string]any{"jobId": "release-job"}},
 		{section: hubStateSectionSkills, action: "listSource"},
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},
@@ -1008,20 +1006,6 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		t.Fatalf("action=%v, want request (payload=%s)", body["action"], payload)
 	}
 
-	releaseHandler := handlers[hubStateSectionReleasePublish]
-	if _, err := releaseHandler.Action(context.Background(), "status", map[string]any{"jobId": "release-job"}); err != nil {
-		t.Fatalf("release status action: %v", err)
-	}
-	method, payload, _ = toolHandler.snapshot()
-	if method != hubToolMethodRelease {
-		t.Fatalf("method=%q, want %q", method, hubToolMethodRelease)
-	}
-	if err := json.Unmarshal([]byte(payload), &body); err != nil {
-		t.Fatalf("payload json: %v", err)
-	}
-	if body["action"] != "status" || body["jobId"] != "release-job" {
-		t.Fatalf("release payload=%s", payload)
-	}
 }
 
 func TestReporterFlickerBridgeStateDoesNotExposeConfiguredKey(t *testing.T) {
@@ -2358,7 +2342,7 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-test", "proj1"),
 		Payload:   map[string]any{"path": ".", "limit": 50},
 	})
-	listResp := mustReadEnvelope(t, app)
+	listResp := mustReadResponseEnvelope(t, app, 2)
 	if listResp.Type != "response" || listResp.Method != "project.fs.list" {
 		t.Fatalf("unexpected list response: %#v", listResp)
 	}
@@ -4114,7 +4098,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": ".", "knownHash": listHash},
 	})
-	listCached := mustReadEnvelope(t, app)
+	listCached := mustReadResponseEnvelope(t, app, 3)
 	if listCached.Payload["notModified"] != true {
 		t.Fatalf("expected notModified project.fs.list response: %#v", listCached.Payload)
 	}
@@ -4126,7 +4110,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt"},
 	})
-	readResp := mustReadEnvelope(t, app)
+	readResp := mustReadResponseEnvelope(t, app, 4)
 	readHash, _ := readResp.Payload["hash"].(string)
 	if readHash == "" || readResp.Payload["notModified"] != false {
 		t.Fatalf("unexpected project.fs.read payload: %#v", readResp.Payload)
@@ -4139,7 +4123,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt", "knownHash": readHash},
 	})
-	readCached := mustReadEnvelope(t, app)
+	readCached := mustReadResponseEnvelope(t, app, 5)
 	if readCached.Payload["notModified"] != true {
 		t.Fatalf("expected notModified project.fs.read response: %#v", readCached.Payload)
 	}
@@ -4151,7 +4135,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{},
 	})
-	revResp := mustReadEnvelope(t, app)
+	revResp := mustReadResponseEnvelope(t, app, 6)
 	expectedGitState := collectGitState(root)
 	if got := revResp.Payload["gitRev"]; got != expectedGitState.GitRev {
 		t.Fatalf("project.git.rev gitRev=%v, want %s", got, expectedGitState.GitRev)
@@ -4167,7 +4151,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{},
 	})
-	statusResp := mustReadEnvelope(t, app)
+	statusResp := mustReadResponseEnvelope(t, app, 7)
 	if statusResp.Payload["dirty"] != true {
 		t.Fatalf("expected dirty project.git.status payload: %#v", statusResp.Payload)
 	}
@@ -4186,7 +4170,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt", "scope": "unstaged", "contextLines": 2},
 	})
-	diffResp := mustReadEnvelope(t, app)
+	diffResp := mustReadResponseEnvelope(t, app, 8)
 	diffText, _ := diffResp.Payload["diff"].(string)
 	if !strings.Contains(diffText, "+gamma") {
 		t.Fatalf("unexpected working tree diff: %q", diffText)
@@ -4378,6 +4362,16 @@ func mustReadEnvelope(t *testing.T, ws *websocket.Conn) testEnvelope {
 		t.Fatalf("read json: %v", err)
 	}
 	return out
+}
+
+func mustReadResponseEnvelope(t *testing.T, ws *websocket.Conn, requestID int64) testEnvelope {
+	t.Helper()
+	for {
+		envelope := mustReadEnvelope(t, ws)
+		if envelope.RequestID == requestID {
+			return envelope
+		}
+	}
 }
 
 func TestProjectFileIndexRebuildWritesGitIgnoredLineIndexAndSearchesFuzzy(t *testing.T) {
