@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
@@ -1065,6 +1066,96 @@ func TestHubSkillChangeReusesProjectLocalInventory(t *testing.T) {
 	}
 	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p1"]["codex"], "hub-skill", "local-one")
 	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p2"]["claude"], "hub-skill", "local-two")
+}
+
+func TestSkillsWatcherDebouncesEventsPerTarget(t *testing.T) {
+	root := t.TempDir()
+	events := make(chan fsnotify.Event, 8)
+	timer := make(chan time.Time, 1)
+	triggered := make(chan skillsWatchTarget, 8)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		Events: events,
+		After: func(time.Duration) <-chan time.Time {
+			return timer
+		},
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	watcher.TrackProject("hub-a:project", "project", root)
+
+	events <- fsnotify.Event{Name: filepath.Join(root, ".agents", "skills", "scope", "SKILL.md"), Op: fsnotify.Write}
+	events <- fsnotify.Event{Name: filepath.Join(root, ".claude", "skills", "scope", "SKILL.md"), Op: fsnotify.Write}
+	timer <- time.Now()
+
+	select {
+	case got := <-triggered:
+		if got.ProjectID != "hub-a:project" {
+			t.Fatalf("target = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watcher did not trigger")
+	}
+	select {
+	case extra := <-triggered:
+		t.Fatalf("unexpected duplicate trigger %#v", extra)
+	case <-time.After(25 * time.Millisecond):
+	}
+}
+
+func TestSkillsWatcherTracksProjectAddAndRemove(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	events := make(chan fsnotify.Event, 8)
+	triggered := make(chan skillsWatchTarget, 8)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		Events: events,
+		After:  func(time.Duration) <-chan time.Time { return time.After(time.Millisecond) },
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	watcher.TrackProject("hub-a:first", "first", first)
+	watcher.TrackProject("hub-a:second", "second", second)
+	watcher.RemoveProject("hub-a:first")
+
+	events <- fsnotify.Event{Name: filepath.Join(first, ".agents", "skills", "old", "SKILL.md"), Op: fsnotify.Write}
+	events <- fsnotify.Event{Name: filepath.Join(second, "skills-lock.json"), Op: fsnotify.Write}
+	select {
+	case got := <-triggered:
+		if got.ProjectID != "hub-a:second" {
+			t.Fatalf("target = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watcher did not trigger added project")
+	}
+}
+
+func TestSkillsWatcherObservesSkillRootCreatedAfterTracking(t *testing.T) {
+	root := t.TempDir()
+	triggered := make(chan skillsWatchTarget, 2)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	if err := watcher.Error(); err != nil {
+		t.Fatalf("create native watcher: %v", err)
+	}
+	watcher.TrackProject("hub-a:project", "project", root)
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "scope"), "Scope", "description")
+
+	select {
+	case got := <-triggered:
+		if got.ProjectID != "hub-a:project" {
+			t.Fatalf("target = %#v", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("watcher did not observe newly created skills root")
+	}
 }
 
 func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {

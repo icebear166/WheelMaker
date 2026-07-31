@@ -156,6 +156,9 @@ type Reporter struct {
 	fileIndex               *projectFileIndexManager
 	hubStateManager         *HubStateManager
 	skillsState             *skillsStateCoordinator
+	skillsWatcher           *skillsWatcher
+	skillsWatcherMu         sync.Mutex
+	skillsWatcherOnce       sync.Once
 	usageService            *usage.Service
 	usageHistory            *usage.HistoryStore
 	terminalHandler         TerminalHandler
@@ -291,6 +294,7 @@ func (r *Reporter) Run(ctx context.Context) error {
 		r.usageService.Start(ctx)
 	}
 	r.startHubStateBootstrap(ctx)
+	r.startSkillsWatcher(ctx)
 	for {
 		if err := r.runSession(ctx); err != nil && ctx.Err() == nil {
 			registryLogger("").Warn("reporter session ended: %v", err)
@@ -374,6 +378,7 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 
 	if topologyChanged {
 		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
+		r.updateSkillsWatcherProjects()
 		_, _ = r.ensureHubStateManager().enqueueRefresh(
 			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
 			true,
@@ -1133,6 +1138,39 @@ func (r *Reporter) refreshSkillsStateTarget(scope, projectName string) {
 		"",
 		"skills.changed",
 	)
+}
+
+func (r *Reporter) startSkillsWatcher(ctx context.Context) {
+	r.skillsWatcherOnce.Do(func() {
+		watcher := newSkillsWatcher(skillsWatcherOptions{
+			OnChange: func(target skillsWatchTarget) {
+				r.refreshSkillsStateTarget(target.Scope, target.ProjectName)
+			},
+		})
+		if err := watcher.Error(); err != nil {
+			hubLogger("").Warn("start skills watcher failed: %v", err)
+		}
+		if home, err := os.UserHomeDir(); err == nil {
+			watcher.TrackHub(home)
+		}
+		watcher.ReplaceProjects(r.skillsTargets())
+		r.skillsWatcherMu.Lock()
+		r.skillsWatcher = watcher
+		r.skillsWatcherMu.Unlock()
+		go func() {
+			<-ctx.Done()
+			_ = watcher.Close()
+		}()
+	})
+}
+
+func (r *Reporter) updateSkillsWatcherProjects() {
+	r.skillsWatcherMu.Lock()
+	watcher := r.skillsWatcher
+	r.skillsWatcherMu.Unlock()
+	if watcher != nil {
+		watcher.ReplaceProjects(r.skillsTargets())
+	}
 }
 
 func (r *Reporter) onReleaseJobUpdated(job tools.ReleasePublishJob) {
@@ -2896,6 +2934,7 @@ func (r *Reporter) replaceProjects(projects []ProjectInfo) {
 	}
 	if changed {
 		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
+		r.updateSkillsWatcherProjects()
 		_, _ = r.ensureHubStateManager().enqueueRefresh(
 			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
 			true,
