@@ -1616,6 +1616,9 @@ export class RegistryRepository {
     return {
       ok: body.ok === true,
       sessionId,
+      agentType: typeof body.agentType === 'string' && body.agentType.trim()
+        ? body.agentType.trim()
+        : undefined,
       context: this.normalizeSessionStatusContext(body.context),
       limits: Array.isArray(body.limits)
         ? body.limits

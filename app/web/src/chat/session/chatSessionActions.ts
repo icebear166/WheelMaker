@@ -69,7 +69,7 @@ export function buildChatSessionActionOptions(
     },
     {
       name: '/status',
-      description: 'Show session ID, context usage, and rate limits',
+      description: 'Show session ID, agent type, and context usage',
       kind: 'command',
       behavior: 'invoke',
       icon: 'layoutDashboard',

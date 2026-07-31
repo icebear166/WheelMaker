@@ -1,7 +1,16 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
+import {writeTextToClipboard} from '../web/src/platform/clipboard';
 import {AppSessionStatusDialog} from '../web/src/shell/AppDialogs';
+
+jest.mock('../web/src/platform/clipboard', () => ({
+  writeTextToClipboard: jest.fn(() => Promise.resolve()),
+}));
+
+const mockedWriteTextToClipboard = writeTextToClipboard as jest.MockedFunction<
+  typeof writeTextToClipboard
+>;
 
 function renderedText(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number') return String(value);
@@ -13,7 +22,11 @@ function renderedText(value: unknown): string {
 }
 
 describe('session status dialog', () => {
-  test('shows cached context immediately while refreshed limits are loading', () => {
+  beforeEach(() => {
+    mockedWriteTextToClipboard.mockClear();
+  });
+
+  test('shows cached context immediately while status is loading', () => {
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
       renderer = TestRenderer.create(
@@ -32,9 +45,10 @@ describe('session status dialog', () => {
     expect(renderedText(root.findByProps({'data-testid': 'session-status-id'}))).toContain('stable-session');
     expect(renderedText(root.findByProps({'data-testid': 'session-status-context'}))).toContain('42,000');
     expect(root.findByProps({'aria-label': 'Refreshing session status'})).toBeTruthy();
+    expect(renderedText(renderer!.toJSON())).toContain('Refreshing status…');
   });
 
-  test('renders normalized limit windows, account data, and keeps refresh errors visible', () => {
+  test('renders the same session-local fields and ignores legacy provider data', () => {
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
       renderer = TestRenderer.create(
@@ -44,18 +58,16 @@ describe('session status dialog', () => {
           status={{
             ok: true,
             sessionId: 'stable-session',
+            agentType: 'codex',
             context: {used: 50000, size: 258400},
             limits: [
-              {id: 'primary', name: '5 hour limit', usedPercent: 37, remainingPercent: 63, resetsAt: '2026-07-14T12:00:00Z'},
-              {id: 'secondary', name: 'Weekly limit', usedPercent: 15, remainingPercent: 85},
+              {id: 'legacy', name: 'Legacy limit', usedPercent: 37, remainingPercent: 63},
             ],
             account: {
-              planType: 'pro',
+              planType: 'legacy-plan',
               credits: {hasCredits: true, unlimited: false, balance: '12.50'},
-              individualLimit: {limit: '100', used: '40', remainingPercent: 60},
-              rateLimitResetCredits: {availableCount: 3},
             },
-            updatedAt: '2026-07-14T10:00:01Z',
+            updatedAt: '',
           }}
           loading={false}
           error="Refresh failed; showing the last result."
@@ -65,12 +77,38 @@ describe('session status dialog', () => {
       );
     });
     const text = renderedText(renderer!.toJSON());
-    expect(text).toContain('5 hour limit');
-    expect(text).toContain('Weekly limit');
-    expect(text).toContain('63% remaining');
-    expect(text).toContain('Pro');
-    expect(text).toContain('12.50');
+    expect(text).toContain('stable-session');
+    expect(text).toContain('codex');
+    expect(text).toContain('50,000');
     expect(text).toContain('Refresh failed; showing the last result.');
-    expect(renderer!.root.findAllByProps({className: 'app-session-status-limit-fill'})).toHaveLength(2);
+    expect(text).not.toContain('Legacy limit');
+    expect(text).not.toContain('legacy-plan');
+    expect(text).not.toContain('12.50');
+    expect(text).not.toContain('Rate limits');
+    expect(text).not.toContain('Account');
+    expect(renderer!.root.findByProps({'data-testid': 'session-status-agent'})).toBeTruthy();
+  });
+
+  test('copies the exact session id from an accessible icon button', () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <AppSessionStatusDialog
+          sessionId="stable-session"
+          status={null}
+          loading={false}
+          error=""
+          onClose={() => undefined}
+          onRefresh={() => undefined}
+        />,
+      );
+    });
+
+    const copyButton = renderer!.root.findByProps({'aria-label': 'Copy session ID'});
+    act(() => {
+      copyButton.props.onClick();
+    });
+    expect(mockedWriteTextToClipboard).toHaveBeenCalledTimes(1);
+    expect(mockedWriteTextToClipboard).toHaveBeenCalledWith('stable-session');
   });
 });

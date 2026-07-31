@@ -1098,6 +1098,37 @@
   overflow-wrap: anywhere;
 }
 
+.app-session-status-id-value {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.app-session-status-copy {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-tertiary);
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.app-session-status-copy:hover {
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+}
+
+.app-session-status-copy:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
 .app-session-status-close {
   appearance: none;
   width: 30px;
@@ -1146,39 +1177,6 @@
   font-size: 17px;
 }
 
-.app-session-status-limits {
-  display: grid;
-  gap: 14px;
-}
-
-.app-session-status-limit-heading {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.app-session-status-limit-heading strong {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.app-session-status-limit-track {
-  height: 7px;
-  margin: 7px 0 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--surface-raised);
-}
-
-.app-session-status-limit-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--accent-primary) 82%, #fff);
-}
-
 .app-session-status-muted,
 .app-session-status-loading {
   color: var(--text-tertiary);
@@ -1193,24 +1191,6 @@
   padding-top: 12px;
 }
 
-.app-session-status-account {
-  display: grid;
-  grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
-  gap: 7px 14px;
-  margin: 0;
-  font-size: 12px;
-}
-
-.app-session-status-account dt {
-  color: var(--text-tertiary);
-}
-
-.app-session-status-account dd {
-  margin: 0;
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-}
-
 .app-session-status-actions {
   justify-content: flex-end;
   border-top: 1px solid var(--border-subtle);
@@ -1219,15 +1199,6 @@
 @media (width <= 560px) {
   .app-session-status-dialog {
     max-height: calc(100vh - 20px);
-  }
-
-  .app-session-status-account {
-    grid-template-columns: 1fr;
-    gap: 3px;
-  }
-
-  .app-session-status-account dd {
-    margin-bottom: 7px;
   }
 }
 

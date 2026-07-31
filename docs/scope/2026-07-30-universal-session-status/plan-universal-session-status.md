@@ -696,7 +696,7 @@ git commit -m "refactor(agent): remove provider session status adapter"
 - Test: `app/__tests__/web-session-status-dialog.test.tsx`
 - Test: `app/__tests__/web-chat-session-actions.test.ts`
 
-- [ ] **Step 1: Add the failing repository expectation**
+- [x] **Step 1: Add the failing repository expectation**
 
 In the first test in `app/__tests__/web-session-actions-service.test.ts`:
 
@@ -731,7 +731,7 @@ await expect(repository.statusSession('project-a', 'stable-session')).resolves.t
 });
 ```
 
-- [ ] **Step 2: Replace the dialog tests with uniform-layout and copy tests**
+- [x] **Step 2: Replace the dialog tests with uniform-layout and copy tests**
 
 At the top of `app/__tests__/web-session-status-dialog.test.tsx`, add:
 
@@ -833,7 +833,7 @@ test('copies the exact session id from an accessible icon button', () => {
 });
 ```
 
-- [ ] **Step 3: Add the failing provider-neutral slash-description assertion**
+- [x] **Step 3: Add the failing provider-neutral slash-description assertion**
 
 In the first test in `app/__tests__/web-chat-session-actions.test.ts`, extend the status option assertion to:
 
@@ -845,7 +845,7 @@ expect(options[1]).toMatchObject({
 });
 ```
 
-- [ ] **Step 4: Run the three Web suites to verify they fail**
+- [x] **Step 4: Run the three Web suites to verify they fail**
 
 Run:
 
@@ -856,7 +856,7 @@ npx jest web-session-actions-service web-session-status-dialog web-chat-session-
 
 Expected: FAIL because `agentType` is not typed/normalized, the dialog still renders legacy limits/account and has no copy button, loading still says limits, and the slash description mentions rate limits.
 
-- [ ] **Step 5: Add and normalize `agentType`**
+- [x] **Step 5: Add and normalize `agentType`**
 
 Add `agentType` after `sessionId` in `RegistrySessionStatusResult` in `app/web/src/registry/registryTypes.ts`:
 
@@ -882,7 +882,7 @@ agentType: typeof body.agentType === 'string' && body.agentType.trim()
 
 Keep the existing tolerant `limits` and `account` normalization so the Web client remains compatible with older Hub responses; the dialog will intentionally ignore those fields.
 
-- [ ] **Step 6: Replace the dialog's provider-specific rendering**
+- [x] **Step 6: Replace the dialog's provider-specific rendering**
 
 In `app/web/src/shell/AppDialogs.tsx`:
 
@@ -931,7 +931,7 @@ Refreshing status…
 
 The Context section, cached-usage fallback, refresh error, Refresh button, and Close button stay unchanged.
 
-- [ ] **Step 7: Add copy styles and remove dead provider-status styles**
+- [x] **Step 7: Add copy styles and remove dead provider-status styles**
 
 Add after `.app-session-status-id code` in `app/web/src/styles/shell.css`:
 
@@ -970,7 +970,7 @@ Add after `.app-session-status-id code` in `app/web/src/styles/shell.css`:
 
 Delete the unused `.app-session-status-limits`, `.app-session-status-limit-*`, and `.app-session-status-account` rule blocks, including the account-only mobile media rules. Keep the general status dialog, context, muted/loading, actions, and mobile max-height styles.
 
-- [ ] **Step 8: Make the slash description provider-neutral**
+- [x] **Step 8: Make the slash description provider-neutral**
 
 In `app/web/src/chat/session/chatSessionActions.ts`, replace the `/status` description with:
 
@@ -978,7 +978,7 @@ In `app/web/src/chat/session/chatSessionActions.ts`, replace the `/status` descr
 description: 'Show session ID, agent type, and context usage',
 ```
 
-- [ ] **Step 9: Run targeted Web tests and type-check**
+- [x] **Step 9: Run targeted Web tests and type-check**
 
 Run:
 
@@ -990,7 +990,7 @@ npm run tsc:web
 
 Expected: all three Jest suites PASS and TypeScript reports no errors.
 
-- [ ] **Step 10: Commit the uniform Web status**
+- [x] **Step 10: Commit the uniform Web status**
 
 ```powershell
 git add app/web/src/registry/registryTypes.ts app/web/src/registry/RegistryRepository.ts app/web/src/shell/AppDialogs.tsx app/web/src/styles/shell.css app/web/src/chat/session/chatSessionActions.ts app/__tests__/web-session-actions-service.test.ts app/__tests__/web-session-status-dialog.test.tsx app/__tests__/web-chat-session-actions.test.ts

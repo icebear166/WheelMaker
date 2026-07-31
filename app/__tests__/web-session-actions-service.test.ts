@@ -11,20 +11,10 @@ describe('web session action protocol', () => {
       payload: {
         ok: true,
         sessionId: 'runtime-thread-must-not-win',
+        agentType: ' codex ',
         context: {used: 42000.8, size: 258400.2, updatedAt: '2026-07-14T10:00:00Z', private: true},
-        limits: [
-          {id: ' codex:primary ', name: 'Five hour', usedPercent: 37.8, remainingPercent: 62.2, windowDurationMins: 300.9, resetsAt: '2026-07-14T12:00:00Z'},
-          {id: '', name: 'invalid'},
-        ],
-        account: {
-          planType: 'pro',
-          credits: {hasCredits: true, unlimited: false, balance: '12.50'},
-          individualLimit: {limit: '100', used: '40', remainingPercent: 60.9, resetsAt: '2026-08-01T00:00:00Z'},
-          rateLimitReachedType: 'none',
-          rateLimitResetCredits: {availableCount: 3.9},
-          providerPrivate: 'hidden',
-        },
-        updatedAt: '2026-07-14T10:00:01Z',
+        limits: [],
+        updatedAt: '',
         runtimeThreadId: 'hidden',
       },
     });
@@ -33,23 +23,11 @@ describe('web session action protocol', () => {
     await expect(repository.statusSession('project-a', 'stable-session')).resolves.toEqual({
       ok: true,
       sessionId: 'stable-session',
+      agentType: 'codex',
       context: {used: 42000, size: 258400, updatedAt: '2026-07-14T10:00:00Z'},
-      limits: [{
-        id: 'codex:primary',
-        name: 'Five hour',
-        usedPercent: 37,
-        remainingPercent: 62,
-        windowDurationMins: 300,
-        resetsAt: '2026-07-14T12:00:00Z',
-      }],
-      account: {
-        planType: 'pro',
-        credits: {hasCredits: true, unlimited: false, balance: '12.50'},
-        individualLimit: {limit: '100', used: '40', remainingPercent: 60, resetsAt: '2026-08-01T00:00:00Z'},
-        rateLimitReachedType: 'none',
-        rateLimitResetCredits: {availableCount: 3},
-      },
-      updatedAt: '2026-07-14T10:00:01Z',
+      limits: [],
+      account: undefined,
+      updatedAt: '',
     });
     expect(request).toHaveBeenCalledWith({
       method: RegistryMethods.SessionStatus,

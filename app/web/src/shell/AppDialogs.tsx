@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ArchiveCandidate } from '../chat/session/sessionArchiveState';
 import {Icon, type IconName} from '../common/Icon';
+import {writeTextToClipboard} from '../platform/clipboard';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/agentPackageUpdateView';
 import { skillScopeLabel } from '../settings/skillManagementView';
 import type {
@@ -155,17 +156,6 @@ export type AppSessionStatusDialogProps = {
   onClose: () => void;
   onRefresh: () => void;
 };
-
-function formatStatusPlan(value: string | undefined): string {
-  if (!value) return '';
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatStatusReset(value: string | undefined): string {
-  if (!value) return '';
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
-}
 
 function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall' | 'reinstall'): string {
   switch (action) {
@@ -738,8 +728,6 @@ export function AppSessionStatusDialog({
 
   if (!sessionId) return null;
   const context = status?.context ?? cachedUsage;
-  const account = status?.account;
-  const plan = formatStatusPlan(account?.planType);
 
   return (
     <div className="app-confirm-backdrop" role="presentation" onPointerDown={onClose}>
@@ -755,8 +743,27 @@ export function AppSessionStatusDialog({
             <div id="app-session-status-title" className="app-session-status-title">Session status</div>
             <div className="app-session-status-id" data-testid="session-status-id">
               <span>Session ID</span>
-              <code>{sessionId}</code>
+              <span className="app-session-status-id-value">
+                <code>{sessionId}</code>
+                <button
+                  type="button"
+                  className="app-session-status-copy"
+                  aria-label="Copy session ID"
+                  title="Copy session ID"
+                  onClick={() => {
+                    void writeTextToClipboard(sessionId).catch(() => undefined);
+                  }}
+                >
+                  <Icon name="copy" />
+                </button>
+              </span>
             </div>
+            {status?.agentType ? (
+              <div className="app-session-status-id" data-testid="session-status-agent">
+                <span>Agent</span>
+                <code>{status.agentType}</code>
+              </div>
+            ) : null}
           </div>
           <button type="button" className="app-session-status-close" onClick={onClose} aria-label="Close session status">
             <Icon name="x" />
@@ -774,42 +781,10 @@ export function AppSessionStatusDialog({
             ) : <div className="app-session-status-muted">Context usage is not available yet.</div>}
           </section>
 
-          {status?.limits.length ? (
-            <section className="app-session-status-section">
-              <div className="app-session-status-section-title">Rate limits</div>
-              <div className="app-session-status-limits">
-                {status.limits.map(limit => (
-                  <div key={limit.id} className="app-session-status-limit">
-                    <div className="app-session-status-limit-heading">
-                      <span>{limit.name}</span>
-                      <strong>{limit.remainingPercent}% remaining</strong>
-                    </div>
-                    <div className="app-session-status-limit-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={limit.remainingPercent}>
-                      <span className="app-session-status-limit-fill" style={{width: `${limit.remainingPercent}%`}} />
-                    </div>
-                    {limit.resetsAt ? <div className="app-session-status-muted">Resets {formatStatusReset(limit.resetsAt)}</div> : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {account ? (
-            <section className="app-session-status-section">
-              <div className="app-session-status-section-title">Account</div>
-              <dl className="app-session-status-account">
-                {plan ? <><dt>Plan</dt><dd>{plan}</dd></> : null}
-                {account.credits ? <><dt>Credits</dt><dd>{account.credits.unlimited ? 'Unlimited' : account.credits.balance ?? (account.credits.hasCredits ? 'Available' : 'None')}</dd></> : null}
-                {account.individualLimit ? <><dt>Individual limit</dt><dd>{account.individualLimit.used} / {account.individualLimit.limit} ({account.individualLimit.remainingPercent}% remaining)</dd></> : null}
-                {account.rateLimitResetCredits ? <><dt>Reset credits</dt><dd>{account.rateLimitResetCredits.availableCount}</dd></> : null}
-              </dl>
-            </section>
-          ) : null}
-
           {loading ? (
             <div className="app-session-status-loading" aria-label="Refreshing session status">
               <Icon name="loader" spin />
-              Refreshing limits…
+              Refreshing status…
             </div>
           ) : null}
           {error ? <div className="app-confirm-error" role="alert">{error}</div> : null}

@@ -25,7 +25,11 @@ describe('chat session action options', () => {
       ['/zoom-out', 'skill', 'insert'],
     ]);
     expect(options[0]).toMatchObject({enabled: false, disabledReason: 'Compact is unavailable.', icon: 'circle'});
-    expect(options[1]).toMatchObject({enabled: true, icon: 'layoutDashboard'});
+    expect(options[1]).toMatchObject({
+      enabled: true,
+      icon: 'layoutDashboard',
+      description: 'Show session ID, agent type, and context usage',
+    });
     expect(options[2].icon).toBe('wand');
   });
 

@@ -597,6 +597,7 @@ export interface RegistrySessionStatusAccount {
 export interface RegistrySessionStatusResult {
   ok: boolean;
   sessionId: string;
+  agentType?: string;
   context?: RegistrySessionStatusContext;
   limits: RegistrySessionRateLimit[];
   account?: RegistrySessionStatusAccount;
