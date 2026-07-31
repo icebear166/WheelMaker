@@ -36,6 +36,10 @@ import type {
   RegistryHubStateActionResponse,
   RegistryHubStateRefreshResponse,
   RegistryHubStateSectionName,
+  RegistryDeepSeekUsageCost,
+  RegistryDeepSeekUsageCostDay,
+  RegistryDeepSeekUsageDay,
+  RegistryDeepSeekUsageResponse,
   RegistryUsageHistoryLimit,
   RegistryUsageHistoryResponse,
 	RegistryReleasePublishResponse,
@@ -314,6 +318,9 @@ export class RegistryRepository {
     const apiKeysInput = configInput.apiKeys && typeof configInput.apiKeys === 'object' && !Array.isArray(configInput.apiKeys)
       ? configInput.apiKeys as Record<string, unknown>
       : {};
+    const deepSeekPlatformInput = configInput.deepSeekPlatform && typeof configInput.deepSeekPlatform === 'object'
+      ? configInput.deepSeekPlatform as Record<string, unknown>
+      : {};
     const apiKeys: RegistryHubConfig['apiKeys'] = {};
     for (const [name, value] of Object.entries(apiKeysInput)) {
       const entry = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -330,6 +337,12 @@ export class RegistryRepository {
           enabled: flickerInput.enabled === true,
         },
         apiKeys,
+        deepSeekPlatform: {
+          configured: deepSeekPlatformInput.configured === true,
+          updatedAt: typeof deepSeekPlatformInput.updatedAt === 'string'
+            ? deepSeekPlatformInput.updatedAt
+            : undefined,
+        },
       },
     };
   }
@@ -2153,6 +2166,23 @@ export class RegistryRepository {
     };
   }
 
+  async getDeepSeekUsage(
+    hubId: string,
+    year: number,
+    month: number,
+    force = false,
+  ): Promise<RegistryDeepSeekUsageResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.DeepSeekUsageGet,
+      hubId,
+      payload: {year, month, force},
+      timeoutMs: 30000,
+    });
+    const response = normalizeDeepSeekUsageResponse(resp.payload, hubId);
+    if (!response) throw new Error('invalid deepseek usage response');
+    return response;
+  }
+
   async refreshHubState(
     hubId: string,
     sections: RegistryHubStateSectionName[],
@@ -2509,6 +2539,85 @@ export class RegistryRepository {
   onClose(listener: () => void): () => void {
     return this.client.onClose(listener);
   }
+}
+
+function normalizeDeepSeekUsageDay(raw: unknown): RegistryDeepSeekUsageDay | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const day = raw as Record<string, unknown>;
+  const numbers = ['request', 'outputTokens', 'hitTokens', 'missTokens', 'totalTokens']
+    .map(key => day[key])
+    .filter(value => typeof value === 'number' && Number.isFinite(value));
+  if (typeof day.date !== 'string' || day.date === '' || numbers.length !== 5) return null;
+  return {
+    date: day.date,
+    request: day.request as number,
+    outputTokens: day.outputTokens as number,
+    hitTokens: day.hitTokens as number,
+    missTokens: day.missTokens as number,
+    totalTokens: day.totalTokens as number,
+  };
+}
+
+function normalizeDeepSeekUsageCost(raw: unknown): RegistryDeepSeekUsageCost | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const cost = raw as Record<string, unknown>;
+  if (typeof cost.currency !== 'string' || cost.currency === '') return null;
+  const daily = Array.isArray(cost.daily)
+    ? cost.daily.map((entry: unknown): RegistryDeepSeekUsageCostDay | null => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+        const day = entry as Record<string, unknown>;
+        return typeof day.date === 'string' && typeof day.amount === 'number' && Number.isFinite(day.amount)
+          ? {date: day.date, amount: day.amount}
+          : null;
+      }).filter((entry: RegistryDeepSeekUsageCostDay | null): entry is RegistryDeepSeekUsageCostDay => entry !== null)
+    : [];
+  return {
+    currency: cost.currency,
+    monthlyCost: Number(cost.monthlyCost) || 0,
+    todayCost: Number(cost.todayCost) || 0,
+    daily,
+  };
+}
+
+function normalizeDeepSeekUsageResponse(
+  raw: unknown,
+  hubId: string,
+): RegistryDeepSeekUsageResponse | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const input = raw as Record<string, unknown>;
+  const status = input.status;
+  const month = input.month as {year?: unknown; month?: unknown} | undefined;
+  if (
+    input.hubId !== hubId
+    || (status !== 'ok' && status !== 'notConnected' && status !== 'expired')
+    || !month
+    || typeof month.year !== 'number'
+    || typeof month.month !== 'number'
+  ) {
+    return null;
+  }
+  if (status !== 'ok') {
+    return {hubId, status, month: {year: month.year, month: month.month}};
+  }
+  const days = Array.isArray(input.days)
+    ? input.days.map(normalizeDeepSeekUsageDay).filter((day): day is RegistryDeepSeekUsageDay => day !== null)
+    : [];
+  const costs = Array.isArray(input.costs)
+    ? input.costs.map(normalizeDeepSeekUsageCost).filter((cost): cost is RegistryDeepSeekUsageCost => cost !== null)
+    : [];
+  if (days.length !== (Array.isArray(input.days) ? input.days.length : 0)) return null;
+  if (costs.length !== (Array.isArray(input.costs) ? input.costs.length : 0)) return null;
+  return {
+    hubId,
+    status,
+    month: {year: month.year, month: month.month},
+    balance: Array.isArray(input.balance)
+      ? input.balance as RegistryDeepSeekUsageResponse['balance']
+      : undefined,
+    days,
+    costs,
+    cachedAt: typeof input.cachedAt === 'string' ? input.cachedAt : undefined,
+  };
 }
 
 export const createRegistryRepository = (

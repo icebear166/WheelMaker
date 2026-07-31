@@ -34,6 +34,7 @@ import type {
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
   RegistryUsageHistoryResponse,
+  RegistryDeepSeekUsageResponse,
 	RegistryReleasePublishResponse,
   RegistryNpmCommandResponse,
   RegistryPortRelayEnablePayload,
@@ -893,6 +894,18 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.getUsageHistory(hubId, providerId, accountLocalId);
+  }
+
+  async getDeepSeekUsage(
+    hubId: string,
+    year: number,
+    month: number,
+    force = false,
+  ): Promise<RegistryDeepSeekUsageResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getDeepSeekUsage(hubId, year, month, force);
   }
 
   async refreshHubState(

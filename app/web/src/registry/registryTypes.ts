@@ -161,10 +161,16 @@ export interface RegistryHubConfigFlickerBridgeSnapshot {
   enabled: boolean;
 }
 
+export interface RegistryHubConfigDeepSeekPlatformSnapshot {
+  configured: boolean;
+  updatedAt?: string;
+}
+
 /** Sanitized hub config snapshot — secret values never leave the hub. */
 export interface RegistryHubConfig {
   flickerBridge: RegistryHubConfigFlickerBridgeSnapshot;
   apiKeys: Record<string, RegistryHubConfigAPIKeySnapshot>;
+  deepSeekPlatform: RegistryHubConfigDeepSeekPlatformSnapshot;
 }
 
 export interface RegistryHubConfigResponse {
@@ -174,7 +180,39 @@ export interface RegistryHubConfigResponse {
 
 export type RegistryHubConfigUpdatePayload =
   | {section: 'apiKeys'; field: string; action: 'set' | 'clear'; value?: string}
-  | {section: 'flickerBridge'; field: 'enabled'; action: 'set' | 'clear'};
+  | {section: 'flickerBridge'; field: 'enabled'; action: 'set' | 'clear'}
+  | {section: 'deepSeekPlatform'; field: 'token'; action: 'set' | 'clear'; value?: string};
+
+export interface RegistryDeepSeekUsageDay {
+  date: string;
+  request: number;
+  outputTokens: number;
+  hitTokens: number;
+  missTokens: number;
+  totalTokens: number;
+}
+
+export interface RegistryDeepSeekUsageCostDay {
+  date: string;
+  amount: number;
+}
+
+export interface RegistryDeepSeekUsageCost {
+  currency: string;
+  monthlyCost: number;
+  todayCost: number;
+  daily: RegistryDeepSeekUsageCostDay[];
+}
+
+export interface RegistryDeepSeekUsageResponse {
+  hubId: string;
+  status: 'ok' | 'notConnected' | 'expired';
+  month: {year: number; month: number};
+  balance?: Array<{currency: string; total: string; granted?: string; toppedUp?: string}>;
+  days?: RegistryDeepSeekUsageDay[];
+  costs?: RegistryDeepSeekUsageCost[];
+  cachedAt?: string;
+}
 
 export interface RegistryUsageHistorySample {
   observedAtMillis: number;
