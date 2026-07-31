@@ -1110,14 +1110,6 @@ func (c *codexappConn) sendThreadArchiveState(ctx context.Context, sessionID str
 	return c.runtime.request(ctx, method, appServerThreadArchiveParams{ThreadID: threadID}, &ignored)
 }
 
-func (c *codexappConn) SessionStatus(ctx context.Context) (protocol.SessionActionStatusResult, error) {
-	var response appServerGetAccountRateLimitsResponse
-	if err := c.runtime.request(ctx, "account/rateLimits/read", nil, &response); err != nil {
-		return protocol.SessionActionStatusResult{}, err
-	}
-	return normalizeCodexappRateLimits(response, time.Now()), nil
-}
-
 func (c *codexappConn) SteerSession(
 	ctx context.Context,
 	sessionID string,

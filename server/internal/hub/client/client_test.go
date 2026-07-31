@@ -338,7 +338,6 @@ func (i *testInjectedInstance) SessionGoalClear(_ context.Context, sessionID str
 func (i *testInjectedInstance) Close() error { return nil }
 
 var _ agent.Instance = (*testInjectedInstance)(nil)
-var _ agent.SessionStatusProvider = (*testInjectedInstance)(nil)
 var _ agent.SessionCompactor = (*testInjectedInstance)(nil)
 var _ agent.SessionForker = (*testInjectedInstance)(nil)
 var _ agent.SessionGoalController = (*testInjectedInstance)(nil)

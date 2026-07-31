@@ -601,7 +601,7 @@ git commit -m "feat(hub): return session-local status without spawning"
 - Modify: `server/internal/hub/agent/codexapp_convert.go`
 - Modify: `server/internal/hub/agent/agent_test.go`
 
-- [ ] **Step 1: Confirm the production call chain is now dead**
+- [x] **Step 1: Confirm the production call chain is now dead**
 
 Run:
 
@@ -612,7 +612,7 @@ rg -n "SessionStatusProvider|func .*SessionStatus|account/rateLimits/read|normal
 
 Expected before cleanup: matches only the interface/wrapper in `instance.go`, the Codex app-server adapter in `codexapp_agent.go`, and rate-limit conversion code in `codexapp_convert.go`. There must be no Monitor or `tokenStats` call site in this package.
 
-- [ ] **Step 2: Remove the agent status interface and wrapper**
+- [x] **Step 2: Remove the agent status interface and wrapper**
 
 Delete this interface from `server/internal/hub/agent/instance.go`:
 
@@ -624,7 +624,7 @@ type SessionStatusProvider interface {
 
 Delete the entire `func (i *instance) SessionStatus(...)` method from the same file.
 
-- [ ] **Step 3: Remove the Codex app-server session-status RPC**
+- [x] **Step 3: Remove the Codex app-server session-status RPC**
 
 Delete this method from `server/internal/hub/agent/codexapp_agent.go`:
 
@@ -640,7 +640,7 @@ func (c *codexappConn) SessionStatus(ctx context.Context) (protocol.SessionActio
 
 Keep Monitor collectors unchanged; this deletes only the obsolete `session.status` adapter.
 
-- [ ] **Step 4: Remove the now-unused conversion model and helpers**
+- [x] **Step 4: Remove the now-unused conversion model and helpers**
 
 From `server/internal/hub/agent/codexapp_convert.go`, delete these exact declarations and functions:
 
@@ -659,11 +659,11 @@ codexappUnixTime
 
 Remove the `sort` import when it becomes unused. Keep `time` because timestamp conversion elsewhere in the file still uses it.
 
-- [ ] **Step 5: Remove the obsolete adapter test**
+- [x] **Step 5: Remove the obsolete adapter test**
 
 Delete `TestCodexappSessionStatusNormalizesRateLimits` from `server/internal/hub/agent/agent_test.go`. Do not delete Monitor limits tests; this test specifically exercises the retired `codexappConn.SessionStatus` method.
 
-- [ ] **Step 6: Format, prove the symbols are gone, and run agent/client tests**
+- [x] **Step 6: Format, prove the symbols are gone, and run agent/client tests**
 
 Run:
 
@@ -676,7 +676,7 @@ go test ./internal/hub/agent/ ./internal/hub/client/
 
 Expected: `rg` exits with no matches; both Go packages PASS.
 
-- [ ] **Step 7: Commit the dead-path cleanup**
+- [x] **Step 7: Commit the dead-path cleanup**
 
 ```powershell
 git add server/internal/hub/agent/instance.go server/internal/hub/agent/codexapp_agent.go server/internal/hub/agent/codexapp_convert.go server/internal/hub/agent/agent_test.go
