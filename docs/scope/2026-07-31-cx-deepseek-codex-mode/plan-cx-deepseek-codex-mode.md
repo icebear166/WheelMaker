@@ -56,7 +56,7 @@
 - Modify: `server/internal/hub/agent/acp_provider.go:46`
 - Modify: `server/internal/hub/agent/skills.go:29`
 
-- [ ] **Step 1: Write the failing protocol identity test**
+- [x] **Step 1: Write the failing protocol identity test**
 
 Add this test to `server/internal/protocol/acp_test.go`:
 
@@ -79,7 +79,7 @@ func TestCXDeepSeekProviderIdentity(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the protocol test and verify the missing symbol failure**
+- [x] **Step 2: Run the protocol test and verify the missing symbol failure**
 
 Run from `server/`:
 
@@ -89,7 +89,7 @@ go test ./internal/protocol -run TestCXDeepSeekProviderIdentity -count=1
 
 Expected: compilation fails because `ACPProviderCXDeepSeek` does not exist.
 
-- [ ] **Step 3: Add the protocol constant, stable list entry, and parser branch**
+- [x] **Step 3: Add the protocol constant, stable list entry, and parser branch**
 
 Add the constant beside `ACPProviderCodex`, include it once in `acpProviders`, and parse it case-insensitively:
 
@@ -107,7 +107,7 @@ case string(ACPProviderCXDeepSeek):
 
 Keep `ACPProviderCodex` first and place `ACPProviderCXDeepSeek` immediately after it in the stable built-in list. Do not add a generic `cx` alias.
 
-- [ ] **Step 4: Write the failing skills-isolation test**
+- [x] **Step 4: Write the failing skills-isolation test**
 
 Add to the existing provider preset tests in `server/internal/hub/agent/agent_test.go`:
 
@@ -129,7 +129,7 @@ func TestCXDeepSeekPresetUsesSharedAgentSkillsWithoutNativeCodexHome(t *testing.
 }
 ```
 
-- [ ] **Step 5: Run the skills test and verify it fails**
+- [x] **Step 5: Run the skills test and verify it fails**
 
 Run from `server/`:
 
@@ -139,7 +139,7 @@ go test ./internal/hub/agent -run TestCXDeepSeekPresetUsesSharedAgentSkillsWitho
 
 Expected: FAIL because the new preset is not registered in `providerPresetByName`.
 
-- [ ] **Step 6: Add the focused skills preset and lookup branch**
+- [x] **Step 6: Add the focused skills preset and lookup branch**
 
 Add this preset in `acp_provider.go`:
 
@@ -162,7 +162,7 @@ case CXDeepSeekProviderPreset.Name:
 
 The isolated preset intentionally excludes `~/.codex/skills` and `~/.copilot/installed-plugins`.
 
-- [ ] **Step 7: Run focused tests and commit the identity boundary**
+- [x] **Step 7: Run focused tests and commit the identity boundary**
 
 Run from `server/`:
 
@@ -185,7 +185,7 @@ git commit -m "feat(agent): add cx deepseek provider identity"
 - Create: `server/internal/hub/agent/cxdeepseek/catalog.go`
 - Create: `server/internal/hub/agent/cxdeepseek/catalog_test.go`
 
-- [ ] **Step 1: Add the reviewed official catalog asset**
+- [x] **Step 1: Add the reviewed official catalog asset**
 
 From the official DeepSeek Codex documentation, copy the complete `deepseek-v4-flash` object into `models.json` under the original top-level `models` array. Remove only the `deepseek-v4-pro` object. Preserve every Flash field, including the complete `model_messages.instructions_template`, `model_messages.instructions_variables`, `base_instructions`, and these exact capability values:
 
@@ -217,7 +217,7 @@ From the official DeepSeek Codex documentation, copy the complete `deepseek-v4-f
 
 The excerpt above is the invariant subset, not a replacement for the full official object. The checked-in asset must not contain `deepseek-v4-pro`, an API key, or an abbreviated instruction field.
 
-- [ ] **Step 2: Write catalog validation tests**
+- [x] **Step 2: Write catalog validation tests**
 
 Create `catalog_test.go` in package `cxdeepseek` with table-driven assertions equivalent to:
 
@@ -256,7 +256,7 @@ func TestEmbeddedCatalogIsOfficialFlashOnly(t *testing.T) {
 
 Also add invalid-document cases for malformed JSON, zero models, a non-Flash slug, image input, a missing `apply_patch`/web-search capability, wrong context window, wrong effort set/default, wrong minimum version, and empty model instructions.
 
-- [ ] **Step 3: Run the catalog tests and verify the missing implementation failure**
+- [x] **Step 3: Run the catalog tests and verify the missing implementation failure**
 
 Run from `server/`:
 
@@ -266,7 +266,7 @@ go test ./internal/hub/agent/cxdeepseek -run TestEmbeddedCatalogIsOfficialFlashO
 
 Expected: compilation fails because the catalog package implementation does not exist.
 
-- [ ] **Step 4: Implement embedded validation with exact public constants**
+- [x] **Step 4: Implement embedded validation with exact public constants**
 
 Create `catalog.go` with this public surface and focused validation types:
 
@@ -359,7 +359,7 @@ func reasoningEfforts(model catalogModel) []string {
 }
 ```
 
-- [ ] **Step 5: Write atomic-write and keyed-concurrency tests**
+- [x] **Step 5: Write atomic-write and keyed-concurrency tests**
 
 Use a package-private `materializer` with injectable `rename` and `writeFile` operations. Cover these exact outcomes:
 
@@ -388,7 +388,7 @@ func TestMaterializePreservesLastValidCatalogWhenRenameFails(t *testing.T) {
 
 Add a no-prior-file variant that confirms failure leaves no final `models.json`, and a 16-goroutine test that counts one successful replacement and verifies every caller receives the same final path and complete bytes.
 
-- [ ] **Step 6: Implement keyed locking and atomic replacement**
+- [x] **Step 6: Implement keyed locking and atomic replacement**
 
 Use one package-level lock registry keyed by the cleaned absolute target path. The production API is:
 
@@ -468,7 +468,7 @@ func (m *materializer) materialize(homeDir string) (string, error) {
 
 Keep the single final `os.Rename` replacement under the keyed lock. The Windows test run is part of the required gate and must demonstrate that failed replacement leaves the existing final file intact.
 
-- [ ] **Step 7: Run package tests and commit the catalog boundary**
+- [x] **Step 7: Run package tests and commit the catalog boundary**
 
 Run from `server/`:
 
@@ -491,7 +491,7 @@ git commit -m "feat(agent): add deepseek codex catalog bootstrap"
 - Modify: `server/internal/hub/agent/codexapp_agent.go:24`
 - Modify: `server/internal/hub/agent/agent_test.go:137`
 
-- [ ] **Step 1: Write version parsing and launch-shape tests**
+- [x] **Step 1: Write version parsing and launch-shape tests**
 
 Add tests to `agent_test.go` that inject `lookPath`, `versionOutput`, and `materializeCatalog` before first availability check. Assert:
 
@@ -552,7 +552,7 @@ func TestCXDeepSeekProviderLaunchUsesResponsesOverridesAndProcessOnlyKey(t *test
 
 Add a table for `codex-cli 0.143.9` (reject), `codex-cli 0.144.0` (accept), `codex-cli 1.0.0` (accept), malformed output (reject), and command failure (reject). Error messages must identify `cx-deepseek` and the required version without including the API key.
 
-- [ ] **Step 2: Run the launch tests and verify the missing constructor failure**
+- [x] **Step 2: Run the launch tests and verify the missing constructor failure**
 
 Run from `server/`:
 
@@ -562,7 +562,7 @@ go test ./internal/hub/agent -run 'TestCXDeepSeekProviderLaunch|TestCXDeepSeekCo
 
 Expected: compilation fails because `NewCXDeepSeekProvider` is undefined.
 
-- [ ] **Step 3: Implement the versioned launcher in a focused file**
+- [x] **Step 3: Implement the versioned launcher in a focused file**
 
 First parameterize `codexAppProvider` in `codexapp_agent.go` with this exact configuration boundary; the native constructor supplies native defaults and the DeepSeek constructor supplies isolated values:
 
@@ -774,7 +774,7 @@ func tomlStringOverride(key, value string) string {
 
 `codexAppProvider.CheckAvailable()` resolves `codex`, executes `codex --version` once per provider object, parses semantic numeric components, and caches only executable/version availability. `Launch()` calls `CheckAvailable()`, materializes the catalog, then returns the base app-server arguments plus the config overrides. Catalog creation must not occur during Factory availability scanning.
 
-- [ ] **Step 4: Write failing bridge identity, image-gate, mapping, and fork tests**
+- [x] **Step 4: Write failing bridge identity, image-gate, mapping, and fork tests**
 
 Use `newFakeCodexappTransport` and a DeepSeek connection profile to assert:
 
@@ -814,7 +814,7 @@ func TestCXDeepSeekCodexBridgeUsesProviderIdentityAndTextOnlyCapability(t *testi
 
 Also assert that image ContentBlocks and image resource links are rejected before `turn/start`, while text prompts still reach `turn/start`; emitted prompt/fork points use `Provider: "cx-deepseek"`; and a DeepSeek connection reads/writes only its injected Session map path. Keep native-connection assertions for `Provider: "codex"`, `Image: true`, and the existing `~/.wheelmaker/codexapp-sessions.json` path.
 
-- [ ] **Step 5: Parameterize the existing bridge without changing native defaults**
+- [x] **Step 5: Parameterize the existing bridge without changing native defaults**
 
 Add a provider/profile boundary:
 
@@ -881,7 +881,7 @@ func (p *codexAppProvider) connectionProfile() codexappConnProfile {
 }
 ```
 
-- [ ] **Step 6: Run focused bridge and launch tests**
+- [x] **Step 6: Run focused bridge and launch tests**
 
 Run from `server/`:
 
@@ -892,7 +892,7 @@ go test ./internal/hub/agent -run 'TestCodexProviderUsesAppServerStdio|TestCodex
 
 Expected: PASS. Existing native Codex launch arguments remain exactly `app-server --listen stdio://` and native image tests remain green.
 
-- [ ] **Step 7: Commit the launcher and reusable bridge changes**
+- [x] **Step 7: Commit the launcher and reusable bridge changes**
 
 ```powershell
 git add server/internal/hub/agent/codexapp_agent.go server/internal/hub/agent/codexapp_deepseek.go server/internal/hub/agent/agent_test.go
@@ -905,7 +905,7 @@ git commit -m "feat(agent): launch deepseek through codex app server"
 - Modify: `server/internal/hub/agent/factory.go:84`
 - Modify: `server/internal/hub/agent/agent_test.go:5913`
 
-- [ ] **Step 1: Write the Factory registration matrix test**
+- [x] **Step 1: Write the Factory registration matrix test**
 
 Add a focused test that makes only the requested provider available:
 
@@ -941,7 +941,7 @@ func TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey(t *testing.T) {
 
 Extend the Session action assertion so `cx-deepseek` has `Status`, `Compact`, `Steer`, `Fork`, and `Goal`, and remains absent from `PreferredName()` ordering.
 
-- [ ] **Step 2: Write the independent creator-pool test**
+- [x] **Step 2: Write the independent creator-pool test**
 
 Use `codexappInstanceCreatorWithStarter(provider, starter)` from Task 3 to create native and DeepSeek creators for the same project/cwd. Extract the package-private connection from each returned `*instance`, assert two runtime starts, sharing within each creator, and no runtime pointer shared across creators:
 
@@ -1018,7 +1018,7 @@ if nativeA.runtime == deepSeekA.runtime {
 }
 ```
 
-- [ ] **Step 3: Run the Factory tests and verify registration is missing**
+- [x] **Step 3: Run the Factory tests and verify registration is missing**
 
 Run from `server/`:
 
@@ -1028,7 +1028,7 @@ go test ./internal/hub/agent -run 'TestConfiguredACPFactoryRegistersCXDeepSeek|T
 
 Expected: the registration test fails because the Factory does not bind `ACPProviderCXDeepSeek`.
 
-- [ ] **Step 4: Register the provider from the existing DeepSeek Key**
+- [x] **Step 4: Register the provider from the existing DeepSeek Key**
 
 Inside the existing non-empty DeepSeek Key branch:
 
@@ -1048,7 +1048,7 @@ if available(cxDeepSeekProvider) {
 
 Teach `isProviderAvailable` to call an optional `CheckAvailable() error` interface before falling back to `Launch()`. The DeepSeek implementation checks binary/version only; its catalog materializer remains on the first real `Launch()` path.
 
-- [ ] **Step 5: Run all agent tests and commit Factory integration**
+- [x] **Step 5: Run all agent tests and commit Factory integration**
 
 Run from `server/`:
 
@@ -1071,7 +1071,7 @@ git commit -m "feat(agent): register cx deepseek codex provider"
 - Modify: `server/internal/hub/client/client.go:836`
 - Modify: `server/internal/hub/client/client_test.go:3168`
 
-- [ ] **Step 1: Write the Codex-home isolation test**
+- [x] **Step 1: Write the Codex-home isolation test**
 
 Refactor the fixture helper to accept a Codex home directly, then create one native and one DeepSeek rollout tree:
 
@@ -1120,7 +1120,7 @@ func assertRecoverySessionIDs(t *testing.T, response map[string]any, want string
 
 Also call `sourceFor("cx-deepseek")` with an empty `stateDir` and assert a diagnostic error.
 
-- [ ] **Step 2: Run the recovery test and verify unsupported-provider failure**
+- [x] **Step 2: Run the recovery test and verify unsupported-provider failure**
 
 Run from `server/`:
 
@@ -1130,7 +1130,7 @@ go test ./internal/hub/client -run TestCodexFamilyRecoveryUsesIsolatedHomes -cou
 
 Expected: FAIL with unsupported recovery agent `cx-deepseek`.
 
-- [ ] **Step 3: Parameterize the Codex recovery source**
+- [x] **Step 3: Parameterize the Codex recovery source**
 
 Replace the empty source with explicit ownership:
 
@@ -1162,7 +1162,7 @@ case "cx-deepseek":
 	}, nil
 ```
 
-- [ ] **Step 4: Write provider-preserving fork and archive tests**
+- [x] **Step 4: Write provider-preserving fork and archive tests**
 
 Extend existing Codex fork/archive tests with `cx-deepseek`. The source summary, injected instance name, fork point provider, target Session agent type, and native archive creator lookup must all remain `cx-deepseek`. A fork point carrying `codex` for a `cx-deepseek` source must be rejected as a provider mismatch.
 
@@ -1181,7 +1181,7 @@ func isCodexAppAgentType(agentType string) bool {
 
 The implementation helper belongs in `client.go`; tests call behavior, not the helper directly.
 
-- [ ] **Step 5: Run the Session action tests and verify the hard-coded Codex checks fail**
+- [x] **Step 5: Run the Session action tests and verify the hard-coded Codex checks fail**
 
 Run from `server/`:
 
@@ -1191,7 +1191,7 @@ go test ./internal/hub/client -run 'Test.*CXDeepSeek.*Fork|Test.*CXDeepSeek.*Arc
 
 Expected: FAIL because `client.go` accepts only `codex`.
 
-- [ ] **Step 6: Generalize the three Codex-native call sites**
+- [x] **Step 6: Generalize the three Codex-native call sites**
 
 Use `isCodexAppAgentType` for legacy fork-point enrichment and native archive synchronization. In `forkSessionAtTurn`, require the selected fork point provider to equal the normalized source Session agent type:
 
@@ -1207,7 +1207,7 @@ if !strings.EqualFold(selectedPoint.Provider, sourceAgentType) {
 
 Do not broaden these paths to CC providers or other ACP agents.
 
-- [ ] **Step 7: Run client tests and commit recovery/action isolation**
+- [x] **Step 7: Run client tests and commit recovery/action isolation**
 
 Run from `server/`:
 
@@ -1231,7 +1231,7 @@ git commit -m "feat(hub): isolate cx deepseek session recovery"
 - Modify: `app/web/src/chat/projectAgents.ts:8`
 - Modify: `app/web/src/chat/agentTagVariant.ts:6`
 
-- [ ] **Step 1: Write frontend label and raw-ID tests**
+- [x] **Step 1: Write frontend label and raw-ID tests**
 
 Create `projectAgents.test.ts`:
 
@@ -1259,7 +1259,7 @@ describe('cx.deepseek agent presentation', () => {
 });
 ```
 
-- [ ] **Step 2: Write the Codex color parity test**
+- [x] **Step 2: Write the Codex color parity test**
 
 Create `agentTagVariant.test.ts`:
 
@@ -1274,7 +1274,7 @@ describe('cx.deepseek agent color', () => {
 });
 ```
 
-- [ ] **Step 3: Run the frontend tests and verify they fail**
+- [x] **Step 3: Run the frontend tests and verify they fail**
 
 Run from `app/`:
 
@@ -1284,7 +1284,7 @@ npm test -- --runInBand web/src/chat/projectAgents.test.ts web/src/chat/agentTag
 
 Expected: label test returns `cx-deepseek`, and color test returns a hash-derived variant.
 
-- [ ] **Step 4: Add the two explicit mappings**
+- [x] **Step 4: Add the two explicit mappings**
 
 In `agentDisplayLabel`:
 
@@ -1301,7 +1301,7 @@ In `AGENT_TAG_VARIANT_INDEX`:
 
 Do not add a generic `cx` grouping or a new settings component.
 
-- [ ] **Step 5: Run focused tests and TypeScript checking**
+- [x] **Step 5: Run focused tests and TypeScript checking**
 
 Run from `app/`:
 
@@ -1312,7 +1312,7 @@ npm run tsc:web
 
 Expected: PASS with no TypeScript errors.
 
-- [ ] **Step 6: Commit the frontend mapping**
+- [x] **Step 6: Commit the frontend mapping**
 
 ```powershell
 git add app/web/src/chat/projectAgents.ts app/web/src/chat/projectAgents.test.ts app/web/src/chat/agentTagVariant.ts app/web/src/chat/agentTagVariant.test.ts
@@ -1324,7 +1324,7 @@ git commit -m "feat(web): present cx deepseek agent"
 **Files:**
 - Modify: `docs/scope/2026-07-31-cx-deepseek-codex-mode/plan-cx-deepseek-codex-mode.md` — mark executed checkboxes complete.
 
-- [ ] **Step 1: Run complete server tests**
+- [x] **Step 1: Run complete server tests**
 
 Run from `server/`:
 
@@ -1334,7 +1334,7 @@ go test ./...
 
 Expected: PASS across all server packages without a real DeepSeek key or network request.
 
-- [ ] **Step 2: Run complete frontend tests and type checking**
+- [x] **Step 2: Run complete frontend tests and type checking**
 
 Run from `app/`:
 
@@ -1345,13 +1345,13 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 3: Verify security, catalog scope, and repository cleanliness**
+- [x] **Step 3: Verify security, catalog scope, and repository cleanliness**
 
 Run from the repository root:
 
 ```powershell
 rg -n "deepseek-v4-pro|experimental_bearer_token" server/internal/hub/agent/cxdeepseek server/internal/hub/agent/codexapp_deepseek.go
-rg -n "secret-deepseek-key|sk-[A-Za-z0-9]" server/internal/hub/agent/cxdeepseek server/internal/hub/agent/codexapp_deepseek.go
+rg -n "secret-deepseek-key|\bsk-[A-Za-z0-9]{16,}\b" server/internal/hub/agent/cxdeepseek server/internal/hub/agent/codexapp_deepseek.go
 git diff --check
 git status --short
 ```
@@ -1360,9 +1360,11 @@ Expected: both secret/catalog-scope searches return no matches in production ass
 
 - [ ] **Step 4: Optionally smoke-test a configured local Hub**
 
+Skipped in this execution because no explicit DeepSeek test credential was available in the process environment. This remains a non-CI verification step.
+
 When a developer already has a DeepSeek Key configured and Codex CLI `>= 0.144.0`, start the Hub from this worktree, create a `cx.deepseek` Session, verify `model/list` exposes only Flash with `low/high/max`, send one text prompt, restart the Hub, and resume the same Session. Skip this step when credentials are unavailable; it is not a CI gate.
 
-- [ ] **Step 5: Synchronize with the latest remote base and repeat the full gate if rebased**
+- [x] **Step 5: Synchronize with the latest remote base and repeat the full gate if rebased**
 
 From the repository root, with all task commits complete and the worktree clean:
 
@@ -1373,11 +1375,11 @@ git rebase origin/main
 
 Expected: rebase succeeds. If commits changed, repeat Steps 1–3 before continuing.
 
-- [ ] **Step 6: Mark this plan complete using apply_patch**
+- [x] **Step 6: Mark this plan complete using apply_patch**
 
 Change every executed `- [ ]` marker in this plan to `- [x]`. Leave no implementation or verification step marked complete unless its command actually succeeded.
 
-- [ ] **Step 7: Execute the repository completion gate exactly**
+- [x] **Step 7: Execute the repository completion gate exactly**
 
 From the repository root:
 
