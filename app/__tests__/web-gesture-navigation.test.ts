@@ -81,6 +81,8 @@ describe('gesture navigation', () => {
     expect(currentSelectBody).toContain('floatingClickCooldownUntilRef.current > Date.now()');
     expect(currentSelectBody).toContain("gestureNavStateRef.current?.phase === 'expanded'");
     expect(currentSelectBody).toContain('setDrawerOpen(false);');
+    expect(currentSelectBody).toContain('openGestureNavigationActions(shouldOpenDrawerWithFloatingNav(floatingNavCurrent));');
+    expect(main).toContain('gestureNavigationExpanded && shouldOpenDrawerWithFloatingNav(floatingNavCurrent) && !drawerOpen');
     expect(pointerMoveBody).toContain('shouldCancelGestureClick({');
     expect(pointerMoveBody).toContain('clearGestureMoveLongPressTimer();');
     expect(pointerMoveBody).toContain('gestureNavigationSuppressClickUntilRef.current');

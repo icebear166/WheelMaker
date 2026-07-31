@@ -96,10 +96,8 @@ export function MobileShell({
     <div
       className={`workspace theme-${themeMode} narrow-shell`}
       data-floating-control-side={floatingControlSide}
-      data-chat-preview-open={mobileOverlay ? 'true' : undefined}
     >
       {setiFontCss ? <style>{setiFontCss}</style> : null}
-      {floatingControlStack}
       {mobileSettingsScreen}
       {mobileOverlay}
 
@@ -117,6 +115,7 @@ export function MobileShell({
       >
         {sidebar}
       </aside>
+      {floatingControlStack}
     </div>
   );
 }

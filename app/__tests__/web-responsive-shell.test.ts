@@ -65,6 +65,23 @@ describe('web responsive shell split', () => {
     expect(output).toMatch(/require\(["']react["']\)|from ["']react["']/);
   });
 
+  test('renders mobile application controls after primary surfaces and the drawer', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const shellTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx'), 'utf8');
+    const mobileStart = shellTsx.indexOf('export function MobileShell');
+    const mobileBody = shellTsx.slice(mobileStart, shellTsx.indexOf('export function ResponsiveShell'));
+
+    expect(mobileBody.indexOf('{floatingControlStack}')).toBeGreaterThan(mobileBody.indexOf('{mobileOverlay}'));
+    expect(mobileBody.indexOf('{floatingControlStack}')).toBeGreaterThan(mobileBody.indexOf('{mobileSettingsScreen}'));
+    expect(mobileBody.indexOf('{floatingControlStack}')).toBeGreaterThan(mobileBody.indexOf('{sidebar}'));
+    expect(mobileBody).not.toContain('data-chat-preview-open={mobileOverlay');
+
+    const stylesCss = readWebStyles(projectRoot);
+    const usageCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8');
+    expect(cssRuleBlock(stylesCss, '.floating-control-stack-layer')).toContain('z-index: 71;');
+    expect(cssRuleBlock(usageCss, '.usage-mobile-overlay')).toContain('z-index: 70;');
+  });
+
   test('main delegates shell structure instead of owning desktop and mobile containers inline', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
@@ -172,7 +189,7 @@ describe('web responsive shell split', () => {
     const rightChatTitlePreviewOpenBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .desktop-primary-workspace > .chat-title-bar");
     expect(rightChatTitlePreviewOpenBlock).toContain('padding-right: 10px;');
 
-    const previewToolbarBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop .preview-workbench-toolbar");
+    const previewToolbarBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop > .workbench-chrome-toolbar");
     expect(previewToolbarBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
   });
 

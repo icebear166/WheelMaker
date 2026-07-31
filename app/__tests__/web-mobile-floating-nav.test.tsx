@@ -8,6 +8,7 @@ import {
   FLOATING_NAV_EXPANDED_OVERFLOW_PX,
   FLOATING_NAV_ITEMS,
   resolveFloatingNavReservedBottomInset,
+  shouldOpenDrawerWithFloatingNav,
   resolveFloatingNavCurrent,
   resolveFloatingNavRelayState,
 } from '../web/src/shell/layouts/mobile/mobileFloatingNavModel';
@@ -137,6 +138,15 @@ describe('mobile floating nav model', () => {
     expect(resolveFloatingNavRelayState({ready: true, frameUrl: 'http://x', hasTarget: true, frameOpen: true}))
       .toEqual({frameOpen: true, enabled: true, active: true});
   });
+
+  test('opens the Session drawer only when expanding from Chat', () => {
+    expect(shouldOpenDrawerWithFloatingNav('chat')).toBe(true);
+    expect(shouldOpenDrawerWithFloatingNav('preview')).toBe(false);
+    expect(shouldOpenDrawerWithFloatingNav('terminal')).toBe(false);
+    expect(shouldOpenDrawerWithFloatingNav('relay')).toBe(false);
+    expect(shouldOpenDrawerWithFloatingNav('monitor')).toBe(false);
+    expect(shouldOpenDrawerWithFloatingNav('settings')).toBe(false);
+  });
 });
 
 function readMain(): string {
@@ -153,6 +163,7 @@ describe('floating nav wiring', () => {
     expect(main).toContain('ready: portRelayReady');
     expect(main).toContain('frameUrl: portRelayFrameUrl');
     expect(main).toContain('expandedOverflowPx: floatingKeyboardOffset > 0 ? 0 : FLOATING_NAV_EXPANDED_OVERFLOW_PX');
+    expect(main).toContain('settingsOpen: sidebarSettingsOpen || releasePublishingOpen || portRelayScreenOpen');
   });
 
   test('merges relay into the nav and drops the standalone bubble', () => {
@@ -173,6 +184,25 @@ describe('floating nav wiring', () => {
     const main = readMain();
 
     expect(main).toContain('previewTabCount={previewTabCount}');
+    expect(main).toContain('openGestureNavigationActions(shouldOpenDrawerWithFloatingNav(floatingNavCurrent))');
+    expect(main).toContain('setDrawerOpen(openDrawer);');
+  });
+
+  test('closes transient mobile UI before switching destinations', () => {
+    const main = readMain();
+    const selectStart = main.indexOf('const handleFloatingNavSelect = useCallback(');
+    const selectEnd = main.indexOf('const toggleTerminalFromTitle', selectStart);
+    const selectBody = main.slice(selectStart, selectEnd);
+
+    expect(selectBody).toContain('setDrawerOpen(false);');
+    expect(selectBody).toContain('setMobileRelayTargetSheet(null);');
+    expect(selectBody).toContain('setPreviewWorkbenchActionsMenuOpen(false);');
+    expect(selectBody).toContain('setPreviewSelectionMenu(null);');
+    expect(selectBody).toContain('closeMobileDrawerCompanionOverlays();');
+    expect(selectBody).toContain('setReleasePublishingOpen(false);');
+    expect(selectBody).toContain('setPortRelayScreenOpen(false);');
+    expect(selectBody).not.toContain('setPreviewWorkbenchFullscreen(false)');
+    expect(selectBody).not.toContain('setTerminalFullscreen(false)');
   });
 
   test('relay frame chrome uses lucide icons', () => {

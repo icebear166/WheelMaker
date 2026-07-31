@@ -415,7 +415,7 @@
   right: 0;
   bottom: 0;
   pointer-events: none;
-  z-index: 44;
+  z-index: 71;
 }
 
 .floating-control-drag-backdrop {
@@ -1513,11 +1513,6 @@
 .narrow-shell[data-floating-control-side='left'] .drawer.show {
   transform: translateX(0);
   box-shadow: -8px 0 28px rgba(0, 0, 0, 0.38);
-}
-
-.floating-control-stack-layer[data-side-pulse='left'] ~ .drawer:not(.show),
-.floating-control-stack-layer[data-side-pulse='right'] ~ .drawer:not(.show) {
-  transition: box-shadow 220ms ease;
 }
 
 .narrow-shell .body {

@@ -40,6 +40,10 @@
   flex: 1 1 auto;
 }
 
+.terminal-mobile-overlay[hidden] {
+  display: none;
+}
+
 .terminal-workbench.mobile > .workbench-chrome-fullscreen-toggle {
   bottom: calc(70px + var(--wm-safe-area-bottom));
 }

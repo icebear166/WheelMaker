@@ -408,6 +408,7 @@ import {
   resolveFloatingNavCurrent,
   resolveFloatingNavReservedBottomInset,
   resolveFloatingNavRelayState,
+  shouldOpenDrawerWithFloatingNav,
   type FloatingNavDestination,
 } from '../shell/layouts/mobile/mobileFloatingNavModel';
 import {
@@ -6903,7 +6904,7 @@ export function App() {
   };
   const floatingNavCurrent = resolveFloatingNavCurrent({
     relayFrameOpen: mobilePortRelayFrameOpen,
-    settingsOpen: sidebarSettingsOpen,
+    settingsOpen: sidebarSettingsOpen || releasePublishingOpen || portRelayScreenOpen,
     usageOpen: mobileUsageOpen,
     terminalOpen,
     previewOpen: chatPreviewOpen && !mobilePortRelayFrameOpen,
@@ -7161,12 +7162,12 @@ export function App() {
     },
     [],
   );
-  const openGestureNavigationActions = useCallback(() => {
+  const openGestureNavigationActions = useCallback((openDrawer: boolean) => {
     clearGestureMoveLongPressTimer();
     const nextState: GestureNavigationState = {phase: 'expanded'};
     gestureNavStateRef.current = nextState;
     setGestureNavState(nextState);
-    setDrawerOpen(true);
+    setDrawerOpen(openDrawer);
   }, [
     clearGestureMoveLongPressTimer,
     setDrawerOpen,
@@ -7188,10 +7189,11 @@ export function App() {
     if (floatingClickCooldownUntilRef.current > Date.now()) {
       return;
     }
-    openGestureNavigationActions();
+    openGestureNavigationActions(shouldOpenDrawerWithFloatingNav(floatingNavCurrent));
   }, [
     clearGestureMoveLongPressTimer,
     gestureNavigationExpanded,
+    floatingNavCurrent,
     openGestureNavigationActions,
     setDrawerOpen,
   ]);
@@ -7357,10 +7359,10 @@ export function App() {
     };
   }, [cancelGestureNavigation, gestureNavigationExpanded]);
   useEffect(() => {
-    if (gestureNavigationExpanded && !drawerOpen) {
+    if (gestureNavigationExpanded && shouldOpenDrawerWithFloatingNav(floatingNavCurrent) && !drawerOpen) {
       cancelGestureNavigation();
     }
-  }, [cancelGestureNavigation, drawerOpen, gestureNavigationExpanded]);
+  }, [cancelGestureNavigation, drawerOpen, floatingNavCurrent, gestureNavigationExpanded]);
   const closeSettingsPanel = useCallback(() => {
     setSettingsDetailView(null);
     setSidebarSettingsOpen(false);
@@ -17296,18 +17298,43 @@ export function App() {
   const handleFloatingNavSelect = useCallback(
     (destination: FloatingNavDestination) => {
       cancelGestureNavigation();
+      setDrawerOpen(false);
+      setMobileRelayTargetSheet(null);
+      setPreviewWorkbenchActionsMenuOpen(false);
+      setPreviewSelectionMenu(null);
+      closeMobileDrawerCompanionOverlays();
+      mobileReleasePublishingHistoryRef.current = false;
+      mobilePortRelayHistoryRef.current = false;
+      setReleasePublishingOpen(false);
+      setPortRelayScreenOpen(false);
+      setMobileUsageOpen(false);
+      setSidebarSettingsOpen(false);
+      setTerminalOpen(false);
       if (destination === 'relay') {
         handleFloatingNavRelayOpen();
         return;
       }
       if (destination === 'preview') {
-        toggleChatPreviewFromTitle();
+        setPreviewWorkbench(current => {
+          const activeProjectId = current.activeProjectId;
+          const tabs = current.tabsByProjectId[activeProjectId] ?? [];
+          const currentActiveId = current.activeTabIdByProjectId[activeProjectId] ?? '';
+          const activeTab = tabs.find(tab => tab.id === currentActiveId);
+          if (activeTab?.type !== 'port-relay') return current;
+          const nextTab = [...tabs].reverse().find(tab => tab.type !== 'port-relay');
+          return {
+            ...current,
+            activeTabIdByProjectId: {
+              ...current.activeTabIdByProjectId,
+              [activeProjectId]: nextTab?.id ?? '',
+            },
+          };
+        });
+        setChatPreviewManualCollapsed(false);
+        setChatPreviewManualOpen(true);
         return;
       }
-      setMobileUsageOpen(false);
       closeChatPreview();
-      setSidebarSettingsOpen(false);
-      setTerminalOpen(false);
       if (destination === 'terminal') {
         setTerminalOpen(true);
       } else if (destination === 'monitor') {
@@ -17320,10 +17347,10 @@ export function App() {
     [
       cancelGestureNavigation,
       closeChatPreview,
+      closeMobileDrawerCompanionOverlays,
       handleFloatingNavRelayOpen,
       openSettingsRoot,
       setSidebarSettingsOpen,
-      toggleChatPreviewFromTitle,
     ],
   );
   const toggleTerminalFromTitle = useCallback(() => {
@@ -20250,9 +20277,11 @@ export function App() {
       {renderPreviewWorkbenchSurface('desktop')}
     </aside>
   ) : null;
-  const chatPreviewMobileOverlay = !isWide && chatPreviewOpen ? (
+  const chatPreviewMobileOverlay = !isWide ? (
     <div
       className="chat-preview-mobile-overlay"
+      hidden={!chatPreviewOpen}
+      aria-hidden={chatPreviewOpen ? undefined : true}
       role="dialog"
       aria-modal="true"
       aria-label="Chat preview"
@@ -20278,8 +20307,15 @@ export function App() {
       onOpenHistory={openUsageHistory}
     />
   ) : null;
-  const terminalMobileOverlay = !isWide && terminalOpen ? (
-    <div className="terminal-mobile-overlay" role="dialog" aria-modal="true" aria-label="Terminal">
+  const terminalMobileOverlay = !isWide ? (
+    <div
+      className="terminal-mobile-overlay"
+      hidden={!terminalOpen}
+      aria-hidden={terminalOpen ? undefined : true}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Terminal"
+    >
       <TerminalWorkbench mode="mobile"
         terminals={terminalItems}
         activeKey={activeTerminalKey}
@@ -20299,8 +20335,8 @@ export function App() {
             key={`mobile:${activeTerminalKey}`}
             ref={terminalViewRef}
             themeMode={themeMode}
-            active
-            resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
+            active={terminalOpen}
+            resizeEnabled={terminalOpen && terminalResizeTokensRef.current.has(activeTerminalKey)}
             cols={activeTerminal.cols}
             rows={activeTerminal.rows}
             shell={activeTerminal.shell}
@@ -20690,7 +20726,13 @@ export function App() {
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileReleasePublishingScreen ?? mobilePortRelayScreen ?? mobileSettingsScreen}
-        mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}
+        mobileOverlay={(
+          <>
+            {mobileUsageOverlay}
+            {terminalMobileOverlay}
+            {chatPreviewMobileOverlay}
+          </>
+        )}
         sidebar={renderSidebar()}
         main={renderMain()}
         sidebarCollapsed={chatSidebarCollapsed}

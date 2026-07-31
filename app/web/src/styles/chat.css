@@ -460,7 +460,7 @@
   color: var(--text-primary);
 }
 
-.narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer {
+.chat-preview-mobile-overlay[hidden] {
   display: none;
 }
 

@@ -127,9 +127,12 @@ describe('terminal workspace integration', () => {
 
   test('uses the full-screen mobile overlay slot and keeps Preview exclusive', () => {
     const source = read('web/src/app/WorkspaceApp.tsx');
-    expect(source).toContain('const terminalMobileOverlay = !isWide && terminalOpen ? (');
+    expect(source).toContain('const terminalMobileOverlay = !isWide ? (');
     expect(source).toContain('className="terminal-mobile-overlay"');
-    expect(source).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
+    expect(source).toContain('hidden={!terminalOpen}');
+    expect(source).toContain('aria-hidden={terminalOpen ? undefined : true}');
+    expect(source).toContain('{terminalMobileOverlay}');
+    expect(source).toContain('active={terminalOpen}');
     expect(source).toContain([
       'if (!isWide) {',
       '      setMobileUsageOpen(false);',

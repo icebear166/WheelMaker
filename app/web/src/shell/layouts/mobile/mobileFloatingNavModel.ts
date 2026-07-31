@@ -73,6 +73,10 @@ export function resolveFloatingNavCurrent(flags: FloatingNavSurfaceFlags): Float
   return 'chat';
 }
 
+export function shouldOpenDrawerWithFloatingNav(current: FloatingNavDestination): boolean {
+  return current === 'chat';
+}
+
 export type FloatingNavRelayState = {
   frameOpen: boolean;
   /** Can open the frame right now (relay up with a target, or frame already open). */

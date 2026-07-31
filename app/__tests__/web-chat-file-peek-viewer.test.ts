@@ -347,7 +347,10 @@ describe('web chat file peek viewer', () => {
     expect(shellTsx).toContain('desktopPeek: ReactNode;');
     expect(shellTsx).toContain('{desktopPeek}');
     expect(mainTsx).toContain('desktopPeek={chatPreviewDesktopPane}');
-    expect(mainTsx).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
+    expect(mainTsx).toContain('const chatPreviewMobileOverlay = !isWide ? (');
+    expect(mainTsx).toContain('hidden={!chatPreviewOpen}');
+    expect(mainTsx).toContain('aria-hidden={chatPreviewOpen ? undefined : true}');
+    expect(mainTsx).toContain('{chatPreviewMobileOverlay}');
   });
 
   test('right preview workbench uses project-scoped directory listing without switching workspace project', () => {
@@ -891,7 +894,7 @@ describe('web chat file peek viewer', () => {
     expect(mobileOverlay).toContain('inset: 0;');
     expect(mobileOverlay).toContain('z-index: 70;');
 
-    expect(stylesCss).toContain(".narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer");
+    expect(stylesCss).not.toContain(".narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer");
   });
 
   test('keeps chat and preview content on one workspace canvas at every viewport', () => {

@@ -143,7 +143,9 @@ describe('limits workspace integration', () => {
     expect(main).toContain('const mobileUsageOverlay = !isWide && mobileUsageOpen ? (');
     expect(main).toContain('<MobileUsageDialog');
     expect(main).toContain('snapshot={usageSnapshot}');
-    expect(main).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
+    expect(main).toContain('{mobileUsageOverlay}');
+    expect(main).toContain('{terminalMobileOverlay}');
+    expect(main).toContain('{chatPreviewMobileOverlay}');
 
     const selectStart = main.indexOf('const handleFloatingNavSelect = useCallback(');
     const selectEnd = main.indexOf('const toggleTerminalFromTitle', selectStart);

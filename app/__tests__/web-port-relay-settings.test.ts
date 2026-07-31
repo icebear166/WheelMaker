@@ -2,6 +2,11 @@ import fs from 'fs';
 import path from 'path';
 
 import {readWebStyles} from '../testHelpers/webStyles';
+function cssRuleBlock(styles: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return styles.match(new RegExp(`${escapedSelector} \\{([\\s\\S]*?)\\}`))?.[1] ?? '';
+}
+
 const root = path.resolve(__dirname, '..');
 const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const settingsSurfaceTsx = fs.readFileSync(path.join(root, 'web/src/settings/SettingsSurface.tsx'), 'utf8');
@@ -157,12 +162,9 @@ describe('port relay settings UI source structure', () => {
     expect(previewChromeTsx).toContain('<Icon name="refreshCw" />');
 
     expect(stylesCss).toContain('.preview-workbench-mobile-port-relay-refresh');
-    const refreshStart = stylesCss.indexOf('.preview-workbench-mobile-port-relay-refresh');
-    const fullscreenStart = stylesCss.indexOf('.preview-workbench-mobile-header-toggle', refreshStart);
-    expect(refreshStart).toBeGreaterThanOrEqual(0);
-    expect(fullscreenStart).toBeGreaterThan(refreshStart);
-    const refreshCss = stylesCss.slice(refreshStart, fullscreenStart);
+    const refreshCss = cssRuleBlock(stylesCss, '.preview-workbench-mobile-port-relay-refresh');
     expect(refreshCss).toContain('bottom: calc(max(14px, var(--wm-safe-area-bottom)) + 44px);');
+    expect(stylesCss).toContain('.workbench-chrome-fullscreen-toggle {\n  position: absolute;');
   });
 
   test('tracks relay enable status and polls opening status silently', () => {
@@ -218,9 +220,7 @@ describe('port relay settings UI source structure', () => {
     expect(mobileSurfaceCss).toContain('overscroll-behavior: none;');
     expect(mobileSurfaceCss).toContain('touch-action: pan-y;');
 
-    const iframeStart = stylesCss.indexOf('.port-relay-frame {');
-    const iframeEnd = stylesCss.indexOf('.floating-control-stack-layer', iframeStart);
-    const iframeCss = stylesCss.slice(iframeStart, iframeEnd);
+    const iframeCss = cssRuleBlock(stylesCss, '.port-relay-frame');
 
     expect(iframeCss).toContain('max-width: 100%;');
   });
