@@ -484,9 +484,6 @@ func (f *fakeNPMRunner) Run(ctx context.Context, name string, args ...string) np
 	if ok {
 		return result
 	}
-	if name == "npm" && len(args) >= 3 && args[0] == "view" && args[2] == "version" {
-		return npmCommandResult{Stdout: "9.9.9\n", ExitCode: 0}
-	}
 	return npmCommandResult{Stdout: "", ExitCode: 0}
 }
 
@@ -516,8 +513,92 @@ func (f *fakeNPMRunner) hasCall(name string, args ...string) bool {
 	return false
 }
 
+func (f *fakeNPMRunner) snapshot() []npmCommandCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]npmCommandCall(nil), f.calls...)
+}
+
 func npmCallKey(name string, args ...string) string {
 	return name + "\x00" + strings.Join(args, "\x00")
+}
+
+// fakeNPMLatestFetcher stands in for the registry HTTP lookup so tests never
+// touch the network.
+type fakeNPMLatestFetcher struct {
+	mu       sync.Mutex
+	versions map[string]string
+	errs     map[string]error
+	calls    []string
+	fallback string
+}
+
+func newFakeNPMLatestFetcher() *fakeNPMLatestFetcher {
+	return &fakeNPMLatestFetcher{
+		versions: map[string]string{},
+		errs:     map[string]error{},
+		fallback: "9.9.9",
+	}
+}
+
+func (f *fakeNPMLatestFetcher) LatestVersion(_ context.Context, packageName string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, packageName)
+	if err, ok := f.errs[packageName]; ok {
+		return "", err
+	}
+	if version, ok := f.versions[packageName]; ok {
+		return version, nil
+	}
+	return f.fallback, nil
+}
+
+func (f *fakeNPMLatestFetcher) setVersion(packageName, version string) {
+	f.mu.Lock()
+	f.versions[packageName] = version
+	f.mu.Unlock()
+}
+
+func (f *fakeNPMLatestFetcher) setError(packageName string, err error) {
+	f.mu.Lock()
+	f.errs[packageName] = err
+	f.mu.Unlock()
+}
+
+func (f *fakeNPMLatestFetcher) callCount(packageName string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	count := 0
+	for _, call := range f.calls {
+		if call == packageName {
+			count++
+		}
+	}
+	return count
+}
+
+func newNPMTestCommand(runner npmCommandRunner) (*NPMCommand, *fakeNPMLatestFetcher) {
+	return newNPMTestCommandWithProbe(runner, func(context.Context) bool { return true })
+}
+
+func newNPMTestCommandWithProbe(runner npmCommandRunner, probe func(context.Context) bool) (*NPMCommand, *fakeNPMLatestFetcher) {
+	fetcher := newFakeNPMLatestFetcher()
+	return newNPMCommandWithDependencies("", runner, fetcher, probe), fetcher
+}
+
+func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
+	cmd, _ := newNPMTestCommand(runner)
+	return cmd
+}
+
+// seedNPMPrivateRegistryState pre-caches the private registry decision so a
+// test can assert scan output without waiting for the async probe.
+func seedNPMPrivateRegistryState(cmd *NPMCommand, available bool) {
+	cmd.mu.Lock()
+	cmd.cacheLoaded = true
+	cmd.flicker = npmPrivateRegistryState{known: true, available: available, probedAt: cmd.now()}
+	cmd.mu.Unlock()
 }
 
 func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
@@ -526,9 +607,9 @@ func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
 		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.129.0"},"@zed-industries/claude-agent-acp":{"version":"0.13.0"}}}`,
 		ExitCode: 0,
 	})
-	runner.set("npm", []string{"view", "@openai/codex", "version"}, npmCommandResult{Stdout: "0.130.0\n", ExitCode: 0})
 
-	cmd := newNPMCommandWithRunner(runner)
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@openai/codex", "0.130.0")
 	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
 		"action": "scan",
 		"hubId":  "hub-a",
@@ -545,6 +626,11 @@ func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
 	}
 	if runner.hasCall("node", "--version") || runner.hasCall("npm", "--version") || runner.hasCall("npm", "prefix", "-g") {
 		t.Fatalf("scan should not call hidden metadata commands: %#v", runner.calls)
+	}
+	for _, call := range runner.snapshot() {
+		if call.Name == "npm" && len(call.Args) > 0 && call.Args[0] == "view" {
+			t.Fatalf("latest lookup should not spawn npm view: %#v", call)
+		}
 	}
 
 	codex := findNPMTestPackage(t, body.Hub.Packages, "@openai/codex")
@@ -589,10 +675,11 @@ func TestNPMCommandScanIncludesMyFlickerFromPrivateRegistry(t *testing.T) {
 		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"},"@openai/codex":{"version":"0.129.0"}}}`,
 		ExitCode: 0,
 	})
-	runner.set("npm", []string{"view", "@openai/codex", "version"}, npmCommandResult{Stdout: "0.130.0\n", ExitCode: 0})
-	runner.set("npm", []string{"view", "@myflicker/cli", "version", "--registry=https://npm.corp.kuaishou.com"}, npmCommandResult{Stdout: "1.1.0\n", ExitCode: 0})
 
-	cmd := newNPMCommandWithRunner(runner)
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@openai/codex", "0.130.0")
+	fetcher.setVersion(myFlickerPackageName, "1.1.0")
+	seedNPMPrivateRegistryState(cmd, true)
 	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
 		"action": "scan",
 		"hubId":  "hub-a",
@@ -621,8 +708,11 @@ func TestNPMCommandScanIncludesMyFlickerFromPrivateRegistry(t *testing.T) {
 	if myFlicker.Status != "update_available" || myFlicker.LatestVersion != "1.1.0" || !myFlicker.CanUpdate {
 		t.Fatalf("myflicker package=%#v", myFlicker)
 	}
-	if !runner.hasCall("npm", "view", "@myflicker/cli", "version", "--registry=https://npm.corp.kuaishou.com") {
-		t.Fatalf("scan should query MyFlicker latest through its private registry: %#v", runner.calls)
+	if fetcher.callCount(myFlickerPackageName) == 0 {
+		t.Fatal("scan should query MyFlicker latest version")
+	}
+	if npmRegistryForPackage(myFlickerPackageName) != myFlickerRegistry {
+		t.Fatalf("MyFlicker latest lookup registry=%q, want %q", npmRegistryForPackage(myFlickerPackageName), myFlickerRegistry)
 	}
 }
 
@@ -672,18 +762,14 @@ func TestNPMCommandScanListFailureReturnsHubError(t *testing.T) {
 	}
 }
 
-func TestNPMCommandScanMarksMissingPackageViewFailureAsCheckingFailed(t *testing.T) {
+func TestNPMCommandScanMarksMissingPackageLatestFailureAsCheckingFailed(t *testing.T) {
 	runner := newFakeNPMRunner()
 	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
 		Stdout:   `{"dependencies":{}}`,
 		ExitCode: 0,
 	})
-	runner.set("npm", []string{"view", "@openai/codex", "version"}, npmCommandResult{
-		Stderr:   "registry unavailable\n",
-		ExitCode: 1,
-		Err:      errors.New("exit status 1"),
-	})
-	cmd := newNPMCommandWithRunner(runner)
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setError("@openai/codex", errors.New("registry unavailable"))
 
 	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
 		"action": "scan",
@@ -707,6 +793,127 @@ func TestNPMCommandScanMarksMissingPackageViewFailureAsCheckingFailed(t *testing
 	pkg = findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@openai/codex")
 	if pkg.Status != "latest_unknown" || pkg.CanInstall || pkg.CanUpdate || pkg.Error == "" {
 		t.Fatalf("pkg=%#v, want latest_unknown package without actions after latest failure", pkg)
+	}
+}
+
+func TestNPMPackageLatestURLTargetsSingleManifestEndpoint(t *testing.T) {
+	tests := []struct {
+		packageName string
+		wantURL     string
+	}{
+		{packageName: "@openai/codex", wantURL: defaultNPMRegistry + "/@openai%2fcodex/latest"},
+		{packageName: "opencode-ai", wantURL: defaultNPMRegistry + "/opencode-ai/latest"},
+		{packageName: myFlickerPackageName, wantURL: myFlickerRegistry + "/@myflicker%2fcli/latest"},
+	}
+	for _, tt := range tests {
+		got := npmPackageLatestURL(npmRegistryForPackage(tt.packageName), tt.packageName)
+		if got != tt.wantURL {
+			t.Fatalf("npmPackageLatestURL(%s)=%q, want %q", tt.packageName, got, tt.wantURL)
+		}
+	}
+}
+
+func TestNPMCommandScanServesStaleLatestWhileRefreshing(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.129.0"}}}`,
+		ExitCode: 0,
+	})
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@openai/codex", "0.131.0")
+	base := time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC)
+	cmd.now = func() time.Time { return base }
+	cmd.mu.Lock()
+	cmd.cacheLoaded = true
+	cmd.latestCache["@openai/codex"] = npmLatestCacheEntry{
+		result:    npmLatestResult{version: "0.130.0"},
+		fetchedAt: base.Add(-npmLatestSuccessTTL - time.Minute),
+	}
+	cmd.mu.Unlock()
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	pkg := findNPMTestPackage(t, body.Hub.Packages, "@openai/codex")
+	if pkg.LatestVersion != "0.130.0" || pkg.Status != "update_available" {
+		t.Fatalf("pkg=%#v, want the stale latest version served while refreshing", pkg)
+	}
+	if body.Operation == nil || !body.Operation.Running || body.Operation.Action != "scan_latest" {
+		t.Fatalf("operation=%#v, want a running background refresh", body.Operation)
+	}
+
+	waitForNPMTestOperation(t, cmd)
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle second scan error: %#v", cmdErr)
+	}
+	pkg = findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@openai/codex")
+	if pkg.LatestVersion != "0.131.0" {
+		t.Fatalf("pkg=%#v, want the refreshed latest version", pkg)
+	}
+}
+
+func TestNPMCommandReusesPersistedLatestCacheAcrossRestart(t *testing.T) {
+	stateDir := t.TempDir()
+	listResult := npmCommandResult{
+		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.129.0"}}}`,
+		ExitCode: 0,
+	}
+
+	firstRunner := newFakeNPMRunner()
+	firstRunner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, listResult)
+	firstFetcher := newFakeNPMLatestFetcher()
+	firstFetcher.setVersion("@openai/codex", "0.130.0")
+	first := newNPMCommandWithDependencies(stateDir, firstRunner, firstFetcher, func(context.Context) bool { return false })
+	if _, cmdErr := first.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("first hub scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, first)
+
+	cachePath := filepath.Join(stateDir, npmCacheDirectoryName, npmLatestCacheFileName)
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("latest cache was not persisted: %v", err)
+	}
+
+	secondRunner := newFakeNPMRunner()
+	secondRunner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, listResult)
+	secondFetcher := newFakeNPMLatestFetcher()
+	probeCalls := 0
+	second := newNPMCommandWithDependencies(stateDir, secondRunner, secondFetcher, func(context.Context) bool {
+		probeCalls++
+		return false
+	})
+	resp, cmdErr := second.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("restarted hub scan error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	pkg := findNPMTestPackage(t, body.Hub.Packages, "@openai/codex")
+	if pkg.LatestVersion != "0.130.0" || pkg.Status != "update_available" {
+		t.Fatalf("pkg=%#v, want the persisted latest version on the first scan after restart", pkg)
+	}
+	if body.Operation != nil && body.Operation.Running {
+		t.Fatalf("operation=%#v, want no refresh while the persisted cache is fresh", body.Operation)
+	}
+	if secondFetcher.callCount("@openai/codex") != 0 {
+		t.Fatal("restarted hub should not re-query a fresh persisted latest version")
+	}
+	if probeCalls != 0 {
+		t.Fatalf("private registry probe calls=%d, want 0 while the persisted decision is fresh", probeCalls)
 	}
 }
 

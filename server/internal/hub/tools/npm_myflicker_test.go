@@ -6,47 +6,68 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
-func TestProbeNPMRegistryPackageRequiresMatchingMetadata(t *testing.T) {
+func TestFetchNPMLatestVersionRequiresMatchingManifest(t *testing.T) {
 	tests := []struct {
-		name       string
-		statusCode int
-		body       string
-		want       bool
+		name        string
+		statusCode  int
+		body        string
+		wantVersion string
+		wantErr     bool
 	}{
-		{name: "matching package", statusCode: http.StatusOK, body: `{"name":"@myflicker/cli","dist-tags":{"latest":"0.3.13"}}`, want: true},
-		{name: "html login page", statusCode: http.StatusOK, body: `<html>login</html>`, want: false},
-		{name: "wrong package", statusCode: http.StatusOK, body: `{"name":"other-package","dist-tags":{"latest":"0.3.13"}}`, want: false},
-		{name: "missing latest tag", statusCode: http.StatusOK, body: `{"name":"@myflicker/cli","dist-tags":{}}`, want: false},
-		{name: "registry unavailable", statusCode: http.StatusForbidden, body: `{"error":"forbidden"}`, want: false},
+		{name: "matching package", statusCode: http.StatusOK, body: `{"name":"@myflicker/cli","version":"0.3.13"}`, wantVersion: "0.3.13"},
+		{name: "html login page", statusCode: http.StatusOK, body: `<html>login</html>`, wantErr: true},
+		{name: "wrong package", statusCode: http.StatusOK, body: `{"name":"other-package","version":"0.3.13"}`, wantErr: true},
+		{name: "missing version", statusCode: http.StatusOK, body: `{"name":"@myflicker/cli"}`, wantErr: true},
+		{name: "registry unavailable", statusCode: http.StatusForbidden, body: `{"error":"forbidden"}`, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var requestedPath string
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				requestedPath = request.URL.EscapedPath()
 				writer.WriteHeader(tt.statusCode)
 				_, _ = writer.Write([]byte(tt.body))
 			}))
 			defer server.Close()
 
-			if got := probeNPMRegistryPackage(context.Background(), server.Client(), server.URL, myFlickerPackageName); got != tt.want {
-				t.Fatalf("probeNPMRegistryPackage()=%v, want %v", got, tt.want)
+			version, err := fetchNPMLatestVersion(context.Background(), server.Client(), server.URL, myFlickerPackageName)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("fetchNPMLatestVersion()=%q, want error", version)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("fetchNPMLatestVersion() error: %v", err)
+			}
+			if version != tt.wantVersion {
+				t.Fatalf("fetchNPMLatestVersion()=%q, want %q", version, tt.wantVersion)
+			}
+			if requestedPath != "/@myflicker%2fcli/latest" {
+				t.Fatalf("requested path=%q, want the single-manifest endpoint", requestedPath)
 			}
 		})
 	}
 }
 
-func TestNPMCommandHidesMyFlickerWhenPrivateRegistryUnavailableAndProbesOnce(t *testing.T) {
+func TestNPMCommandHidesMyFlickerWhenPrivateRegistryUnavailableAndCachesProbe(t *testing.T) {
 	runner := newFakeNPMRunner()
 	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
 		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"},"@openai/codex":{"version":"0.129.0"}}}`,
 		ExitCode: 0,
 	})
+	var probeMu sync.Mutex
 	probeCalls := 0
-	cmd := newNPMCommandWithRunnerAndProbe(runner, func(context.Context) bool {
+	cmd, fetcher := newNPMTestCommandWithProbe(runner, func(context.Context) bool {
+		probeMu.Lock()
 		probeCalls++
+		probeMu.Unlock()
 		return false
 	})
 
@@ -64,17 +85,83 @@ func TestNPMCommandHidesMyFlickerWhenPrivateRegistryUnavailableAndProbesOnce(t *
 		waitForNPMTestOperation(t, cmd)
 	}
 
-	if probeCalls != 1 {
-		t.Fatalf("private registry probe calls=%d, want 1", probeCalls)
+	probeMu.Lock()
+	calls := probeCalls
+	probeMu.Unlock()
+	if calls != 1 {
+		t.Fatalf("private registry probe calls=%d, want 1 within the cache TTL", calls)
 	}
-	if runner.hasCall("npm", "view", myFlickerPackageName, "version", "--registry="+myFlickerRegistry) {
-		t.Fatalf("unavailable MyFlicker should not query latest: %#v", runner.calls)
+	if fetcher.callCount(myFlickerPackageName) != 0 {
+		t.Fatal("unavailable MyFlicker should not query latest version")
+	}
+}
+
+func TestNPMCommandReprobesPrivateRegistryAfterUnavailableTTL(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"}}}`,
+		ExitCode: 0,
+	})
+	var probeMu sync.Mutex
+	probeCalls := 0
+	cmd, _ := newNPMTestCommandWithProbe(runner, func(context.Context) bool {
+		probeMu.Lock()
+		defer probeMu.Unlock()
+		probeCalls++
+		// Recover on the second probe, mirroring a machine that rejoined the
+		// corporate network.
+		return probeCalls > 1
+	})
+	base := time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC)
+	var clockMu sync.Mutex
+	clock := base
+	cmd.now = func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return clock
+	}
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("first scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	clockMu.Lock()
+	clock = base.Add(npmPrivateRegistryUnavailableTTL + time.Minute)
+	clockMu.Unlock()
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("second scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("third scan error: %#v", cmdErr)
+	}
+	if !hasNPMTestPackage(resp.(npmCommandResponse).Hub.Packages, myFlickerPackageName) {
+		t.Fatalf("MyFlicker row missing after the registry became reachable again: %#v", resp)
+	}
+	probeMu.Lock()
+	calls := probeCalls
+	probeMu.Unlock()
+	if calls != 2 {
+		t.Fatalf("private registry probe calls=%d, want 2 (one per expired TTL)", calls)
 	}
 }
 
 func TestNPMCommandUsesPrivateRegistryOnlyForMyFlickerOperations(t *testing.T) {
 	runner := newFakeNPMRunner()
-	cmd := newNPMCommandWithRunnerAndProbe(runner, func(context.Context) bool { return true })
+	cmd, _ := newNPMTestCommand(runner)
 
 	_, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
 		"action":      "install",
@@ -135,7 +222,7 @@ func TestNPMCommandUsesPrivateRegistryOnlyForMyFlickerOperations(t *testing.T) {
 
 func TestNPMCommandUsesMyFlickerBinaryNameInInstallMessage(t *testing.T) {
 	runner := newFakeNPMRunner()
-	cmd := newNPMCommandWithRunnerAndProbe(runner, func(context.Context) bool { return true })
+	cmd, _ := newNPMTestCommand(runner)
 	cmd.lookPath = func(name string) (string, error) {
 		if name == "myflicker" {
 			return "/usr/local/bin/myflicker", nil

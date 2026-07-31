@@ -76,7 +76,7 @@ func NewManager(config ManagerConfig) *Manager {
 	config.GlobalLockPath = strings.TrimSpace(config.GlobalLockPath)
 	config.HomeDir = strings.TrimSpace(config.HomeDir)
 	config.Projects = append([]ProjectInfo(nil), config.Projects...)
-	npmCommand := NewNPMCommand()
+	npmCommand := NewNPMCommand(config.StateDir)
 	npmCommand.setOperationDoneHandler(config.OnNPMOperationDone)
 	updateCommand := NewUpdateCommand(config.StateDir)
 	updateCommand.setOperationDoneHandler(config.OnUpdateOperationDone)
@@ -123,7 +123,7 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 	switch strings.TrimSpace(method) {
 	case "cmd.npm":
 		if m.npmCommand == nil {
-			m.npmCommand = NewNPMCommand()
+			m.npmCommand = NewNPMCommand(m.cfg.StateDir)
 			m.npmCommand.setOperationDoneHandler(m.cfg.OnNPMOperationDone)
 		}
 		out, err := m.npmCommand.Handle(ctx, payload)

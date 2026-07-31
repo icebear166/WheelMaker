@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -62,52 +64,137 @@ func (execNPMCommandRunner) Run(ctx context.Context, name string, args ...string
 
 type NPMCommand struct {
 	runner       npmCommandRunner
+	fetcher      npmLatestFetcher
 	now          func() time.Time
 	lookPath     func(string) (string, error)
 	flickerProbe func(context.Context) bool
-	flickerOnce  sync.Once
-	flickerReady bool
+	stateDir     string
 
 	mu            sync.Mutex
 	operation     *npmOperationSnapshot
 	latestCache   map[string]npmLatestCacheEntry
+	flicker       npmPrivateRegistryState
+	cacheLoaded   bool
 	operationDone func()
 }
 
-func NewNPMCommand() *NPMCommand {
-	return newNPMCommandWithRunnerAndProbe(execNPMCommandRunner{}, probeMyFlickerRegistry)
+func NewNPMCommand(stateDir string) *NPMCommand {
+	return newNPMCommandWithDependencies(stateDir, execNPMCommandRunner{}, httpNPMLatestFetcher{}, probeMyFlickerRegistry)
 }
 
-func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
-	return newNPMCommandWithRunnerAndProbe(runner, func(context.Context) bool { return true })
-}
-
-func newNPMCommandWithRunnerAndProbe(runner npmCommandRunner, flickerProbe func(context.Context) bool) *NPMCommand {
+func newNPMCommandWithDependencies(stateDir string, runner npmCommandRunner, fetcher npmLatestFetcher, flickerProbe func(context.Context) bool) *NPMCommand {
 	if runner == nil {
 		runner = execNPMCommandRunner{}
+	}
+	if fetcher == nil {
+		fetcher = httpNPMLatestFetcher{}
 	}
 	if flickerProbe == nil {
 		flickerProbe = probeMyFlickerRegistry
 	}
 	return &NPMCommand{
 		runner:       runner,
+		fetcher:      fetcher,
 		now:          func() time.Time { return time.Now().UTC() },
 		lookPath:     exec.LookPath,
 		flickerProbe: flickerProbe,
+		stateDir:     stateDir,
 		latestCache:  map[string]npmLatestCacheEntry{},
 	}
 }
 
 const (
-	myFlickerPackageName         = "@myflicker/cli"
-	myFlickerRegistry            = "https://npm.corp.kuaishou.com"
-	myFlickerRegistryMetadataURL = myFlickerRegistry + "/@myflicker%2fcli"
-	myFlickerProbeTimeout        = 5 * time.Second
+	myFlickerPackageName  = "@myflicker/cli"
+	myFlickerRegistry     = "https://npm.corp.kuaishou.com"
+	defaultNPMRegistry    = "https://registry.npmjs.org"
+	myFlickerProbeTimeout = 2 * time.Second
+
+	// npmLatestRequestTimeout bounds a single registry lookup. The endpoint we
+	// use returns a few KB, so a slow response means a slow link rather than a
+	// large payload.
+	npmLatestRequestTimeout = 10 * time.Second
+
+	// npmPrivateRegistryAvailableTTL and npmPrivateRegistryUnavailableTTL keep
+	// the private registry reachability decision cached without freezing it for
+	// the whole process lifetime: leaving or rejoining the corporate network is
+	// picked up on the next scan after the TTL expires.
+	npmPrivateRegistryAvailableTTL   = 6 * time.Hour
+	npmPrivateRegistryUnavailableTTL = 10 * time.Minute
 )
 
-type npmRegistryPackageMetadata struct {
-	Name     string            `json:"name"`
-	DistTags map[string]string `json:"dist-tags"`
+// npmLatestFetcher resolves a package's latest published version.
+type npmLatestFetcher interface {
+	LatestVersion(ctx context.Context, packageName string) (string, error)
+}
+
+// httpNPMLatestFetcher reads the latest version straight from the registry
+// instead of spawning `npm view`. `npm view` downloads the whole packument
+// (megabytes for packages with long release histories) and pays a node startup
+// per package; the `/<package>/latest` endpoint answers with a few KB.
+type httpNPMLatestFetcher struct {
+	client *http.Client
+}
+
+func (f httpNPMLatestFetcher) LatestVersion(ctx context.Context, packageName string) (string, error) {
+	client := f.client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	requestCtx, cancel := context.WithTimeout(ctx, npmLatestRequestTimeout)
+	defer cancel()
+	return fetchNPMLatestVersion(requestCtx, client, npmRegistryForPackage(packageName), packageName)
+}
+
+func npmRegistryForPackage(packageName string) string {
+	if packageName == myFlickerPackageName {
+		return myFlickerRegistry
+	}
+	return defaultNPMRegistry
+}
+
+// npmPackageLatestURL builds the registry endpoint that returns only the latest
+// manifest. Scoped names carry a slash that must be escaped into a single path
+// segment (npm's own clients use the lowercase escape).
+func npmPackageLatestURL(registry, packageName string) string {
+	return strings.TrimSuffix(registry, "/") + "/" + strings.ReplaceAll(packageName, "/", "%2f") + "/latest"
+}
+
+type npmLatestManifest struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+func fetchNPMLatestVersion(ctx context.Context, client *http.Client, registry, packageName string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if client == nil {
+		client = http.DefaultClient
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, npmPackageLatestURL(registry, packageName), nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Accept", "application/json")
+	response, err := client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("registry responded with status %d", response.StatusCode)
+	}
+	var manifest npmLatestManifest
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&manifest); err != nil {
+		return "", fmt.Errorf("invalid registry manifest: %w", err)
+	}
+	if manifest.Name != packageName || manifest.Version == "" {
+		return "", fmt.Errorf("registry manifest does not describe %s", packageName)
+	}
+	return manifest.Version, nil
 }
 
 func probeMyFlickerRegistry(ctx context.Context) bool {
@@ -116,44 +203,35 @@ func probeMyFlickerRegistry(ctx context.Context) bool {
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, myFlickerProbeTimeout)
 	defer cancel()
-	return probeNPMRegistryPackage(probeCtx, http.DefaultClient, myFlickerRegistryMetadataURL, myFlickerPackageName)
+	version, err := fetchNPMLatestVersion(probeCtx, http.DefaultClient, myFlickerRegistry, myFlickerPackageName)
+	return err == nil && version != ""
 }
 
-func probeNPMRegistryPackage(ctx context.Context, client *http.Client, metadataURL, packageName string) bool {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if client == nil {
-		client = http.DefaultClient
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
-	if err != nil {
-		return false
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return false
-	}
-	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return false
-	}
-	var metadata npmRegistryPackageMetadata
-	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&metadata); err != nil {
-		return false
-	}
-	return metadata.Name == packageName && strings.TrimSpace(metadata.DistTags["latest"]) != ""
+// npmPrivateRegistryState caches whether the MyFlicker registry answered, so a
+// scan never blocks on the probe.
+type npmPrivateRegistryState struct {
+	known     bool
+	available bool
+	probedAt  time.Time
 }
 
-func (c *NPMCommand) myFlickerRegistryAvailable() bool {
-	c.flickerOnce.Do(func() {
-		probe := c.flickerProbe
-		if probe == nil {
-			probe = probeMyFlickerRegistry
-		}
-		c.flickerReady = probe(context.Background())
-	})
-	return c.flickerReady
+func npmPrivateRegistryStateValid(state npmPrivateRegistryState, now time.Time) bool {
+	if !state.known || state.probedAt.IsZero() {
+		return false
+	}
+	ttl := npmPrivateRegistryUnavailableTTL
+	if state.available {
+		ttl = npmPrivateRegistryAvailableTTL
+	}
+	return now.Sub(state.probedAt) < ttl
+}
+
+func (c *NPMCommand) runFlickerProbe(ctx context.Context) bool {
+	probe := c.flickerProbe
+	if probe == nil {
+		probe = probeMyFlickerRegistry
+	}
+	return probe(ctx)
 }
 
 func (c *NPMCommand) setOperationDoneHandler(handler func()) {
@@ -379,7 +457,6 @@ func (c *NPMCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *npm
 func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse {
 	now := c.now()
 	updatedAt := now.Format(time.RFC3339)
-	flickerAvailable := c.myFlickerRegistryAvailable()
 	hub := npmHubSnapshot{
 		HubID:    hubID,
 		Packages: []npmPackageStatus{},
@@ -396,16 +473,16 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 		return npmCommandResponse{OK: false, UpdatedAt: updatedAt, Hub: hub, Operation: c.currentOperationSnapshot()}
 	}
 
-	latest, missingLatest := c.latestResultsForScan(now, flickerAvailable)
+	plan := c.latestPlanForScan(now)
 	operation := c.currentOperationSnapshot()
-	if len(missingLatest) > 0 && (operation == nil || !operation.Running) {
+	if (len(plan.missing) > 0 || plan.probeFlicker) && (operation == nil || !operation.Running) {
 		started, cmdErr := c.acceptOperation("scan_latest", "", "", nil)
 		if cmdErr == nil {
 			operation = cloneNPMOperation(started)
-			go c.runLatestOperation(started, missingLatest)
+			go c.runLatestOperation(started, plan.missing, plan.probeFlicker)
 		}
 	}
-	for _, policy := range runtimeNPMPackagesForScan(flickerAvailable) {
+	for _, policy := range runtimeNPMPackagesForScan(plan.flickerAvailable) {
 		installedVersion := installed[policy.PackageName]
 		row := npmPackageStatus{
 			PackageName:      policy.PackageName,
@@ -416,7 +493,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 			InstalledVersion: installedVersion,
 			CanUninstall:     installedVersion != "",
 		}
-		latestResult, hasLatest := latest[policy.PackageName]
+		latestResult, hasLatest := plan.latest[policy.PackageName]
 		if hasLatest {
 			row.LatestVersion = latestResult.version
 			row.Error = latestResult.errorSummary
@@ -502,11 +579,6 @@ func npmRegistryArgs(packageName string) []string {
 	return nil
 }
 
-func npmViewArgs(packageName string) []string {
-	args := []string{"view", packageName, "version"}
-	return append(args, npmRegistryArgs(packageName)...)
-}
-
 func npmInstallArgs(packageName, version string) []string {
 	args := []string{"install", "-g", packageName + "@" + version}
 	return append(args, npmRegistryArgs(packageName)...)
@@ -514,18 +586,21 @@ func npmInstallArgs(packageName, version string) []string {
 
 func (c *NPMCommand) lookupLatestVersions(ctx context.Context, packageNames []string) map[string]npmLatestResult {
 	out := make(map[string]npmLatestResult, len(packageNames))
+	fetcher := c.fetcher
+	if fetcher == nil {
+		fetcher = httpNPMLatestFetcher{}
+	}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	for _, packageName := range packageNames {
-		packageName := packageName
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := c.runner.Run(ctx, "npm", npmViewArgs(packageName)...)
-			next := npmLatestResult{version: firstNonEmptyLine(result.Stdout)}
-			if commandFailed(result) || next.version == "" {
+			version, err := fetcher.LatestVersion(ctx, packageName)
+			next := npmLatestResult{version: version}
+			if err != nil || next.version == "" {
 				next.version = ""
-				next.errorSummary = npmResultSummary(result)
+				next.errorSummary = formatNPMLatestErrorSummary(packageName, err)
 			}
 			mu.Lock()
 			out[packageName] = next
@@ -536,22 +611,46 @@ func (c *NPMCommand) lookupLatestVersions(ctx context.Context, packageNames []st
 	return out
 }
 
-func (c *NPMCommand) latestResultsForScan(now time.Time, flickerAvailable bool) (map[string]npmLatestResult, []string) {
+func formatNPMLatestErrorSummary(packageName string, err error) string {
+	if err == nil {
+		return fmt.Sprintf("registry did not report a latest version for %s", packageName)
+	}
+	return fmt.Sprintf("latest version lookup failed for %s: %s", packageName, truncateRunes(err.Error(), 500))
+}
+
+type npmLatestScanPlan struct {
+	latest           map[string]npmLatestResult
+	missing          []string
+	flickerAvailable bool
+	probeFlicker     bool
+}
+
+// latestPlanForScan decides what the scan can answer from cache and what the
+// background refresh has to fetch. Stale entries are still served (stale while
+// revalidate) so the App renders known versions immediately instead of showing
+// every row as "checking" after a hub restart or TTL expiry.
+func (c *NPMCommand) latestPlanForScan(now time.Time) npmLatestScanPlan {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.ensureCacheLoadedLocked()
 
-	packages := runtimeNPMPackagesForScan(flickerAvailable)
-	out := make(map[string]npmLatestResult, len(packages))
-	var missing []string
-	for _, policy := range packages {
+	plan := npmLatestScanPlan{
+		latest:           map[string]npmLatestResult{},
+		flickerAvailable: c.flicker.known && c.flicker.available,
+		probeFlicker:     !npmPrivateRegistryStateValid(c.flicker, now),
+	}
+	for _, policy := range runtimeNPMPackagesForScan(plan.flickerAvailable) {
 		entry, ok := c.latestCache[policy.PackageName]
-		if !ok || !npmLatestCacheValid(entry, now) {
-			missing = append(missing, policy.PackageName)
+		if ok && npmLatestCacheValid(entry, now) {
+			plan.latest[policy.PackageName] = entry.result
 			continue
 		}
-		out[policy.PackageName] = entry.result
+		if ok && entry.result.version != "" {
+			plan.latest[policy.PackageName] = entry.result
+		}
+		plan.missing = append(plan.missing, policy.PackageName)
 	}
-	return out, missing
+	return plan
 }
 
 func npmLatestCacheValid(entry npmLatestCacheEntry, now time.Time) bool {
@@ -565,16 +664,141 @@ func npmLatestCacheValid(entry npmLatestCacheEntry, now time.Time) bool {
 	return now.Sub(entry.fetchedAt) < ttl
 }
 
-func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, packageNames []string) {
-	results := c.lookupLatestVersions(context.Background(), packageNames)
+const (
+	npmCacheDirectoryName  = "cache"
+	npmLatestCacheFileName = "npm-latest.json"
+	npmLatestCacheSchema   = 1
+)
+
+type npmLatestCacheFile struct {
+	Schema          int                             `json:"schema"`
+	Packages        map[string]npmLatestCacheRecord `json:"packages"`
+	PrivateRegistry *npmPrivateRegistryRecord       `json:"privateRegistry,omitempty"`
+}
+
+type npmLatestCacheRecord struct {
+	Version   string `json:"version,omitempty"`
+	Error     string `json:"error,omitempty"`
+	FetchedAt string `json:"fetchedAt"`
+}
+
+type npmPrivateRegistryRecord struct {
+	Available bool   `json:"available"`
+	ProbedAt  string `json:"probedAt"`
+}
+
+func (c *NPMCommand) latestCachePath() string {
+	if c.stateDir == "" {
+		return ""
+	}
+	return filepath.Join(c.stateDir, npmCacheDirectoryName, npmLatestCacheFileName)
+}
+
+// ensureCacheLoadedLocked hydrates the in-memory cache from disk once, so a hub
+// restart answers the first scan from the last known versions instead of
+// re-querying every registry. A missing or unreadable file is not an error.
+func (c *NPMCommand) ensureCacheLoadedLocked() {
+	if c.cacheLoaded {
+		return
+	}
+	c.cacheLoaded = true
+	path := c.latestCachePath()
+	if path == "" {
+		return
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var file npmLatestCacheFile
+	if err := json.Unmarshal(raw, &file); err != nil || file.Schema != npmLatestCacheSchema {
+		return
+	}
+	for packageName, record := range file.Packages {
+		fetchedAt, err := time.Parse(time.RFC3339, record.FetchedAt)
+		if err != nil {
+			continue
+		}
+		c.latestCache[packageName] = npmLatestCacheEntry{
+			result:    npmLatestResult{version: record.Version, errorSummary: record.Error},
+			fetchedAt: fetchedAt.UTC(),
+		}
+	}
+	if file.PrivateRegistry != nil {
+		probedAt, err := time.Parse(time.RFC3339, file.PrivateRegistry.ProbedAt)
+		if err == nil {
+			c.flicker = npmPrivateRegistryState{known: true, available: file.PrivateRegistry.Available, probedAt: probedAt.UTC()}
+		}
+	}
+}
+
+func (c *NPMCommand) persistCacheLocked() {
+	path := c.latestCachePath()
+	if path == "" {
+		return
+	}
+	file := npmLatestCacheFile{
+		Schema:   npmLatestCacheSchema,
+		Packages: make(map[string]npmLatestCacheRecord, len(c.latestCache)),
+	}
+	for packageName, entry := range c.latestCache {
+		file.Packages[packageName] = npmLatestCacheRecord{
+			Version:   entry.result.version,
+			Error:     entry.result.errorSummary,
+			FetchedAt: entry.fetchedAt.UTC().Format(time.RFC3339),
+		}
+	}
+	if c.flicker.known {
+		file.PrivateRegistry = &npmPrivateRegistryRecord{
+			Available: c.flicker.available,
+			ProbedAt:  c.flicker.probedAt.UTC().Format(time.RFC3339),
+		}
+	}
+	raw, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return
+	}
+	_ = replaceUpdateFile(path, append(raw, '\n'), 0o600)
+}
+
+// runLatestOperation refreshes latest versions and, when the cached decision
+// expired, re-probes the private registry. Both run off the request path so a
+// scan response never waits on the network.
+func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, packageNames []string, probeFlicker bool) {
+	ctx := context.Background()
+	flickerAvailable := false
+	var probeWG sync.WaitGroup
+	if probeFlicker {
+		probeWG.Add(1)
+		go func() {
+			defer probeWG.Done()
+			flickerAvailable = c.runFlickerProbe(ctx)
+		}()
+	}
+	results := c.lookupLatestVersions(ctx, packageNames)
+	probeWG.Wait()
+
+	refreshed := append([]string(nil), packageNames...)
+	if probeFlicker && flickerAvailable {
+		if _, ok := results[myFlickerPackageName]; !ok {
+			for packageName, result := range c.lookupLatestVersions(ctx, []string{myFlickerPackageName}) {
+				results[packageName] = result
+			}
+			refreshed = append(refreshed, myFlickerPackageName)
+		}
+	}
+
 	finished := c.now()
 	finishedAt := finished.Format(time.RFC3339)
 	var failed []string
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, packageName := range packageNames {
-		result := results[packageName]
+	for _, packageName := range refreshed {
+		result, ok := results[packageName]
+		if !ok {
+			continue
+		}
 		c.latestCache[packageName] = npmLatestCacheEntry{
 			result:    result,
 			fetchedAt: finished,
@@ -583,6 +807,10 @@ func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, package
 			failed = append(failed, packageName)
 		}
 	}
+	if probeFlicker {
+		c.flicker = npmPrivateRegistryState{known: true, available: flickerAvailable, probedAt: finished}
+	}
+	c.persistCacheLocked()
 	if c.operation != operation {
 		return
 	}
@@ -908,17 +1136,6 @@ func lastNonEmptySegment(raw string) string {
 	lines := strings.Split(clean, "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
-		if line != "" {
-			return line
-		}
-	}
-	return ""
-}
-
-func firstNonEmptyLine(raw string) string {
-	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
 		if line != "" {
 			return line
 		}
