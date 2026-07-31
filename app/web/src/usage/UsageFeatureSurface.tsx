@@ -87,7 +87,7 @@ function AccountRail({
       )}
     </>
   );
-  if (account.limits.length > 0 && onOpenHistory) {
+  if ((account.limits.length > 0 || provider.id === 'deepseek') && onOpenHistory) {
     return (
       <button
         type="button"
@@ -187,7 +187,7 @@ function ProviderDetails({
     <section className="usage-detail-provider">
       {accounts.map(account => {
         const key = `${account.localId}:${account.hubIds.join(',')}`;
-        return account.limits.length > 0 && onOpenHistory ? (
+        return (account.limits.length > 0 || provider.id === 'deepseek') && onOpenHistory ? (
           <div
             role="button"
             tabIndex={0}
