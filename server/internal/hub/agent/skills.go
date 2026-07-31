@@ -30,6 +30,8 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case CodexProviderPreset.Name:
 		return CodexProviderPreset, true
+	case CXDeepSeekProviderPreset.Name:
+		return CXDeepSeekProviderPreset, true
 	case ClaudeACPProviderPreset.Name:
 		return ClaudeACPProviderPreset, true
 	case CopilotACPProviderPreset.Name:

@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+func TestCXDeepSeekProviderIdentity(t *testing.T) {
+	provider, ok := ParseACPProvider(" CX-DeepSeek ")
+	if !ok || provider != ACPProviderCXDeepSeek {
+		t.Fatalf("ParseACPProvider() = (%q, %v), want (%q, true)", provider, ok, ACPProviderCXDeepSeek)
+	}
+
+	count := 0
+	for _, name := range ACPProviderNames() {
+		if name == string(ACPProviderCXDeepSeek) {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("ACPProviderNames() = %v, want one %q", ACPProviderNames(), ACPProviderCXDeepSeek)
+	}
+}
+
 func TestSessionUpdateParams_JSONParity(t *testing.T) {
 	in := SessionUpdateParams{SessionID: "s1"}
 	b, err := json.Marshal(in)

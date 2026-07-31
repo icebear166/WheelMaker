@@ -5783,6 +5783,22 @@ func TestCodexPreset_IncludesAgentsUserSkillsDir(t *testing.T) {
 	}
 }
 
+func TestCXDeepSeekPresetUsesSharedAgentSkillsWithoutNativeCodexHome(t *testing.T) {
+	preset, ok := providerPresetByName(string(protocol.ACPProviderCXDeepSeek))
+	if !ok {
+		t.Fatal("providerPresetByName(cx-deepseek) returned ok=false")
+	}
+	if preset.Name != string(protocol.ACPProviderCXDeepSeek) || preset.BinaryName != "codex" {
+		t.Fatalf("preset = %#v", preset)
+	}
+	if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".agents/skills"}) {
+		t.Fatalf("project skill dirs = %v", preset.SkillProjectDirs)
+	}
+	if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.agents/skills"}) {
+		t.Fatalf("user skill dirs = %v, want isolated shared agent skills", preset.SkillUserDirs)
+	}
+}
+
 func TestKimiProviderPreset(t *testing.T) {
 	preset := KimiACPProviderPreset
 	if preset.Name != "kimi" || preset.BinaryName != "kimi" {

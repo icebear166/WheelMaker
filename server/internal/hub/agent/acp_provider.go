@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -52,6 +53,13 @@ var (
 		SkillPluginDirGlobs: []string{
 			"~/.copilot/installed-plugins/*/*/skills",
 		},
+	}
+	CXDeepSeekProviderPreset = ACPProviderPreset{
+		Name:             string(protocol.ACPProviderCXDeepSeek),
+		BinaryName:       "codex",
+		InstallHint:      "@openai/codex",
+		SkillProjectDirs: []string{".agents/skills"},
+		SkillUserDirs:    []string{"~/.agents/skills"},
 	}
 	ClaudeACPProviderPreset = ACPProviderPreset{
 		Name:                   "claude",
