@@ -3630,11 +3630,11 @@ export function App() {
     chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
     setChatHubFlickerBridgeActionHubId(hubId);
     try {
-      const state = await service.runHubStateAction(hubId, 'flickerBridge', action, params);
+      const response = await service.runHubStateAction(hubId, 'flickerBridge', action, params);
       if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
         return;
       }
-      const status = normalizeFlickerBridgeStatus(state.sections.flickerBridge?.data);
+      const status = normalizeFlickerBridgeStatus(response.result);
       setChatHubFlickerBridgeStatuses(current => ({...current, [hubId]: status}));
     } catch (error) {
       if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {

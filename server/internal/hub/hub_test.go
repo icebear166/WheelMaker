@@ -599,8 +599,19 @@ func TestReporterRespondsToHubStateGet(t *testing.T) {
 		if state["hubId"] != "hub-state-get" {
 			t.Fatalf("state hubId=%v, want hub-state-get", state["hubId"])
 		}
-		if state["status"] != "refreshing" && state["status"] != "ready" {
-			t.Fatalf("state status=%v, want startup limits scan", state["status"])
+		if state["instanceId"] == "" {
+			t.Fatalf("state instanceId missing: %#v", state)
+		}
+		sections, ok := state["sections"].(map[string]any)
+		if !ok {
+			t.Fatalf("state sections missing: %#v", state)
+		}
+		tokenStats, ok := sections[hubStateSectionTokenStats].(map[string]any)
+		if !ok {
+			t.Fatalf("tokenStats missing from state: %#v", sections)
+		}
+		if tokenStats["updateStatus"] != "updating" && tokenStats["updateStatus"] != "idle" {
+			t.Fatalf("tokenStats updateStatus=%v, want startup limits scan", tokenStats["updateStatus"])
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not receive hub.state.get response from reporter")

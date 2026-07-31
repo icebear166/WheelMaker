@@ -2,39 +2,16 @@ package hub
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
-)
 
-type hubStateStatus string
-
-const (
-	hubStateStatusEmpty      hubStateStatus = "empty"
-	hubStateStatusReady      hubStateStatus = "ready"
-	hubStateStatusRefreshing hubStateStatus = "refreshing"
-	hubStateStatusPartial    hubStateStatus = "partial"
-	hubStateStatusError      hubStateStatus = "error"
-)
-
-type hubStateSectionStatus string
-
-const (
-	hubStateSectionStatusEmpty      hubStateSectionStatus = "empty"
-	hubStateSectionStatusReady      hubStateSectionStatus = "ready"
-	hubStateSectionStatusRefreshing hubStateSectionStatus = "refreshing"
-	hubStateSectionStatusError      hubStateSectionStatus = "error"
-)
-
-type hubStateActionStatus string
-
-const (
-	hubStateActionStatusRunning   hubStateActionStatus = "running"
-	hubStateActionStatusSucceeded hubStateActionStatus = "succeeded"
-	hubStateActionStatusFailed    hubStateActionStatus = "failed"
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 const (
@@ -47,38 +24,11 @@ const (
 	hubStateSectionFlickerBridge    = "flickerBridge"
 )
 
-type hubState struct {
-	HubID     string                     `json:"hubId"`
-	Status    hubStateStatus             `json:"status"`
-	UpdatedAt string                     `json:"updatedAt,omitempty"`
-	Sections  map[string]hubStateSection `json:"sections"`
-}
-
-type hubStateSection struct {
-	Status    hubStateSectionStatus `json:"status"`
-	UpdatedAt string                `json:"updatedAt,omitempty"`
-	StartedAt string                `json:"startedAt,omitempty"`
-	Error     string                `json:"error,omitempty"`
-	Data      any                   `json:"data,omitempty"`
-	Action    *hubStateAction       `json:"action,omitempty"`
-}
-
-type hubStateAction struct {
-	ID         string               `json:"id"`
-	Name       string               `json:"name"`
-	Status     hubStateActionStatus `json:"status"`
-	StartedAt  string               `json:"startedAt,omitempty"`
-	FinishedAt string               `json:"finishedAt,omitempty"`
-	Error      string               `json:"error,omitempty"`
-	Params     map[string]any       `json:"params,omitempty"`
-	Result     any                  `json:"result,omitempty"`
-}
-
 type hubStateRefreshInput struct {
 	HubID  string
 	Force  bool
 	Now    time.Time
-	State  hubState
+	State  rp.HubState
 	Params map[string]any
 }
 
@@ -87,239 +37,356 @@ type hubStateSectionHandler struct {
 	Action  func(context.Context, string, map[string]any) (any, error)
 }
 
-type HubStateManager struct {
-	mu           sync.Mutex
-	hubID        string
-	state        hubState
-	handlers     map[string]hubStateSectionHandler
-	now          func() time.Time
-	nextActionID int64
+type hubStateUpdate struct {
+	id           string
+	baseRevision uint64
+	force        bool
 }
 
-func newHubStateManager(hubID string, handlers map[string]hubStateSectionHandler) *HubStateManager {
+type hubStateSectionController struct {
+	mu           sync.Mutex
+	section      rp.HubStateSection
+	active       *hubStateUpdate
+	pendingRerun bool
+	forceRerun   bool
+	nextUpdateID uint64
+	handler      hubStateSectionHandler
+	changed      chan struct{}
+}
+
+type HubStateManager struct {
+	hubID      string
+	instanceID string
+	sections   map[string]*hubStateSectionController
+	now        func() time.Time
+	publish    func(reason string, sections map[string]rp.HubStateSection)
+}
+
+func newHubStateManager(
+	hubID string,
+	instanceID string,
+	handlers map[string]hubStateSectionHandler,
+	publish func(reason string, sections map[string]rp.HubStateSection),
+) *HubStateManager {
 	hubID = strings.TrimSpace(hubID)
 	if hubID == "" {
 		hubID = "wheelmaker-hub"
 	}
-	handlerCopy := make(map[string]hubStateSectionHandler, len(handlers))
+	if instanceID == "" {
+		instanceID = newHubStateInstanceID()
+	}
+	sections := make(map[string]*hubStateSectionController, len(handlers))
 	for name, handler := range handlers {
-		handlerCopy[name] = handler
+		sections[name] = &hubStateSectionController{
+			section: rp.HubStateSection{
+				Availability: rp.HubStateAvailabilityEmpty,
+				UpdateStatus: rp.HubStateUpdateIdle,
+			},
+			handler: handler,
+			changed: make(chan struct{}),
+		}
 	}
 	return &HubStateManager{
-		hubID: hubID,
-		state: hubState{
-			HubID:    hubID,
-			Status:   hubStateStatusEmpty,
-			Sections: map[string]hubStateSection{},
-		},
-		handlers: handlerCopy,
-		now:      time.Now,
+		hubID:      hubID,
+		instanceID: instanceID,
+		sections:   sections,
+		now:        time.Now,
+		publish:    publish,
 	}
 }
 
-func (m *HubStateManager) get(sections []string) hubState {
-	sectionNames := normalizeHubStateSections(sections)
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.snapshotLocked(sectionNames)
-}
-
-func (m *HubStateManager) replaceSection(name string, section hubStateSection) hubState {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return m.get(nil)
-	}
-	m.mu.Lock()
-	m.state.Sections[name] = cloneHubStateSection(section)
-	state := m.snapshotLocked(nil)
-	m.mu.Unlock()
-	return state
-}
-
-func (m *HubStateManager) refresh(ctx context.Context, sections []string, force bool) (hubState, error) {
-	sectionNames := normalizeHubStateSections(sections)
-	if len(sectionNames) == 0 {
-		return hubState{}, errors.New("refresh requires at least one section")
-	}
-	for _, sectionName := range sectionNames {
-		if m.handlers[sectionName].Refresh == nil {
-			return hubState{}, fmt.Errorf("section %q does not support refresh", sectionName)
+func (m *HubStateManager) get(sections []string) rp.HubState {
+	names := normalizeHubStateSections(sections)
+	if len(names) == 0 {
+		names = make([]string, 0, len(m.sections))
+		for name := range m.sections {
+			names = append(names, name)
 		}
 	}
-
-	for _, sectionName := range sectionNames {
-		handler := m.handlers[sectionName]
-		startedAt := m.now().UTC()
-		m.mu.Lock()
-		section := m.state.Sections[sectionName]
-		section.Status = hubStateSectionStatusRefreshing
-		section.StartedAt = formatHubStateTime(startedAt)
-		section.Error = ""
-		m.state.Sections[sectionName] = section
-		inputState := m.snapshotLocked(nil)
-		m.mu.Unlock()
-
-		data, err := handler.Refresh(ctx, hubStateRefreshInput{
-			HubID: m.hubID,
-			Force: force,
-			Now:   startedAt,
-			State: inputState,
-		})
-
-		finishedAt := m.now().UTC()
-		m.mu.Lock()
-		section = m.state.Sections[sectionName]
-		if err != nil {
-			section.Status = hubStateSectionStatusError
-			section.Error = err.Error()
-		} else {
-			section.Status = hubStateSectionStatusReady
-			section.Error = ""
-			section.Data = cloneHubStateValue(data)
-			section.UpdatedAt = formatHubStateTime(finishedAt)
+	snapshot := rp.HubState{
+		HubID:      m.hubID,
+		InstanceID: m.instanceID,
+		Sections:   make(map[string]rp.HubStateSection, len(names)),
+	}
+	for _, name := range names {
+		controller, ok := m.sections[name]
+		if !ok {
+			continue
 		}
-		m.state.Sections[sectionName] = section
-		m.mu.Unlock()
+		controller.mu.Lock()
+		snapshot.Sections[name] = cloneHubStateSection(controller.section)
+		controller.mu.Unlock()
 	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.snapshotLocked(nil), nil
-}
-
-func (m *HubStateManager) action(ctx context.Context, sectionName string, actionName string, params map[string]any) (hubState, error) {
-	sectionName = strings.TrimSpace(sectionName)
-	actionName = strings.TrimSpace(actionName)
-	if sectionName == "" {
-		return hubState{}, errors.New("action requires section")
-	}
-	if actionName == "" {
-		return hubState{}, errors.New("action requires action name")
-	}
-	handler := m.handlers[sectionName]
-	if handler.Action == nil {
-		return hubState{}, fmt.Errorf("section %q does not support actions", sectionName)
-	}
-
-	startedAt := m.now().UTC()
-	paramsCopy := cloneHubStateParams(params)
-	action := hubStateAction{
-		Name:      actionName,
-		Status:    hubStateActionStatusRunning,
-		StartedAt: formatHubStateTime(startedAt),
-		Params:    cloneHubStateParams(paramsCopy),
-	}
-
-	m.mu.Lock()
-	m.nextActionID++
-	action.ID = fmt.Sprintf("%s:%s:%d:%d", sectionName, actionName, startedAt.UnixNano(), m.nextActionID)
-	section := m.state.Sections[sectionName]
-	section.Status = hubStateSectionStatusRefreshing
-	section.StartedAt = action.StartedAt
-	section.Error = ""
-	section.Action = cloneHubStateAction(&action)
-	m.state.Sections[sectionName] = section
-	m.mu.Unlock()
-
-	result, err := handler.Action(ctx, actionName, paramsCopy)
-
-	finishedAt := m.now().UTC()
-	m.mu.Lock()
-	section = m.state.Sections[sectionName]
-	if section.Action == nil || section.Action.ID != action.ID {
-		state := m.snapshotLocked(nil)
-		m.mu.Unlock()
-		return state, err
-	}
-	section.Action.FinishedAt = formatHubStateTime(finishedAt)
-	if err != nil {
-		section.Action.Status = hubStateActionStatusFailed
-		section.Action.Error = err.Error()
-		section.Status = hubStateSectionStatusError
-		section.Error = err.Error()
-	} else {
-		section.Action.Status = hubStateActionStatusSucceeded
-		section.Action.Error = ""
-		section.Action.Result = cloneHubStateValue(result)
-		section.Status = hubStateSectionStatusReady
-		section.Error = ""
-		section.UpdatedAt = formatHubStateTime(finishedAt)
-		if result != nil {
-			section.Data = cloneHubStateValue(result)
-		}
-	}
-	m.state.Sections[sectionName] = section
-	state := m.snapshotLocked(nil)
-	m.mu.Unlock()
-	return state, nil
-}
-
-func (m *HubStateManager) snapshotLocked(sections []string) hubState {
-	snapshot := hubState{
-		HubID:    m.hubID,
-		Status:   hubStateStatusEmpty,
-		Sections: map[string]hubStateSection{},
-	}
-	if len(sections) == 0 {
-		for name, section := range m.state.Sections {
-			snapshot.Sections[name] = cloneHubStateSection(section)
-		}
-	} else {
-		for _, name := range sections {
-			if section, ok := m.state.Sections[name]; ok {
-				snapshot.Sections[name] = cloneHubStateSection(section)
-			}
-		}
-	}
-	snapshot.Status = aggregateHubStateStatus(snapshot.Sections)
-	snapshot.UpdatedAt = newestHubStateUpdatedAt(snapshot.Sections)
 	return snapshot
 }
 
-func aggregateHubStateStatus(sections map[string]hubStateSection) hubStateStatus {
-	if len(sections) == 0 {
-		return hubStateStatusEmpty
+func (m *HubStateManager) enqueueRefresh(
+	sections []string,
+	force bool,
+) (rp.HubStateRefreshResponse, error) {
+	names := normalizeHubStateSections(sections)
+	if len(names) == 0 {
+		return rp.HubStateRefreshResponse{}, errors.New("refresh requires at least one section")
 	}
-	readyCount := 0
-	errorCount := 0
-	for _, section := range sections {
-		if section.Status == hubStateSectionStatusRefreshing || (section.Action != nil && section.Action.Status == hubStateActionStatusRunning) {
-			return hubStateStatusRefreshing
-		}
-		switch section.Status {
-		case hubStateSectionStatusReady:
-			readyCount++
-		case hubStateSectionStatusError:
-			errorCount++
+	for _, name := range names {
+		controller, ok := m.sections[name]
+		if !ok || controller.handler.Refresh == nil {
+			return rp.HubStateRefreshResponse{}, fmt.Errorf("section %q does not support refresh", name)
 		}
 	}
-	if readyCount == len(sections) {
-		return hubStateStatusReady
-	}
-	if errorCount == len(sections) {
-		return hubStateStatusError
-	}
-	if readyCount > 0 && errorCount > 0 {
-		return hubStateStatusPartial
-	}
-	return hubStateStatusEmpty
-}
 
-func newestHubStateUpdatedAt(sections map[string]hubStateSection) string {
-	var newest time.Time
-	for _, section := range sections {
-		updatedAt, err := time.Parse(time.RFC3339, section.UpdatedAt)
-		if err != nil {
+	updates := make([]rp.HubStateUpdateAck, 0, len(names))
+	start := make([]string, 0, len(names))
+	for _, name := range names {
+		controller := m.sections[name]
+		controller.mu.Lock()
+		if controller.active != nil {
+			if force {
+				controller.pendingRerun = true
+				controller.forceRerun = true
+			}
+			status := string(controller.section.UpdateStatus)
+			if force {
+				status = string(rp.HubStateUpdateQueued)
+			}
+			updates = append(updates, rp.HubStateUpdateAck{
+				Section: name, UpdateID: controller.active.id, Status: status,
+			})
+			controller.mu.Unlock()
 			continue
 		}
-		if updatedAt.After(newest) {
-			newest = updatedAt
+		controller.nextUpdateID++
+		update := &hubStateUpdate{
+			id:           fmt.Sprintf("%s:%d", name, controller.nextUpdateID),
+			baseRevision: controller.section.Revision,
+			force:        force,
+		}
+		controller.active = update
+		controller.section.UpdateStatus = rp.HubStateUpdateQueued
+		controller.section.LastAttemptAt = formatHubStateTime(m.now())
+		controller.signalLocked()
+		updates = append(updates, rp.HubStateUpdateAck{
+			Section: name, UpdateID: update.id, Status: string(rp.HubStateUpdateQueued),
+		})
+		start = append(start, name)
+		controller.mu.Unlock()
+	}
+	response := rp.HubStateRefreshResponse{
+		Accepted: true,
+		Updates:  updates,
+		State:    m.get(nil),
+	}
+	for _, name := range start {
+		go m.runUpdate(name)
+	}
+	return response, nil
+}
+
+func (m *HubStateManager) runUpdate(name string) {
+	controller := m.sections[name]
+	controller.mu.Lock()
+	update := controller.active
+	if update == nil {
+		controller.mu.Unlock()
+		return
+	}
+	controller.section.UpdateStatus = rp.HubStateUpdateUpdating
+	controller.signalLocked()
+	handler := controller.handler.Refresh
+	now := m.now().UTC()
+	controller.mu.Unlock()
+
+	data, updateErr := handler(context.Background(), hubStateRefreshInput{
+		HubID: m.hubID,
+		Force: update.force,
+		Now:   now,
+		State: m.get(nil),
+	})
+
+	finishedAt := m.now().UTC()
+	var published *rp.HubStateSection
+	var startRerun bool
+	controller.mu.Lock()
+	if controller.active != update {
+		controller.mu.Unlock()
+		return
+	}
+	stale := controller.section.Revision != update.baseRevision
+	if stale {
+		controller.pendingRerun = true
+	}
+	if !stale {
+		if updateErr != nil {
+			controller.section.LastError = updateErr.Error()
+			controller.section.Revision++
+			snapshot := cloneHubStateSection(controller.section)
+			published = &snapshot
+		} else {
+			nextData := cloneHubStateValue(data)
+			changed := controller.section.Availability != rp.HubStateAvailabilityReady ||
+				controller.section.LastError != "" ||
+				!reflect.DeepEqual(controller.section.Data, nextData)
+			if changed {
+				controller.section.Availability = rp.HubStateAvailabilityReady
+				controller.section.LastError = ""
+				controller.section.Data = nextData
+				controller.section.UpdatedAt = formatHubStateTime(finishedAt)
+				controller.section.Revision++
+				snapshot := cloneHubStateSection(controller.section)
+				published = &snapshot
+			}
 		}
 	}
-	if newest.IsZero() {
-		return ""
+	if controller.pendingRerun {
+		controller.nextUpdateID++
+		controller.active = &hubStateUpdate{
+			id:           fmt.Sprintf("%s:%d", name, controller.nextUpdateID),
+			baseRevision: controller.section.Revision,
+			force:        controller.forceRerun,
+		}
+		controller.pendingRerun = false
+		controller.forceRerun = false
+		controller.section.UpdateStatus = rp.HubStateUpdateQueued
+		controller.section.LastAttemptAt = formatHubStateTime(finishedAt)
+		startRerun = true
+	} else {
+		controller.active = nil
+		controller.section.UpdateStatus = rp.HubStateUpdateIdle
 	}
-	return newest.Format(time.RFC3339)
+	if published != nil {
+		published.UpdateStatus = controller.section.UpdateStatus
+	}
+	controller.signalLocked()
+	controller.mu.Unlock()
+
+	if published != nil {
+		m.publishSections("refresh.completed", map[string]rp.HubStateSection{name: *published})
+	}
+	if startRerun {
+		go m.runUpdate(name)
+	}
+}
+
+func (m *HubStateManager) notify(
+	name string,
+	data any,
+	availability rp.HubStateAvailability,
+	lastError string,
+	reason string,
+) rp.HubState {
+	return m.notifyWithStatus(
+		name,
+		data,
+		availability,
+		rp.HubStateUpdateIdle,
+		lastError,
+		reason,
+	)
+}
+
+func (m *HubStateManager) notifyWithStatus(
+	name string,
+	data any,
+	availability rp.HubStateAvailability,
+	updateStatus rp.HubStateUpdateStatus,
+	lastError string,
+	reason string,
+) rp.HubState {
+	controller, ok := m.sections[name]
+	if !ok {
+		return m.get(nil)
+	}
+	nextData := cloneHubStateValue(data)
+	controller.mu.Lock()
+	changed := controller.section.Availability != availability ||
+		controller.section.UpdateStatus != updateStatus ||
+		controller.section.LastError != lastError ||
+		!reflect.DeepEqual(controller.section.Data, nextData)
+	if changed {
+		controller.section.Availability = availability
+		controller.section.LastError = lastError
+		controller.section.Data = nextData
+		controller.section.Revision++
+		now := m.now().UTC()
+		controller.section.LastAttemptAt = formatHubStateTime(now)
+		if availability == rp.HubStateAvailabilityReady {
+			controller.section.UpdatedAt = formatHubStateTime(now)
+		}
+		if controller.active == nil {
+			controller.section.UpdateStatus = updateStatus
+		} else {
+			controller.pendingRerun = true
+		}
+		controller.signalLocked()
+	}
+	section := cloneHubStateSection(controller.section)
+	controller.mu.Unlock()
+	if changed {
+		m.publishSections(reason, map[string]rp.HubStateSection{name: section})
+	}
+	return m.get(nil)
+}
+
+func (m *HubStateManager) action(
+	ctx context.Context,
+	sectionName string,
+	actionName string,
+	params map[string]any,
+) (rp.HubStateActionResponse, error) {
+	sectionName = strings.TrimSpace(sectionName)
+	actionName = strings.TrimSpace(actionName)
+	if sectionName == "" {
+		return rp.HubStateActionResponse{}, errors.New("action requires section")
+	}
+	if actionName == "" {
+		return rp.HubStateActionResponse{}, errors.New("action requires action name")
+	}
+	controller, ok := m.sections[sectionName]
+	if !ok || controller.handler.Action == nil {
+		return rp.HubStateActionResponse{}, fmt.Errorf("section %q does not support actions", sectionName)
+	}
+	result, err := controller.handler.Action(ctx, actionName, cloneHubStateParams(params))
+	if err != nil {
+		return rp.HubStateActionResponse{}, err
+	}
+	return rp.HubStateActionResponse{Accepted: true, Result: cloneHubStateValue(result)}, nil
+}
+
+func (m *HubStateManager) waitForIdle(ctx context.Context, name string) error {
+	controller, ok := m.sections[name]
+	if !ok {
+		return fmt.Errorf("unknown HubState section %q", name)
+	}
+	for {
+		controller.mu.Lock()
+		if controller.active == nil && controller.section.UpdateStatus == rp.HubStateUpdateIdle {
+			controller.mu.Unlock()
+			return nil
+		}
+		changed := controller.changed
+		controller.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+		}
+	}
+}
+
+func (m *HubStateManager) publishSections(reason string, sections map[string]rp.HubStateSection) {
+	if m.publish == nil {
+		return
+	}
+	cloned := make(map[string]rp.HubStateSection, len(sections))
+	for name, section := range sections {
+		cloned[name] = cloneHubStateSection(section)
+	}
+	m.publish(reason, cloned)
+}
+
+func (c *hubStateSectionController) signalLocked() {
+	close(c.changed)
+	c.changed = make(chan struct{})
 }
 
 func normalizeHubStateSections(sections []string) []string {
@@ -339,20 +406,9 @@ func normalizeHubStateSections(sections []string) []string {
 	return out
 }
 
-func cloneHubStateSection(section hubStateSection) hubStateSection {
+func cloneHubStateSection(section rp.HubStateSection) rp.HubStateSection {
 	section.Data = cloneHubStateValue(section.Data)
-	section.Action = cloneHubStateAction(section.Action)
 	return section
-}
-
-func cloneHubStateAction(action *hubStateAction) *hubStateAction {
-	if action == nil {
-		return nil
-	}
-	clone := *action
-	clone.Params = cloneHubStateParams(action.Params)
-	clone.Result = cloneHubStateValue(action.Result)
-	return &clone
 }
 
 func cloneHubStateParams(params map[string]any) map[string]any {
@@ -383,9 +439,6 @@ func cloneHubStateReflectValue(value reflect.Value) reflect.Value {
 			return reflect.Zero(value.Type())
 		}
 		cloned := cloneHubStateReflectValue(value.Elem())
-		if cloned.Type().AssignableTo(value.Type()) {
-			return cloned
-		}
 		out := reflect.New(value.Type()).Elem()
 		out.Set(cloned)
 		return out
@@ -396,9 +449,10 @@ func cloneHubStateReflectValue(value reflect.Value) reflect.Value {
 		clone := reflect.MakeMapWithSize(value.Type(), value.Len())
 		iter := value.MapRange()
 		for iter.Next() {
-			key := cloneHubStateReflectValue(iter.Key())
-			item := cloneHubStateReflectValue(iter.Value())
-			clone.SetMapIndex(key, item)
+			clone.SetMapIndex(
+				cloneHubStateReflectValue(iter.Key()),
+				cloneHubStateReflectValue(iter.Value()),
+			)
 		}
 		return clone
 	case reflect.Slice:
@@ -421,6 +475,14 @@ func cloneHubStateReflectValue(value reflect.Value) reflect.Value {
 	}
 }
 
-func formatHubStateTime(t time.Time) string {
-	return t.UTC().Format(time.RFC3339)
+func formatHubStateTime(value time.Time) string {
+	return value.UTC().Format(time.RFC3339)
+}
+
+func newHubStateInstanceID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err == nil {
+		return hex.EncodeToString(value[:])
+	}
+	return fmt.Sprintf("hub-state-%d", time.Now().UTC().UnixNano())
 }

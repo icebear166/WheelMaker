@@ -51,17 +51,19 @@ describe('hub state registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          state: {hubId: 'hub-a', instanceId: 'instance-a', sections: {}},
+          accepted: true,
+          result: {operation: {id: 'npm-1'}},
         },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
 
-    await repository.runHubStateAction('hub-a', 'agentPackages', 'install', {
+    const result = await repository.runHubStateAction('hub-a', 'agentPackages', 'install', {
       packageName: '@openai/codex',
       version: 'latest',
     });
 
+    expect(result).toEqual({accepted: true, result: {operation: {id: 'npm-1'}}});
     expect(client.request).toHaveBeenCalledWith({
       method: RegistryMethods.HubStateAction,
       hubId: 'hub-a',

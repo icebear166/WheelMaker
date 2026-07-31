@@ -26,6 +26,7 @@ import type {
   RegistryGitStatus,
   RegistryHub,
   RegistryHubState,
+  RegistryHubStateActionResponse,
   RegistryHubStateSectionName,
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
@@ -912,7 +913,7 @@ export class RegistryWorkspaceService {
     section: RegistryHubStateSectionName,
     action: string,
     params: Record<string, unknown> = {},
-  ): Promise<RegistryHubState> {
+  ): Promise<RegistryHubStateActionResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }

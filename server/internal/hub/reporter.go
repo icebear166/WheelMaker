@@ -230,7 +230,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 		ReleaseNotifier:       r,
 	})
-	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+	r.hubStateManager = r.newHubStateManager()
 	r.flickerBridge.setStateChangeHandler(r.updateFlickerBridgeLifecycleState)
 	collector := usage.NewLocalCollector("")
 	collector.UpdateAPIKeys(
@@ -252,21 +252,13 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 }
 
 func (r *Reporter) updateFlickerBridgeLifecycleState(status flickerBridgeStatus) {
-	sectionStatus := hubStateSectionStatusReady
-	if status.State == "starting" {
-		sectionStatus = hubStateSectionStatusRefreshing
-	} else if status.State == "failed" {
-		sectionStatus = hubStateSectionStatusError
-	}
-	state := r.ensureHubStateManager().replaceSection(hubStateSectionFlickerBridge, hubStateSection{
-		Status:    sectionStatus,
-		UpdatedAt: formatHubStateTime(time.Now().UTC()),
-		Error:     status.Error,
-		Data:      status,
-	})
-	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
-		"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "lifecycle",
-	})
+	r.ensureHubStateManager().notify(
+		hubStateSectionFlickerBridge,
+		status,
+		rp.HubStateAvailabilityReady,
+		status.Error,
+		"lifecycle",
+	)
 	go func() {
 		if err := r.reloadAgentRuntimeFromStore(context.Background()); err != nil {
 			hubLogger("").Warn("reload agent runtime after Flicker Bridge state change failed: %v", err)
@@ -292,34 +284,22 @@ func (r *Reporter) Run(ctx context.Context) error {
 }
 
 func (r *Reporter) updateUsageSnapshot(snapshot usage.Snapshot) {
-	section := hubStateSection{
-		Status: usageSectionStatus(snapshot.Status),
-		Data:   snapshot,
-		Error:  snapshot.Message,
+	updateStatus := rp.HubStateUpdateIdle
+	if snapshot.Status == usage.ScanScanning {
+		updateStatus = rp.HubStateUpdateUpdating
 	}
-	if snapshot.StartedAt != nil {
-		section.StartedAt = formatHubStateTime(*snapshot.StartedAt)
+	availability := rp.HubStateAvailabilityReady
+	if snapshot.Generation == 0 && len(snapshot.Providers) == 0 {
+		availability = rp.HubStateAvailabilityEmpty
 	}
-	if snapshot.UpdatedAt != nil {
-		section.UpdatedAt = formatHubStateTime(*snapshot.UpdatedAt)
-	}
-	state := r.ensureHubStateManager().replaceSection(hubStateSectionTokenStats, section)
-	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
-		"state": state, "sections": []string{hubStateSectionTokenStats}, "reason": "snapshot",
-	})
-}
-
-func usageSectionStatus(status usage.ScanStatus) hubStateSectionStatus {
-	switch status {
-	case usage.ScanScanning:
-		return hubStateSectionStatusRefreshing
-	case usage.ScanReady:
-		return hubStateSectionStatusReady
-	case usage.ScanError:
-		return hubStateSectionStatusError
-	default:
-		return hubStateSectionStatusEmpty
-	}
+	r.ensureHubStateManager().notifyWithStatus(
+		hubStateSectionTokenStats,
+		snapshot,
+		availability,
+		updateStatus,
+		snapshot.Message,
+		"snapshot",
+	)
 }
 
 // SetDebugLogger sets an optional writer for debug logging of registry envelopes.
@@ -880,7 +860,7 @@ func (r *Reporter) replyHubStateRefresh(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.state.refresh payload")
 		return
 	}
-	state, err := r.ensureHubStateManager().refresh(context.Background(), payload.Sections, payload.Force)
+	response, err := r.ensureHubStateManager().enqueueRefresh(payload.Sections, payload.Force)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
@@ -890,10 +870,7 @@ func (r *Reporter) replyHubStateRefresh(conn *websocket.Conn, req envelope) {
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"state":    state,
-			"sections": payload.Sections,
-		}),
+		Payload:   rp.MustRaw(response),
 	})
 }
 
@@ -909,25 +886,17 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
 	}
-	state, err := r.ensureHubStateManager().action(context.Background(), payload.Section, payload.Action, payload.Params)
+	response, err := r.ensureHubStateManager().action(context.Background(), payload.Section, payload.Action, payload.Params)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
-	}
-	if payload.Section == hubStateSectionFlickerBridge {
-		_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
-			"state": state, "sections": []string{hubStateSectionFlickerBridge}, "reason": "action",
-		})
 	}
 	_ = r.writeJSON(conn, "->", envelope{
 		RequestID: req.RequestID,
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"state":   state,
-			"section": payload.Section,
-		}),
+		Payload:   rp.MustRaw(response),
 	})
 }
 
@@ -984,9 +953,25 @@ func (r *Reporter) ensureHubStateManager() *HubStateManager {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.hubStateManager == nil {
-		r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+		r.hubStateManager = r.newHubStateManager()
 	}
 	return r.hubStateManager
+}
+
+func (r *Reporter) newHubStateManager() *HubStateManager {
+	instanceID := newHubStateInstanceID()
+	return newHubStateManager(
+		r.cfg.HubID,
+		instanceID,
+		r.hubStateSectionHandlers(),
+		func(reason string, sections map[string]rp.HubStateSection) {
+			_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+				"instanceId": instanceID,
+				"sections":   sections,
+				"reason":     reason,
+			})
+		},
+	)
 }
 
 func (r *Reporter) ensureHubConfigStore() *hubconfig.Store {

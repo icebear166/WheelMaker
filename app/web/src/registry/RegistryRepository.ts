@@ -33,6 +33,7 @@ import type {
   RegistryHubConfigResponse,
   RegistryHubConfigUpdatePayload,
   RegistryHubState,
+  RegistryHubStateActionResponse,
   RegistryHubStateSectionName,
   RegistryUsageHistoryLimit,
   RegistryUsageHistoryResponse,
@@ -241,22 +242,8 @@ function hubStateSectionData<T>(state: RegistryHubState, section: RegistryHubSta
   return state.sections[section]?.data as T | undefined;
 }
 
-function releasePublishStateResponse(state: RegistryHubState): RegistryReleasePublishResponse {
-  const section = state.sections.releasePublish as unknown as {
-    status?: string;
-    error?: string;
-    action?: {status?: string; error?: string};
-  } | undefined;
-  const error = section?.action?.status === 'failed'
-    ? section.action.error || section.error
-    : section?.status === 'error'
-      ? section.error
-      : '';
-  if (error) {
-    return {ok: false, status: 'failed', error};
-  }
-  return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish')
-    ?? {ok: false, status: 'missing_hub_state_response'};
+function hubStateActionResult<T>(response: RegistryHubStateActionResponse): T | undefined {
+  return (response.result ?? response.operation) as T | undefined;
 }
 
 function normalizeUsageHistoryLimit(raw: unknown): RegistryUsageHistoryLimit | null {
@@ -1349,8 +1336,8 @@ export class RegistryRepository {
 
   async rebuildFileIndex(projectId: string): Promise<RegistryFileIndexRebuildResponse> {
     const hubId = hubIdFromProjectId(projectId);
-    const state = await this.runHubStateAction(hubId, 'fileIndex', 'rebuild', {projectId});
-    return hubStateSectionData<RegistryFileIndexRebuildResponse>(state, 'fileIndex') ?? {
+    const response = await this.runHubStateAction(hubId, 'fileIndex', 'rebuild', {projectId});
+    return hubStateActionResult<RegistryFileIndexRebuildResponse>(response) ?? {
       ok: false,
       accepted: false,
       running: false,
@@ -2204,15 +2191,19 @@ export class RegistryRepository {
     section: RegistryHubStateSectionName,
     action: string,
     params: Record<string, unknown> = {},
-  ): Promise<RegistryHubState> {
+  ): Promise<RegistryHubStateActionResponse> {
     const resp = await this.client.request({
       method: RegistryMethods.HubStateAction,
       hubId,
       payload: {section, action, params},
       timeoutMs: 60000,
     });
-    const payload = (resp.payload ?? {}) as {state?: unknown};
-    return this.normalizeHubState(payload.state, hubId);
+    const payload = (resp.payload ?? {}) as RegistryHubStateActionResponse;
+    return {
+      accepted: payload.accepted === true ? true : undefined,
+      result: payload.result,
+      operation: payload.operation,
+    };
   }
 
   async getHubConfig(hubId: string): Promise<RegistryHubConfigResponse> {
@@ -2306,29 +2297,29 @@ export class RegistryRepository {
   }
 
   async installNpmPackage(hubId: string, packageName: string, version = 'latest'): Promise<RegistryNpmCommandResponse> {
-    const state = await this.runHubStateAction(hubId, 'agentPackages', 'install', {
+    const response = await this.runHubStateAction(hubId, 'agentPackages', 'install', {
       packageName,
       version,
     });
-    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
+    return normalizeNpmCommandResponse(hubStateActionResult(response), hubId);
   }
 
   async installNpmPackages(hubId: string, packageNames: string[], version = 'latest'): Promise<RegistryNpmCommandResponse> {
-    const state = await this.runHubStateAction(hubId, 'agentPackages', 'installMany', {
+    const response = await this.runHubStateAction(hubId, 'agentPackages', 'installMany', {
       packageNames,
       version,
     });
-    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
+    return normalizeNpmCommandResponse(hubStateActionResult(response), hubId);
   }
 
   async uninstallNpmPackage(hubId: string, packageName: string): Promise<RegistryNpmCommandResponse> {
-    const state = await this.runHubStateAction(hubId, 'agentPackages', 'uninstall', {packageName});
-    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
+    const response = await this.runHubStateAction(hubId, 'agentPackages', 'uninstall', {packageName});
+    return normalizeNpmCommandResponse(hubStateActionResult(response), hubId);
   }
 
   async reinstallNpmPackage(hubId: string, packageName: string): Promise<RegistryNpmCommandResponse> {
-    const state = await this.runHubStateAction(hubId, 'agentPackages', 'reinstall', {packageName});
-    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
+    const response = await this.runHubStateAction(hubId, 'agentPackages', 'reinstall', {packageName});
+    return normalizeNpmCommandResponse(hubStateActionResult(response), hubId);
   }
 
   async queryWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
@@ -2343,8 +2334,8 @@ export class RegistryRepository {
   }
 
   async requestWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
-    const state = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'requestUpdate');
-    return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
+    const response = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'requestUpdate');
+    return hubStateActionResult<RegistryWheelMakerUpdateResponse>(response) ?? {
       ok: false,
       status: 'checking_failed',
       hubId,
@@ -2354,8 +2345,9 @@ export class RegistryRepository {
   }
 
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
-    const state = await this.runHubStateAction(hubId, 'releasePublish', 'start', input);
-    return releasePublishStateResponse(state);
+    const response = await this.runHubStateAction(hubId, 'releasePublish', 'start', input);
+    return hubStateActionResult<RegistryReleasePublishResponse>(response)
+      ?? {ok: false, status: 'missing_hub_state_response'};
   }
 
   async respondSessionPermission(
@@ -2380,8 +2372,9 @@ export class RegistryRepository {
   }
 
   async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {
-    const state = await this.runHubStateAction(hubId, 'releasePublish', 'status', {jobId});
-    return releasePublishStateResponse(state);
+    const response = await this.runHubStateAction(hubId, 'releasePublish', 'status', {jobId});
+    return hubStateActionResult<RegistryReleasePublishResponse>(response)
+      ?? {ok: false, status: 'missing_hub_state_response'};
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
@@ -2394,8 +2387,8 @@ export class RegistryRepository {
   }
 
   async reindexSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
-    const state = await this.runHubStateAction(hubId, 'skills', 'reindex');
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.runHubStateAction(hubId, 'skills', 'reindex');
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
       errorSummary: 'missing hub state response',
@@ -2403,8 +2396,8 @@ export class RegistryRepository {
   }
 
   async listSkillsSource(hubId: string, source: string): Promise<RegistrySkillCommandResponse> {
-    const state = await this.runHubStateAction(hubId, 'skills', 'listSource', {source});
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.runHubStateAction(hubId, 'skills', 'listSource', {source});
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
       source,
@@ -2414,8 +2407,8 @@ export class RegistryRepository {
 
   async installSkills(payload: RegistrySkillInstallPayload): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;
-    const state = await this.runHubStateAction(hubId, 'skills', 'install', params);
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.runHubStateAction(hubId, 'skills', 'install', params);
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
       errorSummary: 'missing hub state response',
@@ -2424,8 +2417,8 @@ export class RegistryRepository {
 
   async uninstallSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;
-    const state = await this.runHubStateAction(hubId, 'skills', 'uninstall', params);
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.runHubStateAction(hubId, 'skills', 'uninstall', params);
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
       errorSummary: 'missing hub state response',
@@ -2434,8 +2427,8 @@ export class RegistryRepository {
 
   async getSkillDetail(payload: RegistrySkillDetailPayload): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;
-    const state = await this.runHubStateAction(hubId, 'skills', 'detail', params);
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.runHubStateAction(hubId, 'skills', 'detail', params);
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
       errorSummary: 'missing hub state response',
@@ -2444,8 +2437,8 @@ export class RegistryRepository {
 
   async updateSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;
-    const state = await this.runHubStateAction(hubId, 'skills', 'update', params);
-    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+    const response = await this.runHubStateAction(hubId, 'skills', 'update', params);
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
       errorSummary: 'missing hub state response',
