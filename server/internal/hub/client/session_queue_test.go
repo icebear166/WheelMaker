@@ -429,6 +429,33 @@ func TestSessionQueueDrainsPromptCompactPromptInOrder(t *testing.T) {
 	}
 }
 
+func TestSessionQueuePromptTranscriptCarriesQueueItemIdentity(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-prompt-identity")
+	sink := s.viewSink.(*recordingSessionViewSink)
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("prompt-item-1", "identify me")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:identify me")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
+
+	for _, event := range sink.events {
+		if event.Type != SessionViewEventTypeACP {
+			continue
+		}
+		var envelope struct {
+			Params struct {
+				ClientMessageID string `json:"clientMessageId"`
+			} `json:"params"`
+		}
+		if json.Unmarshal([]byte(event.Content), &envelope) == nil &&
+			envelope.Params.ClientMessageID == "prompt-item-1" {
+			return
+		}
+	}
+	t.Fatalf("prompt transcript events do not carry queue item identity: %#v", sink.events)
+}
+
 func TestSessionQueueFailurePausesUntilRetry(t *testing.T) {
 	s, instance := newQueueExecutionSession(t, "sess-retry-drain")
 	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "first")); err != nil {
@@ -490,6 +517,111 @@ func TestSessionQueueCancelActivePromptWaitsForOfficialOutcome(t *testing.T) {
 	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
 }
 
+func TestSessionQueueCancelActivePromptBeforeSessionLoadCompletes(t *testing.T) {
+	s := mustNewSessionForQueueTest(t, "sess-cancel-loading")
+	loadStarted := make(chan struct{}, 1)
+	loadRelease := make(chan struct{})
+	instance := &queueExecutionInstance{
+		testInjectedInstance: &testInjectedInstance{
+			name:      "queue-test",
+			sessionID: s.acpSessionID,
+			alive:     true,
+			callbacks: s,
+			initResult: acp.InitializeResult{
+				ProtocolVersion: "0.1",
+				AgentCapabilities: acp.AgentCapabilities{
+					LoadSession: true,
+				},
+				AgentInfo: &acp.AgentInfo{Name: "queue-test"},
+			},
+			loadFn: func(ctx context.Context, _ acp.SessionLoadParams) (acp.SessionLoadResult, error) {
+				loadStarted <- struct{}{}
+				select {
+				case <-loadRelease:
+					return acp.SessionLoadResult{}, nil
+				case <-ctx.Done():
+					return acp.SessionLoadResult{}, ctx.Err()
+				}
+			},
+		},
+		started:         make(chan string, 1),
+		promptOutcomes:  make(chan queuePromptOutcome, 1),
+		compactOutcomes: make(chan error, 1),
+	}
+	s.mu.Lock()
+	s.instance = instance
+	s.ready = false
+	s.viewSink = &recordingSessionViewSink{}
+	s.mu.Unlock()
+
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "cancel before load")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-loadStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("session/load did not start")
+	}
+	if err := s.cancelQueueItem("p1"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if !s.queuePinsMemory() {
+			close(loadRelease)
+			select {
+			case started := <-instance.started:
+				t.Fatalf("provider prompt started after early cancellation: %s", started)
+			default:
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	close(loadRelease)
+	t.Fatal("early cancellation did not finish the active queue item")
+}
+
+func TestSessionQueueReschedulesAfterConfigMutationReleasesExecutionLock(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-config-drain")
+	configStarted := make(chan struct{}, 1)
+	configRelease := make(chan struct{})
+	configDone := make(chan error, 1)
+	instance.setConfigFn = func(_ context.Context, params acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error) {
+		configStarted <- struct{}{}
+		<-configRelease
+		return []acp.ConfigOption{{ID: params.ConfigID, CurrentValue: params.Value}}, nil
+	}
+
+	go func() {
+		_, err := s.SetConfigOption(context.Background(), acp.ConfigOptionIDModel, "model-b")
+		configDone <- err
+	}()
+	select {
+	case <-configStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("config mutation did not start")
+	}
+
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "after config")); err != nil {
+		t.Fatal(err)
+	}
+	eventuallyQueue(t, func() bool {
+		s.queueMu.Lock()
+		defer s.queueMu.Unlock()
+		return !s.queue.draining && len(s.queue.waiting) == 1
+	})
+	close(configRelease)
+	if err := <-configDone; err != nil {
+		t.Fatal(err)
+	}
+
+	awaitQueueExecutionStart(t, instance, "prompt:after config")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
+}
+
 func TestSessionQueueConcurrentEnqueueExecutesEachItemOnce(t *testing.T) {
 	s, instance := newQueueExecutionSession(t, "sess-concurrent")
 	const count = 12
@@ -524,6 +656,64 @@ func TestSessionQueueConcurrentEnqueueExecutesEachItemOnce(t *testing.T) {
 			t.Fatalf("duplicate execution %q in %v", entry, order)
 		}
 		seen[entry] = true
+	}
+}
+
+func TestClientCloseStopsQueueBeforeClosingSessionResources(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	s, instance := addPersistedQueueRuntimeSession(t, c, "sess-close-queue")
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p1", "active")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("p2", "must not start")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:active")
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- c.Close()
+	}()
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Client.Close did not wait for the queue drain to stop")
+	}
+
+	if got := s.queueSnapshot(true); got.ActiveItem != nil || got.WaitingCount != 0 || len(got.WaitingItems) != 0 {
+		t.Fatalf("queue after Client.Close = %#v", got)
+	}
+	select {
+	case started := <-instance.started:
+		t.Fatalf("queue started another item during Client.Close: %s", started)
+	default:
+	}
+}
+
+func TestClientCloseCancelsActiveCompactQueue(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	s, instance := addPersistedQueueRuntimeSession(t, c, "sess-close-compact")
+	if _, _, err := s.enqueueAndScheduleQueueItem(compactQueueItem("compact-1")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "compact:sess-close-compact")
+
+	closeDone := make(chan error, 1)
+	go func() {
+		closeDone <- c.Close()
+	}()
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		instance.compactOutcomes <- context.Canceled
+		<-closeDone
+		t.Fatal("Client.Close did not cancel the active compact execution")
 	}
 }
 
@@ -812,6 +1002,26 @@ func TestSessionQueueIsNotRecoveredFromSQLite(t *testing.T) {
 	}
 	reopened := New(reopenedStore, "proj1", t.TempDir())
 	t.Cleanup(func() { _ = reopened.Close() })
+
+	readResp, err := reopened.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionRead,
+		"proj1",
+		json.RawMessage(`{"sessionId":"sess-queue-restart"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readSummary := readResp.(map[string]any)["session"].(sessionViewSummary)
+	if readSummary.Queue == nil ||
+		readSummary.Queue.Generation == "" ||
+		readSummary.Queue.Generation == sess.queueSnapshot(true).Generation ||
+		readSummary.Queue.ActiveItem != nil ||
+		readSummary.Queue.WaitingCount != 0 ||
+		len(readSummary.Queue.WaitingItems) != 0 {
+		t.Fatalf("queue projection after restart = %#v", readSummary.Queue)
+	}
+
 	reloaded, err := reopened.SessionForTest("sess-queue-restart")
 	if err != nil {
 		t.Fatal(err)

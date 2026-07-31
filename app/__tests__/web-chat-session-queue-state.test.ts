@@ -3,6 +3,7 @@ import {
   fullQueueSnapshot,
   mergeChatSessionQueueProjection,
   queueDisplayItems,
+  queueTranscriptItemIDs,
 } from '../web/src/chat/session/chatSessionQueue';
 import type {RegistrySessionQueueSnapshot} from '../web/src/registry/registryTypes';
 
@@ -67,6 +68,56 @@ describe('server session queue projection', () => {
     expect(items.map(item => item.itemId)).toEqual(['failed', 'item-1']);
     items[1].blocks![0].text = 'mutated';
     expect(queue.waitingItems![0].blocks![0].text).toBe('item-1');
+  });
+
+  test('suppresses active transient rows already represented by the transcript', () => {
+    const compact = snapshot('g1', 5);
+    compact.waitingItems = [];
+    compact.waitingCount = 0;
+    compact.activeItem = {
+      itemId: 'compact-1',
+      kind: 'compact',
+      status: 'running',
+      createdAt: '2026-07-31T09:00:00Z',
+      cancelSupported: false,
+    };
+    expect(queueDisplayItems(compact, new Set(['compact-1']))).toEqual([]);
+
+    const cancelling = snapshot('g1', 6);
+    cancelling.waitingItems = [];
+    cancelling.waitingCount = 0;
+    cancelling.activeItem = {
+      itemId: 'prompt-1',
+      kind: 'prompt',
+      status: 'cancelling',
+      createdAt: '2026-07-31T09:00:00Z',
+      blocks: [{type: 'text', text: 'cancel me'}],
+      cancelSupported: true,
+    };
+    expect(queueDisplayItems(cancelling, new Set(['prompt-1']))).toEqual([]);
+
+    cancelling.activeItem.status = 'failed';
+    expect(queueDisplayItems(cancelling, new Set(['prompt-1'])))
+      .toEqual([expect.objectContaining({itemId: 'prompt-1', status: 'failed'})]);
+  });
+
+  test('collects queue identities from prompt and operation transcript rows', () => {
+    expect(queueTranscriptItemIDs([
+      {
+        sessionId: 'sess-1',
+        turnIndex: 1,
+        method: 'prompt_request',
+        param: {clientMessageId: 'prompt-1'},
+        finished: false,
+      },
+      {
+        sessionId: 'sess-1',
+        turnIndex: 2,
+        method: 'session_operation',
+        param: {operationId: 'compact-1', type: 'compact'},
+        finished: false,
+      },
+    ])).toEqual(new Set(['prompt-1', 'compact-1']));
   });
 
   test('builds a synthetic prompt message from server item identity', () => {

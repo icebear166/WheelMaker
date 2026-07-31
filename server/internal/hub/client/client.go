@@ -69,11 +69,14 @@ type Client struct {
 	stopPersistCh  chan struct{} // closed to stop the persist timer goroutine
 	backgroundWG   sync.WaitGroup
 
-	sessionRecorder *SessionRecorder
-	archiveStore    *sessionArchiveStore
-	sessionSearch   *sessionSearchManager
-	attachments     *attachmentManager
-	viewSink        SessionViewSink
+	queueGeneration string
+
+	sessionRecorder     *SessionRecorder
+	archiveStore        *sessionArchiveStore
+	sessionSearch       *sessionSearchManager
+	attachments         *attachmentManager
+	markAttachmentsSent func([]attachmentRef) error
+	viewSink            SessionViewSink
 }
 
 // RuntimeConfig binds Hub-scoped runtime dependencies to one Client.
@@ -100,17 +103,19 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		stateDir = filepath.Clean(runtime.StateDir)
 	}
 	c := &Client{
-		projectName:    projectName,
-		cwd:            cwd,
-		stateDir:       stateDir,
-		registry:       runtime.AgentFactory,
-		store:          store,
-		sessions:       make(map[string]*Session),
-		forkPointCache: make(map[string]sessionForkPointCacheEntry),
-		suspendTimeout: 5 * time.Minute,
-		stopPersistCh:  make(chan struct{}),
-		attachments:    newAttachmentManager(),
+		projectName:     projectName,
+		cwd:             cwd,
+		stateDir:        stateDir,
+		registry:        runtime.AgentFactory,
+		store:           store,
+		sessions:        make(map[string]*Session),
+		forkPointCache:  make(map[string]sessionForkPointCacheEntry),
+		suspendTimeout:  5 * time.Minute,
+		stopPersistCh:   make(chan struct{}),
+		attachments:     newAttachmentManager(),
+		queueGeneration: uuid.NewString(),
 	}
+	c.markAttachmentsSent = c.attachments.markSent
 	c.sessionRecorder = newSessionRecorder(projectName, store, func(ctx context.Context) ([]SessionRecord, error) {
 		return c.ListSessions(ctx)
 	})
@@ -163,7 +168,9 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		sess := c.sessions[strings.TrimSpace(sessionID)]
 		c.mu.Unlock()
 		if sess == nil {
-			return nil
+			return &acp.SessionQueueSnapshot{
+				Generation: c.queueGeneration,
+			}
 		}
 		snapshot := sess.queueSnapshot(full)
 		return &snapshot
@@ -323,6 +330,9 @@ func (c *Client) Close() error {
 
 	ctx := context.Background()
 	for _, sess := range sessions {
+		sess.beginQueueShutdown()
+	}
+	for _, sess := range sessions {
 		sess.mu.Lock()
 		inst := sess.instance
 		sess.mu.Unlock()
@@ -335,6 +345,9 @@ func (c *Client) Close() error {
 		if err := sess.persistSession(ctx); err != nil {
 			hubLogger(c.projectName).Warn("persist session during close session=%s err=%v", sess.acpSessionID, err)
 		}
+	}
+	for _, sess := range sessions {
+		sess.waitQueueShutdown()
 	}
 	if c.sessionRecorder != nil {
 		c.sessionRecorder.Close()
@@ -727,10 +740,9 @@ func (c *Client) handleSessionQueueRequest(ctx context.Context, req acp.SessionQ
 				return nil, err
 			}
 		}
-		if _, _, err := sess.enqueueQueueItem(item); err != nil {
-			return nil, err
-		}
-		if err := c.markSessionAttachmentsSent(attachmentRefs); err != nil {
+		if _, _, err := sess.enqueueQueueItemWithPrecommit(item, func() error {
+			return c.markSessionAttachmentsSent(attachmentRefs)
+		}); err != nil {
 			return nil, err
 		}
 		sess.publishQueueSnapshot()

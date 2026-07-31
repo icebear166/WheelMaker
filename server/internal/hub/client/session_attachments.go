@@ -455,6 +455,9 @@ func (c *Client) markSessionAttachmentsSent(refs []attachmentRef) error {
 	if len(refs) == 0 {
 		return nil
 	}
+	if c.markAttachmentsSent != nil {
+		return c.markAttachmentsSent(refs)
+	}
 	return c.attachmentManager().markSent(refs)
 }
 

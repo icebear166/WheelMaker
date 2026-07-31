@@ -1822,9 +1822,15 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				}, "")
 				return parsed, nil
 			}
-			params := acp.SessionPromptParams{}
+			params := struct {
+				Prompt          []acp.ContentBlock `json:"prompt"`
+				ClientMessageID string             `json:"clientMessageId,omitempty"`
+			}{}
 			jsonDecodeAt(contentRaw, "params", &params)
-			parsed.setJSONMessage(acp.SessionTurnMethodPromptRequest, acp.SessionTurnPromptRequest{ContentBlocks: cloneJSON(params.Prompt)}, "")
+			parsed.setJSONMessage(acp.SessionTurnMethodPromptRequest, acp.SessionTurnPromptRequest{
+				ContentBlocks:   cloneJSON(params.Prompt),
+				ClientMessageID: params.ClientMessageID,
+			}, "")
 		case acp.MethodSessionUpdate:
 			params := acp.SessionUpdateParams{}
 			jsonDecodeAt(contentRaw, "params", &params)

@@ -40,6 +40,7 @@ type testInjectedInstance struct {
 	loadResult     acp.SessionLoadResult
 	loadUpdates    []acp.SessionUpdateParams
 	loadErr        error
+	loadFn         func(context.Context, acp.SessionLoadParams) (acp.SessionLoadResult, error)
 	newResult      *acp.SessionNewResult
 	listResult     acp.SessionListResult
 	listErr        error
@@ -195,8 +196,11 @@ func (i *testInjectedInstance) SessionNew(context.Context, acp.SessionNewParams)
 	}
 	return acp.SessionNewResult{SessionID: sid}, nil
 }
-func (i *testInjectedInstance) SessionLoad(context.Context, acp.SessionLoadParams) (acp.SessionLoadResult, error) {
+func (i *testInjectedInstance) SessionLoad(ctx context.Context, params acp.SessionLoadParams) (acp.SessionLoadResult, error) {
 	i.loadCalls++
+	if i.loadFn != nil {
+		return i.loadFn(ctx, params)
+	}
 	for _, params := range i.loadUpdates {
 		if strings.TrimSpace(params.SessionID) == "" {
 			params.SessionID = i.sessionID
@@ -10377,6 +10381,50 @@ func TestSessionQueueAcceptsUploadedAttachmentBlock(t *testing.T) {
 	}
 	if !sidecar.Sent {
 		t.Fatalf("attachment sidecar = %#v, want sent", sidecar)
+	}
+}
+
+func TestSessionQueueAttachmentCommitFailureDoesNotCreateQueueItem(t *testing.T) {
+	mock := &mockSession{agentName: "codex", sessionID: "sess-attachment-commit-failure"}
+	c := newAttachmentTestClientWithMock(t, mock)
+	block := uploadSessionAttachmentForTest(
+		t,
+		c,
+		"sess-attachment-commit-failure",
+		"report.pdf",
+		"application/pdf",
+		[]byte("hello world"),
+	)
+	c.markAttachmentsSent = func([]attachmentRef) error {
+		return errors.New("sidecar write failed")
+	}
+
+	_, err := c.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionQueue,
+		"proj1",
+		queuePromptPayload(
+			"sess-attachment-commit-failure",
+			"attachment-failed",
+			[]acp.ContentBlock{
+				{Type: acp.ContentBlockTypeText, Text: "read this"},
+				block,
+			},
+		),
+	)
+	if err == nil || !strings.Contains(err.Error(), "sidecar write failed") {
+		t.Fatalf("session.queue error = %v, want sidecar failure", err)
+	}
+
+	sess, sessionErr := c.SessionForTest("sess-attachment-commit-failure")
+	if sessionErr != nil {
+		t.Fatal(sessionErr)
+	}
+	if got := sess.queueSnapshot(true); got.ActiveItem != nil || got.WaitingCount != 0 || len(got.WaitingItems) != 0 {
+		t.Fatalf("queue after attachment commit failure = %#v", got)
+	}
+	if len(mock.promptCalls) != 0 {
+		t.Fatalf("promptCalls = %v, want no execution", mock.promptCalls)
 	}
 }
 

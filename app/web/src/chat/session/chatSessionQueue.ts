@@ -48,16 +48,40 @@ export function fullQueueSnapshot(
 
 export function queueDisplayItems(
   queue: RegistrySessionQueueSnapshot | undefined,
+  transcriptItemIDs: ReadonlySet<string> = new Set<string>(),
 ): RegistrySessionQueueItem[] {
   const activeItem = queue?.activeItem;
+  const representedByTranscript = !!activeItem &&
+    transcriptItemIDs.has(activeItem.itemId) &&
+    (
+      activeItem.status === 'cancelling' ||
+      (activeItem.kind === 'compact' && activeItem.status === 'running')
+    );
   const activeDisplay = activeItem && (
     activeItem.status === 'failed' ||
     activeItem.status === 'cancelling' ||
     activeItem.kind === 'compact'
-  )
+  ) && !representedByTranscript
     ? [activeItem]
     : [];
   return [...activeDisplay, ...(queue?.waitingItems ?? [])].map(cloneQueueItem);
+}
+
+export function queueTranscriptItemIDs(
+  messages: RegistryChatMessage[],
+): Set<string> {
+  const itemIDs = new Set<string>();
+  for (const message of messages) {
+    const rawID = message.method === 'prompt_request'
+      ? message.param.clientMessageId
+      : message.method === 'session_operation'
+        ? message.param.operationId
+        : undefined;
+    if (typeof rawID !== 'string') continue;
+    const itemID = rawID.trim();
+    if (itemID) itemIDs.add(itemID);
+  }
+  return itemIDs;
 }
 
 export function makeSessionQueueItemID(): string {

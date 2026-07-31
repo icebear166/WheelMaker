@@ -120,6 +120,7 @@ import {
   makeSessionQueueItemID,
   mergeChatSessionQueueProjection,
   queueDisplayItems,
+  queueTranscriptItemIDs,
   type ChatSessionQueuesByKey,
 } from '../chat/session/chatSessionQueue';
 import {
@@ -3978,9 +3979,13 @@ export function App() {
   const selectedSessionQueue = selectedChatEncodedKey
     ? chatSessionQueuesByKey[selectedChatEncodedKey]
     : undefined;
+  const selectedTranscriptQueueItemIDs = useMemo(
+    () => queueTranscriptItemIDs(selectedFullChatMessages),
+    [selectedFullChatMessages],
+  );
   const selectedQueueItems = useMemo(
-    () => queueDisplayItems(selectedSessionQueue),
-    [selectedSessionQueue],
+    () => queueDisplayItems(selectedSessionQueue, selectedTranscriptQueueItemIDs),
+    [selectedSessionQueue, selectedTranscriptQueueItemIDs],
   );
   const queuedPromptTurnIndex = useCallback(
     (index: number) => nextPromptTurnIndex(selectedFullChatMessages) + index + 1,
@@ -10595,6 +10600,7 @@ export function App() {
     blocksOverride?: RegistryChatContentBlock[];
     preserveComposer?: boolean;
     itemIdOverride?: string;
+    createdAtOverride?: string;
   } = {}) => {
     if (voiceAwaitingFinalRef.current) {
       return;
@@ -10699,7 +10705,7 @@ export function App() {
         setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
         return;
       }
-      const createdAt = new Date().toISOString();
+      const createdAt = options.createdAtOverride ?? new Date().toISOString();
       const itemId = options.itemIdOverride ?? makeSessionQueueItemID();
       rememberPendingChatPrompt(runtimeKey, {
         itemId,
@@ -11613,6 +11619,7 @@ export function App() {
       blocksOverride: pending.blocks,
       preserveComposer: true,
       itemIdOverride: pending.itemId,
+      createdAtOverride: pending.createdAt,
     }).catch(() => undefined);
   }, [sendChatMessageEvent]);
 

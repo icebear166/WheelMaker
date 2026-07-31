@@ -192,7 +192,9 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId)');
     expect(main).toContain('service.retryProjectSessionQueueItem(projectId, key.sessionId, itemId)');
     expect(main).toContain('mergeChatSessionQueueProjection(current[runtimeKey], incoming)');
-    expect(main).toContain('queueDisplayItems(selectedSessionQueue)');
+    expect(main).toContain(
+      'queueDisplayItems(selectedSessionQueue, selectedTranscriptQueueItemIDs)',
+    );
     expect(main).not.toContain('chatQueuedPromptsByKey');
     expect(main).not.toContain('reconcileSteeredChatPrompts');
     expect(chatTurn).toContain('chat-prompt-status-queued');
@@ -207,6 +209,16 @@ describe('web chat turn rendering', () => {
     expect(chatTurn).toContain('chat-prompt-steered-label');
     expect(styles).toContain('.chat-prompt-status-queued');
     expect(styles).toContain('.chat-prompt-queue-actions');
+  });
+
+  test('retries an undelivered queue prompt with its original idempotency metadata', () => {
+    const main = readMain();
+
+    expect(main).toContain('createdAtOverride?: string;');
+    expect(main).toContain(
+      'const createdAt = options.createdAtOverride ?? new Date().toISOString();',
+    );
+    expect(main).toContain('createdAtOverride: pending.createdAt,');
   });
 
   test('renders persisted prompt attachments as user-visible chips', () => {

@@ -65,6 +65,7 @@ type Session struct {
 	ready        bool
 	initializing bool
 	loading      bool
+	closing      bool
 
 	prompt   promptState
 	initCond *sync.Cond
@@ -84,6 +85,8 @@ type Session struct {
 	steerMu         sync.Mutex
 	queueOpMu       sync.Mutex
 	queueMu         sync.Mutex
+	queueDrainWG    sync.WaitGroup
+	queueClosing    bool
 	executionKind   string
 	executionLocked bool
 	steerState      sessionSteerState
@@ -216,7 +219,10 @@ func (s *Session) SetConfigOption(ctx context.Context, configID, value string) (
 	}
 
 	s.promptMu.Lock()
-	defer s.promptMu.Unlock()
+	defer func() {
+		s.promptMu.Unlock()
+		s.scheduleQueueDrain()
+	}()
 
 	if err := s.ensureInstance(ctx); err != nil {
 		return nil, err
@@ -321,6 +327,10 @@ func (s *Session) recordSessionViewEvent(event SessionViewEvent) bool {
 // runtime instance if not already running. Connect is executed outside s.mu.
 func (s *Session) ensureInstance(ctx context.Context) error {
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return errors.New("session is closing")
+	}
 	if s.instance != nil {
 		s.mu.Unlock()
 		return nil
@@ -338,6 +348,11 @@ func (s *Session) ensureInstance(ctx context.Context) error {
 	inst.SetCallbacks(s)
 
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		_ = inst.Close()
+		return errors.New("session is closing")
+	}
 	if s.instance != nil {
 		s.mu.Unlock()
 		_ = inst.Close()
@@ -1000,7 +1015,8 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 			select {
 			case u := <-interceptCh:
 				if !drain(u) {
-					return
+					pr.err = ctx.Err()
+					goto done
 				}
 			case pr = <-resultCh:
 				s.mu.Lock()
@@ -1012,7 +1028,8 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 					select {
 					case u := <-interceptCh:
 						if !drain(u) {
-							return
+							pr.err = ctx.Err()
+							goto done
 						}
 					default:
 						goto drained
@@ -1027,16 +1044,10 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 		result, err := pr.result, pr.err
 
 		if err != nil {
-			select {
-			case updates <- promptStreamEvent{err: err}:
-			case <-ctx.Done():
-			}
+			updates <- promptStreamEvent{err: err}
 		} else {
 			final := result
-			select {
-			case updates <- promptStreamEvent{result: &final}:
-			case <-ctx.Done():
-			}
+			updates <- promptStreamEvent{result: &final}
 		}
 		close(updates)
 	}()
@@ -1378,11 +1389,22 @@ func (s *Session) runPromptExecution(initial []acp.ContentBlock) error {
 }
 
 func (s *Session) runPromptTurn(blocks []acp.ContentBlock) sessionExecutionOutcome {
+	return s.runPromptTurnWithContext(context.Background(), blocks, "")
+}
+
+func (s *Session) runPromptTurnWithContext(
+	ctx context.Context,
+	blocks []acp.ContentBlock,
+	clientMessageID string,
+) sessionExecutionOutcome {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	s.mu.Lock()
 	generation := s.beginPromptGenerationLocked()
 	s.mu.Unlock()
 
-	outcome := s.runPromptBlocks(blocks)
+	outcome := s.runPromptBlocks(ctx, blocks, clientMessageID)
 
 	s.mu.Lock()
 	generation.completed = true
@@ -1400,24 +1422,39 @@ func (s *Session) runPromptTurn(blocks []acp.ContentBlock) sessionExecutionOutco
 }
 
 // runPromptBlocks executes one provider turn while promptMu is already owned.
-func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) sessionExecutionOutcome {
+func (s *Session) runPromptBlocks(
+	ctx context.Context,
+	blocks []acp.ContentBlock,
+	clientMessageID string,
+) sessionExecutionOutcome {
+	recordedParams := map[string]any{
+		"sessionId": s.acpSessionID,
+		"prompt":    cloneSessionContentBlocks(blocks),
+	}
+	if clientMessageID != "" {
+		recordedParams["clientMessageId"] = clientMessageID
+	}
 	s.recordSessionViewEvent(SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
 		Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-			"params": acp.SessionPromptParams{
-				SessionID: s.acpSessionID,
-				Prompt:    cloneSessionContentBlocks(blocks),
-			},
+			"params": recordedParams,
 		}),
 	})
-	ctx := context.Background()
 	if err := s.ensureInstance(ctx); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			s.recordPromptDone(acp.StopReasonCancelled, "")
+			return sessionExecutionOutcome{status: sessionExecutionCancelled}
+		}
 		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	if err := s.ensureReadyAndNotify(ctx); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			s.recordPromptDone(acp.StopReasonCancelled, "")
+			return sessionExecutionOutcome{status: sessionExecutionCancelled}
+		}
 		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
@@ -1427,9 +1464,17 @@ func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) sessionExecutionOut
 		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
+	if err := ctx.Err(); err != nil {
+		s.recordPromptDone(acp.StopReasonCancelled, "")
+		return sessionExecutionOutcome{status: sessionExecutionCancelled}
+	}
 
 	updates, err := s.promptStream(ctx, promptBlocks)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			s.recordPromptDone(acp.StopReasonCancelled, "")
+			return sessionExecutionOutcome{status: sessionExecutionCancelled}
+		}
 		if isAgentExitError(err) && !s.agentProcessAlive() {
 			_ = s.resetDeadConnection(err)
 		}
