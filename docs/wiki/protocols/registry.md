@@ -6,7 +6,7 @@
 >
 > Session Queue 决策来源：[`../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
 
-本文定义 WheelMaker Registry 2.6 主协议。App 与 Registry、正常 Hub 与 Registry 的 `connect.init.payload.protocolVersion` 必须一致；完整业务协议不提供降级兼容。Hub 另行声明稳定的 maintenance protocol version，使未来主协议硬切后，已经具备维护协议的旧 Hub 仍可在严格受限的 `update_only` 模式中查询并触发自身更新。
+本文定义 WheelMaker Registry 2.6 主协议。App 与 Registry 的 `connect.init.payload.protocolVersion` 必须一致。Hub 主协议相同时获得完整业务能力；较旧 Hub 可以保持 `update_only` 连接，以便通过现有 HubState 更新路径升级。
 
 ## 0. 单一来源
 
@@ -93,27 +93,13 @@
 - `role=hub` 必须在 payload 中携带 `hubId`。
 - `role=client` 可选携带 `hubId`；携带后 client scope 限定在该 Hub。
 - `role=client` 的 `protocolVersion` 必须等于 Registry 当前主协议版本。
-- `role=hub` 主协议相同时进入 `normal`；主协议较旧且双方 `maintenanceProtocolVersion` 相同时可进入 `update_only`；Hub 主协议较新时仍拒绝。
+- `role=hub` 主协议相同时进入 `normal`；主协议较旧时进入 `update_only`；Hub 主协议较新时仍拒绝。
 - 配置了 token 时必须携带并匹配。
 - 所有非 `connect.*` 业务请求必须在 `connect.init` 成功后发送。
 
-认证、Hub ID 和角色校验始终先于连接模式判定，`update_only` 不降低认证要求。主协议版本按数值组件比较，不按普通字符串顺序比较。当前 maintenance protocol version 为 `1`；未声明或声明其他 maintenance version 的旧 Hub 不获得推断式兼容。
+认证、Hub ID 和角色校验始终先于连接模式判定，`update_only` 不降低认证要求。主协议版本按数值组件比较，不按普通字符串顺序比较。握手 wire contract 不增加维护版本或连接模式字段；旧 Hub 不需要感知受限状态。Registry 在连接内部记录模式，并通过项目列表的 Hub descriptor 向 App 暴露可选的 `connectionMode`。
 
-Hub 请求增量声明：
-
-```json
-{
-  "clientName": "wheelmaker-hub",
-  "clientVersion": "0.1.0",
-  "protocolVersion": "2.6",
-  "maintenanceProtocolVersion": 1,
-  "role": "hub",
-  "hubId": "hub-a",
-  "token": "******"
-}
-```
-
-Registry 响应通过 `connectionMode` 返回 `normal` 或 `update_only`，并在 `serverInfo` 中返回当前主协议和 maintenance protocol version。Hub 只有断开并以当前主协议重新握手后才能从 `update_only` 进入 `normal`，不能通过业务消息提升连接模式。
+Hub 只有断开并以当前主协议重新握手后才能从 `update_only` 进入 `normal`，不能通过业务消息提升连接模式。
 
 > 决策来源：[`docs/scope/2026-07-31-update-only-hub/spec-update-only-hub.md`](../../scope/2026-07-31-update-only-hub/spec-update-only-hub.md)
 
@@ -134,14 +120,14 @@ Registry 响应通过 `connectionMode` 返回 `normal` 或 `update_only`，并�
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub`（`normal`） | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
-| `hub`（`update_only`） | `hub.ping` |
-| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`hub.maintenance.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
+| `hub`（`update_only`） | `hub.ping`；业务上报由 Registry 确认后丢弃 |
+| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
 
-事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`registry.hub.updated`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
+事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
 
 ## 4. Hub 上报
 
-`normal` Hub 建连后必须先发全量项目报告，后续按需发单项目报告。两个方法都要求 envelope 顶层 `hubId`。`update_only` Hub 跳过项目报告；Registry 拒绝其项目报告并保持受限连接模式。
+`normal` Hub 建连后必须先发全量项目报告，后续按需发单项目报告。两个方法都要求 envelope 顶层 `hubId`。旧 Hub 不知道 `update_only`，仍会发送全量项目报告；Registry 必须返回成功响应但丢弃 payload，否则旧 Reporter 会把握手视为失败。受限连接的后续业务报告和事件同样不进入业务路由，不创建 Project snapshot，也不广播状态。
 
 ### `hub.report.projects`
 
@@ -233,16 +219,14 @@ Client 读取 Registry 当前项目目录。返回范围受 client scope 限制�
     "hubs": [
       {
         "hubId": "hub-a",
-        "connectionMode": "normal",
-        "protocolVersion": "2.6",
-        "supportedProtocolVersion": "2.6"
+        "connectionMode": "normal"
       }
     ]
   }
 }
 ```
 
-Hub 目录与 Project snapshot 分离。`update_only` Hub 会出现在 `hubs` 中并携带版本和连接模式，但不会在 `projects` 中产生空项目或伪造项目状态。
+Hub 目录与 Project snapshot 分离。Registry 在 Hub 握手成功时登记连接，而不是等到首次项目报告。`update_only` Hub 会出现在 `hubs` 中并携带 `connectionMode: "update_only"`，但不会在 `projects` 中产生空项目或伪造项目状态。字段缺失时 App 按 `normal` 处理。
 
 ### `registry.project.report`
 
@@ -257,27 +241,6 @@ Registry 对 App 广播单项目完整快照：
     "hubId": "hub-a",
     "projectId": "hub-a:WheelMaker",
     "project": {}
-  }
-}
-```
-
-### `registry.hub.updated`
-
-Hub 建连、连接模式变化或断开时，Registry 向已认证 App 广播完整 Hub descriptor 和 `online` 状态。该事件使没有 Project 报告的 `update_only` Hub 也能实时进入或退出 App 的 Hub 目录。
-
-```json
-{
-  "type": "event",
-  "method": "registry.hub.updated",
-  "hubId": "hub-a",
-  "payload": {
-    "online": true,
-    "hub": {
-      "hubId": "hub-a",
-      "connectionMode": "update_only",
-      "protocolVersion": "2.6",
-      "supportedProtocolVersion": "2.7"
-    }
   }
 }
 ```
@@ -495,19 +458,16 @@ HubConfig 是 Hub 的持久化配置，存放在 Hub 本地 `<stateDir>/db/hub-c
 
 Flicker Bridge 的 API key 不需要用户填写：未显式设置 `apiKeys.flicker` 时，Hub 使用 loopback-only 的内置占位门禁 `00000000000000000000`。设置面板只保留 Off/V1/V2：选择 V1/V2 会持久化 enabled 并立即启动对应模式，Off 会立即停止且 Hub 下次启动不会加载 Bridge。底层 start/stop/restart/switchMode 仍走 `hub.state.action` 的 `flickerBridge` section，但 UI 不再提供独立的临时 Start/Stop toggle。
 
-## 7B. Hub Maintenance
+## 7B. Update-only Hub
 
-maintenance v1 是独立于主业务协议的最小更新救援通道，只定义：
+`update_only` 是 Registry 的永久兼容状态，不是独立协议。Registry 对目标受限 Hub 只放行既有 HubState 更新子集：
 
-- `hub.ping`：Hub 向 Registry 确认连接存活。
-- `hub.maintenance.update.query`：Client 经 Registry 查询目标 Hub 的本机安装版本、更新任务状态和是否可请求更新。
-- `hub.maintenance.update.request`：Client 经 Registry 请求目标 Hub 原子接受更新任务，并触发既有 `deploy.mjs update` 路径。
+- `hub.state.refresh`，且 `sections` 必须只包含 `wheelmakerUpdate`。
+- `hub.state.action`，且 `section=wheelmakerUpdate`、`action=requestUpdate`。
 
-两个 `hub.maintenance.update.*` 方法都要求 envelope 顶层 `hubId`。Registry 只向目标 Hub 转发固定维护 payload，不允许 Client 提供发布 URL；Hub 复用既有 UpdateCommand、更新锁、`staging/status.json` 和 updater trigger。maintenance v1 不复用 HubState envelope，也不包含 Project、Session、文件、Git、HubConfig、Skills、发布、Debug Web 或 Relay 能力。
+方法与 payload 必须同时匹配；`hub.state.get`、其他 section、其他 action 及 Project、Session、文件、Git、Terminal、HubConfig、Skills、发布、Debug Web 和 Relay 请求统一返回 `FORBIDDEN`。App 不承担此权限判断，只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，并继续复用现有更新状态和按钮。
 
-`normal` 与 `update_only` Hub 都能处理维护方法，因此 App 的更新页面不需要根据连接模式选择两套更新后端。`update_only` Hub 的其他请求、事件和转发统一返回 `FORBIDDEN`。用户必须明确触发更新；握手成功本身不启动更新。
-
-maintenance v1 发布后保持 wire-compatible。若维护协议本身需要破坏性调整，使用新的 maintenance version；不得改变 v1 语义。
+Hub 内部仍使用既有 WheelMaker Update HubState adapter、UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。用户必须明确触发更新；受限握手本身不启动更新。该 HubState wire 子集从本能力发布起保持兼容，不增加 maintenance version 或平行 RPC。
 
 ## 8. Session
 
