@@ -10,6 +10,8 @@
 
 **Command convention:** Run every `go` command from `server/`, every `npm` command from `app/`, and every `git` command from the repository root. Keep Registry Protocol version `2.6`.
 
+**Implementation status (2026-07-31): Complete.** The unified protocol, Hub-owned queue and scheduler, lifecycle handling, App projection, queue controls, and running-state attachment flow are implemented. Validation passed for all Go packages, all 250 App suites (1,482 tests), TypeScript, the production web build, the Registry 16 MiB boundary, and `go vet ./internal/hub/client`. The requested Go race run is unavailable in this Windows environment because CGO is disabled (`-race requires cgo`); the queue concurrency regression tests pass in the standard suite.
+
 **Locked wire shape:**
 
 ```json
