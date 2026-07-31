@@ -137,6 +137,17 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		f.Register(candidate.provider, providerInstanceCreator(prov))
 	}
 	if deepseekKey := strings.TrimSpace(options.DeepSeekAPIKey); deepseekKey != "" {
+		cxDeepSeekProvider := NewCXDeepSeekProvider(options.StateDir, deepseekKey)
+		if available(cxDeepSeekProvider) {
+			f.Register(protocol.ACPProviderCXDeepSeek, codexappInstanceCreator(cxDeepSeekProvider))
+			f.RegisterSessionActions(protocol.ACPProviderCXDeepSeek, SessionActionSupport{
+				Status:  true,
+				Compact: true,
+				Steer:   true,
+				Fork:    true,
+				Goal:    true,
+			})
+		}
 		registerConfiguredProvider(f, protocol.ACPProviderCCDeepSeek, NewCCDeepSeekProvider(options.StateDir, deepseekKey), available)
 	}
 	if kimiKey := strings.TrimSpace(options.KimiAPIKey); kimiKey != "" {
@@ -350,7 +361,12 @@ func isProviderAvailable(provider ACPProvider) bool {
 	if provider == nil {
 		return false
 	}
-	_, _, _, err := provider.Launch()
+	var err error
+	if checker, ok := provider.(interface{ CheckAvailable() error }); ok {
+		err = checker.CheckAvailable()
+	} else {
+		_, _, _, err = provider.Launch()
+	}
 	if err != nil {
 		agentLogger().Warn("skip provider=%s reason=%v", provider.Name(), err)
 		return false

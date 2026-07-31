@@ -6260,6 +6260,117 @@ func TestFactoryCodexSupportsSessionActions(t *testing.T) {
 	}
 }
 
+func TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey(t *testing.T) {
+	stateDir := t.TempDir()
+	tests := []struct {
+		name      string
+		key       string
+		available bool
+		want      bool
+	}{
+		{name: "key and supported codex", key: "deepseek-key", available: true, want: true},
+		{name: "missing key", available: true, want: false},
+		{name: "unsupported codex", key: "deepseek-key", available: false, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			factory := newACPFactoryWithOptions(ACPFactoryOptions{
+				StateDir:       stateDir,
+				DeepSeekAPIKey: test.key,
+			}, func(provider ACPProvider) bool {
+				return test.available && provider.Name() == string(protocol.ACPProviderCXDeepSeek)
+			})
+			registered := factory.Creator(protocol.ACPProviderCXDeepSeek) != nil
+			if registered != test.want {
+				t.Fatalf("registered = %v, want %v; names=%v", registered, test.want, factory.Names())
+			}
+			if !test.want {
+				return
+			}
+			actions := factory.SessionActions(protocol.ACPProviderCXDeepSeek)
+			if !actions.Status || !actions.Compact || !actions.Steer || !actions.Fork || !actions.Goal {
+				t.Fatalf("cx-deepseek session actions = %+v", actions)
+			}
+			if preferred := factory.PreferredName(); preferred == string(protocol.ACPProviderCXDeepSeek) {
+				t.Fatalf("PreferredName() selected cx-deepseek: %q", preferred)
+			}
+		})
+	}
+}
+
+func TestCodexAppProviderCreatorsUseIndependentPools(t *testing.T) {
+	starts := map[string]int{}
+	starter := func(name string) codexappRuntimeStarter {
+		return func(context.Context, string, string) (*codexappRuntime, error) {
+			starts[name]++
+			return newCodexappRuntimeWithTransport(newFakeCodexappTransport()), nil
+		}
+	}
+	nativeProvider := NewCodexAppProvider()
+	nativeProvider.lookPath = func(string) (string, error) { return "/bin/codex-native", nil }
+	deepSeekProvider := newCodexAppProvider(codexAppProviderOptions{
+		Provider:    protocol.ACPProviderCXDeepSeek,
+		Title:       "DeepSeek Codex",
+		AllowImages: false,
+	})
+	deepSeekProvider.lookPath = func(string) (string, error) { return "/bin/codex-deepseek", nil }
+	nativeCreator := codexappInstanceCreatorWithStarter(nativeProvider, starter("native"))
+	deepSeekCreator := codexappInstanceCreatorWithStarter(deepSeekProvider, starter("deepseek"))
+	ctx := WithProjectName(context.Background(), "project-a")
+	cwd := t.TempDir()
+
+	nativeInstanceA, err := nativeCreator(ctx, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = nativeInstanceA.Close() })
+	nativeInstanceB, err := nativeCreator(ctx, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = nativeInstanceB.Close() })
+	deepSeekInstanceA, err := deepSeekCreator(ctx, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = deepSeekInstanceA.Close() })
+	deepSeekInstanceB, err := deepSeekCreator(ctx, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = deepSeekInstanceB.Close() })
+
+	nativeA := codexappConnFromInstance(t, nativeInstanceA)
+	nativeB := codexappConnFromInstance(t, nativeInstanceB)
+	deepSeekA := codexappConnFromInstance(t, deepSeekInstanceA)
+	deepSeekB := codexappConnFromInstance(t, deepSeekInstanceB)
+	if starts["native"] != 1 || starts["deepseek"] != 1 {
+		t.Fatalf("runtime starts = %v, want one per provider creator", starts)
+	}
+	if nativeA.runtime != nativeB.runtime {
+		t.Fatal("native creator did not share its project runtime")
+	}
+	if deepSeekA.runtime != deepSeekB.runtime {
+		t.Fatal("cx-deepseek creator did not share its project runtime")
+	}
+	if nativeA.runtime == deepSeekA.runtime {
+		t.Fatal("native codex and cx-deepseek shared a runtime")
+	}
+}
+
+func codexappConnFromInstance(t *testing.T, value Instance) *codexappConn {
+	t.Helper()
+	base, ok := value.(*instance)
+	if !ok {
+		t.Fatalf("instance type = %T", value)
+	}
+	conn, ok := base.conn.(*codexappConn)
+	if !ok {
+		t.Fatalf("connection type = %T", base.conn)
+	}
+	return conn
+}
+
 func TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace(t *testing.T) {
 	original := NewACPFactory()
 	original.Register(protocol.ACPProviderClaude, func(context.Context, string) (Instance, error) {
