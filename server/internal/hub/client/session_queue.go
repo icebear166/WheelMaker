@@ -31,6 +31,7 @@ type sessionQueueItem struct {
 	status      string
 	errMessage  string
 	payloadHash [sha256.Size]byte
+	steerCancel context.CancelFunc
 }
 
 type sessionQueueState struct {
@@ -134,6 +135,10 @@ func (s *Session) cancelQueueItem(itemID string) error {
 		if item.wire.ItemID != itemID {
 			continue
 		}
+		if item.steerCancel != nil {
+			item.steerCancel()
+			item.steerCancel = nil
+		}
 		s.queue.waiting = append(s.queue.waiting[:i], s.queue.waiting[i+1:]...)
 		s.bumpQueueRevisionLocked()
 		s.queueMu.Unlock()
@@ -198,10 +203,10 @@ func (s *Session) retryQueueItem(itemID string) error {
 
 func (s *Session) steerQueueItem(ctx context.Context, itemID string) error {
 	s.queueOpMu.Lock()
-	defer s.queueOpMu.Unlock()
 
 	itemID = strings.TrimSpace(itemID)
 	if itemID == "" {
+		s.queueOpMu.Unlock()
 		return sessionQueueRequestError(acp.CodeInvalidArgument, "itemId is required")
 	}
 
@@ -217,20 +222,28 @@ func (s *Session) steerQueueItem(ctx context.Context, itemID string) error {
 	}
 	if target == nil {
 		s.queueMu.Unlock()
+		s.queueOpMu.Unlock()
 		return sessionQueueRequestError(acp.CodeNotFound, "waiting queue item was not found")
 	}
 	if target.wire.Kind != acp.SessionQueueItemKindPrompt || target.status != acp.SessionQueueItemStatusQueued {
 		s.queueMu.Unlock()
+		s.queueOpMu.Unlock()
 		return sessionQueueRequestError(acp.CodeConflict, "only a queued waiting prompt can be steered")
 	}
+	steerCtx, cancelSteer := context.WithCancel(ctx)
 	target.status = acp.SessionQueueItemStatusSteering
+	target.steerCancel = cancelSteer
 	blocks := cloneSessionContentBlocks(target.wire.Blocks)
 	s.bumpQueueRevisionLocked()
 	s.queueMu.Unlock()
+	s.queueOpMu.Unlock()
 	s.publishQueueSnapshot()
 
-	attempt, err := s.trySteerQueuePrompt(ctx, itemID, blocks)
+	attempt, err := s.trySteerQueuePrompt(steerCtx, itemID, blocks)
+	cancelSteer()
 
+	s.queueOpMu.Lock()
+	defer s.queueOpMu.Unlock()
 	s.queueMu.Lock()
 	currentIndex := -1
 	for index, item := range s.queue.waiting {
@@ -241,8 +254,12 @@ func (s *Session) steerQueueItem(ctx context.Context, itemID string) error {
 	}
 	if currentIndex < 0 {
 		s.queueMu.Unlock()
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		return err
 	}
+	target.steerCancel = nil
 	if err == nil && attempt.outcome == sessionSteerAttemptTranscript {
 		s.queueMu.Unlock()
 		return nil
@@ -279,6 +296,10 @@ func (s *Session) completeSteeredQueueItem(clientMessageID string) {
 		if item.wire.ItemID != clientMessageID || item.status != acp.SessionQueueItemStatusSteering {
 			continue
 		}
+		if item.steerCancel != nil {
+			item.steerCancel()
+			item.steerCancel = nil
+		}
 		s.queue.waiting = append(s.queue.waiting[:index], s.queue.waiting[index+1:]...)
 		s.bumpQueueRevisionLocked()
 		s.queueMu.Unlock()
@@ -293,6 +314,11 @@ func (s *Session) resetQueue() acp.SessionQueueSnapshot {
 	defer s.queueOpMu.Unlock()
 
 	s.queueMu.Lock()
+	for _, item := range s.queue.waiting {
+		if item.steerCancel != nil {
+			item.steerCancel()
+		}
+	}
 	s.queue = newSessionQueueState()
 	snapshot := s.queueSnapshotLocked(true)
 	s.queueMu.Unlock()

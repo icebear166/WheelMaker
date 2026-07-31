@@ -28,6 +28,8 @@ type queueExecutionInstance struct {
 	promptOutcomes  chan queuePromptOutcome
 	compactOutcomes chan error
 	steerErr        error
+	steerStarted    chan struct{}
+	steerRelease    chan struct{}
 }
 
 func newQueueExecutionSession(t *testing.T, id string) (*Session, *queueExecutionInstance) {
@@ -80,14 +82,29 @@ func (i *queueExecutionInstance) CompactSession(ctx context.Context, sessionID s
 }
 
 func (i *queueExecutionInstance) SteerSession(
-	context.Context,
-	string,
-	string,
-	[]acp.ContentBlock,
+	ctx context.Context,
+	_ string,
+	_ string,
+	_ []acp.ContentBlock,
 ) (agent.SessionSteerResult, error) {
 	i.mu.Lock()
 	err := i.steerErr
+	started := i.steerStarted
+	release := i.steerRelease
 	i.mu.Unlock()
+	if started != nil {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+	}
+	if release != nil {
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return agent.SessionSteerResult{}, ctx.Err()
+		}
+	}
 	return agent.SessionSteerResult{}, err
 }
 
@@ -551,6 +568,57 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 		},
 	})
 	eventuallyQueue(t, func() bool { return len(s.queueSnapshot(true).WaitingItems) == 0 })
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+}
+
+func TestSessionQueueSteeringItemCanBeCancelledWhileProviderIsPending(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-steer-cancel")
+	instance.mu.Lock()
+	instance.steerStarted = make(chan struct{}, 1)
+	instance.steerRelease = make(chan struct{})
+	started := instance.steerStarted
+	instance.mu.Unlock()
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("active", "first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("steer-1", "change direction")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+
+	steerDone := make(chan error, 1)
+	go func() {
+		steerDone <- s.steerQueueItem(context.Background(), "steer-1")
+	}()
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("steer did not reach provider")
+	}
+
+	cancelDone := make(chan error, 1)
+	go func() {
+		cancelDone <- s.cancelQueueItem("steer-1")
+	}()
+	select {
+	case err := <-cancelDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("cancel blocked behind the provider steer call")
+	}
+	if got := s.queueSnapshot(true); len(got.WaitingItems) != 0 {
+		t.Fatalf("queue after cancelling steering item = %#v", got)
+	}
+	select {
+	case err := <-steerDone:
+		if err != nil {
+			t.Fatalf("steer returned after cancellation: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("cancel did not stop the provider steer call")
+	}
 	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
 }
 
