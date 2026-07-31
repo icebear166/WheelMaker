@@ -11,4 +11,5 @@
 - [`composer.md`](composer.md)：Composer 输入区的两行布局、stop 状态 pill、Enter 行为、触发菜单几何与弹层互斥/动画约定。
 - [`session-list.md`](session-list.md)：Project、Recent 与移动端 Session 列表的排序、菜单、pin 状态、层级呈现和动作可见性约定。
 - [`mobile-floating-nav.md`](mobile-floating-nav.md)：移动端 Floating Nav 的形态、材质分档、手势阈值、Relay 合并入口与动效约定。
+- [`workbench-chrome.md`](workbench-chrome.md)：Preview 与 Terminal 的共享 Chrome、标题与标签层级、平台化返回/关闭操作和移动端全屏约定。
 - [`visual-language.md`](visual-language.md)：跨页面的视觉语言约定：设计风格定位、Lucide 图标体系、动效原则、色彩收敛与层级呈现规则。
