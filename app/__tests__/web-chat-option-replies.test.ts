@@ -83,7 +83,7 @@ describe('chat option reply extraction', () => {
     const text = [
       '第一个问题：**“消息已发送成功”的判定边界应该是哪一个？**',
       '',
-      'A. `session.send` 返回 `ok=true` 就算发送成功。  ',
+      'A. `session.queue` 返回 `ok=true` 就算服务端接收成功。  ',
       '推荐度低。它只能说明请求处理过，不一定说明 UI 已收到并对上了服务端 turn。',
       '',
       'B. 服务端发布并被前端收到对应的 `prompt_request` turn 后，才算发送成功。  ',
@@ -96,13 +96,13 @@ describe('chat option reply extraction', () => {
     ].join('\n');
 
     expect(extractChatOptionReplies(text)).toEqual([
-      {label: 'A', text: '`session.send` 返回 `ok=true` 就算发送成功。'},
+      {label: 'A', text: '`session.queue` 返回 `ok=true` 就算服务端接收成功。'},
       {label: 'B', text: '服务端发布并被前端收到对应的 `prompt_request` turn 后，才算发送成功。'},
       {label: 'C', text: '收到第一段 AI 回复后才算成功。'},
     ]);
     expect(splitChatOptionReplyText(text)).toEqual([
       {type: 'markdown', text: '第一个问题：**“消息已发送成功”的判定边界应该是哪一个？**\n\n'},
-      {type: 'option', reply: {label: 'A', text: '`session.send` 返回 `ok=true` 就算发送成功。'}},
+      {type: 'option', reply: {label: 'A', text: '`session.queue` 返回 `ok=true` 就算服务端接收成功。'}},
       {type: 'markdown', text: '\n推荐度低。它只能说明请求处理过，不一定说明 UI 已收到并对上了服务端 turn。\n\n'},
       {
         type: 'option',

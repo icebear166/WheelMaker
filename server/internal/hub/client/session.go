@@ -65,6 +65,7 @@ type Session struct {
 	ready        bool
 	initializing bool
 	loading      bool
+	closing      bool
 
 	prompt   promptState
 	initCond *sync.Cond
@@ -82,9 +83,14 @@ type Session struct {
 	mu              sync.Mutex
 	promptMu        sync.Mutex
 	steerMu         sync.Mutex
+	queueOpMu       sync.Mutex
+	queueMu         sync.Mutex
+	queueDrainWG    sync.WaitGroup
+	queueClosing    bool
 	executionKind   string
 	executionLocked bool
 	steerState      sessionSteerState
+	queue           sessionQueueState
 	goal            sessionGoalState
 	permissions     sessionPermissionState
 }
@@ -107,6 +113,7 @@ func newSession(id, cwd, agentType string) (*Session, error) {
 		cwd:          cwd,
 		createdAt:    time.Now(),
 		prompt:       promptState{},
+		queue:        newSessionQueueState(),
 	}
 	s.initCond = sync.NewCond(&s.mu)
 	return s, nil
@@ -212,7 +219,10 @@ func (s *Session) SetConfigOption(ctx context.Context, configID, value string) (
 	}
 
 	s.promptMu.Lock()
-	defer s.promptMu.Unlock()
+	defer func() {
+		s.promptMu.Unlock()
+		s.scheduleQueueDrain()
+	}()
 
 	if err := s.ensureInstance(ctx); err != nil {
 		return nil, err
@@ -317,6 +327,10 @@ func (s *Session) recordSessionViewEvent(event SessionViewEvent) bool {
 // runtime instance if not already running. Connect is executed outside s.mu.
 func (s *Session) ensureInstance(ctx context.Context) error {
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		return errors.New("session is closing")
+	}
 	if s.instance != nil {
 		s.mu.Unlock()
 		return nil
@@ -334,6 +348,11 @@ func (s *Session) ensureInstance(ctx context.Context) error {
 	inst.SetCallbacks(s)
 
 	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		_ = inst.Close()
+		return errors.New("session is closing")
+	}
 	if s.instance != nil {
 		s.mu.Unlock()
 		_ = inst.Close()
@@ -610,12 +629,14 @@ func (s *Session) endExecution() {
 	if !s.executionLocked {
 		s.executionKind = ""
 		s.mu.Unlock()
+		s.scheduleQueueDrain()
 		return
 	}
 	s.executionKind = ""
 	s.executionLocked = false
 	s.mu.Unlock()
 	s.promptMu.Unlock()
+	s.scheduleQueueDrain()
 }
 
 func (s *Session) StartCompaction(ctx context.Context, operationID string) error {
@@ -626,17 +647,22 @@ func (s *Session) StartCompaction(ctx context.Context, operationID string) error
 	if err := s.beginExecution(acp.SessionOperationTypeCompact); err != nil {
 		return err
 	}
-	release := true
-	defer func() {
-		if release {
-			s.endExecution()
+	go func() {
+		outcome := s.runCompactionExecution(ctx, operationID)
+		if outcome.err != nil {
+			hubLogger(s.projectName).Warn("session compaction failed session=%s operation=%s err=%v", s.acpSessionID, operationID, outcome.err)
 		}
+		s.endExecution()
 	}()
+	return nil
+}
+
+func (s *Session) runCompactionExecution(ctx context.Context, operationID string) sessionExecutionOutcome {
 	if err := s.ensureInstance(ctx); err != nil {
-		return err
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 	if err := s.ensureReadyAndNotify(ctx); err != nil {
-		return err
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	s.mu.Lock()
@@ -645,60 +671,51 @@ func (s *Session) StartCompaction(ctx context.Context, operationID string) error
 	s.mu.Unlock()
 	compactor, ok := inst.(agent.SessionCompactor)
 	if !ok {
-		return agent.ErrSessionActionUnsupported
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: agent.ErrSessionActionUnsupported}
 	}
 	recorder := s.viewSink
 	if recorder == nil {
-		return fmt.Errorf("session operation recorder is required")
+		err := errors.New("session operation recorder is required")
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
-	startedAt := time.Now().UTC()
 	started := acp.SessionOperationPayload{
 		OperationID: operationID,
 		Type:        acp.SessionOperationTypeCompact,
 		Status:      acp.SessionOperationStatusStarted,
-		StartedAt:   startedAt.Format(time.RFC3339),
+		StartedAt:   time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := recorder.RecordSessionOperation(ctx, sessionID, started); err != nil {
-		return err
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
+	}
+	fail := func(err error) sessionExecutionOutcome {
+		failed := started
+		failed.Status = acp.SessionOperationStatusFailed
+		failed.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+		failed.Message = err.Error()
+		_ = recorder.RecordSessionOperation(context.Background(), sessionID, failed)
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 	done, err := compactor.CompactSession(ctx, sessionID)
 	if err != nil {
-		failed := started
-		failed.Status = acp.SessionOperationStatusFailed
-		failed.CompletedAt = time.Now().UTC().Format(time.RFC3339)
-		failed.Message = err.Error()
-		_ = recorder.RecordSessionOperation(context.Background(), sessionID, failed)
-		return err
+		return fail(err)
 	}
 	if done == nil {
-		err := errors.New("session compactor returned no completion channel")
-		failed := started
-		failed.Status = acp.SessionOperationStatusFailed
-		failed.CompletedAt = time.Now().UTC().Format(time.RFC3339)
-		failed.Message = err.Error()
-		_ = recorder.RecordSessionOperation(context.Background(), sessionID, failed)
-		return err
+		return fail(errors.New("session compactor returned no completion channel"))
 	}
-	release = false
-	go func() {
-		result, open := <-done
-		finished := started
-		finished.CompletedAt = time.Now().UTC().Format(time.RFC3339)
-		if !open {
-			finished.Status = acp.SessionOperationStatusFailed
-			finished.Message = "session compaction ended without a result"
-		} else if result.Err != nil {
-			finished.Status = acp.SessionOperationStatusFailed
-			finished.Message = result.Err.Error()
-		} else {
-			finished.Status = acp.SessionOperationStatusCompleted
-		}
-		if err := recorder.RecordSessionOperation(context.Background(), sessionID, finished); err != nil {
-			hubLogger(s.projectName).Warn("record session operation failed session=%s operation=%s err=%v", sessionID, operationID, err)
-		}
-		s.endExecution()
-	}()
-	return nil
+	result, open := <-done
+	if !open {
+		return fail(errors.New("session compaction ended without a result"))
+	}
+	if result.Err != nil {
+		return fail(result.Err)
+	}
+	completed := started
+	completed.Status = acp.SessionOperationStatusCompleted
+	completed.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := recorder.RecordSessionOperation(context.Background(), sessionID, completed); err != nil {
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
+	}
+	return sessionExecutionOutcome{status: sessionExecutionCompleted}
 }
 func configPreferenceFromACPOptions(options []acp.ConfigOption) []PreferenceConfigOption {
 	out := make([]PreferenceConfigOption, 0, len(options))
@@ -998,7 +1015,8 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 			select {
 			case u := <-interceptCh:
 				if !drain(u) {
-					return
+					pr.err = ctx.Err()
+					goto done
 				}
 			case pr = <-resultCh:
 				s.mu.Lock()
@@ -1010,7 +1028,8 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 					select {
 					case u := <-interceptCh:
 						if !drain(u) {
-							return
+							pr.err = ctx.Err()
+							goto done
 						}
 					default:
 						goto drained
@@ -1025,16 +1044,10 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 		result, err := pr.result, pr.err
 
 		if err != nil {
-			select {
-			case updates <- promptStreamEvent{err: err}:
-			case <-ctx.Done():
-			}
+			updates <- promptStreamEvent{err: err}
 		} else {
 			final := result
-			select {
-			case updates <- promptStreamEvent{result: &final}:
-			case <-ctx.Done():
-			}
+			updates <- promptStreamEvent{result: &final}
 		}
 		close(updates)
 	}()
@@ -1222,6 +1235,10 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	}
 
 	update := params.Update
+	if update.SessionUpdate == acp.SessionUpdateUserMessageChunk &&
+		update.Steered && strings.TrimSpace(update.ClientMessageID) != "" {
+		s.completeSteeredQueueItem(update.ClientMessageID)
+	}
 	if isGoalLifecycleUpdate(update.SessionUpdate) {
 		s.handleGoalLifecycleUpdate(update)
 		return
@@ -1368,82 +1385,101 @@ func (s *Session) runPromptExecution(initial []acp.ContentBlock) error {
 			s.endExecution()
 		}
 	}()
+	return s.runPromptTurn(cloneSessionContentBlocks(initial)).err
+}
+
+func (s *Session) runPromptTurn(blocks []acp.ContentBlock) sessionExecutionOutcome {
+	return s.runPromptTurnWithContext(context.Background(), blocks, "")
+}
+
+func (s *Session) runPromptTurnWithContext(
+	ctx context.Context,
+	blocks []acp.ContentBlock,
+	clientMessageID string,
+) sessionExecutionOutcome {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	s.mu.Lock()
-	s.steerState.acceptingFallbacks = true
+	generation := s.beginPromptGenerationLocked()
 	s.mu.Unlock()
 
-	blocks := cloneSessionContentBlocks(initial)
-	for len(blocks) > 0 {
-		s.mu.Lock()
-		generation := s.beginPromptGenerationLocked()
-		s.mu.Unlock()
+	outcome := s.runPromptBlocks(ctx, blocks, clientMessageID)
 
-		runErr := s.runPromptBlocks(blocks)
+	s.mu.Lock()
+	generation.completed = true
+	resolvePromptGenerationLocked(generation)
+	resolved := generation.resolved
+	s.mu.Unlock()
+	<-resolved
 
-		s.mu.Lock()
-		generation.completed = true
-		resolvePromptGenerationLocked(generation)
-		resolved := generation.resolved
-		s.mu.Unlock()
-		<-resolved
-
-		s.mu.Lock()
-		if s.steerState.active != generation {
-			s.steerState.acceptingFallbacks = false
-			s.mu.Unlock()
-			return runErr
-		}
-		s.steerState.priority = append(s.steerState.priority, generation.fallbacks...)
+	s.mu.Lock()
+	if s.steerState.active == generation {
 		s.steerState.active = nil
-		next, ok := s.shiftPriorityPromptLocked()
-		if !ok {
-			s.steerState.acceptingFallbacks = false
-		}
-		s.mu.Unlock()
-		if !ok {
-			return runErr
-		}
-		blocks = next.blocks
 	}
-	return nil
+	s.mu.Unlock()
+	return outcome
 }
 
 // runPromptBlocks executes one provider turn while promptMu is already owned.
-func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
+func (s *Session) runPromptBlocks(
+	ctx context.Context,
+	blocks []acp.ContentBlock,
+	clientMessageID string,
+) sessionExecutionOutcome {
+	recordedParams := map[string]any{
+		"sessionId": s.acpSessionID,
+		"prompt":    cloneSessionContentBlocks(blocks),
+	}
+	if clientMessageID != "" {
+		recordedParams["clientMessageId"] = clientMessageID
+	}
 	s.recordSessionViewEvent(SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
 		Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-			"params": acp.SessionPromptParams{
-				SessionID: s.acpSessionID,
-				Prompt:    cloneSessionContentBlocks(blocks),
-			},
+			"params": recordedParams,
 		}),
 	})
-	ctx := context.Background()
 	if err := s.ensureInstance(ctx); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			s.recordPromptDone(acp.StopReasonCancelled, "")
+			return sessionExecutionOutcome{status: sessionExecutionCancelled}
+		}
 		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
-		return nil
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	if err := s.ensureReadyAndNotify(ctx); err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			s.recordPromptDone(acp.StopReasonCancelled, "")
+			return sessionExecutionOutcome{status: sessionExecutionCancelled}
+		}
 		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
-		return nil
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	promptBlocks, err := s.promptBlocksForAgent(blocks)
 	if err != nil {
 		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
-		return nil
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
+	}
+	if err := ctx.Err(); err != nil {
+		s.recordPromptDone(acp.StopReasonCancelled, "")
+		return sessionExecutionOutcome{status: sessionExecutionCancelled}
 	}
 
 	updates, err := s.promptStream(ctx, promptBlocks)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			s.recordPromptDone(acp.StopReasonCancelled, "")
+			return sessionExecutionOutcome{status: sessionExecutionCancelled}
+		}
 		if isAgentExitError(err) && !s.agentProcessAlive() {
 			_ = s.resetDeadConnection(err)
 		}
 		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
-		return nil
+		return sessionExecutionOutcome{status: sessionExecutionFailed, err: err}
 	}
 
 	s.mu.Lock()
@@ -1464,7 +1500,7 @@ func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
 				s.mu.Lock()
 				s.prompt.currentCh = nil
 				s.mu.Unlock()
-				return nil
+				return sessionExecutionOutcome{status: sessionExecutionCancelled}
 			}
 			recovered := false
 			if !s.agentProcessAlive() && s.resetDeadConnection(ev.err) {
@@ -1481,7 +1517,7 @@ func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
 			s.mu.Lock()
 			s.prompt.currentCh = nil
 			s.mu.Unlock()
-			return nil
+			return sessionExecutionOutcome{status: sessionExecutionFailed, err: ev.err}
 		}
 		if ev.update != nil {
 			params := *ev.update
@@ -1522,6 +1558,22 @@ func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
 					ForkPoint: cloneSessionForkPoint(ev.result.ForkPoint),
 				})
 			}
+			if ev.result.StopReason == acp.StopReasonCancelled {
+				s.mu.Lock()
+				s.prompt.currentCh = nil
+				s.mu.Unlock()
+				return sessionExecutionOutcome{status: sessionExecutionCancelled}
+			}
+			if ev.result.StopReason == acp.StopReasonFailed {
+				message := strings.TrimSpace(ev.result.Message)
+				if message == "" {
+					message = "prompt failed"
+				}
+				s.mu.Lock()
+				s.prompt.currentCh = nil
+				s.mu.Unlock()
+				return sessionExecutionOutcome{status: sessionExecutionFailed, err: errors.New(message)}
+			}
 			streamDone = true
 		}
 	}
@@ -1535,7 +1587,7 @@ func (s *Session) runPromptBlocks(blocks []acp.ContentBlock) error {
 	if buf.Len() > 0 {
 		s.reply(buf.String())
 	}
-	return nil
+	return sessionExecutionOutcome{status: sessionExecutionCompleted}
 }
 
 func extractTextChunk(raw json.RawMessage) string {

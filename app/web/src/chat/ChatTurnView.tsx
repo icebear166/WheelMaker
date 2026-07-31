@@ -9,6 +9,8 @@ import type {
   RegistrySessionContentBlock,
   RegistrySessionPromptArtifact,
   RegistrySessionPromptArtifactFile,
+  RegistrySessionQueueItem,
+  RegistrySessionQueueItemStatus,
 } from '../registry/registryTypes';
 import { formatPromptDurationMs } from '../workspace/sessionTime';
 import {
@@ -316,10 +318,9 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
-  onSteerQueuedPrompt?: () => void;
-  onCancelQueuedPrompt?: () => void;
-  onPrioritizeQueuedPrompt?: () => void;
-  queuedPromptSteering?: boolean;
+  queueItemStatus?: RegistrySessionQueueItemStatus;
+  queueItemError?: string;
+  queueActions?: ChatQueueActions;
   onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
   onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
@@ -333,6 +334,13 @@ export type ChatTurnViewProps = {
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
   highlightQuery?: string;
+};
+
+export type ChatQueueActions = {
+  cancel?: () => void;
+  prioritize?: () => void;
+  steer?: () => void;
+  retry?: () => void;
 };
 
 type PromptAttachmentChipProps = {
@@ -419,10 +427,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onSelectConfirmationReply,
   onRetryPendingPrompt,
   onEditPendingPrompt,
-  onSteerQueuedPrompt,
-  onCancelQueuedPrompt,
-  onPrioritizeQueuedPrompt,
-  queuedPromptSteering = false,
+  queueItemStatus,
+  queueItemError = '',
+  queueActions,
   onOpenPromptAttachment,
   resolvePromptAttachmentThumbnail,
   onLoadPromptAttachmentThumbnail,
@@ -624,6 +631,18 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const blocks = msgBlocks(message.method, message.param);
     const inlineParts = buildChatPromptInlineParts(blocks);
     const steered = message.method === 'user_message_chunk' && message.param.steered === true;
+    const queueStatus = queueItemStatus ?? (
+      promptStatus === 'queued' || promptStatus === 'steering' ? promptStatus : undefined
+    );
+    const queueStatusLabel = queueStatus === 'failed'
+      ? 'Failed'
+      : queueStatus === 'cancelling'
+        ? 'Cancelling'
+        : queueStatus === 'steering'
+          ? 'Steering'
+          : queueStatus === 'running'
+            ? 'Running'
+            : 'Queued';
     return (
       <div className="chat-prompt-group">
         {text || promptStatus || steered ? (
@@ -655,51 +674,66 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 <ChatIcon name="refreshCw" size={12} />
               </span>
             ) : null}
-            {promptStatus === 'queued' || promptStatus === 'steering' ? (
+            {queueStatus ? (
               <span
-                className="chat-prompt-status chat-prompt-status-queued"
-                title={promptStatus === 'steering' ? 'Steering' : 'Queued'}
+                className={`chat-prompt-status chat-prompt-status-queued ${queueStatus}`}
+                title={queueStatusLabel}
               >
-                {promptStatus === 'steering' ? 'Steering' : 'Queued'}
+                {queueStatusLabel}
               </span>
             ) : null}
-            {promptStatus === 'queued' || promptStatus === 'steering' ? (
+            {queueStatus && queueStatus !== 'cancelling' && queueStatus !== 'running' ? (
               <div className="chat-prompt-queue-actions">
-                {onSteerQueuedPrompt ? (
+                {queueStatus === 'failed' && queueActions?.retry ? (
+                  <button
+                    type="button"
+                    className="chat-prompt-queue-action"
+                    title="Retry"
+                    aria-label="Retry"
+                    onClick={queueActions.retry}
+                  >
+                    <ChatIcon name="refreshCw" size={12} />
+                  </button>
+                ) : null}
+                {queueStatus === 'queued' && queueActions?.steer ? (
                   <button
                     type="button"
                     className="chat-prompt-queue-action"
                     title="Steer"
                     aria-label="Steer"
-                    disabled={queuedPromptSteering}
-                    onClick={onSteerQueuedPrompt}
+                    onClick={queueActions.steer}
                   >
                     <ChatIcon name="cornerDownLeft" size={12} />
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="chat-prompt-queue-action"
-                  title="Next"
-                  aria-label="Next"
-                  disabled={queuedPromptSteering}
-                  onClick={onPrioritizeQueuedPrompt}
-                >
-                  <ChatIcon name="arrowUpToLine" size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="chat-prompt-queue-action danger"
-                  title="Cancel"
-                  aria-label="Cancel"
-                  disabled={queuedPromptSteering}
-                  onClick={onCancelQueuedPrompt}
-                >
-                  <ChatIcon name="x" size={12} />
-                </button>
+                {queueStatus === 'queued' && queueActions?.prioritize ? (
+                  <button
+                    type="button"
+                    className="chat-prompt-queue-action"
+                    title="Next"
+                    aria-label="Prioritize"
+                    onClick={queueActions.prioritize}
+                  >
+                    <ChatIcon name="arrowUpToLine" size={12} />
+                  </button>
+                ) : null}
+                {queueActions?.cancel ? (
+                  <button
+                    type="button"
+                    className="chat-prompt-queue-action danger"
+                    title="Cancel"
+                    aria-label="Cancel"
+                    onClick={queueActions.cancel}
+                  >
+                    <ChatIcon name="x" size={12} />
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
+        ) : null}
+        {queueStatus === 'failed' && queueItemError ? (
+          <div className="chat-queue-item-error" role="alert">{queueItemError}</div>
         ) : null}
         {imageBlocks.length > 0 ? (
           <div className="chat-image-strip">
@@ -930,6 +964,50 @@ export const ChatTurnView = React.memo(function ChatTurnView({
       >
         {text}
       </ReactMarkdown>
+    </div>
+  );
+});
+
+export const ChatQueueCompactView = React.memo(function ChatQueueCompactView({
+  item,
+  actions,
+}: {
+  item: RegistrySessionQueueItem & {kind: 'compact'};
+  actions: ChatQueueActions;
+}) {
+  const label = item.status === 'failed'
+    ? 'Context compaction failed'
+    : item.status === 'running'
+      ? 'Compressing context'
+      : item.status === 'cancelling'
+        ? 'Cancelling context compaction'
+        : 'Context compaction queued';
+  return (
+    <div className={`chat-queue-compact-row ${item.status}`} role="status">
+      <ChatIcon
+        name={item.status === 'failed' ? 'circleX' : item.status === 'running' ? 'loader' : 'circle'}
+        spin={item.status === 'running'}
+        className="chat-session-operation-icon"
+      />
+      <span className="chat-session-operation-label">{label}</span>
+      {item.error ? <span className="chat-queue-item-error">{item.error}</span> : null}
+      <span className="chat-prompt-queue-actions">
+        {item.status === 'failed' && actions.retry ? (
+          <button type="button" className="chat-prompt-queue-action" aria-label="Retry" onClick={actions.retry}>
+            <ChatIcon name="refreshCw" size={12} />
+          </button>
+        ) : null}
+        {item.status === 'queued' && actions.prioritize ? (
+          <button type="button" className="chat-prompt-queue-action" aria-label="Prioritize" onClick={actions.prioritize}>
+            <ChatIcon name="arrowUpToLine" size={12} />
+          </button>
+        ) : null}
+        {(item.status === 'queued' || item.status === 'failed') && actions.cancel ? (
+          <button type="button" className="chat-prompt-queue-action danger" aria-label="Cancel" onClick={actions.cancel}>
+            <ChatIcon name="x" size={12} />
+          </button>
+        ) : null}
+      </span>
     </div>
   );
 });

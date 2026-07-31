@@ -201,7 +201,8 @@ describe('web chat integration', () => {
     expect(repositoryTs).toContain('async createSession(');
     expect(repositoryTs).toContain('createRequestId?: string,');
     expect(repositoryTs).toContain('...(normalizedCreateRequestId ? {createRequestId: normalizedCreateRequestId} : {}),');
-    expect(repositoryTs).toContain('RegistryMethods.SessionSend');
+    expect(repositoryTs).toContain('RegistryMethods.SessionQueue');
+    expect(repositoryTs).not.toContain('RegistryMethods.SessionSend');
     expect(repositoryTs).toContain('RegistryMethods.SessionMarkRead');
     expect(repositoryTs).toContain('RegistryMethods.SessionRename');
     expect(repositoryTs).toContain('async renameSession(projectId: string, sessionId: string, title: string)');
@@ -213,7 +214,8 @@ describe('web chat integration', () => {
     expect(workspaceServiceTs).toContain('async readSession(');
     expect(workspaceServiceTs).toContain('async createSession(');
     expect(workspaceServiceTs).toContain('async createSession(agentType: string, title?: string, createRequestId?: string)');
-    expect(workspaceServiceTs).toContain('async sendSessionMessage(');
+    expect(workspaceServiceTs).toContain('async enqueueProjectSessionItem(');
+    expect(workspaceServiceTs).toContain('async cancelProjectSessionQueueItem(');
     expect(workspaceServiceTs).toContain('async markSessionRead(');
     expect(workspaceServiceTs).toContain('async markProjectSessionRead(');
     expect(workspaceServiceTs).toContain('async renameProjectSession(projectId: string, sessionId: string, title: string)');
@@ -471,21 +473,20 @@ describe('web chat integration', () => {
     const sendExistingStart = mainTsx.indexOf('const sendChatMessage = async');
     const sendEnd = mainTsx.indexOf('const sendChatMessageEvent = useStableEvent(sendChatMessage);', sendExistingStart);
     const sendBlock = mainTsx.slice(sendExistingStart, sendEnd);
-    const sendAwait = mainTsx.indexOf('const result = await service.sendProjectSessionMessage(selectedProjectId, {', sendExistingStart);
+    const sendAwait = mainTsx.indexOf('const result = await service.enqueueProjectSessionItem(selectedProjectId, sessionId, {', sendExistingStart);
     expect(sendExistingStart).toBeGreaterThanOrEqual(0);
     expect(sendEnd).toBeGreaterThan(sendExistingStart);
     expect(sendBlock).toContain("if (trimmedText === '/cancel' && sourceAttachments.length === 0 && !options.blocksOverride) {");
     expect(sendBlock).toContain("setError('Use the stop button to cancel in app.');");
     expect(sendBlock).toContain('rememberPendingChatPrompt(runtimeKey, {');
     expect(sendBlock).toContain("status: 'confirming',");
-    expect(sendBlock).toContain('const result = await service.sendProjectSessionMessage(selectedProjectId, {');
-    expect(mainTsx).toContain('const chatSteerChainsByKeyRef = useRef<Record<string, Promise<void>>>({});');
-    expect(mainTsx).not.toContain('chatAcceptedSteerIdsByKeyRef');
-    expect(mainTsx).toContain('(chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).some(');
-    expect(mainTsx).toContain('service.steerProjectSession(');
-    expect(mainTsx).toContain('onSteerQueuedPrompt=');
+    expect(sendBlock).toContain('const result = await service.enqueueProjectSessionItem(selectedProjectId, sessionId, {');
+    expect(sendBlock).toContain('itemId,');
+    expect(mainTsx).toContain('service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId)');
+    expect(mainTsx).toContain('queueActions={queuedItemActions}');
+    expect(mainTsx).not.toContain('chatQueuedPromptsByKey');
     expect(chatTurnTsx).toContain('aria-label="Steer"');
-    expect(chatTurnTsx).toContain('aria-label="Next"');
+    expect(chatTurnTsx).toContain('aria-label="Prioritize"');
     expect(chatTurnTsx).toContain('aria-label="Cancel"');
     expect(chatTurnTsx).toContain('chat-prompt-steered-label');
     expect(chatTurnTsx).not.toContain('Send next');
@@ -494,7 +495,7 @@ describe('web chat integration', () => {
     expect(sendBlock).toContain('if (shouldApplySentChatSelection(selectedChatKeyRef.current, sentFromKey)) {');
     const sendSelectionGuard = sendBlock.indexOf('if (shouldApplySentChatSelection(selectedChatKeyRef.current, sentFromKey)) {');
     const sendSelectionApply = sendBlock.indexOf('applySelectedChatKey(nextSelectedKey);', sendSelectionGuard);
-    expect(sendSelectionGuard).toBeGreaterThan(sendBlock.indexOf('const nextSelectedKey = chatSessionKeyFromParts(selectedProjectId, nextSessionId);'));
+    expect(sendSelectionGuard).toBeGreaterThan(sendBlock.indexOf('const nextSelectedKey = chatSessionKeyFromParts(selectedProjectId, sessionId);'));
     expect(sendSelectionApply).toBeGreaterThan(sendSelectionGuard);
     expect(sendBlock).not.toContain('markChatSessionRunning(');
     expect(sendAwait).toBeGreaterThan(sendExistingStart);
@@ -1115,8 +1116,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('chat-composer-stop-slot${chatStopPillExiting');
     expect(mainTsx).toContain("title={isWide ? 'Attach files' : 'Attach files or photos'}");
     expect(mainTsx).toContain('aria-haspopup={isWide ? undefined : \'menu\'}');
-    expect(mainTsx).toContain('aria-expanded={isWide ? undefined : !selectedChatPromptRunning && chatAttachmentTrayOpen}');
-    expect(mainTsx).toContain('{!isWide && !selectedChatPromptRunning && chatAttachmentTrayOpen ? (');
+    expect(mainTsx).toContain('aria-expanded={isWide ? undefined : chatAttachmentTrayOpen}');
+    expect(mainTsx).toContain('{!isWide && chatAttachmentTrayOpen ? (');
     expect(mainTsx).toContain('chat-attachment-action-tray${chatComposerMenuExiting');
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('className="chat-attachment-action-button file"');
@@ -1601,7 +1602,8 @@ describe('web chat integration', () => {
     expect(attachButtonBlock).toContain('if (isWide) {');
     expect(attachButtonBlock).toContain('chatFileInputRef.current?.click();');
     expect(attachButtonBlock).toContain('toggleChatAttachmentTray();');
-    expect(mainTsx).toContain('{!isWide && !selectedChatPromptRunning && chatAttachmentTrayOpen ? (');
+    expect(mainTsx).toContain('{!isWide && chatAttachmentTrayOpen ? (');
+    expect(attachButtonBlock).not.toContain('if (selectedChatPromptRunning) return;');
 
     const imageHandlerStart = mainTsx.indexOf('const handleChatImageChange = (');
     const imageHandlerEnd = mainTsx.indexOf('const connect = async', imageHandlerStart);
@@ -2764,14 +2766,14 @@ describe('web chat integration', () => {
 
     expect(mainTsx).toContain('const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});');
     expect(mainTsx).toContain('const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});');
-    expect(mainTsx).toContain('const [chatQueuedPromptsByKey, setChatQueuedPromptsByKey] = useState<QueuedChatPromptsByKey>({});');
-    expect(mainTsx).toContain('const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});');
+    expect(mainTsx).toContain('const [chatSessionQueuesByKey, setChatSessionQueuesByKey] = useState<ChatSessionQueuesByKey>({});');
+    expect(mainTsx).toContain('const chatSessionQueuesByKeyRef = useRef<ChatSessionQueuesByKey>({});');
     expect(mainTsx).toContain('const selectedChatSubmitPending = selectedChatEncodedKey');
     expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || !!selectedActivePermission;');
-    expect(mainTsx).toContain('enqueueSelectedChatPrompt(');
-    expect(mainTsx).toContain('drainNextQueuedChatItem(selectedChatEncodedKey)');
-    expect(mainTsx).toContain('cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');
-    expect(mainTsx).toContain('prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');
+    expect(mainTsx).toContain('service.enqueueProjectSessionItem(selectedProjectId, sessionId, {');
+    expect(mainTsx).toContain('cancelProjectSessionQueueItem(projectId, key.sessionId, itemId)');
+    expect(mainTsx).toContain('prioritizeProjectSessionQueueItem(projectId, key.sessionId, itemId)');
+    expect(mainTsx).not.toContain('drainNextQueuedChatItem');
     expect(mainTsx).toContain('readOnly={selectedChatSubmitPending}');
     expect(mainTsx).toContain('disabled={chatSendDisabled}');
     expect(mainTsx).toContain('if (chatSendDisabled) {');
@@ -2784,7 +2786,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('disabled={chatSending || chatAttachmentUploadPending}');
   });
 
-  test('does not requeue an idle send because of its own submitting lock', () => {
+  test('always submits prompt work through the server queue', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const sendStart = mainTsx.indexOf('const sendChatMessage = async');
@@ -2793,9 +2795,9 @@ describe('web chat integration', () => {
 
     expect(sendStart).toBeGreaterThanOrEqual(0);
     expect(sendEnd).toBeGreaterThan(sendStart);
-    expect(mainTsx).toContain('const runtimeSessionHasActiveExecution = (');
-    expect(sendBlock).toContain('if (runtimeSessionHasActiveExecution(selectedProjectId, sessionId, runtimeKey)) {');
-    expect(sendBlock).not.toContain('if (runtimeSessionIsBusy(selectedProjectId, sessionId, runtimeKey)) {');
+    expect(sendBlock).toContain('service.enqueueProjectSessionItem(selectedProjectId, sessionId, {');
+    expect(sendBlock).not.toContain('runtimeSessionHasActiveExecution');
+    expect(sendBlock).not.toContain('runtimeSessionIsBusy');
   });
 
   test('keeps sidebar search fixed in the title region and new sessions project-scoped', () => {
@@ -2970,13 +2972,13 @@ describe('workspace session actions', () => {
     expect(mainTsx).toContain('option.icon');
     expect(mainTsx).toContain('option.disabledReason');
     expect(mainTsx).toContain('service.statusProjectSession(');
-    expect(mainTsx).toContain('service.compactProjectSession(');
-    expect(mainTsx).toContain('shiftNextQueuedChatItem(');
+    expect(mainTsx).toContain('service.enqueueProjectSessionItem(targetProjectId, sessionId, {');
+    expect(mainTsx).not.toContain('shiftNextQueuedChatItem(');
     expect(mainTsx).toContain('<AppSessionStatusDialog');
     expect(mainTsx).not.toContain("agentType === 'codex'");
   });
 
-  test('intercepts typed actions before attachment upload and clears queue on disconnect', () => {
+  test('intercepts typed actions before attachment upload and retains server queue projection on disconnect', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const sendStart = mainTsx.indexOf('const sendChatMessage = async');
@@ -2985,8 +2987,8 @@ describe('workspace session actions', () => {
 
     expect(parseIndex).toBeGreaterThan(sendStart);
     expect(parseIndex).toBeLessThan(uploadIndex);
-    expect(mainTsx).toContain('chatQueuedPromptsByKeyRef.current = {};');
-    expect(mainTsx).toContain('setChatQueuedPromptsByKey({});');
+    expect(mainTsx).not.toContain('chatSessionQueuesByKeyRef.current = {};');
+    expect(mainTsx).not.toContain('setChatSessionQueuesByKey({});');
   });
 
   test('surfaces compact request failures in the active workspace', () => {
@@ -2998,7 +3000,7 @@ describe('workspace session actions', () => {
 
     expect(requestStart).toBeGreaterThanOrEqual(0);
     expect(requestEnd).toBeGreaterThan(requestStart);
-    expect(requestBody).toContain('if (!isSessionBusyError(errorValue)) {');
+    expect(requestBody).toContain('service.enqueueProjectSessionItem(targetProjectId, sessionId, {');
     expect(requestBody).toContain('setToastMessage(`Context compaction failed: ${message}`);');
     expect(requestBody).toContain('throw errorValue;');
   });

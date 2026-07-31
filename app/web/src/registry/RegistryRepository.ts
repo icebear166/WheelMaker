@@ -76,8 +76,11 @@ import type {
   RegistrySessionCommand,
   RegistrySessionActionCapabilities,
   RegistrySessionActionCapability,
-  RegistrySessionCompactAccepted,
-  RegistrySessionSteerAccepted,
+  RegistrySessionQueueAction,
+  RegistrySessionQueueEnqueueItem,
+  RegistrySessionQueueItem,
+  RegistrySessionQueueResponse,
+  RegistrySessionQueueSnapshot,
   RegistrySessionForkResponse,
   RegistrySessionGoal,
   RegistrySessionGoalClearResponse,
@@ -625,6 +628,95 @@ export class RegistryRepository {
     }
   }
 
+  private normalizeSessionQueueItem(raw: unknown): RegistrySessionQueueItem | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+    const input = raw as Record<string, unknown>;
+    const itemId = typeof input.itemId === 'string' ? input.itemId.trim() : '';
+    const createdAt = typeof input.createdAt === 'string' ? input.createdAt.trim() : '';
+    const kind = input.kind === 'prompt' || input.kind === 'compact' ? input.kind : undefined;
+    const status = ['queued', 'running', 'cancelling', 'steering', 'failed'].includes(String(input.status))
+      ? input.status as RegistrySessionQueueItem['status']
+      : undefined;
+    if (!itemId || !createdAt || !kind || !status) {
+      return null;
+    }
+    const common = {
+      itemId,
+      createdAt,
+      status,
+      cancelSupported: input.cancelSupported === true,
+      error: typeof input.error === 'string' && input.error.trim() ? input.error : undefined,
+    };
+    if (kind === 'compact') {
+      if (Array.isArray(input.blocks) && input.blocks.length > 0) {
+        return null;
+      }
+      return {...common, kind};
+    }
+    if (!Array.isArray(input.blocks) || input.blocks.length === 0) {
+      return null;
+    }
+    const blocks: RegistrySessionContentBlock[] = [];
+    for (const block of input.blocks) {
+      if (!block || typeof block !== 'object') continue;
+      const value = block as Record<string, unknown>;
+      if (value.type !== 'text' && value.type !== 'image' && value.type !== 'resource_link') continue;
+      blocks.push({
+        type: value.type,
+        text: typeof value.text === 'string' ? value.text : undefined,
+        mimeType: typeof value.mimeType === 'string' ? value.mimeType : undefined,
+        data: typeof value.data === 'string' ? value.data : undefined,
+        uri: typeof value.uri === 'string' ? value.uri : undefined,
+        name: typeof value.name === 'string' ? value.name : undefined,
+        size: typeof value.size === 'number' && Number.isFinite(value.size)
+          ? Math.max(0, Math.trunc(value.size))
+          : undefined,
+      });
+    }
+    if (blocks.length !== input.blocks.length) {
+      return null;
+    }
+    return {...common, kind, blocks};
+  }
+
+  private normalizeSessionQueue(raw: unknown): RegistrySessionQueueSnapshot | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    const generation = typeof input.generation === 'string' ? input.generation.trim() : '';
+    if (!generation) {
+      return undefined;
+    }
+    const activeItem = input.activeItem === undefined
+      ? undefined
+      : this.normalizeSessionQueueItem(input.activeItem) ?? undefined;
+    const waitingItems = input.waitingItems === undefined
+      ? undefined
+      : Array.isArray(input.waitingItems)
+        ? input.waitingItems
+            .map(item => this.normalizeSessionQueueItem(item))
+            .filter((item): item is RegistrySessionQueueItem => !!item)
+        : undefined;
+    return {
+      generation,
+      revision: typeof input.revision === 'number' && Number.isFinite(input.revision)
+        ? Math.max(0, Math.trunc(input.revision))
+        : 0,
+      paused: input.paused === true,
+      activeKind: input.activeKind === 'prompt' || input.activeKind === 'compact'
+        ? input.activeKind
+        : undefined,
+      waitingCount: typeof input.waitingCount === 'number' && Number.isFinite(input.waitingCount)
+        ? Math.max(0, Math.trunc(input.waitingCount))
+        : 0,
+      ...(activeItem ? {activeItem} : {}),
+      ...(waitingItems ? {waitingItems} : {}),
+    };
+  }
+
   private normalizeSessionSummary(raw: unknown): RegistrySessionSummary | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -675,6 +767,23 @@ export class RegistryRepository {
       sessionActions: this.normalizeSessionActions(input.sessionActions),
       goal: this.normalizeSessionGoal(input.goal),
       forkedFrom: this.normalizeSessionForkOrigin(input.forkedFrom),
+      queue: this.normalizeSessionQueue(input.queue),
+    };
+  }
+
+  private normalizeSessionQueueResponse(raw: unknown, sessionId: string): RegistrySessionQueueResponse {
+    const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const session = this.normalizeSessionSummary(input.session) ?? {
+      sessionId,
+      title: '',
+      preview: '',
+      updatedAt: '',
+      messageCount: 0,
+    };
+    return {
+      ok: input.ok === true,
+      sessionId,
+      session,
     };
   }
 
@@ -1489,47 +1598,19 @@ export class RegistryRepository {
     };
   }
 
-  async sendSessionMessage(projectId: string, payload: {sessionId: string; text?: string; blocks?: RegistrySessionContentBlock[]}): Promise<{ok: boolean; sessionId: string}> {
-    const resp = await this.client.request({
-      method: RegistryMethods.SessionSend,
-      projectId,
-      payload,
-      timeoutMs: 30000,
-    });
-    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string};
-    return {
-      ok: body.ok ?? false,
-      sessionId: body.sessionId ?? payload.sessionId,
-    };
-  }
-
-  async steerSession(
+  async mutateSessionQueue(
     projectId: string,
-    payload: {
-      sessionId: string;
-      clientMessageId: string;
-      blocks: RegistrySessionContentBlock[];
-    },
-  ): Promise<RegistrySessionSteerAccepted> {
+    payload:
+      | {sessionId: string; action: 'enqueue'; item: RegistrySessionQueueEnqueueItem}
+      | {sessionId: string; action: Exclude<RegistrySessionQueueAction, 'enqueue'>; itemId: string},
+  ): Promise<RegistrySessionQueueResponse> {
     const response = await this.client.request({
-      method: RegistryMethods.SessionSteer,
+      method: RegistryMethods.SessionQueue,
       projectId,
       payload,
       timeoutMs: 30000,
     });
-    const body = response.payload && typeof response.payload === 'object'
-      ? response.payload as Record<string, unknown>
-      : {};
-    const outcome = body.outcome === 'sent' ? 'sent' : 'steered';
-    return {
-      ok: body.ok === true,
-      accepted: body.accepted === true,
-      sessionId: typeof body.sessionId === 'string' ? body.sessionId : payload.sessionId,
-      clientMessageId: typeof body.clientMessageId === 'string'
-        ? body.clientMessageId
-        : payload.clientMessageId,
-      outcome,
-    };
+    return this.normalizeSessionQueueResponse(response.payload, payload.sessionId);
   }
 
   async statusSession(projectId: string, sessionId: string): Promise<RegistrySessionStatusResult> {
@@ -1553,24 +1634,6 @@ export class RegistryRepository {
         : [],
       account: this.normalizeSessionStatusAccount(body.account),
       updatedAt: typeof body.updatedAt === 'string' ? body.updatedAt : '',
-    };
-  }
-
-  async compactSession(projectId: string, sessionId: string): Promise<RegistrySessionCompactAccepted> {
-    const resp = await this.client.request({
-      method: RegistryMethods.SessionCompact,
-      projectId,
-      payload: {sessionId},
-      timeoutMs: 30000,
-    });
-    const body = resp.payload && typeof resp.payload === 'object'
-      ? resp.payload as Record<string, unknown>
-      : {};
-    return {
-      ok: body.ok === true,
-      accepted: body.accepted === true,
-      sessionId,
-      operationId: typeof body.operationId === 'string' ? body.operationId : '',
     };
   }
 
@@ -1807,20 +1870,6 @@ export class RegistryRepository {
       height: body.height,
       size: body.size,
       hash: body.hash,
-    };
-  }
-
-  async cancelSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
-    const resp = await this.client.request({
-      method: RegistryMethods.SessionCancel,
-      projectId,
-      payload: {sessionId},
-      timeoutMs: 15000,
-    });
-    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string};
-    return {
-      ok: body.ok ?? false,
-      sessionId: body.sessionId ?? sessionId,
     };
   }
 

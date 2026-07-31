@@ -45,9 +45,10 @@ type SessionTurnMessage struct {
 }
 
 type SessionTurnPromptRequest struct {
-	ContentBlocks []ContentBlock `json:"contentBlocks,omitempty"`
-	ModelName     string         `json:"modelName,omitempty"`
-	CreatedAt     string         `json:"createdAt,omitempty"`
+	ContentBlocks   []ContentBlock `json:"contentBlocks,omitempty"`
+	ModelName       string         `json:"modelName,omitempty"`
+	CreatedAt       string         `json:"createdAt,omitempty"`
+	ClientMessageID string         `json:"clientMessageId,omitempty"`
 }
 
 type SessionTurnPromptResult struct {

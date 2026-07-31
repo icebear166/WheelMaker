@@ -69,11 +69,14 @@ type Client struct {
 	stopPersistCh  chan struct{} // closed to stop the persist timer goroutine
 	backgroundWG   sync.WaitGroup
 
-	sessionRecorder *SessionRecorder
-	archiveStore    *sessionArchiveStore
-	sessionSearch   *sessionSearchManager
-	attachments     *attachmentManager
-	viewSink        SessionViewSink
+	queueGeneration string
+
+	sessionRecorder     *SessionRecorder
+	archiveStore        *sessionArchiveStore
+	sessionSearch       *sessionSearchManager
+	attachments         *attachmentManager
+	markAttachmentsSent func([]attachmentRef) error
+	viewSink            SessionViewSink
 }
 
 // RuntimeConfig binds Hub-scoped runtime dependencies to one Client.
@@ -100,17 +103,19 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		stateDir = filepath.Clean(runtime.StateDir)
 	}
 	c := &Client{
-		projectName:    projectName,
-		cwd:            cwd,
-		stateDir:       stateDir,
-		registry:       runtime.AgentFactory,
-		store:          store,
-		sessions:       make(map[string]*Session),
-		forkPointCache: make(map[string]sessionForkPointCacheEntry),
-		suspendTimeout: 5 * time.Minute,
-		stopPersistCh:  make(chan struct{}),
-		attachments:    newAttachmentManager(),
+		projectName:     projectName,
+		cwd:             cwd,
+		stateDir:        stateDir,
+		registry:        runtime.AgentFactory,
+		store:           store,
+		sessions:        make(map[string]*Session),
+		forkPointCache:  make(map[string]sessionForkPointCacheEntry),
+		suspendTimeout:  5 * time.Minute,
+		stopPersistCh:   make(chan struct{}),
+		attachments:     newAttachmentManager(),
+		queueGeneration: uuid.NewString(),
 	}
+	c.markAttachmentsSent = c.attachments.markSent
 	c.sessionRecorder = newSessionRecorder(projectName, store, func(ctx context.Context) ([]SessionRecord, error) {
 		return c.ListSessions(ctx)
 	})
@@ -157,6 +162,18 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 				Reason:    unsupportedSessionActionReason(support.Goal),
 			},
 		}
+	}
+	c.sessionRecorder.queueLookup = func(sessionID string, full bool) *acp.SessionQueueSnapshot {
+		c.mu.Lock()
+		sess := c.sessions[strings.TrimSpace(sessionID)]
+		c.mu.Unlock()
+		if sess == nil {
+			return &acp.SessionQueueSnapshot{
+				Generation: c.queueGeneration,
+			}
+		}
+		snapshot := sess.queueSnapshot(full)
+		return &snapshot
 	}
 	c.viewSink = c.sessionRecorder
 	return c
@@ -313,6 +330,9 @@ func (c *Client) Close() error {
 
 	ctx := context.Background()
 	for _, sess := range sessions {
+		sess.beginQueueShutdown()
+	}
+	for _, sess := range sessions {
 		sess.mu.Lock()
 		inst := sess.instance
 		sess.mu.Unlock()
@@ -325,6 +345,9 @@ func (c *Client) Close() error {
 		if err := sess.persistSession(ctx); err != nil {
 			hubLogger(c.projectName).Warn("persist session during close session=%s err=%v", sess.acpSessionID, err)
 		}
+	}
+	for _, sess := range sessions {
+		sess.waitQueueShutdown()
 	}
 	if c.sessionRecorder != nil {
 		c.sessionRecorder.Close()
@@ -684,6 +707,88 @@ func (c *Client) RecordPermissionRequest(ctx context.Context, sessionID string, 
 
 func (c *Client) RecordPermissionResponse(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionResponse) (int64, error) {
 	return c.sessionRecorder.RecordPermissionResponse(ctx, sessionID, payload)
+}
+
+func (c *Client) PublishSessionSummary(ctx context.Context, sessionID string) error {
+	return c.sessionRecorder.PublishSessionSummary(ctx, sessionID)
+}
+
+func (c *Client) handleSessionQueueRequest(ctx context.Context, req acp.SessionQueueRequest) (any, error) {
+	sessionID := strings.TrimSpace(req.SessionID)
+	action := strings.TrimSpace(req.Action)
+	if sessionID == "" {
+		return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "sessionId is required")
+	}
+	sess, err := c.SessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if err := sess.persistSession(ctx); err != nil {
+		return nil, err
+	}
+
+	switch action {
+	case acp.SessionQueueActionEnqueue:
+		if req.Item == nil || strings.TrimSpace(req.ItemID) != "" {
+			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "enqueue requires item and does not accept itemId")
+		}
+		item := *req.Item
+		var attachmentRefs []attachmentRef
+		if strings.TrimSpace(item.Kind) == acp.SessionQueueItemKindPrompt {
+			item.Blocks, attachmentRefs, err = c.prepareSessionPromptBlocks(ctx, sessionID, item.Blocks)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if _, _, err := sess.enqueueQueueItemWithPrecommit(item, func() error {
+			return c.markSessionAttachmentsSent(attachmentRefs)
+		}); err != nil {
+			return nil, err
+		}
+		sess.publishQueueSnapshot()
+		sess.scheduleQueueDrain()
+	case acp.SessionQueueActionCancel:
+		if req.Item != nil || strings.TrimSpace(req.ItemID) == "" {
+			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "cancel requires itemId")
+		}
+		if err := sess.cancelQueueItem(req.ItemID); err != nil {
+			return nil, err
+		}
+		sess.publishQueueSnapshot()
+		sess.scheduleQueueDrain()
+	case acp.SessionQueueActionPrioritize:
+		if req.Item != nil || strings.TrimSpace(req.ItemID) == "" {
+			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "prioritize requires itemId")
+		}
+		if err := sess.prioritizeQueueItem(req.ItemID); err != nil {
+			return nil, err
+		}
+		sess.publishQueueSnapshot()
+	case acp.SessionQueueActionSteer:
+		if req.Item != nil || strings.TrimSpace(req.ItemID) == "" {
+			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "steer requires itemId")
+		}
+		if err := sess.steerQueueItem(ctx, req.ItemID); err != nil {
+			return nil, err
+		}
+	case acp.SessionQueueActionRetry:
+		if req.Item != nil || strings.TrimSpace(req.ItemID) == "" {
+			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "retry requires itemId")
+		}
+		if err := sess.retryQueueItem(req.ItemID); err != nil {
+			return nil, err
+		}
+		sess.publishQueueSnapshot()
+		sess.scheduleQueueDrain()
+	default:
+		return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "unknown session.queue action")
+	}
+
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true, "sessionId": sessionID, "session": summary}, nil
 }
 
 func (c *Client) HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error) {
@@ -1111,34 +1216,14 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, fmt.Errorf("%w: status", agent.ErrSessionActionUnsupported)
 		}
 		return sess.SessionStatus(ctx)
-	case acp.RegistryMethodSessionCompact:
-		var req struct {
-			SessionID string `json:"sessionId"`
+	case acp.RegistryMethodSessionQueue:
+		var req acp.SessionQueueRequest
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
+			return nil, sessionQueueRequestError(acp.CodeInvalidArgument, "invalid session.queue payload")
 		}
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.compact payload: %w", err)
-		}
-		sessionID := strings.TrimSpace(req.SessionID)
-		if sessionID == "" {
-			return nil, fmt.Errorf("sessionId is required")
-		}
-		sess, err := c.SessionByID(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-		if !c.sessionSupportsAction(sess, acp.SessionActionCompact) {
-			return nil, fmt.Errorf("%w: compact", agent.ErrSessionActionUnsupported)
-		}
-		operationID := uuid.NewString()
-		if err := sess.StartCompaction(ctx, operationID); err != nil {
-			return nil, err
-		}
-		return acp.SessionCompactAccepted{
-			OK:          true,
-			Accepted:    true,
-			SessionID:   sessionID,
-			OperationID: operationID,
-		}, nil
+		return c.handleSessionQueueRequest(ctx, req)
 	case acp.RegistryMethodSessionFork:
 		var req struct {
 			SessionID string `json:"sessionId"`
@@ -1148,111 +1233,6 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, fmt.Errorf("invalid session.fork payload: %w", err)
 		}
 		return c.forkSessionAtTurn(ctx, req.SessionID, req.TurnIndex)
-	case acp.RegistryMethodSessionSteer:
-		var req acp.SessionSteerParams
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.steer payload: %w", err)
-		}
-		req.SessionID = strings.TrimSpace(req.SessionID)
-		req.ClientMessageID = strings.TrimSpace(req.ClientMessageID)
-		if req.SessionID == "" {
-			return nil, fmt.Errorf("sessionId is required")
-		}
-		if req.ClientMessageID == "" {
-			return nil, fmt.Errorf("clientMessageId is required")
-		}
-		if len(req.Blocks) == 0 {
-			return nil, fmt.Errorf("session steer is empty")
-		}
-		sess, err := c.SessionByID(ctx, req.SessionID)
-		if err != nil {
-			return nil, err
-		}
-		if !c.sessionSupportsAction(sess, acp.SessionActionSteer) {
-			return nil, fmt.Errorf("%w: steer", agent.ErrSessionActionUnsupported)
-		}
-		blocks, attachmentRefs, err := c.prepareSessionPromptBlocks(ctx, req.SessionID, req.Blocks)
-		if err != nil {
-			return nil, err
-		}
-		req.Blocks = blocks
-		accepted, err := sess.Steer(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		if err := c.markSessionAttachmentsSent(attachmentRefs); err != nil {
-			return nil, err
-		}
-		return accepted, nil
-	case acp.RegistryMethodSessionSend:
-		var req struct {
-			SessionID string             `json:"sessionId"`
-			Text      string             `json:"text,omitempty"`
-			Blocks    []acp.ContentBlock `json:"blocks,omitempty"`
-		}
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.send payload: %w", err)
-		}
-		blocks := req.Blocks
-		if len(blocks) == 0 && strings.TrimSpace(req.Text) != "" {
-			blocks = []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: req.Text}}
-		}
-		if strings.TrimSpace(req.SessionID) == "" {
-			return nil, fmt.Errorf("sessionId is required")
-		}
-		if len(blocks) == 0 {
-			return nil, fmt.Errorf("session prompt is empty")
-		}
-		rawGoal, objective, matchedGoal, goalErr := parseGoalCommand(blocks)
-		if matchedGoal {
-			if goalErr != nil {
-				return nil, goalErr
-			}
-			sessionID := strings.TrimSpace(req.SessionID)
-			sess, err := c.SessionByID(ctx, sessionID)
-			if err != nil {
-				return nil, err
-			}
-			if !c.sessionSupportsAction(sess, acp.SessionActionGoal) {
-				return nil, fmt.Errorf("%w: goal", agent.ErrSessionActionUnsupported)
-			}
-			goal, err := sess.CreateGoalFromCommand(ctx, rawGoal, objective, acp.OptionalInt64{Present: true})
-			if err != nil {
-				return nil, err
-			}
-			return map[string]any{"ok": true, "sessionId": sessionID, "goal": goal}, nil
-		}
-		blocks, attachmentRefs, err := c.prepareSessionPromptBlocks(ctx, req.SessionID, blocks)
-		if err != nil {
-			return nil, err
-		}
-		sessionID := strings.TrimSpace(req.SessionID)
-		if err := c.PromptToSession(ctx, sessionID, blocks); err != nil {
-			return nil, err
-		}
-		if err := c.markSessionAttachmentsSent(attachmentRefs); err != nil {
-			return nil, err
-		}
-		return map[string]any{"ok": true, "sessionId": strings.TrimSpace(req.SessionID)}, nil
-	case acp.RegistryMethodSessionCancel:
-		var req struct {
-			SessionID string `json:"sessionId"`
-		}
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.cancel payload: %w", err)
-		}
-		sessionID := strings.TrimSpace(req.SessionID)
-		if sessionID == "" {
-			return nil, fmt.Errorf("sessionId is required")
-		}
-		sess, err := c.SessionByID(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-		if err := sess.cancelPrompt(); err != nil {
-			return nil, err
-		}
-		return map[string]any{"ok": true, "sessionId": sessionID}, nil
 	case acp.RegistryMethodSessionPermissionRespond:
 		var req struct {
 			SessionID    string `json:"sessionId"`
@@ -1906,6 +1886,11 @@ func (c *Client) deleteActiveSession(ctx context.Context, sessionID string, reje
 
 	c.mu.Lock()
 	sess := c.sessions[sessionID]
+	c.mu.Unlock()
+	if sess != nil {
+		sess.resetQueue()
+	}
+	c.mu.Lock()
 	delete(c.sessions, sessionID)
 	store := c.store
 	c.mu.Unlock()
@@ -2304,10 +2289,11 @@ func (c *Client) evictSuspendedSessions() {
 	var toEvict []*Session
 	for _, sess := range c.sessions {
 		sess.mu.Lock()
-		if sess.Status == SessionSuspended && time.Since(sess.lastActiveAt) > timeout {
+		eligible := sess.Status == SessionSuspended && time.Since(sess.lastActiveAt) > timeout
+		sess.mu.Unlock()
+		if eligible && !sess.queuePinsMemory() {
 			toEvict = append(toEvict, sess)
 		}
-		sess.mu.Unlock()
 	}
 	c.mu.Unlock()
 

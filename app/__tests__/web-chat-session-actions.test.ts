@@ -85,7 +85,9 @@ describe('chat session action options', () => {
     expect(resolveStandaloneSessionAction('/fast', 0)).toEqual({kind: 'fast'});
     expect(resolveStandaloneSessionAction('/fast on', 0)).toEqual({kind: 'invalid', command: '/fast'});
     expect(resolveStandaloneSessionAction('/debug', 0)).toBeNull();
-    expect(resolveStandaloneSessionAction('/goal ship', 0)).toBeNull();
+    expect(resolveStandaloneSessionAction('/goal ship', 0)).toEqual({kind: 'goal', objective: 'ship'});
+    expect(resolveStandaloneSessionAction('/goal', 0)).toEqual({kind: 'invalid', command: '/goal'});
+    expect(resolveStandaloneSessionAction('/goal ship', 1)).toEqual({kind: 'invalid', command: '/goal'});
   });
 
   test('shows Goal only when supported and inserts plain command text', () => {

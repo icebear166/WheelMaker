@@ -1,8 +1,10 @@
-> 摘要：本页维护 WheelMaker Registry 2.6 的消息封装、方法域、路由、认证和版本约束。
+> 摘要：本页维护 WheelMaker Registry 2.6 的消息封装、方法域、Session Queue、路由、认证和版本约束。
 
 # WheelMaker Registry Protocol 2.6
 
 > 来源：本页由原路径 `docs/registry-protocol.md` 于 2026-07-17 全文迁入 wiki；本次迁移未修改协议版本或 payload。
+>
+> Session Queue 决策来源：[`../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
 
 本文定义 WheelMaker Registry 2.6 协议。2.6 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.6`，不保留旧端兼容入口。
 
@@ -464,9 +466,8 @@ Session 请求要求 envelope 顶层 `projectId`。`sessionId` 放在 payload �
 - `session.rename`
 - `session.pin`
 - `session.mark`
-- `session.send`
+- `session.queue`
 - `session.fork`
-- `session.cancel`
 - `session.markRead`
 - `session.config`
 - `session.attachment.start`
@@ -482,7 +483,25 @@ Hub 上传和 Registry 广播使用同一事件名：
 
 `session.create` 可在 payload 中携带可选的 `createRequestId`。Hub 将其持久化到会话摘要，并在创建响应、`session.list` 与 `session.updated` 中原样返回，使客户端能在请求响应丢失后将已创建会话与本地草稿重新关联。
 
-`session.read` 响应 payload 使用 top-level `sessionId` 和 `turns[]`；turn 内不重复 `sessionId`。
+`session.read` 响应 payload 使用 top-level `sessionId` 和 `turns[]`；turn 内不重复 `sessionId`。响应中的 `session` 信息包含完整 queue snapshot；`session.list` 的 Session summary 只携带 queue generation/revision、paused、active kind 和 waiting count 摘要。
+
+### Session Queue
+
+`session.queue` 是 prompt 与 compact 的统一入口，替换 `session.send`、`session.compact`、`session.cancel` 和 `session.steer`，不保留旧方法兼容。Payload 使用 action union，action 仅为：
+
+- `enqueue`：提交客户端生成的 `itemId` 与 prompt blocks 或 compact item。
+- `cancel`：取消 waiting item、取消 active prompt，或移除 failed item并恢复调度。
+- `prioritize`：把 waiting item 移到队首，不中断 active item。
+- `steer`：尝试把 waiting prompt steer 到 active prompt；错过窗口时退化为最高优先级的下一条 prompt。
+- `retry`：以原 item 重试当前 failed item。
+
+Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 project/session 路由转发，不保存 queue。Mutation 按 Hub 接收顺序串行处理。每次成功响应返回最新 Session/queue snapshot，enqueue 响应不等待执行完成。
+
+完整 snapshot 包含 `generation`、单调递增的 `revision`、`paused`、`activeItem` 和 `waitingItems`。Item 状态为 `queued`、`running`、`cancelling`、`steering` 或 `failed`；active compact 以 `cancelSupported:false` 表明不可取消。Queue 状态变化复用 `session.updated` 推送完整 Session/queue snapshot，不增加 queue 专属 read 或 event。
+
+`itemId` 在 Session 内唯一，同时用于 enqueue 幂等、queue 操作、steer 与 transcript 归因。同 ID 同 payload 返回原结果，同 ID 不同 payload 返回冲突。Hub reload/restart 会更换 generation；客户端只在同 generation 内比较 revision。
+
+该替换仍使用 Registry Protocol `2.6`。Registry、Hub、App 必须同步发布；版本握手不能识别新旧 2.6 组件混用，混用时允许直接返回 method 或 payload shape 错误。
 
 ### Session Pin 与颜色 Mark
 
@@ -701,6 +720,7 @@ Debug：
 1. 协议版本硬切到 `2.6`，不接受 `2.5` 连接。
 2. 后端 Key 配置由旧 `security.secret.*` 硬切为 `server.config.*` 非敏感快照与更新。
 3. 新增受设备 Session 与 Android 客户端名称门禁的 `server.androidSpeechCredential.get`。
+4. Session prompt/compact/取消/steer 在 2.6 内硬切为统一 `session.queue` action；删除旧方法且不提供兼容，Registry、Hub、App 必须同步发布。
 
 ### 2.5 相比 2.4
 

@@ -1,8 +1,10 @@
-> 摘要：本页维护 Session 数据模型、Turn 语义、持久化、同步和归档的当前稳定机制。
+> 摘要：本页维护 Session 数据模型、Turn 语义、持久化、Hub 内存 Queue、同步和归档的当前稳定机制。
 
 # Session 对话管理与同步
 
 > 来源：本页整理自 [`../../references/session-management-and-sync.zh-CN.md`](../../references/session-management-and-sync.zh-CN.md) 的当前稳定部分；完整原文第 8 节是评审阶段设计，不作为 wiki 当前事实。原始路径为 `docs/session-management-and-sync.zh-CN.md`。
+>
+> Queue 决策来源：[`../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
 
 本文是 session 对话链路的基础协议、存储说明、turn-first 同步、状态和显示重构的主文档。旧的 `session_prompts`、`turns_json`、`promptIndex` 游标和一次性迁移工具都已移除；运行期协议只暴露 session 级全局 `turnIndex`。
 
@@ -184,7 +186,7 @@ ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 
 
 - response 顶层必须带 `sessionId`，客户端必须校验它与请求 session 一致。
 - `turns[]` 内不带 `sessionId`。
-- `session` summary 随 read 返回，方便激活 session 时一次同步 turns 和列表状态。
+- `session` 信息随 read 返回，包含完整 queue snapshot，方便激活 session 时一次同步 turns、queue 和列表状态。
 - `afterTurnIndex < latestPersistedTurnIndex` 时，从 turn 文件读取持久化增量。
 - 如果当前 session 有 live prompt state，再追加内存中 `turnIndex > afterTurnIndex` 且尚未持久化的 turns。
 - 返回内容按 `turnIndex` 升序排序，并覆盖 `afterTurnIndex+1..latestTurnIndex` 的连续区间。
@@ -200,7 +202,7 @@ ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 
 
 服务端把 `lastReadTurnIndex` 按 `max(old, incoming)` 写入 `session_sync_json`，并返回更新后的 session summary。客户端只在用户打开 session，或当前可见 session 收到 `prompt_done` 后调用；列表刷新和后台事件不能清 read cursor。
 
-`session.reload` 会清除该 session 的内存 turn state、删除该 session 的 turn 文件、把 `session_sync_json` 的 turn/read/done cursor 重置后从 agent replay 回灌；`pinned` 与 `markColor` 作为独立 Session 元数据保留。
+`session.reload` 只在没有 active execution 时允许。它会清除该 session 的内存 turn state、queue waiting/failed item 和 queue 幂等记录，创建新的 queue generation，删除该 session 的 turn 文件，把 `session_sync_json` 的 turn/read/done cursor 重置后从 agent replay 回灌；`pinned` 与 `markColor` 作为独立 Session 元数据保留。
 
 `session.mark` 通过 project-scoped 请求更新 `markColor` 并返回权威 Session summary。空字符串清除 Mark；写入路径拒绝未知颜色。该操作不改变 `pinned`、`updated_at` 或列表排序，也不发布 `session.updated`。发起请求的客户端立即合并响应，其他客户端在下次 `session.list` 时同步。
 
@@ -232,6 +234,18 @@ type Cursor = { turnIndex: number };
 - Session resume、load 或 Registry reconnect 时，permission modal 必须等本次 `session.read` 与本地缓存 reconcile 完成后再由 turn 状态机决定；读取失败或连接断开时不从旧缓存打开 modal。Web 可以为 runtimeKey 保存一个不含 permission identity、也不持久化的 read-ready 门禁，但 pending 真相仍只来自 turns。
 - 选中 session 的显示视图由 raw source store 派生完整轻量 Display Index，再由 `react-virtuoso` 只挂载 visible + overscan items。上滑/下滑只改变 virtualizer range，不触发 server read。
 - 尾部锁定时新 turn 和 streaming 高度增长跟随到底；用户离开底部后保持当前锚点并显示回到底部 affordance。
+
+### Hub 内存 Session Queue
+
+Prompt 与 compact 共用由 Hub `Session` 持有的 FIFO。Queue 不写入 SQLite、SessionRecorder、turn history 或 Registry；Hub 重启后允许丢失。Queue 非空（包括 failed 后暂停）时 Session 不得被闲置回收，所有 App 断开后 Hub 仍继续调度。Goal、status、fork 等 Session action 不进入 queue，其他 active execution 会阻止下一项启动。
+
+Queue snapshot 包含 `generation`、单调递增的 `revision`、`paused`、`activeItem` 和 `waitingItems`。Item 状态为 `queued`、`running`、`cancelling`、`steering` 或 `failed`；完成、取消或 steer 被 transcript 确认后从 live queue 移除。App 对不同 generation 整体替换；同 generation 只接受更高 revision，不自行 dequeue 或 drain。
+
+客户端生成 Session 内唯一 `itemId`。Hub 以它执行 enqueue 幂等、后续 queue 操作和 transcript 归因：同 ID 同 payload 返回原结果，同 ID 不同 payload 冲突。幂等记录保留到 reload、archive/delete 或 Hub 重启。Queue mutation 按 Hub 接收顺序串行执行，每次可观察变化递增 revision，并通过 `session.updated` 推送完整 snapshot；`session.read` 返回完整 snapshot，`session.list` 只返回 generation/revision、paused、active kind 和 waiting count 摘要。
+
+Active item 成功或 prompt 取消后自动继续下一项；执行失败时 failed item 保留为 active failure 并暂停，`retry` 重试原 item，`cancel` failed item 会移除它并恢复调度。Waiting item 可取消或移到队首。Active prompt 取消进入 cancelling，等待 Agent 的正式 cancelled 结果；active compact 不支持取消。
+
+Waiting prompt 可以尝试 steer。Provider 接受后 item 保持 steering，直到相同 item ID 的 transcript 确认；若错过 active steer 窗口，则成为最高优先级的下一条 prompt；不支持或失败时恢复原位置和 queued 状态。
 
 ### Permission 的关闭与强关恢复
 
@@ -268,7 +282,7 @@ permission turns 与所在 prompt 共用持久化边界。Hub 强关时尚未 te
 - `session.archive.restore`：把归档 turns 写回普通 session turn 文件，重建 `sessions` 行，并在 manifest 中标记 `restoredAt`。
 - `session.delete`：硬删除协议，不写归档 pack、manifest 或 tombstone，直接删除 `sessions`、原 session 目录和 WheelMaker 管理的 session artifacts。
 
-`session.archive`、`session.delete`、`session.reload` 都必须拒绝运行中的 session。running 判定以服务端内存态为准：如果 session 仍有 active prompt 或 recorder 中存在未 terminal 的 prompt state，则返回错误；客户端的 `running` 字段只用于禁用按钮。
+`session.archive`、`session.delete`、`session.reload` 都必须拒绝存在 active execution 的 session。判定以服务端内存态为准：如果 session 仍有 active prompt/compact、其他 execution，或 recorder 中存在未 terminal 的 prompt state，则返回错误；客户端的 `running` 字段只用于禁用按钮。没有 active execution 时，archive/delete 直接清除 waiting/failed queue 和幂等记录，不额外确认。
 
 归档目录：
 
@@ -278,7 +292,7 @@ permission turns 与所在 prompt 共用持久化边界。Hub 强关时尚未 te
   manifest.json
 ```
 
-其中 `<projectName>` 使用和普通 session 历史相同的 safe path segment。归档只保存 turn 正文和 session summary 元信息；prompt diff artifacts 不进入归档，`prompt_done.artifacts` 元数据会在归档写入、归档读取和恢复时丢弃。服务端在归档写入、列表、读取和恢复入口会清理旧版留下的 `session-archive/<projectName>/artifacts` 目录。原 session 目录删除时一并删除图片/附件，恢复只重建 session 行和 turn 文件。
+其中 `<projectName>` 使用和普通 session 历史相同的 safe path segment。归档只保存 turn 正文和 session summary 元信息；queue 不进入归档。Prompt diff artifacts 不进入归档，`prompt_done.artifacts` 元数据会在归档写入、归档读取和恢复时丢弃。服务端在归档写入、列表、读取和恢复入口会清理旧版留下的 `session-archive/<projectName>/artifacts` 目录。原 session 目录删除时一并删除图片/附件，包括 waiting/failed item 曾上传但未发送的附件；恢复只重建 session 行和 turn 文件。
 
 ### 7.1 Manifest
 

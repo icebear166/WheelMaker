@@ -115,22 +115,14 @@ import {
   type ChatSessionKey,
 } from '../chat/session/chatSessionKey';
 import {
-  buildQueuedPromptMessage,
-  cancelQueuedChatPrompt,
-  enqueueChatCompact,
-  enqueueChatItemToFront,
-  enqueueChatPrompt,
-  hasSteeringChatPrompt,
-  moveQueuedChatPromptToFront,
-  moveQueuedChatPrompts,
-  queuedChatPrompts,
-  reconcileSteeredChatPrompts,
-  setQueuedChatPromptSteering,
-  shiftNextQueuedChatItem,
-  type QueuedChatCompact,
-  type QueuedChatPrompt,
-  type QueuedChatPromptsByKey,
-} from '../chat/session/chatPromptQueue';
+  buildQueuePromptMessage,
+  fullQueueSnapshot,
+  makeSessionQueueItemID,
+  mergeChatSessionQueueProjection,
+  queueDisplayItems,
+  queueTranscriptItemIDs,
+  type ChatSessionQueuesByKey,
+} from '../chat/session/chatSessionQueue';
 import {
   buildChatSessionActionOptions,
   chatSlashOptionDisplayName,
@@ -150,7 +142,7 @@ import {
 } from '../chat/mobileChatQuickSwitch';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
-import { ChatTurnView } from '../chat/ChatTurnView';
+import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';
 import {ChatPermissionDialog} from '../chat/permission/ChatPermissionDialog';
 import {
   deriveChatPermissionState,
@@ -795,6 +787,7 @@ type ChatComposerDraft = {
   attachments: ChatAttachment[];
 };
 type PendingChatPrompt = {
+  itemId: string;
   sessionId: string;
   blocks: RegistryChatContentBlock[];
   createdAt: string;
@@ -3518,7 +3511,7 @@ export function App() {
   const [chatComposerDragActive, setChatComposerDragActive] = useState(false);
   const [chatComposerDrafts, setChatComposerDrafts] = useState<Record<string, ChatComposerDraft>>({});
   const [chatPendingPromptsByKey, setChatPendingPromptsByKey] = useState<Record<string, PendingChatPrompt>>({});
-  const [chatQueuedPromptsByKey, setChatQueuedPromptsByKey] = useState<QueuedChatPromptsByKey>({});
+  const [chatSessionQueuesByKey, setChatSessionQueuesByKey] = useState<ChatSessionQueuesByKey>({});
   const [chatCompactingByKey, setChatCompactingByKey] = useState<Record<string, boolean>>({});
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
@@ -3535,8 +3528,7 @@ export function App() {
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
-  const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});
-  const chatSteerChainsByKeyRef = useRef<Record<string, Promise<void>>>({});
+  const chatSessionQueuesByKeyRef = useRef<ChatSessionQueuesByKey>({});
   const chatCompactingByKeyRef = useRef<Record<string, boolean>>({});
   const terminalCompactionOperationIdsRef = useRef<Set<string>>(new Set());
   const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});
@@ -3987,11 +3979,16 @@ export function App() {
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
     : undefined;
-  const selectedQueuedPrompts = useMemo(
-    () => selectedChatEncodedKey
-      ? queuedChatPrompts(chatQueuedPromptsByKey, selectedChatEncodedKey)
-      : [],
-    [chatQueuedPromptsByKey, selectedChatEncodedKey],
+  const selectedSessionQueue = selectedChatEncodedKey
+    ? chatSessionQueuesByKey[selectedChatEncodedKey]
+    : undefined;
+  const selectedTranscriptQueueItemIDs = useMemo(
+    () => queueTranscriptItemIDs(selectedFullChatMessages),
+    [selectedFullChatMessages],
+  );
+  const selectedQueueItems = useMemo(
+    () => queueDisplayItems(selectedSessionQueue, selectedTranscriptQueueItemIDs),
+    [selectedSessionQueue, selectedTranscriptQueueItemIDs],
   );
   const queuedPromptTurnIndex = useCallback(
     (index: number) => nextPromptTurnIndex(selectedFullChatMessages) + index + 1,
@@ -4015,7 +4012,7 @@ export function App() {
       ? `${selectedChatEncodedKey}:pending:${selectedPendingPrompt.createdAt}`
       : undefined,
     pendingEstimatedHeight: 120,
-    queuedKeys: selectedQueuedPrompts.map(prompt => `${selectedChatEncodedKey}:queued:${prompt.id}`),
+    queuedKeys: selectedQueueItems.map(item => `${selectedChatEncodedKey}:queued:${item.itemId}`),
     queuedEstimatedHeight: 128,
   }), [
     chatMessages,
@@ -4023,7 +4020,7 @@ export function App() {
     selectedChatEncodedKey,
     selectedPromptTurnStatusIndex,
     selectedPendingPrompt,
-    selectedQueuedPrompts,
+    selectedQueueItems,
     selectedPermissionState,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
@@ -4268,7 +4265,6 @@ export function App() {
       chatFinishedCursorRef.current[toRuntimeKey] = chatFinishedCursorRef.current[fromRuntimeKey];
     }
     movePendingChatPrompt(fromRuntimeKey, toRuntimeKey, sessionId);
-    setQueuedPrompts(current => moveQueuedChatPrompts(current, fromRuntimeKey, toRuntimeKey, sessionId));
   };
 
   const moveChatComposerDraft = (fromDraftKey: string, toDraftKey: string) => {
@@ -9446,6 +9442,7 @@ export function App() {
       chatFinishedCursorRef.current[resultRuntimeKey] = latestSyncCursor.turnIndex;
       const resultSession = result.session;
       if (resultSession) {
+        applySessionQueueProjection(activeProjectId, resultSession);
         setProjectSessionsByProjectId(prev => mergeProjectSessionMap(prev, activeProjectId, resultSession));
         if (activeProjectId === projectIdRef.current) {
           setChatSessions(prev => mergeChatSession(prev, resultSession));
@@ -9538,6 +9535,7 @@ export function App() {
       chatFinishedCursorRef.current[resultRuntimeKey] = latestSyncCursor.turnIndex;
       const resultSession = result.session;
       if (resultSession) {
+        applySessionQueueProjection(activeProjectId, resultSession);
         setProjectSessionsByProjectId(prev => mergeProjectSessionMap(prev, activeProjectId, resultSession));
         if (activeProjectId === projectIdRef.current) {
           setChatSessions(prev => mergeChatSession(prev, resultSession));
@@ -9787,36 +9785,30 @@ export function App() {
     setChatSubmittingByKey(next);
   };
 
-  const makeQueuedPromptId = () => `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const makeQueuedCompactId = () => `compact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const setQueuedPrompts = useCallback((updater: (current: QueuedChatPromptsByKey) => QueuedChatPromptsByKey) => {
-    setChatQueuedPromptsByKey(current => {
-      const next = updater(current);
-      chatQueuedPromptsByKeyRef.current = next;
+  const applySessionQueueProjection = useCallback((
+    targetProjectId: string,
+    session: RegistrySessionSummary | undefined,
+  ) => {
+    if (!session?.sessionId) return;
+    const incoming = fullQueueSnapshot(session.queue);
+    if (!incoming) return;
+    const runtimeKey = buildChatRuntimeKey(targetProjectId, session.sessionId);
+    setChatSessionQueuesByKey(current => {
+      const merged = mergeChatSessionQueueProjection(current[runtimeKey], incoming);
+      if (!merged || merged === current[runtimeKey]) return current;
+      const next = {...current, [runtimeKey]: merged};
+      chatSessionQueuesByKeyRef.current = next;
       return next;
     });
+    const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
+    const acceptedIds = new Set([
+      incoming.activeItem?.itemId,
+      ...(incoming.waitingItems ?? []).map(item => item.itemId),
+    ].filter((itemId): itemId is string => !!itemId));
+    if (pending && acceptedIds.has(pending.itemId)) {
+      forgetPendingChatPrompt(runtimeKey);
+    }
   }, []);
-
-  useEffect(() => {
-    if (!selectedChatEncodedKey || selectedFullChatMessages.length === 0) return;
-    setQueuedPrompts(current =>
-      reconcileSteeredChatPrompts(current, selectedChatEncodedKey, selectedFullChatMessages));
-  }, [selectedChatEncodedKey, selectedFullChatMessages, setQueuedPrompts]);
-
-  const enqueueSelectedChatPrompt = useCallback((runtimeKey: string, prompt: QueuedChatPrompt) => {
-    setQueuedPrompts(current => enqueueChatPrompt(current, runtimeKey, prompt));
-  }, [setQueuedPrompts]);
-
-  const enqueueSelectedChatCompact = (runtimeKey: string, sessionId: string) => {
-    const compact: QueuedChatCompact = {
-      kind: 'compact',
-      id: makeQueuedCompactId(),
-      sessionId,
-      createdAt: new Date().toISOString(),
-    };
-    setQueuedPrompts(current => enqueueChatCompact(current, runtimeKey, compact));
-  };
 
   const setRuntimeCompacting = (runtimeKey: string, compacting: boolean) => {
     const next = {...chatCompactingByKeyRef.current};
@@ -9837,40 +9829,23 @@ export function App() {
     .find(session => session.sessionId === sessionId)
     ?.sessionActions?.[action];
 
-  const runtimeSessionHasActiveExecution = (targetProjectId: string, sessionId: string, runtimeKey: string) =>
-    chatCompactingByKeyRef.current[runtimeKey] === true ||
-    knownChatSessionsForProject(targetProjectId).some(session =>
-      session.sessionId === sessionId && session.running === true,
-    );
-
-  const runtimeSessionIsBusy = (targetProjectId: string, sessionId: string, runtimeKey: string) =>
-    chatSubmittingByKeyRef.current[runtimeKey] === true ||
-    runtimeSessionHasActiveExecution(targetProjectId, sessionId, runtimeKey);
-
-  const isSessionBusyError = (errorValue: unknown) => {
-    const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
-    const normalized = message.toLowerCase();
-    return normalized.includes('busy') || normalized.includes('running');
-  };
-
   const requestSessionCompaction = async (
     targetProjectId: string,
     sessionId: string,
-    runtimeKey: string,
   ) => {
     try {
-      const result = await service.compactProjectSession(targetProjectId, sessionId);
-      if (!result.ok || !result.accepted || !result.operationId) {
-        throw new Error('session.compact returned accepted=false');
+      const result = await service.enqueueProjectSessionItem(targetProjectId, sessionId, {
+        itemId: makeSessionQueueItemID(),
+        kind: 'compact',
+        createdAt: new Date().toISOString(),
+      });
+      if (!result.ok) {
+        throw new Error('session.queue enqueue returned ok=false');
       }
-      if (!terminalCompactionOperationIdsRef.current.delete(result.operationId)) {
-        setRuntimeCompacting(runtimeKey, true);
-      }
+      applySessionQueueProjection(targetProjectId, result.session);
     } catch (errorValue) {
-      if (!isSessionBusyError(errorValue)) {
-        const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
-        setToastMessage(`Context compaction failed: ${message}`);
-      }
+      const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
+      setToastMessage(`Context compaction failed: ${message}`);
       throw errorValue;
     }
   };
@@ -9929,79 +9904,51 @@ export function App() {
       await refreshSessionStatusDialog(selectedKey.projectId, selectedKey.sessionId);
       return;
     }
-    if (
-      runtimeSessionIsBusy(selectedKey.projectId, selectedKey.sessionId, runtimeKey) ||
-      (chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).length > 0
-    ) {
-      enqueueSelectedChatCompact(runtimeKey, selectedKey.sessionId);
-      setToastMessage('Context compaction queued.');
-      return;
-    }
     setChatSubmittingForRuntimeKey(runtimeKey, true);
     try {
-      await requestSessionCompaction(selectedKey.projectId, selectedKey.sessionId, runtimeKey);
-    } catch (errorValue) {
-      if (isSessionBusyError(errorValue)) {
-        enqueueSelectedChatCompact(runtimeKey, selectedKey.sessionId);
-        setToastMessage('Context compaction queued.');
-        return;
-      }
-      throw errorValue;
+      await requestSessionCompaction(selectedKey.projectId, selectedKey.sessionId);
+      setToastMessage('Context compaction queued.');
     } finally {
       setChatSubmittingForRuntimeKey(runtimeKey, false);
     }
   }
 
-  const cancelQueuedPrompt = useCallback((runtimeKey: string, promptId: string) => {
-    setQueuedPrompts(current => cancelQueuedChatPrompt(current, runtimeKey, promptId));
-  }, [setQueuedPrompts]);
-
-  const prioritizeQueuedPrompt = useCallback((runtimeKey: string, promptId: string) => {
-    setQueuedPrompts(current => moveQueuedChatPromptToFront(current, runtimeKey, promptId));
-  }, [setQueuedPrompts]);
-
-  const steerQueuedPrompt = useCallback((
+  const mutateQueuedPrompt = useCallback(async (
     projectId: string,
     runtimeKey: string,
-    prompt: QueuedChatPrompt,
+    itemId: string,
+    action: 'cancel' | 'prioritize' | 'steer' | 'retry',
   ) => {
-    setQueuedPrompts(current =>
-      setQueuedChatPromptSteering(current, runtimeKey, prompt.id, true));
+    const key = decodeChatSessionKey(runtimeKey);
+    if (!key?.sessionId) return;
+    try {
+      const result = action === 'cancel'
+        ? await service.cancelProjectSessionQueueItem(projectId, key.sessionId, itemId)
+        : action === 'prioritize'
+          ? await service.prioritizeProjectSessionQueueItem(projectId, key.sessionId, itemId)
+          : action === 'steer'
+            ? await service.steerProjectSessionQueueItem(projectId, key.sessionId, itemId)
+            : await service.retryProjectSessionQueueItem(projectId, key.sessionId, itemId);
+      if (!result.ok) {
+        throw new Error(`session.queue ${action} returned ok=false`);
+      }
+      applySessionQueueProjection(projectId, result.session);
+    } catch (errorValue) {
+      setError(errorValue instanceof Error ? errorValue.message : String(errorValue));
+    }
+  }, [applySessionQueueProjection, service]);
 
-    const previous = chatSteerChainsByKeyRef.current[runtimeKey] ?? Promise.resolve();
-    const next = previous.then(async () => {
-      try {
-        const result = await service.steerProjectSession(projectId, {
-          sessionId: prompt.sessionId,
-          clientMessageId: prompt.id,
-          blocks: prompt.blocks,
-        });
-        if (!result.ok || !result.accepted) {
-          throw new Error('session.steer returned accepted=false');
-        }
-        if (result.outcome === 'sent') {
-          setQueuedPrompts(current =>
-            cancelQueuedChatPrompt(current, runtimeKey, prompt.id));
-        }
-      } catch (errorValue) {
-        if (!(chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).some(
-          item => item.kind === 'prompt' && item.id === prompt.id,
-        )) {
-          return;
-        }
-        setQueuedPrompts(current =>
-          setQueuedChatPromptSteering(current, runtimeKey, prompt.id, false));
-        setError(errorValue instanceof Error ? errorValue.message : String(errorValue));
-      }
-    }).finally(() => {
-      if (chatSteerChainsByKeyRef.current[runtimeKey] === next) {
-        const remaining = {...chatSteerChainsByKeyRef.current};
-        delete remaining[runtimeKey];
-        chatSteerChainsByKeyRef.current = remaining;
-      }
-    });
-    chatSteerChainsByKeyRef.current[runtimeKey] = next;
-  }, [service, setQueuedPrompts]);
+  const cancelQueuedPrompt = useCallback((projectId: string, runtimeKey: string, itemId: string) => {
+    mutateQueuedPrompt(projectId, runtimeKey, itemId, 'cancel').catch(() => undefined);
+  }, [mutateQueuedPrompt]);
+
+  const prioritizeQueuedPrompt = useCallback((projectId: string, runtimeKey: string, itemId: string) => {
+    mutateQueuedPrompt(projectId, runtimeKey, itemId, 'prioritize').catch(() => undefined);
+  }, [mutateQueuedPrompt]);
+
+  const steerQueuedPrompt = useCallback((projectId: string, runtimeKey: string, itemId: string) => {
+    mutateQueuedPrompt(projectId, runtimeKey, itemId, 'steer').catch(() => undefined);
+  }, [mutateQueuedPrompt]);
 
   const clearPendingChatPromptTimer = (runtimeKey: string) => {
     const timerId = chatPendingPromptTimersRef.current[runtimeKey];
@@ -10147,6 +10094,10 @@ export function App() {
       setChatSessions(prev => prev.filter(item => item.sessionId !== sessionId));
     }
     const runtimeKey = buildChatRuntimeKey(targetProjectId, sessionId);
+    const nextQueues = {...chatSessionQueuesByKeyRef.current};
+    delete nextQueues[runtimeKey];
+    chatSessionQueuesByKeyRef.current = nextQueues;
+    setChatSessionQueuesByKey(nextQueues);
     if (encodeChatSessionKey(selectedChatKeyRef.current) === runtimeKey) {
         applySelectedChatKey(null);
         setChatMessages([]);
@@ -10660,6 +10611,8 @@ export function App() {
     attachmentsOverride?: ChatAttachment[];
     blocksOverride?: RegistryChatContentBlock[];
     preserveComposer?: boolean;
+    itemIdOverride?: string;
+    createdAtOverride?: string;
   } = {}) => {
     if (voiceAwaitingFinalRef.current) {
       return;
@@ -10705,7 +10658,19 @@ export function App() {
         if (!options.preserveComposer) {
           resetChatComposerDraft(currentChatDraftKeyRef.current);
         }
-        await invokeChatSessionAction(nativeAction.kind);
+        if (nativeAction.kind === 'goal') {
+          const result = await service.createProjectSessionGoal(
+            selectedProjectId,
+            sessionId,
+            nativeAction.objective,
+          );
+          if (!result.ok || !result.goal) {
+            throw new Error('session.goal.create returned no Goal');
+          }
+          rememberChatSessionSummary(selectedProjectId, {sessionId, goal: result.goal});
+        } else {
+          await invokeChatSessionAction(nativeAction.kind);
+        }
         return;
       }
     }
@@ -10752,28 +10717,10 @@ export function App() {
         setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
         return;
       }
-      if (runtimeSessionHasActiveExecution(selectedProjectId, sessionId, runtimeKey)) {
-        const queuedPrompt: QueuedChatPrompt = {
-          kind: 'prompt',
-          id: makeQueuedPromptId(),
-          sessionId,
-          blocks: blocks.map(block => ({...block})),
-          createdAt: new Date().toISOString(),
-          text: trimmedText || msgText('prompt_request', {contentBlocks: blocks}).trim(),
-          status: 'queued',
-        };
-        enqueueSelectedChatPrompt(runtimeKey, queuedPrompt);
-        if (!options.preserveComposer) {
-          resetChatComposerDraft(draftKey);
-        }
-        setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
-        forceChatScrollToBottom();
-        return;
-      }
-      const firstAttachmentName = uploadedAttachments[0]?.name || '';
-      const previewText = trimmedText || firstAttachmentName || msgText('prompt_request', {contentBlocks: blocks}).trim();
-      const createdAt = new Date().toISOString();
+      const createdAt = options.createdAtOverride ?? new Date().toISOString();
+      const itemId = options.itemIdOverride ?? makeSessionQueueItemID();
       rememberPendingChatPrompt(runtimeKey, {
+        itemId,
         sessionId,
         blocks: blocks.map(block => ({...block})),
         createdAt,
@@ -10786,19 +10733,18 @@ export function App() {
         resetChatComposerDraft(draftKey);
       }
       forceChatScrollToBottom();
-      const result = await service.sendProjectSessionMessage(selectedProjectId, {
-        sessionId,
-        text: trimmedText || previewText,
+      const result = await service.enqueueProjectSessionItem(selectedProjectId, sessionId, {
+        itemId,
+        kind: 'prompt',
+        createdAt,
         blocks,
       });
       if (!result.ok) {
-        throw new Error('session.send returned ok=false');
+        throw new Error('session.queue enqueue returned ok=false');
       }
-      const nextSessionId = result.sessionId || sessionId;
-      if (nextSessionId !== sessionId) {
-        movePendingChatPrompt(runtimeKey, buildChatRuntimeKey(selectedProjectId, nextSessionId), nextSessionId);
-      }
-      const nextSelectedKey = chatSessionKeyFromParts(selectedProjectId, nextSessionId);
+      applySessionQueueProjection(selectedProjectId, result.session);
+      forgetPendingChatPrompt(runtimeKey);
+      const nextSelectedKey = chatSessionKeyFromParts(selectedProjectId, sessionId);
       if (shouldApplySentChatSelection(selectedChatKeyRef.current, sentFromKey)) {
         applySelectedChatKey(nextSelectedKey);
         workspaceStore.rememberSelectedChatSessionKey(nextSelectedKey);
@@ -10838,39 +10784,6 @@ export function App() {
   const handleSelectChatReply = useCallback((replyText: string) => {
     sendDirectChatText(replyText).catch(() => undefined);
   }, [sendDirectChatText]);
-
-  const drainNextQueuedChatItem = (runtimeKey: string) => {
-    const selectedKey = selectedChatKeyRef.current;
-    if (!selectedKey) return;
-    if (buildChatRuntimeKey(selectedKey.projectId, selectedKey.sessionId) !== runtimeKey) return;
-    if (hasSteeringChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey)) return;
-    if (runtimeSessionIsBusy(selectedKey.projectId, selectedKey.sessionId, runtimeKey)) return;
-    const result = shiftNextQueuedChatItem(chatQueuedPromptsByKeyRef.current, runtimeKey);
-    if (!result.item) return;
-    if (result.item.kind === 'compact') {
-      const compact = result.item;
-      setChatSubmittingForRuntimeKey(runtimeKey, true);
-      setQueuedPrompts(() => result.state);
-      requestSessionCompaction(selectedKey.projectId, compact.sessionId, runtimeKey)
-        .catch(errorValue => {
-          if (isSessionBusyError(errorValue)) {
-            setQueuedPrompts(current => enqueueChatItemToFront(current, runtimeKey, compact));
-            return;
-          }
-          setError(errorValue instanceof Error ? errorValue.message : String(errorValue));
-        })
-        .finally(() => setChatSubmittingForRuntimeKey(runtimeKey, false));
-      return;
-    }
-    const prompt = result.item;
-    setQueuedPrompts(() => result.state);
-    sendChatMessage({
-      textOverride: prompt.text,
-      blocksOverride: prompt.blocks,
-      attachmentsOverride: [],
-      preserveComposer: true,
-    }).catch(err => setError(err instanceof Error ? err.message : String(err)));
-  };
 
   const stopVoiceCapture = (options: {flush?: boolean} = {}) => {
     voiceCaptureRef.current?.stop(options);
@@ -11717,6 +11630,8 @@ export function App() {
       attachmentsOverride: [],
       blocksOverride: pending.blocks,
       preserveComposer: true,
+      itemIdOverride: pending.itemId,
+      createdAtOverride: pending.createdAt,
     }).catch(() => undefined);
   }, [sendChatMessageEvent]);
 
@@ -11879,14 +11794,24 @@ export function App() {
           applyChatSessionGoal(selectedKey.projectId, selectedKey.sessionId, result.goal);
         }
       } else {
-        const result = await service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId);
-        if (!result.ok) {
-          throw new Error('session.cancel returned ok=false');
+        const activeItemId = chatSessionQueuesByKeyRef.current[runtimeKey]?.activeItem?.itemId;
+        if (!activeItemId) {
+          return;
         }
+        const result = await service.cancelProjectSessionQueueItem(
+          selectedKey.projectId,
+          selectedKey.sessionId,
+          activeItemId,
+        );
+        if (!result.ok) {
+          throw new Error('session.queue cancel returned ok=false');
+        }
+        applySessionQueueProjection(selectedKey.projectId, result.session);
       }
     } catch (err) {
-      setChatCancellingRuntimeKey(current => (current === runtimeKey ? '' : current));
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChatCancellingRuntimeKey(current => (current === runtimeKey ? '' : current));
     }
   };
 
@@ -15697,6 +15622,7 @@ export function App() {
           session?: RegistryChatSession;
         };
         if (payload.session?.sessionId) {
+          applySessionQueueProjection(eventProjectId, payload.session);
           reconcileCreatedDraftSessions(eventProjectId, [payload.session]);
           const runtimeKey = buildChatRuntimeKey(eventProjectId, payload.session.sessionId);
           if (payload.session.running === false) {
@@ -15728,18 +15654,6 @@ export function App() {
         }
         const sessionId = message.sessionId;
         const runtimeKey = buildChatRuntimeKey(eventProjectId, sessionId);
-        if (
-          message.method === 'user_message_chunk' &&
-          message.param.steered === true &&
-          typeof message.param.clientMessageId === 'string'
-        ) {
-          const clientMessageId = message.param.clientMessageId;
-          setQueuedPrompts(current => cancelQueuedChatPrompt(
-            current,
-            runtimeKey,
-            clientMessageId,
-          ));
-        }
         if (message.method === 'session_operation') {
           const operationId = typeof message.param.operationId === 'string' ? message.param.operationId : '';
           const operationType = typeof message.param.type === 'string' ? message.param.type : '';
@@ -15830,8 +15744,6 @@ export function App() {
       setPermissionReadRevision(revision => revision + 1);
       setPermissionSubmission({runtimeKey: '', permissionId: '', optionId: '', error: ''});
       setConnected(false);
-      chatQueuedPromptsByKeyRef.current = {};
-      setChatQueuedPromptsByKey({});
       chatCompactingByKeyRef.current = {};
       setChatCompactingByKey({});
       terminalCompactionOperationIdsRef.current.clear();
@@ -17198,6 +17110,12 @@ export function App() {
 
   const selectedChatHasOpenPromptTurn = selectedPromptTurnStatusIndex.hasOpenPrompt;
   const selectedChatCompactionRunning = useMemo(() => {
+    if (
+      selectedSessionQueue?.activeItem?.kind === 'compact' &&
+      selectedSessionQueue.activeItem.status === 'running'
+    ) {
+      return true;
+    }
     if (selectedChatEncodedKey && chatCompactingByKey[selectedChatEncodedKey] === true) {
       return true;
     }
@@ -17212,12 +17130,17 @@ export function App() {
       }
     }
     return Array.from(operationStates.values()).some(status => status === 'queued' || status === 'started');
-  }, [chatCompactingByKey, selectedChatEncodedKey, selectedFullChatMessages]);
+  }, [chatCompactingByKey, selectedChatEncodedKey, selectedFullChatMessages, selectedSessionQueue]);
+  const selectedQueueActivePrompt = selectedSessionQueue?.activeItem?.kind === 'prompt'
+    ? selectedSessionQueue.activeItem
+    : undefined;
   const selectedChatPromptRunning =
     !!selectedChatEncodedKey &&
     !selectedPendingPrompt &&
     (
-      (selectedChatSession?.running === true && !selectedChatCompactionRunning) ||
+      selectedQueueActivePrompt?.status === 'running' ||
+      selectedQueueActivePrompt?.status === 'cancelling' ||
+      (selectedGoal?.status === 'active' && selectedChatSession?.running === true) ||
       selectedChatHasOpenPromptTurn
     );
   const selectedActiveToolGroupKey = useMemo(
@@ -17227,8 +17150,7 @@ export function App() {
   const selectedChatExecutionRunning = selectedChatPromptRunning || selectedChatCompactionRunning;
   const queuedPromptCanSteer =
     selectedChatSession?.sessionActions?.steer?.supported === true &&
-    selectedChatSession?.running === true &&
-    chatCompactingByKeyRef.current[selectedChatEncodedKey] !== true;
+    selectedQueueActivePrompt?.status === 'running';
   const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || !!selectedActivePermission;
   const submitChatPermission = useCallback(async (optionId: string) => {
     const activePermission = selectedActivePermission;
@@ -17285,27 +17207,12 @@ export function App() {
     }
   }, [permissionSubmission, selectedActivePermission, selectedChatKey]);
   const selectedChatPromptCancelling =
-    !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
+    selectedQueueActivePrompt?.status === 'cancelling' ||
+    (!!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey);
   const [chatStopPillVisible, setChatStopPillVisible, chatStopPillExiting] = useMenuExitFlag();
   useEffect(() => {
     setChatStopPillVisible(selectedChatPromptRunning);
   }, [selectedChatPromptRunning, setChatStopPillVisible]);
-
-  useEffect(() => {
-    if (selectedChatExecutionRunning) {
-      setChatAttachmentTrayOpen(false);
-    }
-  }, [selectedChatExecutionRunning]);
-
-  useEffect(() => {
-    if (!selectedChatEncodedKey || selectedChatExecutionRunning || selectedChatSubmitPending) {
-      return;
-    }
-    if ((chatQueuedPromptsByKeyRef.current[selectedChatEncodedKey] ?? []).length === 0) {
-      return;
-    }
-    drainNextQueuedChatItem(selectedChatEncodedKey);
-  }, [selectedChatEncodedKey, selectedChatExecutionRunning, selectedChatSubmitPending, chatMessages.length, chatQueuedPromptsByKey]);
 
   const latestSelectableAssistantReply = useMemo(() => {
     if (selectedPendingPrompt) {
@@ -17584,10 +17491,41 @@ export function App() {
         .map(sourceIndex => sourceMessages[sourceIndex])
         .filter((message): message is RegistryChatMessage => !!message && message.method === 'tool_call')
       : [];
-    const queuedPromptIndex = displayItem.kind === 'queued'
-      ? selectedQueuedPrompts.findIndex(queuedPrompt => `${selectedChatEncodedKey}:queued:${queuedPrompt.id}` === displayItem.key)
+    const queuedItemIndex = displayItem.kind === 'queued'
+      ? selectedQueueItems.findIndex(item => `${selectedChatEncodedKey}:queued:${item.itemId}` === displayItem.key)
       : -1;
-    const queuedPrompt = queuedPromptIndex >= 0 ? selectedQueuedPrompts[queuedPromptIndex] : null;
+    const queuedItem = queuedItemIndex >= 0 ? selectedQueueItems[queuedItemIndex] : null;
+    const queuedItemActions = queuedItem ? {
+      ...(queuedItem.cancelSupported && queuedItem.status !== 'cancelling' && queuedItem.status !== 'running'
+        ? {cancel: () => cancelQueuedPrompt(
+            selectedChatKeyRef.current?.projectId ?? '',
+            selectedChatEncodedKey,
+            queuedItem.itemId,
+          )}
+        : {}),
+      ...(queuedItem.status === 'queued'
+        ? {prioritize: () => prioritizeQueuedPrompt(
+            selectedChatKeyRef.current?.projectId ?? '',
+            selectedChatEncodedKey,
+            queuedItem.itemId,
+          )}
+        : {}),
+      ...(queuedItem.kind === 'prompt' && queuedItem.status === 'queued' && queuedPromptCanSteer
+        ? {steer: () => steerQueuedPrompt(
+            selectedChatKeyRef.current?.projectId ?? '',
+            selectedChatEncodedKey,
+            queuedItem.itemId,
+          )}
+        : {}),
+      ...(queuedItem.status === 'failed'
+        ? {retry: () => mutateQueuedPrompt(
+            selectedChatKeyRef.current?.projectId ?? '',
+            selectedChatEncodedKey,
+            queuedItem.itemId,
+            'retry',
+          )}
+        : {}),
+    } satisfies ChatQueueActions : {};
     const toolGroupSearchHighlighted =
       sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
       chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
@@ -17604,23 +17542,27 @@ export function App() {
       >
         <ChatToolCallGroup messages={sourceToolMessages} active={toolGroupActive} />
       </div>
-    ) : displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
+    ) : displayItem.kind === 'queued' && queuedItem?.kind === 'prompt' && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
         <ChatTurnView
-          message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
-          promptStatus={queuedPrompt.status}
+          message={buildQueuePromptMessage(
+            selectedChatKeyRef.current?.sessionId ?? '',
+            queuedItem,
+            queuedPromptTurnIndex(queuedItemIndex),
+          )}
+          queueItemStatus={queuedItem.status}
+          queueItemError={queuedItem.error}
+          queueActions={queuedItemActions}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
-          onSteerQueuedPrompt={queuedPromptCanSteer
-            ? () => steerQueuedPrompt(selectedChatKeyRef.current?.projectId ?? '', selectedChatEncodedKey, queuedPrompt)
-            : undefined}
-          queuedPromptSteering={queuedPrompt.status === 'steering'}
-          onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
-          onPrioritizeQueuedPrompt={() => prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
           onOpenPromptAttachment={openChatAttachmentPreview}
           resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
           onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
         />
+      </div>
+    ) : displayItem.kind === 'queued' && queuedItem?.kind === 'compact' && !chatReadOnlyPreview ? (
+      <div className="chat-view-content">
+        <ChatQueueCompactView item={queuedItem} actions={queuedItemActions} />
       </div>
     ) : displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
@@ -17662,9 +17604,10 @@ export function App() {
     selectedChatEncodedKey,
     selectedActiveToolGroupKey,
     selectedPendingPrompt,
-    selectedQueuedPrompts,
+    selectedQueueItems,
     sessionSearchTargetTurn,
     steerQueuedPrompt,
+    mutateQueuedPrompt,
   ]);
   const closePortRelayFrameFromChrome = useCallback(() => {
     const tab = activePreviewTab(previewWorkbenchRef.current);
@@ -18999,7 +18942,6 @@ export function App() {
                     className="chat-tool-button chat-attachment-plus-button"
                     onPointerDown={event => event.preventDefault()}
                     onClick={() => {
-                      if (selectedChatPromptRunning) return;
                       // Desktop: File and Photo both open the same native file
                       // dialog (the accept filter is switchable there), so the
                       // tray is skipped and the picker opens directly. Mobile
@@ -19014,7 +18956,7 @@ export function App() {
                     title={isWide ? 'Attach files' : 'Attach files or photos'}
                     aria-label={isWide ? 'Attach files' : 'Attach files or photos'}
                     aria-haspopup={isWide ? undefined : 'menu'}
-                    aria-expanded={isWide ? undefined : !selectedChatPromptRunning && chatAttachmentTrayOpen}
+                    aria-expanded={isWide ? undefined : chatAttachmentTrayOpen}
                   >
                     <ChatIcon name="paperclip" />
                   </button>
@@ -19027,7 +18969,7 @@ export function App() {
                       />
                     </div>
                   ) : null}
-                  {!isWide && !selectedChatPromptRunning && chatAttachmentTrayOpen ? (
+                  {!isWide && chatAttachmentTrayOpen ? (
                     <div
                       ref={chatAttachmentTrayRef}
                       className={`chat-attachment-action-tray${chatComposerMenuExiting ? ' sl-menu-exit' : ''}`}

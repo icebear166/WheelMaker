@@ -2524,8 +2524,7 @@ func TestReporterRespondsToSessionPermissionRespondRequests(t *testing.T) {
 func TestReporterForwardsSessionActionRequests(t *testing.T) {
 	for _, method := range []string{
 		rp.RegistryMethodSessionStatus,
-		rp.RegistryMethodSessionCompact,
-		rp.RegistryMethodSessionSteer,
+		rp.RegistryMethodSessionQueue,
 		rp.RegistryMethodSessionFork,
 		rp.RegistryMethodSessionGoalCreate,
 		rp.RegistryMethodSessionGoalGet,
@@ -2849,11 +2848,16 @@ func TestReporterVerboseEnvelopeLogsDoNotIncludePayloadOrTiming(t *testing.T) {
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: 100,
 			Type:      "request",
-			Method:    "session.send",
+			Method:    rp.RegistryMethodSessionQueue,
 			ProjectID: "hub-session:proj1",
 			Payload: map[string]any{
 				"sessionId": "sess-secret",
-				"text":      "hello session",
+				"action":    "enqueue",
+				"item": map[string]any{
+					"itemId": "item-secret",
+					"kind":   "prompt",
+					"blocks": []map[string]any{{"type": "text", "text": "hello session"}},
+				},
 			},
 		})
 		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
@@ -2885,23 +2889,23 @@ func TestReporterVerboseEnvelopeLogsDoNotIncludePayloadOrTiming(t *testing.T) {
 	case err := <-errSeen:
 		t.Fatalf("fake registry error: %v", err)
 	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != "session.send" {
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodSessionQueue {
 			t.Fatalf("unexpected response: %#v", resp)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive session.send response")
+		t.Fatal("did not receive session.queue response")
 	}
 
 	got := logs.String()
 	for _, want := range []string{
-		"envelope dir=in type=request requestId=100 method=session.send projectId=hub-session:proj1",
-		"envelope dir=out type=response requestId=100 method=session.send projectId=hub-session:proj1",
+		"envelope dir=in type=request requestId=100 method=session.queue projectId=hub-session:proj1",
+		"envelope dir=out type=response requestId=100 method=session.queue projectId=hub-session:proj1",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("log missing %q in:\n%s", want, got)
 		}
 	}
-	for _, forbidden := range []string{"durationMs", "handlerDurationMs", "writeDurationMs", "sessionId", "sess-secret", "hello session"} {
+	for _, forbidden := range []string{"durationMs", "handlerDurationMs", "writeDurationMs", "sessionId", "sess-secret", "item-secret", "hello session"} {
 		if strings.Contains(got, forbidden) {
 			t.Fatalf("log contains forbidden %q in:\n%s", forbidden, got)
 		}

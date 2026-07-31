@@ -40,6 +40,7 @@ type testInjectedInstance struct {
 	loadResult     acp.SessionLoadResult
 	loadUpdates    []acp.SessionUpdateParams
 	loadErr        error
+	loadFn         func(context.Context, acp.SessionLoadParams) (acp.SessionLoadResult, error)
 	newResult      *acp.SessionNewResult
 	listResult     acp.SessionListResult
 	listErr        error
@@ -130,6 +131,19 @@ func mustJSON(v any) []byte {
 	return raw
 }
 
+func queuePromptPayload(sessionID, itemID string, blocks []acp.ContentBlock) json.RawMessage {
+	return json.RawMessage(mustJSON(map[string]any{
+		"sessionId": sessionID,
+		"action":    acp.SessionQueueActionEnqueue,
+		"item": map[string]any{
+			"itemId":    itemID,
+			"kind":      acp.SessionQueueItemKindPrompt,
+			"createdAt": "2026-07-31T10:00:00Z",
+			"blocks":    blocks,
+		},
+	}))
+}
+
 func mustNewSession(t *testing.T, id, cwd, agentType string) *Session {
 	t.Helper()
 	sess, err := newSession(id, cwd, agentType)
@@ -182,8 +196,11 @@ func (i *testInjectedInstance) SessionNew(context.Context, acp.SessionNewParams)
 	}
 	return acp.SessionNewResult{SessionID: sid}, nil
 }
-func (i *testInjectedInstance) SessionLoad(context.Context, acp.SessionLoadParams) (acp.SessionLoadResult, error) {
+func (i *testInjectedInstance) SessionLoad(ctx context.Context, params acp.SessionLoadParams) (acp.SessionLoadResult, error) {
 	i.loadCalls++
+	if i.loadFn != nil {
+		return i.loadFn(ctx, params)
+	}
 	for _, params := range i.loadUpdates {
 		if strings.TrimSpace(params.SessionID) == "" {
 			params.SessionID = i.sessionID
@@ -8836,10 +8853,22 @@ func TestHandleSessionRequestSessionReloadClearsPromptStateBeforeReplay(t *testi
 	cached := newSessionPromptState(9)
 	c.sessionRecorder.promptState["sess-reload"] = &cached
 	c.sessionRecorder.writeMu.Unlock()
+	sess, err := c.SessionForTest("sess-reload")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := sess.enqueueQueueItem(promptQueueItem("reload-item", "discard me")); err != nil {
+		t.Fatal(err)
+	}
+	queueGeneration := sess.queueSnapshot(true).Generation
 
-	_, err := c.HandleSessionRequest(ctx, "session.reload", "proj1", json.RawMessage(`{"sessionId":"sess-reload"}`))
+	_, err = c.HandleSessionRequest(ctx, "session.reload", "proj1", json.RawMessage(`{"sessionId":"sess-reload"}`))
 	if err == nil {
 		t.Fatal("expected reload to fail when replay load fails")
+	}
+	queueAfter := sess.queueSnapshot(true)
+	if queueAfter.Generation == queueGeneration || queueAfter.ActiveItem != nil || len(queueAfter.WaitingItems) != 0 {
+		t.Fatalf("queue after reload = %#v", queueAfter)
 	}
 
 	c.sessionRecorder.writeMu.Lock()
@@ -9327,89 +9356,6 @@ func TestHandleSessionRequestSessionStatusInitializesWithoutLoading(t *testing.T
 	}
 	if inst.initCalls != 1 || inst.loadCalls != 0 {
 		t.Fatalf("initialize calls=%d load calls=%d", inst.initCalls, inst.loadCalls)
-	}
-}
-
-func TestHandleSessionRequestSessionCompactRejectsBusyPrompt(t *testing.T) {
-	promptStarted := make(chan struct{})
-	releasePrompt := make(chan struct{})
-	mock := &mockSession{
-		agentName: string(acp.ACPProviderCodex),
-		sessionID: "sess-compact-busy",
-		promptFn: func(string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error) {
-			close(promptStarted)
-			<-releasePrompt
-			updates := make(chan acp.SessionUpdateParams)
-			close(updates)
-			return updates, acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}, nil
-		},
-	}
-	c := newTestClient(t, mock)
-	sendDone := make(chan error, 1)
-	go func() {
-		_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(`{"sessionId":"sess-compact-busy","text":"working"}`))
-		sendDone <- err
-	}()
-	select {
-	case <-promptStarted:
-	case <-time.After(time.Second):
-		t.Fatal("prompt did not start")
-	}
-	_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionCompact, "test", json.RawMessage(`{"sessionId":"sess-compact-busy"}`))
-	if !errors.Is(err, agent.ErrSessionBusy) {
-		t.Fatalf("session.compact err = %v, want busy", err)
-	}
-	close(releasePrompt)
-	if err := <-sendDone; err != nil {
-		t.Fatalf("session.send: %v", err)
-	}
-}
-
-func TestHandleSessionRequestSessionCompactAcceptsAndBlocksPrompt(t *testing.T) {
-	c := newTestClient(t, &mockSession{agentName: string(acp.ACPProviderCodex), sessionID: "sess-compact"})
-	c.SetSessionViewSink(c)
-	ctx := context.Background()
-	if err := c.store.SaveSession(ctx, &SessionRecord{
-		ID:           "sess-compact",
-		ProjectName:  "test",
-		AgentType:    string(acp.ACPProviderCodex),
-		CreatedAt:    time.Now().Add(-time.Hour),
-		LastActiveAt: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatalf("SaveSession: %v", err)
-	}
-	sess, err := c.SessionByID(ctx, "sess-compact")
-	if err != nil {
-		t.Fatalf("SessionByID: %v", err)
-	}
-	inst := sess.instance.(*testInjectedInstance)
-	inst.compactDone = make(chan agent.SessionCompactResult, 1)
-
-	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionCompact, "test", json.RawMessage(`{"sessionId":"sess-compact"}`))
-	if err != nil {
-		t.Fatalf("session.compact: %v", err)
-	}
-	accepted, ok := response.(acp.SessionCompactAccepted)
-	if !ok || !accepted.OK || !accepted.Accepted || accepted.OperationID == "" {
-		t.Fatalf("compact response = %#v", response)
-	}
-	_, err = c.HandleSessionRequest(ctx, acp.RegistryMethodSessionSend, "test", json.RawMessage(`{"sessionId":"sess-compact","text":"must not overlap"}`))
-	if !errors.Is(err, agent.ErrSessionBusy) {
-		t.Fatalf("session.send err = %v, want busy", err)
-	}
-
-	inst.compactDone <- agent.SessionCompactResult{}
-	close(inst.compactDone)
-	deadline := time.Now().Add(time.Second)
-	for {
-		summary, readErr := c.sessionRecorder.ReadSessionSummary(ctx, "sess-compact")
-		if readErr == nil && !summary.Running && summary.LatestTurnIndex >= 2 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("compact did not reach terminal summary: %+v err=%v", summary, readErr)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -10069,21 +10015,22 @@ func TestStart_CreatesProjectRowWhenMissing(t *testing.T) {
 	}
 }
 
-func TestHandleSessionRequestSessionSendSlashTextIsPrompt(t *testing.T) {
+func TestHandleSessionQueueSlashTextIsPrompt(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-send-slash"}
 	c := newTestClient(t, mock)
 	published := captureSessionMessageEvents(t, c)
 
-	payload := json.RawMessage(`{"sessionId":"sess-send-slash","text":"/skills"}`)
-	resp, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	payload := queuePromptPayload("sess-send-slash", "slash-1", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "/skills"}})
+	resp, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
 	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.send): %v", err)
+		t.Fatalf("HandleSessionRequest(session.queue): %v", err)
 	}
 	body, ok := resp.(map[string]any)
 	if !ok || body["ok"] != true {
 		t.Fatalf("response = %#v, want ok=true", resp)
 	}
 
+	eventuallyQueue(t, func() bool { return len(*published) > 0 })
 	first := (*published)[0].payload
 	turn := publishedTurnMap(t, first)
 	content, _ := turn["content"].(string)
@@ -10247,7 +10194,7 @@ func TestSessionAttachmentThumbnailRejectsNonImage(t *testing.T) {
 	}
 }
 
-func TestSessionSendConvertsUploadedImageResourceLinkForImageCapableACPAgent(t *testing.T) {
+func TestSessionQueueConvertsUploadedImageResourceLinkForImageCapableACPAgent(t *testing.T) {
 	mock := &mockSession{agentName: "claude", sessionID: "sess-send-image"}
 	c := newAttachmentTestClientWithMock(t, mock)
 	imageBytes := []byte("hello")
@@ -10261,16 +10208,13 @@ func TestSessionSendConvertsUploadedImageResourceLinkForImageCapableACPAgent(t *
 	sess.agentState.AgentCapabilities.PromptCapabilities = &acp.PromptCapabilities{Image: true}
 	sess.mu.Unlock()
 
-	payload := mustJSON(map[string]any{
-		"sessionId": "sess-send-image",
-		"blocks": []acp.ContentBlock{
-			{Type: acp.ContentBlockTypeText, Text: "describe"},
-			block,
-		},
+	payload := queuePromptPayload("sess-send-image", "image-1", []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "describe"},
+		block,
 	})
-	resp, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	resp, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
 	if err != nil {
-		t.Fatalf("session.send: %v", err)
+		t.Fatalf("session.queue: %v", err)
 	}
 	body := responseMapForTest(t, resp)
 	if body["ok"] != true {
@@ -10278,6 +10222,7 @@ func TestSessionSendConvertsUploadedImageResourceLinkForImageCapableACPAgent(t *
 	}
 
 	inst := sess.instance.(*testInjectedInstance)
+	eventuallyQueue(t, func() bool { return len(inst.lastPrompt) == 2 })
 	if len(inst.lastPrompt) != 2 {
 		t.Fatalf("lastPrompt len=%d, want 2: %#v", len(inst.lastPrompt), inst.lastPrompt)
 	}
@@ -10404,21 +10349,18 @@ func TestSessionAttachmentDeleteRemovesCompletedImageThumbnail(t *testing.T) {
 	}
 }
 
-func TestSessionSendAcceptsUploadedAttachmentBlock(t *testing.T) {
+func TestSessionQueueAcceptsUploadedAttachmentBlock(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-send-attachment"}
 	c := newAttachmentTestClientWithMock(t, mock)
 	block := uploadSessionAttachmentForTest(t, c, "sess-send-attachment", "report.pdf", "application/pdf", []byte("hello world"))
-	payload := mustJSON(map[string]any{
-		"sessionId": "sess-send-attachment",
-		"blocks": []acp.ContentBlock{
-			{Type: acp.ContentBlockTypeText, Text: "read this"},
-			block,
-		},
+	payload := queuePromptPayload("sess-send-attachment", "attachment-1", []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "read this"},
+		block,
 	})
 
-	resp, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	resp, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
 	if err != nil {
-		t.Fatalf("session.send: %v", err)
+		t.Fatalf("session.queue: %v", err)
 	}
 	body := responseMapForTest(t, resp)
 	if body["ok"] != true {
@@ -10429,12 +10371,64 @@ func TestSessionSendAcceptsUploadedAttachmentBlock(t *testing.T) {
 		t.Fatalf("SessionForTest: %v", err)
 	}
 	inst := sess.instance.(*testInjectedInstance)
+	eventuallyQueue(t, func() bool { return len(inst.lastPrompt) == 2 })
 	if len(inst.lastPrompt) != 2 || inst.lastPrompt[1].URI != block.URI || inst.lastPrompt[1].Data != "" {
 		t.Fatalf("lastPrompt=%#v, want uploaded attachment block", inst.lastPrompt)
 	}
+	sidecar, err := readAttachmentSidecar(attachmentSidecarPathForTest(attachmentFileURIPathForTest(t, block.URI)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sidecar.Sent {
+		t.Fatalf("attachment sidecar = %#v, want sent", sidecar)
+	}
 }
 
-func TestSessionSendConvertsProjectRelativeResourceLinkToFileURI(t *testing.T) {
+func TestSessionQueueAttachmentCommitFailureDoesNotCreateQueueItem(t *testing.T) {
+	mock := &mockSession{agentName: "codex", sessionID: "sess-attachment-commit-failure"}
+	c := newAttachmentTestClientWithMock(t, mock)
+	block := uploadSessionAttachmentForTest(
+		t,
+		c,
+		"sess-attachment-commit-failure",
+		"report.pdf",
+		"application/pdf",
+		[]byte("hello world"),
+	)
+	c.markAttachmentsSent = func([]attachmentRef) error {
+		return errors.New("sidecar write failed")
+	}
+
+	_, err := c.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionQueue,
+		"proj1",
+		queuePromptPayload(
+			"sess-attachment-commit-failure",
+			"attachment-failed",
+			[]acp.ContentBlock{
+				{Type: acp.ContentBlockTypeText, Text: "read this"},
+				block,
+			},
+		),
+	)
+	if err == nil || !strings.Contains(err.Error(), "sidecar write failed") {
+		t.Fatalf("session.queue error = %v, want sidecar failure", err)
+	}
+
+	sess, sessionErr := c.SessionForTest("sess-attachment-commit-failure")
+	if sessionErr != nil {
+		t.Fatal(sessionErr)
+	}
+	if got := sess.queueSnapshot(true); got.ActiveItem != nil || got.WaitingCount != 0 || len(got.WaitingItems) != 0 {
+		t.Fatalf("queue after attachment commit failure = %#v", got)
+	}
+	if len(mock.promptCalls) != 0 {
+		t.Fatalf("promptCalls = %v, want no execution", mock.promptCalls)
+	}
+}
+
+func TestSessionQueueConvertsProjectRelativeResourceLinkToFileURI(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-send-project-file"}
 	c := newAttachmentTestClientWithMock(t, mock)
 	projectFile := filepath.Join(c.cwd, "src", "MobileInstance.ts")
@@ -10444,17 +10438,14 @@ func TestSessionSendConvertsProjectRelativeResourceLinkToFileURI(t *testing.T) {
 	if err := os.WriteFile(projectFile, []byte("export const mobile = true;\n"), 0o644); err != nil {
 		t.Fatalf("write project file: %v", err)
 	}
-	payload := mustJSON(map[string]any{
-		"sessionId": "sess-send-project-file",
-		"blocks": []acp.ContentBlock{
-			{Type: acp.ContentBlockTypeText, Text: "use this file"},
-			{Type: acp.ContentBlockTypeResourceLink, URI: "src/MobileInstance.ts", Name: "MobileInstance.ts"},
-		},
+	payload := queuePromptPayload("sess-send-project-file", "project-file-1", []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "use this file"},
+		{Type: acp.ContentBlockTypeResourceLink, URI: "src/MobileInstance.ts", Name: "MobileInstance.ts"},
 	})
 
-	resp, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	resp, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
 	if err != nil {
-		t.Fatalf("session.send: %v", err)
+		t.Fatalf("session.queue: %v", err)
 	}
 	body := responseMapForTest(t, resp)
 	if body["ok"] != true {
@@ -10465,6 +10456,7 @@ func TestSessionSendConvertsProjectRelativeResourceLinkToFileURI(t *testing.T) {
 		t.Fatalf("SessionForTest: %v", err)
 	}
 	inst := sess.instance.(*testInjectedInstance)
+	eventuallyQueue(t, func() bool { return len(inst.lastPrompt) == 2 })
 	if len(inst.lastPrompt) != 2 {
 		t.Fatalf("lastPrompt=%#v, want text and resource_link", inst.lastPrompt)
 	}
@@ -10478,66 +10470,40 @@ func TestSessionSendConvertsProjectRelativeResourceLinkToFileURI(t *testing.T) {
 	}
 }
 
-func TestSessionSendRejectsProjectRelativeResourceLinkOutsideProject(t *testing.T) {
+func TestSessionQueueRejectsProjectRelativeResourceLinkOutsideProject(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-send-project-file-outside"}
 	c := newAttachmentTestClientWithMock(t, mock)
-	payload := mustJSON(map[string]any{
-		"sessionId": "sess-send-project-file-outside",
-		"blocks": []acp.ContentBlock{{
-			Type: acp.ContentBlockTypeResourceLink,
-			URI:  "../secret.txt",
-			Name: "secret.txt",
-		}},
-	})
+	payload := queuePromptPayload("sess-send-project-file-outside", "outside-project-1", []acp.ContentBlock{{
+		Type: acp.ContentBlockTypeResourceLink,
+		URI:  "../secret.txt",
+		Name: "secret.txt",
+	}})
 
-	_, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
 	if err == nil || !strings.Contains(err.Error(), "project file") {
-		t.Fatalf("session.send err=%v, want project file containment rejection", err)
+		t.Fatalf("session.queue err=%v, want project file containment rejection", err)
 	}
 	if len(mock.promptCalls) != 0 {
 		t.Fatalf("promptCalls=%v, want rejected before prompt", mock.promptCalls)
 	}
 }
 
-func TestSessionSendRejectsAttachmentFileURIOutsideSession(t *testing.T) {
+func TestSessionQueueRejectsAttachmentFileURIOutsideSession(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-send-outside"}
 	c := newAttachmentTestClientWithMock(t, mock)
-	payload := mustJSON(map[string]any{
-		"sessionId": "sess-send-outside",
-		"blocks": []acp.ContentBlock{{
-			Type:     acp.ContentBlockTypeResourceLink,
-			URI:      "file:///C:/outside/report.pdf",
-			Name:     "report.pdf",
-			MimeType: "application/pdf",
-		}},
-	})
+	payload := queuePromptPayload("sess-send-outside", "outside-attachment-1", []acp.ContentBlock{{
+		Type:     acp.ContentBlockTypeResourceLink,
+		URI:      "file:///C:/outside/report.pdf",
+		Name:     "report.pdf",
+		MimeType: "application/pdf",
+	}})
 
-	_, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", payload)
 	if err == nil || !strings.Contains(err.Error(), "attachment") {
-		t.Fatalf("session.send err=%v, want attachment containment rejection", err)
+		t.Fatalf("session.queue err=%v, want attachment containment rejection", err)
 	}
 	if len(mock.promptCalls) != 0 {
 		t.Fatalf("promptCalls=%v, want rejected before prompt", mock.promptCalls)
-	}
-}
-
-func TestHandleSessionRequestSessionCancelUsesCancelAPIWithoutPrompt(t *testing.T) {
-	mock := &mockSession{agentName: "codex", sessionID: "sess-cancel-api"}
-	c := newTestClient(t, mock)
-
-	resp, err := c.HandleSessionRequest(context.Background(), "session.cancel", "proj1", json.RawMessage(`{"sessionId":"sess-cancel-api"}`))
-	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.cancel): %v", err)
-	}
-	body, ok := resp.(map[string]any)
-	if !ok || body["ok"] != true || body["sessionId"] != "sess-cancel-api" {
-		t.Fatalf("response = %#v, want ok=true sessionId=sess-cancel-api", resp)
-	}
-	if mock.cancelCalls != 1 {
-		t.Fatalf("cancelCalls = %d, want 1", mock.cancelCalls)
-	}
-	if len(mock.promptCalls) != 0 {
-		t.Fatalf("promptCalls = %v, want no prompt text", mock.promptCalls)
 	}
 }
 
@@ -10554,8 +10520,8 @@ func TestPromptToSessionRecordsFailedPromptDoneOnAgentError(t *testing.T) {
 		t.Fatalf("RecordEvent session created: %v", err)
 	}
 
-	if err := c.PromptToSession(context.Background(), "sess-prompt-error", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "hello"}}); err != nil {
-		t.Fatalf("PromptToSession: %v", err)
+	if err := c.PromptToSession(context.Background(), "sess-prompt-error", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "hello"}}); err == nil || !strings.Contains(err.Error(), "agent crashed") {
+		t.Fatalf("PromptToSession error = %v, want agent crashed", err)
 	}
 	_, turns, err := c.sessionRecorder.ReadSessionTurns(context.Background(), "sess-prompt-error", 0)
 	if err != nil {
@@ -10573,7 +10539,7 @@ func TestPromptToSessionRecordsFailedPromptDoneOnAgentError(t *testing.T) {
 	}
 }
 
-func TestHandleSessionRequestSessionCancelFinishesPromptAsCancelled(t *testing.T) {
+func TestHandleSessionQueueCancelFinishesPromptAsCancelled(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-cancel-running"}
 	c := newTestClient(t, mock)
 	if err := c.RecordEvent(context.Background(), sessionViewCreatedEvent("sess-cancel-running", "Cancel Running")); err != nil {
@@ -10598,22 +10564,29 @@ func TestHandleSessionRequestSessionCancelFinishesPromptAsCancelled(t *testing.T
 		return nil
 	})
 
-	done := make(chan error, 1)
-	go func() {
-		done <- c.PromptToSession(context.Background(), "sess-cancel-running", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "please stop"}})
-	}()
+	_, err := c.HandleSessionRequest(
+		context.Background(),
+		acp.RegistryMethodSessionQueue,
+		"proj1",
+		queuePromptPayload("sess-cancel-running", "cancel-item-1", []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "please stop"}}),
+	)
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
 	<-started
 
-	resp, err := c.HandleSessionRequest(context.Background(), "session.cancel", "proj1", json.RawMessage(`{"sessionId":"sess-cancel-running"}`))
+	resp, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionQueue, "proj1", json.RawMessage(`{"sessionId":"sess-cancel-running","action":"cancel","itemId":"cancel-item-1"}`))
 	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.cancel): %v", err)
+		t.Fatalf("HandleSessionRequest(session.queue cancel): %v", err)
 	}
 	if body, ok := resp.(map[string]any); !ok || body["ok"] != true {
 		t.Fatalf("response = %#v, want ok=true", resp)
 	}
-	if err := <-done; err != nil {
-		t.Fatalf("PromptToSession: %v", err)
+	sess, err := c.SessionForTest("sess-cancel-running")
+	if err != nil {
+		t.Fatal(err)
 	}
+	eventuallyQueue(t, func() bool { return !sess.queuePinsMemory() })
 	if cancelCalls != 1 {
 		t.Fatalf("cancelCalls = %d, want 1", cancelCalls)
 	}

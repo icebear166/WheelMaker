@@ -3088,6 +3088,19 @@ button.chat-hub-skill-name:disabled {
   padding: 0 7px;
 }
 
+.chat-prompt-status-queued.steering,
+.chat-prompt-status-queued.cancelling {
+  border-color: color-mix(in srgb, var(--state-warning) 44%, transparent);
+  background: color-mix(in srgb, var(--state-warning) 10%, transparent);
+  color: color-mix(in srgb, var(--state-warning) 84%, var(--text-primary));
+}
+
+.chat-prompt-status-queued.failed {
+  border-color: color-mix(in srgb, var(--state-danger) 48%, transparent);
+  background: color-mix(in srgb, var(--state-danger) 10%, transparent);
+  color: color-mix(in srgb, var(--state-danger) 88%, var(--text-primary));
+}
+
 .chat-prompt-status-dots {
   display: inline-flex;
   gap: 1px;
@@ -3198,6 +3211,35 @@ button.chat-hub-skill-name:disabled {
 .chat-prompt-queue-action:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
+}
+
+.chat-queue-item-error {
+  color: var(--state-danger);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.chat-queue-compact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.chat-queue-compact-row.failed {
+  color: color-mix(in srgb, var(--state-danger) 82%, var(--text-primary));
+}
+
+.chat-queue-compact-row .chat-queue-item-error {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.chat-queue-compact-row .chat-prompt-queue-actions {
+  margin-left: auto;
 }
 
 .chat-prompt-steered-label {

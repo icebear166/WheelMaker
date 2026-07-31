@@ -27,7 +27,8 @@ export type ChatSessionSlashOption = {
 
 export type StandaloneSessionActionResolution =
   | {kind: ChatSessionActionKind}
-  | {kind: 'invalid'; command: '/status' | '/compact' | '/fast'}
+  | {kind: 'goal'; objective: string}
+  | {kind: 'invalid'; command: '/status' | '/compact' | '/fast' | '/goal'}
   | null;
 
 const unsupportedReason = 'Current Agent does not support this action.';
@@ -144,9 +145,16 @@ export function filterChatSessionActionOptions(
 
 export function resolveStandaloneSessionAction(text: string, attachmentCount: number): StandaloneSessionActionResolution {
   const trimmed = text.trim();
-  const match = /^(\/compact|\/status|\/fast)(?:\s|$)/i.exec(trimmed);
+  const match = /^(\/compact|\/status|\/fast|\/goal)(?:\s|$)/i.exec(trimmed);
   if (!match) return null;
-  const command = match[1].toLowerCase() as '/status' | '/compact' | '/fast';
+  const command = match[1].toLowerCase() as '/status' | '/compact' | '/fast' | '/goal';
+  if (command === '/goal') {
+    const objective = trimmed.slice(match[0].length).trim();
+    if (!objective || attachmentCount > 0) {
+      return {kind: 'invalid', command};
+    }
+    return {kind: 'goal', objective};
+  }
   if (trimmed.toLowerCase() !== command || attachmentCount > 0) {
     return {kind: 'invalid', command};
   }
