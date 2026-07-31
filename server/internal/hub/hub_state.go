@@ -113,7 +113,11 @@ func (m *HubStateManager) get(sections []string) rp.HubState {
 			continue
 		}
 		controller.mu.Lock()
-		snapshot.Sections[name] = cloneHubStateSection(controller.section)
+		section := cloneHubStateSection(controller.section)
+		if name != hubStateSectionTokenStats && controller.active != nil {
+			section.UpdateStatus = rp.HubStateUpdateIdle
+		}
+		snapshot.Sections[name] = section
 		controller.mu.Unlock()
 	}
 	return snapshot
@@ -378,7 +382,13 @@ func (m *HubStateManager) publishSections(reason string, sections map[string]rp.
 	}
 	cloned := make(map[string]rp.HubStateSection, len(sections))
 	for name, section := range sections {
-		cloned[name] = cloneHubStateSection(section)
+		section = cloneHubStateSection(section)
+		if name != hubStateSectionTokenStats &&
+			(section.UpdateStatus == rp.HubStateUpdateQueued ||
+				section.UpdateStatus == rp.HubStateUpdateUpdating) {
+			section.UpdateStatus = rp.HubStateUpdateIdle
+		}
+		cloned[name] = section
 	}
 	m.publish(reason, cloned)
 }
@@ -449,10 +459,17 @@ func cloneHubStateReflectValue(value reflect.Value) reflect.Value {
 		iter := value.MapRange()
 		for iter.Next() {
 			clone.SetMapIndex(
-				cloneHubStateReflectValue(iter.Key()),
+				iter.Key(),
 				cloneHubStateReflectValue(iter.Value()),
 			)
 		}
+		return clone
+	case reflect.Ptr:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		clone := reflect.New(value.Type().Elem())
+		clone.Elem().Set(cloneHubStateReflectValue(value.Elem()))
 		return clone
 	case reflect.Slice:
 		if value.IsNil() {
@@ -467,6 +484,15 @@ func cloneHubStateReflectValue(value reflect.Value) reflect.Value {
 		clone := reflect.New(value.Type()).Elem()
 		for i := 0; i < value.Len(); i++ {
 			clone.Index(i).Set(cloneHubStateReflectValue(value.Index(i)))
+		}
+		return clone
+	case reflect.Struct:
+		clone := reflect.New(value.Type()).Elem()
+		clone.Set(value)
+		for i := 0; i < value.NumField(); i++ {
+			if clone.Field(i).CanSet() && value.Field(i).CanInterface() {
+				clone.Field(i).Set(cloneHubStateReflectValue(value.Field(i)))
+			}
 		}
 		return clone
 	default:

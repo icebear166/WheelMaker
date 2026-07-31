@@ -24,7 +24,9 @@ export class HubStore {
   private readonly hubs = new Map<string, RegistryHubState>();
   private readonly listeners = new Set<(snapshot: HubStoreSnapshot) => void>();
   private readonly refreshes = new Map<string, Promise<RegistryHubStateRefreshResponse>>();
-  private readonly discoveries = new Map<string, Promise<void>>();
+  private readonly discoveries = new Map<string, {generation: number; promise: Promise<void>}>();
+  private readonly discoveryGenerations = new Map<string, number>();
+  private desiredHubs = new Set<string>();
 
   constructor(private readonly options: HubStoreOptions = {}) {}
 
@@ -71,7 +73,7 @@ export class HubStore {
     for (const [name, section] of Object.entries(incoming.sections)) {
       const previous = sections[name];
       if (!previous || section.revision > previous.revision) {
-        sections[name] = {...section};
+        sections[name] = cloneHubStateSection(section);
         changed = true;
       }
     }
@@ -91,25 +93,51 @@ export class HubStore {
     section: RegistryHubStateSectionName,
   ): RegistryHubStateSection<T> | undefined {
     const value = this.hubs.get(hubId)?.sections[section];
-    return value ? {...value} as RegistryHubStateSection<T> : undefined;
+    return value ? cloneHubStateSection(value) as RegistryHubStateSection<T> : undefined;
   }
 
   async discover(hubIds: string[]): Promise<void> {
+    const normalizedHubIds = [...new Set(hubIds)];
+    const nextDesiredHubs = new Set(normalizedHubIds);
+    for (const hubId of new Set([...this.desiredHubs, ...nextDesiredHubs])) {
+      if (this.desiredHubs.has(hubId) !== nextDesiredHubs.has(hubId)) {
+        this.discoveryGenerations.set(hubId, (this.discoveryGenerations.get(hubId) ?? 0) + 1);
+      }
+    }
+    this.desiredHubs = nextDesiredHubs;
+    this.retainHubs(normalizedHubIds);
     if (!this.options.get) {
       return;
     }
-    await Promise.all([...new Set(hubIds)].map(async hubId => {
-      if (this.hubs.has(hubId)) {
-        return;
-      }
+    await Promise.all(normalizedHubIds.map(async hubId => {
+      const generation = this.discoveryGenerations.get(hubId) ?? 0;
       const existing = this.discoveries.get(hubId);
-      if (existing) {
-        return existing;
+      if (existing?.generation === generation) {
+        return existing.promise;
       }
-      const discovery = this.options.get!(hubId)
-        .then(state => this.replace(state))
-        .finally(() => this.discoveries.delete(hubId));
-      this.discoveries.set(hubId, discovery);
+      let request: Promise<RegistryHubState>;
+      try {
+        request = this.options.get!(hubId);
+      } catch (error) {
+        request = Promise.reject(error);
+      }
+      let discovery: Promise<void>;
+      discovery = request
+        .then(state => {
+          if (
+            this.desiredHubs.has(hubId)
+            && this.discoveryGenerations.get(hubId) === generation
+          ) {
+            this.replace(state);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (this.discoveries.get(hubId)?.promise === discovery) {
+            this.discoveries.delete(hubId);
+          }
+        });
+      this.discoveries.set(hubId, {generation, promise: discovery});
       return discovery;
     }));
   }
@@ -172,13 +200,44 @@ export class HubStore {
       listener(snapshot);
     }
   }
+
+  private retainHubs(hubIds: string[]): void {
+    const retained = new Set(hubIds);
+    let changed = false;
+    for (const hubId of this.hubs.keys()) {
+      if (!retained.has(hubId)) {
+        this.hubs.delete(hubId);
+        changed = true;
+      }
+    }
+    if (changed) this.emit();
+  }
 }
 
 function cloneHubState(state: RegistryHubState): RegistryHubState {
   return {
     ...state,
     sections: Object.fromEntries(
-      Object.entries(state.sections).map(([name, section]) => [name, {...section}]),
+      Object.entries(state.sections).map(([name, section]) => [name, cloneHubStateSection(section)]),
     ),
   };
+}
+
+function cloneHubStateSection(section: RegistryHubStateSection): RegistryHubStateSection {
+  return {
+    ...section,
+    data: cloneHubStateValue(section.data),
+  };
+}
+
+function cloneHubStateValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(item => cloneHubStateValue(item)) as T;
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, cloneHubStateValue(item)]),
+    ) as T;
+  }
+  return value;
 }

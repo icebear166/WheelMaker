@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/swm8023/wheelmaker/internal/hub/tools"
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 const (
@@ -46,22 +49,30 @@ func (r *Reporter) refreshHubStateFlickerBridge(ctx context.Context, _ hubStateR
 }
 
 func (r *Reporter) actionHubStateFlickerBridge(ctx context.Context, action string, params map[string]any) (any, error) {
+	var (
+		result any
+		err    error
+	)
 	switch action {
 	case "start":
-		return r.flickerBridge.Start(ctx)
+		result, err = r.flickerBridge.Start(ctx)
 	case "stop":
-		return r.flickerBridge.Stop(ctx)
+		result, err = r.flickerBridge.Stop(ctx)
 	case "restart":
-		return r.flickerBridge.Restart(ctx)
+		result, err = r.flickerBridge.Restart(ctx)
 	case "switchMode":
 		mode, ok := params["mode"].(string)
 		if !ok || mode == "" {
 			return nil, fmt.Errorf("%s switchMode requires mode", hubStateSectionFlickerBridge)
 		}
-		return r.flickerBridge.SwitchMode(ctx, flickerBridgeMode(mode))
+		result, err = r.flickerBridge.SwitchMode(ctx, flickerBridgeMode(mode))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionFlickerBridge, action)
 	}
+	if err == nil {
+		r.refreshHubStateSectionAfterAction(hubStateSectionFlickerBridge)
+	}
+	return result, err
 }
 
 func (r *Reporter) refreshHubStateTokenStats(ctx context.Context, _ hubStateRefreshInput) (any, error) {
@@ -79,18 +90,26 @@ func (r *Reporter) refreshHubStateAgentPackages(ctx context.Context, input hubSt
 }
 
 func (r *Reporter) actionHubStateAgentPackages(ctx context.Context, action string, params map[string]any) (any, error) {
+	var (
+		result any
+		err    error
+	)
 	switch action {
 	case "install":
-		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install", params))
+		result, err = r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install", params))
 	case "installMany":
-		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install_many", params))
+		result, err = r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install_many", params))
 	case "uninstall":
-		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
+		result, err = r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
 	case "reinstall":
-		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "reinstall", params))
+		result, err = r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "reinstall", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionAgentPackages, action)
 	}
+	if err == nil {
+		r.refreshHubStateSectionAfterAction(hubStateSectionAgentPackages)
+	}
+	return result, err
 }
 
 func (r *Reporter) refreshHubStateWheelmakerUpdate(ctx context.Context, input hubStateRefreshInput) (any, error) {
@@ -103,7 +122,11 @@ func (r *Reporter) refreshHubStateWheelmakerUpdate(ctx context.Context, input hu
 func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "requestUpdate":
-		return r.runHubStateTool(ctx, hubToolMethodUpdate, hubStateToolPayload(r.cfg.HubID, "request", params))
+		result, err := r.runHubStateTool(ctx, hubToolMethodUpdate, hubStateToolPayload(r.cfg.HubID, "request", params))
+		if err == nil {
+			r.refreshHubStateSectionAfterAction(hubStateSectionWheelmakerUpdate)
+		}
+		return result, err
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionWheelmakerUpdate, action)
 	}
@@ -116,27 +139,69 @@ func (r *Reporter) refreshHubStateSkills(ctx context.Context, _ hubStateRefreshI
 func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "reindex":
-		result, err := r.runHubStateTool(ctx, hubToolMethodSkills, map[string]any{
-			"action": "scan",
-			"hubId":  r.cfg.HubID,
-		})
+		result, err := r.ensureHubStateManager().enqueueRefresh(
+			[]string{hubStateSectionSkills},
+			true,
+		)
 		if err != nil {
 			return nil, err
 		}
-		return result, nil
+		return map[string]any{
+			"ok":       true,
+			"accepted": result.Accepted,
+			"hubId":    r.cfg.HubID,
+		}, nil
 	case "listSource":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
 	case "install":
-		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "install", params))
+		return r.runSkillsStateAction(ctx, "install", params)
 	case "uninstall":
-		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
+		return r.runSkillsStateAction(ctx, "uninstall", params)
 	case "update":
-		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "update", params))
+		return r.runSkillsStateAction(ctx, "update", params)
 	case "detail":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "detail", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionSkills, action)
 	}
+}
+
+func (r *Reporter) runSkillsStateAction(ctx context.Context, action string, params map[string]any) (any, error) {
+	result, err := r.runHubStateTool(
+		ctx,
+		hubToolMethodSkills,
+		hubStateToolPayload(r.cfg.HubID, action, params),
+	)
+	if err != nil {
+		return nil, err
+	}
+	operation := skillsOperationFromResult(result)
+	if operation != nil {
+		coordinator := r.ensureSkillsStateCoordinator()
+		coordinator.SetOperation(operation)
+		r.ensureHubStateManager().notify(
+			hubStateSectionSkills,
+			coordinator.Snapshot(),
+			rp.HubStateAvailabilityReady,
+			"",
+			"skills.operation.started",
+		)
+	}
+	return result, nil
+}
+
+func skillsOperationFromResult(result any) *tools.SkillsOperationSnapshot {
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return nil
+	}
+	var response struct {
+		Operation *tools.SkillsOperationSnapshot `json:"operation"`
+	}
+	if json.Unmarshal(raw, &response) != nil {
+		return nil
+	}
+	return response.Operation
 }
 
 func (r *Reporter) refreshHubStateFileIndex(_ context.Context, input hubStateRefreshInput) (any, error) {
@@ -153,10 +218,16 @@ func (r *Reporter) actionHubStateFileIndex(ctx context.Context, action string, p
 		if err != nil {
 			return nil, err
 		}
-		return r.ensureFileIndexManager().startRebuild(ctx, project), nil
+		result := r.ensureFileIndexManager().startRebuild(ctx, project)
+		r.refreshHubStateSectionAfterAction(hubStateSectionFileIndex)
+		return result, nil
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionFileIndex, action)
 	}
+}
+
+func (r *Reporter) refreshHubStateSectionAfterAction(section string) {
+	_, _ = r.ensureHubStateManager().enqueueRefresh([]string{section}, true)
 }
 
 func (r *Reporter) runHubStateTool(ctx context.Context, method string, payload map[string]any) (any, error) {

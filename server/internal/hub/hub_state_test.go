@@ -47,6 +47,37 @@ func TestHubStateRefreshReturnsBeforeUpdaterCompletesAndCoalesces(t *testing.T) 
 	}
 }
 
+func TestHubStateRefreshKeepsOrdinaryQueueProgressRequestLocal(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				started <- struct{}{}
+				<-release
+				return map[string]any{"skills": []string{"scope"}}, nil
+			},
+		},
+	}, nil)
+
+	response, err := manager.enqueueRefresh([]string{hubStateSectionSkills}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Updates[0].Status != string(rp.HubStateUpdateQueued) {
+		t.Fatalf("ack status = %q, want queued", response.Updates[0].Status)
+	}
+	if got := response.State.Sections[hubStateSectionSkills].UpdateStatus; got != rp.HubStateUpdateIdle {
+		t.Fatalf("response section status = %q, want request-local idle snapshot", got)
+	}
+	waitSignal(t, started)
+	if got := manager.get([]string{hubStateSectionSkills}).Sections[hubStateSectionSkills].UpdateStatus; got != rp.HubStateUpdateIdle {
+		t.Fatalf("get section status = %q, want request-local idle snapshot", got)
+	}
+	close(release)
+	waitHubStateSectionIdle(t, manager, hubStateSectionSkills)
+}
+
 func TestHubStateForceDuringRunSchedulesOnlyOneRerun(t *testing.T) {
 	started := make(chan struct{}, 2)
 	release := make(chan struct{}, 2)
@@ -244,6 +275,52 @@ func TestHubStateSnapshotMutationDoesNotAlterCommittedData(t *testing.T) {
 	}
 }
 
+func TestHubStateStructAndPointerPayloadsDoNotShareMutableData(t *testing.T) {
+	type nested struct {
+		Labels []string
+	}
+	type payload struct {
+		Names  []string
+		Values map[string][]int
+		Nested *nested
+	}
+	original := payload{
+		Names:  []string{"scope"},
+		Values: map[string][]int{"counts": {1, 2}},
+		Nested: &nested{Labels: []string{"agents"}},
+	}
+	manager := newHubStateManager("hub-a", "instance-a", map[string]hubStateSectionHandler{
+		hubStateSectionSkills: {},
+	}, nil)
+	manager.notify(
+		hubStateSectionSkills,
+		original,
+		rp.HubStateAvailabilityReady,
+		"",
+		"seed",
+	)
+
+	original.Names[0] = "mutated-original"
+	original.Values["counts"][0] = 9
+	original.Nested.Labels[0] = "mutated-original"
+	first := manager.get(nil).Sections[hubStateSectionSkills].Data.(payload)
+	if !reflect.DeepEqual(first, payload{
+		Names:  []string{"scope"},
+		Values: map[string][]int{"counts": {1, 2}},
+		Nested: &nested{Labels: []string{"agents"}},
+	}) {
+		t.Fatalf("committed struct shared original data: %#v", first)
+	}
+
+	first.Names[0] = "mutated-snapshot"
+	first.Values["counts"][0] = 8
+	first.Nested.Labels[0] = "mutated-snapshot"
+	second := manager.get(nil).Sections[hubStateSectionSkills].Data.(payload)
+	if second.Names[0] != "scope" || second.Values["counts"][0] != 1 || second.Nested.Labels[0] != "agents" {
+		t.Fatalf("committed struct mutated through snapshot: %#v", second)
+	}
+}
+
 func TestReporterBootstrapRefreshesOperationalSectionsOnce(t *testing.T) {
 	var calls sync.Map
 	handlers := map[string]hubStateSectionHandler{}
@@ -326,6 +403,58 @@ func TestProjectTopologyChangeRefreshesSkillsAndFileIndex(t *testing.T) {
 	assertRefreshes("path", 2, 2)
 	reporter.replaceProjects(nil)
 	assertRefreshes("remove", 3, 3)
+}
+
+func TestProjectAgentChangeRefreshesSkillsWithoutRefreshingFileIndex(t *testing.T) {
+	var refreshed sync.Map
+	handler := func(name string) hubStateSectionHandler {
+		return hubStateSectionHandler{
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				counter, _ := refreshed.LoadOrStore(name, &atomic.Int32{})
+				counter.(*atomic.Int32).Add(1)
+				return map[string]any{"section": name}, nil
+			},
+		}
+	}
+	reporter := &Reporter{
+		cfg: ReporterConfig{HubID: "hub-a"},
+		projects: []ProjectInfo{{
+			Name:   "project",
+			Path:   "same",
+			Agents: []string{"codex"},
+		}},
+		projectsByID: map[string]ProjectInfo{
+			"project":       {Name: "project", Path: "same", Agents: []string{"codex"}},
+			"hub-a:project": {Name: "project", Path: "same", Agents: []string{"codex"}},
+		},
+	}
+	reporter.hubStateManager = newHubStateManager(
+		"hub-a",
+		"instance-a",
+		map[string]hubStateSectionHandler{
+			hubStateSectionSkills:    handler(hubStateSectionSkills),
+			hubStateSectionFileIndex: handler(hubStateSectionFileIndex),
+		},
+		nil,
+	)
+
+	if err := reporter.UpdateProject(ProjectInfo{
+		Name:   "project",
+		Path:   "same",
+		Agents: []string{"codex", "claude"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	waitHubStateSectionIdle(t, reporter.hubStateManager, hubStateSectionSkills)
+
+	skills, _ := refreshed.LoadOrStore(hubStateSectionSkills, &atomic.Int32{})
+	fileIndex, _ := refreshed.LoadOrStore(hubStateSectionFileIndex, &atomic.Int32{})
+	if got := skills.(*atomic.Int32).Load(); got != 1 {
+		t.Fatalf("skills refreshes = %d, want 1", got)
+	}
+	if got := fileIndex.(*atomic.Int32).Load(); got != 0 {
+		t.Fatalf("fileIndex refreshes = %d, want 0", got)
+	}
 }
 
 func TestUpdateProjectPathRefreshesSkillsAndFileIndex(t *testing.T) {

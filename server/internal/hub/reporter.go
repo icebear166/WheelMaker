@@ -247,6 +247,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		Projects:              cp,
 		StateDir:              stateDir,
 		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnUpdateOperationDone: r.onUpdateOperationDone,
 		OnSkillsOperationDone: r.onSkillsOperationDone,
 		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
@@ -361,8 +362,9 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 
 	r.mu.Lock()
 	previous := r.projectsByID[project.Name]
-	topologyChanged := previous.Name == "" ||
+	pathChanged := previous.Name == "" ||
 		strings.TrimSpace(previous.Path) != strings.TrimSpace(project.Path)
+	skillTargetsChanged := pathChanged || !sameProjectAgents(previous.Agents, project.Agents)
 	if previous.Name != "" {
 		changedDomains = diffProjectDomains(previous, project)
 		if len(changedDomains) == 0 {
@@ -374,11 +376,22 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	connectionEpoch := r.connectionEpoch
 	r.mu.Unlock()
 
-	if topologyChanged {
+	if skillTargetsChanged {
 		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
+	}
+	if pathChanged {
 		r.updateSkillsWatcherProjects()
+	}
+	if skillTargetsChanged || pathChanged {
+		sections := make([]string, 0, 2)
+		if skillTargetsChanged {
+			sections = append(sections, hubStateSectionSkills)
+		}
+		if pathChanged {
+			sections = append(sections, hubStateSectionFileIndex)
+		}
 		_, _ = r.ensureHubStateManager().enqueueRefresh(
-			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
+			sections,
 			true,
 		)
 	}
@@ -1105,7 +1118,19 @@ func (r *Reporter) onNPMOperationDone() {
 	)
 }
 
-func (r *Reporter) onSkillsOperationDone(scope, projectName string) {
+func (r *Reporter) onUpdateOperationDone() {
+	_, _ = r.ensureHubStateManager().enqueueRefresh(
+		[]string{hubStateSectionWheelmakerUpdate},
+		true,
+	)
+}
+
+func (r *Reporter) onSkillsOperationDone(
+	scope,
+	projectName string,
+	operation tools.SkillsOperationSnapshot,
+) {
+	r.ensureSkillsStateCoordinator().SetOperation(&operation)
 	go r.refreshSkillsStateTarget(scope, projectName)
 }
 
@@ -1786,6 +1811,7 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
 		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
+		OnUpdateOperationDone: r.onUpdateOperationDone,
 		OnSkillsOperationDone: r.onSkillsOperationDone,
 		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
@@ -2906,7 +2932,8 @@ func (r *Reporter) replaceProjects(projects []ProjectInfo) {
 	}
 
 	r.mu.Lock()
-	changed := projectTopologyChanged(r.projects, next)
+	pathsChanged := projectPathTopologyChanged(r.projects, next)
+	skillTargetsChanged := projectSkillTargetsChanged(r.projects, next)
 	r.projects = next
 	r.projectsByID = nextByID
 	handler := r.toolHandler
@@ -2914,17 +2941,28 @@ func (r *Reporter) replaceProjects(projects []ProjectInfo) {
 	if handler != nil {
 		handler.SetProjects(next)
 	}
-	if changed {
+	if skillTargetsChanged {
 		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
+	}
+	if pathsChanged {
 		r.updateSkillsWatcherProjects()
+	}
+	if skillTargetsChanged || pathsChanged {
+		sections := make([]string, 0, 2)
+		if skillTargetsChanged {
+			sections = append(sections, hubStateSectionSkills)
+		}
+		if pathsChanged {
+			sections = append(sections, hubStateSectionFileIndex)
+		}
 		_, _ = r.ensureHubStateManager().enqueueRefresh(
-			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
+			sections,
 			true,
 		)
 	}
 }
 
-func projectTopologyChanged(previous, current []ProjectInfo) bool {
+func projectPathTopologyChanged(previous, current []ProjectInfo) bool {
 	paths := func(projects []ProjectInfo) map[string]string {
 		out := make(map[string]string, len(projects))
 		for _, project := range projects {
@@ -2936,6 +2974,38 @@ func projectTopologyChanged(previous, current []ProjectInfo) bool {
 		return out
 	}
 	return !reflect.DeepEqual(paths(previous), paths(current))
+}
+
+func projectSkillTargetsChanged(previous, current []ProjectInfo) bool {
+	targets := func(projects []ProjectInfo) map[string]projectSkillsTarget {
+		out := make(map[string]projectSkillsTarget, len(projects))
+		for _, project := range projects {
+			name := strings.TrimSpace(project.Name)
+			if name == "" {
+				continue
+			}
+			agents := normalizedProjectAgents(project.Agents)
+			out[name] = projectSkillsTarget{
+				Path:   strings.TrimSpace(project.Path),
+				Agents: agents,
+			}
+		}
+		return out
+	}
+	return !reflect.DeepEqual(targets(previous), targets(current))
+}
+
+func sameProjectAgents(left, right []string) bool {
+	return reflect.DeepEqual(normalizedProjectAgents(left), normalizedProjectAgents(right))
+}
+
+func normalizedProjectAgents(agents []string) []string {
+	out := appendUniqueFold(nil, agents...)
+	for index := range out {
+		out[index] = strings.ToLower(out[index])
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (r *Reporter) setProjectLocked(project ProjectInfo) {

@@ -1566,15 +1566,17 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 
 	callbackDone := make(chan struct{})
 	var callbackScope, callbackProject string
+	var callbackOperation SkillsOperationSnapshot
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
 		HubID: "hub-a",
 		Projects: []ProjectInfo{{
 			Name: "proj",
 			Path: projectRoot,
 		}},
-		OnOperationDone: func(scope, projectName string) {
+		OnOperationDone: func(scope, projectName string, operation SkillsOperationSnapshot) {
 			callbackScope = scope
 			callbackProject = projectName
+			callbackOperation = operation
 			close(callbackDone)
 		},
 	})
@@ -1602,6 +1604,9 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 	if callbackProject != "proj" {
 		t.Fatalf("callback projectName = %q, want %q", callbackProject, "proj")
 	}
+	if callbackOperation.Running || callbackOperation.Status != "succeeded" {
+		t.Fatalf("callback operation = %+v, want terminal success", callbackOperation)
+	}
 }
 
 func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
@@ -1618,7 +1623,10 @@ func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
 	callbackCalled := make(chan struct{}, 1)
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
 		HubID: "hub-a",
-		OnOperationDone: func(scope, projectName string) {
+		OnOperationDone: func(scope, projectName string, operation SkillsOperationSnapshot) {
+			if operation.Running || operation.Status != "failed" {
+				t.Errorf("callback operation = %+v, want terminal failure", operation)
+			}
 			callbackCalled <- struct{}{}
 		},
 	})
@@ -2078,6 +2086,43 @@ func TestUpdateRequestCreatesOneQueuedJob(t *testing.T) {
 	}
 	if status.JobID != first.JobID || status.State != "queued" {
 		t.Fatalf("status=%+v", status)
+	}
+}
+
+func TestUpdateCommandNotifiesOnceWhenExternalUpdaterReachesTerminalState(t *testing.T) {
+	baseDir := t.TempDir()
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
+	done := make(chan struct{}, 2)
+	cmd.setOperationDoneHandler(func() {
+		done <- struct{}{}
+	})
+	response := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if response.JobID == "" {
+		t.Fatal("request did not create a job")
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     response.JobID,
+		State:     "failed",
+		StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		ErrorCode: "download_failed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("update completion callback was not called")
+	}
+	select {
+	case <-done:
+		t.Fatal("update completion callback was called more than once")
+	case <-time.After(100 * time.Millisecond):
 	}
 }
 

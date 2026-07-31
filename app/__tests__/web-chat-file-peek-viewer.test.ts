@@ -596,7 +596,8 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain('const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);');
     expect(mainTsx).toContain('const handlePreviewProjectIndexRebuild = useCallback(async (projectId: string) => {');
-    expect(mainTsx).toContain("projectIndexScanPendingByProjectId[tab.projectId] ? 'Indexing...' : 'Rebuild file index'");
+    expect(mainTsx).toContain("indexPending ? 'Indexing...' : 'Rebuild file index'");
+    expect(mainTsx).toContain("indexedProject?.status === 'scanning'");
     expect(mainTsx).toContain('actionsMenuOpen={previewWorkbenchActionsMenuOpen}');
     expect(mainTsx).toContain('onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}');
     expect(mainTsx).toContain('onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}');

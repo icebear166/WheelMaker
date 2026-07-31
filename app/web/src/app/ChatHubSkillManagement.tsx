@@ -34,6 +34,19 @@ interface ChatHubSkillScopeDetailProps {
   actions: ChatHubSkillActions;
 }
 
+function skillSyncPresentation(skill: RegistrySkillSnapshot): {label: string; title: string} | null {
+  switch (skill.sync?.status) {
+    case 'agentsOnly':
+      return {label: '.agents only', title: 'Available only in .agents'};
+    case 'claudeOnly':
+      return {label: '.claude only', title: 'Available only in .claude'};
+    case 'contentMismatch':
+      return {label: 'Content differs', title: '.agents and .claude content differs'};
+    default:
+      return null;
+  }
+}
+
 function actionPending(
   pendingKey: string,
   input: SkillScopeTarget & {skillName?: string; action: string},
@@ -59,6 +72,7 @@ export function ChatHubSkillScopeDetail({
     [skills],
   );
   const managedSkills = sortedSkills.filter(skill => skill.managed);
+  const syncIssueCount = sortedSkills.filter(skill => skillSyncPresentation(skill) !== null).length;
   const scopeLabel = target.scope === 'hub' ? 'Hub' : 'Project';
   const hubBusy = loading
     || operationRunning
@@ -97,6 +111,9 @@ export function ChatHubSkillScopeDetail({
       <div className="chat-hub-skill-toolbar">
         <strong className="chat-hub-skill-toolbar-label">
           {selectionMode ? `${selectedNames.length} selected` : label}
+          {!selectionMode && syncIssueCount > 0 ? (
+            <span className="chat-hub-skill-sync-summary"> · {syncIssueCount} mismatch</span>
+          ) : null}
         </strong>
         <div className="chat-hub-skill-toolbar-actions">
           {selectionMode ? (
@@ -197,6 +214,7 @@ export function ChatHubSkillScopeDetail({
               skillName: skill.name,
               action: 'skillUninstall',
             });
+            const syncPresentation = skillSyncPresentation(skill);
 
             return (
               <div
@@ -230,6 +248,11 @@ export function ChatHubSkillScopeDetail({
                   {!managed ? (
                     <span className="chat-hub-skill-external" title="External skill">
                       <Icon name="link" />
+                    </span>
+                  ) : null}
+                  {syncPresentation ? (
+                    <span className="chat-hub-skill-sync" title={syncPresentation.title}>
+                      {syncPresentation.label}
                     </span>
                   ) : null}
                 </span>

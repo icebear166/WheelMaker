@@ -247,11 +247,11 @@ describe('agent package update settings UI source structure', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);');
-    expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const hubOperationalViews = useMemo(');
+    expect(mainTsx).toContain('() => deriveHubOperationalViews(hubStoreSnapshot)');
+    expect(mainTsx).not.toContain('refreshWheelMakerUpdatesRef');
+    expect(mainTsx).not.toContain('refreshAgentPackagesRef');
     expect(mainTsx).not.toContain('refreshAndroidApkUpdateRef');
-    expect(mainTsx).toContain('if (!options.silent) {');
-    expect(mainTsx).toContain('loading: !options.silent,');
     expect(mainTsx).not.toContain('agentPackageScanPollTimerRef');
     expect(mainTsx).not.toContain('updateSurfaceActiveRef');
   });
@@ -283,49 +283,23 @@ describe('agent package update settings UI source structure', () => {
     expect(refreshTriggers).toContain("['flickerBridge', 'agentPackages', 'skills', 'fileIndex']");
   });
 
-  test('updates each hub scan surface as its request settles', () => {
+  test('derives each hub operation surface from the canonical HubStore snapshot', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    const wheelMakerStart = mainTsx.indexOf('const refreshWheelMakerUpdates = useCallback');
-    const wheelMakerEnd = mainTsx.indexOf('const refreshAgentPackages = useCallback', wheelMakerStart);
-    expect(wheelMakerStart).toBeGreaterThanOrEqual(0);
-    expect(wheelMakerEnd).toBeGreaterThan(wheelMakerStart);
-    const wheelMakerBlock = mainTsx.slice(wheelMakerStart, wheelMakerEnd);
-    expect(wheelMakerBlock).toContain('await Promise.all(hubIds.map(async hubId => {');
-    expect(wheelMakerBlock).not.toContain('const responses = await Promise.all(hubIds.map');
-    expect(wheelMakerBlock).not.toContain('responses.forEach(entry =>');
-    const wheelMakerRequestIndex = wheelMakerBlock.indexOf('const result = await service.queryWheelMakerUpdate(hubId);');
-    const wheelMakerUpdateIndex = wheelMakerBlock.indexOf('setWheelMakerUpdateHubs(prev => ({', wheelMakerRequestIndex);
-    expect(wheelMakerUpdateIndex).toBeGreaterThan(wheelMakerRequestIndex);
-
-    const agentStart = mainTsx.indexOf('const refreshAgentPackages = useCallback');
-    const agentEnd = mainTsx.indexOf('const refreshProjectFileIndexes = useCallback', agentStart);
-    expect(agentStart).toBeGreaterThanOrEqual(0);
-    expect(agentEnd).toBeGreaterThan(agentStart);
-    const agentBlock = mainTsx.slice(agentStart, agentEnd);
-    expect(agentBlock).toContain('const runningHubIds = new Set<string>();');
-    expect(agentBlock).toContain('await Promise.all(hubIds.map(async hubId => {');
-    expect(agentBlock).not.toContain('const responses = await Promise.all(hubIds.map');
-    expect(agentBlock).not.toContain('responses.forEach(entry =>');
-    const agentRequestIndex = agentBlock.indexOf('const result = await withAgentPackageTimeout(');
-    const agentUpdateIndex = agentBlock.indexOf('setAgentPackageHubs(prev => ({', agentRequestIndex);
-    expect(agentUpdateIndex).toBeGreaterThan(agentRequestIndex);
-
-    const projectIndexStart = mainTsx.indexOf('const refreshProjectFileIndexes = useCallback');
-    const projectIndexEnd = mainTsx.indexOf('useEffect(() => {\n    refreshWheelMakerUpdatesRef.current = refreshWheelMakerUpdates;', projectIndexStart);
-    expect(projectIndexStart).toBeGreaterThanOrEqual(0);
-    expect(projectIndexEnd).toBeGreaterThan(projectIndexStart);
-    const projectIndexBlock = mainTsx.slice(projectIndexStart, projectIndexEnd);
-    expect(projectIndexBlock).toContain('const runningHubIds = new Set<string>();');
-    expect(projectIndexBlock).toContain('await Promise.all(ids.map(async hubId => {');
-    expect(projectIndexBlock).not.toContain('const responses = await Promise.all(ids.map');
-    expect(projectIndexBlock).not.toContain('responses.forEach(entry =>');
-    const projectRequestIndex = projectIndexBlock.indexOf('const result = await service.getFileIndexStatus(hubId);');
-    const projectUpdateIndex = projectIndexBlock.indexOf('setProjectIndexByHubId(prev => ({', projectRequestIndex);
-    expect(projectUpdateIndex).toBeGreaterThan(projectRequestIndex);
+    const deriveStart = mainTsx.indexOf('function deriveHubOperationalViews');
+    const deriveEnd = mainTsx.indexOf('type SkillDetailCacheEntry', deriveStart);
+    expect(deriveStart).toBeGreaterThanOrEqual(0);
+    expect(deriveEnd).toBeGreaterThan(deriveStart);
+    const deriveBlock = mainTsx.slice(deriveStart, deriveEnd);
+    expect(deriveBlock).toContain('hub.sections.wheelmakerUpdate');
+    expect(deriveBlock).toContain('hub.sections.agentPackages');
+    expect(deriveBlock).toContain('hub.sections.fileIndex');
+    expect(deriveBlock).toContain('hub.sections.skills');
+    expect(deriveBlock).toContain('hub.sections.flickerBridge');
+    expect(mainTsx).not.toMatch(/set(?:WheelMakerUpdateHubs|AgentPackageHubs|ProjectIndexByHubId|SkillHubs)/);
   });
 
   test('uses explicit agent tag variants and softly sized capsules', () => {

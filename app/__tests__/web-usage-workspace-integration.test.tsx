@@ -16,7 +16,8 @@ describe('limits workspace integration', () => {
 
   test('loads cached tokenStats after Registry connection and never creates a usage interval', () => {
     expect(workspaceService).toContain('await this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId))');
-    expect(main).toContain('RegistryMethods.HubStateUpdated');
+    expect(main).toContain('usageStore.bindHubStore(service.hubStore)');
+    expect(main).not.toContain('RegistryMethods.HubStateUpdated');
     expect(main).not.toContain('setInterval(refreshUsageAcrossHubs');
     expect(main).not.toContain('renderChatMenuUsageButton');
   });

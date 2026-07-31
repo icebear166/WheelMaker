@@ -1,8 +1,22 @@
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import type {RegistryClient} from '../web/src/registry/RegistryClient';
 import {RegistryMethods} from '../web/src/registry/registryMethods';
+import fs from 'fs';
+import path from 'path';
 
 describe('hub state registry service', () => {
+  test('Workspace projects operational UI directly from HubStore without legacy poll caches', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('deriveHubOperationalViews(hubStoreSnapshot)');
+    expect(source).not.toMatch(/set(?:WheelMakerUpdateHubs|AgentPackageHubs|ProjectIndexByHubId|SkillHubs|ChatHubFlickerBridgeStatuses)/);
+    expect(source).not.toMatch(/wheelMakerUpdatePoll|projectIndexPoll|handleWheelMakerUpdatePending|handleProjectIndexPending/);
+    expect(source).not.toMatch(/service\.(?:queryWheelMakerUpdate|scanSkills|getFileIndexStatus|scanNpmPackages)/);
+  });
+
   test('gets hub state with envelope hubId', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({

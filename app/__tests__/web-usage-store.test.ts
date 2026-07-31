@@ -2,6 +2,46 @@ import {UsageStore, summarizeProvider} from '../web/src/usage/usageStore';
 import {HubStore} from '../web/src/hubState/hubStore';
 
 describe('UsageStore', () => {
+  it('drops Usage projections for Hubs removed from the latest discovery snapshot', async () => {
+    const hubs = new HubStore({
+      get: async hubId => ({
+        hubId,
+        instanceId: `instance-${hubId}`,
+        sections: {
+          tokenStats: {
+            availability: 'ready',
+            updateStatus: 'idle',
+            revision: 1,
+            data: {
+              hubId,
+              generation: 1,
+              status: 'ready',
+              providers: [{
+                id: 'codex',
+                name: 'Codex',
+                status: 'ok',
+                accounts: [{
+                  localId: hubId,
+                  identity: {},
+                  status: 'ok',
+                  limits: [],
+                }],
+              }],
+            },
+          },
+        },
+      }),
+    });
+    const store = new UsageStore();
+    const unsubscribe = store.bindHubStore(hubs);
+    await hubs.discover(['hub-a', 'hub-b']);
+    await hubs.discover(['hub-b']);
+
+    expect(store.snapshot().providers.flatMap(provider => provider.hubs.map(hub => hub.hubId)))
+      .not.toContain('hub-a');
+    unsubscribe();
+  });
+
   it('projects tokenStats from HubStore and keeps newer generations', () => {
     const hubs = new HubStore();
     const store = new UsageStore();

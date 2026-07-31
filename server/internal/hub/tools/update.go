@@ -15,8 +15,10 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
@@ -127,9 +129,12 @@ type updateTrigger interface {
 }
 
 type UpdateCommand struct {
-	baseDir string
-	trigger updateTrigger
-	now     func() time.Time
+	baseDir         string
+	trigger         updateTrigger
+	now             func() time.Time
+	completionMu    sync.Mutex
+	onOperationDone func()
+	watchedJobs     map[string]struct{}
 }
 
 func NewUpdateCommand(baseDir string) *UpdateCommand {
@@ -141,10 +146,17 @@ func newUpdateCommandWithDependencies(baseDir string, trigger updateTrigger) *Up
 		trigger = execUpdateTrigger{}
 	}
 	return &UpdateCommand{
-		baseDir: filepath.Clean(baseDir),
-		trigger: trigger,
-		now:     func() time.Time { return time.Now().UTC() },
+		baseDir:     filepath.Clean(baseDir),
+		trigger:     trigger,
+		now:         func() time.Time { return time.Now().UTC() },
+		watchedJobs: make(map[string]struct{}),
 	}
+}
+
+func (c *UpdateCommand) setOperationDoneHandler(handler func()) {
+	c.completionMu.Lock()
+	c.onOperationDone = handler
+	c.completionMu.Unlock()
 }
 
 func (c *UpdateCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *updateCommandError) {
@@ -173,6 +185,9 @@ func (c *UpdateCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 
 func (c *UpdateCommand) query(hubID string) updateCommandResponse {
 	job, activeJob := c.readJobState()
+	if activeJob && job != nil {
+		c.watchCompletion(job.JobID)
+	}
 	installed, err := c.readInstalledRelease()
 	if errors.Is(err, os.ErrNotExist) {
 		return updateCommandResponse{
@@ -249,6 +264,7 @@ func (c *UpdateCommand) request(ctx context.Context, hubID string) (updateComman
 				UpdatedAt: existing.HeartbeatAt,
 			}
 		}
+		c.watchCompletion(existing.JobID)
 		return queuedUpdateResponse(hubID, existing.JobID, job), nil
 	}
 
@@ -271,7 +287,102 @@ func (c *UpdateCommand) request(ctx context.Context, hubID string) (updateComman
 		_ = os.Remove(leasePath)
 		return updateCommandResponse{}, internalUpdateError("failed to trigger updater runtime")
 	}
+	c.watchCompletion(jobID)
 	return queuedUpdateResponse(hubID, jobID, job), nil
+}
+
+func (c *UpdateCommand) watchCompletion(jobID string) {
+	jobID = strings.TrimSpace(jobID)
+	if jobID == "" {
+		return
+	}
+	c.completionMu.Lock()
+	if c.onOperationDone == nil {
+		c.completionMu.Unlock()
+		return
+	}
+	if _, ok := c.watchedJobs[jobID]; ok {
+		c.completionMu.Unlock()
+		return
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		c.completionMu.Unlock()
+		return
+	}
+	stagingDir := filepath.Join(c.baseDir, updateStagingDirectoryName)
+	if err := watcher.Add(stagingDir); err != nil {
+		c.completionMu.Unlock()
+		_ = watcher.Close()
+		return
+	}
+	c.watchedJobs[jobID] = struct{}{}
+	c.completionMu.Unlock()
+
+	finish := func(notify bool) {
+		c.completionMu.Lock()
+		delete(c.watchedJobs, jobID)
+		handler := c.onOperationDone
+		c.completionMu.Unlock()
+		_ = watcher.Close()
+		if notify && handler != nil {
+			handler()
+		}
+	}
+	isTerminal := func() bool {
+		status := c.readJobStatus()
+		return status != nil && status.JobID == jobID && terminalUpdateState(status.State)
+	}
+	if isTerminal() {
+		go finish(true)
+		return
+	}
+	go func() {
+		timeout := time.NewTimer(30 * time.Minute)
+		defer timeout.Stop()
+		var settleTimer *time.Timer
+		var settle <-chan time.Time
+		defer func() {
+			if settleTimer != nil {
+				settleTimer.Stop()
+			}
+		}()
+		for {
+			select {
+			case _, ok := <-watcher.Events:
+				if !ok {
+					finish(false)
+					return
+				}
+				if settleTimer == nil {
+					settleTimer = time.NewTimer(25 * time.Millisecond)
+				} else {
+					if !settleTimer.Stop() {
+						select {
+						case <-settleTimer.C:
+						default:
+						}
+					}
+					settleTimer.Reset(25 * time.Millisecond)
+				}
+				settle = settleTimer.C
+			case <-settle:
+				settle = nil
+				if isTerminal() {
+					finish(true)
+					return
+				}
+			case _, ok := <-watcher.Errors:
+				if !ok {
+					finish(false)
+					return
+				}
+			case <-timeout.C:
+				finish(false)
+				return
+			}
+		}
+	}()
 }
 
 func queuedUpdateResponse(hubID string, jobID string, job *updateJobStatus) updateCommandResponse {
@@ -469,6 +580,10 @@ func activeUpdateState(state string) bool {
 	default:
 		return false
 	}
+}
+
+func terminalUpdateState(state string) bool {
+	return state == "succeeded" || state == "failed"
 }
 
 type updateTriggerCommand struct {

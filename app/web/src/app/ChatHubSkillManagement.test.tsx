@@ -6,6 +6,7 @@ import {
   ChatHubSkillScopeDetail,
   type ChatHubSkillActions,
 } from './ChatHubSkillManagement';
+import type {RegistrySkillSnapshot} from '../registry/registryTypes';
 
 const hubTarget = {hubId: 'hub-a', scope: 'hub' as const};
 const projectTarget = {
@@ -13,7 +14,7 @@ const projectTarget = {
   scope: 'project' as const,
   projectName: 'alpha',
 };
-const skills = [
+const skills: RegistrySkillSnapshot[] = [
   {name: 'baseline-ui', category: 'UI', categoryKey: 'ui', managed: true},
   {name: 'external-skill', category: 'External', categoryKey: 'external', managed: false},
 ];
@@ -33,7 +34,7 @@ async function renderScope(options: {
   target?: typeof hubTarget | typeof projectTarget;
   pendingKey?: string;
   actions?: ChatHubSkillActions;
-  items?: typeof skills;
+  items?: RegistrySkillSnapshot[];
 }) {
   const actions = options.actions ?? createActions();
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -146,4 +147,21 @@ test('replaces only the pending update icon while preserving aligned action slot
   expect(actionButtons).toHaveLength(2);
   expect(actionButtons[0].findByType('svg').props['data-icon-name']).toBe('loader');
   expect(actionButtons[1].findByType('svg').props['data-icon-name']).toBe('trash');
+});
+
+test('shows non-blocking directory sync diagnostics on affected skill rows', async () => {
+  const {renderer} = await renderScope({
+    items: [{
+      name: 'scope',
+      category: 'Managed',
+      categoryKey: 'managed',
+      managed: true,
+      sync: {status: 'contentMismatch'},
+    }],
+  });
+
+  const diagnostic = renderer.root.findByProps({className: 'chat-hub-skill-sync'});
+  expect(diagnostic.props.title).toBe('.agents and .claude content differs');
+  expect(diagnostic.children.join('')).toContain('Content differs');
+  expect(renderer.root.findByProps({'aria-label': 'Update scope'})).toBeTruthy();
 });

@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
+	"github.com/swm8023/wheelmaker/internal/hub/tools"
 )
 
 type skillSyncStatus string
@@ -47,6 +48,7 @@ type skillsStateSnapshot struct {
 	HubInventory            map[string]skillInventoryItem              `json:"hubInventory"`
 	ProjectLocalInventories map[string]map[string]skillInventoryItem   `json:"projectLocalInventories"`
 	EffectiveSkills         map[string]map[string][]skillInventoryItem `json:"effectiveSkills"`
+	Operation               *tools.SkillsOperationSnapshot             `json:"operation,omitempty"`
 }
 
 type projectSkillsTarget struct {
@@ -214,35 +216,40 @@ func deriveSkillSyncStatus(locations map[string]skillLocation) skillSyncStatus {
 
 func readManagedSkillNames(root string) map[string]bool {
 	out := map[string]bool{}
-	if strings.TrimSpace(root) == "" {
+	lockPath := managedSkillsLockPath(root)
+	if lockPath == "" {
 		return out
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "skills-lock.json"))
+	raw, err := os.ReadFile(lockPath)
 	if err != nil {
 		return out
 	}
-	var value any
+	var value struct {
+		Skills map[string]json.RawMessage `json:"skills"`
+	}
 	if json.Unmarshal(raw, &value) != nil {
 		return out
 	}
-	var visit func(any)
-	visit = func(current any) {
-		switch typed := current.(type) {
-		case map[string]any:
-			for key, child := range typed {
-				if strings.TrimSpace(key) != "" && key != "skills" && key != "version" {
-					out[strings.ToLower(strings.TrimSpace(key))] = true
-				}
-				visit(child)
-			}
-		case []any:
-			for _, child := range typed {
-				visit(child)
-			}
+	for name := range value.Skills {
+		if name = strings.TrimSpace(name); name != "" {
+			out[strings.ToLower(name)] = true
 		}
 	}
-	visit(value)
 	return out
+}
+
+func managedSkillsLockPath(root string) string {
+	if root = strings.TrimSpace(root); root != "" {
+		return filepath.Join(root, "skills-lock.json")
+	}
+	if stateHome := strings.TrimSpace(os.Getenv("XDG_STATE_HOME")); stateHome != "" {
+		return filepath.Join(stateHome, "skills", ".skill-lock.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".agents", ".skill-lock.json")
 }
 
 type skillsStateCoordinatorOptions struct {
@@ -252,11 +259,12 @@ type skillsStateCoordinatorOptions struct {
 }
 
 type skillsStateCoordinator struct {
-	mu       sync.Mutex
-	options  skillsStateCoordinatorOptions
-	hub      map[string]skillInventoryItem
-	projects map[string]map[string]skillInventoryItem
-	targets  map[string]projectSkillsTarget
+	mu        sync.Mutex
+	options   skillsStateCoordinatorOptions
+	hub       map[string]skillInventoryItem
+	projects  map[string]map[string]skillInventoryItem
+	targets   map[string]projectSkillsTarget
+	operation *tools.SkillsOperationSnapshot
 }
 
 func newSkillsStateCoordinator(options skillsStateCoordinatorOptions) *skillsStateCoordinator {
@@ -283,6 +291,12 @@ func (c *skillsStateCoordinator) SetTargets(targets []projectSkillsTarget) {
 			delete(c.projects, projectID)
 		}
 	}
+}
+
+func (c *skillsStateCoordinator) SetOperation(operation *tools.SkillsOperationSnapshot) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.operation = cloneSkillsStateOperation(operation)
 }
 
 func (c *skillsStateCoordinator) seedProject(projectID string, inventory map[string]skillInventoryItem) {
@@ -415,7 +429,21 @@ func (c *skillsStateCoordinator) snapshotLocked() skillsStateSnapshot {
 		HubInventory:            hub,
 		ProjectLocalInventories: projects,
 		EffectiveSkills:         effective,
+		Operation:               cloneSkillsStateOperation(c.operation),
 	}
+}
+
+func cloneSkillsStateOperation(operation *tools.SkillsOperationSnapshot) *tools.SkillsOperationSnapshot {
+	if operation == nil {
+		return nil
+	}
+	clone := *operation
+	clone.Skills = append([]string(nil), operation.Skills...)
+	if operation.ExitCode != nil {
+		exitCode := *operation.ExitCode
+		clone.ExitCode = &exitCode
+	}
+	return &clone
 }
 
 func cloneSkillInventory(source map[string]skillInventoryItem) map[string]skillInventoryItem {

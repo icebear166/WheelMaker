@@ -480,6 +480,7 @@ type stubToolCommandHandler struct {
 	mu       sync.Mutex
 	method   string
 	payload  string
+	calls    []struct{ method, payload string }
 	projects []ProjectInfo
 	response any
 	err      *tools.CommandError
@@ -490,6 +491,7 @@ func (s *stubToolCommandHandler) Handle(_ context.Context, method string, payloa
 	defer s.mu.Unlock()
 	s.method = method
 	s.payload = string(payload)
+	s.calls = append(s.calls, struct{ method, payload string }{method: method, payload: string(payload)})
 	if s.response == nil {
 		s.response = map[string]any{"ok": true}
 	}
@@ -514,6 +516,12 @@ func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.method, s.payload, append([]ProjectInfo(nil), s.projects...)
+}
+
+func (s *stubToolCommandHandler) callSnapshot() []struct{ method, payload string } {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]struct{ method, payload string }(nil), s.calls...)
 }
 
 type overlapDetectingToolCommandHandler struct {
@@ -960,16 +968,22 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 				t.Fatalf("adapter action returned error: %v", err)
 			}
 			if tc.section == hubStateSectionAgentPackages && tc.action == "reinstall" {
-				method, payload, _ := toolHandler.snapshot()
-				if method != hubToolMethodNPM {
-					t.Fatalf("reinstall method=%q, want %q", method, hubToolMethodNPM)
+				var matched bool
+				for _, call := range toolHandler.callSnapshot() {
+					if call.method != hubToolMethodNPM {
+						continue
+					}
+					var decoded map[string]any
+					if err := json.Unmarshal([]byte(call.payload), &decoded); err != nil {
+						t.Fatalf("decode reinstall payload: %v", err)
+					}
+					if decoded["action"] == "reinstall" && decoded["packageName"] == "@openai/codex" {
+						matched = true
+						break
+					}
 				}
-				var decoded map[string]any
-				if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
-					t.Fatalf("decode reinstall payload: %v", err)
-				}
-				if decoded["action"] != "reinstall" || decoded["packageName"] != "@openai/codex" {
-					t.Fatalf("reinstall payload=%v", decoded)
+				if !matched {
+					t.Fatalf("reinstall call missing from %v", toolHandler.callSnapshot())
 				}
 			}
 		})
@@ -995,16 +1009,22 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	if _, err := updateHandler.Action(context.Background(), "requestUpdate", nil); err != nil {
 		t.Fatalf("requestUpdate action: %v", err)
 	}
-	method, payload, _ := toolHandler.snapshot()
-	if method != hubToolMethodUpdate {
-		t.Fatalf("method=%q, want %q", method, hubToolMethodUpdate)
+	var requestCallFound bool
+	for _, call := range toolHandler.callSnapshot() {
+		if call.method != hubToolMethodUpdate {
+			continue
+		}
+		var body map[string]any
+		if err := json.Unmarshal([]byte(call.payload), &body); err != nil {
+			t.Fatalf("payload json: %v", err)
+		}
+		if body["action"] == "request" {
+			requestCallFound = true
+			break
+		}
 	}
-	var body map[string]any
-	if err := json.Unmarshal([]byte(payload), &body); err != nil {
-		t.Fatalf("payload json: %v", err)
-	}
-	if body["action"] != "request" {
-		t.Fatalf("action=%v, want request (payload=%s)", body["action"], payload)
+	if !requestCallFound {
+		t.Fatalf("update request call missing from %v", toolHandler.callSnapshot())
 	}
 
 }
@@ -1034,6 +1054,24 @@ func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
 	}
 	if _, ok := state.EffectiveByAgent["claude"]["scope"]; !ok {
 		t.Fatal("claude effective skills missing scope")
+	}
+}
+
+func TestReadManagedSkillNamesUsesGlobalAgentsLock(t *testing.T) {
+	stateHome := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", stateHome)
+	lockPath := filepath.Join(stateHome, "skills", ".skill-lock.json")
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, []byte(`{"version":1,"skills":{"scope":{"source":"owner/repo"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	managed := readManagedSkillNames("")
+
+	if !managed["scope"] {
+		t.Fatalf("global managed skills = %#v, want scope", managed)
 	}
 }
 
@@ -2400,6 +2438,52 @@ func TestHubStateSkillsRefreshBuildsCanonicalProjectInventories(t *testing.T) {
 		projectID := rp.ProjectID("hub-skills-reindex", projectName)
 		wantSkill := projectName + "-skill"
 		assertCanonicalSkillNames(t, snapshot.EffectiveSkills[projectID]["codex"], wantSkill)
+	}
+}
+
+func TestHubStateSkillsActionPublishesRunningOperationWithoutReplacingInventory(t *testing.T) {
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-skills-operation", StateDir: t.TempDir()},
+		nil,
+	)
+	reporter.toolHandler = &stubToolCommandHandler{response: map[string]any{
+		"ok":       true,
+		"accepted": true,
+		"hubId":    "hub-skills-operation",
+		"operation": map[string]any{
+			"running":   true,
+			"action":    "install",
+			"scope":     "hub",
+			"status":    "running",
+			"startedAt": "2026-07-31T00:00:00Z",
+			"exitCode":  nil,
+		},
+	}}
+	coordinator := reporter.ensureSkillsStateCoordinator()
+	coordinator.seedProject("hub-skills-operation:project-a", map[string]skillInventoryItem{
+		"existing": {Name: "existing"},
+	})
+
+	if _, err := reporter.actionHubStateSkills(
+		context.Background(),
+		"install",
+		map[string]any{"scope": "hub", "source": "owner/repo", "skills": []string{"new"}},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	data, ok := reporter.ensureHubStateManager().
+		get([]string{hubStateSectionSkills}).
+		Sections[hubStateSectionSkills].
+		Data.(skillsStateSnapshot)
+	if !ok {
+		t.Fatalf("skills data type = %T, want skillsStateSnapshot", data)
+	}
+	if data.Operation == nil || !data.Operation.Running || data.Operation.Action != "install" {
+		t.Fatalf("operation = %+v, want running install", data.Operation)
+	}
+	if _, exists := data.ProjectLocalInventories["hub-skills-operation:project-a"]["existing"]; !exists {
+		t.Fatalf("existing inventory was replaced: %+v", data.ProjectLocalInventories)
 	}
 }
 

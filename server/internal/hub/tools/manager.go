@@ -17,7 +17,8 @@ type ManagerConfig struct {
 	GlobalLockPath        string
 	HomeDir               string
 	OnNPMOperationDone    func()
-	OnSkillsOperationDone func(scope, projectName string)
+	OnUpdateOperationDone func()
+	OnSkillsOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
 	OnReleaseJobUpdated   func(ReleasePublishJob)
 	ReleaseCommand        *ReleaseCommand
 	ReleaseNotifier       ReleaseNotifier
@@ -28,6 +29,7 @@ func (m *Manager) ApplyRelease(ctx context.Context, kind, _ string) (ReleaseTarg
 	case "version":
 		if m.updateCommand == nil {
 			m.updateCommand = NewUpdateCommand(m.cfg.StateDir)
+			m.updateCommand.setOperationDoneHandler(m.cfg.OnUpdateOperationDone)
 		}
 		raw, _ := json.Marshal(map[string]string{"action": "request", "hubId": m.cfg.HubID})
 		_, err := m.updateCommand.Handle(ctx, raw)
@@ -76,13 +78,15 @@ func NewManager(config ManagerConfig) *Manager {
 	config.Projects = append([]ProjectInfo(nil), config.Projects...)
 	npmCommand := NewNPMCommand()
 	npmCommand.setOperationDoneHandler(config.OnNPMOperationDone)
+	updateCommand := NewUpdateCommand(config.StateDir)
+	updateCommand.setOperationDoneHandler(config.OnUpdateOperationDone)
 	if config.ReleaseCommand != nil {
 		config.ReleaseCommand.SetJobUpdatedHandler(config.OnReleaseJobUpdated)
 	}
 	return &Manager{
 		cfg:           config,
 		npmCommand:    npmCommand,
-		updateCommand: NewUpdateCommand(config.StateDir),
+		updateCommand: updateCommand,
 		skillsCommand: NewSkillsCommand(skillsCommandConfig{
 			HubID:           config.HubID,
 			Projects:        config.Projects,
@@ -127,6 +131,7 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 	case "cmd.update":
 		if m.updateCommand == nil {
 			m.updateCommand = NewUpdateCommand(m.cfg.StateDir)
+			m.updateCommand.setOperationDoneHandler(m.cfg.OnUpdateOperationDone)
 		}
 		out, err := m.updateCommand.Handle(ctx, payload)
 		return out, updateErr(err)

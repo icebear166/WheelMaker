@@ -830,6 +830,8 @@ export interface RegistrySkillSnapshot {
   categoryKey: string;
   managed?: boolean;
   agents?: string[];
+  locations?: Record<string, {path?: string; resolvedPath?: string; fingerprint?: string}>;
+  sync?: {status?: 'aligned' | 'agentsOnly' | 'claudeOnly' | 'contentMismatch' | 'unknown'};
 }
 
 export interface RegistrySkillSupportingFile {

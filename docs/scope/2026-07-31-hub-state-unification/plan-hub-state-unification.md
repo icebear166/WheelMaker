@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26, Gorilla WebSocket, fsnotify v1.10.1, React 19, TypeScript 5.8, Jest 30.
 
-**Execution status:** planned
+**Execution status:** review remediation verified; delivery pending
 
 ---
 
@@ -1963,3 +1963,156 @@ git push origin main
 ```
 
 Expected: the execution record is committed on `main`, the final push succeeds, and no commands run after this sequence before the user-facing completion message.
+
+### Task 15: Make Hub discovery and store lifetime resilient
+
+**Files:**
+- Modify: `app/web/src/hubState/hubStore.ts`
+- Modify: `app/web/src/hubState/hubStore.test.ts`
+- Modify: `app/web/src/registry/RegistryWorkspaceService.ts`
+- Modify: `app/__tests__/web-hub-state-service.test.ts`
+- Modify: `app/web/src/usage/usageStore.test.ts`
+
+- [x] **Step 1: Add failing tests**
+
+Add tests proving that one failed `hub.state.get` does not reject discovery, reconnect rediscovery replaces same-ID state when the Hub instance changed, and retaining the active Hub IDs removes obsolete Usage projections.
+
+- [x] **Step 2: Run focused tests and verify failure**
+
+```powershell
+cd app
+npm test -- --runInBand web/src/hubState/hubStore.test.ts __tests__/web-hub-state-service.test.ts web/src/usage/usageStore.test.ts
+```
+
+Expected: FAIL on discovery rejection, skipped rediscovery, or obsolete Hub retention.
+
+- [x] **Step 3: Implement minimal lifetime behavior**
+
+Make discovery settle each Hub independently, always query connected Hub IDs, retain only the current connection's Hub IDs, and preserve cached section data while a refresh is in flight. Workspace connection must remain usable when HubState discovery is unavailable.
+
+- [x] **Step 4: Run focused tests**
+
+Run the Step 2 command. Expected: PASS.
+
+### Task 16: Fix Skills ownership, target changes, and diagnostics
+
+**Files:**
+- Modify: `server/internal/hub/skills_state.go`
+- Modify: `server/internal/hub/skills_state_test.go`
+- Modify: `server/internal/hub/reporter.go`
+- Modify: `server/internal/hub/reporter_test.go`
+- Modify: `app/web/src/registry/registryTypes.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/app/ChatHubSkillManagement.tsx`
+- Modify: `app/web/src/app/ChatComposer.tsx`
+- Modify: corresponding existing Web tests
+
+- [x] **Step 1: Add failing server and Web tests**
+
+Cover global managed Skill lookup through the authoritative `.agents/.skill-lock.json`, agent-list-only topology changes, preservation of sync diagnostics in menu models, and rendering of the non-blocking Composer diagnostic.
+
+- [x] **Step 2: Verify RED**
+
+```powershell
+cd server
+go test ./internal/hub -run 'Managed|Topology|AgentTargets' -count=1
+cd ..\app
+npm test -- --runInBand __tests__/web-skill-management-view.test.ts __tests__/web-chat-inline-composer-wiring.test.ts
+```
+
+Expected: at least one assertion fails for each missing behavior.
+
+- [x] **Step 3: Implement the authoritative data flow**
+
+Resolve the global managed lock from the Hub `.agents` root, include Agent membership in topology comparison, carry `sync` through the Hub menu view model, and display `selectComposerDiagnostic` without triggering refresh or blocking Skill selection.
+
+- [x] **Step 4: Verify GREEN**
+
+Run the Step 2 commands. Expected: PASS.
+
+### Task 17: Correct refresh edges and asynchronous completion
+
+**Files:**
+- Modify: `app/web/src/hubState/hubRefreshTriggers.ts`
+- Modify: `app/web/src/hubState/hubRefreshTriggers.test.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `server/internal/hub/tools/update.go`
+- Modify: `server/internal/hub/tools/update_test.go`
+- Modify: Hub action wiring files and existing tests
+
+- [x] **Step 1: Add failing edge and completion tests**
+
+Test menu-open-before-Hub-discovery, Hub additions while open, reconnect/open generations, clearing expanded state on close, handled refresh rejection, and WheelMaker update completion publishing a terminal `wheelmakerUpdate` refresh.
+
+- [x] **Step 2: Verify RED**
+
+```powershell
+cd app
+npm test -- --runInBand web/src/hubState/hubRefreshTriggers.test.ts
+cd ..\server
+go test ./internal/hub/... -run 'Update.*Done|WheelMaker.*Update' -count=1
+```
+
+- [x] **Step 3: Implement edge generations and completion notification**
+
+Track observed Hub IDs per menu-open generation, reset expansion on close, retry newly connected IDs once, catch request failures at the UI boundary, and invoke the section completion callback after the updater exits regardless of success.
+
+- [x] **Step 4: Verify GREEN**
+
+Run the Step 2 commands. Expected: PASS.
+
+### Task 18: Make section snapshots observable and immutable
+
+**Files:**
+- Modify: `server/internal/hub/hub_state.go`
+- Modify: `server/internal/hub/hub_state_test.go`
+- Modify: `app/web/src/hubState/hubStore.ts`
+- Modify: `app/web/src/hubState/hubStore.test.ts`
+
+- [x] **Step 1: Add failing tests**
+
+Cover request-local queue progress without losing committed data, stale response rejection, discovery generations, and deep cloning of structs, pointers, maps, and slices used by real Section payloads.
+
+- [x] **Step 2: Verify RED**
+
+```powershell
+cd server
+go test ./internal/hub -run 'HubState.*(NoChange|Clone|Status)' -count=1
+cd ..\app
+npm test -- --runInBand web/src/hubState/hubStore.test.ts
+```
+
+- [x] **Step 3: Implement minimal state semantics**
+
+Commit and publish a monotonic revision when data, availability, or error changes; keep queue progress request-local except for Usage scanning; and recursively clone pointers and structs so committed snapshots do not share mutable backing data.
+
+- [x] **Step 4: Verify GREEN**
+
+Run the Step 2 commands. Expected: PASS.
+
+### Task 19: Re-review and deliver remediation
+
+**Files:**
+- Modify documentation only where final behavior differs from the approved wording.
+
+- [x] **Step 1: Run complete verification**
+
+```powershell
+cd server
+go test ./... -count=1
+go build ./cmd/wheelmaker/
+cd ..\app
+npm test -- --runInBand
+npm run tsc:web
+npm run build:web
+cd ..
+git diff --check
+```
+
+- [x] **Step 2: Re-review**
+
+Trace startup, reconnect, menu open/expand, Skill filesystem notification, token usage, and asynchronous action completion end-to-end. Search for discarded diagnostics, stale Hub IDs, unhandled refresh promises, obsolete polling, and duplicate update paths.
+
+- [ ] **Step 3: Deliver through the configured Git workflow**
+
+Fetch and rebase the feature branch, repeat targeted smoke tests, run the repository completion gate (`git add -A`, `git commit`, `git push origin feat/hub-state-unification`), then merge only if the main worktree is clean.

@@ -45,7 +45,8 @@ describe('Hub-owned skill management source structure', () => {
   });
 
   test('keeps skill commands and retry feedback without polling', () => {
-    expect(mainTsx).toContain('service.scanSkills');
+    expect(mainTsx).toContain("service.hubStore.refresh(hubId, ['skills'], true)");
+    expect(mainTsx).not.toContain('service.scanSkills');
     expect(mainTsx).toContain('service.listSkillsSource');
     expect(mainTsx).toContain('service.installSkills');
     expect(mainTsx).toContain('service.getSkillDetail');
@@ -79,7 +80,8 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).toContain('onRequestSkillDetail={requestSkillDetail}');
     expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');
     expect(mainTsx).toContain('onRequestSkillBatchUninstall={requestSkillBatchUninstall}');
-    expect(mainTsx).toContain('refreshSkillManagementHubRef.current?.(hubId)');
+    expect(mainTsx).toContain("service.hubStore.refresh(hubId, ['skills'], true)");
+    expect(mainTsx).not.toContain('refreshSkillManagementHubRef');
   });
 
   test('keeps Hub skill install and detail companion surfaces', () => {

@@ -3,6 +3,7 @@ import type {
   RegistryFlickerBridgeStatus,
   RegistryHubState,
   RegistryNpmCommandResponse,
+  RegistrySkillOperation,
   RegistryWheelMakerUpdateResponse,
 } from '../registry/registryTypes';
 import type {HubStoreSnapshot} from './hubStore';
@@ -20,6 +21,7 @@ export interface RegistrySkillsStateSnapshot {
   hubInventory?: Record<string, RegistrySkillInventoryItem>;
   projectLocalInventories?: Record<string, Record<string, RegistrySkillInventoryItem>>;
   effectiveSkills?: Record<string, Record<string, RegistrySkillInventoryItem[]>>;
+  operation?: RegistrySkillOperation | null;
 }
 
 function sectionData<T>(state: RegistryHubState | undefined, name: string): T | undefined {

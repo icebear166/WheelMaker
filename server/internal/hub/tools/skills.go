@@ -96,7 +96,7 @@ type skillsCommandConfig struct {
 	Projects        []ProjectInfo
 	GlobalLockPath  string
 	HomeDir         string
-	OnOperationDone func(scope, projectName string)
+	OnOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
 	LookPath        func(name string) (string, error)
 }
 
@@ -107,7 +107,7 @@ type SkillsCommand struct {
 	hubID           string
 	globalLockPath  string
 	homeDir         string
-	onOperationDone func(scope, projectName string)
+	onOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
 
 	mu                     sync.RWMutex
 	projects               []ProjectInfo
@@ -203,6 +203,8 @@ type skillsOperationSnapshot struct {
 	ErrorSummary    string   `json:"errorSummary,omitempty"`
 	Message         string   `json:"message,omitempty"`
 }
+
+type SkillsOperationSnapshot = skillsOperationSnapshot
 
 type skillsScopeSnapshot struct {
 	Scope  string                `json:"scope"`
@@ -616,7 +618,7 @@ func (c *SkillsCommand) finishOperation(operation *skillsOperationSnapshot, stat
 	c.mu.Unlock()
 
 	if done != nil {
-		done(scope, projectName)
+		done(scope, projectName, *cloneSkillsOperation(operation))
 	}
 }
 

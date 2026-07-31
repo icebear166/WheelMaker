@@ -2506,6 +2506,20 @@ button.chat-hub-skill-name:disabled {
   color: var(--text-tertiary);
 }
 
+.chat-hub-skill-sync-summary,
+.chat-hub-skill-sync {
+  color: var(--warning, #d8a13b);
+}
+
+.chat-hub-skill-sync {
+  flex: 0 0 auto;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+}
+
 .chat-hub-skill-row-actions {
   width: 52px;
   display: grid;
@@ -5211,6 +5225,19 @@ button.chat-hub-skill-name:disabled {
   border-radius: 4px;
   background: var(--surface-raised);
   color: var(--text-secondary);
+}
+
+.chat-slash-diagnostic {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  padding: 5px 8px 3px;
+  border-top: 1px solid color-mix(in srgb, var(--warning, #d8a13b) 25%, transparent);
+  color: var(--warning, #d8a13b);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .chat-slash-section {

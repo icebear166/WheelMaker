@@ -3,7 +3,6 @@ import {createPortal} from 'react-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import {resolveSessionsShortcutAction, resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
 import {
-  applyFlickerBridgeHubStateEvent,
   normalizeFlickerBridgeStatus,
 } from './flickerBridgeState';
 import {
@@ -437,13 +436,16 @@ import {UsageHistoryDialog, type UsageHistoryDialogState} from '../usage/UsageHi
 import {loadUsageHistoryFromSources} from '../usage/usageHistory';
 import {UsageStore} from '../usage/usageStore';
 import {HubRefreshTriggers} from '../hubState/hubRefreshTriggers';
-import {selectComposerSkills, type RegistrySkillsStateSnapshot} from '../hubState/hubSelectors';
+import {
+  selectComposerDiagnostic,
+  selectComposerSkills,
+  type RegistrySkillsStateSnapshot,
+} from '../hubState/hubSelectors';
 import type {HubStoreSnapshot} from '../hubState/hubStore';
 import type {UsageProviderView, UsageViewAccount, UsageViewSnapshot} from '../usage/usageTypes';
 import {ModelEfficiencyStore} from '../modelEfficiency/modelEfficiencyStore';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {
-  AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
   deriveNpmUpdatableTargets,
   deriveOperationalHubIds,
@@ -458,7 +460,6 @@ import {
   wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
   wheelMakerVersionCopy,
-  withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
   type WheelMakerPublicMetadata,
 } from '../settings/agentPackageUpdateView';
@@ -755,7 +756,6 @@ type ProjectSessionActionMenuState = {
   popover?: WideProjectActionPopoverPlacement | null;
 };
 type SettingsDetailView = SettingsDetail | null;
-const WHEELMAKER_UPDATE_JOB_POLL_DELAY_MS = 1500;
 type WheelMakerUpdateHubView = {
   hubId: string;
   loading: boolean;
@@ -776,6 +776,89 @@ type SkillHubView = {
   error: string;
   data: RegistrySkillCommandResponse | null;
 };
+
+function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
+  wheelmaker: Record<string, WheelMakerUpdateHubView>;
+  packages: Record<string, AgentPackageHubView>;
+  indexes: Record<string, RegistryFileIndexStatusResponse>;
+  skills: Record<string, SkillHubView>;
+  flicker: Record<string, RegistryFlickerBridgeStatus>;
+} {
+  const wheelmaker: Record<string, WheelMakerUpdateHubView> = {};
+  const packages: Record<string, AgentPackageHubView> = {};
+  const indexes: Record<string, RegistryFileIndexStatusResponse> = {};
+  const skills: Record<string, SkillHubView> = {};
+  const flicker: Record<string, RegistryFlickerBridgeStatus> = {};
+  for (const [hubId, hub] of Object.entries(snapshot.hubs)) {
+    const wheelSection = hub.sections.wheelmakerUpdate;
+    if (wheelSection?.data) {
+      wheelmaker[hubId] = {
+        hubId,
+        loading: wheelSection.updateStatus !== 'idle',
+        error: wheelSection.lastError ?? '',
+        data: wheelSection.data as RegistryWheelMakerUpdateResponse,
+      };
+    }
+    const packageSection = hub.sections.agentPackages;
+    if (packageSection?.data) {
+      const data = packageSection.data as RegistryNpmCommandResponse;
+      packages[hubId] = {
+        hubId,
+        loading: packageSection.updateStatus !== 'idle',
+        error: packageSection.lastError ?? '',
+        updatedAt: data.updatedAt ?? '',
+        hub: data.hub ?? null,
+        operation: data.operation ?? null,
+      };
+    }
+    const indexSection = hub.sections.fileIndex;
+    if (indexSection?.data) {
+      indexes[hubId] = indexSection.data as RegistryFileIndexStatusResponse;
+    }
+    const skillSection = hub.sections.skills;
+    if (skillSection?.data) {
+      const data = skillSection.data as RegistrySkillsStateSnapshot;
+      const toItems = (inventory: Record<string, {
+        name: string;
+        managed?: boolean;
+        agents?: string[];
+        locations?: Record<string, {path?: string; resolvedPath?: string; fingerprint?: string}>;
+        sync?: {status?: 'aligned' | 'agentsOnly' | 'claudeOnly' | 'contentMismatch' | 'unknown'};
+      }>) => Object.values(inventory).map(item => ({
+        name: item.name,
+        path: Object.values(item.locations ?? {})[0]?.path,
+        category: item.managed ? 'Managed' : 'Local',
+        categoryKey: item.managed ? 'managed' : 'local',
+        managed: item.managed,
+        agents: item.agents,
+        locations: item.locations,
+        sync: item.sync,
+      }));
+      skills[hubId] = {
+        hubId,
+        loading: skillSection.updateStatus !== 'idle',
+        error: skillSection.lastError ?? '',
+        data: {
+          ok: true,
+          hubId,
+          hubSkills: {scope: 'hub', skills: toItems(data.hubInventory ?? {})},
+          projects: Object.entries(data.projectLocalInventories ?? {}).map(([projectId, inventory]) => ({
+            projectId,
+            projectName: projectId.includes(':') ? projectId.slice(projectId.indexOf(':') + 1) : projectId,
+            online: true,
+            skills: toItems(inventory),
+          })),
+          operation: data.operation ?? null,
+        },
+      };
+    }
+    const flickerSection = hub.sections.flickerBridge;
+    if (flickerSection?.data) {
+      flicker[hubId] = normalizeFlickerBridgeStatus(flickerSection.data);
+    }
+  }
+  return {wheelmaker, packages, indexes, skills, flicker};
+}
 type SkillDetailCacheEntry = {
   loading: boolean;
   error: string;
@@ -3002,9 +3085,6 @@ export function App() {
   const portRelayScreenOpenRef = useRef(portRelayScreenOpen);
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
-  const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
-  const [wheelMakerUpdatesLoading, setWheelMakerUpdatesLoading] = useState(false);
-  const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
   const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
@@ -3049,31 +3129,16 @@ export function App() {
     };
   }, [androidApkUpdateBridge]);
   const clientUpdateController = desktopUpdateController ?? androidUpdateController;
-  const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
-  const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshWheelMakerUpdatesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshAgentPackagesRef = useRef<((hubIds: string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshProjectFileIndexesRef = useRef<((hubIds: string | string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
-  const [agentPackageHubs, setAgentPackageHubs] = useState<Record<string, AgentPackageHubView>>({});
-  const [agentPackagesLoading, setAgentPackagesLoading] = useState(false);
-  const [agentPackagesError, setAgentPackagesError] = useState('');
   const [agentPackageActionPendingKey, setAgentPackageActionPendingKey] = useState('');
   const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');
-  const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});
-  const [projectIndexLoading, setProjectIndexLoading] = useState(false);
-  const [projectIndexError, setProjectIndexError] = useState('');
   const [projectIndexErrorByProjectId, setProjectIndexErrorByProjectId] = useState<Record<string, string>>({});
   const [projectIndexScanPendingByProjectId, setProjectIndexScanPendingByProjectId] = useState<Record<string, boolean>>({});
   const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
-  const projectIndexPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  const [skillHubs, setSkillHubs] = useState<Record<string, SkillHubView>>({});
   const [skillsPendingKey, setSkillsPendingKey] = useState('');
   const [skillRetryNotice, setSkillRetryNotice] =
     useState<SkillRetryNotice<SkillConfirmedTarget> | null>(null);
   const skillActionByHubIdRef = useRef(new Map<string, SkillConfirmedTarget>());
   const seenSkillOperationRef = useRef(new Map<string, string>());
-  const refreshSkillManagementHubRef = useRef<((hubId: string) => Promise<void>) | null>(null);
   const [skillInstallTarget, setSkillInstallTarget] = useState<SkillInstallTarget | null>(null);
   const [skillSourceInput, setSkillSourceInput] = useState('');
   const [skillSourceCandidates, setSkillSourceCandidates] = useState<RegistrySkillSourceCandidate[]>([]);
@@ -3316,6 +3381,45 @@ export function App() {
   const registryHubIds = useMemo<string[]>(() => JSON.parse(registryHubIdsKey), [registryHubIdsKey]);
   const usageStore = useMemo(() => new UsageStore(), []);
   const [hubStoreSnapshot, setHubStoreSnapshot] = useState<HubStoreSnapshot>({hubs: {}});
+  const hubOperationalViews = useMemo(
+    () => deriveHubOperationalViews(hubStoreSnapshot),
+    [hubStoreSnapshot],
+  );
+  const wheelMakerUpdateHubs = hubOperationalViews.wheelmaker;
+  const agentPackageHubs = hubOperationalViews.packages;
+  const projectIndexByHubId = hubOperationalViews.indexes;
+  const skillHubs = hubOperationalViews.skills;
+  const chatHubFlickerBridgeStatuses = hubOperationalViews.flicker;
+  useEffect(() => {
+    setProjectIndexScanPendingByProjectId(current => {
+      let changed = false;
+      const next = {...current};
+      for (const [projectId, pending] of Object.entries(current)) {
+        if (!pending) continue;
+        const status = Object.values(projectIndexByHubId)
+          .flatMap(snapshot => snapshot.projects ?? [])
+          .find(project => project.projectId === projectId);
+        if (status && status.running !== true && status.status !== 'scanning') {
+          next[projectId] = false;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+    setProjectIndexScanAllPendingByHubId(current => {
+      let changed = false;
+      const next = {...current};
+      for (const [hubId, pending] of Object.entries(current)) {
+        if (!pending) continue;
+        const projects = projectIndexByHubId[hubId]?.projects;
+        if (projects && projects.every(project => project.running !== true && project.status !== 'scanning')) {
+          next[hubId] = false;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [projectIndexByHubId]);
   const hubRefreshTriggers = useMemo(
     () => new HubRefreshTriggers((hubId, sections, force) =>
       service.hubStore.refresh(hubId, sections, force)),
@@ -3583,12 +3687,7 @@ export function App() {
       closeChatHubSkillSurface();
     }
   }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, closeChatHubSkillSurface]);
-  const [chatHubFlickerBridgeStatuses, setChatHubFlickerBridgeStatuses] = useState<Record<string, RegistryFlickerBridgeStatus>>({});
-  useEffect(() => {
-    void hubRefreshTriggers.setMenuOpen(chatHubMenuOpen, registryHubIds);
-  }, [chatHubMenuOpen, hubRefreshTriggers, registryHubIdsKey]);
   const [chatHubFlickerBridgeActionHubId, setChatHubFlickerBridgeActionHubId] = useState('');
-  const chatHubFlickerBridgeRequestGenerationRef = useRef<Record<string, number>>({});
   const [chatHubExpandedSections, setChatHubExpandedSections] = useState<Record<string, ChatHubDetailId[]>>({});
   const [chatHubConfigByHubId, setChatHubConfigByHubId] = useState<Record<string, {
     loading: boolean;
@@ -3612,65 +3711,21 @@ export function App() {
   const [resumeSessions, setResumeSessions] = useState<RegistryResumableSession[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
 
-  const refreshChatHubFlickerBridge = useCallback(async (hubId: string): Promise<void> => {
-    const generation = (chatHubFlickerBridgeRequestGenerationRef.current[hubId] ?? 0) + 1;
-    chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
-    let state;
-    try {
-      state = (await service.refreshHubState(hubId, ['flickerBridge'])).state;
-    } catch (error) {
-      if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
-        return;
-      }
-      throw error;
-    }
-    if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
-      return;
-    }
-    const status = normalizeFlickerBridgeStatus(state.sections.flickerBridge?.data);
-    setChatHubFlickerBridgeStatuses(current => ({...current, [hubId]: status}));
-  }, []);
-
   const runChatHubFlickerBridgeAction = useCallback(async (
     hubId: string,
     action: 'start' | 'stop' | 'restart' | 'switchMode',
     params: Record<string, unknown> = {},
   ): Promise<void> => {
-    const generation = (chatHubFlickerBridgeRequestGenerationRef.current[hubId] ?? 0) + 1;
-    chatHubFlickerBridgeRequestGenerationRef.current[hubId] = generation;
     setChatHubFlickerBridgeActionHubId(hubId);
     try {
-      const response = await service.runHubStateAction(hubId, 'flickerBridge', action, params);
-      if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
-        return;
-      }
-      const status = normalizeFlickerBridgeStatus(response.result);
-      setChatHubFlickerBridgeStatuses(current => ({...current, [hubId]: status}));
+      await service.runHubStateAction(hubId, 'flickerBridge', action, params);
     } catch (error) {
-      if (chatHubFlickerBridgeRequestGenerationRef.current[hubId] !== generation) {
-        return;
-      }
-      if (action === 'switchMode') {
-        try {
-          await refreshChatHubFlickerBridge(hubId);
-          return;
-        } catch {
-          // Fall through to a local error state when the recovered Hub state is unavailable.
-        }
-      }
       const message = error instanceof Error ? error.message : String(error);
-      setChatHubFlickerBridgeStatuses(current => ({
-        ...current,
-        [hubId]: {
-          ...(current[hubId] ?? normalizeFlickerBridgeStatus(null)),
-          state: 'failed',
-          error: message,
-        },
-      }));
+      setError(message);
     } finally {
       setChatHubFlickerBridgeActionHubId(current => current === hubId ? '' : current);
     }
-  }, [refreshChatHubFlickerBridge]);
+  }, []);
 
   const refreshChatHubConfig = useCallback(async (hubId: string): Promise<void> => {
     setChatHubConfigByHubId(current => ({
@@ -4094,16 +4149,25 @@ export function App() {
     };
   }, [chatComposerStatusCompact, selectedChatConfigOptions]);
 
-  const chatSlashSkills = useMemo(() => {
-    const skillProjectId = resolveChatSkillProjectId(
+  const skillProjectId = useMemo(
+    () => resolveChatSkillProjectId(
       projects,
       selectedChatKey?.projectId,
       projectId,
-    );
+    ),
+    [projects, projectId, selectedChatKey?.projectId],
+  );
+
+  const chatSlashSkills = useMemo(() => {
     const currentProject = projects.find(item => item.projectId === skillProjectId);
     const agent = (selectedChatSession?.agentType || currentProject?.agent || '').trim();
     return selectComposerSkills(hubStoreSnapshot, skillProjectId, agent);
-  }, [hubStoreSnapshot, projects, projectId, selectedChatKey?.projectId, selectedChatSession?.agentType]);
+  }, [hubStoreSnapshot, projects, skillProjectId, selectedChatSession?.agentType]);
+
+  const chatSlashDiagnostic = useMemo(
+    () => selectComposerDiagnostic(hubStoreSnapshot, skillProjectId),
+    [hubStoreSnapshot, skillProjectId],
+  );
 
   const chatSlashCommands = useMemo(
     () => buildChatSessionActionOptions(
@@ -5415,6 +5479,31 @@ export function App() {
     [expandedHubIds],
   );
   const effectiveExpandedHubIds = expandedHubIds.length > 0 ? savedExpandedHubIds : defaultExpandedHubIds;
+  useEffect(() => {
+    void hubRefreshTriggers
+      .setMenuOpen(chatHubMenuOpen && connected, registryHubIds, effectiveExpandedHubIds)
+      .catch(() => undefined);
+  }, [
+    chatHubMenuOpen,
+    connected,
+    effectiveExpandedHubIds,
+    hubRefreshTriggers,
+    registryHubIds,
+  ]);
+  useEffect(() => {
+    if (!chatHubMenuOpen || !connected) return;
+    let active = true;
+    fetchWheelMakerPublicMetadata()
+      .then(metadata => {
+        if (active) setWheelMakerPublicMetadata(metadata);
+      })
+      .catch(() => {
+        if (active) setWheelMakerPublicMetadata(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [chatHubMenuOpen, connected]);
   const hubAccentStyle = useCallback((hubId: string): React.CSSProperties => {
     const color = resolveHubColor(hubColors, hubId);
     return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
@@ -6661,7 +6750,7 @@ export function App() {
         expandedHubIds={effectiveExpandedHubIds}
         onToggleHub={hubId => {
           const expanded = effectiveExpandedHubIds.includes(hubId);
-          void hubRefreshTriggers.setHubExpanded(hubId, !expanded);
+          void hubRefreshTriggers.setHubExpanded(hubId, !expanded).catch(() => undefined);
           const next = expanded
             ? effectiveExpandedHubIds.filter(id => id !== hubId)
             : [...effectiveExpandedHubIds, hubId];
@@ -6695,7 +6784,7 @@ export function App() {
         onRequestSkillUninstall={requestSkillUninstall}
         onRequestSkillBatchUninstall={requestSkillBatchUninstall}
         onRetrySkills={hubId => {
-          refreshSkillManagementHubRef.current?.(hubId).catch(() => undefined);
+          service.hubStore.refresh(hubId, ['skills'], true).catch(() => undefined);
         }}
         skillSurface={chatHubSkillSurface}
         skillInstall={{
@@ -12189,78 +12278,6 @@ export function App() {
 
   useEffect(() => usageStore.subscribe(setUsageSnapshot), [usageStore]);
   useEffect(() => service.hubStore.subscribe(setHubStoreSnapshot), []);
-  useEffect(() => {
-    const wheelmaker: Record<string, WheelMakerUpdateHubView> = {};
-    const packages: Record<string, AgentPackageHubView> = {};
-    const indexes: Record<string, RegistryFileIndexStatusResponse> = {};
-    const skills: Record<string, SkillHubView> = {};
-    const flicker: Record<string, RegistryFlickerBridgeStatus> = {};
-    for (const [hubId, hub] of Object.entries(hubStoreSnapshot.hubs)) {
-      const wheelSection = hub.sections.wheelmakerUpdate;
-      if (wheelSection?.data) {
-        wheelmaker[hubId] = {
-          hubId,
-          loading: wheelSection.updateStatus !== 'idle',
-          error: wheelSection.lastError ?? '',
-          data: wheelSection.data as RegistryWheelMakerUpdateResponse,
-        };
-      }
-      const packageSection = hub.sections.agentPackages;
-      if (packageSection?.data) {
-        const data = packageSection.data as RegistryNpmCommandResponse;
-        packages[hubId] = {
-          hubId,
-          loading: packageSection.updateStatus !== 'idle',
-          error: packageSection.lastError ?? '',
-          updatedAt: data.updatedAt ?? '',
-          hub: data.hub ?? null,
-          operation: data.operation ?? null,
-        };
-      }
-      const indexSection = hub.sections.fileIndex;
-      if (indexSection?.data) {
-        indexes[hubId] = indexSection.data as RegistryFileIndexStatusResponse;
-      }
-      const skillSection = hub.sections.skills;
-      if (skillSection?.data) {
-        const data = skillSection.data as RegistrySkillsStateSnapshot;
-        const toItems = (inventory: Record<string, {name: string; managed?: boolean; agents?: string[]; locations?: Record<string, {path?: string}>}>) =>
-          Object.values(inventory).map(item => ({
-            name: item.name,
-            path: Object.values(item.locations ?? {})[0]?.path,
-            category: item.managed ? 'Managed' : 'Local',
-            categoryKey: item.managed ? 'managed' : 'local',
-            managed: item.managed,
-            agents: item.agents,
-          }));
-        skills[hubId] = {
-          hubId,
-          loading: skillSection.updateStatus !== 'idle',
-          error: skillSection.lastError ?? '',
-          data: {
-            ok: true,
-            hubId,
-            hubSkills: {scope: 'hub', skills: toItems(data.hubInventory ?? {})},
-            projects: Object.entries(data.projectLocalInventories ?? {}).map(([projectId, inventory]) => ({
-              projectId,
-              projectName: projectId.includes(':') ? projectId.slice(projectId.indexOf(':') + 1) : projectId,
-              online: true,
-              skills: toItems(inventory),
-            })),
-          },
-        };
-      }
-      const flickerSection = hub.sections.flickerBridge;
-      if (flickerSection?.data) {
-        flicker[hubId] = flickerSection.data as RegistryFlickerBridgeStatus;
-      }
-    }
-    setWheelMakerUpdateHubs(wheelmaker);
-    setAgentPackageHubs(packages);
-    setProjectIndexByHubId(indexes);
-    setSkillHubs(skills);
-    setChatHubFlickerBridgeStatuses(flicker);
-  }, [hubStoreSnapshot]);
   useEffect(() => usageStore.bindHubStore(service.hubStore), [usageStore]);
 
   useEffect(
@@ -12889,13 +12906,16 @@ export function App() {
       const npmUpdatable = deriveNpmUpdatableTargets(card.agentPackage?.hub?.packages ?? []);
       const hubPackages = card.agentPackage?.hub?.packages ?? [];
       const indexTargets = chatHubProjectIndexTargets(card.hubId);
+      const indexRunning = indexTargets.some(
+        project => project.running === true || project.status === 'scanning',
+      );
       const skillHub = skillHubs[card.hubId];
       const hubSkills = skillHub?.data?.hubSkills?.skills ?? [];
       const skillProjects = skillHub?.data?.projects ?? [];
       views[card.hubId] = {
         wheelMaker: {
           loading: card.wheelMaker?.loading === true,
-          pending: pending || wheelMakerUpdateAllPending,
+          pending: pending || wheelMakerUpdateAllPending || jobActive,
           currentVersion: wheelMakerVersionCopy(wheelMakerData, stableRelease).current,
           actionLabel: hubStatusLabel(
             pending,
@@ -12908,12 +12928,12 @@ export function App() {
           actionVisible: shouldShowWheelMakerUpdateAction({
             data: viewData,
             loading: card.wheelMaker?.loading === true,
-            pending: pending || wheelMakerUpdateAllPending,
+            pending: pending || wheelMakerUpdateAllPending || jobActive,
           }),
           updateAvailable: status === 'update_available',
         },
         npm: {
-          loading: card.agentPackage?.loading === true || agentPackagesLoading,
+          loading: card.agentPackage?.loading === true,
           pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
           outdatedCount: npmUpdatable.length,
           packages: hubPackages.map(pkg => ({
@@ -12935,14 +12955,16 @@ export function App() {
           projects: skillProjects,
         },
         index: {
-          pending: projectIndexScanAllPendingByHubId[card.hubId] === true,
+          pending: projectIndexScanAllPendingByHubId[card.hubId] === true || indexRunning,
           indexedCount: indexTargets.filter(project => project.status === 'indexed').length,
           totalCount: indexTargets.length,
           projects: indexTargets.map(project => ({
             projectId: project.projectId,
             name: project.name,
             status: project.status,
-            pending: projectIndexScanPendingByProjectId[project.projectId] === true,
+            pending: projectIndexScanPendingByProjectId[project.projectId] === true
+              || project.running === true
+              || project.status === 'scanning',
           })),
         },
       };
@@ -12952,7 +12974,6 @@ export function App() {
     agentPackageActionKey,
     agentPackageActionPendingKey,
     agentPackageHubUpdatePendingId,
-    agentPackagesLoading,
     chatHubProjectIndexTargets,
     projectIndexScanAllPendingByHubId,
     projectIndexScanPendingByProjectId,
@@ -12963,297 +12984,6 @@ export function App() {
     wheelMakerUpdateAllPending,
     wheelMakerUpdatePendingHubId,
   ]);
-
-  const clearWheelMakerUpdatePollTimer = useCallback(() => {
-    if (wheelMakerUpdatePollTimerRef.current) {
-      window.clearTimeout(wheelMakerUpdatePollTimerRef.current);
-      wheelMakerUpdatePollTimerRef.current = null;
-    }
-    wheelMakerUpdatePollHubIdsRef.current.clear();
-  }, []);
-
-  const clearAgentPackageScanPollTimer = useCallback(() => {
-  }, []);
-
-  const clearProjectIndexPollTimer = useCallback(() => {
-    if (projectIndexPollTimerRef.current) {
-      window.clearTimeout(projectIndexPollTimerRef.current);
-      projectIndexPollTimerRef.current = null;
-    }
-  }, []);
-
-  const handleProjectIndexPending = useCallback((_hubIds: string | string[]) => {}, []);
-  const handleWheelMakerUpdatePending = useCallback((_hubIds: string | string[]) => {}, []);
-
-  const refreshWheelMakerUpdateHub = useCallback(async (hubId: string, options: {silent?: boolean} = {}) => {
-    if (!options.silent) {
-      setWheelMakerUpdateHubs(prev => ({
-        ...prev,
-        [hubId]: {
-          ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
-          loading: true,
-          error: '',
-        },
-      }));
-    }
-    try {
-      const result = await service.queryWheelMakerUpdate(hubId);
-      setWheelMakerUpdateHubs(prev => ({
-        ...prev,
-        [hubId]: {
-          hubId,
-          loading: false,
-          error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update check failed.',
-          data: result,
-        },
-      }));
-      if (wheelMakerUpdateJobActive(result.job)) {
-        handleWheelMakerUpdatePending(hubId);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setWheelMakerUpdateHubs(prev => ({
-        ...prev,
-        [hubId]: {
-          ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
-          loading: false,
-          error: message,
-        },
-      }));
-    }
-  }, [handleWheelMakerUpdatePending]);
-
-  const refreshWheelMakerUpdates = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) => {
-    const silent = options.silent === true;
-    clearWheelMakerUpdatePollTimer();
-    if (!silent) {
-      setWheelMakerUpdatesLoading(true);
-    }
-    setWheelMakerUpdatesError('');
-    try {
-      try {
-        setWheelMakerPublicMetadata(await fetchWheelMakerPublicMetadata());
-      } catch (err) {
-        setWheelMakerPublicMetadata(null);
-        setWheelMakerUpdatesError(err instanceof Error ? err.message : String(err));
-      }
-      if (hubIds.length === 0) {
-        setWheelMakerUpdateHubs({});
-        return;
-      }
-      setWheelMakerUpdateHubs(prev => {
-        const next: Record<string, WheelMakerUpdateHubView> = {};
-        hubIds.forEach(hubId => {
-          next[hubId] = {
-            hubId,
-            loading: silent ? prev[hubId]?.loading === true : true,
-            error: '',
-            data: prev[hubId]?.data ?? null,
-          };
-        });
-        return next;
-      });
-      await Promise.all(hubIds.map(async hubId => {
-        try {
-          const result = await service.queryWheelMakerUpdate(hubId);
-          setWheelMakerUpdateHubs(prev => ({
-            ...prev,
-            [hubId]: {
-              hubId,
-              loading: false,
-              error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update check failed.',
-              data: result,
-            },
-          }));
-          if (wheelMakerUpdateJobActive(result.job)) {
-            handleWheelMakerUpdatePending(hubId);
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          setWheelMakerUpdateHubs(prev => ({
-            ...prev,
-            [hubId]: {
-              ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
-              loading: false,
-              error: message,
-            },
-          }));
-        }
-      }));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setWheelMakerUpdatesError(message);
-    } finally {
-      if (!silent) {
-        setWheelMakerUpdatesLoading(false);
-      }
-    }
-  }, [clearWheelMakerUpdatePollTimer, handleWheelMakerUpdatePending]);
-
-  useEffect(() => {
-    refreshWheelMakerUpdateHubRef.current = refreshWheelMakerUpdateHub;
-  }, [refreshWheelMakerUpdateHub]);
-
-  const refreshAgentPackages = useCallback(async (hubIds: string[], options: {silent?: boolean} = {}) => {
-    clearAgentPackageScanPollTimer();
-    if (!options.silent) {
-      setAgentPackagesLoading(true);
-      setAgentPackagesError('');
-    }
-    try {
-      if (hubIds.length === 0) {
-        setAgentPackageHubs({});
-        setAgentPackagesError('No hubs available.');
-        return;
-      }
-      setAgentPackageHubs(prev => {
-        const next: Record<string, AgentPackageHubView> = {};
-        hubIds.forEach(hubId => {
-          next[hubId] = {
-            hubId,
-            loading: !options.silent,
-            error: '',
-            updatedAt: prev[hubId]?.updatedAt || '',
-            hub: prev[hubId]?.hub ?? null,
-            operation: prev[hubId]?.operation ?? null,
-          };
-        });
-        return next;
-      });
-      const runningHubIds = new Set<string>();
-      await Promise.all(hubIds.map(async hubId => {
-        try {
-          const result = await withAgentPackageTimeout(
-            service.scanNpmPackages(hubId),
-            AGENT_PACKAGE_SCAN_TIMEOUT_MS,
-            `${hubId} npm package scan timed out`,
-          );
-          const hub = result.hub ?? {
-            hubId,
-            nodeVersion: '',
-            npmVersion: '',
-            npmPrefix: '',
-            warning: '',
-            error: '',
-            packages: [],
-          };
-          setAgentPackageHubs(prev => ({
-            ...prev,
-            [hubId]: {
-              hubId,
-              loading: false,
-              error: result.ok ? '' : hub.error || 'Scan failed.',
-              updatedAt: result.updatedAt || '',
-              hub,
-              operation: result.operation ?? prev[hubId]?.operation ?? null,
-            },
-          }));
-          if (result.operation?.running) {
-            runningHubIds.add(hubId);
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          setAgentPackageHubs(prev => ({
-            ...prev,
-            [hubId]: {
-              hubId,
-              loading: false,
-              error: message,
-              updatedAt: prev[hubId]?.updatedAt || '',
-              hub: prev[hubId]?.hub ?? null,
-              operation: prev[hubId]?.operation ?? null,
-            },
-          }));
-        }
-      }));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setAgentPackagesError(message);
-    } finally {
-      if (!options.silent) {
-        setAgentPackagesLoading(false);
-      }
-    }
-  }, [clearAgentPackageScanPollTimer]);
-
-  const refreshProjectFileIndexes = useCallback(async (hubIds: string | string[], options: {silent?: boolean} = {}) => {
-    const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
-      .map(hubId => hubId.trim())
-      .filter(Boolean);
-    if (ids.length === 0) {
-      setProjectIndexByHubId({});
-      return;
-    }
-    clearProjectIndexPollTimer();
-    if (!options.silent) {
-      setProjectIndexLoading(true);
-      setProjectIndexError('');
-    }
-    try {
-      const errorsByHubId: Record<string, string> = {};
-      const runningHubIds = new Set<string>();
-      await Promise.all(ids.map(async hubId => {
-        try {
-          const result = await service.getFileIndexStatus(hubId);
-          setProjectIndexByHubId(prev => ({
-            ...prev,
-            [hubId]: {
-              hubId: result.hubId ?? hubId,
-              projects: result.projects ?? [],
-            },
-          }));
-          const completedProjectIds = (result.projects ?? [])
-            .filter(project => project.projectId && project.running !== true && project.status !== 'scanning')
-            .map(project => project.projectId);
-          if (completedProjectIds.length > 0) {
-            setProjectIndexScanPendingByProjectId(prev => {
-              let changed = false;
-              const next = {...prev};
-              completedProjectIds.forEach(projectId => {
-                if (next[projectId]) {
-                  next[projectId] = false;
-                  changed = true;
-                }
-              });
-              return changed ? next : prev;
-            });
-          }
-          if ((result.projects ?? []).some(project => project.running === true || project.status === 'scanning')) {
-            runningHubIds.add(hubId);
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          errorsByHubId[hubId] = message;
-          setProjectIndexByHubId(prev => ({
-            ...prev,
-            [hubId]: prev[hubId] ?? {hubId, projects: []},
-          }));
-        }
-      }));
-      setProjectIndexError(ids.map(hubId => errorsByHubId[hubId]).find(Boolean) || '');
-      if (runningHubIds.size > 0) {
-        handleProjectIndexPending(Array.from(runningHubIds));
-      }
-    } finally {
-      if (!options.silent) {
-        setProjectIndexLoading(false);
-      }
-    }
-  }, [clearProjectIndexPollTimer, handleProjectIndexPending]);
-
-  useEffect(() => {
-    refreshWheelMakerUpdatesRef.current = refreshWheelMakerUpdates;
-  }, [refreshWheelMakerUpdates]);
-
-  useEffect(() => {
-    refreshAgentPackagesRef.current = refreshAgentPackages;
-  }, [refreshAgentPackages]);
-
-  useEffect(() => {
-    refreshProjectFileIndexesRef.current = refreshProjectFileIndexes;
-  }, [refreshProjectFileIndexes]);
-
-  const handleSkillOperationPending = useCallback((_hubIds: string | string[]) => {}, []);
 
   const observeSkillOperation = useCallback((
     hubId: string,
@@ -13272,6 +13002,7 @@ export function App() {
       return;
     }
     seenSkillOperationRef.current.set(hubId, operationKey);
+    setSkillsPendingKey('');
     if (operation.status === 'succeeded') {
       skillActionByHubIdRef.current.delete(hubId);
       setSkillRetryNotice(current => {
@@ -13284,6 +13015,7 @@ export function App() {
     }
     if (operation.status === 'failed') {
       const target = skillActionByHubIdRef.current.get(hubId);
+      skillActionByHubIdRef.current.delete(hubId);
       const notice = createSkillRetryNotice(
         operation.errorSummary || operation.message || 'Skill operation failed.',
         target,
@@ -13294,44 +13026,11 @@ export function App() {
     }
   }, []);
 
-  const refreshSkillManagementHub = useCallback(async (hubId: string) => {
-    setSkillHubs(prev => ({
-      ...prev,
-      [hubId]: {
-        ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
-        loading: true,
-        error: '',
-      },
-    }));
-    try {
-      const result = await service.scanSkills(hubId);
-      setSkillHubs(prev => ({
-        ...prev,
-        [hubId]: {
-          hubId,
-          loading: false,
-          data: result,
-          error: result.ok ? '' : skillCommandErrorMessage(result),
-        },
-      }));
-      observeSkillOperation(hubId, result.operation);
-      if (result.operation?.running) {
-        handleSkillOperationPending(hubId);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setSkillHubs(prev => ({
-        ...prev,
-        [hubId]: {
-          ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
-          loading: false,
-          error: message,
-        },
-      }));
+  useEffect(() => {
+    for (const [hubId, skillHub] of Object.entries(skillHubs)) {
+      observeSkillOperation(hubId, skillHub.data?.operation);
     }
-  }, [observeSkillOperation, handleSkillOperationPending]);
-
-  refreshSkillManagementHubRef.current = refreshSkillManagementHub;
+  }, [observeSkillOperation, skillHubs]);
 
   const requestSkillInstall = useCallback((target: SkillInstallTarget) => {
     const sameTarget = sameSkillScopeTarget(skillInstallTarget, target);
@@ -13511,6 +13210,7 @@ export function App() {
     setSkillRetryNotice(null);
     setConfirmError('');
     setSkillsPendingKey(pendingKey);
+    let operationPending = false;
     try {
       let results: RegistrySkillCommandResponse[] = [];
       if (target.kind === 'skillInstall') {
@@ -13554,6 +13254,7 @@ export function App() {
       const completedImmediately = results.every(
         result => result.accepted !== true && result.operation?.running !== true,
       );
+      operationPending = !completedImmediately;
       setConfirmTarget(null);
       setConfirmError('');
       if (target.kind === 'skillInstall') {
@@ -13561,7 +13262,6 @@ export function App() {
         setSkillSourceCandidates([]);
         setSkillSourceSelectedNames([]);
       }
-      await refreshSkillManagementHub(target.hubId);
       if (terminalOperation) {
         observeSkillOperation(target.hubId, terminalOperation);
       } else if (completedImmediately) {
@@ -13574,9 +13274,11 @@ export function App() {
       setConfirmError('');
       setSkillRetryNotice(createSkillRetryNotice(message, target));
     } finally {
-      setSkillsPendingKey('');
+      if (!operationPending) {
+        setSkillsPendingKey('');
+      }
     }
-  }, [observeSkillOperation, refreshSkillManagementHub]);
+  }, [observeSkillOperation]);
 
   const retrySkillNotice = useCallback(() => {
     const retry = skillRetryNotice?.retry;
@@ -13658,7 +13360,6 @@ export function App() {
     if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
       return;
     }
-    setProjectIndexError('');
     setProjectIndexErrorByProjectId(prev => ({...prev, [projectId]: ''}));
     setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: true}));
     let scanRunning = false;
@@ -13668,13 +13369,8 @@ export function App() {
         throw new Error(result.error || 'Project index scan failed.');
       }
       scanRunning = result.running === true;
-      await refreshProjectFileIndexes(hubId, {silent: true});
-      if (scanRunning) {
-        handleProjectIndexPending(hubId);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setProjectIndexError(message);
       setProjectIndexErrorByProjectId(prev => ({...prev, [projectId]: message}));
       setError(message);
     } finally {
@@ -13682,7 +13378,7 @@ export function App() {
         setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: false}));
       }
     }
-  }, [projectIndexScanPendingByProjectId, refreshProjectFileIndexes, handleProjectIndexPending]);
+  }, [projectIndexScanPendingByProjectId]);
 
   const handlePreviewProjectIndexRebuild = useCallback(async (projectId: string) => {
     const project = projects.find(item => item.projectId === projectId);
@@ -13695,7 +13391,6 @@ export function App() {
     if (!hubId || targets.length === 0 || projectIndexScanAllPendingByHubId[hubId]) {
       return;
     }
-    setProjectIndexError('');
     setProjectIndexScanAllPendingByHubId(prev => ({...prev, [hubId]: true}));
     setProjectIndexScanPendingByProjectId(prev => ({
       ...prev,
@@ -13717,11 +13412,8 @@ export function App() {
       await Promise.all(
         Array.from({length: Math.min(PROJECT_INDEX_SCAN_CONCURRENCY, targets.length)}, () => worker()),
       );
-      await refreshProjectFileIndexes(hubId, {silent: true});
-      handleProjectIndexPending(hubId);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setProjectIndexError(message);
       setError(message);
     } finally {
       setProjectIndexScanAllPendingByHubId(prev => ({...prev, [hubId]: false}));
@@ -13730,7 +13422,7 @@ export function App() {
         ...Object.fromEntries(targets.map(project => [project.projectId, false])),
       }));
     }
-  }, [projectIndexScanAllPendingByHubId, refreshProjectFileIndexes, handleProjectIndexPending]);
+  }, [projectIndexScanAllPendingByHubId]);
 
   const handleChatHubWheelMakerUpdate = useCallback((hubId: string) => {
     requestWheelMakerUpdate(hubId, wheelMakerUpdateHubs[hubId]?.data ?? null);
@@ -13783,29 +13475,19 @@ export function App() {
     setWheelMakerUpdatePendingHubId(target.hubId);
     try {
       const result = await service.requestWheelMakerUpdate(target.hubId);
-      setWheelMakerUpdateHubs(prev => ({
-        ...prev,
-        [target.hubId]: {
-          hubId: target.hubId,
-          loading: false,
-          error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.',
-          data: result,
-        },
-      }));
+      if (!result.ok) {
+        throw new Error(wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.');
+      }
       setConfirmTarget(null);
       setConfirmError('');
-      if (wheelMakerUpdateJobActive(result.job)) {
-        handleWheelMakerUpdatePending(target.hubId);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmError(message);
-      setWheelMakerUpdatesError(message);
       setError(message);
     } finally {
       setWheelMakerUpdatePendingHubId('');
     }
-  }, [handleWheelMakerUpdatePending]);
+  }, []);
 
   const handleWheelMakerUpdateAllConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdateAll'}>) => {
     if (target.hubIds.length === 0) {
@@ -13813,7 +13495,6 @@ export function App() {
       return;
     }
     setConfirmError('');
-    setWheelMakerUpdatesError('');
     setWheelMakerUpdateAllPending(true);
     setWheelMakerUpdatePendingHubId('');
     try {
@@ -13822,61 +13503,31 @@ export function App() {
           const result = await service.requestWheelMakerUpdate(hubId);
           return {
             hubId,
-            result,
-            error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.',
+            error: result.ok
+              ? ''
+              : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.',
           };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return {hubId, error: message};
         }
       }));
-      setWheelMakerUpdateHubs(prev => {
-        const next = {...prev};
-        responses.forEach(entry => {
-          next[entry.hubId] = {
-            ...(prev[entry.hubId] ?? {hubId: entry.hubId, loading: false, error: '', data: null}),
-            hubId: entry.hubId,
-            loading: false,
-            error: entry.error || '',
-            data: 'result' in entry && entry.result ? entry.result : prev[entry.hubId]?.data ?? null,
-          };
-        });
-        return next;
-      });
       setConfirmTarget(null);
       setConfirmError('');
-      handleWheelMakerUpdatePending(
-        responses
-          .filter(entry => 'result' in entry && wheelMakerUpdateJobActive(entry.result?.job))
-          .map(entry => entry.hubId),
-      );
       const failedUpdates = responses.filter(entry => entry.error);
       if (failedUpdates.length > 0) {
         const message = `Failed to update ${failedUpdates.length} of ${target.hubIds.length} hubs: ${failedUpdates.map(entry => entry.hubId).join(', ')}`;
-        setWheelMakerUpdatesError(message);
-        setWheelMakerUpdateHubs(prev => {
-          const next = {...prev};
-          failedUpdates.forEach(entry => {
-            next[entry.hubId] = {
-              ...(prev[entry.hubId] ?? {hubId: entry.hubId, loading: false, error: '', data: null}),
-              hubId: entry.hubId,
-              loading: false,
-              error: entry.error || 'Update request failed.',
-            };
-          });
-          return next;
-        });
+        setError(message);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmTarget(null);
       setConfirmError('');
-      setWheelMakerUpdatesError(message);
       setError(message);
     } finally {
       setWheelMakerUpdateAllPending(false);
     }
-  }, [handleWheelMakerUpdatePending]);
+  }, []);
 
   const handleAgentPackageConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'npmPackage'}>) => {
     const pendingKey = agentPackageActionKey(target.hubId, target.packageName);
@@ -13888,25 +13539,19 @@ export function App() {
         : target.action === 'uninstall'
           ? await service.uninstallNpmPackage(target.hubId, target.packageName)
           : await service.installNpmPackage(target.hubId, target.packageName, 'latest');
-      setAgentPackageHubs(prev => ({
-        ...prev,
-        [target.hubId]: {
-          ...(prev[target.hubId] ?? {hubId: target.hubId, loading: false, error: '', updatedAt: '', hub: null, operation: null}),
-          operation: result.operation ?? null,
-        },
-      }));
+      if (!result.ok) {
+        throw new Error(result.operation?.errorSummary || result.operation?.message || 'Package operation failed.');
+      }
       setConfirmTarget(null);
       setConfirmError('');
-      await refreshAgentPackages([target.hubId]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmError(message);
-      setAgentPackagesError(message);
       setError(message);
     } finally {
       setAgentPackageActionPendingKey('');
     }
-  }, [agentPackageActionKey, refreshAgentPackages]);
+  }, [agentPackageActionKey]);
 
   const handleAgentPackageHubUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'npmPackageHubUpdate'}>) => {
     if (target.packages.length === 0) {
@@ -13914,41 +13559,24 @@ export function App() {
       return;
     }
     setConfirmError('');
-    setAgentPackagesError('');
     setAgentPackageHubUpdatePendingId(target.hubId);
     try {
       const result = await service.installNpmPackages(target.hubId, target.packages.map(pkg => pkg.packageName), 'latest');
-      setAgentPackageHubs(prev => ({
-        ...prev,
-        [target.hubId]: {
-          ...(prev[target.hubId] ?? {hubId: target.hubId, loading: false, error: '', updatedAt: '', hub: null, operation: null}),
-          operation: result.operation ?? null,
-        },
-      }));
       setConfirmTarget(null);
       setConfirmError('');
-      await refreshAgentPackages([target.hubId]);
       if (!result.ok) {
         const message = result.operation?.errorSummary || result.operation?.message || 'Update request failed.';
-        setAgentPackagesError(message);
-        setAgentPackageHubs(prev => ({
-          ...prev,
-          [target.hubId]: {
-            ...(prev[target.hubId] ?? {hubId: target.hubId, loading: false, error: '', updatedAt: '', hub: null, operation: null}),
-            error: message,
-          },
-        }));
+        setError(message);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmTarget(null);
       setConfirmError('');
-      setAgentPackagesError(message);
       setError(message);
     } finally {
       setAgentPackageHubUpdatePendingId('');
     }
-  }, [refreshAgentPackages]);
+  }, []);
 
   const formatDatabaseDump = (dump: Awaited<ReturnType<typeof workspaceStore.dumpDatabase>>): string => {
     return JSON.stringify(
@@ -15457,17 +15085,6 @@ export function App() {
 
   useEffect(() => {
     const unsubscribeEvent = service.onEvent(event => {
-      if (event.method === RegistryMethods.HubStateUpdated) {
-        setChatHubFlickerBridgeStatuses(current => {
-          const next = applyFlickerBridgeHubStateEvent(current, event);
-          if (next !== current && event.hubId) {
-            chatHubFlickerBridgeRequestGenerationRef.current[event.hubId] =
-              (chatHubFlickerBridgeRequestGenerationRef.current[event.hubId] ?? 0) + 1;
-          }
-          return next;
-        });
-        return;
-      }
       if (event.method === RegistryMethods.TerminalOutput && event.hubId) {
         const result = receiveTerminalOutput(
           terminalSyncRef.current,
@@ -18849,6 +18466,12 @@ export function App() {
                     ));
                   })()}
                   </div>
+                  {chatSlashDiagnostic ? (
+                    <div className="chat-slash-diagnostic" role="status">
+                      <ChatIcon name="help" size={13} />
+                      <span>{chatSlashDiagnostic}</span>
+                    </div>
+                  ) : null}
                   {isWide ? <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['↵', 'Apply'], ['esc', 'Close']]} /> : null}
                 </div>
               ) : null}
@@ -20157,7 +19780,12 @@ export function App() {
           setToastMessage(`${failurePrefix}: ${reason}`);
         });
     };
-    const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true;
+    const indexedProject = Object.values(projectIndexByHubId)
+      .flatMap(snapshot => snapshot.projects ?? [])
+      .find(project => project.projectId === tab.projectId);
+    const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true
+      || indexedProject?.running === true
+      || indexedProject?.status === 'scanning';
     const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
     const canExportPreviewHtml =
       tab.type === 'file' &&
@@ -20249,7 +19877,7 @@ export function App() {
           disabled={indexPending}
         >
           <Icon name="refreshCw" spin={indexPending} />
-          <span>{projectIndexScanPendingByProjectId[tab.projectId] ? 'Indexing...' : 'Rebuild file index'}</span>
+          <span>{indexPending ? 'Indexing...' : 'Rebuild file index'}</span>
         </button>
         {indexError ? <div className="preview-workbench-action-menu-error" role="alert">{indexError}</div> : null}
       </>
