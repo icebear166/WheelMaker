@@ -204,7 +204,7 @@ describe('terminal workspace integration', () => {
     expect(terminalCss).toContain('.terminal-toolbar-action {');
     expect(terminalCss).toContain('display: inline-flex;');
     expect(terminalCss).toContain('.terminal-workbench.mobile > .workbench-chrome-fullscreen-toggle {');
-    expect(terminalCss).toContain('bottom: calc(70px + var(--wm-safe-area-bottom));');
+    expect(terminalCss).toContain('bottom: calc(71px + var(--wm-safe-area-bottom));');
   });
 
   test('uses the danger state color for an unavailable terminal', () => {

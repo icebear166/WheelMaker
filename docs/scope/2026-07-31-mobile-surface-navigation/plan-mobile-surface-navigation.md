@@ -369,7 +369,7 @@ test('uses shared two-row chrome with compact real-button tabs', () => {
   const tab = root.findByProps({className: 'terminal-workbench-tab active'});
   expect(tab.props.title).toContain('hub-a');
   expect(tab.findAllByProps({className: 'terminal-workbench-tab-hub'})).toHaveLength(0);
-  const close = tab.findByProps({'aria-label': 'Close terminal Project'});
+  const close = tab.findByProps({'aria-label': 'Close terminal p1'});
   expect(close.type).toBe('button');
   expect(close.props.type).toBe('button');
 });

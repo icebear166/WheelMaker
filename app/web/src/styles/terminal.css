@@ -45,7 +45,7 @@
 }
 
 .terminal-workbench.mobile > .workbench-chrome-fullscreen-toggle {
-  bottom: calc(70px + var(--wm-safe-area-bottom));
+  bottom: calc(71px + var(--wm-safe-area-bottom));
 }
 
 .terminal-tabs {
