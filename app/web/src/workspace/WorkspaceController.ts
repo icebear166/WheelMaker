@@ -16,7 +16,9 @@ export class WorkspaceController {
 
   async connect(wsUrl: string): Promise<ProjectLoadResult> {
     const baseSession = await this.service.connect(wsUrl);
-    const targetProjectId = this.store.selectProjectOnConnect(baseSession.projects, baseSession.selectedProjectId);
+    const targetProjectId = baseSession.selectedProjectId
+      ? this.store.selectProjectOnConnect(baseSession.projects, baseSession.selectedProjectId)
+      : '';
     const session = targetProjectId !== baseSession.selectedProjectId
       ? await this.service.selectProject(targetProjectId)
       : baseSession;

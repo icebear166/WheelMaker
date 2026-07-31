@@ -2211,6 +2211,46 @@ func TestReporterRejectsDebugWebReleaseNotification(t *testing.T) {
 	}
 }
 
+func TestReporterOffersPerMessageDeflate(t *testing.T) {
+	extensions := make(chan string, 1)
+	upgrader := websocket.Upgrader{
+		CheckOrigin:       func(_ *http.Request) bool { return true },
+		EnableCompression: true,
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		extensions <- req.Header.Get("Sec-WebSocket-Extensions")
+		ws, err := upgrader.Upgrade(w, req, nil)
+		if err != nil {
+			return
+		}
+		defer ws.Close()
+		for {
+			if _, _, err := ws.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	t.Cleanup(ts.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reporter := NewReporter(ReporterConfig{
+		Server: ts.URL, HubID: "compressed-hub", StateDir: t.TempDir(),
+		ReconnectInterval: 10 * time.Millisecond,
+	}, nil)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case extension := <-extensions:
+		if !strings.Contains(extension, "permessage-deflate") {
+			t.Fatalf("Sec-WebSocket-Extensions=%q, want permessage-deflate", extension)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("reporter did not connect")
+	}
+}
+
 func TestReporterTransfersDebugWebInAcknowledgedChunks(t *testing.T) {
 	server := registry.New(registry.Config{})
 	ts := httptest.NewServer(server.Handler())

@@ -643,7 +643,9 @@ func (r *Reporter) runSession(ctx context.Context) error {
 		return err
 	}
 	registryLogger("").Info("connecting to %s", wsURL)
-	conn, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
+	dialer := *websocket.DefaultDialer
+	dialer.EnableCompression = true
+	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
 	if err != nil {
 		return fmt.Errorf("dial registry %s: %w", wsURL, err)
 	}

@@ -58,6 +58,137 @@ describe('registry workspace project-scoped chat service methods', () => {
     expect(repository.listFiles).not.toHaveBeenCalled();
   });
 
+  test('connect resolves before lightweight HubState discovery finishes', async () => {
+    let resolveHubState!: (state: {
+      hubId: string;
+      instanceId: string;
+      sections: {};
+    }) => void;
+    const hubState = new Promise<{
+      hubId: string;
+      instanceId: string;
+      sections: {};
+    }>(resolve => {
+      resolveHubState = resolve;
+    });
+    const repository = {
+      initialize: jest.fn().mockResolvedValue(undefined),
+      listProjectSnapshot: jest.fn().mockResolvedValue({
+        projects: [],
+        hubs: [{hubId: 'hub-background'}],
+      }),
+      getHubState: jest.fn().mockReturnValue(hubState),
+      listFiles: jest.fn(),
+      onEvent: jest.fn(() => () => undefined),
+      onClose: jest.fn(() => () => undefined),
+      close: jest.fn(),
+    };
+    const service = new RegistryWorkspaceService(undefined, {
+      createRepository: jest.fn(() => repository as never),
+    });
+
+    const connect = service.connect('ws://registry.example/ws');
+    const winner = await Promise.race([
+      connect.then(() => 'connected'),
+      new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 25)),
+    ]);
+    resolveHubState({
+      hubId: 'hub-background',
+      instanceId: 'instance-background',
+      sections: {},
+    });
+    await connect;
+
+    expect(winner).toBe('connected');
+    expect(repository.getHubState).toHaveBeenCalledWith('hub-background', ['tokenStats']);
+  });
+
+  test('continues probing after a project request timeout', async () => {
+    const repository = {
+      initialize: jest.fn().mockResolvedValue(undefined),
+      listProjectSnapshot: jest.fn().mockResolvedValue({
+        projects: [
+          {projectId: 'slow', name: 'Slow', online: true, path: '/slow'},
+          {projectId: 'ready', name: 'Ready', online: true, path: '/ready'},
+        ],
+        hubs: [],
+      }),
+      getHubState: jest.fn(),
+      listFiles: jest.fn()
+        .mockRejectedValueOnce(new Error('registry request timed out (20000ms): project.fs.list'))
+        .mockResolvedValueOnce({entries: [{name: 'README.md', path: 'README.md', kind: 'file'}]}),
+      onEvent: jest.fn(() => () => undefined),
+      onClose: jest.fn(() => () => undefined),
+      close: jest.fn(),
+    };
+    const service = new RegistryWorkspaceService(undefined, {
+      createRepository: jest.fn(() => repository as never),
+    });
+
+    const session = await service.connect('ws://registry.example/ws');
+
+    expect(session.selectedProjectId).toBe('ready');
+    expect(repository.listFiles).toHaveBeenCalledTimes(2);
+  });
+
+  test('keeps the Registry connection usable when every project probe is unavailable', async () => {
+    const repository = {
+      initialize: jest.fn().mockResolvedValue(undefined),
+      listProjectSnapshot: jest.fn().mockResolvedValue({
+        projects: [{projectId: 'offline', name: 'Offline', online: true, path: '/offline'}],
+        hubs: [],
+      }),
+      getHubState: jest.fn(),
+      listFiles: jest.fn().mockRejectedValue(
+        Object.assign(new Error('project unavailable'), {code: 'UNAVAILABLE'}),
+      ),
+      onEvent: jest.fn(() => () => undefined),
+      onClose: jest.fn(() => () => undefined),
+      close: jest.fn(),
+    };
+    const service = new RegistryWorkspaceService(undefined, {
+      createRepository: jest.fn(() => repository as never),
+    });
+
+    await expect(service.connect('ws://registry.example/ws')).resolves.toMatchObject({
+      selectedProjectId: '',
+      fileEntries: [],
+    });
+  });
+
+  test('caps a stalled project probe before degrading the connection', async () => {
+    jest.useFakeTimers();
+    try {
+      const repository = {
+        initialize: jest.fn().mockResolvedValue(undefined),
+        listProjectSnapshot: jest.fn().mockResolvedValue({
+          projects: [{projectId: 'stalled', name: 'Stalled', online: true, path: '/stalled'}],
+          hubs: [],
+        }),
+        getHubState: jest.fn(),
+        listFiles: jest.fn().mockReturnValue(new Promise(() => undefined)),
+        onEvent: jest.fn(() => () => undefined),
+        onClose: jest.fn(() => () => undefined),
+        close: jest.fn(),
+      };
+      const service = new RegistryWorkspaceService(undefined, {
+        createRepository: jest.fn(() => repository as never),
+      });
+
+      const connect = service.connect('ws://registry.example/ws');
+      await Promise.resolve();
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(5000);
+
+      await expect(connect).resolves.toMatchObject({
+        selectedProjectId: '',
+        fileEntries: [],
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('does not send project read requests when no project is selected', async () => {
     const service = new RegistryWorkspaceService();
     const repository = {

@@ -105,6 +105,23 @@ export type RegistryWorkspaceServiceOptions = {
   clientName?: RegistryClientName;
 };
 
+const PROJECT_CONNECT_PROBE_TIMEOUT_MS = 5000;
+
+function isProjectReachabilityError(error: unknown): boolean {
+  if (error instanceof RegistryRequestError) {
+    return error.code === 'NOT_FOUND' || error.code === 'UNAVAILABLE';
+  }
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as {code?: unknown}).code;
+    if (code === 'NOT_FOUND' || code === 'UNAVAILABLE') return true;
+  }
+  return error instanceof Error
+    && (
+      error.message.includes('registry request timed out')
+      || error.message.includes('project probe timed out')
+    );
+}
+
 export function translateExternalFileError(error: unknown): never {
   const details = error instanceof RegistryRequestError
     && error.details
@@ -141,7 +158,7 @@ export class RegistryWorkspaceService {
     this.createRepository = options.createRepository ?? createRegistryRepository;
     this.clientName = options.clientName ?? 'wheelmaker-web';
     this.hubStore = new HubStore({
-      get: hubId => this.getHubState(hubId),
+      get: hubId => this.getHubState(hubId, ['tokenStats']),
       refresh: (hubId, sections, force) => {
         if (!this.repository) throw new Error('session is not ready');
         return this.repository.refreshHubState(hubId, sections, {force});
@@ -162,7 +179,7 @@ export class RegistryWorkspaceService {
       previousRepository?.close();
       this.repository = repository;
       this.session = {...snapshot, selectedProjectId, fileEntries};
-      await this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId));
+      void this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId));
       return this.session;
     } catch (error) {
       this.unbindRepository();
@@ -227,26 +244,38 @@ export class RegistryWorkspaceService {
     repository: RegistryRepository,
     projects: RegistryProject[],
   ): Promise<{selectedProjectId: string; fileEntries: RegistryFsEntry[]}> {
-    let lastError: unknown = null;
     for (const project of projects) {
       if (!project.projectId) continue;
+      if (project.online === false) continue;
       try {
-        const fileList = await repository.listFiles(project.projectId, '.');
+        const fileList = await this.probeProjectRoot(repository, project.projectId);
         return {selectedProjectId: project.projectId, fileEntries: fileList.entries ?? []};
       } catch (error) {
-        lastError = error;
-        const offline =
-          error instanceof RegistryRequestError &&
-          (error.code === 'NOT_FOUND' || error.code === 'UNAVAILABLE');
-        if (!offline) {
+        if (!isProjectReachabilityError(error)) {
           throw error;
         }
       }
     }
-    if (lastError instanceof Error) {
-      throw new Error(`No reachable projects. Last error: ${lastError.message}`);
+    return {selectedProjectId: '', fileEntries: []};
+  }
+
+  private async probeProjectRoot(
+    repository: RegistryRepository,
+    projectId: string,
+  ): ReturnType<RegistryRepository['listFiles']> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        repository.listFiles(projectId, '.'),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(new Error(`project probe timed out (${PROJECT_CONNECT_PROBE_TIMEOUT_MS}ms): ${projectId}`));
+          }, PROJECT_CONNECT_PROBE_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
     }
-    throw new Error('No reachable projects. All listed projects appear offline.');
   }
 
   close(): void {

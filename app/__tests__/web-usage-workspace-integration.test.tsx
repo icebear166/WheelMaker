@@ -15,11 +15,18 @@ describe('limits workspace integration', () => {
   const settingsCss = fs.readFileSync(path.join(root, 'web', 'src', 'styles', 'settings.css'), 'utf8');
 
   test('loads cached tokenStats after Registry connection and never creates a usage interval', () => {
-    expect(workspaceService).toContain('await this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId))');
+    expect(workspaceService).toContain("get: hubId => this.getHubState(hubId, ['tokenStats'])");
+    expect(workspaceService).toContain('void this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId))');
+    expect(workspaceService).not.toContain('await this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId))');
     expect(main).toContain('usageStore.bindHubStore(service.hubStore)');
     expect(main).not.toContain('RegistryMethods.HubStateUpdated');
     expect(main).not.toContain('setInterval(refreshUsageAcrossHubs');
     expect(main).not.toContain('renderChatMenuUsageButton');
+  });
+
+  test('loads large skill inventories only when the composer needs them', () => {
+    expect(main).toContain("service.hubStore.getSection(skillHubId, 'skills')");
+    expect(main).toContain("service.hubStore.refresh(skillHubId, ['skills'], false)");
   });
 
   test('loads every account source and keeps a successful Hub when another fails', async () => {

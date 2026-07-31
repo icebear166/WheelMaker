@@ -2599,6 +2599,23 @@ func TestRegistryBasePathRoutesWebSocketUpgrade(t *testing.T) {
 	_ = conn.Close()
 }
 
+func TestRegistryWebSocketNegotiatesPerMessageDeflate(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	dialer := websocket.Dialer{EnableCompression: true}
+	conn, response, err := dialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial compressed websocket: %v", err)
+	}
+	defer conn.Close()
+
+	if extension := response.Header.Get("Sec-WebSocket-Extensions"); !strings.Contains(extension, "permessage-deflate") {
+		t.Fatalf("Sec-WebSocket-Extensions=%q, want permessage-deflate", extension)
+	}
+}
+
 func TestAuthRoutesUseWSPath(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())

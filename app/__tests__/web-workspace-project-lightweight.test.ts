@@ -12,6 +12,29 @@ import { WorkspaceController } from '../web/src/workspace/WorkspaceController';
 import { WorkspaceStore } from '../web/src/workspace/WorkspaceStore';
 
 describe('workspace lightweight project switching', () => {
+  test('does not re-probe a preferred project after connection degraded to no selection', async () => {
+    const session = {
+      projects: [{projectId: 'offline', name: 'Offline', online: false, path: '/offline'}],
+      hubs: [],
+      selectedProjectId: '',
+      fileEntries: [],
+    };
+    const service = {
+      connect: jest.fn().mockResolvedValue(session),
+      selectProject: jest.fn(),
+    };
+    const store = {
+      selectProjectOnConnect: jest.fn(() => 'offline'),
+      hydrateProject: jest.fn((projectId: string) => ({projectId})),
+    };
+    const controller = new WorkspaceController(service as any, store as any);
+
+    await expect(controller.connect('ws://registry.example/ws')).resolves.toMatchObject({
+      hydrated: {projectId: ''},
+    });
+    expect(service.selectProject).not.toHaveBeenCalled();
+  });
+
   test('switches project identity without loading root files', async () => {
     const service = {
       selectProjectLightweight: jest.fn().mockResolvedValue({

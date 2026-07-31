@@ -4157,6 +4157,21 @@ export function App() {
     ),
     [projects, projectId, selectedChatKey?.projectId],
   );
+  const skillHubId = useMemo(() => {
+    const skillProject = projects.find(item => item.projectId === skillProjectId);
+    return skillProject ? projectHubId(skillProject) : '';
+  }, [projects, skillProjectId]);
+  const chatSlashSkillsRequested = chatSlashQuery !== null;
+  useEffect(() => {
+    if (
+      !chatSlashSkillsRequested
+      || !skillHubId
+      || service.hubStore.getSection(skillHubId, 'skills')
+    ) {
+      return;
+    }
+    void service.hubStore.refresh(skillHubId, ['skills'], false).catch(() => undefined);
+  }, [chatSlashSkillsRequested, skillHubId]);
 
   const chatSlashSkills = useMemo(() => {
     const currentProject = projects.find(item => item.projectId === skillProjectId);
