@@ -9564,7 +9564,7 @@ func TestHandleSessionRequestSessionStatusInitializesWithoutLoading(t *testing.T
 	c := New(store, "proj1", t.TempDir())
 	c.registry = agent.DefaultACPFactory().Clone()
 	c.registry.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) { return inst, nil })
-	c.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{Status: true, Compact: true})
+	c.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{Compact: true})
 	t.Cleanup(func() { _ = c.Close() })
 
 	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionStatus, "proj1", json.RawMessage(`{"sessionId":"sess-status"}`))
@@ -11221,5 +11221,51 @@ func writeLegacyV1TurnFiles(t *testing.T, root, projectName, sessionID string, c
 		if err := os.WriteFile(path, raw, 0o644); err != nil {
 			t.Fatalf("WriteFile legacy turn file: %v", err)
 		}
+	}
+}
+
+func TestSessionStatusActionAlwaysSupported(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	c := New(store, "proj1", t.TempDir())
+	c.registry = agent.NewACPFactory()
+	c.registry.RegisterSessionActions(acp.ACPProviderClaude, agent.SessionActionSupport{Compact: true})
+	t.Cleanup(func() { _ = c.Close() })
+
+	known := c.sessionRecorder.actionLookup(string(acp.ACPProviderClaude))
+	if !known.Status.Supported {
+		t.Fatal("known provider status should be supported")
+	}
+	if !known.Compact.Supported {
+		t.Fatal("known provider compact support was lost")
+	}
+
+	unknown := c.sessionRecorder.actionLookup("unknown-agent")
+	if !unknown.Status.Supported {
+		t.Fatal("unknown provider status should be supported")
+	}
+	if unknown.Compact.Supported {
+		t.Fatal("unknown provider compact should stay unsupported")
+	}
+
+	sess := &Session{agentType: "unknown-agent"}
+	if !c.sessionSupportsAction(sess, acp.SessionActionStatus) {
+		t.Fatal("unknown provider dispatch should allow status")
+	}
+	if c.sessionSupportsAction(sess, acp.SessionActionCompact) {
+		t.Fatal("unknown provider dispatch should reject compact")
+	}
+
+	c.registry = nil
+	if !c.sessionRecorder.actionLookup("unknown-agent").Status.Supported {
+		t.Fatal("nil registry summary should still allow status")
+	}
+	if !c.sessionSupportsAction(sess, acp.SessionActionStatus) {
+		t.Fatal("nil registry dispatch should still allow status")
+	}
+	if c.sessionSupportsAction(sess, acp.SessionActionCompact) {
+		t.Fatal("nil registry dispatch should reject compact")
 	}
 }

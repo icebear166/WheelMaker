@@ -162,7 +162,7 @@ git commit -m "feat(protocol): add agent type to session status"
 - Modify: `server/internal/hub/agent/factory.go` (`SessionActionSupport` and registrations)
 - Modify: `server/internal/hub/agent/agent_test.go`
 
-- [ ] **Step 1: Write the failing universal-capability test**
+- [x] **Step 1: Write the failing universal-capability test**
 
 Append to `server/internal/hub/client/client_test.go`:
 
@@ -214,7 +214,7 @@ func TestSessionStatusActionAlwaysSupported(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -225,7 +225,7 @@ go test ./internal/hub/client/ -run TestSessionStatusActionAlwaysSupported -v
 
 Expected: FAIL at the unknown-provider status assertion because current `actionLookup` returns every action unsupported.
 
-- [ ] **Step 3: Make summary status universal**
+- [x] **Step 3: Make summary status universal**
 
 Replace the `c.sessionRecorder.actionLookup` closure in `server/internal/hub/client/client.go` with:
 
@@ -261,7 +261,7 @@ c.sessionRecorder.actionLookup = func(agentType string) acp.SessionActionCapabil
 }
 ```
 
-- [ ] **Step 4: Make dispatch status universal with one normalization boundary**
+- [x] **Step 4: Make dispatch status universal with one normalization boundary**
 
 Replace `sessionSupportsAction` in `server/internal/hub/client/client.go` with:
 
@@ -300,7 +300,7 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 }
 ```
 
-- [ ] **Step 5: Remove provider-level `Status` support**
+- [x] **Step 5: Remove provider-level `Status` support**
 
 Change `SessionActionSupport` in `server/internal/hub/agent/factory.go` to:
 
@@ -370,7 +370,7 @@ if !actions.Compact || !actions.Steer || !actions.Fork || !actions.Goal {
 }
 ```
 
-- [ ] **Step 6: Format and run capability/factory tests**
+- [x] **Step 6: Format and run capability/factory tests**
 
 Run:
 
@@ -383,7 +383,7 @@ go test ./internal/hub/agent/ -run "TestFactorySessionActionsAreProviderSpecific
 
 Expected: all selected tests PASS. The existing session-list test continues to report status supported even though factory support no longer contains a `Status` field.
 
-- [ ] **Step 7: Commit the universal capability**
+- [x] **Step 7: Commit the universal capability**
 
 ```powershell
 git add server/internal/hub/client/client.go server/internal/hub/client/client_test.go server/internal/hub/agent/factory.go server/internal/hub/agent/agent_test.go

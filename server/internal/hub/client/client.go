@@ -135,33 +135,33 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		return ""
 	}
 	c.sessionRecorder.actionLookup = func(agentType string) acp.SessionActionCapabilities {
+		var caps acp.SessionActionCapabilities
 		provider, ok := acp.ParseACPProvider(agentType)
 		if !ok || c.registry == nil {
-			return unsupportedSessionActions("Current Agent does not support this action.")
+			caps = unsupportedSessionActions("Current Agent does not support this action.")
+		} else {
+			support := c.registry.SessionActions(provider)
+			caps = acp.SessionActionCapabilities{
+				Compact: acp.SessionActionCapability{
+					Supported: support.Compact,
+					Reason:    unsupportedSessionActionReason(support.Compact),
+				},
+				Steer: acp.SessionActionCapability{
+					Supported: support.Steer,
+					Reason:    unsupportedSessionActionReason(support.Steer),
+				},
+				Fork: acp.SessionActionCapability{
+					Supported: support.Fork,
+					Reason:    unsupportedSessionActionReason(support.Fork),
+				},
+				Goal: acp.SessionActionCapability{
+					Supported: support.Goal,
+					Reason:    unsupportedSessionActionReason(support.Goal),
+				},
+			}
 		}
-		support := c.registry.SessionActions(provider)
-		return acp.SessionActionCapabilities{
-			Status: acp.SessionActionCapability{
-				Supported: support.Status,
-				Reason:    unsupportedSessionActionReason(support.Status),
-			},
-			Compact: acp.SessionActionCapability{
-				Supported: support.Compact,
-				Reason:    unsupportedSessionActionReason(support.Compact),
-			},
-			Steer: acp.SessionActionCapability{
-				Supported: support.Steer,
-				Reason:    unsupportedSessionActionReason(support.Steer),
-			},
-			Fork: acp.SessionActionCapability{
-				Supported: support.Fork,
-				Reason:    unsupportedSessionActionReason(support.Fork),
-			},
-			Goal: acp.SessionActionCapability{
-				Supported: support.Goal,
-				Reason:    unsupportedSessionActionReason(support.Goal),
-			},
-		}
+		caps.Status = acp.SessionActionCapability{Supported: true}
+		return caps
 	}
 	c.sessionRecorder.queueLookup = func(sessionID string, full bool) *acp.SessionQueueSnapshot {
 		c.mu.Lock()
@@ -1681,7 +1681,14 @@ func sessionForkOriginTitle(rawTitle string) string {
 }
 
 func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
-	if c == nil || c.registry == nil || sess == nil {
+	if c == nil || sess == nil {
+		return false
+	}
+	action = strings.TrimSpace(action)
+	if action == acp.SessionActionStatus {
+		return true
+	}
+	if c.registry == nil {
 		return false
 	}
 	sess.mu.Lock()
@@ -1692,9 +1699,7 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 		return false
 	}
 	support := c.registry.SessionActions(provider)
-	switch strings.TrimSpace(action) {
-	case acp.SessionActionStatus:
-		return support.Status
+	switch action {
 	case acp.SessionActionCompact:
 		return support.Compact
 	case acp.SessionActionSteer:

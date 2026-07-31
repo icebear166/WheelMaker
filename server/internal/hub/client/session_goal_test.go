@@ -17,7 +17,7 @@ func newGoalTestClient(t *testing.T, sessionID string) (*Client, *Session, *test
 	t.Helper()
 	client := newTestClient(t, &mockSession{agentName: string(acp.ACPProviderCodex), sessionID: sessionID})
 	client.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{
-		Status: true, Compact: true, Steer: true, Fork: true, Goal: true,
+		Compact: true, Steer: true, Fork: true, Goal: true,
 	})
 	session, err := client.SessionForTest(sessionID)
 	if err != nil {

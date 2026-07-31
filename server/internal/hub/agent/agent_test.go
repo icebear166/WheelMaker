@@ -6233,19 +6233,18 @@ func TestClaudePreset_UsesClaudeUserSkillsDirOnly(t *testing.T) {
 func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
 	factory := &ACPFactory{}
 	factory.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{
-		Status:  true,
 		Compact: true,
 	})
 
-	if got := factory.SessionActions(protocol.ACPProviderCodex); !got.Status || !got.Compact {
+	if got := factory.SessionActions(protocol.ACPProviderCodex); !got.Compact {
 		t.Fatalf("codex session actions = %+v", got)
 	}
-	if got := factory.SessionActions(protocol.ACPProviderClaude); got.Status || got.Compact {
+	if got := factory.SessionActions(protocol.ACPProviderClaude); got.Compact {
 		t.Fatalf("claude session actions = %+v", got)
 	}
 
 	cloned := factory.Clone()
-	if got := cloned.SessionActions(protocol.ACPProviderCodex); !got.Status || !got.Compact {
+	if got := cloned.SessionActions(protocol.ACPProviderCodex); !got.Compact {
 		t.Fatalf("cloned codex session actions = %+v", got)
 	}
 }
@@ -6255,7 +6254,7 @@ func TestFactoryCodexSupportsSessionActions(t *testing.T) {
 		return provider.Name() == string(protocol.ACPProviderCodex)
 	})
 	got := factory.SessionActions(protocol.ACPProviderCodex)
-	if !got.Status || !got.Compact || !got.Steer || !got.Fork {
+	if !got.Compact || !got.Steer || !got.Fork || !got.Goal {
 		t.Fatalf("Codex session actions = %+v", got)
 	}
 }
@@ -6288,7 +6287,7 @@ func TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey(t *testing.T) {
 				return
 			}
 			actions := factory.SessionActions(protocol.ACPProviderCXDeepSeek)
-			if !actions.Status || !actions.Compact || !actions.Steer || !actions.Fork || !actions.Goal {
+			if !actions.Compact || !actions.Steer || !actions.Fork || !actions.Goal {
 				t.Fatalf("cx-deepseek session actions = %+v", actions)
 			}
 			if preferred := factory.PreferredName(); preferred == string(protocol.ACPProviderCXDeepSeek) {
@@ -6380,7 +6379,7 @@ func TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace(t *testing.T) {
 	replacement.Register(protocol.ACPProviderCodex, func(context.Context, string) (Instance, error) {
 		return nil, nil
 	})
-	replacement.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true})
+	replacement.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Compact: true})
 
 	original.ReplaceFrom(replacement)
 
@@ -6393,8 +6392,8 @@ func TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace(t *testing.T) {
 	if original.Creator(protocol.ACPProviderCodex) == nil {
 		t.Fatal("Codex creator missing after replacement")
 	}
-	if got := original.SessionActions(protocol.ACPProviderCodex); !got.Status {
-		t.Fatalf("Codex session actions = %+v, want status support", got)
+	if got := original.SessionActions(protocol.ACPProviderCodex); !got.Compact {
+		t.Fatalf("Codex session actions = %+v, want compact support", got)
 	}
 }
 
