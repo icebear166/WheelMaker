@@ -240,36 +240,18 @@
   opacity: 0.9;
 }
 
-.preview-workbench-toolbar {
-  display: grid;
-  grid-template-columns: 24px minmax(80px, 1fr) auto;
-  gap: 6px;
-}
-
-.desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop .preview-workbench-toolbar {
+.desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop > .workbench-chrome-toolbar {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
   background: var(--desktop-top-surface);
 }
 
-.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar {
+.desktop-shell .preview-workbench-surface.desktop > .workbench-chrome-toolbar {
   background: var(--desktop-top-surface);
 }
 
-.preview-workbench-title,
 .preview-workbench-tab-label {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preview-workbench-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -579,15 +561,6 @@
   text-align: center;
 }
 
-.preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-toolbar,
-.preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-tabs {
-  display: none;
-}
-
-.preview-workbench-surface.mobile .preview-workbench-toolbar {
-  grid-template-columns: 24px minmax(72px, 1fr) auto;
-}
-
 .preview-workbench-surface.mobile .preview-workbench-body-tools {
   right: max(10px, var(--wm-safe-area-right));
 }
@@ -619,28 +592,6 @@
 }
 
 .preview-workbench-mobile-port-relay-refresh:hover {
-  color: var(--accent-primary);
-  border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
-  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));
-}
-
-.preview-workbench-mobile-header-toggle {
-  position: absolute;
-  right: max(14px, var(--wm-safe-area-right));
-  bottom: max(14px, var(--wm-safe-area-bottom));
-  z-index: 11;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
-  color: var(--text-primary);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
-}
-
-.preview-workbench-mobile-header-toggle.active {
   color: var(--accent-primary);
   border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
   background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));

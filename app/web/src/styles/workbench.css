@@ -13,6 +13,9 @@
   display: grid;
   grid-template-columns: 24px minmax(80px, 1fr) auto;
   flex: 0 0 32px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
   align-items: center;
   gap: 6px;
   min-width: 0;

@@ -15,6 +15,7 @@ type WorkbenchChromeProps = {
   actions?: ReactNode;
   tabsAriaLabel: string;
   tabs: ReactNode;
+  tabsClassName?: string;
   mobileFullscreen?: boolean;
   onMobileFullscreenChange?: (fullscreen: boolean) => void;
   bodyClassName?: string;
@@ -34,6 +35,7 @@ export function WorkbenchChrome({
   actions,
   tabsAriaLabel,
   tabs,
+  tabsClassName,
   mobileFullscreen = false,
   onMobileFullscreenChange,
   bodyClassName,
@@ -73,7 +75,11 @@ export function WorkbenchChrome({
       ) : (
         <div className="workbench-chrome-toolbar">{toolbar}</div>
       )}
-      <div className="workbench-chrome-tabs" role="tablist" aria-label={tabsAriaLabel}>
+      <div
+        className={`workbench-chrome-tabs${tabsClassName ? ` ${tabsClassName}` : ''}`}
+        role="tablist"
+        aria-label={tabsAriaLabel}
+      >
         {tabs}
       </div>
       <div className={`workbench-chrome-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>

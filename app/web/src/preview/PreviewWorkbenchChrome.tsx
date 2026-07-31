@@ -6,7 +6,7 @@ import {
   type PreviewWorkbenchTabType,
 } from './previewWorkbenchState';
 import {Icon, type IconName} from '../common/Icon';
-import { DesktopDragRegion } from '../shell/layouts/desktop/DesktopTitleBar';
+import {WorkbenchChrome} from '../shell/workbench/WorkbenchChrome';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
 
@@ -31,6 +31,8 @@ type PreviewWorkbenchChromeProps = {
   searchActive?: boolean;
   searchDisabled?: boolean;
   onMobilePortRelayRefresh?: () => void;
+  mobileFullscreen?: boolean;
+  onMobileFullscreenChange?: (fullscreen: boolean) => void;
   children: React.ReactNode;
 };
 
@@ -62,27 +64,17 @@ export function PreviewWorkbenchChrome({
   searchActive = false,
   searchDisabled = false,
   onMobilePortRelayRefresh,
+  mobileFullscreen = false,
+  onMobileFullscreenChange,
   children,
 }: PreviewWorkbenchChromeProps) {
-  const [mobileHeaderHidden, setMobileHeaderHidden] = React.useState(false);
-  const surfaceRef = React.useRef<HTMLElement | null>(null);
   const fileTreeButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);
   const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
   const actionsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const activeTitle = previewWorkbenchHeaderTitle(activeTab);
-  const toolbar = (
+  const toolbarActions = (
     <>
-      <button
-        type="button"
-        className="chat-preview-icon-button"
-        onClick={onClose}
-        title={mode === 'mobile' ? 'Back' : 'Close preview'}
-        aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-      >
-        <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} />
-      </button>
-      <div className="preview-workbench-title" title={activeTitle}>{activeTitle}</div>
       {onSearch ? (
         <button
           type="button"
@@ -157,107 +149,89 @@ export function PreviewWorkbenchChrome({
   }, [actionsMenuOpen, fileTreeOpen, onActionsMenuClose, onFileTreeClose]);
 
   return (
-    <section
-      ref={surfaceRef}
-      className={`preview-workbench-surface chat-file-peek-surface ${mode}${mobileHeaderHidden ? ' mobile-header-hidden' : ''}`}
-      aria-label="Preview workbench"
+    <WorkbenchChrome
+      mode={mode}
+      surfaceClassName="preview-workbench-surface chat-file-peek-surface"
+      ariaLabel="Preview workbench"
+      title={activeTitle}
+      closeLabel={mode === 'mobile' ? 'Back to Chat' : 'Close preview'}
+      onClose={onClose}
+      actions={toolbarActions}
+      tabsAriaLabel="Open preview tabs"
+      tabsClassName="chat-file-workbench-tabs preview-workbench-tabs"
+      tabs={tabs.map(tab => {
+        const active = activeTab?.id === tab.id;
+        const tooltip = previewWorkbenchTabTooltip(tab);
+        return (
+          <div
+            key={`preview-tab:${tab.projectId}:${tab.id}`}
+            className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
+            role="tab"
+            aria-selected={active}
+            title={tooltip}
+          >
+            <button type="button" className="chat-file-workbench-tab-open" onClick={() => onTabSelect(tab.id)}>
+              <Icon name={previewWorkbenchTabIcon(tab.type)} className="preview-workbench-tab-icon" />
+              <span className="preview-workbench-tab-label">{tab.title}</span>
+            </button>
+            <button
+              type="button"
+              className="chat-file-workbench-tab-close"
+              onClick={() => onTabClose(tab.id)}
+              aria-label={`Close ${tab.title}`}
+              title="Close"
+            >
+              <Icon name="x" />
+            </button>
+          </div>
+        );
+      })}
+      mobileFullscreen={mobileFullscreen}
+      onMobileFullscreenChange={onMobileFullscreenChange}
+      bodyClassName="preview-workbench-body"
       onKeyDown={onWorkbenchKeyDown}
     >
-      {mode === 'desktop' ? (
-        <DesktopDragRegion className="chat-preview-toolbar preview-workbench-toolbar">
-          {toolbar}
-        </DesktopDragRegion>
-      ) : (
-        <div className="chat-preview-toolbar preview-workbench-toolbar">
-          {toolbar}
-        </div>
-      )}
-      <div className="chat-file-workbench-tabs preview-workbench-tabs" role="tablist" aria-label="Open preview tabs">
-        {tabs.map(tab => {
-          const active = activeTab?.id === tab.id;
-          const tooltip = previewWorkbenchTabTooltip(tab);
-          return (
+      {fileTree ? (
+        <div className="preview-workbench-body-tools">
+          {fileTreeSearch ? (
             <div
-              key={`preview-tab:${tab.projectId}:${tab.id}`}
-              className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
-              role="tab"
-              aria-selected={active}
-              title={tooltip}
+              ref={fileTreeSearchRef}
+              className="preview-workbench-tree-search-shell"
+              data-open={fileTreeOpen}
             >
-              <button type="button" className="chat-file-workbench-tab-open" onClick={() => onTabSelect(tab.id)}>
-                <Icon name={previewWorkbenchTabIcon(tab.type)} className="preview-workbench-tab-icon" />
-                <span className="preview-workbench-tab-label">{tab.title}</span>
-              </button>
-              <button
-                type="button"
-                className="chat-file-workbench-tab-close"
-                onClick={() => onTabClose(tab.id)}
-                aria-label={`Close ${tab.title}`}
-                title="Close"
-              >
-                <Icon name="x" />
-              </button>
+              {fileTreeSearch}
             </div>
-          );
-        })}
-      </div>
-      <div className="preview-workbench-body">
-        {fileTree ? (
-          <div className="preview-workbench-body-tools">
-            {fileTreeSearch ? (
-              <div
-                ref={fileTreeSearchRef}
-                className="preview-workbench-tree-search-shell"
-                data-open={fileTreeOpen}
-              >
-                {fileTreeSearch}
-              </div>
-            ) : null}
-            <button
-              ref={fileTreeButtonRef}
-              type="button"
-              className={`preview-workbench-tree-fab${fileTreeOpen ? ' active' : ''}`}
-              onClick={onFileTreeToggle}
-              aria-label="Toggle file tree"
-              title="Toggle file tree"
-              aria-pressed={fileTreeOpen}
-            >
-              <Icon name="files" />
-            </button>
-          </div>
-        ) : null}
-        {fileTreeOpen && fileTree ? (
-          <div ref={fileTreePanelRef} className="preview-workbench-tree-panel">
-            {fileTree}
-          </div>
-        ) : null}
-        {mode === 'mobile' ? (
-          <>
-            {activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (
-              <button
-                type="button"
-                className="preview-workbench-mobile-port-relay-refresh"
-                onClick={onMobilePortRelayRefresh}
-                title="Refresh relay page"
-                aria-label="Refresh relay page"
-              >
-                <Icon name="refreshCw" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={`preview-workbench-mobile-header-toggle${mobileHeaderHidden ? ' active' : ''}`}
-              onClick={() => setMobileHeaderHidden(hidden => !hidden)}
-              title={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
-              aria-label={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
-              aria-pressed={mobileHeaderHidden}
-            >
-              <Icon name={mobileHeaderHidden ? 'panelTopOpen' : 'panelTop'} />
-            </button>
-          </>
-        ) : null}
-        {children}
-      </div>
-    </section>
+          ) : null}
+          <button
+            ref={fileTreeButtonRef}
+            type="button"
+            className={`preview-workbench-tree-fab${fileTreeOpen ? ' active' : ''}`}
+            onClick={onFileTreeToggle}
+            aria-label="Toggle file tree"
+            title="Toggle file tree"
+            aria-pressed={fileTreeOpen}
+          >
+            <Icon name="files" />
+          </button>
+        </div>
+      ) : null}
+      {fileTreeOpen && fileTree ? (
+        <div ref={fileTreePanelRef} className="preview-workbench-tree-panel">
+          {fileTree}
+        </div>
+      ) : null}
+      {mode === 'mobile' && activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (
+        <button
+          type="button"
+          className="preview-workbench-mobile-port-relay-refresh"
+          onClick={onMobilePortRelayRefresh}
+          title="Refresh relay page"
+          aria-label="Refresh relay page"
+        >
+          <Icon name="refreshCw" />
+        </button>
+      ) : null}
+      {children}
+    </WorkbenchChrome>
   );
 }

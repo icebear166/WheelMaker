@@ -8,6 +8,7 @@ const STYLE_ENTRY_ORDER = [
   'settings.css',
   'portRelay.css',
   'debug.css',
+  'workbench.css',
   'file.css',
   'chat.css',
   'sessionlist.css',

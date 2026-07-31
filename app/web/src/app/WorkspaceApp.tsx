@@ -3204,6 +3204,7 @@ export function App() {
   const [terminalPanelHeight, setTerminalPanelHeight] = useState(280);
   const terminalPanelResizeRef = useRef<{pointerId: number; originY: number; startHeight: number} | null>(null);
   const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);
+  const [previewWorkbenchFullscreen, setPreviewWorkbenchFullscreen] = useState(false);
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
@@ -20208,6 +20209,8 @@ export function App() {
       onSearch={() => openPreviewSearch()}
       onWorkbenchKeyDown={handlePreviewWorkbenchKeyDown}
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
+      mobileFullscreen={mode === 'mobile' && previewWorkbenchFullscreen}
+      onMobileFullscreenChange={setPreviewWorkbenchFullscreen}
     >
       {previewSearchBar}
       <div

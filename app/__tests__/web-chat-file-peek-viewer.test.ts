@@ -267,6 +267,7 @@ describe('web chat file peek viewer', () => {
 
   test('chat preview can open without active content and keeps chrome close controls', () => {
     const mainTsx = readSourceText(mainPath);
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
@@ -277,7 +278,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const renderPreviewWorkbenchBody = (mode:');
     expect(mainTsx).toContain('No preview selected');
     expect(mainTsx).toContain('<PreviewWorkbenchChrome');
-    expect(mainTsx).toContain('title={mode === \'mobile\' ? \'Back\' : \'Close preview\'}');
+    expect(chromeTsx).toContain("closeLabel={mode === 'mobile' ? 'Back to Chat' : 'Close preview'}");
 
     expect(stylesCss).toContain('.chat-empty-preview-body {');
     expect(stylesCss).toContain('.chat-empty-preview-copy {');
@@ -443,7 +444,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).not.toContain('projectMenuOpen');
     expect(chromeTsx).not.toContain('onProjectSelect');
     expect(chromeTsx).toContain('previewWorkbenchHeaderTitle(activeTab)');
-    expect(chromeTsx).toContain('className="preview-workbench-title"');
+    expect(chromeTsx).toContain('title={activeTitle}');
     expect(chromeTsx).toContain('className="preview-workbench-actions"');
     expect(chromeTsx).toContain('previewWorkbenchTabIcon(');
     expect(chromeTsx).toContain('preview-workbench-tab-icon');
@@ -454,19 +455,19 @@ describe('web chat file peek viewer', () => {
   });
 
   test('preview workbench toolbar gives the title the remaining row width', () => {
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    const toolbar = cssRuleBlock(stylesCss, '.preview-workbench-toolbar');
+    const toolbar = cssRuleBlock(stylesCss, '.workbench-chrome-toolbar');
     expect(toolbar).toContain('display: grid;');
     expect(toolbar).toContain('grid-template-columns: 24px minmax(80px, 1fr) auto;');
 
-    const title = cssRuleBlock(stylesCss, '.preview-workbench-title');
+    const title = cssRuleBlock(stylesCss, '.workbench-chrome-title');
     expect(title).toContain('min-width: 0;');
     expect(title).toContain('overflow: hidden;');
     expect(title).toContain('text-overflow: ellipsis;');
 
-    const mobileToolbar = cssRuleBlock(stylesCss, '.preview-workbench-surface.mobile .preview-workbench-toolbar');
-    expect(mobileToolbar).toContain('grid-template-columns: 24px minmax(72px, 1fr) auto;');
+    expect(chromeTsx).toContain('surfaceClassName="preview-workbench-surface chat-file-peek-surface"');
   });
 
   test('file tree toggle is a floating body button on desktop and mobile', () => {
@@ -548,24 +549,28 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.chat-file-workbench-empty-action');
   });
 
-  test('mobile preview workbench can hide and restore its top chrome', () => {
+  test('mobile preview workbench uses controlled fullscreen in the shared chrome', () => {
+    const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(chromeTsx).toContain('const [mobileHeaderHidden, setMobileHeaderHidden] = React.useState(false);');
-    expect(chromeTsx).toContain("preview-workbench-surface chat-file-peek-surface ${mode}${mobileHeaderHidden ? ' mobile-header-hidden' : ''}");
-    expect(chromeTsx).toContain("mode === 'mobile' ? (");
-    expect(chromeTsx).toContain('preview-workbench-mobile-header-toggle');
-    expect(chromeTsx).toContain("setMobileHeaderHidden(hidden => !hidden)");
-    expect(chromeTsx).toContain("mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'");
-    expect(chromeTsx).toContain("mobileHeaderHidden ? 'panelTopOpen' : 'panelTop'");
+    expect(chromeTsx).toContain("import {WorkbenchChrome} from '../shell/workbench/WorkbenchChrome';");
+    expect(chromeTsx).toContain('mobileFullscreen?: boolean;');
+    expect(chromeTsx).toContain('onMobileFullscreenChange?: (fullscreen: boolean) => void;');
+    expect(chromeTsx).toContain('<WorkbenchChrome');
+    expect(chromeTsx).toContain('mobileFullscreen={mobileFullscreen}');
+    expect(chromeTsx).toContain('onMobileFullscreenChange={onMobileFullscreenChange}');
+    expect(chromeTsx).not.toContain('mobileHeaderHidden');
 
-    expect(stylesCss).toContain('.preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-toolbar');
-    expect(stylesCss).toContain('.preview-workbench-mobile-header-toggle');
-    const mobileToggle = cssRuleBlock(stylesCss, '.preview-workbench-mobile-header-toggle');
-    expect(mobileToggle).toContain('right: max(14px, var(--wm-safe-area-right));');
-    expect(mobileToggle).toContain('bottom: max(14px, var(--wm-safe-area-bottom));');
-    expect(mobileToggle).toContain('z-index: 11;');
+    expect(mainTsx).toContain('const [previewWorkbenchFullscreen, setPreviewWorkbenchFullscreen] = useState(false);');
+    expect(mainTsx).toContain("mobileFullscreen={mode === 'mobile' && previewWorkbenchFullscreen}");
+    expect(mainTsx).toContain('onMobileFullscreenChange={setPreviewWorkbenchFullscreen}');
+
+    expect(stylesCss).not.toContain('.preview-workbench-mobile-header-toggle');
+    expect(stylesCss).toContain('.workbench-chrome-fullscreen-toggle {\n  position: absolute;');
+    expect(stylesCss).toContain('right: max(14px, var(--wm-safe-area-right));');
+    expect(stylesCss).toContain('bottom: max(14px, var(--wm-safe-area-bottom));');
+    expect(stylesCss).toContain('z-index: 11;');
   });
 
   test('preview workbench closes open file-tree popovers on outside interactions', () => {
@@ -573,7 +578,6 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(chromeTsx).toContain('onFileTreeClose: () => void;');
-    expect(chromeTsx).toContain('const surfaceRef = React.useRef<HTMLElement | null>(null);');
     expect(chromeTsx).not.toContain('projectMenuRef');
     expect(chromeTsx).toContain('const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);');
     expect(chromeTsx).toContain("window.addEventListener('pointerdown', handlePointerDown, true);");
@@ -952,8 +956,8 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
 
-    const toolbar = cssRuleBlock(stylesCss, '.chat-preview-toolbar');
-    const desktopToolbar = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar');
+    const toolbar = cssRuleBlock(stylesCss, '.workbench-chrome-toolbar');
+    const desktopToolbar = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop > .workbench-chrome-toolbar');
     expect(toolbar).toContain('height: 32px;');
     expect(toolbar).toContain('min-height: 32px;');
     expect(toolbar).toContain('max-height: 32px;');
