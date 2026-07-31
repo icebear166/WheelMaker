@@ -17,6 +17,7 @@ export type ChatConfirmationReplyTextPart =
   | {type: 'confirmation'; reply: ChatConfirmationReply};
 
 const OPTION_LINE_PATTERN = /^\s*([A-H1-9])\.\s+(.+?)\s*$/;
+const BOLD_OPTION_LINE_PATTERN = /^\s*\*\*([A-H1-9])\.\s+(.+?)\*\*\s*$/;
 const LETTER_OPTION_LABELS = 'ABCDEFGH';
 const NUMBER_OPTION_LABELS = '123456789';
 const NUMERIC_CHOICE_CONTEXT_PATTERN =
@@ -69,6 +70,10 @@ function isFenceLine(line: string): boolean {
   return line.trimStart().startsWith('```');
 }
 
+function matchOptionLine(line: string): RegExpExecArray | null {
+  return BOLD_OPTION_LINE_PATTERN.exec(line) ?? OPTION_LINE_PATTERN.exec(line);
+}
+
 function hasNumericChoiceContext(lines: string[], firstOptionLine: number): boolean {
   const contextLines = lines.slice(Math.max(0, firstOptionLine - 4), firstOptionLine);
   return NUMERIC_CHOICE_CONTEXT_PATTERN.test(contextLines.join('\n'));
@@ -111,7 +116,7 @@ function findLatestOptionReplyBlock(text: string): ChatOptionReplyBlock | null {
     if (inCodeFence) {
       continue;
     }
-    const match = OPTION_LINE_PATTERN.exec(line);
+    const match = matchOptionLine(line);
     if (!match) {
       continue;
     }

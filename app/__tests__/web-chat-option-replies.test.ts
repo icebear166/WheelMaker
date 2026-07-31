@@ -20,6 +20,23 @@ describe('chat option reply extraction', () => {
     ]);
   });
 
+  test('extracts option lines wrapped in Markdown bold markers', () => {
+    expect(extractChatOptionReplies([
+      '下一个决策：Floating Nav 的“常驻”范围到哪里？',
+      '',
+      '**A. 所有移动端主界面都常驻（推荐）**  ',
+      'Chat、Preview、Terminal、Relay、Monitor、Settings 都显示。',
+      '',
+      '**B. 只在 Chat、Preview、Terminal 常驻**  ',
+      '本次只解决明确提出的三个界面。',
+      '',
+      '选 A 还是 B？',
+    ].join('\n'))).toEqual([
+      {label: 'A', text: '所有移动端主界面都常驻（推荐）'},
+      {label: 'B', text: '只在 Chat、Preview、Terminal 常驻'},
+    ]);
+  });
+
   test('extracts numeric choices only when a choice context is nearby', () => {
     expect(extractChatOptionReplies([
       '第二个问题：更新动作要支持到什么粒度？',

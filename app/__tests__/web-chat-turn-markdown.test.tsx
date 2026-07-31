@@ -19,9 +19,9 @@ jest.mock('react-markdown', () => {
         'mock-react-markdown',
         {source},
         ...blocks.map((block, index) => {
+          const blockStartLine = source.slice(0, source.indexOf(block)).split(/\r?\n/).length;
           if (/^\d+\.\s+/m.test(block)) {
             const ListItem = components?.li ?? 'li';
-            const blockStartLine = source.slice(0, source.indexOf(block)).split(/\r?\n/).length;
             return ReactModule.createElement(
               'ol',
               {key: index},
@@ -66,6 +66,10 @@ jest.mock('react-markdown', () => {
                   tagName: 'p',
                   properties: {},
                   children: [],
+                  position: {
+                    start: {line: blockStartLine, column: 1, offset: 0},
+                    end: {line: blockStartLine, column: block.length + 1, offset: block.length},
+                  },
                 },
               };
           return ReactModule.createElement(Paragraph, props, block);
@@ -106,6 +110,18 @@ const optionText = [
   'B. `session.list/session.updated/session.read` 都携带完整 queue。',
   '',
   'C. Session 信息只带 revision，完整 queue 必须另调接口读取。',
+].join('\n');
+
+const boldOptionText = [
+  '下一个决策：Floating Nav 的“常驻”范围到哪里？',
+  '',
+  '**A. 所有移动端主界面都常驻（推荐）**  ',
+  'Chat、Preview、Terminal、Relay、Monitor、Settings 都显示。',
+  '',
+  '**B. 只在 Chat、Preview、Terminal 常驻**  ',
+  '本次只解决明确提出的三个界面。',
+  '',
+  '选 A 还是 B？',
 ].join('\n');
 
 const optionReplies = [
@@ -218,6 +234,22 @@ describe('ChatTurnView Markdown reply structure', () => {
 
     expect(optionA.type).toBe('p');
     expect(onSelectOptionReply).toHaveBeenCalledWith('A');
+  });
+
+  it('adds interaction to option paragraphs wrapped in Markdown bold markers', async () => {
+    const historical = await renderTurn(boldOptionText);
+    const selectable = await renderTurn(boldOptionText, {
+      optionReplies: [
+        {label: 'A', text: '所有移动端主界面都常驻（推荐）'},
+        {label: 'B', text: '只在 Chat、Preview、Terminal 常驻'},
+      ],
+      onSelectOptionReply: jest.fn(),
+    });
+
+    expect(markdownSources(selectable)).toEqual([boldOptionText]);
+    expect(renderedMarkdownBlocks(selectable)).toEqual(renderedMarkdownBlocks(historical));
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'A'}).type).toBe('p');
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'B'}).type).toBe('p');
   });
 
   it('adds the same geometry-free interaction to native numeric list items', async () => {
