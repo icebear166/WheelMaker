@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -30,9 +31,36 @@ func (s *Server) handleServerDataRequest(peer *peerConn, state *connectionState,
 		s.handleServerConfigUpdate(peer, in)
 	case rp.RegistryMethodServerAndroidSpeechCredentialGet:
 		s.handleAndroidSpeechCredentialGet(peer, state, in)
+	case rp.RegistryMethodCodexRadarEfficiencyGet:
+		s.handleCodexRadarEfficiencyGet(peer, in)
 	default:
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported server data method", nil)
 	}
+}
+
+func (s *Server) handleCodexRadarEfficiencyGet(peer *peerConn, in envelope) {
+	var payload struct{}
+	if err := decodeStrictPayload(in.Payload, &payload); err != nil {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid CodexRadar efficiency payload", nil)
+		return
+	}
+	if s.codexRadarEfficiencyLoader == nil {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInternal, "CodexRadar efficiency is unavailable", nil)
+		return
+	}
+	raw, err := s.codexRadarEfficiencyLoader(context.Background())
+	if err != nil {
+		registryLogger("").Warn("CodexRadar efficiency fetch failed: %v", err)
+		_ = s.writeError(peer, in.RequestID, in.Method, codeUnavailable, "fetch CodexRadar efficiency failed", nil)
+		return
+	}
+	snapshot, err := decodeCodexRadarEfficiency(raw)
+	if err != nil {
+		registryLogger("").Warn("CodexRadar efficiency decode failed: %v", err)
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInternal, "decode CodexRadar efficiency failed", nil)
+		return
+	}
+	_ = s.writeResponse(peer, in.RequestID, in.Method, "", snapshot)
 }
 
 func (s *Server) handleServerConfigGet(peer *peerConn, in envelope) {

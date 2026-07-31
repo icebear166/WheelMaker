@@ -443,7 +443,10 @@ import {
 } from '../hubState/hubSelectors';
 import type {HubStoreSnapshot} from '../hubState/hubStore';
 import type {UsageProviderView, UsageViewAccount, UsageViewSnapshot} from '../usage/usageTypes';
-import {ModelEfficiencyStore} from '../modelEfficiency/modelEfficiencyStore';
+import {
+  MODEL_EFFICIENCY_REFRESH_INTERVAL_MS,
+  ModelEfficiencyStore,
+} from '../modelEfficiency/modelEfficiencyStore';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {
   deriveNpmPackageUpdateTargets,
@@ -3428,7 +3431,10 @@ export function App() {
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
   const usageHistoryRequestSeqRef = useRef(0);
   const [usageHistoryDialogView, setUsageHistoryDialogView] = useState<UsageHistoryDialogView | null>(null);
-  const modelEfficiencyStore = useMemo(() => new ModelEfficiencyStore(), []);
+  const modelEfficiencyStore = useMemo(
+    () => new ModelEfficiencyStore(() => service.getCodexRadarEfficiency()),
+    [],
+  );
   const [modelEfficiencySnapshot, setModelEfficiencySnapshot] = useState<ModelEfficiencySnapshot>(
     () => modelEfficiencyStore.snapshot(),
   );
@@ -12305,8 +12311,13 @@ export function App() {
   );
 
   useEffect(() => {
+    if (!connected) return;
     void modelEfficiencyStore.refresh();
-  }, [modelEfficiencyStore]);
+    const timer = window.setInterval(() => {
+      void modelEfficiencyStore.refresh();
+    }, MODEL_EFFICIENCY_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [connected, modelEfficiencyStore]);
 
   const refreshUsageAcrossHubs = useCallback(() => {
     return Promise.allSettled(registryHubs.map(hub =>

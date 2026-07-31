@@ -1070,6 +1070,15 @@ export class RegistryRepository {
     return normalizeServerSettings(response.payload);
   }
 
+  async getCodexRadarEfficiency(): Promise<unknown> {
+    const response = await this.client.request({
+      method: RegistryMethods.CodexRadarEfficiencyGet,
+      payload: {},
+      timeoutMs: 15000,
+    });
+    return response.payload;
+  }
+
   async updateServerSettings(payload: ServerSettingsUpdate): Promise<ServerSettings> {
     const response = await this.client.request({
       method: RegistryMethods.ServerConfigUpdate,

@@ -6,8 +6,9 @@ IQ 是 Workspace Web 内的只读模型比较功能。它展示 Codex 模型不�
 
 ## 数据所有权与刷新
 
-- Workspace Web 前端的单例 store 直接读取 `https://codexradar.com/data/intelligence-efficiency.json`，Hub、Registry 和 ACP 不参与。
-- 每个页面生命周期启动时请求一次；运行期间不存在定时或 focus 刷新，用户点击 Monitor 的共享刷新按钮时与 Limits 一起刷新。
+- Workspace Web 前端的单例 store 通过 Registry 请求 `registry.codexRadar.efficiency.get`；Registry 服务端读取 CodexRadar 实时表并聚合为紧凑的 `points` 快照，Hub 和 ACP 不参与。
+- Registry 连接建立后请求一次，随后每 10 分钟刷新；用户点击 Monitor 的刷新按钮时也会立即刷新 IQ。无 Registry 连接时不发起外部请求。
+- store 仍保留默认的浏览器直连 loader，使用 `https://codexradar.com/data/intelligence-efficiency.json` 和 `cache: no-store`，仅供未注入 Registry loader 的独立调用方使用。
 - store 对并发刷新做 singleflight。快照只保存在页面内存，不跨刷新或应用重启持久化；已有数据后的刷新失败保留当前快照并显示错误。
 - 桌面 Monitor 和窄屏 Monitor 弹层共享同一个 store 快照，不在组件内分别请求。
 - Monitor 不显示 CodexRadar 标题栏图标或独立状态栏；桌面刷新按钮 tooltip 可显示 IQ 数据更新时间。

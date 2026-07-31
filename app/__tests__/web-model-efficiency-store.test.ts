@@ -1,8 +1,9 @@
 import {
-  CODEX_RADAR_EFFICIENCY_URL,
   ModelEfficiencyStore,
-  type ModelEfficiencyFetcher,
 } from '../web/src/modelEfficiency/modelEfficiencyStore';
+import {RegistryRepository} from '../web/src/registry/RegistryRepository';
+import {RegistryWorkspaceService} from '../web/src/registry/RegistryWorkspaceService';
+import {RegistryMethods} from '../web/src/registry/registryMethods';
 
 const successfulPayload = {
   source_updated_at: '2026-07-22T13:58:55+08:00',
@@ -15,14 +16,6 @@ const successfulPayload = {
   }],
 };
 
-function response(payload: unknown, ok = true, status = 200) {
-  return {
-    ok,
-    status,
-    json: async () => payload,
-  };
-}
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -34,9 +27,20 @@ function deferred<T>() {
 }
 
 describe('ModelEfficiencyStore', () => {
+  test('loads a normalized snapshot from an injected Registry payload loader', async () => {
+    const loader = jest.fn(async () => successfulPayload);
+    const store = new ModelEfficiencyStore(loader);
+
+    await store.refresh();
+
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(store.snapshot().status).toBe('ready');
+    expect(store.snapshot().updatedAt).toBe('2026-07-22T13:58:55+08:00');
+  });
+
   test('loads and normalizes the current CodexRadar snapshot', async () => {
-    const fetcher = jest.fn<ModelEfficiencyFetcher>(async () => response(successfulPayload));
-    const store = new ModelEfficiencyStore(fetcher);
+    const loader = jest.fn(async () => successfulPayload);
+    const store = new ModelEfficiencyStore(loader);
 
     const refresh = store.refresh();
     expect(store.snapshot()).toEqual({
@@ -47,7 +51,7 @@ describe('ModelEfficiencyStore', () => {
 
     await refresh;
 
-    expect(fetcher).toHaveBeenCalledWith(CODEX_RADAR_EFFICIENCY_URL);
+    expect(loader).toHaveBeenCalledTimes(1);
     expect(store.snapshot()).toEqual({
       status: 'ready',
       refreshing: false,
@@ -63,7 +67,7 @@ describe('ModelEfficiencyStore', () => {
   });
 
   test('notifies subscribers immediately and after each request transition', async () => {
-    const store = new ModelEfficiencyStore(async () => response(successfulPayload));
+    const store = new ModelEfficiencyStore(async () => successfulPayload);
     const listener = jest.fn();
     const unsubscribe = store.subscribe(listener);
 
@@ -80,22 +84,24 @@ describe('ModelEfficiencyStore', () => {
   });
 
   test('coalesces concurrent refreshes into one request', async () => {
-    const pending = deferred<ReturnType<typeof response>>();
-    const fetcher = jest.fn<ModelEfficiencyFetcher>(() => pending.promise);
-    const store = new ModelEfficiencyStore(fetcher);
+    const pending = deferred<unknown>();
+    const loader = jest.fn(() => pending.promise);
+    const store = new ModelEfficiencyStore(loader);
 
     const first = store.refresh();
     const second = store.refresh();
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(loader).toHaveBeenCalledTimes(1);
 
-    pending.resolve(response(successfulPayload));
+    pending.resolve(successfulPayload);
     await Promise.all([first, second]);
     expect(store.snapshot().status).toBe('ready');
   });
 
   test('exposes a retryable error when the first request fails', async () => {
-    const fetcher = jest.fn<ModelEfficiencyFetcher>(async () => response({}, false, 503));
-    const store = new ModelEfficiencyStore(fetcher);
+    const loader = jest.fn(async () => {
+      throw new Error('CodexRadar request failed (503).');
+    });
+    const store = new ModelEfficiencyStore(loader);
 
     await store.refresh();
 
@@ -106,16 +112,16 @@ describe('ModelEfficiencyStore', () => {
       error: 'CodexRadar request failed (503).',
     });
 
-    fetcher.mockImplementationOnce(async () => response(successfulPayload));
+    loader.mockImplementationOnce(async () => successfulPayload);
     await store.refresh();
     expect(store.snapshot().status).toBe('ready');
   });
 
   test('retains stale data and source time when manual refresh fails', async () => {
-    const fetcher = jest.fn<ModelEfficiencyFetcher>()
-      .mockResolvedValueOnce(response(successfulPayload))
+    const loader = jest.fn<() => Promise<unknown>>()
+      .mockResolvedValueOnce(successfulPayload)
       .mockRejectedValueOnce(new Error('Network offline'));
-    const store = new ModelEfficiencyStore(fetcher);
+    const store = new ModelEfficiencyStore(loader);
     await store.refresh();
     const ready = store.snapshot();
 
@@ -144,5 +150,34 @@ describe('ModelEfficiencyStore', () => {
 
     await store.refresh();
     expect(store.snapshot().error).toBe('Unable to refresh CodexRadar data.');
+  });
+});
+
+describe('RegistryRepository CodexRadar access', () => {
+  test('requests the live efficiency snapshot through Registry server data', async () => {
+    const request = jest.fn(async () => ({
+      payload: successfulPayload,
+    }));
+    const repository = new RegistryRepository({request} as never);
+
+    await repository.getCodexRadarEfficiency();
+
+    expect(request).toHaveBeenCalledWith({
+      method: RegistryMethods.CodexRadarEfficiencyGet,
+      payload: {},
+      timeoutMs: 15000,
+    });
+  });
+
+  test('exposes the Repository method through the connected Workspace service', async () => {
+    const payload = {source_updated_at: '2026-07-22T13:58:55+08:00', points: []};
+    const repository = {
+      getCodexRadarEfficiency: jest.fn().mockResolvedValue(payload),
+    };
+    const service = new RegistryWorkspaceService();
+    Object.assign(service as unknown as {repository: unknown}, {repository});
+
+    await expect(service.getCodexRadarEfficiency()).resolves.toBe(payload);
+    expect(repository.getCodexRadarEfficiency).toHaveBeenCalledTimes(1);
   });
 });

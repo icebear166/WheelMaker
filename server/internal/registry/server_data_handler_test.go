@@ -1,8 +1,11 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +14,84 @@ import (
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/serverdata"
 )
+
+func TestCodexRadarEfficiencyGetAggregatesLiveTable(t *testing.T) {
+	server := New(Config{})
+	server.codexRadarEfficiencyLoader = func(context.Context) (json.RawMessage, error) {
+		return json.RawMessage(`{
+			"combos": [
+				{"model":"gpt-5.6-sol","effort":"max"},
+				{"model":"gpt-5.6-sol","effort":"low"}
+			],
+			"tasks": [{"id":"task-a"},{"id":"task-b"}],
+			"cells": {
+				"task-a|gpt-5.6-sol|max": {"ran_by":[{"passed":true,"duration_sec":120,"actual_cost_usd":2,"graded_at":"2026-07-31T10:00:00Z"}]},
+				"task-b|gpt-5.6-sol|max": {"ran_by":[{"passed":false,"duration_sec":180,"actual_cost_usd":4,"graded_at":"2026-07-31T10:05:00Z"}]},
+				"task-a|gpt-5.6-sol|low": {"ran_by":[{"passed":true,"duration_sec":60,"actual_cost_usd":1,"graded_at":"2026-07-31T10:01:00Z"}]},
+				"task-b|gpt-5.6-sol|low": {"ran_by":[{"passed":true,"duration_sec":90,"actual_cost_usd":2,"graded_at":"2026-07-31T10:02:00Z"}]}
+			}
+		}`), nil
+	}
+	response := invokeServerDataHandler(t, server, &connectionState{browserSession: true, role: string(rp.RegistryRoleClient), clientName: "wheelmaker-web"}, envelope{
+		RequestID: 1,
+		Method:    rp.RegistryMethodCodexRadarEfficiencyGet,
+		Payload:   rp.MustRaw(map[string]any{}),
+	})
+	if response.Type != rp.RegistryEnvelopeTypeResponse {
+		t.Fatalf("response=%+v", response)
+	}
+	var payload struct {
+		SourceUpdatedAt string `json:"source_updated_at"`
+		Points          []struct {
+			Model           string  `json:"model"`
+			Effort          string  `json:"effort"`
+			IQ              float64 `json:"iq"`
+			AveragePriceUSD float64 `json:"average_price_usd"`
+			AverageMinutes  float64 `json:"average_minutes"`
+		} `json:"points"`
+	}
+	if err := json.Unmarshal(response.Payload, &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.SourceUpdatedAt != "2026-07-31T10:05:00Z" {
+		t.Fatalf("source_updated_at=%q", payload.SourceUpdatedAt)
+	}
+	if len(payload.Points) != 2 {
+		t.Fatalf("points=%+v", payload.Points)
+	}
+	if payload.Points[0].Effort != "max" || payload.Points[0].IQ != 75 || payload.Points[0].AveragePriceUSD != 3 || payload.Points[0].AverageMinutes != 2.5 {
+		t.Fatalf("max point=%+v", payload.Points[0])
+	}
+	if payload.Points[1].Effort != "low" || payload.Points[1].IQ != 150 || payload.Points[1].AveragePriceUSD != 1.5 || payload.Points[1].AverageMinutes != 1.25 {
+		t.Fatalf("low point=%+v", payload.Points[1])
+	}
+}
+
+func TestCodexRadarEfficiencyFetcherLoadsLiveEndpoint(t *testing.T) {
+	const body = `{"combos":[],"tasks":[],"cells":{}}`
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			t.Errorf("method=%q, want GET", request.Method)
+		}
+		if request.Header.Get("Accept") != "application/json" {
+			t.Errorf("Accept=%q", request.Header.Get("Accept"))
+		}
+		if request.Header.Get("Cache-Control") != "no-cache" {
+			t.Errorf("Cache-Control=%q", request.Header.Get("Cache-Control"))
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	defer httpServer.Close()
+
+	fetcher := &codexRadarEfficiencyFetcher{client: httpServer.Client(), endpoint: httpServer.URL}
+	raw, err := fetcher.load(context.Background())
+	if err != nil {
+		t.Fatalf("load() error = %v", err)
+	}
+	if string(raw) != body {
+		t.Fatalf("raw body = %q, want %q", raw, body)
+	}
+}
 
 type fakeServerDataStore struct {
 	mu            sync.Mutex

@@ -40,15 +40,17 @@ describe('model efficiency workspace integration', () => {
     expect(main).not.toContain('showModelEfficiency={showModelEfficiency}');
   });
 
-  test('creates one frontend store, subscribes once, and performs only startup/manual refreshes', () => {
-    expect(main).toContain('const modelEfficiencyStore = useMemo(() => new ModelEfficiencyStore(), []);');
+  test('creates one frontend store, subscribes once, and refreshes through Registry', () => {
+    expect(main).toContain('new ModelEfficiencyStore(() => service.getCodexRadarEfficiency())');
     expect(main).toContain('modelEfficiencyStore.subscribe(setModelEfficiencySnapshot)');
     expect(main).toContain('void modelEfficiencyStore.refresh();');
     expect(store).toContain("https://codexradar.com/data/intelligence-efficiency.json");
+    expect(store).toContain("cache: 'no-store'");
     expect(store).not.toContain('localStorage');
     expect(store).not.toContain('sessionStorage');
-    expect(store).not.toContain('setInterval');
-    expect(store).not.toContain('setTimeout');
+    expect(main).toContain('MODEL_EFFICIENCY_REFRESH_INTERVAL_MS');
+    expect(main).toContain('window.setInterval');
+    expect(main).toContain('window.clearInterval');
     expect(model).not.toContain('currentModel');
     expect(model).not.toContain('selectedModel');
   });

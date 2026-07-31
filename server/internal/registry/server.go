@@ -259,12 +259,13 @@ type Server struct {
 	nextForwardID atomic.Int64
 	nextConnEpoch atomic.Int64
 
-	relay        *portrelay.Controller
-	relayInitErr error
-	webSessions  *webSessionStore
-	loginLimiter *loginLimiter
-	ipLocation   IPLocationResolver
-	serverData   ServerDataStore
+	relay                      *portrelay.Controller
+	relayInitErr               error
+	webSessions                *webSessionStore
+	loginLimiter               *loginLimiter
+	ipLocation                 IPLocationResolver
+	serverData                 ServerDataStore
+	codexRadarEfficiencyLoader func(context.Context) (json.RawMessage, error)
 
 	speech *speechService
 	tts    *ttsService
@@ -403,6 +404,8 @@ func New(cfg Config) *Server {
 		ipLocation:   cfg.IPLocationResolver,
 		serverData:   cfg.ServerData,
 	}
+	codexRadarFetcher := newCodexRadarEfficiencyFetcher()
+	s.codexRadarEfficiencyLoader = codexRadarFetcher.load
 	s.speech = newSpeechService(speechprovider.NewVolcengineProvider(), s.resolveVolcengineASRSecret)
 	s.tts = newTTSService(ttsprovider.NewClient(), s.resolveMiMoTTSSecret)
 	relay, relayErr := portrelay.NewController(portrelay.ControllerConfig{

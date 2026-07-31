@@ -5,18 +5,17 @@ import {
 import type {ModelEfficiencySnapshot} from './modelEfficiencyTypes';
 
 export const CODEX_RADAR_EFFICIENCY_URL = 'https://codexradar.com/data/intelligence-efficiency.json';
+export const MODEL_EFFICIENCY_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 
-export type ModelEfficiencyFetchResponse = {
-  ok: boolean;
-  status: number;
-  json(): Promise<unknown>;
+export type ModelEfficiencyLoader = () => Promise<unknown>;
+
+const defaultLoader: ModelEfficiencyLoader = async () => {
+  const response = await fetch(CODEX_RADAR_EFFICIENCY_URL, {cache: 'no-store'});
+  if (!response.ok) {
+    throw new Error(`CodexRadar request failed (${response.status}).`);
+  }
+  return response.json();
 };
-
-export type ModelEfficiencyFetcher = (
-  url: string,
-) => Promise<ModelEfficiencyFetchResponse>;
-
-const defaultFetcher: ModelEfficiencyFetcher = async (url) => fetch(url);
 
 export class ModelEfficiencyStore {
   private current: ModelEfficiencySnapshot = {
@@ -28,7 +27,7 @@ export class ModelEfficiencyStore {
   private readonly listeners = new Set<(snapshot: ModelEfficiencySnapshot) => void>();
   private inFlight: Promise<void> | null = null;
 
-  constructor(private readonly fetcher: ModelEfficiencyFetcher = defaultFetcher) {}
+  constructor(private readonly loader: ModelEfficiencyLoader = defaultLoader) {}
 
   snapshot(): ModelEfficiencySnapshot {
     return this.current;
@@ -59,11 +58,7 @@ export class ModelEfficiencyStore {
 
   private async load(): Promise<void> {
     try {
-      const response = await this.fetcher(CODEX_RADAR_EFFICIENCY_URL);
-      if (!response.ok) {
-        throw new Error(`CodexRadar request failed (${response.status}).`);
-      }
-      const payload = await response.json();
+      const payload = await this.loader();
       const updatedAt = readModelEfficiencyUpdatedAt(payload);
       this.current = {
         status: 'ready',

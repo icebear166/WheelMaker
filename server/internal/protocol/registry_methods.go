@@ -102,6 +102,7 @@ const (
 	RegistryMethodServerConfigGet                  = "server.config.get"
 	RegistryMethodServerConfigUpdate               = "server.config.update"
 	RegistryMethodServerAndroidSpeechCredentialGet = "server.androidSpeechCredential.get"
+	RegistryMethodCodexRadarEfficiencyGet          = "registry.codexRadar.efficiency.get"
 
 	RegistryMethodSessionList                = "session.list"
 	RegistryMethodSessionRead                = "session.read"
@@ -199,6 +200,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodServerConfigGet:                  registryMethod(RegistryMethodServerConfigGet, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodServerConfigUpdate:               registryMethod(RegistryMethodServerConfigUpdate, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodServerAndroidSpeechCredentialGet: registryMethod(RegistryMethodServerAndroidSpeechCredentialGet, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodCodexRadarEfficiencyGet:          registryMethod(RegistryMethodCodexRadarEfficiencyGet, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),

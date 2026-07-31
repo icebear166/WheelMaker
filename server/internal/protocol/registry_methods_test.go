@@ -129,7 +129,7 @@ func TestRegistryDeviceSessionMethods(t *testing.T) {
 }
 
 func TestServerConfigMethodsAndSerializationAreSetOnly(t *testing.T) {
-	for _, method := range []string{RegistryMethodServerConfigGet, RegistryMethodServerConfigUpdate, RegistryMethodServerAndroidSpeechCredentialGet} {
+	for _, method := range []string{RegistryMethodServerConfigGet, RegistryMethodServerConfigUpdate, RegistryMethodServerAndroidSpeechCredentialGet, RegistryMethodCodexRadarEfficiencyGet} {
 		desc, ok := RegistryMethod(method)
 		if !ok || desc.Route != RegistryRouteServerData || !RegistryMethodAllowed(string(RegistryRoleClient), method) {
 			t.Fatalf("server data method %q descriptor=%+v ok=%v", method, desc, ok)

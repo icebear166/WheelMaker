@@ -10,6 +10,7 @@ export const RegistryMethods = {
   ServerConfigGet: 'server.config.get',
   ServerConfigUpdate: 'server.config.update',
   ServerAndroidSpeechCredentialGet: 'server.androidSpeechCredential.get',
+  CodexRadarEfficiencyGet: 'registry.codexRadar.efficiency.get',
   RegistryProjectList: 'registry.project.list',
   RegistryProjectReport: 'registry.project.report',
   RegistryRelayStatus: 'registry.relay.status',

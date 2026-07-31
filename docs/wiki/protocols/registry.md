@@ -783,6 +783,7 @@ Server Data 复用已认证的 Registry WebSocket，不新增 HTTP 或 Nginx 路
 - `server.config.get` 接受空对象，返回 Voice Input、Text-to-Speech、DeepSeek 的 `configured` / `updatedAt` 以及 Model / Voice；响应永远不包含 Key。
 - `server.config.update` 接受 `section`、`field`、`action`、可选 `value`，更新成功后返回完整非敏感快照。Key 只接受 `set` / `clear`，Model / Voice 只接受 `set`。
 - `server.androidSpeechCredential.get` 接受空对象，只向“有效浏览器设备 Session + `role=client` + `clientName=wheelmaker-android`”返回 Volcengine `accessToken`、版本和 Model。
+- `registry.codexRadar.efficiency.get` 接受空对象，由 Registry 服务端请求 CodexRadar 实时效率表并返回聚合后的 `source_updated_at` 与 `points`；仅允许 `role=client` 调用，源站不可用时返回 `UNAVAILABLE`。
 
 Android 客户端名称只是当前单用户模型下的便利门禁，不是设备硬件证明；持有有效登录 Cookie 的调用方可以伪造该名称。该方法不会返回 DeepSeek 或 MiMo Key。
 

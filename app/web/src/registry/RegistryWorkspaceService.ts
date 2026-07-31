@@ -511,6 +511,13 @@ export class RegistryWorkspaceService {
     return (await this.listProjectSnapshot()).projects;
   }
 
+  async getCodexRadarEfficiency(): Promise<unknown> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getCodexRadarEfficiency();
+  }
+
   async uploadDebugLog(payload: RegistryDebugUploadLogPayload): Promise<RegistryDebugUploadLogResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
