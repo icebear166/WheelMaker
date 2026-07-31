@@ -26,6 +26,24 @@ $security = $documents['docs/security.md']
 $knownRisks = $documents['docs/security-known-risks.md']
 $allDocs = ($documents.Values -join "`n")
 
+foreach ($relativePath in @('README.md', 'INSTALL.md')) {
+    $nginxDoc = $documents[$relativePath]
+    foreach ($pattern in @(
+        'gzip on;',
+        'gzip_vary on;',
+        'gzip_min_length 1024;',
+        'gzip_comp_level 5;',
+        'text/css',
+        'application/javascript',
+        'application/manifest+json',
+        'image/svg+xml'
+    )) {
+        if (-not $nginxDoc.Contains($pattern)) {
+            Fail "$relativePath Nginx template is missing: $pattern"
+        }
+    }
+}
+
 $requiredSecurityPatterns = [ordered]@{
     'single-user and single-token scope' = '(?is)single.user.*single.token'
     '256-bit generated token and short custom token risk' = '(?is)256.bit.*short custom'

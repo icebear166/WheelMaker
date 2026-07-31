@@ -97,30 +97,12 @@ export type WorkspaceSession = {
   projects: RegistryProject[];
   hubs: RegistryHub[];
   selectedProjectId: string;
-  fileEntries: RegistryFsEntry[];
 };
 
 export type RegistryWorkspaceServiceOptions = {
   createRepository?: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;
   clientName?: RegistryClientName;
 };
-
-const PROJECT_CONNECT_PROBE_TIMEOUT_MS = 5000;
-
-function isProjectReachabilityError(error: unknown): boolean {
-  if (error instanceof RegistryRequestError) {
-    return error.code === 'NOT_FOUND' || error.code === 'UNAVAILABLE';
-  }
-  if (error && typeof error === 'object' && 'code' in error) {
-    const code = (error as {code?: unknown}).code;
-    if (code === 'NOT_FOUND' || code === 'UNAVAILABLE') return true;
-  }
-  return error instanceof Error
-    && (
-      error.message.includes('registry request timed out')
-      || error.message.includes('project probe timed out')
-    );
-}
 
 export function translateExternalFileError(error: unknown): never {
   const details = error instanceof RegistryRequestError
@@ -173,12 +155,10 @@ export class RegistryWorkspaceService {
       const previousRepository = this.repository;
       this.bindRepository(repository);
       const snapshot = await this.listProjectSnapshotWithRetry(repository);
-      const {selectedProjectId, fileEntries} = snapshot.projects.length > 0
-        ? await this.selectFirstReachableProject(repository, snapshot.projects)
-        : {selectedProjectId: '', fileEntries: []};
+      const selectedProjectId = snapshot.projects[0]?.projectId ?? '';
       previousRepository?.close();
       this.repository = repository;
-      this.session = {...snapshot, selectedProjectId, fileEntries};
+      this.session = {...snapshot, selectedProjectId};
       void this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId));
       return this.session;
     } catch (error) {
@@ -240,44 +220,6 @@ export class RegistryWorkspaceService {
     return lastSnapshot;
   }
 
-  private async selectFirstReachableProject(
-    repository: RegistryRepository,
-    projects: RegistryProject[],
-  ): Promise<{selectedProjectId: string; fileEntries: RegistryFsEntry[]}> {
-    for (const project of projects) {
-      if (!project.projectId) continue;
-      if (project.online === false) continue;
-      try {
-        const fileList = await this.probeProjectRoot(repository, project.projectId);
-        return {selectedProjectId: project.projectId, fileEntries: fileList.entries ?? []};
-      } catch (error) {
-        if (!isProjectReachabilityError(error)) {
-          throw error;
-        }
-      }
-    }
-    return {selectedProjectId: '', fileEntries: []};
-  }
-
-  private async probeProjectRoot(
-    repository: RegistryRepository,
-    projectId: string,
-  ): ReturnType<RegistryRepository['listFiles']> {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-      return await Promise.race([
-        repository.listFiles(projectId, '.'),
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => {
-            reject(new Error(`project probe timed out (${PROJECT_CONNECT_PROBE_TIMEOUT_MS}ms): ${projectId}`));
-          }, PROJECT_CONNECT_PROBE_TIMEOUT_MS);
-        }),
-      ]);
-    } finally {
-      if (timeout !== undefined) clearTimeout(timeout);
-    }
-  }
-
   close(): void {
     this.repository?.close();
     this.repository = null;
@@ -285,15 +227,6 @@ export class RegistryWorkspaceService {
   }
 
   getSession(): WorkspaceSession | null {
-    return this.session;
-  }
-
-  async selectProject(projectId: string): Promise<WorkspaceSession> {
-    if (!this.session || !this.repository) {
-      throw new Error('session is not ready');
-    }
-    const fileEntries = (await this.repository.listFiles(projectId, '.')).entries ?? [];
-    this.session = {...this.session, selectedProjectId: projectId, fileEntries};
     return this.session;
   }
 

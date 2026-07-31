@@ -12,27 +12,33 @@ import { WorkspaceController } from '../web/src/workspace/WorkspaceController';
 import { WorkspaceStore } from '../web/src/workspace/WorkspaceStore';
 
 describe('workspace lightweight project switching', () => {
-  test('does not re-probe a preferred project after connection degraded to no selection', async () => {
-    const session = {
-      projects: [{projectId: 'offline', name: 'Offline', online: false, path: '/offline'}],
-      hubs: [],
-      selectedProjectId: '',
-      fileEntries: [],
-    };
+  test('restores a preferred project without loading its root filesystem', async () => {
+    const projects = [
+      {projectId: 'p1', name: 'One', online: true, path: '/one'},
+      {projectId: 'p2', name: 'Two', online: true, path: '/two'},
+    ];
     const service = {
-      connect: jest.fn().mockResolvedValue(session),
-      selectProject: jest.fn(),
+      connect: jest.fn().mockResolvedValue({
+        projects,
+        hubs: [{hubId: 'hub'}],
+        selectedProjectId: 'p1',
+      }),
+      selectProjectLightweight: jest.fn().mockResolvedValue({
+        projects,
+        hubs: [{hubId: 'hub'}],
+        selectedProjectId: 'p2',
+      }),
     };
     const store = {
-      selectProjectOnConnect: jest.fn(() => 'offline'),
+      selectProjectOnConnect: jest.fn(() => 'p2'),
       hydrateProject: jest.fn((projectId: string) => ({projectId})),
     };
     const controller = new WorkspaceController(service as any, store as any);
 
     await expect(controller.connect('ws://registry.example/ws')).resolves.toMatchObject({
-      hydrated: {projectId: ''},
+      hydrated: {projectId: 'p2'},
     });
-    expect(service.selectProject).not.toHaveBeenCalled();
+    expect(service.selectProjectLightweight).toHaveBeenCalledWith('p2');
   });
 
   test('switches project identity without loading root files', async () => {
@@ -43,7 +49,6 @@ describe('workspace lightweight project switching', () => {
           { projectId: 'p2', name: 'Two', online: true, path: '/two' },
         ],
         selectedProjectId: 'p2',
-        fileEntries: [{ name: 'stale', path: 'stale', kind: 'file' }],
       }),
       listDirectory: jest.fn(),
     };

@@ -593,7 +593,10 @@ class MainActivity : Activity() {
             showBootstrap("")
             return
         }
-        probeAndLoad(baseUrl, notificationUrl)
+        val policy = BaseUrlPolicy(baseUrl)
+        val targetUrl = notificationUrl?.takeIf(policy::contains) ?: baseUrl
+        bootstrapError = ""
+        loadConfiguredRemote(webView, targetUrl)
     }
 
     private fun probeAndLoad(baseUrl: String, requestedUrl: String? = null) {

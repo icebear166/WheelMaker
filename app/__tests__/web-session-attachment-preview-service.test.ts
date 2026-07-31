@@ -127,7 +127,6 @@ describe('registry session attachment preview service', () => {
       session: {
         projects: [],
         selectedProjectId: 'workspace-project',
-        fileEntries: [],
       },
     });
 

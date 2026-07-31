@@ -13,10 +13,10 @@ describe('web clear local cache settings', () => {
     expect(settingsRootTsx).toContain('Clear Local Cache');
     expect(settingsRootTsx).not.toContain('Clear Local Cache (Keep Token)');
     const clearCacheStart = mainTsx.indexOf('const requestClearLocalCache = () => {');
-    const switchProjectStart = mainTsx.indexOf('const switchProject = async', clearCacheStart);
+    const selectDraftChatSessionStart = mainTsx.indexOf('const selectDraftChatSession = useCallback', clearCacheStart);
     expect(clearCacheStart).toBeGreaterThanOrEqual(0);
-    expect(switchProjectStart).toBeGreaterThan(clearCacheStart);
-    const clearCacheFlow = mainTsx.slice(clearCacheStart, switchProjectStart);
+    expect(selectDraftChatSessionStart).toBeGreaterThan(clearCacheStart);
+    const clearCacheFlow = mainTsx.slice(clearCacheStart, selectDraftChatSessionStart);
     expect(clearCacheFlow).not.toContain('window.confirm(');
     expect(appDialogsTsx).toContain('export type ConfirmTarget =');
     expect(mainTsx).toContain("kind: 'clearCache'");

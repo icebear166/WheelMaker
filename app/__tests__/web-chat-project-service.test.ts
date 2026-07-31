@@ -53,7 +53,6 @@ describe('registry workspace project-scoped chat service methods', () => {
       projects: [],
       hubs: [{hubId: 'hub-empty'}],
       selectedProjectId: '',
-      fileEntries: [],
     });
     expect(repository.listFiles).not.toHaveBeenCalled();
   });
@@ -103,45 +102,15 @@ describe('registry workspace project-scoped chat service methods', () => {
     expect(repository.getHubState).toHaveBeenCalledWith('hub-background', ['tokenStats']);
   });
 
-  test('continues probing after a project request timeout', async () => {
+  test('connect selects project metadata regardless of the project online flag', async () => {
     const repository = {
       initialize: jest.fn().mockResolvedValue(undefined),
       listProjectSnapshot: jest.fn().mockResolvedValue({
-        projects: [
-          {projectId: 'slow', name: 'Slow', online: true, path: '/slow'},
-          {projectId: 'ready', name: 'Ready', online: true, path: '/ready'},
-        ],
-        hubs: [],
+        projects: [{projectId: 'project-1', name: 'Project', online: false, path: '/project'}],
+        hubs: [{hubId: 'hub-1'}],
       }),
       getHubState: jest.fn(),
-      listFiles: jest.fn()
-        .mockRejectedValueOnce(new Error('registry request timed out (20000ms): project.fs.list'))
-        .mockResolvedValueOnce({entries: [{name: 'README.md', path: 'README.md', kind: 'file'}]}),
-      onEvent: jest.fn(() => () => undefined),
-      onClose: jest.fn(() => () => undefined),
-      close: jest.fn(),
-    };
-    const service = new RegistryWorkspaceService(undefined, {
-      createRepository: jest.fn(() => repository as never),
-    });
-
-    const session = await service.connect('ws://registry.example/ws');
-
-    expect(session.selectedProjectId).toBe('ready');
-    expect(repository.listFiles).toHaveBeenCalledTimes(2);
-  });
-
-  test('keeps the Registry connection usable when every project probe is unavailable', async () => {
-    const repository = {
-      initialize: jest.fn().mockResolvedValue(undefined),
-      listProjectSnapshot: jest.fn().mockResolvedValue({
-        projects: [{projectId: 'offline', name: 'Offline', online: true, path: '/offline'}],
-        hubs: [],
-      }),
-      getHubState: jest.fn(),
-      listFiles: jest.fn().mockRejectedValue(
-        Object.assign(new Error('project unavailable'), {code: 'UNAVAILABLE'}),
-      ),
+      listFiles: jest.fn(),
       onEvent: jest.fn(() => () => undefined),
       onClose: jest.fn(() => () => undefined),
       close: jest.fn(),
@@ -151,19 +120,19 @@ describe('registry workspace project-scoped chat service methods', () => {
     });
 
     await expect(service.connect('ws://registry.example/ws')).resolves.toMatchObject({
-      selectedProjectId: '',
-      fileEntries: [],
+      selectedProjectId: 'project-1',
     });
+    expect(repository.listFiles).not.toHaveBeenCalled();
   });
 
-  test('caps a stalled project probe before degrading the connection', async () => {
+  test('connect resolves without waiting for the project filesystem', async () => {
     jest.useFakeTimers();
     try {
       const repository = {
         initialize: jest.fn().mockResolvedValue(undefined),
         listProjectSnapshot: jest.fn().mockResolvedValue({
-          projects: [{projectId: 'stalled', name: 'Stalled', online: true, path: '/stalled'}],
-          hubs: [],
+          projects: [{projectId: 'project-1', name: 'Project', online: true, path: '/project'}],
+          hubs: [{hubId: 'hub-1'}],
         }),
         getHubState: jest.fn(),
         listFiles: jest.fn().mockReturnValue(new Promise(() => undefined)),
@@ -176,14 +145,15 @@ describe('registry workspace project-scoped chat service methods', () => {
       });
 
       const connect = service.connect('ws://registry.example/ws');
-      await Promise.resolve();
-      await Promise.resolve();
-      await jest.advanceTimersByTimeAsync(5000);
+      const winner = Promise.race([
+        connect.then(() => 'connected'),
+        new Promise<'timeout'>(resolve => setTimeout(() => resolve('timeout'), 1)),
+      ]);
+      await jest.advanceTimersByTimeAsync(1);
 
-      await expect(connect).resolves.toMatchObject({
-        selectedProjectId: '',
-        fileEntries: [],
-      });
+      expect(await winner).toBe('connected');
+      await expect(connect).resolves.toMatchObject({selectedProjectId: 'project-1'});
+      expect(repository.listFiles).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
     }
@@ -201,7 +171,6 @@ describe('registry workspace project-scoped chat service methods', () => {
         projects: [],
         hubs: [{hubId: 'hub-empty'}],
         selectedProjectId: '',
-        fileEntries: [],
       },
     });
 
@@ -240,7 +209,6 @@ describe('registry workspace project-scoped chat service methods', () => {
       session: {
         projects: [],
         selectedProjectId: 'workspace-project',
-        fileEntries: [],
       },
     });
 
@@ -354,14 +322,12 @@ describe('registry workspace project-scoped chat service methods', () => {
           { projectId: 'p2', name: 'Two', online: true, path: '/two' },
         ],
         selectedProjectId: 'p1',
-        fileEntries: [{ name: 'old', path: 'old', kind: 'file' }],
       },
     });
 
     const session = await (service as any).selectProjectLightweight('p2');
 
     expect(session.selectedProjectId).toBe('p2');
-    expect(session.fileEntries).toEqual([{ name: 'old', path: 'old', kind: 'file' }]);
     expect(repository.listFiles).not.toHaveBeenCalled();
   });
 
@@ -373,7 +339,6 @@ describe('registry workspace project-scoped chat service methods', () => {
       session: {
         projects: [{ projectId: 'p1', name: 'One', online: true, path: '/one' }],
         selectedProjectId: 'p1',
-        fileEntries: [],
       },
     });
 
@@ -394,7 +359,6 @@ describe('registry workspace project-scoped chat service methods', () => {
         projects: [],
         hubs: [],
         selectedProjectId: '',
-        fileEntries: [],
       },
     });
 

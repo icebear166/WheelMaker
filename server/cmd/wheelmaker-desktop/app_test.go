@@ -216,16 +216,16 @@ func TestDesktopBootstrapInitScriptRecognizesEmbeddedDocument(t *testing.T) {
 	}
 }
 
-func TestDesktopRemoteLaunchAfterTLSProbe(t *testing.T) {
+func TestDesktopSavedServerLaunchesWithoutPreflightProbe(t *testing.T) {
 	launcher := &recordingLauncher{}
-	prober := &recordingDesktopProber{}
+	prober := &recordingDesktopProber{err: errors.New("probe should not run")}
 	store := &memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/app"}}
 
 	if err := runDesktopApp(context.Background(), launcher, store, prober); err != nil {
 		t.Fatalf("runDesktopApp: %v", err)
 	}
-	if prober.url != "https://example.com/app/" {
-		t.Fatalf("probe URL=%q", prober.url)
+	if prober.url != "" {
+		t.Fatalf("saved server was preflight-probed: %q", prober.url)
 	}
 	if launcher.target.URL != "https://example.com/app/" || launcher.target.HTML != "" {
 		t.Fatalf("target=%+v, want direct remote URL", launcher.target)
@@ -235,22 +235,27 @@ func TestDesktopRemoteLaunchAfterTLSProbe(t *testing.T) {
 	}
 }
 
-func TestDesktopRemoteProbeFailureShowsBootstrapState(t *testing.T) {
-	launcher := &recordingLauncher{}
+func TestDesktopBootstrapSaveProbeFailureShowsError(t *testing.T) {
 	prober := &recordingDesktopProber{err: errors.New("certificate is not trusted")}
-	store := &memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/app/"}}
+	store := &memoryDesktopConfigStore{}
+	security, err := newDesktopWebViewSecurityState("", desktopBootstrapPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntime(store, prober, desktopConfig{}, desktopBootstrapState{}, security)
+	surface := &recordingDesktopRuntimeSurface{}
+	runtime.AttachSurface(surface)
 
-	if err := runDesktopApp(context.Background(), launcher, store, prober); err != nil {
-		t.Fatalf("runDesktopApp: %v", err)
+	result := runtime.SaveBaseURL(context.Background(), "https://example.com/app/")
+
+	if result.OK || !strings.Contains(result.Error, "certificate is not trusted") {
+		t.Fatalf("result=%+v", result)
 	}
-	if launcher.target.HTML != desktopBootstrapHTML || launcher.target.URL != "" {
-		t.Fatalf("target=%+v, want Bootstrap error state", launcher.target)
+	if prober.url != "https://example.com/app/" {
+		t.Fatalf("probe URL=%q", prober.url)
 	}
-	if launcher.opts.BootstrapState.BaseURL != store.config.BaseURL {
-		t.Fatalf("bootstrap base URL=%q", launcher.opts.BootstrapState.BaseURL)
-	}
-	if !strings.Contains(launcher.opts.BootstrapState.Error, "certificate is not trusted") {
-		t.Fatalf("bootstrap error=%q", launcher.opts.BootstrapState.Error)
+	if store.config.BaseURL != "" || surface.navigatedURL != "" {
+		t.Fatalf("store=%q navigation=%q", store.config.BaseURL, surface.navigatedURL)
 	}
 }
 

@@ -13743,18 +13743,6 @@ export function App() {
     }
   };
 
-  const switchProject = async (nextProjectId: string) => {
-    setLoadingProject(true);
-    try {
-      const result = await workspaceController.switchProject(nextProjectId);
-      setProjects(result.projects);
-      setHasPendingProjectUpdates(false);
-      applyHydratedProjectState(result.hydrated);
-    } finally {
-      setLoadingProject(false);
-    }
-  };
-
   const selectDraftChatSession = useCallback((
     targetProjectId: string,
     draftId: string,

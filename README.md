@@ -213,6 +213,17 @@ server {
 
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types
+        text/css
+        application/javascript
+        application/json
+        application/manifest+json
+        image/svg+xml;
+
     root C:/Users/<YourUser>/.wheelmaker/web;
 
     location = / {
@@ -284,6 +295,8 @@ server {
 
 }
 ```
+
+Compression only takes effect after this block is applied to the actual Nginx instance serving the configured Base URL, `nginx -t` succeeds, and Nginx is reloaded.
 
 In this layout:
 

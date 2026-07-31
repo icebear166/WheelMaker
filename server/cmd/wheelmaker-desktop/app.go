@@ -66,11 +66,7 @@ func runDesktopAppWithMode(ctx context.Context, launcher desktopLauncher, store 
 					return fmt.Errorf("save normalized desktop config: %w", err)
 				}
 			}
-			if err := prober.Probe(ctx, normalized); err != nil {
-				state.Error = fmt.Sprintf("Unable to connect securely: %v", err)
-			} else {
-				target = desktopLaunchTarget{URL: normalized}
-			}
+			target = desktopLaunchTarget{URL: normalized}
 		}
 	}
 

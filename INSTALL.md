@@ -228,6 +228,17 @@ server {
 
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types
+        text/css
+        application/javascript
+        application/json
+        application/manifest+json
+        image/svg+xml;
+
     root /home/<user>/.wheelmaker/web;
 
     location = / {
@@ -295,9 +306,11 @@ server {
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
         proxy_buffering off;
-        }
     }
+}
 ```
+
+压缩配置必须写入实际提供 Base URL 静态资源的 Nginx；只有 `nginx -t` 通过并 reload 后，APK、EXE 和浏览器才能收到压缩资源。
 
 `/ws/preview/` 是经过认证的 iframe POST 端点，由现有 `/ws` prefix location
 一并代理。必须保持前缀匹配；若改为精确匹配 `/ws`，Registry WebSocket
