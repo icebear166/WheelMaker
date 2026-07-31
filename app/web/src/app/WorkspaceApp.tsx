@@ -427,21 +427,15 @@ import {
   type MobileSettingsHistoryDetail,
 } from '../shell/layouts/mobile/mobileSettingsHistory';
 import {
-  isSettingsPeerDetail,
-  mobileSettingsShortcutIndex,
   settingsPageKind,
-  type SettingsChildDetail,
-  type SettingsDetailId,
-  type SettingsPeerDetail,
+  type SettingsDetail,
 } from '../settings/settingsNavigation';
 import {
   MobileSettingsScreen,
-  MobileSettingsShortcutBar,
   SettingsDetailShell,
   SettingsScreen,
   SettingsSurface,
   settingsDetailTitle,
-  type SettingsDetailShellOptions,
 } from '../settings/SettingsSurface';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
@@ -764,7 +758,7 @@ type ProjectSessionActionMenuState = {
   sessionId: string;
   popover?: WideProjectActionPopoverPlacement | null;
 };
-type SettingsDetailView = SettingsDetailId | null;
+type SettingsDetailView = SettingsDetail | null;
 const WHEELMAKER_UPDATE_JOB_POLL_DELAY_MS = 1500;
 type WheelMakerUpdateHubView = {
   hubId: string;
@@ -3001,12 +2995,14 @@ export function App() {
   const [databaseStorageStats, setDatabaseStorageStats] = useState<WorkspaceDatabaseStorageStats | null>(null);
   const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);
   const [releasePublishingOpen, setReleasePublishingOpen] = useState(false);
+  const [portRelayScreenOpen, setPortRelayScreenOpen] = useState(false);
   const mobileSettingsHistoryKeyRef = useRef<string | null>(null);
-  const mobileSettingsReplaceRootHistoryRef = useRef(false);
   const mobileReleasePublishingHistoryRef = useRef(false);
+  const mobilePortRelayHistoryRef = useRef(false);
   const sidebarSettingsOpenRef = useRef(sidebarSettingsOpen);
   const settingsDetailViewRef = useRef<SettingsDetailView>(settingsDetailView);
   const releasePublishingOpenRef = useRef(releasePublishingOpen);
+  const portRelayScreenOpenRef = useRef(portRelayScreenOpen);
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
   const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
@@ -5905,6 +5901,9 @@ export function App() {
     releasePublishingOpenRef.current = releasePublishingOpen;
   }, [releasePublishingOpen]);
   useEffect(() => {
+    portRelayScreenOpenRef.current = portRelayScreenOpen;
+  }, [portRelayScreenOpen]);
+  useEffect(() => {
     const activeProjectId = projectId || projectIdRef.current;
     if (!connected || !activeProjectId) {
       return;
@@ -7265,16 +7264,20 @@ export function App() {
   }, [setSidebarSettingsOpen]);
   const openSettingsRoot = useCallback(() => {
     setReleasePublishingOpen(false);
+    mobilePortRelayHistoryRef.current = false;
+    setPortRelayScreenOpen(false);
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
   }, [setSidebarSettingsOpen]);
   const openReleasePublishing = useCallback(() => {
     closeSettingsPanel();
     setDrawerOpen(false);
+    mobilePortRelayHistoryRef.current = false;
+    setPortRelayScreenOpen(false);
     setReleasePublishingOpen(true);
     if (!isWide && !mobileReleasePublishingHistoryRef.current) {
       window.history.pushState(
-        createStandalonePageHistoryState(),
+        createStandalonePageHistoryState('release-publish'),
         '',
         window.location.href,
       );
@@ -7289,31 +7292,37 @@ export function App() {
     mobileReleasePublishingHistoryRef.current = false;
     setReleasePublishingOpen(false);
   }, [isWide]);
-  const openSettingsPeer = useCallback((detail: SettingsPeerDetail) => {
-    if (isWide && sidebarSettingsOpen && settingsDetailView === detail) {
-      closeSettingsPanel();
+  const openPortRelayScreen = useCallback(() => {
+    closeSettingsPanel();
+    setDrawerOpen(false);
+    mobileReleasePublishingHistoryRef.current = false;
+    setReleasePublishingOpen(false);
+    setPortRelayError('');
+    setPortRelayScreenOpen(true);
+    if (!isWide && !mobilePortRelayHistoryRef.current) {
+      window.history.pushState(
+        createStandalonePageHistoryState('port-relay'),
+        '',
+        window.location.href,
+      );
+      mobilePortRelayHistoryRef.current = true;
+    }
+  }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  const closePortRelayScreen = useCallback(() => {
+    if (!isWide && mobilePortRelayHistoryRef.current) {
+      window.history.back();
       return;
     }
-    setSidebarSettingsOpen(true);
-    if (detail === 'portRelay') {
-      setPortRelayError('');
-    }
-    setSettingsDetailView(detail);
-  }, [closeSettingsPanel, isWide, setSidebarSettingsOpen, settingsDetailView, sidebarSettingsOpen]);
-  const openSettingsChild = useCallback((detail: SettingsChildDetail) => {
+    mobilePortRelayHistoryRef.current = false;
+    setPortRelayScreenOpen(false);
+  }, [isWide]);
+  const openSettingsChild = useCallback((detail: SettingsDetail) => {
     setSidebarSettingsOpen(true);
     if (detail === 'database') {
       openDatabasePanel();
     }
     setSettingsDetailView(detail);
   }, [setSidebarSettingsOpen]);
-  const openSettingsDetail = useCallback((detail: SettingsDetailId) => {
-    if (isSettingsPeerDetail(detail)) {
-      openSettingsPeer(detail);
-      return;
-    }
-    openSettingsChild(detail);
-  }, [openSettingsChild, openSettingsPeer]);
   const handleDesktopSettingsSelect = useCallback(() => {
     if (sidebarSettingsOpen && settingsDetailView === null) {
       closeSettingsPanel();
@@ -7324,16 +7333,13 @@ export function App() {
   useEffect(() => {
     if (isWide || !sidebarSettingsOpen) {
       mobileSettingsHistoryKeyRef.current = null;
-      mobileSettingsReplaceRootHistoryRef.current = false;
       return;
     }
     const nextKey = mobileSettingsHistoryKey(settingsDetailView as MobileSettingsHistoryDetail | null);
     const historyWriteAction = resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKeyRef.current,
       nextDetail: settingsDetailView as MobileSettingsHistoryDetail | null,
-      replaceRootWithDetail: mobileSettingsReplaceRootHistoryRef.current,
     });
-    mobileSettingsReplaceRootHistoryRef.current = false;
     if (historyWriteAction === 'none') {
       return;
     }
@@ -7376,7 +7382,7 @@ export function App() {
     const handleReleasePublishingPopState = (event: PopStateEvent) => {
       if (
         !releasePublishingOpenRef.current
-        || isStandalonePageHistoryState(event.state)
+        || isStandalonePageHistoryState(event.state, 'release-publish')
       ) {
         return;
       }
@@ -7386,40 +7392,31 @@ export function App() {
     window.addEventListener('popstate', handleReleasePublishingPopState);
     return () => window.removeEventListener('popstate', handleReleasePublishingPopState);
   }, []);
-  const handleSettingsDetailBack = useCallback(() => {
-    const currentKind = settingsPageKind(settingsDetailView);
-    if (!isWide && sidebarSettingsOpen && currentKind === 'child' && mobileSettingsHistoryKeyRef.current !== null) {
-      window.history.back();
-      return;
-    }
-    if (currentKind === 'child') {
-      openSettingsRoot();
-      return;
-    }
-    closeSettingsPanel();
-  }, [closeSettingsPanel, isWide, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
+  useEffect(() => {
+    const handlePortRelayScreenPopState = (event: PopStateEvent) => {
+      if (
+        !portRelayScreenOpenRef.current
+        || isStandalonePageHistoryState(event.state, 'port-relay')
+      ) {
+        return;
+      }
+      mobilePortRelayHistoryRef.current = false;
+      setPortRelayScreenOpen(false);
+    };
+    window.addEventListener('popstate', handlePortRelayScreenPopState);
+    return () => window.removeEventListener('popstate', handlePortRelayScreenPopState);
+  }, []);
   const handleMobileSettingsBackButton = useCallback(() => {
     if (!isWide && sidebarSettingsOpen && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return;
     }
-    if (settingsPageKind(settingsDetailView) === 'child') {
+    if (settingsPageKind(settingsDetailView) === 'detail') {
       setSettingsDetailView(null);
       return;
     }
     closeSettingsPanel();
   }, [closeSettingsPanel, isWide, sidebarSettingsOpen, settingsDetailView]);
-  const handleMobileSettingsRootShortcut = useCallback(() => {
-    const currentKind = settingsPageKind(settingsDetailView);
-    if (currentKind === 'root') {
-      return;
-    }
-    if (!isWide && sidebarSettingsOpen && currentKind === 'child' && mobileSettingsHistoryKeyRef.current !== null) {
-      window.history.back();
-      return;
-    }
-    setSettingsDetailView(null);
-  }, [isWide, settingsDetailView, sidebarSettingsOpen]);
   const closeChatFilePeek = useCallback(() => {
     setChatPeekSelectedLines(new Set());
     chatPeekAnchorRef.current = null;
@@ -7482,6 +7479,10 @@ export function App() {
       closeReleasePublishing();
       return true;
     }
+    if (!isWide && portRelayScreenOpenRef.current) {
+      closePortRelayScreen();
+      return true;
+    }
     if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return true;
@@ -7491,13 +7492,12 @@ export function App() {
     }
     const currentKind = settingsPageKind(settingsDetailViewRef.current);
     mobileSettingsHistoryKeyRef.current = null;
-    mobileSettingsReplaceRootHistoryRef.current = false;
     setSettingsDetailView(null);
-    if (currentKind !== 'child') {
+    if (currentKind !== 'detail') {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closeReleasePublishing, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closePortRelayScreen, closeReleasePublishing, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -7508,15 +7508,6 @@ export function App() {
       }
     };
   }, [handleAndroidNativeBack]);
-  const openMobileSettingsShortcutDetail = useCallback((detail: SettingsPeerDetail) => {
-    if (settingsDetailView === detail) {
-      return;
-    }
-    if (!isWide && sidebarSettingsOpen) {
-      mobileSettingsReplaceRootHistoryRef.current = true;
-    }
-    openSettingsPeer(detail);
-  }, [isWide, openSettingsPeer, settingsDetailView, sidebarSettingsOpen]);
   const clampDesktopSidebarWidthForViewport = useCallback((width: number) => {
     const viewportMax = windowWidth > 0
       ? Math.floor(windowWidth * DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO)
@@ -12481,18 +12472,18 @@ export function App() {
   }, [persistPortRelaySettings, portRelayTargets, selectedPortRelayTarget]);
 
   useEffect(() => {
-    if (settingsDetailView !== 'portRelay') {
+    if (!portRelayScreenOpen) {
       return;
     }
     refreshPortRelayStatus().catch(() => undefined);
-  }, [settingsDetailView]);
+  }, [portRelayScreenOpen]);
 
   useEffect(() => {
-    if (settingsDetailView !== 'portRelay' || portRelayAccessCode || portRelaySnapshot.enabled) {
+    if (!portRelayScreenOpen || portRelayAccessCode || portRelaySnapshot.enabled) {
       return;
     }
     setPortRelayAccessCode(generatePortRelayAccessCode());
-  }, [portRelayAccessCode, portRelaySnapshot.enabled, settingsDetailView]);
+  }, [portRelayAccessCode, portRelayScreenOpen, portRelaySnapshot.enabled]);
 
   const commitPortRelayDraftTarget = useCallback((): PortRelayTarget | null => {
     const target = normalizePortRelayTarget({
@@ -12580,9 +12571,7 @@ export function App() {
     }
     if (portRelayAccessCodeUnknown) {
       setPortRelayError('Access code is unknown on this device. Generate a new code before opening relay pages.');
-      setSidebarSettingsOpen(true);
-      setSidebarCollapsed(false);
-      setSettingsDetailView('portRelay');
+      openPortRelayScreen();
       return;
     }
     const targetProjectId =
@@ -12596,9 +12585,7 @@ export function App() {
     const listenPort = Number(portRelayListenPort);
     if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
       setPortRelayError('Listen port must be in 1..65535.');
-      setSidebarSettingsOpen(true);
-      setSidebarCollapsed(false);
-      setSettingsDetailView('portRelay');
+      openPortRelayScreen();
       return;
     }
     const tabId = previewTabId({type: 'port-relay', hubId: normalizedTarget.hubId, targetPort: normalizedTarget.targetPort, framePath});
@@ -12651,6 +12638,7 @@ export function App() {
   }, [
     enablePortRelayForTarget,
     isWide,
+    openPortRelayScreen,
     portRelayAccessCodeUnknown,
     portRelayFrameReloadKey,
     portRelayFrameUrl,
@@ -12661,7 +12649,6 @@ export function App() {
     portRelaySnapshot.status,
     portRelaySnapshot.targetPort,
     setDrawerOpen,
-    setSidebarCollapsed,
     setSidebarSettingsOpen,
   ]);
 
@@ -12881,27 +12868,6 @@ export function App() {
     persistPortRelaySettings,
     portRelayListenPort,
     portRelayTargets,
-  ]);
-
-  const handleDesktopPortRelaySelect = useCallback(() => {
-    if (sidebarSettingsOpen && settingsDetailView === 'portRelay') {
-      closeSettingsPanel();
-      return;
-    }
-    openSettingsPeer('portRelay');
-    const target = activePortRelayTarget ?? selectedPortRelayTarget;
-    if (target) {
-      openPortRelayWorkbenchTab(target, portRelayFramePath, {source: 'settings'}).catch(() => undefined);
-    }
-  }, [
-    activePortRelayTarget,
-    closeSettingsPanel,
-    openPortRelayWorkbenchTab,
-    openSettingsPeer,
-    portRelayFramePath,
-    selectedPortRelayTarget,
-    settingsDetailView,
-    sidebarSettingsOpen,
   ]);
 
   const updateHubCards = useMemo(() => {
@@ -15902,7 +15868,7 @@ export function App() {
     };
   }, []);
 
-  const renderSettingsDetailActions = (detail: SettingsDetailId): React.ReactNode => {
+  const renderSettingsDetailActions = (detail: SettingsDetail): React.ReactNode => {
     if (detail === 'database') {
       return (
         <button
@@ -15916,40 +15882,26 @@ export function App() {
         </button>
       );
     }
-    if (detail === 'portRelay') {
-      return (
-        <button
-          type="button"
-          className="settings-detail-refresh"
-          onClick={() => refreshPortRelayStatus().catch(() => undefined)}
-          disabled={portRelayLoading}
-        >
-          {portRelayLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      );
-    }
     return null;
   };
 
-  const renderSettingsDetailShell = (
-    title: string,
-    content: React.ReactNode,
-    actions?: React.ReactNode,
-    options: SettingsDetailShellOptions = {},
-  ) => (
-    <SettingsDetailShell
-      title={title}
-      actions={actions}
-      hideDetailHeader={options.hideDetailHeader}
-      onBack={handleSettingsDetailBack}
+  const portRelayRefreshAction = (
+    <button
+      type="button"
+      className="settings-detail-refresh"
+      onClick={() => refreshPortRelayStatus().catch(() => undefined)}
+      disabled={portRelayLoading}
     >
-      {content}
-    </SettingsDetailShell>
+      {portRelayLoading ? 'Refreshing...' : 'Refresh'}
+    </button>
   );
 
-  const renderDatabaseSettingsDetail = (options?: SettingsDetailShellOptions) =>
+  const renderSettingsDetailShell = (content: React.ReactNode) => (
+    <SettingsDetailShell>{content}</SettingsDetailShell>
+  );
+
+  const renderDatabaseSettingsDetail = () =>
     renderSettingsDetailShell(
-      'Database',
       <React.Suspense fallback={null}>
         <DatabaseSettingsDetail
           loading={databaseLoading}
@@ -15958,14 +15910,11 @@ export function App() {
           storageStats={databaseStorageStats}
         />
       </React.Suspense>,
-      renderSettingsDetailActions('database'),
-      options,
     );
 
-  const renderPortRelaySettingsDetail = (options?: SettingsDetailShellOptions) => {
+  const renderPortRelayScreenContent = () => {
     const hubIds = deriveRegistryHubIds(registryHubs);
     return renderSettingsDetailShell(
-      'Port Relay',
       <React.Suspense fallback={null}>
         <PortRelaySettingsDetail
           hubIds={hubIds}
@@ -15994,22 +15943,17 @@ export function App() {
           disablePortRelay={disablePortRelay}
         />
       </React.Suspense>,
-      renderSettingsDetailActions('portRelay'),
-      options,
     );
   };
 
-  const renderDebugLogsSettingsDetail = (options?: SettingsDetailShellOptions) =>
+  const renderDebugLogsSettingsDetail = () =>
     renderSettingsDetailShell(
-      'Logs',
       <React.Suspense fallback={null}>
         <DebugLogsSettingsDetail
           logLevel={logLevel}
           uploadDebugLog={payload => service.uploadDebugLog(payload)}
         />
       </React.Suspense>,
-      undefined,
-      options,
     );
 
   const renderReleasePublishContent = () => (
@@ -16022,9 +15966,8 @@ export function App() {
     </React.Suspense>
   );
 
-  const renderConnectionStatusSettingsDetail = (options?: SettingsDetailShellOptions) =>
+  const renderConnectionStatusSettingsDetail = () =>
     renderSettingsDetailShell(
-      'Connection Status',
       <React.Suspense fallback={null}>
         <ConnectionStatusSettingsDetail
           connected={connected}
@@ -16036,13 +15979,10 @@ export function App() {
           androidNativeAvailable={!!getAndroidNativeSpeechBridge()}
         />
       </React.Suspense>,
-      undefined,
-      options,
     );
 
-  const renderDeviceSessionsSettingsDetail = (options?: SettingsDetailShellOptions) =>
+  const renderDeviceSessionsSettingsDetail = () =>
     renderSettingsDetailShell(
-      'Devices',
       <React.Suspense fallback={null}>
         <DeviceSessionsSettingsDetail
           sessions={deviceSessions}
@@ -16053,36 +15993,27 @@ export function App() {
           onCurrentRevoked={returnToRegistryLogin}
         />
       </React.Suspense>,
-      undefined,
-      options,
     );
 
-  const renderSettingsDetailContent = (
-    detail: SettingsDetailId,
-    options: SettingsDetailShellOptions = {},
-  ) => {
+  const renderSettingsDetailContent = (detail: SettingsDetail) => {
     if (detail === 'database') {
-      return renderDatabaseSettingsDetail(options);
-    }
-    if (detail === 'portRelay') {
-      return renderPortRelaySettingsDetail(options);
+      return renderDatabaseSettingsDetail();
     }
     if (detail === 'connectionStatus') {
-      return renderConnectionStatusSettingsDetail(options);
+      return renderConnectionStatusSettingsDetail();
     }
     if (detail === 'deviceSessions') {
-      return renderDeviceSessionsSettingsDetail(options);
+      return renderDeviceSessionsSettingsDetail();
     }
     if (detail === 'debugLogs') {
-      return renderDebugLogsSettingsDetail(options);
+      return renderDebugLogsSettingsDetail();
     }
     return null;
   };
 
-  const renderSettingsRootContent = (showSectionTitle: boolean) => (
+  const renderSettingsRootContent = () => (
     <React.Suspense fallback={null}>
       <SettingsRootContent
-        showSectionTitle={showSectionTitle}
         isWide={isWide}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
@@ -16096,7 +16027,7 @@ export function App() {
         serverSettingsBusy={serverSettingsBusy}
         serverSettingsError={serverSettingsError}
         updateServerSetting={updateServerSetting}
-        openSettingsChild={openSettingsChild}
+        openSettingsDetail={openSettingsChild}
         codeTheme={codeTheme}
         setCodeTheme={setCodeTheme}
         codeFont={codeFont}
@@ -16122,14 +16053,10 @@ export function App() {
     </React.Suspense>
   );
 
-  const renderSettingsContent = (
-    showSectionTitle: boolean,
-    options: SettingsDetailShellOptions = {},
-  ) => (
+  const renderSettingsContent = () => (
     <SettingsSurface
       detailView={settingsDetailView}
-      options={options}
-      renderRoot={() => renderSettingsRootContent(showSectionTitle)}
+      renderRoot={renderSettingsRootContent}
       renderDetail={renderSettingsDetailContent}
     />
   );
@@ -16139,6 +16066,7 @@ export function App() {
       themeMode={themeMode}
       setThemeMode={setThemeMode}
       onOpenSettings={handleDesktopSettingsSelect}
+      onOpenPortRelay={openPortRelayScreen}
       onOpenReleasePublishing={openReleasePublishing}
       updateController={clientUpdateController}
       triggerClassName={mobile
@@ -17794,7 +17722,7 @@ export function App() {
     }
     const target = activePortRelayTarget ?? selectedPortRelayTarget;
     if (!portRelayReady || !portRelayFrameUrl || !target) {
-      openSettingsDetail('portRelay');
+      openPortRelayScreen();
       return;
     }
     if (portRelayTargetMenuTargets.length > 1) {
@@ -17806,8 +17734,8 @@ export function App() {
     activePortRelayTarget,
     mobilePortRelayFrameOpen,
     closePortRelayFrameFromChrome,
+    openPortRelayScreen,
     openPortRelayWorkbenchTab,
-    openSettingsDetail,
     portRelayFramePath,
     portRelayFrameUrl,
     portRelayReady,
@@ -19754,17 +19682,6 @@ export function App() {
   const mobileSettingsActions = settingsDetailView
     ? renderSettingsDetailActions(settingsDetailView)
     : <span className="mobile-settings-action-spacer" aria-hidden="true" />;
-  const mobileSettingsShortcutActiveIndex = mobileSettingsShortcutIndex(settingsDetailView);
-  const mobileSettingsRootShortcutActive = mobileSettingsShortcutActiveIndex === 0;
-  const settingsShortcutBar = sidebarSettingsOpen ? (
-    <MobileSettingsShortcutBar
-      activeDetail={settingsDetailView}
-      activeIndex={mobileSettingsShortcutActiveIndex}
-      rootActive={mobileSettingsRootShortcutActive}
-      onRootSelect={handleMobileSettingsRootShortcut}
-      onDetailSelect={openMobileSettingsShortcutDetail}
-    />
-  ) : null;
 
   const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (
     <SettingsScreen
@@ -19772,11 +19689,10 @@ export function App() {
       title={mobileSettingsTitle}
       actions={mobileSettingsActions}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Close settings'}
-      shortcutBar={settingsShortcutBar}
       onBack={handleMobileSettingsBackButton}
       onBackdropClick={handleMobileSettingsBackButton}
     >
-      {renderSettingsContent(false, { hideDetailHeader: true })}
+      {renderSettingsContent()}
     </SettingsScreen>
   ) : null;
 
@@ -19785,10 +19701,9 @@ export function App() {
       title={mobileSettingsTitle}
       actions={mobileSettingsActions}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Back to drawer'}
-      shortcutBar={settingsShortcutBar}
       onBack={handleMobileSettingsBackButton}
     >
-      {renderSettingsContent(false, { hideDetailHeader: true })}
+      {renderSettingsContent()}
     </MobileSettingsScreen>
   ) : null;
   const desktopReleasePublishingScreen = isWide && releasePublishingOpen ? (
@@ -19797,7 +19712,6 @@ export function App() {
       title="Release publishing"
       actions={null}
       backAriaLabel="Close release publishing"
-      shortcutBar={null}
       onBack={closeReleasePublishing}
       onBackdropClick={closeReleasePublishing}
     >
@@ -19809,10 +19723,31 @@ export function App() {
       title="Release publishing"
       actions={null}
       backAriaLabel="Back to chat"
-      shortcutBar={null}
       onBack={closeReleasePublishing}
     >
       {renderReleasePublishContent()}
+    </MobileSettingsScreen>
+  ) : null;
+  const desktopPortRelayScreen = isWide && portRelayScreenOpen ? (
+    <SettingsScreen
+      className="desktop-settings-screen port-relay-screen"
+      title="Port Relay"
+      actions={portRelayRefreshAction}
+      backAriaLabel="Close Port Relay"
+      onBack={closePortRelayScreen}
+      onBackdropClick={closePortRelayScreen}
+    >
+      {renderPortRelayScreenContent()}
+    </SettingsScreen>
+  ) : null;
+  const mobilePortRelayScreen = !isWide && portRelayScreenOpen ? (
+    <MobileSettingsScreen
+      title="Port Relay"
+      actions={portRelayRefreshAction}
+      backAriaLabel="Back to chat"
+      onBack={closePortRelayScreen}
+    >
+      {renderPortRelayScreenContent()}
     </MobileSettingsScreen>
   ) : null;
   const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
@@ -21177,14 +21112,14 @@ export function App() {
         desktopTopBar={desktopTopBar}
         desktopWindowControls={desktopWindowControls}
         desktopWindowControlsVisible={desktopWindowControlsVisible}
-        desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopSettingsScreen}
+        desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopPortRelayScreen ?? desktopSettingsScreen}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
         desktopSidebarWidth={desktopLayoutSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
-        mobileSettingsScreen={mobileReleasePublishingScreen ?? mobileSettingsScreen}
+        mobileSettingsScreen={mobileReleasePublishingScreen ?? mobilePortRelayScreen ?? mobileSettingsScreen}
         mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}

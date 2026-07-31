@@ -9,7 +9,7 @@ describe('database settings UI source structure', () => {
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 
     expect(mainTsx).toContain("'database'");
-    expect(mainTsx).toContain('renderDatabaseSettingsDetail(options)');
+    expect(mainTsx).toContain('renderDatabaseSettingsDetail()');
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('<DatabaseSettingsDetail');
     expect(mainTsx).toContain('loading={databaseLoading}');

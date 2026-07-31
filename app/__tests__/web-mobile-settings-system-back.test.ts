@@ -22,22 +22,17 @@ function readStyles(): string {
 describe('mobile settings system back', () => {
   test('marks and keys mobile settings history states', () => {
     const root = createMobileSettingsHistoryState(null);
-    const portRelay = createMobileSettingsHistoryState('portRelay');
+    const database = createMobileSettingsHistoryState('database');
 
     expect(isMobileSettingsHistoryState(root)).toBe(true);
-    expect(isMobileSettingsHistoryState(portRelay)).toBe(true);
+    expect(isMobileSettingsHistoryState(database)).toBe(true);
     expect(isMobileSettingsHistoryState({})).toBe(false);
+    expect(isMobileSettingsHistoryState(createMobileSettingsHistoryState('portRelay' as never))).toBe(false);
     expect(mobileSettingsHistoryKey(null)).toBe('mobile-settings:root');
-    expect(mobileSettingsHistoryKey('portRelay')).toBe('mobile-settings:portRelay');
+    expect(mobileSettingsHistoryKey('database')).toBe('mobile-settings:database');
   });
 
   test('resolves native back actions for settings layers', () => {
-    expect(resolveMobileSettingsPopAction({
-      nextState: createMobileSettingsHistoryState(null),
-      settingsOpen: true,
-      settingsDetailView: 'portRelay',
-    })).toBe('close-settings');
-
     expect(resolveMobileSettingsPopAction({
       nextState: createMobileSettingsHistoryState(null),
       settingsOpen: true,
@@ -49,6 +44,12 @@ describe('mobile settings system back', () => {
       settingsOpen: true,
       settingsDetailView: 'database',
     })).toBe('back-to-root');
+
+    expect(resolveMobileSettingsPopAction({
+      nextState: null,
+      settingsOpen: true,
+      settingsDetailView: 'connectionStatus',
+    })).toBe('close-settings');
 
     expect(resolveMobileSettingsPopAction({
       nextState: null,
@@ -69,7 +70,7 @@ describe('mobile settings system back', () => {
     })).toBe('none');
   });
 
-  test('replaces history when switching between mobile settings details', () => {
+  test('pushes from root into details and replaces between detail states', () => {
     expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: null,
       nextDetail: null,
@@ -77,34 +78,23 @@ describe('mobile settings system back', () => {
 
     expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKey(null),
-      nextDetail: 'portRelay',
+      nextDetail: 'database',
     })).toBe('push');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey(null),
-      nextDetail: 'portRelay',
-      replaceRootWithDetail: true,
-    })).toBe('replace');
-
-    expect(resolveMobileSettingsHistoryWriteAction({
       currentKey: mobileSettingsHistoryKey('connectionStatus'),
-      nextDetail: 'portRelay',
+      nextDetail: 'database',
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('portRelay'),
+      currentKey: mobileSettingsHistoryKey('database'),
       nextDetail: null,
     })).toBe('replace');
 
     expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('portRelay'),
-      nextDetail: 'portRelay',
+      currentKey: mobileSettingsHistoryKey('database'),
+      nextDetail: 'database',
     })).toBe('none');
-
-    expect(resolveMobileSettingsHistoryWriteAction({
-      currentKey: mobileSettingsHistoryKey('portRelay'),
-      nextDetail: 'connectionStatus',
-    })).toBe('push');
   });
 
   test('wires mobile settings to history and mobile title actions', () => {
@@ -114,15 +104,15 @@ describe('mobile settings system back', () => {
     expect(main).toContain('window.history.pushState(createMobileSettingsHistoryState(settingsDetailView');
     expect(main).toContain('window.history.replaceState(createMobileSettingsHistoryState(settingsDetailView');
     expect(main).toContain('resolveMobileSettingsHistoryWriteAction({');
-    expect(main).toContain('replaceRootWithDetail: mobileSettingsReplaceRootHistoryRef.current');
+    expect(main).not.toContain('replaceRootWithDetail');
     expect(main).toContain("window.addEventListener('popstate', handleMobileSettingsPopState)");
     expect(main).toContain('resolveMobileSettingsPopAction({');
     expect(main).toContain('const mobileSettingsTitle = settingsDetailView');
     expect(main).toContain('const mobileSettingsActions = settingsDetailView');
-    expect(main).toContain('renderSettingsContent(false, { hideDetailHeader: true })');
+    expect(main).toContain('renderSettingsContent()');
     expect(main).toContain('handleMobileSettingsBackButton');
-    expect(main).toContain('handleMobileSettingsRootShortcut');
-    expect(main).toContain('openMobileSettingsShortcutDetail');
+    expect(main).not.toContain('handleMobileSettingsRootShortcut');
+    expect(main).not.toContain('openMobileSettingsShortcutDetail');
     expect(main).toContain('const handleAndroidNativeBack = useCallback(() => {');
     expect(main).toContain('window.WheelMakerAndroidBack = {');
     expect(main).toContain('handleBack: handleAndroidNativeBack');
@@ -137,7 +127,7 @@ describe('mobile settings system back', () => {
   test('lets the APK back gesture close the mobile Hub page first', () => {
     const main = readMain();
     const backStart = main.indexOf('const handleAndroidNativeBack = useCallback(() => {');
-    const backEnd = main.indexOf('const openMobileSettingsShortcutDetail =', backStart);
+    const backEnd = main.indexOf('const clampDesktopSidebarWidthForViewport =', backStart);
     const backBody = main.slice(backStart, backEnd);
     const skillChildBack = backBody.indexOf('if (!isWide && chatHubMenuOpen && chatHubSkillSurfaceOpen) {');
     const hubClose = backBody.indexOf('if (!isWide && chatHubMenuOpen) {');
@@ -159,12 +149,12 @@ describe('mobile settings system back', () => {
   test('returns from standalone Release Publishing before mobile Settings', () => {
     const main = readMain();
     const backStart = main.indexOf('const handleAndroidNativeBack = useCallback(() => {');
-    const backEnd = main.indexOf('const openMobileSettingsShortcutDetail =', backStart);
+    const backEnd = main.indexOf('const clampDesktopSidebarWidthForViewport =', backStart);
     const backBody = main.slice(backStart, backEnd);
     const releaseBack = backBody.indexOf('if (!isWide && releasePublishingOpenRef.current) {');
     const settingsBack = backBody.indexOf('if (!isWide && sidebarSettingsOpenRef.current');
 
-    expect(main).toContain('window.history.pushState(\n        createStandalonePageHistoryState()');
+    expect(main).toContain("createStandalonePageHistoryState('release-publish')");
     expect(main).toContain("window.addEventListener('popstate', handleReleasePublishingPopState)");
     expect(main).toContain('const mobileReleasePublishingScreen = !isWide && releasePublishingOpen ? (');
     expect(main).toContain('onBack={closeReleasePublishing}');
@@ -172,6 +162,26 @@ describe('mobile settings system back', () => {
     expect(releaseBack).toBeLessThan(settingsBack);
     expect(backBody.slice(releaseBack, settingsBack)).toContain('closeReleasePublishing();');
     expect(backBody.slice(releaseBack, settingsBack)).toContain('return true;');
+  });
+
+  test('returns from the standalone Port Relay screen before mobile Settings', () => {
+    const main = readMain();
+    const backStart = main.indexOf('const handleAndroidNativeBack = useCallback(() => {');
+    const backEnd = main.indexOf('const clampDesktopSidebarWidthForViewport =', backStart);
+    const backBody = main.slice(backStart, backEnd);
+    const releaseBack = backBody.indexOf('if (!isWide && releasePublishingOpenRef.current) {');
+    const relayBack = backBody.indexOf('if (!isWide && portRelayScreenOpenRef.current) {');
+    const settingsBack = backBody.indexOf('if (!isWide && sidebarSettingsOpenRef.current');
+
+    expect(main).toContain("createStandalonePageHistoryState('port-relay')");
+    expect(main).toContain("window.addEventListener('popstate', handlePortRelayScreenPopState)");
+    expect(main).toContain('const mobilePortRelayScreen = !isWide && portRelayScreenOpen ? (');
+    expect(main).toContain('onBack={closePortRelayScreen}');
+    expect(relayBack).toBeGreaterThanOrEqual(0);
+    expect(relayBack).toBeGreaterThan(releaseBack);
+    expect(relayBack).toBeLessThan(settingsBack);
+    expect(backBody.slice(relayBack, settingsBack)).toContain('closePortRelayScreen();');
+    expect(backBody.slice(relayBack, settingsBack)).toContain('return true;');
   });
 
   test('centers the mobile settings title independently from title bar actions', () => {

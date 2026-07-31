@@ -26,14 +26,13 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from '../code/shikiSettings';
-import type {SettingsChildDetail} from './settingsNavigation';
+import type {SettingsDetail} from './settingsNavigation';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
 const CODE_LINE_HEIGHT_OPTIONS = [1.35, 1.45, 1.5, 1.6, 1.7] as const;
 const CODE_TAB_SIZE_OPTIONS = [2, 4, 8] as const;
 
 type SettingsRootContentProps = {
-  showSectionTitle: boolean;
   isWide: boolean;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
@@ -47,7 +46,7 @@ type SettingsRootContentProps = {
   serverSettingsBusy: boolean;
   serverSettingsError: string;
   updateServerSetting: (update: ServerSettingsUpdate) => Promise<void>;
-  openSettingsChild: (detail: SettingsChildDetail) => void;
+  openSettingsDetail: (detail: SettingsDetail) => void;
   codeTheme: CodeThemeId;
   setCodeTheme: (value: CodeThemeId) => void;
   codeFont: CodeFontId;
@@ -71,7 +70,7 @@ type SettingsRootContentProps = {
   handleRegistryDebugLogout: () => void;
 };
 
-type SettingsSectionId = 'chat' | 'server' | 'connection' | 'code-display' | 'debug';
+type SettingsSectionId = 'chat' | 'code' | 'state' | 'debug';
 
 type SettingsSectionOptions = {
   id: SettingsSectionId;
@@ -80,7 +79,7 @@ type SettingsSectionOptions = {
   icon?: IconName;
 };
 
-function renderSettingsSection({id, title, rows, icon}: SettingsSectionOptions) {
+function SettingsSection({id, title, rows, icon}: SettingsSectionOptions) {
   return (
     <section className={`settings-section settings-section-${id}`} aria-label={title}>
       <div className="settings-section-title">
@@ -92,8 +91,48 @@ function renderSettingsSection({id, title, rows, icon}: SettingsSectionOptions) 
   );
 }
 
+type SettingsRowProps = {
+  icon: IconName;
+  label: string;
+  control: React.ReactNode;
+};
+
+function SettingsControlRow({icon, label, control}: SettingsRowProps) {
+  return (
+    <label className="settings-row sidebar-setting-row">
+      <span>
+        <Icon name={icon} className="settings-row-icon" />
+        {label}
+      </span>
+      {control}
+    </label>
+  );
+}
+
+type SettingsNavRowProps = {
+  icon: IconName;
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+};
+
+function SettingsNavRow({icon, label, danger = false, onClick}: SettingsNavRowProps) {
+  return (
+    <button
+      type="button"
+      className={`settings-row ${danger ? 'settings-danger-row' : 'settings-detail-row'}`}
+      onClick={onClick}
+    >
+      <span>
+        <Icon name={icon} className="settings-row-icon" />
+        {label}
+      </span>
+      {danger ? null : <Icon name="chevronRight" className="settings-row-chevron" />}
+    </button>
+  );
+}
+
 export function SettingsRootContent({
-  showSectionTitle,
   isWide,
   mobileEnterKeyBehavior,
   setMobileEnterKeyBehavior,
@@ -107,7 +146,7 @@ export function SettingsRootContent({
   serverSettingsBusy,
   serverSettingsError,
   updateServerSetting,
-  openSettingsChild,
+  openSettingsDetail,
   codeTheme,
   setCodeTheme,
   codeFont,
@@ -131,411 +170,357 @@ export function SettingsRootContent({
   handleRegistryDebugLogout,
 }: SettingsRootContentProps) {
   return (
-    <>
-      {showSectionTitle ? <div className="section-title">SETTINGS</div> : null}
-      <div className="settings-list">
-        {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'messageCircle', rows: (
+    <div className="settings-list">
+      <SettingsSection id="chat" title="Chat" icon="messageCircle" rows={(
         <>
-        {isWide ? (
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <Icon name="activity" className="settings-row-icon" />
-              Show Monitor
-            </span>
-            <input
-              type="checkbox"
-              checked={showMonitor}
-              onChange={e => setShowMonitor(e.target.checked)}
+          {isWide ? (
+            <SettingsControlRow
+              icon="activity"
+              label="Show Monitor"
+              control={(
+                <input
+                  type="checkbox"
+                  className="settings-switch"
+                  checked={showMonitor}
+                  onChange={e => setShowMonitor(e.target.checked)}
+                />
+              )}
             />
-          </label>
-        ) : null}
-        {!isWide ? (
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <Icon name="keyboard" className="settings-row-icon" />
-              Mobile Enter Key
-            </span>
-            <select
-              className="sidebar-setting-select"
-              value={mobileEnterKeyBehavior}
-              onChange={event => {
-                const next = event.target.value;
-                if (isMobileEnterKeyBehavior(next)) setMobileEnterKeyBehavior(next);
-              }}
-            >
-              {MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <div className="voice-input-settings-menu">
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <Icon name="bell" className="settings-row-icon" />
-              Notifications
-            </span>
-            <input
-              type="checkbox"
-              checked={promptCompletionNotificationsEnabled}
-              onChange={event => {
-                if (!event.target.checked) {
-                  setPromptCompletionNotificationsEnabled(false);
-                  return;
-                }
-                handlePromptCompletionNotificationsChange(true);
-              }}
+          ) : null}
+          {!isWide ? (
+            <SettingsControlRow
+              icon="keyboard"
+              label="Mobile Enter Key"
+              control={(
+                <select
+                  className="sidebar-setting-select"
+                  value={mobileEnterKeyBehavior}
+                  onChange={event => {
+                    const next = event.target.value;
+                    if (isMobileEnterKeyBehavior(next)) setMobileEnterKeyBehavior(next);
+                  }}
+                >
+                  {MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             />
-          </label>
+          ) : null}
+          <SettingsControlRow
+            icon="bell"
+            label="Notifications"
+            control={(
+              <input
+                type="checkbox"
+                className="settings-switch"
+                checked={promptCompletionNotificationsEnabled}
+                onChange={event => {
+                  if (!event.target.checked) {
+                    setPromptCompletionNotificationsEnabled(false);
+                    return;
+                  }
+                  handlePromptCompletionNotificationsChange(true);
+                }}
+              />
+            )}
+          />
           {notificationPermissionState === 'denied' ? (
-            <div className="voice-input-settings-nested">
-              <div className="settings-metadata-line">Blocked by system permission</div>
-            </div>
+            <div className="settings-row-note">Blocked by system permission</div>
           ) : null}
-        </div>
-        </>
-        )})}
-        {renderSettingsSection({id: 'server', title: 'Server', icon: 'server', rows: (
-        <>
-          <div className="voice-input-settings-menu">
-            <div className="settings-row sidebar-setting-row">
-              <span>
-                <Icon name="mic" className="settings-row-icon" />
-                Voice Input
-              </span>
-            </div>
-            <SecretEditor
-              label="Volcengine ASR Access Token"
-              configured={serverSettings.voiceInput.configured}
-              updatedAt={serverSettings.voiceInput.updatedAt}
-              busy={serverSettingsBusy}
-              onSet={value => updateServerSetting({section: 'voiceInput', field: 'key', action: 'set', value})}
-              onClear={() => updateServerSetting({section: 'voiceInput', field: 'key', action: 'clear'})}
-            />
-            <div className="voice-input-settings-nested">
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
-                  <Icon name="bot" className="settings-row-icon" />
-                  Model
-                </span>
-                <select
-                  className="sidebar-setting-select"
-                  title="Doubao Streaming ASR 2.0"
-                  value={serverSettings.voiceInput.model}
-                  disabled={serverSettingsBusy}
-                  onChange={event => void updateServerSetting({
-                    section: 'voiceInput',
-                    field: 'model',
-                    action: 'set',
-                    value: event.target.value,
-                  }).catch(() => undefined)}
-                >
-                  {SPEECH_MODEL_OPTIONS.map(item => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
-          <div className="voice-input-settings-menu">
-            <div className="settings-row sidebar-setting-row">
-              <span>
-                <Icon name="volume2" className="settings-row-icon" />
-                Text-to-Speech
-              </span>
-            </div>
-            <SecretEditor
-              label="MiMo TTS API Key"
-              configured={serverSettings.textToSpeech.configured}
-              updatedAt={serverSettings.textToSpeech.updatedAt}
-              busy={serverSettingsBusy}
-              onSet={value => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'set', value})}
-              onClear={() => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'clear'})}
-            />
-            <div className="voice-input-settings-nested">
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
-                  <Icon name="bot" className="settings-row-icon" />
-                  Model
-                </span>
-                <select
-                  className="sidebar-setting-select"
-                  value={serverSettings.textToSpeech.model}
-                  disabled={serverSettingsBusy}
-                  onChange={event => void updateServerSetting({
-                    section: 'textToSpeech',
-                    field: 'model',
-                    action: 'set',
-                    value: event.target.value as TtsModelId,
-                  }).catch(() => undefined)}
-                >
-                  {TTS_MODEL_OPTIONS.map(item => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
-                  <Icon name="userRound" className="settings-row-icon" />
-                  Voice
-                </span>
-                <select
-                  className="sidebar-setting-select"
-                  value={serverSettings.textToSpeech.voice}
-                  disabled={serverSettingsBusy}
-                  onChange={event => void updateServerSetting({
-                    section: 'textToSpeech',
-                    field: 'voice',
-                    action: 'set',
-                    value: event.target.value as TtsVoiceId,
-                  }).catch(() => undefined)}
-                >
-                  {TTS_VOICE_OPTIONS.map(item => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
+          <SecretEditor
+            compact
+            label="Voice Input Key"
+            configured={serverSettings.voiceInput.configured}
+            updatedAt={serverSettings.voiceInput.updatedAt}
+            busy={serverSettingsBusy}
+            onSet={value => updateServerSetting({section: 'voiceInput', field: 'key', action: 'set', value})}
+            onClear={() => updateServerSetting({section: 'voiceInput', field: 'key', action: 'clear'})}
+          />
+          <SettingsControlRow
+            icon="bot"
+            label="Voice Input Model"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                title="Doubao Streaming ASR 2.0"
+                value={serverSettings.voiceInput.model}
+                disabled={serverSettingsBusy}
+                onChange={event => void updateServerSetting({
+                  section: 'voiceInput',
+                  field: 'model',
+                  action: 'set',
+                  value: event.target.value,
+                }).catch(() => undefined)}
+              >
+                {SPEECH_MODEL_OPTIONS.map(item => (
+                  <option key={item.id} value={item.id}>{item.label}</option>
+                ))}
+              </select>
+            )}
+          />
+          <SecretEditor
+            compact
+            label="Speech Key"
+            configured={serverSettings.textToSpeech.configured}
+            updatedAt={serverSettings.textToSpeech.updatedAt}
+            busy={serverSettingsBusy}
+            onSet={value => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'set', value})}
+            onClear={() => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'clear'})}
+          />
+          <SettingsControlRow
+            icon="bot"
+            label="Speech Model"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={serverSettings.textToSpeech.model}
+                disabled={serverSettingsBusy}
+                onChange={event => void updateServerSetting({
+                  section: 'textToSpeech',
+                  field: 'model',
+                  action: 'set',
+                  value: event.target.value as TtsModelId,
+                }).catch(() => undefined)}
+              >
+                {TTS_MODEL_OPTIONS.map(item => (
+                  <option key={item.id} value={item.id}>{item.label}</option>
+                ))}
+              </select>
+            )}
+          />
+          <SettingsControlRow
+            icon="userRound"
+            label="Speech Voice"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={serverSettings.textToSpeech.voice}
+                disabled={serverSettingsBusy}
+                onChange={event => void updateServerSetting({
+                  section: 'textToSpeech',
+                  field: 'voice',
+                  action: 'set',
+                  value: event.target.value as TtsVoiceId,
+                }).catch(() => undefined)}
+              >
+                {TTS_VOICE_OPTIONS.map(item => (
+                  <option key={item.id} value={item.id}>{item.label}</option>
+                ))}
+              </select>
+            )}
+          />
           {serverSettingsError ? (
-            <div className="voice-input-settings-nested">
-              <div className="settings-metadata-line">{serverSettingsError}</div>
-            </div>
+            <div className="settings-row-note settings-row-note-error">{serverSettingsError}</div>
           ) : null}
         </>
-        )})}
-        {renderSettingsSection({id: 'connection', title: 'Connection', icon: 'radioTower', rows: (
+      )} />
+      <SettingsSection id="code" title="Code" icon="code" rows={(
         <>
-        <button
-          type="button"
-          className="settings-row settings-detail-row"
-          onClick={() => openSettingsChild('connectionStatus')}
-        >
-          <span>
-            <Icon name="radioTower" className="settings-row-icon" />
-            Connection Status
-          </span>
-          <Icon name="chevronRight" className="settings-row-chevron" />
-        </button>
-        <button
-          type="button"
-          className="settings-row settings-detail-row"
-          onClick={() => openSettingsChild('deviceSessions')}
-        >
-          <span>
-            <Icon name="laptop" className="settings-row-icon" />
-            Devices
-          </span>
-          <Icon name="chevronRight" className="settings-row-chevron" />
-        </button>
-        </>
-        )})}
-        {renderSettingsSection({id: 'code-display', title: 'Code Display', icon: 'code', rows: (
-        <>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="swatchBook" className="settings-row-icon" />
-            Code Theme
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={codeTheme}
-            onChange={event => {
-              const next = event.target.value;
-              if (isCodeThemeId(next)) setCodeTheme(next);
-            }}
-          >
-            <option
-              key={CODE_THEME_OPTIONS[0].id}
-              value={CODE_THEME_OPTIONS[0].id}
-            >
-              {CODE_THEME_OPTIONS[0].label}
-            </option>
-            {CODE_THEME_OPTION_GROUPS.map(group => (
-              <optgroup key={group.label} label={group.label}>
-                {group.options.map(item => (
+          <SettingsControlRow
+            icon="swatchBook"
+            label="Code Theme"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={codeTheme}
+                onChange={event => {
+                  const next = event.target.value;
+                  if (isCodeThemeId(next)) setCodeTheme(next);
+                }}
+              >
+                <option
+                  key={CODE_THEME_OPTIONS[0].id}
+                  value={CODE_THEME_OPTIONS[0].id}
+                >
+                  {CODE_THEME_OPTIONS[0].label}
+                </option>
+                {CODE_THEME_OPTION_GROUPS.map(group => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.options.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )}
+          />
+          <SettingsControlRow
+            icon="type"
+            label="Code Font"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={codeFont}
+                onChange={event => {
+                  const next = event.target.value;
+                  if (isCodeFontId(next)) setCodeFont(next);
+                }}
+              >
+                {CODE_FONT_OPTIONS.map(item => (
                   <option key={item.id} value={item.id}>
                     {item.label}
                   </option>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-        </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="type" className="settings-row-icon" />
-            Code Font
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={codeFont}
-            onChange={event => {
-              const next = event.target.value;
-              if (isCodeFontId(next)) setCodeFont(next);
-            }}
-          >
-            {CODE_FONT_OPTIONS.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="aArrowUp" className="settings-row-icon" />
-            Font Size
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={String(codeFontSize)}
-            onChange={event => {
-              setCodeFontSize(
-                clampCodeFontSize(Number(event.target.value)),
-              );
-            }}
-          >
-            {CODE_FONT_SIZE_OPTIONS.map(size => (
-              <option key={size} value={size}>
-                {size}px
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="moveVertical" className="settings-row-icon" />
-            Line Height
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={String(codeLineHeight)}
-            onChange={event => {
-              setCodeLineHeight(
-                clampCodeLineHeight(Number(event.target.value)),
-              );
-            }}
-          >
-            {CODE_LINE_HEIGHT_OPTIONS.map(v => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="indentIncrease" className="settings-row-icon" />
-            Tab Size
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={String(codeTabSize)}
-            onChange={event => {
-              setCodeTabSize(
-                clampCodeTabSize(Number(event.target.value)),
-              );
-            }}
-          >
-            {CODE_TAB_SIZE_OPTIONS.map(v => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
+              </select>
+            )}
+          />
+          <SettingsControlRow
+            icon="aArrowUp"
+            label="Font Size"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={String(codeFontSize)}
+                onChange={event => {
+                  setCodeFontSize(
+                    clampCodeFontSize(Number(event.target.value)),
+                  );
+                }}
+              >
+                {CODE_FONT_SIZE_OPTIONS.map(size => (
+                  <option key={size} value={size}>
+                    {size}px
+                  </option>
+                ))}
+              </select>
+            )}
+          />
+          <SettingsControlRow
+            icon="moveVertical"
+            label="Line Height"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={String(codeLineHeight)}
+                onChange={event => {
+                  setCodeLineHeight(
+                    clampCodeLineHeight(Number(event.target.value)),
+                  );
+                }}
+              >
+                {CODE_LINE_HEIGHT_OPTIONS.map(v => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
+          <SettingsControlRow
+            icon="indentIncrease"
+            label="Tab Size"
+            control={(
+              <select
+                className="sidebar-setting-select"
+                value={String(codeTabSize)}
+                onChange={event => {
+                  setCodeTabSize(
+                    clampCodeTabSize(Number(event.target.value)),
+                  );
+                }}
+              >
+                {CODE_TAB_SIZE_OPTIONS.map(v => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            )}
+          />
         </>
-        )})}
-        {renderSettingsSection({id: 'debug', title: 'Debug', icon: 'bug', rows: (
+      )} />
+      <SettingsSection id="state" title="State" icon="activity" rows={(
         <>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="eye" className="settings-row-icon" />
-            Message Viewer
-          </span>
-          <input
-            type="checkbox"
-            checked={messageViewerEnabled}
-            onChange={event => setMessageViewerEnabled(event.target.checked)}
+          <SettingsNavRow
+            icon="radioTower"
+            label="Connection Status"
+            onClick={() => openSettingsDetail('connectionStatus')}
           />
-        </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="filter" className="settings-row-icon" />
-            Log Level
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={logLevel}
-            onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}
-          >
-            <option value="debug">Debug</option>
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="error">Error</option>
-          </select>
-        </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <Icon name="database" className="settings-row-icon" />
-            Disable File Cache
-          </span>
-          <input
-            type="checkbox"
-            checked={disableFileCache}
-            onChange={event => setDisableFileCache(event.target.checked)}
+          <SettingsNavRow
+            icon="laptop"
+            label="Devices"
+            onClick={() => openSettingsDetail('deviceSessions')}
           />
-        </label>
-        <button
-          type="button"
-          className="settings-row settings-detail-row"
-          onClick={() => openSettingsChild('debugLogs')}
-        >
-          <span>
-            <Icon name="scrollText" className="settings-row-icon" />
-            Logs
-          </span>
-          <Icon name="chevronRight" className="settings-row-chevron" />
-        </button>
-        <button
-          type="button"
-          className="settings-row settings-detail-row"
-          onClick={() => openSettingsChild('database')}
-        >
-          <span>
-            <Icon name="database" className="settings-row-icon" />
-            Database
-          </span>
-          <Icon name="chevronRight" className="settings-row-chevron" />
-        </button>
-        <button
-          type="button"
-          className="settings-row settings-danger-row"
-          onClick={requestClearLocalCache}
-        >
-          <span>
-            <Icon name="eraser" className="settings-row-icon" />
-            Clear Local Cache
-          </span>
-          <Icon name="chevronRight" className="settings-row-chevron" />
-        </button>
-        <button
-          type="button"
-          className="settings-row settings-danger-row"
-          onClick={handleRegistryDebugLogout}
-        >
-          <span>
-            <Icon name="logOut" className="settings-row-icon" />
-            Logout
-          </span>
-          <Icon name="chevronRight" className="settings-row-chevron" />
-        </button>
+          <SettingsNavRow
+            icon="database"
+            label="Database"
+            onClick={() => openSettingsDetail('database')}
+          />
+          <SettingsNavRow
+            icon="eraser"
+            label="Clear Local Cache"
+            danger
+            onClick={requestClearLocalCache}
+          />
+          <SettingsNavRow
+            icon="logOut"
+            label="Logout"
+            danger
+            onClick={handleRegistryDebugLogout}
+          />
         </>
-        )})}
-      </div>
-    </>
+      )} />
+      <SettingsSection id="debug" title="Debug" icon="bug" rows={(
+        <>
+          <SettingsControlRow
+            icon="eye"
+            label="Message Viewer"
+            control={(
+              <input
+                type="checkbox"
+                className="settings-switch"
+                checked={messageViewerEnabled}
+                onChange={event => setMessageViewerEnabled(event.target.checked)}
+              />
+            )}
+          />
+          <SettingsControlRow
+            icon="ban"
+            label="Disable File Cache"
+            control={(
+              <input
+                type="checkbox"
+                className="settings-switch"
+                checked={disableFileCache}
+                onChange={event => setDisableFileCache(event.target.checked)}
+              />
+            )}
+          />
+          <div className="settings-row settings-log-level-row">
+            <span>
+              <Icon name="filter" className="settings-row-icon" />
+              Log Level
+            </span>
+            <div className="settings-log-level-controls">
+              <select
+                className="sidebar-setting-select"
+                aria-label="Log level"
+                value={logLevel}
+                onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}
+              >
+                <option value="debug">Debug</option>
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="error">Error</option>
+              </select>
+              <button
+                type="button"
+                className="settings-row-nav-btn"
+                aria-label="Open logs"
+                title="Open logs"
+                onClick={() => openSettingsDetail('debugLogs')}
+              >
+                <Icon name="chevronRight" />
+              </button>
+            </div>
+          </div>
+        </>
+      )} />
+    </div>
   );
 }

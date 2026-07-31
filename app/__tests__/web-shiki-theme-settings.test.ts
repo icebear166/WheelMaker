@@ -26,7 +26,7 @@ describe('web shiki theme settings', () => {
     expect(settingsRootTsx).toContain('CODE_THEME_OPTION_GROUPS');
     expect(settingsRootTsx).toContain('<optgroup key={group.label} label={group.label}>');
     expect(settingsRootTsx).toContain('CODE_THEME_OPTIONS[0].label');
-    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'code-display'");
+    expect(settingsRootTsx).toContain('<SettingsSection id="code"');
     expect(settingsRootTsx).toContain('Code Font');
     expect(settingsRootTsx).toContain('Font Size');
     expect(settingsRootTsx).toContain('Line Height');

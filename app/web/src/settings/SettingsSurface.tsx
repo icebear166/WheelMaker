@@ -1,32 +1,16 @@
 import React, { type ReactNode } from 'react';
 
-import {Icon, type IconName} from '../common/Icon';
-import type { SettingsDetailId, SettingsPeerDetail } from './settingsNavigation';
+import {Icon} from '../common/Icon';
+import type { SettingsDetail } from './settingsNavigation';
 
-export type SettingsDetailShellOptions = {
-  hideDetailHeader?: boolean;
-};
-
-export type SettingsDetailShellProps = SettingsDetailShellOptions & {
-  title: string;
-  actions?: ReactNode;
+export type SettingsDetailShellProps = {
   children: ReactNode;
-  onBack: () => void;
 };
 
 export type SettingsSurfaceProps = {
-  detailView: SettingsDetailId | null;
-  options?: SettingsDetailShellOptions;
+  detailView: SettingsDetail | null;
   renderRoot: () => ReactNode;
-  renderDetail: (detail: SettingsDetailId, options: SettingsDetailShellOptions) => ReactNode;
-};
-
-export type MobileSettingsShortcutBarProps = {
-  activeDetail: SettingsDetailId | null;
-  activeIndex: number;
-  rootActive: boolean;
-  onRootSelect: () => void;
-  onDetailSelect: (detail: SettingsPeerDetail) => void;
+  renderDetail: (detail: SettingsDetail) => ReactNode;
 };
 
 export type MobileSettingsScreenProps = {
@@ -34,7 +18,6 @@ export type MobileSettingsScreenProps = {
   actions: ReactNode;
   backAriaLabel: string;
   children: ReactNode;
-  shortcutBar: ReactNode;
   onBack: () => void;
 };
 
@@ -43,28 +26,10 @@ export type SettingsScreenProps = MobileSettingsScreenProps & {
   onBackdropClick?: () => void;
 };
 
-type MobileSettingsShortcut = {
-  detail: SettingsPeerDetail;
-  title: string;
-  label: string;
-  icon: IconName;
-};
-
-export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
-  {
-    detail: 'portRelay',
-    title: 'Port Relay',
-    label: 'Port Relay',
-    icon: 'radioTower',
-  },
-];
-
-export function settingsDetailTitle(detail: SettingsDetailId): string {
+export function settingsDetailTitle(detail: SettingsDetail): string {
   switch (detail) {
     case 'database':
       return 'Database';
-    case 'portRelay':
-      return 'Port Relay';
     case 'connectionStatus':
       return 'Connection Status';
     case 'deviceSessions':
@@ -76,83 +41,19 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
 
 export function SettingsSurface({
   detailView,
-  options = {},
   renderRoot,
   renderDetail,
 }: SettingsSurfaceProps) {
-  return detailView ? renderDetail(detailView, options) : renderRoot();
+  return detailView ? renderDetail(detailView) : renderRoot();
 }
 
 export function SettingsDetailShell({
-  title,
-  actions,
   children,
-  onBack,
-  hideDetailHeader = false,
 }: SettingsDetailShellProps) {
   return (
-    <div className={`settings-detail-page settings-workbench-detail-page${hideDetailHeader ? ' settings-detail-page-body-only' : ''}`}>
-      {hideDetailHeader ? null : (
-        <div className="settings-detail-header">
-          <button
-            type="button"
-            className="mobile-settings-back settings-detail-back"
-            onClick={onBack}
-            aria-label="Back to settings"
-            title="Back"
-          >
-            <Icon name="arrowLeft" />
-          </button>
-          <div className="settings-detail-title">{title}</div>
-          {actions ?? <span className="settings-detail-header-spacer" aria-hidden="true" />}
-        </div>
-      )}
+    <div className="settings-detail-page settings-workbench-detail-page settings-detail-page-body-only">
       <div className="settings-detail-body">{children}</div>
     </div>
-  );
-}
-
-export function MobileSettingsShortcutBar({
-  activeDetail,
-  activeIndex,
-  rootActive,
-  onRootSelect,
-  onDetailSelect,
-}: MobileSettingsShortcutBarProps) {
-  const shortcutCount = MOBILE_SETTINGS_SHORTCUTS.length + 1;
-  const shortcutStyle = {'--settings-shortcut-count': shortcutCount} as React.CSSProperties;
-  return (
-    <nav
-      className="mobile-settings-shortcut-bar"
-      data-active-index={activeIndex}
-      aria-label="Settings shortcuts"
-    >
-      <div className="mobile-settings-shortcut-track" style={shortcutStyle}>
-        <button
-          type="button"
-          className={`mobile-settings-shortcut-button${rootActive ? ' active' : ''}`}
-          onClick={onRootSelect}
-          title="Settings"
-          aria-label="Settings"
-        >
-          <Icon name="settings" size={22} />
-          <span className="mobile-settings-shortcut-label">Settings</span>
-        </button>
-        {MOBILE_SETTINGS_SHORTCUTS.map(shortcut => (
-          <button
-            key={shortcut.detail}
-            type="button"
-            className={`mobile-settings-shortcut-button${activeDetail === shortcut.detail ? ' active' : ''}`}
-            onClick={() => onDetailSelect(shortcut.detail)}
-            title={shortcut.title}
-            aria-label={shortcut.title}
-          >
-            <Icon name={shortcut.icon} size={22} />
-            <span className="mobile-settings-shortcut-label">{shortcut.label}</span>
-          </button>
-        ))}
-      </div>
-    </nav>
   );
 }
 
@@ -161,7 +62,6 @@ export function SettingsScreen({
   actions,
   backAriaLabel,
   children,
-  shortcutBar,
   onBack,
   className,
   onBackdropClick,
@@ -202,7 +102,6 @@ export function SettingsScreen({
           <div className="mobile-settings-scroll">
             <div className="mobile-settings-group">{children}</div>
           </div>
-          {shortcutBar}
         </div>
       </div>
     </div>

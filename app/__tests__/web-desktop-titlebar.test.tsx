@@ -10,10 +10,14 @@ import {
 
 describe('desktop title bar', () => {
   const originalWindow = (global as typeof globalThis & {window?: unknown}).window;
+  const originalSetTimeout = globalThis.setTimeout;
 
   afterEach(() => {
     (global as typeof globalThis & {window?: unknown}).window = originalWindow;
     jest.useRealTimers();
+    // This jest/node combination can drop global setTimeout after fake timers;
+    // restore it explicitly so later tests keep a working timer.
+    globalThis.setTimeout = originalSetTimeout;
   });
 
   test('renders window controls only in the desktop runtime', async () => {
@@ -60,6 +64,7 @@ describe('desktop title bar', () => {
           themeMode="dark"
           setThemeMode={jest.fn()}
           onOpenSettings={jest.fn()}
+          onOpenPortRelay={jest.fn()}
           onOpenReleasePublishing={jest.fn()}
           updateController={{check, start}}
         />,
@@ -75,6 +80,7 @@ describe('desktop title bar', () => {
     expect(actions.map(action => action.props['data-app-menu-action'])).toEqual([
       'settings',
       'theme',
+      'port-relay',
       'update',
       'release-publish',
       'local-dev',
@@ -110,6 +116,7 @@ describe('desktop title bar', () => {
           themeMode="dark"
           setThemeMode={jest.fn()}
           onOpenSettings={jest.fn()}
+          onOpenPortRelay={jest.fn()}
           onOpenReleasePublishing={jest.fn()}
         />,
       );
@@ -136,6 +143,7 @@ describe('desktop title bar', () => {
           themeMode="light"
           setThemeMode={jest.fn()}
           onOpenSettings={jest.fn()}
+          onOpenPortRelay={jest.fn()}
           onOpenReleasePublishing={jest.fn()}
         />,
       );

@@ -12,7 +12,7 @@ describe('web hide tool calls setting', () => {
       'utf8',
     );
 
-    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'chat'");
+    expect(settingsRootTsx).toContain('<SettingsSection id="chat"');
     expect(settingsRootTsx).not.toContain('Use Latest Prompt Title');
     expect(workspacePersistence).not.toContain('hideToolCalls');
     expect(settingsRootTsx).not.toContain('Hide Tool Calls');

@@ -20,9 +20,9 @@ describe('chat prompt completion notification settings', () => {
       'utf8',
     );
 
-    const chatSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
-    const connectionSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'connection'");
-    const chatSection = settingsRootTsx.slice(chatSectionStart, connectionSectionStart);
+    const chatSectionStart = settingsRootTsx.indexOf('<SettingsSection id="chat"');
+    const codeSectionStart = settingsRootTsx.indexOf('<SettingsSection id="code"');
+    const chatSection = settingsRootTsx.slice(chatSectionStart, codeSectionStart);
 
     expect(chatSection).toContain('Notifications');
     expect(chatSection).not.toContain('Prompt Completion Notifications');

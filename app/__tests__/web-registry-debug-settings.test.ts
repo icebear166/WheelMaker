@@ -51,7 +51,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('registryDebugStore.setEnabled(messageViewerEnabled);');
     expect(mainTsx).toContain('appDiagnosticStore.setLogLevel(logLevel);');
     expect(mainTsx).toContain('setNativeDiagnosticLogLevel(logLevel);');
-    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'debug'");
+    expect(settingsRootTsx).toContain('<SettingsSection id="debug"');
     expect(settingsRootTsx).toContain('Message Viewer');
     expect(settingsRootTsx).toContain('Log Level');
     expect(settingsNavigationTs).toContain("'debugLogs'");
@@ -59,7 +59,7 @@ describe('web registry debug settings', () => {
     expect(settingsSurfaceTsx).toContain("return 'Logs';");
     expect(mainTsx).toContain("detail === 'debugLogs'");
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
-    expect(mainTsx).toContain('renderDebugLogsSettingsDetail(options)');
+    expect(mainTsx).toContain('renderDebugLogsSettingsDetail()');
     expect(mainTsx).toContain('<DebugLogsSettingsDetail');
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');
     expect(settingsRootTsx).toContain('checked={messageViewerEnabled}');
@@ -71,14 +71,20 @@ describe('web registry debug settings', () => {
     expect(mainTsx).not.toContain('handleDesktopRemoteDebugEnabledChange');
     expect(mainTsx).not.toContain('Open Debug Panel');
     expect(mainTsx).not.toContain('disabled={!registryDebug}');
-    const debugSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
-    const debugSectionEnd = settingsRootTsx.indexOf("), 'bug')", debugSectionStart);
-    const debugSection = settingsRootTsx.slice(debugSectionStart, debugSectionEnd);
-    expect(debugSection).toContain("openSettingsChild('debugLogs')");
-    expect(debugSection).toContain('Logs');
-    expect(debugSection).toContain('Logout');
-    expect(debugSection).toContain('handleRegistryDebugLogout');
-    expect(debugSection).toContain('settings-danger-row');
+    const debugSectionStart = settingsRootTsx.indexOf('<SettingsSection id="debug"');
+    const debugSection = settingsRootTsx.slice(debugSectionStart);
+    expect(debugSection).toContain("openSettingsDetail('debugLogs')");
+    expect(debugSection).toContain('Message Viewer');
+    expect(debugSection).toContain('Disable File Cache');
+    expect(debugSection).toContain('Log Level');
+    expect(debugSection).toContain('aria-label="Open logs"');
+    expect(debugSection).not.toContain('Logout');
+    const stateSectionStart = settingsRootTsx.indexOf('<SettingsSection id="state"');
+    const stateSection = settingsRootTsx.slice(stateSectionStart, debugSectionStart);
+    expect(stateSection).toContain('Logout');
+    expect(stateSection).toContain('handleRegistryDebugLogout');
+    expect(stateSection).toMatch(/label="Clear Local Cache"[\s\S]*?danger/);
+    expect(stateSection).toMatch(/label="Logout"[\s\S]*?danger/);
     expect(mainTsx).toContain('registryAuthController.logout()');
     expect(mainTsx).toContain('supervisorManagedCloseRef.current = true;');
     expect(mainTsx).not.toContain('registryDebugRecordsJson');
@@ -120,19 +126,23 @@ describe('web registry debug settings', () => {
     expect(debugLogLineRule).not.toContain('text-overflow: ellipsis;');
   });
 
-  test('places debug maintenance settings at the bottom after code display', () => {
+  test('places debug settings after state, with the log level row last', () => {
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
-    const codeDisplaySectionIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'");
-    const debugSectionIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
-    expect(debugSectionIndex).toBeGreaterThan(codeDisplaySectionIndex);
-    expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
+    const codeSectionIndex = settingsRootTsx.indexOf('<SettingsSection id="code"');
+    const stateSectionIndex = settingsRootTsx.indexOf('<SettingsSection id="state"');
+    const debugSectionIndex = settingsRootTsx.indexOf('<SettingsSection id="debug"');
+    expect(stateSectionIndex).toBeGreaterThan(codeSectionIndex);
+    expect(debugSectionIndex).toBeGreaterThan(stateSectionIndex);
+
+    const stateSection = settingsRootTsx.slice(stateSectionIndex, debugSectionIndex);
+    expect(stateSection.indexOf('Connection Status')).toBeLessThan(stateSection.indexOf('Database'));
+    expect(stateSection.indexOf('Database')).toBeLessThan(stateSection.indexOf('Clear Local Cache'));
+    expect(stateSection.indexOf('Clear Local Cache')).toBeLessThan(stateSection.indexOf('Logout'));
 
     const debugSection = settingsRootTsx.slice(debugSectionIndex);
-    expect(debugSection.indexOf('Message Viewer')).toBeLessThan(debugSection.indexOf('Log Level'));
-    expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('Logs'));
-    expect(debugSection.indexOf('Logs')).toBeLessThan(debugSection.indexOf('Database'));
-    expect(debugSection.indexOf('Database')).toBeLessThan(debugSection.indexOf('Clear Local Cache'));
-    expect(debugSection.indexOf('Clear Local Cache')).toBeLessThan(debugSection.indexOf('Logout'));
+    expect(debugSection.indexOf('Message Viewer')).toBeLessThan(debugSection.indexOf('Disable File Cache'));
+    expect(debugSection.indexOf('Disable File Cache')).toBeLessThan(debugSection.indexOf('Log Level'));
+    expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('aria-label="Open logs"'));
   });
 });

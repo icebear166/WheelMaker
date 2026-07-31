@@ -4,20 +4,21 @@ import path from 'path';
 describe('server settings', () => {
   const root = path.resolve(__dirname, '..');
 
-  test('renders the Server section between Chat and Connection in the approved row order', () => {
+  test('renders voice and speech settings inside Chat in the approved row order', () => {
     const settings = fs.readFileSync(path.join(root, 'web/src/settings/SettingsRootContent.tsx'), 'utf8');
-    const chat = settings.indexOf("renderSettingsSection({id: 'chat'");
-    const server = settings.indexOf("renderSettingsSection({id: 'server'");
-    const connection = settings.indexOf("renderSettingsSection({id: 'connection'");
-    const serverBlock = settings.slice(server, connection);
+    const chat = settings.indexOf('<SettingsSection id="chat"');
+    const code = settings.indexOf('<SettingsSection id="code"');
+    const chatBlock = settings.slice(chat, code);
 
     expect(chat).toBeGreaterThanOrEqual(0);
-    expect(server).toBeGreaterThan(chat);
-    expect(connection).toBeGreaterThan(server);
-    expect(serverBlock.indexOf('Voice Input')).toBeLessThan(serverBlock.indexOf('Text-to-Speech'));
-    expect(serverBlock).toMatch(/Voice Input[\s\S]*Volcengine ASR Access Token[\s\S]*Model/);
-    expect(serverBlock).toMatch(/Text-to-Speech[\s\S]*MiMo TTS API Key[\s\S]*Model[\s\S]*Voice/);
-    expect(serverBlock).not.toContain('DeepSeek');
+    expect(code).toBeGreaterThan(chat);
+    expect(chatBlock.indexOf('Voice Input Key')).toBeLessThan(chatBlock.indexOf('Voice Input Model'));
+    expect(chatBlock.indexOf('Voice Input Model')).toBeLessThan(chatBlock.indexOf('Speech Key'));
+    expect(chatBlock.indexOf('Speech Key')).toBeLessThan(chatBlock.indexOf('Speech Model'));
+    expect(chatBlock.indexOf('Speech Model')).toBeLessThan(chatBlock.indexOf('Speech Voice'));
+    expect(chatBlock).toMatch(/Voice Input Key[\s\S]*configured=\{serverSettings\.voiceInput\.configured\}/);
+    expect(chatBlock).toMatch(/Speech Key[\s\S]*configured=\{serverSettings\.textToSpeech\.configured\}/);
+    expect(chatBlock).not.toContain('DeepSeek');
   });
 
   test('renders set-only password editors and never binds a server secret value', () => {

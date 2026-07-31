@@ -1,10 +1,10 @@
 import {
-  isSettingsDetailId,
+  isSettingsDetail,
   settingsPageKind,
-  type SettingsDetailId,
+  type SettingsDetail,
 } from '../../../settings/settingsNavigation';
 
-export type MobileSettingsHistoryDetail = SettingsDetailId;
+export type MobileSettingsHistoryDetail = SettingsDetail;
 
 export type MobileSettingsHistoryState = {
   wheelMakerHistory: 'mobile-settings';
@@ -15,17 +15,6 @@ export type MobileSettingsPopAction = 'back-to-root' | 'close-settings' | 'none'
 export type MobileSettingsHistoryWriteAction = 'push' | 'replace' | 'none';
 
 const MOBILE_SETTINGS_HISTORY_MARKER = 'mobile-settings';
-
-function detailFromMobileSettingsHistoryKey(key: string | null): MobileSettingsHistoryDetail | null | undefined {
-  if (!key?.startsWith(`${MOBILE_SETTINGS_HISTORY_MARKER}:`)) {
-    return undefined;
-  }
-  const value = key.slice(MOBILE_SETTINGS_HISTORY_MARKER.length + 1);
-  if (value === 'root') {
-    return null;
-  }
-  return isSettingsDetailId(value) ? value : undefined;
-}
 
 export function createMobileSettingsHistoryState(
   detail: MobileSettingsHistoryDetail | null,
@@ -44,7 +33,7 @@ export function isMobileSettingsHistoryState(input: unknown): input is MobileSet
   return state.wheelMakerHistory === MOBILE_SETTINGS_HISTORY_MARKER
     && (
       state.detail === null
-      || isSettingsDetailId(state.detail)
+      || isSettingsDetail(state.detail)
     );
 }
 
@@ -55,11 +44,9 @@ export function mobileSettingsHistoryKey(detail: MobileSettingsHistoryDetail | n
 export function resolveMobileSettingsHistoryWriteAction({
   currentKey,
   nextDetail,
-  replaceRootWithDetail = false,
 }: {
   currentKey: string | null;
   nextDetail: MobileSettingsHistoryDetail | null;
-  replaceRootWithDetail?: boolean;
 }): MobileSettingsHistoryWriteAction {
   const nextKey = mobileSettingsHistoryKey(nextDetail);
   if (currentKey === nextKey) {
@@ -68,11 +55,7 @@ export function resolveMobileSettingsHistoryWriteAction({
   if (currentKey === null) {
     return 'push';
   }
-  if (currentKey === mobileSettingsHistoryKey(null)) {
-    return replaceRootWithDetail && nextDetail !== null ? 'replace' : 'push';
-  }
-  const currentDetail = detailFromMobileSettingsHistoryKey(currentKey);
-  if (settingsPageKind(currentDetail) === 'peer' && settingsPageKind(nextDetail) === 'child') {
+  if (currentKey === mobileSettingsHistoryKey(null) && nextDetail !== null) {
     return 'push';
   }
   return 'replace';
@@ -91,11 +74,8 @@ export function resolveMobileSettingsPopAction({
     return 'none';
   }
   const currentKind = settingsPageKind(settingsDetailView);
-  if (currentKind === 'child') {
+  if (currentKind === 'detail') {
     return isMobileSettingsHistoryState(nextState) ? 'back-to-root' : 'close-settings';
-  }
-  if (currentKind === 'peer') {
-    return 'close-settings';
   }
   return isMobileSettingsHistoryState(nextState) ? 'none' : 'close-settings';
 }

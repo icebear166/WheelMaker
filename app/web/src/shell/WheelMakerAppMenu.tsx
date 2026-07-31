@@ -31,6 +31,7 @@ export type WheelMakerAppMenuProps = {
   themeMode: 'dark' | 'light';
   setThemeMode: (mode: 'dark' | 'light') => void;
   onOpenSettings: () => void;
+  onOpenPortRelay: () => void;
   onOpenReleasePublishing: () => void;
   updateController?: ClientUpdateController | null;
   triggerClassName?: string;
@@ -86,6 +87,7 @@ export function WheelMakerAppMenu({
   themeMode,
   setThemeMode,
   onOpenSettings,
+  onOpenPortRelay,
   onOpenReleasePublishing,
   updateController = null,
   triggerClassName = '',
@@ -307,6 +309,12 @@ export function WheelMakerAppMenu({
         onClick={() => {
           setThemeMode(themeMode === 'dark' ? 'light' : 'dark');
         }}
+      />
+      <MenuRow
+        action="port-relay"
+        icon="radioTower"
+        label="Port Relay"
+        onClick={() => closeAndRun(onOpenPortRelay)}
       />
       {updateController ? (
         <MenuRow

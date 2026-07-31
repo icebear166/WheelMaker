@@ -26,9 +26,9 @@ describe('model efficiency workspace integration', () => {
       '{k: GLOBAL_KEYS.showMonitor, v: serialize(this.state.global.showMonitor), updatedAt}',
     );
 
-    const chatStart = settings.indexOf("renderSettingsSection({id: 'chat'");
-    const connectionStart = settings.indexOf("renderSettingsSection({id: 'connection'");
-    const chatSection = settings.slice(chatStart, connectionStart);
+    const chatStart = settings.indexOf('<SettingsSection id="chat"');
+    const codeStart = settings.indexOf('<SettingsSection id="code"');
+    const chatSection = settings.slice(chatStart, codeStart);
     expect(chatSection).toContain('Show Monitor');
     expect(chatSection).not.toContain('Show Model Efficiency');
 

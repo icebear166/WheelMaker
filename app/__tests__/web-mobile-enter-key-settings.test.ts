@@ -47,19 +47,19 @@ describe('web mobile enter key settings', () => {
     expect(settingsRootTsx).toContain('MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (');
     expect(settingsRootTsx).toContain('{!isWide ? (');
 
-    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
-    const connectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'connection'", chatStart);
+    const chatStart = settingsRootTsx.indexOf('<SettingsSection id="chat"');
+    const codeStart = settingsRootTsx.indexOf('<SettingsSection id="code"', chatStart);
     const settingStart = settingsRootTsx.indexOf('Mobile Enter Key');
     const mobileOnlyStart = settingsRootTsx.lastIndexOf('{!isWide ? (', settingStart);
     const mobileOnlyEnd = settingsRootTsx.indexOf(') : null}', settingStart);
     expect(chatStart).toBeGreaterThanOrEqual(0);
-    expect(connectionStart).toBeGreaterThan(chatStart);
+    expect(codeStart).toBeGreaterThan(chatStart);
     expect(settingStart).toBeGreaterThan(chatStart);
-    expect(settingStart).toBeLessThan(connectionStart);
+    expect(settingStart).toBeLessThan(codeStart);
     expect(mobileOnlyStart).toBeGreaterThan(chatStart);
     expect(mobileOnlyStart).toBeLessThan(settingStart);
     expect(mobileOnlyEnd).toBeGreaterThan(settingStart);
-    expect(mobileOnlyEnd).toBeLessThan(connectionStart);
+    expect(mobileOnlyEnd).toBeLessThan(codeStart);
   });
 
   test('uses mobile enter preference for keyboard hint and plain Enter send ownership', () => {

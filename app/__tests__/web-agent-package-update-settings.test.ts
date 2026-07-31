@@ -168,13 +168,13 @@ describe('agent package update settings UI source structure', () => {
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
     expect(mainTsx).toContain("} from '../settings/settingsNavigation';");
-    expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
+    expect(mainTsx).toContain('type SettingsDetailView = SettingsDetail | null;');
     expect(mainTsx).not.toContain("if (detail === 'update') {");
     expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
     expect(settingsRootTsx).not.toContain("renderSettingsSection('Storage'");
 
-    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
-    const codeDisplayStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'", chatStart);
+    const chatStart = settingsRootTsx.indexOf('<SettingsSection id="chat"');
+    const codeDisplayStart = settingsRootTsx.indexOf('<SettingsSection id="code"', chatStart);
     expect(chatStart).toBeGreaterThanOrEqual(0);
     expect(codeDisplayStart).toBeGreaterThan(chatStart);
     const chatSection = settingsRootTsx.slice(chatStart, codeDisplayStart);
@@ -183,17 +183,20 @@ describe('agent package update settings UI source structure', () => {
     expect(chatSection).not.toContain('Token Stats');
     expect(chatSection).not.toContain('CC Switch');
 
-    const debugStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
-    expect(debugStart).toBeGreaterThan(codeDisplayStart);
+    const stateStart = settingsRootTsx.indexOf('<SettingsSection id="state"');
+    const debugStart = settingsRootTsx.indexOf('<SettingsSection id="debug"');
+    expect(stateStart).toBeGreaterThan(codeDisplayStart);
+    expect(debugStart).toBeGreaterThan(stateStart);
+    const stateSection = settingsRootTsx.slice(stateStart, debugStart);
+    expect(stateSection.indexOf("openSettingsDetail('database')")).toBeGreaterThanOrEqual(0);
+    expect(stateSection.indexOf("openSettingsDetail('database')")).toBeLessThan(stateSection.indexOf('requestClearLocalCache'));
+    expect(stateSection.indexOf('requestClearLocalCache')).toBeLessThan(stateSection.indexOf('handleRegistryDebugLogout'));
     const debugSection = settingsRootTsx.slice(debugStart);
     expect(debugSection).not.toContain("setSettingsDetailView('update')");
     expect(debugSection).not.toContain("setSettingsDetailView('skills')");
     expect(debugSection).not.toContain("setSettingsDetailView('tokenStats')");
     expect(debugSection).not.toContain("setSettingsDetailView('ccSwitch')");
     expect(debugSection).not.toContain("setSettingsDetailView('portRelay')");
-    expect(debugSection.indexOf("openSettingsChild('database')")).toBeGreaterThanOrEqual(0);
-    expect(debugSection.indexOf("openSettingsChild('database')")).toBeLessThan(debugSection.indexOf('requestClearLocalCache'));
-    expect(debugSection.indexOf('requestClearLocalCache')).toBeLessThan(debugSection.indexOf('handleRegistryDebugLogout'));
   });
 
   test('wires update, npm, skills, index and footer actions into the hub menu', () => {
@@ -360,7 +363,7 @@ describe('agent package update settings UI source structure', () => {
     expect(stylesCss).not.toContain('.token-stats-');
   });
 
-  test('hides desktop shortcuts and shares the Settings shortcut bar across settings screens', () => {
+  test('hides desktop shortcuts and keeps settings screens free of peer surfaces', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
@@ -368,8 +371,7 @@ describe('agent package update settings UI source structure', () => {
 
     expect(mainTsx).not.toContain('renderTokenStatsSettingsDetail(options)');
     expect(mainTsx).not.toContain('renderSkillsSettingsDetail(options)');
-    expect(mainTsx).toContain("openSettingsPeer('portRelay')");
-    expect(mainTsx).not.toContain("openSettingsPeer('ccSwitch')");
+    expect(mainTsx).not.toContain('openSettingsPeer');
     expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
     expect(mainTsx).not.toContain('const desktopActivityBar = isWide ? (');
     expect(mainTsx).not.toContain('className="desktop-activity-bar"');
@@ -378,39 +380,17 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).not.toContain('aria-label="CC Switch"');
 
     const floatingStart = mainTsx.indexOf('const floatingControlStack = !isWide ? (');
-    const settingsBarStart = mainTsx.indexOf('const settingsShortcutBar = sidebarSettingsOpen ? (', floatingStart);
-    const mobileOnly = mainTsx.slice(floatingStart, settingsBarStart);
+    const desktopScreenStart = mainTsx.indexOf('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (', floatingStart);
+    const mobileOnly = mainTsx.slice(floatingStart, desktopScreenStart);
     expect(mobileOnly).not.toContain("openSettingsDetail('update')");
 
-    const settingsBarEnd = mainTsx.indexOf('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (', settingsBarStart);
-    expect(settingsBarStart).toBeGreaterThanOrEqual(0);
-    expect(settingsBarEnd).toBeGreaterThan(settingsBarStart);
-    const settingsBar = mainTsx.slice(settingsBarStart, settingsBarEnd);
-    expect(settingsBar).toContain('<MobileSettingsShortcutBar');
-    expect(settingsBar).toContain('onRootSelect={handleMobileSettingsRootShortcut}');
-    expect(settingsBar).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
-    expect(settingsBar).toContain('activeIndex={mobileSettingsShortcutActiveIndex}');
-    expect(mainTsx).toContain('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (');
-    expect(mainTsx).toContain('shortcutBar={settingsShortcutBar}');
+    expect(desktopScreenStart).toBeGreaterThanOrEqual(0);
+    expect(mainTsx).not.toContain('settingsShortcutBar');
+    expect(mainTsx).not.toContain('shortcutBar=');
+    expect(mainTsx).not.toContain('MobileSettingsShortcutBar');
     expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (');
-    const surfaceShortcutStart = settingsSurfaceTsx.indexOf('export const MOBILE_SETTINGS_SHORTCUTS');
-    const surfaceShortcutEnd = settingsSurfaceTsx.indexOf('export function settingsDetailTitle', surfaceShortcutStart);
-    const surfaceShortcuts = settingsSurfaceTsx.slice(surfaceShortcutStart, surfaceShortcutEnd);
-    expect(surfaceShortcutStart).toBeGreaterThanOrEqual(0);
-    expect(surfaceShortcutEnd).toBeGreaterThan(surfaceShortcutStart);
-    expect(surfaceShortcuts).not.toContain("detail: 'update'");
-    expect(surfaceShortcuts).not.toContain("detail: 'skills'");
-    expect(surfaceShortcuts).toContain("detail: 'portRelay'");
-    expect(surfaceShortcuts).not.toContain("detail: 'ccSwitch'");
-    const surfaceBarStart = settingsSurfaceTsx.indexOf('export function MobileSettingsShortcutBar');
-    const surfaceBarEnd = settingsSurfaceTsx.indexOf('export function MobileSettingsScreen', surfaceBarStart);
-    const surfaceBar = settingsSurfaceTsx.slice(surfaceBarStart, surfaceBarEnd);
-    expect(surfaceBar.indexOf('title="Settings"')).toBeLessThan(surfaceBar.indexOf('MOBILE_SETTINGS_SHORTCUTS.map'));
-    expect(surfaceBar).toContain('className="mobile-settings-shortcut-track"');
-    expect(surfaceBar).toContain('onClick={onRootSelect}');
-    expect(surfaceBar).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
-    expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">Settings</span>');
-    expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">{shortcut.label}</span>');
+    expect(settingsSurfaceTsx).not.toContain('MOBILE_SETTINGS_SHORTCUTS');
+    expect(settingsSurfaceTsx).not.toContain('MobileSettingsShortcutBar');
 
     const chatSessionHeaderStart = mainTsx.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
     const chatSessionHeaderEnd = mainTsx.indexOf('const renderMobileChatSessionSheet = (', chatSessionHeaderStart);
@@ -432,28 +412,10 @@ describe('agent package update settings UI source structure', () => {
     expect(mobileChatSessionHeaderBlock).not.toContain('border-radius: 10px;');
     expect(stylesCss).not.toContain('.mobile-chat-toolbar {');
 
-    expect(stylesCss).toContain('.mobile-settings-shortcut-bar {');
-    expect(stylesCss).toContain('.mobile-settings-shortcut-track {');
-    expect(stylesCss).toContain('.mobile-settings-shortcut-track::before {');
-    expect(stylesCss).toContain('.mobile-settings-shortcut-button {');
-    expect(stylesCss).toContain('.mobile-settings-shortcut-label {');
-    const mobileShortcutBarBlock = stylesCss.match(/\.mobile-settings-shortcut-bar \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileShortcutBarBlock).toContain('display: flex;');
-    expect(mobileShortcutBarBlock).toContain('justify-content: center;');
-    expect(mobileShortcutBarBlock).toContain('padding: 0 12px env(safe-area-inset-bottom, 0px);');
-    expect(mobileShortcutBarBlock).not.toContain('grid-template-columns: repeat(6');
-    const mobileShortcutTrackBlock = stylesCss.match(/\.mobile-settings-shortcut-track \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileShortcutTrackBlock).toContain('width: min(100%, 340px);');
-    expect(mobileShortcutTrackBlock).toContain('grid-template-columns: repeat(var(--settings-shortcut-count), minmax(0, 1fr));');
-    const mobileShortcutButtonBlock = stylesCss.match(/\.mobile-settings-shortcut-button \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileShortcutButtonBlock).toContain('height: 58px;');
-    expect(mobileShortcutButtonBlock).toContain('flex-direction: column;');
-    const mobileShortcutIndicatorBlock = stylesCss.match(/\.mobile-settings-shortcut-track::before \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileShortcutIndicatorBlock).toContain('top: 0;');
-    expect(mobileShortcutIndicatorBlock).toContain('width: calc(100% / var(--settings-shortcut-count));');
-    expect(mobileShortcutIndicatorBlock).toContain('transition: transform');
-    expect(stylesCss).not.toContain(".mobile-settings-shortcut-bar[data-active-index='4'] .mobile-settings-shortcut-track::before");
-    expect(stylesCss).not.toContain('.mobile-settings-shortcut-button.active::before');
+    expect(stylesCss).not.toContain('.mobile-settings-shortcut-bar {');
+    expect(stylesCss).not.toContain('.mobile-settings-shortcut-track');
+    expect(stylesCss).not.toContain('.mobile-settings-shortcut-button');
+    expect(stylesCss).not.toContain('.mobile-settings-shortcut-label');
     expect(stylesCss).not.toContain('.mobile-chat-toolbar-icon.active');
   });
 });

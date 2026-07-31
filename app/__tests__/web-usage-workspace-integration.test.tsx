@@ -57,10 +57,9 @@ describe('limits workspace integration', () => {
     expect(main).toContain('{usageHistoryOverlay}');
   });
 
-  test('uses four data-driven Settings shortcut columns', () => {
-    expect(settingsCss).toContain('repeat(var(--settings-shortcut-count), minmax(0, 1fr))');
-    expect(settingsCss).toContain('calc(100% / var(--settings-shortcut-count))');
-    expect(settingsCss).not.toContain("data-active-index='4'");
+  test('keeps the settings screen free of the retired shortcut bar', () => {
+    expect(settingsCss).not.toContain('--settings-shortcut-count');
+    expect(settingsCss).not.toContain('.mobile-settings-shortcut-bar');
   });
 
   test('shows Monitor by default and migrates the legacy visibility settings', () => {
@@ -78,9 +77,9 @@ describe('limits workspace integration', () => {
     expect(persistence).not.toContain('this.state.global.showLimitsMonitor');
     expect(persistence).not.toContain('this.state.global.showModelEfficiency');
 
-    const chatStart = settings.indexOf("renderSettingsSection({id: 'chat'");
-    const connectionStart = settings.indexOf("renderSettingsSection({id: 'connection'");
-    const chatSection = settings.slice(chatStart, connectionStart);
+    const chatStart = settings.indexOf('<SettingsSection id="chat"');
+    const codeStart = settings.indexOf('<SettingsSection id="code"');
+    const chatSection = settings.slice(chatStart, codeStart);
     expect(chatSection).toContain('Show Monitor');
     expect(chatSection).toContain('checked={showMonitor}');
     expect(chatSection).toContain('setShowMonitor(e.target.checked)');

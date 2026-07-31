@@ -9,8 +9,7 @@
 ## 形态
 
 - 移动端只有一个边缘停靠的浮控控件：常态是单个圆角矩形图标按钮，显示当前所在表面的 Lucide 图标 + 未读点；tap 展开为一张整体圆角矩形菜单卡，纯图标列（无文字标签），当前项高亮。
-- 菜单卡目的地：Chat / Preview / Terminal / Relay / Monitor / Settings；Relay 位呈现 active target 状态。
-- 基本结构稳定：左右边缘停靠、垂直拖拽调位置、横向过中线 ±24px hysteresis 换边、side 与 yRatio 持久化，这些不随视觉迭代改变。
+- 菜单卡目的地：Chat / Preview / Terminal / Relay / Monitor / Settings；Relay 位呈现 active target 状态。- 基本结构稳定：左右边缘停靠、垂直拖拽调位置、横向过中线 ±24px hysteresis 换边、side 与 yRatio 持久化，这些不随视觉迭代改变。
 
 ## 材质
 
@@ -19,7 +18,7 @@
 
 ## Relay 入口
 
-- Relay 无独立气泡，彻底并入菜单卡且**常驻可见**：frame 打开时 tap 关闭 frame；relay 已启用且有 target 时单 target 直接打开 frame、多 target 先弹 bottom-sheet 选 target（复用项目 sheet 的菜单语言）；未启用或无 target 时 tap 进入 Port Relay 设置页。
+- Relay 无独立气泡，彻底并入菜单卡且**常驻可见**：frame 打开时 tap 关闭 frame；relay 已启用且有 target 时单 target 直接打开 frame、多 target 先弹 bottom-sheet 选 target（复用项目 sheet 的菜单语言）；未启用或无 target 时 tap 打开独立 Port Relay 页面（app menu 一级入口承载，不再进入 Settings）。
 - Relay 位用 CSS 状态点呈现 frame 开关状态；frame 打不开时整位降不透明度，不做禁用。
 - Relay frame 打开期间浮控整体保持可拖拽，不卸载。
 

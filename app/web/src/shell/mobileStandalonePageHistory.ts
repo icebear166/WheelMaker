@@ -1,17 +1,30 @@
+export type StandalonePageKind = 'release-publish' | 'port-relay';
+
 export type StandalonePageHistoryState = {
-  wheelMakerStandalonePage: 'release-publish';
+  wheelMakerStandalonePage: StandalonePageKind;
 };
 
-export function createStandalonePageHistoryState(): StandalonePageHistoryState {
-  return {wheelMakerStandalonePage: 'release-publish'};
+const STANDALONE_PAGE_KINDS: readonly StandalonePageKind[] = [
+  'release-publish',
+  'port-relay',
+];
+
+export function createStandalonePageHistoryState(
+  page: StandalonePageKind,
+): StandalonePageHistoryState {
+  return {wheelMakerStandalonePage: page};
 }
 
 export function isStandalonePageHistoryState(
   value: unknown,
+  page?: StandalonePageKind,
 ): value is StandalonePageHistoryState {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && (value as Record<string, unknown>).wheelMakerStandalonePage === 'release-publish',
-  );
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const marker = (value as Record<string, unknown>).wheelMakerStandalonePage;
+  if (page !== undefined) {
+    return marker === page;
+  }
+  return STANDALONE_PAGE_KINDS.includes(marker as StandalonePageKind);
 }

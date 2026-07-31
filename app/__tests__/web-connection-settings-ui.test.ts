@@ -14,14 +14,14 @@ describe('connection settings UI source structure', () => {
     expect(settingsSurfaceTsx).toContain("case 'connectionStatus':");
     expect(settingsSurfaceTsx).toContain("return 'Connection Status';");
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
-    expect(mainTsx).toContain('renderConnectionStatusSettingsDetail(options)');
+    expect(mainTsx).toContain('renderConnectionStatusSettingsDetail()');
     expect(mainTsx).toContain('<ConnectionStatusSettingsDetail');
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');
     expect(mainTsx).not.toContain('resolveRegistryConnectionStatus,');
     expect(mainTsx).not.toContain('resolveVoiceCapabilityStatus,');
     expect(mainTsx).not.toContain('resolveWebResourceConnectionStatus,');
-    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'connection'");
-    expect(settingsRootTsx).toContain("openSettingsChild('connectionStatus')");
+    expect(settingsRootTsx).toContain('<SettingsSection id="state"');
+    expect(settingsRootTsx).toContain("openSettingsDetail('connectionStatus')");
     expect(settingsRootTsx).toContain('Connection Status');
     expect(settingsRootTsx).not.toContain('Local Hub Read');
     expect(fs.existsSync(detailPath)).toBe(true);
@@ -32,14 +32,17 @@ describe('connection settings UI source structure', () => {
     expect(detailTsx).toContain('baseURL');
     expect(detailTsx).not.toContain('Local Hub Read');
 
-    const chatSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
-    const connectionSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'connection'");
-    const codeSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'");
-    const connectionSection = settingsRootTsx.slice(connectionSectionStart, codeSectionStart);
-    const connectionStatusIndex = connectionSection.indexOf('Connection Status');
+    const chatSectionStart = settingsRootTsx.indexOf('<SettingsSection id="chat"');
+    const codeSectionStart = settingsRootTsx.indexOf('<SettingsSection id="code"');
+    const stateSectionStart = settingsRootTsx.indexOf('<SettingsSection id="state"');
+    const debugSectionStart = settingsRootTsx.indexOf('<SettingsSection id="debug"');
+    const stateSection = settingsRootTsx.slice(stateSectionStart, debugSectionStart);
+    const connectionStatusIndex = stateSection.indexOf('Connection Status');
 
-    expect(connectionSectionStart).toBeGreaterThan(chatSectionStart);
-    expect(connectionSectionStart).toBeLessThan(codeSectionStart);
+    expect(chatSectionStart).toBeGreaterThanOrEqual(0);
+    expect(codeSectionStart).toBeGreaterThan(chatSectionStart);
+    expect(stateSectionStart).toBeGreaterThan(codeSectionStart);
+    expect(debugSectionStart).toBeGreaterThan(stateSectionStart);
     expect(connectionStatusIndex).toBeGreaterThanOrEqual(0);
   });
 });

@@ -1,65 +1,25 @@
-export type SettingsPeerDetail = 'portRelay';
-
-export type SettingsChildDetail =
+export type SettingsDetail =
   | 'connectionStatus'
   | 'database'
   | 'debugLogs'
   | 'deviceSessions';
 
-export type SettingsDetailId = SettingsPeerDetail | SettingsChildDetail;
-export type SettingsPageKind = 'root' | 'peer' | 'child';
+export type SettingsPageKind = 'root' | 'detail';
 
-export const SETTINGS_PEER_DETAILS: readonly SettingsPeerDetail[] = [
-  'portRelay',
-];
-
-export const SETTINGS_CHILD_DETAILS: readonly SettingsChildDetail[] = [
+export const SETTINGS_DETAILS: readonly SettingsDetail[] = [
   'connectionStatus',
   'database',
   'debugLogs',
   'deviceSessions',
 ];
 
-export function isSettingsPeerDetail(
-  detail: SettingsDetailId | null | undefined,
-): detail is SettingsPeerDetail {
-  return detail !== null
-    && detail !== undefined
-    && SETTINGS_PEER_DETAILS.includes(detail as SettingsPeerDetail);
-}
-
-export function isSettingsChildDetail(
-  detail: SettingsDetailId | null | undefined,
-): detail is SettingsChildDetail {
-  return detail !== null
-    && detail !== undefined
-    && SETTINGS_CHILD_DETAILS.includes(detail as SettingsChildDetail);
-}
-
-export function isSettingsDetailId(detail: unknown): detail is SettingsDetailId {
-  return isSettingsPeerDetail(detail as SettingsDetailId | null)
-    || isSettingsChildDetail(detail as SettingsDetailId | null);
+export function isSettingsDetail(detail: unknown): detail is SettingsDetail {
+  return typeof detail === 'string'
+    && SETTINGS_DETAILS.includes(detail as SettingsDetail);
 }
 
 export function settingsPageKind(
-  detail: SettingsDetailId | null | undefined,
+  detail: SettingsDetail | null | undefined,
 ): SettingsPageKind {
-  if (isSettingsPeerDetail(detail)) {
-    return 'peer';
-  }
-  if (isSettingsChildDetail(detail)) {
-    return 'child';
-  }
-  return 'root';
-}
-
-export function mobileSettingsShortcutIndex(
-  detail: SettingsDetailId | null | undefined,
-): number {
-  switch (detail) {
-    case 'portRelay':
-      return 1;
-    default:
-      return 0;
-  }
+  return isSettingsDetail(detail) ? 'detail' : 'root';
 }

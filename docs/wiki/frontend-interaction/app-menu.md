@@ -10,11 +10,12 @@ WheelMaker 图标是跨端一致的应用级菜单入口，不直接打开 Setti
 
 1. `Settings`：关闭菜单并打开 Settings 首页。
 2. `Theme`：在应用整体 Light/Dark 间立即切换；右侧文字和图标显示当前主题。
-3. `Update`：只在 APK/EXE 原生客户端显示。
+3. `Port Relay`：关闭菜单并打开独立 Port Relay 页面（radioTower 图标），不属于 Settings。
+4. `Update`：只在 APK/EXE 原生客户端显示。
 
 主项目后使用分隔线。所有端都显示 `Release publishing`，它打开独立发布页面，不属于 Settings；页面返回后回到 Chat。支持 Desktop 本地开发能力时，`Dev Mode` 紧随其后。
 
-浏览器/PWA 不显示 Update，也不把 Update 指向 Hub/Web 更新页。其菜单结构为 Settings、Theme、分隔线、Release Publishing。
+浏览器/PWA 不显示 Update，也不把 Update 指向 Hub/Web 更新页。其菜单结构为 Settings、Theme、Port Relay、分隔线、Release Publishing。
 
 ## 客户端更新
 
@@ -30,13 +31,17 @@ APK/EXE 每次打开菜单都执行一次无缓存更新检查。Update 右侧�
 
 ## Settings 边界
 
+Settings 首页固定为四个分组：`Chat`（对话行为 + 语音输入/TTS）、`Code`（代码展示）、`State`（连接状态、设备、数据库、本地缓存与登出）、`Debug`（诊断开关与日志）。子详情页只有 Connection Status、Devices、Database、Logs 四个，不再有 peer 页与底部 shortcut bar。
+
+Port Relay 是一级菜单入口与独立页面，不出现在 Settings 内。
+
 以下应用级入口不再出现在 Settings：
 
 - Android APK 更新卡片。
 - `Appearance → Dark Mode`；Appearance 没有其他项目时整个分区消失。
 - `Debug → Release publishing` 及其 Settings detail 类型。
 
-`Code Display → Code Theme` 仍属于 Settings，因为它控制代码块配色而非应用整体明暗主题。Settings 的 Update peer 继续负责 Hub/Web 与 Agent package 更新。
+`Code → Code Theme` 仍属于 Settings，因为它控制代码块配色而非应用整体明暗主题。Hub/Web 与 Agent package 更新不在 Settings 内，由 Chat 头部 Hub 菜单的 per-hub 操作面板承担。
 
 设计来源：
 
