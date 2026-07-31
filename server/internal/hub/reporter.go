@@ -151,9 +151,11 @@ type Reporter struct {
 	releaseToolMu           sync.Mutex
 	miscToolMu              sync.Mutex
 	toolHandlerInitMu       sync.Mutex
+	skillsStateInitMu       sync.Mutex
 	relayClient             *portrelay.HubClient
 	fileIndex               *projectFileIndexManager
 	hubStateManager         *HubStateManager
+	skillsState             *skillsStateCoordinator
 	usageService            *usage.Service
 	usageHistory            *usage.HistoryStore
 	terminalHandler         TerminalHandler
@@ -224,6 +226,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	}
 	r.hubConfig = cfg.HubConfig
 	r.reloadAgentRuntime = cfg.ReloadAgentRuntime
+	r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
 	if r.hubConfig == nil {
 		r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
 	}
@@ -370,6 +373,7 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	r.mu.Unlock()
 
 	if topologyChanged {
+		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
 		_, _ = r.ensureHubStateManager().enqueueRefresh(
 			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
 			true,
@@ -1096,10 +1100,38 @@ func (r *Reporter) onNPMOperationDone() {
 }
 
 func (r *Reporter) onSkillsOperationDone(scope, projectName string) {
-	r.refreshSkillsAgentProfiles(scope, projectName)
-	_, _ = r.ensureHubStateManager().enqueueRefresh(
-		[]string{hubStateSectionSkills},
-		true,
+	go r.refreshSkillsStateTarget(scope, projectName)
+}
+
+func (r *Reporter) refreshSkillsStateTarget(scope, projectName string) {
+	var (
+		snapshot skillsStateSnapshot
+		err      error
+	)
+	if scope == "project" && strings.TrimSpace(projectName) != "" {
+		snapshot, err = r.ensureSkillsStateCoordinator().RefreshProject(
+			context.Background(),
+			rp.ProjectID(r.cfg.HubID, projectName),
+		)
+	} else {
+		snapshot, err = r.ensureSkillsStateCoordinator().RefreshHub(context.Background())
+	}
+	if err != nil {
+		r.ensureHubStateManager().notify(
+			hubStateSectionSkills,
+			r.ensureSkillsStateCoordinator().Snapshot(),
+			rp.HubStateAvailabilityReady,
+			err.Error(),
+			"skills.refresh.failed",
+		)
+		return
+	}
+	r.ensureHubStateManager().notify(
+		hubStateSectionSkills,
+		snapshot,
+		rp.HubStateAvailabilityReady,
+		"",
+		"skills.changed",
 	)
 }
 
@@ -1715,11 +1747,26 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
 		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
-		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		OnSkillsOperationDone: r.onSkillsOperationDone,
 		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
 		ReleaseNotifier:       r,
 	})
 	return r.toolHandler
+}
+
+func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
+	r.skillsStateInitMu.Lock()
+	defer r.skillsStateInitMu.Unlock()
+	if r.skillsState == nil {
+		r.skillsState = newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+			ScanHub: func(ctx context.Context) (map[string]skillInventoryItem, error) {
+				return scanHubSkillsInventory(ctx, r.skillsAgents())
+			},
+			ScanProject: scanProjectSkillsInventory,
+			Targets:     r.skillsTargets,
+		})
+	}
+	return r.skillsState
 }
 
 func (r *Reporter) refreshSkillsAgentProfiles(scope, projectName string) {
@@ -2798,6 +2845,31 @@ func (r *Reporter) projectsSnapshot() []ProjectInfo {
 	return append([]ProjectInfo(nil), r.projects...)
 }
 
+func (r *Reporter) skillsTargets() []projectSkillsTarget {
+	projects := r.projectsSnapshot()
+	targets := make([]projectSkillsTarget, 0, len(projects))
+	for _, project := range projects {
+		name := strings.TrimSpace(project.Name)
+		if name == "" || strings.TrimSpace(project.Path) == "" {
+			continue
+		}
+		targets = append(targets, projectSkillsTarget{
+			ProjectID: rp.ProjectID(r.cfg.HubID, name),
+			Path:      project.Path,
+			Agents:    append([]string(nil), project.Agents...),
+		})
+	}
+	return targets
+}
+
+func (r *Reporter) skillsAgents() []string {
+	var agents []string
+	for _, target := range r.skillsTargets() {
+		agents = appendUniqueFold(agents, target.Agents...)
+	}
+	return agents
+}
+
 func (r *Reporter) replaceProjects(projects []ProjectInfo) {
 	next := append([]ProjectInfo(nil), projects...)
 	sort.Slice(next, func(i, j int) bool {
@@ -2823,6 +2895,7 @@ func (r *Reporter) replaceProjects(projects []ProjectInfo) {
 		handler.SetProjects(next)
 	}
 	if changed {
+		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
 		_, _ = r.ensureHubStateManager().enqueueRefresh(
 			[]string{hubStateSectionSkills, hubStateSectionFileIndex},
 			true,

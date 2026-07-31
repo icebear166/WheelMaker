@@ -109,11 +109,8 @@ func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action st
 	}
 }
 
-func (r *Reporter) refreshHubStateSkills(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, hubToolMethodSkills, map[string]any{
-		"action": "scan",
-		"hubId":  input.HubID,
-	})
+func (r *Reporter) refreshHubStateSkills(ctx context.Context, _ hubStateRefreshInput) (any, error) {
+	return r.ensureSkillsStateCoordinator().RefreshAll(ctx)
 }
 
 func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, params map[string]any) (any, error) {
@@ -126,7 +123,6 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 		if err != nil {
 			return nil, err
 		}
-		r.refreshSkillsAgentProfiles("hub", "")
 		return result, nil
 	case "listSource":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))

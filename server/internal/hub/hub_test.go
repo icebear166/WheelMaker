@@ -1008,6 +1008,89 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 
 }
 
+func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
+	root := t.TempDir()
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "scope"), "Scope", "shared description")
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".claude", "skills", "scope"), "Scope", "shared description")
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "codex-only"), "Codex", "codex description")
+
+	state, err := scanProjectSkillsState(context.Background(), projectSkillsTarget{
+		ProjectID: "hub-a:project",
+		Path:      root,
+		Agents:    []string{"codex", "claude"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Inventory["scope"].Sync.Status != skillSyncAligned {
+		t.Fatalf("scope sync = %#v", state.Inventory["scope"].Sync)
+	}
+	if state.Inventory["codex-only"].Sync.Status != skillSyncAgentsOnly {
+		t.Fatalf("codex-only sync = %#v", state.Inventory["codex-only"].Sync)
+	}
+	if _, ok := state.EffectiveByAgent["codex"]["scope"]; !ok {
+		t.Fatal("codex effective skills missing scope")
+	}
+	if _, ok := state.EffectiveByAgent["claude"]["scope"]; !ok {
+		t.Fatal("claude effective skills missing scope")
+	}
+}
+
+func TestHubSkillChangeReusesProjectLocalInventory(t *testing.T) {
+	projectCalls := atomic.Int32{}
+	coordinator := newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+		ScanHub: func(context.Context) (map[string]skillInventoryItem, error) {
+			return map[string]skillInventoryItem{
+				"hub-skill": {Name: "hub-skill", Agents: []string{"codex", "claude"}},
+			}, nil
+		},
+		ScanProject: func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error) {
+			projectCalls.Add(1)
+			return nil, errors.New("project scanner must not run")
+		},
+	})
+	coordinator.seedProject("hub-a:p1", map[string]skillInventoryItem{
+		"local-one": {Name: "local-one", Agents: []string{"codex"}},
+	})
+	coordinator.seedProject("hub-a:p2", map[string]skillInventoryItem{
+		"local-two": {Name: "local-two", Agents: []string{"claude"}},
+	})
+
+	got, err := coordinator.RefreshHub(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projectCalls.Load() != 0 {
+		t.Fatalf("project scan calls = %d, want 0", projectCalls.Load())
+	}
+	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p1"]["codex"], "hub-skill", "local-one")
+	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p2"]["claude"], "hub-skill", "local-two")
+}
+
+func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n", name, description)
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertCanonicalSkillNames(t *testing.T, skills []skillInventoryItem, want ...string) {
+	t.Helper()
+	got := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		got = append(got, skill.Name)
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("skill names=%v, want %v", got, want)
+	}
+}
+
 func TestReporterFlickerBridgeStateDoesNotExposeConfiguredKey(t *testing.T) {
 	stateDir := t.TempDir()
 	store := hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
@@ -2157,7 +2240,6 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 	}{
 		{section: hubStateSectionAgentPackages, method: hubToolMethodNPM, action: "scan"},
 		{section: hubStateSectionWheelmakerUpdate, method: hubToolMethodUpdate, action: "query"},
-		{section: hubStateSectionSkills, method: hubToolMethodSkills, action: "scan"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.section, func(t *testing.T) {
@@ -2186,7 +2268,7 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 	}
 }
 
-func TestHubStateSkillsReindexRefreshesEveryProjectAgentProfile(t *testing.T) {
+func TestHubStateSkillsRefreshBuildsCanonicalProjectInventories(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -2217,41 +2299,16 @@ func TestHubStateSkillsReindexRefreshesEveryProjectAgentProfile(t *testing.T) {
 			{Name: "project-b", Path: projectB, Online: true, Agents: []string{"codex"}},
 		},
 	)
-	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
-	reporter.toolHandler = toolHandler
-
 	handler := reporter.hubStateSectionHandlers()[hubStateSectionSkills]
-	if _, err := handler.Action(context.Background(), "reindex", nil); err != nil {
-		t.Fatalf("reindex: %v", err)
+	data, err := handler.Refresh(context.Background(), hubStateRefreshInput{HubID: "hub-skills-reindex"})
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
 	}
-
-	method, payload, projects := toolHandler.snapshot()
-	if method != hubToolMethodSkills {
-		t.Fatalf("method=%q, want %q", method, hubToolMethodSkills)
-	}
-	var body map[string]any
-	if err := json.Unmarshal([]byte(payload), &body); err != nil {
-		t.Fatalf("decode payload: %v", err)
-	}
-	if body["action"] != "scan" || body["hubId"] != "hub-skills-reindex" {
-		t.Fatalf("payload=%v, want skills scan for hub-skills-reindex", body)
-	}
-	if len(projects) != 2 {
-		t.Fatalf("SetProjects projects=%d, want 2", len(projects))
-	}
-
-	refreshed := reporter.projectsSnapshot()
-	if len(refreshed) != 2 {
-		t.Fatalf("projects=%d, want 2", len(refreshed))
-	}
-	for _, project := range refreshed {
-		if len(project.AgentProfiles) != 1 {
-			t.Fatalf("%s profiles=%v, want one codex profile", project.Name, project.AgentProfiles)
-		}
-		wantSkill := project.Name + "-skill"
-		if got := project.AgentProfiles[0].Skills; !reflect.DeepEqual(got, []string{wantSkill}) {
-			t.Fatalf("%s skills=%v, want [%s]", project.Name, got, wantSkill)
-		}
+	snapshot := data.(skillsStateSnapshot)
+	for _, projectName := range []string{"project-a", "project-b"} {
+		projectID := rp.ProjectID("hub-skills-reindex", projectName)
+		wantSkill := projectName + "-skill"
+		assertCanonicalSkillNames(t, snapshot.EffectiveSkills[projectID]["codex"], wantSkill)
 	}
 }
 
