@@ -8,6 +8,8 @@
 
 **Tech Stack:** React 19, TypeScript 5.8, Jest 30, react-test-renderer, CSS custom properties, existing WheelMaker responsive shell and workspace state.
 
+**Implementation status (2026-07-31):** Complete and merged to `main`. Verified with all 253 Jest suites / 1530 tests, `npm run tsc:web`, and `npm run build:web`.
+
 ---
 
 ## File structure
