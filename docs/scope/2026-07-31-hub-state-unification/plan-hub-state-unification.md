@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go 1.26, Gorilla WebSocket, fsnotify v1.10.1, React 19, TypeScript 5.8, Jest 30.
 
-**Execution status:** review remediation verified; delivery pending
+**Execution status:** completed
 
 ---
 
@@ -2113,6 +2113,6 @@ git diff --check
 
 Trace startup, reconnect, menu open/expand, Skill filesystem notification, token usage, and asynchronous action completion end-to-end. Search for discarded diagnostics, stale Hub IDs, unhandled refresh promises, obsolete polling, and duplicate update paths.
 
-- [ ] **Step 3: Deliver through the configured Git workflow**
+- [x] **Step 3: Deliver through the configured Git workflow**
 
 Fetch and rebase the feature branch, repeat targeted smoke tests, run the repository completion gate (`git add -A`, `git commit`, `git push origin feat/hub-state-unification`), then merge only if the main worktree is clean.
