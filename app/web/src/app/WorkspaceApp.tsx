@@ -435,7 +435,7 @@ import {MobileUsageDialog} from '../usage/MobileUsageDialog';
 import {MonitorSurface} from '../usage/MonitorSurface';
 import {UsageHistoryDialog, type UsageHistoryDialogState} from '../usage/UsageHistoryDialog';
 import {loadUsageHistoryFromSources} from '../usage/usageHistory';
-import {UsageStore, parseHubSnapshot} from '../usage/usageStore';
+import {UsageStore} from '../usage/usageStore';
 import type {UsageProviderView, UsageViewAccount, UsageViewSnapshot} from '../usage/usageTypes';
 import {ModelEfficiencyStore} from '../modelEfficiency/modelEfficiencyStore';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
@@ -12210,6 +12210,7 @@ export function App() {
   }, [registryAuth.state, autoConnecting, connected]);
 
   useEffect(() => usageStore.subscribe(setUsageSnapshot), [usageStore]);
+  useEffect(() => usageStore.bindHubStore(service.hubStore), [usageStore]);
 
   useEffect(
     () => modelEfficiencyStore.subscribe(setModelEfficiencySnapshot),
@@ -12220,31 +12221,11 @@ export function App() {
     void modelEfficiencyStore.refresh();
   }, [modelEfficiencyStore]);
 
-  useEffect(() => {
-    const hubIds = registryHubs.map(hub => hub.hubId).filter(Boolean);
-    usageStore.retainHubs(hubIds);
-    if (!connected) return;
-    let cancelled = false;
-    for (const hub of registryHubs) {
-      service.getHubState(hub.hubId, ['tokenStats']).then(state => {
-        if (cancelled) return;
-        const snapshot = parseHubSnapshot(state.sections.tokenStats?.data);
-        if (snapshot) usageStore.replaceHub(hub.hubId, snapshot);
-      }).catch(() => undefined);
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [connected, registryHubs, usageStore]);
-
   const refreshUsageAcrossHubs = useCallback(() => {
     return Promise.allSettled(registryHubs.map(hub =>
-      service.refreshHubState(hub.hubId, ['tokenStats']).then(response => {
-        const snapshot = parseHubSnapshot(response.state.sections.tokenStats?.data);
-        if (snapshot) usageStore.replaceHub(hub.hubId, snapshot);
-      }),
+      service.hubStore.refresh(hub.hubId, ['tokenStats'], true),
     ));
-  }, [registryHubs, usageStore]);
+  }, [registryHubs]);
 
   const loadUsageHistoryDialog = useCallback(async (target: UsageHistoryDialogTarget) => {
     const requestSeq = ++usageHistoryRequestSeqRef.current;
@@ -15506,7 +15487,6 @@ export function App() {
   useEffect(() => {
     const unsubscribeEvent = service.onEvent(event => {
       if (event.method === RegistryMethods.HubStateUpdated) {
-        usageStore.ingest(event);
         setChatHubFlickerBridgeStatuses(current => {
           const next = applyFlickerBridgeHubStateEvent(current, event);
           if (next !== current && event.hubId) {
