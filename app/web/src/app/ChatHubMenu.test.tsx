@@ -367,7 +367,7 @@ test('version action is disabled while its update or restart request is pending'
     .toBe(true);
 });
 
-test('npm detail uses single-line versions and hides unavailable actions in fixed slots', async () => {
+test('npm detail renders status versions with labeled action pills', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['npm']},
     opsByHubId: {
@@ -390,21 +390,20 @@ test('npm detail uses single-line versions and hides unavailable actions in fixe
 
   const rows = renderer.root.findAllByProps({className: 'chat-hub-npm-row'});
   expect(rows).toHaveLength(3);
-  expect(rows.map(row => row.findByProps({className: 'chat-hub-npm-version-copy'}).children))
-    .toEqual([['1.0 → 1.1'], ['Not installed · 2.0'], ['3.0']]);
-  expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-install-state installed'})))
-    .toHaveLength(0);
-  expect(rows.map(row => row.findAllByProps({className: 'chat-hub-action-slot'}).length))
-    .toEqual([2, 2, 2]);
-  const firstActions = rows[0].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
-  const secondActions = rows[1].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
-  const thirdActions = rows[2].findByProps({className: 'chat-hub-row-actions'}).findAllByType('button');
-  expect(firstActions).toHaveLength(2);
-  expect(secondActions).toHaveLength(1);
-  expect(thirdActions).toHaveLength(1);
+  expect(rows[0].findByProps({className: 'chat-hub-npm-version-new'}).children).toEqual(['1.1']);
+  expect(rows[1].findByProps({className: 'chat-hub-npm-version-copy'}).children).toEqual(['—']);
+  expect(rows[2].findByProps({className: 'chat-hub-npm-version-copy'}).children).toEqual(['3.0']);
+  expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-version-new'}))).toHaveLength(1);
+  const firstActions = rows[0].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
+  const secondActions = rows[1].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
+  const thirdActions = rows[2].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
   expect(firstActions.map(button => button.props['aria-label'])).toEqual(['Update One', 'Uninstall One']);
   expect(secondActions.map(button => button.props['aria-label'])).toEqual(['Install Two']);
   expect(thirdActions.map(button => button.props['aria-label'])).toEqual(['Uninstall Three']);
+  expect(firstActions[0].props.className).toBe('chat-hub-npm-pill update');
+  expect(firstActions[0].children).toEqual(['Update']);
+  expect(secondActions[0].props.className).toBe('chat-hub-npm-pill install');
+  expect(secondActions[0].children).toEqual(['Install']);
   act(() => firstActions[0].props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'update', expect.objectContaining({packageName: '@a/one'}));
   act(() => secondActions[0].props.onClick());

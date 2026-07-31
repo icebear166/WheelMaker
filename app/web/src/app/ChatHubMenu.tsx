@@ -676,35 +676,34 @@ function ChatHubNpmDetail({
         disabled={ops.npm.outdatedCount === 0}
         onAction={() => onUpdateAll(hubId)}
       />
-      {ops.npm.packages.map(pkg => (
-        <div key={pkg.packageName} className="chat-hub-npm-row">
-          <span className="chat-hub-npm-name" title={pkg.packageName}>{pkg.displayName}</span>
-          <span className="chat-hub-npm-versions">
-            <span className="chat-hub-npm-version-copy">
-              {pkg.installedVersion
-                ? pkg.action === 'update' && pkg.latestVersion
-                  ? `${pkg.installedVersion} → ${pkg.latestVersion}`
-                  : pkg.installedVersion
-                : pkg.latestVersion
-                  ? `Not installed · ${pkg.latestVersion}`
-                  : 'Not installed'}
+      {ops.npm.packages.map(pkg => {
+        const updateAvailable = pkg.action === 'update' && Boolean(pkg.installedVersion) && Boolean(pkg.latestVersion);
+        return (
+          <div key={pkg.packageName} className="chat-hub-npm-row">
+            <span className="chat-hub-npm-name" title={pkg.packageName}>{pkg.displayName}</span>
+            <span className="chat-hub-npm-versions">
+              <span className="chat-hub-npm-version-copy">
+                {pkg.installedVersion
+                  ? updateAvailable
+                    ? <>{pkg.installedVersion} → <span className="chat-hub-npm-version-new">{pkg.latestVersion}</span></>
+                    : pkg.installedVersion
+                  : '—'}
+              </span>
             </span>
-          </span>
-          <span className="chat-hub-row-actions">
-            <span className="chat-hub-action-slot">
+            <span className="chat-hub-npm-actions">
               {pkg.action ? (
                 <button
                   type="button"
-                  className="chat-hub-icon-btn"
+                  className={`chat-hub-npm-pill ${pkg.action}`}
                   aria-label={`${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}`}
                   disabled={pkg.pending}
                   onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
                 >
-                  <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
+                  {pkg.pending
+                    ? pkg.action === 'install' ? 'Installing…' : 'Updating…'
+                    : pkg.action === 'install' ? 'Install' : 'Update'}
                 </button>
               ) : null}
-            </span>
-            <span className="chat-hub-action-slot">
               {pkg.canUninstall ? (
                 <button
                   type="button"
@@ -717,9 +716,9 @@ function ChatHubNpmDetail({
                 </button>
               ) : null}
             </span>
-          </span>
-        </div>
-      ))}
+          </div>
+        );
+      })}
       {ops.npm.packages.length === 0 ? <div className="chat-hub-detail-empty">No packages</div> : null}
     </div>
   );
