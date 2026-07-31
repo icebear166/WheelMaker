@@ -2,7 +2,7 @@
 
 # Limits 监控
 
-Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前额度或余额，并为百分比额度提供最长 Limit 的近期剩余趋势与耗尽预测；不包含 Copilot、实际 Token 明细或费用预测。
+Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前额度或余额，并为百分比额度提供最长 Limit 的近期剩余趋势与耗尽预测；DeepSeek 额外提供平台用量弹窗（本月/今日花费、余额与每日 token 缓存命中率曲线）；不包含 Copilot 和其他 Provider 的 Token 明细或费用。
 
 ## 数据所有权
 
@@ -23,6 +23,16 @@ Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前�
 - 固定窗口的当前周期起点由最新 `resetAt` 与窗口长度推导。MyFlicker 月额度按 `Asia/Shanghai` 自然月划分，并以下月 1 日 00:00 作为重置时间。
 - Registry 不持有或聚合历史。Web 仅在打开曲线模态框时，通过只读 `usage.history.get` 分别向账号关联的在线 Hub 请求最近 7 天原始采样，查询范围可跨额度重置；常规 `hub.state.updated` 不携带历史。
 
+### DeepSeek 平台用量
+
+- DeepSeek 平台用量数据来自 `platform.deepseek.com` 私有接口（`users/get_user_summary`、`usage/amount`、`usage/cost`），使用平台 session token 认证；API key 只能取余额，无法访问这些接口。
+- 平台 session token 由 Desktop/Android 弹窗内嵌官方登录页登录后自动抓取，或浏览器端手动粘贴，经 Hub 配置接口写入 `hub-config.json` secret；Hub 不实现平台登录协议（登录依赖 hCaptcha/Turnstile/数美设备指纹等浏览器风控），token 不回显、不落日志。
+- 一个 Hub 保存一个平台会话；DeepSeek 配置多个 API key 账号时，平台数据挂在第一个账号并标注“平台用量”。
+- tokenStats 保持简短：DeepSeek 账号仍只发布余额与连接状态，不携带每日序列。每月/今日花费与每日曲线通过只读 `deepseek.usage.get` 在弹窗打开时按需请求。
+- Hub 按 `(year, month)` 缓存平台响应：当前月 TTL 5 分钟（与平台约 5 分钟数据延迟一致），历史月 TTL 24 小时；弹窗“刷新”强制重拉；平台请求失败或 token 失效（40003）时保留最后一次成功缓存并返回 `expired` 状态。
+- 命中率 = `promptHit ÷ (promptHit + promptMiss)`，无输入 token 时按 0 处理；花费一律采用平台官方金额，不做本地价格估算。
+- 余额优先使用平台钱包余额（与花费同账号口径）；无会话、会话过期或平台余额不可用时回退 API key 余额。
+
 ## 同步边界
 
 Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get` 读取缓存、通过 `hub.state.refresh` 手动刷新，并通过通用 `hub.state.updated` 接收完整快照替换。Registry 只验证 Hub 身份和 scope、转发通用 HubState，不包含 Provider 业务或密钥注入逻辑。
@@ -42,6 +52,7 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 - 正常态额度 rail 使用纯 `--accent-primary`，不与 `text-primary` 混色；警告/危险分别接 `--state-warning` / `--state-danger`，tone 行 label 同步染色，不保留双色值。
 - 详情模式保持相同宽度，展示聚合后的账号、所属 Hub、额度窗口、重置时间、余额和刷新状态；账号区块拍平为 hairline 分隔分区（标题行 + 额度行），不使用卡片套卡片。
 - 百分比额度账号的整行可打开曲线模态框；只有余额、没有百分比 Limit 的账号不提供入口。一个账号只展示周期最长的 Limit，不提供短周期切换。
+- DeepSeek 余额账号行可点击打开平台用量弹窗：弹窗展示本月花费、今日花费、余额与当前月每日曲线（每个节点含总量、命中率、花费，tooltip 细分输出/缓存命中/未命中 token），支持切换本月/上月与刷新；未登录或 token 过期时弹窗内提供登录入口（Desktop/Android 内嵌官方登录页自动抓 token，浏览器打开官方页后粘贴 token），期间保留最后一次成功数据。
 - 曲线纵轴固定为 0–100% 剩余额度，横轴从最近 7 天内所选数据的首个有效采样开始，到下次重置时间结束。真实采样用实线，剩余比例因重置或充值回升时在回升区间断线；Web 计算的未来趋势用虚线，重置时间使用独立参考线。
 - Web 对周额度近 24 小时、月额度近 72 小时的相邻采样区间做时间加权平均：平稳区间计入，近期区间权重更高，额度回升区间排除。至少 3 个有效点才输出预测。
 - 预计提前耗尽时显示耗尽时间；预计不会在重置前耗尽时，图表不延伸到重置以后，改为显示重置时预计剩余百分比。Canvas 图形旁必须提供包含相同结论的文字摘要。
@@ -55,6 +66,7 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 - Monitor 使用覆盖移动视口的遮罩和保留安全区间距的大型详情卡片。标题栏同一行固定提供 `Monitor`、带明确容器与选中态的 `Limits / IQ` 分段 Toggle、刷新和关闭；每次打开默认选择 Limits，两个 Tab 都直接使用 Detail 正文，不提供 Simple/Detail 按钮和底部状态栏。
 - 标题栏提供共享刷新和关闭操作。共享刷新同时触发现有跨 Hub 强制刷新与 IQ 前端 store 刷新；打开 Monitor 本身只读取当前缓存，不额外触发请求。
 - 点击卡片外遮罩、关闭按钮或移动端系统返回会关闭 Monitor；卡片内部点击不关闭。Terminal、Preview、Settings 和 Monitor 全屏层互斥。
+- 移动端 DeepSeek 平台用量弹窗与桌面端一致：登录使用 Android WebView Dialog 打开官方登录页自动抓取 token；未登录时也可在弹窗内手动粘贴。
 
 ## Windows 子进程
 
@@ -68,4 +80,5 @@ Provider 扫描启动的所有辅助进程都必须使用统一后台命令配�
 - [`../../scope/2026-07-22-monitor-card/spec-monitor-card.md`](../../scope/2026-07-22-monitor-card/spec-monitor-card.md)
 - [`../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md)
 - [`../../scope/2026-07-28-token-usage-curve/spec-token-usage-curve.md`](../../scope/2026-07-28-token-usage-curve/spec-token-usage-curve.md)
+- [`../../scope/2026-08-01-deepseek-platform-usage/spec-deepseek-platform-usage.md`](../../scope/2026-08-01-deepseek-platform-usage/spec-deepseek-platform-usage.md)
 - [`model-efficiency.md`](model-efficiency.md)
