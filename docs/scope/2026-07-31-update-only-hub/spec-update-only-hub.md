@@ -19,7 +19,7 @@ Registry 主协议升级后，旧 Hub 不再因 `protocolVersion` 落后而失�
 - Token、角色、Hub ID 及现有握手校验照常执行；兼容处理不降低认证要求。
 - Registry 在握手成功时登记 Hub 连接，不再依赖项目报告才登记 Hub。
 - 旧 Hub 无需感知 `update_only`。它仍按原流程发送项目报告和其他上报；Registry 对需要响应的兼容上报返回成功，但不存储、不路由、不广播其内容。
-- Registry 仅允许现有 WheelMaker 更新查询和更新请求穿过受限连接；其他 Client → Hub 操作全部拒绝。
+- Registry 仅允许现有 WheelMaker 更新查询和更新请求穿过受限连接；其他 Client → Hub 操作全部拒绝。App 不承担权限控制。
 - 更新只由用户在 Web 中明确触发，不自动开始；既有每日 updater 行为不变。
 - 受限状态只存在于当前连接。Hub 更新、重启并以当前协议重新握手后自然进入 `normal`。
 
@@ -82,10 +82,11 @@ Registry 的现有项目快照 `hubs[]` 增量携带可选连接状态：
 
 App 对 `update_only` Hub：
 
-- 显示“版本不兼容，需要更新”。
-- 显示现有 WheelMaker 更新状态，并仅保留刷新和手动更新动作。
-- 不把该 Hub 放入任何业务扫描、项目操作、配置、终端、Relay、发布或其他选择器。
+- 在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”。
+- 继续使用现有 WheelMaker 更新状态、刷新和手动更新动作，不修改更新调用。
 - 从 Registry 项目快照看到 `0` 个项目。
+
+App 不需要隐藏或改造其他现有入口，也不新增前端权限过滤。用户或既有后台流程发出的非更新请求由 Registry 统一拒绝；前端提示只说明连接状态，不是安全边界。
 
 App 使用既有项目快照刷新机制发现 Hub 状态；打开 Hub 菜单或执行相关刷新时重新获取快照即可，不为该能力增加实时目录事件。
 
@@ -109,7 +110,7 @@ App 使用既有项目快照刷新机制发现 Hub 状态；打开 Hub 菜单或
 → 旧 Hub 照常发送项目报告
 → Registry 成功应答但丢弃报告
 → App 快照中看到该 Hub、项目数为 0
-→ App 只显示更新状态与手动更新动作
+→ App 展开 Hub 时提示 Protocol 不匹配
 → Registry 仅放行 wheelmakerUpdate 查询/请求
 → Hub 复用现有 updater 执行更新并重启
 → 新 Hub 以当前协议重连
@@ -125,7 +126,8 @@ App 使用既有项目快照刷新机制发现 Hub 状态；打开 Hub 菜单或
 - Client 协议不匹配时仍拒绝连接。
 - 受限 Hub 在现有 Hub 目录中可见，Project 列表中没有该 Hub 的项目。
 - Registry 对受限 Hub 的自动项目报告成功应答但不存储、不路由、不广播。
-- App 对受限 Hub 只显示版本不兼容状态、更新状态刷新和手动更新动作。
+- App 在受限 Hub 展开内容中显示 Protocol 不匹配提示，现有更新状态和更新动作可继续使用。
+- App 不需要隐藏其他入口或实现受限权限判断；所有非更新操作由 Registry 拒绝。
 - 只有 `wheelmakerUpdate` refresh 和 `requestUpdate` action 可以穿过受限连接；同一 HubState 方法下的其他 payload 也必须拒绝。
 - 更新继续复用现有更新锁、状态文件、可信发布链和部署触发路径。
 - Hub 更新后以当前协议重新连接时自动恢复 `normal`，无需清理 Registry 端状态。
@@ -138,7 +140,7 @@ App 使用既有项目快照刷新机制发现 Hub 状态；打开 Hub 菜单或
 - Registry 路由测试覆盖受限 Hub 握手即登记、项目报告成功丢弃、Project 不可见、断开清理。
 - Registry 防火墙测试覆盖两个允许的精确 update payload、必要 ping/response，以及所有其他请求、事件和变体被拒绝或丢弃。
 - 现有 Hub Reporter 测试证明 Registry 的兼容响应能让旧握手流程保持在线；不修改 Reporter 行为。
-- App 测试覆盖受限 descriptor、零项目、仅更新动作、业务扫描过滤和正常 Hub 不回归。
+- App 测试只覆盖受限 descriptor、展开后的 Protocol 不匹配提示和正常 Hub 不回归。
 - 不在本项目测试中执行真实系统任务注册、真实二进制替换或公网发布。
 
 ## 范围之外
