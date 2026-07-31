@@ -119,8 +119,8 @@ describe('mobile floating nav model', () => {
   });
 
   test('card geometry reserves overflow above the collapsed button', () => {
-    expect(FLOATING_NAV_CARD_HEIGHT_PX).toBe(272);
-    expect(FLOATING_NAV_EXPANDED_OVERFLOW_PX).toBe(224);
+    expect(FLOATING_NAV_CARD_HEIGHT_PX).toBe(268);
+    expect(FLOATING_NAV_EXPANDED_OVERFLOW_PX).toBe(220);
   });
 
   test('reserves right-edge workbench controls below the floating nav', () => {

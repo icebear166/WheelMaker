@@ -152,8 +152,8 @@ describe('gesture navigation', () => {
     expect(navSection).not.toMatch(/\d+ms/);
     // Expanded card uses the frosted overlay material; collapsed stays light.
     const cardBlock = styles.match(/\.floating-nav-card \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(cardBlock).toContain('blur(12px) saturate(1.1)');
-    expect(cardBlock).toContain('var(--shadow-overlay)');
+    expect(cardBlock).toContain('blur(20px) saturate(1.6)');
+    expect(cardBlock).toContain('var(--shadow-floating)');
     // Reduced motion covers the card entrance.
     expect(styles).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.floating-nav-card[\s\S]*animation: none;[\s\S]*\}/,

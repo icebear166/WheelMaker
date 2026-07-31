@@ -553,29 +553,34 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 4px;
-  border: 1px solid var(--border-faint);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
-  backdrop-filter: blur(12px) saturate(1.1);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  box-shadow: var(--shadow-overlay);
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 65%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-overlay) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 10%),
+    0 1px 2px rgb(0 0 0 / 8%),
+    var(--shadow-floating);
+  transform-origin: bottom right;
   animation: floating-nav-card-in var(--motion-standard) var(--ease-out);
 }
 
 .floating-control-stack[data-side='left'] .floating-nav-card {
   right: auto;
   left: 0;
+  transform-origin: bottom left;
 }
 
 @keyframes floating-nav-card-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px) scale(0.92);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -604,7 +609,13 @@
 
 .floating-nav-card-item[data-active='true'] {
   background: var(--accent-soft-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-primary) 30%, transparent);
   color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
+}
+
+.floating-nav-card-item:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 1px;
 }
 
 .floating-nav-card-item[data-enabled='false'] {
