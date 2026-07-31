@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Execution:** Completed on 2026-07-31. Registry, Hub regression, App tests, TypeScript checking, and the production Web build passed.
+
 **Goal:** Let an authenticated older Hub stay connected to a newer Registry, expose zero projects, and retain only the existing WheelMaker update query/request path.
 
 **Architecture:** Registry derives `normal` or `update_only` from the existing Hub `protocolVersion`, registers the Hub at handshake, and owns the restricted firewall. Old Hub code remains unchanged: its reports are acknowledged and discarded, while the existing `wheelmakerUpdate` HubState subset is forwarded. App only carries an additive Hub descriptor field into the Hub menu and shows a mismatch notice when expanded.
