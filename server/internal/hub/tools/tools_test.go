@@ -584,7 +584,7 @@ func newNPMTestCommand(runner npmCommandRunner) (*NPMCommand, *fakeNPMLatestFetc
 
 func newNPMTestCommandWithProbe(runner npmCommandRunner, probe func(context.Context) bool) (*NPMCommand, *fakeNPMLatestFetcher) {
 	fetcher := newFakeNPMLatestFetcher()
-	return newNPMCommandWithDependencies("", runner, fetcher, probe), fetcher
+	return newNPMCommandWithDependencies(runner, fetcher, probe), fetcher
 }
 
 func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
@@ -596,7 +596,6 @@ func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
 // test can assert scan output without waiting for the async probe.
 func seedNPMPrivateRegistryState(cmd *NPMCommand, available bool) {
 	cmd.mu.Lock()
-	cmd.cacheLoaded = true
 	cmd.flicker = npmPrivateRegistryState{known: true, available: available, probedAt: cmd.now()}
 	cmd.mu.Unlock()
 }
@@ -824,7 +823,6 @@ func TestNPMCommandScanServesStaleLatestWhileRefreshing(t *testing.T) {
 	base := time.Date(2026, 7, 31, 10, 0, 0, 0, time.UTC)
 	cmd.now = func() time.Time { return base }
 	cmd.mu.Lock()
-	cmd.cacheLoaded = true
 	cmd.latestCache["@openai/codex"] = npmLatestCacheEntry{
 		result:    npmLatestResult{version: "0.130.0"},
 		fetchedAt: base.Add(-npmLatestSuccessTTL - time.Minute),
@@ -861,59 +859,37 @@ func TestNPMCommandScanServesStaleLatestWhileRefreshing(t *testing.T) {
 	}
 }
 
-func TestNPMCommandReusesPersistedLatestCacheAcrossRestart(t *testing.T) {
-	stateDir := t.TempDir()
-	listResult := npmCommandResult{
+func TestNPMCommandReusesInMemoryLatestCacheWithinTTL(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
 		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.129.0"}}}`,
 		ExitCode: 0,
-	}
+	})
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@openai/codex", "0.130.0")
+	seedNPMPrivateRegistryState(cmd, false)
 
-	firstRunner := newFakeNPMRunner()
-	firstRunner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, listResult)
-	firstFetcher := newFakeNPMLatestFetcher()
-	firstFetcher.setVersion("@openai/codex", "0.130.0")
-	first := newNPMCommandWithDependencies(stateDir, firstRunner, firstFetcher, func(context.Context) bool { return false })
-	if _, cmdErr := first.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
 		"action": "scan",
 		"hubId":  "hub-a",
 	})); cmdErr != nil {
-		t.Fatalf("first hub scan error: %#v", cmdErr)
+		t.Fatalf("first scan error: %#v", cmdErr)
 	}
-	waitForNPMTestOperation(t, first)
+	waitForNPMTestOperation(t, cmd)
 
-	cachePath := filepath.Join(stateDir, npmCacheDirectoryName, npmLatestCacheFileName)
-	if _, err := os.Stat(cachePath); err != nil {
-		t.Fatalf("latest cache was not persisted: %v", err)
-	}
-
-	secondRunner := newFakeNPMRunner()
-	secondRunner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, listResult)
-	secondFetcher := newFakeNPMLatestFetcher()
-	probeCalls := 0
-	second := newNPMCommandWithDependencies(stateDir, secondRunner, secondFetcher, func(context.Context) bool {
-		probeCalls++
-		return false
-	})
-	resp, cmdErr := second.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
 		"action": "scan",
 		"hubId":  "hub-a",
 	}))
 	if cmdErr != nil {
-		t.Fatalf("restarted hub scan error: %#v", cmdErr)
+		t.Fatalf("second scan error: %#v", cmdErr)
 	}
-	body := resp.(npmCommandResponse)
-	pkg := findNPMTestPackage(t, body.Hub.Packages, "@openai/codex")
+	pkg := findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@openai/codex")
 	if pkg.LatestVersion != "0.130.0" || pkg.Status != "update_available" {
-		t.Fatalf("pkg=%#v, want the persisted latest version on the first scan after restart", pkg)
+		t.Fatalf("pkg=%#v, want the cached latest version", pkg)
 	}
-	if body.Operation != nil && body.Operation.Running {
-		t.Fatalf("operation=%#v, want no refresh while the persisted cache is fresh", body.Operation)
-	}
-	if secondFetcher.callCount("@openai/codex") != 0 {
-		t.Fatal("restarted hub should not re-query a fresh persisted latest version")
-	}
-	if probeCalls != 0 {
-		t.Fatalf("private registry probe calls=%d, want 0 while the persisted decision is fresh", probeCalls)
+	if count := fetcher.callCount("@openai/codex"); count != 1 {
+		t.Fatalf("latest lookups=%d, want 1 within the cache TTL", count)
 	}
 }
 

@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -68,21 +66,19 @@ type NPMCommand struct {
 	now          func() time.Time
 	lookPath     func(string) (string, error)
 	flickerProbe func(context.Context) bool
-	stateDir     string
 
 	mu            sync.Mutex
 	operation     *npmOperationSnapshot
 	latestCache   map[string]npmLatestCacheEntry
 	flicker       npmPrivateRegistryState
-	cacheLoaded   bool
 	operationDone func()
 }
 
-func NewNPMCommand(stateDir string) *NPMCommand {
-	return newNPMCommandWithDependencies(stateDir, execNPMCommandRunner{}, httpNPMLatestFetcher{}, probeMyFlickerRegistry)
+func NewNPMCommand() *NPMCommand {
+	return newNPMCommandWithDependencies(execNPMCommandRunner{}, httpNPMLatestFetcher{}, probeMyFlickerRegistry)
 }
 
-func newNPMCommandWithDependencies(stateDir string, runner npmCommandRunner, fetcher npmLatestFetcher, flickerProbe func(context.Context) bool) *NPMCommand {
+func newNPMCommandWithDependencies(runner npmCommandRunner, fetcher npmLatestFetcher, flickerProbe func(context.Context) bool) *NPMCommand {
 	if runner == nil {
 		runner = execNPMCommandRunner{}
 	}
@@ -98,7 +94,6 @@ func newNPMCommandWithDependencies(stateDir string, runner npmCommandRunner, fet
 		now:          func() time.Time { return time.Now().UTC() },
 		lookPath:     exec.LookPath,
 		flickerProbe: flickerProbe,
-		stateDir:     stateDir,
 		latestCache:  map[string]npmLatestCacheEntry{},
 	}
 }
@@ -208,7 +203,8 @@ func probeMyFlickerRegistry(ctx context.Context) bool {
 }
 
 // npmPrivateRegistryState caches whether the MyFlicker registry answered, so a
-// scan never blocks on the probe.
+// scan never blocks on the probe. Like the latest-version cache it lives only in
+// memory, so a hub restart re-probes.
 type npmPrivateRegistryState struct {
 	known     bool
 	available bool
@@ -625,14 +621,13 @@ type npmLatestScanPlan struct {
 	probeFlicker     bool
 }
 
-// latestPlanForScan decides what the scan can answer from cache and what the
-// background refresh has to fetch. Stale entries are still served (stale while
-// revalidate) so the App renders known versions immediately instead of showing
-// every row as "checking" after a hub restart or TTL expiry.
+// latestPlanForScan decides what the scan can answer from the in-memory cache
+// and what the background refresh has to fetch. Stale entries are still served
+// (stale while revalidate) so the App renders known versions immediately instead
+// of showing every row as "checking" once a TTL expires.
 func (c *NPMCommand) latestPlanForScan(now time.Time) npmLatestScanPlan {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.ensureCacheLoadedLocked()
 
 	plan := npmLatestScanPlan{
 		latest:           map[string]npmLatestResult{},
@@ -662,103 +657,6 @@ func npmLatestCacheValid(entry npmLatestCacheEntry, now time.Time) bool {
 		ttl = npmLatestSuccessTTL
 	}
 	return now.Sub(entry.fetchedAt) < ttl
-}
-
-const (
-	npmCacheDirectoryName  = "cache"
-	npmLatestCacheFileName = "npm-latest.json"
-	npmLatestCacheSchema   = 1
-)
-
-type npmLatestCacheFile struct {
-	Schema          int                             `json:"schema"`
-	Packages        map[string]npmLatestCacheRecord `json:"packages"`
-	PrivateRegistry *npmPrivateRegistryRecord       `json:"privateRegistry,omitempty"`
-}
-
-type npmLatestCacheRecord struct {
-	Version   string `json:"version,omitempty"`
-	Error     string `json:"error,omitempty"`
-	FetchedAt string `json:"fetchedAt"`
-}
-
-type npmPrivateRegistryRecord struct {
-	Available bool   `json:"available"`
-	ProbedAt  string `json:"probedAt"`
-}
-
-func (c *NPMCommand) latestCachePath() string {
-	if c.stateDir == "" {
-		return ""
-	}
-	return filepath.Join(c.stateDir, npmCacheDirectoryName, npmLatestCacheFileName)
-}
-
-// ensureCacheLoadedLocked hydrates the in-memory cache from disk once, so a hub
-// restart answers the first scan from the last known versions instead of
-// re-querying every registry. A missing or unreadable file is not an error.
-func (c *NPMCommand) ensureCacheLoadedLocked() {
-	if c.cacheLoaded {
-		return
-	}
-	c.cacheLoaded = true
-	path := c.latestCachePath()
-	if path == "" {
-		return
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var file npmLatestCacheFile
-	if err := json.Unmarshal(raw, &file); err != nil || file.Schema != npmLatestCacheSchema {
-		return
-	}
-	for packageName, record := range file.Packages {
-		fetchedAt, err := time.Parse(time.RFC3339, record.FetchedAt)
-		if err != nil {
-			continue
-		}
-		c.latestCache[packageName] = npmLatestCacheEntry{
-			result:    npmLatestResult{version: record.Version, errorSummary: record.Error},
-			fetchedAt: fetchedAt.UTC(),
-		}
-	}
-	if file.PrivateRegistry != nil {
-		probedAt, err := time.Parse(time.RFC3339, file.PrivateRegistry.ProbedAt)
-		if err == nil {
-			c.flicker = npmPrivateRegistryState{known: true, available: file.PrivateRegistry.Available, probedAt: probedAt.UTC()}
-		}
-	}
-}
-
-func (c *NPMCommand) persistCacheLocked() {
-	path := c.latestCachePath()
-	if path == "" {
-		return
-	}
-	file := npmLatestCacheFile{
-		Schema:   npmLatestCacheSchema,
-		Packages: make(map[string]npmLatestCacheRecord, len(c.latestCache)),
-	}
-	for packageName, entry := range c.latestCache {
-		file.Packages[packageName] = npmLatestCacheRecord{
-			Version:   entry.result.version,
-			Error:     entry.result.errorSummary,
-			FetchedAt: entry.fetchedAt.UTC().Format(time.RFC3339),
-		}
-	}
-	if c.flicker.known {
-		file.PrivateRegistry = &npmPrivateRegistryRecord{
-			Available: c.flicker.available,
-			ProbedAt:  c.flicker.probedAt.UTC().Format(time.RFC3339),
-		}
-	}
-	raw, err := json.MarshalIndent(file, "", "  ")
-	if err != nil {
-		return
-	}
-	_ = replaceUpdateFile(path, append(raw, '\n'), 0o600)
 }
 
 // runLatestOperation refreshes latest versions and, when the cached decision
@@ -810,7 +708,6 @@ func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, package
 	if probeFlicker {
 		c.flicker = npmPrivateRegistryState{known: true, available: flickerAvailable, probedAt: finished}
 	}
-	c.persistCacheLocked()
 	if c.operation != operation {
 		return
 	}
