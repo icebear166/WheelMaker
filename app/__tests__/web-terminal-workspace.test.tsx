@@ -136,6 +136,9 @@ describe('terminal workspace integration', () => {
       '      setTerminalOpen(false);',
     ].join('\n'));
     expect(source).toContain('onCloseSurface={() => setTerminalOpen(false)}');
+    expect(source).toContain('const [terminalFullscreen, setTerminalFullscreen] = useState(false);');
+    expect(source).toContain('mobileFullscreen={terminalFullscreen}');
+    expect(source).toContain('onMobileFullscreenChange={setTerminalFullscreen}');
     expect(source).toContain('if (!isWide && terminalOpen) {');
   });
 
@@ -195,10 +198,10 @@ describe('terminal workspace integration', () => {
     expect(terminalCss).toContain('.terminal-xterm-surface {');
     expect(terminalCss).toContain('.terminal-copy-context-menu {');
     expect(terminalCss).toContain('position: fixed;');
-    expect(terminalCss).toContain('.terminal-actions .terminal-fit {');
+    expect(terminalCss).toContain('.terminal-toolbar-action {');
     expect(terminalCss).toContain('display: inline-flex;');
-    expect(terminalCss).toContain('width: 32px;');
-    expect(terminalCss).toContain('height: 32px;');
+    expect(terminalCss).toContain('.terminal-workbench.mobile > .workbench-chrome-fullscreen-toggle {');
+    expect(terminalCss).toContain('bottom: calc(70px + var(--wm-safe-area-bottom));');
   });
 
   test('uses the danger state color for an unavailable terminal', () => {

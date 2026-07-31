@@ -713,6 +713,11 @@ describe('terminal components', () => {
       );
     });
     const root = renderer!.root;
+    expect(root.findByProps({className: 'workbench-chrome-toolbar'})).toBeTruthy();
+    expect(root.findByProps({className: 'workbench-chrome-title'}).children).toEqual(['p1']);
+    expect(root.findByProps({className: 'workbench-chrome-title'}).props.title).toBe('hub-a · C:\\src\\p1');
+    expect(root.findByProps({role: 'tablist'}).props['aria-label']).toBe('Terminals');
+    expect(root.findAllByProps({className: 'terminal-tab-hub'})).toHaveLength(0);
     const press = (label: string) => root.findByProps({'aria-label': label}).props.onClick();
     act(() => press('Terminal Escape'));
     act(() => press('Terminal Enter'));
@@ -724,7 +729,7 @@ describe('terminal components', () => {
     ]);
   });
 
-  test('keeps the Fit action visible and usable in mobile chrome', () => {
+  test('keeps New and Fit visible and usable in mobile chrome', () => {
     const onClaimResize = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -748,9 +753,75 @@ describe('terminal components', () => {
     const fit = renderer!.root.findByProps({'aria-label': 'Fit terminal to this screen'});
     expect(fit.props.title).toBe('Fit terminal to this screen');
     expect(fit.findByProps({'data-icon-name': 'maximize'})).toBeTruthy();
-    expect(fit.children).not.toContain('Fit');
+    expect(fit.findByType('span').children).toEqual(['Fit']);
+    expect(renderer!.root.findByProps({'aria-label': 'Create terminal'}).findByType('span').children).toEqual(['New']);
     act(() => fit.props.onClick());
     expect(onClaimResize).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses separate tab controls and puts Restart in the stopped-terminal menu', () => {
+    const onRequestClose = jest.fn();
+    const onRestart = jest.fn();
+    const stopped = terminal({status: 'exited'});
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <TerminalWorkbench
+          mode="desktop"
+          terminals={[stopped]}
+          activeKey="hub-a:t1"
+          unavailableHubIds={{}}
+          onSelect={jest.fn()}
+          onCreate={jest.fn()}
+          onRequestClose={onRequestClose}
+          onRestart={onRestart}
+          onClaimResize={jest.fn()}
+          onSendBytes={jest.fn()}
+          onCloseSurface={jest.fn()}
+        />,
+      );
+    });
+
+    const close = renderer!.root.findByProps({'aria-label': 'Close terminal p1'});
+    expect(close.type).toBe('button');
+    act(() => close.props.onClick({stopPropagation: jest.fn()}));
+    expect(onRequestClose).toHaveBeenCalledWith(stopped);
+
+    const more = renderer!.root.findByProps({'aria-label': 'Terminal actions'});
+    act(() => more.props.onClick());
+    const restart = renderer!.root.findByProps({role: 'menuitem'});
+    expect(restart.children).toContain('Restart');
+    act(() => restart.props.onClick());
+    expect(onRestart).toHaveBeenCalledWith(stopped);
+  });
+
+  test('keeps the mobile keybar while controlled fullscreen hides top chrome', () => {
+    const onMobileFullscreenChange = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <TerminalWorkbench
+          mode="mobile"
+          terminals={[terminal()]}
+          activeKey="hub-a:t1"
+          unavailableHubIds={{}}
+          onSelect={jest.fn()}
+          onCreate={jest.fn()}
+          onRequestClose={jest.fn()}
+          onRestart={jest.fn()}
+          onClaimResize={jest.fn()}
+          onSendBytes={jest.fn()}
+          onCloseSurface={jest.fn()}
+          mobileFullscreen
+          onMobileFullscreenChange={onMobileFullscreenChange}
+        />,
+      );
+    });
+
+    const frame = renderer!.root.findByProps({'data-mobile-fullscreen': true});
+    expect(frame.findByProps({'aria-label': 'Terminal shortcuts'})).toBeTruthy();
+    act(() => frame.findByProps({'aria-label': 'Exit workbench fullscreen'}).props.onClick());
+    expect(onMobileFullscreenChange).toHaveBeenCalledWith(false);
   });
 
   test('mobile surface provides a way back to Chat without closing a terminal', () => {

@@ -3191,6 +3191,7 @@ export function App() {
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const [mobileUsageOpen, setMobileUsageOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalFullscreen, setTerminalFullscreen] = useState(false);
   const [terminalSync, setTerminalSync] = useState<TerminalSyncState>(() => createTerminalSyncState());
   const terminalSyncRef = useRef(terminalSync);
   const [activeTerminalKey, setActiveTerminalKey] = useState('');
@@ -18674,6 +18675,7 @@ export function App() {
                   onRestart={item => { handleRestartTerminal(item).catch(err => setError(err instanceof Error ? err.message : String(err))); }}
                   onClaimResize={handleClaimTerminalResize}
                   onSendBytes={handleTerminalInput}
+                  onCloseSurface={() => setTerminalOpen(false)}
                 >
                   {activeTerminal ? (
                     <TerminalView
@@ -20283,6 +20285,8 @@ export function App() {
         onClaimResize={handleClaimTerminalResize}
         onSendBytes={handleTerminalInput}
         onCloseSurface={() => setTerminalOpen(false)}
+        mobileFullscreen={terminalFullscreen}
+        onMobileFullscreenChange={setTerminalFullscreen}
       >
         {activeTerminal ? (
           <TerminalView

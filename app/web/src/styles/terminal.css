@@ -37,57 +37,55 @@
 }
 
 .terminal-workbench {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  color: var(--text-primary);
-  background: var(--surface-workspace-content);
+  flex: 1 1 auto;
 }
 
-.terminal-tabbar {
-  display: flex;
-  align-items: center;
-  flex: 0 0 34px;
-  min-width: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-sidebar);
+.terminal-workbench.mobile > .workbench-chrome-fullscreen-toggle {
+  bottom: calc(70px + var(--wm-safe-area-bottom));
 }
 
 .terminal-tabs {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.terminal-back {
-  flex: 0 0 44px;
-  align-self: stretch;
+  gap: 1px;
 }
 
 .terminal-tab {
-  appearance: none;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
-  gap: 6px;
-  min-width: 120px;
-  max-width: 220px;
+  flex: 0 0 auto;
+  min-width: 104px;
+  max-width: 190px;
   height: 34px;
-  padding: 0 8px;
-  border: 0;
   border-right: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   background: transparent;
-  cursor: pointer;
 }
 
 .terminal-tab.active {
   color: var(--text-primary);
   background: var(--surface-workspace-content);
   box-shadow: inset 0 2px var(--accent-primary);
+}
+
+.terminal-tab-open,
+.terminal-tab-close {
+  height: 33px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.terminal-tab-open {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  padding-left: 8px;
+  text-align: left;
 }
 
 .terminal-status {
@@ -110,40 +108,76 @@
   white-space: nowrap;
 }
 
-.terminal-tab-hub {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  text-overflow: ellipsis;
-}
-
 .terminal-tab-close {
-  margin-left: auto;
-  padding: 2px 4px;
-  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  opacity: 0.7;
 }
 
-.terminal-tab-close:hover { background: var(--hover); }
+.terminal-tab-close:hover {
+  color: var(--state-danger);
+  background: var(--hover);
+  opacity: 1;
+}
 
-.terminal-new,
-.terminal-actions button {
+.terminal-toolbar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   height: 26px;
-  margin: 0 4px;
+  padding: 0 7px;
   border: 1px solid var(--border-subtle);
   border-radius: 5px;
   color: var(--text-secondary);
   background: var(--surface-raised);
   cursor: pointer;
+  font-size: 11px;
 }
 
-.terminal-new { width: 28px; font-size: 18px; }
-.terminal-actions { display: flex; align-items: center; }
-.terminal-actions button { padding: 0 8px; font-size: 11px; }
-.terminal-actions .terminal-fit {
-  display: inline-flex;
+.terminal-toolbar-action:hover,
+.terminal-toolbar-action:focus-visible {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--hover);
+}
+
+.terminal-more {
+  position: relative;
+  display: flex;
+}
+
+.terminal-actions-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 22;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-floating);
+}
+
+.terminal-actions-menu button {
+  display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.terminal-actions-menu button:hover,
+.terminal-actions-menu button:focus-visible {
+  background: var(--hover);
 }
 
 .terminal-content,
@@ -225,20 +259,12 @@
 }
 
 @media (max-width: 720px) {
-  .terminal-tabbar { flex-basis: 40px; }
-  .terminal-tab { height: 40px; min-width: 132px; }
-  .terminal-actions button { display: none; }
-  .terminal-actions .terminal-fit {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border-color: transparent;
-    background: transparent;
-    font-size: 16px;
+  .terminal-tab {
+    min-width: 112px;
   }
-  .terminal-actions .terminal-fit:hover,
-  .terminal-actions .terminal-fit:focus-visible {
-    border-color: var(--border-strong);
-    background: var(--hover);
+
+  .terminal-toolbar-action {
+    height: 28px;
+    padding: 0 6px;
   }
 }

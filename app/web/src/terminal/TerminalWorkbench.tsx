@@ -1,6 +1,7 @@
-import React, {type ReactNode, useState} from 'react';
+import React, {type ReactNode, useEffect, useRef, useState} from 'react';
 import {Icon} from '../common/Icon';
 import type {RegistryTerminal} from '../registry/registryTypes';
+import {WorkbenchChrome} from '../shell/workbench/WorkbenchChrome';
 
 export type TerminalWorkbenchProps = {
   mode: 'desktop' | 'mobile';
@@ -14,6 +15,8 @@ export type TerminalWorkbenchProps = {
   onClaimResize: () => void;
   onSendBytes: (data: Uint8Array) => void;
   onCloseSurface?: () => void;
+  mobileFullscreen?: boolean;
+  onMobileFullscreenChange?: (fullscreen: boolean) => void;
   children?: ReactNode;
 };
 
@@ -32,7 +35,10 @@ const MOBILE_KEYS: Array<{label: string; aria: string; sequence: string}> = [
 export function TerminalWorkbench(props: TerminalWorkbenchProps) {
   const [ctrl, setCtrl] = useState(false);
   const [alt, setAlt] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const active = props.terminals.find(item => terminalKey(item) === props.activeKey);
+  const activeTitle = active?.projectName || active?.terminalId || 'Terminal';
 
   const sendSequence = (sequence: string) => {
     props.onSendBytes(new TextEncoder().encode(applyModifiers(sequence, ctrl, alt)));
@@ -46,58 +52,146 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
     setAlt(false);
   };
 
-  return (
-    <div className={`terminal-workbench ${props.mode}`}>
-      <div className="terminal-tabbar" role="tablist" aria-label="Terminals">
-        {props.mode === 'mobile' ? (
-          <button type="button" className="terminal-back" aria-label="Back to Chat" onClick={props.onCloseSurface}>
-            <Icon name="arrowLeft" />
+  useEffect(() => {
+    setActionsMenuOpen(false);
+  }, [props.activeKey]);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) return undefined;
+    const closeOnPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || !actionsMenuRef.current?.contains(target)) setActionsMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActionsMenuOpen(false);
+    };
+    window.addEventListener('pointerdown', closeOnPointerDown, true);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('pointerdown', closeOnPointerDown, true);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [actionsMenuOpen]);
+
+  const actions = (
+    <>
+      <button
+        type="button"
+        className="terminal-toolbar-action"
+        aria-label="Create terminal"
+        title="Create terminal"
+        onClick={props.onCreate}
+      >
+        <Icon name="plus" />
+        <span>New</span>
+      </button>
+      {active ? (
+        <button
+          type="button"
+          className="terminal-toolbar-action terminal-fit"
+          aria-label="Fit terminal to this screen"
+          title="Fit terminal to this screen"
+          onClick={props.onClaimResize}
+        >
+          <Icon name="maximize" />
+          <span>Fit</span>
+        </button>
+      ) : null}
+      {active && active.status !== 'running' ? (
+        <div ref={actionsMenuRef} className="terminal-more">
+          <button
+            type="button"
+            className="workbench-chrome-icon-button"
+            aria-label="Terminal actions"
+            title="Terminal actions"
+            aria-haspopup="menu"
+            aria-expanded={actionsMenuOpen}
+            onClick={() => setActionsMenuOpen(open => !open)}
+          >
+            <Icon name="ellipsis" />
           </button>
-        ) : null}
-        <div className="terminal-tabs">
-          {props.terminals.map(item => {
-            const key = terminalKey(item);
-            const unavailable = props.unavailableHubIds[item.hubId] === true;
-            return (
-              <button key={key} type="button" role="tab" aria-selected={key === props.activeKey}
-                className={`terminal-tab${key === props.activeKey ? ' active' : ''}`}
-                onClick={() => props.onSelect(key)} title={`${item.hubId} · ${item.projectName} · ${item.initialCwd}`}>
-                <span className={`terminal-status ${unavailable ? 'unavailable' : item.status}`} aria-hidden="true" />
-                <span className="terminal-tab-label">{item.projectName || item.terminalId}</span>
-                <span className="terminal-tab-hub">{item.hubId}</span>
-                <span role="button" tabIndex={0} className="terminal-tab-close" aria-label={`Close terminal ${item.projectName || item.terminalId}`}
-                  onClick={event => { event.stopPropagation(); props.onRequestClose(item); }}>×</span>
+          {actionsMenuOpen ? (
+            <div className="terminal-actions-menu" role="menu" aria-label="Terminal actions">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setActionsMenuOpen(false);
+                  props.onRestart(active);
+                }}
+              >
+                <Icon name="refreshCw" />
+                Restart
               </button>
-            );
-          })}
-        </div>
-        <button type="button" className="terminal-new" aria-label="Create terminal" onClick={props.onCreate}>+</button>
-        {active ? (
-          <div className="terminal-actions">
-            {active.status !== 'running' ? (
-              <button type="button" className="terminal-restart" onClick={() => props.onRestart(active)}>Restart</button>
-            ) : null}
-            <button type="button" className="terminal-fit" aria-label="Fit terminal to this screen"
-              title="Fit terminal to this screen" onClick={props.onClaimResize}>
-              {props.mode === 'mobile'
-                ? <Icon name="maximize" />
-                : 'Fit to this screen'}
-            </button>
-          </div>
-        ) : null}
-      </div>
-      <div className="terminal-content">{props.children ?? <div className="terminal-empty">Create a terminal to begin.</div>}</div>
-      {props.mode === 'mobile' ? (
-        <div className="terminal-keybar" aria-label="Terminal shortcuts">
-          <button type="button" aria-label="Terminal Ctrl modifier" aria-pressed={ctrl} onClick={() => setCtrl(value => !value)}>Ctrl</button>
-          <button type="button" aria-label="Terminal Alt modifier" aria-pressed={alt} onClick={() => setAlt(value => !value)}>Alt</button>
-          {MOBILE_KEYS.map(key => (
-            <button key={key.aria} type="button" aria-label={key.aria} onClick={() => sendSequence(key.sequence)}>{key.label}</button>
-          ))}
-          <button type="button" aria-label="Terminal Paste" onClick={() => { paste().catch(() => undefined); }}>Paste</button>
+            </div>
+          ) : null}
         </div>
       ) : null}
+    </>
+  );
+
+  const keybar = props.mode === 'mobile' ? (
+    <div className="terminal-keybar" aria-label="Terminal shortcuts">
+      <button type="button" aria-label="Terminal Ctrl modifier" aria-pressed={ctrl} onClick={() => setCtrl(value => !value)}>Ctrl</button>
+      <button type="button" aria-label="Terminal Alt modifier" aria-pressed={alt} onClick={() => setAlt(value => !value)}>Alt</button>
+      {MOBILE_KEYS.map(key => (
+        <button key={key.aria} type="button" aria-label={key.aria} onClick={() => sendSequence(key.sequence)}>{key.label}</button>
+      ))}
+      <button type="button" aria-label="Terminal Paste" onClick={() => { paste().catch(() => undefined); }}>Paste</button>
     </div>
+  ) : null;
+
+  return (
+    <WorkbenchChrome
+      mode={props.mode}
+      surfaceClassName="terminal-workbench"
+      ariaLabel="Terminal workbench"
+      title={activeTitle}
+      titleTooltip={active ? `${active.hubId} · ${active.initialCwd}` : 'Terminal'}
+      closeLabel={props.mode === 'mobile' ? 'Back to Chat' : 'Close terminal panel'}
+      onClose={() => props.onCloseSurface?.()}
+      actions={actions}
+      tabsAriaLabel="Terminals"
+      tabsClassName="terminal-tabs"
+      tabs={props.terminals.map(item => {
+        const key = terminalKey(item);
+        const unavailable = props.unavailableHubIds[item.hubId] === true;
+        const label = item.projectName || item.terminalId || 'Terminal';
+        return (
+          <div key={key} className={`terminal-tab${key === props.activeKey ? ' active' : ''}`}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={key === props.activeKey}
+              className="terminal-tab-open"
+              onClick={() => props.onSelect(key)}
+              title={`${item.hubId} · ${item.initialCwd}`}
+            >
+              <span className={`terminal-status ${unavailable ? 'unavailable' : item.status}`} aria-hidden="true" />
+              <span className="terminal-tab-label">{label}</span>
+            </button>
+            <button
+              type="button"
+              className="terminal-tab-close"
+              aria-label={`Close terminal ${label}`}
+              title={`Close terminal ${label}`}
+              onClick={event => {
+                event.stopPropagation();
+                props.onRequestClose(item);
+              }}
+            >
+              <Icon name="x" />
+            </button>
+          </div>
+        );
+      })}
+      mobileFullscreen={props.mobileFullscreen}
+      onMobileFullscreenChange={props.onMobileFullscreenChange}
+      bodyClassName="terminal-content"
+      footer={keybar}
+    >
+      {props.children ?? <div className="terminal-empty">Create a terminal to begin.</div>}
+    </WorkbenchChrome>
   );
 }
 
