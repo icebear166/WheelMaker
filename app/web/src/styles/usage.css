@@ -646,3 +646,78 @@
     height: 260px;
   }
 }
+
+.deepseek-usage-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+.deepseek-usage-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.deepseek-usage-months {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.deepseek-usage-month-label {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.deepseek-usage-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.deepseek-usage-summary span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+.deepseek-usage-summary strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.deepseek-usage-summary em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.deepseek-usage-login {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.deepseek-usage-login input {
+  width: 100%;
+}
+.deepseek-usage-login-error {
+  color: var(--state-danger);
+  font-size: 11px;
+}
+.deepseek-usage-expired {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--state-warning);
+  border-radius: 8px;
+  color: var(--state-warning);
+  font-size: 11px;
+}
+.deepseek-usage-chart {
+  height: 280px;
+  width: 100%;
+}
