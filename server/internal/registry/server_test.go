@@ -2052,6 +2052,67 @@ func TestUsageHistoryGetForwardsByEnvelopeHubID(t *testing.T) {
 	}
 }
 
+func TestDeepSeekUsageGetForwardsByEnvelopeHubID(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-deepseek-usage")
+	defer hub.Close()
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    rp.RegistryMethodDeepSeekUsageGet,
+		HubID:     "hub-deepseek-usage",
+		Payload: map[string]any{
+			"year":  2026,
+			"month": 8,
+		},
+	})
+
+	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Type != "request" || forwarded.Method != rp.RegistryMethodDeepSeekUsageGet {
+		t.Fatalf("forwarded=%#v, want deepseek.usage.get request", forwarded)
+	}
+	if forwarded.HubID != "hub-deepseek-usage" {
+		t.Fatalf("forwarded.hubId=%q, want hub-deepseek-usage", forwarded.HubID)
+	}
+	if forwarded.ProjectID != "" {
+		t.Fatalf("forwarded.projectId=%q, want empty", forwarded.ProjectID)
+	}
+	if forwarded.Payload["year"] != float64(2026) || forwarded.Payload["month"] != float64(8) {
+		t.Fatalf("forwarded.payload=%#v", forwarded.Payload)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    rp.RegistryMethodDeepSeekUsageGet,
+		HubID:     "hub-deepseek-usage",
+		Payload: map[string]any{
+			"hubId":  "hub-deepseek-usage",
+			"status": "ok",
+			"month":  map[string]any{"year": 2026, "month": 8},
+			"days":   []any{},
+			"costs":  []any{},
+		},
+	})
+
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" || resp.Method != rp.RegistryMethodDeepSeekUsageGet {
+		t.Fatalf("client response=%#v, want deepseek.usage.get response", resp)
+	}
+	if resp.HubID != "hub-deepseek-usage" || resp.Payload["status"] != "ok" {
+		t.Fatalf("client response=%#v", resp)
+	}
+}
+
 func TestHubReleaseNotificationForwardsToTargetHub(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
