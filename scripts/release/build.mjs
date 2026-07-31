@@ -3,7 +3,6 @@ import { join } from 'node:path';
 
 import { runCommand } from './commands.mjs';
 import { buildAndroidRelease } from './android.mjs';
-import { buildGoClient, ensureGarble } from './go-client-build.mjs';
 
 export const RELEASE_TARGETS = Object.freeze([
   {
@@ -42,7 +41,6 @@ export async function buildRelease({
   stagingRoot = join(workRoot, 'tmp', `release-${version}`),
   withDesktop = false,
   withAndroid = false,
-  goProfile = 'release',
   runner = runCommand,
 }) {
   if (!/^v1\.(0|[1-9]\d*)$/.test(version)) {
@@ -62,7 +60,6 @@ export async function buildRelease({
   const buildEnvironment = {
     GOCACHE: join(cacheRoot, 'go-build'),
     GOMODCACHE: join(cacheRoot, 'go-mod'),
-    GOTMPDIR: join(cacheRoot, 'go-tmp'),
   };
   const webEnvironment = {
     WHEELMAKER_WEB_TARGET: webSource,
@@ -78,7 +75,6 @@ export async function buildRelease({
   await Promise.all([
     mkdir(buildEnvironment.GOCACHE, { recursive: true }),
     mkdir(buildEnvironment.GOMODCACHE, { recursive: true }),
-    mkdir(buildEnvironment.GOTMPDIR, { recursive: true }),
     mkdir(webEnvironment.WHEELMAKER_WEBPACK_CACHE, { recursive: true }),
   ]);
 
@@ -92,14 +88,6 @@ export async function buildRelease({
     runner('npm', ['run', 'build:web:release'], {
       cwd: appRoot,
       env: webEnvironment,
-    }),
-  );
-  const garblePath = await task('Installing Garble', () =>
-    ensureGarble({
-      buildEnvironment,
-      cacheRoot,
-      runner,
-      serverRoot,
     }),
   );
 
@@ -131,19 +119,22 @@ export async function buildRelease({
       const binaryPath = join(hubDirectory, target.binary);
       await mkdir(hubDirectory, { recursive: true });
 
-      await buildGoClient({
-        binaryPath,
-        buildEnvironment,
-        garblePath,
-        goarch: target.GOARCH,
-        goos: target.GOOS,
-        ldflags: target.GOOS === 'windows'
-          ? '-s -w -H windowsgui'
-          : '-s -w',
-        packagePath: './cmd/wheelmaker',
-        profile: goProfile,
-        runner,
-        serverRoot,
+      const buildArguments = ['build', '-trimpath'];
+      if (target.GOOS === 'windows') {
+        buildArguments.push('-ldflags=-s -w -H windowsgui');
+      } else {
+        buildArguments.push('-ldflags=-s -w');
+      }
+      buildArguments.push('-o', binaryPath, './cmd/wheelmaker');
+
+      await runner('go', buildArguments, {
+        cwd: serverRoot,
+        env: {
+          CGO_ENABLED: '0',
+          ...buildEnvironment,
+          GOARCH: target.GOARCH,
+          GOOS: target.GOOS,
+        },
       });
       await cp(webSource, join(directory, 'web'), { recursive: true });
       platforms[index] = {...target, binaryPath, directory};
@@ -181,18 +172,26 @@ export async function buildRelease({
           ],
           { cwd: desktopCommandRoot, env: buildEnvironment },
         );
-        await buildGoClient({
-          binaryPath: desktopExe,
-          buildEnvironment,
-          garblePath,
-          goarch: 'amd64',
-          goos: 'windows',
-          ldflags: `-s -w -H windowsgui -X main.desktopReleaseVersion=${version}`,
-          packagePath: './cmd/wheelmaker-desktop',
-          profile: goProfile,
-          runner,
-          serverRoot,
-        });
+        await runner(
+          'go',
+          [
+            'build',
+            '-trimpath',
+            `-ldflags=-s -w -H windowsgui -X main.desktopReleaseVersion=${version}`,
+            '-o',
+            desktopExe,
+            './cmd/wheelmaker-desktop',
+          ],
+          {
+            cwd: serverRoot,
+            env: {
+              CGO_ENABLED: '0',
+              ...buildEnvironment,
+              GOARCH: 'amd64',
+              GOOS: 'windows',
+            },
+          },
+        );
       } finally {
         await rm(desktopResourcePath, {force: true});
       }
@@ -205,7 +204,6 @@ export async function buildRelease({
     androidApk,
     desktopExe,
     platforms,
-    goProfile,
     version,
     versionRoot,
     webSource,

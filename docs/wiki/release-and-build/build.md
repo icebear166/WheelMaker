@@ -22,8 +22,6 @@ scripts/release.mjs             命令入口
         ▼
 scripts/release/cli.mjs         流程编排
    ├─ build.mjs                 Hub、Web、Desktop 构建
-   ├─ go-client-build.mjs       固定版本 Garble 和 Go 客户端 profile
-   ├─ diagnostic.mjs            私有非 tiny 诊断构建入口
    ├─ android.mjs               Android 构建与签名
    ├─ publish.mjs               打包和 manifest
    ├─ tar.mjs                   tar.zst 生成
@@ -71,16 +69,7 @@ npm ci --include=dev
 - Desktop：可选，生成 Windows AMD64 GUI 程序 `WheelMakerDesktop.exe`。
 - Android：可选，生成已签名 APK 和 `android-release.json`。
 
-发往用户机器的 Go 客户端二进制（四个平台 Hub 与可选 Windows Desktop）使用固定的 `mvdan.cc/garble@v0.17.0` 正式 profile，并保留 `CGO_ENABLED=0`、`-trimpath`、`-s`、`-w` 以及 Windows 的 `-H windowsgui`。正式 profile 启用 `-tiny`，不启用 `-literals` 或控制流混淆；普通业务 `warn` 日志仍保留，但公开产物不承诺保留未恢复 panic 的 runtime 堆栈。Registry 和 Release Server 等只运行在受控服务端的 Go 程序不进入客户端混淆链。内部诊断使用同一源码和工具版本的非 `tiny` Garble profile，诊断产物不进入发布资产。四个 Hub 构建把同一份 `web-source` 复制到各平台目录。完整决策见 [客户端 Go 混淆发布 spec](../../scope/2026-07-31-client-go-obfuscation/spec-client-go-obfuscation.md)。
-
-内部诊断构建只在源码工作树执行，不接受发布参数，不写入 `.release-out/`，产物保留在 `.release-work/diagnostic/`：
-
-```bash
-node scripts/release/diagnostic.mjs --version v1.83
-node scripts/release/diagnostic.mjs --version v1.83 --with-desktop
-```
-
-诊断 profile 不启用 `-tiny`，用于保留更完整的运行时诊断信息；它不会上传，也不会成为客户包。正式构建和诊断构建都通过独立缓存安装并校验同一固定 Garble 版本。
+所有 Go 二进制（Hub 与 Desktop）都用 `CGO_ENABLED=0` 与 `-trimpath -ldflags=-s -w` 构建：剥离符号与 DWARF 以缩小体积，Windows 额外加 `-H windowsgui`；panic 堆栈仍保留函数名（pclntab 不被剥离）。四个 Hub 构建把同一份 `web-source` 复制到各平台目录。
 
 ## 产物
 
@@ -120,8 +109,6 @@ Windows 平台包不携带独立 Desktop updater 二进制；自更新由部署�
 .release-work/cache/
 ├─ go-build/
 ├─ go-mod/
-├─ go-tmp/
-├─ go-tools/
 ├─ webpack/
 └─ gradle/
 ```

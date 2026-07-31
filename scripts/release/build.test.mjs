@@ -11,17 +11,10 @@ function isGarbleCommand(command) {
   return /(^|[\\/])garble(?:\.exe)?$/.test(command);
 }
 
-function recordingRunner({garbleVersion = 'v0.17.0'} = {}) {
+function recordingRunner() {
   const calls = [];
   const runner = async (command, args, options) => {
     calls.push({ command, args: [...args], options });
-
-    if (isGarbleCommand(command) && args[0] === 'version') {
-      return {
-        stderr: '',
-        stdout: `mvdan.cc/garble ${garbleVersion}\n`,
-      };
-    }
 
     if (
       command === 'npm' &&
@@ -36,12 +29,6 @@ function recordingRunner({garbleVersion = 'v0.17.0'} = {}) {
     }
 
     if (command === 'go' && args[0] === 'build') {
-      const outputPath = args[args.indexOf('-o') + 1];
-      await mkdir(join(outputPath, '..'), { recursive: true });
-      await writeFile(outputPath, basename(outputPath));
-    }
-
-    if (isGarbleCommand(command) && args.includes('build')) {
       const outputPath = args[args.indexOf('-o') + 1];
       await mkdir(join(outputPath, '..'), { recursive: true });
       await writeFile(outputPath, basename(outputPath));
@@ -87,7 +74,7 @@ test('release build compiles Web once and exactly four Hub targets', async () =>
     const hubTargets = runner.calls
       .filter(
         ({ command, args }) =>
-          isGarbleCommand(command) &&
+          command === 'go' &&
           args.at(-1) === './cmd/wheelmaker',
       )
       .map(({ args, options }) => ({
@@ -101,27 +88,48 @@ test('release build compiles Web once and exactly four Hub targets', async () =>
       { target: 'linux/amd64', binary: 'wheelmaker' },
       { target: 'windows/amd64', binary: 'wheelmaker.exe' },
     ]);
-
-    const garbleBuilds = runner.calls.filter(
-      ({command, args}) => isGarbleCommand(command) && args.includes('build'),
-    );
-    assert.equal(garbleBuilds.length, 4);
-    for (const build of garbleBuilds) {
-      assert.deepEqual(build.args.slice(0, 2), ['-tiny', 'build']);
-      assert.equal(build.args.includes('-literals'), false);
-      assert.equal(build.args.some(arg => arg.includes('control')), false);
-      assert.equal(build.args.includes('-trimpath'), true);
-    }
-
-    const installs = runner.calls.filter(
-      ({command, args}) =>
-        command === 'go' && args[0] === 'install',
-    );
-    assert.deepEqual(installs.map(({args}) => args.slice(0, 2)), [
-      ['install', 'mvdan.cc/garble@v0.17.0'],
-    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('release build uses native Go without installing or invoking Garble', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-native-go-build-'));
+  const repoRoot = join(root, 'repo');
+  const runner = recordingRunner();
+
+  try {
+    await mkdir(join(repoRoot, 'app'), {recursive: true});
+    await mkdir(join(repoRoot, 'server'), {recursive: true});
+
+    await buildRelease({
+      repoRoot,
+      runner,
+      version: 'v1.85',
+    });
+
+    const nativeHubBuilds = runner.calls.filter(
+      ({command, args}) =>
+        command === 'go' &&
+        args[0] === 'build' &&
+        args.at(-1) === './cmd/wheelmaker',
+    );
+    assert.equal(nativeHubBuilds.length, RELEASE_TARGETS.length);
+    assert.equal(
+      runner.calls.some(({command}) => isGarbleCommand(command)),
+      false,
+    );
+    assert.equal(
+      runner.calls.some(
+        ({command, args}) =>
+          command === 'go' &&
+          args[0] === 'install' &&
+          args.some(arg => arg.startsWith('mvdan.cc/garble@')),
+      ),
+      false,
+    );
+  } finally {
+    await rm(root, {recursive: true, force: true});
   }
 });
 
@@ -145,7 +153,7 @@ test('Windows Hub uses the GUI subsystem without changing Unix Hub builds', asyn
 
     const hubBuilds = runner.calls.filter(
       ({ command, args }) =>
-        isGarbleCommand(command) && args.at(-1) === './cmd/wheelmaker',
+        command === 'go' && args.at(-1) === './cmd/wheelmaker',
     );
     const windowsBuild = hubBuilds.find(
       ({ options }) => options.env.GOOS === 'windows',
@@ -241,62 +249,6 @@ test('release build rejects the retired local source identifier', async () => {
   }
 });
 
-test('release build stops before client compilation when Garble version is unexpected', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-garble-version-'));
-  const repoRoot = join(root, 'repo');
-  const runner = recordingRunner({garbleVersion: 'v0.16.0'});
-
-  try {
-    await mkdir(join(repoRoot, 'app'), {recursive: true});
-    await mkdir(join(repoRoot, 'server'), {recursive: true});
-    await assert.rejects(
-      () => buildRelease({
-        repoRoot,
-        runner,
-        version: 'v1.24',
-      }),
-      /Garble version verification failed/,
-    );
-    assert.equal(
-      runner.calls.filter(
-        ({command, args}) => isGarbleCommand(command) && args.includes('build'),
-      ).length,
-      0,
-    );
-  } finally {
-    await rm(root, {recursive: true, force: true});
-  }
-});
-
-test('diagnostic Go client profile omits tiny while using the shared builder', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-diagnostic-profile-'));
-  const repoRoot = join(root, 'repo');
-  const runner = recordingRunner();
-
-  try {
-    await mkdir(join(repoRoot, 'app'), {recursive: true});
-    await mkdir(join(repoRoot, 'server'), {recursive: true});
-    const result = await buildRelease({
-      goProfile: 'diagnostic',
-      repoRoot,
-      runner,
-      stagingRoot: join(root, 'diagnostic-staging'),
-      version: 'v1.24',
-      workRoot: join(root, '.release-work'),
-    });
-
-    assert.equal(result.goProfile, 'diagnostic');
-    for (const build of runner.calls.filter(
-      ({command, args}) => isGarbleCommand(command) && args.includes('build'),
-    )) {
-      assert.equal(build.args[0], 'build');
-      assert.equal(build.args.includes('-tiny'), false);
-    }
-  } finally {
-    await rm(root, {recursive: true, force: true});
-  }
-});
-
 test('release build routes Webpack and Go caches through the work root', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-release-cache-'));
   const repoRoot = join(root, 'repo');
@@ -317,7 +269,7 @@ test('release build routes Webpack and Go caches through the work root', async (
     const npmCalls = runner.calls.filter(({command}) => command === 'npm');
     const goCalls = runner.calls.filter(({command}) => command === 'go');
     assert.equal(npmCalls.length, 2);
-    assert.equal(goCalls.length, 1);
+    assert.equal(goCalls.length, 4);
     for (const call of npmCalls) {
       assert.equal(
         call.options.env.WHEELMAKER_WEBPACK_CACHE,
@@ -327,7 +279,6 @@ test('release build routes Webpack and Go caches through the work root', async (
     for (const call of goCalls) {
       assert.equal(call.options.env.GOCACHE, join(workRoot, 'cache', 'go-build'));
       assert.equal(call.options.env.GOMODCACHE, join(workRoot, 'cache', 'go-mod'));
-      assert.equal(call.options.env.GOTMPDIR, join(workRoot, 'cache', 'go-tmp'));
     }
   } finally {
     await rm(root, {recursive: true, force: true});
@@ -407,7 +358,6 @@ test('release build reports Web and platform subtask progress', async () => {
       'Building darwin-arm64',
       'Building linux-amd64',
       'Building windows-amd64',
-      'Installing Garble',
     ]);
   } finally {
     await rm(root, {recursive: true, force: true});
@@ -429,8 +379,7 @@ test('independent release compilation uses bounded concurrency', async () => {
       repoRoot,
       runner: async (command, args, options) => {
         const isHubBuild =
-          isGarbleCommand(command) && args.includes('build') &&
-          args.at(-1) === './cmd/wheelmaker';
+          command === 'go' && args.at(-1) === './cmd/wheelmaker';
         if (!isHubBuild) return baseRunner(command, args, options);
         activeBuilds += 1;
         maximumBuilds = Math.max(maximumBuilds, activeBuilds);
@@ -470,9 +419,8 @@ test('optional Desktop is built once outside platform packages', async () => {
     assert.equal(await readExists(result.desktopExe), true);
     const desktopBuild = runner.calls.find(
       ({command, args}) =>
-        isGarbleCommand(command) && args.at(-1) === './cmd/wheelmaker-desktop',
+        command === 'go' && args.at(-1) === './cmd/wheelmaker-desktop',
     );
-    assert.equal(desktopBuild.args[0], '-tiny');
     assert.equal(
       desktopBuild.args.includes(
         '-ldflags=-s -w -H windowsgui -X main.desktopReleaseVersion=v1.8',
