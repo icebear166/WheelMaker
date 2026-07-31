@@ -39,7 +39,7 @@ describe('registry debug records', () => {
   });
 
   test('resolves method families into debug scopes', () => {
-    expect(resolveRegistryDebugScope('session.send', 'request')).toBe('session.*');
+    expect(resolveRegistryDebugScope('session.queue', 'request')).toBe('session.*');
     expect(resolveRegistryDebugScope('project.fs.read', 'response')).toBe('project.*');
     expect(resolveRegistryDebugScope('project.git.status', 'event')).toBe('project.*');
     expect(resolveRegistryDebugScope('registry.project.list', 'request')).toBe('registry.*');
@@ -53,17 +53,17 @@ describe('registry debug records', () => {
   test('records, correlates, filters, and clears debug entries', () => {
     const store = createRegistryDebugStore(() => 1000);
     store.setEnabled(true);
-    const sessionSendRaw = '{"requestId":7,"type":"request","method":"session.send","projectId":"project-a","payload":{"sessionId":"sess-a","text":"hello"}}';
+    const sessionQueueRaw = '{"requestId":7,"type":"request","method":"session.queue","projectId":"project-a","payload":{"sessionId":"sess-a","action":"enqueue"}}';
 
     store.recordOutbound({
       envelope: {
         requestId: 7,
         type: 'request',
-        method: 'session.send',
+        method: 'session.queue',
         projectId: 'project-a',
-        payload: {sessionId: 'sess-a', text: 'hello'},
+        payload: {sessionId: 'sess-a', action: 'enqueue'},
       },
-      raw: sessionSendRaw,
+      raw: sessionQueueRaw,
     });
     store.recordInboundEnvelope({
       envelope: {
@@ -97,18 +97,18 @@ describe('registry debug records', () => {
       phase: 'request',
       scope: 'session.*',
       connection: 'Remote',
-      method: 'session.send',
+      method: 'session.queue',
       requestId: 7,
       projectId: 'project-a',
       sessionIds: ['sess-a'],
-      raw: sessionSendRaw,
+      raw: sessionQueueRaw,
     });
     expect(records[1]).toMatchObject({
       direction: 'in',
       phase: 'response',
       scope: 'session.*',
       connection: 'Remote',
-      method: 'session.send',
+      method: 'session.queue',
       requestId: 7,
       projectId: 'project-a',
       sessionIds: ['sess-a'],

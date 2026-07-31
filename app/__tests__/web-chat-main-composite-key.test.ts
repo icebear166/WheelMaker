@@ -43,13 +43,13 @@ describe('main chat composite key migration', () => {
     expect(selectProjectChatSessionBody).toContain('workspaceStore.rememberSelectedChatSessionKey');
   });
 
-  test('session read and send use the selected session project id', () => {
+  test('session read and queue mutation use the selected session project id', () => {
     const main = readMain();
 
     expect(main).toContain('service.readProjectSession(');
-    expect(main).toContain('service.sendProjectSessionMessage(');
+    expect(main).toContain('service.enqueueProjectSessionItem(');
     expect(main).toContain('service.setProjectSessionConfig(');
     expect(main).not.toContain('service.readSession(\n        sessionId,');
-    expect(main).not.toContain('service.sendSessionMessage({');
+    expect(main).not.toContain('service.sendProjectSessionMessage(');
   });
 });

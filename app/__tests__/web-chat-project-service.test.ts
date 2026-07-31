@@ -77,12 +77,15 @@ describe('registry workspace project-scoped chat service methods', () => {
     expect(repository.listFiles).not.toHaveBeenCalled();
   });
 
-  test('delegates read/send/config to the explicitly selected chat project', async () => {
+  test('delegates read/queue/config to the explicitly selected chat project', async () => {
     const service = new RegistryWorkspaceService();
     const repository = {
       readSession: jest.fn().mockResolvedValue({ messages: [], latestTurnIndex: 0 }),
-      sendSessionMessage: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1' }),
-      cancelSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1' }),
+      mutateSessionQueue: jest.fn().mockResolvedValue({
+        ok: true,
+        sessionId: 's1',
+        session: {sessionId: 's1'},
+      }),
       respondSessionPermission: jest.fn().mockResolvedValue({accepted: true, permissionId: 'perm-1', outcome: 'selected', optionId: 'allow'}),
       setSessionConfig: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', configOptions: [] }),
       renameSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', session: { sessionId: 's1', title: 'Manual title', updatedAt: '' } }),
@@ -106,11 +109,13 @@ describe('registry workspace project-scoped chat service methods', () => {
     });
 
     await (service as any).readProjectSession('chat-project', 's1', 7);
-    await (service as any).sendProjectSessionMessage('chat-project', {
-      sessionId: 's1',
-      text: 'hello',
+    await (service as any).enqueueProjectSessionItem('chat-project', 's1', {
+      itemId: 'item-1',
+      kind: 'prompt',
+      createdAt: '2026-07-31T00:00:00Z',
+      blocks: [{type: 'text', text: 'hello'}],
     });
-    await (service as any).cancelProjectSession('chat-project', 's1');
+    await (service as any).cancelProjectSessionQueueItem('chat-project', 's1', 'item-1');
     await (service as any).respondProjectSessionPermission('chat-project', 's1', 'perm-1', 'allow');
     await (service as any).setProjectSessionConfig('chat-project', {
       sessionId: 's1',
@@ -147,11 +152,21 @@ describe('registry workspace project-scoped chat service methods', () => {
     });
 
     expect(repository.readSession).toHaveBeenCalledWith('chat-project', 's1', 7);
-    expect(repository.sendSessionMessage).toHaveBeenCalledWith('chat-project', {
+    expect(repository.mutateSessionQueue).toHaveBeenNthCalledWith(1, 'chat-project', {
       sessionId: 's1',
-      text: 'hello',
+      action: 'enqueue',
+      item: {
+        itemId: 'item-1',
+        kind: 'prompt',
+        createdAt: '2026-07-31T00:00:00Z',
+        blocks: [{type: 'text', text: 'hello'}],
+      },
     });
-    expect(repository.cancelSession).toHaveBeenCalledWith('chat-project', 's1');
+    expect(repository.mutateSessionQueue).toHaveBeenNthCalledWith(2, 'chat-project', {
+      sessionId: 's1',
+      action: 'cancel',
+      itemId: 'item-1',
+    });
     expect(repository.respondSessionPermission).toHaveBeenCalledWith('chat-project', 's1', 'perm-1', 'allow');
     expect(repository.setSessionConfig).toHaveBeenCalledWith('chat-project', {
       sessionId: 's1',

@@ -252,9 +252,9 @@ describe('web chat draft sessions', () => {
     const repositoryTs = readSourceText(path.join(root, 'web', 'src', 'registry', 'RegistryRepository.ts'));
     const createSessionStart = repositoryTs.indexOf('async createSession(');
     expect(createSessionStart).toBeGreaterThanOrEqual(0);
-    const sendSessionStart = repositoryTs.indexOf('async sendSessionMessage(', createSessionStart);
-    expect(sendSessionStart).toBeGreaterThan(createSessionStart);
-    const createSessionBody = repositoryTs.slice(createSessionStart, sendSessionStart);
+    const queueSessionStart = repositoryTs.indexOf('async mutateSessionQueue(', createSessionStart);
+    expect(queueSessionStart).toBeGreaterThan(createSessionStart);
+    const createSessionBody = repositoryTs.slice(createSessionStart, queueSessionStart);
 
     expect(repositoryTs).toContain('const SESSION_CREATE_TIMEOUT_MS = 120000;');
     expect(createSessionBody).toContain('timeoutMs: SESSION_CREATE_TIMEOUT_MS,');
