@@ -44,16 +44,15 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).not.toContain('refreshSkillManagement(registryHubIds)');
   });
 
-  test('keeps skill commands, polling, and retry feedback available to Hub surfaces', () => {
+  test('keeps skill commands and retry feedback without polling', () => {
     expect(mainTsx).toContain('service.scanSkills');
     expect(mainTsx).toContain('service.listSkillsSource');
     expect(mainTsx).toContain('service.installSkills');
     expect(mainTsx).toContain('service.getSkillDetail');
     expect(mainTsx).toContain('service.updateSkills');
     expect(mainTsx).toContain('service.uninstallSkills');
-    expect(mainTsx).toContain('skillOperationPollTimerRef');
-    expect(mainTsx).toContain('skillOperationPollHubIdsRef');
-    expect(mainTsx).toContain('scheduleSkillOperationPoll(hubId)');
+    expect(mainTsx).not.toContain('skillOperationPollTimerRef');
+    expect(mainTsx).not.toContain('scheduleSkillOperationPoll');
     expect(mainTsx).toContain('<RetryToast');
     expect(mainTsx).toContain("setToastMessage('Skill operation completed.')");
     expect(mainTsx).toContain('setSkillRetryNotice(createSkillRetryNotice(message, target))');

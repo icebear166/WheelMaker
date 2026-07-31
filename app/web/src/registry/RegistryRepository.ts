@@ -43,7 +43,6 @@ import type {
   RegistryNpmHubSnapshot,
   RegistryNpmPackage,
   RegistryProject,
-  RegistryProjectAgentProfile,
   RegistryProjectListResponse,
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
@@ -1002,8 +1001,11 @@ export class RegistryRepository {
     const payload = (resp.payload ?? {}) as { projects?: RegistryProject[]; hubs?: RegistryHub[] };
     const projects = (payload.projects ?? [])
       .filter(project => !!project.projectId)
-      .map(project => ({
-        ...project,
+      .map(project => {
+        const {agentProfiles: _legacyAgentProfiles, ...projectWithoutLegacyProfiles} =
+          project as RegistryProject & {agentProfiles?: unknown};
+        return {
+        ...projectWithoutLegacyProfiles,
         agent: normalizeAgentType(project.agent),
         agents: Array.isArray(project.agents)
           ? project.agents
@@ -1011,39 +1013,9 @@ export class RegistryRepository {
               .map(item => normalizeAgentType(item))
               .filter((item): item is string => !!item)
           : undefined,
-        agentProfiles: Array.isArray(project.agentProfiles)
-          ? project.agentProfiles
-              .map((item): RegistryProjectAgentProfile | null => {
-                const name = normalizeAgentType(item?.name) ?? '';
-                if (!name) {
-                  return null;
-                }
-                const skills = Array.isArray(item.skills)
-                  ? item.skills
-                      .filter((skill): skill is string => typeof skill === 'string')
-                      .map(skill => skill.trim())
-                      .filter(skill => skill.length > 0)
-                  : [];
-                const skillNamesByKey = new Map(skills.map(skill => [skill.toLowerCase(), skill]));
-                const skillDescriptions = item.skillDescriptions && typeof item.skillDescriptions === 'object'
-                  ? Object.fromEntries(Object.entries(item.skillDescriptions).flatMap(([skillName, description]) => {
-                      const normalizedName = skillNamesByKey.get(skillName.trim().toLowerCase());
-                      const normalizedDescription = typeof description === 'string' ? description.trim() : '';
-                      return normalizedName && normalizedDescription
-                        ? [[normalizedName, normalizedDescription]]
-                        : [];
-                    }))
-                  : {};
-                return {
-                  name,
-                  skills,
-                  ...(Object.keys(skillDescriptions).length > 0 ? {skillDescriptions} : {}),
-                };
-              })
-              .filter((item): item is RegistryProjectAgentProfile => !!item)
-          : undefined,
         hubId: project.hubId || project.projectId.split(':', 1)[0] || '',
-      }));
+      };
+      });
     const seenHubIds = new Set<string>();
     const hubs = (payload.hubs ?? [])
       .map((hub): RegistryHub => ({
@@ -2370,9 +2342,13 @@ export class RegistryRepository {
   }
 
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
-    const response = await this.runHubStateAction(hubId, 'releasePublish', 'start', input);
-    return hubStateActionResult<RegistryReleasePublishResponse>(response)
-      ?? {ok: false, status: 'missing_hub_state_response'};
+    const response = await this.client.request({
+      method: RegistryMethods.ReleasePublishStart,
+      hubId,
+      payload: input,
+      timeoutMs: 60000,
+    });
+    return response.payload as RegistryReleasePublishResponse;
   }
 
   async respondSessionPermission(
@@ -2397,9 +2373,13 @@ export class RegistryRepository {
   }
 
   async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {
-    const response = await this.runHubStateAction(hubId, 'releasePublish', 'status', {jobId});
-    return hubStateActionResult<RegistryReleasePublishResponse>(response)
-      ?? {ok: false, status: 'missing_hub_state_response'};
+    const response = await this.client.request({
+      method: RegistryMethods.ReleasePublishGet,
+      hubId,
+      payload: {jobId},
+      timeoutMs: 15000,
+    });
+    return response.payload as RegistryReleasePublishResponse;
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {

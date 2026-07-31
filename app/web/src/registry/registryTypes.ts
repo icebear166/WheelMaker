@@ -970,12 +970,6 @@ export interface RegistryGitRev {
   worktreeRev: string;
 }
 
-export interface RegistryProjectAgentProfile {
-  name: string;
-  skills?: string[];
-  skillDescriptions?: Record<string, string>;
-}
-
 export interface RegistryHub {
   hubId: string;
 }
@@ -1033,7 +1027,6 @@ export interface RegistryProject {
   hubId?: string;
   agent?: string;
   agents?: string[];
-  agentProfiles?: RegistryProjectAgentProfile[];
   projectRev?: string;
   git?: RegistryProjectGitState;
 }

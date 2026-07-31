@@ -9,10 +9,11 @@ const empty: Settings = {publisherHubId: '', sourcePath: '', serverHubId: '', we
 
 function load(): Settings { try { return {...empty, ...JSON.parse(window.localStorage.getItem(key) || '{}')}; } catch { return empty; } }
 
-export function ReleasePublishSettings({hubIds, start, query}: {
+export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
   hubIds: string[];
   start: (hubId: string, input: Record<string, unknown>) => Promise<RegistryReleasePublishResponse>;
   query: (hubId: string, jobId: string) => Promise<RegistryReleasePublishResponse>;
+  subscribe?: (listener: (hubId: string, job: NonNullable<RegistryReleasePublishResponse['job']>) => void) => () => void;
 }) {
   const [settings, setSettings] = React.useState<Settings>(load);
   const [job, setJob] = React.useState<RegistryReleasePublishResponse['job']>();
@@ -23,8 +24,15 @@ export function ReleasePublishSettings({hubIds, start, query}: {
     if (!settings.jobId || !settings.jobHubId) return;
     let stopped = false;
     const refresh = async () => { try { const result = await query(settings.jobHubId, settings.jobId); if (!stopped) { setJob(result.job); setError(result.ok ? '' : result.error || result.status); } } catch (value) { if (!stopped) setError(value instanceof Error ? value.message : String(value)); } };
-    void refresh(); const timer = window.setInterval(() => void refresh(), 2_000); return () => { stopped = true; window.clearInterval(timer); };
+    void refresh();
+    return () => { stopped = true; };
   }, [query, settings.jobHubId, settings.jobId]);
+  React.useEffect(() => subscribe?.((hubId, nextJob) => {
+    if (hubId === settings.jobHubId && nextJob.id === settings.jobId) {
+      setJob(nextJob);
+      setError('');
+    }
+  }), [settings.jobHubId, settings.jobId, subscribe]);
   const update = (patch: Partial<Settings>) => setSettings(current => ({...current, ...patch}));
   const submit = async (kind: 'version' | 'debugWeb') => {
     if (!settings.publisherHubId || !settings.sourcePath || pending) return;

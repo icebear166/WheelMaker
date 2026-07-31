@@ -8,6 +8,7 @@ import type {RegistryDebugSink} from './RegistryClient';
 import {RegistryMethods} from './registryMethods';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
 import {HubStore} from '../hubState/hubStore';
+import {ReleasePublishStore} from './releasePublishStore';
 import type {ServerSettings, ServerSettingsUpdate, SpeechModelId} from '../settings/serverSettings';
 import type {
   RegistryEnvelope,
@@ -126,6 +127,7 @@ export function translateExternalFileError(error: unknown): never {
 
 export class RegistryWorkspaceService {
   readonly hubStore: HubStore;
+  readonly releasePublishStore = new ReleasePublishStore();
   private repository: RegistryRepository | null = null;
   private session: WorkspaceSession | null = null;
   private eventListeners = new Set<(event: RegistryEnvelope) => void>();
@@ -172,6 +174,7 @@ export class RegistryWorkspaceService {
   private bindRepository(repository: RegistryRepository): void {
     this.unbindRepository();
     this.unsubscribeRepositoryEvent = repository.onEvent(event => {
+      this.releasePublishStore.ingest(event);
       if (event.method === RegistryMethods.HubStateUpdated && event.hubId) {
         const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
           ? event.payload as {instanceId?: unknown; sections?: unknown; reason?: unknown}
