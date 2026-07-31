@@ -59,25 +59,81 @@ describe('web session action protocol', () => {
     });
   });
 
-  test('requests compact and preserves the requested stable session ID', async () => {
+  test('uses one session.queue method for every queue action', async () => {
     const request = jest.fn().mockResolvedValue({
-      payload: {ok: true, accepted: true, sessionId: 'runtime-thread', operationId: 'op-1'},
+      payload: {
+        ok: true,
+        sessionId: 'runtime-thread',
+        session: {
+          sessionId: 'stable-session',
+          title: 'Queue',
+          updatedAt: '2026-07-31T10:00:00Z',
+          queue: {
+            generation: 'generation-1',
+            revision: 3.9,
+            paused: false,
+            activeKind: 'prompt',
+            waitingCount: 1.8,
+            waitingItems: [{
+              itemId: 'item-1',
+              kind: 'prompt',
+              status: 'queued',
+              createdAt: '2026-07-31T10:00:00Z',
+              blocks: [{type: 'text', text: 'hello'}],
+              cancelSupported: true,
+            }],
+          },
+        },
+      },
     });
     const repository = new RegistryRepository({request} as never);
 
-    await expect(repository.compactSession('project-a', 'stable-session')).resolves.toEqual({
-      ok: true,
-      accepted: true,
+    await repository.mutateSessionQueue('project-a', {
       sessionId: 'stable-session',
-      operationId: 'op-1',
+      action: 'enqueue',
+      item: {
+        itemId: 'item-1',
+        kind: 'prompt',
+        createdAt: '2026-07-31T10:00:00Z',
+        blocks: [{type: 'text', text: 'hello'}],
+      },
     });
-    expect(request).toHaveBeenCalledWith({
-      method: RegistryMethods.SessionCompact,
-      projectId: 'project-a',
-      payload: {sessionId: 'stable-session'},
-      timeoutMs: 30000,
+    for (const action of ['cancel', 'prioritize', 'steer', 'retry'] as const) {
+      await repository.mutateSessionQueue('project-a', {
+        sessionId: 'stable-session',
+        action,
+        itemId: 'item-1',
+      });
+    }
+
+    expect(request.mock.calls.map(([input]) => [input.method, input.payload])).toEqual([
+      ['session.queue', expect.objectContaining({sessionId: 'stable-session', action: 'enqueue'})],
+      ['session.queue', {sessionId: 'stable-session', action: 'cancel', itemId: 'item-1'}],
+      ['session.queue', {sessionId: 'stable-session', action: 'prioritize', itemId: 'item-1'}],
+      ['session.queue', {sessionId: 'stable-session', action: 'steer', itemId: 'item-1'}],
+      ['session.queue', {sessionId: 'stable-session', action: 'retry', itemId: 'item-1'}],
+    ]);
+    await expect(repository.mutateSessionQueue('project-a', {
+      sessionId: 'stable-session',
+      action: 'cancel',
+      itemId: 'item-1',
+    })).resolves.toMatchObject({
+      ok: true,
+      sessionId: 'stable-session',
+      session: {
+        queue: {
+          generation: 'generation-1',
+          revision: 3,
+          waitingCount: 1,
+        },
+      },
     });
     expect(RegistryProtocolVersion).toBe('2.6');
+    expect(RegistryMethods.SessionQueue).toBe('session.queue');
+    expect(RegistryMethods).not.toHaveProperty('SessionSend');
+    expect(RegistryMethods).not.toHaveProperty('SessionCompact');
+    expect(RegistryMethods).not.toHaveProperty('SessionCancel');
+    expect(RegistryMethods).not.toHaveProperty('SessionSteer');
     expect(RegistryMethods.SessionPin).toBe('session.pin');
     expect(RegistryMethods.SessionMark).toBe('session.mark');
   });
@@ -117,41 +173,6 @@ describe('web session action protocol', () => {
     expect(workspaceSource).toContain(
       'Session branch request timed out; creation may still complete in the background. Check the session list before retrying.',
     );
-  });
-
-  test('sends session.steer and normalizes the accepted outcome', async () => {
-    const request = jest.fn().mockResolvedValue({
-      payload: {
-        ok: true,
-        accepted: true,
-        sessionId: 's1',
-        clientMessageId: 'queued-1',
-        outcome: 'steered',
-      },
-    });
-    const repository = new RegistryRepository({request} as never);
-
-    await expect(repository.steerSession('project-a', {
-      sessionId: 's1',
-      clientMessageId: 'queued-1',
-      blocks: [{type: 'text', text: 'change direction'}],
-    })).resolves.toEqual({
-      ok: true,
-      accepted: true,
-      sessionId: 's1',
-      clientMessageId: 'queued-1',
-      outcome: 'steered',
-    });
-    expect(request).toHaveBeenCalledWith({
-      method: RegistryMethods.SessionSteer,
-      projectId: 'project-a',
-      payload: {
-        sessionId: 's1',
-        clientMessageId: 'queued-1',
-        blocks: [{type: 'text', text: 'change direction'}],
-      },
-      timeoutMs: 30000,
-    });
   });
 
   test('requests session pin and normalizes shared pin state', async () => {
@@ -257,17 +278,10 @@ describe('web session action protocol', () => {
     });
   });
 
-  test('workspace delegates project-scoped status and compact actions', async () => {
+  test('workspace delegates named queue actions to one repository mutation', async () => {
     const repository = {
       statusSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', limits: [], updatedAt: ''}),
-      compactSession: jest.fn().mockResolvedValue({ok: true, accepted: true, sessionId: 's1', operationId: 'op-1'}),
-      steerSession: jest.fn().mockResolvedValue({
-        ok: true,
-        accepted: true,
-        sessionId: 's1',
-        clientMessageId: 'queued-1',
-        outcome: 'steered',
-      }),
+      mutateSessionQueue: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1'}}),
       pinSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', pinned: true}}),
       markSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', markColor: 'green'}}),
     };
@@ -275,22 +289,26 @@ describe('web session action protocol', () => {
     Object.assign(service as unknown as {repository: unknown}, {repository});
 
     await service.statusProjectSession('project-a', 's1');
-    await service.compactProjectSession('project-a', 's1');
-    await service.steerProjectSession('project-a', {
-      sessionId: 's1',
-      clientMessageId: 'queued-1',
-      blocks: [{type: 'text', text: 'change direction'}],
+    await service.enqueueProjectSessionItem('project-a', 's1', {
+      itemId: 'item-1',
+      kind: 'compact',
+      createdAt: '2026-07-31T10:00:00Z',
     });
+    await service.cancelProjectSessionQueueItem('project-a', 's1', 'item-1');
+    await service.prioritizeProjectSessionQueueItem('project-a', 's1', 'item-1');
+    await service.steerProjectSessionQueueItem('project-a', 's1', 'item-1');
+    await service.retryProjectSessionQueueItem('project-a', 's1', 'item-1');
     await service.pinProjectSession('project-a', 's1', true);
     await service.markProjectSession('project-a', 's1', 'green');
 
     expect(repository.statusSession).toHaveBeenCalledWith('project-a', 's1');
-    expect(repository.compactSession).toHaveBeenCalledWith('project-a', 's1');
-    expect(repository.steerSession).toHaveBeenCalledWith('project-a', {
-      sessionId: 's1',
-      clientMessageId: 'queued-1',
-      blocks: [{type: 'text', text: 'change direction'}],
-    });
+    expect(repository.mutateSessionQueue.mock.calls).toEqual([
+      ['project-a', {sessionId: 's1', action: 'enqueue', item: expect.objectContaining({itemId: 'item-1'})}],
+      ['project-a', {sessionId: 's1', action: 'cancel', itemId: 'item-1'}],
+      ['project-a', {sessionId: 's1', action: 'prioritize', itemId: 'item-1'}],
+      ['project-a', {sessionId: 's1', action: 'steer', itemId: 'item-1'}],
+      ['project-a', {sessionId: 's1', action: 'retry', itemId: 'item-1'}],
+    ]);
     expect(repository.pinSession).toHaveBeenCalledWith('project-a', 's1', true);
     expect(repository.markSession).toHaveBeenCalledWith('project-a', 's1', 'green');
   });

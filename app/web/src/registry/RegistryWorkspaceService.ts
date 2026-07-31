@@ -50,7 +50,6 @@ import type {
   RegistrySessionAttachmentStartPayload,
   RegistrySessionAttachmentStartResponse,
   RegistrySessionArtifactReadResponse,
-  RegistrySessionContentBlock,
   RegistrySessionConfigOption,
   RegistrySessionMessage,
   RegistrySessionMarkColor,
@@ -62,8 +61,8 @@ import type {
   RegistrySessionSearchStatusResponse,
   RegistryResumableSession,
   RegistrySessionSummary,
-  RegistrySessionCompactAccepted,
-  RegistrySessionSteerAccepted,
+  RegistrySessionQueueEnqueueItem,
+  RegistrySessionQueueResponse,
   RegistrySessionForkResponse,
   RegistrySessionGoalClearResponse,
   RegistrySessionGoalPatch,
@@ -570,32 +569,43 @@ export class RegistryWorkspaceService {
     return this.repository.createSession(projectId, agentType, title, createRequestId);
   }
 
-  async sendSessionMessage(payload: {sessionId: string; text?: string; blocks?: RegistrySessionContentBlock[]}): Promise<{ok: boolean; sessionId: string}> {
-    if (!this.session || !this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.sendSessionMessage(this.session.selectedProjectId, payload);
-  }
-
-  async sendProjectSessionMessage(projectId: string, payload: {sessionId: string; text?: string; blocks?: RegistrySessionContentBlock[]}): Promise<{ok: boolean; sessionId: string}> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.sendSessionMessage(projectId, payload);
-  }
-
-  async steerProjectSession(
+  async enqueueProjectSessionItem(
     projectId: string,
-    payload: {
-      sessionId: string;
-      clientMessageId: string;
-      blocks: RegistrySessionContentBlock[];
-    },
-  ): Promise<RegistrySessionSteerAccepted> {
+    sessionId: string,
+    item: RegistrySessionQueueEnqueueItem,
+  ): Promise<RegistrySessionQueueResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.steerSession(projectId, payload);
+    return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'enqueue', item});
+  }
+
+  async cancelProjectSessionQueueItem(projectId: string, sessionId: string, itemId: string): Promise<RegistrySessionQueueResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'cancel', itemId});
+  }
+
+  async prioritizeProjectSessionQueueItem(projectId: string, sessionId: string, itemId: string): Promise<RegistrySessionQueueResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'prioritize', itemId});
+  }
+
+  async steerProjectSessionQueueItem(projectId: string, sessionId: string, itemId: string): Promise<RegistrySessionQueueResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'steer', itemId});
+  }
+
+  async retryProjectSessionQueueItem(projectId: string, sessionId: string, itemId: string): Promise<RegistrySessionQueueResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.mutateSessionQueue(projectId, {sessionId, action: 'retry', itemId});
   }
 
   async statusProjectSession(projectId: string, sessionId: string): Promise<RegistrySessionStatusResult> {
@@ -603,13 +613,6 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.statusSession(projectId, sessionId);
-  }
-
-  async compactProjectSession(projectId: string, sessionId: string): Promise<RegistrySessionCompactAccepted> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.compactSession(projectId, sessionId);
   }
 
   async createProjectSessionGoal(
@@ -731,13 +734,6 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.readSessionAttachment(projectId, payload);
-  }
-
-  async cancelProjectSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.cancelSession(projectId, sessionId);
   }
 
   async respondProjectSessionPermission(

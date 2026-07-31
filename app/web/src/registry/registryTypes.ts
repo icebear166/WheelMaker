@@ -475,14 +475,43 @@ export interface RegistrySessionGoalClearResponse {
   cleared: boolean;
 }
 
-export type RegistrySessionSteerOutcome = 'steered' | 'sent';
+export type RegistrySessionQueueAction = 'enqueue' | 'cancel' | 'prioritize' | 'steer' | 'retry';
+export type RegistrySessionQueueItemKind = 'prompt' | 'compact';
+export type RegistrySessionQueueItemStatus = 'queued' | 'running' | 'cancelling' | 'steering' | 'failed';
 
-export interface RegistrySessionSteerAccepted {
+export type RegistrySessionQueueEnqueueItem =
+  | {
+      itemId: string;
+      kind: 'prompt';
+      createdAt: string;
+      blocks: RegistrySessionContentBlock[];
+    }
+  | {
+      itemId: string;
+      kind: 'compact';
+      createdAt: string;
+    };
+
+export type RegistrySessionQueueItem = RegistrySessionQueueEnqueueItem & {
+  status: RegistrySessionQueueItemStatus;
+  cancelSupported: boolean;
+  error?: string;
+};
+
+export interface RegistrySessionQueueSnapshot {
+  generation: string;
+  revision: number;
+  paused: boolean;
+  activeKind?: RegistrySessionQueueItemKind;
+  waitingCount: number;
+  activeItem?: RegistrySessionQueueItem;
+  waitingItems?: RegistrySessionQueueItem[];
+}
+
+export interface RegistrySessionQueueResponse {
   ok: boolean;
-  accepted: boolean;
   sessionId: string;
-  clientMessageId: string;
-  outcome: RegistrySessionSteerOutcome;
+  session: RegistrySessionSummary;
 }
 
 export interface RegistrySessionStatusContext {
@@ -532,13 +561,6 @@ export interface RegistrySessionStatusResult {
   limits: RegistrySessionRateLimit[];
   account?: RegistrySessionStatusAccount;
   updatedAt: string;
-}
-
-export interface RegistrySessionCompactAccepted {
-  ok: boolean;
-  accepted: boolean;
-  sessionId: string;
-  operationId: string;
 }
 
 export interface RegistrySessionForkPoint {
@@ -594,6 +616,7 @@ export interface RegistrySessionSummary {
   sessionActions?: RegistrySessionActionCapabilities;
   goal?: RegistrySessionGoal;
   forkedFrom?: RegistrySessionForkOrigin;
+  queue?: RegistrySessionQueueSnapshot;
 }
 
 export interface RegistryPermissionRespondResponse {
