@@ -1,4 +1,4 @@
-> 摘要：本页维护 Codex App Server 在 WheelMaker 中的连接、Turn 跟踪和可选 Session 能力映射。
+> 摘要：本页维护 Codex App Server 在 WheelMaker 中的连接、provider 隔离、Turn 跟踪和可选 Session 能力映射。
 
 # Codex
 
@@ -31,3 +31,13 @@ Codex 原生 Goal status 直接映射为 WheelMaker 通用 status。`thread/goal
 `thread/resume` 可能立即继续 active Goal 并发出 Turn 通知，因此 load/reconnect 路径必须先建立 stable Session、runtime thread 和 event sink 的绑定，再调用 resume。App Server 失活时，Hub 先清除旧 runtime 的物理 Turn 状态，再建立新连接；恢复后用 `thread/goal/get` 校准 snapshot。
 
 产品语义与验收见 [`../../scope/2026-07-26-session-goal/spec-session-goal.md`](../../scope/2026-07-26-session-goal/spec-session-goal.md)；通用能力边界见 [`session-capabilities.md`](session-capabilities.md)。
+
+## DeepSeek Responses provider
+
+`cx-deepseek` 是复用原生 Codex App Server bridge 的独立 provider，稳定 agent ID 为 `cx-deepseek`，App 展示名为 `cx.deepseek`。它使用 `codex app-server --listen stdio://` 与 DeepSeek Responses API 通信，继续复用现有 thread、turn、item、Steer、Goal、工具调用和 `model/list` 转换，不在 WheelMaker 内另建 Responses SSE 客户端。
+
+该 provider 的 `CODEX_HOME` 固定为 `<stateDir>/.data/cx-deepseek`，并拥有独立 instance creator、runtime pool、catalog 和恢复源；原生 `codex` 仍使用用户自己的 Codex home。DeepSeek Key 复用 Hub `apiKeys.deepSeek`，仅作为子进程环境变量 `DEEPSEEK_API_KEY` 注入。provider 设置通过 `codex app-server -c key=value` 覆盖，不覆盖 App Server 自有的 `config.toml`。
+
+模型元数据来自随 WheelMaker 版本发布、经过校验的 DeepSeek 官方 Codex catalog 资产。首版只暴露官方确认支持 Responses/Codex 的 `deepseek-v4-flash`，不根据通用 `/models` 推导 Codex catalog，也不运行远程安装脚本。catalog 保留官方文本输入、function tools、freeform `apply_patch`、text `web_search`、推理档位、上下文窗口和模型指令；图片与文件输入不在能力声明内。Codex CLI 最低版本为 `0.144.0`。
+
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)。

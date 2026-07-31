@@ -74,6 +74,14 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
 
+### Codex Responses provider 约定
+
+`cx-deepseek` 是独立 ACP provider，复用原生 Codex App Server bridge，但使用 DeepSeek Responses 上游和独立 Codex home。协议、Session 与 Registry payload 始终保留稳定 agent ID `cx-deepseek`；`cx.deepseek` 仅是 App 展示名。新增该 provider 不改变 ACP 或 Registry protocol version，也不引入 provider 私有模型协议；现有 `model/list` 与通用 `configOptions` 链路继续作为模型和推理档位来源。
+
+provider 只在 Hub 配置 DeepSeek Key 且本机 Codex CLI 满足最低版本时注册。Key、上游地址和模型 provider 设置属于 Hub 本地启动配置，不进入 ACP wire payload 或 Registry metadata。Session 恢复以 agent ID 和 `<stateDir>/.data/cx-deepseek` 为边界，禁止从原生 `codex` 或任意 `cc-*` provider 导入历史。
+
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)。
+
 ## 完整参考的使用方式
 
 完整中文参考适合查阅字段示例、废弃 API 和来源链接，但其中的 unstable 草案、codex-acp 使用摘要、旧飞书阶段说明以及过期内部文件路径不能直接视为当前实现事实。需要更新本页时，应同时核对当前代码和上游稳定 schema。
@@ -85,3 +93,4 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 - [`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)
 - [`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)
 - [`../../scope/2026-07-28-flicker-v2-request-parity/spec-flicker-v2-request-parity.md`](../../scope/2026-07-28-flicker-v2-request-parity/spec-flicker-v2-request-parity.md)
+- [`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)

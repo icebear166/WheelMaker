@@ -230,7 +230,24 @@ Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID
 
 来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
 
-## 9. Hub-owned Runtime Configuration
+## 9. Codex Responses Provider Isolation
+
+`cx-deepseek` 通过 Hub-scoped AgentFactory 注册为独立 provider，复用 Codex App Server bridge，但不与原生 `codex` 共享 home、instance creator 或 runtime pool。它的全部 Codex 状态和恢复索引位于 `<stateDir>/.data/cx-deepseek`；恢复扫描器按 agent ID 选择该目录，不扫描用户 `~/.codex` 或任何 `cc-*` 目录。
+
+Hub 继续以 `hub-config.json` 的 `apiKeys.deepSeek` 作为 Key 唯一来源。创建子进程时，Factory 把 Key 放入进程环境 `DEEPSEEK_API_KEY`，把 DeepSeek Responses provider 和 catalog 路径作为 `codex app-server -c` 覆盖项传递；Key 不进入生成文件、Session、Registry 或日志。WheelMaker 只在 provider 级锁内校验并原子物化版本化 `models.json` 资产，不创建或整体覆盖 App Server 自有的 `config.toml`。
+
+原生 `codex`、`cc-deepseek` 和 `cx-deepseek` 是三个相互隔离的 runtime：
+
+```text
+Hub-scoped AgentFactory
+  ├─ codex        ──► user CODEX_HOME / native runtime pool
+  ├─ cc-deepseek  ──► <stateDir>/.data/cc-deepseek
+  └─ cx-deepseek  ──► <stateDir>/.data/cx-deepseek / dedicated runtime pool
+```
+
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)。
+
+## 10. Hub-owned Runtime Configuration
 
 每台 Hub 的前端可写、Hub 本地生效的持久化配置统一由 Hub 自己保存到 `<stateDir>/db/hub-config.json`。该文件与 Registry 入口机拥有的 `db/server-data.json`、人工维护的 `config.json` 以及浏览器 LocalStorage 分离：Registry 不拥有远程 Hub 的配置，浏览器也不是实际运行状态的事实来源。
 
@@ -253,6 +270,6 @@ Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前�
 
 来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)。
 
-## 10. Historical Context
+## 11. Historical Context
 
 The original Architecture 3.0 rollout used chat route keys and command routing while multi-session support was being introduced. That design has been retired. Current code should be read through the App-only Registry/session model above.
