@@ -3021,7 +3021,7 @@ describe('provider-aware session labels', () => {
 });
 
 describe('Agent choice menu', () => {
-  test('shares one flat pill menu across mobile and wide new/resume entry points', () => {
+  test('shares one grouped pill menu across mobile and wide new/resume entry points', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
@@ -3042,7 +3042,9 @@ describe('Agent choice menu', () => {
     expect(stylesCss).toContain('border-radius: 999px;');
 
     const choiceMenuBlock = cssRuleBlock(stylesCss, '.agent-choice-menu');
-    expect(choiceMenuBlock).toContain('flex-wrap: wrap;');
+    expect(choiceMenuBlock).toContain('flex-direction: column;');
+    const groupPillsBlock = cssRuleBlock(stylesCss, '.agent-choice-group-pills');
+    expect(groupPillsBlock).toContain('display: grid;');
 
     // Mobile pills share the desktop specs (no separate mobile override).
     expect(stylesCss).not.toContain('.agent-choice-menu.mobile .agent-choice-pill');

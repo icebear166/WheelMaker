@@ -30,8 +30,8 @@ export function agentDisplayLabel(agentType?: string | null): string {
 
 /**
  * Build a flat, deduplicated list of agent choice nodes for the selection menu.
- * Every agent (claude default + cc-* variants + codex/copilot/...) is a sibling
- * — no grouping, so the UI renders them as uniform pills.
+ * Labels keep their full form here ("cc · deepseek"); grouping/shortening for
+ * display happens in buildAgentChoiceGroups.
  */
 export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
   const seen = new Set<string>();
@@ -46,6 +46,79 @@ export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
     nodes.push({agentType: normalized, label: agentDisplayLabel(normalized)});
   }
   return nodes;
+}
+
+export type AgentChoiceGroup = {key: string; label: string; nodes: AgentChoiceNode[]};
+
+const AGENT_FAMILY_LABEL: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  other: 'Other',
+};
+
+// cc-* profiles ride the claude CLI and cx-* profiles ride codex, so they group
+// under their engine; every other agent is standalone under "Other".
+function agentFamilyKey(agentType: string): string {
+  const key = agentType.toLowerCase();
+  if (key === 'claude' || key.startsWith('cc-')) {
+    return 'claude';
+  }
+  if (key === 'codex' || key.startsWith('cx-')) {
+    return 'codex';
+  }
+  return 'other';
+}
+
+// Inside a named family the group header already carries the engine context, so
+// profile pills drop the redundant prefix ("cc · deepseek" -> "deepseek").
+function familyShortLabel(familyKey: string, label: string): string {
+  if (familyKey === 'claude') {
+    return label.replace(/^cc · /, '');
+  }
+  if (familyKey === 'codex') {
+    return label.replace(/^cx\./, '');
+  }
+  return label;
+}
+
+/**
+ * Group agent choice nodes by engine family for the selection menu. The default
+ * agent's family sorts first (and the default pill first within it), the base
+ * engine pill (claude/codex) leads its family, and "Other" always trails.
+ */
+export function buildAgentChoiceGroups(agentTypes: string[], defaultAgent?: string): AgentChoiceGroup[] {
+  const groups = new Map<string, AgentChoiceGroup>();
+  for (const node of buildAgentChoiceNodes(agentTypes)) {
+    const familyKey = agentFamilyKey(node.agentType);
+    let group = groups.get(familyKey);
+    if (!group) {
+      group = {key: familyKey, label: AGENT_FAMILY_LABEL[familyKey], nodes: []};
+      groups.set(familyKey, group);
+    }
+    group.nodes.push(node);
+  }
+
+  const defaultKey = (defaultAgent || '').toLowerCase();
+  const defaultFamily = defaultKey ? agentFamilyKey(defaultKey) : '';
+  const ordered = [...groups.values()];
+  ordered.sort((a, b) => {
+    const aScore = (a.key === defaultFamily ? 0 : 1) * 2 + (a.key === 'other' ? 1 : 0);
+    const bScore = (b.key === defaultFamily ? 0 : 1) * 2 + (b.key === 'other' ? 1 : 0);
+    return aScore - bScore;
+  });
+
+  for (const group of ordered) {
+    group.nodes = group.nodes.map(node => ({...node, label: familyShortLabel(group.key, node.label)}));
+    group.nodes.sort((a, b) => {
+      const aFirst = a.agentType.toLowerCase() === group.key || a.agentType.toLowerCase() === defaultKey;
+      const bFirst = b.agentType.toLowerCase() === group.key || b.agentType.toLowerCase() === defaultKey;
+      if (aFirst === bFirst) {
+        return 0;
+      }
+      return aFirst ? -1 : 1;
+    });
+  }
+  return ordered;
 }
 
 /**

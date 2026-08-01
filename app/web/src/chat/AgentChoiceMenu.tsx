@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 
 import {agentTagVariantClass} from './agentTagVariant';
-import {buildAgentChoiceNodes} from './projectAgents';
+import {buildAgentChoiceGroups} from './projectAgents';
 
 export type AgentChoiceMenuProps = {
   agents: string[];
@@ -16,19 +16,9 @@ export function AgentChoiceMenu({agents, defaultAgent, variant, onSelect, onClos
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const pills = buildAgentChoiceNodes(agents);
-  // Default agent sorts first; everything else keeps its reported order.
-  const sortedPills = defaultAgent
-    ? [...pills].sort((a, b) => {
-        const key = defaultAgent.toLowerCase();
-        const aDefault = a.agentType.toLowerCase() === key;
-        const bDefault = b.agentType.toLowerCase() === key;
-        if (aDefault === bDefault) {
-          return 0;
-        }
-        return aDefault ? -1 : 1;
-      })
-    : pills;
+  const groups = buildAgentChoiceGroups(agents, defaultAgent);
+  // Keyboard navigation walks the flattened pill order across groups.
+  const sortedPills = groups.flatMap(group => group.nodes);
 
   const safeActiveIndex = sortedPills.length === 0 ? 0 : Math.min(activeIndex, sortedPills.length - 1);
 
@@ -46,7 +36,7 @@ export function AgentChoiceMenu({agents, defaultAgent, variant, onSelect, onClos
     if (!container) {
       return;
     }
-    const activePill = container.children[safeActiveIndex] as HTMLElement | undefined;
+    const activePill = container.querySelectorAll('.agent-choice-pill')[safeActiveIndex] as HTMLElement | undefined;
     activePill?.scrollIntoView({block: 'nearest'});
   }, [safeActiveIndex]);
 
@@ -87,6 +77,8 @@ export function AgentChoiceMenu({agents, defaultAgent, variant, onSelect, onClos
     }
   };
 
+  // Running pill index across groups, for keyboard-active state.
+  let flatIndex = 0;
   return (
     <div
       ref={containerRef}
@@ -96,26 +88,37 @@ export function AgentChoiceMenu({agents, defaultAgent, variant, onSelect, onClos
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
-      {sortedPills.map((pill, index) => {
-        const isActive = index === safeActiveIndex;
-        return (
-          <button
-            key={pill.agentType}
-            type="button"
-            className={`agent-choice-pill ${agentTagVariantClass(pill.agentType)}${isActive ? ' active' : ''}`}
-            role="option"
-            aria-selected={isActive}
-            onClick={() => onSelect(pill.agentType)}
-            onMouseEnter={() => setActiveIndex(index)}
-          >
-            <span
-              className={`agent-choice-pill-dot ${agentTagVariantClass(pill.agentType)}`}
-              aria-hidden="true"
-            />
-            <span>{pill.label}</span>
-          </button>
-        );
-      })}
+      {groups.map(group => (
+        <div className="agent-choice-group" key={group.key}>
+          {groups.length > 1 ? (
+            <div className="agent-choice-group-label" aria-hidden="true">{group.label}</div>
+          ) : null}
+          <div className="agent-choice-group-pills">
+            {group.nodes.map(pill => {
+              const index = flatIndex;
+              flatIndex += 1;
+              const isActive = index === safeActiveIndex;
+              return (
+                <button
+                  key={pill.agentType}
+                  type="button"
+                  className={`agent-choice-pill ${agentTagVariantClass(pill.agentType)}${isActive ? ' active' : ''}`}
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={() => onSelect(pill.agentType)}
+                  onMouseEnter={() => setActiveIndex(index)}
+                >
+                  <span
+                    className={`agent-choice-pill-dot ${agentTagVariantClass(pill.agentType)}`}
+                    aria-hidden="true"
+                  />
+                  <span>{pill.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -9,7 +9,7 @@ describe('AgentChoiceMenu', () => {
     return pills.map(pill => pill.findAllByType('span')[1].children[0] as string);
   }
 
-  test('renders flat pills with no grouping or expand control', async () => {
+  test('groups pills by engine family with short profile labels', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
@@ -23,20 +23,61 @@ describe('AgentChoiceMenu', () => {
       );
     });
 
+    const groupLabels = renderer!.root
+      .findAllByProps({className: 'agent-choice-group-label'})
+      .map(label => label.children[0]);
+    expect(groupLabels).toEqual(['Claude', 'Codex']);
+
     const pills = renderer!.root.findAllByProps({role: 'option'});
     expect(pills).toHaveLength(7);
     expect(pillLabels(renderer!.root)).toEqual([
       'claude',
-      'cc · deepseek',
-      'cc · glm',
-      'cc · kimi',
-      'cc · qwen',
-      'cc · flicker',
+      'deepseek',
+      'glm',
+      'kimi',
+      'qwen',
+      'flicker',
       'codex',
     ]);
     // No legacy expand control / child structure remains.
     expect(renderer!.root.findAllByProps({'aria-label': 'Expand Claude agents'})).toHaveLength(0);
     expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(0);
+  });
+
+  test('sorts the default agent family first and keeps Other last', async () => {
+    const onSelect = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <AgentChoiceMenu
+          agents={['kimi', 'claude', 'cc-glm', 'codex', 'cx-deepseek']}
+          defaultAgent="codex"
+          variant="wide"
+          onSelect={onSelect}
+        />,
+      );
+    });
+
+    const groupLabels = renderer!.root
+      .findAllByProps({className: 'agent-choice-group-label'})
+      .map(label => label.children[0]);
+    expect(groupLabels).toEqual(['Codex', 'Claude', 'Other']);
+    expect(pillLabels(renderer!.root)).toEqual(['codex', 'deepseek', 'claude', 'glm', 'kimi']);
+  });
+
+  test('hides the group label when only one family is present', async () => {
+    const onSelect = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <AgentChoiceMenu agents={['claude', 'cc-glm']} variant="wide" onSelect={onSelect} />,
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({className: 'agent-choice-group-label'})).toHaveLength(0);
+    expect(pillLabels(renderer!.root)).toEqual(['claude', 'glm']);
   });
 
   test('sorts the default agent to the first pill', async () => {
