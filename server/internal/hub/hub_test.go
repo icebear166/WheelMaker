@@ -757,6 +757,150 @@ func TestReporterRejectsInvalidUsageHistoryGet(t *testing.T) {
 	}
 }
 
+type deepSeekUsageStub struct {
+	result usage.DeepSeekPlatformUsage
+	err    error
+}
+
+func (s *deepSeekUsageStub) Get(ctx context.Context, year, month int, force bool) (usage.DeepSeekPlatformUsage, error) {
+	return s.result, s.err
+}
+
+func (s *deepSeekUsageStub) SetToken(token string) {}
+
+func TestReporterRespondsToDeepSeekUsageGet(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := newFakeReporterRegistry(t, "hub-deepseek-usage", testEnvelope{
+		RequestID: 201,
+		Type:      "request",
+		Method:    rp.RegistryMethodDeepSeekUsageGet,
+		HubID:     "hub-deepseek-usage",
+		Payload:   map[string]any{"year": 2026, "month": 8},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-deepseek-usage",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          t.TempDir(),
+	}, nil)
+	reporter.deepSeekUsage = &deepSeekUsageStub{result: usage.DeepSeekPlatformUsage{
+		Status:  usage.DeepSeekPlatformOK,
+		Month:   usage.DeepSeekPlatformMonth{Year: 2026, Month: 8},
+		Balance: []usage.BalanceItem{{Currency: "CNY", Total: "3.24"}},
+		Days: []usage.DeepSeekPlatformDay{{
+			Date: "2026-08-01", Request: 3, OutputTokens: 120, HitTokens: 300, MissTokens: 100, TotalTokens: 520,
+		}},
+		Costs: []usage.DeepSeekPlatformCost{{
+			Currency: "CNY", MonthlyCost: 8.8, TodayCost: 0.02,
+			Daily: []usage.DeepSeekPlatformCostDay{{Date: "2026-08-01", Amount: 0.02}},
+		}},
+	}}
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodDeepSeekUsageGet {
+			t.Fatalf("unexpected response: %#v", resp)
+		}
+		if resp.Payload["status"] != "ok" || resp.Payload["hubId"] != "hub-deepseek-usage" {
+			t.Fatalf("response payload=%#v", resp.Payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive deepseek.usage.get response")
+	}
+}
+
+func TestReporterRespondsToDeepSeekUsageGetErrorWithMessage(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := newFakeReporterRegistry(t, "hub-deepseek-usage-error", testEnvelope{
+		RequestID: 203,
+		Type:      "request",
+		Method:    rp.RegistryMethodDeepSeekUsageGet,
+		HubID:     "hub-deepseek-usage-error",
+		Payload:   map[string]any{"year": 2026, "month": 8},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-deepseek-usage-error",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          t.TempDir(),
+	}, nil)
+	reporter.deepSeekUsage = &deepSeekUsageStub{result: usage.DeepSeekPlatformUsage{
+		Status:  usage.DeepSeekPlatformError,
+		Message: "platform request failed",
+		Month:   usage.DeepSeekPlatformMonth{Year: 2026, Month: 8},
+		Days: []usage.DeepSeekPlatformDay{{
+			Date: "2026-07-31", Request: 267, OutputTokens: 213950, HitTokens: 84587904, MissTokens: 546731, TotalTokens: 85348585,
+		}},
+	}}
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Payload["status"] != "error" || resp.Payload["message"] != "platform request failed" {
+			t.Fatalf("response payload=%#v", resp.Payload)
+		}
+		if days, ok := resp.Payload["days"].([]any); !ok || len(days) != 1 {
+			t.Fatalf("stale days missing: %#v", resp.Payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive deepseek.usage.get response")
+	}
+}
+
+func TestReporterRejectsInvalidDeepSeekUsageGet(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := newFakeReporterRegistry(t, "hub-deepseek-usage-invalid", testEnvelope{
+		RequestID: 202,
+		Type:      "request",
+		Method:    rp.RegistryMethodDeepSeekUsageGet,
+		HubID:     "hub-deepseek-usage-invalid",
+		Payload:   map[string]any{"year": 1999, "month": 13},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-deepseek-usage-invalid",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          t.TempDir(),
+	}, nil)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "error" || resp.Payload["code"] != rp.CodeInvalidArgument {
+			t.Fatalf("invalid request response=%#v", resp)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive invalid deepseek.usage.get response")
+	}
+}
+
 func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
 	cases := []struct {
 		name    string
