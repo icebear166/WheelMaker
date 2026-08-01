@@ -127,6 +127,16 @@ func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action st
 			r.refreshHubStateSectionAfterAction(hubStateSectionWheelmakerUpdate)
 		}
 		return result, err
+	case "restart":
+		if r.restartRuntime == nil {
+			return nil, fmt.Errorf("managed runtime restart is unavailable")
+		}
+		return map[string]any{
+			"ok":       true,
+			"accepted": true,
+			"status":   "restart_pending",
+			"hubId":    r.cfg.HubID,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionWheelmakerUpdate, action)
 	}

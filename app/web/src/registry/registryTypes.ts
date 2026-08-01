@@ -797,6 +797,7 @@ export type RegistryWheelMakerUpdateStatus =
   | 'up_to_date'
   | 'update_available'
   | 'update_pending'
+  | 'restart_pending'
   | 'not_installed'
   | 'checking_failed'
   | 'local_newer';

@@ -33,11 +33,21 @@ type Hub struct {
 	agentReloadMu       sync.Mutex
 	clients             []*client.Client
 	regSync             *Reporter
+	restartRuntime      func() error
 	terminalManager     *terminalpkg.Manager
 	flickerBridge       *flickerBridgeManager
 	hubConfig           *hubconfig.Store
 	flickerModels       *agent.FlickerModelStore
 	clientsByName       map[string]*client.Client
+}
+
+// SetRestartRuntimeHandler configures the managed runtime restart callback.
+// It is installed before Hub.Start creates the Registry reporter.
+func (h *Hub) SetRestartRuntimeHandler(handler func() error) {
+	if h == nil {
+		return
+	}
+	h.restartRuntime = handler
 }
 
 // New creates a Hub from the given config and client DB path.
@@ -348,6 +358,7 @@ func (h *Hub) setupRegistrySync() {
 		HubConfig:          h.hubConfig,
 		FlickerBridge:      h.flickerBridge,
 		ReloadAgentRuntime: h.reloadAgentRuntime,
+		RestartRuntime:     h.restartRuntime,
 	}, projects)
 	projectsByID := make(map[string]terminalpkg.Project, len(projects))
 	for _, project := range projects {

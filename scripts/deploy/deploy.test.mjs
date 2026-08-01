@@ -129,11 +129,27 @@ test('pending launcher is promoted at the beginning of the next invocation', asy
   ]);
 });
 
+test('runtime restart skips release checks and deployment updates', async () => {
+  const deps = launcherFixture({pendingLauncher: Buffer.from('pending-launcher')});
+  deps.fetchBytes = async () => {
+    throw new Error('runtime restart must not fetch releases');
+  };
+
+  await runLauncher(['runtime', 'restart'], deps);
+
+  assert.deepEqual(deps.events, [
+    'promote-launcher',
+    'run-core:runtime,restart',
+  ]);
+  assert.deepEqual(deps.files.get('deploy.mjs'), Buffer.from('pending-launcher'));
+  assert.equal(deps.files.has('deploy.next.mjs'), false);
+});
+
 test('unknown commands fail before launcher files are mutated', async () => {
   const deps = launcherFixture({ pendingLauncher: Buffer.from('next') });
   assert.deepEqual(parseDeployArgs(['runtime', 'start']), ['runtime', 'start']);
   assert.deepEqual(parseDeployArgs(['runtime', 'stop']), ['runtime', 'stop']);
-  assert.throws(() => parseDeployArgs(['runtime', 'restart']), /unknown deploy command/);
+  assert.deepEqual(parseDeployArgs(['runtime', 'restart']), ['runtime', 'restart']);
   assert.throws(() => parseDeployArgs(['runtime', 'status']), /unknown deploy command/);
   assert.throws(() => parseDeployArgs(['schedule']), /unknown deploy command/);
   await assert.rejects(() => runLauncher(['schedule'], deps), /unknown deploy command/);

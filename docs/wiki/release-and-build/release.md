@@ -35,7 +35,7 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 
 ## 目标机部署代码
 
-目标机本地部署由两个 MJS 文件组成：
+目标机本地部署由两个 MJS 文件组成；运行时生命周期控制也由这套可信 MJS 入口提供：
 
 ```text
 ~/.wheelmaker/
@@ -83,11 +83,24 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 | `node deploy.mjs update` | 日常更新 Hub 和 Web | 否 |
 | `node deploy.mjs runtime start` | 启动 Hub | 否 |
 | `node deploy.mjs runtime stop` | 停止 Hub | 否 |
+| `node deploy.mjs runtime restart` | 重启托管 Hub runtime 并重新加载服务管理器环境 | 否 |
 | `node deploy.mjs desktop-update` | 按 `stable.json` 指针更新 Desktop | 否 |
 | `node deploy.mjs desktop-self-update --parent-pid <PID>` | 等待当前 Desktop 退出后按 stable 指针更新 | 否 |
 | `node deploy.mjs migrate-uninstall` | 一次性清理旧部署模式 | 只删除旧注册 |
 
-完整安装生成当前平台的 `deploy`、`start` 和 `stop` 包装脚本。Windows 额外生成带 self-update capability 标记的 `update_exe.bat`。该 BAT 有 PID 时进入 `desktop-self-update`，无参数时保留 `desktop-update` 手动恢复语义。`restart` 和 `status` 包装脚本已退役。
+完整安装生成当前平台的 `deploy`、`start` 和 `stop` 包装脚本。Windows 额外生成带 self-update capability 标记的 `update_exe.bat`。该 BAT 有 PID 时进入 `desktop-self-update`，无参数时保留 `desktop-update` 手动恢复语义。独立的 `restart` 和 `status` 包装脚本已退役；Hub 菜单的 Restart 通过已安装的 `deploy.mjs runtime restart` 入口执行。
+
+## 托管 runtime 重启
+
+`runtime restart` 只控制进程生命周期，不下载、校验、替换版本文件，也不执行 `deploy.mjs update`。Hub 通过响应后的独立 helper 调用它，避免当前 worker 在写回 `hub.state.action` 响应前终止自己。
+
+平台 adapter 使用服务管理器的单一 restart 动作：
+
+- Linux：`systemctl --user restart wheelmaker-hub.service`；systemd 重新读取 `EnvironmentFile` 后创建新的 guardian。
+- macOS：`launchctl kickstart -k gui/<uid>/com.wheelmaker.hub`；launchd 重新创建 `com.wheelmaker.hub` job。
+- Windows：停止 `WheelMaker` Scheduled Task 及其 worker，再重新启动该 task；重启脚本必须独立于将被停止的当前 worker。
+
+当前 guardian 同时管理 Hub 与配置启用的 Registry worker，因此完整 runtime restart 可能使两者短暂断线。新 Hub 连接会生成新的 `instanceId`。Restart 只重新读取服务管理器已经提供的环境来源，不把旧 worker 的环境快照同步成新的跨平台配置。
 
 ## 主协议不兼容时的受限更新
 

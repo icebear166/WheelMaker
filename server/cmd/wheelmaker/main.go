@@ -170,6 +170,9 @@ func runHubWorker(stateDir string, localDev bool) error {
 	defer stop()
 
 	h := hub.New(cfg, dbPath)
+	h.SetRestartRuntimeHandler(func() error {
+		return startManagedRuntimeRestart(baseDir)
+	})
 	if err := h.Start(ctx); err != nil {
 		hubScopedLogger.Error("start failed err=%v", err)
 		return err

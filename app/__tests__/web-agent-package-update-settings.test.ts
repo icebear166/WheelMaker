@@ -208,6 +208,7 @@ describe('agent package update settings UI source structure', () => {
 
     expect(mainTsx).toContain('opsByHubId={chatHubOpsByHubId}');
     expect(mainTsx).toContain('onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}');
+    expect(mainTsx).toContain('onRequestWheelMakerRestart={handleChatHubWheelMakerRestart}');
     expect(mainTsx).toContain('onRequestNpmUpdate={handleChatHubNpmUpdate}');
     expect(mainTsx).toContain('onPackageAction={handleChatHubPackageAction}');
     expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');

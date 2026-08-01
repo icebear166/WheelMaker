@@ -55,6 +55,31 @@ func TestBuildClient_DefaultConfigStartsSessionClient(t *testing.T) {
 	t.Cleanup(func() { _ = c.Close() })
 }
 
+func TestHubPassesRestartRuntimeHandlerToReporter(t *testing.T) {
+	h := newHubWithFactory(
+		&logger.AppConfig{Registry: logger.RegistryConfig{
+			Listen: true,
+			Server: "127.0.0.1",
+			Port:   9630,
+			HubID:  "hub-restart-handler",
+			Token:  "token",
+		}},
+		filepath.Join(t.TempDir(), "db", "client.sqlite3"),
+		agent.NewACPFactory(),
+	)
+	t.Cleanup(func() { _ = h.Close() })
+	handler := func() error { return nil }
+	h.SetRestartRuntimeHandler(handler)
+	h.setupRegistrySync()
+
+	if h.regSync == nil {
+		t.Fatal("registry reporter was not created")
+	}
+	if h.regSync.cfg.RestartRuntime == nil {
+		t.Fatal("reporter restart handler is nil")
+	}
+}
+
 func TestStartExpandsHomeProjectPath(t *testing.T) {
 	home := t.TempDir()
 	projectRoot := filepath.Join(home, "WheelMaker")
@@ -956,6 +981,71 @@ func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
 	}
 }
 
+func TestReporterAcceptsRestartAndRepliesBeforeSchedulingRuntime(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	callbackStarted := make(chan struct{})
+	responseReleased := make(chan struct{})
+	ts := newFakeReporterRegistry(t, "hub-restart", testEnvelope{
+		RequestID: 101,
+		Type:      "request",
+		Method:    rp.RegistryMethodHubStateAction,
+		HubID:     "hub-restart",
+		Payload: map[string]any{
+			"section": "wheelmakerUpdate",
+			"action":  "restart",
+			"params":  map[string]any{},
+		},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-restart",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          t.TempDir(),
+		RestartRuntime: func() error {
+			close(callbackStarted)
+			<-responseReleased
+			return errors.New("restart helper exited")
+		},
+	}, nil)
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodHubStateAction {
+			t.Fatalf("unexpected restart response: %#v", resp)
+		}
+		if resp.Payload["accepted"] != true {
+			t.Fatalf("accepted=%v, want true", resp.Payload["accepted"])
+		}
+		result, ok := resp.Payload["result"].(map[string]any)
+		if !ok {
+			t.Fatalf("restart result=%#v, want object", resp.Payload["result"])
+		}
+		if result["ok"] != true || result["accepted"] != true ||
+			result["status"] != "restart_pending" || result["hubId"] != "hub-restart" {
+			t.Fatalf("restart result=%#v", result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive restart response")
+	}
+
+	select {
+	case <-callbackStarted:
+		close(responseReleased)
+	case <-time.After(2 * time.Second):
+		t.Fatal("restart callback was not scheduled")
+	}
+}
+
 func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
 	toolHandler := &overlapDetectingToolCommandHandler{}
 	reporter := NewReporter(ReporterConfig{HubID: "hub-state-serialized", StateDir: t.TempDir()}, nil)
@@ -1059,7 +1149,13 @@ func TestHubStateToolHandlingParallelizesDistinctMethods(t *testing.T) {
 func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	root := t.TempDir()
 	reporter := NewReporter(
-		ReporterConfig{HubID: "hub-state-action-parity", StateDir: t.TempDir()},
+		ReporterConfig{
+			HubID:    "hub-state-action-parity",
+			StateDir: t.TempDir(),
+			RestartRuntime: func() error {
+				return nil
+			},
+		},
 		[]ProjectInfo{{Name: "proj1", Path: root, Online: true}},
 	)
 	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
@@ -1080,6 +1176,7 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 			params:  map[string]any{"packageName": "@openai/codex"},
 		},
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
+		{section: hubStateSectionWheelmakerUpdate, action: "restart"},
 		{section: hubStateSectionSkills, action: "listSource"},
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},

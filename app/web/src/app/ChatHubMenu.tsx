@@ -110,8 +110,8 @@ export interface ChatHubOpsView {
     loading: boolean;
     pending: boolean;
     currentVersion: string;
-    actionLabel: string;
-    actionVisible: boolean;
+    updateVisible: boolean;
+    restartVisible: boolean;
     updateAvailable: boolean;
   };
   npm: {
@@ -157,8 +157,8 @@ const EMPTY_OPS_VIEW: ChatHubOpsView = {
     loading: false,
     pending: false,
     currentVersion: '-',
-    actionLabel: 'Update Hub',
-    actionVisible: false,
+    updateVisible: false,
+    restartVisible: false,
     updateAvailable: false,
   },
   npm: {loading: false, pending: false, outdatedCount: 0, packages: []},
@@ -204,6 +204,7 @@ export interface ChatHubMenuProps {
   onUpdateHubConfig: (hubId: string, update: RegistryHubConfigUpdatePayload) => Promise<void>;
   opsByHubId: Record<string, ChatHubOpsView | undefined>;
   onRequestWheelMakerUpdate: (hubId: string) => void;
+  onRequestWheelMakerRestart: (hubId: string) => void;
   onRequestNpmUpdate: (hubId: string) => void;
   onPackageAction: (hubId: string, action: 'install' | 'update' | 'uninstall', pkg: ChatHubNpmPackageView) => void;
   onRequestSkillInstall: (target: SkillInstallTarget) => void;
@@ -983,6 +984,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onUpdateHubConfig,
     opsByHubId,
     onRequestWheelMakerUpdate,
+    onRequestWheelMakerRestart,
     onRequestNpmUpdate,
     onPackageAction,
     onRequestSkillInstall,
@@ -1052,20 +1054,40 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
           <span className="chat-hub-color-dot" aria-hidden="true" />
         </button>
         <span className="chat-hub-row-name">{hubId}</span>
-        <button
-          type="button"
-          className="chat-hub-action chat-hub-version-action"
-          aria-label={`${ops.wheelMaker.actionLabel} ${ops.wheelMaker.currentVersion}`}
-          disabled={!ops.wheelMaker.actionVisible || ops.wheelMaker.pending}
-          onClick={() => onRequestWheelMakerUpdate(hubId)}
-        >
+        <span className="chat-hub-version-readout">
           <span className="chat-hub-action-label">{ops.wheelMaker.currentVersion}</span>
-          <Icon
-            name={ops.wheelMaker.pending ? 'loader' : ops.wheelMaker.updateAvailable ? 'cloudDownload' : 'refreshCw'}
-            spin={ops.wheelMaker.pending}
-          />
-          {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
-        </button>
+        </span>
+        <span className="chat-hub-row-actions">
+          {ops.wheelMaker.updateVisible ? (
+            <button
+              type="button"
+              className="chat-hub-action chat-hub-version-action chat-hub-version-update-action"
+              aria-label={`Update WheelMaker ${ops.wheelMaker.currentVersion}`}
+              disabled={ops.wheelMaker.pending}
+              onClick={() => onRequestWheelMakerUpdate(hubId)}
+            >
+              <Icon
+                name={ops.wheelMaker.pending ? 'loader' : 'cloudDownload'}
+                spin={ops.wheelMaker.pending}
+              />
+              {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
+            </button>
+          ) : <span className="chat-hub-action-slot" aria-hidden="true" />}
+          {ops.wheelMaker.restartVisible ? (
+            <button
+              type="button"
+              className="chat-hub-action chat-hub-version-action chat-hub-version-restart-action"
+              aria-label={`Restart WheelMaker ${ops.wheelMaker.currentVersion}`}
+              disabled={ops.wheelMaker.pending}
+              onClick={() => onRequestWheelMakerRestart(hubId)}
+            >
+              <Icon
+                name={ops.wheelMaker.pending ? 'loader' : 'refreshCw'}
+                spin={ops.wheelMaker.pending}
+              />
+            </button>
+          ) : <span className="chat-hub-action-slot" aria-hidden="true" />}
+        </span>
         <Icon
           name="chevronRight"
           className="chat-hub-expand-chevron"

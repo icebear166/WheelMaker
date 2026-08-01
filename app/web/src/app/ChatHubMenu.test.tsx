@@ -37,6 +37,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onFlickerSwitchMode: jest.fn(),
     onUpdateHubConfig: jest.fn().mockResolvedValue(undefined),
     onRequestWheelMakerUpdate: jest.fn(),
+    onRequestWheelMakerRestart: jest.fn(),
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
     onRequestSkillInstall: jest.fn(),
@@ -120,8 +121,8 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       loading: false,
       pending: false,
       currentVersion: 'v1.2',
-      actionLabel: 'Update Hub',
-      actionVisible: true,
+      updateVisible: true,
+      restartVisible: true,
       updateAvailable: true,
     },
     npm: {loading: false, pending: false, outdatedCount: 2, packages: []},
@@ -194,7 +195,7 @@ test('toggling the summary button calls onToggle and renders hub rows', async ()
 });
 
 test('uses a full Hub row disclosure behind the independent color control', async () => {
-  const {props, callbacks} = createHarness();
+  const {props, callbacks} = createHarness({opsByHubId: {'hub-a': opsView()}});
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
@@ -205,7 +206,8 @@ test('uses a full Hub row disclosure behind the independent color control', asyn
   expect(rowButtons.map(button => button.props.className)).toEqual([
     'chat-hub-expand-button',
     'chat-hub-color-button',
-    'chat-hub-action chat-hub-version-action',
+    'chat-hub-action chat-hub-version-action chat-hub-version-update-action',
+    'chat-hub-action chat-hub-version-action chat-hub-version-restart-action',
   ]);
   expect(row.findByProps({className: 'chat-hub-expand-chevron'})).toBeTruthy();
 
@@ -230,7 +232,7 @@ test('settings accordion delegates toggling and detail ids open their detail', a
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'settings');
 });
 
-test('hub row uses one direct version action and three icon-count Global disclosures', async () => {
+test('hub row uses independent update and restart actions with three icon-count Global disclosures', async () => {
   const {props, callbacks} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
@@ -255,13 +257,17 @@ test('hub row uses one direct version action and three icon-count Global disclos
   });
 
   expect(renderer.root.findAllByProps({className: 'chat-hub-action-toggle'})).toHaveLength(0);
-  const version = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
-  expect(renderer.root.findByProps({className: 'chat-hub-row'})
-    .findByProps({className: 'chat-hub-action chat-hub-version-action'})).toBe(version);
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const version = row.findByProps({className: 'chat-hub-version-readout'});
+  const update = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
+  const restart = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
   expect(version.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.2']);
-  expect(version.props['aria-label']).toBe('Update Hub v1.2');
-  act(() => version.props.onClick());
+  expect(update.props['aria-label']).toBe('Update WheelMaker v1.2');
+  expect(restart.props['aria-label']).toBe('Restart WheelMaker v1.2');
+  act(() => update.props.onClick());
   expect(callbacks.onRequestWheelMakerUpdate).toHaveBeenCalledWith('hub-a');
+  act(() => restart.props.onClick());
+  expect(callbacks.onRequestWheelMakerRestart).toHaveBeenCalledWith('hub-a');
   expect(callbacks.onToggleSection).not.toHaveBeenCalled();
 
   const npm = renderer.root.findByProps({'aria-label': 'NPM details'});
@@ -274,7 +280,7 @@ test('hub row uses one direct version action and three icon-count Global disclos
   );
   expect(globalIcons.map(node => node.props['data-icon-name'])).toEqual(['package', 'mcp', 'wand']);
   expect(globalIcons.map(node => node.props.width)).toEqual([14, 14, 14]);
-  expect(version.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
+  expect(update.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
   expect(npm.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(1);
   expect(mcp.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
   expect(skills.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
@@ -321,8 +327,8 @@ test('hub row disables unavailable actions', async () => {
           loading: false,
           pending: false,
           currentVersion: 'v1.2',
-          actionLabel: 'Restart',
-          actionVisible: false,
+          updateVisible: false,
+          restartVisible: false,
           updateAvailable: false,
         },
         npm: {loading: false, pending: false, outdatedCount: 0, packages: []},
@@ -334,10 +340,10 @@ test('hub row disables unavailable actions', async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  const version = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  const version = renderer.root.findByProps({className: 'chat-hub-version-readout'});
   expect(version.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.2']);
-  expect(version.props.disabled).toBe(true);
-  expect(version.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({className: 'chat-hub-version-update-action'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({className: 'chat-hub-version-restart-action'})).toHaveLength(0);
   expect(renderer.root.findByProps({'aria-label': 'NPM details'})
     .findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
   expect(renderer.root.findByProps({'aria-label': 'NPM details'}).props.disabled).not.toBe(true);
@@ -351,8 +357,8 @@ test('version action is disabled while its update or restart request is pending'
           loading: false,
           pending: true,
           currentVersion: 'v1.2',
-          actionLabel: 'Updating Hub',
-          actionVisible: true,
+          updateVisible: true,
+          restartVisible: true,
           updateAvailable: true,
         },
       }),
@@ -363,8 +369,39 @@ test('version action is disabled while its update or restart request is pending'
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  expect(renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'}).props.disabled)
-    .toBe(true);
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const update = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
+  const restart = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
+  expect(update.props.disabled).toBe(true);
+  expect(restart.props.disabled).toBe(true);
+  expect(update.findByType(Icon).props.name).toBe('loader');
+  expect(restart.findByType(Icon).props.name).toBe('loader');
+});
+
+test('update-only Hub keeps Update and hides Restart', async () => {
+  const {props} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        wheelMaker: {
+          loading: false,
+          pending: false,
+          currentVersion: 'v1.2',
+          updateVisible: true,
+          restartVisible: false,
+          updateAvailable: true,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'}))
+    .toBeTruthy();
+  expect(renderer.root.findAllByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'}))
+    .toHaveLength(0);
 });
 
 test('npm detail keeps version next to the name and hugs actions right', async () => {
@@ -984,8 +1021,10 @@ test('version action uses an update or restart icon instead of a detached status
   await act(async () => {
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
-  const updateAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
+  const updateAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
   expect(updateAction.findByType(Icon).props.name).toBe('cloudDownload');
+  const restartAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
+  expect(restartAction.findByType(Icon).props.name).toBe('refreshCw');
   expect(renderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);
 
   const current = createHarness({
@@ -995,8 +1034,8 @@ test('version action uses an update or restart icon instead of a detached status
           loading: false,
           pending: false,
           currentVersion: 'v1.2',
-          actionLabel: 'Restart',
-          actionVisible: true,
+          updateVisible: false,
+          restartVisible: true,
           updateAvailable: false,
         },
       }),
@@ -1006,8 +1045,9 @@ test('version action uses an update or restart icon instead of a detached status
   await act(async () => {
     currentRenderer = TestRenderer.create(<ChatHubMenu {...current.props} />);
   });
-  const restartAction = currentRenderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action'});
-  expect(restartAction.findByType(Icon).props.name).toBe('refreshCw');
+  expect(currentRenderer.root.findAllByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'})).toHaveLength(0);
+  const currentRestartAction = currentRenderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
+  expect(currentRestartAction.findByType(Icon).props.name).toBe('refreshCw');
 });
 
 test('settings section surfaces the unsupported-hub message', async () => {

@@ -548,7 +548,7 @@ describe('web responsive ui state', () => {
 
     const rowBlock = stylesCss.match(/\.chat-hub-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(rowBlock).toContain('display: grid;');
-    expect(rowBlock).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
+    expect(rowBlock).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 52px 16px;');
     const expandButtonBlock = stylesCss.match(/\.chat-hub-expand-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(expandButtonBlock).toContain('position: absolute;');
     expect(expandButtonBlock).toContain('inset: 0;');

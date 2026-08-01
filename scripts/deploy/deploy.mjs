@@ -19,7 +19,7 @@ const ALLOWED_COMMANDS = new Set([
   'migrate-uninstall',
   'update',
 ]);
-const RUNTIME_ACTIONS = new Set(['start', 'stop']);
+const RUNTIME_ACTIONS = new Set(['start', 'stop', 'restart']);
 
 function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -288,6 +288,14 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
 
   if (await deps.promotePendingLauncher()) {
     deps.onEvent?.('promote-launcher');
+  }
+
+  if (args[0] === 'runtime' && args[1] === 'restart') {
+    return deps.runCore(args, {
+      releaseBaseUrl: deps.releaseBaseUrl,
+      stable: null,
+      stableBytes: null,
+    });
   }
 
   deps.reportStatus?.('Checking latest release');

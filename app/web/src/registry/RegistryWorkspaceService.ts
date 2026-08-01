@@ -1025,6 +1025,13 @@ export class RegistryWorkspaceService {
     return this.repository.requestWheelMakerUpdate(hubId);
   }
 
+  async requestWheelMakerRestart(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.requestWheelMakerRestart(hubId);
+  }
+
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
     if (!this.repository) throw new Error('session is not ready');
     return this.repository.startReleasePublish(hubId, input);

@@ -471,7 +471,6 @@ import {
   deriveRegistryHubIds,
   deriveWheelMakerHubStatus,
   fetchWheelMakerPublicMetadata,
-  hubStatusLabel,
   npmPackageUpdateSummary,
   packageStatusLabel,
   shouldShowWheelMakerUpdateAction,
@@ -3105,7 +3104,8 @@ export function App() {
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
   const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
-  const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
+  const [wheelMakerMaintenancePendingHubId, setWheelMakerMaintenancePendingHubId] = useState('');
+  const [wheelMakerRestartPendingInstanceId, setWheelMakerRestartPendingInstanceId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
   const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
   const latestAndroidReleaseRef = useRef<AndroidApkLatestRelease | null>(null);
@@ -3402,6 +3402,16 @@ export function App() {
   const registryHubIds = useMemo<string[]>(() => JSON.parse(registryHubIdsKey), [registryHubIdsKey]);
   const usageStore = useMemo(() => new UsageStore(), []);
   const [hubStoreSnapshot, setHubStoreSnapshot] = useState<HubStoreSnapshot>({hubs: {}});
+  useEffect(() => {
+    if (!wheelMakerMaintenancePendingHubId || !wheelMakerRestartPendingInstanceId) {
+      return;
+    }
+    const currentInstanceId = hubStoreSnapshot.hubs[wheelMakerMaintenancePendingHubId]?.instanceId;
+    if (currentInstanceId && currentInstanceId !== wheelMakerRestartPendingInstanceId) {
+      setWheelMakerMaintenancePendingHubId('');
+      setWheelMakerRestartPendingInstanceId('');
+    }
+  }, [hubStoreSnapshot, wheelMakerMaintenancePendingHubId, wheelMakerRestartPendingInstanceId]);
   const hubOperationalViews = useMemo(
     () => deriveHubOperationalViews(hubStoreSnapshot),
     [hubStoreSnapshot],
@@ -6821,6 +6831,7 @@ export function App() {
         onUpdateHubConfig={updateChatHubConfig}
         opsByHubId={chatHubOpsByHubId}
         onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
+        onRequestWheelMakerRestart={handleChatHubWheelMakerRestart}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
         onPackageAction={handleChatHubPackageAction}
         onRequestSkillInstall={requestSkillInstall}
@@ -13028,12 +13039,14 @@ export function App() {
       ...Object.keys(projectIndexByHubId),
       ...Object.keys(skillHubs),
     ]);
+    const registryHubById = new Map(registryHubs.map(hub => [hub.hubId, hub]));
     return Array.from(hubIds).sort((left, right) => {
       if (left < right) return -1;
       if (left > right) return 1;
       return 0;
     }).map(hubId => ({
       hubId,
+      connectionMode: registryHubById.get(hubId)?.connectionMode,
       wheelMaker: wheelMakerUpdateHubs[hubId] ?? null,
       agentPackage: agentPackageHubs[hubId] ?? null,
       projectIndex: projectIndexByHubId[hubId] ?? null,
@@ -13071,8 +13084,7 @@ export function App() {
       const wheelMakerData = card.wheelMaker?.data ?? null;
       const status = deriveWheelMakerHubStatus(wheelMakerData?.installed, stableRelease, wheelMakerData?.job);
       const jobActive = wheelMakerUpdateJobActive(wheelMakerData?.job);
-      const jobFailed = wheelMakerData?.job?.state === 'failed';
-      const pending = wheelMakerUpdatePendingHubId === card.hubId;
+      const pending = wheelMakerMaintenancePendingHubId === card.hubId;
       const viewData = wheelMakerData ? {
         ...wheelMakerData,
         status,
@@ -13088,24 +13100,21 @@ export function App() {
       const skillHub = skillHubs[card.hubId];
       const hubSkills = skillHub?.data?.hubSkills?.skills ?? [];
       const skillProjects = skillHub?.data?.projects ?? [];
+      const updateVisible = shouldShowWheelMakerUpdateAction({
+        data: viewData,
+        loading: card.wheelMaker?.loading === true,
+        pending: pending || wheelMakerUpdateAllPending || jobActive,
+      });
+      const restartVisible = card.connectionMode !== 'update_only'
+        && card.wheelMaker?.loading !== true
+        && Boolean(wheelMakerData?.installed?.version);
       views[card.hubId] = {
         wheelMaker: {
           loading: card.wheelMaker?.loading === true,
           pending: pending || wheelMakerUpdateAllPending || jobActive,
           currentVersion: wheelMakerVersionCopy(wheelMakerData, stableRelease).current,
-          actionLabel: hubStatusLabel(
-            pending,
-            jobActive,
-            jobFailed,
-            status === 'checking_failed',
-            status === 'up_to_date' || status === 'local_newer',
-            wheelMakerData?.job?.state || '',
-          ),
-          actionVisible: shouldShowWheelMakerUpdateAction({
-            data: viewData,
-            loading: card.wheelMaker?.loading === true,
-            pending: pending || wheelMakerUpdateAllPending || jobActive,
-          }),
+          updateVisible,
+          restartVisible,
           updateAvailable: status === 'update_available',
         },
         npm: {
@@ -13159,7 +13168,7 @@ export function App() {
     updateHubCards,
     wheelMakerPublicMetadata,
     wheelMakerUpdateAllPending,
-    wheelMakerUpdatePendingHubId,
+    wheelMakerMaintenancePendingHubId,
   ]);
 
   const observeSkillOperation = useCallback((
@@ -13503,15 +13512,28 @@ export function App() {
     });
   }, []);
 
-  const requestWheelMakerUpdate = useCallback((hubId: string, data: RegistryWheelMakerUpdateResponse | null) => {
+  const requestWheelMakerAction = useCallback((
+    action: 'update' | 'restart',
+    hubId: string,
+    data: RegistryWheelMakerUpdateResponse | null,
+  ) => {
     setConfirmError('');
     setConfirmTarget({
       kind: 'wheelMakerUpdate',
+      action,
       hubId,
       currentVersion: data?.installed?.version || '',
       latestVersion: wheelMakerPublicMetadata?.stable.version || '',
     });
   }, [wheelMakerPublicMetadata?.stable.version]);
+
+  const requestWheelMakerUpdate = useCallback((hubId: string, data: RegistryWheelMakerUpdateResponse | null) => {
+    requestWheelMakerAction('update', hubId, data);
+  }, [requestWheelMakerAction]);
+
+  const requestWheelMakerRestart = useCallback((hubId: string, data: RegistryWheelMakerUpdateResponse | null) => {
+    requestWheelMakerAction('restart', hubId, data);
+  }, [requestWheelMakerAction]);
 
   const requestWheelMakerUpdateAll = useCallback((hubIds: string[]) => {
     const uniqueHubIds = Array.from(new Set(hubIds.filter(Boolean))).sort();
@@ -13605,6 +13627,10 @@ export function App() {
     requestWheelMakerUpdate(hubId, wheelMakerUpdateHubs[hubId]?.data ?? null);
   }, [requestWheelMakerUpdate, wheelMakerUpdateHubs]);
 
+  const handleChatHubWheelMakerRestart = useCallback((hubId: string) => {
+    requestWheelMakerRestart(hubId, wheelMakerUpdateHubs[hubId]?.data ?? null);
+  }, [requestWheelMakerRestart, wheelMakerUpdateHubs]);
+
   const handleChatHubNpmUpdate = useCallback((hubId: string) => {
     const card = updateHubCards.find(item => item.hubId === hubId);
     const targets = deriveNpmUpdatableTargets(card?.agentPackage?.hub?.packages ?? []);
@@ -13649,22 +13675,38 @@ export function App() {
 
   const handleWheelMakerUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdate'}>) => {
     setConfirmError('');
-    setWheelMakerUpdatePendingHubId(target.hubId);
+    const restart = target.action === 'restart';
+    setWheelMakerMaintenancePendingHubId(target.hubId);
+    if (restart) {
+      setWheelMakerRestartPendingInstanceId(hubStoreSnapshot.hubs[target.hubId]?.instanceId || '');
+    }
     try {
-      const result = await service.requestWheelMakerUpdate(target.hubId);
+      const result = restart
+        ? await service.requestWheelMakerRestart(target.hubId)
+        : await service.requestWheelMakerUpdate(target.hubId);
       if (!result.ok) {
-        throw new Error(wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.');
+        const errorLabel = restart
+          ? (result.errorCode ? `Restart error: ${result.errorCode}` : 'Restart request failed.')
+          : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.';
+        throw new Error(errorLabel);
       }
       setConfirmTarget(null);
       setConfirmError('');
+      if (!restart) {
+        setWheelMakerRestartPendingInstanceId('');
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmError(message);
       setError(message);
+      setWheelMakerMaintenancePendingHubId('');
+      setWheelMakerRestartPendingInstanceId('');
     } finally {
-      setWheelMakerUpdatePendingHubId('');
+      if (!restart) {
+        setWheelMakerMaintenancePendingHubId('');
+      }
     }
-  }, []);
+  }, [hubStoreSnapshot]);
 
   const handleWheelMakerUpdateAllConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdateAll'}>) => {
     if (target.hubIds.length === 0) {
@@ -13673,7 +13715,8 @@ export function App() {
     }
     setConfirmError('');
     setWheelMakerUpdateAllPending(true);
-    setWheelMakerUpdatePendingHubId('');
+    setWheelMakerMaintenancePendingHubId('');
+    setWheelMakerRestartPendingInstanceId('');
     try {
       const responses = await Promise.all(target.hubIds.map(async hubId => {
         try {
@@ -20643,7 +20686,7 @@ export function App() {
             : npmPackageHubUpdateTarget
               ? agentPackageHubUpdatePendingId === npmPackageHubUpdateTarget.hubId
               : wheelMakerUpdateTarget
-                ? wheelMakerUpdatePendingHubId === wheelMakerUpdateTarget.hubId
+                ? wheelMakerMaintenancePendingHubId === wheelMakerUpdateTarget.hubId
                 : wheelMakerUpdateAllTarget
                   ? wheelMakerUpdateAllPending
                   : skillConfirmTarget

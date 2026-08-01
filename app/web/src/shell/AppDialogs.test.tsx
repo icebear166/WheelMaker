@@ -87,6 +87,37 @@ test('marks a Hub-owned confirmation as part of the Hub interaction surface', ()
     .toMatchObject({'data-chat-hub-owned-overlay': 'true'});
 });
 
+test('Restart confirmation uses runtime-reload copy and refresh icon', () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppConfirmDialog
+        target={{
+          kind: 'wheelMakerUpdate',
+          action: 'restart',
+          hubId: 'hub-a',
+          currentVersion: 'v1.2.0',
+          latestVersion: 'v1.3.0',
+        }}
+        busy={false}
+        error=""
+        onCancel={() => undefined}
+        onPrimary={() => undefined}
+      />,
+    );
+  });
+
+  expect(renderer.root.findByProps({className: 'app-confirm-title'}).children.join(''))
+    .toBe('Restart WheelMaker?');
+  expect(renderer.root.findByProps({className: 'app-confirm-copy'}).children.join(''))
+    .toContain('does not download or update WheelMaker');
+  expect(renderer.root.findByProps({className: 'app-confirm-copy'}).children.join(''))
+    .toContain('latest environment variables');
+  const primary = renderer.root.findByProps({className: 'app-confirm-btn primary'});
+  expect(primary.findByProps({'data-icon-name': 'refreshCw'})).toBeDefined();
+  expect(primary.children.join('')).toContain('Restart');
+});
+
 test('HTML export name dialog presents an editable stem with a fixed extension', () => {
   const onCancel = jest.fn();
   const onSubmit = jest.fn();

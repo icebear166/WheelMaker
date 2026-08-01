@@ -135,6 +135,7 @@ type ReporterConfig struct {
 	HubConfig          *hubconfig.Store
 	FlickerBridge      *flickerBridgeManager
 	ReloadAgentRuntime func(context.Context, map[hubconfig.APIKeyName]string) error
+	RestartRuntime     func() error
 }
 
 // Reporter keeps a long-lived hub connection and serves local project queries.
@@ -179,6 +180,7 @@ type Reporter struct {
 	hubConfig               *hubconfig.Store
 	usageCollector          *usage.LocalCollector
 	reloadAgentRuntime      func(context.Context, map[hubconfig.APIKeyName]string) error
+	restartRuntime          func() error
 	hubStateBootstrapOnce   sync.Once
 	hubStateBootstrapDone   chan struct{}
 	hubStateBootstrapActive atomic.Bool
@@ -241,6 +243,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	}
 	r.hubConfig = cfg.HubConfig
 	r.reloadAgentRuntime = cfg.ReloadAgentRuntime
+	r.restartRuntime = cfg.RestartRuntime
 	r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
 	if r.hubConfig == nil {
 		r.hubConfig = hubconfig.New(filepath.Join(stateDir, "db", "hub-config.json"))
@@ -1006,13 +1009,22 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
 		return
 	}
-	_ = r.writeJSON(conn, "->", envelope{
+	if err := r.writeJSON(conn, "->", envelope{
 		RequestID: req.RequestID,
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		HubID:     r.cfg.HubID,
 		Payload:   rp.MustRaw(response),
-	})
+	}); err != nil {
+		return
+	}
+	if payload.Section == hubStateSectionWheelmakerUpdate && payload.Action == "restart" {
+		go func() {
+			if err := r.restartRuntime(); err != nil {
+				hubLogger("").Warn("managed runtime restart failed: %v", err)
+			}
+		}()
+	}
 }
 
 func (r *Reporter) replyReleasePublish(conn *websocket.Conn, req envelope, action string) {
@@ -1064,6 +1076,7 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionWheelmakerUpdate: {
 			"requestUpdate": {},
+			"restart":       {},
 		},
 		hubStateSectionSkills: {
 			"listSource": {},

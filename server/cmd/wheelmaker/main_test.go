@@ -249,6 +249,40 @@ func TestConfigureWorkerCommandIOToDevNull(t *testing.T) {
 	}
 }
 
+func TestStartManagedRuntimeRestartStartsDetachedNodeCommand(t *testing.T) {
+	originalStart := startManagedRuntimeRestartCommand
+	t.Cleanup(func() { startManagedRuntimeRestartCommand = originalStart })
+
+	var started *exec.Cmd
+	startManagedRuntimeRestartCommand = func(cmd *exec.Cmd) error {
+		started = cmd
+		return nil
+	}
+
+	stateDir := filepath.Join(t.TempDir(), ".wheelmaker")
+	if err := startManagedRuntimeRestart(stateDir); err != nil {
+		t.Fatalf("startManagedRuntimeRestart() error = %v", err)
+	}
+	if started == nil {
+		t.Fatal("runtime restart command was not started")
+	}
+	wantArgs := []string{"node", filepath.Join(stateDir, "deploy.mjs"), "runtime", "restart"}
+	if !slices.Equal(started.Args, wantArgs) {
+		t.Fatalf("command args = %v, want %v", started.Args, wantArgs)
+	}
+	if started.Dir != stateDir {
+		t.Fatalf("command dir = %q, want %q", started.Dir, stateDir)
+	}
+	stdoutFile, ok := started.Stdout.(*os.File)
+	if !ok || stdoutFile.Name() != os.DevNull {
+		t.Fatalf("stdout = %#v, want %q sink", started.Stdout, os.DevNull)
+	}
+	stderrFile, ok := started.Stderr.(*os.File)
+	if !ok || stderrFile.Name() != os.DevNull {
+		t.Fatalf("stderr = %#v, want %q sink", started.Stderr, os.DevNull)
+	}
+}
+
 func TestRedirectProcessStdioToDevNull(t *testing.T) {
 	oldStdout := os.Stdout
 	oldStderr := os.Stderr

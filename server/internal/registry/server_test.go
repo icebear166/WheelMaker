@@ -564,6 +564,16 @@ func TestUpdateOnlyHubRequestAllowedRequiresExactUpdatePayload(t *testing.T) {
 			want: false,
 		},
 		{
+			name:   "restart is not allowed",
+			method: rp.RegistryMethodHubStateAction,
+			payload: map[string]any{
+				"section": "wheelmakerUpdate",
+				"action":  "restart",
+				"params":  map[string]any{},
+			},
+			want: false,
+		},
+		{
 			name:   "request update with injected params",
 			method: rp.RegistryMethodHubStateAction,
 			payload: map[string]any{

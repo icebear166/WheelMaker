@@ -1352,6 +1352,14 @@ Get-CimInstance Win32_Process | Where-Object {
 `;
 }
 
+function windowsRestartScript() {
+  return `$ErrorActionPreference = 'Stop'
+$restartCommand = "Start-Sleep -Milliseconds 500; Start-ScheduledTask -TaskName 'WheelMaker' -ErrorAction Stop"
+Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $restartCommand) -WindowStyle Hidden
+Stop-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
+`;
+}
+
 async function checkLinuxPrerequisites(runner) {
   await runner('systemctl', ['--user', 'show-environment']);
   let userName = process.env.USER;
@@ -1460,10 +1468,17 @@ export function createRuntimeAdapter({
   }
 
   async function action(name) {
-    if (!['start', 'stop'].includes(name)) {
+    if (!['start', 'stop', 'restart'].includes(name)) {
       throw new Error(`unknown runtime action: ${name}`);
     }
     if (platform === 'win32') {
+      if (name === 'restart') {
+        await runner(
+          'powershell',
+          ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsRestartScript()],
+          { cwd: paths.home },
+        );
+      }
       if (name === 'stop') {
         await runner(
           'powershell',
@@ -1489,7 +1504,7 @@ export function createRuntimeAdapter({
     }
     if (platform === 'darwin') {
       const target = `gui/${paths.uid}/com.wheelmaker.hub`;
-      if (name === 'start') {
+      if (name === 'start' || name === 'restart') {
         return runner('launchctl', ['kickstart', '-k', target]);
       }
       if (name === 'stop') {
@@ -1575,6 +1590,7 @@ export function createRuntimeAdapter({
     },
     start: () => action('start'),
     stop: () => action('stop'),
+    restart: () => action('restart'),
     writeWrappers: () => writeRuntimeWrappers(paths, platform),
   };
 }
@@ -2013,16 +2029,18 @@ export async function runCore(args, deps = {}) {
   }
   const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {
-    if (!['start', 'stop'].includes(args[1])) {
+    if (!['start', 'stop', 'restart'].includes(args[1])) {
       throw new Error(`unknown runtime action: ${args[1]}`);
     }
     if (!runtime || typeof runtime[args[1]] !== 'function') {
       throw new Error(`runtime adapter cannot ${args[1]}`);
     }
     const action = args[1];
-    deps.reportStatus?.(`${action === 'start' ? 'Starting' : 'Stopping'} Hub`);
+    const verb = action === 'start' ? 'Starting' : action === 'stop' ? 'Stopping' : 'Restarting';
+    const pastTense = action === 'start' ? 'started' : action === 'stop' ? 'stopped' : 'restarted';
+    deps.reportStatus?.(`${verb} Hub`);
     await runtime[action]();
-    deps.reportStatus?.(`Hub ${action === 'start' ? 'started' : 'stopped'}`);
+    deps.reportStatus?.(`Hub ${pastTense}`);
     return;
   }
   if (args.length === 1 && args[0] === 'update') {

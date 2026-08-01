@@ -2383,6 +2383,17 @@ export class RegistryRepository {
     };
   }
 
+  async requestWheelMakerRestart(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
+    const response = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'restart');
+    return hubStateActionResult<RegistryWheelMakerUpdateResponse>(response) ?? {
+      ok: false,
+      status: 'checking_failed',
+      hubId,
+      canRequestUpdate: false,
+      errorCode: 'missing_hub_state_response',
+    };
+  }
+
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
     const response = await this.client.request({
       method: RegistryMethods.ReleasePublishStart,

@@ -14,7 +14,7 @@ Hub 菜单是唯一的 per-hub 操作中心：所有针对单个 Hub 的配置�
 每个 Hub 是一个完整视觉分组：标题行按颜色点、名称、版本直接动作、手风琴 chevron 排列；展开后依次显示 Settings、Global、Projects。移除贯穿内容的彩色树线，Hub 颜色只保留在名称前的颜色点。标题行除独立的颜色和版本按钮外整行可展开，chevron 位于最右侧。
 
 ```
-● hub-a                                      v1.2 ↻  ⌄
+● hub-a                                  v1.2  ↓  ↻  ⌄
   ⚙ Settings                                      ● V2  ›
   ⛭ Global                    [Package 2] [MCP 0] [Skills 12]
   ▤ Projects                [Visible 11] [Scan 2] [Skills 24]
@@ -25,7 +25,7 @@ Latest v1.3                                  Update all hubs
 ```
 
 - **Settings 行**：整行手风琴。展开内容是 Flicker Bridge 段（Off/V1/V2 是唯一生命周期与模式控件）和紧凑单行 API key 编辑器（状态图标 + 行内密码输入 + Set/Replace + Clear）。收缩摘要显示 Flicker `V1`/`V2` 或 `Off`，使用颜色点表达状态。
-- **Hub 标题行**：颜色点在名称前；版本按钮显示当前版本号与状态图标，无展开行为，有更新时执行 Update，已是最新版时执行 Restart，走 wheelmakerUpdate confirm 流程。版本按钮默认透明，仅 hover/focus/active 时出现背景；存在新版本时显示不占布局空间的红色提示点。
+- **Hub 标题行**：颜色点在名称前；版本号是只读状态，右侧提供独立的 Update 与 Restart 图标动作，无展开行为。已安装的正常 Hub 有新版本时同时显示两个动作；已是最新版或本地版本较新时只显示 Restart；未安装或 `update_only` Hub 只显示 Update。Update 使用 `cloudDownload`，Restart 使用 `refreshCw`，存在新版本时红色提示点附着在 Update 动作上。两个动作都走 `wheelmakerUpdate` confirm 流程，pending 时动作组禁用。版本动作默认透明，仅 hover/focus/active 时出现背景。
 - **Global 行**：固定三个等宽入口，顺序为 NPM、MCP、Skills。入口都采用“图标 + 数量”，不显示文字标签和 disclosure chevron：
   - NPM 使用 package 图标，数量沿用现有统计；存在可更新包时显示不占布局空间的红色提示点。展开逐包列表，批量 `Update all` 位于 detail 工具栏。
   - MCP 使用官方 MCP 图标，当前数量固定为 `0`；点击展开本地空态 `MCP servers` / `No MCP servers configured.`，不发起网络、API 或协议调用。
@@ -49,13 +49,13 @@ Hub 菜单只读取统一 HubStore，不为 WheelMaker Update、NPM、Skills、F
 | 展开 Visibility 或 MCP | 不触发 HubState |
 | 打开 Skill Detail / Add Skill | 只做详情或候选查询，不覆盖或 refresh `skills` |
 
-请求只能由 closed→open 或 collapsed→expanded 边沿触发，不能因 render、effect 依赖变化或 detail 切换重复发送。同一 Section 已 queued/updating 时复用既有任务。关闭菜单、收起 Hub 或关闭 companion surface 不取消 Hub 已接受的更新。
+请求只能由 closed→open 或 collapsed→expanded 边沿触发，不能因 render、effect 依赖变化或 detail 切换重复发送。同一 Section 已 queued/updating 时复用既有任务。关闭菜单、收起 Hub 或关闭 companion surface 不取消 Hub 已接受的 Update 或 Restart。
 
 Composer Slash Menu 和聊天文件 `@mention` 不因打开而刷新 HubState：前者读取当前 Project/Agent 的 effective Skills，后者查询既有 File Index。Limits Monitor 是独立常驻数据面；它继续消费 Usage Service 的启动扫描和 10 分钟周期 `tokenStats` 更新，打开 Monitor 本身不触发刷新。
 
 ## 按钮语义与展开互斥
 
-Global / Projects 的入口整个点击区域只负责展开或收起；只有 Hub 标题里的版本按钮执行直接动作。批量更新、批量扫描等动作放在展开 detail 内。三个入口使用轻分隔线组成一体化三列，不做三个厚重的输入框式圆角按钮；展开态通过背景变化表达。
+Global / Projects 的入口整个点击区域只负责展开或收起；只有 Hub 标题里的版本动作执行直接维护操作。Update 与 Restart 是两个独立图标按钮：Update 负责下载、校验、部署并重启，Restart 只重启托管 runtime 并重新加载运行环境。批量更新、批量扫描等动作放在展开 detail 内。三个入口使用轻分隔线组成一体化三列，不做三个厚重的输入框式圆角按钮；展开态通过背景变化表达。
 
 detail 渲染为 Hub 分组内全宽、轻缩进的单个面板。Settings 独立展开；Global 的 NPM / MCP / Skills 互斥；Projects 的 Visibility / Scan / Skills 互斥。三个行组之间可同时展开；当前应用会话内关闭并重新打开菜单时保留展开状态。功能按钮只执行自己的动作，不顺带关闭 Hub 面板。
 

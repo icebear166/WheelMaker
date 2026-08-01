@@ -65,6 +65,7 @@ export type ConfirmTarget =
     }
   | {
       kind: 'wheelMakerUpdate';
+      action: 'update' | 'restart';
       hubId: string;
       currentVersion: string;
       latestVersion: string;
@@ -180,7 +181,9 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'goalClear') return 'Clear goal?';
   if (target.kind === 'npmPackage') return `${agentPackageActionLabel(target.action)} package?`;
   if (target.kind === 'npmPackageHubUpdate') return 'Update npm packages?';
-  if (target.kind === 'wheelMakerUpdate') return 'Update WheelMaker?';
+  if (target.kind === 'wheelMakerUpdate') {
+    return target.action === 'restart' ? 'Restart WheelMaker?' : 'Update WheelMaker?';
+  }
   if (target.kind === 'wheelMakerUpdateAll') return 'Update all hubs?';
   if (target.kind === 'skillInstall') return 'Install skills?';
   if (target.kind === 'skillUninstall') return 'Uninstall skill?';
@@ -239,6 +242,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     return `Runs latest install/update for ${target.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Agent availability refreshes automatically; running sessions are not interrupted.`;
   }
   if (target.kind === 'wheelMakerUpdate') {
+    if (target.action === 'restart') {
+      return `Current: ${target.currentVersion || '-'}. Restart does not download or update WheelMaker. The managed runtime reloads the latest environment variables.`;
+    }
     return `Current: ${target.currentVersion || '-'}. Latest: ${target.latestVersion || '-'}. The current-user updater will download and verify the stable release, deploy it, and restart Hub.`;
   }
   if (target.kind === 'wheelMakerUpdateAll') {
@@ -275,7 +281,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
     return target.action === 'uninstall' ? 'trash' : 'cloudDownload';
   }
   if (target.kind === 'npmPackageHubUpdate') return 'cloudDownload';
-  if (target.kind === 'wheelMakerUpdate') return 'cloudDownload';
+  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'refreshCw' : 'cloudDownload';
   if (target.kind === 'wheelMakerUpdateAll') return 'cloudDownload';
   if (target.kind === 'skillInstall') return 'cloudDownload';
   if (target.kind === 'skillUninstall') return 'trash';
@@ -293,7 +299,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'goalClear') return 'Clear Goal';
   if (target.kind === 'npmPackage') return agentPackageActionLabel(target.action);
   if (target.kind === 'npmPackageHubUpdate') return 'Update';
-  if (target.kind === 'wheelMakerUpdate') return 'Update';
+  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'Restart' : 'Update';
   if (target.kind === 'wheelMakerUpdateAll') return 'Update';
   if (target.kind === 'skillInstall') return 'Install';
   if (target.kind === 'skillUninstall') return 'Uninstall';

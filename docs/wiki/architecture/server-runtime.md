@@ -55,6 +55,7 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 10. Session persistence: Active -> Suspended -> Persisted (SQLite). Restore by `session.read` / `session.send` session id access.
 11. Provider 可用性依赖 Hub 本地运行时配置时，AgentFactory 必须是 Hub-scoped 实例；项目上报与 Session 创建必须使用同一个 Factory，不能从进程级全局 Factory 重新推导。
 12. Hub 配置或 Agent CLI 变化时，Hub 原子替换共享 AgentFactory 内的 provider 注册表，不替换 Client/Session 持有的 Factory 指针。已启动的 AgentInstance 保持运行并继续使用创建时的进程环境；新建、恢复或重新连接的 Session 使用刷新后的 provider 与 Key。
+13. Hub 的 Restart 是托管 runtime 级别的重启，不是旧 guardian 重新拉起单个 worker。Hub 先返回 action 响应，再通过 `deploy.mjs runtime restart` 请求 systemd、launchd 或 Windows Task 重新创建 guardian；因此新 worker 使用服务管理器当前提供的环境变量。当前 guardian 同时管理 Registry worker 时，两者一并重启。
 
 ## 3. Responsibilities
 
@@ -270,6 +271,14 @@ Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前�
 
 来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)。
 
-## 11. Historical Context
+## 11. Managed Runtime Restart
+
+安装运行时的拓扑是“平台服务管理器 → guardian → Hub worker / 可选 Registry worker”。Hub worker 只退出时，旧 guardian 仍可能持有启动时的环境快照；因此需要 Restart 时必须请求平台服务管理器重启整个 `wheelmaker-hub` runtime。Restart 不下载或替换业务文件，也不把旧 Hub 的 `os.Environ()` 写回运行时配置。
+
+Restart action 成功写回 Registry response 后才启动独立 helper。Linux 使用 `systemctl --user restart wheelmaker-hub.service`，macOS 使用 `launchctl kickstart -k gui/<uid>/com.wheelmaker.hub`，Windows 停止并重新启动 `WheelMaker` Scheduled Task。服务管理器重新创建的进程读取其当前环境来源；环境来源的同步不由 Hub Restart 发明新的跨平台格式。
+
+Web 侧把 runtime 重启视为一次短暂断线：新 Hub 连接会获得新的 `instanceId`，HubStore 使用既有 instance replacement 和 reconnect 流程恢复状态。
+
+## 12. Historical Context
 
 The original Architecture 3.0 rollout used chat route keys and command routing while multi-session support was being introduced. That design has been retired. Current code should be read through the App-only Registry/session model above.

@@ -977,7 +977,7 @@ describe('web chat integration', () => {
     const line = cssRuleBlock(stylesCss, '.chat-hub-line');
     const actions = cssRuleBlock(stylesCss, '.chat-hub-line-actions');
     const footer = cssRuleBlock(stylesCss, '.chat-hub-footer');
-    const versionAction = cssRuleBlock(stylesCss, '.chat-hub-row > .chat-hub-version-action');
+    const versionAction = cssRuleBlock(stylesCss, '.chat-hub-row-actions .chat-hub-version-action');
     const detailToolbar = cssRuleBlock(stylesCss, '.chat-hub-detail-toolbar');
     const detailRows = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-npm-row')
       .find(block => block.includes('height: 32px;')) ?? '';
@@ -986,7 +986,7 @@ describe('web chat integration', () => {
     const sectionHeader = cssRuleBlock(stylesCss, '.chat-hub-section-header');
 
     expect(hubRow).toContain('height: 40px;');
-    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 16px;');
+    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 52px 16px;');
     expect(sections).not.toContain('border-left:');
     expect(stylesCss).not.toContain('.chat-hub-sections::before {');
     expect(line).toContain('grid-template-columns: 14px minmax(44px, max-content) minmax(0, 1fr);');

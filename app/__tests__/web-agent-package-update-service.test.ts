@@ -233,6 +233,7 @@ describe('agent package update registry service', () => {
 
     await repository.queryWheelMakerUpdate('hub-a');
     await repository.requestWheelMakerUpdate('hub-a');
+    await repository.requestWheelMakerRestart('hub-a');
 
     expect(client.request).toHaveBeenNthCalledWith(1, {
       method: RegistryMethods.HubStateRefresh,
@@ -244,6 +245,12 @@ describe('agent package update registry service', () => {
       method: RegistryMethods.HubStateAction,
       hubId: 'hub-a',
       payload: {section: 'wheelmakerUpdate', action: 'requestUpdate', params: {}},
+      timeoutMs: 60000,
+    });
+    expect(client.request).toHaveBeenNthCalledWith(3, {
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'wheelmakerUpdate', action: 'restart', params: {}},
       timeoutMs: 60000,
     });
   });

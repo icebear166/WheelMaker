@@ -438,7 +438,7 @@ Hub 启动运行态初始化结束和 Registry 重连时可发送一次完整 Hu
 | Section | Refresh | Actions |
 | --- | --- | --- |
 | `agentPackages` | 扫描 agent npm 包 | `install`、`installMany`、`uninstall`、`reinstall` |
-| `wheelmakerUpdate` | 查询 WheelMaker 当前安装与发布状态 | `requestUpdate` |
+| `wheelmakerUpdate` | 查询 WheelMaker 当前安装与发布状态 | `requestUpdate`、`restart` |
 | `skills` | 扫描 Hub inventory、Project inventory 和 effective Skills | `reindex`、`listSource`、`detail`、`install`、`uninstall`、`update` |
 | `tokenStats` | 请求 Usage Service 刷新完整 Limits 快照 | 无 |
 | `fileIndex` | 查询 Hub 内项目索引状态 | `rebuild` |
@@ -455,6 +455,8 @@ Hub 启动运行态初始化结束和 Registry 重连时可发送一次完整 Hu
 `tokenStats` 不接受 Provider action 或凭据参数。Usage Service 负责 Hub 启动扫描、10 分钟周期扫描、API Key 变更扫描和手动 refresh singleflight；HubState 不重复调度启动扫描。Kimi、ZAI、DeepSeek 凭据只在 Hub 本地读取；Registry 对 HubState payload 按字节透传，不注入、缓存或记录 Provider 密钥。
 
 `skills` 是 Hub 菜单、Project Skills 与 Composer 自动提示的唯一来源。Project report 不再提供 `agentProfiles`。`.agents` / `.claude` inventory 差异属于 `skills` 数据中的非敏感诊断，不触发 Registry 业务处理。
+
+正常 Hub 的 `hub.state.action` 可以对 `wheelmakerUpdate` 发送 `requestUpdate` 或 `restart`。`restart` 只返回 accepted 结果并触发托管 runtime 重启，不下载或部署新版本；Hub 必须先写回 response，再异步调用 `deploy.mjs runtime restart`。runtime 重启可能同时重启同一 guardian 管理的 Registry worker。
 
 ## 7A. HubConfig
 
@@ -589,7 +591,7 @@ Release Publishing 页面通过 `start/get/updated` 工作，不通过 HubState 
 
 方法与 payload 必须同时匹配；`hub.state.get`、其他 section、其他 action 及 Project、Session、文件、Git、Terminal、HubConfig、Skills、发布、Debug Web 和 Relay 请求统一返回 `FORBIDDEN`。App 不承担此权限判断，只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，并继续复用现有更新状态和按钮。
 
-Hub 内部仍使用既有 WheelMaker Update HubState adapter、UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。用户必须明确触发更新；受限握手本身不启动更新。该 HubState wire 子集从本能力发布起保持兼容，不增加 maintenance version 或平行 RPC。
+Hub 内部仍使用既有 WheelMaker Update HubState adapter、UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。用户必须明确触发更新；受限握手本身不启动更新。`restart` 不属于受限连接能力。该 HubState wire 子集从本能力发布起保持兼容，不增加 maintenance version 或平行 RPC。
 
 ## 8. Session
 

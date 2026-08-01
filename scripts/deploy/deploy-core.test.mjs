@@ -295,7 +295,28 @@ test('runtime start command builds a default adapter from the install directory'
   assert.equal(startCalls, 1);
 });
 
-test('runtime adapter exposes only manual start and stop actions', () => {
+test('runtime restart command builds a default adapter from the install directory', async () => {
+  let capturedPaths;
+  let restartCalls = 0;
+  await runCore(['runtime', 'restart'], {
+    installDirectory: 'C:\\Users\\alice\\.wheelmaker',
+    nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+    platform: 'win32',
+    runtimeFactory({ paths }) {
+      capturedPaths = paths;
+      return {
+        async restart() {
+          restartCalls += 1;
+        },
+      };
+    },
+    userHome: 'C:\\Users\\alice',
+  });
+  assert.equal(capturedPaths.hub.endsWith('bin\\wheelmaker.exe'), true);
+  assert.equal(restartCalls, 1);
+});
+
+test('runtime adapter exposes manual start, stop, and restart actions', () => {
   const adapter = createRuntimeAdapter({
     paths: RUNTIME_PATHS,
     platform: 'win32',
@@ -303,8 +324,55 @@ test('runtime adapter exposes only manual start and stop actions', () => {
   });
   assert.equal(typeof adapter.start, 'function');
   assert.equal(typeof adapter.stop, 'function');
-  assert.equal(adapter.restart, undefined);
+  assert.equal(typeof adapter.restart, 'function');
   assert.equal(adapter.status, undefined);
+});
+
+test('runtime restart delegates to each platform manager', async () => {
+  const linuxCalls = [];
+  const linux = createRuntimeAdapter({
+    paths: RUNTIME_PATHS,
+    platform: 'linux',
+    runner: async (command, args, options) => {
+      linuxCalls.push({ args, command, options });
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+  await linux.restart();
+  assert.deepEqual(linuxCalls.at(-1), {
+    command: 'systemctl',
+    args: ['--user', 'restart', 'wheelmaker-hub.service'],
+    options: { allowFailure: false },
+  });
+
+  const macCalls = [];
+  const mac = createRuntimeAdapter({
+    paths: { ...RUNTIME_PATHS, uid: 501 },
+    platform: 'darwin',
+    runner: async (command, args, options) => {
+      macCalls.push({ args, command, options });
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+  await mac.restart();
+  assert.deepEqual(macCalls.at(-1), {
+    command: 'launchctl',
+    args: ['kickstart', '-k', 'gui/501/com.wheelmaker.hub'],
+    options: undefined,
+  });
+
+  let windowsScript = '';
+  const windows = createRuntimeAdapter({
+    paths: RUNTIME_PATHS,
+    platform: 'win32',
+    runner: async (_command, args) => {
+      windowsScript = args.at(-1);
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+  await windows.restart();
+  assert.match(windowsScript, /Stop-ScheduledTask -TaskName 'WheelMaker'/);
+  assert.match(windowsScript, /Start-ScheduledTask -TaskName 'WheelMaker'/);
 });
 
 test('runtime health requires the registered task and an actual Hub worker', async () => {
@@ -360,7 +428,7 @@ test('runtime health requires the registered task and an actual Hub worker', asy
 });
 
 test('core rejects retired runtime actions even when an adapter defines them', async () => {
-  for (const action of ['restart', 'status']) {
+  for (const action of ['status']) {
     await assert.rejects(
       () =>
         runCore(['runtime', action], {
