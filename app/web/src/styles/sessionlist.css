@@ -747,15 +747,6 @@
 .theme-light .agent-choice-pill {
   color: color-mix(in srgb, var(--agent-accent, #666) 80%, black);
 }
-/* Larger touch targets and roomier grid on the mobile sheet. */
-.agent-choice-menu.mobile .agent-choice-group-pills {
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 8px;
-}
-.agent-choice-menu.mobile .agent-choice-pill {
-  min-height: 42px;
-  font-size: 13px;
-}
 
 /* ---------- misc ---------- */
 .wide-project-empty {
