@@ -4,11 +4,11 @@
 
 WheelMaker 不假定每个 Agent 都实现相同的 Session 控制能力。`status` 是 WheelMaker 层通用能力——所有 session 恒可用，显示数据库身份（session id、agent 类型）与累计 token 用量，不依赖 provider；`compact`、`steer`、`fork`、`goal` 由 Agent factory 按 provider 声明。Session summary 以 `{supported, reason}` 投影到 Web；Web 据此隐藏不可用入口，Hub 仍是最终校验者，不为 unsupported provider 模拟能力。
 
-Agent 层用可选接口承接能力。通用 Client/Session 只使用 provider-neutral 参数、结果和错误；runtime thread ID、turn ID、原生 JSON-RPC method 与 provider 状态只存在于 adapter。
+Agent 层用可选接口承接 provider-gated 能力。通用 Client/Session 只使用 provider-neutral 参数、结果和错误；runtime thread ID、turn ID 与原生 JSON-RPC method 只存在于 adapter。`status` 不经过 Agent 接口或 adapter。
 
 ## Status
 
-`status` 对所有 session 恒 supported：返回 WheelMaker 稳定 session id、agent 类型与累计 token 用量（`agentState.Usage`），这些都是 WheelMaker 自身事实，不属于 provider 能力。回退路径直接读 session 持久化状态，不启动 agent 子进程，冷/归档 session 也可查。仅 codex 额外提供 live rich status（限流、套餐），由 factory 的 status 标志标记并经 `SessionStatusProvider` 获取；codex 冷 session 仍按其原生语义 spawn。其余 provider-gated 能力（`compact`/`steer`/`fork`/`goal`）不支持时隐藏入口并由服务端拒绝。
+`status` 对所有 session 恒 supported：只返回 WheelMaker 稳定 session id、agent 类型与累计 token 用量（`agentState.Usage`），这些都是 WheelMaker 自身事实，不属于 provider 能力。读取时只取当前 Session 的内存或持久化 snapshot，不创建、初始化或加载 Agent，不调用 provider RPC，因此冷/归档 session 和所有 provider 的表现一致。Provider 限流、套餐与账号数据由 Monitor 负责，不属于 session status。其余 provider-gated 能力（`compact`/`steer`/`fork`/`goal`）不支持时隐藏入口并由服务端拒绝。
 
 详细设计见 [`../../scope/2026-07-30-universal-session-status/spec-universal-session-status.md`](../../scope/2026-07-30-universal-session-status/spec-universal-session-status.md)。
 

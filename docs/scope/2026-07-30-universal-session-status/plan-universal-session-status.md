@@ -1003,7 +1003,7 @@ git commit -m "feat(app): show uniform session status with copy"
 
 - Modify: `docs/scope/2026-07-30-universal-session-status/plan-universal-session-status.md` (final verification record only)
 
-- [ ] **Step 1: Run the complete Go suite**
+- [x] **Step 1: Run the complete Go suite**
 
 Run:
 
@@ -1014,7 +1014,7 @@ go test ./...
 
 Expected: PASS for every Go package, including `internal/protocol`, `internal/hub/client`, and `internal/hub/agent`.
 
-- [ ] **Step 2: Run Web tests, type-check, and production build**
+- [x] **Step 2: Run Web tests, type-check, and production build**
 
 Run:
 
@@ -1027,7 +1027,7 @@ npm run build:web
 
 Expected: all selected Jest suites PASS, TypeScript reports no errors, and webpack completes the production build to the configured `~/.wheelmaker/web` destination.
 
-- [ ] **Step 3: Check formatting, scope, and retired-symbol absence**
+- [x] **Step 3: Check formatting, scope, and retired-symbol absence**
 
 From the worktree root, run:
 
@@ -1043,7 +1043,7 @@ Expected:
 - `rg` returns no production matches;
 - `git status --short` contains no unexpected files or generated `dist` output.
 
-- [ ] **Step 4: Record verification so the final completion-gate commit is real**
+- [x] **Step 4: Record verification so the final completion-gate commit is real**
 
 Append this record after every command in Steps 1–3 has passed. Do not pre-mark the completion-gate step as finished:
 
@@ -1058,17 +1058,27 @@ Append this record after every command in Steps 1–3 has passed. Do not pre-mar
 - Retired provider session-status symbols — absent
 ```
 
+## Verification Record
+
+- `cd server && go test ./...` — PASS
+- `cd app && npx jest web-session-actions-service web-session-status-dialog web-chat-session-actions` — PASS (3 suites, 23 tests)
+- `cd app && npm run tsc:web` — PASS
+- `cd app && npm run build:web` — PASS
+- `git diff --check` — PASS
+- Retired provider session-status symbols — absent
+- `internal/hub/tools` produced transient cleanup/async timing failures under parallel verification load; each affected test passed 5 consecutive isolated runs, and the standalone complete Go suite passed after the final rebase. No feature diff touches that package.
+
 - [ ] **Step 5: Execute the exact repository completion gate**
 
-From the worktree root, run this exact tail sequence with no `|| echo` fallback:
+Delivery override confirmed by the user on 2026-08-01: land the rebased implementation directly on `main`, discard the old feature-branch line, and do not force-push it. Commit this verification record locally, fast-forward and push `main`, remove the task worktree and feature branches, then run this exact tail sequence from the clean `main` worktree with no `|| echo` fallback:
 
 ```powershell
 git add -A
-git commit -m "docs(scope): record universal session status verification"
-git push origin feat/universal-session-status
+git commit -m "docs(scope): complete universal session status plan"
+git push origin main
 ```
 
-Expected: all three commands succeed. If push requires history rewriting because the branch was rebased, stop and obtain explicit approval before using `--force-with-lease`; do not claim completion with an unpushed branch.
+Expected: all three commands succeed. The remote feature branch is deleted rather than rewritten.
 
 ## Self-Review Notes
 
