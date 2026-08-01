@@ -39,7 +39,6 @@ const (
 	desktopBridgeAppendHTMLFileClipboard
 	desktopBridgeCommitHTMLFileClipboard
 	desktopBridgeCancelHTMLFileClipboard
-	desktopBridgeDeepSeekLogin
 	desktopBridgeEnterLocalDev
 	desktopBridgeGetLocalDevState
 	desktopBridgeSaveLocalDevSource
@@ -128,8 +127,7 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeCommitHTMLFileClipboard,
 		desktopBridgeCancelHTMLFileClipboard,
 		desktopBridgeGetUpdateInfo,
-		desktopBridgeRequestUpdate,
-		desktopBridgeDeepSeekLogin:
+		desktopBridgeRequestUpdate:
 		return true
 	default:
 		return false

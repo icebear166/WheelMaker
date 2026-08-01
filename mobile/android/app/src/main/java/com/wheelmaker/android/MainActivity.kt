@@ -47,7 +47,7 @@ import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class MainActivity : Activity(), DeepSeekLoginHost {
+class MainActivity : Activity() {
     private lateinit var rootView: FrameLayout
     private lateinit var webView: WebView
     private lateinit var baseUrlStore: BaseUrlStore
@@ -105,8 +105,7 @@ class MainActivity : Activity(), DeepSeekLoginHost {
             androidPortRelaySiteDataRuntime,
             androidWebDiagnostics,
             androidDiagnosticLogLevelStore,
-            trustedNativeActionGrantStore,
-            this
+            trustedNativeActionGrantStore
         )
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
@@ -408,24 +407,12 @@ class MainActivity : Activity(), DeepSeekLoginHost {
                 return@addWebMessageListener
             }
             try {
-                val bridgeReply = BridgeReply(parsed.first.requestId) { result ->
-                    replyProxy.postMessage(result.toString())
-                }
-                val result = wheelMakerBridge.dispatch(capability, parsed.second, bridgeReply)
-                if (result != null) {
-                    sendSuccess(replyProxy, parsed.first.requestId, result)
-                }
+				sendSuccess(replyProxy, parsed.first.requestId, wheelMakerBridge.dispatch(capability, parsed.second))
             } catch (_: Exception) {
                 sendError(replyProxy, parsed.first.requestId, "native_action_failed")
             }
         }
         businessMessageListenerRegistered = true
-    }
-
-    override fun showLogin(onResult: (token: String?) -> Unit) {
-        runOnUiThread {
-            DeepSeekLoginDialog(this) { token -> onResult(token) }.show()
-        }
     }
 
     private fun unregisterBusinessMessageListener() {

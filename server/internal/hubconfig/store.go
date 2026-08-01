@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -57,17 +56,11 @@ type FlickerBridgeSnapshot struct {
 	Enabled bool              `json:"enabled"`
 }
 
-type DeepSeekPlatformSnapshot struct {
-	Configured bool   `json:"configured"`
-	UpdatedAt  string `json:"updatedAt,omitempty"`
-}
-
 // Snapshot is the sanitized view of the hub config: secret values never leave
 // the store, only their configured/updatedAt markers.
 type Snapshot struct {
-	FlickerBridge    FlickerBridgeSnapshot     `json:"flickerBridge"`
-	APIKeys          map[string]APIKeySnapshot `json:"apiKeys"`
-	DeepSeekPlatform DeepSeekPlatformSnapshot  `json:"deepSeekPlatform"`
+	FlickerBridge FlickerBridgeSnapshot     `json:"flickerBridge"`
+	APIKeys       map[string]APIKeySnapshot `json:"apiKeys"`
 }
 
 type Store struct {
@@ -251,14 +244,9 @@ func (s *Store) Snapshot() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	platformSection, err := deepSeekPlatformSection(root)
-	if err != nil {
-		return Snapshot{}, err
-	}
 	snapshot := Snapshot{
-		FlickerBridge:    FlickerBridgeSnapshot{Mode: mode, Enabled: enabled},
-		APIKeys:          make(map[string]APIKeySnapshot, len(APIKeyNames)),
-		DeepSeekPlatform: DeepSeekPlatformSnapshot{},
+		FlickerBridge: FlickerBridgeSnapshot{Mode: mode, Enabled: enabled},
+		APIKeys:       make(map[string]APIKeySnapshot, len(APIKeyNames)),
 	}
 	for _, name := range APIKeyNames {
 		entry := keys[string(name)]
@@ -267,11 +255,6 @@ func (s *Store) Snapshot() (Snapshot, error) {
 			keySnapshot.UpdatedAt = entry.UpdatedAt.UTC().Format(time.RFC3339)
 		}
 		snapshot.APIKeys[string(name)] = keySnapshot
-	}
-	platformEntry := platformSection["token"]
-	snapshot.DeepSeekPlatform = DeepSeekPlatformSnapshot{Configured: platformEntry.Value != ""}
-	if !platformEntry.UpdatedAt.IsZero() {
-		snapshot.DeepSeekPlatform.UpdatedAt = platformEntry.UpdatedAt.UTC().Format(time.RFC3339)
 	}
 	return snapshot, nil
 }
@@ -391,63 +374,4 @@ func apiKeysSection(root map[string]json.RawMessage) (map[string]secretValue, er
 		}
 	}
 	return section, nil
-}
-
-func deepSeekPlatformSection(root map[string]json.RawMessage) (map[string]secretValue, error) {
-	section := map[string]secretValue{}
-	if raw := root["deepSeekPlatform"]; len(raw) != 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &section); err != nil || section == nil {
-			return nil, fmt.Errorf("parse hub config deepSeekPlatform section")
-		}
-	}
-	return section, nil
-}
-
-// DeepSeekPlatformToken returns the stored platform session token, or "" when unset.
-func (s *Store) DeepSeekPlatformToken() (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	root, _, err := s.loadLocked()
-	if err != nil {
-		return "", err
-	}
-	section, err := deepSeekPlatformSection(root)
-	if err != nil {
-		return "", err
-	}
-	return section["token"].Value, nil
-}
-
-// UpdateDeepSeekPlatformToken sets or clears the platform session token.
-func (s *Store) UpdateDeepSeekPlatformToken(action, value string, now time.Time) error {
-	if action != "set" && action != "clear" {
-		return fmt.Errorf("unsupported deepSeekPlatform action %q", action)
-	}
-	if action == "set" {
-		value = strings.TrimSpace(value)
-		if value == "" || len(value) > maxSecretBytes {
-			return fmt.Errorf("deepSeekPlatform token is required and must not exceed 16 KiB")
-		}
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	root, _, err := s.loadLocked()
-	if err != nil {
-		return err
-	}
-	section, err := deepSeekPlatformSection(root)
-	if err != nil {
-		return err
-	}
-	if action == "clear" {
-		delete(section, "token")
-	} else {
-		section["token"] = secretValue{Value: value, UpdatedAt: now.UTC()}
-	}
-	rawSection, err := json.Marshal(section)
-	if err != nil {
-		return fmt.Errorf("encode deepSeekPlatform section: %w", err)
-	}
-	root["deepSeekPlatform"] = rawSection
-	return s.writeRootLocked(root)
 }

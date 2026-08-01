@@ -64,17 +64,9 @@ describe('limits workspace integration', () => {
 
     expect(request).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({status: 'ready', hubId: 'hub-a', limit: {id: 'week'}});
-    expect(main).toContain('onOpenHistory={handleUsageRowActivate}');
+    expect(main).toContain('onOpenHistory={openUsageHistory}');
     expect(main).toContain('<UsageHistoryDialog');
     expect(main).toContain('{usageHistoryOverlay}');
-  });
-
-  test('wires the deepseek usage dialog and platform token save', () => {
-    expect(main).toContain('openDeepSeekUsage');
-    expect(main).toContain('<DeepSeekUsageDialog');
-    expect(main).toContain('{deepSeekUsageOverlay}');
-    expect(main).toContain("section: 'deepSeekPlatform'");
-    expect(workspaceService).toContain('async getDeepSeekUsage(');
   });
 
   test('keeps the settings screen free of the retired shortcut bar', () => {

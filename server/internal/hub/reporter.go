@@ -79,17 +79,6 @@ type usageHistoryGetPayload struct {
 	AccountLocalID string           `json:"accountLocalId"`
 }
 
-type deepSeekUsageGetPayload struct {
-	Year  int  `json:"year"`
-	Month int  `json:"month"`
-	Force bool `json:"force,omitempty"`
-}
-
-type deepSeekUsageSource interface {
-	Get(ctx context.Context, year, month int, force bool) (usage.DeepSeekPlatformUsage, error)
-	SetToken(token string)
-}
-
 type SessionHandler interface {
 	HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error)
 }
@@ -172,7 +161,6 @@ type Reporter struct {
 	skillsWatcherOnce       sync.Once
 	usageService            *usage.Service
 	usageHistory            *usage.HistoryStore
-	deepSeekUsage           deepSeekUsageSource
 	terminalHandler         TerminalHandler
 	hubEventSink            *hubEventSink
 	flickerBridge           *flickerBridgeManager
@@ -275,8 +263,6 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 	)
 	r.usageCollector = collector
 	r.usageHistory = usage.NewHistoryStore(filepath.Join(stateDir, "db", "usage-history.json"))
-	platformToken, _ := r.hubConfig.DeepSeekPlatformToken()
-	r.deepSeekUsage = usage.NewDeepSeekPlatformStore(platformToken, &http.Client{Timeout: 20 * time.Second})
 	r.usageService = usage.NewService(usage.ServiceOptions{
 		HubID: r.cfg.HubID, Collector: collector, History: r.usageHistory,
 		OnSnapshot: r.updateUsageSnapshot,
@@ -752,8 +738,6 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubConfigUpdate(conn, in)
 	case rp.RegistryMethodUsageHistoryGet:
 		r.replyUsageHistoryGet(conn, in)
-	case rp.RegistryMethodDeepSeekUsageGet:
-		r.replyDeepSeekUsageGet(conn, in)
 	case rp.RegistryMethodHubReleaseApply:
 		r.replyReleaseApply(conn, in)
 	case rp.RegistryMethodHubDebugWebReceiveStart, rp.RegistryMethodHubDebugWebReceiveChunk,
@@ -921,49 +905,6 @@ func (r *Reporter) replyUsageHistoryGet(conn *websocket.Conn, req envelope) {
 			"providerId":     history.ProviderID,
 			"accountLocalId": history.AccountLocalID,
 			"limits":         history.Limits,
-		}),
-	})
-}
-
-func (r *Reporter) replyDeepSeekUsageGet(conn *websocket.Conn, req envelope) {
-	var payload deepSeekUsageGetPayload
-	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid deepseek.usage.get payload")
-		return
-	}
-	year, month := payload.Year, payload.Month
-	if year == 0 {
-		year = time.Now().UTC().Year()
-	}
-	if month == 0 {
-		month = int(time.Now().UTC().Month())
-	}
-	if year < 2020 || year > 2100 || month < 1 || month > 12 {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid year or month")
-		return
-	}
-	if r.deepSeekUsage == nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, "deepseek usage is unavailable")
-		return
-	}
-	result, err := r.deepSeekUsage.Get(context.Background(), year, month, payload.Force)
-	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to fetch deepseek usage")
-		return
-	}
-	_ = r.writeJSON(conn, "->", envelope{
-		RequestID: req.RequestID,
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    req.Method,
-		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"hubId":    r.cfg.HubID,
-			"status":   result.Status,
-			"month":    result.Month,
-			"balance":  result.Balance,
-			"days":     result.Days,
-			"costs":    result.Costs,
-			"cachedAt": result.CachedAt,
 		}),
 	})
 }
@@ -1364,21 +1305,6 @@ func (r *Reporter) applyHubConfigUpdate(payload hubConfigUpdatePayload) error {
 		}
 		r.applyFlickerBridgeEnabled(enabled)
 		return r.reloadAgentRuntimeFromStore(context.Background())
-	case "deepSeekPlatform":
-		if payload.Field != "token" {
-			return fmt.Errorf("unsupported deepSeekPlatform field %q", payload.Field)
-		}
-		if err := store.UpdateDeepSeekPlatformToken(payload.Action, payload.Value, time.Now()); err != nil {
-			return err
-		}
-		if r.deepSeekUsage != nil {
-			token := ""
-			if payload.Action == "set" {
-				token = payload.Value
-			}
-			r.deepSeekUsage.SetToken(token)
-		}
-		return nil
 	default:
 		return fmt.Errorf("unsupported hub config section %q", payload.Section)
 	}

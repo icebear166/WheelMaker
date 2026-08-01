@@ -64,7 +64,7 @@ describe('MonitorSurface module', () => {
     ))).toBe(true);
   });
 
-  it('opens history from percentage rows and deepseek balance rows', () => {
+  it('opens history from percentage account rows but not balance-only rows', () => {
     const onOpenHistory = jest.fn();
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -82,22 +82,13 @@ describe('MonitorSurface module', () => {
       expect.objectContaining({localId: 'acct-a'}),
       trigger,
     );
-    const deepSeekTrigger = view!.root.findByProps({'data-usage-account-trigger': 'deepseek:opencode'});
-    expect(deepSeekTrigger.props.role).toBe('button');
-    act(() => deepSeekTrigger.props.onClick({currentTarget: deepSeekTrigger}));
-    expect(onOpenHistory).toHaveBeenCalledWith(
-      expect.objectContaining({id: 'deepseek'}),
-      expect.objectContaining({localId: 'opencode'}),
-      deepSeekTrigger,
-    );
+    expect(view!.root.findAllByProps({'data-usage-account-trigger': 'deepseek:opencode'})).toHaveLength(0);
 
     act(() => {
       view!.update(<UsageDetailContent snapshot={fixtureSnapshot} onOpenHistory={onOpenHistory} />);
     });
     const detailTrigger = view!.root.findByProps({'data-usage-account-trigger': 'codex:acct-a'});
     expect(detailTrigger.props.tabIndex).toBe(0);
-    const deepSeekDetailTrigger = view!.root.findByProps({'data-usage-account-trigger': 'deepseek:opencode'});
-    expect(deepSeekDetailTrigger.props.tabIndex).toBe(0);
     const preventDefault = jest.fn();
     act(() => detailTrigger.props.onKeyDown({
       key: 'Enter',
@@ -105,12 +96,7 @@ describe('MonitorSurface module', () => {
       preventDefault,
     }));
     expect(preventDefault).toHaveBeenCalledTimes(1);
-    act(() => deepSeekDetailTrigger.props.onKeyDown({
-      key: ' ',
-      currentTarget: deepSeekDetailTrigger,
-      preventDefault,
-    }));
-    expect(onOpenHistory).toHaveBeenCalledTimes(4);
+    expect(onOpenHistory).toHaveBeenCalledTimes(2);
   });
 
   it('shares one detail mode across the Limits and IQ tabs', () => {

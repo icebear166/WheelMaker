@@ -253,29 +253,3 @@ func readHubConfigFixture(t *testing.T, path string) []byte {
 	}
 	return raw
 }
-
-func TestStoreDeepSeekPlatformTokenRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "hub-config.json")
-	store := New(path)
-	now := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	if err := store.UpdateDeepSeekPlatformToken("set", "ds-platform-session", now); err != nil {
-		t.Fatalf("set token: %v", err)
-	}
-	token, err := store.DeepSeekPlatformToken()
-	if err != nil || token != "ds-platform-session" {
-		t.Fatalf("token=%q err=%v", token, err)
-	}
-	snapshot, err := store.Snapshot()
-	if err != nil || !snapshot.DeepSeekPlatform.Configured || snapshot.DeepSeekPlatform.UpdatedAt == "" {
-		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
-	}
-	if err := store.UpdateDeepSeekPlatformToken("clear", "", now); err != nil {
-		t.Fatalf("clear token: %v", err)
-	}
-	if token, _ := store.DeepSeekPlatformToken(); token != "" {
-		t.Fatalf("token after clear=%q", token)
-	}
-	if err := store.UpdateDeepSeekPlatformToken("bogus", "x", now); err == nil {
-		t.Fatal("invalid action must fail")
-	}
-}

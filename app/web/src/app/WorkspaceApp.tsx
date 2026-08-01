@@ -33,18 +33,6 @@ type UsageHistoryDialogView = {
   state: UsageHistoryDialogState;
 };
 
-type DeepSeekUsageDialogTarget = {
-  provider: UsageProviderView;
-  account: UsageViewAccount;
-  triggerElement: HTMLElement;
-};
-
-type DeepSeekUsageDialogView = {
-  target: DeepSeekUsageDialogTarget;
-  month: {year: number; month: number};
-  state: DeepSeekUsageDialogState;
-};
-
 import {deriveRegistryEndpoints} from '../registry/registryBaseUrl';
 import {RegistryWebAuthClient} from '../registry/RegistryWebAuthClient';
 import {RegistryAuthController, type RegistryAuthSnapshot} from '../registry/RegistryAuthController';
@@ -448,8 +436,6 @@ import {MobileUsageDialog} from '../usage/MobileUsageDialog';
 import {MonitorSurface} from '../usage/MonitorSurface';
 import {UsageHistoryDialog, type UsageHistoryDialogState} from '../usage/UsageHistoryDialog';
 import {loadUsageHistoryFromSources} from '../usage/usageHistory';
-import {DeepSeekUsageDialog, type DeepSeekUsageDialogState} from '../usage/DeepSeekUsageDialog';
-import {normalizeDeepSeekUsage} from '../usage/deepSeekUsage';
 import {UsageStore} from '../usage/usageStore';
 import {HubRefreshTriggers} from '../hubState/hubRefreshTriggers';
 import {
@@ -3449,8 +3435,6 @@ export function App() {
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
   const usageHistoryRequestSeqRef = useRef(0);
   const [usageHistoryDialogView, setUsageHistoryDialogView] = useState<UsageHistoryDialogView | null>(null);
-  const deepSeekUsageRequestSeqRef = useRef(0);
-  const [deepSeekUsageDialogView, setDeepSeekUsageDialogView] = useState<DeepSeekUsageDialogView | null>(null);
   const modelEfficiencyStore = useMemo(
     () => new ModelEfficiencyStore(() => service.getCodexRadarEfficiency()),
     [],
@@ -12423,102 +12407,6 @@ export function App() {
     setUsageHistoryDialogView(null);
   }, []);
 
-  const loadDeepSeekUsage = useCallback(async (
-    target: DeepSeekUsageDialogTarget,
-    month: {year: number; month: number},
-    force = false,
-  ) => {
-    const requestSeq = ++deepSeekUsageRequestSeqRef.current;
-    setDeepSeekUsageDialogView({target, month, state: {status: 'loading', month}});
-    const source = target.account.sources[0];
-    if (!source) {
-      setDeepSeekUsageDialogView({
-        target,
-        month,
-        state: {status: 'error', message: 'No online Hub for this account', month},
-      });
-      return;
-    }
-    try {
-      const result = await service.getDeepSeekUsage(source.hubId, month.year, month.month, force);
-      if (deepSeekUsageRequestSeqRef.current !== requestSeq) return;
-      const view = normalizeDeepSeekUsage(result);
-      if ((view.balance ?? []).length === 0 && target.account.balance?.items?.length) {
-        view.balance = target.account.balance.items;
-      }
-      const state: DeepSeekUsageDialogState = view.status === 'ok'
-        ? {status: 'ready', view}
-        : view.status === 'expired'
-          ? {status: 'expired', month, view}
-          : {status: 'notConnected', month};
-      setDeepSeekUsageDialogView({target, month, state});
-    } catch (err) {
-      if (deepSeekUsageRequestSeqRef.current !== requestSeq) return;
-      setDeepSeekUsageDialogView({
-        target,
-        month,
-        state: {status: 'error', message: err instanceof Error ? err.message : 'Failed to load DeepSeek usage', month},
-      });
-    }
-  }, [service]);
-
-  const openDeepSeekUsage = useCallback((
-    provider: UsageProviderView,
-    account: UsageViewAccount,
-    triggerElement: HTMLElement,
-  ) => {
-    const month = {year: new Date().getFullYear(), month: new Date().getMonth() + 1};
-    void loadDeepSeekUsage({provider, account, triggerElement}, month);
-  }, [loadDeepSeekUsage]);
-
-  const closeDeepSeekUsage = useCallback(() => {
-    deepSeekUsageRequestSeqRef.current += 1;
-    setDeepSeekUsageDialogView(null);
-  }, []);
-
-  const saveDeepSeekToken = useCallback(async (token: string) => {
-    const view = deepSeekUsageDialogView;
-    const source = view?.target.account.sources[0];
-    if (!view || !source) throw new Error('No active DeepSeek account');
-    await service.updateHubConfig(source.hubId, {
-      section: 'deepSeekPlatform',
-      field: 'token',
-      action: 'set',
-      value: token,
-    });
-    await loadDeepSeekUsage(view.target, view.month);
-  }, [deepSeekUsageDialogView, loadDeepSeekUsage, service]);
-
-  const clearDeepSeekToken = useCallback(async () => {
-    const view = deepSeekUsageDialogView;
-    const source = view?.target.account.sources[0];
-    if (!view || !source) return;
-    await service.updateHubConfig(source.hubId, {
-      section: 'deepSeekPlatform',
-      field: 'token',
-      action: 'clear',
-    });
-    await loadDeepSeekUsage(view.target, view.month);
-  }, [deepSeekUsageDialogView, loadDeepSeekUsage, service]);
-
-  const changeDeepSeekMonth = useCallback((year: number, month: number) => {
-    const view = deepSeekUsageDialogView;
-    if (!view) return;
-    void loadDeepSeekUsage(view.target, {year, month});
-  }, [deepSeekUsageDialogView, loadDeepSeekUsage]);
-
-  const handleUsageRowActivate = useCallback((
-    provider: UsageProviderView,
-    account: UsageViewAccount,
-    triggerElement: HTMLElement,
-  ) => {
-    if (provider.id === 'deepseek') {
-      openDeepSeekUsage(provider, account, triggerElement);
-    } else {
-      openUsageHistory(provider, account, triggerElement);
-    }
-  }, [openDeepSeekUsage, openUsageHistory]);
-
   const agentPackageActionKey = useCallback((hubId: string, packageName: string): string => {
     return `${hubId}:${packageName}`;
   }, []);
@@ -18115,7 +18003,7 @@ export function App() {
                   onRefreshLimits={() => { void refreshUsageAcrossHubs(); }}
                   onRefreshIq={() => { void modelEfficiencyStore.refresh(); }}
                   onRequestHide={() => setConfirmTarget({kind: 'hideMonitor'})}
-                  onOpenHistory={handleUsageRowActivate}
+                  onOpenHistory={openUsageHistory}
                 />
               ) : null}
             </div>
@@ -20405,17 +20293,6 @@ export function App() {
       onRetry={() => { void loadUsageHistoryDialog(usageHistoryDialogView.target); }}
     />
   ) : null;
-  const deepSeekUsageOverlay = deepSeekUsageDialogView ? (
-    <DeepSeekUsageDialog
-      state={deepSeekUsageDialogView.state}
-      triggerElement={deepSeekUsageDialogView.target.triggerElement}
-      onClose={closeDeepSeekUsage}
-      onRetry={() => { void loadDeepSeekUsage(deepSeekUsageDialogView.target, deepSeekUsageDialogView.month, true); }}
-      onMonthChange={changeDeepSeekMonth}
-      onSaveToken={saveDeepSeekToken}
-      onClearToken={clearDeepSeekToken}
-    />
-  ) : null;
   const mobileUsageOverlay = !isWide && mobileUsageOpen ? (
     <MobileUsageDialog
       snapshot={usageSnapshot}
@@ -20423,7 +20300,7 @@ export function App() {
       onRefresh={() => { void refreshUsageAcrossHubs(); }}
       onRefreshEfficiency={() => void modelEfficiencyStore.refresh()}
       onClose={() => setMobileUsageOpen(false)}
-      onOpenHistory={handleUsageRowActivate}
+      onOpenHistory={openUsageHistory}
     />
   ) : null;
   const terminalMobileOverlay = !isWide ? (
@@ -20858,7 +20735,6 @@ export function App() {
         onCloseDrawer={() => setDrawerOpen(false)}
       />
       {usageHistoryOverlay}
-      {deepSeekUsageOverlay}
       <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}

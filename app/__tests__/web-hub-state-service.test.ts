@@ -181,32 +181,4 @@ describe('hub state registry service', () => {
     await expect(repository.getUsageHistory('hub-a', 'codex', 'current'))
       .rejects.toThrow('invalid usage history response');
   });
-
-  test('requests deepseek usage with month params', async () => {
-    const client = {
-      request: jest.fn().mockResolvedValue({
-        type: 'response',
-        payload: {
-          hubId: 'hub-a',
-          status: 'ok',
-          month: {year: 2026, month: 8},
-          balance: [{currency: 'CNY', total: '3.24'}],
-          days: [{date: '2026-08-01', request: 3, outputTokens: 120, hitTokens: 300, missTokens: 100, totalTokens: 520}],
-          costs: [{currency: 'CNY', monthlyCost: 8.8, todayCost: 0.02, daily: [{date: '2026-08-01', amount: 0.02}]}],
-        },
-      }),
-    } as unknown as RegistryClient;
-    const repository = new RegistryRepository(client);
-
-    const result = await repository.getDeepSeekUsage('hub-a', 2026, 8, true);
-
-    expect(client.request).toHaveBeenCalledWith({
-      method: 'deepseek.usage.get',
-      hubId: 'hub-a',
-      payload: {year: 2026, month: 8, force: true},
-      timeoutMs: 30000,
-    });
-    expect(result.status).toBe('ok');
-    expect(result.days?.[0]?.totalTokens).toBe(520);
-  });
 });

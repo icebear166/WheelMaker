@@ -28,7 +28,6 @@ export type NativePortRelaySiteDataResult = {
 
 export type NativeRuntimeBridge = {
   enabled?: boolean;
-  deepSeekLogin?: () => Promise<string>;
   drainWebDiagnostics?: () => Promise<NativeWebDiagnosticsPayload> | NativeWebDiagnosticsPayload;
   setDiagnosticLogLevel?: (
     logLevel: NativeDiagnosticLogLevel,
@@ -59,14 +58,6 @@ function parsePortRelaySiteDataResult(value: string | undefined): NativePortRela
 function wrapAndroidRuntime(native: AndroidNativeRpcFacade): NativeRuntimeBridge {
   return {
     enabled: true,
-    deepSeekLogin: async () => {
-      const raw = await native.deepSeekLogin();
-      const parsed = JSON.parse(raw) as {token?: unknown};
-      if (typeof parsed.token !== 'string' || parsed.token === '') {
-        throw new Error('DeepSeek login returned no token');
-      }
-      return parsed.token;
-    },
     drainWebDiagnostics: async () => parseWebDiagnostics(await native.drainWebDiagnostics()),
     setDiagnosticLogLevel: async logLevel =>
       parseDiagnosticLogLevelState(await native.setDiagnosticLogLevel(logLevel)),

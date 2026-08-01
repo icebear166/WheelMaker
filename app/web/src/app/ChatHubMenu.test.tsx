@@ -829,7 +829,6 @@ test('settings section renders the flicker segment row and compact key editors',
         busyField: '',
         data: {
           flickerBridge: {mode: 'v1', enabled: true},
-          deepSeekPlatform: {configured: false},
           apiKeys: {
             kimi: {configured: true, updatedAt: '2026-07-29T12:00:00Z'},
           },
@@ -894,7 +893,7 @@ test('flicker segment disables unavailable modes and surfaces the inline error',
         loading: false,
         error: '',
         busyField: '',
-        data: {flickerBridge: {mode: 'v1', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}},
+        data: {flickerBridge: {mode: 'v1', enabled: true}, apiKeys: {}},
       },
     },
   });
@@ -932,7 +931,7 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
         loading: false,
         error: '',
         busyField: '',
-        data: {flickerBridge: {mode: 'v2', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}},
+        data: {flickerBridge: {mode: 'v2', enabled: true}, apiKeys: {}},
       },
     },
   });
@@ -958,7 +957,7 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
         loading: false,
         error: '',
         busyField: '',
-        data: {flickerBridge: {mode: 'v1', enabled: false}, apiKeys: {}, deepSeekPlatform: {configured: false}},
+        data: {flickerBridge: {mode: 'v1', enabled: false}, apiKeys: {}},
       },
     },
   });

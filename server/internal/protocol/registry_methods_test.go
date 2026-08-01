@@ -581,7 +581,6 @@ func TestRegistryHubStateMethodsRequireHubID(t *testing.T) {
 		RegistryMethodHubConfigGet,
 		RegistryMethodHubConfigUpdate,
 		RegistryMethodUsageHistoryGet,
-		RegistryMethodDeepSeekUsageGet,
 	}
 	for _, method := range methods {
 		desc, ok := RegistryMethod(method)
@@ -605,12 +604,5 @@ func TestRegistryHubStateMethodsRequireHubID(t *testing.T) {
 	}
 	if updated.Route != RegistryRouteClientEvent {
 		t.Fatalf("hub.state.updated route=%q, want client event", updated.Route)
-	}
-}
-
-func TestDeepSeekUsageGetDescriptor(t *testing.T) {
-	got, ok := RegistryMethod(RegistryMethodDeepSeekUsageGet)
-	if !ok || got.Route != RegistryRouteHubState || !got.RequiresHubID {
-		t.Fatalf("descriptor=%+v ok=%v", got, ok)
 	}
 }

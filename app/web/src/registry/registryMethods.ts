@@ -77,7 +77,6 @@ export const RegistryMethods = {
   HubConfigGet: 'hub.config.get',
   HubConfigUpdate: 'hub.config.update',
   UsageHistoryGet: 'usage.history.get',
-  DeepSeekUsageGet: 'deepseek.usage.get',
   ReleasePublishStart: 'release.publish.start',
   ReleasePublishGet: 'release.publish.get',
   ReleasePublishUpdated: 'release.publish.updated',
