@@ -1,6 +1,6 @@
 # DeepSeek Platform Usage (Redo) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Revert the initial DeepSeek platform usage implementation (13 code commits) and rebuild it on top of real captured API structures, per `spec-deepseek-platform-usage.md` (redo version).
 
@@ -30,7 +30,7 @@
 - `docs/scope/2026-08-01-deepseek-platform-usage/plan-deepseek-platform-usage.md` (this file)
 - `docs/wiki/features/limits-monitoring.md` (DeepSeek section already rewritten)
 
-- [ ] **Step 1: Commit docs**
+- [x] **Step 1: Commit docs**
 
 ```bash
 git add docs/scope/2026-08-01-deepseek-platform-usage docs/wiki/features/limits-monitoring.md
@@ -45,7 +45,7 @@ Reverts in reverse chronological order. Doc commits (`f2ef31f0`, `2d7fdcf1`) are
 
 **Files:** all files touched by the 13 commits (see `git log --oneline 04ce29e6^..05f133b1`).
 
-- [ ] **Step 1: Revert all 13 commits into the index**
+- [x] **Step 1: Revert all 13 commits into the index**
 
 ```bash
 git revert --no-commit 05f133b1 2804066c da3da061 93836e77 6fa70f1c 90f3ec4d ee0a99a3 8e635714 bb1b60ec c006903a 93cffd5a f259b88f 04ce29e6
@@ -53,7 +53,7 @@ git revert --no-commit 05f133b1 2804066c da3da061 93836e77 6fa70f1c 90f3ec4d ee0
 
 Expected: completes without conflicts (commits form a contiguous chain).
 
-- [ ] **Step 2: Verify no deepseek-usage code remains**
+- [x] **Step 2: Verify no deepseek-usage code remains**
 
 ```bash
 rg -il "deepseek" --glob '!docs/**' --glob '!**/dist/**' | sort
@@ -61,7 +61,7 @@ rg -il "deepseek" --glob '!docs/**' --glob '!**/dist/**' | sort
 
 Expected remaining matches only in: `server/internal/hub/agent/cxdeepseek/`, `server/internal/hub/agent/codexapp_deepseek.go`, `server/internal/hub/agent/factory.go`, `server/internal/hub/agent/skills.go`, `app/web/src/chat/` (cx-deepseek agent feature, unrelated). `server/internal/hubconfig/store.go`, `server/internal/hub/reporter.go`, `app/web/src/usage/` must NOT appear.
 
-- [ ] **Step 3: Verify build and tests are green post-revert**
+- [x] **Step 3: Verify build and tests are green post-revert**
 
 ```bash
 cd server && go build ./... && go test ./... 2>&1 | tail -20
@@ -71,7 +71,7 @@ cd ..
 
 Expected: all PASS.
 
-- [ ] **Step 4: Commit the revert**
+- [x] **Step 4: Commit the revert**
 
 ```bash
 git add -A
@@ -88,7 +88,7 @@ The old hubconfig secret implementation was correct — restore it unchanged.
 - `server/internal/hubconfig/store.go`
 - `server/internal/hubconfig/store_test.go`
 
-- [ ] **Step 1: Cherry-pick the old commit**
+- [x] **Step 1: Cherry-pick the old commit**
 
 ```bash
 git cherry-pick 04ce29e6
@@ -96,7 +96,7 @@ git cherry-pick 04ce29e6
 
 Expected: clean pick, keeps message `feat(hubconfig): store deepseek platform session token`.
 
-- [ ] **Step 2: Verify tests**
+- [x] **Step 2: Verify tests**
 
 ```bash
 cd server && go test ./internal/hubconfig/ -run TestDeepSeek -v
@@ -117,7 +117,7 @@ Strict typed parsing replaces the speculative multi-key guessing. Key behaviors:
 - Create: `server/internal/hub/usage/deepseek_platform.go`
 - Create: `server/internal/hub/usage/deepseek_platform_test.go`
 
-- [ ] **Step 1: Copy sanitized fixtures into testdata**
+- [x] **Step 1: Copy sanitized fixtures into testdata**
 
 ```bash
 mkdir -p server/internal/hub/usage/testdata
@@ -126,7 +126,7 @@ cp docs/scope/2026-08-01-deepseek-platform-usage/fixtures/usage_amount.json serv
 cp docs/scope/2026-08-01-deepseek-platform-usage/fixtures/usage_cost.json server/internal/hub/usage/testdata/deepseek_usage_cost.json
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `server/internal/hub/usage/deepseek_platform_test.go`:
 
@@ -401,7 +401,7 @@ func TestDeepSeekPlatformStoreNotConnected(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 ```bash
 cd server && go test ./internal/hub/usage/ -run TestParseDeepSeek -v
@@ -409,7 +409,7 @@ cd server && go test ./internal/hub/usage/ -run TestParseDeepSeek -v
 
 Expected: FAIL — `deepSeekEnvelope`, `parseDeepSeekSummaryBalance` etc. undefined.
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `server/internal/hub/usage/deepseek_platform.go`:
 
@@ -932,7 +932,7 @@ func deepSeekCacheFresh(entry deepSeekPlatformCacheEntry, now time.Time, year, m
 
 Note: `BalanceItem` already exists in the `usage` package with `Currency`, `Total`, `Granted`, `ToppedUp` string fields — verify with `rg "type BalanceItem" server/internal/hub/usage/`.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 ```bash
 cd server && go test ./internal/hub/usage/ -run "DeepSeek" -v
@@ -940,7 +940,7 @@ cd server && go test ./internal/hub/usage/ -run "DeepSeek" -v
 
 Expected: all PASS (fixture parse, malformed rejection, expired codes, cache TTL/force, stale on expired/error, notConnected).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/internal/hub/usage/
@@ -958,7 +958,7 @@ The old protocol registration was correct — restore unchanged.
 - `server/internal/protocol/registry_methods_test.go`
 - `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: Cherry-pick**
+- [x] **Step 1: Cherry-pick**
 
 ```bash
 git cherry-pick 93cffd5a
@@ -966,7 +966,7 @@ git cherry-pick 93cffd5a
 
 Expected: clean pick (`feat(protocol): expose deepseek usage read method`).
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```bash
 cd server && go test ./internal/protocol/ ./internal/registry/ -run "DeepSeek" -v
@@ -982,7 +982,7 @@ Expected: PASS (method descriptor + registry forwarding by envelope hubId).
 - `server/internal/hub/reporter.go`
 - `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: Cherry-pick without committing**
+- [x] **Step 1: Cherry-pick without committing**
 
 ```bash
 git cherry-pick -n c006903a
@@ -990,7 +990,7 @@ git cherry-pick -n c006903a
 
 Expected: clean (restores `deepSeekUsageGetPayload`, `deepSeekUsageSource`, `Reporter.deepSeekUsage`, wiring in `NewReporter`, `replyDeepSeekUsageGet`, the `deepSeekPlatform` case in `applyHubConfigUpdate`, and the two handler tests).
 
-- [ ] **Step 2: Pass the message field through the response payload**
+- [x] **Step 2: Pass the message field through the response payload**
 
 In `server/internal/hub/reporter.go`, in `replyDeepSeekUsageGet`, change the payload map from:
 
@@ -1021,7 +1021,7 @@ to:
 		}),
 ```
 
-- [ ] **Step 3: Add an error-status test**
+- [x] **Step 3: Add an error-status test**
 
 Append to `server/internal/hub/hub_test.go` (after `TestReporterRespondsToDeepSeekUsageGet`):
 
@@ -1074,7 +1074,7 @@ func TestReporterRespondsToDeepSeekUsageGetErrorWithMessage(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 cd server && go test ./internal/hub/ -run "DeepSeekUsage" -v
@@ -1082,7 +1082,7 @@ cd server && go test ./internal/hub/ -run "DeepSeekUsage" -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add server/internal/hub/reporter.go server/internal/hub/hub_test.go
@@ -1101,7 +1101,7 @@ git commit -m "feat(hub): serve deepseek platform usage with stale error status"
 - `app/__tests__/web-hub-state-service.test.ts`
 - `app/web/src/app/ChatHubMenu.test.tsx`
 
-- [ ] **Step 1: Cherry-pick without committing**
+- [x] **Step 1: Cherry-pick without committing**
 
 ```bash
 git cherry-pick -n bb1b60ec
@@ -1109,7 +1109,7 @@ git cherry-pick -n bb1b60ec
 
 Expected: clean.
 
-- [ ] **Step 2: Add the error status and message to the types**
+- [x] **Step 2: Add the error status and message to the types**
 
 In `app/web/src/registry/registryTypes.ts`, change `RegistryDeepSeekUsageResponse` from:
 
@@ -1140,7 +1140,7 @@ export interface RegistryDeepSeekUsageResponse {
 }
 ```
 
-- [ ] **Step 3: Parse the full payload for every status**
+- [x] **Step 3: Parse the full payload for every status**
 
 `expired`/`error` responses now carry stale data, so the early return for non-ok statuses must go. In `app/web/src/registry/RegistryRepository.ts`, replace the whole `normalizeDeepSeekUsageResponse` function with:
 
@@ -1185,7 +1185,7 @@ function normalizeDeepSeekUsageResponse(
 }
 ```
 
-- [ ] **Step 4: Run transport tests**
+- [x] **Step 4: Run transport tests**
 
 ```bash
 cd app && npm test -- web-hub-state-service web-backend-secret-settings 2>&1 | tail -8
@@ -1193,7 +1193,7 @@ cd app && npm test -- web-hub-state-service web-backend-secret-settings 2>&1 | t
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/web/src/registry app/__tests__/web-hub-state-service.test.ts app/web/src/app/ChatHubMenu.test.tsx
@@ -1208,7 +1208,7 @@ git commit -m "feat(app): transport deepseek platform usage with error status"
 - Create: `app/web/src/usage/deepSeekUsage.ts`
 - Create: `app/__tests__/web-deepseek-usage.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `app/__tests__/web-deepseek-usage.test.ts`:
 
@@ -1302,7 +1302,7 @@ describe('normalizeDeepSeekUsage', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 cd app && npm test -- web-deepseek-usage 2>&1 | tail -5
@@ -1310,7 +1310,7 @@ cd app && npm test -- web-deepseek-usage 2>&1 | tail -5
 
 Expected: FAIL — module `../web/src/usage/deepSeekUsage` not found.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `app/web/src/usage/deepSeekUsage.ts`:
 
@@ -1374,7 +1374,7 @@ export function normalizeDeepSeekUsage(raw: RegistryDeepSeekUsageResponse, now =
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 cd app && npm test -- web-deepseek-usage 2>&1 | tail -5
@@ -1382,7 +1382,7 @@ cd app && npm test -- web-deepseek-usage 2>&1 | tail -5
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/web/src/usage/deepSeekUsage.ts app/__tests__/web-deepseek-usage.test.ts
@@ -1400,7 +1400,7 @@ These small pieces were correct in the old implementation; re-apply them manuall
 - Modify: `app/web/src/platform/native/nativeRuntime.ts`
 - Create: `app/web/src/usage/deepSeekLogin.ts`
 
-- [ ] **Step 1: Add the android facade method**
+- [x] **Step 1: Add the android facade method**
 
 In `app/web/src/platform/android/androidNativeMessageBridge.ts`, in `AndroidNativeRpcFacade`, after the `reserveUserAction` line add:
 
@@ -1414,7 +1414,7 @@ and in `getAndroidNativeRpcFacade`'s returned object, after the `reserveUserActi
     deepSeekLogin: () => request('deepseek.login'),
 ```
 
-- [ ] **Step 2: Add the native runtime bridge wrapper**
+- [x] **Step 2: Add the native runtime bridge wrapper**
 
 In `app/web/src/platform/native/nativeRuntime.ts`, in `NativeRuntimeBridge`, after `enabled?: boolean;` add:
 
@@ -1435,7 +1435,7 @@ and in `wrapAndroidRuntime`'s returned object, after `enabled: true,` add:
     },
 ```
 
-- [ ] **Step 3: Create the login helper**
+- [x] **Step 3: Create the login helper**
 
 Create `app/web/src/usage/deepSeekLogin.ts`:
 
@@ -1455,7 +1455,7 @@ export function requestNativeDeepSeekLogin(): Promise<string> {
 }
 ```
 
-- [ ] **Step 4: Type check**
+- [x] **Step 4: Type check**
 
 ```bash
 cd app && npm run tsc:web
@@ -1463,7 +1463,7 @@ cd app && npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/web/src/platform app/web/src/usage/deepSeekLogin.ts
@@ -1480,7 +1480,7 @@ Full `usage-history` shell, styled login panel with official-site link, expired 
 - Create: `app/web/src/usage/DeepSeekUsageDialog.tsx`
 - Create: `app/__tests__/web-deepseek-usage-dialog.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `app/__tests__/web-deepseek-usage-dialog.test.tsx`:
 
@@ -1657,7 +1657,7 @@ describe('DeepSeekUsageDialog', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 cd app && npm test -- web-deepseek-usage-dialog 2>&1 | tail -5
@@ -1665,7 +1665,7 @@ cd app && npm test -- web-deepseek-usage-dialog 2>&1 | tail -5
 
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Write the dialog**
+- [x] **Step 3: Write the dialog**
 
 Create `app/web/src/usage/DeepSeekUsageDialog.tsx`:
 
@@ -2002,7 +2002,7 @@ function DeepSeekUsageReady({view}: {view: DeepSeekUsageView}) {
 }
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 ```bash
 cd app && npm test -- web-deepseek-usage-dialog 2>&1 | tail -8
@@ -2010,7 +2010,7 @@ cd app && npm test -- web-deepseek-usage-dialog 2>&1 | tail -8
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/web/src/usage/DeepSeekUsageDialog.tsx app/__tests__/web-deepseek-usage-dialog.test.tsx
@@ -2025,7 +2025,7 @@ git commit -m "feat(app): add deepseek platform usage dialog"
 - Create: `app/web/src/usage/DeepSeekUsageChart.tsx`
 - Modify: `app/web/src/styles/usage.css` (append deepseek block at the end)
 
-- [ ] **Step 1: Write the chart**
+- [x] **Step 1: Write the chart**
 
 Create `app/web/src/usage/DeepSeekUsageChart.tsx`:
 
@@ -2210,7 +2210,7 @@ function formatTooltip(params: unknown, view: DeepSeekUsageView): string {
 }
 ```
 
-- [ ] **Step 2: Append the deepseek styles**
+- [x] **Step 2: Append the deepseek styles**
 
 Append to `app/web/src/styles/usage.css`:
 
@@ -2365,7 +2365,7 @@ Append to `app/web/src/styles/usage.css`:
 }
 ```
 
-- [ ] **Step 3: Verify type check, tests, and production build**
+- [x] **Step 3: Verify type check, tests, and production build**
 
 ```bash
 cd app && npm run tsc:web && npm test -- web-deepseek-usage 2>&1 | tail -5 && npm run build:web 2>&1 | tail -5
@@ -2373,7 +2373,7 @@ cd app && npm run tsc:web && npm test -- web-deepseek-usage 2>&1 | tail -5 && np
 
 Expected: tsc PASS, jest PASS, webpack build succeeds (chart chunk emitted).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/web/src/usage/DeepSeekUsageChart.tsx app/web/src/styles/usage.css
@@ -2390,7 +2390,7 @@ git commit -m "feat(app): chart deepseek daily usage with theme tokens"
 - `app/__tests__/web-usage-feature-surface.test.tsx`
 - `app/__tests__/web-usage-workspace-integration.test.tsx`
 
-- [ ] **Step 1: Cherry-pick the old wiring without committing**
+- [x] **Step 1: Cherry-pick the old wiring without committing**
 
 ```bash
 git cherry-pick -n 90f3ec4d
@@ -2398,7 +2398,7 @@ git cherry-pick -n 90f3ec4d
 
 Expected: clean. This restores the `deepSeekUsageDialogView` state, the `loadDeepSeekUsage`/`openDeepSeekUsage`/`closeDeepSeekUsage`/`saveDeepSeekToken`/`clearDeepSeekToken`/`changeDeepSeekMonth`/`handleUsageRowActivate` callbacks, the overlay render, the `provider.id === 'deepseek'` clickable rows in `UsageFeatureSurface.tsx`, and the two test files.
 
-- [ ] **Step 2: Map the error status with stale data**
+- [x] **Step 2: Map the error status with stale data**
 
 In `app/web/src/app/WorkspaceApp.tsx`, in `loadDeepSeekUsage`, change the state mapping from:
 
@@ -2430,7 +2430,7 @@ to:
             : {status: 'notConnected', month};
 ```
 
-- [ ] **Step 3: Run wiring tests**
+- [x] **Step 3: Run wiring tests**
 
 ```bash
 cd app && npm test -- web-usage-feature-surface web-usage-workspace-integration 2>&1 | tail -8 && npm run tsc:web
@@ -2438,7 +2438,7 @@ cd app && npm test -- web-usage-feature-surface web-usage-workspace-integration 
 
 Expected: PASS. If the integration test asserts the old state mapping, update its expectations to the new error mapping.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add app/web/src/app/WorkspaceApp.tsx app/web/src/usage/UsageFeatureSurface.tsx app/__tests__/web-usage-feature-surface.test.tsx app/__tests__/web-usage-workspace-integration.test.tsx
@@ -2458,7 +2458,7 @@ git commit -m "feat(app): open deepseek usage from monitor rows"
 - `server/cmd/wheelmaker-desktop/webview_policy_test.go`
 - `server/cmd/wheelmaker-desktop/webview_windows.go`
 
-- [ ] **Step 1: Cherry-pick without committing**
+- [x] **Step 1: Cherry-pick without committing**
 
 ```bash
 git cherry-pick -n 6fa70f1c
@@ -2466,7 +2466,7 @@ git cherry-pick -n 6fa70f1c
 
 Expected: clean.
 
-- [ ] **Step 2: Replace the token scan with a precise userToken read**
+- [x] **Step 2: Replace the token scan with a precise userToken read**
 
 In `server/cmd/wheelmaker-desktop/deepseek_login.go`, replace the `deepSeekLoginScript` constant:
 
@@ -2486,7 +2486,7 @@ const deepSeekLoginScript = `(() => {
 })()`
 ```
 
-- [ ] **Step 3: Extend the login test**
+- [x] **Step 3: Extend the login test**
 
 In `server/cmd/wheelmaker-desktop/deepseek_login_test.go`, append:
 
@@ -2503,7 +2503,7 @@ func TestDeepSeekLoginScriptTargetsUserTokenKey(t *testing.T) {
 
 (Ensure `strings` is imported in the test file.)
 
-- [ ] **Step 4: Run desktop tests and build**
+- [x] **Step 4: Run desktop tests and build**
 
 ```bash
 cd server && go test ./cmd/wheelmaker-desktop/ -run "DeepSeek|WebViewPolicy" -v && go build ./cmd/wheelmaker-desktop/
@@ -2511,7 +2511,7 @@ cd server && go test ./cmd/wheelmaker-desktop/ -run "DeepSeek|WebViewPolicy" -v 
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add server/cmd/wheelmaker-desktop/
@@ -2529,7 +2529,7 @@ git commit -m "feat(desktop): embedded deepseek platform login"
 - `mobile/android/app/src/main/java/com/wheelmaker/android/TrustedWebMessagePolicy.kt`
 - `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`
 
-- [ ] **Step 1: Cherry-pick the android chain without committing**
+- [x] **Step 1: Cherry-pick the android chain without committing**
 
 ```bash
 git cherry-pick -n 93836e77
@@ -2553,7 +2553,7 @@ If any conflict involves android files, stop and resolve manually — the androi
 git show 05f133b1:mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt | diff - mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt && echo "android dialog matches 05f133b1"
 ```
 
-- [ ] **Step 2: Replace the token scan with a precise userToken read**
+- [x] **Step 2: Replace the token scan with a precise userToken read**
 
 In `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`, replace `DEEP_SEEK_TOKEN_SCRIPT` with:
 
@@ -2573,7 +2573,7 @@ internal const val DEEP_SEEK_TOKEN_SCRIPT = """
 """
 ```
 
-- [ ] **Step 3: Extend the protocol test**
+- [x] **Step 3: Extend the protocol test**
 
 In `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`, append a test (matching the file's existing assertion style):
 
@@ -2585,7 +2585,7 @@ In `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtoco
     }
 ```
 
-- [ ] **Step 4: Run android unit tests**
+- [x] **Step 4: Run android unit tests**
 
 ```bash
 cd mobile/android && ./gradlew.bat :app:testDebugUnitTest --tests "com.wheelmaker.android.DeepSeekLoginProtocolTest" 2>&1 | tail -10
@@ -2593,7 +2593,7 @@ cd mobile/android && ./gradlew.bat :app:testDebugUnitTest --tests "com.wheelmake
 
 Expected: PASS. (Use `./gradlew` if the wrapper script has no `.bat`.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mobile/android
@@ -2604,7 +2604,7 @@ git commit -m "feat(android): embedded deepseek platform login"
 
 ### Task 15: Full verification and probe cleanup
 
-- [ ] **Step 1: Full server verification**
+- [x] **Step 1: Full server verification**
 
 ```bash
 cd server && go build ./... && go test ./... 2>&1 | tail -15
@@ -2612,7 +2612,7 @@ cd server && go build ./... && go test ./... 2>&1 | tail -15
 
 Expected: all PASS.
 
-- [ ] **Step 2: Full web verification**
+- [x] **Step 2: Full web verification**
 
 ```bash
 cd app && npm run tsc:web && npm test 2>&1 | tail -10 && npm run build:web 2>&1 | tail -3
@@ -2620,7 +2620,7 @@ cd app && npm run tsc:web && npm test 2>&1 | tail -10 && npm run build:web 2>&1 
 
 Expected: all PASS.
 
-- [ ] **Step 3: Confirm spec acceptance points against the diff**
+- [x] **Step 3: Confirm spec acceptance points against the diff**
 
 ```bash
 git diff origin/main...HEAD --stat | tail -5
@@ -2629,7 +2629,7 @@ rg -n "userToken|40002|biz_data|isCurrentMonth|Disconnect DeepSeek" server/inter
 
 Expected: every acceptance bullet in `spec-deepseek-platform-usage.md` maps to landed code; no camelCase `bizData` guessing remains in `deepseek_platform.go`.
 
-- [ ] **Step 4: Clean up the probe environment**
+- [x] **Step 4: Clean up the probe environment**
 
 ```bash
 powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like '*wm-ds-probe-profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
