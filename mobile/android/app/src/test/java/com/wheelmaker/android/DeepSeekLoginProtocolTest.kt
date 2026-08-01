@@ -25,5 +25,9 @@ class DeepSeekLoginProtocolTest {
         val dialogSource = source("src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt")
         assertTrue(dialogSource.contains("layoutParams ="))
         assertTrue(dialogSource.indexOf("dialog.show()") in 0 until dialogSource.indexOf("webView.loadUrl"))
+        assertTrue(dialogSource.contains("dialog.window?.setLayout"))
+        assertTrue(dialogSource.contains("onReceivedError"))
+        assertTrue(dialogSource.contains("onReceivedHttpError"))
+        assertTrue(dialogSource.contains("Blocked navigation"))
     }
 }
