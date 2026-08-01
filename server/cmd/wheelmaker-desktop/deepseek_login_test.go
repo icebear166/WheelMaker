@@ -15,7 +15,7 @@ func TestDeepSeekLoginScriptTargetsUserTokenKey(t *testing.T) {
 	}
 }
 
-func TestDeepSeekLoginOverlayRunsOnOneLockedThread(t *testing.T) {
+func TestDeepSeekLoginPopupRunsOnOneLockedThread(t *testing.T) {
 	body, err := os.ReadFile("deepseek_login_windows.go")
 	if err != nil {
 		t.Fatal(err)
@@ -23,15 +23,20 @@ func TestDeepSeekLoginOverlayRunsOnOneLockedThread(t *testing.T) {
 	source := string(body)
 	for _, want := range []string{
 		"runtime.LockOSThread()",
-		"setWindowParent(hwnd, parentHwnd)",
+		"gwlHwndParent",
 		"window.Run()",
 	} {
 		if !strings.Contains(source, want) {
-			t.Errorf("login overlay missing %q", want)
+			t.Errorf("login popup missing %q", want)
 		}
 	}
 	if strings.Contains(source, "go window.Run()") {
-		t.Error("login overlay must run its message loop on the window's own thread")
+		t.Error("login popup must run its message loop on the window's own thread")
+	}
+	// Cross-thread SetParent attaches both threads' input queues; the popup's
+	// WM_QUIT would then be able to reach the main window loop and kill the app.
+	if strings.Contains(source, "SetParent") || strings.Contains(source, "setWindowParent") {
+		t.Error("login popup must not reparent into the main window; use an owned popup instead")
 	}
 }
 

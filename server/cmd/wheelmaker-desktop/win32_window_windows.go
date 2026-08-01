@@ -9,19 +9,19 @@ import (
 )
 
 const (
-	gwlStyle = -16
+	gwlStyle       = -16
+	gwlHwndParent  = -8
 
 	wsCaption      = 0x00c00000
 	wsSysMenu      = 0x00080000
 	wsThickFrame   = 0x00040000
 	wsMinimizeBox  = 0x00020000
 	wsMaximizeBox  = 0x00010000
-	wsChild        = 0x40000000
-	wsClipSiblings = 0x04000000
 
 	swpNoSize        = 0x0001
 	swpNoMove        = 0x0002
 	swpNoZOrder      = 0x0004
+	swpNoActivate    = 0x0010
 	swpNoOwnerZOrder = 0x0200
 	swpFrameChanged  = 0x0020
 	swpShowWindow    = 0x0040
@@ -59,8 +59,6 @@ var (
 	procMessageBoxW           = user32.NewProc("MessageBoxW")
 	procIsZoomed              = user32.NewProc("IsZoomed")
 	procIsWindow              = user32.NewProc("IsWindow")
-	procSetParent             = user32.NewProc("SetParent")
-	procGetClientRect         = user32.NewProc("GetClientRect")
 	procGetSystemMetrics      = user32.NewProc("GetSystemMetrics")
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
@@ -178,16 +176,6 @@ func isWindowMaximized(hwnd uintptr) bool {
 func isWindow(hwnd uintptr) bool {
 	result, _, _ := procIsWindow.Call(hwnd)
 	return result != 0
-}
-
-func setWindowParent(hwnd, parentHwnd uintptr) {
-	procSetParent.Call(hwnd, parentHwnd)
-}
-
-func getClientRect(hwnd uintptr) (desktopWindowRect, bool) {
-	var rect desktopWindowRect
-	result, _, _ := procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
-	return rect, result != 0
 }
 
 func setWindowPosRect(hwnd uintptr, x, y, width, height int32, flags uintptr) {
