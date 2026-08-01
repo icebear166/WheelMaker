@@ -2304,7 +2304,7 @@ button.chat-hub-skill-name {
 }
 
 .chat-hub-npm-row {
-  grid-template-columns: minmax(0, 1fr) max-content 52px;
+  grid-template-columns: minmax(0, 1fr) max-content;
 }
 
 .chat-hub-skill-row {
@@ -2361,17 +2361,28 @@ button.chat-hub-skill-name:disabled {
   cursor: default;
 }
 
-.chat-hub-npm-versions {
+/* Name and version read as one left-side unit; actions hug the right edge
+   so uninstall always lands in the same trailing column. */
+.chat-hub-npm-name-cell {
   min-width: 0;
-  max-width: 112px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.chat-hub-npm-name-cell .chat-hub-npm-name {
+  flex: 0 1 auto;
+}
+
+.chat-hub-npm-name.missing {
+  color: var(--text-tertiary);
+}
+
+.chat-hub-npm-versions {
+  flex: 0 0 auto;
   font-size: 10px;
   color: var(--text-tertiary);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .chat-hub-npm-version-copy {
@@ -2384,9 +2395,9 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-npm-actions {
-  width: 52px;
-  display: grid;
-  grid-template-columns: repeat(2, 24px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 2px;
 }
 

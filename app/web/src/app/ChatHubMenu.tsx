@@ -680,43 +680,46 @@ function ChatHubNpmDetail({
         const updateAvailable = pkg.action === 'update' && Boolean(pkg.installedVersion) && Boolean(pkg.latestVersion);
         return (
           <div key={pkg.packageName} className="chat-hub-npm-row">
-            <span className="chat-hub-npm-name" title={pkg.packageName}>{pkg.displayName}</span>
-            <span className="chat-hub-npm-versions">
-              <span className="chat-hub-npm-version-copy">
-                {pkg.installedVersion
-                  ? updateAvailable
-                    ? <>{pkg.installedVersion} → <span className="chat-hub-npm-version-new">{pkg.latestVersion}</span></>
-                    : pkg.installedVersion
-                  : '—'}
+            <span className="chat-hub-npm-name-cell">
+              <span
+                className={`chat-hub-npm-name${pkg.installedVersion ? '' : ' missing'}`}
+                title={pkg.packageName}
+              >
+                {pkg.displayName}
+              </span>
+              <span className="chat-hub-npm-versions">
+                <span className="chat-hub-npm-version-copy">
+                  {pkg.installedVersion
+                    ? updateAvailable
+                      ? <>{pkg.installedVersion} → <span className="chat-hub-npm-version-new">{pkg.latestVersion}</span></>
+                      : pkg.installedVersion
+                    : pkg.latestVersion || '—'}
+                </span>
               </span>
             </span>
             <span className="chat-hub-npm-actions">
-              <span className="chat-hub-action-slot">
-                {pkg.action ? (
-                  <button
-                    type="button"
-                    className={`chat-hub-icon-btn${pkg.action === 'update' ? ' accent' : ''}`}
-                    aria-label={`${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}`}
-                    disabled={pkg.pending}
-                    onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
-                  >
-                    <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
-                  </button>
-                ) : null}
-              </span>
-              <span className="chat-hub-action-slot">
-                {pkg.canUninstall ? (
-                  <button
-                    type="button"
-                    className="chat-hub-icon-btn danger"
-                    aria-label={`Uninstall ${pkg.displayName}`}
-                    disabled={pkg.pending}
-                    onClick={() => onPackageAction(hubId, 'uninstall', pkg)}
-                  >
-                    <Icon name={pkg.pending ? 'loader' : 'trash'} spin={pkg.pending} />
-                  </button>
-                ) : null}
-              </span>
+              {pkg.action ? (
+                <button
+                  type="button"
+                  className={`chat-hub-icon-btn${pkg.action === 'update' ? ' accent' : ''}`}
+                  aria-label={`${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}`}
+                  disabled={pkg.pending}
+                  onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
+                >
+                  <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
+                </button>
+              ) : null}
+              {pkg.canUninstall ? (
+                <button
+                  type="button"
+                  className="chat-hub-icon-btn danger"
+                  aria-label={`Uninstall ${pkg.displayName}`}
+                  disabled={pkg.pending}
+                  onClick={() => onPackageAction(hubId, 'uninstall', pkg)}
+                >
+                  <Icon name={pkg.pending ? 'loader' : 'trash'} spin={pkg.pending} />
+                </button>
+              ) : null}
             </span>
           </div>
         );

@@ -367,7 +367,7 @@ test('version action is disabled while its update or restart request is pending'
     .toBe(true);
 });
 
-test('npm detail renders status versions and accents the update action', async () => {
+test('npm detail keeps version next to the name and hugs actions right', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['npm']},
     opsByHubId: {
@@ -391,11 +391,12 @@ test('npm detail renders status versions and accents the update action', async (
   const rows = renderer.root.findAllByProps({className: 'chat-hub-npm-row'});
   expect(rows).toHaveLength(3);
   expect(rows[0].findByProps({className: 'chat-hub-npm-version-new'}).children).toEqual(['1.1']);
-  expect(rows[1].findByProps({className: 'chat-hub-npm-version-copy'}).children).toEqual(['—']);
+  expect(rows[1].findByProps({className: 'chat-hub-npm-version-copy'}).children).toEqual(['2.0']);
   expect(rows[2].findByProps({className: 'chat-hub-npm-version-copy'}).children).toEqual(['3.0']);
   expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-version-new'}))).toHaveLength(1);
-  expect(rows.map(row => row.findAllByProps({className: 'chat-hub-action-slot'}).length))
-    .toEqual([2, 2, 2]);
+  expect(rows.map(row => row.findByProps({className: 'chat-hub-npm-name-cell'}).findByProps({className: 'chat-hub-npm-versions'}))).toHaveLength(3);
+  expect(rows[1].findByProps({className: 'chat-hub-npm-name missing'}).children).toEqual(['Two']);
+  expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-action-slot'}))).toHaveLength(0);
   const firstActions = rows[0].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
   const secondActions = rows[1].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
   const thirdActions = rows[2].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
