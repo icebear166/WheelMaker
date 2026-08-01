@@ -1068,7 +1068,7 @@ Append this record after every command in Steps 1–3 has passed. Do not pre-mar
 - Retired provider session-status symbols — absent
 - `internal/hub/tools` produced transient cleanup/async timing failures under parallel verification load; each affected test passed 5 consecutive isolated runs, and the standalone complete Go suite passed after the final rebase. No feature diff touches that package.
 
-- [ ] **Step 5: Execute the exact repository completion gate**
+- [x] **Step 5: Execute the exact repository completion gate**
 
 Delivery override confirmed by the user on 2026-08-01: land the rebased implementation directly on `main`, discard the old feature-branch line, and do not force-push it. Commit this verification record locally, fast-forward and push `main`, remove the task worktree and feature branches, then run this exact tail sequence from the clean `main` worktree with no `|| echo` fallback:
 
