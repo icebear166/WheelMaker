@@ -38,11 +38,40 @@ describe('device session settings', () => {
     expect(text).not.toMatch(/digest|cookie|csrf|token/i);
 
     const buttons = renderer.root.findAllByType('button');
-    await act(async () => { await buttons[0].props.onClick(); });
-    await act(async () => { await buttons[1].props.onClick(); });
+    const revokeButton = buttons.find(button => button.props['aria-label'] === 'Revoke Chrome');
+    const revokeAllButton = buttons.find(button => button.props['aria-label'] === 'Revoke all device sessions');
+    expect(revokeButton).toBeDefined();
+    expect(revokeAllButton).toBeDefined();
+    await act(async () => { await revokeButton!.props.onClick(); });
+    await act(async () => { await revokeAllButton!.props.onClick(); });
     expect(revoke).toHaveBeenCalledWith('device-1');
     expect(revokeAll).toHaveBeenCalled();
     expect(currentRevoked).toHaveBeenCalledTimes(2);
     delete (window as {confirm?: typeof confirm}).confirm;
+  });
+
+  test('renders an empty state with a refresh action', async () => {
+    const refresh = jest.fn().mockResolvedValue(undefined);
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <DeviceSessionsSettingsDetail
+          sessions={[]}
+          loading={false}
+          error=""
+          onRevoke={jest.fn()}
+          onRevokeAll={jest.fn()}
+          onCurrentRevoked={jest.fn()}
+          onRefresh={refresh}
+        />,
+      );
+    });
+    expect(JSON.stringify(renderer.toJSON())).toContain('No device sessions');
+    const refreshButton = renderer.root.findAllByType('button').find(
+      button => button.props['aria-label'] === 'Refresh device sessions',
+    );
+    expect(refreshButton).toBeDefined();
+    await act(async () => { await refreshButton!.props.onClick(); });
+    expect(refresh).toHaveBeenCalled();
   });
 });

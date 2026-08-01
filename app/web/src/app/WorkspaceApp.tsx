@@ -15637,6 +15637,7 @@ export function App() {
           onRevoke={revokeDeviceSession}
           onRevokeAll={revokeAllDeviceSessions}
           onCurrentRevoked={returnToRegistryLogin}
+          onRefresh={refreshDeviceSessions}
         />
       </React.Suspense>,
     );
