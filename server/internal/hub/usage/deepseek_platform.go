@@ -19,6 +19,8 @@ const (
 	deepSeekPlatformCurrentMonthTTL  = 5 * time.Minute
 	deepSeekPlatformPastMonthTTL     = 24 * time.Hour
 	deepSeekPlatformMaxResponseBytes = 4 << 20
+	// The platform's risk control rejects requests without a browser UA (HTTP 429).
+	deepSeekPlatformUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 )
 
 var errDeepSeekSessionExpired = errors.New("deepseek platform session expired")
@@ -204,6 +206,7 @@ func (c *DeepSeekPlatformClient) fetchBizData(ctx context.Context, client *http.
 		return nil, err
 	}
 	request.Header.Set("Accept", "application/json")
+	request.Header.Set("User-Agent", deepSeekPlatformUserAgent)
 	request.Header.Set("Authorization", "Bearer "+token)
 	response, err := client.Do(request)
 	if err != nil {
@@ -477,7 +480,7 @@ func (s *DeepSeekPlatformStore) Get(ctx context.Context, year, month int, force 
 	usage, err := client.Fetch(ctx, year, month)
 	if err != nil {
 		status := DeepSeekPlatformError
-		message := "platform request failed"
+		message := err.Error()
 		if errors.Is(err, errDeepSeekSessionExpired) {
 			status = DeepSeekPlatformExpired
 			message = "platform session expired"

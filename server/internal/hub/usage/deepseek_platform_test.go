@@ -140,6 +140,10 @@ func newDeepSeekFixtureServer(t *testing.T, calls *atomic.Int64) *httptest.Serve
 		if calls != nil {
 			calls.Add(1)
 		}
+		if ua := r.UserAgent(); !strings.Contains(ua, "Mozilla/5.0") {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
 		switch {
 		case strings.Contains(r.URL.Path, "get_user_summary"):
 			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_user_summary.json"))
