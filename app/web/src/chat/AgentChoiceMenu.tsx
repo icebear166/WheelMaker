@@ -105,6 +105,7 @@ export function AgentChoiceMenu({agents, defaultAgent, variant, onSelect, onClos
                   className={`agent-choice-pill ${agentTagVariantClass(pill.agentType)}${isActive ? ' active' : ''}`}
                   role="option"
                   aria-selected={isActive}
+                  style={{'--agent-choice-delay': `${Math.min(index, 14) * 18}ms`} as React.CSSProperties}
                   onClick={() => onSelect(pill.agentType)}
                   onMouseEnter={() => setActiveIndex(index)}
                 >

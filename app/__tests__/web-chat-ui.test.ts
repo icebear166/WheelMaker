@@ -3046,8 +3046,10 @@ describe('Agent choice menu', () => {
     const groupPillsBlock = cssRuleBlock(stylesCss, '.agent-choice-group-pills');
     expect(groupPillsBlock).toContain('display: grid;');
 
-    // Mobile pills share the desktop specs (no separate mobile override).
-    expect(stylesCss).not.toContain('.agent-choice-menu.mobile .agent-choice-pill');
+    // Mobile pills enlarge the touch target over the shared desktop specs.
+    expect(stylesCss).toContain('.agent-choice-menu.mobile .agent-choice-pill');
+    const mobilePillBlock = cssRuleBlock(stylesCss, '.agent-choice-menu.mobile .agent-choice-pill');
+    expect(mobilePillBlock).toContain('min-height: 42px;');
   });
 });
 
