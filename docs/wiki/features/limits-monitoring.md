@@ -26,12 +26,16 @@ Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前�
 ### DeepSeek 平台用量
 
 - DeepSeek 平台用量数据来自 `platform.deepseek.com` 私有接口（`users/get_user_summary`、`usage/amount`、`usage/cost`），使用平台 session token 认证；API key 只能取余额，无法访问这些接口。
-- 平台 session token 由 Desktop/Android 弹窗内嵌官方登录页登录后自动抓取，或浏览器端手动粘贴，经 Hub 配置接口写入 `hub-config.json` secret；Hub 不实现平台登录协议（登录依赖 hCaptcha/Turnstile/数美设备指纹等浏览器风控），token 不回显、不落日志。
+- 三个接口的信封统一为 `{code, msg, data: {biz_code, biz_msg, biz_data}}`（snake_case，2026-08-01 真实抓包验证）；顶层 `code` 或 `data.biz_code` 为 40002/40003 均视为 token 失效。解析按确定结构强类型进行，结构不符返回明确解析错误，不做多 key 猜测、不静默出空数据。
+- `get_user_summary`：`biz_data.normal_wallets`（充值）/ `bonus_wallets`（赠送），wallet 的 `balance` 为十进制字符串，按币种聚合 total = toppedUp + granted。
+- `usage/amount`：`biz_data.{total[], days[]}`，`days` 补满整月；usage `type` 为 `REQUEST`/`PROMPT_TOKEN`/`PROMPT_CACHE_HIT_TOKEN`/`PROMPT_CACHE_MISS_TOKEN`/`RESPONSE_TOKEN`，`amount` 为整数字符串；`PROMPT_TOKEN` 恒 0 忽略不计，每日总量 = hit + miss + response。
+- `usage/cost`：`biz_data[]` 按币种分块，每日花费 = 当日全部模型非 REQUEST 之和，月花费 = `total[]` 非 REQUEST 之和；花费一律采用平台官方金额，不做本地价格估算。
+- 平台 session token 存于平台页 `localStorage.userToken`（JSON `{"value":...}`），由 Desktop/Android 弹窗内嵌官方登录页登录后精确抓取，或浏览器端手动粘贴，经 Hub 配置接口写入 `hub-config.json` secret；Hub 不实现平台登录协议（登录依赖 hCaptcha/Turnstile/数美设备指纹等浏览器风控），token 不回显、不落日志。
 - 一个 Hub 保存一个平台会话；DeepSeek 配置多个 API key 账号时，平台数据挂在第一个账号并标注“平台用量”。
 - tokenStats 保持简短：DeepSeek 账号仍只发布余额与连接状态，不携带每日序列。每月/今日花费与每日曲线通过只读 `deepseek.usage.get` 在弹窗打开时按需请求。
-- Hub 按 `(year, month)` 缓存平台响应：当前月 TTL 5 分钟（与平台约 5 分钟数据延迟一致），历史月 TTL 24 小时；弹窗“刷新”强制重拉；平台请求失败或 token 失效（40003）时保留最后一次成功缓存并返回 `expired` 状态。
-- 命中率 = `promptHit ÷ (promptHit + promptMiss)`，无输入 token 时按 0 处理；花费一律采用平台官方金额，不做本地价格估算。
-- 余额优先使用平台钱包余额（与花费同账号口径）；无会话、会话过期或平台余额不可用时回退 API key 余额。
+- Hub 按 `(year, month)` 缓存平台响应：当前月 TTL 5 分钟（与平台约 5 分钟数据延迟一致），历史月 TTL 24 小时；弹窗“刷新”强制重拉；失败不覆盖缓存。token 失效返回 `expired`，平台网络失败/5xx 返回 `error`，两者在有缓存时都附带最后一次成功数据；弹窗保留数据展示并分别提供重登 / 重试入口。
+- 命中率 = `promptHit ÷ (promptHit + promptMiss)`，无输入 token 时按 0 处理。
+- 余额优先使用平台钱包余额（与花费同账号口径）；无会话、会话过期或平台余额不可用时回退 API key 余额。花费与余额均按币种分组展示。
 
 ## 同步边界
 

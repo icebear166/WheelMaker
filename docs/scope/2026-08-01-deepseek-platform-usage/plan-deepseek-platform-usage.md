@@ -1,156 +1,1428 @@
-# DeepSeek Platform Usage Implementation Plan
+# DeepSeek Platform Usage (Redo) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a DeepSeek platform usage dialog to Monitor that lazily fetches official monthly/today spend, balance, and a daily token chart (total, cache hit rate, spend), with login handled through an embedded official page on Desktop/Android and manual token paste in browsers.
+**Goal:** Revert the initial DeepSeek platform usage implementation (13 code commits) and rebuild it on top of real captured API structures, per `spec-deepseek-platform-usage.md` (redo version).
 
-**Architecture:** The Hub stores a DeepSeek platform session token in `hub-config.json` as a secret, exposes a new read-only `deepseek.usage.get` Registry method routed through the existing Hub-state path, and serves per-month data from a TTL cache backed by the platform's private `get_user_summary` / `usage/amount` / `usage/cost` APIs. The Web UI opens a dialog that calls the method on demand; Desktop (WebView2) and Android (WebView Dialog) provide a native login flow that opens the official page and returns the token, while browsers fall back to manual paste. tokenStats stays unchanged.
+**Architecture:** Hub fetches three private platform endpoints (`get_user_summary`, `usage/amount`, `usage/cost`) with a session token, parses them with strict typed decoders, caches per `(year, month)`, and serves the additive read-only Registry method `deepseek.usage.get`. Web renders a dialog that reuses the `usage-history` shell; Desktop/Android embed the official login page and read `localStorage.userToken` precisely.
 
-**Tech Stack:** Go, hubconfig versioned JSON, Registry WebSocket protocol, React 19, TypeScript, ECharts 6, WebView2 (Go COM bindings), Android Kotlin WebView, Jest, Go tests.
+**Tech Stack:** Go (hub/registry), React + TypeScript + ECharts (web), WebView2 (desktop), Kotlin WebView (android), Jest + go test.
+
+**Reference material:**
+- Real captured (sanitized) fixtures: `docs/scope/2026-08-01-deepseek-platform-usage/fixtures/` (`get_user_summary.json`, `usage_amount.json`, `usage_cost.json` for 2026-08; `*_prev_month.json` for 2026-07).
+- Old implementation in git history (cherry-pick sources): `04ce29e6` hubconfig, `93cffd5a` protocol method, `c006903a` hub handler, `bb1b60ec` web transport, `90f3ec4d` monitor wiring, `6fa70f1c` desktop login, `93836e77`+`da3da061`+`2804066c`+`05f133b1` android login.
+- Worktree: `.worktree/deepseek-platform-usage-redo`, branch `deepseek-platform-usage-redo`. All commands run from the worktree root.
+
+**Verified API facts (from 2026-08-01 capture):**
+- Envelope: `{code, msg, data: {biz_code, biz_msg, biz_data}}` (snake_case). `code` or `biz_code` = 40002/40003 → token expired.
+- `get_user_summary` → `biz_data.normal_wallets[]` / `bonus_wallets[]`, wallet = `{currency, balance: decimal-string, token_estimation}`.
+- `usage/amount` → `biz_data.{total[], days[]}`, `days` padded to full month; day = `{date, data[]}`; model usage types: `REQUEST`, `PROMPT_TOKEN` (always "0", ignored), `PROMPT_CACHE_HIT_TOKEN`, `PROMPT_CACHE_MISS_TOKEN`, `RESPONSE_TOKEN`; `amount` = integer string.
+- `usage/cost` → `biz_data[]` per currency `{currency, total[], days[]}`; daily cost = sum of non-`REQUEST` amounts (decimal strings).
+- Token storage: `localStorage.userToken` = `{"value":"<token>","__version":"0"}`.
 
 ---
 
-### Task 7: Add the DeepSeek usage dialog, lazy chart, and native login helper
+### Task 1: Commit spec, fixtures, wiki, and this plan
 
 **Files:**
-- Modify: `app/web/src/platform/native/nativeRuntime.ts`
-- Modify: `app/web/src/platform/android/androidNativeMessageBridge.ts`
-- Create: `app/web/src/usage/deepSeekLogin.ts`
-- Create: `app/web/src/usage/DeepSeekUsageDialog.tsx`
-- Create: `app/web/src/usage/DeepSeekUsageChart.tsx`
-- Modify: `app/web/src/styles/usage.css`
-- Test: `app/__tests__/web-deepseek-usage-dialog.test.tsx`
+- `docs/scope/2026-08-01-deepseek-platform-usage/spec-deepseek-platform-usage.md` (already rewritten)
+- `docs/scope/2026-08-01-deepseek-platform-usage/fixtures/*.json` (already generated)
+- `docs/scope/2026-08-01-deepseek-platform-usage/plan-deepseek-platform-usage.md` (this file)
+- `docs/wiki/features/limits-monitoring.md` (DeepSeek section already rewritten)
 
-- [x] **Step 1: Write the failing dialog state and accessibility tests**
+- [ ] **Step 1: Commit docs**
 
-Create `app/__tests__/web-deepseek-usage-dialog.test.tsx`:
+```bash
+git add docs/scope/2026-08-01-deepseek-platform-usage docs/wiki/features/limits-monitoring.md
+git commit -m "docs: respec deepseek platform usage redo with verified fixtures"
+```
 
-```tsx
-import React from 'react';
-import {act, create} from 'react-test-renderer';
+---
 
-import {DeepSeekUsageDialog, type DeepSeekUsageDialogState} from '../web/src/usage/DeepSeekUsageDialog';
+### Task 2: Revert the initial implementation (13 code commits)
 
-jest.mock('../web/src/usage/DeepSeekUsageChart', () => ({
-  __esModule: true,
-  default: () => null,
-}));
+Reverts in reverse chronological order. Doc commits (`f2ef31f0`, `2d7fdcf1`) are intentionally excluded — the spec/plan/wiki were already replaced in Task 1. Unrelated commits `f57a2c2c` and `c20fc00f` are excluded.
 
-function renderedText(root: ReturnType<typeof create>): string {
-  const walk = (node: {children?: unknown}): string[] => {
-    const parts: string[] = [];
-    if (typeof node === 'string' || typeof node === 'number') parts.push(String(node));
-    if (node && typeof node === 'object' && 'children' in node && Array.isArray(node.children)) {
-      for (const child of node.children) parts.push(...walk(child as {children?: unknown}));
-    }
-    return parts;
-  };
-  return walk(root.toJSON() as unknown as {children?: unknown}).join(' ');
+**Files:** all files touched by the 13 commits (see `git log --oneline 04ce29e6^..05f133b1`).
+
+- [ ] **Step 1: Revert all 13 commits into the index**
+
+```bash
+git revert --no-commit 05f133b1 2804066c da3da061 93836e77 6fa70f1c 90f3ec4d ee0a99a3 8e635714 bb1b60ec c006903a 93cffd5a f259b88f 04ce29e6
+```
+
+Expected: completes without conflicts (commits form a contiguous chain).
+
+- [ ] **Step 2: Verify no deepseek-usage code remains**
+
+```bash
+rg -il "deepseek" --glob '!docs/**' --glob '!**/dist/**' | sort
+```
+
+Expected remaining matches only in: `server/internal/hub/agent/cxdeepseek/`, `server/internal/hub/agent/codexapp_deepseek.go`, `server/internal/hub/agent/factory.go`, `server/internal/hub/agent/skills.go`, `app/web/src/chat/` (cx-deepseek agent feature, unrelated). `server/internal/hubconfig/store.go`, `server/internal/hub/reporter.go`, `app/web/src/usage/` must NOT appear.
+
+- [ ] **Step 3: Verify build and tests are green post-revert**
+
+```bash
+cd server && go build ./... && go test ./... 2>&1 | tail -20
+cd ../app && npm test 2>&1 | tail -10 && npm run tsc:web
+cd ..
+```
+
+Expected: all PASS.
+
+- [ ] **Step 4: Commit the revert**
+
+```bash
+git add -A
+git commit -m "revert: deepseek platform usage initial implementation"
+```
+
+---
+
+### Task 3: Restore hubconfig platform token secret
+
+The old hubconfig secret implementation was correct — restore it unchanged.
+
+**Files:**
+- `server/internal/hubconfig/store.go`
+- `server/internal/hubconfig/store_test.go`
+
+- [ ] **Step 1: Cherry-pick the old commit**
+
+```bash
+git cherry-pick 04ce29e6
+```
+
+Expected: clean pick, keeps message `feat(hubconfig): store deepseek platform session token`.
+
+- [ ] **Step 2: Verify tests**
+
+```bash
+cd server && go test ./internal/hubconfig/ -run TestDeepSeek -v
+```
+
+Expected: PASS (set/clear/redact/snapshot tests).
+
+---
+
+### Task 4: Rewrite the platform client with verified parsing
+
+Strict typed parsing replaces the speculative multi-key guessing. Key behaviors: snake_case envelope, 40002/40003 at either level → expired; `balance`/`amount` decimal/integer strings; `PROMPT_TOKEN` ignored; `days` full-month padded; daily cost = non-`REQUEST` sum; month cost = `total[]` non-`REQUEST` sum; network/5xx and expired both fall back to stale cache with status `error`/`expired`.
+
+**Files:**
+- Create: `server/internal/hub/usage/testdata/deepseek_user_summary.json`
+- Create: `server/internal/hub/usage/testdata/deepseek_usage_amount.json`
+- Create: `server/internal/hub/usage/testdata/deepseek_usage_cost.json`
+- Create: `server/internal/hub/usage/deepseek_platform.go`
+- Create: `server/internal/hub/usage/deepseek_platform_test.go`
+
+- [ ] **Step 1: Copy sanitized fixtures into testdata**
+
+```bash
+mkdir -p server/internal/hub/usage/testdata
+cp docs/scope/2026-08-01-deepseek-platform-usage/fixtures/get_user_summary.json server/internal/hub/usage/testdata/deepseek_user_summary.json
+cp docs/scope/2026-08-01-deepseek-platform-usage/fixtures/usage_amount.json server/internal/hub/usage/testdata/deepseek_usage_amount.json
+cp docs/scope/2026-08-01-deepseek-platform-usage/fixtures/usage_cost.json server/internal/hub/usage/testdata/deepseek_usage_cost.json
+```
+
+- [ ] **Step 2: Write the failing test**
+
+Create `server/internal/hub/usage/deepseek_platform_test.go`:
+
+```go
+package usage
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func readDeepSeekFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatalf("read fixture %s: %v", name, err)
+	}
+	return raw
 }
 
-test('ready state renders summary and month label', () => {
-  const state: DeepSeekUsageDialogState = {
-    status: 'ready',
-    view: {
-      status: 'ok',
-      month: {year: 2026, month: 8},
-      balance: [{currency: 'CNY', total: '3.24'}],
-      days: [{
-        date: '2026-08-01',
-        request: 3,
-        outputTokens: 120,
-        hitTokens: 300,
-        missTokens: 100,
-        totalTokens: 520,
-        cacheHitRate: 0.75,
-        cost: 0.02,
-      }],
-      costs: [{currency: 'CNY', monthlyCost: 8.8, todayCost: 0.02, daily: [{date: '2026-08-01', amount: 0.02}]}],
-      monthlyCost: 8.8,
-      todayCost: 0.02,
-      currency: 'CNY',
-    },
+func deepSeekFixtureBizData(t *testing.T, name string) json.RawMessage {
+	t.Helper()
+	var envelope deepSeekEnvelope
+	if err := json.Unmarshal(readDeepSeekFixture(t, name), &envelope); err != nil {
+		t.Fatalf("fixture %s envelope: %v", name, err)
+	}
+	if envelope.Code != 0 || envelope.Data.BizCode != 0 || len(envelope.Data.BizData) == 0 {
+		t.Fatalf("fixture %s has unexpected envelope: %+v", name, envelope)
+	}
+	return envelope.Data.BizData
+}
+
+func TestParseDeepSeekSummaryBalanceFixture(t *testing.T) {
+	items, err := parseDeepSeekSummaryBalance(deepSeekFixtureBizData(t, "deepseek_user_summary.json"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items=%+v", items)
+	}
+	item := items[0]
+	if item.Currency != "CNY" || item.Total != "1.25" || item.Granted != "0.00" || item.ToppedUp != "1.25" {
+		t.Fatalf("item=%+v", item)
+	}
+}
+
+func TestParseDeepSeekAmountDaysFixture(t *testing.T) {
+	days, err := parseDeepSeekAmountDays(deepSeekFixtureBizData(t, "deepseek_usage_amount.json"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(days) != 31 {
+		t.Fatalf("expected 31 padded days, got %d", len(days))
+	}
+	first := days[0]
+	if first.Date != "2026-08-01" || first.Request != 800000 || first.HitTokens != 500000 ||
+		first.MissTokens != 600000 || first.OutputTokens != 700000 || first.TotalTokens != 1800000 {
+		t.Fatalf("first=%+v", first)
+	}
+	second := days[1]
+	if second.TotalTokens != 0 || second.Request != 0 {
+		t.Fatalf("second day should be zero-padded: %+v", second)
+	}
+}
+
+func TestParseDeepSeekCostsFixture(t *testing.T) {
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	costs, err := parseDeepSeekCosts(deepSeekFixtureBizData(t, "deepseek_usage_cost.json"), now, DeepSeekPlatformMonth{Year: 2026, Month: 8})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(costs) != 1 || costs[0].Currency != "CNY" {
+		t.Fatalf("costs=%+v", costs)
+	}
+	cost := costs[0]
+	if cost.MonthlyCost != 12.75 {
+		t.Fatalf("monthly=%v, want 12.75", cost.MonthlyCost)
+	}
+	if cost.TodayCost != 21.75 {
+		t.Fatalf("today=%v, want 21.75", cost.TodayCost)
+	}
+	if len(cost.Daily) != 31 || cost.Daily[0].Date != "2026-08-01" || cost.Daily[0].Amount != 21.75 {
+		t.Fatalf("daily=%+v", cost.Daily)
+	}
+	if cost.Daily[1].Amount != 0 {
+		t.Fatalf("second day should be zero: %+v", cost.Daily[1])
+	}
+}
+
+func TestParseDeepSeekCostsTodayOnlyForCurrentMonth(t *testing.T) {
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	costs, err := parseDeepSeekCosts(deepSeekFixtureBizData(t, "deepseek_usage_cost.json"), now, DeepSeekPlatformMonth{Year: 2026, Month: 8})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if costs[0].TodayCost != 0 {
+		t.Fatalf("today cost must be 0 outside the current month: %+v", costs[0])
+	}
+}
+
+func TestParseDeepSeekRejectsMalformed(t *testing.T) {
+	if _, err := parseDeepSeekSummaryBalance(json.RawMessage(`{"normal_wallets":[{"currency":"CNY","balance":123}]}`)); err == nil {
+		t.Fatal("expected parse error for numeric balance")
+	}
+	if _, err := parseDeepSeekAmountDays(json.RawMessage(`{"days":[{"date":"2026-08-01","data":[{"model":"m","usage":[{"type":"REQUEST","amount":"abc"}]}]}]}`)); err == nil {
+		t.Fatal("expected parse error for non-integer amount")
+	}
+}
+
+func TestDeepSeekExpiredCodes(t *testing.T) {
+	for _, body := range []string{
+		`{"code":40003,"msg":"Authorization Failed (invalid token)"}`,
+		`{"code":40002,"msg":"Authorization Failed"}`,
+		`{"code":0,"data":{"biz_code":40003,"biz_msg":"expired","biz_data":{}}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+			store := NewDeepSeekPlatformStore("session-token", server.Client(), server.URL)
+			got, err := store.Get(context.Background(), 2026, 8, false)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if got.Status != DeepSeekPlatformExpired {
+				t.Fatalf("status=%q, want expired", got.Status)
+			}
+		})
+	}
+}
+
+func newDeepSeekFixtureServer(t *testing.T, calls *atomic.Int64) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls != nil {
+			calls.Add(1)
+		}
+		switch {
+		case strings.Contains(r.URL.Path, "get_user_summary"):
+			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_user_summary.json"))
+		case strings.Contains(r.URL.Path, "usage/amount"):
+			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_usage_amount.json"))
+		case strings.Contains(r.URL.Path, "usage/cost"):
+			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_usage_cost.json"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+func TestDeepSeekPlatformStoreFetchAndCache(t *testing.T) {
+	var calls atomic.Int64
+	server := newDeepSeekFixtureServer(t, &calls)
+	defer server.Close()
+
+	store := NewDeepSeekPlatformStore("session-token", server.Client(), server.URL)
+	store.now = func() time.Time { return time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC) }
+
+	first, err := store.Get(context.Background(), 2026, 8, false)
+	if err != nil || first.Status != DeepSeekPlatformOK {
+		t.Fatalf("first=%+v err=%v", first, err)
+	}
+	if len(first.Days) != 31 || len(first.Costs) != 1 || len(first.Balance) != 1 {
+		t.Fatalf("first=%+v", first)
+	}
+	if first.CachedAt == nil {
+		t.Fatal("cachedAt must be set on fresh fetch")
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("expected 3 upstream calls, got %d", calls.Load())
+	}
+
+	cached, err := store.Get(context.Background(), 2026, 8, false)
+	if err != nil || cached.Status != DeepSeekPlatformOK {
+		t.Fatalf("cached=%+v err=%v", cached, err)
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("cache miss: expected still 3 calls, got %d", calls.Load())
+	}
+
+	if _, err := store.Get(context.Background(), 2026, 8, true); err != nil {
+		t.Fatalf("forced refresh: %v", err)
+	}
+	if calls.Load() != 6 {
+		t.Fatalf("forced refresh should refetch, got %d calls", calls.Load())
+	}
+}
+
+func TestDeepSeekPlatformStoreStaleOnExpiredAndError(t *testing.T) {
+	var failMode atomic.Int32 // 0 = serve fixtures, 1 = expired, 2 = 500
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch failMode.Load() {
+		case 1:
+			_, _ = w.Write([]byte(`{"code":40003,"msg":"expired"}`))
+			return
+		case 2:
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		switch {
+		case strings.Contains(r.URL.Path, "get_user_summary"):
+			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_user_summary.json"))
+		case strings.Contains(r.URL.Path, "usage/amount"):
+			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_usage_amount.json"))
+		default:
+			_, _ = w.Write(readDeepSeekFixture(t, "deepseek_usage_cost.json"))
+		}
+	}))
+	defer server.Close()
+
+	store := NewDeepSeekPlatformStore("session-token", server.Client(), server.URL)
+	store.now = func() time.Time { return time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC) }
+	if _, err := store.Get(context.Background(), 2026, 8, false); err != nil {
+		t.Fatalf("prime cache: %v", err)
+	}
+
+	failMode.Store(1)
+	expired, err := store.Get(context.Background(), 2026, 8, true)
+	if err != nil {
+		t.Fatalf("expired fetch: %v", err)
+	}
+	if expired.Status != DeepSeekPlatformExpired || len(expired.Days) != 31 {
+		t.Fatalf("expired must keep stale data: %+v", expired)
+	}
+
+	failMode.Store(2)
+	platformError, err := store.Get(context.Background(), 2026, 8, true)
+	if err != nil {
+		t.Fatalf("error fetch: %v", err)
+	}
+	if platformError.Status != DeepSeekPlatformError || len(platformError.Days) != 31 {
+		t.Fatalf("error must keep stale data: %+v", platformError)
+	}
+	if platformError.Message == "" {
+		t.Fatal("error status must carry a message")
+	}
+
+	empty := NewDeepSeekPlatformStore("session-token", server.Client(), server.URL)
+	failMode.Store(1)
+	got, err := empty.Get(context.Background(), 2026, 7, false)
+	if err != nil {
+		t.Fatalf("expired without cache: %v", err)
+	}
+	if got.Status != DeepSeekPlatformExpired || len(got.Days) != 0 {
+		t.Fatalf("expired without cache must be empty: %+v", got)
+	}
+	failMode.Store(2)
+	got, err = empty.Get(context.Background(), 2026, 7, false)
+	if err != nil {
+		t.Fatalf("error without cache: %v", err)
+	}
+	if got.Status != DeepSeekPlatformError || got.Message == "" || len(got.Days) != 0 {
+		t.Fatalf("error without cache must be empty with message: %+v", got)
+	}
+}
+
+func TestDeepSeekPlatformStoreNotConnected(t *testing.T) {
+	store := NewDeepSeekPlatformStore("", nil)
+	got, err := store.Get(context.Background(), 2026, 8, false)
+	if err != nil || got.Status != DeepSeekPlatformNotConnected {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+}
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+```bash
+cd server && go test ./internal/hub/usage/ -run TestParseDeepSeek -v
+```
+
+Expected: FAIL — `deepSeekEnvelope`, `parseDeepSeekSummaryBalance` etc. undefined.
+
+- [ ] **Step 4: Write the implementation**
+
+Create `server/internal/hub/usage/deepseek_platform.go`:
+
+```go
+package usage
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+const (
+	deepSeekPlatformBaseURL          = "https://platform.deepseek.com"
+	deepSeekPlatformCurrentMonthTTL  = 5 * time.Minute
+	deepSeekPlatformPastMonthTTL     = 24 * time.Hour
+	deepSeekPlatformMaxResponseBytes = 4 << 20
+)
+
+var errDeepSeekSessionExpired = errors.New("deepseek platform session expired")
+
+type DeepSeekPlatformStatus string
+
+const (
+	DeepSeekPlatformOK           DeepSeekPlatformStatus = "ok"
+	DeepSeekPlatformNotConnected DeepSeekPlatformStatus = "notConnected"
+	DeepSeekPlatformExpired      DeepSeekPlatformStatus = "expired"
+	DeepSeekPlatformError        DeepSeekPlatformStatus = "error"
+)
+
+type DeepSeekPlatformMonth struct {
+	Year  int `json:"year"`
+	Month int `json:"month"`
+}
+
+type DeepSeekPlatformDay struct {
+	Date         string `json:"date"`
+	Request      int64  `json:"request"`
+	OutputTokens int64  `json:"outputTokens"`
+	HitTokens    int64  `json:"hitTokens"`
+	MissTokens   int64  `json:"missTokens"`
+	TotalTokens  int64  `json:"totalTokens"`
+}
+
+type DeepSeekPlatformCostDay struct {
+	Date   string  `json:"date"`
+	Amount float64 `json:"amount"`
+}
+
+type DeepSeekPlatformCost struct {
+	Currency    string                    `json:"currency"`
+	MonthlyCost float64                   `json:"monthlyCost"`
+	TodayCost   float64                   `json:"todayCost"`
+	Daily       []DeepSeekPlatformCostDay `json:"daily"`
+}
+
+type DeepSeekPlatformUsage struct {
+	Status   DeepSeekPlatformStatus `json:"status"`
+	Month    DeepSeekPlatformMonth  `json:"month"`
+	Message  string                 `json:"message,omitempty"`
+	Balance  []BalanceItem          `json:"balance,omitempty"`
+	Days     []DeepSeekPlatformDay  `json:"days,omitempty"`
+	Costs    []DeepSeekPlatformCost `json:"costs,omitempty"`
+	CachedAt *time.Time             `json:"cachedAt,omitempty"`
+}
+
+// Wire types for the verified platform response shapes (2026-08-01 capture).
+// All endpoints share the envelope {code, msg, data: {biz_code, biz_msg, biz_data}}.
+
+type deepSeekEnvelope struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data struct {
+		BizCode int             `json:"biz_code"`
+		BizMsg  string          `json:"biz_msg"`
+		BizData json.RawMessage `json:"biz_data"`
+	} `json:"data"`
+}
+
+type deepSeekWallet struct {
+	Currency string `json:"currency"`
+	Balance  string `json:"balance"`
+}
+
+type deepSeekSummaryBiz struct {
+	NormalWallets []deepSeekWallet `json:"normal_wallets"`
+	BonusWallets  []deepSeekWallet `json:"bonus_wallets"`
+}
+
+type deepSeekUsageItem struct {
+	Type   string `json:"type"`
+	Amount string `json:"amount"`
+}
+
+type deepSeekModelUsage struct {
+	Model string              `json:"model"`
+	Usage []deepSeekUsageItem `json:"usage"`
+}
+
+type deepSeekDayUsage struct {
+	Date string               `json:"date"`
+	Data []deepSeekModelUsage `json:"data"`
+}
+
+type deepSeekAmountBiz struct {
+	Total []deepSeekModelUsage `json:"total"`
+	Days  []deepSeekDayUsage   `json:"days"`
+}
+
+type deepSeekCostBlock struct {
+	Currency string               `json:"currency"`
+	Total    []deepSeekModelUsage `json:"total"`
+	Days     []deepSeekDayUsage   `json:"days"`
+}
+
+// DeepSeekPlatformClient fetches and parses the platform endpoints once.
+type DeepSeekPlatformClient struct {
+	Token   string
+	BaseURL string
+	Client  *http.Client
+	Now     func() time.Time
+}
+
+func (c *DeepSeekPlatformClient) Fetch(ctx context.Context, year, month int) (DeepSeekPlatformUsage, error) {
+	token := strings.TrimSpace(c.Token)
+	monthValue := DeepSeekPlatformMonth{Year: year, Month: month}
+	if token == "" {
+		return DeepSeekPlatformUsage{Status: DeepSeekPlatformNotConnected, Month: monthValue}, nil
+	}
+	httpClient := c.Client
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	baseURL := strings.TrimRight(c.BaseURL, "/")
+	if baseURL == "" {
+		baseURL = deepSeekPlatformBaseURL
+	}
+	monthQuery := "year=" + strconv.Itoa(year) + "&month=" + strconv.Itoa(month)
+	type fetchResult struct {
+		kind string
+		raw  json.RawMessage
+		err  error
+	}
+	results := make(chan fetchResult, 3)
+	go func() {
+		raw, err := c.fetchBizData(ctx, httpClient, baseURL, "/api/v0/users/get_user_summary", token)
+		results <- fetchResult{kind: "summary", raw: raw, err: err}
+	}()
+	go func() {
+		raw, err := c.fetchBizData(ctx, httpClient, baseURL, "/api/v0/usage/amount?"+monthQuery, token)
+		results <- fetchResult{kind: "amount", raw: raw, err: err}
+	}()
+	go func() {
+		raw, err := c.fetchBizData(ctx, httpClient, baseURL, "/api/v0/usage/cost?"+monthQuery, token)
+		results <- fetchResult{kind: "cost", raw: raw, err: err}
+	}()
+	var summaryRaw, amountRaw, costRaw json.RawMessage
+	for range 3 {
+		result := <-results
+		if result.err != nil {
+			return DeepSeekPlatformUsage{}, result.err
+		}
+		switch result.kind {
+		case "summary":
+			summaryRaw = result.raw
+		case "amount":
+			amountRaw = result.raw
+		case "cost":
+			costRaw = result.raw
+		}
+	}
+	now := time.Now().UTC()
+	if c.Now != nil {
+		now = c.Now().UTC()
+	}
+	balance, err := parseDeepSeekSummaryBalance(summaryRaw)
+	if err != nil {
+		return DeepSeekPlatformUsage{}, err
+	}
+	days, err := parseDeepSeekAmountDays(amountRaw)
+	if err != nil {
+		return DeepSeekPlatformUsage{}, err
+	}
+	costs, err := parseDeepSeekCosts(costRaw, now, monthValue)
+	if err != nil {
+		return DeepSeekPlatformUsage{}, err
+	}
+	return DeepSeekPlatformUsage{
+		Status:  DeepSeekPlatformOK,
+		Month:   monthValue,
+		Balance: balance,
+		Days:    days,
+		Costs:   costs,
+	}, nil
+}
+
+func (c *DeepSeekPlatformClient) fetchBizData(ctx context.Context, client *http.Client, baseURL, path, token string) (json.RawMessage, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("deepseek platform %s: %w", path, err)
+	}
+	defer response.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(response.Body, deepSeekPlatformMaxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("deepseek platform %s: %w", path, err)
+	}
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
+		return nil, errDeepSeekSessionExpired
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("deepseek platform %s: HTTP %d", path, response.StatusCode)
+	}
+	var envelope deepSeekEnvelope
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return nil, fmt.Errorf("deepseek platform %s: invalid JSON", path)
+	}
+	if deepSeekIsExpiredCode(envelope.Code) || deepSeekIsExpiredCode(envelope.Data.BizCode) {
+		return nil, errDeepSeekSessionExpired
+	}
+	if envelope.Code != 0 {
+		return nil, fmt.Errorf("deepseek platform %s: code %d (%s)", path, envelope.Code, envelope.Msg)
+	}
+	if envelope.Data.BizCode != 0 {
+		return nil, fmt.Errorf("deepseek platform %s: biz_code %d (%s)", path, envelope.Data.BizCode, envelope.Data.BizMsg)
+	}
+	if len(envelope.Data.BizData) == 0 {
+		return nil, fmt.Errorf("deepseek platform %s: missing biz_data", path)
+	}
+	return envelope.Data.BizData, nil
+}
+
+func deepSeekIsExpiredCode(code int) bool {
+	return code == 40002 || code == 40003
+}
+
+func parseDeepSeekSummaryBalance(raw json.RawMessage) ([]BalanceItem, error) {
+	var payload deepSeekSummaryBiz
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("parse user summary: %w", err)
+	}
+	type currencyTotals struct {
+		toppedUp float64
+		granted  float64
+	}
+	totals := map[string]*currencyTotals{}
+	add := func(wallets []deepSeekWallet, granted bool) error {
+		for _, wallet := range wallets {
+			amount, err := deepSeekDecimal(wallet.Balance)
+			if err != nil {
+				return fmt.Errorf("parse user summary wallet: %w", err)
+			}
+			entry := totals[wallet.Currency]
+			if entry == nil {
+				entry = &currencyTotals{}
+				totals[wallet.Currency] = entry
+			}
+			if granted {
+				entry.granted += amount
+			} else {
+				entry.toppedUp += amount
+			}
+		}
+		return nil
+	}
+	if err := add(payload.NormalWallets, false); err != nil {
+		return nil, err
+	}
+	if err := add(payload.BonusWallets, true); err != nil {
+		return nil, err
+	}
+	currencies := make([]string, 0, len(totals))
+	for currency := range totals {
+		currencies = append(currencies, currency)
+	}
+	sort.Strings(currencies)
+	items := make([]BalanceItem, 0, len(currencies))
+	for _, currency := range currencies {
+		entry := totals[currency]
+		items = append(items, BalanceItem{
+			Currency: currency,
+			Total:    deepSeekFormatMoney(entry.toppedUp + entry.granted),
+			Granted:  deepSeekFormatMoney(entry.granted),
+			ToppedUp: deepSeekFormatMoney(entry.toppedUp),
+		})
+	}
+	return items, nil
+}
+
+func parseDeepSeekAmountDays(raw json.RawMessage) ([]DeepSeekPlatformDay, error) {
+	var payload deepSeekAmountBiz
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, fmt.Errorf("parse usage amount: %w", err)
+	}
+	days := make([]DeepSeekPlatformDay, 0, len(payload.Days))
+	for _, day := range payload.Days {
+		totals, err := deepSeekTokenTotals(day.Data)
+		if err != nil {
+			return nil, err
+		}
+		days = append(days, DeepSeekPlatformDay{
+			Date:         day.Date,
+			Request:      totals.request,
+			OutputTokens: totals.output,
+			HitTokens:    totals.hit,
+			MissTokens:   totals.miss,
+			TotalTokens:  totals.hit + totals.miss + totals.output,
+		})
+	}
+	return days, nil
+}
+
+type deepSeekTokenAggregate struct {
+	request int64
+	output  int64
+	hit     int64
+	miss    int64
+}
+
+// deepSeekTokenTotals sums token usage across models. PROMPT_TOKEN is a legacy
+// aggregate that is always zero on current models and is ignored to avoid
+// double counting against hit+miss.
+func deepSeekTokenTotals(models []deepSeekModelUsage) (deepSeekTokenAggregate, error) {
+	var totals deepSeekTokenAggregate
+	for _, model := range models {
+		for _, item := range model.Usage {
+			if item.Type == "PROMPT_TOKEN" {
+				continue
+			}
+			amount, err := deepSeekTokenAmount(item.Amount)
+			if err != nil {
+				return totals, err
+			}
+			switch item.Type {
+			case "REQUEST":
+				totals.request += amount
+			case "RESPONSE_TOKEN":
+				totals.output += amount
+			case "PROMPT_CACHE_HIT_TOKEN":
+				totals.hit += amount
+			case "PROMPT_CACHE_MISS_TOKEN":
+				totals.miss += amount
+			}
+		}
+	}
+	return totals, nil
+}
+
+func parseDeepSeekCosts(raw json.RawMessage, now time.Time, month DeepSeekPlatformMonth) ([]DeepSeekPlatformCost, error) {
+	var blocks []deepSeekCostBlock
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil, fmt.Errorf("parse usage cost: %w", err)
+	}
+	currentMonth := now.Year() == month.Year && int(now.Month()) == month.Month
+	today := now.Format("2006-01-02")
+	costs := make([]DeepSeekPlatformCost, 0, len(blocks))
+	for _, block := range blocks {
+		monthly, err := deepSeekCostSum(block.Total)
+		if err != nil {
+			return nil, err
+		}
+		cost := DeepSeekPlatformCost{Currency: block.Currency, MonthlyCost: monthly}
+		for _, day := range block.Days {
+			amount, err := deepSeekCostSum(day.Data)
+			if err != nil {
+				return nil, err
+			}
+			cost.Daily = append(cost.Daily, DeepSeekPlatformCostDay{Date: day.Date, Amount: amount})
+			if currentMonth && day.Date == today {
+				cost.TodayCost = amount
+			}
+		}
+		costs = append(costs, cost)
+	}
+	return costs, nil
+}
+
+// deepSeekCostSum adds non-REQUEST usage amounts (REQUEST carries no charge).
+func deepSeekCostSum(models []deepSeekModelUsage) (float64, error) {
+	var sum float64
+	for _, model := range models {
+		for _, item := range model.Usage {
+			if item.Type == "REQUEST" {
+				continue
+			}
+			amount, err := deepSeekDecimal(item.Amount)
+			if err != nil {
+				return 0, err
+			}
+			sum += amount
+		}
+	}
+	return sum, nil
+}
+
+func deepSeekDecimal(raw string) (float64, error) {
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid decimal amount %q", raw)
+	}
+	return value, nil
+}
+
+func deepSeekTokenAmount(raw string) (int64, error) {
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid token amount %q", raw)
+	}
+	return value, nil
+}
+
+func deepSeekFormatMoney(value float64) string {
+	return strconv.FormatFloat(value, 'f', 2, 64)
+}
+
+type deepSeekPlatformCacheEntry struct {
+	usage     DeepSeekPlatformUsage
+	fetchedAt time.Time
+}
+
+// DeepSeekPlatformStore owns the token and the per-month cache.
+type DeepSeekPlatformStore struct {
+	mu      sync.RWMutex
+	token   string
+	baseURL string
+	client  *http.Client
+	now     func() time.Time
+	cache   map[string]deepSeekPlatformCacheEntry
+}
+
+func NewDeepSeekPlatformStore(token string, client *http.Client, baseURLs ...string) *DeepSeekPlatformStore {
+	baseURL := ""
+	if len(baseURLs) > 0 {
+		baseURL = strings.TrimRight(baseURLs[0], "/")
+	}
+	return &DeepSeekPlatformStore{
+		token:   strings.TrimSpace(token),
+		baseURL: baseURL,
+		client:  client,
+		now:     time.Now,
+		cache:   map[string]deepSeekPlatformCacheEntry{},
+	}
+}
+
+// SetToken replaces the session token and drops cached responses.
+func (s *DeepSeekPlatformStore) SetToken(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.token = strings.TrimSpace(token)
+	s.cache = map[string]deepSeekPlatformCacheEntry{}
+}
+
+// Get returns cached or freshly fetched platform usage for the month.
+// Expired sessions and platform failures both fall back to the last
+// successful cache (status expired/error + message); the cache is never
+// overwritten by a failed fetch.
+func (s *DeepSeekPlatformStore) Get(ctx context.Context, year, month int, force bool) (DeepSeekPlatformUsage, error) {
+	key := fmt.Sprintf("%d-%02d", year, month)
+	s.mu.RLock()
+	entry, exists := s.cache[key]
+	token := s.token
+	now := s.now().UTC()
+	s.mu.RUnlock()
+	if exists && !force && deepSeekCacheFresh(entry, now, year, month) {
+		return entry.usage, nil
+	}
+	client := DeepSeekPlatformClient{Token: token, BaseURL: s.baseURL, Client: s.client, Now: s.now}
+	usage, err := client.Fetch(ctx, year, month)
+	if err != nil {
+		status := DeepSeekPlatformError
+		message := "platform request failed"
+		if errors.Is(err, errDeepSeekSessionExpired) {
+			status = DeepSeekPlatformExpired
+			message = "platform session expired"
+		}
+		s.mu.RLock()
+		entry, exists = s.cache[key]
+		s.mu.RUnlock()
+		if exists {
+			stale := entry.usage
+			stale.Status = status
+			stale.Message = message
+			return stale, nil
+		}
+		return DeepSeekPlatformUsage{
+			Status:  status,
+			Month:   DeepSeekPlatformMonth{Year: year, Month: month},
+			Message: message,
+		}, nil
+	}
+	usage.Month = DeepSeekPlatformMonth{Year: year, Month: month}
+	usage.CachedAt = &now
+	s.mu.Lock()
+	s.cache[key] = deepSeekPlatformCacheEntry{usage: usage, fetchedAt: now}
+	s.mu.Unlock()
+	return usage, nil
+}
+
+func deepSeekCacheFresh(entry deepSeekPlatformCacheEntry, now time.Time, year, month int) bool {
+	ttl := deepSeekPlatformPastMonthTTL
+	if year == now.Year() && month == int(now.Month()) {
+		ttl = deepSeekPlatformCurrentMonthTTL
+	}
+	return now.Sub(entry.fetchedAt) < ttl
+}
+```
+
+Note: `BalanceItem` already exists in the `usage` package with `Currency`, `Total`, `Granted`, `ToppedUp` string fields — verify with `rg "type BalanceItem" server/internal/hub/usage/`.
+
+- [ ] **Step 5: Run the tests**
+
+```bash
+cd server && go test ./internal/hub/usage/ -run "DeepSeek" -v
+```
+
+Expected: all PASS (fixture parse, malformed rejection, expired codes, cache TTL/force, stale on expired/error, notConnected).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add server/internal/hub/usage/
+git commit -m "feat(usage): fetch deepseek platform usage with verified parsing"
+```
+
+---
+
+### Task 5: Restore the protocol method
+
+The old protocol registration was correct — restore unchanged.
+
+**Files:**
+- `server/internal/protocol/registry_methods.go`
+- `server/internal/protocol/registry_methods_test.go`
+- `server/internal/registry/server_test.go`
+
+- [ ] **Step 1: Cherry-pick**
+
+```bash
+git cherry-pick 93cffd5a
+```
+
+Expected: clean pick (`feat(protocol): expose deepseek usage read method`).
+
+- [ ] **Step 2: Verify**
+
+```bash
+cd server && go test ./internal/protocol/ ./internal/registry/ -run "DeepSeek" -v
+```
+
+Expected: PASS (method descriptor + registry forwarding by envelope hubId).
+
+---
+
+### Task 6: Restore hub handler and add error/message passthrough
+
+**Files:**
+- `server/internal/hub/reporter.go`
+- `server/internal/hub/hub_test.go`
+
+- [ ] **Step 1: Cherry-pick without committing**
+
+```bash
+git cherry-pick -n c006903a
+```
+
+Expected: clean (restores `deepSeekUsageGetPayload`, `deepSeekUsageSource`, `Reporter.deepSeekUsage`, wiring in `NewReporter`, `replyDeepSeekUsageGet`, the `deepSeekPlatform` case in `applyHubConfigUpdate`, and the two handler tests).
+
+- [ ] **Step 2: Pass the message field through the response payload**
+
+In `server/internal/hub/reporter.go`, in `replyDeepSeekUsageGet`, change the payload map from:
+
+```go
+		Payload: rp.MustRaw(map[string]any{
+			"hubId":    r.cfg.HubID,
+			"status":   result.Status,
+			"month":    result.Month,
+			"balance":  result.Balance,
+			"days":     result.Days,
+			"costs":    result.Costs,
+			"cachedAt": result.CachedAt,
+		}),
+```
+
+to:
+
+```go
+		Payload: rp.MustRaw(map[string]any{
+			"hubId":    r.cfg.HubID,
+			"status":   result.Status,
+			"month":    result.Month,
+			"message":  result.Message,
+			"balance":  result.Balance,
+			"days":     result.Days,
+			"costs":    result.Costs,
+			"cachedAt": result.CachedAt,
+		}),
+```
+
+- [ ] **Step 3: Add an error-status test**
+
+Append to `server/internal/hub/hub_test.go` (after `TestReporterRespondsToDeepSeekUsageGet`):
+
+```go
+func TestReporterRespondsToDeepSeekUsageGetErrorWithMessage(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := newFakeReporterRegistry(t, "hub-deepseek-usage-error", testEnvelope{
+		RequestID: 203,
+		Type:      "request",
+		Method:    rp.RegistryMethodDeepSeekUsageGet,
+		HubID:     "hub-deepseek-usage-error",
+		Payload:   map[string]any{"year": 2026, "month": 8},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-deepseek-usage-error",
+		ReconnectInterval: 50 * time.Millisecond,
+		StateDir:          t.TempDir(),
+	}, nil)
+	reporter.deepSeekUsage = &deepSeekUsageStub{result: usage.DeepSeekPlatformUsage{
+		Status:  usage.DeepSeekPlatformError,
+		Message: "platform request failed",
+		Month:   usage.DeepSeekPlatformMonth{Year: 2026, Month: 8},
+		Days: []usage.DeepSeekPlatformDay{{
+			Date: "2026-07-31", Request: 267, OutputTokens: 213950, HitTokens: 84587904, MissTokens: 546731, TotalTokens: 85348585,
+		}},
+	}}
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Payload["status"] != "error" || resp.Payload["message"] != "platform request failed" {
+			t.Fatalf("response payload=%#v", resp.Payload)
+		}
+		if days, ok := resp.Payload["days"].([]any); !ok || len(days) != 1 {
+			t.Fatalf("stale days missing: %#v", resp.Payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive deepseek.usage.get response")
+	}
+}
+```
+
+- [ ] **Step 4: Run tests**
+
+```bash
+cd server && go test ./internal/hub/ -run "DeepSeekUsage" -v
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add server/internal/hub/reporter.go server/internal/hub/hub_test.go
+git commit -m "feat(hub): serve deepseek platform usage with stale error status"
+```
+
+---
+
+### Task 7: Restore web transport with error status
+
+**Files:**
+- `app/web/src/registry/registryMethods.ts`
+- `app/web/src/registry/registryTypes.ts`
+- `app/web/src/registry/RegistryRepository.ts`
+- `app/web/src/registry/RegistryWorkspaceService.ts`
+- `app/__tests__/web-hub-state-service.test.ts`
+- `app/web/src/app/ChatHubMenu.test.tsx`
+
+- [ ] **Step 1: Cherry-pick without committing**
+
+```bash
+git cherry-pick -n bb1b60ec
+```
+
+Expected: clean.
+
+- [ ] **Step 2: Add the error status and message to the types**
+
+In `app/web/src/registry/registryTypes.ts`, change `RegistryDeepSeekUsageResponse` from:
+
+```ts
+export interface RegistryDeepSeekUsageResponse {
+  hubId: string;
+  status: 'ok' | 'notConnected' | 'expired';
+  month: {year: number; month: number};
+  balance?: Array<{currency: string; total: string; granted?: string; toppedUp?: string}>;
+  days?: RegistryDeepSeekUsageDay[];
+  costs?: RegistryDeepSeekUsageCost[];
+  cachedAt?: string;
+}
+```
+
+to:
+
+```ts
+export interface RegistryDeepSeekUsageResponse {
+  hubId: string;
+  status: 'ok' | 'notConnected' | 'expired' | 'error';
+  month: {year: number; month: number};
+  message?: string;
+  balance?: Array<{currency: string; total: string; granted?: string; toppedUp?: string}>;
+  days?: RegistryDeepSeekUsageDay[];
+  costs?: RegistryDeepSeekUsageCost[];
+  cachedAt?: string;
+}
+```
+
+- [ ] **Step 3: Parse the full payload for every status**
+
+`expired`/`error` responses now carry stale data, so the early return for non-ok statuses must go. In `app/web/src/registry/RegistryRepository.ts`, replace the whole `normalizeDeepSeekUsageResponse` function with:
+
+```ts
+function normalizeDeepSeekUsageResponse(
+  raw: unknown,
+  hubId: string,
+): RegistryDeepSeekUsageResponse | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const input = raw as Record<string, unknown>;
+  const status = input.status;
+  const month = input.month as {year?: unknown; month?: unknown} | undefined;
+  if (
+    input.hubId !== hubId
+    || (status !== 'ok' && status !== 'notConnected' && status !== 'expired' && status !== 'error')
+    || !month
+    || typeof month.year !== 'number'
+    || typeof month.month !== 'number'
+  ) {
+    return null;
+  }
+  const days = Array.isArray(input.days)
+    ? input.days.map(normalizeDeepSeekUsageDay).filter((day): day is RegistryDeepSeekUsageDay => day !== null)
+    : [];
+  const costs = Array.isArray(input.costs)
+    ? input.costs.map(normalizeDeepSeekUsageCost).filter((cost): cost is RegistryDeepSeekUsageCost => cost !== null)
+    : [];
+  if (days.length !== (Array.isArray(input.days) ? input.days.length : 0)) return null;
+  if (costs.length !== (Array.isArray(input.costs) ? input.costs.length : 0)) return null;
+  return {
+    hubId,
+    status,
+    month: {year: month.year, month: month.month},
+    message: typeof input.message === 'string' && input.message !== '' ? input.message : undefined,
+    balance: Array.isArray(input.balance)
+      ? input.balance as RegistryDeepSeekUsageResponse['balance']
+      : undefined,
+    days,
+    costs,
+    cachedAt: typeof input.cachedAt === 'string' ? input.cachedAt : undefined,
   };
-  const view = create(
-    <DeepSeekUsageDialog
-      state={state}
-      onClose={jest.fn()}
-      onRetry={jest.fn()}
-      onMonthChange={jest.fn()}
-      onSaveToken={jest.fn()}
-      onClearToken={jest.fn()}
-    />,
-  );
-  const dialog = view.root.findByProps({'data-deepseek-usage-dialog': true});
-  expect(dialog.props.role).toBe('dialog');
-  expect(dialog.props['aria-modal']).toBe(true);
-  expect(renderedText(view)).toContain('2026-08');
-  expect(renderedText(view)).toContain('3.24');
+}
+```
+
+- [ ] **Step 4: Run transport tests**
+
+```bash
+cd app && npm test -- web-hub-state-service web-backend-secret-settings 2>&1 | tail -8
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/web/src/registry app/__tests__/web-hub-state-service.test.ts app/web/src/app/ChatHubMenu.test.tsx
+git commit -m "feat(app): transport deepseek platform usage with error status"
+```
+
+---
+
+### Task 8: Rewrite the usage view model (multi-currency)
+
+**Files:**
+- Create: `app/web/src/usage/deepSeekUsage.ts`
+- Create: `app/__tests__/web-deepseek-usage.test.ts`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `app/__tests__/web-deepseek-usage.test.ts`:
+
+```ts
+import {deepSeekHitRate, normalizeDeepSeekUsage} from '../web/src/usage/deepSeekUsage';
+import type {RegistryDeepSeekUsageResponse} from '../web/src/registry/registryTypes';
+
+function makeResponse(overrides: Partial<RegistryDeepSeekUsageResponse> = {}): RegistryDeepSeekUsageResponse {
+  return {
+    hubId: 'hub-1',
+    status: 'ok',
+    month: {year: 2026, month: 8},
+    balance: [{currency: 'CNY', total: '1.25', granted: '0.00', toppedUp: '1.25'}],
+    days: [
+      {date: '2026-08-01', request: 800000, outputTokens: 700000, hitTokens: 500000, missTokens: 600000, totalTokens: 1800000},
+      {date: '2026-08-02', request: 0, outputTokens: 0, hitTokens: 0, missTokens: 0, totalTokens: 0},
+    ],
+    costs: [
+      {
+        currency: 'CNY',
+        monthlyCost: 12.75,
+        todayCost: 21.75,
+        daily: [{date: '2026-08-01', amount: 21.75}],
+      },
+      {
+        currency: 'USD',
+        monthlyCost: 1.5,
+        todayCost: 0.5,
+        daily: [{date: '2026-08-01', amount: 0.5}],
+      },
+    ],
+    cachedAt: '2026-08-01T12:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('deepSeekHitRate', () => {
+  it('computes hit / (hit + miss) and handles zero input', () => {
+    expect(deepSeekHitRate({hitTokens: 500000, missTokens: 600000})).toBeCloseTo(500000 / 1100000, 6);
+    expect(deepSeekHitRate({hitTokens: 0, missTokens: 0})).toBe(0);
+  });
 });
 
-test('notConnected state offers login and paste form', () => {
-  const onSaveToken = jest.fn().mockResolvedValue(undefined);
-  const view = create(
-    <DeepSeekUsageDialog
-      state={{status: 'notConnected', month: {year: 2026, month: 8}}}
-      onClose={jest.fn()}
-      onRetry={jest.fn()}
-      onMonthChange={jest.fn()}
-      onSaveToken={onSaveToken}
-      onClearToken={jest.fn()}
-    />,
-  );
-  expect(renderedText(view)).toContain('Login DeepSeek');
-});
+describe('normalizeDeepSeekUsage', () => {
+  const now = new Date(2026, 7, 1, 12, 0, 0);
 
-test('expired state keeps stale data and offers re-login', () => {
-  const view = create(
-    <DeepSeekUsageDialog
-      state={{
-        status: 'expired',
-        month: {year: 2026, month: 8},
-        view: {
-          status: 'expired',
-          month: {year: 2026, month: 8},
-          balance: [{currency: 'CNY', total: '3.24'}],
-          days: [],
-          costs: [],
-          monthlyCost: 8.8,
-          todayCost: 0,
-          currency: 'CNY',
-        },
-      }}
-      onClose={jest.fn()}
-      onRetry={jest.fn()}
-      onMonthChange={jest.fn()}
-      onSaveToken={jest.fn()}
-      onClearToken={jest.fn()}
-    />,
-  );
-  expect(renderedText(view)).toContain('Session expired');
-  expect(renderedText(view)).toContain('8.8');
+  it('maps per-currency daily costs onto days', () => {
+    const view = normalizeDeepSeekUsage(makeResponse(), now);
+    expect(view.days[0].costs).toEqual([
+      {currency: 'CNY', amount: 21.75},
+      {currency: 'USD', amount: 0.5},
+    ]);
+    expect(view.days[1].costs).toEqual([
+      {currency: 'CNY', amount: 0},
+      {currency: 'USD', amount: 0},
+    ]);
+  });
+
+  it('keeps one spend row per currency with today cost for the current month', () => {
+    const view = normalizeDeepSeekUsage(makeResponse(), now);
+    expect(view.isCurrentMonth).toBe(true);
+    expect(view.spend).toEqual([
+      {currency: 'CNY', monthlyCost: 12.75, todayCost: 21.75},
+      {currency: 'USD', monthlyCost: 1.5, todayCost: 0.5},
+    ]);
+  });
+
+  it('drops today cost for past months', () => {
+    const past = new Date(2026, 8, 1, 12, 0, 0);
+    const view = normalizeDeepSeekUsage(makeResponse(), past);
+    expect(view.isCurrentMonth).toBe(false);
+    expect(view.spend.map(item => item.todayCost)).toEqual([null, null]);
+  });
+
+  it('marks months without any usage as empty', () => {
+    const view = normalizeDeepSeekUsage(makeResponse({
+      days: [{date: '2026-08-01', request: 0, outputTokens: 0, hitTokens: 0, missTokens: 0, totalTokens: 0}],
+    }), now);
+    expect(view.isEmpty).toBe(true);
+    const nonEmpty = normalizeDeepSeekUsage(makeResponse(), now);
+    expect(nonEmpty.isEmpty).toBe(false);
+  });
+
+  it('defaults missing sections', () => {
+    const view = normalizeDeepSeekUsage({hubId: 'hub-1', status: 'expired', month: {year: 2026, month: 8}}, now);
+    expect(view.balance).toEqual([]);
+    expect(view.days).toEqual([]);
+    expect(view.spend).toEqual([]);
+    expect(view.isEmpty).toBe(true);
+  });
 });
 ```
 
-- [x] **Step 2: Run the dialog tests and verify RED**
+- [ ] **Step 2: Run test to verify it fails**
 
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-deepseek-usage-dialog.test.tsx
+```bash
+cd app && npm test -- web-deepseek-usage 2>&1 | tail -5
 ```
 
-Expected: FAIL because the dialog and chart modules do not exist.
+Expected: FAIL — module `../web/src/usage/deepSeekUsage` not found.
 
-- [x] **Step 3: Add the native login capability to the bridge type**
+- [ ] **Step 3: Write the implementation**
 
-In `app/web/src/platform/native/nativeRuntime.ts`, extend `NativeRuntimeBridge`:
+Create `app/web/src/usage/deepSeekUsage.ts`:
+
+```ts
+import type {RegistryDeepSeekUsageCost, RegistryDeepSeekUsageDay, RegistryDeepSeekUsageResponse} from '../registry/registryTypes';
+
+export interface DeepSeekUsageDay extends RegistryDeepSeekUsageDay {
+  cacheHitRate: number;
+  costs: Array<{currency: string; amount: number}>;
+}
+
+export interface DeepSeekCurrencySpend {
+  currency: string;
+  monthlyCost: number;
+  todayCost: number | null;
+}
+
+export interface DeepSeekUsageView {
+  status: RegistryDeepSeekUsageResponse['status'];
+  message?: string;
+  month: {year: number; month: number};
+  balance: NonNullable<RegistryDeepSeekUsageResponse['balance']>;
+  days: DeepSeekUsageDay[];
+  spend: DeepSeekCurrencySpend[];
+  cachedAt?: string;
+  isCurrentMonth: boolean;
+  isEmpty: boolean;
+}
+
+export function deepSeekHitRate(day: Pick<RegistryDeepSeekUsageDay, 'hitTokens' | 'missTokens'>): number {
+  const total = day.hitTokens + day.missTokens;
+  return total > 0 ? day.hitTokens / total : 0;
+}
+
+export function normalizeDeepSeekUsage(raw: RegistryDeepSeekUsageResponse, now = new Date()): DeepSeekUsageView {
+  const costs: RegistryDeepSeekUsageCost[] = raw.costs ?? [];
+  const isCurrentMonth = raw.month.year === now.getFullYear() && raw.month.month === now.getMonth() + 1;
+  const days = (raw.days ?? []).map(day => ({
+    ...day,
+    cacheHitRate: deepSeekHitRate(day),
+    costs: costs.map(block => ({
+      currency: block.currency,
+      amount: block.daily.find(entry => entry.date === day.date)?.amount ?? 0,
+    })),
+  }));
+  return {
+    status: raw.status,
+    message: raw.message,
+    month: raw.month,
+    balance: raw.balance ?? [],
+    days,
+    spend: costs.map(block => ({
+      currency: block.currency,
+      monthlyCost: block.monthlyCost,
+      todayCost: isCurrentMonth ? block.todayCost : null,
+    })),
+    cachedAt: raw.cachedAt,
+    isCurrentMonth,
+    isEmpty: days.every(day => day.totalTokens === 0),
+  };
+}
+```
+
+- [ ] **Step 4: Run the tests**
+
+```bash
+cd app && npm test -- web-deepseek-usage 2>&1 | tail -5
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/web/src/usage/deepSeekUsage.ts app/__tests__/web-deepseek-usage.test.ts
+git commit -m "feat(app): normalize deepseek platform usage views"
+```
+
+---
+
+### Task 9: Bridge native deepseek login (web side)
+
+These small pieces were correct in the old implementation; re-apply them manually (no cherry-pick — the rest of that commit is being rewritten).
+
+**Files:**
+- Modify: `app/web/src/platform/android/androidNativeMessageBridge.ts`
+- Modify: `app/web/src/platform/native/nativeRuntime.ts`
+- Create: `app/web/src/usage/deepSeekLogin.ts`
+
+- [ ] **Step 1: Add the android facade method**
+
+In `app/web/src/platform/android/androidNativeMessageBridge.ts`, in `AndroidNativeRpcFacade`, after the `reserveUserAction` line add:
+
+```ts
+  deepSeekLogin(): Promise<string>;
+```
+
+and in `getAndroidNativeRpcFacade`'s returned object, after the `reserveUserAction` implementation (which ends with `'token',\n    ),`) add:
+
+```ts
+    deepSeekLogin: () => request('deepseek.login'),
+```
+
+- [ ] **Step 2: Add the native runtime bridge wrapper**
+
+In `app/web/src/platform/native/nativeRuntime.ts`, in `NativeRuntimeBridge`, after `enabled?: boolean;` add:
 
 ```ts
   deepSeekLogin?: () => Promise<string>;
 ```
 
-In `app/web/src/platform/android/androidNativeMessageBridge.ts`, add `deepSeekLogin` to the RPC facade and implement it as `call('deepseek.login', {})` following the existing `clearPortRelaySiteData` call pattern; then in `nativeRuntime.ts`'s `wrapAndroidRuntime`, map:
+and in `wrapAndroidRuntime`'s returned object, after `enabled: true,` add:
 
 ```ts
     deepSeekLogin: async () => {
@@ -162,6 +1434,8 @@ In `app/web/src/platform/android/androidNativeMessageBridge.ts`, add `deepSeekLo
       return parsed.token;
     },
 ```
+
+- [ ] **Step 3: Create the login helper**
 
 Create `app/web/src/usage/deepSeekLogin.ts`:
 
@@ -181,178 +1455,217 @@ export function requestNativeDeepSeekLogin(): Promise<string> {
 }
 ```
 
-- [x] **Step 4: Implement the lazy chart boundary**
+- [ ] **Step 4: Type check**
 
-Create `app/web/src/usage/DeepSeekUsageChart.tsx`:
+```bash
+cd app && npm run tsc:web
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/web/src/platform app/web/src/usage/deepSeekLogin.ts
+git commit -m "feat(app): bridge native deepseek login"
+```
+
+---
+
+### Task 10: Rewrite the usage dialog
+
+Full `usage-history` shell, styled login panel with official-site link, expired state with re-login entry, error state with stale data + retry, month prev/next, cachedAt, disconnect button, empty state.
+
+**Files:**
+- Create: `app/web/src/usage/DeepSeekUsageDialog.tsx`
+- Create: `app/__tests__/web-deepseek-usage-dialog.test.tsx`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `app/__tests__/web-deepseek-usage-dialog.test.tsx`:
 
 ```tsx
 import React from 'react';
-import * as echarts from 'echarts/core';
-import {BarChart, LineChart} from 'echarts/charts';
-import {GridComponent, LegendComponent, TooltipComponent} from 'echarts/components';
-import {CanvasRenderer} from 'echarts/renderers';
+import TestRenderer, {act} from 'react-test-renderer';
 
-import type {DeepSeekUsageView} from './deepSeekUsage';
+import {DeepSeekUsageDialog, type DeepSeekUsageDialogState} from '../web/src/usage/DeepSeekUsageDialog';
+import type {DeepSeekUsageView} from '../web/src/usage/deepSeekUsage';
 
-echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+jest.mock('../web/src/usage/deepSeekLogin', () => ({
+  nativeDeepSeekLoginAvailable: jest.fn(() => false),
+  requestNativeDeepSeekLogin: jest.fn(),
+}));
 
-export default function DeepSeekUsageChart({view}: {view: DeepSeekUsageView}) {
-  const containerRef = React.useRef<HTMLDivElement | null>(null);
-  const chartRef = React.useRef<echarts.ECharts | null>(null);
+jest.mock('../web/src/usage/DeepSeekUsageChart', () => ({
+  __esModule: true,
+  default: () => <div data-chart-stub={true} />,
+}));
 
-  React.useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const chart = echarts.init(container, undefined, {renderer: 'canvas'});
-    chartRef.current = chart;
-    const resizeObserver = typeof ResizeObserver === 'undefined'
-      ? null
-      : new ResizeObserver(() => chart.resize());
-    resizeObserver?.observe(container);
-    return () => {
-      resizeObserver?.disconnect();
-      chart.dispose();
-      chartRef.current = null;
-    };
-  }, []);
+import {nativeDeepSeekLoginAvailable, requestNativeDeepSeekLogin} from '../web/src/usage/deepSeekLogin';
 
-  React.useEffect(() => {
-    const chart = chartRef.current;
-    const container = containerRef.current;
-    if (!chart || !container) return;
-    const styles = getComputedStyle(container);
-    const accent = cssToken(styles, '--accent-primary', '#2784c7');
-    const textPrimary = cssToken(styles, '--text-primary', '#dedede');
-    const textSecondary = cssToken(styles, '--text-secondary', '#a3a3a3');
-    const border = cssToken(styles, '--border-subtle', '#363636');
-    const dates = view.days.map(day => day.date);
-    chart.setOption({
-      animation: false,
-      legend: {
-        textStyle: {color: textSecondary, fontSize: 10},
-        top: 0,
-      },
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: cssToken(styles, '--surface-overlay', '#2e2e2e'),
-        borderColor: border,
-        textStyle: {color: textPrimary, fontSize: 11},
-        formatter: (params: unknown) => formatTooltip(params, view),
-      },
-      grid: {left: 46, right: 46, top: 28, bottom: 28},
-      xAxis: {
-        type: 'category',
-        data: dates,
-        axisLabel: {color: textSecondary, fontSize: 10},
-        axisLine: {lineStyle: {color: border}},
-        axisTick: {show: false},
-      },
-      yAxis: [
-        {
-          type: 'value',
-          name: 'Tokens',
-          axisLabel: {color: textSecondary, fontSize: 10},
-          axisLine: {show: false},
-          axisTick: {show: false},
-          splitLine: {lineStyle: {color: withAlpha(border, 0.68)}},
-        },
-        {
-          type: 'value',
-          min: 0,
-          max: 100,
-          name: 'Hit %',
-          axisLabel: {color: textSecondary, fontSize: 10, formatter: '{value}%'},
-          axisLine: {show: false},
-          axisTick: {show: false},
-          splitLine: {show: false},
-        },
-      ],
-      series: [
-        {
-          name: 'Output',
-          type: 'bar',
-          stack: 'tokens',
-          barMaxWidth: 14,
-          data: view.days.map(day => day.outputTokens),
-          itemStyle: {color: accent},
-          emphasis: {disabled: true},
-        },
-        {
-          name: 'Cache miss',
-          type: 'bar',
-          stack: 'tokens',
-          barMaxWidth: 14,
-          data: view.days.map(day => day.missTokens),
-          itemStyle: {color: '#8ab4c8'},
-          emphasis: {disabled: true},
-        },
-        {
-          name: 'Cache hit',
-          type: 'bar',
-          stack: 'tokens',
-          barMaxWidth: 14,
-          data: view.days.map(day => day.hitTokens),
-          itemStyle: {color: '#a0d6a0'},
-          emphasis: {disabled: true},
-        },
-        {
-          name: 'Hit rate',
-          type: 'line',
-          yAxisIndex: 1,
-          data: view.days.map(day => Number((day.cacheHitRate * 100).toFixed(1))),
-          showSymbol: false,
-          smooth: 0.2,
-          lineStyle: {color: '#e8b84b', width: 2},
-          itemStyle: {color: '#e8b84b'},
-          emphasis: {disabled: true},
-        },
-      ],
-    }, {notMerge: true});
-  }, [view]);
+const MONTH = {year: 2026, month: 8};
 
-  return (
-    <div
-      ref={containerRef}
-      className="deepseek-usage-chart"
-      role="img"
-      aria-label="Daily token usage, cache hit rate, and spend chart"
-    />
-  );
+function makeView(overrides: Partial<DeepSeekUsageView> = {}): DeepSeekUsageView {
+  return {
+    status: 'ok',
+    month: MONTH,
+    balance: [{currency: 'CNY', total: '1.25'}],
+    days: [{
+      date: '2026-08-01', request: 800000, outputTokens: 700000, hitTokens: 500000, missTokens: 600000,
+      totalTokens: 1800000, cacheHitRate: 500000 / 1100000,
+      costs: [{currency: 'CNY', amount: 21.75}],
+    }],
+    spend: [{currency: 'CNY', monthlyCost: 12.75, todayCost: 21.75}],
+    cachedAt: '2026-08-01T12:00:00Z',
+    isCurrentMonth: true,
+    isEmpty: false,
+    ...overrides,
+  };
 }
 
-function cssToken(styles: CSSStyleDeclaration, name: string, fallback: string): string {
-  return styles.getPropertyValue(name).trim() || fallback;
+function renderDialog(state: DeepSeekUsageDialogState, handlers: Record<string, jest.Mock> = {}) {
+  const props = {
+    state,
+    onClose: jest.fn(),
+    onRetry: jest.fn(),
+    onMonthChange: jest.fn(),
+    onSaveToken: jest.fn(async () => {}),
+    onClearToken: jest.fn(async () => {}),
+    ...handlers,
+  };
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(<DeepSeekUsageDialog {...props} />);
+  });
+  return {renderer, props};
 }
 
-function withAlpha(color: string, alpha: number): string {
-  const hex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
-  if (hex) {
-    return `rgb(${parseInt(hex[1], 16)} ${parseInt(hex[2], 16)} ${parseInt(hex[3], 16)} / ${alpha})`;
-  }
-  return color;
+function text(renderer: TestRenderer.ReactTestRenderer): string {
+  return JSON.stringify(renderer.toJSON());
 }
 
-function formatTooltip(params: unknown, view: DeepSeekUsageView): string {
-  const items = Array.isArray(params) ? params : [];
-  const first = items[0] as {name?: unknown} | undefined;
-  const date = String(first?.name ?? '');
-  const day = view.days.find(entry => entry.date === date);
-  if (!day) return '';
-  const hitPercent = Math.round(day.cacheHitRate * 1000) / 10;
-  const rows = [
-    `<strong>${date}</strong>`,
-    `Total: ${day.totalTokens.toLocaleString()} tokens`,
-    `Hit rate: ${hitPercent}%`,
-    `Spend: ${view.currency} ${day.cost.toFixed(4)}`,
-    `Output: ${day.outputTokens.toLocaleString()}`,
-    `Cache hit: ${day.hitTokens.toLocaleString()}`,
-    `Cache miss: ${day.missTokens.toLocaleString()}`,
-  ];
-  return rows.join('<br/>');
-}
+describe('DeepSeekUsageDialog', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('shows the login panel with the official site link when not connected', () => {
+    const {renderer} = renderDialog({status: 'notConnected', month: MONTH});
+    const output = text(renderer);
+    expect(output).toContain('Login DeepSeek');
+    expect(output).toContain('platform.deepseek.com');
+    const link = renderer.root.findByType('a');
+    expect(link.props.href).toBe('https://platform.deepseek.com');
+    expect(link.props.target).toBe('_blank');
+  });
+
+  it('saves a pasted token', async () => {
+    const onSaveToken = jest.fn(async () => {});
+    const {renderer} = renderDialog({status: 'notConnected', month: MONTH}, {onSaveToken});
+    const input = renderer.root.findByType('input');
+    await act(async () => {
+      input.props.onChange({target: {value: '  token-abc  '}});
+    });
+    const saveButton = renderer.root.findAllByType('button').find(node =>
+      TestRenderer.isElement(node) && node.props.children === 'Save token');
+    expect(saveButton).toBeDefined();
+    await act(async () => {
+      saveButton!.props.onClick();
+    });
+    expect(onSaveToken).toHaveBeenCalledWith('token-abc');
+  });
+
+  it('keeps stale data and offers re-login when expired', () => {
+    const {renderer} = renderDialog({status: 'expired', month: MONTH, view: makeView()});
+    const output = text(renderer);
+    expect(output).toContain('Session expired');
+    expect(output).toContain('CNY 12.75');
+    expect(output).toContain('Login DeepSeek');
+  });
+
+  it('keeps stale data and offers retry on platform error', () => {
+    const onRetry = jest.fn();
+    const {renderer} = renderDialog(
+      {status: 'error', message: 'platform request failed', month: MONTH, view: makeView()},
+      {onRetry},
+    );
+    const output = text(renderer);
+    expect(output).toContain('platform request failed');
+    expect(output).toContain('CNY 12.75');
+    const retry = renderer.root.findAllByType('button').find(node => node.props.children === 'Retry');
+    expect(retry).toBeDefined();
+    act(() => {
+      retry!.props.onClick();
+    });
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('shows per-currency spend, balance, updated time when ready', () => {
+    const {renderer} = renderDialog({status: 'ready', view: makeView()});
+    const output = text(renderer);
+    expect(output).toContain('CNY 12.75');
+    expect(output).toContain('CNY 21.75');
+    expect(output).toContain('CNY 1.25');
+    expect(output).toContain('Updated');
+  });
+
+  it('shows an empty state for months without usage', () => {
+    const {renderer} = renderDialog({status: 'ready', view: makeView({isEmpty: true, days: []})});
+    expect(text(renderer)).toContain('No usage recorded this month');
+  });
+
+  it('navigates months backward and forward but not past the current month', () => {
+    const onMonthChange = jest.fn();
+    const now = new Date();
+    const current = {year: now.getFullYear(), month: now.getMonth() + 1};
+    const {renderer} = renderDialog({status: 'loading', month: current}, {onMonthChange});
+    const next = renderer.root.findAllByType('button').find(node => node.props['aria-label'] === 'Next month');
+    expect(next!.props.disabled).toBe(true);
+    const previous = renderer.root.findAllByType('button').find(node => node.props['aria-label'] === 'Previous month');
+    act(() => {
+      previous!.props.onClick();
+    });
+    const expected = current.month === 1
+      ? [current.year - 1, 12]
+      : [current.year, current.month - 1];
+    expect(onMonthChange).toHaveBeenCalledWith(expected[0], expected[1]);
+  });
+
+  it('offers the native login button only when the bridge exists and surfaces its errors', async () => {
+    (nativeDeepSeekLoginAvailable as jest.Mock).mockReturnValue(true);
+    (requestNativeDeepSeekLogin as jest.Mock).mockRejectedValue(new Error('login window closed'));
+    const {renderer} = renderDialog({status: 'notConnected', month: MONTH});
+    const nativeButton = renderer.root.findAllByType('button').find(node => node.props.children === 'Login in window');
+    expect(nativeButton).toBeDefined();
+    await act(async () => {
+      nativeButton!.props.onClick();
+    });
+    expect(text(renderer)).toContain('login window closed');
+  });
+
+  it('disconnects through onClearToken', () => {
+    const onClearToken = jest.fn(async () => {});
+    const {renderer} = renderDialog({status: 'ready', view: makeView()}, {onClearToken});
+    const disconnect = renderer.root.findAllByType('button').find(node =>
+      node.props['aria-label'] === 'Disconnect DeepSeek platform');
+    expect(disconnect).toBeDefined();
+    act(() => {
+      disconnect!.props.onClick();
+    });
+    expect(onClearToken).toHaveBeenCalled();
+  });
+});
 ```
 
-- [x] **Step 5: Implement the dialog**
+- [ ] **Step 2: Run test to verify it fails**
+
+```bash
+cd app && npm test -- web-deepseek-usage-dialog 2>&1 | tail -5
+```
+
+Expected: FAIL — module not found.
+
+- [ ] **Step 3: Write the dialog**
 
 Create `app/web/src/usage/DeepSeekUsageDialog.tsx`:
 
@@ -368,11 +1681,16 @@ const LazyDeepSeekUsageChart = React.lazy(() => import(
   './DeepSeekUsageChart'
 ));
 
+export interface DeepSeekUsageMonth {
+  year: number;
+  month: number;
+}
+
 export type DeepSeekUsageDialogState =
-  | {status: 'loading'; month: {year: number; month: number}}
-  | {status: 'error'; message: string; month: {year: number; month: number}}
-  | {status: 'notConnected'; month: {year: number; month: number}}
-  | {status: 'expired'; month: {year: number; month: number}; view?: DeepSeekUsageView}
+  | {status: 'loading'; month: DeepSeekUsageMonth}
+  | {status: 'error'; message: string; month: DeepSeekUsageMonth; view?: DeepSeekUsageView}
+  | {status: 'notConnected'; month: DeepSeekUsageMonth}
+  | {status: 'expired'; month: DeepSeekUsageMonth; view?: DeepSeekUsageView}
   | {status: 'ready'; view: DeepSeekUsageView};
 
 interface DeepSeekUsageDialogProps {
@@ -416,7 +1734,10 @@ export function DeepSeekUsageDialog({
   }, []);
 
   const month = state.status === 'ready' ? state.view.month : state.month;
-  const view = state.status === 'ready' || state.status === 'expired' ? state.view : undefined;
+  const view = state.status === 'ready' || state.status === 'expired' || state.status === 'error'
+    ? state.view
+    : undefined;
+  const hasData = Boolean(view && (view.days.length > 0 || view.balance.length > 0));
 
   return (
     <div
@@ -427,7 +1748,7 @@ export function DeepSeekUsageDialog({
       }}
     >
       <section
-        className="deepseek-usage-dialog"
+        className="usage-history-dialog deepseek-usage-dialog"
         role="dialog"
         aria-modal={true}
         aria-labelledby="deepseek-usage-dialog-title"
@@ -456,33 +1777,55 @@ export function DeepSeekUsageDialog({
             <Icon name="x" />
           </button>
         </header>
-        <div className="usage-history-body deepseek-usage-body">
+        <div className="usage-history-body">
           <div className="deepseek-usage-toolbar">
             <MonthSwitcher month={month} onMonthChange={onMonthChange} />
-            <button type="button" className="chat-function-action" aria-label="Refresh DeepSeek usage" onClick={onRetry}>
-              <Icon name="refreshCw" />
-            </button>
+            <div className="deepseek-usage-toolbar-side">
+              {view?.cachedAt ? (
+                <span className="deepseek-usage-updated">Updated {formatCachedAt(view.cachedAt)}</span>
+              ) : null}
+              <button
+                type="button"
+                className="deepseek-usage-icon-button"
+                aria-label="Refresh DeepSeek usage"
+                onClick={onRetry}
+              >
+                <Icon name="refreshCw" />
+              </button>
+              {view ? (
+                <button
+                  type="button"
+                  className="deepseek-usage-icon-button"
+                  aria-label="Disconnect DeepSeek platform"
+                  onClick={() => { void onClearToken(); }}
+                >
+                  <Icon name="logOut" />
+                </button>
+              ) : null}
+            </div>
           </div>
-          {state.status === 'loading' ? (
-            <div className="usage-history-loading" aria-live="polite">
-              <strong>Loading DeepSeek usage…</strong>
-            </div>
-          ) : null}
-          {state.status === 'error' ? (
-            <div className="usage-history-error" role="alert">
-              <strong>Usage unavailable</strong>
-              <p>{state.message}</p>
-              <button type="button" onClick={onRetry}>Retry</button>
-            </div>
-          ) : null}
+          {state.status === 'loading' ? <DeepSeekUsageLoading /> : null}
           {state.status === 'notConnected' ? <DeepSeekLoginPanel onSaveToken={onSaveToken} /> : null}
           {state.status === 'expired' ? (
             <>
-              <div className="deepseek-usage-expired" role="alert">
+              <div className="deepseek-usage-banner tone-warning" role="alert">
                 <strong>Session expired</strong>
-                <span>Re-login to refresh. Last successful data is kept below.</span>
+                <p>Sign in again to refresh.{hasData ? ' Last successful data is shown below.' : ''}</p>
               </div>
-              {view ? <DeepSeekUsageReady view={view} /> : <DeepSeekLoginPanel onSaveToken={onSaveToken} />}
+              {view && hasData ? <DeepSeekUsageReady view={view} /> : null}
+              <DeepSeekLoginPanel onSaveToken={onSaveToken} />
+            </>
+          ) : null}
+          {state.status === 'error' ? (
+            <>
+              <div className="deepseek-usage-banner tone-danger" role="alert">
+                <strong>Usage unavailable</strong>
+                <p>{state.message}</p>
+                <div>
+                  <button type="button" className="deepseek-usage-banner-action" onClick={onRetry}>Retry</button>
+                </div>
+              </div>
+              {view && hasData ? <DeepSeekUsageReady view={view} /> : null}
             </>
           ) : null}
           {state.status === 'ready' && view ? <DeepSeekUsageReady view={view} /> : null}
@@ -492,19 +1835,49 @@ export function DeepSeekUsageDialog({
   );
 }
 
+function formatCachedAt(cachedAt: string): string {
+  const parsed = new Date(cachedAt);
+  if (Number.isNaN(parsed.getTime())) return cachedAt;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`;
+}
+
+function DeepSeekUsageLoading() {
+  return (
+    <div className="usage-history-loading" aria-live="polite">
+      <div className="usage-history-loading-copy">
+        <strong>Loading DeepSeek usage</strong>
+        <span>Fetching monthly spend and daily tokens from the platform…</span>
+      </div>
+      <div className="usage-history-skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+
 function MonthSwitcher({
   month,
   onMonthChange,
 }: {
-  month: {year: number; month: number};
+  month: DeepSeekUsageMonth;
   onMonthChange: (year: number, month: number) => void;
 }) {
-  const previous = month.month === 1 ? {year: month.year - 1, month: 12} : {year: month.year, month: month.month - 1};
+  const now = new Date();
+  const atCurrentMonth = month.year === now.getFullYear() && month.month === now.getMonth() + 1;
+  const previous = month.month === 1
+    ? {year: month.year - 1, month: 12}
+    : {year: month.year, month: month.month - 1};
+  const next = month.month === 12
+    ? {year: month.year + 1, month: 1}
+    : {year: month.year, month: month.month + 1};
   return (
     <div className="deepseek-usage-months">
       <button
         type="button"
-        className="chat-function-action"
+        className="deepseek-usage-icon-button"
         aria-label="Previous month"
         onClick={() => onMonthChange(previous.year, previous.month)}
       >
@@ -515,9 +1888,10 @@ function MonthSwitcher({
       </span>
       <button
         type="button"
-        className="chat-function-action"
-        aria-label="Current month"
-        onClick={() => onMonthChange(new Date().getFullYear(), new Date().getMonth() + 1)}
+        className="deepseek-usage-icon-button"
+        aria-label="Next month"
+        disabled={atCurrentMonth}
+        onClick={() => onMonthChange(next.year, next.month)}
       >
         <Icon name="chevronRight" />
       </button>
@@ -547,21 +1921,28 @@ function DeepSeekLoginPanel({onSaveToken}: {onSaveToken: (token: string) => Prom
     <div className="deepseek-usage-login" data-deepseek-usage-login={true}>
       <strong>Login DeepSeek</strong>
       <p>
-        Sign in to platform.deepseek.com to fetch official spend and token usage.
+        Sign in on{' '}
+        <a href="https://platform.deepseek.com" target="_blank" rel="noreferrer">
+          platform.deepseek.com
+        </a>{' '}
+        to fetch official spend and token usage.
       </p>
       {nativeAvailable ? (
         <button
           type="button"
+          className="deepseek-usage-primary-action"
           disabled={busy}
           onClick={() => {
-            void requestNativeDeepSeekLogin().then(save);
+            void requestNativeDeepSeekLogin()
+              .then(save)
+              .catch(cause => setError(cause instanceof Error ? cause.message : 'Failed to start native login'));
           }}
         >
           Login in window
         </button>
       ) : null}
       <label>
-        <span>Or paste the platform session token</span>
+        <span>Paste the platform session token</span>
         <input
           type="password"
           value={token}
@@ -570,7 +1951,12 @@ function DeepSeekLoginPanel({onSaveToken}: {onSaveToken: (token: string) => Prom
           onChange={event => setToken(event.target.value)}
         />
       </label>
-      <button type="button" disabled={busy || token.trim() === ''} onClick={() => void save(token.trim())}>
+      <button
+        type="button"
+        className="deepseek-usage-primary-action"
+        disabled={busy || token.trim() === ''}
+        onClick={() => void save(token.trim())}
+      >
         Save token
       </button>
       {error ? <p className="deepseek-usage-login-error" role="alert">{error}</p> : null}
@@ -582,2589 +1968,680 @@ function DeepSeekUsageReady({view}: {view: DeepSeekUsageView}) {
   return (
     <>
       <div className="deepseek-usage-summary">
-        <span><strong>{view.currency} {view.monthlyCost.toFixed(2)}</strong><em>This month</em></span>
-        <span><strong>{view.currency} {view.todayCost.toFixed(2)}</strong><em>Today</em></span>
+        <span>
+          <strong>{view.spend.map(item => `${item.currency} ${item.monthlyCost.toFixed(2)}`).join(' · ') || '—'}</strong>
+          <em>This month</em>
+        </span>
         <span>
           <strong>
-            {(view.balance ?? []).map(item => `${item.currency} ${item.total}`).join(' · ') || '—'}
+            {view.isCurrentMonth
+              ? view.spend.map(item => `${item.currency} ${(item.todayCost ?? 0).toFixed(2)}`).join(' · ') || '—'
+              : '—'}
           </strong>
+          <em>Today</em>
+        </span>
+        <span>
+          <strong>{view.balance.map(item => `${item.currency} ${item.total}`).join(' · ') || '—'}</strong>
           <em>Balance</em>
         </span>
       </div>
-      <React.Suspense fallback={(
-        <div className="usage-history-chart-loading" aria-live="polite">Loading chart…</div>
-      )}>
-        <LazyDeepSeekUsageChart view={view} />
-      </React.Suspense>
+      {view.isEmpty ? (
+        <div className="usage-history-empty">
+          <strong>No usage recorded this month</strong>
+          <p>Days with DeepSeek API spend will appear here.</p>
+        </div>
+      ) : (
+        <React.Suspense fallback={(
+          <div className="usage-history-chart-loading" aria-live="polite">Loading chart…</div>
+        )}>
+          <LazyDeepSeekUsageChart view={view} />
+        </React.Suspense>
+      )}
     </>
   );
 }
 ```
 
-`arrowLeft` and `chevronRight` both exist in `app/web/src/common/Icon.tsx`; keep the tests unchanged.
+- [ ] **Step 4: Run the tests**
 
-- [x] **Step 6: Add dialog styles**
-
-Append to `app/web/src/styles/usage.css`:
-
-```css
-.deepseek-usage-dialog {
-  width: min(720px, calc(100vw - 32px));
-}
-.deepseek-usage-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.deepseek-usage-months {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.deepseek-usage-month-label {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-}
-.deepseek-usage-summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.deepseek-usage-summary span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--surface-raised);
-}
-.deepseek-usage-summary strong {
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
-.deepseek-usage-summary em {
-  font-style: normal;
-  font-size: 10px;
-  color: var(--text-tertiary);
-}
-.deepseek-usage-login {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-}
-.deepseek-usage-login input {
-  width: 100%;
-}
-.deepseek-usage-login-error {
-  color: var(--state-danger);
-  font-size: 11px;
-}
-.deepseek-usage-expired {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
-  border: 1px solid var(--state-warning);
-  border-radius: 8px;
-  color: var(--state-warning);
-  font-size: 11px;
-}
-.deepseek-usage-chart {
-  height: 280px;
-  width: 100%;
-}
-```
-
-- [x] **Step 7: Run the dialog tests and TypeScript**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-deepseek-usage-dialog.test.tsx
-npm --prefix app run tsc:web
+```bash
+cd app && npm test -- web-deepseek-usage-dialog 2>&1 | tail -8
 ```
 
 Expected: PASS.
 
-- [x] **Step 8: Commit**
+- [ ] **Step 5: Commit**
 
-```powershell
-git add app/web/src/platform/native/nativeRuntime.ts app/web/src/usage/deepSeekLogin.ts app/web/src/usage/DeepSeekUsageDialog.tsx app/web/src/usage/DeepSeekUsageChart.tsx app/web/src/styles/usage.css app/__tests__/web-deepseek-usage-dialog.test.tsx
+```bash
+git add app/web/src/usage/DeepSeekUsageDialog.tsx app/__tests__/web-deepseek-usage-dialog.test.tsx
 git commit -m "feat(app): add deepseek platform usage dialog"
 ```
 
 ---
 
-### Task 9: Add the Desktop embedded login window
+### Task 11: Chart and dialog styles
 
 **Files:**
-- Modify: `server/cmd/wheelmaker-desktop/webview_policy.go`
-- Modify: `server/cmd/wheelmaker-desktop/desktop_bridge.go`
-- Modify: `server/cmd/wheelmaker-desktop/desktop_runtime.go`
-- Create: `server/cmd/wheelmaker-desktop/deepseek_login.go`
-- Create: `server/cmd/wheelmaker-desktop/deepseek_login_windows.go`
-- Modify: `server/cmd/wheelmaker-desktop/webview_windows.go`
-- Test: `server/cmd/wheelmaker-desktop/webview_policy_test.go`
-- Test: `server/cmd/wheelmaker-desktop/deepseek_login_test.go`
+- Create: `app/web/src/usage/DeepSeekUsageChart.tsx`
+- Modify: `app/web/src/styles/usage.css` (append deepseek block at the end)
 
-- [x] **Step 1: Write the failing policy and session tests**
+- [ ] **Step 1: Write the chart**
 
-Add to `server/cmd/wheelmaker-desktop/webview_policy_test.go`:
-
-```go
-func TestTrustedPageAllowsDeepSeekLoginBridge(t *testing.T) {
-	policy, err := newDesktopWebViewPolicy("https://release.wheelmaker.top/")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !policy.AllowsBridge(desktopTrustedRemotePage, "https://release.wheelmaker.top/", true, desktopBridgeDeepSeekLogin) {
-		t.Fatal("deepseek login bridge must be allowed on trusted pages")
-	}
-	if policy.AllowsBridge(desktopBootstrapPage, desktopBootstrapDocumentURL(), true, desktopBridgeDeepSeekLogin) {
-		t.Fatal("deepseek login bridge must not be allowed on the bootstrap page")
-	}
-}
-```
-
-Create `server/cmd/wheelmaker-desktop/deepseek_login_test.go`:
-
-```go
-package main
-
-import "testing"
-
-func TestExtractDeepSeekToken(t *testing.T) {
-	cases := map[string]string{
-		`"abc123.xyz"`:                       "abc123.xyz",
-		`""`:                                 "",
-		`"Bearer abc123.xyz"`:                "abc123.xyz",
-		"abc123.xyz":                         "abc123.xyz",
-		`"short"`:                            "",
-		`"token with spaces and long xxxx"`:  "",
-	}
-	for input, want := range cases {
-		if got := extractDeepSeekToken(input); got != want {
-			t.Fatalf("extractDeepSeekToken(%q) = %q, want %q", input, got, want)
-		}
-	}
-}
-
-func TestDeepSeekLoginSessionPollsUntilToken(t *testing.T) {
-	reads := 0
-	read := func() (string, bool) {
-		reads++
-		if reads < 2 {
-			return "", true
-		}
-		return "session-token", true
-	}
-	session := newDeepSeekLoginSession(read)
-	for i := 0; i < 5; i++ {
-		if token, done := session.Poll(); done {
-			if token != "session-token" {
-				t.Fatalf("token=%q", token)
-			}
-			return
-		}
-	}
-	t.Fatal("session did not resolve")
-}
-```
-
-- [x] **Step 2: Run the tests and verify RED**
-
-Run:
-
-```powershell
-go -C server test ./cmd/wheelmaker-desktop -run 'Test(TrustedPageAllowsDeepSeekLoginBridge|ExtractDeepSeekToken|DeepSeekLoginSessionPollsUntilToken)' -count=1
-```
-
-Expected: FAIL because the action, constants, and functions do not exist.
-
-- [x] **Step 3: Add the bridge action and binding**
-
-In `webview_policy.go`, add to `desktopBridgeAction`:
-
-```go
-	desktopBridgeDeepSeekLogin
-```
-
-Add `desktopBridgeDeepSeekLogin` to the allowed list in `AllowsBridge` for trusted pages (in the `desktopTrustedRemotePage` switch, next to `desktopBridgeRequestUpdate`).
-
-In `desktop_bridge.go`, add:
-
-```go
-	desktopDeepSeekLoginBinding = "__wheelMakerDesktopDeepSeekLogin"
-```
-
-In `desktop_runtime.go`, inside the `location.protocol === 'https:'` branch of `window.WheelMakerDesktop`, add:
-
-```ts
-		deepSeekLogin: invoke('` + desktopDeepSeekLoginBinding + `'),
-```
-
-In `webview_windows.go`'s `bindings` list, add:
-
-```go
-		{desktopDeepSeekLoginBinding, func() (string, error) {
-			if err := authorize(desktopBridgeDeepSeekLogin); err != nil {
-				return "", err
-			}
-			return launchDeepSeekLoginWindow()
-		}},
-```
-
-- [x] **Step 4: Implement the pure session helpers**
-
-Create `server/cmd/wheelmaker-desktop/deepseek_login.go`:
-
-```go
-package main
-
-import (
-	"strconv"
-	"strings"
-	"time"
-)
-
-const (
-	deepSeekLoginURL          = "https://platform.deepseek.com"
-	deepSeekLoginTimeout      = 10 * time.Minute
-	deepSeekLoginPollInterval = time.Second
-	deepSeekLoginMaxTokenLen  = 4096
-)
-
-// deepSeekLoginScript reads the first token-like value from localStorage.
-// ExecuteScript returns the evaluated expression JSON-encoded, so an empty
-// result arrives as `""`.
-const deepSeekLoginScript = `(() => {
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i) || '';
-    if (!/token/i.test(key)) continue;
-    const raw = String(localStorage.getItem(key) || '');
-    const match = raw.match(/[A-Za-z0-9._~+/=-]{20,}/);
-    if (match) return match[0];
-  }
-  return '';
-})()`
-
-// extractDeepSeekToken normalizes the JSON-encoded ExecuteScript result.
-func extractDeepSeekToken(result string) string {
-	value := strings.TrimSpace(result)
-	if unquoted, err := strconv.Unquote(value); err == nil {
-		value = unquoted
-	}
-	value = strings.TrimSpace(value)
-	value = strings.TrimPrefix(value, "Bearer ")
-	if len(value) < 20 || len(value) > deepSeekLoginMaxTokenLen {
-		return ""
-	}
-	if strings.ContainsAny(value, " \t\r\n") {
-		return ""
-	}
-	return value
-}
-
-type deepSeekLoginSession struct {
-	readToken func() (string, bool)
-	started   time.Time
-}
-
-func newDeepSeekLoginSession(readToken func() (string, bool)) *deepSeekLoginSession {
-	return &deepSeekLoginSession{readToken: readToken, started: time.Now()}
-}
-
-// Poll returns (token, true) when the session token is found or the timeout
-// elapses; otherwise ("", false).
-func (s *deepSeekLoginSession) Poll() (string, bool) {
-	if time.Since(s.started) > deepSeekLoginTimeout {
-		return "", true
-	}
-	if s.readToken == nil {
-		return "", true
-	}
-	return s.readToken()
-}
-```
-
-- [x] **Step 5: Implement the Windows login window**
-
-Create `server/cmd/wheelmaker-desktop/deepseek_login_windows.go` with build tag `//go:build windows`:
-
-```go
-//go:build windows
-
-package main
-
-import (
-	"errors"
-	"time"
-
-	webview2 "github.com/jchv/go-webview2"
-)
-
-// launchDeepSeekLoginWindow opens a modal WebView2 window on the official
-// DeepSeek platform page, polls localStorage for the session token, and
-// returns it. Closing the window or the 10-minute timeout returns an error.
-func launchDeepSeekLoginWindow() (string, error) {
-	window := webview2.NewWithOptions(webview2.WebViewOptions{
-		WindowOptions: webview2.WindowOptions{
-			Title:  "DeepSeek Login",
-			Width:  480,
-			Height: 720,
-			IconId: desktopResourceIconID,
-			Center: true,
-		},
-	})
-	if window == nil {
-		return "", errWebView2Unavailable
-	}
-	defer window.Destroy()
-	loginSecurity, err := newDesktopWebViewSecurityState(deepSeekLoginURL, desktopTrustedRemotePage)
-	if err != nil {
-		return "", err
-	}
-	loginRuntime := &desktopRuntime{security: loginSecurity}
-	if _, err := installDesktopWebViewPolicyAdapter(window, loginRuntime); err != nil {
-		return "", err
-	}
-
-	tokenCh := make(chan string, 1)
-	errCh := make(chan error, 1)
-	session := newDeepSeekLoginSession(func() (string, bool) {
-		raw, err := window.Eval(deepSeekLoginScript)
-		if err != nil {
-			return "", true
-		}
-		return extractDeepSeekToken(stringifyEvalResult(raw)), true
-	})
-	go func() {
-		for {
-			if token, done := session.Poll(); done {
-				if token != "" {
-					tokenCh <- token
-				} else {
-					errCh <- errors.New("deepseek login timed out or was cancelled")
-				}
-				return
-			}
-			time.Sleep(deepSeekLoginPollInterval)
-		}
-	}()
-
-	window.Navigate(deepSeekLoginURL)
-	window.Run()
-	select {
-	case token := <-tokenCh:
-		return token, nil
-	case err := <-errCh:
-		return "", err
-	default:
-		return "", errors.New("deepseek login window closed")
-	}
-}
-```
-
-Add a small `stringifyEvalResult` helper in the same file that converts the library's `Eval` return value (`string` or `[]byte`) to `string`; the exact conversion depends on the `go-webview2` version already used in this package (check how `Eval` results are handled elsewhere, if at all). If the binding library blocks `Eval` before the window loop starts, move `window.Navigate` before the poll goroutine and start polling only after `window.Run()` returns false; keep the same pure session helpers.
-
-The `installDesktopWebViewPolicyAdapter` call is what enforces the acceptance criterion that the login window only allows `platform.deepseek.com`; the adapter reuses the existing policy machinery and blocks other hosts and certificate errors.
-
-- [x] **Step 6: Run the tests and build**
-
-Run:
-
-```powershell
-gofmt -w server/cmd/wheelmaker-desktop/webview_policy.go server/cmd/wheelmaker-desktop/desktop_bridge.go server/cmd/wheelmaker-desktop/desktop_runtime.go server/cmd/wheelmaker-desktop/webview_windows.go server/cmd/wheelmaker-desktop/deepseek_login.go server/cmd/wheelmaker-desktop/deepseek_login_windows.go server/cmd/wheelmaker-desktop/webview_policy_test.go server/cmd/wheelmaker-desktop/deepseek_login_test.go
-go -C server test ./cmd/wheelmaker-desktop -count=1
-go -C server build ./cmd/wheelmaker-desktop
-```
-
-Expected: PASS and the desktop binary builds.
-
-- [x] **Step 7: Commit**
-
-```powershell
-git add server/cmd/wheelmaker-desktop
-git commit -m "feat(desktop): embedded deepseek platform login"
-```
-
----
-
-### Task 10: Add the Android embedded login dialog
-
-**Files:**
-- Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/WheelMakerBridge.kt`
-- Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/MainActivity.kt`
-- Create: `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`
-- Test: `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`
-
-- [x] **Step 1: Write the failing protocol test**
-
-Create `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`:
-
-```kotlin
-package com.wheelmaker.android
-
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
-
-class DeepSeekLoginProtocolTest {
-    @Test
-    fun `extracts token from script result`() {
-        assertEquals("abc123.xyz", extractDeepSeekToken("\"abc123.xyz\""))
-        assertEquals("abc123.xyz", extractDeepSeekToken("Bearer abc123.xyz"))
-        assertNull(extractDeepSeekToken("\"\""))
-        assertNull(extractDeepSeekToken("short"))
-    }
-}
-```
-
-- [x] **Step 2: Run the test and verify RED**
-
-Run:
-
-```powershell
-Set-Location mobile/android; gradle testDebugUnitTest --tests "com.wheelmaker.android.DeepSeekLoginProtocolTest"
-```
-
-Expected: FAIL because `extractDeepSeekToken` is undefined.
-
-This repo does not commit a Gradle wrapper; use the system `gradle` command from `mobile/android` (Gradle 9.5.1 is already used by this project's local build state).
-
-- [x] **Step 3: Implement the token extraction and login dialog**
-
-Create `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`:
-
-```kotlin
-package com.wheelmaker.android
-
-import android.annotation.SuppressLint
-import android.app.Activity
-import android.app.AlertDialog
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import java.util.concurrent.atomic.AtomicBoolean
-
-internal const val DEEP_SEEK_LOGIN_URL = "https://platform.deepseek.com"
-internal const val DEEP_SEEK_TOKEN_SCRIPT = """
-  (() => {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i) || '';
-      if (!/token/i.test(key)) continue;
-      const raw = String(localStorage.getItem(key) || '');
-      const match = raw.match(/[A-Za-z0-9._~+/=-]{20,}/);
-      if (match) return match[0];
-    }
-    return '';
-  })()
-"""
-
-internal fun extractDeepSeekToken(result: String): String? {
-    var value = result.trim().trim('"')
-    if (value.startsWith("Bearer ")) value = value.removePrefix("Bearer ")
-    if (value.length < 20 || value.length > 4096) return null
-    if (value.any { it.isWhitespace() }) return null
-    return value
-}
-
-class DeepSeekLoginDialog(
-    private val activity: Activity,
-    private val onResult: (token: String?) -> Unit,
-) {
-    private val finished = AtomicBoolean(false)
-
-    @SuppressLint("SetJavaScriptEnabled")
-    fun show() {
-        val webView = WebView(activity)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                return url?.startsWith(DEEP_SEEK_LOGIN_URL) != true
-            }
-            override fun onPageFinished(view: WebView?, url: String?) {
-                view?.postDelayed({ pollToken(view) }, 1000)
-            }
-        }
-        val dialog = AlertDialog.Builder(activity)
-            .setTitle("DeepSeek Login")
-            .setView(webView)
-            .setNegativeButton("Cancel") { _, _ -> finish(null) }
-            .setOnCancelListener { finish(null) }
-            .create()
-        webView.loadUrl(DEEP_SEEK_LOGIN_URL)
-        dialog.show()
-    }
-
-    private fun pollToken(view: WebView) {
-        if (finished.get()) return
-        view.evaluateJavascript(DEEP_SEEK_TOKEN_SCRIPT) { result ->
-            val token = extractDeepSeekToken(result ?: "")
-            if (token != null) {
-                finish(token)
-            } else {
-                view.postDelayed({ pollToken(view) }, 1000)
-            }
-        }
-    }
-
-    private fun finish(token: String?) {
-        if (!finished.compareAndSet(false, true)) return
-        onResult(token)
-    }
-}
-```
-
-- [x] **Step 4: Wire the bridge RPC**
-
-In `WheelMakerBridge.kt`, add a case in the RPC dispatch next to `diagnostics.setLogLevel`:
-
-```kotlin
-        "deepseek.login" -> deepSeekLogin { token ->
-            respond(JSONObject().put("token", token ?: JSONObject.NULL))
-        }
-```
-
-Add the handler method that shows the dialog on the main thread (use the existing `mainHandler`/`runOnUiThread` pattern already used by this bridge):
-
-```kotlin
-    private fun deepSeekLogin(onToken: (String?) -> Unit) {
-        val host = host ?: return onToken(null)
-        host.runOnUiThread {
-            DeepSeekLoginDialog(host) { token -> onToken(token) }.show()
-        }
-    }
-```
-
-Add `deepSeekLogin` to the native bridge interface that `WheelMakerBridge.kt` already defines for `MainActivity` (the interface field named `host`), with signature `fun runOnUiThread(action: Runnable)` and `fun <T> runOnUiThread(action: () -> T): T` variants matching the file's existing helpers.
-
-- [x] **Step 5: Run the Android unit tests**
-
-Run:
-
-```powershell
-Set-Location mobile/android; gradle testDebugUnitTest
-```
-
-Expected: PASS.
-
-- [x] **Step 6: Commit**
-
-```powershell
-git add mobile/android/app/src/main/java/com/wheelmaker/android/WheelMakerBridge.kt mobile/android/app/src/main/java/com/wheelmaker/android/MainActivity.kt mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt
-git commit -m "feat(android): embedded deepseek platform login"
-```
-
----
-
-### Task 11: Full regression, build, and delivery
-
-**Files:**
-- Modify if implementation differs: `docs/scope/2026-08-01-deepseek-platform-usage/spec-deepseek-platform-usage.md`
-- Modify if stable behavior differs: `docs/wiki/features/limits-monitoring.md`
-- Update checklist: `docs/scope/2026-08-01-deepseek-platform-usage/plan-deepseek-platform-usage.md`
-
-- [x] **Step 1: Format Go and run server package tests**
-
-Run:
-
-```powershell
-gofmt -w server/internal/hubconfig/store.go server/internal/hubconfig/store_test.go server/internal/hub/usage/deepseek_platform.go server/internal/hub/usage/deepseek_platform_test.go server/internal/protocol/registry_methods.go server/internal/protocol/registry_methods_test.go server/internal/hub/reporter.go server/internal/hub/hub_test.go server/internal/registry/server_test.go server/cmd/wheelmaker-desktop
-go -C server test ./...
-```
-
-Expected: PASS.
-
-- [x] **Step 2: Run all App usage tests and TypeScript**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-hub-state-service.test.ts __tests__/web-deepseek-usage.test.ts __tests__/web-deepseek-usage-dialog.test.tsx __tests__/web-usage-feature-surface.test.tsx __tests__/web-usage-workspace-integration.test.tsx
-npm --prefix app run tsc:web
-```
-
-Expected: PASS.
-
-- [x] **Step 3: Run the full server and App regression suites**
-
-Run:
-
-```powershell
-go -C server test ./...
-npm --prefix app test -- --runInBand
-Set-Location mobile/android; gradle testDebugUnitTest
-```
-
-Expected: PASS.
-
-- [x] **Step 4: Build production Web into an isolated target**
-
-Run:
-
-```powershell
-$env:WHEELMAKER_WEB_TARGET = Join-Path $env:TEMP 'wheelmaker-deepseek-usage-web'
-npm --prefix app run build:web
-Get-ChildItem -LiteralPath $env:WHEELMAKER_WEB_TARGET -File | Select-Object Name, Length
-```
-
-Expected: PASS; output contains a separately named `deepseek-usage-chart.<hash>.js` async chunk and the main bundle does not inline the ECharts module.
-
-- [x] **Step 5: Check documentation and working tree**
-
-Run:
-
-```powershell
-rg -n -i 'TBD|TODO|implement later' docs/scope/2026-08-01-deepseek-platform-usage docs/wiki/features/limits-monitoring.md
-git diff --check
-git status --short
-```
-
-Expected: no placeholders, no whitespace errors, and only intended feature files changed.
-
-- [x] **Step 6: Rebase and rerun smoke tests if HEAD changes**
-
-Run:
-
-```powershell
-git fetch origin
-git rebase origin/main
-go -C server test ./internal/hub/usage ./internal/hub ./internal/protocol ./internal/registry ./internal/hubconfig
-npm --prefix app test -- --runInBand __tests__/web-deepseek-usage.test.ts __tests__/web-deepseek-usage-dialog.test.tsx __tests__/web-usage-workspace-integration.test.tsx
-```
-
-Expected: rebase and tests pass.
-
-- [x] **Step 7: Mark the plan complete and execute the repository completion gate**
-
-Update every completed plan checkbox to `[x]`, then execute this exact tail:
-
-```powershell
-git add -A
-git commit -m "docs: record deepseek platform usage delivery"
-git push origin feat/deepseek-platform-usage
-```
-
-Expected: commit succeeds and the remote feature branch is updated.
-
-### Verification record
-
-- Full server regression: `go -C server test ./...` PASS (25 packages).
-- Full App regression: `npm --prefix app test -- --runInBand` PASS (257 suites, 1546 tests).
-- Web TypeScript: `npm --prefix app run tsc:web` PASS.
-- Production Web build: PASS; the renderer entry is `deepseek-usage-chart.599fa4b5bb6d3b880573.js` (3251 bytes) and ECharts stays out of the main bundle.
-- Desktop package tests and `go build ./cmd/wheelmaker-desktop`: PASS.
-- Android unit tests: `gradle testDebugUnitTest` PASS.
-- Rebase onto `origin/main` (`a9ca8d48`) applied cleanly; smoke tests PASS.
-
-### Task 8: Open the dialog from DeepSeek account rows
-
-**Files:**
-- Modify: `app/web/src/usage/UsageFeatureSurface.tsx`
-- Modify: `app/web/src/usage/MonitorSurface.tsx` (only if the callback dispatch changes)
-- Modify: `app/web/src/usage/MobileUsageDialog.tsx` (only if the callback dispatch changes)
-- Modify: `app/web/src/app/WorkspaceApp.tsx`
-- Test: `app/__tests__/web-usage-feature-surface.test.tsx`
-- Test: `app/__tests__/web-usage-workspace-integration.test.tsx`
-
-- [x] **Step 1: Write the failing row activation tests**
-
-Add to `app/__tests__/web-usage-feature-surface.test.tsx`:
-
-```ts
-test('deepseek balance-only rows open the usage callback', () => {
-  const onOpenHistory = jest.fn();
-  const view = renderUsageCompactContent(deepSeekSnapshotWithBalanceOnly(), onOpenHistory);
-  const row = view!.root.findByProps({'data-usage-account-trigger': 'deepseek:wheelmaker-config'});
-  expect(row.props.role).toBe('button');
-  act(() => row.props.onClick());
-  expect(onOpenHistory).toHaveBeenCalledWith(
-    expect.objectContaining({id: 'deepseek'}),
-    expect.objectContaining({localId: 'wheelmaker-config'}),
-    expect.anything(),
-  );
-});
-```
-
-Reuse the snapshot builders already present in that test file; add a helper `deepSeekSnapshotWithBalanceOnly()` that returns a provider with `id: 'deepseek'`, one ok account with `balance` and no `limits`.
-
-In `app/__tests__/web-usage-workspace-integration.test.tsx`, add a case that opens the DeepSeek row, resolves `getDeepSeekUsage` with a `notConnected` response, and asserts the login panel appears.
-
-In the same integration test, add a second case that types a token into the paste form, submits it, and asserts `updateHubConfig` is called with `{section: 'deepSeekPlatform', field: 'token', action: 'set', value: 'pasted-token'}` followed by a reload of `getDeepSeekUsage`.
-
-- [x] **Step 2: Run the activation tests and verify RED**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-usage-feature-surface.test.tsx __tests__/web-usage-workspace-integration.test.tsx
-```
-
-Expected: FAIL because DeepSeek rows are not clickable and the dialog is not wired.
-
-- [x] **Step 3: Make DeepSeek balance rows clickable**
-
-In `app/web/src/usage/UsageFeatureSurface.tsx`, change both activation conditions from:
+Create `app/web/src/usage/DeepSeekUsageChart.tsx`:
 
 ```tsx
-if (account.limits.length > 0 && onOpenHistory) {
+import React from 'react';
+import * as echarts from 'echarts/core';
+import {BarChart, LineChart} from 'echarts/charts';
+import {GridComponent, LegendComponent, TooltipComponent} from 'echarts/components';
+import {CanvasRenderer} from 'echarts/renderers';
+
+import type {DeepSeekUsageView} from './deepSeekUsage';
+
+echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+
+export default function DeepSeekUsageChart({view}: {view: DeepSeekUsageView}) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const chartRef = React.useRef<echarts.ECharts | null>(null);
+
+  React.useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const chart = echarts.init(container, undefined, {renderer: 'canvas'});
+    chartRef.current = chart;
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => chart.resize());
+    resizeObserver?.observe(container);
+    return () => {
+      resizeObserver?.disconnect();
+      chart.dispose();
+      chartRef.current = null;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const chart = chartRef.current;
+    const container = containerRef.current;
+    if (!chart || !container) return;
+    const styles = getComputedStyle(container);
+    const output = cssToken(styles, '--accent-primary', '#2784c7');
+    const miss = cssToken(styles, '--state-info', '#65a3d8');
+    const hit = cssToken(styles, '--state-success', '#58a86d');
+    const hitRate = cssToken(styles, '--state-warning', '#d0a24f');
+    const textPrimary = cssToken(styles, '--text-primary', '#dedede');
+    const textSecondary = cssToken(styles, '--text-secondary', '#a3a3a3');
+    const border = cssToken(styles, '--border-subtle', '#363636');
+    chart.setOption({
+      animation: false,
+      legend: {
+        textStyle: {color: textSecondary, fontSize: 10},
+        top: 0,
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: cssToken(styles, '--surface-overlay', '#2e2e2e'),
+        borderColor: border,
+        textStyle: {color: textPrimary, fontSize: 11},
+        formatter: (params: unknown) => formatTooltip(params, view),
+      },
+      grid: {left: 46, right: 46, top: 28, bottom: 28},
+      xAxis: {
+        type: 'category',
+        data: view.days.map(day => day.date),
+        axisLabel: {
+          color: textSecondary,
+          fontSize: 10,
+          formatter: (value: string) => value.slice(5),
+        },
+        axisLine: {lineStyle: {color: border}},
+        axisTick: {show: false},
+      },
+      yAxis: [
+        {
+          type: 'value',
+          name: 'Tokens',
+          axisLabel: {color: textSecondary, fontSize: 10},
+          axisLine: {show: false},
+          axisTick: {show: false},
+          splitLine: {lineStyle: {color: withAlpha(border, 0.68)}},
+        },
+        {
+          type: 'value',
+          min: 0,
+          max: 100,
+          name: 'Hit %',
+          axisLabel: {color: textSecondary, fontSize: 10, formatter: '{value}%'},
+          axisLine: {show: false},
+          axisTick: {show: false},
+          splitLine: {show: false},
+        },
+      ],
+      series: [
+        {
+          name: 'Output',
+          type: 'bar',
+          stack: 'tokens',
+          barMaxWidth: 14,
+          data: view.days.map(day => day.outputTokens),
+          itemStyle: {color: output},
+          emphasis: {disabled: true},
+        },
+        {
+          name: 'Cache miss',
+          type: 'bar',
+          stack: 'tokens',
+          barMaxWidth: 14,
+          data: view.days.map(day => day.missTokens),
+          itemStyle: {color: miss},
+          emphasis: {disabled: true},
+        },
+        {
+          name: 'Cache hit',
+          type: 'bar',
+          stack: 'tokens',
+          barMaxWidth: 14,
+          data: view.days.map(day => day.hitTokens),
+          itemStyle: {color: hit},
+          emphasis: {disabled: true},
+        },
+        {
+          name: 'Hit rate',
+          type: 'line',
+          yAxisIndex: 1,
+          data: view.days.map(day => Number((day.cacheHitRate * 100).toFixed(1))),
+          showSymbol: false,
+          smooth: 0.2,
+          lineStyle: {color: hitRate, width: 2},
+          itemStyle: {color: hitRate},
+          emphasis: {disabled: true},
+        },
+      ],
+    }, {notMerge: true});
+  }, [view]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="usage-history-chart deepseek-usage-chart"
+      role="img"
+      aria-label="Daily token usage, cache hit rate, and spend chart"
+    />
+  );
+}
+
+function cssToken(styles: CSSStyleDeclaration, name: string, fallback: string): string {
+  return styles.getPropertyValue(name).trim() || fallback;
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
+  if (hex) {
+    return `rgb(${parseInt(hex[1], 16)} ${parseInt(hex[2], 16)} ${parseInt(hex[3], 16)} / ${alpha})`;
+  }
+  return color;
+}
+
+function trimMoney(amount: number): string {
+  return amount.toFixed(4).replace(/0+$/, '').replace(/\.$/, '.0');
+}
+
+function formatTooltip(params: unknown, view: DeepSeekUsageView): string {
+  const items = Array.isArray(params) ? params : [];
+  const first = items[0] as {name?: unknown} | undefined;
+  const date = String(first?.name ?? '');
+  const day = view.days.find(entry => entry.date === date);
+  if (!day) return '';
+  const hitPercent = Math.round(day.cacheHitRate * 1000) / 10;
+  const spend = day.costs
+    .filter(item => item.amount > 0)
+    .map(item => `${item.currency} ${trimMoney(item.amount)}`)
+    .join(' · ') || '—';
+  const rows = [
+    `<strong>${date}</strong>`,
+    `Total: ${day.totalTokens.toLocaleString()} tokens`,
+    `Hit rate: ${hitPercent}%`,
+    `Spend: ${spend}`,
+    `Output: ${day.outputTokens.toLocaleString()}`,
+    `Cache hit: ${day.hitTokens.toLocaleString()}`,
+    `Cache miss: ${day.missTokens.toLocaleString()}`,
+  ];
+  return rows.join('<br/>');
+}
+```
+
+- [ ] **Step 2: Append the deepseek styles**
+
+Append to `app/web/src/styles/usage.css`:
+
+```css
+.deepseek-usage-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.deepseek-usage-months { display: inline-flex; align-items: center; gap: 6px; }
+.deepseek-usage-month-label {
+  min-width: 64px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.deepseek-usage-toolbar-side { display: inline-flex; align-items: center; gap: 6px; }
+.deepseek-usage-updated {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.deepseek-usage-icon-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.deepseek-usage-icon-button:hover:not(:disabled) { background: var(--hover); color: var(--text-primary); }
+.deepseek-usage-icon-button:disabled { cursor: default; opacity: 0.4; }
+.deepseek-usage-icon-button:focus-visible,
+.deepseek-usage-login input:focus-visible,
+.deepseek-usage-login button:focus-visible,
+.deepseek-usage-banner-action:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+.deepseek-usage-summary {
+  display: grid;
+  margin-bottom: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.deepseek-usage-summary > span {
+  display: flex;
+  min-width: 0;
+  padding: 8px 10px;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}
+.deepseek-usage-summary strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deepseek-usage-summary em {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-style: normal;
+}
+.deepseek-usage-banner {
+  display: flex;
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid;
+  border-radius: var(--radius-control);
+  font-size: 11px;
+}
+.deepseek-usage-banner.tone-warning {
+  border-color: color-mix(in srgb, var(--state-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--state-warning) 8%, transparent);
+  color: var(--state-warning);
+}
+.deepseek-usage-banner.tone-danger {
+  border-color: color-mix(in srgb, var(--state-danger) 45%, transparent);
+  background: color-mix(in srgb, var(--state-danger) 8%, transparent);
+  color: var(--state-danger);
+}
+.deepseek-usage-banner p { margin: 0; color: var(--text-secondary); }
+.deepseek-usage-banner-action {
+  min-height: 26px;
+  margin-top: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.deepseek-usage-banner-action:hover { background: var(--hover); }
+.deepseek-usage-login {
+  display: grid;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 16px;
+  gap: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+}
+.deepseek-usage-login > strong { font-size: 13px; }
+.deepseek-usage-login > p { margin: 0; color: var(--text-secondary); font-size: 11px; }
+.deepseek-usage-login a { color: var(--accent-primary); }
+.deepseek-usage-login label { display: grid; color: var(--text-secondary); font-size: 11px; gap: 4px; }
+.deepseek-usage-login input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+}
+.deepseek-usage-login button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.deepseek-usage-login button:hover:not(:disabled) { background: var(--hover); }
+.deepseek-usage-login button:disabled { cursor: default; opacity: 0.5; }
+.deepseek-usage-login .deepseek-usage-primary-action {
+  border-color: var(--accent-primary);
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
+}
+.deepseek-usage-login-error { margin: 0; color: var(--state-danger); font-size: 11px; }
+@media (max-width: 620px) {
+  .deepseek-usage-summary { grid-template-columns: 1fr; }
+}
+```
+
+- [ ] **Step 3: Verify type check, tests, and production build**
+
+```bash
+cd app && npm run tsc:web && npm test -- web-deepseek-usage 2>&1 | tail -5 && npm run build:web 2>&1 | tail -5
+```
+
+Expected: tsc PASS, jest PASS, webpack build succeeds (chart chunk emitted).
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/web/src/usage/DeepSeekUsageChart.tsx app/web/src/styles/usage.css
+git commit -m "feat(app): chart deepseek daily usage with theme tokens"
+```
+
+---
+
+### Task 12: Wire the dialog into Monitor rows
+
+**Files:**
+- `app/web/src/app/WorkspaceApp.tsx`
+- `app/web/src/usage/UsageFeatureSurface.tsx`
+- `app/__tests__/web-usage-feature-surface.test.tsx`
+- `app/__tests__/web-usage-workspace-integration.test.tsx`
+
+- [ ] **Step 1: Cherry-pick the old wiring without committing**
+
+```bash
+git cherry-pick -n 90f3ec4d
+```
+
+Expected: clean. This restores the `deepSeekUsageDialogView` state, the `loadDeepSeekUsage`/`openDeepSeekUsage`/`closeDeepSeekUsage`/`saveDeepSeekToken`/`clearDeepSeekToken`/`changeDeepSeekMonth`/`handleUsageRowActivate` callbacks, the overlay render, the `provider.id === 'deepseek'` clickable rows in `UsageFeatureSurface.tsx`, and the two test files.
+
+- [ ] **Step 2: Map the error status with stale data**
+
+In `app/web/src/app/WorkspaceApp.tsx`, in `loadDeepSeekUsage`, change the state mapping from:
+
+```ts
+      const view = normalizeDeepSeekUsage(result);
+      if ((view.balance ?? []).length === 0 && target.account.balance?.items?.length) {
+        view.balance = target.account.balance.items;
+      }
+      const state: DeepSeekUsageDialogState = view.status === 'ok'
+        ? {status: 'ready', view}
+        : view.status === 'expired'
+          ? {status: 'expired', month, view}
+          : {status: 'notConnected', month};
 ```
 
 to:
 
-```tsx
-if ((account.limits.length > 0 || provider.id === 'deepseek') && onOpenHistory) {
+```ts
+      const view = normalizeDeepSeekUsage(result);
+      if (view.balance.length === 0 && target.account.balance?.items?.length) {
+        view.balance = target.account.balance.items;
+      }
+      const state: DeepSeekUsageDialogState = view.status === 'ok'
+        ? {status: 'ready', view}
+        : view.status === 'expired'
+          ? {status: 'expired', month, view}
+          : view.status === 'error'
+            ? {status: 'error', message: view.message ?? 'Failed to load DeepSeek usage', month, view}
+            : {status: 'notConnected', month};
 ```
 
-There are two places: `AccountRail` (compact) and `ProviderDetails` (detail). Keep `data-usage-account-trigger` keys unchanged.
+- [ ] **Step 3: Run wiring tests**
 
-- [x] **Step 4: Add the dialog state to WorkspaceApp**
-
-In `app/web/src/app/WorkspaceApp.tsx`:
-
-```tsx
-type DeepSeekUsageDialogTarget = {
-  provider: UsageProviderView;
-  account: UsageViewAccount;
-  triggerElement: HTMLElement | null;
-};
-
-type DeepSeekUsageDialogView = {
-  target: DeepSeekUsageDialogTarget;
-  month: {year: number; month: number};
-  state: DeepSeekUsageDialogState;
-};
+```bash
+cd app && npm test -- web-usage-feature-surface web-usage-workspace-integration 2>&1 | tail -8 && npm run tsc:web
 ```
 
-Add imports for `DeepSeekUsageDialog` and `DeepSeekUsageDialogState`. Near the existing `usageHistoryDialogView` state add:
+Expected: PASS. If the integration test asserts the old state mapping, update its expectations to the new error mapping.
 
-```tsx
-const deepSeekUsageRequestSeqRef = useRef(0);
-const [deepSeekUsageDialogView, setDeepSeekUsageDialogView] = useState<DeepSeekUsageDialogView | null>(null);
-```
+- [ ] **Step 4: Commit**
 
-Add the loader, opener, closer, token handlers, and month change next to the existing usage history functions:
-
-```tsx
-const loadDeepSeekUsage = useCallback(async (
-  target: DeepSeekUsageDialogTarget,
-  month: {year: number; month: number},
-  force = false,
-) => {
-  const requestSeq = ++deepSeekUsageRequestSeqRef.current;
-  setDeepSeekUsageDialogView({target, month, state: {status: 'loading', month}});
-  const source = target.account.sources[0];
-  if (!source) {
-    setDeepSeekUsageDialogView({
-      target,
-      month,
-      state: {status: 'error', message: 'No online Hub for this account', month},
-    });
-    return;
-  }
-  try {
-    const result = await service.getDeepSeekUsage(source.hubId, month.year, month.month, force);
-    if (deepSeekUsageRequestSeqRef.current !== requestSeq) return;
-    const view = normalizeDeepSeekUsage(result);
-    if ((view.balance ?? []).length === 0 && target.account.balance?.items?.length) {
-      view.balance = target.account.balance.items;
-    }
-    const state: DeepSeekUsageDialogState = view.status === 'ok'
-      ? {status: 'ready', view}
-      : view.status === 'expired'
-        ? {status: 'expired', month, view}
-        : {status: 'notConnected', month};
-    setDeepSeekUsageDialogView({target, month, state});
-  } catch (err) {
-    if (deepSeekUsageRequestSeqRef.current !== requestSeq) return;
-    setDeepSeekUsageDialogView({
-      target,
-      month,
-      state: {status: 'error', message: err instanceof Error ? err.message : 'Failed to load DeepSeek usage', month},
-    });
-  }
-}, [service]);
-
-const openDeepSeekUsage = useCallback((
-  provider: UsageProviderView,
-  account: UsageViewAccount,
-  triggerElement: HTMLElement,
-) => {
-  const month = {year: new Date().getFullYear(), month: new Date().getMonth() + 1};
-  void loadDeepSeekUsage({provider, account, triggerElement}, month);
-}, [loadDeepSeekUsage]);
-
-const closeDeepSeekUsage = useCallback(() => {
-  deepSeekUsageRequestSeqRef.current += 1;
-  setDeepSeekUsageDialogView(null);
-}, []);
-
-const saveDeepSeekToken = useCallback(async (token: string) => {
-  const view = deepSeekUsageDialogView;
-  const source = view?.target.account.sources[0];
-  if (!view || !source) throw new Error('No active DeepSeek account');
-  await service.updateHubConfig(source.hubId, {
-    section: 'deepSeekPlatform',
-    field: 'token',
-    action: 'set',
-    value: token,
-  });
-  await loadDeepSeekUsage(view.target, view.month);
-}, [deepSeekUsageDialogView, loadDeepSeekUsage, service]);
-
-const clearDeepSeekToken = useCallback(async () => {
-  const view = deepSeekUsageDialogView;
-  const source = view?.target.account.sources[0];
-  if (!view || !source) return;
-  await service.updateHubConfig(source.hubId, {
-    section: 'deepSeekPlatform',
-    field: 'token',
-    action: 'clear',
-  });
-  await loadDeepSeekUsage(view.target, view.month);
-}, [deepSeekUsageDialogView, loadDeepSeekUsage, service]);
-
-const changeDeepSeekMonth = useCallback((year: number, month: number) => {
-  const view = deepSeekUsageDialogView;
-  if (!view) return;
-  void loadDeepSeekUsage(view.target, {year, month});
-}, [deepSeekUsageDialogView, loadDeepSeekUsage]);
-```
-
-Update both `onOpenHistory` call sites so DeepSeek rows open the new dialog:
-
-```tsx
-onOpenHistory={provider => provider.id === 'deepseek'
-  ? openDeepSeekUsage
-  : openUsageHistory}
-```
-
-`UsageOpenHistory` passes `(provider, account, trigger)`; if the prop signature does not include `provider`, change the call sites to use a small wrapper:
-
-```tsx
-onOpenHistory={(provider, account, trigger) => {
-  if (provider.id === 'deepseek') {
-    openDeepSeekUsage(provider, account, trigger);
-  } else {
-    openUsageHistory(provider, account, trigger);
-  }
-}}
-```
-
-Render the overlay next to `usageHistoryOverlay`:
-
-```tsx
-const deepSeekUsageOverlay = deepSeekUsageDialogView ? (
-  <DeepSeekUsageDialog
-    state={deepSeekUsageDialogView.state}
-    triggerElement={deepSeekUsageDialogView.target.triggerElement}
-    onClose={closeDeepSeekUsage}
-    onRetry={() => void loadDeepSeekUsage(deepSeekUsageDialogView.target, deepSeekUsageDialogView.month, true)}
-    onMonthChange={changeDeepSeekMonth}
-    onSaveToken={saveDeepSeekToken}
-    onClearToken={clearDeepSeekToken}
-  />
-) : null;
-```
-
-- [x] **Step 5: Run the activation and integration tests**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-usage-feature-surface.test.tsx __tests__/web-usage-workspace-integration.test.tsx __tests__/web-deepseek-usage-dialog.test.tsx
-npm --prefix app run tsc:web
-```
-
-Expected: PASS.
-
-- [x] **Step 6: Commit**
-
-```powershell
-git add app/web/src/usage/UsageFeatureSurface.tsx app/web/src/usage/MonitorSurface.tsx app/web/src/usage/MobileUsageDialog.tsx app/web/src/app/WorkspaceApp.tsx app/__tests__/web-usage-feature-surface.test.tsx app/__tests__/web-usage-workspace-integration.test.tsx
+```bash
+git add app/web/src/app/WorkspaceApp.tsx app/web/src/usage/UsageFeatureSurface.tsx app/__tests__/web-usage-feature-surface.test.tsx app/__tests__/web-usage-workspace-integration.test.tsx
 git commit -m "feat(app): open deepseek usage from monitor rows"
 ```
 
 ---
 
-### Task 3: Register the read-only Registry method
+### Task 13: Restore desktop embedded login with precise token read
 
 **Files:**
-- Modify: `server/internal/protocol/registry_methods.go`
-- Modify: `server/internal/protocol/registry_methods_test.go`
-- Modify: `server/internal/registry/server_test.go`
+- `server/cmd/wheelmaker-desktop/deepseek_login.go`
+- `server/cmd/wheelmaker-desktop/deepseek_login_test.go`
+- `server/cmd/wheelmaker-desktop/deepseek_login_windows.go`
+- `server/cmd/wheelmaker-desktop/desktop_bridge.go`
+- `server/cmd/wheelmaker-desktop/webview_policy.go`
+- `server/cmd/wheelmaker-desktop/webview_policy_test.go`
+- `server/cmd/wheelmaker-desktop/webview_windows.go`
 
-- [x] **Step 1: Write the failing descriptor test**
+- [ ] **Step 1: Cherry-pick without committing**
 
-Add to `server/internal/protocol/registry_methods_test.go`:
+```bash
+git cherry-pick -n 6fa70f1c
+```
+
+Expected: clean.
+
+- [ ] **Step 2: Replace the token scan with a precise userToken read**
+
+In `server/cmd/wheelmaker-desktop/deepseek_login.go`, replace the `deepSeekLoginScript` constant:
 
 ```go
-func TestDeepSeekUsageGetDescriptor(t *testing.T) {
-	got, ok := RegistryMethod(RegistryMethodDeepSeekUsageGet)
-	if !ok || got.Route != RegistryRouteHubState || !got.RequiresHubID {
-		t.Fatalf("descriptor=%+v ok=%v", got, ok)
-	}
-}
-```
-
-- [x] **Step 2: Run the descriptor test and verify RED**
-
-Run:
-
-```powershell
-go -C server test ./internal/protocol -run TestDeepSeekUsageGetDescriptor -count=1
-```
-
-Expected: FAIL because `RegistryMethodDeepSeekUsageGet` is undefined.
-
-- [x] **Step 3: Register the additive method**
-
-In `server/internal/protocol/registry_methods.go`, add to the method constants:
-
-```go
-	RegistryMethodUsageHistoryGet           = "usage.history.get"
-	RegistryMethodDeepSeekUsageGet          = "deepseek.usage.get"
-```
-
-Add to the descriptors map next to the usage history entry:
-
-```go
-	RegistryMethodUsageHistoryGet:                  registryHubStateMethod(RegistryMethodUsageHistoryGet),
-	RegistryMethodDeepSeekUsageGet:                 registryHubStateMethod(RegistryMethodDeepSeekUsageGet),
-```
-
-Do not edit the protocol version constant or compatibility docs.
-
-- [x] **Step 4: Run the descriptor test and verify GREEN**
-
-Run:
-
-```powershell
-go -C server test ./internal/protocol -run 'Test(DeepSeekUsageGetDescriptor|UsageHistoryGetDescriptor)' -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 5: Add the Registry forwarding test**
-
-Add to `server/internal/registry/server_test.go`, following the existing `usage.history.get` forwarding test in that file:
-
-```go
-func TestServerForwardsDeepSeekUsageGet(t *testing.T) {
-	hubResponses := map[string]any{
-		rp.RegistryMethodDeepSeekUsageGet: map[string]any{
-			"hubId":  "hub-deepseek-usage",
-			"status": "ok",
-			"month":  map[string]any{"year": 2026, "month": 8},
-			"days":   []any{},
-			"costs":  []any{},
-		},
-	}
-	// Reuse the existing hub-mock fixture in this file with the deepseek method
-	// added; then a client sends {hubId: "hub-deepseek-usage", payload: {year: 2026, month: 8}}.
-	// Assert the request reaches the hub mock and the response reaches the client.
-	runHubStateForwardingTest(t, hubResponses)
-}
-```
-
-If the file has no shared `runHubStateForwardingTest` helper, copy the exact structure of the existing `usage.history.get` forwarding test instead and replace the method/payload/assertions.
-
-- [x] **Step 6: Run the forwarding test and verify GREEN**
-
-Run:
-
-```powershell
-go -C server test ./internal/registry -run TestServerForwardsDeepSeekUsageGet -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 7: Commit**
-
-```powershell
-git add server/internal/protocol/registry_methods.go server/internal/protocol/registry_methods_test.go server/internal/registry/server_test.go
-git commit -m "feat(protocol): expose deepseek usage read method"
-```
-
----
-
-### Task 4: Wire the Hub handler and config updates
-
-**Files:**
-- Modify: `server/internal/hub/reporter.go`
-- Test: `server/internal/hub/hub_test.go`
-
-- [x] **Step 1: Write the failing handler tests**
-
-Add to `server/internal/hub/hub_test.go`, following the existing `TestReporterRespondsToUsageHistoryGet` pattern (fake registry + `NewReporter` + `Run`):
-
-```go
-type deepSeekUsageStub struct {
-	result usage.DeepSeekPlatformUsage
-	err    error
-}
-
-func (s *deepSeekUsageStub) Get(ctx context.Context, year, month int, force bool) (usage.DeepSeekPlatformUsage, error) {
-	return s.result, s.err
-}
-
-func TestReporterRespondsToDeepSeekUsageGet(t *testing.T) {
-	respSeen := make(chan testEnvelope, 1)
-	errSeen := make(chan error, 1)
-	ts := newFakeReporterRegistry(t, "hub-deepseek-usage", testEnvelope{
-		RequestID: 201,
-		Type:      "request",
-		Method:    rp.RegistryMethodDeepSeekUsageGet,
-		HubID:     "hub-deepseek-usage",
-		Payload:   map[string]any{"year": 2026, "month": 8},
-	}, respSeen, errSeen)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
-		HubID:             "hub-deepseek-usage",
-		ReconnectInterval: 50 * time.Millisecond,
-		StateDir:          t.TempDir(),
-	}, nil)
-	reporter.deepSeekUsage = &deepSeekUsageStub{result: usage.DeepSeekPlatformUsage{
-		Status: usage.DeepSeekPlatformOK,
-		Month:  usage.DeepSeekPlatformMonth{Year: 2026, Month: 8},
-		Balance: []usage.BalanceItem{{Currency: "CNY", Total: "3.24"}},
-		Days: []usage.DeepSeekPlatformDay{{
-			Date: "2026-08-01", Request: 3, OutputTokens: 120, HitTokens: 300, MissTokens: 100, TotalTokens: 520,
-		}},
-		Costs: []usage.DeepSeekPlatformCost{{
-			Currency: "CNY", MonthlyCost: 8.8, TodayCost: 0.02,
-			Daily: []usage.DeepSeekPlatformCostDay{{Date: "2026-08-01", Amount: 0.02}},
-		}},
-	}}
-
-	done := make(chan error, 1)
-	go func() { done <- reporter.Run(ctx) }()
-	defer stopReporterForTest(t, cancel, done)
-
-	select {
-	case err := <-errSeen:
-		t.Fatalf("fake registry error: %v", err)
-	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != rp.RegistryMethodDeepSeekUsageGet {
-			t.Fatalf("unexpected response: %#v", resp)
-		}
-		if resp.Payload["status"] != "ok" || resp.Payload["hubId"] != "hub-deepseek-usage" {
-			t.Fatalf("response payload=%#v", resp.Payload)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive deepseek.usage.get response")
-	}
-}
-
-func TestReporterRejectsInvalidDeepSeekUsageGet(t *testing.T) {
-	respSeen := make(chan testEnvelope, 1)
-	errSeen := make(chan error, 1)
-	ts := newFakeReporterRegistry(t, "hub-deepseek-usage-invalid", testEnvelope{
-		RequestID: 202,
-		Type:      "request",
-		Method:    rp.RegistryMethodDeepSeekUsageGet,
-		HubID:     "hub-deepseek-usage-invalid",
-		Payload:   map[string]any{"year": 1999, "month": 13},
-	}, respSeen, errSeen)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
-		HubID:             "hub-deepseek-usage-invalid",
-		ReconnectInterval: 50 * time.Millisecond,
-		StateDir:          t.TempDir(),
-	}, nil)
-	done := make(chan error, 1)
-	go func() { done <- reporter.Run(ctx) }()
-	defer stopReporterForTest(t, cancel, done)
-
-	select {
-	case err := <-errSeen:
-		if err == nil {
-			t.Fatal("expected an invalid argument error")
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive error")
-	}
-}
-```
-
-Check `hub_test.go` imports for `context`; add it if missing.
-
-- [x] **Step 2: Run the handler tests and verify RED**
-
-Run:
-
-```powershell
-go -C server test ./internal/hub -run 'TestReporter(RespondsTo|RejectsInvalid)DeepSeekUsageGet' -count=1
-```
-
-Expected: FAIL because `deepSeekUsage` and `replyDeepSeekUsageGet` do not exist.
-
-- [x] **Step 3: Add the store and handler to the Reporter**
-
-In `server/internal/hub/reporter.go`:
-
-```go
-type deepSeekUsageSource interface {
-	Get(ctx context.Context, year, month int, force bool) (usage.DeepSeekPlatformUsage, error)
-}
-
-type deepSeekUsageGetPayload struct {
-	Year  int `json:"year"`
-	Month int `json:"month"`
-	Force bool `json:"force,omitempty"`
-}
-```
-
-Add to the `Reporter` struct:
-
-```go
-	deepSeekUsage           deepSeekUsageSource
-```
-
-In `NewReporter`, after `r.hubConfig` is finalized and before `return r`:
-
-```go
-	platformToken, _ := r.hubConfig.DeepSeekPlatformToken()
-	r.deepSeekUsage = usage.NewDeepSeekPlatformStore(platformToken, &http.Client{Timeout: 20 * time.Second})
-```
-
-In `handleRegistryRequest`, add:
-
-```go
-	case rp.RegistryMethodDeepSeekUsageGet:
-		r.replyDeepSeekUsageGet(conn, in)
-```
-
-Add the handler next to `replyUsageHistoryGet`:
-
-```go
-func (r *Reporter) replyDeepSeekUsageGet(conn *websocket.Conn, req envelope) {
-	var payload deepSeekUsageGetPayload
-	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid deepseek.usage.get payload")
-		return
-	}
-	year, month := payload.Year, payload.Month
-	if year == 0 {
-		year = time.Now().UTC().Year()
-	}
-	if month == 0 {
-		month = int(time.Now().UTC().Month())
-	}
-	if year < 2020 || year > 2100 || month < 1 || month > 12 {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid year or month")
-		return
-	}
-	if r.deepSeekUsage == nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, "deepseek usage is unavailable")
-		return
-	}
-	result, err := r.deepSeekUsage.Get(context.Background(), year, month, payload.Force)
-	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, "failed to fetch deepseek usage")
-		return
-	}
-	_ = r.writeJSON(conn, "->", envelope{
-		RequestID: req.RequestID,
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    req.Method,
-		HubID:     r.cfg.HubID,
-		Payload: rp.MustRaw(map[string]any{
-			"hubId":    r.cfg.HubID,
-			"status":   result.Status,
-			"month":    result.Month,
-			"balance":  result.Balance,
-			"days":     result.Days,
-			"costs":    result.Costs,
-			"cachedAt": result.CachedAt,
-		}),
-	})
-}
-```
-
-- [x] **Step 4: Handle the `deepSeekPlatform` config section**
-
-In `applyHubConfigUpdate`, add a case before `default:`:
-
-```go
-	case "deepSeekPlatform":
-		if payload.Field != "token" {
-			return fmt.Errorf("unsupported deepSeekPlatform field %q", payload.Field)
-		}
-		if err := store.UpdateDeepSeekPlatformToken(payload.Action, payload.Value, time.Now()); err != nil {
-			return err
-		}
-		if r.deepSeekUsage != nil {
-			token := ""
-			if payload.Action == "set" {
-				token = payload.Value
-			}
-			r.deepSeekUsage.SetToken(token)
-		}
-		return nil
-```
-
-- [x] **Step 5: Run the handler tests and verify GREEN**
-
-Run:
-
-```powershell
-go -C server test ./internal/hub -run 'TestReporter(RespondsTo|RejectsInvalid)DeepSeekUsageGet' -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 6: Run gofmt and package tests**
-
-Run:
-
-```powershell
-gofmt -w server/internal/hub/reporter.go server/internal/hub/hub_test.go
-go -C server test ./internal/hub ./internal/hubconfig ./internal/protocol ./internal/registry -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 7: Commit**
-
-```powershell
-git add server/internal/hub/reporter.go server/internal/hub/hub_test.go
-git commit -m "feat(hub): serve deepseek platform usage"
-```
-
----
-
-### Task 5: Add the Web transport DTOs and repository method
-
-**Files:**
-- Modify: `app/web/src/registry/registryMethods.ts`
-- Modify: `app/web/src/registry/registryTypes.ts`
-- Modify: `app/web/src/registry/RegistryRepository.ts`
-- Modify: `app/web/src/registry/RegistryWorkspaceService.ts`
-- Test: `app/__tests__/web-hub-state-service.test.ts`
-
-- [x] **Step 1: Write the failing transport assertions**
-
-Add to `app/__tests__/web-hub-state-service.test.ts` (follow the existing `getUsageHistory` request assertion in that file):
-
-```ts
-test('requests deepseek usage with month params', async () => {
-  const client = {
-    request: jest.fn().mockResolvedValue({
-      type: 'response',
-      payload: {
-        hubId: 'hub-a',
-        status: 'ok',
-        month: {year: 2026, month: 8},
-        balance: [{currency: 'CNY', total: '3.24'}],
-        days: [{date: '2026-08-01', request: 3, outputTokens: 120, hitTokens: 300, missTokens: 100, totalTokens: 520}],
-        costs: [{currency: 'CNY', monthlyCost: 8.8, todayCost: 0.02, daily: [{date: '2026-08-01', amount: 0.02}]}],
-      },
-    }),
-  } as unknown as RegistryClient;
-  const repository = new RegistryRepository(client);
-  const result = await repository.getDeepSeekUsage('hub-a', 2026, 8, true);
-  expect(client.request).toHaveBeenCalledWith({
-    method: 'deepseek.usage.get',
-    hubId: 'hub-a',
-    payload: {year: 2026, month: 8, force: true},
-    timeoutMs: 30000,
-  });
-  expect(result.status).toBe('ok');
-  expect(result.days?.[0]?.totalTokens).toBe(520);
-});
-```
-
-`RegistryClient` is already imported at the top of the file. The repository returns the normalized payload directly, so the assertion uses `repository.getDeepSeekUsage` rather than a service-level call.
-
-- [x] **Step 2: Run the test and verify RED**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-hub-state-service.test.ts
-```
-
-Expected: FAIL because the method, DTOs, and service function do not exist.
-
-- [x] **Step 3: Add the method constant**
-
-In `app/web/src/registry/registryMethods.ts`, next to `UsageHistoryGet`:
-
-```ts
-  DeepSeekUsageGet: 'deepseek.usage.get',
-```
-
-- [x] **Step 4: Add the TypeScript DTOs**
-
-In `app/web/src/registry/registryTypes.ts`:
-
-```ts
-export interface RegistryDeepSeekUsageDay {
-  date: string;
-  request: number;
-  outputTokens: number;
-  hitTokens: number;
-  missTokens: number;
-  totalTokens: number;
-}
-
-export interface RegistryDeepSeekUsageCostDay {
-  date: string;
-  amount: number;
-}
-
-export interface RegistryDeepSeekUsageCost {
-  currency: string;
-  monthlyCost: number;
-  todayCost: number;
-  daily: RegistryDeepSeekUsageCostDay[];
-}
-
-export interface RegistryDeepSeekUsageResponse {
-  hubId: string;
-  status: 'ok' | 'notConnected' | 'expired';
-  month: {year: number; month: number};
-  balance?: Array<{currency: string; total: string; granted?: string; toppedUp?: string}>;
-  days?: RegistryDeepSeekUsageDay[];
-  costs?: RegistryDeepSeekUsageCost[];
-  cachedAt?: string;
-}
-```
-
-Extend the hub config types:
-
-```ts
-export interface RegistryHubConfigDeepSeekPlatformSnapshot {
-  configured: boolean;
-  updatedAt?: string;
-}
-
-export interface RegistryHubConfig {
-  flickerBridge: RegistryHubConfigFlickerBridgeSnapshot;
-  apiKeys: Record<string, RegistryHubConfigAPIKeySnapshot>;
-  deepSeekPlatform: RegistryHubConfigDeepSeekPlatformSnapshot;
-}
-
-export type RegistryHubConfigUpdatePayload =
-  | {section: 'apiKeys'; field: string; action: 'set' | 'clear'; value?: string}
-  | {section: 'flickerBridge'; field: 'enabled'; action: 'set' | 'clear'}
-  | {section: 'deepSeekPlatform'; field: 'token'; action: 'set' | 'clear'; value?: string};
-```
-
-- [x] **Step 5: Add repository normalization and request**
-
-In `app/web/src/registry/RegistryRepository.ts`, add near `normalizeUsageHistoryLimit`:
-
-```ts
-function normalizeDeepSeekUsageResponse(raw: unknown): RegistryDeepSeekUsageResponse | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const input = raw as Record<string, unknown>;
-  const hubId = input.hubId;
-  const status = input.status;
-  const month = input.month as {year?: unknown; month?: unknown} | undefined;
-  if (typeof hubId !== 'string' || hubId === '') return null;
-  if (status !== 'ok' && status !== 'notConnected' && status !== 'expired') return null;
-  if (!month || typeof month.year !== 'number' || typeof month.month !== 'number') return null;
-  if (status === 'ok') {
-    const days = Array.isArray(input.days) ? input.days.map(normalizeDeepSeekUsageDay).filter(day => day !== null) : [];
-    const costs = Array.isArray(input.costs) ? input.costs.map(normalizeDeepSeekUsageCost).filter(cost => cost !== null) : [];
-    return {
-      hubId,
-      status,
-      month: {year: month.year, month: month.month},
-      balance: Array.isArray(input.balance) ? input.balance as RegistryDeepSeekUsageResponse['balance'] : undefined,
-      days,
-      costs,
-      cachedAt: typeof input.cachedAt === 'string' ? input.cachedAt : undefined,
-    };
+// deepSeekLoginScript reads the platform session token from localStorage. The
+// platform stores it as JSON under the userToken key: {"value":"<token>","__version":"0"}.
+const deepSeekLoginScript = `(() => {
+  try {
+    const raw = localStorage.getItem('userToken');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    const token = parsed && typeof parsed.value === 'string' ? parsed.value : '';
+    return /^[A-Za-z0-9._~+/=-]{20,4096}$/.test(token) ? token : '';
+  } catch (_) {
+    return '';
   }
-  return {hubId, status, month: {year: month.year, month: month.month}};
-}
+})()`
+```
 
-function normalizeDeepSeekUsageDay(raw: unknown): RegistryDeepSeekUsageDay | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const day = raw as Record<string, unknown>;
-  const date = day.date;
-  const numbers = ['request', 'outputTokens', 'hitTokens', 'missTokens', 'totalTokens']
-    .map(key => day[key])
-    .filter(value => typeof value === 'number' && Number.isFinite(value));
-  if (typeof date !== 'string' || date === '' || numbers.length !== 5) return null;
-  return {
-    date,
-    request: day.request as number,
-    outputTokens: day.outputTokens as number,
-    hitTokens: day.hitTokens as number,
-    missTokens: day.missTokens as number,
-    totalTokens: day.totalTokens as number,
-  };
-}
+- [ ] **Step 3: Extend the login test**
 
-function normalizeDeepSeekUsageCost(raw: unknown): RegistryDeepSeekUsageCost | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const cost = raw as Record<string, unknown>;
-  if (typeof cost.currency !== 'string' || cost.currency === '') return null;
-  const daily = Array.isArray(cost.daily) ? cost.daily.map((entry: unknown) => {
-    if (!entry || typeof entry !== 'object') return null;
-    const day = entry as Record<string, unknown>;
-    return typeof day.date === 'string' && typeof day.amount === 'number'
-      ? {date: day.date, amount: day.amount}
-      : null;
-  }).filter((entry: unknown): entry is RegistryDeepSeekUsageCostDay => entry !== null) : [];
-  return {
-    currency: cost.currency,
-    monthlyCost: Number(cost.monthlyCost) || 0,
-    todayCost: Number(cost.todayCost) || 0,
-    daily,
-  };
+In `server/cmd/wheelmaker-desktop/deepseek_login_test.go`, append:
+
+```go
+func TestDeepSeekLoginScriptTargetsUserTokenKey(t *testing.T) {
+	if !strings.Contains(deepSeekLoginScript, `localStorage.getItem('userToken')`) {
+		t.Fatal("login script must read the userToken key precisely")
+	}
+	if strings.Contains(deepSeekLoginScript, "localStorage.key(") || strings.Contains(deepSeekLoginScript, "localStorage.length") {
+		t.Fatal("login script must not scan unrelated localStorage keys")
+	}
 }
 ```
 
-Add the repository method next to `getUsageHistory`:
+(Ensure `strings` is imported in the test file.)
 
-```ts
-async getDeepSeekUsage(hubId: string, year: number, month: number, force = false): Promise<RegistryDeepSeekUsageResponse> {
-  const input = await this.client.request({
-    method: RegistryMethods.DeepSeekUsageGet,
-    hubId,
-    payload: {year, month, force},
-    timeoutMs: 30000,
-  });
-  const response = normalizeDeepSeekUsageResponse(input);
-  if (!response || response.hubId !== hubId) throw new Error('invalid deepseek usage response');
-  return response;
-}
-```
+- [ ] **Step 4: Run desktop tests and build**
 
-- [x] **Step 6: Add the workspace service method**
-
-In `app/web/src/registry/RegistryWorkspaceService.ts`, next to `getUsageHistory`:
-
-```ts
-async getDeepSeekUsage(hubId: string, year: number, month: number, force = false): Promise<RegistryDeepSeekUsageResponse> {
-  return this.repository.getDeepSeekUsage(hubId, year, month, force);
-}
-```
-
-Add `RegistryDeepSeekUsageResponse` to the file's type imports.
-
-- [x] **Step 7: Run the Web tests and TypeScript**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-hub-state-service.test.ts
-npm --prefix app run tsc:web
+```bash
+cd server && go test ./cmd/wheelmaker-desktop/ -run "DeepSeek|WebViewPolicy" -v && go build ./cmd/wheelmaker-desktop/
 ```
 
 Expected: PASS.
 
-- [x] **Step 8: Commit**
+- [ ] **Step 5: Commit**
 
-```powershell
-git add app/web/src/registry app/__tests__/web-hub-state-service.test.ts
-git commit -m "feat(app): transport deepseek platform usage"
+```bash
+git add server/cmd/wheelmaker-desktop/
+git commit -m "feat(desktop): embedded deepseek platform login"
 ```
 
 ---
 
-### Task 6: Add pure usage view helpers
+### Task 14: Restore android embedded login with precise token read
 
 **Files:**
-- Create: `app/web/src/usage/deepSeekUsage.ts`
-- Test: `app/__tests__/web-deepseek-usage.test.ts`
+- `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`
+- `mobile/android/app/src/main/java/com/wheelmaker/android/MainActivity.kt`
+- `mobile/android/app/src/main/java/com/wheelmaker/android/WheelMakerBridge.kt`
+- `mobile/android/app/src/main/java/com/wheelmaker/android/TrustedWebMessagePolicy.kt`
+- `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`
 
-- [x] **Step 1: Write the failing pure-function tests**
+- [ ] **Step 1: Cherry-pick the android chain without committing**
 
-Create `app/__tests__/web-deepseek-usage.test.ts`:
-
-```ts
-import {
-  deepSeekDayCost,
-  deepSeekHitRate,
-  deepSeekMonthKey,
-  deepSeekMonthLabel,
-  deepSeekTodayCost,
-  normalizeDeepSeekUsage,
-  previousDeepSeekMonth,
-  type RegistryDeepSeekUsageCost,
-} from '../web/src/usage/deepSeekUsage';
-
-test('computes cache hit rate from hit and miss tokens', () => {
-  expect(deepSeekHitRate({hitTokens: 300, missTokens: 100})).toBeCloseTo(0.75);
-  expect(deepSeekHitRate({hitTokens: 0, missTokens: 0})).toBe(0);
-});
-
-test('finds the cost for a day in the primary currency', () => {
-  const costs: RegistryDeepSeekUsageCost[] = [{
-    currency: 'CNY',
-    monthlyCost: 8.8,
-    todayCost: 0.02,
-    daily: [{date: '2026-08-01', amount: 0.02}],
-  }];
-  expect(deepSeekDayCost('2026-08-01', costs)).toBeCloseTo(0.02);
-  expect(deepSeekDayCost('2026-08-02', costs)).toBe(0);
-});
-
-test('picks today cost from the current month', () => {
-  const now = new Date('2026-08-01T12:00:00Z');
-  expect(deepSeekTodayCost(now, [{date: '2026-08-01', amount: 0.02}])).toBeCloseTo(0.02);
-});
-
-test('normalizes a response into a view with merged costs', () => {
-  const view = normalizeDeepSeekUsage({
-    hubId: 'hub-a',
-    status: 'ok',
-    month: {year: 2026, month: 8},
-    balance: [{currency: 'CNY', total: '3.24'}],
-    days: [{date: '2026-08-01', request: 3, outputTokens: 120, hitTokens: 300, missTokens: 100, totalTokens: 520}],
-    costs: [{currency: 'CNY', monthlyCost: 8.8, todayCost: 0.02, daily: [{date: '2026-08-01', amount: 0.02}]}],
-  }, new Date('2026-08-01T12:00:00Z'));
-  expect(view.days[0].cacheHitRate).toBeCloseTo(0.75);
-  expect(view.days[0].cost).toBeCloseTo(0.02);
-  expect(view.monthlyCost).toBeCloseTo(8.8);
-  expect(view.todayCost).toBeCloseTo(0.02);
-  expect(view.currency).toBe('CNY');
-});
-
-test('month helpers round-trip', () => {
-  expect(deepSeekMonthKey(2026, 8)).toBe('2026-08');
-  expect(deepSeekMonthLabel(2026, 8)).toBe('2026-08');
-  expect(previousDeepSeekMonth(2026, 1)).toEqual({year: 2025, month: 12});
-});
+```bash
+git cherry-pick -n 93836e77
+git cherry-pick -n da3da061
+git cherry-pick -n 2804066c || true
+git cherry-pick -n 05f133b1 || true
+git status --short
 ```
 
-Note: import the registry response type through `RegistryDeepSeekUsageResponse` in the normalization signature.
+`2804066c` also touches web files (`app/__tests__/web-deepseek-usage-login-error.test.tsx`, `app/web/src/usage/DeepSeekUsageDialog.tsx`) which have been rewritten — conflicts there are expected. Drop the web side and keep the android side:
 
-- [x] **Step 2: Run the tests and verify RED**
-
-Run:
-
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-deepseek-usage.test.ts
+```bash
+git checkout HEAD -- app/
+git add -A
+git status --short
 ```
 
-Expected: FAIL because `deepSeekUsage.ts` does not exist.
+If any conflict involves android files, stop and resolve manually — the android side must end up identical to `05f133b1`'s version:
 
-- [x] **Step 3: Implement the helpers**
-
-Create `app/web/src/usage/deepSeekUsage.ts`:
-
-```ts
-import type {RegistryDeepSeekUsageCost, RegistryDeepSeekUsageDay, RegistryDeepSeekUsageResponse} from '../registry/registryTypes';
-
-export interface DeepSeekUsageDay extends RegistryDeepSeekUsageDay {
-  cacheHitRate: number;
-  cost: number;
-}
-
-export interface DeepSeekUsageView {
-  status: RegistryDeepSeekUsageResponse['status'];
-  month: {year: number; month: number};
-  balance: RegistryDeepSeekUsageResponse['balance'];
-  days: DeepSeekUsageDay[];
-  costs: RegistryDeepSeekUsageCost[];
-  monthlyCost: number;
-  todayCost: number;
-  currency: string;
-  cachedAt?: string;
-}
-
-export function deepSeekHitRate(day: Pick<RegistryDeepSeekUsageDay, 'hitTokens' | 'missTokens'>): number {
-  const total = day.hitTokens + day.missTokens;
-  return total > 0 ? day.hitTokens / total : 0;
-}
-
-export function deepSeekDayCost(date: string, costs: RegistryDeepSeekUsageCost[]): number {
-  for (const cost of costs) {
-    const day = cost.daily.find(entry => entry.date === date);
-    if (day) return day.amount;
-  }
-  return 0;
-}
-
-export function deepSeekTodayCost(now: Date, daily: Array<{date: string; amount: number}>): number {
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return daily.find(entry => entry.date === today)?.amount ?? 0;
-}
-
-export function normalizeDeepSeekUsage(raw: RegistryDeepSeekUsageResponse, now = new Date()): DeepSeekUsageView {
-  const days = (raw.days ?? []).map(day => ({
-    ...day,
-    cacheHitRate: deepSeekHitRate(day),
-    cost: deepSeekDayCost(day.date, raw.costs ?? []),
-  }));
-  const costs = raw.costs ?? [];
-  const primary = costs[0];
-  const todayCost = primary ? deepSeekTodayCost(now, primary.daily) : 0;
-  return {
-    status: raw.status,
-    month: raw.month,
-    balance: raw.balance,
-    days,
-    costs,
-    monthlyCost: primary?.monthlyCost ?? 0,
-    todayCost,
-    currency: primary?.currency ?? '',
-    cachedAt: raw.cachedAt,
-  };
-}
-
-export function deepSeekMonthKey(year: number, month: number): string {
-  return `${year}-${String(month).padStart(2, '0')}`;
-}
-
-export function deepSeekMonthLabel(year: number, month: number): string {
-  return deepSeekMonthKey(year, month);
-}
-
-export function previousDeepSeekMonth(year: number, month: number): {year: number; month: number} {
-  return month === 1 ? {year: year - 1, month: 12} : {year, month: month - 1};
-}
+```bash
+git show 05f133b1:mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt | diff - mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt && echo "android dialog matches 05f133b1"
 ```
 
-- [x] **Step 4: Run the tests and TypeScript**
+- [ ] **Step 2: Replace the token scan with a precise userToken read**
 
-Run:
+In `mobile/android/app/src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt`, replace `DEEP_SEEK_TOKEN_SCRIPT` with:
 
-```powershell
-npm --prefix app test -- --runInBand __tests__/web-deepseek-usage.test.ts
-npm --prefix app run tsc:web
+```kotlin
+internal const val DEEP_SEEK_TOKEN_SCRIPT = """
+  (() => {
+    try {
+      const raw = localStorage.getItem('userToken');
+      if (!raw) return '';
+      const parsed = JSON.parse(raw);
+      const token = parsed && typeof parsed.value === 'string' ? parsed.value : '';
+      return /^[A-Za-z0-9._~+/=-]{20,4096}$/.test(token) ? token : '';
+    } catch (_) {
+      return '';
+    }
+  })()
+"""
 ```
 
-Expected: PASS.
+- [ ] **Step 3: Extend the protocol test**
 
-- [x] **Step 5: Commit**
+In `mobile/android/app/src/test/java/com/wheelmaker/android/DeepSeekLoginProtocolTest.kt`, append a test (matching the file's existing assertion style):
 
-```powershell
-git add app/web/src/usage/deepSeekUsage.ts app/__tests__/web-deepseek-usage.test.ts
-git commit -m "feat(app): normalize deepseek platform usage views"
+```kotlin
+    @Test
+    fun tokenScriptReadsUserTokenKeyPrecisely() {
+        assertTrue(DEEP_SEEK_TOKEN_SCRIPT.contains("localStorage.getItem('userToken')"))
+        assertFalse(DEEP_SEEK_TOKEN_SCRIPT.contains("localStorage.key("))
+    }
+```
+
+- [ ] **Step 4: Run android unit tests**
+
+```bash
+cd mobile/android && ./gradlew.bat :app:testDebugUnitTest --tests "com.wheelmaker.android.DeepSeekLoginProtocolTest" 2>&1 | tail -10
+```
+
+Expected: PASS. (Use `./gradlew` if the wrapper script has no `.bat`.)
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add mobile/android
+git commit -m "feat(android): embedded deepseek platform login"
 ```
 
 ---
 
-## File structure
+### Task 15: Full verification and probe cleanup
 
-### Hub and protocol
+- [ ] **Step 1: Full server verification**
 
-- Modify `server/internal/hubconfig/store.go`: add `deepSeekPlatform` secret section with `DeepSeekPlatformToken()` / `UpdateDeepSeekPlatformToken()` and snapshot markers.
-- Create `server/internal/hub/usage/deepseek_platform.go`: platform HTTP client, tolerant parsers for summary/amount/cost, per-month TTL cache, and `DeepSeekPlatformStore`.
-- Create `server/internal/hub/usage/deepseek_platform_test.go`: parser, cache, expired, and not-connected coverage using `httptest`.
-- Modify `server/internal/protocol/registry_methods.go`: add `deepseek.usage.get` as a Hub-state routed method (no protocol version bump).
-- Modify `server/internal/hub/reporter.go`: construct the store, route `deepseek.usage.get`, and handle the `deepSeekPlatform` config section.
-- Extend `server/internal/hub/hub_test.go` and `server/internal/protocol/registry_methods_test.go`; add a forwarding case in `server/internal/registry/server_test.go`.
+```bash
+cd server && go build ./... && go test ./... 2>&1 | tail -15
+```
 
-### Web data and UI
+Expected: all PASS.
 
-- Modify `app/web/src/registry/registryMethods.ts`, `registryTypes.ts`, `RegistryRepository.ts`, `RegistryWorkspaceService.ts`: method constant, DTOs, normalization, and request.
-- Create `app/web/src/usage/deepSeekUsage.ts`: pure view normalization, hit rate, month helpers.
-- Create `app/web/src/usage/DeepSeekUsageDialog.tsx` and `DeepSeekUsageChart.tsx`: accessible modal with login state and lazy ECharts chart.
-- Modify `app/web/src/usage/UsageFeatureSurface.tsx`, `MonitorSurface.tsx`, `MobileUsageDialog.tsx`, and `app/web/src/app/WorkspaceApp.tsx`: DeepSeek balance rows become clickable and open the new dialog.
-- Modify `app/web/src/styles/usage.css`: dialog, summary cards, and chart styles.
-- Extend `app/__tests__/web-usage-feature-surface.test.tsx`, `app/__tests__/web-usage-workspace-integration.test.tsx`, `app/__tests__/web-hub-state-service.test.ts`; create `app/__tests__/web-deepseek-usage.test.ts` and `app/__tests__/web-deepseek-usage-dialog.test.tsx`.
+- [ ] **Step 2: Full web verification**
 
-### Native login
+```bash
+cd app && npm run tsc:web && npm test 2>&1 | tail -10 && npm run build:web 2>&1 | tail -3
+```
 
-- Modify `server/cmd/wheelmaker-desktop/webview_policy.go`, `desktop_bridge.go`, `desktop_runtime.go`, `webview_windows.go`; create `server/cmd/wheelmaker-desktop/deepseek_login.go` and `deepseek_login_windows.go`; extend `webview_policy_test.go` and add `deepseek_login_test.go`.
-- Modify `mobile/android/app/src/main/java/com/wheelmaker/android/WheelMakerBridge.kt` and `MainActivity.kt`; create `DeepSeekLoginDialog.kt`; add `DeepSeekLoginProtocolTest.kt` under `mobile/android/app/src/test/...`.
+Expected: all PASS.
+
+- [ ] **Step 3: Confirm spec acceptance points against the diff**
+
+```bash
+git diff origin/main...HEAD --stat | tail -5
+rg -n "userToken|40002|biz_data|isCurrentMonth|Disconnect DeepSeek" server/internal app/web/src mobile/android --glob '!**/dist/**' | head -20
+```
+
+Expected: every acceptance bullet in `spec-deepseek-platform-usage.md` maps to landed code; no camelCase `bizData` guessing remains in `deepseek_platform.go`.
+
+- [ ] **Step 4: Clean up the probe environment**
+
+```bash
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe'\" | Where-Object { $_.CommandLine -like '*wm-ds-probe-profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+rm -rf /c/Users/suweimin/AppData/Local/Temp/wm-ds-probe /c/Users/suweimin/AppData/Local/Temp/wm-ds-probe-profile /c/Users/suweimin/AppData/Local/Temp/codexbar-ref
+```
+
+Expected: temporary Edge profile (holding the logged-in DeepSeek session), probe outputs with raw responses, and the CodexBar reference clone are all removed.
 
 ---
 
-### Task 1: Store the DeepSeek platform session token
-
-**Files:**
-- Modify: `server/internal/hubconfig/store.go`
-- Test: `server/internal/hubconfig/store_test.go`
-
-- [x] **Step 1: Write the failing store test**
-
-Add to `server/internal/hubconfig/store_test.go`:
-
-```go
-func TestStoreDeepSeekPlatformTokenRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "hub-config.json")
-	store := New(path)
-	now := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	if err := store.UpdateDeepSeekPlatformToken("set", "ds-platform-session", now); err != nil {
-		t.Fatalf("set token: %v", err)
-	}
-	token, err := store.DeepSeekPlatformToken()
-	if err != nil || token != "ds-platform-session" {
-		t.Fatalf("token=%q err=%v", token, err)
-	}
-	snapshot, err := store.Snapshot()
-	if err != nil || !snapshot.DeepSeekPlatform.Configured || snapshot.DeepSeekPlatform.UpdatedAt == "" {
-		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
-	}
-	if err := store.UpdateDeepSeekPlatformToken("clear", "", now); err != nil {
-		t.Fatalf("clear token: %v", err)
-	}
-	if token, _ := store.DeepSeekPlatformToken(); token != "" {
-		t.Fatalf("token after clear=%q", token)
-	}
-	if err := store.UpdateDeepSeekPlatformToken("bogus", "x", now); err == nil {
-		t.Fatal("invalid action must fail")
-	}
-}
-```
-
-- [x] **Step 2: Run the test and verify RED**
-
-Run:
-
-```powershell
-go -C server test ./internal/hubconfig -run TestStoreDeepSeekPlatformTokenRoundTrip -count=1
-```
-
-Expected: FAIL because `DeepSeekPlatformToken` / `UpdateDeepSeekPlatformToken` do not exist.
-
-- [x] **Step 3: Implement the secret section**
-
-In `server/internal/hubconfig/store.go`, add:
-
-```go
-type DeepSeekPlatformSnapshot struct {
-	Configured bool   `json:"configured"`
-	UpdatedAt  string `json:"updatedAt,omitempty"`
-}
-```
-
-Add `DeepSeekPlatform DeepSeekPlatformSnapshot `json:"deepSeekPlatform"`` to `Snapshot`, then add:
-
-```go
-func deepSeekPlatformSection(root map[string]json.RawMessage) (map[string]secretValue, error) {
-	section := map[string]secretValue{}
-	if raw := root["deepSeekPlatform"]; len(raw) != 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &section); err != nil || section == nil {
-			return nil, fmt.Errorf("parse hub config deepSeekPlatform section")
-		}
-	}
-	return section, nil
-}
-
-// DeepSeekPlatformToken returns the stored platform session token, or "" when unset.
-func (s *Store) DeepSeekPlatformToken() (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	root, _, err := s.loadLocked()
-	if err != nil {
-		return "", err
-	}
-	section, err := deepSeekPlatformSection(root)
-	if err != nil {
-		return "", err
-	}
-	return section["token"].Value, nil
-}
-
-// UpdateDeepSeekPlatformToken sets or clears the platform session token.
-func (s *Store) UpdateDeepSeekPlatformToken(action, value string, now time.Time) error {
-	if action != "set" && action != "clear" {
-		return fmt.Errorf("unsupported deepSeekPlatform action %q", action)
-	}
-	if action == "set" {
-		value = strings.TrimSpace(value)
-		if value == "" || len(value) > maxSecretBytes {
-			return fmt.Errorf("deepSeekPlatform token is required and must not exceed 16 KiB")
-		}
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	root, _, err := s.loadLocked()
-	if err != nil {
-		return err
-	}
-	section, err := deepSeekPlatformSection(root)
-	if err != nil {
-		return err
-	}
-	if action == "clear" {
-		delete(section, "token")
-	} else {
-		section["token"] = secretValue{Value: value, UpdatedAt: now.UTC()}
-	}
-	rawSection, err := json.Marshal(section)
-	if err != nil {
-		return fmt.Errorf("encode deepSeekPlatform section: %w", err)
-	}
-	root["deepSeekPlatform"] = rawSection
-	return s.writeRootLocked(root)
-}
-```
-
-In `Snapshot()`, populate the new field:
-
-```go
-	platformSection, err := deepSeekPlatformSection(root)
-	if err != nil {
-		return Snapshot{}, err
-	}
-	platformEntry := platformSection["token"]
-	snapshot.DeepSeekPlatform = DeepSeekPlatformSnapshot{Configured: platformEntry.Value != ""}
-	if !platformEntry.UpdatedAt.IsZero() {
-		snapshot.DeepSeekPlatform.UpdatedAt = platformEntry.UpdatedAt.UTC().Format(time.RFC3339)
-	}
-```
-
-Check that `strings` is imported in `store.go`; add it if missing.
-
-- [x] **Step 4: Run the store test and verify GREEN**
-
-Run:
-
-```powershell
-go -C server test ./internal/hubconfig -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 5: Commit**
-
-```powershell
-git add server/internal/hubconfig/store.go server/internal/hubconfig/store_test.go
-git commit -m "feat(hubconfig): store deepseek platform session token"
-```
-
----
-
-### Task 2: Implement the DeepSeek platform client and per-month cache
-
-**Files:**
-- Create: `server/internal/hub/usage/deepseek_platform.go`
-- Test: `server/internal/hub/usage/deepseek_platform_test.go`
-
-- [x] **Step 1: Write the failing client, parser, and cache tests**
-
-Create `server/internal/hub/usage/deepseek_platform_test.go`:
-
-```go
-package usage
-
-import (
-	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"sync/atomic"
-	"testing"
-	"time"
-)
-
-const deepSeekPlatformFixture = `{
-  "code": 0,
-  "bizData": {
-    "monthly_costs": [{"currency": "CNY", "total": 8.8}],
-    "normal_wallets": [{"currency": "CNY", "total_balance": "3.24", "granted_balance": "0.00", "topped_up_balance": "3.24"}],
-    "bonus_wallets": []
-  }
-}`
-
-const deepSeekAmountFixture = `{
-  "code": 0,
-  "data": {
-    "days": [
-      {
-        "date": "2026-08-01",
-        "models": [
-          {
-            "model": "deepseek-v4-flash",
-            "usage": [
-              {"type": "REQUEST", "amount": 3},
-              {"type": "RESPONSE_TOKEN", "amount": 120},
-              {"type": "PROMPT_CACHE_HIT_TOKEN", "amount": 300},
-              {"type": "PROMPT_CACHE_MISS_TOKEN", "amount": 100}
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}`
-
-const deepSeekCostFixture = `{
-  "code": 0,
-  "bizData": {
-    "currencies": [
-      {
-        "currency": "CNY",
-        "total": [{"model": "deepseek-v4-flash", "usage": [{"type": "RESPONSE_TOKEN", "amount": 0.02}]}],
-        "days": [{"date": "2026-08-01", "amount": 0.02}]
-      }
-    ]
-  }
-}`
-
-func TestParseDeepSeekPlatformFixtures(t *testing.T) {
-	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
-	balance, err := parseDeepSeekSummary(asMap(t, deepSeekPlatformFixture), now)
-	if err != nil || len(balance) != 1 || balance[0].Currency != "CNY" || balance[0].Total != "3.24" {
-		t.Fatalf("balance=%+v err=%v", balance, err)
-	}
-	days, err := parseDeepSeekAmount(asMap(t, deepSeekAmountFixture))
-	if err != nil || len(days) != 1 {
-		t.Fatalf("days=%+v err=%v", days, err)
-	}
-	day := days[0]
-	if day.Date != "2026-08-01" || day.Request != 3 || day.OutputTokens != 120 ||
-		day.HitTokens != 300 || day.MissTokens != 100 || day.TotalTokens != 520 {
-		t.Fatalf("day=%+v", day)
-	}
-	costs, err := parseDeepSeekCost(asMap(t, deepSeekCostFixture), now, DeepSeekPlatformMonth{Year: 2026, Month: 8})
-	if err != nil || len(costs) != 1 || costs[0].Currency != "CNY" || costs[0].TodayCost != 0.02 || len(costs[0].Daily) != 1 {
-		t.Fatalf("costs=%+v err=%v", costs, err)
-	}
-}
-
-func TestDeepSeekPlatformStoreCacheAndExpired(t *testing.T) {
-	var calls atomic.Int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		if strings.Contains(r.URL.Path, "get_user_summary") {
-			_, _ = w.Write([]byte(deepSeekPlatformFixture))
-			return
-		}
-		if strings.Contains(r.URL.Path, "usage/amount") {
-			_, _ = w.Write([]byte(deepSeekAmountFixture))
-			return
-		}
-		if strings.Contains(r.URL.Path, "usage/cost") {
-			_, _ = w.Write([]byte(deepSeekCostFixture))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
-
-	store := NewDeepSeekPlatformStore("session-token", server.Client())
-	first, err := store.Get(context.Background(), 2026, 8, false)
-	if err != nil || first.Status != DeepSeekPlatformOK || len(first.Days) != 1 || len(first.Costs) != 1 {
-		t.Fatalf("first=%+v err=%v", first, err)
-	}
-	if calls.Load() != 3 {
-		t.Fatalf("expected 3 upstream calls, got %d", calls.Load())
-	}
-	cached, err := store.Get(context.Background(), 2026, 8, false)
-	if err != nil || len(cached.Days) != 1 {
-		t.Fatalf("cached=%+v err=%v", cached, err)
-	}
-	if calls.Load() != 3 {
-		t.Fatalf("cache miss: expected still 3 calls, got %d", calls.Load())
-	}
-	if _, err := store.Get(context.Background(), 2026, 8, true); err != nil {
-		t.Fatalf("forced refresh: %v", err)
-	}
-	if calls.Load() != 6 {
-		t.Fatalf("forced refresh should refetch, got %d calls", calls.Load())
-	}
-}
-
-func TestDeepSeekPlatformStoreExpiredKeepsCache(t *testing.T) {
-	var calls atomic.Int64
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if calls.Add(1) <= 3 {
-			switch {
-			case strings.Contains(r.URL.Path, "get_user_summary"):
-				_, _ = w.Write([]byte(deepSeekPlatformFixture))
-			case strings.Contains(r.URL.Path, "usage/amount"):
-				_, _ = w.Write([]byte(deepSeekAmountFixture))
-			default:
-				_, _ = w.Write([]byte(deepSeekCostFixture))
-			}
-			return
-		}
-		_, _ = w.Write([]byte(`{"code":40003,"msg":"Authorization Failed (invalid token)"}`))
-	}))
-	defer server.Close()
-
-	store := NewDeepSeekPlatformStore("session-token", server.Client())
-	first, err := store.Get(context.Background(), 2026, 8, false)
-	if err != nil || first.Status != DeepSeekPlatformOK {
-		t.Fatalf("first=%+v err=%v", first, err)
-	}
-	got, err := store.Get(context.Background(), 2026, 8, true)
-	if err != nil {
-		t.Fatalf("expired fetch: %v", err)
-	}
-	if got.Status != DeepSeekPlatformExpired || len(got.Days) != 1 {
-		t.Fatalf("expired response must keep cached data: %+v", got)
-	}
-}
-
-func TestDeepSeekPlatformStoreNotConnected(t *testing.T) {
-	store := NewDeepSeekPlatformStore("", nil)
-	got, err := store.Get(context.Background(), 2026, 8, false)
-	if err != nil || got.Status != DeepSeekPlatformNotConnected {
-		t.Fatalf("got=%+v err=%v", got, err)
-	}
-}
-
-func asMap(t *testing.T, raw string) map[string]any {
-	t.Helper()
-	var out map[string]any
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		t.Fatalf("fixture: %v", err)
-	}
-	return out
-}
-```
-
-- [x] **Step 2: Run the tests and verify RED**
-
-Run:
-
-```powershell
-go -C server test ./internal/hub/usage -run 'Test(ParseDeepSeekPlatform|DeepSeekPlatformStore)' -count=1
-```
-
-Expected: FAIL because `deepseek_platform.go` does not exist.
-
-- [x] **Step 3: Implement the client, parsers, and cache**
-
-Create `server/internal/hub/usage/deepseek_platform.go`:
-
-```go
-package usage
-
-import (
-	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-)
-
-const (
-	deepSeekPlatformBaseURL           = "https://platform.deepseek.com"
-	deepSeekExpiredCode               = 40003
-	deepSeekPlatformCurrentMonthTTL   = 5 * time.Minute
-	deepSeekPlatformPastMonthTTL      = 24 * time.Hour
-	deepSeekPlatformMaxResponseBytes  = 4 << 20
-)
-
-var errDeepSeekExpired = errors.New("deepseek platform session expired")
-
-type DeepSeekPlatformStatus string
-
-const (
-	DeepSeekPlatformOK           DeepSeekPlatformStatus = "ok"
-	DeepSeekPlatformNotConnected DeepSeekPlatformStatus = "notConnected"
-	DeepSeekPlatformExpired      DeepSeekPlatformStatus = "expired"
-)
-
-type DeepSeekPlatformMonth struct {
-	Year  int `json:"year"`
-	Month int `json:"month"`
-}
-
-type DeepSeekPlatformDay struct {
-	Date         string `json:"date"`
-	Request      int64  `json:"request"`
-	OutputTokens int64  `json:"outputTokens"`
-	HitTokens    int64  `json:"hitTokens"`
-	MissTokens   int64  `json:"missTokens"`
-	TotalTokens  int64  `json:"totalTokens"`
-}
-
-type DeepSeekPlatformCostDay struct {
-	Date   string  `json:"date"`
-	Amount float64 `json:"amount"`
-}
-
-type DeepSeekPlatformCost struct {
-	Currency    string                    `json:"currency"`
-	MonthlyCost float64                   `json:"monthlyCost"`
-	TodayCost   float64                   `json:"todayCost"`
-	Daily       []DeepSeekPlatformCostDay `json:"daily"`
-}
-
-type DeepSeekPlatformUsage struct {
-	Status   DeepSeekPlatformStatus     `json:"status"`
-	Month    DeepSeekPlatformMonth      `json:"month"`
-	Balance  []BalanceItem              `json:"balance,omitempty"`
-	Days     []DeepSeekPlatformDay      `json:"days,omitempty"`
-	Costs    []DeepSeekPlatformCost     `json:"costs,omitempty"`
-	CachedAt *time.Time                 `json:"cachedAt,omitempty"`
-}
-
-type DeepSeekPlatformClient struct {
-	Token  string
-	Client *http.Client
-	Now    func() time.Time
-}
-
-func (c *DeepSeekPlatformClient) Fetch(ctx context.Context, year, month int) (DeepSeekPlatformUsage, error) {
-	token := strings.TrimSpace(c.Token)
-	monthValue := DeepSeekPlatformMonth{Year: year, Month: month}
-	if token == "" {
-		return DeepSeekPlatformUsage{Status: DeepSeekPlatformNotConnected, Month: monthValue}, nil
-	}
-	client := c.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	summary, err := c.fetchJSON(ctx, client, "/api/v0/users/get_user_summary", token)
-	if err != nil {
-		return DeepSeekPlatformUsage{}, err
-	}
-	amount, err := c.fetchJSON(ctx, client, "/api/v0/usage/amount?year="+strconv.Itoa(year)+"&month="+strconv.Itoa(month), token)
-	if err != nil {
-		return DeepSeekPlatformUsage{}, err
-	}
-	cost, err := c.fetchJSON(ctx, client, "/api/v0/usage/cost?year="+strconv.Itoa(year)+"&month="+strconv.Itoa(month), token)
-	if err != nil {
-		return DeepSeekPlatformUsage{}, err
-	}
-	now := time.Now().UTC()
-	if c.Now != nil {
-		now = c.Now().UTC()
-	}
-	balance, err := parseDeepSeekSummary(summary, now)
-	if err != nil {
-		return DeepSeekPlatformUsage{}, err
-	}
-	days, err := parseDeepSeekAmount(amount)
-	if err != nil {
-		return DeepSeekPlatformUsage{}, err
-	}
-	costs, err := parseDeepSeekCost(cost, now, monthValue)
-	if err != nil {
-		return DeepSeekPlatformUsage{}, err
-	}
-	return DeepSeekPlatformUsage{
-		Status:  DeepSeekPlatformOK,
-		Month:   monthValue,
-		Balance: balance,
-		Days:    days,
-		Costs:   costs,
-	}, nil
-}
-
-func (c *DeepSeekPlatformClient) fetchJSON(ctx context.Context, client *http.Client, path, token string) (map[string]any, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, deepSeekPlatformBaseURL+path, nil)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Accept", "application/json, text/plain, */*")
-	request.Header.Set("Authorization", "Bearer "+token)
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, deepSeekPlatformMaxResponseBytes))
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode == http.StatusUnauthorized {
-		return nil, errDeepSeekExpired
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("deepseek platform %s: status %d", path, response.StatusCode)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(raw, &payload); err != nil {
-		return nil, fmt.Errorf("deepseek platform %s: invalid JSON", path)
-	}
-	if code, _ := nestedInt(payload, "code"); code == deepSeekExpiredCode {
-		return nil, errDeepSeekExpired
-	}
-	return payload, nil
-}
-
-func deepSeekBizData(payload map[string]any) map[string]any {
-	current := payload
-	for depth := 0; depth < 6; depth++ {
-		if current == nil {
-			return nil
-		}
-		if next, ok := current["bizData"].(map[string]any); ok {
-			current = next
-			continue
-		}
-		if next, ok := current["data"].(map[string]any); ok {
-			current = next
-			continue
-		}
-		return current
-	}
-	return nil
-}
-
-func parseDeepSeekSummary(payload map[string]any, now time.Time) ([]BalanceItem, error) {
-	data := deepSeekBizData(payload)
-	items := make([]BalanceItem, 0, 4)
-	items = append(items, parseDeepSeekWallets(data, "normal_wallets")...)
-	items = append(items, parseDeepSeekWallets(data, "bonus_wallets")...)
-	return items, nil
-}
-
-func parseDeepSeekWallets(data map[string]any, key string) []BalanceItem {
-	raw, _ := data[key].([]any)
-	items := make([]BalanceItem, 0, len(raw))
-	for _, entry := range raw {
-		item, _ := entry.(map[string]any)
-		if item == nil {
-			continue
-		}
-		currency := deepSeekText(item, "currency", "currency_code", "currencyCode")
-		total := deepSeekText(item, "total_balance", "totalBalance", "balance", "total")
-		if currency == "" || total == "" {
-			continue
-		}
-		items = append(items, BalanceItem{
-			Currency: currency,
-			Total:    total,
-			Granted:  deepSeekText(item, "granted_balance", "grantedBalance"),
-			ToppedUp: deepSeekText(item, "topped_up_balance", "toppedUpBalance"),
-		})
-	}
-	return items
-}
-
-func parseDeepSeekAmount(payload map[string]any) ([]DeepSeekPlatformDay, error) {
-	data := deepSeekBizData(payload)
-	rawDays, ok := firstArray(data, "days", "daily", "daily_usage", "dailyUsage")
-	if !ok {
-		return nil, nil
-	}
-	days := make([]DeepSeekPlatformDay, 0, len(rawDays))
-	for _, raw := range rawDays {
-		entry, _ := raw.(map[string]any)
-		if entry == nil {
-			continue
-		}
-		aggregate := deepSeekAggregateUsage(firstArrayValues(entry, "data", "models", "usage", "usages"))
-		days = append(days, DeepSeekPlatformDay{
-			Date:         deepSeekText(entry, "date", "day"),
-			Request:      aggregate.request,
-			OutputTokens: aggregate.response,
-			HitTokens:    aggregate.promptHit,
-			MissTokens:   aggregate.promptMiss,
-			TotalTokens:  aggregate.total,
-		})
-	}
-	return days, nil
-}
-
-type deepSeekUsageAggregate struct {
-	request, response, promptHit, promptMiss, total int64
-}
-
-func deepSeekAggregateUsage(items []any) deepSeekUsageAggregate {
-	var sum deepSeekUsageAggregate
-	for _, item := range items {
-		entry, _ := item.(map[string]any)
-		if entry == nil {
-			continue
-		}
-		var model deepSeekUsageAggregate
-		for _, usageEntry := range firstArrayValues(entry, "usage", "usages", "usage_list", "usageList") {
-			usage, _ := usageEntry.(map[string]any)
-			if usage == nil {
-				continue
-			}
-			kind := deepSeekText(usage, "type", "usage_type", "usageType", "name", "key")
-			amount := deepSeekInt(usage, "amount", "value", "count", "total")
-			switch kind {
-			case "REQUEST":
-				model.request += amount
-			case "RESPONSE_TOKEN":
-				model.response += amount
-			case "PROMPT_CACHE_HIT_TOKEN":
-				model.promptHit += amount
-			case "PROMPT_CACHE_MISS_TOKEN":
-				model.promptMiss += amount
-			}
-		}
-		sum.request += model.request
-		sum.response += model.response
-		sum.promptHit += model.promptHit
-		sum.promptMiss += model.promptMiss
-	}
-	sum.total = sum.response + sum.promptHit + sum.promptMiss
-	return sum
-}
-
-func parseDeepSeekCost(payload map[string]any, now time.Time, month DeepSeekPlatformMonth) ([]DeepSeekPlatformCost, error) {
-	data := deepSeekBizData(payload)
-	rawBlocks, ok := firstArray(data, "cost", "costs", "currencies")
-	if !ok {
-		if nested, ok := firstArray(data, "data"); ok {
-			rawBlocks = nested
-		} else {
-			return nil, nil
-		}
-	}
-	currentMonth := now.Year() == month.Year && int(now.Month()) == month.Month
-	today := now.Format("2006-01-02")
-	costs := make([]DeepSeekPlatformCost, 0, len(rawBlocks))
-	for _, raw := range rawBlocks {
-		block, _ := raw.(map[string]any)
-		if block == nil {
-			continue
-		}
-		currency := deepSeekText(block, "currency", "currency_code", "currencyCode")
-		if currency == "" {
-			continue
-		}
-		cost := DeepSeekPlatformCost{Currency: currency}
-		for _, model := range firstArrayValues(block, "total", "totals", "models", "model_cost", "modelCost") {
-			cost.MonthlyCost += deepSeekEntryAmount(model)
-		}
-		for _, rawDay := range firstArrayValues(block, "days", "daily", "daily_cost", "dailyCost") {
-			day, _ := rawDay.(map[string]any)
-			if day == nil {
-				continue
-			}
-			date := deepSeekText(day, "date", "day")
-			amount := deepSeekFloat(day, "amount", "value", "cost", "total")
-			if amount == 0 {
-				amount = deepSeekBlockDayAmount(day)
-			}
-			cost.Daily = append(cost.Daily, DeepSeekPlatformCostDay{Date: date, Amount: amount})
-			if currentMonth && date == today {
-				cost.TodayCost = amount
-			}
-		}
-		costs = append(costs, cost)
-	}
-	return costs, nil
-}
-
-func deepSeekBlockDayAmount(day map[string]any) float64 {
-	var amount float64
-	for _, model := range firstArrayValues(day, "models", "data", "costs", "model_cost", "modelCost") {
-		amount += deepSeekEntryAmount(model)
-	}
-	return amount
-}
-
-func deepSeekEntryAmount(value any) float64 {
-	entry, _ := value.(map[string]any)
-	if entry == nil {
-		return 0
-	}
-	var amount float64
-	for _, usageEntry := range firstArrayValues(entry, "usage", "usages") {
-		usage, _ := usageEntry.(map[string]any)
-		if usage == nil {
-			continue
-		}
-		amount += deepSeekFloat(usage, "amount", "value", "cost")
-	}
-	if amount == 0 {
-		amount = deepSeekFloat(entry, "amount", "value", "cost")
-	}
-	return amount
-}
-
-func firstArray(data map[string]any, keys ...string) ([]any, bool) {
-	for _, key := range keys {
-		if value, ok := data[key].([]any); ok {
-			return value, true
-		}
-	}
-	return nil, false
-}
-
-func firstArrayValues(data map[string]any, keys ...string) []any {
-	for _, key := range keys {
-		if value, ok := data[key].([]any); ok {
-			return value
-		}
-	}
-	return nil
-}
-
-func nestedInt(data map[string]any, key string) (int64, bool) {
-	switch value := data[key].(type) {
-	case float64:
-		return int64(value), true
-	case int64:
-		return value, true
-	case json.Number:
-		parsed, err := value.Int64()
-		return parsed, err == nil
-	default:
-		return 0, false
-	}
-}
-
-func deepSeekText(data map[string]any, keys ...string) string {
-	for _, key := range keys {
-		if value, ok := data[key].(string); ok {
-			if text := strings.TrimSpace(value); text != "" {
-				return text
-			}
-		}
-	}
-	return ""
-}
-
-func deepSeekInt(data map[string]any, keys ...string) int64 {
-	for _, key := range keys {
-		switch value := data[key].(type) {
-		case float64:
-			return int64(value)
-		case int64:
-			return value
-		case json.Number:
-			if parsed, err := value.Int64(); err == nil {
-				return parsed
-			}
-		case string:
-			if parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil {
-				return parsed
-			}
-		}
-	}
-	return 0
-}
-
-func deepSeekFloat(data map[string]any, keys ...string) float64 {
-	for _, key := range keys {
-		switch value := data[key].(type) {
-		case float64:
-			return value
-		case json.Number:
-			if parsed, err := value.Float64(); err == nil {
-				return parsed
-			}
-		case string:
-			if parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
-				return parsed
-			}
-		}
-	}
-	return 0
-}
-
-type deepSeekPlatformCacheEntry struct {
-	usage     DeepSeekPlatformUsage
-	fetchedAt time.Time
-}
-
-// DeepSeekPlatformStore owns the token and the per-month cache.
-type DeepSeekPlatformStore struct {
-	mu     sync.RWMutex
-	token  string
-	client *http.Client
-	now    func() time.Time
-	cache  map[string]deepSeekPlatformCacheEntry
-}
-
-func NewDeepSeekPlatformStore(token string, client *http.Client) *DeepSeekPlatformStore {
-	return &DeepSeekPlatformStore{
-		token:  strings.TrimSpace(token),
-		client: client,
-		now:    time.Now,
-		cache:  map[string]deepSeekPlatformCacheEntry{},
-	}
-}
-
-// SetToken replaces the session token and drops cached responses.
-func (s *DeepSeekPlatformStore) SetToken(token string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.token = strings.TrimSpace(token)
-	s.cache = map[string]deepSeekPlatformCacheEntry{}
-}
-
-// Get returns cached or freshly fetched platform usage for the month.
-func (s *DeepSeekPlatformStore) Get(ctx context.Context, year, month int, force bool) (DeepSeekPlatformUsage, error) {
-	key := fmt.Sprintf("%d-%02d", year, month)
-	s.mu.RLock()
-	entry, exists := s.cache[key]
-	token := s.token
-	now := s.now().UTC()
-	s.mu.RUnlock()
-	if exists && !force && cacheFresh(entry, now, year, month) {
-		return entry.usage, nil
-	}
-	client := DeepSeekPlatformClient{Token: token, Client: s.client, Now: s.now}
-	usage, err := client.Fetch(ctx, year, month)
-	if err != nil {
-		if errors.Is(err, errDeepSeekExpired) {
-			s.mu.RLock()
-			entry, exists = s.cache[key]
-			s.mu.RUnlock()
-			if exists {
-				stale := entry.usage
-				stale.Status = DeepSeekPlatformExpired
-				return stale, nil
-			}
-			return DeepSeekPlatformUsage{
-				Status: DeepSeekPlatformExpired,
-				Month:  DeepSeekPlatformMonth{Year: year, Month: month},
-			}, nil
-		}
-		return DeepSeekPlatformUsage{}, err
-	}
-	usage.Month = DeepSeekPlatformMonth{Year: year, Month: month}
-	usage.CachedAt = &now
-	s.mu.Lock()
-	s.cache[key] = deepSeekPlatformCacheEntry{usage: usage, fetchedAt: now}
-	s.mu.Unlock()
-	return usage, nil
-}
-
-func cacheFresh(entry deepSeekPlatformCacheEntry, now time.Time, year, month int) bool {
-	ttl := deepSeekPlatformPastMonthTTL
-	if year == now.Year() && month == int(now.Month()) {
-		ttl = deepSeekPlatformCurrentMonthTTL
-	}
-	return now.Sub(entry.fetchedAt) < ttl
-}
-```
-
-- [x] **Step 4: Run the tests and verify GREEN**
-
-Run:
-
-```powershell
-go -C server test ./internal/hub/usage -run 'Test(ParseDeepSeekPlatform|DeepSeekPlatformStore)' -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 5: Run gofmt and the full usage package**
-
-Run:
-
-```powershell
-gofmt -w server/internal/hub/usage/deepseek_platform.go server/internal/hub/usage/deepseek_platform_test.go
-go -C server test ./internal/hub/usage -count=1
-```
-
-Expected: PASS.
-
-- [x] **Step 6: Commit**
-
-```powershell
-git add server/internal/hub/usage/deepseek_platform.go server/internal/hub/usage/deepseek_platform_test.go
-git commit -m "feat(usage): fetch deepseek platform usage with cache"
-```
-
----
+## Self-review notes
+
+- **Spec coverage:** revert (Task 2) · hubconfig secret (3) · verified parsing + fixtures (4) · protocol method (5) · hub handler with expired/error + stale (6) · web transport with error status (7) · multi-currency view model (8) · native bridge (9) · dialog shell/states/login panel/disconnect/empty/cachedAt/month-nav (10) · chart with CSS tokens (11) · monitor rows (12) · desktop precise userToken (13) · android precise userToken (14) · verification + cleanup (15). All spec acceptance bullets map to a task.
+- **No placeholders:** every code-changing step carries the full code or an exact cherry-pick command plus the exact edit.
+- **Type consistency:** `DeepSeekPlatformStatus` adds `error` (Task 4) → reporter passes `message` (6) → `RegistryDeepSeekUsageResponse.status` includes `'error'` + `message?` (7) → `DeepSeekUsageView.message` (8) → dialog error state (10) → WorkspaceApp mapping (12). `DeepSeekUsageDialogState` keeps the old shape plus `error.view`, so the cherry-picked WorkspaceApp wiring compiles with minimal edits.
