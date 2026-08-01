@@ -3,6 +3,7 @@ package com.wheelmaker.android
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import java.util.concurrent.atomic.AtomicBoolean
@@ -38,6 +39,10 @@ class DeepSeekLoginDialog(
     @SuppressLint("SetJavaScriptEnabled")
     fun show() {
         val webView = WebView(activity)
+        webView.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            (activity.resources.displayMetrics.density * 520).toInt()
+        )
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         webView.webViewClient = object : WebViewClient() {
@@ -55,8 +60,8 @@ class DeepSeekLoginDialog(
             .setNegativeButton("Cancel") { _, _ -> finish(null) }
             .setOnCancelListener { finish(null) }
             .create()
-        webView.loadUrl(DEEP_SEEK_LOGIN_URL)
         dialog.show()
+        webView.loadUrl(DEEP_SEEK_LOGIN_URL)
     }
 
     private fun pollToken(view: WebView) {

@@ -195,7 +195,9 @@ function DeepSeekLoginPanel({onSaveToken}: {onSaveToken: (token: string) => Prom
           type="button"
           disabled={busy}
           onClick={() => {
-            void requestNativeDeepSeekLogin().then(save);
+            void requestNativeDeepSeekLogin()
+              .then(save)
+              .catch(cause => setError(cause instanceof Error ? cause.message : 'Failed to start native login'));
           }}
         >
           Login in window
