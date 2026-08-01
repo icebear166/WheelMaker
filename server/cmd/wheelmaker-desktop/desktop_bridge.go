@@ -27,6 +27,7 @@ const (
 	desktopCancelHTMLFileClipboardBinding = "__wheelMakerDesktopCancelHTMLFileClipboard"
 	desktopGetUpdateInfoBinding           = "__wheelMakerDesktopGetUpdateInfo"
 	desktopRequestUpdateBinding           = "__wheelMakerDesktopRequestUpdate"
+	desktopDeepSeekLoginBinding           = "__wheelMakerDesktopDeepSeekLogin"
 	desktopEnterLocalDevBinding           = "__wheelMakerDesktopEnterLocalDev"
 	desktopGetLocalDevStateBinding        = "__wheelMakerDesktopGetLocalDevState"
 	desktopSaveLocalDevSourceBinding      = "__wheelMakerDesktopSaveLocalDevSource"
@@ -77,6 +78,7 @@ func desktopRuntimeInitScript() string {
 		cancelHtmlFileClipboard: invoke('` + desktopCancelHTMLFileClipboardBinding + `'),
 		getDesktopUpdateInfo: invoke('` + desktopGetUpdateInfoBinding + `'),
 		requestDesktopUpdate: invoke('` + desktopRequestUpdateBinding + `'),
+		deepSeekLogin: invoke('` + desktopDeepSeekLoginBinding + `'),
     });
 	return;
 	}

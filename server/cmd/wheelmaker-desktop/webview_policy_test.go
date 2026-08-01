@@ -99,6 +99,19 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 	}
 }
 
+func TestTrustedPageAllowsDeepSeekLoginBridge(t *testing.T) {
+	policy, err := newDesktopWebViewPolicy("https://release.wheelmaker.top/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !policy.AllowsBridge(desktopTrustedRemotePage, "https://release.wheelmaker.top/", true, desktopBridgeDeepSeekLogin) {
+		t.Fatal("deepseek login bridge must be allowed on trusted pages")
+	}
+	if policy.AllowsBridge(desktopBootstrapPage, desktopBootstrapDocumentURL(), true, desktopBridgeDeepSeekLogin) {
+		t.Fatal("deepseek login bridge must not be allowed on the bootstrap page")
+	}
+}
+
 func TestDesktopLocalDevPolicyAcceptsOnlyExactLoopbackOrigin(t *testing.T) {
 	policy, err := newDesktopLocalDevWebViewPolicy()
 	if err != nil {

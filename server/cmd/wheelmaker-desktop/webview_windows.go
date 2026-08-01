@@ -166,6 +166,12 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			postWindowClose(hwnd)
 			return nil
 		}},
+		{desktopDeepSeekLoginBinding, func() (string, error) {
+			if err := authorize(desktopBridgeDeepSeekLogin); err != nil {
+				return "", err
+			}
+			return launchDeepSeekLoginWindow()
+		}},
 		{desktopEnterLocalDevBinding, func(sourcePath string) error {
 			if err := authorize(desktopBridgeEnterLocalDev); err != nil {
 				return err
