@@ -9,7 +9,7 @@ describe('AgentChoiceMenu', () => {
     return pills.map(pill => pill.findAllByType('span')[1].children[0] as string);
   }
 
-  test('groups pills by engine family with short profile labels', async () => {
+  test('groups pills by engine family with full profile labels', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
@@ -32,11 +32,11 @@ describe('AgentChoiceMenu', () => {
     expect(pills).toHaveLength(7);
     expect(pillLabels(renderer!.root)).toEqual([
       'claude',
-      'deepseek',
-      'glm',
-      'kimi',
-      'qwen',
-      'flicker',
+      'cc · deepseek',
+      'cc · glm',
+      'cc · kimi',
+      'cc · qwen',
+      'cc · flicker',
       'codex',
     ]);
     // No legacy expand control / child structure remains.
@@ -63,7 +63,7 @@ describe('AgentChoiceMenu', () => {
       .findAllByProps({className: 'agent-choice-group-label'})
       .map(label => label.children[0]);
     expect(groupLabels).toEqual(['Codex', 'Claude', 'Other']);
-    expect(pillLabels(renderer!.root)).toEqual(['codex', 'deepseek', 'claude', 'glm', 'kimi']);
+    expect(pillLabels(renderer!.root)).toEqual(['codex', 'cx.deepseek', 'claude', 'cc · glm', 'kimi']);
   });
 
   test('hides the group label when only one family is present', async () => {
@@ -77,7 +77,7 @@ describe('AgentChoiceMenu', () => {
     });
 
     expect(renderer!.root.findAllByProps({className: 'agent-choice-group-label'})).toHaveLength(0);
-    expect(pillLabels(renderer!.root)).toEqual(['claude', 'glm']);
+    expect(pillLabels(renderer!.root)).toEqual(['claude', 'cc · glm']);
   });
 
   test('sorts the default agent to the first pill', async () => {

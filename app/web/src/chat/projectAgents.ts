@@ -30,8 +30,7 @@ export function agentDisplayLabel(agentType?: string | null): string {
 
 /**
  * Build a flat, deduplicated list of agent choice nodes for the selection menu.
- * Labels keep their full form here ("cc · deepseek"); grouping/shortening for
- * display happens in buildAgentChoiceGroups.
+ * Grouping/ordering for display happens in buildAgentChoiceGroups.
  */
 export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
   const seen = new Set<string>();
@@ -69,22 +68,12 @@ function agentFamilyKey(agentType: string): string {
   return 'other';
 }
 
-// Inside a named family the group header already carries the engine context, so
-// profile pills drop the redundant prefix ("cc · deepseek" -> "deepseek").
-function familyShortLabel(familyKey: string, label: string): string {
-  if (familyKey === 'claude') {
-    return label.replace(/^cc · /, '');
-  }
-  if (familyKey === 'codex') {
-    return label.replace(/^cx\./, '');
-  }
-  return label;
-}
-
 /**
  * Group agent choice nodes by engine family for the selection menu. The default
  * agent's family sorts first (and the default pill first within it), the base
  * engine pill (claude/codex) leads its family, and "Other" always trails.
+ * Pills keep their full labels ("cc · deepseek") so profiles are recognizable
+ * at a glance even outside their group.
  */
 export function buildAgentChoiceGroups(agentTypes: string[], defaultAgent?: string): AgentChoiceGroup[] {
   const groups = new Map<string, AgentChoiceGroup>();
@@ -108,7 +97,6 @@ export function buildAgentChoiceGroups(agentTypes: string[], defaultAgent?: stri
   });
 
   for (const group of ordered) {
-    group.nodes = group.nodes.map(node => ({...node, label: familyShortLabel(group.key, node.label)}));
     group.nodes.sort((a, b) => {
       const aFirst = a.agentType.toLowerCase() === group.key || a.agentType.toLowerCase() === defaultKey;
       const bFirst = b.agentType.toLowerCase() === group.key || b.agentType.toLowerCase() === defaultKey;
