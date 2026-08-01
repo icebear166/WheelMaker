@@ -26,6 +26,7 @@ Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前�
 ### DeepSeek 平台用量
 
 - DeepSeek 平台用量数据来自 `platform.deepseek.com` 私有接口（`users/get_user_summary`、`usage/amount`、`usage/cost`），使用平台 session token 认证；API key 只能取余额，无法访问这些接口。
+- 平台风控（数美/阿里云 WAF）会拦截缺少浏览器 User-Agent 的请求（HTTP 429 HTML 阻断页），Hub 请求这三个接口必须携带浏览器 UA；登录页的 hCaptcha/Turnstile/设备指纹挑战则只能在真实浏览器环境完成。
 - 三个接口的信封统一为 `{code, msg, data: {biz_code, biz_msg, biz_data}}`（snake_case，2026-08-01 真实抓包验证）；顶层 `code` 或 `data.biz_code` 为 40002/40003 均视为 token 失效。解析按确定结构强类型进行，结构不符返回明确解析错误，不做多 key 猜测、不静默出空数据。
 - `get_user_summary`：`biz_data.normal_wallets`（充值）/ `bonus_wallets`（赠送），wallet 的 `balance` 为十进制字符串，按币种聚合 total = toppedUp + granted。
 - `usage/amount`：`biz_data.{total[], days[]}`，`days` 补满整月；usage `type` 为 `REQUEST`/`PROMPT_TOKEN`/`PROMPT_CACHE_HIT_TOKEN`/`PROMPT_CACHE_MISS_TOKEN`/`RESPONSE_TOKEN`，`amount` 为整数字符串；`PROMPT_TOKEN` 恒 0 忽略不计，每日总量 = hit + miss + response。
