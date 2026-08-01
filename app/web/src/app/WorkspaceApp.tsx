@@ -10202,6 +10202,9 @@ export function App() {
         anchorRect: anchor?.getBoundingClientRect() ?? null,
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
+        // Room for three agent-pill columns so grouped menus stay scroll-free.
+        preferredWidth: 300,
+        preferredMaxHeight: 320,
       }),
     });
   };
