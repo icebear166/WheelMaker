@@ -13115,6 +13115,7 @@ export function App() {
           packages: hubPackages.map(pkg => ({
             packageName: pkg.packageName,
             displayName: pkg.displayName,
+            agentTypes: pkg.agentTypes ?? [],
             installedVersion: pkg.installedVersion,
             latestVersion: pkg.latestVersion,
             action: pkg.canUpdate ? 'update' as const : pkg.canInstall ? 'install' as const : null,

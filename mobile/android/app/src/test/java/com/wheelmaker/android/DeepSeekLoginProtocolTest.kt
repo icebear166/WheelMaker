@@ -22,14 +22,17 @@ class DeepSeekLoginProtocolTest {
     }
 
     @Test
-    fun `login dialog sizes the webview and loads after showing`() {
+    fun `login screen is a full-screen in-app page`() {
         val dialogSource = source("src/main/java/com/wheelmaker/android/DeepSeekLoginDialog.kt")
-        assertTrue(dialogSource.contains("layoutParams ="))
-        assertTrue(dialogSource.indexOf("dialog.show()") in 0 until dialogSource.indexOf("webView.loadUrl"))
-        assertTrue(dialogSource.contains("dialog.window?.setLayout"))
+        assertTrue(dialogSource.contains("FEATURE_NO_TITLE"))
+        assertTrue(dialogSource.contains("ViewGroup.LayoutParams.MATCH_PARENT,\n            ViewGroup.LayoutParams.MATCH_PARENT"))
+        assertTrue(dialogSource.contains("useWideViewPort = true"))
+        assertTrue(dialogSource.contains("loadWithOverviewMode = true"))
         assertTrue(dialogSource.contains("onReceivedError"))
         assertTrue(dialogSource.contains("onReceivedHttpError"))
         assertTrue(dialogSource.contains("Blocked navigation"))
+        assertTrue(dialogSource.contains("Retry"))
+        assertFalse(dialogSource.contains("AlertDialog"))
     }
 
     @Test

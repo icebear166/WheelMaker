@@ -1325,15 +1325,15 @@
 }
 
 .chat-hub-tree + .chat-hub-tree {
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .chat-hub-tree {
   position: relative;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 46%, transparent);
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 18%, var(--border-subtle));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-raised) 28%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
   --hub-accent: var(--accent-primary);
 }
 
@@ -2321,7 +2321,6 @@ button.chat-hub-skill-name {
   background: color-mix(in srgb, var(--hover) 48%, transparent);
 }
 
-.chat-hub-npm-name,
 .chat-hub-scan-name,
 .chat-hub-skill-name {
   min-width: 0;
@@ -2366,16 +2365,36 @@ button.chat-hub-skill-name:disabled {
 .chat-hub-npm-name-cell {
   min-width: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
 }
 
-.chat-hub-npm-name-cell .chat-hub-npm-name {
+/* Package names reuse the session-list agent capsule: the wide-session-agent-N
+   variant classes (above) supply each agent's --agent-accent color. */
+.chat-hub-npm-agent-tag {
   flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--agent-accent, var(--text-tertiary)) 88%, white);
+  background: color-mix(in srgb, var(--agent-accent, #666) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--agent-accent, #666) 26%, transparent);
 }
 
-.chat-hub-npm-name.missing {
-  color: var(--text-tertiary);
+.theme-light .chat-hub-npm-agent-tag {
+  color: color-mix(in srgb, var(--agent-accent, #666) 82%, black);
+}
+
+.chat-hub-npm-agent-tag.missing {
+  opacity: 0.55;
 }
 
 .chat-hub-npm-versions {

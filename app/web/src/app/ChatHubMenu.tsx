@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 
 import {Icon, type IconName} from '../common/Icon';
 import {SecretEditor} from '../common/SecretEditor';
+import {agentTagVariantClass} from '../chat/agentTagVariant';
 import type {
   RegistryFlickerBridgeMode,
   RegistryFlickerBridgeStatus,
@@ -89,6 +90,7 @@ export interface ChatHubTreeItem {
 export interface ChatHubNpmPackageView {
   packageName: string;
   displayName: string;
+  agentTypes: string[];
   installedVersion: string;
   latestVersion: string;
   action: 'update' | 'install' | null;
@@ -678,13 +680,12 @@ function ChatHubNpmDetail({
       />
       {ops.npm.packages.map(pkg => {
         const updateAvailable = pkg.action === 'update' && Boolean(pkg.installedVersion) && Boolean(pkg.latestVersion);
+        const agentType = pkg.agentTypes[0] ?? '';
+        const capsuleClass = `chat-hub-npm-agent-tag${agentType ? ` ${agentTagVariantClass(agentType)}` : ''}${pkg.installedVersion ? '' : ' missing'}`;
         return (
           <div key={pkg.packageName} className="chat-hub-npm-row">
             <span className="chat-hub-npm-name-cell">
-              <span
-                className={`chat-hub-npm-name${pkg.installedVersion ? '' : ' missing'}`}
-                title={pkg.packageName}
-              >
+              <span className={capsuleClass} title={pkg.packageName}>
                 {pkg.displayName}
               </span>
               <span className="chat-hub-npm-versions">

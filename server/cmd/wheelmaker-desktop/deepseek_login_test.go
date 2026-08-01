@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -11,6 +12,26 @@ func TestDeepSeekLoginScriptTargetsUserTokenKey(t *testing.T) {
 	}
 	if strings.Contains(deepSeekLoginScript, "localStorage.key(") || strings.Contains(deepSeekLoginScript, "localStorage.length") {
 		t.Fatal("login script must not scan unrelated localStorage keys")
+	}
+}
+
+func TestDeepSeekLoginOverlayRunsOnOneLockedThread(t *testing.T) {
+	body, err := os.ReadFile("deepseek_login_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+	for _, want := range []string{
+		"runtime.LockOSThread()",
+		"setWindowParent(hwnd, parentHwnd)",
+		"window.Run()",
+	} {
+		if !strings.Contains(source, want) {
+			t.Errorf("login overlay missing %q", want)
+		}
+	}
+	if strings.Contains(source, "go window.Run()") {
+		t.Error("login overlay must run its message loop on the window's own thread")
 	}
 }
 

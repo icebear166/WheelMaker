@@ -375,9 +375,9 @@ test('npm detail keeps version next to the name and hugs actions right', async (
         npm: {
           loading: false, pending: false, outdatedCount: 1,
           packages: [
-            {packageName: '@a/one', displayName: 'One', installedVersion: '1.0', latestVersion: '1.1', action: 'update', canUninstall: true, pending: false},
-            {packageName: '@a/two', displayName: 'Two', installedVersion: '', latestVersion: '2.0', action: 'install', canUninstall: false, pending: false},
-            {packageName: '@a/three', displayName: 'Three', installedVersion: '3.0', latestVersion: '3.0', action: null, canUninstall: true, pending: false},
+            {packageName: '@a/one', displayName: 'One', agentTypes: ['claude'], installedVersion: '1.0', latestVersion: '1.1', action: 'update', canUninstall: true, pending: false},
+            {packageName: '@a/two', displayName: 'Two', agentTypes: ['codex'], installedVersion: '', latestVersion: '2.0', action: 'install', canUninstall: false, pending: false},
+            {packageName: '@a/three', displayName: 'Three', agentTypes: [], installedVersion: '3.0', latestVersion: '3.0', action: null, canUninstall: true, pending: false},
           ],
         },
       }),
@@ -395,7 +395,9 @@ test('npm detail keeps version next to the name and hugs actions right', async (
   expect(rows[2].findByProps({className: 'chat-hub-npm-version-copy'}).children).toEqual(['3.0']);
   expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-version-new'}))).toHaveLength(1);
   expect(rows.map(row => row.findByProps({className: 'chat-hub-npm-name-cell'}).findByProps({className: 'chat-hub-npm-versions'}))).toHaveLength(3);
-  expect(rows[1].findByProps({className: 'chat-hub-npm-name missing'}).children).toEqual(['Two']);
+  expect(rows[0].findByProps({className: 'chat-hub-npm-agent-tag wide-session-agent-2'}).children).toEqual(['One']);
+  expect(rows[1].findByProps({className: 'chat-hub-npm-agent-tag wide-session-agent-0 missing'}).children).toEqual(['Two']);
+  expect(rows[2].findByProps({className: 'chat-hub-npm-agent-tag'}).children).toEqual(['Three']);
   expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-action-slot'}))).toHaveLength(0);
   const firstActions = rows[0].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
   const secondActions = rows[1].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
