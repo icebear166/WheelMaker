@@ -3,13 +3,42 @@ import {
   deriveRegistryHubIds,
   npmPackageUpdateSummary,
   packageStatusLabel,
+  resolveWheelMakerRestartPending,
   shouldShowWheelMakerUpdateAction,
+  WHEELMAKER_RESTART_RECONNECT_TIMEOUT_MS,
   wheelMakerUpdateStatusLabel,
   withAgentPackageTimeout,
 } from '../web/src/settings/agentPackageUpdateView';
 import type {RegistryHub} from '../web/src/registry/registryTypes';
 
 describe('agent package update view helpers', () => {
+  test('resolves restart pending after reconnect or timeout', () => {
+    expect(resolveWheelMakerRestartPending({
+      previousInstanceId: 'instance-a',
+      currentInstanceId: 'instance-b',
+      startedAtMs: 1_000,
+      nowMs: 2_000,
+    })).toBe('reconnected');
+    expect(resolveWheelMakerRestartPending({
+      previousInstanceId: '',
+      currentInstanceId: 'instance-b',
+      startedAtMs: 1_000,
+      nowMs: 2_000,
+    })).toBe('reconnected');
+    expect(resolveWheelMakerRestartPending({
+      previousInstanceId: 'instance-a',
+      currentInstanceId: 'instance-a',
+      startedAtMs: 1_000,
+      nowMs: 1_000 + WHEELMAKER_RESTART_RECONNECT_TIMEOUT_MS - 1,
+    })).toBe('waiting');
+    expect(resolveWheelMakerRestartPending({
+      previousInstanceId: 'instance-a',
+      currentInstanceId: 'instance-a',
+      startedAtMs: 1_000,
+      nowMs: 1_000 + WHEELMAKER_RESTART_RECONNECT_TIMEOUT_MS,
+    })).toBe('timed_out');
+  });
+
   test('derives unique hub ids from project.list hubs in stable sorted order', () => {
     const hubs: RegistryHub[] = [
       {hubId: 'hub-b'},

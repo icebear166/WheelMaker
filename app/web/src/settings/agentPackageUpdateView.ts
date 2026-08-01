@@ -12,6 +12,7 @@ import type {
 import {wheelMakerReleaseUrl} from './releaseChannel';
 
 export const AGENT_PACKAGE_SCAN_TIMEOUT_MS = 65000;
+export const WHEELMAKER_RESTART_RECONNECT_TIMEOUT_MS = 60000;
 export const WHEELMAKER_RELEASE_HISTORY_URL =
   wheelMakerReleaseUrl('/releases.json');
 export const WHEELMAKER_STABLE_URL =
@@ -26,6 +27,21 @@ const ACTIVE_WHEELMAKER_UPDATE_STATES = new Set([
   'applying',
   'restarting',
 ]);
+
+export function resolveWheelMakerRestartPending(input: {
+  previousInstanceId: string;
+  currentInstanceId: string;
+  startedAtMs: number;
+  nowMs: number;
+}): 'waiting' | 'reconnected' | 'timed_out' {
+  if (input.currentInstanceId && input.currentInstanceId !== input.previousInstanceId) {
+    return 'reconnected';
+  }
+  if (input.nowMs - input.startedAtMs >= WHEELMAKER_RESTART_RECONNECT_TIMEOUT_MS) {
+    return 'timed_out';
+  }
+  return 'waiting';
+}
 
 export type WheelMakerReleaseHistoryEntry = {
   version: string;

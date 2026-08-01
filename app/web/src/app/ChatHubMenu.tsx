@@ -109,6 +109,7 @@ export interface ChatHubOpsView {
   wheelMaker: {
     loading: boolean;
     pending: boolean;
+    pendingAction: 'update' | 'restart' | null;
     currentVersion: string;
     updateVisible: boolean;
     restartVisible: boolean;
@@ -156,6 +157,7 @@ const EMPTY_OPS_VIEW: ChatHubOpsView = {
   wheelMaker: {
     loading: false,
     pending: false,
+    pendingAction: null,
     currentVersion: '-',
     updateVisible: false,
     restartVisible: false,
@@ -1067,8 +1069,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               onClick={() => onRequestWheelMakerUpdate(hubId)}
             >
               <Icon
-                name={ops.wheelMaker.pending ? 'loader' : 'cloudDownload'}
-                spin={ops.wheelMaker.pending}
+                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'cloudDownload'}
+                spin={ops.wheelMaker.pendingAction === 'update'}
               />
               {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
             </button>
@@ -1082,8 +1084,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               onClick={() => onRequestWheelMakerRestart(hubId)}
             >
               <Icon
-                name={ops.wheelMaker.pending ? 'loader' : 'refreshCw'}
-                spin={ops.wheelMaker.pending}
+                name={ops.wheelMaker.pendingAction === 'restart' ? 'loader' : 'refreshCw'}
+                spin={ops.wheelMaker.pendingAction === 'restart'}
               />
             </button>
           ) : <span className="chat-hub-action-slot" aria-hidden="true" />}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 
@@ -10,6 +11,10 @@ import (
 
 var startManagedRuntimeRestartCommand = func(cmd *exec.Cmd) error {
 	return cmd.Start()
+}
+
+var releaseManagedRuntimeRestartProcess = func(process *os.Process) error {
+	return process.Release()
 }
 
 func startManagedRuntimeRestart(stateDir string) error {
@@ -30,5 +35,8 @@ func startManagedRuntimeRestart(stateDir string) error {
 		return fmt.Errorf("start runtime restart: %w", err)
 	}
 	restoreIO()
+	if err := releaseManagedRuntimeRestartProcess(cmd.Process); err != nil {
+		return fmt.Errorf("release runtime restart process: %w", err)
+	}
 	return nil
 }

@@ -120,6 +120,7 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
     wheelMaker: {
       loading: false,
       pending: false,
+      pendingAction: null,
       currentVersion: 'v1.2',
       updateVisible: true,
       restartVisible: true,
@@ -326,6 +327,7 @@ test('hub row disables unavailable actions', async () => {
         wheelMaker: {
           loading: false,
           pending: false,
+          pendingAction: null,
           currentVersion: 'v1.2',
           updateVisible: false,
           restartVisible: false,
@@ -349,13 +351,44 @@ test('hub row disables unavailable actions', async () => {
   expect(renderer.root.findByProps({'aria-label': 'NPM details'}).props.disabled).not.toBe(true);
 });
 
-test('version action is disabled while its update or restart request is pending', async () => {
+test('only Restart shows loading while its restart request is pending', async () => {
   const {props} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
         wheelMaker: {
           loading: false,
           pending: true,
+          pendingAction: 'restart',
+          currentVersion: 'v1.2',
+          updateVisible: true,
+          restartVisible: true,
+          updateAvailable: true,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const update = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
+  const restart = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
+  expect(update.props.disabled).toBe(true);
+  expect(restart.props.disabled).toBe(true);
+  expect(update.findByType(Icon).props.name).toBe('cloudDownload');
+  expect(restart.findByType(Icon).props.name).toBe('loader');
+});
+
+test('only Update shows loading while its update request is pending', async () => {
+  const {props} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        wheelMaker: {
+          loading: false,
+          pending: true,
+          pendingAction: 'update',
           currentVersion: 'v1.2',
           updateVisible: true,
           restartVisible: true,
@@ -375,7 +408,7 @@ test('version action is disabled while its update or restart request is pending'
   expect(update.props.disabled).toBe(true);
   expect(restart.props.disabled).toBe(true);
   expect(update.findByType(Icon).props.name).toBe('loader');
-  expect(restart.findByType(Icon).props.name).toBe('loader');
+  expect(restart.findByType(Icon).props.name).toBe('refreshCw');
 });
 
 test('update-only Hub keeps Update and hides Restart', async () => {
@@ -385,6 +418,7 @@ test('update-only Hub keeps Update and hides Restart', async () => {
         wheelMaker: {
           loading: false,
           pending: false,
+          pendingAction: null,
           currentVersion: 'v1.2',
           updateVisible: true,
           restartVisible: false,
@@ -1033,6 +1067,7 @@ test('version action uses an update or restart icon instead of a detached status
         wheelMaker: {
           loading: false,
           pending: false,
+          pendingAction: null,
           currentVersion: 'v1.2',
           updateVisible: false,
           restartVisible: true,

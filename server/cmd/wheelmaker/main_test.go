@@ -251,11 +251,22 @@ func TestConfigureWorkerCommandIOToDevNull(t *testing.T) {
 
 func TestStartManagedRuntimeRestartStartsDetachedNodeCommand(t *testing.T) {
 	originalStart := startManagedRuntimeRestartCommand
-	t.Cleanup(func() { startManagedRuntimeRestartCommand = originalStart })
+	originalRelease := releaseManagedRuntimeRestartProcess
+	t.Cleanup(func() {
+		startManagedRuntimeRestartCommand = originalStart
+		releaseManagedRuntimeRestartProcess = originalRelease
+	})
 
 	var started *exec.Cmd
+	process := &os.Process{}
 	startManagedRuntimeRestartCommand = func(cmd *exec.Cmd) error {
 		started = cmd
+		cmd.Process = process
+		return nil
+	}
+	var released *os.Process
+	releaseManagedRuntimeRestartProcess = func(candidate *os.Process) error {
+		released = candidate
 		return nil
 	}
 
@@ -280,6 +291,9 @@ func TestStartManagedRuntimeRestartStartsDetachedNodeCommand(t *testing.T) {
 	stderrFile, ok := started.Stderr.(*os.File)
 	if !ok || stderrFile.Name() != os.DevNull {
 		t.Fatalf("stderr = %#v, want %q sink", started.Stderr, os.DevNull)
+	}
+	if released != process {
+		t.Fatalf("released process = %p, want %p", released, process)
 	}
 }
 
