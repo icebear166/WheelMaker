@@ -2155,7 +2155,6 @@
 .chat-hub-section-header,
 .chat-hub-action,
 .chat-hub-icon-btn,
-.chat-hub-npm-pill,
 .chat-hub-detail-action,
 .chat-hub-project-row,
 .chat-hub-project-skill-trigger,
@@ -2175,7 +2174,6 @@ button.chat-hub-skill-name {
   .chat-hub-section-header,
   .chat-hub-action,
   .chat-hub-icon-btn,
-  .chat-hub-npm-pill,
   .chat-hub-detail-action,
   .chat-hub-project-row,
   .chat-hub-project-skill-trigger,
@@ -2306,7 +2304,7 @@ button.chat-hub-skill-name {
 }
 
 .chat-hub-npm-row {
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  grid-template-columns: minmax(0, 1fr) max-content 52px;
 }
 
 .chat-hub-skill-row {
@@ -2386,56 +2384,22 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-npm-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
+  width: 52px;
+  display: grid;
+  grid-template-columns: repeat(2, 24px);
+  gap: 2px;
 }
 
-/* The primary package action is a labeled pill so its meaning never depends
-   on reading an icon; uninstall stays a quiet icon button next to it. */
-.chat-hub-npm-pill {
-  appearance: none;
-  min-height: 24px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 2px 10px;
-  font: inherit;
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.chat-hub-npm-pill.update {
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 55%, transparent);
-  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+/* The update action borrows the accent color so outdated rows read as
+   actionable without a label; install and uninstall stay quiet. */
+.chat-hub-icon-btn.accent {
   color: var(--accent-primary);
 }
 
-.chat-hub-npm-pill.install {
-  border: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.chat-hub-npm-pill.update:hover:not(:disabled),
-.chat-hub-npm-pill.update:focus-visible {
-  background: color-mix(in srgb, var(--accent-primary) 24%, transparent);
-}
-
-.chat-hub-npm-pill.install:hover:not(:disabled),
-.chat-hub-npm-pill.install:focus-visible {
-  color: var(--text-primary);
-  background: color-mix(in srgb, var(--hover) 80%, transparent);
-}
-
-.chat-hub-npm-pill:disabled {
-  opacity: 0.6;
-  cursor: default;
+.chat-hub-icon-btn.accent:hover:not(:disabled),
+.chat-hub-icon-btn.accent:focus-visible {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .chat-hub-row-actions {
@@ -3023,12 +2987,6 @@ button.chat-hub-skill-name:disabled {
 
   .chat-hub-detail-action {
     min-height: 32px;
-  }
-
-  .chat-hub-npm-pill {
-    min-height: 32px;
-    padding: 4px 12px;
-    font-size: 11px;
   }
 
   .chat-hub-flicker-row {

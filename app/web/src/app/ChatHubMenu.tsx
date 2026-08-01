@@ -691,30 +691,32 @@ function ChatHubNpmDetail({
               </span>
             </span>
             <span className="chat-hub-npm-actions">
-              {pkg.action ? (
-                <button
-                  type="button"
-                  className={`chat-hub-npm-pill ${pkg.action}`}
-                  aria-label={`${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}`}
-                  disabled={pkg.pending}
-                  onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
-                >
-                  {pkg.pending
-                    ? pkg.action === 'install' ? 'Installing…' : 'Updating…'
-                    : pkg.action === 'install' ? 'Install' : 'Update'}
-                </button>
-              ) : null}
-              {pkg.canUninstall ? (
-                <button
-                  type="button"
-                  className="chat-hub-icon-btn danger"
-                  aria-label={`Uninstall ${pkg.displayName}`}
-                  disabled={pkg.pending}
-                  onClick={() => onPackageAction(hubId, 'uninstall', pkg)}
-                >
-                  <Icon name={pkg.pending ? 'loader' : 'trash'} spin={pkg.pending} />
-                </button>
-              ) : null}
+              <span className="chat-hub-action-slot">
+                {pkg.action ? (
+                  <button
+                    type="button"
+                    className={`chat-hub-icon-btn${pkg.action === 'update' ? ' accent' : ''}`}
+                    aria-label={`${pkg.action === 'install' ? 'Install' : 'Update'} ${pkg.displayName}`}
+                    disabled={pkg.pending}
+                    onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
+                  >
+                    <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
+                  </button>
+                ) : null}
+              </span>
+              <span className="chat-hub-action-slot">
+                {pkg.canUninstall ? (
+                  <button
+                    type="button"
+                    className="chat-hub-icon-btn danger"
+                    aria-label={`Uninstall ${pkg.displayName}`}
+                    disabled={pkg.pending}
+                    onClick={() => onPackageAction(hubId, 'uninstall', pkg)}
+                  >
+                    <Icon name={pkg.pending ? 'loader' : 'trash'} spin={pkg.pending} />
+                  </button>
+                ) : null}
+              </span>
             </span>
           </div>
         );
