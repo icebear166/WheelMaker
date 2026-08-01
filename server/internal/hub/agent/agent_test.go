@@ -6062,6 +6062,12 @@ func TestKimiProviderPreset(t *testing.T) {
 	if len(preset.Args) != 1 || preset.Args[0] != "acp" {
 		t.Fatalf("args=%v, want [acp]", preset.Args)
 	}
+	if preset.InstallHint != "@moonshot-ai/kimi-code" {
+		t.Fatalf("install hint=%q, want @moonshot-ai/kimi-code", preset.InstallHint)
+	}
+	if preset.MissingPathErrTemplate != "kimi: binary not found in PATH: %v" {
+		t.Fatalf("missing-path template=%q, want npm-style PATH message", preset.MissingPathErrTemplate)
+	}
 	if !strings.Contains(preset.MissingPathErrTemplate, "%v") {
 		t.Fatalf("missing-path template must consume the underlying error: %q", preset.MissingPathErrTemplate)
 	}

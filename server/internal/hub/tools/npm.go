@@ -412,6 +412,7 @@ var runtimeNPMPackages = []npmPackagePolicy{
 	{PackageName: "@github/copilot", DisplayName: "Copilot CLI", AgentTypes: []string{"copilot"}, Kind: "runtime"},
 	{PackageName: "opencode-ai", DisplayName: "OpenCode CLI", AgentTypes: []string{"opencode"}, Kind: "runtime"},
 	{PackageName: "@tencent-ai/codebuddy-code", DisplayName: "CodeBuddy CLI", AgentTypes: []string{"codebuddy"}, Kind: "runtime"},
+	{PackageName: "@moonshot-ai/kimi-code", DisplayName: "Kimi Code CLI", AgentTypes: []string{"kimi"}, BinaryName: "kimi", Kind: "runtime"},
 	{PackageName: myFlickerPackageName, DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, BinaryName: "myflicker", Kind: "runtime"},
 }
 

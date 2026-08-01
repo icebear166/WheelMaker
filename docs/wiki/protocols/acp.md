@@ -10,7 +10,7 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 完整参考中标记为 unstable、特定工具版本、历史阶段或后续计划的内容不属于本页所述的当前稳定边界。
 
-内置 ACP provider 为 codex、claude、copilot、opencode、mimo、codebuddy、flicker、kimi；统一以 `ACPProviderPreset` 声明启动方式，kimi 走官方 Kimi Code CLI 的 `kimi acp` 子进程，登录由用户在 CLI 侧自行完成，WheelMaker 不触发 device-code 授权。
+内置 ACP provider 为 codex、claude、copilot、opencode、mimo、codebuddy、flicker、kimi；统一以 `ACPProviderPreset` 声明启动方式，kimi 走官方 Kimi Code CLI 的 `kimi acp` 子进程，登录由用户在 CLI 侧自行完成，WheelMaker 不触发 device-code 授权。kimi CLI 的安装与更新纳入 Hub npm 管理（官方包 `@moonshot-ai/kimi-code`，缺 binary 时提示 `npm install -g`），不再指向原生安装脚本。
 
 ## 消息与初始化
 

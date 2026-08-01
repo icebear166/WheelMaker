@@ -120,7 +120,8 @@ var (
 		Name:                   "kimi",
 		BinaryName:             "kimi",
 		Args:                   []string{"acp"},
-		MissingPathErrTemplate: "kimi: binary not found (install Kimi Code CLI: https://code.kimi.com/kimi-code): %v",
+		InstallHint:            "@moonshot-ai/kimi-code",
+		MissingPathErrTemplate: "kimi: binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
 	}

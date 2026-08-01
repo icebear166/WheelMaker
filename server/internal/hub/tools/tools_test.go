@@ -715,6 +715,64 @@ func TestNPMCommandScanIncludesMyFlickerFromPrivateRegistry(t *testing.T) {
 	}
 }
 
+func TestNPMCommandScanIncludesKimiCodePackage(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@moonshot-ai/kimi-code":{"version":"0.30.0"}}}`,
+		ExitCode: 0,
+	})
+
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@moonshot-ai/kimi-code", "0.31.1")
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	kimi := findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@moonshot-ai/kimi-code")
+	if kimi.Kind != "runtime" || kimi.DisplayName != "Kimi Code CLI" {
+		t.Fatalf("kimi package metadata=%#v", kimi)
+	}
+	if !reflect.DeepEqual(kimi.AgentTypes, []string{"kimi"}) {
+		t.Fatalf("kimi agentTypes=%v, want [kimi]", kimi.AgentTypes)
+	}
+	if kimi.InstalledVersion != "0.30.0" || !kimi.Installed || !kimi.CanUninstall {
+		t.Fatalf("kimi package=%#v", kimi)
+	}
+
+	waitForNPMTestOperation(t, cmd)
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle second scan error: %#v", cmdErr)
+	}
+	kimi = findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@moonshot-ai/kimi-code")
+	if kimi.Status != "update_available" || kimi.LatestVersion != "0.31.1" || !kimi.CanUpdate {
+		t.Fatalf("kimi package after latest=%#v", kimi)
+	}
+
+	_, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@moonshot-ai/kimi-code",
+		"version":     "latest",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("kimi install error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+	if !runner.hasCall("npm", "install", "-g", "@moonshot-ai/kimi-code@latest") {
+		t.Fatalf("kimi install call not found: %#v", runner.calls)
+	}
+	if runner.hasCall("npm", "install", "-g", "@moonshot-ai/kimi-code@latest", "--registry="+myFlickerRegistry) {
+		t.Fatalf("kimi install was routed through MyFlicker registry: %#v", runner.calls)
+	}
+}
+
 func TestNPMCommandScanDeprecatedCodexACPUsesEmptyAgentTypes(t *testing.T) {
 	runner := newFakeNPMRunner()
 	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
