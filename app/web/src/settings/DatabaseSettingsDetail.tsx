@@ -8,6 +8,8 @@ type DatabaseSettingsDetailProps = {
   error: string;
   dumpText: string;
   storageStats: WorkspaceDatabaseStorageStats | null;
+  onShow: () => void;
+  onExport: () => void;
   onClearDatabase: () => void;
 };
 
@@ -34,6 +36,8 @@ export function DatabaseSettingsDetail({
   error,
   dumpText,
   storageStats,
+  onShow,
+  onExport,
   onClearDatabase,
 }: DatabaseSettingsDetailProps) {
   const storagePercent = storageStats
@@ -47,49 +51,76 @@ export function DatabaseSettingsDetail({
       {error ? (
         <div className="error">Database error: {error}</div>
       ) : null}
-      {!loading && !error && storageStats ? (
+      {!loading && !error ? (
         <div className="settings-database-storage-summary">
-          <div className="settings-database-storage-metrics" aria-label="Browser storage summary">
-            <div className="settings-database-storage-metric">
-              <span className="settings-database-storage-label">Usage</span>
-              <strong>{formatStorageBytes(storageStats.usageBytes)}</strong>
-              {storagePercent ? (
-                <span className="settings-database-storage-note">{storagePercent} of quota</span>
-              ) : null}
-            </div>
-            <div className="settings-database-storage-metric">
-              <span className="settings-database-storage-label">Quota</span>
-              <strong>{formatStorageBytes(storageStats.quotaBytes)}</strong>
-              <span className="settings-database-storage-note">Origin estimate</span>
-            </div>
-            <div className="settings-database-storage-metric">
-              <span className="settings-database-storage-label">Persisted</span>
-              <strong>{storageStats.persisted == null ? 'Unknown' : storageStats.persisted ? 'Yes' : 'No'}</strong>
-              <span className="settings-database-storage-note">Browser eviction mode</span>
-            </div>
-            <div className="settings-database-storage-metric">
-              <span className="settings-database-storage-label">Approx DB</span>
-              <strong>{formatStorageBytes(storageStats.totalApproximateStoreBytes)}</strong>
-              <span className="settings-database-storage-note">JSON size estimate</span>
-            </div>
-          </div>
-          <div className="settings-database-store-list" aria-label="IndexedDB stores">
-            <div className="settings-database-store-list-header">
-              <span>IndexedDB stores</span>
-              <span>Rows</span>
-              <span>Approx</span>
-            </div>
-            {storageStats.stores.map(store => (
-              <div className="settings-database-store-row" key={store.store}>
-                <span className="settings-database-store-name">{store.store}</span>
-                <span>{store.rows}</span>
-                <span>{formatStorageBytes(store.approximateBytes)}</span>
+          {storageStats ? (
+            <>
+              <div className="settings-database-storage-metrics" aria-label="Browser storage summary">
+                <div className="settings-database-storage-metric">
+                  <span className="settings-database-storage-label">Usage</span>
+                  <strong>{formatStorageBytes(storageStats.usageBytes)}</strong>
+                  {storagePercent ? (
+                    <span className="settings-database-storage-note">{storagePercent} of quota</span>
+                  ) : null}
+                </div>
+                <div className="settings-database-storage-metric">
+                  <span className="settings-database-storage-label">Quota</span>
+                  <strong>{formatStorageBytes(storageStats.quotaBytes)}</strong>
+                  <span className="settings-database-storage-note">Origin estimate</span>
+                </div>
+                <div className="settings-database-storage-metric">
+                  <span className="settings-database-storage-label">Persisted</span>
+                  <strong>{storageStats.persisted == null ? 'Unknown' : storageStats.persisted ? 'Yes' : 'No'}</strong>
+                  <span className="settings-database-storage-note">Browser eviction mode</span>
+                </div>
+                <div className="settings-database-storage-metric">
+                  <span className="settings-database-storage-label">Approx DB</span>
+                  <strong>{formatStorageBytes(storageStats.totalApproximateStoreBytes)}</strong>
+                  <span className="settings-database-storage-note">JSON size estimate</span>
+                </div>
               </div>
-            ))}
+              <div className="settings-database-store-list" aria-label="IndexedDB stores">
+                <div className="settings-database-store-list-header">
+                  <span>IndexedDB stores</span>
+                  <span>Rows</span>
+                  <span>Approx</span>
+                </div>
+                {storageStats.stores.map(store => (
+                  <div className="settings-database-store-row" key={store.store}>
+                    <span className="settings-database-store-name">{store.store}</span>
+                    <span>{store.rows}</span>
+                    <span>{formatStorageBytes(store.approximateBytes)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="settings-database-storage-empty">Stats not loaded yet.</div>
+          )}
+          <div className="settings-database-actions">
+            <button
+              type="button"
+              className="set-btn set-btn--primary"
+              onClick={onShow}
+              disabled={loading}
+            >
+              <Icon name={loading ? 'loader' : 'eye'} spin={loading} size={13} />
+              {loading ? 'Loading...' : 'Show'}
+            </button>
+            <button
+              type="button"
+              className="set-btn"
+              onClick={onExport}
+              disabled={loading || !!error || !dumpText}
+              aria-label="Export database dump"
+            >
+              <Icon name="cloudDownload" size={13} />
+              Export
+            </button>
           </div>
         </div>
       ) : null}
-      {!loading && !error ? (
+      {!loading && !error && dumpText ? (
         <pre className="settings-database-dump">{dumpText}</pre>
       ) : null}
       <section className="set-card database-clear-card">

@@ -7419,9 +7419,6 @@ export function App() {
   }, [isWide]);
   const openSettingsChild = useCallback((detail: SettingsDetail) => {
     setSidebarSettingsOpen(true);
-    if (detail === 'database') {
-      openDatabasePanel();
-    }
     setSettingsDetailView(detail);
   }, [setSidebarSettingsOpen]);
   const handleDesktopSettingsSelect = useCallback(() => {
@@ -15538,19 +15535,6 @@ export function App() {
   }, []);
 
   const renderSettingsDetailActions = (detail: SettingsDetail): React.ReactNode => {
-    if (detail === 'database') {
-      return (
-        <button
-          type="button"
-          className="settings-detail-refresh"
-          onClick={exportDatabaseDump}
-          disabled={databaseLoading || !!databaseError || !databaseDumpText}
-          title="Export current database dump"
-        >
-          Export
-        </button>
-      );
-    }
     return null;
   };
 
@@ -15577,6 +15561,8 @@ export function App() {
           error={databaseError}
           dumpText={databaseDumpText}
           storageStats={databaseStorageStats}
+          onShow={openDatabasePanel}
+          onExport={exportDatabaseDump}
           onClearDatabase={requestClearDatabase}
         />
       </React.Suspense>,

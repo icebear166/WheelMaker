@@ -2815,3 +2815,20 @@ textarea,
 .database-clear-note {
   line-height: 1.4;
 }
+
+/* ---- database page lazy stats: empty placeholder + Show/Export actions ---- */
+.settings-database-storage-empty {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-raised) 84%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.settings-database-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
