@@ -103,4 +103,4 @@ Hub 菜单是唯一的 Skills 管理入口：Hub 全局 Skills 位于各 Hub 的
 
 Hub 级配置走 `hub.config.get/update`，写 Hub 本地 `db/hub-config.json`，secret 永不回显。HubConfig 是持久化配置，HubState 是运行态；两者可以由统一 HubStore 组织，但不得互相复制为第二份权威。
 
-Registry Protocol 保持 2.6 并在当前 HubState schema 内硬切，Hub 与 Web 配套发布，不保留旧 HubState 或 `agentProfiles` 降级分支。菜单不通过轮询维持 WheelMaker Update、NPM、Skills、File Index 或 Flicker；异步 Action 完成后由 Hub 主动发布对应完整 Section。
+Registry Protocol 使用 2.7 并在当前 HubState schema 内硬切，Hub 与 Web 配套发布，不保留旧 HubState 或 `agentProfiles` 降级分支。2.6 Hub 只保留 `update_only` 升级通道；菜单不通过轮询维持 WheelMaker Update、NPM、Skills、File Index 或 Flicker，异步 Action 完成后由 Hub 主动发布对应完整 Section。

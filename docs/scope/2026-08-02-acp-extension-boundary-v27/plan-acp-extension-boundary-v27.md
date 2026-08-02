@@ -145,7 +145,7 @@ type ToolCallUpdate struct {
 
 Implement `DecodeSessionUpdate` by reading the discriminator, decoding with `json.Decoder.DisallowUnknownFields`, and validating required/disallowed fields. Give all implemented request/result/capability/nested variant structs `Meta json.RawMessage \`json:"_meta,omitempty"\``. Replace `mcp` with `mcpCapabilities`, `modeId` with `currentModeId`, config option/value structs with discriminator variants, and set-config response with `{configOptions:[...]}`.
 
-- [ ] **Step 4: Delete old wire-only fields and constants**
+- [x] **Step 4: Delete old wire-only fields and constants**
 
 Remove from wire structs and constants: `contentBlocks`, `clientMessageId`, `steered`, `toolCallContent`, Goal update discriminators/fields, `SessionNewResult.title`, root prompt-result `message`, `StopReasonFailed`, `usage_update.updatedAt`, and response-side `Artifacts`/`ForkPoint`. Keep corresponding fields only in `session_turn.go`, `session_actions.go`, or the internal event types introduced next.
 
@@ -327,7 +327,7 @@ git commit -m "feat(session): preserve ACP message lifecycle in WMT2"
 - Modify: `server/internal/hub/agent/codexapp_deepseek.go`
 - Modify: `server/internal/hub/agent/agent_test.go`
 
-- [ ] **Step 1: Write Codex/CX wire-shape tests**
+- [x] **Step 1: Write Codex/CX wire-shape tests**
 
 Capture serialized `session/update` notifications and assert no private root fields. Add started/delta/completed tests where completed changes commentary to final_answer, no visible duplicate text appears, replay uses one complete full-text chunk, late delta is ignored, title is a standard `session_info_update`, usage has no `updatedAt`, and tool updates use standard `content`.
 
@@ -341,27 +341,27 @@ func TestCodexItemCompletedEmitsAuthoritativeMessageCompletion(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run adapter tests and verify RED**
+- [x] **Step 2: Run adapter tests and verify RED**
 
 Run: `go test ./internal/hub/agent -run 'TestCodex.*(Completed|Replay|Steer|Tool|Title|Usage)|TestCXDeepSeek.*Message' -count=1`
 
 Expected: FAIL because item/completed currently drops lifecycle state and emitters build the wide private-root structure.
 
-- [ ] **Step 3: Convert every built-in update to a strict wire variant**
+- [x] **Step 3: Convert every built-in update to a strict wire variant**
 
 Make `emitSessionUpdate` accept `SessionUpdateVariant`, serialize it, and feed it through `Instance.HandleACPResponse`. Use item ID as messageId; retain `(turnID,itemID)` state through completed emission; then delete it. Emit standard title, mode, config, plan, tool, usage, message, and thought variants.
 
-- [ ] **Step 4: Implement completion and replay rules**
+- [x] **Step 4: Implement completion and replay rules**
 
 On live item/completed, send an empty Text ContentBlock with `messageComplete=true` and the valid completed phase; if completed phase is absent/unknown, retain the last valid phase. Replay sends its full text once with `messageComplete=true`. Ignore delta for a lifecycle entry already marked complete.
 
-- [ ] **Step 5: Run all agent tests**
+- [x] **Step 5: Run all agent tests**
 
 Run: `go test ./internal/hub/agent -count=1`
 
 Expected: PASS for both codex and cx-deepseek because they share the bridge path.
 
-- [ ] **Step 6: Commit strict built-in emitters**
+- [x] **Step 6: Commit strict built-in emitters**
 
 ```bash
 git add server/internal/hub/agent/codexapp_agent.go server/internal/hub/agent/codexapp_convert.go server/internal/hub/agent/codexapp_deepseek.go server/internal/hub/agent/agent_test.go
@@ -383,7 +383,7 @@ git commit -m "fix(codex): emit authoritative ACP message completion"
 - Modify: `server/internal/hub/client/session_goal_test.go`
 - Modify: `server/internal/hub/client/session_archive.go`
 
-- [ ] **Step 1: Write capability/action/Goal RED tests**
+- [x] **Step 1: Write capability/action/Goal RED tests**
 
 Test client initialize metadata, Codex/CX agent metadata, version intersection, every `_wm/session/*` method name/params/result, stable error classification, invalid Goal notification rejection, unknown `_wm/*` notification ignore, and absence of `Conn` action type assertions.
 
@@ -397,13 +397,13 @@ func TestInstanceSteerUsesNegotiatedWMRequest(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `go test ./internal/protocol ./internal/hub/agent ./internal/hub/client -run 'Test.*WM|Test.*Goal.*Notification|Test.*SessionAction.*Capability' -count=1`
 
 Expected: FAIL because formal extension DTOs and request routing do not exist.
 
-- [ ] **Step 3: Define formal extension DTOs and capabilities**
+- [x] **Step 3: Define formal extension DTOs and capabilities**
 
 Add constants and typed request/notification structs for:
 
@@ -423,21 +423,21 @@ const (
 
 All params/results carry optional `_meta`. Validate `version==1`, booleans, Goal event-specific required fields, and preserve unknown metadata.
 
-- [ ] **Step 4: Route actions through `Conn.Send`**
+- [x] **Step 4: Route actions through `Conn.Send`**
 
 Keep provider-neutral typed methods on `Instance`, but gate them from stored initialize capabilities and call the matching `_wm/*` request through `Conn.Send`. Remove `SessionSteerer`, `SessionCompactor`, `SessionGoalController`, `SessionForker`, and `SessionArchiver` assertions from `instance.go`; `Conn` remains transport-only.
 
-- [ ] **Step 5: Implement built-in dispatcher and Goal notification**
+- [x] **Step 5: Implement built-in dispatcher and Goal notification**
 
 Handle all `_wm/*` requests in the Codex/CX dispatcher by invoking existing provider logic. Replace Goal-shaped session updates with `_wm/session/goal`; Instance validates and maps them to internal Goal events. Preserve current Session queue fallback and Goal execution-owner semantics.
 
-- [ ] **Step 6: Run action and lifecycle regressions**
+- [x] **Step 6: Run action and lifecycle regressions**
 
 Run: `go test ./internal/hub/agent ./internal/hub/client -run 'Test.*(Steer|Compact|Goal|Fork|Archive)|TestSessionQueue' -count=1`
 
 Expected: PASS without Conn-level action transport.
 
-- [ ] **Step 7: Commit formal actions**
+- [x] **Step 7: Commit formal actions**
 
 ```bash
 git add server/internal/protocol/acp_wm_extension.go server/internal/protocol/acp_wm_extension_test.go server/internal/hub/agent server/internal/hub/client
@@ -457,7 +457,7 @@ git commit -m "feat(acp): formalize WheelMaker session extensions"
 - Modify: `app/web/src/chat/turns/chatDisplayIndex.ts`
 - Modify: `app/web/src/chat/ChatTurnView.test.tsx`
 
-- [ ] **Step 1: Write projection and UI RED tests**
+- [x] **Step 1: Write projection and UI RED tests**
 
 Add Go tests proving normal summary/read and new archive manifest/read retain `sessionFeatures.messageLifecycle.version=1`, while old WMT2/archive data may omit it. Add Web tests proving a third-party agent with the feature folds work, a new codex session without the feature does not use provider fallback, and an explicitly historical codex view still does.
 
@@ -471,7 +471,7 @@ it('activates completed work from negotiated session feature', () => {
 });
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `go test ./internal/hub/client -run 'Test.*SessionFeatures|Test.*Archive.*Feature' -count=1`
 
@@ -479,7 +479,7 @@ Run: `npm test -- --runInBand app/web/src/chat/ChatTurnView.test.tsx`
 
 Expected: FAIL because feature projection/persistence and capability-driven activation do not exist.
 
-- [ ] **Step 3: Persist and project `SessionFeatures`**
+- [x] **Step 3: Persist and project `SessionFeatures`**
 
 Add stable Registry/internal shapes:
 
@@ -492,11 +492,11 @@ type SessionFeatureVersion struct { Version int `json:"version"` }
 
 Derive it only from negotiated ACP capabilities for live sessions. Add it to normal summary/read and new archive manifest/read; old archive entries decode with a nil field. Do not change WMT2 major version.
 
-- [ ] **Step 4: Make Web capability-driven**
+- [x] **Step 4: Make Web capability-driven**
 
 Add matching TypeScript types. Pass a `messageLifecycleEnabled` flag into display-index construction. Use `version===1` for live/current session data; allow provider-name fallback only when the loaded view is explicitly marked historical and has no feature projection.
 
-- [ ] **Step 5: Run Go and Web tests**
+- [x] **Step 5: Run Go and Web tests**
 
 Run: `go test ./internal/hub/client -run 'Test.*SessionFeatures|Test.*Archive|Test.*SessionRead' -count=1`
 
@@ -504,7 +504,7 @@ Run: `npm test -- --runInBand app/web/src/chat/ChatTurnView.test.tsx app/web/src
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit capability projection**
+- [x] **Step 6: Commit capability projection**
 
 ```bash
 git add server/internal/protocol/registry.go server/internal/hub/client app/web/src/registry/registryTypes.ts app/web/src/chat
@@ -520,7 +520,7 @@ git commit -m "feat(registry): project ACP lifecycle capabilities"
 - Modify: `app/web/src/chat/ChatTurnView.test.tsx`
 - Modify: `docs/scope/2026-08-02-acp-extension-boundary-v27/plan-acp-extension-boundary-v27.md`
 
-- [ ] **Step 1: Add the final cross-boundary regression matrix**
+- [x] **Step 1: Add the final cross-boundary regression matrix**
 
 Cover standard third-party ACP message/tool/plan/config/session-info/usage input; unknown `_meta` round-trip; unknown `_wm/*` ignore; prompt success/refusal/cancel/runtime failure; title and early Goal notifications; Codex/CX replay; Steer with attachments; Goal create/get/update/stop/clear; Fork; Archive; search; and exporter-visible text.
 
@@ -540,7 +540,7 @@ func assertJSONKeys(t *testing.T, raw []byte, allowed ...string) {
 }
 ```
 
-- [ ] **Step 2: Run formatting and focused regression suites**
+- [x] **Step 2: Run formatting and focused regression suites**
 
 Run: `gofmt -w server/internal/protocol server/internal/hub/agent server/internal/hub/client`
 
@@ -548,13 +548,13 @@ Run: `go test ./internal/protocol ./internal/hub/agent ./internal/hub/client ./i
 
 Expected: PASS.
 
-- [ ] **Step 3: Run complete backend verification**
+- [x] **Step 3: Run complete backend verification**
 
 Run: `go test ./...`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run complete Web verification**
+- [x] **Step 4: Run complete Web verification**
 
 Run: `npm test -- --runInBand`
 
@@ -564,7 +564,7 @@ Run: `npm run build`
 
 Expected: all commands PASS.
 
-- [ ] **Step 5: Audit forbidden wire fields and diff integrity**
+- [x] **Step 5: Audit forbidden wire fields and diff integrity**
 
 Run: `rg -n 'json:"(contentBlocks|clientMessageId|steered|toolCallContent|goal|turnId|modeId|updatedAt)' server/internal/protocol/acp*.go`
 
@@ -574,7 +574,7 @@ Run: `git diff --check && git status -sb`
 
 Expected: no whitespace errors; only scoped files differ.
 
-- [ ] **Step 6: Mark every completed checkbox and create the completion commit**
+- [x] **Step 6: Mark every completed checkbox and create the completion commit**
 
 Update this plan's executed checkboxes from `[ ]` to `[x]`, then run:
 
@@ -583,7 +583,7 @@ git add -A
 git commit -m "feat(acp): enforce formal extension boundary"
 ```
 
-- [ ] **Step 7: Push the feature branch**
+- [x] **Step 7: Push the feature branch**
 
 Run: `git push origin feature/acp-extension-boundary-v27`
 

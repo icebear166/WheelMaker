@@ -6,12 +6,12 @@ function readAppSource(relativePath: string): string {
 }
 
 describe('registry protocol domain service', () => {
-  test('registers external file reads without changing the protocol version', () => {
+  test('registers external file reads on the current protocol version', () => {
     const registryMethodsTs = readAppSource('web/src/registry/registryMethods.ts');
 
     expect(registryMethodsTs).toContain("ProjectFSExternalInfo: 'project.fs.external.info'");
     expect(registryMethodsTs).toContain("ProjectFSExternalRead: 'project.fs.external.read'");
-    expect(registryMethodsTs).toContain("RegistryProtocolVersion = '2.6'");
+    expect(registryMethodsTs).toContain("RegistryProtocolVersion = '2.7'");
   });
 
   test('RegistryRepository does not send removed public method names', () => {

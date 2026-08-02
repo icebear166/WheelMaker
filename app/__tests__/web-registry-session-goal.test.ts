@@ -75,7 +75,7 @@ describe('web Registry Session Goal transport', () => {
       payload: {sessionId: 'session-1', tokenBudget: null, status: 'paused'},
       timeoutMs: 30000,
     });
-    expect(RegistryProtocolVersion).toBe('2.6');
+    expect(RegistryProtocolVersion).toBe('2.7');
   });
 
   test('workspace delegates all project-scoped Goal controls', async () => {

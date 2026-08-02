@@ -222,12 +222,12 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('createdAtOverride: pending.createdAt,');
   });
 
-  test('routes Codex completed work groups through the shared live and archive renderer', () => {
+  test('routes negotiated completed work groups through the shared live and archive renderer', () => {
     const main = readMain();
 
     expect(main).toContain("import {ChatWorkGroup} from '../chat/ChatWorkGroup';");
-    expect(main).toContain('collapseCompletedWork: isCodexAppAgentType(selectedChatSession?.agentType)');
-    expect(main).toContain('collapseCompletedWork: isCodexAppAgentType(archivedPreview?.session.agentType)');
+    expect(main).toContain('collapseCompletedWork: hasMessageLifecycleFeature(selectedChatSession)');
+    expect(main).toContain('collapseCompletedWork: hasMessageLifecycleFeature(archivedPreview?.session, true)');
     expect(main).toContain("displayItem.kind === 'assistant-group'");
     expect(main).toContain("displayItem.kind === 'work-group'");
     expect(main).toContain('combineAssistantGroupMessages');

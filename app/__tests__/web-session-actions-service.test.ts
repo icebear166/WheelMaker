@@ -104,7 +104,7 @@ describe('web session action protocol', () => {
         },
       },
     });
-    expect(RegistryProtocolVersion).toBe('2.6');
+    expect(RegistryProtocolVersion).toBe('2.7');
     expect(RegistryMethods.SessionQueue).toBe('session.queue');
     expect(RegistryMethods).not.toHaveProperty('SessionSend');
     expect(RegistryMethods).not.toHaveProperty('SessionCompact');
@@ -227,7 +227,7 @@ describe('web session action protocol', () => {
     });
     expect(result.session.markColor).toBe('blue');
     expect(result.session.pinned).toBe(false);
-    expect(RegistryProtocolVersion).toBe('2.6');
+    expect(RegistryProtocolVersion).toBe('2.7');
   });
 
   test('normalizes cleared and unknown session marks to undefined', async () => {
