@@ -28,6 +28,17 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 5. `session/cancel` 是 notification。取消成功后，原 prompt 仍以 `stopReason=cancelled` 正常结束，而不是留下悬挂请求。
 6. `session/list` 只有在 `agentCapabilities.sessionCapabilities.list` 存在时才可调用。
 
+## WheelMaker 正式扩展
+
+WheelMaker 只使用 ACP v1 规定的两类扩展点：数据放在 `_meta.wm`，自定义 JSON-RPC 方法和通知使用 `_wm/*`。扩展只有在 initialize 双向 capability 协商成功后才启用；未知 `_meta` 必须完整透传和保存，未知 `_wm/*` 按普通未知方法处理。
+
+- `clientCapabilities._meta.wm` 与 `agentCapabilities._meta.wm` 分别声明双方支持的扩展版本；当前 `messageLifecycle`、`goalLifecycle`、`sessionActions` 均为 version 1。
+- 消息继续使用标准 `agent_message_chunk` / `agent_thought_chunk`、单个 `content` 和可选 `messageId`。`_meta.wm.messagePhase`、`messageComplete`、`steered` 只补充生命周期，不替代标准内容。
+- Codex/CX 收到原生 item completed 时，以相同 `messageId` 发送空文本标准 chunk，并用 `_meta.wm.messageComplete=true` 与权威 phase 完成已有消息；replay 则发送完整文本和完成标记。
+- Goal 状态使用 `_wm/session/goal` notification；Steer、Compact、Goal、Fork、Archive 使用 `_wm/session/*` request。通用 Session 层通过已协商能力调用这些 request，不再依赖隐藏的 provider Go 可选接口。
+
+扩展契约见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
+
 ## 内容、工具与权限
 
 - `text` 和 `resource_link` 是基础 ContentBlock；`image`、`audio` 和嵌入式 `resource` 受 prompt capabilities 门禁。
@@ -35,7 +46,7 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 - Agent 可以通过 `session/request_permission` 请求用户授权；回合取消时，待处理的权限请求也必须得到取消结果。
 - `session/request_permission.params` 包含 `sessionId`、`toolCall: ToolCallUpdate` 和 `options`。`toolCall` 是当前请求携带的操作详情，不要求 Client 把 permission 转换成 ToolCall，也不保证 `content` 是专门的问题字段。
 - `plan` 和 `config_option_update` 携带完整快照，消费者应替换对应状态，不把它们当成增量 patch。
-- `session/set_config_option` 返回完整配置项列表。Session Modes 只作为 legacy 输入字段保留，新路径使用 `configOptions`。
+- `session/set_config_option` 使用 ACP v1 的判别式配置值，并以 `{configOptions:[...]}` 返回完整配置项列表。Mode 更新使用标准 `currentModeId` 与 `session/set_mode`，不保留私有或 legacy wire 字段。
 
 ### WheelMaker Request Permission
 
@@ -50,8 +61,9 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 ## WheelMaker 实现边界
 
-- ACP wire 类型只表达协议字段；WheelMaker 内部 side-band 数据不得序列化进 wire payload。
-- `SessionUpdate.ModeID` 仅用于解析 legacy `current_mode_update` 输入，当前配置路径使用 `ConfigOptions` 和 `config_option_update`。
+- ACP wire DTO 只表达官方 v1 字段和正式扩展点；顶层对象及 `ContentBlock`、`ToolCallContent`、MCP Server、Session Config Option 等嵌套 union 都按 discriminator 严格解码。
+- 文本消息只使用标准单个 `content` 与 `messageId`，工具更新只使用标准 `content: ToolCallContent[]`。`contentBlocks`、`clientMessageId`、`steered`、`toolCallContent`、`modeId` 等旧私有 wire 字段不再读写。
+- `Artifacts`、`ForkPoint`、queue/Goal 状态和 WMT2 turn payload 属于 WheelMaker 内部模型，不伪装成 ACP 字段。真实 ACP 解码后先映射到 typed internal event，再进入 Session、Recorder 和 Registry。
 - Agent/provider 层负责外部运行时与 ACP 的转换。Session、Registry 和 recorder 不应依赖 provider 私有 thread、turn 或 item 字段。
 - ACP 负责 Agent 交互语义；App 侧跨机器路由、项目归属和 Session 事件广播属于 [Registry 协议](registry.md)。
 
@@ -76,7 +88,7 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 ### Codex Responses provider 约定
 
-`cx-deepseek` 是独立 ACP provider，复用原生 Codex App Server bridge，但使用 DeepSeek Responses 上游和独立 Codex home。协议、Session 与 Registry payload 始终保留稳定 agent ID `cx-deepseek`；`cx.deepseek` 仅是 App 展示名。新增该 provider 不改变 ACP 或 Registry protocol version，也不引入 provider 私有模型协议；现有 `model/list` 与通用 `configOptions` 链路继续作为模型和推理档位来源。
+`cx-deepseek` 是独立 ACP provider，复用原生 Codex App Server bridge，但使用 DeepSeek Responses 上游和独立 Codex home。协议、Session 与 Registry payload 始终保留稳定 agent ID `cx-deepseek`；`cx.deepseek` 仅是 App 展示名。它与原生 Codex 共用严格 ACP v1、`_meta.wm.messageLifecycle` 和 `_wm/*` 扩展，不引入 provider 私有根字段；现有 `model/list` 与标准 `configOptions` 链路继续作为模型和推理档位来源。
 
 provider 只在 Hub 配置 DeepSeek Key 且本机 Codex CLI 满足最低版本时注册。Key、上游地址和模型 provider 设置属于 Hub 本地启动配置，不进入 ACP wire payload 或 Registry metadata。Session 恢复以 agent ID 和 `<stateDir>/.data/cx-deepseek` 为边界，禁止从原生 `codex` 或任意 `cc-*` provider 导入历史。
 
@@ -94,3 +106,4 @@ provider 只在 Hub 配置 DeepSeek Key 且本机 Codex CLI 满足最低版本�
 - [`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)
 - [`../../scope/2026-07-28-flicker-v2-request-parity/spec-flicker-v2-request-parity.md`](../../scope/2026-07-28-flicker-v2-request-parity/spec-flicker-v2-request-parity.md)
 - [`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)
+- [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)

@@ -38,7 +38,7 @@ func TestHubStateUpdatedAllowsHubOrigin(t *testing.T) {
 	}
 }
 
-func TestReleasePublishMethodsAreRegisteredWithoutVersionBump(t *testing.T) {
+func TestReleasePublishMethodsAreRegisteredInProtocol27(t *testing.T) {
 	for _, method := range []string{
 		RegistryMethodReleasePublishStart,
 		RegistryMethodReleasePublishGet,
@@ -52,8 +52,8 @@ func TestReleasePublishMethodsAreRegisteredWithoutVersionBump(t *testing.T) {
 			t.Fatalf("%s must require hubId", method)
 		}
 	}
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("protocol version = %q, want 2.7", DefaultProtocolVersion)
 	}
 }
 
@@ -74,7 +74,7 @@ func TestHubStateSectionWireShape(t *testing.T) {
 	}
 }
 
-func TestHubReleaseNotifyAllowsOnlyHubOriginWithoutProtocolVersionChange(t *testing.T) {
+func TestHubReleaseNotifyAllowsOnlyHubOriginInProtocol27(t *testing.T) {
 	descriptor, ok := RegistryMethod(RegistryMethodHubReleaseNotify)
 	if !ok {
 		t.Fatal("hub.release.notify is not registered")
@@ -88,8 +88,8 @@ func TestHubReleaseNotifyAllowsOnlyHubOriginWithoutProtocolVersionChange(t *test
 	if RegistryMethodAllowed(string(RegistryRoleClient), descriptor.Method) {
 		t.Fatal("client role must not be allowed to publish hub.release.notify")
 	}
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
 	}
 }
 
@@ -201,9 +201,9 @@ func TestRegistryDeviceSessionListSerializationExcludesCredentials(t *testing.T)
 	}
 }
 
-func TestRegistryDefaultProtocolVersionIs26(t *testing.T) {
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+func TestRegistryDefaultProtocolVersionIs27(t *testing.T) {
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
 	}
 }
 
@@ -221,14 +221,14 @@ func TestSessionPermissionRespondIsClientProjectForwardWithoutVersionChange(t *t
 	if RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
 		t.Fatal("hub role can invoke session.permission.respond")
 	}
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
 	}
 }
 
 func TestSessionPinIsClientProjectForwardWithoutVersionChange(t *testing.T) {
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
 	}
 	descriptor, ok := RegistryMethod(RegistryMethodSessionPin)
 	if !ok {
@@ -246,8 +246,8 @@ func TestSessionPinIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 }
 
 func TestSessionMarkIsClientProjectForwardWithoutVersionChange(t *testing.T) {
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
 	}
 	descriptor, ok := RegistryMethod(RegistryMethodSessionMark)
 	if !ok {
@@ -292,8 +292,8 @@ func TestRegistrySessionQueueReplacesLegacyMethods(t *testing.T) {
 			t.Fatalf("%s must not remain registered", removed)
 		}
 	}
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("protocol version = %q, want 2.7", DefaultProtocolVersion)
 	}
 }
 
@@ -317,8 +317,8 @@ func TestRegistryGoalMethodsAreProjectScopedSessionForwards(t *testing.T) {
 			t.Fatalf("%s should allow client", method)
 		}
 	}
-	if DefaultProtocolVersion != "2.6" {
-		t.Fatalf("protocol version = %q, want 2.6", DefaultProtocolVersion)
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("protocol version = %q, want 2.7", DefaultProtocolVersion)
 	}
 }
 

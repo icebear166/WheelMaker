@@ -18,6 +18,7 @@ SQLite 只保存会话索引和热状态，不保存对话正文：
 - `sessions.project_name`：项目名。
 - `sessions.status`：会话生命周期状态。
 - `sessions.agent_type` / `sessions.agent_json`：agent 类型和运行态快照。
+- `sessionFeatures`：从已协商 ACP capabilities 投影的稳定展示能力。当前可含 `messageLifecycle:{version:1}`，随活跃 summary/read 返回；新归档也保存该投影。
 - `sessions.title`：会话标题，通常由最新用户 prompt 更新；服务端和 app 不再用 session id 或消息内容合成 fallback 标题。
 - `sessions.created_at` / `sessions.updated_at`：创建时间和最后活动时间。`updated_at` 只在 session 创建、prompt start 和 prompt done 时推进，保存时不会被更旧的事件时间回退；中间 turn、usage update 和 compact 等 session operation 都不推进。运行时快照持久化只保存 agent 状态，不回写推进 `updated_at`；内存中按 turn 推进的 `lastActiveAt` 仅供 Suspended 会话驱逐判断，不进入 `updated_at`。因此 `updated_at` 的排序、折叠、归档候选和 age 展示口径统一为"最后一次 prompt start/done"。
 - `sessions.session_sync_json`：同步投影，保存服务端内部落盘进度和会话级 read/done cursor：
@@ -73,14 +74,14 @@ type RegistrySessionTurn = {
 - 不再有 `promptIndex`、`turnId`、`updateIndex`。
 - `sessionId` 只在 payload 顶层；`turn` 内不重复 `sessionId`。
 - 不兼容旧的扁平 `{sessionId, turnIndex, content, finished}` payload。
-- `content` 是 session turn JSON，包含 `method` 和 `param`。
+- `content` 是 WheelMaker 内部 WMT2 session turn JSON，包含 `method` 和 `param`；它不是 ACP wire DTO，可以保存 `contentBlocks`、`clientMessageId`、`steered`、`messageId`、完整 `_meta` 和工具展示所需的标准富内容投影。
 - source store 和 IndexedDB 原样保存 `content`，不 parse-normalize 后重新 stringify。
 - 服务端对客户端暴露的 `turnIndex` 必须连续；语义上为空的 turn 也必须返回一条非空 JSON `content`，不能跳过 index。
 - `prompt_request.param` 会写入 `createdAt` 和当前 `modelName`。
 - `prompt_done.param` 会写入 `completedAt` 和 `stopReason`。
 - 实时消息和 `session.read` 返回都使用 `finished`；旧的 `done` 字段不参与解析。
-- tool call 按 tool call id 合并到同一个 turn。
-- 连续 `agent_message_chunk` 或连续 `agent_thought_chunk` 合并到同一个 turn。
+- tool call 按 tool call id 合并到同一个 turn，并保留标准 tool content、locations、rawInput、rawOutput 与 `_meta`。
+- 连续 `agent_message_chunk` 或连续 `agent_thought_chunk` 按稳定 `messageId` 合并到同一个 turn；metadata 深合并，`messageComplete=true` 完成原 turn 而不新增空行。缺失 messageId 的旧历史继续使用相邻同类型回退。
 - 文本/思考流式 turn 可以先以 `finished=false` 发布；服务端必须保证一个 session 最多只有当前尾部 turn 是 `finished=false`，不能出现中间 unfinished。
 - 当下一个 turn 或 `prompt_done` 到来时，服务端用同一个 `turnIndex` 重发完整内容并标记 `finished=true`，再发布更大的 turn。
 - 如果新 prompt 到来时上一个 prompt 还没有 terminal turn，服务端先合成 `prompt_done(stopReason="interrupted")`，再开始新 prompt。
@@ -148,7 +149,7 @@ ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 
 
 ## 4. 服务端读写流程
 
-`RecordEvent` 接收 ACP/session 事件后转成 session turn：
+真实 ACP payload 先由严格 wire DTO 解码并映射为 typed internal Agent event；`RecordEvent` 只接收该内部事件和 WheelMaker session 事件，再转成 session turn。这样 ACP 标准字段、正式 `_meta.wm` / `_wm/*` 扩展与 WMT2 私有持久化字段互不混用：
 
 1. `session/new` 更新或创建 `sessions` 投影。
 2. `session/prompt` params 生成 `prompt_request` turn。
@@ -332,7 +333,7 @@ permission turns 与所在 prompt 共用持久化边界。Hub 强关时尚未 te
 }
 ```
 
-manifest 只保存索引和元信息，不保存 `agent_json`、`session_sync_json`、route binding 或图片信息。`restoredAt` 非空表示该归档记录已恢复，`session.archive.list` 不再返回。`nativeArchivedAt`、`nativeUnarchivedAt` 和 `nativeSyncWarning` 只记录 agent 原生归档同步的 best-effort 结果，不改变 WheelMaker 归档 source of truth。
+manifest 只保存索引、元信息和稳定 `sessionFeatures`，不保存完整 `agent_json`、`session_sync_json`、route binding 或图片信息。`session.archive.read` 原样返回该 capability 投影；旧 manifest 缺失时保持缺失。`restoredAt` 非空表示该归档记录已恢复，`session.archive.list` 不再返回。`nativeArchivedAt`、`nativeUnarchivedAt` 和 `nativeSyncWarning` 只记录 agent 原生归档同步的 best-effort 结果，不改变 WheelMaker 归档 source of truth。
 
 由于归档 manifest 不保存 `session_sync_json`，Pin 与 Mark 都不会进入冷归档；归档或删除清除这些活跃 Session 元数据，恢复后的 Session 默认未 pin 且无 Mark。
 
@@ -456,6 +457,8 @@ manifest 记录 `gapCount`。WMT2 slot 不能使用 `len=0` 表示 gap，因为�
 9. 返回普通 session summary；如果 native sync 失败，响应带 `warning`。
 
 恢复成功后 app 会退出 Archived mode、刷新目标项目 session list，并打开恢复后的普通 session。
+
+ACP/WMT2 边界与 capability 投影见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
 
 ### 7.6 App/Web 归档入口
 

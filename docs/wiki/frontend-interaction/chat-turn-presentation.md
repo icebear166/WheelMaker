@@ -30,9 +30,11 @@ Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-
 
 ## Completed Work
 
-- 只对 `codex` 与 `cx-deepseek` 启用；prompt 运行期间保持原有流式界面。
-- Codex App Server 的 message phase 通过 ACP 官方扩展点 `_meta.wm.messagePhase` 传递。Session Recorder 完整保存 `_meta`，phase 只识别 `commentary` 与 `final_answer`。
+- 新实时 Session 只在 `sessionFeatures.messageLifecycle.version=1` 时启用；旧 WMT2 缺少该字段时，仅为历史 `codex` 与 `cx-deepseek` 保留展示回退。prompt 运行期间保持原有流式界面。
+- message phase 通过 ACP 官方扩展点 `_meta.wm.messagePhase` 传递；同一 `messageId` 的 item completed 标记通过 `_meta.wm.messageComplete=true` 权威完成原消息。Session Recorder 完整保存并深合并 `_meta`，phase 只识别 `commentary` 与 `final_answer`。
 - prompt 完成后，final answer 之前的 commentary、thinking、tool call 等工作自动收进 28px 中性单行。成功、失败、停止分别显示 `Worked for …`、`Failed after …`、`Stopped after …`。
 - final answer 与 `prompt_done` 的耗时、错误、产物、复制、重试等现有内容保持在折叠组外。顶部和底部都显示耗时。
 - 旧历史没有 phase 时，`prompt_done` 前最后一条 assistant message 视为 final answer；此前工作折叠。若最后一条明确为 commentary，则没有 final answer。
 - 展开后复用原有 turn 与 tool group 组件及顺序，只新增顶部折叠栏。展开状态仅属于当前渲染生命周期；重载或切换 session 后默认折叠。
+
+协议与持久化边界见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。

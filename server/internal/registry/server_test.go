@@ -381,6 +381,7 @@ func TestConnectInitAcceptsOlderHubProtocolOnly(t *testing.T) {
 		wantResponse    bool
 	}{
 		{name: "older hub", role: "hub", protocolVersion: "2.6", wantResponse: true},
+		{name: "too old hub", role: "hub", protocolVersion: "2.5", wantResponse: false},
 		{name: "newer hub", role: "hub", protocolVersion: "2.8", wantResponse: false},
 		{name: "invalid hub", role: "hub", protocolVersion: "2.x", wantResponse: false},
 		{name: "older client", role: "client", protocolVersion: "2.6", wantResponse: false},

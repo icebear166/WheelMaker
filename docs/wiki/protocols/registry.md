@@ -1,6 +1,6 @@
-> 摘要：本页维护 WheelMaker Registry 2.6 的消息封装、方法域、Session Queue、路由、认证和版本约束。
+> 摘要：本页维护 WheelMaker Registry 2.7 的消息封装、方法域、Session Queue、路由、认证和版本约束。
 
-# WheelMaker Registry Protocol 2.6
+# WheelMaker Registry Protocol 2.7
 
 > 来源：本页由原路径 `docs/registry-protocol.md` 于 2026-07-17 全文迁入 wiki。
 >
@@ -8,9 +8,9 @@
 >
 > HubState 当前契约同步自：[`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)
 
-本文定义 WheelMaker Registry 2.6 主协议。App 与 Registry 的 `connect.init.payload.protocolVersion` 必须一致。Hub 主协议相同时获得完整业务能力；较旧 Hub 可以保持 `update_only` 连接，以便通过现有 HubState 更新路径升级。
+本文定义 WheelMaker Registry 2.7 主协议。App 与 Registry 的 `connect.init.payload.protocolVersion` 必须一致。Hub 主协议相同时获得完整业务能力；2.6 Hub 只可保持 `update_only` 连接，以便通过现有 HubState 更新路径升级；2.6 App 直接拒绝。
 
-HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh、Skills 所有权和 Release Job 方法同样按硬切契约发布；Hub 与 Web 必须配套部署，不保留旧 `agentProfiles` 或旧 HubState payload fallback。
+HubState 统一使用协议号 2.7，其 Section schema、异步 refresh、Skills 所有权和 Release Job 方法同样按硬切契约发布；Hub 与 Web 必须配套部署，不保留旧 `agentProfiles` 或旧 HubState payload fallback。
 
 ## 0. 单一来源
 
@@ -62,7 +62,7 @@ HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh�
   "payload": {
     "clientName": "wheelmaker-web",
     "clientVersion": "0.1.0",
-    "protocolVersion": "2.6",
+    "protocolVersion": "2.7",
     "role": "client",
     "hubId": "hub-a",
     "token": "******"
@@ -85,7 +85,7 @@ HubState 统一仍使用协议号 2.6，但其 Section schema、异步 refresh�
       "connectionEpoch": 42
     },
     "serverInfo": {
-      "protocolVersion": "2.6"
+      "protocolVersion": "2.7"
     }
   }
 }
@@ -295,7 +295,7 @@ App 打开 Git tab 时先调用该方法；只有 `gitRev` 或 `worktreeRev` 相
 
 文件读取为整文件语义。大文件由 App 先调用 `project.fs.info` 判定后再读取。
 
-`project.fs.external.info` / `project.fs.external.read` 是 Registry 2.6 的增量只读能力。它们与其他 Project 方法一样要求 envelope 顶层 `projectId`，Registry 通过该项目把请求路由到对应 Hub，但 payload 中的 `path` 必须是 Hub 宿主机上的绝对路径。已认证 client 可以通过这两个方法读取目标 Hub 主机上的任意本地文件；这是文件链接功能明确采用的信任边界。
+`project.fs.external.info` / `project.fs.external.read` 是 Registry 2.7 的只读能力。它们与其他 Project 方法一样要求 envelope 顶层 `projectId`，Registry 通过该项目把请求路由到对应 Hub，但 payload 中的 `path` 必须是 Hub 宿主机上的绝对路径。已认证 client 可以通过这两个方法读取目标 Hub 主机上的任意本地文件；这是文件链接功能明确采用的信任边界。
 
 外部文件方法不接受 `knownHash`，不参与项目文件 cache、目录树、索引、搜索或同步，也不提供目录列举和写入能力。它们不会放宽 `project.fs.info` / `project.fs.read` 现有的项目根目录校验。新 App 连接尚未注册外部文件方法的旧 Hub 时必须返回明确的不支持错误，不得回退到项目文件方法。
 
@@ -633,6 +633,14 @@ Hub 上传和 Registry 广播使用同一事件名：
 
 `session.read` 响应 payload 使用 top-level `sessionId` 和 `turns[]`；turn 内不重复 `sessionId`。响应中的 `session` 信息包含完整 queue snapshot；`session.list` 的 Session summary 只携带 queue generation/revision、paused、active kind 和 waiting count 摘要。
 
+Registry 2.7 的普通 Session summary/read 与新 archive manifest/read 都可携带稳定 capability 投影：
+
+```json
+{"sessionFeatures":{"messageLifecycle":{"version":1}}}
+```
+
+该字段来自 ACP initialize 的双向扩展协商，决定 App 是否启用 Completed Work；新实时 Session 不按 agent ID 猜测。旧 WMT2/manifest 缺失字段时保持缺失，仅展示层可为历史 codex/cx-deepseek 数据保留回退。
+
 ### Session Queue
 
 `session.queue` 是 prompt 与 compact 的统一入口，替换 `session.send`、`session.compact`、`session.cancel` 和 `session.steer`，不保留旧方法兼容。Payload 使用 action union，action 仅为：
@@ -649,7 +657,7 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
 
 `itemId` 在 Session 内唯一，同时用于 enqueue 幂等、queue 操作、steer 与 transcript 归因。同 ID 同 payload 返回原结果，同 ID 不同 payload 返回冲突。Hub reload/restart 会更换 generation；客户端只在同 generation 内比较 revision。
 
-该替换仍使用 Registry Protocol `2.6`。Registry、Hub、App 必须同步发布；版本握手不能识别新旧 2.6 组件混用，混用时允许直接返回 method 或 payload shape 错误。
+该 queue 契约随 Registry Protocol `2.7` 发布。Registry、Hub、App 必须同步发布，不接受旧 App 以兼容字段混用。
 
 ### Session Pin 与颜色 Mark
 
@@ -679,7 +687,7 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
 }
 ```
 
-缺失 `markColor` 表示无 Mark。Mark 不改变 `pinned`，Pin/Unpin 也不改变 `markColor`。字段与方法都是 Registry 2.6 的兼容性扩展，不修改 protocol version；旧客户端可忽略字段，新客户端不为旧 Hub 提供本地 Mark fallback。
+缺失 `markColor` 表示无 Mark。Mark 不改变 `pinned`，Pin/Unpin 也不改变 `markColor`。Registry 2.7 客户端不为旧 Hub 提供本地 Mark fallback。
 
 > 决策来源：[`docs/scope/2026-07-26-session-color-mark/spec-session-color-mark.md`](../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md)
 
@@ -720,13 +728,13 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
 - 老 Codex 历史没有 `forkPoint` 时，`session.read` 通过 `thread/read` 对完整 prompt 序列做精确匹配，只在响应内存中补充映射；不匹配时不猜测，也不重写 WMT2。
 - 目标会话复制所选完成 turn 之前的 WMT2 历史、diff artifacts 和被引用附件，并把所有已映射的 `forkPoint` 改写成目标 Codex thread 的 turn ID。源会话和目标会话没有共享的可变历史文件。
 - 目标摘要携带 `forkedFrom`，归档 manifest 与恢复流程保留该来源标记。复制历史末尾追加一个已完成的 `session_operation`，其中 `type:"fork"` 且携带相同的 `forkedFrom`，供前端显示被动提示行。
-- `forkPoint`、`forkedFrom` 与 `session.fork` 都是增量字段/方法；Registry 协议仍为 2.6，WMT2 文件版本不变。
+- `forkPoint`、`forkedFrom` 与 `session.fork` 属于 Registry 2.7 Session 契约；WMT2 文件版本不变。
 
 > 决策与实施计划：[`docs/scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md`](../../scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md)
 
 ## 9. Registry Relay
 
-Session 的可选 Agent 控制面继续使用 project-scoped forwarding。Goal 增加 `session.goal.create`、`session.goal.get`、`session.goal.update`、`session.goal.stop`、`session.goal.clear`；Session summary 的 `sessionActions.goal` 声明 provider support，`goal` 携带最新 snapshot。它们是 Registry 2.6 的兼容性扩展，不修改 protocol version。字段和状态语义见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。
+Session 的可选 Agent 控制面继续使用 project-scoped forwarding。Goal 使用 `session.goal.create`、`session.goal.get`、`session.goal.update`、`session.goal.stop`、`session.goal.clear`；Session summary 的 `sessionActions.goal` 声明 provider support，`goal` 携带最新 snapshot。Hub 到 Agent 的调用统一映射为 capability-gated `_wm/session/*` ACP 扩展，不再走隐藏 provider 接口。字段和状态语义见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。
 
 Relay 是 Registry 自有全局控制器，不进入 HubState。
 
@@ -776,7 +784,7 @@ Target Hub 发给 Registry 的方法为：
 
 Registry 转给 Web Hub 的内部方法依次为 `hub.debugWeb.receive.start`、`hub.debugWeb.receive.chunk`、`hub.debugWeb.receive.finish` 和 `hub.debugWeb.receive.abort`。每个已解码分块最多 `4 MiB`，完整归档最多 `512 MiB`；发送方必须等待当前分块得到 Web Hub 确认后才能发送下一个分块。Registry 仅在内存保存传输 ID、两个 Hub ID、声明大小/摘要、已确认字节数和下一序号，不保存 ZIP 字节。
 
-这组方法是 Registry 2.6 的增量内部能力，没有改变协议版本。`hub.release.notify` / `hub.release.apply` 只用于正式 `version` 发布，不能再承载 `debugWeb`。
+这组方法属于 Registry 2.7 内部能力。`hub.release.notify` / `hub.release.apply` 只用于正式 `version` 发布，不能再承载 `debugWeb`。
 
 ## 11. Server Data、Speech、TTS、Debug
 
@@ -863,6 +871,15 @@ Debug：
 - `projectRev`：当前由 `gitRev + worktreeRev` 派生。
 
 ## 14. 版本历史
+
+### 2.7 相比 2.6
+
+1. 正常 App/Hub 连接硬切到 `2.7`，不读写旧 ACP 私有根字段；`2.6` Hub 只保留 `update_only` 升级通道，`2.6` App 拒绝连接。
+2. Session summary/read 与新 archive manifest/read 新增 `sessionFeatures.messageLifecycle:{version:1}`，作为 Completed Work 的实时能力依据。
+3. ACP 消息统一使用标准 `content`、`messageId` 和完整 `_meta`；tool rich content 完整进入内部 WMT2 投影，WMT2 仍为 v2。
+4. WheelMaker ACP 扩展统一进入 `_meta.wm` 与 `_wm/*`，Session action 不再依赖隐藏的 provider transport。
+
+决策来源：[`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
 
 ### 2.6 相比 2.5
 

@@ -976,17 +976,16 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 	}
 	protocolVersion := strings.TrimSpace(payload.ProtocolVersion)
 	comparison, comparable := compareProtocolVersions(protocolVersion, s.cfg.ProtocolVersion)
-	if role == string(rp.RegistryRoleClient) {
-		comparable = protocolVersion == s.cfg.ProtocolVersion
-		comparison = 0
-	}
-	if !comparable || comparison > 0 {
+	updateOnlyHub := role == string(rp.RegistryRoleHub) &&
+		s.cfg.ProtocolVersion == rp.DefaultProtocolVersion &&
+		protocolVersion == rp.PreviousUpdateOnlyProtocolVersion
+	if !comparable || (protocolVersion != s.cfg.ProtocolVersion && !updateOnlyHub) {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported protocolVersion", map[string]any{"protocolVersion": payload.ProtocolVersion, "supported": s.cfg.ProtocolVersion})
 		return true
 	}
 
 	connectionMode := rp.RegistryConnectionModeNormal
-	if role == string(rp.RegistryRoleHub) && comparison < 0 {
+	if updateOnlyHub && comparison < 0 {
 		connectionMode = rp.RegistryConnectionModeUpdateOnly
 	}
 	state.initialized = true

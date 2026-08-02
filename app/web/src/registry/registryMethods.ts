@@ -1,4 +1,4 @@
-export const RegistryProtocolVersion = '2.6' as const;
+export const RegistryProtocolVersion = '2.7' as const;
 
 export const RegistryMethods = {
   ConnectInit: 'connect.init',
