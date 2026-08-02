@@ -48,7 +48,7 @@ git commit -m "docs: specify codex completed work collapse"
 - Modify: `server/internal/protocol/session_turn.go`
 - Modify: `server/internal/protocol/acp_test.go`
 
-- [ ] **Step 1: Write failing ACP metadata tests**
+- [x] **Step 1: Write failing ACP metadata tests**
 
 Append tests covering exact phase values, unknown values, the `wm` namespace, and unknown-root round-trip:
 
@@ -92,7 +92,7 @@ func TestSessionUpdateMetaRoundTripPreservesUnknownFields(t *testing.T) {
 
 Add `reflect` to the test imports.
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 ```powershell
 Set-Location server
@@ -101,7 +101,7 @@ go test ./internal/protocol -run 'TestSessionUpdateMeta' -count=1
 
 Expected: compile failure because the metadata fields/helpers do not exist.
 
-- [ ] **Step 3: Add protocol representation and helpers**
+- [x] **Step 3: Add protocol representation and helpers**
 
 Add to `SessionUpdate` in `acp.go`:
 
@@ -207,7 +207,7 @@ func EqualSessionUpdateMeta(left, right json.RawMessage) bool {
 }
 ```
 
-- [ ] **Step 4: Format and pass protocol tests**
+- [x] **Step 4: Format and pass protocol tests**
 
 ```powershell
 gofmt -w internal/protocol/acp.go internal/protocol/acp_meta.go internal/protocol/session_turn.go internal/protocol/acp_test.go
@@ -217,7 +217,7 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit protocol change**
+- [x] **Step 5: Commit protocol change**
 
 ```powershell
 git add server/internal/protocol
@@ -232,7 +232,7 @@ git commit -m "feat(acp): carry official session update metadata"
 - Modify: `server/internal/hub/agent/codexapp_agent.go`
 - Modify: `server/internal/hub/agent/agent_test.go`
 
-- [ ] **Step 1: Write failing live-delta and replay tests**
+- [x] **Step 1: Write failing live-delta and replay tests**
 
 Add a live test that sends `item/started` before the delta and asserts `_meta.wm.messagePhase`:
 
@@ -264,7 +264,7 @@ Extend `TestCodexAppSessionLoadReplaysThreadTurnsBeforeReturning` with `"phase":
 
 Add a cleanup assertion: after `item/completed`, a synthetic late delta with the same item ID has empty metadata. This proves the item map does not leak.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 ```powershell
 Set-Location server
@@ -273,7 +273,7 @@ go test ./internal/hub/agent -run 'TestCodexAppAgentMessageDeltaCarriesMessagePh
 
 Expected: phase assertions fail because Adapter drops `item.phase`.
 
-- [ ] **Step 3: Track phase by turn/item and emit metadata**
+- [x] **Step 3: Track phase by turn/item and emit metadata**
 
 Add connection state:
 
@@ -368,7 +368,7 @@ func (c *codexappConn) emitTurnTextUpdateWithMeta(
 
 Change replay text emission to accept metadata and pass `item.Phase` for `agentMessage`; reasoning passes nil. Clear `messagePhases` whenever prompt/goal completion, cancellation synthesis, active-prompt failure, or prompt cleanup clears turn-local state.
 
-- [ ] **Step 4: Format and pass Adapter tests**
+- [x] **Step 4: Format and pass Adapter tests**
 
 ```powershell
 gofmt -w internal/hub/agent/codexapp_agent.go internal/hub/agent/agent_test.go
@@ -378,7 +378,7 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Adapter change**
+- [x] **Step 5: Commit Adapter change**
 
 ```powershell
 git add server/internal/hub/agent/codexapp_agent.go server/internal/hub/agent/agent_test.go
@@ -393,7 +393,7 @@ git commit -m "feat(codex): bridge message phases through acp metadata"
 - Modify: `server/internal/hub/client/session_recorder.go`
 - Modify: `server/internal/hub/client/client_test.go`
 
-- [ ] **Step 1: Write failing Recorder tests**
+- [x] **Step 1: Write failing Recorder tests**
 
 Add a persistence test with two full metadata objects:
 
@@ -442,7 +442,7 @@ func TestSessionViewPersistsCompleteTextMetaAndSplitsMetadataBoundaries(t *testi
 
 Add a table test proving User Message, Tool Result, and Plan payloads retain their complete `_meta`; a later Tool Call Update without metadata must preserve metadata from the start event.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 ```powershell
 Set-Location server
@@ -451,7 +451,7 @@ go test ./internal/hub/client -run 'TestSessionViewPersistsCompleteTextMetaAndSp
 
 Expected: metadata is absent and commentary/final are merged.
 
-- [ ] **Step 3: Copy metadata into turn projections**
+- [x] **Step 3: Copy metadata into turn projections**
 
 In `parseSessionViewEvent`, clone `params.Update.Meta` into every persisted Session Update payload:
 
@@ -493,7 +493,7 @@ if len(inc.Meta) == 0 {
 
 Apply this rule to Text, User Message, Tool Result, and Plan payload cases without changing their existing content/status merge behavior.
 
-- [ ] **Step 4: Format and pass Recorder tests**
+- [x] **Step 4: Format and pass Recorder tests**
 
 ```powershell
 gofmt -w internal/hub/client/session_recorder.go internal/hub/client/client_test.go
@@ -503,7 +503,7 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Recorder change**
+- [x] **Step 5: Commit Recorder change**
 
 ```powershell
 git add server/internal/hub/client/session_recorder.go server/internal/hub/client/client_test.go
@@ -520,7 +520,7 @@ git commit -m "feat(session): persist complete acp update metadata"
 - Modify: `app/web/src/chat/turns/chatDisplayIndex.ts`
 - Modify: `app/__tests__/web-chat-display-index.test.ts`
 
-- [ ] **Step 1: Write failing Agent capability and Display Index tests**
+- [x] **Step 1: Write failing Agent capability and Display Index tests**
 
 Add Agent test:
 
@@ -554,7 +554,7 @@ Cover:
 7. Work-group sourceIndexes and turn range include every child for search/jump.
 8. Invalid/missing timestamps return `durationMs: 0`.
 
-- [ ] **Step 2: Run focused Jest and verify failure**
+- [x] **Step 2: Run focused Jest and verify failure**
 
 ```powershell
 Set-Location app
@@ -563,7 +563,7 @@ npx jest web/src/chat/projectAgents.test.ts __tests__/web-chat-display-index.tes
 
 Expected: missing exports/options/kinds.
 
-- [ ] **Step 3: Add exact Codex App Agent detection**
+- [x] **Step 3: Add exact Codex App Agent detection**
 
 Export from `projectAgents.ts`:
 
@@ -574,7 +574,7 @@ export function isCodexAppAgentType(agentType?: string | null): boolean {
 }
 ```
 
-- [ ] **Step 4: Extend Display Index types and grouping**
+- [x] **Step 4: Extend Display Index types and grouping**
 
 Extend item/options:
 
@@ -649,7 +649,7 @@ export function combineAssistantGroupMessages(
 
 The work-group key is `${sessionId}:${promptTurnIndex}:${doneTurnIndex}:work-group`; assistant-group reuses the first item's key. A work group has `compact: true`, `estimatedHeight: 28`, flattened sourceIndexes, and first/last child turn indexes.
 
-- [ ] **Step 5: Pass Display Index tests and typecheck**
+- [x] **Step 5: Pass Display Index tests and typecheck**
 
 ```powershell
 npx jest web/src/chat/projectAgents.test.ts __tests__/web-chat-display-index.test.ts --runInBand
@@ -659,7 +659,7 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit pure Web grouping**
+- [x] **Step 6: Commit pure Web grouping**
 
 ```powershell
 git add app/web/src/chat/projectAgents.ts app/web/src/chat/projectAgents.test.ts app/web/src/chat/turns/chatDisplayIndex.ts app/__tests__/web-chat-display-index.test.ts
@@ -677,7 +677,7 @@ git commit -m "feat(web): derive codex completed work groups"
 - Modify: `app/__tests__/web-chat-turn-groups.test.tsx`
 - Modify: `app/__tests__/web-chat-turn-rendering.test.ts`
 
-- [ ] **Step 1: Write failing component/rendering tests**
+- [x] **Step 1: Write failing component/rendering tests**
 
 Test component behavior with `react-test-renderer`:
 
@@ -701,7 +701,7 @@ expect(view.root.findByProps({className: 'chat-work-group-content'})).toBeTruthy
 
 Also assert `Failed after 20.0s`, `Stopped after 20.0s`, and missing-duration labels. Static integration assertions require `WorkspaceApp` to pass Codex flags for live/archive indexes and render `assistant-group` plus `work-group` child items.
 
-- [ ] **Step 2: Run focused Jest and verify failure**
+- [x] **Step 2: Run focused Jest and verify failure**
 
 ```powershell
 Set-Location app
@@ -710,7 +710,7 @@ npx jest __tests__/web-chat-turn-groups.test.tsx __tests__/web-chat-turn-renderi
 
 Expected: missing component and rendering branches.
 
-- [ ] **Step 3: Implement `ChatWorkGroup`**
+- [x] **Step 3: Implement `ChatWorkGroup`**
 
 Create:
 
@@ -761,7 +761,7 @@ export const ChatWorkGroup = React.memo(function ChatWorkGroup({
 });
 ```
 
-- [ ] **Step 4: Wire live/archive indexes and recursive child rendering**
+- [x] **Step 4: Wire live/archive indexes and recursive child rendering**
 
 Import `isCodexAppAgentType`, `ChatWorkGroup`, and `combineAssistantGroupMessages`.
 
@@ -780,7 +780,7 @@ Refactor `renderChatVirtuosoItem` around a local `renderDisplayItem(item)` funct
 - render `work-group` through `ChatWorkGroup` and recursively render its `childItems` inside wrappers whose `compact` class preserves the existing 4px/10px row spacing;
 - apply search highlight to the outer work group when any internal turn matches.
 
-- [ ] **Step 5: Add neutral styles**
+- [x] **Step 5: Add neutral styles**
 
 Add near Thought/Tool Group styles:
 
@@ -841,7 +841,7 @@ Add near Thought/Tool Group styles:
 
 Reduced-motion uses the existing Chat CSS rule pattern to disable Chevron transition.
 
-- [ ] **Step 6: Pass UI tests, typecheck, and build**
+- [x] **Step 6: Pass UI tests, typecheck, and build**
 
 ```powershell
 npx jest __tests__/web-chat-turn-groups.test.tsx __tests__/web-chat-turn-rendering.test.ts __tests__/web-chat-display-index.test.ts --runInBand
@@ -852,7 +852,7 @@ Set-Location ..
 
 Expected: PASS; production Web build completes.
 
-- [ ] **Step 7: Commit UI**
+- [x] **Step 7: Commit UI**
 
 ```powershell
 git add app/web/src/chat/ChatWorkGroup.tsx app/web/src/app/WorkspaceApp.tsx app/web/src/styles/chat.css app/__tests__/web-chat-turn-groups.test.tsx app/__tests__/web-chat-turn-rendering.test.ts
@@ -866,7 +866,7 @@ git commit -m "feat(web): collapse completed codex work"
 **Files:**
 - Modify: `docs/wiki/frontend-interaction/chat-turn-presentation.md`
 
-- [ ] **Step 1: Update long-term Chat Turn documentation**
+- [x] **Step 1: Update long-term Chat Turn documentation**
 
 Update summary/source links and add a `Completed Work` section recording:
 
@@ -878,7 +878,7 @@ Update summary/source links and add a `Completed Work` section recording:
 - local-only expansion state;
 - 28px neutral row and duplicate top/bottom duration.
 
-- [ ] **Step 2: Run Server regression**
+- [x] **Step 2: Run Server regression**
 
 ```powershell
 Set-Location server
@@ -889,7 +889,7 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 3: Run Web regression**
+- [x] **Step 3: Run Web regression**
 
 ```powershell
 Set-Location app
@@ -901,7 +901,7 @@ Set-Location ..
 
 Expected: all Jest suites PASS; typecheck and build PASS.
 
-- [ ] **Step 4: Review diff and forbidden changes**
+- [x] **Step 4: Review diff and forbidden changes**
 
 ```powershell
 git diff --check
@@ -911,9 +911,11 @@ git diff -- server/internal/protocol/registry.go app/web/src/registry/registryTy
 
 Expected: no whitespace errors; only intended files; no Registry version/type change.
 
-- [ ] **Step 5: Commit Wiki and verification record**
+- [x] **Step 5: Commit Wiki and verification record**
 
 Mark completed plan checkboxes, record exact passing suite counts beneath this step, then:
+
+Verification (2026-08-02): focused Server packages passed 3/3; full Server regression passed 23/23 packages (22 tested, 1 without test files); Jest passed 251/251 suites and 1560/1560 tests; `tsc:web` and production `build:web` passed.
 
 ```powershell
 git add docs/wiki/frontend-interaction/chat-turn-presentation.md docs/scope/2026-08-02-codex-turn-work-collapse/plan-codex-turn-work-collapse.md

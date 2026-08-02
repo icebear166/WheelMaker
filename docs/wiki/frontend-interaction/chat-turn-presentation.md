@@ -1,8 +1,10 @@
-> 摘要：本页维护 Thinking 与连续 Tool Call 在虚拟聊天列表中的折叠、聚合、状态和固定高度规则。
+> 摘要：本页维护 Thinking、连续 Tool Call 与 Codex 已完成工作在虚拟聊天列表中的折叠、聚合、状态和固定高度规则。
 
 # Chat Turn 展示
 
 > 来源：[`../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md`](../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md)
+>
+> 来源：[`../../scope/2026-08-02-codex-turn-work-collapse/spec-codex-turn-work-collapse.md`](../../scope/2026-08-02-codex-turn-work-collapse/spec-codex-turn-work-collapse.md)
 
 Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-virtuoso` 的轻量显示项。Thinking 对应单个显示项；同一 prompt 内相邻的 `tool_call` turns 聚合为一个显示项，任意非 tool turn 都会切断工具分组。
 
@@ -25,3 +27,12 @@ Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-
 - 展开状态只属于当前渲染生命周期，切换 session 后不持久化。
 
 这些规则只组织现有 turn 中的工具标题/命令、类型和状态，不引入工具参数、stdout、diff 或其他 tool result 协议。
+
+## Completed Work
+
+- 只对 `codex` 与 `cx-deepseek` 启用；prompt 运行期间保持原有流式界面。
+- Codex App Server 的 message phase 通过 ACP 官方扩展点 `_meta.wm.messagePhase` 传递。Session Recorder 完整保存 `_meta`，phase 只识别 `commentary` 与 `final_answer`。
+- prompt 完成后，final answer 之前的 commentary、thinking、tool call 等工作自动收进 28px 中性单行。成功、失败、停止分别显示 `Worked for …`、`Failed after …`、`Stopped after …`。
+- final answer 与 `prompt_done` 的耗时、错误、产物、复制、重试等现有内容保持在折叠组外。顶部和底部都显示耗时。
+- 旧历史没有 phase 时，`prompt_done` 前最后一条 assistant message 视为 final answer；此前工作折叠。若最后一条明确为 commentary，则没有 final answer。
+- 展开后复用原有 turn 与 tool group 组件及顺序，只新增顶部折叠栏。展开状态仅属于当前渲染生命周期；重载或切换 session 后默认折叠。
