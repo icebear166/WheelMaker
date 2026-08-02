@@ -75,24 +75,28 @@ type SessionTurnPromptArtifactFile struct {
 }
 
 type SessionTurnTextResult struct {
-	Text string `json:"text"`
+	Text string          `json:"text"`
+	Meta json.RawMessage `json:"_meta,omitempty"`
 }
 
 type SessionTurnUserMessage struct {
-	Text            string         `json:"text,omitempty"`
-	ContentBlocks   []ContentBlock `json:"contentBlocks,omitempty"`
-	ClientMessageID string         `json:"clientMessageId,omitempty"`
-	Steered         bool           `json:"steered,omitempty"`
+	Text            string          `json:"text,omitempty"`
+	ContentBlocks   []ContentBlock  `json:"contentBlocks,omitempty"`
+	ClientMessageID string          `json:"clientMessageId,omitempty"`
+	Steered         bool            `json:"steered,omitempty"`
+	Meta            json.RawMessage `json:"_meta,omitempty"`
 }
 
 type SessionTurnToolResult struct {
-	Cmd    string `json:"cmd,omitempty"`
-	Kind   string `json:"kind,omitempty"`
-	Status string `json:"status,omitempty"`
+	Cmd    string          `json:"cmd,omitempty"`
+	Kind   string          `json:"kind,omitempty"`
+	Status string          `json:"status,omitempty"`
+	Meta   json.RawMessage `json:"_meta,omitempty"`
 }
 
 type SessionTurnPlanPayload struct {
 	Entries []SessionTurnPlanResult `json:"entries"`
+	Meta    json.RawMessage         `json:"_meta,omitempty"`
 }
 
 type SessionTurnPlanResult struct {

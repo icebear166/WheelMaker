@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -137,6 +138,46 @@ func TestPermissionTurnPayloadSerialization(t *testing.T) {
 		if containsAny(string(responseJSON), forbidden) {
 			t.Fatalf("response JSON retained request field %q: %s", forbidden, responseJSON)
 		}
+	}
+}
+
+func TestSessionUpdateMetaMessagePhase(t *testing.T) {
+	for _, phase := range []string{SessionMessagePhaseCommentary, SessionMessagePhaseFinalAnswer} {
+		meta := BuildSessionUpdateMetaMessagePhase(phase)
+		if got := SessionUpdateMetaMessagePhase(meta); got != phase {
+			t.Fatalf("phase = %q, want %q; meta=%s", got, phase, meta)
+		}
+	}
+	if meta := BuildSessionUpdateMetaMessagePhase("future_phase"); len(meta) != 0 {
+		t.Fatalf("unknown phase meta = %s, want empty", meta)
+	}
+	if got := SessionUpdateMetaMessagePhase(json.RawMessage(`{"wm":{"messagePhase":"future_phase"}}`)); got != "" {
+		t.Fatalf("unknown phase = %q, want empty", got)
+	}
+}
+
+func TestSessionUpdateMetaRoundTripPreservesUnknownFields(t *testing.T) {
+	original := json.RawMessage(`{"wm":{"messagePhase":"commentary"},"thirdParty":{"trace":"opaque"}}`)
+	raw, err := json.Marshal(SessionUpdate{
+		SessionUpdate: SessionUpdateAgentMessageChunk,
+		Meta:          original,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded SessionUpdate
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	var want, got any
+	if err := json.Unmarshal(original, &want); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(decoded.Meta, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("meta = %#v, want %#v", got, want)
 	}
 }
 
