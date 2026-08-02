@@ -1,11 +1,16 @@
 import type {RegistryChatMessage} from '../../registry/registryTypes';
-import type {ChatPromptStatus} from './chatPromptStatus';
+import {resolvePromptDoneStatus, type ChatPromptStatus} from './chatPromptStatus';
 import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 import type {ChatPermissionState} from '../permission/chatPermissionState';
 
+export type ChatWorkGroupStatus = 'worked' | 'failed' | 'stopped';
+
 export type ChatDisplayIndexItem = {
-  kind: 'turn' | 'tool-group' | 'pending' | 'queued';
+  kind: 'turn' | 'assistant-group' | 'tool-group' | 'work-group' | 'pending' | 'queued';
   compact?: boolean;
+  childItems?: ChatDisplayIndexItem[];
+  workStatus?: ChatWorkGroupStatus;
+  durationMs?: number;
   key: string;
   turnIndex: number;
   endTurnIndex: number;
@@ -42,6 +47,7 @@ export type ChatTurnHeightContext = {
 };
 
 export type ChatDisplayIndexOptions = {
+  collapseCompletedWork?: boolean;
   shouldRender?: (message: RegistryChatMessage, promptStatus: ChatPromptStatus) => boolean;
   layoutMetrics?: Partial<ChatTurnHeightMetrics>;
   promptStatus?: (message: RegistryChatMessage) => ChatPromptStatus;
@@ -111,6 +117,241 @@ function isPromptStartMethod(method: string): boolean {
 
 function isToolCallMethod(method: string): boolean {
   return method === 'tool_call';
+}
+
+function isPromptStartMessage(message: RegistryChatMessage): boolean {
+  return message.method === 'prompt_request' || (
+    message.method === 'user_message_chunk' && message.param.steered !== true
+  );
+}
+
+function assistantMessagePhase(message: RegistryChatMessage): 'commentary' | 'final_answer' | '' {
+  if (message.method !== 'agent_message_chunk') return '';
+  const meta = message.param?._meta;
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return '';
+  const wm = (meta as Record<string, unknown>).wm;
+  if (!wm || typeof wm !== 'object' || Array.isArray(wm)) return '';
+  const phase = (wm as Record<string, unknown>).messagePhase;
+  return phase === 'commentary' || phase === 'final_answer' ? phase : '';
+}
+
+export function combineAssistantGroupMessages(
+  messages: RegistryChatMessage[],
+): RegistryChatMessage | undefined {
+  const group = messages.filter(message => message.method === 'agent_message_chunk');
+  if (group.length === 0) return undefined;
+  const first = group[0];
+  const last = group[group.length - 1];
+  return {
+    ...last,
+    turnIndex: first.turnIndex,
+    param: {
+      ...last.param,
+      text: group
+        .map(message => typeof message.param.text === 'string' ? message.param.text : '')
+        .join(''),
+    },
+  };
+}
+
+type CompletedPromptWorkRange = {
+  sessionId: string;
+  promptTurnIndex: number;
+  doneTurnIndex: number;
+  finalTurnIndex: number;
+  doneMessage: RegistryChatMessage;
+  promptMessage: RegistryChatMessage;
+};
+
+function promptWorkStatus(doneMessage: RegistryChatMessage): ChatWorkGroupStatus {
+  const status = resolvePromptDoneStatus(doneMessage.param);
+  if (status?.kind === 'failed') return 'failed';
+  if (status?.kind === 'cancelled' || status?.kind === 'interrupted') return 'stopped';
+  return 'worked';
+}
+
+function promptDurationMs(
+  promptMessage: RegistryChatMessage,
+  doneMessage: RegistryChatMessage,
+): number {
+  const createdAt = typeof promptMessage.param.createdAt === 'string'
+    ? Date.parse(promptMessage.param.createdAt)
+    : NaN;
+  const completedAt = typeof doneMessage.param.completedAt === 'string'
+    ? Date.parse(doneMessage.param.completedAt)
+    : NaN;
+  return Number.isFinite(createdAt) && Number.isFinite(completedAt) && completedAt > createdAt
+    ? completedAt - createdAt
+    : 0;
+}
+
+function completedPromptWorkRanges(messages: RegistryChatMessage[]): {
+  completed: CompletedPromptWorkRange[];
+  openPromptTurnBySession: Map<string, number>;
+} {
+  const ordered = messages
+    .filter(message => positiveTurnIndex(message) > 0)
+    .sort((left, right) => positiveTurnIndex(left) - positiveTurnIndex(right));
+  const openPromptBySession = new Map<string, {message: RegistryChatMessage; orderedIndex: number}>();
+  const completed: CompletedPromptWorkRange[] = [];
+  for (let index = 0; index < ordered.length; index += 1) {
+    const message = ordered[index];
+    if (isPromptStartMessage(message)) {
+      openPromptBySession.set(message.sessionId, {message, orderedIndex: index});
+      continue;
+    }
+    if (message.method !== 'prompt_done') continue;
+    const prompt = openPromptBySession.get(message.sessionId);
+    if (!prompt) continue;
+    const between = ordered
+      .slice(prompt.orderedIndex + 1, index)
+      .filter(candidate => candidate.sessionId === message.sessionId);
+    const explicitFinal = between.find(candidate => assistantMessagePhase(candidate) === 'final_answer');
+    let finalTurnIndex = explicitFinal ? positiveTurnIndex(explicitFinal) : positiveTurnIndex(message);
+    if (!explicitFinal) {
+      const lastAssistant = [...between]
+        .reverse()
+        .find(candidate => candidate.method === 'agent_message_chunk');
+      if (lastAssistant && assistantMessagePhase(lastAssistant) === '') {
+        finalTurnIndex = positiveTurnIndex(lastAssistant);
+      }
+    }
+    completed.push({
+      sessionId: message.sessionId,
+      promptTurnIndex: positiveTurnIndex(prompt.message),
+      doneTurnIndex: positiveTurnIndex(message),
+      finalTurnIndex,
+      doneMessage: message,
+      promptMessage: prompt.message,
+    });
+    openPromptBySession.delete(message.sessionId);
+  }
+  return {
+    completed,
+    openPromptTurnBySession: new Map(
+      [...openPromptBySession.entries()]
+        .map(([sessionId, prompt]) => [sessionId, positiveTurnIndex(prompt.message)]),
+    ),
+  };
+}
+
+function itemSessionId(item: ChatDisplayIndexItem, messages: RegistryChatMessage[]): string {
+  return messages[item.sourceIndex]?.sessionId ?? '';
+}
+
+function itemBelongsToWorkRange(
+  item: ChatDisplayIndexItem,
+  range: CompletedPromptWorkRange,
+  messages: RegistryChatMessage[],
+): boolean {
+  return itemSessionId(item, messages) === range.sessionId &&
+    item.turnIndex > range.promptTurnIndex &&
+    item.endTurnIndex < range.finalTurnIndex;
+}
+
+function collapseCompletedPromptWork(
+  items: ChatDisplayIndexItem[],
+  messages: RegistryChatMessage[],
+  ranges: CompletedPromptWorkRange[],
+): ChatDisplayIndexItem[] {
+  if (ranges.length === 0) return items;
+  const output: ChatDisplayIndexItem[] = [];
+  for (let index = 0; index < items.length;) {
+    const range = ranges.find(candidate => itemBelongsToWorkRange(items[index], candidate, messages));
+    if (!range) {
+      output.push(items[index]);
+      index += 1;
+      continue;
+    }
+    const childItems: ChatDisplayIndexItem[] = [];
+    while (
+      index < items.length &&
+      itemBelongsToWorkRange(items[index], range, messages)
+    ) {
+      childItems.push(items[index]);
+      index += 1;
+    }
+    if (childItems.length === 0) continue;
+    const sourceIndexes = childItems.flatMap(item => item.sourceIndexes);
+    output.push({
+      kind: 'work-group',
+      compact: true,
+      key: `${range.sessionId}:${range.promptTurnIndex}:${range.doneTurnIndex}:work-group`,
+      turnIndex: childItems[0].turnIndex,
+      endTurnIndex: childItems[childItems.length - 1].endTurnIndex,
+      sourceIndex: childItems[0].sourceIndex,
+      sourceIndexes,
+      estimatedHeight: 28,
+      childItems,
+      workStatus: promptWorkStatus(range.doneMessage),
+      durationMs: promptDurationMs(range.promptMessage, range.doneMessage),
+    });
+  }
+  return output;
+}
+
+function coalesceOpenPromptAssistantItems(
+  items: ChatDisplayIndexItem[],
+  messages: RegistryChatMessage[],
+  openPromptTurnBySession: Map<string, number>,
+): ChatDisplayIndexItem[] {
+  if (openPromptTurnBySession.size === 0) return items;
+  const output: ChatDisplayIndexItem[] = [];
+  for (let index = 0; index < items.length;) {
+    const item = items[index];
+    const message = messages[item.sourceIndex];
+    const openPromptTurn = message ? openPromptTurnBySession.get(message.sessionId) ?? 0 : 0;
+    if (
+      item.kind !== 'turn' ||
+      message?.method !== 'agent_message_chunk' ||
+      item.turnIndex <= openPromptTurn
+    ) {
+      output.push(item);
+      index += 1;
+      continue;
+    }
+    const group = [item];
+    index += 1;
+    while (index < items.length) {
+      const next = items[index];
+      const nextMessage = messages[next.sourceIndex];
+      if (
+        next.kind !== 'turn' ||
+        nextMessage?.method !== 'agent_message_chunk' ||
+        nextMessage.sessionId !== message.sessionId
+      ) {
+        break;
+      }
+      group.push(next);
+      index += 1;
+    }
+    if (group.length === 1) {
+      output.push(item);
+      continue;
+    }
+    output.push({
+      kind: 'assistant-group',
+      key: group[0].key,
+      turnIndex: group[0].turnIndex,
+      endTurnIndex: group[group.length - 1].endTurnIndex,
+      sourceIndex: group[0].sourceIndex,
+      sourceIndexes: group.flatMap(candidate => candidate.sourceIndexes),
+      estimatedHeight: group.reduce((sum, candidate) => sum + candidate.estimatedHeight, 0),
+    });
+  }
+  return output;
+}
+
+function buildCodexWorkDisplayItems(
+  items: ChatDisplayIndexItem[],
+  messages: RegistryChatMessage[],
+): ChatDisplayIndexItem[] {
+  const ranges = completedPromptWorkRanges(messages);
+  return coalesceOpenPromptAssistantItems(
+    collapseCompletedPromptWork(items, messages, ranges.completed),
+    messages,
+    ranges.openPromptTurnBySession,
+  );
 }
 
 function extractTextFromACPContent(content: unknown): string {
@@ -368,7 +609,7 @@ export function buildChatDisplayIndex(
       break;
     }
   }
-  const items: ChatDisplayIndexItem[] = [];
+  let items: ChatDisplayIndexItem[] = [];
   const metrics = normalizeMetrics(options.layoutMetrics);
   const latestOperationSourceIndex = new Map<string, number>();
   for (const item of sorted) {
@@ -437,6 +678,9 @@ export function buildChatDisplayIndex(
       sourceIndexes: [item.sourceIndex],
       estimatedHeight,
     });
+  }
+  if (options.collapseCompletedWork) {
+    items = buildCodexWorkDisplayItems(items, messages);
   }
   const pendingKey = options.pendingKey?.trim();
   if (pendingKey) {

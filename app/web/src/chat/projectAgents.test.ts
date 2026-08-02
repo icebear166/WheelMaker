@@ -1,4 +1,9 @@
-import {agentDisplayLabel, buildAgentChoiceNodes, buildProjectAgentChoices} from './projectAgents';
+import {
+  agentDisplayLabel,
+  buildAgentChoiceNodes,
+  buildProjectAgentChoices,
+  isCodexAppAgentType,
+} from './projectAgents';
 import type {RegistryProject} from '../registry/registryTypes';
 
 describe('cx.deepseek agent presentation', () => {
@@ -20,5 +25,12 @@ describe('cx.deepseek agent presentation', () => {
     };
     expect(buildProjectAgentChoices(project, [])).toEqual(['codex', 'cx-deepseek']);
     expect(buildProjectAgentChoices({...project, agents: ['codex']}, [])).toEqual(['codex']);
+  });
+
+  it('limits Codex App UI behavior to codex and cx-deepseek', () => {
+    expect(isCodexAppAgentType('codex')).toBe(true);
+    expect(isCodexAppAgentType(' CX-DeepSeek ')).toBe(true);
+    expect(isCodexAppAgentType('cx-other')).toBe(false);
+    expect(isCodexAppAgentType('claude')).toBe(false);
   });
 });

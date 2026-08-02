@@ -4,6 +4,11 @@ function normalizeAgentTypeName(value?: string | null): string {
   return (value || '').trim();
 }
 
+export function isCodexAppAgentType(agentType?: string | null): boolean {
+  const normalized = normalizeAgentTypeName(agentType).toLowerCase();
+  return normalized === 'codex' || normalized === 'cx-deepseek';
+}
+
 export type AgentChoiceNode = {agentType: string; label: string};
 
 export function agentDisplayLabel(agentType?: string | null): string {

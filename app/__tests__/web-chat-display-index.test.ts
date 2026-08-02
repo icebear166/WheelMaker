@@ -3,6 +3,7 @@ import path from 'path';
 import {
   buildChatDisplayIndex,
   chatDisplayItemContainsTurn,
+  combineAssistantGroupMessages,
   resolveActiveToolGroupKey,
   resolveChatDisplayScrollIndex,
 } from '../web/src/chat/turns/chatDisplayIndex';
@@ -36,6 +37,37 @@ function toolMessage(
     param: {cmd, kind: 'read', status},
     finished: true,
   };
+}
+
+function phasedMessage(
+  turnIndex: number,
+  text: string,
+  phase: 'commentary' | 'final_answer',
+  finished = true,
+): RegistryChatMessage {
+  return {
+    sessionId: 'sess-1',
+    turnIndex,
+    method: 'agent_message_chunk',
+    param: {_meta: {wm: {messagePhase: phase}}, text},
+    finished,
+  };
+}
+
+function promptMessage(turnIndex: number, createdAt = '2026-08-02T00:00:00Z'): RegistryChatMessage {
+  const prompt = message(turnIndex, 'prompt_request', 'run');
+  prompt.param = {createdAt, text: 'run'};
+  return prompt;
+}
+
+function doneMessage(
+  turnIndex: number,
+  stopReason = 'end_turn',
+  completedAt = '2026-08-02T00:00:20Z',
+): RegistryChatMessage {
+  const done = message(turnIndex, 'prompt_done', '');
+  done.param = {completedAt, stopReason};
+  return done;
 }
 
 describe('chat display index', () => {
@@ -257,6 +289,105 @@ describe('chat display index', () => {
     expect(resolveChatDisplayScrollIndex(index, 5)).toBe(2);
     expect(chatDisplayItemContainsTurn(index.items[1], 3)).toBe(true);
     expect(resolveChatDisplayScrollIndex({items: []}, 1)).toBe(null);
+  });
+
+  test('coalesces adjacent phased assistant turns while prompt is running', () => {
+    const source = [
+      promptMessage(1),
+      phasedMessage(2, 'work', 'commentary'),
+      phasedMessage(3, 'done', 'final_answer', false),
+    ];
+
+    const index = buildChatDisplayIndex(source, {collapseCompletedWork: true});
+
+    expect(index.items.map(item => item.kind)).toEqual(['turn', 'assistant-group']);
+    expect(index.items[1]).toMatchObject({
+      key: 'sess-1:2:agent_message_chunk',
+      turnIndex: 2,
+      endTurnIndex: 3,
+      sourceIndexes: [1, 2],
+    });
+    expect(combineAssistantGroupMessages(source.slice(1))?.param.text).toBe('workdone');
+  });
+
+  test('collapses completed phased work but leaves final answer and done outside', () => {
+    const source = [
+      promptMessage(1),
+      phasedMessage(2, 'checking', 'commentary'),
+      message(3, 'agent_thought_chunk', 'reasoning'),
+      toolMessage(4, 'Read a'),
+      toolMessage(5, 'Run tests'),
+      phasedMessage(6, 'final', 'final_answer'),
+      doneMessage(7),
+    ];
+
+    const index = buildChatDisplayIndex(source, {collapseCompletedWork: true});
+
+    expect(index.items.map(item => item.kind)).toEqual(['turn', 'work-group', 'turn', 'turn']);
+    expect(index.items[1]).toMatchObject({
+      key: 'sess-1:1:7:work-group',
+      turnIndex: 2,
+      endTurnIndex: 5,
+      sourceIndexes: [1, 2, 3, 4],
+      workStatus: 'worked',
+      durationMs: 20_000,
+      compact: true,
+      estimatedHeight: 28,
+    });
+    expect(index.items[1].childItems?.map(item => item.kind)).toEqual(['turn', 'turn', 'tool-group']);
+    expect(index.items[2].sourceIndex).toBe(5);
+    expect(index.items[3].sourceIndex).toBe(6);
+    expect(chatDisplayItemContainsTurn(index.items[1], 5)).toBe(true);
+    expect(resolveChatDisplayScrollIndex(index, 4)).toBe(1);
+  });
+
+  test.each([
+    ['failed', 'failed'],
+    ['cancelled', 'stopped'],
+    ['interrupted', 'stopped'],
+  ])('collapses no-final %s prompts with %s status', (stopReason, workStatus) => {
+    const source = [
+      promptMessage(1),
+      phasedMessage(2, 'working', 'commentary'),
+      toolMessage(3, 'Run tests', stopReason === 'failed' ? 'failed' : 'completed'),
+      doneMessage(4, stopReason),
+    ];
+
+    const index = buildChatDisplayIndex(source, {collapseCompletedWork: true});
+
+    expect(index.items.map(item => item.kind)).toEqual(['turn', 'work-group', 'turn']);
+    expect(index.items[1]).toMatchObject({workStatus, sourceIndexes: [1, 2]});
+  });
+
+  test('uses the last phase-less assistant as final for old history', () => {
+    const source = [
+      promptMessage(1),
+      message(2, 'agent_message_chunk', 'legacy work'),
+      toolMessage(3, 'Read'),
+      message(4, 'agent_message_chunk', 'legacy final'),
+      doneMessage(5),
+    ];
+
+    const index = buildChatDisplayIndex(source, {collapseCompletedWork: true});
+
+    expect(index.items.map(item => item.kind)).toEqual(['turn', 'work-group', 'turn', 'turn']);
+    expect(index.items[1].sourceIndexes).toEqual([1, 2]);
+    expect(index.items[2].sourceIndex).toBe(3);
+  });
+
+  test('does not collapse other agents and does not invent missing duration', () => {
+    const source = [
+      promptMessage(1, ''),
+      phasedMessage(2, 'work', 'commentary'),
+      phasedMessage(3, 'final', 'final_answer'),
+      doneMessage(4, 'end_turn', ''),
+    ];
+
+    expect(buildChatDisplayIndex(source).items.map(item => item.kind)).toEqual([
+      'turn', 'turn', 'turn', 'turn',
+    ]);
+    const codex = buildChatDisplayIndex(source, {collapseCompletedWork: true});
+    expect(codex.items[1]).toMatchObject({kind: 'work-group', durationMs: 0});
   });
 
   test('accounts for prompt status and explicit user newlines', () => {
