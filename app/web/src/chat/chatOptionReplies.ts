@@ -17,7 +17,7 @@ export type ChatConfirmationReplyTextPart =
   | {type: 'confirmation'; reply: ChatConfirmationReply};
 
 const OPTION_LINE_PATTERN = /^\s*([A-H1-9])\.\s+(.+?)\s*$/;
-const BOLD_OPTION_LINE_PATTERN = /^\s*\*\*([A-H1-9])\.\s+(.+?)\*\*\s*$/;
+const BOLD_OPTION_LINE_PATTERN = /^\s*\*\*([A-H1-9])\.\s+(.+?)\*\*(.*?)\s*$/;
 const LETTER_OPTION_LABELS = 'ABCDEFGH';
 const NUMBER_OPTION_LABELS = '123456789';
 const NUMERIC_CHOICE_CONTEXT_PATTERN =
@@ -70,8 +70,16 @@ function isFenceLine(line: string): boolean {
   return line.trimStart().startsWith('```');
 }
 
-function matchOptionLine(line: string): RegExpExecArray | null {
-  return BOLD_OPTION_LINE_PATTERN.exec(line) ?? OPTION_LINE_PATTERN.exec(line);
+function matchOptionLine(line: string): {label: string; text: string} | null {
+  const boldMatch = BOLD_OPTION_LINE_PATTERN.exec(line);
+  if (boldMatch) {
+    return {
+      label: boldMatch[1],
+      text: `${boldMatch[2]}${boldMatch[3]}`,
+    };
+  }
+  const match = OPTION_LINE_PATTERN.exec(line);
+  return match ? {label: match[1], text: match[2]} : null;
 }
 
 function hasNumericChoiceContext(lines: string[], firstOptionLine: number): boolean {
@@ -120,9 +128,9 @@ function findLatestOptionReplyBlock(text: string): ChatOptionReplyBlock | null {
     if (!match) {
       continue;
     }
-    const label = match[1].toUpperCase();
+    const label = match.label.toUpperCase();
     const kind = optionLabelKind(label);
-    const textValue = match[2].trim();
+    const textValue = match.text.trim();
     if (!kind || !textValue) {
       finishBlock();
       continue;

@@ -37,6 +37,19 @@ describe('chat option reply extraction', () => {
     ]);
   });
 
+  test('extracts bold option headings followed by inline descriptions', () => {
+    expect(extractChatOptionReplies([
+      '只确认一个核心范围：首版 Git 功能是否只读？',
+      '',
+      '**A. 只读浏览（推荐）**：显示当前分支、工作区改动与完整提交历史。',
+      '',
+      '**B. 同时支持操作**：加入暂存、提交与切换分支能力。',
+    ].join('\n'))).toEqual([
+      {label: 'A', text: '只读浏览（推荐）：显示当前分支、工作区改动与完整提交历史。'},
+      {label: 'B', text: '同时支持操作：加入暂存、提交与切换分支能力。'},
+    ]);
+  });
+
   test('extracts numeric choices only when a choice context is nearby', () => {
     expect(extractChatOptionReplies([
       '第二个问题：更新动作要支持到什么粒度？',

@@ -252,6 +252,29 @@ describe('ChatTurnView Markdown reply structure', () => {
     expect(selectable.root.findByProps({'data-chat-reply-value': 'B'}).type).toBe('p');
   });
 
+  it('adds interaction to bold option headings with inline descriptions', async () => {
+    const text = [
+      '只确认一个核心范围：首版 Git 功能是否只读？',
+      '',
+      '**A. 只读浏览（推荐）**：显示当前分支、工作区改动与完整提交历史。',
+      '',
+      '**B. 同时支持操作**：加入暂存、提交与切换分支能力。',
+    ].join('\n');
+    const historical = await renderTurn(text);
+    const selectable = await renderTurn(text, {
+      optionReplies: [
+        {label: 'A', text: '只读浏览（推荐）：显示当前分支、工作区改动与完整提交历史。'},
+        {label: 'B', text: '同时支持操作：加入暂存、提交与切换分支能力。'},
+      ],
+      onSelectOptionReply: jest.fn(),
+    });
+
+    expect(markdownSources(selectable)).toEqual(markdownSources(historical));
+    expect(renderedMarkdownBlocks(selectable)).toEqual(renderedMarkdownBlocks(historical));
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'A'}).type).toBe('p');
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'B'}).type).toBe('p');
+  });
+
   it('adds the same geometry-free interaction to native numeric list items', async () => {
     const text = [
       '请选择一个选项：',
