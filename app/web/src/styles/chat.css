@@ -3434,6 +3434,62 @@ button.chat-hub-skill-name:disabled {
   color: var(--state-danger);
 }
 
+.chat-work-group {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.chat-work-group-header {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  user-select: none;
+}
+
+.chat-work-group-chevron {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  opacity: 0.72;
+  transition: transform 140ms ease;
+}
+
+.chat-work-group-open .chat-work-group-chevron {
+  transform: rotate(90deg);
+}
+
+.chat-work-group-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-work-group-content {
+  margin-top: 10px;
+}
+
+.chat-work-group-child {
+  padding-bottom: 10px;
+}
+
+.chat-work-group-child.compact {
+  padding-bottom: 4px;
+}
+
+.chat-work-group-child:last-child {
+  padding-bottom: 0;
+}
+
 .chat-thought-block {
   margin: 0;
   color: var(--text-secondary);
@@ -3536,9 +3592,11 @@ button.chat-hub-skill-name:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .chat-work-group-chevron,
   .chat-thought-block.streaming .chat-thought-icon,
   .chat-tool-group-running .chat-tool-group-summary-icon,
   .chat-activity-dots > span {
+    transition: none;
     animation: none;
   }
 }

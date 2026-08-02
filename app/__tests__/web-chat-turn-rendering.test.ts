@@ -181,7 +181,7 @@ describe('web chat turn rendering', () => {
     const displayIndex = readDisplayIndex();
     const styles = readStyles();
 
-    expect(displayIndex).toContain("kind: 'turn' | 'tool-group' | 'pending' | 'queued';");
+    expect(displayIndex).toContain("kind: 'turn' | 'assistant-group' | 'tool-group' | 'work-group' | 'pending' | 'queued';");
     expect(displayIndex).toContain('queuedKeys?: string[];');
     expect(displayIndex).toContain("kind: 'queued'");
     expect(chatTurn).toContain("'queued'");
@@ -220,6 +220,19 @@ describe('web chat turn rendering', () => {
       'const createdAt = options.createdAtOverride ?? new Date().toISOString();',
     );
     expect(main).toContain('createdAtOverride: pending.createdAt,');
+  });
+
+  test('routes Codex completed work groups through the shared live and archive renderer', () => {
+    const main = readMain();
+
+    expect(main).toContain("import {ChatWorkGroup} from '../chat/ChatWorkGroup';");
+    expect(main).toContain('collapseCompletedWork: isCodexAppAgentType(selectedChatSession?.agentType)');
+    expect(main).toContain('collapseCompletedWork: isCodexAppAgentType(archivedPreview?.session.agentType)');
+    expect(main).toContain("displayItem.kind === 'assistant-group'");
+    expect(main).toContain("displayItem.kind === 'work-group'");
+    expect(main).toContain('combineAssistantGroupMessages');
+    expect(main).toContain('displayItem.childItems');
+    expect(main).toContain('<ChatWorkGroup');
   });
 
   test('renders persisted prompt attachments as user-visible chips', () => {

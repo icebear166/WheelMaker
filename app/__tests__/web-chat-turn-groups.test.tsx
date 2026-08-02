@@ -22,6 +22,7 @@ jest.mock('../web/src/code/markdownPreview', () => ({
 
 import {ChatTurnView} from '../web/src/chat/ChatTurnView';
 import {ChatToolCallGroup} from '../web/src/chat/ChatToolCallGroup';
+import {ChatWorkGroup} from '../web/src/chat/ChatWorkGroup';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
 const markdownComponents = {};
@@ -48,6 +49,57 @@ function tool(turnIndex: number, cmd: string, status: string): RegistryChatMessa
 }
 
 describe('chat turn groups', () => {
+  test.each([
+    ['worked', 20_000, 'Worked for 20.0s'],
+    ['failed', 20_000, 'Failed after 20.0s'],
+    ['stopped', 20_000, 'Stopped after 20.0s'],
+    ['worked', 0, 'Worked'],
+    ['failed', 0, 'Failed'],
+    ['stopped', 0, 'Stopped'],
+  ] as const)('toggles completed %s work with duration %d', async (status, durationMs, label) => {
+    let view!: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(() => {
+      view = ReactTestRenderer.create(
+        <ChatWorkGroup status={status} durationMs={durationMs}>
+          <div className="work-child">Work</div>
+        </ChatWorkGroup>,
+      );
+    });
+
+    const expand = view.root.findByProps({'aria-label': 'Expand completed work'});
+    expect(expand.props['aria-expanded']).toBe(false);
+    expect(view.root.findByProps({className: 'chat-work-group-label'}).children).toEqual([label]);
+    expect(view.root.findAllByProps({className: 'chat-work-group-content'})).toHaveLength(0);
+
+    await ReactTestRenderer.act(() => {
+      expand.props.onClick();
+    });
+    expect(view.root.findByProps({'aria-label': 'Collapse completed work'}).props['aria-expanded']).toBe(true);
+    expect(view.root.findByProps({className: 'chat-work-group-content'})).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      view.root.findByProps({'aria-label': 'Collapse completed work'}).props.onClick();
+    });
+    expect(view.root.findAllByProps({className: 'chat-work-group-content'})).toHaveLength(0);
+  });
+
+  test('uses a fixed neutral completed-work row', () => {
+    const styles = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'),
+      'utf8',
+    );
+    const header = styles.match(/\.chat-work-group-header \{([\s\S]*?)\}/)?.[1] ?? '';
+    const group = styles.match(/\.chat-work-group \{([\s\S]*?)\}/)?.[1] ?? '';
+    const chevron = styles.match(/\.chat-work-group-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
+
+    expect(header).toContain('height: 28px;');
+    expect(header).toContain('background: transparent;');
+    expect(group).not.toContain('accent-primary');
+    expect(chevron).toContain('color: var(--text-tertiary);');
+    expect(styles).toContain('.chat-work-group-open .chat-work-group-chevron');
+    expect(styles).toContain('.chat-work-group-child.compact');
+  });
+
   test('highlights matching characters inside structured prompt text', async () => {
     let view!: ReactTestRenderer.ReactTestRenderer;
     await ReactTestRenderer.act(() => {

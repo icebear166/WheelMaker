@@ -164,6 +164,7 @@ import {
   type ChatPermissionReadToken,
 } from '../chat/permission/chatPermissionReadGate';
 import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
+import {ChatWorkGroup} from '../chat/ChatWorkGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatGoalSurface} from '../chat/ChatGoalSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
@@ -193,7 +194,7 @@ import {
 } from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
-import { agentDisplayLabel, buildProjectAgentChoices } from '../chat/projectAgents';
+import { agentDisplayLabel, buildProjectAgentChoices, isCodexAppAgentType } from '../chat/projectAgents';
 import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {
   decodeSessionTurnToMessage,
@@ -215,6 +216,7 @@ import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
 import {
   buildChatDisplayIndex,
   chatDisplayItemContainsTurn,
+  combineAssistantGroupMessages,
   resolveActiveToolGroupKey,
   type ChatDisplayIndexItem,
 } from '../chat/turns/chatDisplayIndex';
@@ -4076,6 +4078,7 @@ export function App() {
     : false;
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
+    collapseCompletedWork: isCodexAppAgentType(selectedChatSession?.agentType),
     layoutMetrics: chatLayoutMetrics,
     permissionState: selectedPermissionState,
     promptStatus: selectedPromptTurnStatusIndex.statusFor,
@@ -4099,13 +4102,15 @@ export function App() {
     selectedPendingPrompt,
     selectedQueueItems,
     selectedPermissionState,
+    selectedChatSession?.agentType,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
+    collapseCompletedWork: isCodexAppAgentType(archivedPreview?.session.agentType),
     layoutMetrics: chatLayoutMetrics,
     permissionState: archivedPermissionState,
     promptStatus: () => null,
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
-  }), [archivedPreview?.messages, archivedPermissionState, chatLayoutMetrics]);
+  }), [archivedPreview?.messages, archivedPreview?.session.agentType, archivedPermissionState, chatLayoutMetrics]);
 
   const confirmSearchTarget = (target: ChatSearchTarget) => {
     setSearchTargetPickerOpen(false);
@@ -17239,101 +17244,140 @@ export function App() {
     resolvePromptAttachmentThumbnail,
     selectedArchivedKey,
   ]);
-  const renderChatVirtuosoItem = useCallback((displayItem: ChatDisplayIndexItem) => {
+  const renderChatVirtuosoItem = useCallback((rootDisplayItem: ChatDisplayIndexItem) => {
     const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
     const sourceMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
-    const sourceMessage = displayItem.kind === 'turn'
-      ? sourceMessages[displayItem.sourceIndex]
-      : undefined;
-    const sourceToolMessages = displayItem.kind === 'tool-group'
-      ? displayItem.sourceIndexes
-        .map(sourceIndex => sourceMessages[sourceIndex])
-        .filter((message): message is RegistryChatMessage => !!message && message.method === 'tool_call')
-      : [];
-    const queuedItemIndex = displayItem.kind === 'queued'
-      ? selectedQueueItems.findIndex(item => `${selectedChatEncodedKey}:queued:${item.itemId}` === displayItem.key)
-      : -1;
-    const queuedItem = queuedItemIndex >= 0 ? selectedQueueItems[queuedItemIndex] : null;
-    const queuedItemActions = queuedItem ? {
-      ...(queuedItem.cancelSupported && queuedItem.status !== 'cancelling' && queuedItem.status !== 'running'
-        ? {cancel: () => cancelQueuedPrompt(
-            selectedChatKeyRef.current?.projectId ?? '',
-            selectedChatEncodedKey,
-            queuedItem.itemId,
-          )}
-        : {}),
-      ...(queuedItem.status === 'queued'
-        ? {prioritize: () => prioritizeQueuedPrompt(
-            selectedChatKeyRef.current?.projectId ?? '',
-            selectedChatEncodedKey,
-            queuedItem.itemId,
-          )}
-        : {}),
-      ...(queuedItem.kind === 'prompt' && queuedItem.status === 'queued' && queuedPromptCanSteer
-        ? {steer: () => steerQueuedPrompt(
-            selectedChatKeyRef.current?.projectId ?? '',
-            selectedChatEncodedKey,
-            queuedItem.itemId,
-          )}
-        : {}),
-    } satisfies ChatQueueActions : {};
-    const toolGroupSearchHighlighted =
-      sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
-      chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
-    const toolGroupActive =
-      !chatReadOnlyPreview &&
-      displayItem.kind === 'tool-group' &&
-      displayItem.key === selectedActiveToolGroupKey;
-    const content = displayItem.kind === 'tool-group' && sourceToolMessages.length > 0 ? (
-      <div
-        className={[
-          'chat-view-content',
-          toolGroupSearchHighlighted ? 'chat-turn-search-highlight' : '',
-        ].filter(Boolean).join(' ')}
-      >
-        <ChatToolCallGroup messages={sourceToolMessages} active={toolGroupActive} />
-      </div>
-    ) : displayItem.kind === 'queued' && queuedItem?.kind === 'prompt' && !chatReadOnlyPreview ? (
-      <div className="chat-view-content">
-        <ChatTurnView
-          message={buildQueuePromptMessage(
-            selectedChatKeyRef.current?.sessionId ?? '',
-            queuedItem,
-            queuedPromptTurnIndex(queuedItemIndex),
-          )}
-          queueItemStatus={queuedItem.status}
-          queueActions={queuedItemActions}
-          markdownComponents={chatMarkdownComponents}
-          markdownUrlTransform={chatMarkdownUrlTransform}
-          onOpenPromptAttachment={openChatAttachmentPreview}
-          resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
-          onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
-        />
-      </div>
-    ) : displayItem.kind === 'queued' && queuedItem?.kind === 'compact' && !chatReadOnlyPreview ? (
-      <div className="chat-view-content">
-        <ChatQueueCompactView item={queuedItem} actions={queuedItemActions} />
-      </div>
-    ) : displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview ? (
-      <div className="chat-view-content">
-        <ChatTurnView
-          message={buildPendingPromptMessage(selectedPendingPrompt)}
-          promptStatus={selectedPendingPrompt.status}
-          markdownComponents={chatMarkdownComponents}
-          markdownUrlTransform={chatMarkdownUrlTransform}
-          onOpenPromptAttachment={openChatAttachmentPreview}
-          resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
-          onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
-          onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
-          onEditPendingPrompt={() => editPendingChatPrompt(selectedChatEncodedKey)}
-        />
-      </div>
-    ) : sourceMessage && chatReadOnlyPreview ? (
-      renderArchivedChatMessageTurn(sourceMessage)
-    ) : sourceMessage ? (
-      renderChatMessageTurn(sourceMessage)
-    ) : null;
-    return content;
+    const renderDisplayItem = (displayItem: ChatDisplayIndexItem): React.ReactNode => {
+      const sourceAssistantMessages = displayItem.kind === 'assistant-group'
+        ? displayItem.sourceIndexes
+          .map(sourceIndex => sourceMessages[sourceIndex])
+          .filter((message): message is RegistryChatMessage => !!message && message.method === 'agent_message_chunk')
+        : [];
+      const sourceMessage = displayItem.kind === 'turn'
+        ? sourceMessages[displayItem.sourceIndex]
+        : displayItem.kind === 'assistant-group'
+          ? combineAssistantGroupMessages(sourceAssistantMessages)
+          : undefined;
+      const sourceToolMessages = displayItem.kind === 'tool-group'
+        ? displayItem.sourceIndexes
+          .map(sourceIndex => sourceMessages[sourceIndex])
+          .filter((message): message is RegistryChatMessage => !!message && message.method === 'tool_call')
+        : [];
+      const queuedItemIndex = displayItem.kind === 'queued'
+        ? selectedQueueItems.findIndex(item => `${selectedChatEncodedKey}:queued:${item.itemId}` === displayItem.key)
+        : -1;
+      const queuedItem = queuedItemIndex >= 0 ? selectedQueueItems[queuedItemIndex] : null;
+      const queuedItemActions = queuedItem ? {
+        ...(queuedItem.cancelSupported && queuedItem.status !== 'cancelling' && queuedItem.status !== 'running'
+          ? {cancel: () => cancelQueuedPrompt(
+              selectedChatKeyRef.current?.projectId ?? '',
+              selectedChatEncodedKey,
+              queuedItem.itemId,
+            )}
+          : {}),
+        ...(queuedItem.status === 'queued'
+          ? {prioritize: () => prioritizeQueuedPrompt(
+              selectedChatKeyRef.current?.projectId ?? '',
+              selectedChatEncodedKey,
+              queuedItem.itemId,
+            )}
+          : {}),
+        ...(queuedItem.kind === 'prompt' && queuedItem.status === 'queued' && queuedPromptCanSteer
+          ? {steer: () => steerQueuedPrompt(
+              selectedChatKeyRef.current?.projectId ?? '',
+              selectedChatEncodedKey,
+              queuedItem.itemId,
+            )}
+          : {}),
+      } satisfies ChatQueueActions : {};
+      const displayItemSearchHighlighted =
+        sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+        chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+      const toolGroupActive =
+        !chatReadOnlyPreview &&
+        displayItem.kind === 'tool-group' &&
+        displayItem.key === selectedActiveToolGroupKey;
+
+      if (displayItem.kind === 'work-group') {
+        return (
+          <ChatWorkGroup
+            status={displayItem.workStatus ?? 'worked'}
+            durationMs={displayItem.durationMs ?? 0}
+            highlighted={displayItemSearchHighlighted}
+          >
+            {(displayItem.childItems ?? []).map(childItem => (
+              <div
+                key={childItem.key}
+                className={`chat-work-group-child${childItem.compact ? ' compact' : ''}`}
+              >
+                {renderDisplayItem(childItem)}
+              </div>
+            ))}
+          </ChatWorkGroup>
+        );
+      }
+      if (displayItem.kind === 'tool-group' && sourceToolMessages.length > 0) {
+        return (
+          <div
+            className={[
+              'chat-view-content',
+              displayItemSearchHighlighted ? 'chat-turn-search-highlight' : '',
+            ].filter(Boolean).join(' ')}
+          >
+            <ChatToolCallGroup messages={sourceToolMessages} active={toolGroupActive} />
+          </div>
+        );
+      }
+      if (displayItem.kind === 'queued' && queuedItem?.kind === 'prompt' && !chatReadOnlyPreview) {
+        return (
+          <div className="chat-view-content">
+            <ChatTurnView
+              message={buildQueuePromptMessage(
+                selectedChatKeyRef.current?.sessionId ?? '',
+                queuedItem,
+                queuedPromptTurnIndex(queuedItemIndex),
+              )}
+              queueItemStatus={queuedItem.status}
+              queueActions={queuedItemActions}
+              markdownComponents={chatMarkdownComponents}
+              markdownUrlTransform={chatMarkdownUrlTransform}
+              onOpenPromptAttachment={openChatAttachmentPreview}
+              resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+              onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
+            />
+          </div>
+        );
+      }
+      if (displayItem.kind === 'queued' && queuedItem?.kind === 'compact' && !chatReadOnlyPreview) {
+        return (
+          <div className="chat-view-content">
+            <ChatQueueCompactView item={queuedItem} actions={queuedItemActions} />
+          </div>
+        );
+      }
+      if (displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview) {
+        return (
+          <div className="chat-view-content">
+            <ChatTurnView
+              message={buildPendingPromptMessage(selectedPendingPrompt)}
+              promptStatus={selectedPendingPrompt.status}
+              markdownComponents={chatMarkdownComponents}
+              markdownUrlTransform={chatMarkdownUrlTransform}
+              onOpenPromptAttachment={openChatAttachmentPreview}
+              resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+              onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
+              onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
+              onEditPendingPrompt={() => editPendingChatPrompt(selectedChatEncodedKey)}
+            />
+          </div>
+        );
+      }
+      if (sourceMessage && chatReadOnlyPreview) {
+        return renderArchivedChatMessageTurn(sourceMessage);
+      }
+      return sourceMessage ? renderChatMessageTurn(sourceMessage) : null;
+    };
+    return renderDisplayItem(rootDisplayItem);
   }, [
     archivedMode,
     archivedPreview,
