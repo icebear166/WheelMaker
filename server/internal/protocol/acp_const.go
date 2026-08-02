@@ -8,10 +8,6 @@ const (
 	SessionUpdateAgentMessageChunk       = "agent_message_chunk"
 	SessionUpdateUserMessageChunk        = "user_message_chunk"
 	SessionUpdateAgentThoughtChunk       = "agent_thought_chunk"
-	SessionUpdateGoalUpdated             = "goal_updated"
-	SessionUpdateGoalCleared             = "goal_cleared"
-	SessionUpdateGoalTurnStarted         = "goal_turn_started"
-	SessionUpdateGoalTurnCompleted       = "goal_turn_completed"
 	SessionUpdateToolCall                = "tool_call"
 	SessionUpdateToolCallUpdate          = "tool_call_update"
 	SessionUpdatePlan                    = "plan"
@@ -95,7 +91,6 @@ const (
 	StopReasonMaxTurnRequests = "max_turn_requests"
 	StopReasonRefusal         = "refusal"
 	StopReasonCancelled       = "cancelled"
-	StopReasonFailed          = "failed"
 )
 
 // ACPProvider identifies a built-in ACP provider preset.

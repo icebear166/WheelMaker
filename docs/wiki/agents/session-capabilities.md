@@ -16,6 +16,8 @@ Agent 层通过 ACP 正式扩展 request 承接 provider-gated 能力。通用 C
 
 Goal snapshot 的异步变化使用 `_wm/session/goal` notification，并由 `goalLifecycle` capability 门禁。未协商能力时不得通过 Go type assertion、provider 名称或其他 side-channel 猜测支持情况。
 
+扩展 request 失败时使用 JSON-RPC error，并在 `error.data.code` 中返回稳定分类：`inactive`、`busy`、`unavailable`、`unsupported` 或 `invalid`。Hub 只根据该 code 映射 provider-neutral typed error；不解析 message 文案来决定 Steer fallback、Retry 或 unsupported 行为。
+
 ## Status
 
 `status` 对所有 session 恒 supported：只返回 WheelMaker 稳定 session id、agent 类型与累计 token 用量（`agentState.Usage`），这些都是 WheelMaker 自身事实，不属于 provider 能力。读取时只取当前 Session 的内存或持久化 snapshot，不创建、初始化或加载 Agent，不调用 provider RPC，因此冷/归档 session 和所有 provider 的表现一致。Provider 限流、套餐与账号数据由 Monitor 负责，不属于 session status。其余 provider-gated 能力（`compact`/`steer`/`fork`/`goal`）不支持时隐藏入口并由服务端拒绝。

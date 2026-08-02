@@ -34,7 +34,7 @@ type promptState struct {
 
 type promptStreamEvent struct {
 	update *acp.SessionUpdateParams
-	result *acp.SessionPromptResult
+	result *acp.PromptOutcome
 	err    error
 }
 
@@ -134,35 +134,6 @@ func NewWithRuntime(store Store, projectName string, cwd string, runtime Runtime
 		}
 		return ""
 	}
-	c.sessionRecorder.actionLookup = func(agentType string) acp.SessionActionCapabilities {
-		var caps acp.SessionActionCapabilities
-		provider, ok := acp.ParseACPProvider(agentType)
-		if !ok || c.registry == nil {
-			caps = unsupportedSessionActions("Current Agent does not support this action.")
-		} else {
-			support := c.registry.SessionActions(provider)
-			caps = acp.SessionActionCapabilities{
-				Compact: acp.SessionActionCapability{
-					Supported: support.Compact,
-					Reason:    unsupportedSessionActionReason(support.Compact),
-				},
-				Steer: acp.SessionActionCapability{
-					Supported: support.Steer,
-					Reason:    unsupportedSessionActionReason(support.Steer),
-				},
-				Fork: acp.SessionActionCapability{
-					Supported: support.Fork,
-					Reason:    unsupportedSessionActionReason(support.Fork),
-				},
-				Goal: acp.SessionActionCapability{
-					Supported: support.Goal,
-					Reason:    unsupportedSessionActionReason(support.Goal),
-				},
-			}
-		}
-		caps.Status = acp.SessionActionCapability{Supported: true}
-		return caps
-	}
 	c.sessionRecorder.queueLookup = func(sessionID string, full bool) *acp.SessionQueueSnapshot {
 		c.mu.Lock()
 		sess := c.sessions[strings.TrimSpace(sessionID)]
@@ -185,23 +156,6 @@ func defaultClientStateDir() string {
 		return ""
 	}
 	return filepath.Join(home, ".wheelmaker")
-}
-
-func unsupportedSessionActionReason(supported bool) string {
-	if supported {
-		return ""
-	}
-	return "Current Agent does not support this action."
-}
-
-func unsupportedSessionActions(reason string) acp.SessionActionCapabilities {
-	return acp.SessionActionCapabilities{
-		Status:  acp.SessionActionCapability{Supported: false, Reason: reason},
-		Compact: acp.SessionActionCapability{Supported: false, Reason: reason},
-		Steer:   acp.SessionActionCapability{Supported: false, Reason: reason},
-		Fork:    acp.SessionActionCapability{Supported: false, Reason: reason},
-		Goal:    acp.SessionActionCapability{Supported: false, Reason: reason},
-	}
 }
 
 func (c *Client) ProjectName() string {
@@ -255,8 +209,7 @@ func (c *Client) restoreActiveGoals(ctx context.Context) {
 			state.Goal == nil || state.Goal.Status != acp.SessionGoalStatusActive {
 			continue
 		}
-		provider, ok := acp.ParseACPProvider(record.AgentType)
-		if !ok || !c.registry.SessionActions(provider).Goal {
+		if !acp.SessionActionsFromAgentCapabilities(state.AgentCapabilities).Goal.Supported {
 			continue
 		}
 		session, loadErr := c.SessionByID(ctx, record.ID)
@@ -484,6 +437,7 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 			WriteTextFile: true,
 		},
 		Terminal: true,
+		Meta:     acp.BuildWMClientCapabilitiesMeta(nil),
 	}
 	initResult, err := inst.Initialize(ctx, acp.InitializeParams{
 		ProtocolVersion:    acpClientProtocolVersion,
@@ -515,10 +469,7 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 	}
 	resolved = normalizeAgentConfigOptions(agentType, resolved)
 
-	sessionTitle := strings.TrimSpace(newResult.Title)
-	if sessionTitle == "" {
-		sessionTitle = strings.TrimSpace(title)
-	}
+	sessionTitle := strings.TrimSpace(title)
 
 	state := SessionAgentState{
 		ConfigOptions:     append([]acp.ConfigOption(nil), resolved...),
@@ -1688,26 +1639,19 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 	if action == acp.SessionActionStatus {
 		return true
 	}
-	if c.registry == nil {
-		return false
-	}
 	sess.mu.Lock()
-	agentType := sess.agentType
+	capabilities := sess.agentState.AgentCapabilities
 	sess.mu.Unlock()
-	provider, ok := acp.ParseACPProvider(agentType)
-	if !ok {
-		return false
-	}
-	support := c.registry.SessionActions(provider)
+	support := acp.SessionActionsFromAgentCapabilities(capabilities)
 	switch action {
 	case acp.SessionActionCompact:
-		return support.Compact
+		return support.Compact.Supported
 	case acp.SessionActionSteer:
-		return support.Steer
+		return support.Steer.Supported
 	case acp.SessionActionFork:
-		return support.Fork
+		return support.Fork.Supported
 	case acp.SessionActionGoal:
-		return support.Goal
+		return support.Goal.Supported
 	default:
 		return false
 	}
@@ -2085,6 +2029,7 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 		SessionSyncJSON: sessionSyncProjectionJSON(sessionSyncProjection{
 			LatestPersistedTurnIndex: int64(len(contents)),
 			ForkedFrom:               cloneSessionForkOrigin(entry.ForkedFrom),
+			SessionFeatures:          cloneSessionFeatures(entry.SessionFeatures),
 		}),
 		CreatedAt:    createdAt,
 		LastActiveAt: updatedAt,
@@ -2128,6 +2073,7 @@ func archiveSummaryFromEntry(entry sessionArchiveManifestEntry) sessionArchiveSu
 		NativeUnarchivedAt: strings.TrimSpace(entry.NativeUnarchivedAt),
 		NativeSyncWarning:  strings.TrimSpace(entry.NativeSyncWarning),
 		ForkedFrom:         cloneSessionForkOrigin(entry.ForkedFrom),
+		SessionFeatures:    cloneSessionFeatures(entry.SessionFeatures),
 	}
 }
 
@@ -2194,6 +2140,7 @@ func (c *Client) syncNativeArchiveState(ctx context.Context, agentType, sessionI
 			WriteTextFile: true,
 		},
 		Terminal: true,
+		Meta:     acp.BuildWMClientCapabilitiesMeta(nil),
 	}
 	if _, err := inst.Initialize(ctx, acp.InitializeParams{
 		ProtocolVersion:    acpClientProtocolVersion,

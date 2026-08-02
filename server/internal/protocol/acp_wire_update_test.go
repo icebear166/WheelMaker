@@ -77,6 +77,45 @@ func TestSessionUpdateVariantMetaRoundTripPreservesUnknownFields(t *testing.T) {
 	}
 }
 
+func TestSessionUpdateParamsWireMarshalsACPFieldNames(t *testing.T) {
+	raw, err := json.Marshal(SessionUpdateParamsWire{
+		SessionID: "s1",
+		Update: MessageChunkUpdate{
+			SessionUpdate: SessionUpdateAgentMessageChunk,
+			Content:       ContentBlock{Type: ContentBlockTypeText, Text: "hello"},
+			MessageID:     "m1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != `{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"messageId":"m1"}}` {
+		t.Fatalf("raw=%s", raw)
+	}
+	if _, err := DecodeSessionUpdateParams(raw); err != nil {
+		t.Fatalf("strict decode: %v", err)
+	}
+}
+
+func TestSessionPromptResultRejectsPrivateMessageAndFailedStopReason(t *testing.T) {
+	for _, raw := range []string{
+		`{"stopReason":"end_turn","message":"private"}`,
+		`{"stopReason":"failed"}`,
+	} {
+		var result SessionPromptResult
+		if err := json.Unmarshal([]byte(raw), &result); err == nil {
+			t.Fatalf("invalid result accepted: %s", raw)
+		}
+	}
+	var outcome PromptOutcome
+	if err := json.Unmarshal([]byte(`{"stopReason":"refusal","_meta":{"wm":{"message":"declined"}}}`), &outcome); err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Message != "declined" {
+		t.Fatalf("message=%q", outcome.Message)
+	}
+}
+
 func TestStrictNestedUnionsRejectCrossVariantFields(t *testing.T) {
 	contentCases := []string{
 		`{"type":"text","text":"hello","data":"not-text"}`,
@@ -96,6 +135,12 @@ func TestStrictNestedUnionsRejectCrossVariantFields(t *testing.T) {
 		if err := ValidateToolCallContentJSON(json.RawMessage(raw)); err == nil {
 			t.Fatalf("ValidateToolCallContentJSON(%s) succeeded", raw)
 		}
+	}
+	if _, err := json.Marshal(ContentBlock{Type: ContentBlockTypeText, Text: "hello", Data: "not-text"}); err == nil {
+		t.Fatal("invalid ContentBlock marshal succeeded")
+	}
+	if _, err := json.Marshal(ToolCallContent{Type: "terminal", TerminalID: "term", Path: "not-terminal"}); err == nil {
+		t.Fatal("invalid ToolCallContent marshal succeeded")
 	}
 }
 
@@ -207,6 +252,9 @@ func TestMCPServerStrictVariants(t *testing.T) {
 	}
 	if err := ValidateMCPServerJSON(json.RawMessage(`{"type":"stdio","name":"bad","command":"server","args":[],"env":[],"url":"https://example.test"}`)); err == nil {
 		t.Fatal("cross-variant MCP fields succeeded")
+	}
+	if _, err := json.Marshal(MCPServer{Type: "stdio", Name: "bad", Command: "server", URL: "https://example.test"}); err == nil {
+		t.Fatal("cross-variant MCP marshal succeeded")
 	}
 }
 

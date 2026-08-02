@@ -409,6 +409,7 @@ func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, 
 			WriteTextFile: true,
 		},
 		Terminal: true,
+		Meta:     acp.BuildWMClientCapabilitiesMeta(nil),
 	}
 	initResult, err := inst.Initialize(ctx, acp.InitializeParams{
 		ProtocolVersion:    acpClientProtocolVersion,
@@ -980,7 +981,7 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 		}()
 
 		type promptResult struct {
-			result acp.SessionPromptResult
+			result acp.PromptOutcome
 			err    error
 		}
 		resultCh := make(chan promptResult, 1)
@@ -1074,7 +1075,7 @@ func (s *Session) recordPromptDone(stopReason string, message string) {
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
 		Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-			"result": acp.SessionPromptResult{
+			"result": acp.SessionTurnPromptResult{
 				StopReason: strings.TrimSpace(stopReason),
 				Message:    strings.TrimSpace(message),
 			},
@@ -1083,7 +1084,7 @@ func (s *Session) recordPromptDone(stopReason string, message string) {
 }
 
 func (s *Session) recordPromptFailed(message string) {
-	s.recordPromptDone(acp.StopReasonFailed, message)
+	s.recordPromptDone(acp.SessionTurnStopReasonFailed, message)
 }
 
 func (s *Session) toRecord() (*SessionRecord, error) {
@@ -1561,7 +1562,10 @@ func (s *Session) runPromptBlocks(
 					Type:      SessionViewEventTypeACP,
 					SessionID: s.acpSessionID,
 					Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-						"result": *ev.result,
+						"result": acp.SessionTurnPromptResult{
+							StopReason: ev.result.StopReason,
+							Message:    firstNonEmpty(strings.TrimSpace(ev.result.Message), acp.WMPromptResultMetaMessage(ev.result.Meta)),
+						},
 					}),
 					Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
 					ForkPoint: cloneSessionForkPoint(ev.result.ForkPoint),
@@ -1573,8 +1577,8 @@ func (s *Session) runPromptBlocks(
 				s.mu.Unlock()
 				return sessionExecutionOutcome{status: sessionExecutionCancelled}
 			}
-			if ev.result.StopReason == acp.StopReasonFailed {
-				message := strings.TrimSpace(ev.result.Message)
+			if ev.result.StopReason == acp.SessionTurnStopReasonFailed {
+				message := firstNonEmpty(strings.TrimSpace(ev.result.Message), acp.WMPromptResultMetaMessage(ev.result.Meta))
 				if message == "" {
 					message = "prompt failed"
 				}

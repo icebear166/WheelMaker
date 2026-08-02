@@ -96,26 +96,6 @@ type AuthMethod struct {
 	Meta        json.RawMessage `json:"_meta,omitempty"`
 }
 
-// ConfigOptionValue is a selectable value for a config option.
-type ConfigOptionValue struct {
-	Value       string          `json:"value"`
-	Name        string          `json:"name,omitempty"`
-	Description string          `json:"description,omitempty"`
-	Meta        json.RawMessage `json:"_meta,omitempty"`
-}
-
-// ConfigOption is a configurable session parameter (e.g. mode, model, reasoning effort).
-type ConfigOption struct {
-	ID           string              `json:"id"`
-	Name         string              `json:"name,omitempty"`
-	Description  string              `json:"description,omitempty"`
-	Category     string              `json:"category,omitempty"`
-	Type         string              `json:"type,omitempty"`
-	CurrentValue string              `json:"currentValue,omitempty"`
-	Options      []ConfigOptionValue `json:"options,omitempty"`
-	Meta         json.RawMessage     `json:"_meta,omitempty"`
-}
-
 // AvailableCommandInput is the ACP v1 slash-command input hint.
 type AvailableCommandInput struct {
 	Hint string          `json:"hint"`
@@ -140,7 +120,6 @@ type SessionNewParams struct {
 // SessionNewResult is returned after a successful session/new.
 type SessionNewResult struct {
 	SessionID     string          `json:"sessionId"`
-	Title         string          `json:"title,omitempty"`
 	ConfigOptions []ConfigOption  `json:"configOptions,omitempty"`
 	Meta          json.RawMessage `json:"_meta,omitempty"`
 }
@@ -188,70 +167,13 @@ type SessionPromptParams struct {
 
 // SessionPromptResult is the final result after a prompt completes.
 type SessionPromptResult struct {
-	StopReason string                         `json:"stopReason"`
-	Message    string                         `json:"message,omitempty"`
-	Artifacts  []SessionPromptArtifactPayload `json:"-"`
-	ForkPoint  *SessionForkPoint              `json:"-"`
-	Meta       json.RawMessage                `json:"_meta,omitempty"`
-}
-
-// SessionPromptArtifactPayload is internal side-band data attached to a prompt
-// result before the session recorder writes the artifact body to disk.
-type SessionPromptArtifactPayload struct {
-	Type    string `json:"type"`
-	Format  string `json:"format"`
-	Content string `json:"-"`
+	StopReason string          `json:"stopReason"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionCancelParams cancels an in-progress prompt.
 type SessionCancelParams struct {
 	SessionID string          `json:"sessionId"`
-	Meta      json.RawMessage `json:"_meta,omitempty"`
-}
-
-// SessionUpdateParams is the payload of a session/update notification.
-type SessionUpdateParams struct {
-	SessionID string          `json:"sessionId"`
-	Update    SessionUpdate   `json:"update"`
-	Meta      json.RawMessage `json:"_meta,omitempty"`
-}
-
-// SessionUpdate is the body of a single streaming update from the agent.
-type SessionUpdate struct {
-	SessionUpdate     string             `json:"sessionUpdate"`
-	Content           json.RawMessage    `json:"content,omitempty"`
-	MessageID         string             `json:"messageId,omitempty"`
-	Meta              json.RawMessage    `json:"_meta,omitempty"`
-	ContentBlocks     []ContentBlock     `json:"contentBlocks,omitempty"`
-	ClientMessageID   string             `json:"clientMessageId,omitempty"`
-	Steered           bool               `json:"steered,omitempty"`
-	AvailableCommands []AvailableCommand `json:"availableCommands,omitempty"`
-	ToolCallID        string             `json:"toolCallId,omitempty"`
-	Title             string             `json:"title,omitempty"`
-	Kind              string             `json:"kind,omitempty"`
-	Status            string             `json:"status,omitempty"`
-	Entries           []PlanEntry        `json:"entries,omitempty"`
-	Locations         []ToolCallLocation `json:"locations,omitempty"`
-	RawInput          json.RawMessage    `json:"rawInput,omitempty"`
-	RawOutput         json.RawMessage    `json:"rawOutput,omitempty"`
-	ToolCallContent   []ToolCallContent  `json:"toolCallContent,omitempty"`
-	// ModeID is legacy Session Modes payload ("current_mode_update").
-	// Prefer ConfigOptions via "config_option_update"; this field is retained
-	// only for backward-compatible input parsing.
-	ModeID        string         `json:"modeId,omitempty"`
-	ConfigOptions []ConfigOption `json:"configOptions,omitempty"`
-	Size          *int64         `json:"size,omitempty"`
-	Used          *int64         `json:"used,omitempty"`
-	UpdatedAt     string         `json:"updatedAt,omitempty"`
-	Goal          *SessionGoal   `json:"goal,omitempty"`
-	TurnID        string         `json:"turnId,omitempty"`
-}
-
-// SessionUsage is the current context-window usage snapshot for a session.
-type SessionUsage struct {
-	Used      int64           `json:"used"`
-	Size      int64           `json:"size,omitempty"`
-	UpdatedAt string          `json:"updatedAt,omitempty"`
 	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
@@ -360,14 +282,6 @@ type PermissionResponse struct {
 type SessionLoadResult struct {
 	ConfigOptions []ConfigOption  `json:"configOptions,omitempty"`
 	Meta          json.RawMessage `json:"_meta,omitempty"`
-}
-
-// SessionSetConfigOptionParams sets a configuration option on an active session.
-type SessionSetConfigOptionParams struct {
-	SessionID string          `json:"sessionId"`
-	ConfigID  string          `json:"configId"`
-	Value     string          `json:"value"`
-	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // FSReadTextFileParams is sent by the agent to request a file read.

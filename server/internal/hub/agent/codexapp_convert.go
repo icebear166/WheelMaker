@@ -1236,7 +1236,7 @@ func codexappStopReason(status string) string {
 	case "cancelled", "canceled", "interrupted":
 		return protocol.StopReasonCancelled
 	case "failed", "error":
-		return protocol.StopReasonFailed
+		return protocol.SessionTurnStopReasonFailed
 	case "max_tokens":
 		return protocol.StopReasonMaxTokens
 	default:

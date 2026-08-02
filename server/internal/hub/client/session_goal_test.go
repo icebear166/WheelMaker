@@ -16,13 +16,15 @@ import (
 func newGoalTestClient(t *testing.T, sessionID string) (*Client, *Session, *testInjectedInstance) {
 	t.Helper()
 	client := newTestClient(t, &mockSession{agentName: string(acp.ACPProviderCodex), sessionID: sessionID})
-	client.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{
-		Compact: true, Steer: true, Fork: true, Goal: true,
-	})
 	session, err := client.SessionForTest(sessionID)
 	if err != nil {
 		t.Fatalf("SessionForTest(): %v", err)
 	}
+	session.mu.Lock()
+	session.agentState.AgentCapabilities = wmAgentCapabilitiesForTest(acp.WMSessionActionCapabilities{
+		Compact: true, Steer: true, Fork: true, Goal: true,
+	})
+	session.mu.Unlock()
 	session.mu.Lock()
 	runtime, ok := session.instance.(*testInjectedInstance)
 	session.mu.Unlock()
@@ -218,7 +220,7 @@ func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
 		{id: "goal-paused", status: acp.SessionGoalStatusPaused},
 		{id: "goal-complete", status: acp.SessionGoalStatusComplete},
 	} {
-		state, marshalErr := json.Marshal(SessionAgentState{Goal: &acp.SessionGoal{
+		state, marshalErr := json.Marshal(SessionAgentState{AgentCapabilities: wmAgentCapabilitiesForTest(acp.WMSessionActionCapabilities{Goal: true}), Goal: &acp.SessionGoal{
 			SessionID: item.id,
 			Objective: "ship",
 			Status:    item.status,
@@ -243,7 +245,6 @@ func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
 	var mu sync.Mutex
 	loads := make([]string, 0)
 	factory := agent.NewACPFactory()
-	factory.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{Goal: true})
 	factory.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) {
 		runtime := &testInjectedInstance{
 			name:  string(acp.ACPProviderCodex),
@@ -252,6 +253,7 @@ func TestClientStartRestoresOnlyActiveGoals(t *testing.T) {
 				ProtocolVersion: "1",
 				AgentCapabilities: acp.AgentCapabilities{
 					LoadSession: true,
+					Meta:        wmAgentCapabilitiesForTest(acp.WMSessionActionCapabilities{Goal: true}).Meta,
 				},
 			},
 		}
@@ -310,6 +312,7 @@ func TestClientRecoversActiveGoalAfterAgentRuntimeStops(t *testing.T) {
 			ProtocolVersion: "1",
 			AgentCapabilities: acp.AgentCapabilities{
 				LoadSession: true,
+				Meta:        wmAgentCapabilitiesForTest(acp.WMSessionActionCapabilities{Goal: true}).Meta,
 			},
 		},
 		goal: runtimeGoalForTest(t, session),

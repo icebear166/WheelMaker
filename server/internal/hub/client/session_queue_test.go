@@ -16,7 +16,7 @@ import (
 )
 
 type queuePromptOutcome struct {
-	result acp.SessionPromptResult
+	result acp.PromptOutcome
 	err    error
 }
 
@@ -49,7 +49,7 @@ func newQueueExecutionSession(t *testing.T, id string) (*Session, *queueExecutio
 	return s, instance
 }
 
-func (i *queueExecutionInstance) SessionPrompt(ctx context.Context, params acp.SessionPromptParams) (acp.SessionPromptResult, error) {
+func (i *queueExecutionInstance) SessionPrompt(ctx context.Context, params acp.SessionPromptParams) (acp.PromptOutcome, error) {
 	text := ""
 	for _, block := range params.Prompt {
 		if block.Type == acp.ContentBlockTypeText {
@@ -62,7 +62,7 @@ func (i *queueExecutionInstance) SessionPrompt(ctx context.Context, params acp.S
 	case outcome := <-i.promptOutcomes:
 		return outcome.result, outcome.err
 	case <-ctx.Done():
-		return acp.SessionPromptResult{}, ctx.Err()
+		return acp.PromptOutcome{}, ctx.Err()
 	}
 }
 
@@ -377,11 +377,11 @@ func TestSessionQueueDrainsPromptCompactPromptInOrder(t *testing.T) {
 	}
 
 	awaitQueueExecutionStart(t, instance, "prompt:first")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 	awaitQueueExecutionStart(t, instance, "compact:sess-drain")
 	instance.compactOutcomes <- nil
 	awaitQueueExecutionStart(t, instance, "prompt:second")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 
 	eventuallyQueue(t, func() bool {
 		got := s.queueSnapshot(true)
@@ -400,7 +400,7 @@ func TestSessionQueuePromptTranscriptCarriesQueueItemIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	awaitQueueExecutionStart(t, instance, "prompt:identify me")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
 
 	for _, event := range sink.events {
@@ -431,7 +431,7 @@ func TestSessionQueueFailureDequeuesAndContinues(t *testing.T) {
 	awaitQueueExecutionStart(t, instance, "prompt:first")
 	instance.promptOutcomes <- queuePromptOutcome{err: errors.New("provider failed")}
 	awaitQueueExecutionStart(t, instance, "prompt:second")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 	eventuallyQueue(t, func() bool {
 		got := s.queueSnapshot(true)
 		return got.ActiveItem == nil && len(got.WaitingItems) == 0
@@ -451,7 +451,7 @@ func TestSessionQueueEnqueueReturnsBeforeExecutionCompletes(t *testing.T) {
 		t.Fatalf("enqueue blocked for %s", elapsed)
 	}
 	awaitQueueExecutionStart(t, instance, "prompt:slow")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 }
 
 func TestSessionQueueCancelActivePromptWaitsForOfficialOutcome(t *testing.T) {
@@ -571,7 +571,7 @@ func TestSessionQueueReschedulesAfterConfigMutationReleasesExecutionLock(t *test
 	}
 
 	awaitQueueExecutionStart(t, instance, "prompt:after config")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
 }
 
@@ -596,7 +596,7 @@ func TestSessionQueueConcurrentEnqueueExecutesEachItemOnce(t *testing.T) {
 		case <-time.After(3 * time.Second):
 			t.Fatalf("timed out waiting for execution %d", index)
 		}
-		instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+		instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 	}
 	eventuallyQueue(t, func() bool { return !s.queuePinsMemory() })
 	order := instance.executionOrder()
@@ -711,7 +711,7 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 		},
 	})
 	eventuallyQueue(t, func() bool { return len(s.queueSnapshot(true).WaitingItems) == 0 })
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 }
 
 func TestSessionQueueSteeringItemCanBeCancelledWhileProviderIsPending(t *testing.T) {
@@ -762,7 +762,7 @@ func TestSessionQueueSteeringItemCanBeCancelledWhileProviderIsPending(t *testing
 	case <-time.After(3 * time.Second):
 		t.Fatal("cancel did not stop the provider steer call")
 	}
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 }
 
 func TestSessionQueueSteerInactiveMovesPromptToFront(t *testing.T) {
@@ -787,7 +787,7 @@ func TestSessionQueueSteerInactiveMovesPromptToFront(t *testing.T) {
 		got.WaitingItems[0].Status != acp.SessionQueueItemStatusQueued {
 		t.Fatalf("queue = %#v", got)
 	}
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 }
 
 func TestSessionQueueSteerFailureRestoresOriginalPosition(t *testing.T) {
@@ -817,7 +817,7 @@ func TestSessionQueueSteerFailureRestoresOriginalPosition(t *testing.T) {
 		got.WaitingItems[1].Status != acp.SessionQueueItemStatusQueued {
 		t.Fatalf("queue = %#v", got)
 	}
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 }
 
 func TestHandleSessionQueueReturnsLatestFullSnapshot(t *testing.T) {
@@ -852,7 +852,7 @@ func TestHandleSessionQueueReturnsLatestFullSnapshot(t *testing.T) {
 		t.Fatalf("response = %#v", body)
 	}
 	awaitQueueExecutionStart(t, instance, "prompt:hello")
-	instance.promptOutcomes <- queuePromptOutcome{result: acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}}
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 	eventuallyQueue(t, func() bool { return !sess.queuePinsMemory() })
 }
 

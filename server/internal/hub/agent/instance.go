@@ -28,7 +28,7 @@ type Instance interface {
 	SessionNew(ctx context.Context, p protocol.SessionNewParams) (protocol.SessionNewResult, error)
 	SessionLoad(ctx context.Context, p protocol.SessionLoadParams) (protocol.SessionLoadResult, error)
 	SessionList(ctx context.Context, p protocol.SessionListParams) (protocol.SessionListResult, error)
-	SessionPrompt(ctx context.Context, p protocol.SessionPromptParams) (protocol.SessionPromptResult, error)
+	SessionPrompt(ctx context.Context, p protocol.SessionPromptParams) (protocol.PromptOutcome, error)
 	SessionCancel(acpSessionID string) error
 	SessionSetConfigOption(ctx context.Context, p protocol.SessionSetConfigOptionParams) ([]protocol.ConfigOption, error)
 	ListSkills(ctx context.Context, cwd string) ([]SkillDescriptor, error)
@@ -42,6 +42,7 @@ var (
 	ErrSessionBusy              = errors.New("session is busy")
 	ErrSessionSteerInactive     = errors.New("session steer target is inactive")
 	ErrSessionSteerUnavailable  = errors.New("session steer is unavailable")
+	ErrSessionActionInvalid     = errors.New("session action invalid")
 )
 
 type SessionSteerResult struct {
@@ -80,11 +81,16 @@ func (i *instance) SteerSession(
 	if err := i.ensureConn(); err != nil {
 		return SessionSteerResult{}, err
 	}
-	steerer, ok := i.conn.(SessionSteerer)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Steer }) {
 		return SessionSteerResult{}, ErrSessionActionUnsupported
 	}
-	return steerer.SteerSession(ctx, sessionID, clientMessageID, blocks)
+	var out protocol.WMSessionSteerResult
+	if err := i.conn.Send(ctx, protocol.MethodWMSessionSteer, protocol.WMSessionSteerParams{
+		SessionID: sessionID, MessageID: clientMessageID, Prompt: blocks,
+	}, &out); err != nil {
+		return SessionSteerResult{}, classifyWMSessionActionError(err)
+	}
+	return SessionSteerResult{ProviderTurnID: out.TurnID}, nil
 }
 
 type SessionForker interface {
@@ -108,6 +114,7 @@ type instance struct {
 	acpSessionReady bool
 	acpSessionID    string
 	initResult      protocol.InitializeResult
+	wmExtensions    protocol.WMNegotiatedExtensions
 	pendingEvents   []protocol.AgentEvent
 	closed          bool
 }
@@ -178,6 +185,7 @@ func (i *instance) Initialize(ctx context.Context, p protocol.InitializeParams) 
 
 	i.mu.Lock()
 	i.initResult = out
+	i.wmExtensions = protocol.NegotiateWMExtensions(p.ClientCapabilities.Meta, out.AgentCapabilities.Meta)
 	i.mu.Unlock()
 	return out, nil
 }
@@ -238,9 +246,9 @@ func (i *instance) SessionList(ctx context.Context, p protocol.SessionListParams
 	return out, nil
 }
 
-func (i *instance) SessionPrompt(ctx context.Context, p protocol.SessionPromptParams) (protocol.SessionPromptResult, error) {
+func (i *instance) SessionPrompt(ctx context.Context, p protocol.SessionPromptParams) (protocol.PromptOutcome, error) {
 	if err := i.ensureConn(); err != nil {
-		return protocol.SessionPromptResult{}, err
+		return protocol.PromptOutcome{}, err
 	}
 
 	if strings.TrimSpace(p.SessionID) == "" {
@@ -249,15 +257,22 @@ func (i *instance) SessionPrompt(ctx context.Context, p protocol.SessionPromptPa
 		ready := i.acpSessionReady
 		i.mu.RUnlock()
 		if !ready || strings.TrimSpace(sid) == "" {
-			return protocol.SessionPromptResult{}, errors.New("acp session is not ready")
+			return protocol.PromptOutcome{}, errors.New("acp session is not ready")
 		}
 		p.SessionID = sid
 	}
 
-	var out protocol.SessionPromptResult
+	var out protocol.PromptOutcome
 	if err := i.conn.Send(ctx, protocol.MethodSessionPrompt, p, &out); err != nil {
-		return protocol.SessionPromptResult{}, err
+		return protocol.PromptOutcome{}, err
 	}
+	if out.Err != nil {
+		return protocol.PromptOutcome{}, out.Err
+	}
+	if !protocol.IsACPStopReason(out.StopReason) {
+		return protocol.PromptOutcome{}, fmt.Errorf("unsupported ACP stopReason %q", out.StopReason)
+	}
+	out.Message = firstNonEmptyString(out.Message, protocol.WMPromptResultMetaMessage(out.Meta))
 	return out, nil
 }
 
@@ -282,112 +297,171 @@ func (i *instance) SessionSetConfigOption(ctx context.Context, p protocol.Sessio
 		return nil, err
 	}
 
-	var raw json.RawMessage
-	if err := i.conn.Send(ctx, protocol.MethodSetConfigOption, p, &raw); err != nil {
+	request := protocol.SetSessionConfigOptionRequest{
+		SessionID: p.SessionID,
+		ConfigID:  p.ConfigID,
+		Variant:   protocol.SetSessionConfigValueID{Type: "value_id", Value: p.Value},
+		Meta:      protocol.CloneSessionUpdateMeta(p.Meta),
+	}
+	var response protocol.SetSessionConfigOptionResponse
+	if err := i.conn.Send(ctx, protocol.MethodSetConfigOption, request, &response); err != nil {
 		return nil, err
 	}
-	var opts []protocol.ConfigOption
-	if len(raw) == 0 {
-		return opts, nil
-	}
-	if err := json.Unmarshal(raw, &opts); err == nil {
-		return opts, nil
-	}
-	var wrapped struct {
-		ConfigOptions []protocol.ConfigOption `json:"configOptions"`
-	}
-	if err := json.Unmarshal(raw, &wrapped); err == nil {
-		return wrapped.ConfigOptions, nil
-	}
-	return opts, nil
+	return protocol.NormalizeSessionConfigOptions(response.ConfigOptions)
 }
 
 func (i *instance) ArchiveSession(ctx context.Context, sessionID string) error {
 	if err := i.ensureConn(); err != nil {
 		return err
 	}
-	archiver, ok := i.conn.(SessionArchiver)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Archive }) {
 		return ErrSessionArchiveUnsupported
 	}
-	return archiver.ArchiveSession(ctx, sessionID)
+	var out protocol.WMSessionOKResult
+	err := classifyWMSessionActionError(i.conn.Send(ctx, protocol.MethodWMSessionArchive, protocol.WMSessionArchiveParams{SessionID: sessionID, Archived: true}, &out))
+	if errors.Is(err, ErrSessionActionUnsupported) {
+		return ErrSessionArchiveUnsupported
+	}
+	return err
 }
 
 func (i *instance) UnarchiveSession(ctx context.Context, sessionID string) error {
 	if err := i.ensureConn(); err != nil {
 		return err
 	}
-	archiver, ok := i.conn.(SessionArchiver)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Archive }) {
 		return ErrSessionArchiveUnsupported
 	}
-	return archiver.UnarchiveSession(ctx, sessionID)
+	var out protocol.WMSessionOKResult
+	err := classifyWMSessionActionError(i.conn.Send(ctx, protocol.MethodWMSessionArchive, protocol.WMSessionArchiveParams{SessionID: sessionID, Archived: false}, &out))
+	if errors.Is(err, ErrSessionActionUnsupported) {
+		return ErrSessionArchiveUnsupported
+	}
+	return err
 }
 
 func (i *instance) CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error) {
 	if err := i.ensureConn(); err != nil {
 		return nil, err
 	}
-	compactor, ok := i.conn.(SessionCompactor)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Compact }) {
 		return nil, ErrSessionActionUnsupported
 	}
-	return compactor.CompactSession(ctx, sessionID)
+	done := make(chan SessionCompactResult, 1)
+	go func() {
+		var out protocol.WMSessionCompactResult
+		err := classifyWMSessionActionError(i.conn.Send(ctx, protocol.MethodWMSessionCompact, protocol.WMSessionCompactParams{SessionID: sessionID}, &out))
+		done <- SessionCompactResult{Err: err}
+		close(done)
+	}()
+	return done, nil
 }
 
 func (i *instance) SessionGoalSet(ctx context.Context, params protocol.SessionGoalSetParams) (protocol.SessionGoal, error) {
 	if err := i.ensureConn(); err != nil {
 		return protocol.SessionGoal{}, err
 	}
-	controller, ok := i.conn.(SessionGoalController)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Goal }) {
 		return protocol.SessionGoal{}, ErrSessionActionUnsupported
 	}
-	return controller.SessionGoalSet(ctx, params)
+	var out protocol.WMSessionGoalResult
+	err := i.conn.Send(ctx, protocol.MethodWMSessionGoalSet, protocol.WMSessionGoalSetParams{
+		SessionID: params.SessionID, Objective: params.Objective, Status: params.Status, TokenBudget: params.TokenBudget,
+	}, &out)
+	if err != nil {
+		return protocol.SessionGoal{}, classifyWMSessionActionError(err)
+	}
+	if out.Goal == nil {
+		return protocol.SessionGoal{}, errors.New("Goal set returned no snapshot")
+	}
+	return *out.Goal, nil
 }
 
 func (i *instance) SessionGoalGet(ctx context.Context, sessionID string) (*protocol.SessionGoal, error) {
 	if err := i.ensureConn(); err != nil {
 		return nil, err
 	}
-	controller, ok := i.conn.(SessionGoalController)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Goal }) {
 		return nil, ErrSessionActionUnsupported
 	}
-	return controller.SessionGoalGet(ctx, sessionID)
+	var out protocol.WMSessionGoalResult
+	if err := i.conn.Send(ctx, protocol.MethodWMSessionGoalGet, protocol.WMSessionGoalParams{SessionID: sessionID}, &out); err != nil {
+		return nil, classifyWMSessionActionError(err)
+	}
+	return out.Goal, nil
 }
 
 func (i *instance) SessionGoalClear(ctx context.Context, sessionID string) error {
 	if err := i.ensureConn(); err != nil {
 		return err
 	}
-	controller, ok := i.conn.(SessionGoalController)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Goal }) {
 		return ErrSessionActionUnsupported
 	}
-	return controller.SessionGoalClear(ctx, sessionID)
+	var out protocol.WMSessionOKResult
+	return classifyWMSessionActionError(i.conn.Send(ctx, protocol.MethodWMSessionGoalClear, protocol.WMSessionGoalParams{SessionID: sessionID}, &out))
 }
 
 func (i *instance) ResolveForkPoints(ctx context.Context, sessionID string, prompts []protocol.SessionForkPrompt) (map[int64]protocol.SessionForkPoint, error) {
 	if err := i.ensureConn(); err != nil {
 		return nil, err
 	}
-	forker, ok := i.conn.(SessionForker)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Fork }) {
 		return nil, ErrSessionActionUnsupported
 	}
-	return forker.ResolveForkPoints(ctx, sessionID, prompts)
+	var out protocol.WMSessionForkResolveResult
+	if err := i.conn.Send(ctx, protocol.MethodWMSessionForkResolve, protocol.WMSessionForkResolveParams{SessionID: sessionID, Prompts: prompts}, &out); err != nil {
+		return nil, classifyWMSessionActionError(err)
+	}
+	return out.ForkPoints, nil
 }
 
 func (i *instance) ForkSession(ctx context.Context, sessionID string, lastTurnID string, prompts []protocol.SessionForkPrompt) (protocol.SessionForkResult, error) {
 	if err := i.ensureConn(); err != nil {
 		return protocol.SessionForkResult{}, err
 	}
-	forker, ok := i.conn.(SessionForker)
-	if !ok {
+	if !i.wmActionSupported(func(actions protocol.WMSessionActionCapabilities) bool { return actions.Fork }) {
 		return protocol.SessionForkResult{}, ErrSessionActionUnsupported
 	}
-	return forker.ForkSession(ctx, sessionID, lastTurnID, prompts)
+	var out protocol.WMSessionForkResult
+	if err := i.conn.Send(ctx, protocol.MethodWMSessionFork, protocol.WMSessionForkParams{SessionID: sessionID, Ref: lastTurnID, Prompts: prompts}, &out); err != nil {
+		return protocol.SessionForkResult{}, classifyWMSessionActionError(err)
+	}
+	return protocol.SessionForkResult{SessionID: out.SessionID, Title: out.Title, ForkPoints: out.ForkPoints}, nil
+}
+
+func (i *instance) wmActionSupported(supported func(protocol.WMSessionActionCapabilities) bool) bool {
+	i.mu.RLock()
+	actions := i.wmExtensions.SessionActions
+	i.mu.RUnlock()
+	return actions.Version == protocol.WMExtensionVersion && supported(actions)
+}
+
+func classifyWMSessionActionError(err error) error {
+	if err == nil {
+		return nil
+	}
+	code, ok := protocol.WMActionErrorCode(err)
+	if !ok {
+		return err
+	}
+	var classified error
+	switch code {
+	case protocol.WMActionErrorInactive:
+		classified = ErrSessionSteerInactive
+	case protocol.WMActionErrorBusy:
+		classified = ErrSessionBusy
+	case protocol.WMActionErrorUnavailable:
+		classified = ErrSessionSteerUnavailable
+	case protocol.WMActionErrorUnsupported:
+		classified = ErrSessionActionUnsupported
+	case protocol.WMActionErrorInvalid:
+		classified = ErrSessionActionInvalid
+	}
+	if classified == nil {
+		return err
+	}
+	return fmt.Errorf("%w: %v", classified, err)
 }
 
 func (i *instance) HandleACPResponse(_ context.Context, method string, params json.RawMessage) {
@@ -401,6 +475,26 @@ func (i *instance) HandleACPResponse(_ context.Context, method string, params js
 			return
 		}
 		i.dispatchAgentEvent(event)
+		return
+	}
+	if method == protocol.MethodWMSessionGoal {
+		i.mu.RLock()
+		supported := i.wmExtensions.GoalLifecycle
+		i.mu.RUnlock()
+		if !supported {
+			return
+		}
+		notification, err := protocol.DecodeWMGoalNotification(params)
+		if err != nil {
+			return
+		}
+		i.dispatchAgentEvent(protocol.AgentEvent{
+			SessionID: notification.SessionID,
+			Update: protocol.AgentGoalEvent{
+				Event: notification.Event, Goal: notification.Goal, TurnID: notification.TurnID,
+				Meta: protocol.CloneSessionUpdateMeta(notification.Meta), ReceivedAt: time.Now().UTC(),
+			},
+		})
 	}
 }
 

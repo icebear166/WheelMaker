@@ -66,6 +66,7 @@ type sessionArchiveManifestEntry struct {
 	NativeUnarchivedAt string                 `json:"nativeUnarchivedAt,omitempty"`
 	NativeSyncWarning  string                 `json:"nativeSyncWarning,omitempty"`
 	ForkedFrom         *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
+	SessionFeatures    *acp.SessionFeatures   `json:"sessionFeatures,omitempty"`
 }
 
 type sessionArchiveSummary struct {
@@ -83,6 +84,7 @@ type sessionArchiveSummary struct {
 	NativeUnarchivedAt string                 `json:"nativeUnarchivedAt,omitempty"`
 	NativeSyncWarning  string                 `json:"nativeSyncWarning,omitempty"`
 	ForkedFrom         *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
+	SessionFeatures    *acp.SessionFeatures   `json:"sessionFeatures,omitempty"`
 }
 
 type sessionArchiveNativeSyncUpdate struct {
@@ -189,6 +191,7 @@ func (s *sessionArchiveStore) AppendSession(ctx context.Context, rec SessionReco
 		CreatedAt:          formatArchiveTime(rec.CreatedAt),
 		UpdatedAt:          formatArchiveTime(rec.LastActiveAt),
 		ForkedFrom:         cloneSessionForkOrigin(projection.ForkedFrom),
+		SessionFeatures:    sessionFeaturesFromAgentJSON(rec.AgentJSON),
 	}
 	manifest.Version = sessionArchiveManifestVersion
 	manifest.UpdatedAt = entry.ArchivedAt

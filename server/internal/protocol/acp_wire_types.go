@@ -7,6 +7,164 @@ import (
 	"strings"
 )
 
+func (s MCPServer) MarshalJSON() ([]byte, error) {
+	type wire MCPServer
+	raw, err := json.Marshal(wire(s))
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateMCPServerJSON(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (s *MCPServer) UnmarshalJSON(raw []byte) error {
+	if err := ValidateMCPServerJSON(raw); err != nil {
+		return err
+	}
+	type wire MCPServer
+	var decoded wire
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	*s = MCPServer(decoded)
+	return nil
+}
+
+func (b ContentBlock) MarshalJSON() ([]byte, error) {
+	type wire ContentBlock
+	raw, err := json.Marshal(wire(b))
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateContentBlockJSON(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (b *ContentBlock) UnmarshalJSON(raw []byte) error {
+	if err := ValidateContentBlockJSON(raw); err != nil {
+		return err
+	}
+	type wire ContentBlock
+	var decoded wire
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	*b = ContentBlock(decoded)
+	return nil
+}
+
+func (c ToolCallContent) MarshalJSON() ([]byte, error) {
+	type wire ToolCallContent
+	raw, err := json.Marshal(wire(c))
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateToolCallContentJSON(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func (c *ToolCallContent) UnmarshalJSON(raw []byte) error {
+	if err := ValidateToolCallContentJSON(raw); err != nil {
+		return err
+	}
+	type wire ToolCallContent
+	var decoded wire
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	*c = ToolCallContent(decoded)
+	return nil
+}
+
+func (r SessionPromptResult) MarshalJSON() ([]byte, error) {
+	if !IsACPStopReason(r.StopReason) {
+		return nil, fmt.Errorf("unsupported ACP stopReason %q", r.StopReason)
+	}
+	type wire struct {
+		StopReason string          `json:"stopReason"`
+		Meta       json.RawMessage `json:"_meta,omitempty"`
+	}
+	return json.Marshal(wire{StopReason: r.StopReason, Meta: CloneSessionUpdateMeta(r.Meta)})
+}
+
+func (r *SessionPromptResult) UnmarshalJSON(raw []byte) error {
+	var wire struct {
+		StopReason string          `json:"stopReason"`
+		Meta       json.RawMessage `json:"_meta,omitempty"`
+	}
+	if err := decodeStrict(raw, &wire); err != nil {
+		return err
+	}
+	if !IsACPStopReason(wire.StopReason) {
+		return fmt.Errorf("unsupported ACP stopReason %q", wire.StopReason)
+	}
+	r.StopReason = wire.StopReason
+	r.Meta = CloneSessionUpdateMeta(wire.Meta)
+	return nil
+}
+
+func (r SessionNewResult) MarshalJSON() ([]byte, error) {
+	type wire struct {
+		SessionID     string                `json:"sessionId"`
+		ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+		Meta          json.RawMessage       `json:"_meta,omitempty"`
+	}
+	return json.Marshal(wire{SessionID: r.SessionID, ConfigOptions: WireSessionConfigOptions(r.ConfigOptions), Meta: CloneSessionUpdateMeta(r.Meta)})
+}
+
+func (r *SessionNewResult) UnmarshalJSON(raw []byte) error {
+	var wire struct {
+		SessionID     string                `json:"sessionId"`
+		ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+		Meta          json.RawMessage       `json:"_meta,omitempty"`
+	}
+	if err := decodeStrict(raw, &wire); err != nil {
+		return err
+	}
+	if strings.TrimSpace(wire.SessionID) == "" {
+		return errors.New("sessionId is required")
+	}
+	options, err := NormalizeSessionConfigOptions(wire.ConfigOptions)
+	if err != nil {
+		return err
+	}
+	r.SessionID = wire.SessionID
+	r.ConfigOptions = options
+	r.Meta = CloneSessionUpdateMeta(wire.Meta)
+	return nil
+}
+
+func (r SessionLoadResult) MarshalJSON() ([]byte, error) {
+	type wire struct {
+		ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+		Meta          json.RawMessage       `json:"_meta,omitempty"`
+	}
+	return json.Marshal(wire{ConfigOptions: WireSessionConfigOptions(r.ConfigOptions), Meta: CloneSessionUpdateMeta(r.Meta)})
+}
+
+func (r *SessionLoadResult) UnmarshalJSON(raw []byte) error {
+	var wire struct {
+		ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+		Meta          json.RawMessage       `json:"_meta,omitempty"`
+	}
+	if err := decodeStrict(raw, &wire); err != nil {
+		return err
+	}
+	options, err := NormalizeSessionConfigOptions(wire.ConfigOptions)
+	if err != nil {
+		return err
+	}
+	r.ConfigOptions = options
+	r.Meta = CloneSessionUpdateMeta(wire.Meta)
+	return nil
+}
+
 type SessionConfigOptionVariant interface {
 	sessionConfigOptionVariant()
 }
@@ -196,6 +354,38 @@ type SetSessionConfigOptionRequest struct {
 	Meta      json.RawMessage
 }
 
+func (r SetSessionConfigOptionRequest) MarshalJSON() ([]byte, error) {
+	switch value := r.Variant.(type) {
+	case SetSessionConfigValueID:
+		return json.Marshal(struct {
+			SessionID string          `json:"sessionId"`
+			ConfigID  string          `json:"configId"`
+			Type      string          `json:"type,omitempty"`
+			Value     string          `json:"value"`
+			Meta      json.RawMessage `json:"_meta,omitempty"`
+		}{r.SessionID, r.ConfigID, value.Type, value.Value, CloneSessionUpdateMeta(r.Meta)})
+	case SetSessionConfigBoolean:
+		return json.Marshal(struct {
+			SessionID string          `json:"sessionId"`
+			ConfigID  string          `json:"configId"`
+			Type      string          `json:"type"`
+			Value     bool            `json:"value"`
+			Meta      json.RawMessage `json:"_meta,omitempty"`
+		}{r.SessionID, r.ConfigID, "boolean", value.Value, CloneSessionUpdateMeta(r.Meta)})
+	default:
+		return nil, fmt.Errorf("unsupported set config variant %T", r.Variant)
+	}
+}
+
+func (r *SetSessionConfigOptionRequest) UnmarshalJSON(raw []byte) error {
+	decoded, err := DecodeSetSessionConfigOptionRequest(raw)
+	if err != nil {
+		return err
+	}
+	*r = decoded
+	return nil
+}
+
 func DecodeSetSessionConfigOptionRequest(raw json.RawMessage) (SetSessionConfigOptionRequest, error) {
 	var head struct {
 		Type  string          `json:"type,omitempty"`
@@ -239,15 +429,27 @@ type SetSessionConfigOptionResponse struct {
 	Meta          json.RawMessage       `json:"_meta,omitempty"`
 }
 
+func (r *SetSessionConfigOptionResponse) UnmarshalJSON(raw []byte) error {
+	decoded, err := DecodeSetSessionConfigOptionResponse(raw)
+	if err != nil {
+		return err
+	}
+	*r = decoded
+	return nil
+}
+
 func DecodeSetSessionConfigOptionResponse(raw json.RawMessage) (SetSessionConfigOptionResponse, error) {
-	var response SetSessionConfigOptionResponse
-	if err := decodeStrict(raw, &response); err != nil {
+	var wire struct {
+		ConfigOptions []SessionConfigOption `json:"configOptions"`
+		Meta          json.RawMessage       `json:"_meta,omitempty"`
+	}
+	if err := decodeStrict(raw, &wire); err != nil {
 		return SetSessionConfigOptionResponse{}, err
 	}
-	if response.ConfigOptions == nil {
+	if wire.ConfigOptions == nil {
 		return SetSessionConfigOptionResponse{}, errors.New("configOptions is required")
 	}
-	return response, nil
+	return SetSessionConfigOptionResponse{ConfigOptions: wire.ConfigOptions, Meta: CloneSessionUpdateMeta(wire.Meta)}, nil
 }
 
 func (i *AvailableCommandInput) UnmarshalJSON(raw []byte) error {

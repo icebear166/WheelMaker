@@ -64,6 +64,44 @@ type SessionActionCapabilities struct {
 	Goal    SessionActionCapability `json:"goal"`
 }
 
+type SessionFeatureVersion struct {
+	Version int `json:"version"`
+}
+
+type SessionFeatures struct {
+	MessageLifecycle *SessionFeatureVersion `json:"messageLifecycle,omitempty"`
+}
+
+func SessionFeaturesFromAgentCapabilities(capabilities AgentCapabilities) *SessionFeatures {
+	negotiated := NegotiateWMExtensions(BuildWMClientCapabilitiesMeta(nil), capabilities.Meta)
+	if !negotiated.MessageLifecycle {
+		return nil
+	}
+	return &SessionFeatures{MessageLifecycle: &SessionFeatureVersion{Version: WMExtensionVersion}}
+}
+
+// SessionActionsFromAgentCapabilities projects only capabilities negotiated
+// through the WheelMaker ACP extension. Status is implemented locally by the
+// Hub and therefore does not require an Agent extension.
+func SessionActionsFromAgentCapabilities(capabilities AgentCapabilities) SessionActionCapabilities {
+	const unsupported = "Current Agent does not support this action."
+	negotiated := NegotiateWMExtensions(BuildWMClientCapabilitiesMeta(nil), capabilities.Meta)
+	actions := negotiated.SessionActions
+	capability := func(supported bool) SessionActionCapability {
+		if supported {
+			return SessionActionCapability{Supported: true}
+		}
+		return SessionActionCapability{Reason: unsupported}
+	}
+	return SessionActionCapabilities{
+		Status:  SessionActionCapability{Supported: true},
+		Compact: capability(actions.Compact),
+		Steer:   capability(actions.Steer),
+		Fork:    capability(actions.Fork),
+		Goal:    capability(actions.Goal),
+	}
+}
+
 type SessionGoal struct {
 	SessionID       string `json:"sessionId"`
 	Objective       string `json:"objective"`

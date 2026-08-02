@@ -1,4 +1,5 @@
 import type { RegistryChatSession } from '../../registry/registryTypes';
+import {isCodexAppAgentType} from '../projectAgents';
 
 export type ChatSessionVisualState =
   | 'idle'
@@ -36,4 +37,14 @@ export function resolveChatSessionVisualState(
   >,
 ): ChatSessionVisualState {
   return getChatSessionVisualState(session);
+}
+
+export function hasMessageLifecycleFeature(
+  session: Pick<RegistryChatSession, 'agentType' | 'sessionFeatures'> | null | undefined,
+  historical = false,
+): boolean {
+  if (session?.sessionFeatures?.messageLifecycle?.version === 1) {
+    return true;
+  }
+  return historical && session?.sessionFeatures == null && isCodexAppAgentType(session?.agentType);
 }

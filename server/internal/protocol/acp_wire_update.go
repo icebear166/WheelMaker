@@ -23,6 +23,21 @@ type SessionUpdateParamsWire struct {
 	Meta      json.RawMessage
 }
 
+func (p SessionUpdateParamsWire) MarshalJSON() ([]byte, error) {
+	if strings.TrimSpace(p.SessionID) == "" {
+		return nil, errors.New("sessionId is required")
+	}
+	if p.Update == nil {
+		return nil, errors.New("update is required")
+	}
+	type wire struct {
+		SessionID string               `json:"sessionId"`
+		Update    SessionUpdateVariant `json:"update"`
+		Meta      json.RawMessage      `json:"_meta,omitempty"`
+	}
+	return json.Marshal(wire{SessionID: p.SessionID, Update: p.Update, Meta: cloneRaw(p.Meta)})
+}
+
 func DecodeSessionUpdateParams(raw json.RawMessage) (SessionUpdateParamsWire, error) {
 	var wire struct {
 		SessionID string          `json:"sessionId"`
@@ -72,6 +87,16 @@ type ToolCallUpdate struct {
 
 func (u ToolCallUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u ToolCallUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u ToolCallUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdateToolCall && u.SessionUpdate != SessionUpdateToolCallUpdate {
+		return nil, fmt.Errorf("invalid tool sessionUpdate %q", u.SessionUpdate)
+	}
+	if strings.TrimSpace(u.ToolCallID) == "" {
+		return nil, errors.New("toolCallId is required")
+	}
+	type wire ToolCallUpdate
+	return json.Marshal(wire(u))
+}
 
 type PlanUpdate struct {
 	SessionUpdate string          `json:"sessionUpdate"`
@@ -81,6 +106,13 @@ type PlanUpdate struct {
 
 func (u PlanUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u PlanUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u PlanUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdatePlan {
+		return nil, fmt.Errorf("invalid plan sessionUpdate %q", u.SessionUpdate)
+	}
+	type wire PlanUpdate
+	return json.Marshal(wire(u))
+}
 
 type AvailableCommandsUpdate struct {
 	SessionUpdate     string             `json:"sessionUpdate"`
@@ -90,6 +122,13 @@ type AvailableCommandsUpdate struct {
 
 func (u AvailableCommandsUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u AvailableCommandsUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u AvailableCommandsUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdateAvailableCommandsUpdate {
+		return nil, fmt.Errorf("invalid commands sessionUpdate %q", u.SessionUpdate)
+	}
+	type wire AvailableCommandsUpdate
+	return json.Marshal(wire(u))
+}
 
 type CurrentModeUpdate struct {
 	SessionUpdate string          `json:"sessionUpdate"`
@@ -99,6 +138,13 @@ type CurrentModeUpdate struct {
 
 func (u CurrentModeUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u CurrentModeUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u CurrentModeUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdateCurrentModeUpdate || strings.TrimSpace(u.CurrentModeID) == "" {
+		return nil, fmt.Errorf("invalid current mode update")
+	}
+	type wire CurrentModeUpdate
+	return json.Marshal(wire(u))
+}
 
 type ConfigOptionUpdate struct {
 	SessionUpdate string                `json:"sessionUpdate"`
@@ -108,6 +154,13 @@ type ConfigOptionUpdate struct {
 
 func (u ConfigOptionUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u ConfigOptionUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u ConfigOptionUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdateConfigOptionUpdate {
+		return nil, fmt.Errorf("invalid config option sessionUpdate %q", u.SessionUpdate)
+	}
+	type wire ConfigOptionUpdate
+	return json.Marshal(wire(u))
+}
 
 type SessionInfoUpdate struct {
 	SessionUpdate string          `json:"sessionUpdate"`
@@ -118,6 +171,13 @@ type SessionInfoUpdate struct {
 
 func (u SessionInfoUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u SessionInfoUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u SessionInfoUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdateSessionInfoUpdate {
+		return nil, fmt.Errorf("invalid session info sessionUpdate %q", u.SessionUpdate)
+	}
+	type wire SessionInfoUpdate
+	return json.Marshal(wire(u))
+}
 
 type UsageUpdate struct {
 	SessionUpdate string          `json:"sessionUpdate"`
@@ -129,6 +189,13 @@ type UsageUpdate struct {
 
 func (u UsageUpdate) SessionUpdateKind() string { return u.SessionUpdate }
 func (u UsageUpdate) Metadata() json.RawMessage { return CloneSessionUpdateMeta(u.Meta) }
+func (u UsageUpdate) MarshalJSON() ([]byte, error) {
+	if u.SessionUpdate != SessionUpdateUsageUpdate {
+		return nil, fmt.Errorf("invalid usage sessionUpdate %q", u.SessionUpdate)
+	}
+	type wire UsageUpdate
+	return json.Marshal(wire(u))
+}
 
 func marshalMessageChunkUpdate(update MessageChunkUpdate) ([]byte, error) {
 	if !isMessageUpdateKind(update.SessionUpdate) {

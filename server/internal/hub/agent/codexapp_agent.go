@@ -656,6 +656,8 @@ type codexappConn struct {
 	completedMessages map[string]bool
 	goal              *protocol.SessionGoal
 	goalTurnActive    bool
+	wmInitialized     bool
+	wmExtensions      protocol.WMNegotiatedExtensions
 
 	pendingPromptStops   map[string]string
 	pendingPromptUpdates map[string][]protocol.SessionUpdateParams
@@ -752,7 +754,11 @@ var _ Conn = (*codexappConn)(nil)
 func (c *codexappConn) Send(ctx context.Context, method string, params any, result any) error {
 	switch method {
 	case protocol.MethodInitialize:
-		return c.sendInitialize(ctx, result)
+		var p protocol.InitializeParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		return c.sendInitialize(ctx, p, result)
 	case protocol.MethodSessionNew:
 		var p protocol.SessionNewParams
 		if err := remarshal(params, &p); err != nil {
@@ -778,14 +784,140 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		}
 		return c.sendSessionPrompt(ctx, p, result)
 	case protocol.MethodSetConfigOption:
-		var p protocol.SessionSetConfigOptionParams
+		var request protocol.SetSessionConfigOptionRequest
+		if err := remarshal(params, &request); err != nil {
+			return err
+		}
+		p := protocol.SessionSetConfigOptionParams{SessionID: request.SessionID, ConfigID: request.ConfigID, Meta: request.Meta}
+		switch value := request.Variant.(type) {
+		case protocol.SetSessionConfigValueID:
+			p.Value = value.Value
+		case protocol.SetSessionConfigBoolean:
+			if value.Value {
+				p.Value = "true"
+			} else {
+				p.Value = "false"
+			}
+		default:
+			return fmt.Errorf("unsupported config value %T", request.Variant)
+		}
+		return c.sendSetConfigOption(result, p)
+	case protocol.MethodWMSessionSteer:
+		var p protocol.WMSessionSteerParams
 		if err := remarshal(params, &p); err != nil {
 			return err
 		}
-		return c.sendSetConfigOption(result, p)
+		out, err := c.SteerSession(ctx, p.SessionID, p.MessageID, p.Prompt)
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionSteerResult{TurnID: out.ProviderTurnID})
+	case protocol.MethodWMSessionCompact:
+		var p protocol.WMSessionCompactParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		done, err := c.CompactSession(ctx, p.SessionID)
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		select {
+		case outcome, ok := <-done:
+			if !ok {
+				return errors.New("compact ended without a result")
+			}
+			if outcome.Err != nil {
+				return codexappWMActionError(outcome.Err)
+			}
+			return assignResult(result, protocol.WMSessionCompactResult{})
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	case protocol.MethodWMSessionGoalSet:
+		var p protocol.WMSessionGoalSetParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		goal, err := c.SessionGoalSet(ctx, protocol.SessionGoalSetParams{SessionID: p.SessionID, Objective: p.Objective, Status: p.Status, TokenBudget: p.TokenBudget})
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionGoalResult{Goal: &goal})
+	case protocol.MethodWMSessionGoalGet:
+		var p protocol.WMSessionGoalParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		goal, err := c.SessionGoalGet(ctx, p.SessionID)
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionGoalResult{Goal: goal})
+	case protocol.MethodWMSessionGoalClear:
+		var p protocol.WMSessionGoalParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		if err := c.SessionGoalClear(ctx, p.SessionID); err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionOKResult{OK: true})
+	case protocol.MethodWMSessionForkResolve:
+		var p protocol.WMSessionForkResolveParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		points, err := c.ResolveForkPoints(ctx, p.SessionID, p.Prompts)
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionForkResolveResult{ForkPoints: points})
+	case protocol.MethodWMSessionFork:
+		var p protocol.WMSessionForkParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		forked, err := c.ForkSession(ctx, p.SessionID, p.Ref, p.Prompts)
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionForkResult{SessionID: forked.SessionID, Title: forked.Title, ForkPoints: forked.ForkPoints})
+	case protocol.MethodWMSessionArchive:
+		var p protocol.WMSessionArchiveParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		var err error
+		if p.Archived {
+			err = c.ArchiveSession(ctx, p.SessionID)
+		} else {
+			err = c.UnarchiveSession(ctx, p.SessionID)
+		}
+		if err != nil {
+			return codexappWMActionError(err)
+		}
+		return assignResult(result, protocol.WMSessionOKResult{OK: true})
 	default:
 		return fmt.Errorf("codexapp: unsupported ACP method %s", method)
 	}
+}
+
+func codexappWMActionError(err error) error {
+	if err == nil {
+		return nil
+	}
+	code := protocol.WMActionErrorInvalid
+	switch {
+	case errors.Is(err, ErrSessionSteerInactive):
+		code = protocol.WMActionErrorInactive
+	case errors.Is(err, ErrSessionBusy):
+		code = protocol.WMActionErrorBusy
+	case errors.Is(err, ErrSessionSteerUnavailable):
+		code = protocol.WMActionErrorUnavailable
+	case errors.Is(err, ErrSessionActionUnsupported), errors.Is(err, ErrSessionArchiveUnsupported):
+		code = protocol.WMActionErrorUnsupported
+	}
+	return protocol.NewWMActionRPCError(code, err.Error())
 }
 
 func (c *codexappConn) Notify(method string, params any) error {
@@ -896,7 +1028,7 @@ func (c *codexappConn) outboundSessionID(runtimeThreadID string) string {
 	return runtimeThreadID
 }
 
-func (c *codexappConn) sendInitialize(ctx context.Context, result any) error {
+func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.InitializeParams, result any) error {
 	if err := c.runtime.initialize(ctx, func(ctx context.Context) error {
 		var ignored json.RawMessage
 		if err := c.runtime.request(ctx, "initialize", appServerInitializeParams{
@@ -919,8 +1051,19 @@ func (c *codexappConn) sendInitialize(ctx context.Context, result any) error {
 				EmbeddedContext: false,
 			},
 			SessionCapabilities: &protocol.SessionCapabilities{List: &protocol.SessionListCapability{}},
+			Meta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
+				MessageLifecycle: true,
+				GoalLifecycle:    true,
+				SessionActions: protocol.WMSessionActionCapabilities{
+					Steer: true, Compact: true, Goal: true, Fork: true, Archive: true,
+				},
+			}),
 		},
 	}
+	c.mu.Lock()
+	c.wmInitialized = true
+	c.wmExtensions = protocol.NegotiateWMExtensions(params.ClientCapabilities.Meta, out.AgentCapabilities.Meta)
+	c.mu.Unlock()
 	return assignResult(result, out)
 }
 
@@ -942,9 +1085,17 @@ func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNew
 	}
 	c.bindSessionIDs(threadID, threadID)
 	threadTitle := strings.TrimSpace(resp.Thread.displayTitle())
+	if threadTitle != "" {
+		c.emitSessionUpdate(protocol.SessionUpdateParams{
+			SessionID: threadID,
+			Update: protocol.SessionUpdate{
+				SessionUpdate: protocol.SessionUpdateSessionInfoUpdate,
+				Title:         threadTitle,
+			},
+		})
+	}
 	return assignResult(result, protocol.SessionNewResult{
 		SessionID:     threadID,
-		Title:         threadTitle,
 		ConfigOptions: c.config.options(),
 	})
 }
@@ -1385,7 +1536,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 		if promptResult.err != nil {
 			return promptResult.err
 		}
-		return assignResult(result, protocol.SessionPromptResult{
+		return assignResult(result, protocol.PromptOutcome{
 			StopReason: promptResult.stopReason,
 			Artifacts:  promptResult.artifacts,
 			ForkPoint: &protocol.SessionForkPoint{
@@ -1405,7 +1556,9 @@ func (c *codexappConn) sendSetConfigOption(result any, p protocol.SessionSetConf
 	if err := c.config.set(p.ConfigID, p.Value); err != nil {
 		return err
 	}
-	return assignResult(result, c.config.options())
+	return assignResult(result, protocol.SetSessionConfigOptionResponse{
+		ConfigOptions: protocol.WireSessionConfigOptions(c.config.options()),
+	})
 }
 
 func (c *codexappConn) refreshModels(ctx context.Context) error {
@@ -1459,12 +1612,9 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 			c.mu.Lock()
 			c.goal = &goal
 			c.mu.Unlock()
-			c.emitSessionUpdate(protocol.SessionUpdateParams{
-				SessionID: goal.SessionID,
-				Update: protocol.SessionUpdate{
-					SessionUpdate: protocol.SessionUpdateGoalUpdated,
-					Goal:          &goal,
-				},
+			c.emitWMGoalNotification(protocol.WMGoalNotification{
+				SessionID: goal.SessionID, Event: protocol.WMGoalEventUpdated, Goal: &goal,
+				Meta: json.RawMessage(`{"wm":{"goalLifecycleVersion":1}}`),
 			})
 			if p.TurnID != nil && goal.Status == protocol.SessionGoalStatusActive {
 				c.setActiveTurnID(*p.TurnID)
@@ -1476,11 +1626,9 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 			c.mu.Lock()
 			c.goal = nil
 			c.mu.Unlock()
-			c.emitSessionUpdate(protocol.SessionUpdateParams{
-				SessionID: c.outboundSessionID(p.ThreadID),
-				Update: protocol.SessionUpdate{
-					SessionUpdate: protocol.SessionUpdateGoalCleared,
-				},
+			c.emitWMGoalNotification(protocol.WMGoalNotification{
+				SessionID: c.outboundSessionID(p.ThreadID), Event: protocol.WMGoalEventCleared,
+				Meta: json.RawMessage(`{"wm":{"goalLifecycleVersion":1}}`),
 			})
 		}
 	case "item/agentMessage/delta":
@@ -2539,11 +2687,100 @@ func (c *codexappConn) emitTurnUpdate(sessionID string, turnID string, update pr
 func (c *codexappConn) emitSessionUpdate(update protocol.SessionUpdateParams) {
 	c.mu.Lock()
 	h := c.respHandler
+	wmInitialized := c.wmInitialized
+	messageLifecycle := c.wmExtensions.MessageLifecycle
 	c.mu.Unlock()
 	if h == nil {
 		return
 	}
-	h(context.Background(), protocol.MethodSessionUpdate, mustRaw(update))
+	if wmInitialized && !messageLifecycle {
+		update.Update.Meta = protocol.WithoutSessionUpdateLifecycle(update.Update.Meta)
+	}
+	wire, err := codexappWireSessionUpdate(update)
+	if err != nil {
+		panic(fmt.Errorf("encode Codex ACP session update: %w", err))
+	}
+	h(context.Background(), protocol.MethodSessionUpdate, mustRaw(wire))
+}
+
+func (c *codexappConn) emitWMGoalNotification(notification protocol.WMGoalNotification) {
+	c.mu.Lock()
+	h := c.respHandler
+	wmInitialized := c.wmInitialized
+	goalLifecycle := c.wmExtensions.GoalLifecycle
+	c.mu.Unlock()
+	if h == nil || (wmInitialized && !goalLifecycle) {
+		return
+	}
+	if _, err := protocol.DecodeWMGoalNotification(mustRaw(notification)); err != nil {
+		panic(fmt.Errorf("encode Codex Goal notification: %w", err))
+	}
+	h(context.Background(), protocol.MethodWMSessionGoal, mustRaw(notification))
+}
+
+func codexappWireSessionUpdate(params protocol.SessionUpdateParams) (protocol.SessionUpdateParamsWire, error) {
+	update := params.Update
+	wire := protocol.SessionUpdateParamsWire{SessionID: params.SessionID, Meta: protocol.CloneSessionUpdateMeta(params.Meta)}
+	switch update.SessionUpdate {
+	case protocol.SessionUpdateAgentMessageChunk, protocol.SessionUpdateAgentThoughtChunk, protocol.SessionUpdateUserMessageChunk:
+		var content protocol.ContentBlock
+		if err := json.Unmarshal(update.Content, &content); err != nil {
+			return protocol.SessionUpdateParamsWire{}, fmt.Errorf("%s content: %w", update.SessionUpdate, err)
+		}
+		wire.Update = protocol.MessageChunkUpdate{
+			SessionUpdate: update.SessionUpdate,
+			Content:       content,
+			MessageID:     strings.TrimSpace(update.MessageID),
+			Meta:          protocol.CloneSessionUpdateMeta(update.Meta),
+		}
+	case protocol.SessionUpdateToolCall, protocol.SessionUpdateToolCallUpdate:
+		wire.Update = protocol.ToolCallUpdate{
+			SessionUpdate: update.SessionUpdate,
+			ToolCallID:    update.ToolCallID,
+			Title:         update.Title,
+			Kind:          update.Kind,
+			Status:        update.Status,
+			Content:       append([]protocol.ToolCallContent(nil), update.ToolCallContent...),
+			Locations:     append([]protocol.ToolCallLocation(nil), update.Locations...),
+			RawInput:      append(json.RawMessage(nil), update.RawInput...),
+			RawOutput:     append(json.RawMessage(nil), update.RawOutput...),
+			Meta:          protocol.CloneSessionUpdateMeta(update.Meta),
+		}
+	case protocol.SessionUpdatePlan:
+		wire.Update = protocol.PlanUpdate{SessionUpdate: update.SessionUpdate, Entries: append([]protocol.PlanEntry(nil), update.Entries...), Meta: protocol.CloneSessionUpdateMeta(update.Meta)}
+	case protocol.SessionUpdateAvailableCommandsUpdate:
+		wire.Update = protocol.AvailableCommandsUpdate{SessionUpdate: update.SessionUpdate, AvailableCommands: append([]protocol.AvailableCommand(nil), update.AvailableCommands...), Meta: protocol.CloneSessionUpdateMeta(update.Meta)}
+	case protocol.SessionUpdateCurrentModeUpdate:
+		wire.Update = protocol.CurrentModeUpdate{SessionUpdate: update.SessionUpdate, CurrentModeID: update.ModeID, Meta: protocol.CloneSessionUpdateMeta(update.Meta)}
+	case protocol.SessionUpdateConfigOptionUpdate:
+		wire.Update = protocol.ConfigOptionUpdate{SessionUpdate: update.SessionUpdate, ConfigOptions: protocol.WireSessionConfigOptions(update.ConfigOptions), Meta: protocol.CloneSessionUpdateMeta(update.Meta)}
+	case protocol.SessionUpdateSessionInfoUpdate:
+		var title, updatedAt *string
+		if strings.TrimSpace(update.Title) != "" {
+			value := update.Title
+			title = &value
+		}
+		if strings.TrimSpace(update.UpdatedAt) != "" {
+			value := update.UpdatedAt
+			updatedAt = &value
+		}
+		wire.Update = protocol.SessionInfoUpdate{SessionUpdate: update.SessionUpdate, Title: title, UpdatedAt: updatedAt, Meta: protocol.CloneSessionUpdateMeta(update.Meta)}
+	case protocol.SessionUpdateUsageUpdate:
+		var size, used int64
+		if update.Size != nil {
+			size = *update.Size
+		}
+		if update.Used != nil {
+			used = *update.Used
+		}
+		if size < 0 || used < 0 {
+			return protocol.SessionUpdateParamsWire{}, errors.New("usage values must be non-negative")
+		}
+		wire.Update = protocol.UsageUpdate{SessionUpdate: update.SessionUpdate, Size: uint64(size), Used: uint64(used), Meta: protocol.CloneSessionUpdateMeta(update.Meta)}
+	default:
+		return protocol.SessionUpdateParamsWire{}, fmt.Errorf("unsupported update %q", update.SessionUpdate)
+	}
+	return wire, nil
 }
 
 func (c *codexappConn) setActiveTurnID(turnID string) {
@@ -2576,12 +2813,9 @@ func (c *codexappConn) setActiveTurnID(turnID string) {
 	c.mu.Unlock()
 
 	if goalTurnStarted {
-		c.emitSessionUpdate(protocol.SessionUpdateParams{
-			SessionID: c.outboundSessionID(""),
-			Update: protocol.SessionUpdate{
-				SessionUpdate: protocol.SessionUpdateGoalTurnStarted,
-				TurnID:        turnID,
-			},
+		c.emitWMGoalNotification(protocol.WMGoalNotification{
+			SessionID: c.outboundSessionID(""), Event: protocol.WMGoalEventTurnStarted, TurnID: turnID,
+			Meta: json.RawMessage(`{"wm":{"goalLifecycleVersion":1}}`),
 		})
 	}
 	for _, update := range updates {
@@ -2651,20 +2885,22 @@ func (c *codexappConn) completePrompt(turnID string, stopReason string) {
 	sessionID := c.acpSessionID
 	c.mu.Unlock()
 	if goalTurn {
-		c.emitSessionUpdate(protocol.SessionUpdateParams{
-			SessionID: sessionID,
-			Update: protocol.SessionUpdate{
-				SessionUpdate: protocol.SessionUpdateGoalTurnCompleted,
-				TurnID:        turnID,
-			},
+		c.emitWMGoalNotification(protocol.WMGoalNotification{
+			SessionID: sessionID, Event: protocol.WMGoalEventTurnCompleted, TurnID: turnID,
+			Meta: json.RawMessage(`{"wm":{"goalLifecycleVersion":1}}`),
 		})
 	}
 	if done == nil {
 		return
 	}
 	artifacts := codexappPromptDiffArtifacts(diff)
+	result := codexappPromptResult{stopReason: stopReason, turnID: turnID, artifacts: artifacts}
+	if stopReason == protocol.SessionTurnStopReasonFailed {
+		result.stopReason = ""
+		result.err = errors.New("Codex turn failed")
+	}
 	select {
-	case done <- codexappPromptResult{stopReason: stopReason, turnID: turnID, artifacts: artifacts}:
+	case done <- result:
 	default:
 	}
 }
@@ -2779,8 +3015,8 @@ func assignResult(result any, value any) error {
 	if result == nil {
 		return nil
 	}
-	if out, ok := result.(*protocol.SessionPromptResult); ok {
-		if typed, ok := value.(protocol.SessionPromptResult); ok {
+	if out, ok := result.(*protocol.PromptOutcome); ok {
+		if typed, ok := value.(protocol.PromptOutcome); ok {
 			*out = typed
 			return nil
 		}

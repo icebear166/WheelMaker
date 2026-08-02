@@ -33,7 +33,7 @@ type testInjectedInstance struct {
 	sessionID      string
 	alive          bool
 	callbacks      agent.Callbacks
-	promptFn       func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error)
+	promptFn       func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error)
 	lastPrompt     []acp.ContentBlock
 	cancelFn       func() error
 	initResult     acp.InitializeResult
@@ -66,7 +66,7 @@ type testInjectedInstance struct {
 	goalClearCalls []string
 }
 
-func (c *Client) InjectForwarder(agentName, sessionID string, promptFn func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error), cancelFn func() error) {
+func (c *Client) InjectForwarder(agentName, sessionID string, promptFn func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error), cancelFn func() error) {
 	name := strings.TrimSpace(agentName)
 	if name == "" {
 		name = string(acp.ACPProviderClaude)
@@ -130,6 +130,23 @@ func (c *Client) SessionForTest(sessionID string) (*Session, error) {
 func mustJSON(v any) []byte {
 	raw, _ := json.Marshal(v)
 	return raw
+}
+
+func wmAgentCapabilitiesForTest(actions acp.WMSessionActionCapabilities) acp.AgentCapabilities {
+	return acp.AgentCapabilities{Meta: acp.BuildWMAgentCapabilitiesMeta(nil, acp.WMAgentExtensionCapabilities{
+		SessionActions: actions,
+	})}
+}
+
+func setSessionWMActionsForTest(t *testing.T, c *Client, sessionID string, actions acp.WMSessionActionCapabilities) {
+	t.Helper()
+	sess, err := c.SessionForTest(sessionID)
+	if err != nil {
+		t.Fatalf("SessionForTest(%q): %v", sessionID, err)
+	}
+	sess.mu.Lock()
+	sess.agentState.AgentCapabilities = wmAgentCapabilitiesForTest(actions)
+	sess.mu.Unlock()
 }
 
 func queuePromptPayload(sessionID, itemID string, blocks []acp.ContentBlock) json.RawMessage {
@@ -215,10 +232,10 @@ func (i *testInjectedInstance) SessionLoad(ctx context.Context, params acp.Sessi
 func (i *testInjectedInstance) SessionList(context.Context, acp.SessionListParams) (acp.SessionListResult, error) {
 	return i.listResult, i.listErr
 }
-func (i *testInjectedInstance) SessionPrompt(ctx context.Context, p acp.SessionPromptParams) (acp.SessionPromptResult, error) {
+func (i *testInjectedInstance) SessionPrompt(ctx context.Context, p acp.SessionPromptParams) (acp.PromptOutcome, error) {
 	i.lastPrompt = append([]acp.ContentBlock(nil), p.Prompt...)
 	if i.promptFn == nil {
-		return acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}, nil
+		return acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}, nil
 	}
 	text := ""
 	for _, b := range p.Prompt {
@@ -229,7 +246,7 @@ func (i *testInjectedInstance) SessionPrompt(ctx context.Context, p acp.SessionP
 	}
 	updates, result, err := i.promptFn(ctx, text)
 	if err != nil {
-		return acp.SessionPromptResult{}, err
+		return acp.PromptOutcome{}, err
 	}
 	for params := range updates {
 		if strings.TrimSpace(params.SessionID) == "" {
@@ -2828,11 +2845,14 @@ func sessionViewPlanUpdatedEvent(sessionID string, entries []acp.PlanEntry) Sess
 	})
 }
 func sessionViewPromptFinishedEvent(sessionID, stopReason string) SessionViewEvent {
+	if strings.TrimSpace(stopReason) == "" {
+		stopReason = acp.StopReasonEndTurn
+	}
 	return SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: sessionID,
 		Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-			"result": acp.SessionPromptResult{
+			"result": acp.SessionTurnPromptResult{
 				StopReason: stopReason,
 			},
 		}),
@@ -7278,6 +7298,7 @@ func TestHandleSessionForkCreatesIndependentTargetHistory(t *testing.T) {
 	recordPromptWithForkPointForTest(t, c, sourceID, "first", "source-turn-1")
 	recordPromptWithForkPointForTest(t, c, sourceID, "second", "source-turn-2")
 	c.InjectForwarder(string(acp.ACPProviderCodex), sourceID, nil, nil)
+	setSessionWMActionsForTest(t, c, sourceID, acp.WMSessionActionCapabilities{Fork: true})
 	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
 	runtime.forkSessionFn = func(_ context.Context, gotSessionID string, lastTurnID string, prompts []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
 		if gotSessionID != sourceID || lastTurnID != "source-turn-1" {
@@ -7353,7 +7374,6 @@ func TestHandleCXDeepSeekSessionForkPreservesProviderIdentity(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(t.TempDir())
 	c.registry = agent.NewACPFactory()
-	c.registry.RegisterSessionActions(acp.ACPProviderCXDeepSeek, agent.SessionActionSupport{Fork: true})
 	ctx := context.Background()
 	sourceID := "sess-cx-fork-source"
 	targetID := "sess-cx-fork-target"
@@ -7363,6 +7383,7 @@ func TestHandleCXDeepSeekSessionForkPreservesProviderIdentity(t *testing.T) {
 	}
 	recordPromptWithProviderForkPointForTest(t, c, sourceID, "first", string(acp.ACPProviderCXDeepSeek), "source-cx-turn-1")
 	c.InjectForwarder(string(acp.ACPProviderCXDeepSeek), sourceID, nil, nil)
+	setSessionWMActionsForTest(t, c, sourceID, acp.WMSessionActionCapabilities{Fork: true})
 	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
 	runtime.forkSessionFn = func(_ context.Context, gotSessionID string, lastTurnID string, prompts []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
 		if gotSessionID != sourceID || lastTurnID != "source-cx-turn-1" || len(prompts) != 1 {
@@ -7411,7 +7432,6 @@ func TestHandleCXDeepSeekSessionForkRejectsMismatchedPointProvider(t *testing.T)
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(t.TempDir())
 	c.registry = agent.NewACPFactory()
-	c.registry.RegisterSessionActions(acp.ACPProviderCXDeepSeek, agent.SessionActionSupport{Fork: true})
 	ctx := context.Background()
 	sessionID := "sess-cx-fork-mismatch"
 	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sessionID, "CX Mismatch", string(acp.ACPProviderCXDeepSeek))); err != nil {
@@ -7419,6 +7439,7 @@ func TestHandleCXDeepSeekSessionForkRejectsMismatchedPointProvider(t *testing.T)
 	}
 	recordPromptWithProviderForkPointForTest(t, c, sessionID, "first", string(acp.ACPProviderCodex), "wrong-provider-turn")
 	c.InjectForwarder(string(acp.ACPProviderCXDeepSeek), sessionID, nil, nil)
+	setSessionWMActionsForTest(t, c, sessionID, acp.WMSessionActionCapabilities{Fork: true})
 	c.sessions[sessionID].instance.(*testInjectedInstance).forkSessionFn = func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
 		t.Fatal("provider fork must not be called for mismatched fork point")
 		return acp.SessionForkResult{}, nil
@@ -7446,6 +7467,7 @@ func TestHandleSessionForkRejectsMissingForkPoint(t *testing.T) {
 		t.Fatalf("RecordEvent done: %v", err)
 	}
 	c.InjectForwarder(string(acp.ACPProviderCodex), sessionID, nil, nil)
+	setSessionWMActionsForTest(t, c, sessionID, acp.WMSessionActionCapabilities{Fork: true})
 	c.sessions[sessionID].instance.(*testInjectedInstance).resolveForkFn = func(context.Context, string, []acp.SessionForkPrompt) (map[int64]acp.SessionForkPoint, error) {
 		return map[int64]acp.SessionForkPoint{}, nil
 	}
@@ -7473,8 +7495,6 @@ func TestHandleSessionForkRejectsUnsupportedCapabilityBeforeProviderCall(t *test
 		forkCalls++
 		return acp.SessionForkResult{}, nil
 	}
-	c.registry = c.registry.Clone()
-	c.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{})
 
 	_, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-fork-unsupported","turnIndex":2}`))
 	if err == nil || !errors.Is(err, agent.ErrSessionActionUnsupported) {
@@ -7510,6 +7530,7 @@ func TestHandleSessionForkArchivesNativeTargetWithoutDeletingLocalConflict(t *te
 		t.Fatalf("SaveSession conflict: %v", err)
 	}
 	c.InjectForwarder(string(acp.ACPProviderCodex), sourceID, nil, nil)
+	setSessionWMActionsForTest(t, c, sourceID, acp.WMSessionActionCapabilities{Fork: true})
 	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
 	runtime.forkSessionFn = func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error) {
 		return acp.SessionForkResult{
@@ -7538,6 +7559,7 @@ func TestForkHistoryCopiesArtifactsAndReferencedAttachments(t *testing.T) {
 	ctx := context.Background()
 	sourceID := "sess-copy-source"
 	targetID := "sess-copy-target"
+	setSessionWMActionsForTest(t, c, sourceID, acp.WMSessionActionCapabilities{Fork: true})
 	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "Copy payloads", string(acp.ACPProviderCodex))); err != nil {
 		t.Fatalf("RecordEvent session created: %v", err)
 	}
@@ -9660,12 +9682,21 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 5, 10, 5, 0, 0, 0, time.UTC)
 
+	agentJSON, err := json.Marshal(SessionAgentState{
+		Usage: &acp.SessionUsage{Used: 19000, Size: 258000, UpdatedAt: "2026-07-07T08:00:00Z"},
+		AgentCapabilities: wmAgentCapabilitiesForTest(acp.WMSessionActionCapabilities{
+			Compact: true, Steer: true, Fork: true, Goal: true,
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := c.store.SaveSession(ctx, &SessionRecord{
 		ID:           "sess-1",
 		ProjectName:  "proj1",
 		Status:       SessionPersisted,
 		AgentType:    string(acp.ACPProviderCodex),
-		AgentJSON:    `{"usage":{"used":19000,"size":258000,"updatedAt":"2026-07-07T08:00:00Z"}}`,
+		AgentJSON:    string(agentJSON),
 		Title:        "Session 1",
 		CreatedAt:    now,
 		LastActiveAt: now,
@@ -10151,6 +10182,62 @@ func TestSessionRecorderAggregatesStandardSteeredChunks(t *testing.T) {
 	}
 }
 
+func TestSessionSummaryAndArchivePreserveMessageLifecycleFeature(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	state := SessionAgentState{AgentCapabilities: acp.AgentCapabilities{
+		Meta: acp.BuildWMAgentCapabilitiesMeta(nil, acp.WMAgentExtensionCapabilities{MessageLifecycle: true}),
+	}}
+	agentJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := &SessionRecord{
+		ID: "sess-feature", ProjectName: "proj1", AgentType: "third-party", Title: "Feature",
+		AgentJSON: string(agentJSON), CreatedAt: time.Now().UTC(), LastActiveAt: time.Now().UTC(),
+	}
+	if err := c.store.SaveSession(ctx, record); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.SessionFeatures == nil || summary.SessionFeatures.MessageLifecycle == nil || summary.SessionFeatures.MessageLifecycle.Version != 1 {
+		t.Fatalf("sessionFeatures=%#v", summary.SessionFeatures)
+	}
+	archive := newSessionArchiveStore(t.TempDir())
+	entry, created, err := archive.AppendSession(ctx, *record, nil, 0)
+	if err != nil || !created {
+		t.Fatalf("AppendSession created=%v err=%v", created, err)
+	}
+	if entry.SessionFeatures == nil || entry.SessionFeatures.MessageLifecycle == nil || entry.SessionFeatures.MessageLifecycle.Version != 1 {
+		t.Fatalf("archive sessionFeatures=%#v", entry.SessionFeatures)
+	}
+	archivedSummary := archiveSummaryFromEntry(entry)
+	if archivedSummary.SessionFeatures == nil || archivedSummary.SessionFeatures.MessageLifecycle == nil {
+		t.Fatalf("archived summary sessionFeatures=%#v", archivedSummary.SessionFeatures)
+	}
+}
+
+func TestOldSessionSummaryMayOmitSessionFeatures(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	record := &SessionRecord{
+		ID: "sess-old-feature", ProjectName: "proj1", AgentType: "codex", Title: "Old",
+		AgentJSON: `{}`, CreatedAt: time.Now().UTC(), LastActiveAt: time.Now().UTC(),
+	}
+	if err := c.store.SaveSession(context.Background(), record); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := c.sessionRecorder.ReadSessionSummary(context.Background(), record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.SessionFeatures != nil {
+		t.Fatalf("old sessionFeatures=%#v, want nil", summary.SessionFeatures)
+	}
+}
+
 func jsonEqualForTest(left, right []byte) bool {
 	var leftValue, rightValue any
 	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
@@ -10459,7 +10546,7 @@ type mockSession struct {
 	cancelCalls int
 	agentName   string
 	sessionID   string
-	promptFn    func(string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error)
+	promptFn    func(string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error)
 }
 
 func newTestClient(t *testing.T, mock *mockSession) *Client {
@@ -10469,14 +10556,14 @@ func newTestClient(t *testing.T, mock *mockSession) *Client {
 		t.Fatalf("NewStore: %v", err)
 	}
 	c := New(store, "test", t.TempDir())
-	c.InjectForwarder(mock.agentName, mock.sessionID, func(_ context.Context, text string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error) {
+	c.InjectForwarder(mock.agentName, mock.sessionID, func(_ context.Context, text string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error) {
 		mock.promptCalls = append(mock.promptCalls, text)
 		if mock.promptFn != nil {
 			return mock.promptFn(text)
 		}
 		ch := make(chan acp.SessionUpdateParams)
 		close(ch)
-		return ch, acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}, nil
+		return ch, acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}, nil
 	}, func() error {
 		mock.cancelCalls++
 		return nil
@@ -11155,8 +11242,8 @@ func TestPromptToSessionRecordsFailedPromptDoneOnAgentError(t *testing.T) {
 	mock := &mockSession{
 		agentName: "codex",
 		sessionID: "sess-prompt-error",
-		promptFn: func(string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error) {
-			return nil, acp.SessionPromptResult{}, errors.New("agent crashed")
+		promptFn: func(string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error) {
+			return nil, acp.PromptOutcome{}, errors.New("agent crashed")
 		},
 	}
 	c := newTestClient(t, mock)
@@ -11174,7 +11261,7 @@ func TestPromptToSessionRecordsFailedPromptDoneOnAgentError(t *testing.T) {
 	if len(turns) != 2 {
 		t.Fatalf("turns len = %d, want prompt_request + failed prompt_done: %+v", len(turns), turns)
 	}
-	if stopReason := decodePromptDoneStopReason(t, turns[1].Content); stopReason != acp.StopReasonFailed {
+	if stopReason := decodePromptDoneStopReason(t, turns[1].Content); stopReason != acp.SessionTurnStopReasonFailed {
 		t.Fatalf("prompt_done stopReason = %q, want failed", stopReason)
 	}
 	param := decodeTurnParamMap(t, turns[1].Content)
@@ -11193,7 +11280,7 @@ func TestHandleSessionQueueCancelFinishesPromptAsCancelled(t *testing.T) {
 	started := make(chan struct{})
 	releaseUpdates := make(chan struct{})
 	var cancelCalls int
-	c.InjectForwarder("codex", "sess-cancel-running", func(ctx context.Context, _ string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error) {
+	c.InjectForwarder("codex", "sess-cancel-running", func(ctx context.Context, _ string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error) {
 		ch := make(chan acp.SessionUpdateParams)
 		close(started)
 		go func() {
@@ -11202,7 +11289,7 @@ func TestHandleSessionQueueCancelFinishesPromptAsCancelled(t *testing.T) {
 		}()
 		<-ctx.Done()
 		close(releaseUpdates)
-		return ch, acp.SessionPromptResult{}, ctx.Err()
+		return ch, acp.PromptOutcome{}, ctx.Err()
 	}, func() error {
 		cancelCalls++
 		return nil
@@ -11650,24 +11737,22 @@ func TestSessionStatusActionAlwaysSupported(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	c := New(store, "proj1", t.TempDir())
-	c.registry = agent.NewACPFactory()
-	c.registry.RegisterSessionActions(acp.ACPProviderClaude, agent.SessionActionSupport{Compact: true})
 	t.Cleanup(func() { _ = c.Close() })
 
-	known := c.sessionRecorder.actionLookup(string(acp.ACPProviderClaude))
+	known := acp.SessionActionsFromAgentCapabilities(wmAgentCapabilitiesForTest(acp.WMSessionActionCapabilities{Compact: true}))
 	if !known.Status.Supported {
-		t.Fatal("known provider status should be supported")
+		t.Fatal("negotiated Agent status should be supported")
 	}
 	if !known.Compact.Supported {
-		t.Fatal("known provider compact support was lost")
+		t.Fatal("negotiated Agent compact support was lost")
 	}
 
-	unknown := c.sessionRecorder.actionLookup("unknown-agent")
+	unknown := acp.SessionActionsFromAgentCapabilities(acp.AgentCapabilities{})
 	if !unknown.Status.Supported {
-		t.Fatal("unknown provider status should be supported")
+		t.Fatal("unnegotiated Agent status should be supported")
 	}
 	if unknown.Compact.Supported {
-		t.Fatal("unknown provider compact should stay unsupported")
+		t.Fatal("unnegotiated Agent compact should stay unsupported")
 	}
 
 	sess := &Session{agentType: "unknown-agent"}
@@ -11679,9 +11764,6 @@ func TestSessionStatusActionAlwaysSupported(t *testing.T) {
 	}
 
 	c.registry = nil
-	if !c.sessionRecorder.actionLookup("unknown-agent").Status.Supported {
-		t.Fatal("nil registry summary should still allow status")
-	}
 	if !c.sessionSupportsAction(sess, acp.SessionActionStatus) {
 		t.Fatal("nil registry dispatch should still allow status")
 	}

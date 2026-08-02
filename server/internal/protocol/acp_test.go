@@ -12,15 +12,38 @@ func TestACPImplementedTypesPreserveMeta(t *testing.T) {
 		&InitializeParams{}, &InitializeResult{}, &ClientCapabilities{}, &FSCapabilities{},
 		&AgentCapabilities{}, &PromptCapabilities{}, &MCPCapabilities{}, &SessionCapabilities{},
 		&AgentInfo{}, &AuthMethodVar{}, &AuthMethod{}, &AvailableCommand{}, &AvailableCommandInput{},
-		&SessionNewParams{}, &SessionNewResult{}, &SessionLoadParams{}, &EnvVariable{}, &HttpHeader{},
-		&MCPServer{}, &SessionPromptParams{}, &SessionPromptResult{}, &SessionCancelParams{},
-		&SessionUsage{}, &PlanEntry{}, &ToolCallLocation{}, &ToolCallContent{}, &EmbeddedResource{},
-		&ContentBlock{}, &ToolCallRef{}, &PermissionRequestParams{}, &PermissionOption{},
-		&PermissionResult{}, &PermissionResponse{}, &SessionLoadResult{}, &SessionSetConfigOptionParams{},
+		&SessionNewParams{}, &SessionLoadParams{}, &EnvVariable{}, &HttpHeader{},
+		&SessionPromptParams{}, &SessionCancelParams{},
+		&PlanEntry{}, &ToolCallLocation{}, &EmbeddedResource{},
+		&ToolCallRef{}, &PermissionRequestParams{}, &PermissionOption{},
+		&PermissionResult{}, &PermissionResponse{}, &SessionLoadResult{},
 		&FSReadTextFileParams{}, &FSReadTextFileResult{}, &FSWriteTextFileParams{},
 		&TerminalCreateParams{}, &TerminalCreateResult{}, &TerminalOutputParams{}, &TerminalExitStatus{},
 		&TerminalOutputResult{}, &TerminalWaitForExitParams{}, &TerminalWaitForExitResult{},
 		&TerminalKillParams{}, &TerminalReleaseParams{}, &SessionListParams{}, &SessionInfo{}, &SessionListResult{},
+	}
+	for name, test := range map[string]struct {
+		raw    string
+		target any
+	}{
+		"SessionNewResult":    {`{"sessionId":"s1","_meta":{"future":{"value":7}}}`, &SessionNewResult{}},
+		"SessionPromptResult": {`{"stopReason":"end_turn","_meta":{"future":{"value":7}}}`, &SessionPromptResult{}},
+		"MCPServer":           {`{"type":"stdio","name":"local","command":"server","_meta":{"future":{"value":7}}}`, &MCPServer{}},
+		"ContentBlock":        {`{"type":"text","text":"hello","_meta":{"future":{"value":7}}}`, &ContentBlock{}},
+		"ToolCallContent":     {`{"type":"content","content":{"type":"text","text":"hello"},"_meta":{"future":{"value":7}}}`, &ToolCallContent{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := json.Unmarshal([]byte(test.raw), test.target); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(test.target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(raw, []byte(`"_meta":{"future":{"value":7}}`)) {
+				t.Fatalf("%T dropped metadata: %s", test.target, raw)
+			}
+		})
 	}
 	for _, target := range types {
 		t.Run(reflect.TypeOf(target).Elem().Name(), func(t *testing.T) {
@@ -236,6 +259,15 @@ func TestBuildSessionUpdateMetaLifecyclePreservesSteered(t *testing.T) {
 	meta := BuildSessionUpdateMetaLifecycle("", true, true)
 	if SessionUpdateMetaMessagePhase(meta) != "" || !SessionUpdateMetaMessageComplete(meta) || !SessionUpdateMetaSteered(meta) {
 		t.Fatalf("meta=%s", meta)
+	}
+}
+
+func TestWithoutSessionUpdateLifecyclePreservesOtherMetadata(t *testing.T) {
+	meta := json.RawMessage(`{"wm":{"messagePhase":"commentary","messageComplete":true,"steered":true,"future":7},"vendor":{"trace":"keep"}}`)
+	got := WithoutSessionUpdateLifecycle(meta)
+	want := json.RawMessage(`{"wm":{"future":7},"vendor":{"trace":"keep"}}`)
+	if !jsonEqual(got, want) {
+		t.Fatalf("metadata=%s, want %s", got, want)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -73,6 +74,35 @@ func decodeSessionUpdateMeta(meta json.RawMessage) sessionUpdateWheelMakerMeta {
 
 func SessionUpdateMetaMessagePhase(meta json.RawMessage) string {
 	return decodeSessionUpdateMeta(meta).MessagePhase
+}
+
+// WithoutSessionUpdateLifecycle removes only WheelMaker lifecycle keys while
+// retaining every unrelated metadata namespace and unknown wm key.
+func WithoutSessionUpdateLifecycle(meta json.RawMessage) json.RawMessage {
+	root, err := decodeMetaObject(meta)
+	if err != nil {
+		return CloneSessionUpdateMeta(meta)
+	}
+	wm, ok := rawJSONObject(root["wm"])
+	if !ok {
+		return CloneSessionUpdateMeta(meta)
+	}
+	delete(wm, "messagePhase")
+	delete(wm, "messageComplete")
+	delete(wm, "steered")
+	if len(wm) == 0 {
+		delete(root, "wm")
+	} else {
+		root["wm"], _ = json.Marshal(wm)
+	}
+	if len(root) == 0 {
+		return nil
+	}
+	out, err := json.Marshal(root)
+	if err != nil {
+		return CloneSessionUpdateMeta(meta)
+	}
+	return out
 }
 
 // MergeSessionUpdateMeta deep-merges JSON metadata objects. Incoming object
@@ -172,5 +202,15 @@ func CloneSessionUpdateMeta(meta json.RawMessage) json.RawMessage {
 }
 
 func EqualSessionUpdateMeta(left, right json.RawMessage) bool {
-	return bytes.Equal(bytes.TrimSpace(left), bytes.TrimSpace(right))
+	left = bytes.TrimSpace(left)
+	right = bytes.TrimSpace(right)
+	if len(left) == 0 || len(right) == 0 {
+		return len(left) == len(right)
+	}
+	var leftValue any
+	var rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return bytes.Equal(left, right)
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
 }

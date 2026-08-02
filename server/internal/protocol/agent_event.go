@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -97,6 +98,16 @@ type AgentUsageEvent struct {
 
 func (AgentUsageEvent) agentUpdate() {}
 
+type AgentGoalEvent struct {
+	Event      string
+	Goal       *SessionGoal
+	TurnID     string
+	Meta       json.RawMessage
+	ReceivedAt time.Time
+}
+
+func (AgentGoalEvent) agentUpdate() {}
+
 func ProjectSessionUpdate(params SessionUpdateParamsWire, receivedAt time.Time) (AgentEvent, error) {
 	event := AgentEvent{SessionID: params.SessionID}
 	switch update := params.Update.(type) {
@@ -161,6 +172,26 @@ func (event AgentEvent) LegacySessionUpdate() (SessionUpdateParams, error) {
 	case AgentUsageEvent:
 		size, used := update.Size, update.Used
 		params.Update = SessionUpdate{SessionUpdate: SessionUpdateUsageUpdate, Size: &size, Used: &used, Meta: cloneRaw(update.Meta)}
+	case AgentGoalEvent:
+		params.Update.Meta = cloneRaw(update.Meta)
+		switch update.Event {
+		case WMGoalEventUpdated:
+			params.Update.SessionUpdate = SessionUpdateGoalUpdated
+			if update.Goal != nil {
+				goal := *update.Goal
+				params.Update.Goal = &goal
+			}
+		case WMGoalEventCleared:
+			params.Update.SessionUpdate = SessionUpdateGoalCleared
+		case WMGoalEventTurnStarted:
+			params.Update.SessionUpdate = SessionUpdateGoalTurnStarted
+			params.Update.TurnID = update.TurnID
+		case WMGoalEventTurnCompleted:
+			params.Update.SessionUpdate = SessionUpdateGoalTurnCompleted
+			params.Update.TurnID = update.TurnID
+		default:
+			return SessionUpdateParams{}, fmt.Errorf("unsupported Goal event %q", update.Event)
+		}
 	default:
 		return SessionUpdateParams{}, fmt.Errorf("unsupported agent event %T", event.Update)
 	}
@@ -188,6 +219,41 @@ func NormalizeSessionConfigOptions(options []SessionConfigOption) ([]ConfigOptio
 		}
 	}
 	return normalized, nil
+}
+
+func WireSessionConfigOptions(options []ConfigOption) []SessionConfigOption {
+	out := make([]SessionConfigOption, 0, len(options))
+	for _, option := range options {
+		name := firstNonEmptyProtocolString(option.Name, option.ID)
+		if option.Type == "boolean" {
+			out = append(out, SessionConfigOption{Variant: SessionConfigBoolean{
+				ID: option.ID, Name: name, Description: option.Description, Category: option.Category,
+				Type: "boolean", CurrentValue: strings.EqualFold(option.CurrentValue, "true"), Meta: CloneSessionUpdateMeta(option.Meta),
+			}})
+			continue
+		}
+		values := make([]SessionConfigSelectOption, 0, len(option.Options))
+		for _, value := range option.Options {
+			values = append(values, SessionConfigSelectOption{
+				Value: value.Value, Name: firstNonEmptyProtocolString(value.Name, value.Value), Description: value.Description, Meta: CloneSessionUpdateMeta(value.Meta),
+			})
+		}
+		out = append(out, SessionConfigOption{Variant: SessionConfigSelect{
+			ID: option.ID, Name: name, Description: option.Description, Category: option.Category,
+			Type: "select", CurrentValue: option.CurrentValue,
+			Options: SessionConfigSelectOptions{Ungrouped: values}, Meta: CloneSessionUpdateMeta(option.Meta),
+		}})
+	}
+	return out
+}
+
+func firstNonEmptyProtocolString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func cloneContentBlock(block ContentBlock) ContentBlock {

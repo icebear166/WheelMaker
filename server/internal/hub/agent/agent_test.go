@@ -37,11 +37,11 @@ func TestFormatACPLogLine_MinimalShape(t *testing.T) {
 }
 
 func TestCodexAppStopReasonPreservesFailedPromptStatus(t *testing.T) {
-	if got := codexappStopReason("failed"); got != protocol.StopReasonFailed {
-		t.Fatalf("codexappStopReason(failed) = %q, want %q", got, protocol.StopReasonFailed)
+	if got := codexappStopReason("failed"); got != protocol.SessionTurnStopReasonFailed {
+		t.Fatalf("codexappStopReason(failed) = %q, want %q", got, protocol.SessionTurnStopReasonFailed)
 	}
-	if got := codexappStopReason("error"); got != protocol.StopReasonFailed {
-		t.Fatalf("codexappStopReason(error) = %q, want %q", got, protocol.StopReasonFailed)
+	if got := codexappStopReason("error"); got != protocol.SessionTurnStopReasonFailed {
+		t.Fatalf("codexappStopReason(error) = %q, want %q", got, protocol.SessionTurnStopReasonFailed)
 	}
 }
 
@@ -1316,7 +1316,7 @@ func TestFlickerConnPassesThroughStandardConfigOptions(t *testing.T) {
 
 func TestFlickerConnPassesThroughSetConfigOption(t *testing.T) {
 	var capturedMethod string
-	var capturedParams protocol.SessionSetConfigOptionParams
+	var capturedParams protocol.SetSessionConfigOptionRequest
 	base := &testFlickerBaseConn{
 		sendFn: func(_ context.Context, method string, params any, result any) error {
 			capturedMethod = method
@@ -1328,21 +1328,19 @@ func TestFlickerConnPassesThroughSetConfigOption(t *testing.T) {
 	}
 	conn := newFlickerConn(base)
 
-	var raw json.RawMessage
-	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{
+	var response protocol.SetSessionConfigOptionResponse
+	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SetSessionConfigOptionRequest{
 		SessionID: "session-1",
 		ConfigID:  protocol.ConfigOptionIDModel,
-		Value:     "wanqing/glm-5.1",
-	}, &raw); err != nil {
+		Variant:   protocol.SetSessionConfigValueID{Type: "value_id", Value: "wanqing/glm-5.1"},
+	}, &response); err != nil {
 		t.Fatalf("set config: %v", err)
-	}
-	if len(raw) == 0 {
-		t.Fatal("raw result is empty")
 	}
 	if capturedMethod != protocol.MethodSetConfigOption {
 		t.Fatalf("capturedMethod=%q", capturedMethod)
 	}
-	if capturedParams.SessionID != "session-1" || capturedParams.ConfigID != protocol.ConfigOptionIDModel || capturedParams.Value != "wanqing/glm-5.1" {
+	value, ok := capturedParams.Variant.(protocol.SetSessionConfigValueID)
+	if !ok || capturedParams.SessionID != "session-1" || capturedParams.ConfigID != protocol.ConfigOptionIDModel || value.Value != "wanqing/glm-5.1" {
 		t.Fatalf("capturedParams=%#v", capturedParams)
 	}
 }
@@ -1352,16 +1350,16 @@ func TestFlickerConnPassesThroughNonModelConfigOption(t *testing.T) {
 	base := &testFlickerBaseConn{
 		sendFn: func(_ context.Context, method string, _ any, result any) error {
 			capturedMethod = method
-			return assignResult(result, map[string]any{})
+			return assignResult(result, map[string]any{"configOptions": []any{}})
 		},
 	}
 	conn := newFlickerConn(base)
-	var raw json.RawMessage
-	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{
+	var response protocol.SetSessionConfigOptionResponse
+	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SetSessionConfigOptionRequest{
 		SessionID: "session-1",
 		ConfigID:  protocol.ConfigOptionIDMode,
-		Value:     "default",
-	}, &raw); err != nil {
+		Variant:   protocol.SetSessionConfigValueID{Type: "value_id", Value: "default"},
+	}, &response); err != nil {
 		t.Fatalf("set config: %v", err)
 	}
 	if capturedMethod != protocol.MethodSetConfigOption {
@@ -1654,7 +1652,7 @@ func TestCXDeepSeekCodexBridgeSendsTextAndPreservesForkProvider(t *testing.T) {
 		SessionMapPath: func() (string, error) { return mapPath, nil },
 	})
 	conn.BindSessionID("thread-cx")
-	var result protocol.SessionPromptResult
+	var result protocol.PromptOutcome
 	if err := conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
 		SessionID: "thread-cx",
 		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "hello"}},
@@ -2004,7 +2002,9 @@ func TestCodexAppSharedRuntimeKeepsThreadConfigAndEventsIsolated(t *testing.T) {
 	connB.config.setModels(models)
 	set := func(conn *codexappConn, configID string, value string) {
 		t.Helper()
-		if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{ConfigID: configID, Value: value}, &[]protocol.ConfigOption{}); err != nil {
+		if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SetSessionConfigOptionRequest{
+			ConfigID: configID, Variant: protocol.SetSessionConfigValueID{Type: "value_id", Value: value},
+		}, &protocol.SetSessionConfigOptionResponse{}); err != nil {
 			t.Fatalf("set %s=%s: %v", configID, value, err)
 		}
 	}
@@ -2642,7 +2642,7 @@ func TestCodexAppRuntimeKeepsPromptResultBehindBlockedPriorUpdate(t *testing.T) 
 	})
 	conn.BindSessionID("thread-1")
 
-	var promptRes protocol.SessionPromptResult
+	var promptRes protocol.PromptOutcome
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
@@ -3383,9 +3383,14 @@ func TestCodexAppReplayMarksAdditionalUserMessagesSteered(t *testing.T) {
 	}
 }
 
-func TestInstanceSteerDelegatesToOptionalConnection(t *testing.T) {
-	conn := &fakeSteerConn{}
+func TestInstanceSteerRoutesThroughNegotiatedExtension(t *testing.T) {
+	conn := &fakeConn{agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
+		SessionActions: protocol.WMSessionActionCapabilities{Steer: true},
+	})}
 	inst := NewInstance("test", conn)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ClientCapabilities: protocol.ClientCapabilities{Meta: protocol.BuildWMClientCapabilitiesMeta(nil)}}); err != nil {
+		t.Fatal(err)
+	}
 	steerer, ok := inst.(SessionSteerer)
 	if !ok {
 		t.Fatalf("instance type %T does not implement SessionSteerer", inst)
@@ -3398,21 +3403,25 @@ func TestInstanceSteerDelegatesToOptionalConnection(t *testing.T) {
 		t.Fatalf("SteerSession(): %v", err)
 	}
 	if result.ProviderTurnID != "turn-1" ||
-		conn.sessionID != "session-1" ||
-		conn.clientMessageID != "queued-1" ||
-		len(conn.blocks) != 1 ||
-		conn.blocks[0].Text != "change" {
+		conn.lastMethod != protocol.MethodWMSessionSteer {
 		t.Fatalf("delegation result=%#v conn=%#v", result, conn)
 	}
 }
 
 func TestInstanceSessionGoalController(t *testing.T) {
-	conn := &fakeGoalConn{goal: protocol.SessionGoal{
+	goal := protocol.SessionGoal{
 		SessionID: "session-1",
 		Objective: "ship",
 		Status:    protocol.SessionGoalStatusActive,
-	}}
+	}
+	conn := &fakeConn{
+		agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{SessionActions: protocol.WMSessionActionCapabilities{Goal: true}}),
+		goal:      &goal,
+	}
 	inst := NewInstance("test", conn)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ClientCapabilities: protocol.ClientCapabilities{Meta: protocol.BuildWMClientCapabilitiesMeta(nil)}}); err != nil {
+		t.Fatal(err)
+	}
 	controller, ok := inst.(SessionGoalController)
 	if !ok {
 		t.Fatalf("instance type %T does not implement SessionGoalController", inst)
@@ -3435,6 +3444,37 @@ func TestInstanceSessionGoalControllerUnsupported(t *testing.T) {
 	_, err := controller.SessionGoalGet(context.Background(), "session-1")
 	if !errors.Is(err, ErrSessionActionUnsupported) {
 		t.Fatalf("SessionGoalGet() error = %v", err)
+	}
+}
+
+func TestInstanceClassifiesWMActionErrorData(t *testing.T) {
+	tests := []struct {
+		code string
+		want error
+	}{
+		{protocol.WMActionErrorInactive, ErrSessionSteerInactive},
+		{protocol.WMActionErrorBusy, ErrSessionBusy},
+		{protocol.WMActionErrorUnavailable, ErrSessionSteerUnavailable},
+		{protocol.WMActionErrorUnsupported, ErrSessionActionUnsupported},
+		{protocol.WMActionErrorInvalid, ErrSessionActionInvalid},
+	}
+	for _, test := range tests {
+		t.Run(test.code, func(t *testing.T) {
+			conn := &fakeConn{
+				agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
+					SessionActions: protocol.WMSessionActionCapabilities{Steer: true},
+				}),
+				sendErr: protocol.NewWMActionRPCError(test.code, "classified"),
+			}
+			inst := NewInstance("test", conn)
+			if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ClientCapabilities: protocol.ClientCapabilities{Meta: protocol.BuildWMClientCapabilitiesMeta(nil)}}); err != nil {
+				t.Fatal(err)
+			}
+			_, err := inst.(SessionSteerer).SteerSession(context.Background(), "session-1", "message-1", nil)
+			if !errors.Is(err, test.want) {
+				t.Fatalf("SteerSession() error = %v, want %v", err, test.want)
+			}
+		})
 	}
 }
 
@@ -3721,7 +3761,7 @@ func TestCodexAppRuntimeAttachesTurnDiffArtifact(t *testing.T) {
 	conn := newCodexappConnWithRuntime(rt, t.TempDir())
 	conn.BindSessionID("thread-1")
 
-	var promptRes protocol.SessionPromptResult
+	var promptRes protocol.PromptOutcome
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
@@ -3993,8 +4033,8 @@ func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
 	if update.Update.Size == nil || *update.Update.Size != 192000 {
 		t.Fatalf("size=%v, want 192000", update.Update.Size)
 	}
-	if strings.TrimSpace(update.Update.UpdatedAt) == "" {
-		t.Fatal("updatedAt is empty")
+	if update.Update.UpdatedAt != "" {
+		t.Fatalf("usage updatedAt=%q, want omitted from ACP", update.Update.UpdatedAt)
 	}
 }
 
@@ -4544,7 +4584,7 @@ func TestCodexAppPromptResultIncludesForkPoint(t *testing.T) {
 
 	conn := newCodexappConnWithRuntime(rt, t.TempDir())
 	conn.bindSessionIDs("thread-1", "thread-1")
-	var promptRes protocol.SessionPromptResult
+	var promptRes protocol.PromptOutcome
 	if err := conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
 		SessionID: "thread-1",
 		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "fork me"}},
@@ -5638,6 +5678,73 @@ func TestInstanceRejectsInvalidACPUpdateBeforeCallbacks(t *testing.T) {
 	}
 }
 
+func TestInstanceSteerUsesNegotiatedWMRequest(t *testing.T) {
+	fc := &fakeConn{agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
+		SessionActions: protocol.WMSessionActionCapabilities{Steer: true},
+	})}
+	inst := NewInstance("third-party", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{
+		ProtocolVersion: 1,
+		ClientCapabilities: protocol.ClientCapabilities{
+			Meta: protocol.BuildWMClientCapabilitiesMeta(nil),
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	steerer := inst.(SessionSteerer)
+	result, err := steerer.SteerSession(context.Background(), "s1", "m1", []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "change"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fc.lastMethod != protocol.MethodWMSessionSteer || result.ProviderTurnID != "turn-1" {
+		t.Fatalf("method=%q result=%#v", fc.lastMethod, result)
+	}
+	params, ok := fc.lastParams.(protocol.WMSessionSteerParams)
+	if !ok || params.SessionID != "s1" || params.MessageID != "m1" || len(params.Prompt) != 1 {
+		t.Fatalf("params=%#v", fc.lastParams)
+	}
+}
+
+func TestInstanceRejectsUnnegotiatedWMActionAndGoalNotification(t *testing.T) {
+	fc := &fakeConn{agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
+		GoalLifecycle:  true,
+		SessionActions: protocol.WMSessionActionCapabilities{Steer: true},
+	})}
+	inst := NewInstance("third-party", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inst.(SessionSteerer).SteerSession(context.Background(), "s1", "m1", nil); !errors.Is(err, ErrSessionActionUnsupported) {
+		t.Fatalf("steer err=%v", err)
+	}
+	cb := &fakeCallbacks{}
+	inst.SetCallbacks(cb)
+	fc.resp(context.Background(), protocol.MethodWMSessionGoal, json.RawMessage(`{"sessionId":"s1","event":"cleared"}`))
+	if cb.updateCount != 0 {
+		t.Fatalf("unnegotiated Goal notification dispatched %d events", cb.updateCount)
+	}
+}
+
+func TestInstanceDispatchesOnlyValidNegotiatedGoalNotifications(t *testing.T) {
+	fc := &fakeConn{agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{GoalLifecycle: true})}
+	inst := NewInstance("third-party", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{
+		ProtocolVersion:    1,
+		ClientCapabilities: protocol.ClientCapabilities{Meta: protocol.BuildWMClientCapabilitiesMeta(nil)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fc.resp(context.Background(), "_wm/future", json.RawMessage(`{"value":1}`))
+	fc.resp(context.Background(), protocol.MethodWMSessionGoal, json.RawMessage(`{"sessionId":"s1","event":"updated"}`))
+	fc.resp(context.Background(), protocol.MethodWMSessionGoal, json.RawMessage(`{"sessionId":"s1","event":"cleared","_meta":{"vendor":{"trace":1}}}`))
+
+	cb := &fakeCallbacks{}
+	inst.SetCallbacks(cb)
+	if cb.updateCount != 1 {
+		t.Fatalf("Goal events=%d, want one valid buffered event", cb.updateCount)
+	}
+}
+
 func newUpdate(acpSessionID, name string) protocol.SessionUpdateParams {
 	return protocol.SessionUpdateParams{
 		SessionID: acpSessionID,
@@ -5648,15 +5755,34 @@ func newUpdate(acpSessionID, name string) protocol.SessionUpdateParams {
 }
 
 type fakeConn struct {
-	req  ACPRequestHandler
-	resp ACPResponseHandler
+	req        ACPRequestHandler
+	resp       ACPResponseHandler
+	agentMeta  json.RawMessage
+	lastMethod string
+	lastParams any
+	goal       *protocol.SessionGoal
+	sendErr    error
 }
 
-func (f *fakeConn) Send(_ context.Context, method string, _ any, result any) error {
+func (f *fakeConn) Send(_ context.Context, method string, params any, result any) error {
+	f.lastMethod = method
+	f.lastParams = params
+	if method != protocol.MethodInitialize && f.sendErr != nil {
+		return f.sendErr
+	}
 	switch method {
 	case protocol.MethodInitialize:
 		if out, ok := result.(*protocol.InitializeResult); ok {
 			out.ProtocolVersion = json.Number("1")
+			out.AgentCapabilities.Meta = protocol.CloneSessionUpdateMeta(f.agentMeta)
+		}
+	case protocol.MethodWMSessionSteer:
+		if out, ok := result.(*protocol.WMSessionSteerResult); ok {
+			out.TurnID = "turn-1"
+		}
+	case protocol.MethodWMSessionGoalGet:
+		if out, ok := result.(*protocol.WMSessionGoalResult); ok {
+			out.Goal = f.goal
 		}
 	case protocol.MethodSessionNew:
 		if out, ok := result.(*protocol.SessionNewResult); ok {
@@ -5667,7 +5793,7 @@ func (f *fakeConn) Send(_ context.Context, method string, _ any, result any) err
 			out.ConfigOptions = []protocol.ConfigOption{{ID: "mode", CurrentValue: "code"}}
 		}
 	case protocol.MethodSessionPrompt:
-		if out, ok := result.(*protocol.SessionPromptResult); ok {
+		if out, ok := result.(*protocol.PromptOutcome); ok {
 			out.StopReason = "end_turn"
 		}
 	}
@@ -5722,12 +5848,31 @@ func (f *fakeCodexappCallbacks) SessionRequestPermission(context.Context, int64,
 func captureSessionUpdate(t *testing.T, ch chan<- protocol.SessionUpdateParams) ACPResponseHandler {
 	t.Helper()
 	return func(_ context.Context, method string, params json.RawMessage) {
-		if method != protocol.MethodSessionUpdate {
-			t.Fatalf("method=%q, want session/update", method)
+		var event protocol.AgentEvent
+		switch method {
+		case protocol.MethodSessionUpdate:
+			wire, err := protocol.DecodeSessionUpdateParams(params)
+			if err != nil {
+				t.Fatalf("strict decode update: %v; raw=%s", err, params)
+			}
+			event, err = protocol.ProjectSessionUpdate(wire, time.Now())
+			if err != nil {
+				t.Fatalf("project update: %v", err)
+			}
+		case protocol.MethodWMSessionGoal:
+			notification, err := protocol.DecodeWMGoalNotification(params)
+			if err != nil {
+				t.Fatalf("strict decode Goal notification: %v; raw=%s", err, params)
+			}
+			event = protocol.AgentEvent{SessionID: notification.SessionID, Update: protocol.AgentGoalEvent{
+				Event: notification.Event, Goal: notification.Goal, TurnID: notification.TurnID, Meta: notification.Meta,
+			}}
+		default:
+			t.Fatalf("method=%q, want session/update or _wm/session/goal", method)
 		}
-		var update protocol.SessionUpdateParams
-		if err := json.Unmarshal(params, &update); err != nil {
-			t.Fatalf("unmarshal update: %v", err)
+		update, err := event.LegacySessionUpdate()
+		if err != nil {
+			t.Fatalf("normalize update: %v", err)
 		}
 		ch <- update
 	}
@@ -5787,45 +5932,6 @@ func waitForTurnDiff(t *testing.T, conn *codexappConn, turnID string, want strin
 type fakeRawConn struct {
 	req  ACPRequestHandler
 	resp ACPResponseHandler
-}
-
-type fakeSteerConn struct {
-	fakeRawConn
-	sessionID       string
-	clientMessageID string
-	blocks          []protocol.ContentBlock
-}
-
-type fakeGoalConn struct {
-	fakeRawConn
-	goal protocol.SessionGoal
-}
-
-func (f *fakeGoalConn) SessionGoalSet(_ context.Context, params protocol.SessionGoalSetParams) (protocol.SessionGoal, error) {
-	f.goal.SessionID = params.SessionID
-	return f.goal, nil
-}
-
-func (f *fakeGoalConn) SessionGoalGet(_ context.Context, _ string) (*protocol.SessionGoal, error) {
-	goal := f.goal
-	return &goal, nil
-}
-
-func (f *fakeGoalConn) SessionGoalClear(_ context.Context, _ string) error {
-	f.goal = protocol.SessionGoal{}
-	return nil
-}
-
-func (f *fakeSteerConn) SteerSession(
-	_ context.Context,
-	sessionID string,
-	clientMessageID string,
-	blocks []protocol.ContentBlock,
-) (SessionSteerResult, error) {
-	f.sessionID = sessionID
-	f.clientMessageID = clientMessageID
-	f.blocks = cloneCodexappContentBlocks(blocks)
-	return SessionSteerResult{ProviderTurnID: "turn-1"}, nil
 }
 
 func (f *fakeRawConn) Send(_ context.Context, _ string, _ any, _ any) error { return nil }
@@ -6280,35 +6386,6 @@ func TestClaudePreset_UsesClaudeUserSkillsDirOnly(t *testing.T) {
 	}
 }
 
-func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
-	factory := &ACPFactory{}
-	factory.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{
-		Compact: true,
-	})
-
-	if got := factory.SessionActions(protocol.ACPProviderCodex); !got.Compact {
-		t.Fatalf("codex session actions = %+v", got)
-	}
-	if got := factory.SessionActions(protocol.ACPProviderClaude); got.Compact {
-		t.Fatalf("claude session actions = %+v", got)
-	}
-
-	cloned := factory.Clone()
-	if got := cloned.SessionActions(protocol.ACPProviderCodex); !got.Compact {
-		t.Fatalf("cloned codex session actions = %+v", got)
-	}
-}
-
-func TestFactoryCodexSupportsSessionActions(t *testing.T) {
-	factory := newACPFactoryWithOptions(ACPFactoryOptions{}, func(provider ACPProvider) bool {
-		return provider.Name() == string(protocol.ACPProviderCodex)
-	})
-	got := factory.SessionActions(protocol.ACPProviderCodex)
-	if !got.Compact || !got.Steer || !got.Fork || !got.Goal {
-		t.Fatalf("Codex session actions = %+v", got)
-	}
-}
-
 func TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey(t *testing.T) {
 	stateDir := t.TempDir()
 	tests := []struct {
@@ -6335,10 +6412,6 @@ func TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey(t *testing.T) {
 			}
 			if !test.want {
 				return
-			}
-			actions := factory.SessionActions(protocol.ACPProviderCXDeepSeek)
-			if !actions.Compact || !actions.Steer || !actions.Fork || !actions.Goal {
-				t.Fatalf("cx-deepseek session actions = %+v", actions)
 			}
 			if preferred := factory.PreferredName(); preferred == string(protocol.ACPProviderCXDeepSeek) {
 				t.Fatalf("PreferredName() selected cx-deepseek: %q", preferred)
@@ -6429,7 +6502,6 @@ func TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace(t *testing.T) {
 	replacement.Register(protocol.ACPProviderCodex, func(context.Context, string) (Instance, error) {
 		return nil, nil
 	})
-	replacement.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Compact: true})
 
 	original.ReplaceFrom(replacement)
 
@@ -6441,9 +6513,6 @@ func TestACPFactoryReplaceFromUpdatesSharedRegistryInPlace(t *testing.T) {
 	}
 	if original.Creator(protocol.ACPProviderCodex) == nil {
 		t.Fatal("Codex creator missing after replacement")
-	}
-	if got := original.SessionActions(protocol.ACPProviderCodex); !got.Compact {
-		t.Fatalf("Codex session actions = %+v, want compact support", got)
 	}
 }
 
@@ -6820,10 +6889,9 @@ func TestFlickerEffortInstanceRetainsSupportedEffortAcrossModelSwitch(t *testing
 					},
 				})
 			case protocol.MethodSetConfigOption:
-				return assignResult(result, []protocol.ConfigOption{{
-					ID:           protocol.ConfigOptionIDModel,
-					CurrentValue: "claude-4.8-opus",
-				}})
+				return assignResult(result, protocol.SetSessionConfigOptionResponse{ConfigOptions: protocol.WireSessionConfigOptions([]protocol.ConfigOption{{
+					ID: protocol.ConfigOptionIDModel, Name: "Model", Type: "select", CurrentValue: "claude-4.8-opus",
+				}})})
 			default:
 				t.Fatalf("unexpected method %q", method)
 				return nil

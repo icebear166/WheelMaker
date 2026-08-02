@@ -55,6 +55,7 @@ type sessionViewSummary struct {
 	ConfigOptions          []acp.ConfigOption            `json:"configOptions,omitempty"`
 	Usage                  *acp.SessionUsage             `json:"usage,omitempty"`
 	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
+	SessionFeatures        *acp.SessionFeatures          `json:"sessionFeatures,omitempty"`
 	PendingPermissionCount int                           `json:"pendingPermissionCount"`
 	ForkedFrom             *acp.SessionForkOrigin        `json:"forkedFrom,omitempty"`
 	Goal                   *acp.SessionGoal              `json:"goal,omitempty"`
@@ -75,6 +76,7 @@ type sessionSyncProjection struct {
 	Pinned                   bool                   `json:"pinned,omitempty"`
 	MarkColor                string                 `json:"markColor,omitempty"`
 	ForkedFrom               *acp.SessionForkOrigin `json:"forkedFrom,omitempty"`
+	SessionFeatures          *acp.SessionFeatures   `json:"sessionFeatures,omitempty"`
 }
 
 type sessionTurnMessage struct {
@@ -137,9 +139,8 @@ type SessionRecorder struct {
 	thoughtPublish   map[string]sessionThoughtPublishState
 	now              func() time.Time
 
-	modelLookup  func(sessionID string) string
-	actionLookup func(agentType string) acp.SessionActionCapabilities
-	queueLookup  func(sessionID string, full bool) *acp.SessionQueueSnapshot
+	modelLookup func(sessionID string) string
+	queueLookup func(sessionID string, full bool) *acp.SessionQueueSnapshot
 }
 
 func newSessionRecorder(projectName string, store Store, listSessions func(context.Context) ([]SessionRecord, error)) *SessionRecorder {
@@ -386,7 +387,7 @@ func (r *SessionRecorder) InitializeForkedSession(
 			continue
 		}
 		lastDoneTurnIndex = int64(index + 1)
-		lastDoneSuccess = strings.TrimSpace(result.StopReason) != acp.StopReasonFailed
+		lastDoneSuccess = strings.TrimSpace(result.StopReason) != acp.SessionTurnStopReasonFailed
 	}
 	projection := sessionSyncProjection{
 		LatestPersistedTurnIndex: latestTurnIndex,
@@ -1294,6 +1295,7 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 	summary.Pinned = projection.Pinned
 	summary.MarkColor = projection.MarkColor
 	summary.ForkedFrom = cloneSessionForkOrigin(projection.ForkedFrom)
+	summary.SessionActions = acp.SessionActionsFromAgentCapabilities(acp.AgentCapabilities{})
 	var agentState SessionAgentState
 	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil {
 		summary.CreateRequestID = agentState.CreateRequestID
@@ -1309,15 +1311,37 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 			}
 			summary.Goal = &goal
 		}
+		summary.SessionFeatures = cloneSessionFeatures(acp.SessionFeaturesFromAgentCapabilities(agentState.AgentCapabilities))
+		summary.SessionActions = acp.SessionActionsFromAgentCapabilities(agentState.AgentCapabilities)
 	}
-	if r.actionLookup != nil {
-		summary.SessionActions = r.actionLookup(summary.AgentType)
+	if summary.SessionFeatures == nil {
+		summary.SessionFeatures = cloneSessionFeatures(projection.SessionFeatures)
 	}
 	if r.queueLookup != nil {
 		summary.Queue = r.queueLookup(rec.ID, true)
 	}
 	summary.PendingPermissionCount = pendingPermissionCountFromPromptState(r.promptState[rec.ID])
 	return summary
+}
+
+func cloneSessionFeatures(features *acp.SessionFeatures) *acp.SessionFeatures {
+	if features == nil {
+		return nil
+	}
+	out := &acp.SessionFeatures{}
+	if features.MessageLifecycle != nil {
+		value := *features.MessageLifecycle
+		out.MessageLifecycle = &value
+	}
+	return out
+}
+
+func sessionFeaturesFromAgentJSON(raw string) *acp.SessionFeatures {
+	var state SessionAgentState
+	if strings.TrimSpace(raw) == "" || json.Unmarshal([]byte(raw), &state) != nil {
+		return nil
+	}
+	return cloneSessionFeatures(acp.SessionFeaturesFromAgentCapabilities(state.AgentCapabilities))
 }
 
 func pendingPermissionCountFromPromptState(state *sessionPromptState) int {
@@ -1572,7 +1596,7 @@ func sessionDoneTurnSuccess(turn sessionTurnMessage) bool {
 	if !ok {
 		return true
 	}
-	return strings.TrimSpace(result.StopReason) != acp.StopReasonFailed
+	return strings.TrimSpace(result.StopReason) != acp.SessionTurnStopReasonFailed
 }
 
 func boolPtr(value bool) *bool {
@@ -1817,7 +1841,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 		case acp.MethodSessionNew:
 			return parsed, nil
 		case acp.MethodSessionPrompt:
-			promptResult := acp.SessionPromptResult{}
+			promptResult := acp.SessionTurnPromptResult{}
 			ok := jsonDecodeAt(contentRaw, "result", &promptResult)
 			if ok {
 				parsed.setJSONMessage(acp.SessionTurnMethodPromptDone, acp.SessionTurnPromptResult{

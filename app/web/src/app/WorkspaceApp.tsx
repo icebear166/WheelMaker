@@ -105,6 +105,7 @@ import {
   shouldMaterializeRealtimeSessionMessages,
 } from '../chat/turns/chatSync';
 import {
+  hasMessageLifecycleFeature,
   resolveChatSessionVisualState as resolveChatSessionVisualStateValue,
   type ChatSessionVisualState,
 } from '../chat/session/chatSessionState';
@@ -194,7 +195,7 @@ import {
 } from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
-import { agentDisplayLabel, buildProjectAgentChoices, isCodexAppAgentType } from '../chat/projectAgents';
+import { agentDisplayLabel, buildProjectAgentChoices } from '../chat/projectAgents';
 import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {
   decodeSessionTurnToMessage,
@@ -4111,7 +4112,7 @@ export function App() {
     : false;
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
-    collapseCompletedWork: isCodexAppAgentType(selectedChatSession?.agentType),
+    collapseCompletedWork: hasMessageLifecycleFeature(selectedChatSession),
     layoutMetrics: chatLayoutMetrics,
     permissionState: selectedPermissionState,
     promptStatus: selectedPromptTurnStatusIndex.statusFor,
@@ -4136,14 +4137,15 @@ export function App() {
     selectedQueueItems,
     selectedPermissionState,
     selectedChatSession?.agentType,
+    selectedChatSession?.sessionFeatures,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
-    collapseCompletedWork: isCodexAppAgentType(archivedPreview?.session.agentType),
+    collapseCompletedWork: hasMessageLifecycleFeature(archivedPreview?.session, true),
     layoutMetrics: chatLayoutMetrics,
     permissionState: archivedPermissionState,
     promptStatus: () => null,
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
-  }), [archivedPreview?.messages, archivedPreview?.session.agentType, archivedPermissionState, chatLayoutMetrics]);
+  }), [archivedPreview?.messages, archivedPreview?.session, archivedPermissionState, chatLayoutMetrics]);
 
   const confirmSearchTarget = (target: ChatSearchTarget) => {
     setSearchTargetPickerOpen(false);

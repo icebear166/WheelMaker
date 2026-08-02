@@ -620,6 +620,14 @@ export interface RegistrySessionForkResponse {
   session: RegistrySessionSummary;
 }
 
+export interface RegistrySessionFeatureVersion {
+  version: number;
+}
+
+export interface RegistrySessionFeatures {
+  messageLifecycle?: RegistrySessionFeatureVersion;
+}
+
 export type RegistrySessionMarkColor = 'red' | 'yellow' | 'green' | 'blue';
 
 export type RegistrySessionOperationStatus = 'queued' | 'started' | 'completed' | 'failed';
@@ -655,6 +663,7 @@ export interface RegistrySessionSummary {
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;
   sessionActions?: RegistrySessionActionCapabilities;
+  sessionFeatures?: RegistrySessionFeatures;
   goal?: RegistrySessionGoal;
   forkedFrom?: RegistrySessionForkOrigin;
   queue?: RegistrySessionQueueSnapshot;
