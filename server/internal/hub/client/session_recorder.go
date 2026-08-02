@@ -1023,7 +1023,7 @@ func (r *SessionRecorder) addMessageTurn(state *sessionPromptState, event parsed
 		}
 	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought:
 		if len(state.turns) > 0 {
-			if existing := state.turns[len(state.turns)-1]; existing.method == event.method {
+			if existing := state.turns[len(state.turns)-1]; existing.method == event.method && sessionTextTurnMetaEqual(existing.payload, event.payload) {
 				mergedTurnIndex = existing.turnIndex
 			}
 		}
@@ -1834,6 +1834,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 		case acp.MethodSessionUpdate:
 			params := acp.SessionUpdateParams{}
 			jsonDecodeAt(contentRaw, "params", &params)
+			meta := acp.CloneSessionUpdateMeta(params.Update.Meta)
 			method := strings.TrimSpace(params.Update.SessionUpdate)
 			if method == "" {
 				return parsed, nil
@@ -1862,25 +1863,30 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 					ContentBlocks:   blocks,
 					ClientMessageID: clientMessageID,
 					Steered:         params.Update.Steered,
+					Meta:            meta,
 				}, turnKey)
 			case acp.SessionUpdateAgentMessageChunk, acp.SessionUpdateAgentThoughtChunk:
 				text := extractUpdateText(params.Update.Content)
 				if method == acp.SessionUpdateAgentThoughtChunk && strings.TrimSpace(text) == "" {
 					return parsed, nil
 				}
-				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: text}, "")
+				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: text, Meta: meta}, "")
 			case acp.SessionUpdateToolCall, acp.SessionUpdateToolCallUpdate:
 				parsed.setJSONMessage(acp.SessionTurnMethodToolCall, acp.SessionTurnToolResult{
 					Cmd:    strings.TrimSpace(params.Update.Title),
 					Kind:   strings.TrimSpace(params.Update.Kind),
 					Status: strings.TrimSpace(params.Update.Status),
+					Meta:   meta,
 				}, strings.TrimSpace(params.Update.ToolCallID))
 			case acp.SessionUpdatePlan:
 				entries := make([]acp.SessionTurnPlanResult, 0, len(params.Update.Entries))
 				for _, entry := range params.Update.Entries {
 					entries = append(entries, acp.SessionTurnPlanResult{Content: strings.TrimSpace(entry.Content), Status: strings.TrimSpace(entry.Status)})
 				}
-				parsed.setJSONMessage(acp.SessionTurnMethodAgentPlan, acp.SessionTurnPlanPayload{Entries: entries}, "")
+				parsed.setJSONMessage(acp.SessionTurnMethodAgentPlan, acp.SessionTurnPlanPayload{
+					Entries: entries,
+					Meta:    meta,
+				}, "")
 			case acp.SessionUpdateSessionInfoUpdate:
 				parsed.sessionInfoUpdate = true
 				parsed.sessionInfoTitle = strings.TrimSpace(params.Update.Title)
@@ -1943,6 +1949,13 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 	existing.method = firstNonEmpty(incoming.method, existing.method)
 	existing.turnIndex = maxInt64(turnIndex, existing.turnIndex)
 	switch incoming.method {
+	case acp.SessionUpdateUserMessageChunk:
+		base := existing.payload.(acp.SessionTurnUserMessage)
+		inc := incoming.payload.(acp.SessionTurnUserMessage)
+		if len(inc.Meta) == 0 {
+			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+		}
+		existing.payload = inc
 	case acp.SessionTurnMethodToolCall:
 		base := existing.payload.(acp.SessionTurnToolResult)
 		inc := incoming.payload.(acp.SessionTurnToolResult)
@@ -1955,6 +1968,16 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 		if inc.Status == "" {
 			inc.Status = base.Status
 		}
+		if len(inc.Meta) == 0 {
+			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+		}
+		existing.payload = inc
+	case acp.SessionTurnMethodAgentPlan:
+		base := existing.payload.(acp.SessionTurnPlanPayload)
+		inc := incoming.payload.(acp.SessionTurnPlanPayload)
+		if len(inc.Meta) == 0 {
+			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+		}
 		existing.payload = inc
 	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought:
 		base := existing.payload.(acp.SessionTurnTextResult)
@@ -1963,11 +1986,20 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 		if inc.Text == "" {
 			inc.Text = base.Text
 		}
+		if len(inc.Meta) == 0 {
+			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+		}
 		existing.payload = inc
 	default:
 		existing.payload = incoming.payload
 	}
 	return existing
+}
+
+func sessionTextTurnMetaEqual(left any, right any) bool {
+	leftText, leftOK := left.(acp.SessionTurnTextResult)
+	rightText, rightOK := right.(acp.SessionTurnTextResult)
+	return leftOK && rightOK && acp.EqualSessionUpdateMeta(leftText.Meta, rightText.Meta)
 }
 
 func isSessionTextTurnMethod(method string) bool {

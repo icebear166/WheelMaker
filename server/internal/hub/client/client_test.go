@@ -3338,6 +3338,171 @@ func TestMergeTurnMessageMergesTypedTextPayload(t *testing.T) {
 	}
 }
 
+func TestSessionViewPersistsCompleteTextMetaAndSplitsMetadataBoundaries(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-meta", "Meta")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-meta", "run", nil)); err != nil {
+		t.Fatal(err)
+	}
+	commentaryMeta := json.RawMessage(`{"wm":{"messagePhase":"commentary"},"thirdParty":{"trace":"opaque"}}`)
+	finalMeta := json.RawMessage(`{"wm":{"messagePhase":"final_answer"},"other":true}`)
+	for _, update := range []acp.SessionUpdate{
+		{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "work"}),
+			Meta:          commentaryMeta,
+		},
+		{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "ing"}),
+			Meta:          commentaryMeta,
+		},
+		{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "done"}),
+			Meta:          finalMeta,
+		},
+	} {
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-meta", update)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-meta", "")); err != nil {
+		t.Fatal(err)
+	}
+
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-meta", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turns) != 4 {
+		t.Fatalf("turns = %d, want prompt + commentary + final + done", len(turns))
+	}
+	decodeText := func(content string) acp.SessionTurnTextResult {
+		t.Helper()
+		var message acp.SessionTurnMessage
+		if err := json.Unmarshal([]byte(content), &message); err != nil {
+			t.Fatal(err)
+		}
+		var result acp.SessionTurnTextResult
+		if err := json.Unmarshal(message.Param, &result); err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	commentary := decodeText(turns[1].Content)
+	final := decodeText(turns[2].Content)
+	if commentary.Text != "working" || !acp.EqualSessionUpdateMeta(commentary.Meta, commentaryMeta) {
+		t.Fatalf("commentary = %#v", commentary)
+	}
+	if final.Text != "done" || !acp.EqualSessionUpdateMeta(final.Meta, finalMeta) {
+		t.Fatalf("final = %#v", final)
+	}
+}
+
+func TestParseSessionViewEventPreservesMetaForTurnProjections(t *testing.T) {
+	meta := json.RawMessage(`{"wm":{"messagePhase":"commentary"},"vendor":{"value":1}}`)
+	tests := []struct {
+		name   string
+		update acp.SessionUpdate
+		meta   func(parsed parsedSessionViewEvent) json.RawMessage
+	}{
+		{
+			name: "user message",
+			update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateUserMessageChunk,
+				Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "user"}),
+				Meta:          meta,
+			},
+			meta: func(parsed parsedSessionViewEvent) json.RawMessage {
+				return parsed.payload.(acp.SessionTurnUserMessage).Meta
+			},
+		},
+		{
+			name: "tool",
+			update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdateToolCall,
+				ToolCallID:    "call-1",
+				Title:         "Read",
+				Meta:          meta,
+			},
+			meta: func(parsed parsedSessionViewEvent) json.RawMessage {
+				return parsed.payload.(acp.SessionTurnToolResult).Meta
+			},
+		},
+		{
+			name: "plan",
+			update: acp.SessionUpdate{
+				SessionUpdate: acp.SessionUpdatePlan,
+				Entries:       []acp.PlanEntry{{Content: "Run", Status: "pending"}},
+				Meta:          meta,
+			},
+			meta: func(parsed parsedSessionViewEvent) json.RawMessage {
+				return parsed.payload.(acp.SessionTurnPlanPayload).Meta
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := parseSessionViewEvent(sessionViewUpdateEvent("sess-1", tt.update))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := tt.meta(parsed); !acp.EqualSessionUpdateMeta(got, meta) {
+				t.Fatalf("meta = %s, want %s", got, meta)
+			}
+		})
+	}
+}
+
+func TestMergeTurnMessagePreservesEarlierMetaWhenUpdateOmitsIt(t *testing.T) {
+	meta := json.RawMessage(`{"vendor":{"value":1}}`)
+	tests := []struct {
+		name     string
+		method   string
+		existing any
+		incoming any
+		meta     func(any) json.RawMessage
+	}{
+		{
+			name:     "user message",
+			method:   acp.SessionUpdateUserMessageChunk,
+			existing: acp.SessionTurnUserMessage{Text: "first", Meta: meta},
+			incoming: acp.SessionTurnUserMessage{Text: "second"},
+			meta:     func(payload any) json.RawMessage { return payload.(acp.SessionTurnUserMessage).Meta },
+		},
+		{
+			name:     "tool",
+			method:   acp.SessionTurnMethodToolCall,
+			existing: acp.SessionTurnToolResult{Cmd: "Read", Meta: meta},
+			incoming: acp.SessionTurnToolResult{Status: "completed"},
+			meta:     func(payload any) json.RawMessage { return payload.(acp.SessionTurnToolResult).Meta },
+		},
+		{
+			name:     "plan",
+			method:   acp.SessionTurnMethodAgentPlan,
+			existing: acp.SessionTurnPlanPayload{Entries: []acp.SessionTurnPlanResult{{Content: "Old"}}, Meta: meta},
+			incoming: acp.SessionTurnPlanPayload{Entries: []acp.SessionTurnPlanResult{{Content: "New"}}},
+			meta:     func(payload any) json.RawMessage { return payload.(acp.SessionTurnPlanPayload).Meta },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			merged := mergeTurnMessage(
+				sessionTurnMessage{method: tt.method, payload: tt.existing, turnIndex: 1},
+				sessionTurnMessage{method: tt.method, payload: tt.incoming, turnIndex: 1},
+				1,
+			)
+			if got := tt.meta(merged.payload); !acp.EqualSessionUpdateMeta(got, meta) {
+				t.Fatalf("meta = %s, want %s", got, meta)
+			}
+		})
+	}
+}
+
 func TestBuildSessionTurnContentJSONDoesNotTrimSessionTurnMethod(t *testing.T) {
 	raw := buildSessionTurnContentJSON("  method.with.space  ", map[string]any{"k": "v"})
 	msg := acp.SessionTurnMessage{}
