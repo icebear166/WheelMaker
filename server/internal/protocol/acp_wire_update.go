@@ -440,6 +440,13 @@ func decodeStrict(raw json.RawMessage, target any) error {
 	return nil
 }
 
+// DecodeStrictACPJSON decodes a standard ACP wire object while rejecting
+// unknown fields at every typed object boundary. Extension data remains valid
+// inside declared _meta fields and custom extension DTOs.
+func DecodeStrictACPJSON(raw json.RawMessage, target any) error {
+	return decodeStrict(raw, target)
+}
+
 func isMessageUpdateKind(kind string) bool {
 	switch kind {
 	case SessionUpdateAgentMessageChunk, SessionUpdateUserMessageChunk, SessionUpdateAgentThoughtChunk:

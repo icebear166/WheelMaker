@@ -74,6 +74,7 @@ type SessionUpdate struct {
 	ContentBlocks     []ContentBlock     `json:"contentBlocks,omitempty"`
 	ClientMessageID   string             `json:"clientMessageId,omitempty"`
 	Steered           bool               `json:"steered,omitempty"`
+	MessageLifecycle  *bool              `json:"messageLifecycle,omitempty"`
 	AvailableCommands []AvailableCommand `json:"availableCommands,omitempty"`
 	ToolCallID        string             `json:"toolCallId,omitempty"`
 	Title             string             `json:"title,omitempty"`

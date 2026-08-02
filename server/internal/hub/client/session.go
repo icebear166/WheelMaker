@@ -1218,6 +1218,7 @@ func (s *Session) isRunning() bool {
 // SessionUpdate receives session/update notifications from the agent.
 func (s *Session) AgentEvent(event acp.AgentEvent) {
 	if update, ok := event.Update.(acp.AgentMessageEvent); ok &&
+		event.MessageLifecycle &&
 		update.Kind == acp.SessionUpdateUserMessageChunk &&
 		acp.SessionUpdateMetaSteered(update.Meta) &&
 		acp.SessionUpdateMetaMessageComplete(update.Meta) &&

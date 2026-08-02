@@ -23,6 +23,19 @@ func TestDecodeSessionUpdateRejectsPrivateRootFields(t *testing.T) {
 	}
 }
 
+func TestDecodeStrictACPJSONRejectsUnknownInitializeFields(t *testing.T) {
+	tests := []json.RawMessage{
+		json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{},"legacy":true}`),
+		json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"legacy":true}}`),
+	}
+	for _, raw := range tests {
+		var result InitializeResult
+		if err := DecodeStrictACPJSON(raw, &result); err == nil {
+			t.Fatalf("unknown initialize field accepted: %s", raw)
+		}
+	}
+}
+
 func TestDecodeSessionUpdateUsesStrictVariants(t *testing.T) {
 	tests := []struct {
 		raw      string

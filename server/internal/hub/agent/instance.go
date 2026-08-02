@@ -474,6 +474,9 @@ func (i *instance) HandleACPResponse(_ context.Context, method string, params js
 		if err != nil {
 			return
 		}
+		i.mu.RLock()
+		event.MessageLifecycle = i.wmExtensions.MessageLifecycle
+		i.mu.RUnlock()
 		i.dispatchAgentEvent(event)
 		return
 	}
@@ -486,6 +489,11 @@ func (i *instance) HandleACPResponse(_ context.Context, method string, params js
 		}
 		notification, err := protocol.DecodeWMGoalNotification(params)
 		if err != nil {
+			var diagnostic struct {
+				SessionID string `json:"sessionId"`
+			}
+			_ = json.Unmarshal(params, &diagnostic)
+			agentLogger().Warn("ignore invalid Goal notification session=%s err=%v", strings.TrimSpace(diagnostic.SessionID), err)
 			return
 		}
 		i.dispatchAgentEvent(protocol.AgentEvent{
@@ -622,7 +630,7 @@ func (i *instance) currentCallbacks() Callbacks {
 }
 
 func decodeACPParams(method string, params json.RawMessage, out any) error {
-	if err := json.Unmarshal(params, out); err != nil {
+	if err := protocol.DecodeStrictACPJSON(params, out); err != nil {
 		return fmt.Errorf("%s: unmarshal: %w", method, err)
 	}
 	return nil

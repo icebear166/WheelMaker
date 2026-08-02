@@ -692,7 +692,8 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 	}
 
 	s.AgentEvent(acp.AgentEvent{
-		SessionID: "sess-steer",
+		SessionID:        "sess-steer",
+		MessageLifecycle: true,
 		Update: acp.AgentMessageEvent{
 			Kind:      acp.SessionUpdateUserMessageChunk,
 			MessageID: "different",
@@ -704,6 +705,18 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 	}
 	s.AgentEvent(acp.AgentEvent{
 		SessionID: "sess-steer",
+		Update: acp.AgentMessageEvent{
+			Kind:      acp.SessionUpdateUserMessageChunk,
+			MessageID: "steer-1",
+			Meta:      acp.BuildSessionUpdateMetaLifecycle("", true, true),
+		},
+	})
+	if len(s.queueSnapshot(true).WaitingItems) != 1 {
+		t.Fatal("unnegotiated lifecycle metadata removed the item")
+	}
+	s.AgentEvent(acp.AgentEvent{
+		SessionID:        "sess-steer",
+		MessageLifecycle: true,
 		Update: acp.AgentMessageEvent{
 			Kind:      acp.SessionUpdateUserMessageChunk,
 			MessageID: "steer-1",

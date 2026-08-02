@@ -10081,6 +10081,60 @@ func TestSessionRecorderCompletionMarkerUpdatesMessageWithoutNewTurn(t *testing.
 	}
 }
 
+func TestSessionRecorderPreservesButDoesNotInterpretUnnegotiatedLifecycle(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-lifecycle-unnegotiated", "Lifecycle")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-lifecycle-unnegotiated", "answer", nil)); err != nil {
+		t.Fatal(err)
+	}
+	unauthorized := false
+	first := acp.SessionUpdate{
+		SessionUpdate:    acp.SessionUpdateAgentMessageChunk,
+		Content:          mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "answer"}),
+		MessageID:        "message-1",
+		MessageLifecycle: &unauthorized,
+	}
+	completionMeta := json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true},"vendor":{"trace":"keep"}}`)
+	completed := acp.SessionUpdate{
+		SessionUpdate:    acp.SessionUpdateAgentMessageChunk,
+		Content:          mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: ""}),
+		MessageID:        "message-1",
+		MessageLifecycle: &unauthorized,
+		Meta:             completionMeta,
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-lifecycle-unnegotiated", first)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-lifecycle-unnegotiated", completed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-lifecycle-unnegotiated", "")); err != nil {
+		t.Fatal(err)
+	}
+
+	turns := listRecordedPromptTurns(ctx, t, c, "sess-lifecycle-unnegotiated", 1)
+	if len(turns) != 3 {
+		t.Fatalf("turns=%d, want prompt + one message + done", len(turns))
+	}
+	var message acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(turns[1]), &message); err != nil {
+		t.Fatal(err)
+	}
+	var payload acp.SessionTurnTextResult
+	if err := json.Unmarshal(message.Param, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Text != "answer" || payload.MessageComplete {
+		t.Fatalf("payload=%#v", payload)
+	}
+	if !jsonEqualForTest(payload.Meta, completionMeta) {
+		t.Fatalf("meta=%s, want %s", payload.Meta, completionMeta)
+	}
+}
+
 func TestSessionRecorderCompletionPreservesValidPhaseAndIgnoresLateChunk(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()

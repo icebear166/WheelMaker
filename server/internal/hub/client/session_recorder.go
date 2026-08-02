@@ -1864,6 +1864,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 			params := acp.SessionUpdateParams{}
 			jsonDecodeAt(contentRaw, "params", &params)
 			meta := acp.CloneSessionUpdateMeta(params.Update.Meta)
+			interpretMessageLifecycle := params.Update.MessageLifecycle == nil || *params.Update.MessageLifecycle
 			method := strings.TrimSpace(params.Update.SessionUpdate)
 			if method == "" {
 				return parsed, nil
@@ -1883,8 +1884,8 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 					text = extractUpdateText(params.Update.Content)
 				}
 				messageID := strings.TrimSpace(params.Update.MessageID)
-				steered := params.Update.Steered || acp.SessionUpdateMetaSteered(meta)
-				complete := acp.SessionUpdateMetaMessageComplete(meta)
+				steered := params.Update.Steered || (interpretMessageLifecycle && acp.SessionUpdateMetaSteered(meta))
+				complete := interpretMessageLifecycle && acp.SessionUpdateMetaMessageComplete(meta)
 				clientMessageID := strings.TrimSpace(params.Update.ClientMessageID)
 				if clientMessageID == "" && steered {
 					clientMessageID = messageID
@@ -1917,7 +1918,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				parsed.setJSONMessage(method, acp.SessionTurnTextResult{
 					Text:            text,
 					MessageID:       messageID,
-					MessageComplete: acp.SessionUpdateMetaMessageComplete(meta),
+					MessageComplete: interpretMessageLifecycle && acp.SessionUpdateMetaMessageComplete(meta),
 					Meta:            meta,
 				}, turnKey)
 			case acp.SessionUpdateToolCall, acp.SessionUpdateToolCallUpdate:

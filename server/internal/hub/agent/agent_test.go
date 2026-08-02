@@ -3478,6 +3478,23 @@ func TestInstanceClassifiesWMActionErrorData(t *testing.T) {
 	}
 }
 
+func TestCodexAppWMActionRuntimeErrorRemainsGeneric(t *testing.T) {
+	runtimeErr := errors.New("runtime failed")
+	got := codexappWMActionError(runtimeErr)
+	if !errors.Is(got, runtimeErr) {
+		t.Fatalf("runtime error=%v, want original error", got)
+	}
+	if code, ok := protocol.WMActionErrorCode(got); ok {
+		t.Fatalf("runtime error code=%q, want no action classification", code)
+	}
+
+	invalid := fmt.Errorf("%w: malformed request", ErrSessionActionInvalid)
+	code, ok := protocol.WMActionErrorCode(codexappWMActionError(invalid))
+	if !ok || code != protocol.WMActionErrorInvalid {
+		t.Fatalf("invalid action code=%q ok=%v", code, ok)
+	}
+}
+
 func setActiveCodexPromptForTest(conn *codexappConn, turnID string) {
 	conn.mu.Lock()
 	conn.promptDone = make(chan codexappPromptResult, 1)
@@ -5393,6 +5410,29 @@ func TestOwnedConn_SendMatchesResponse(t *testing.T) {
 	}
 }
 
+func TestOwnedConnRejectsUnknownACPResultField(t *testing.T) {
+	tr := newFakeOwnedTransport()
+	tr.onSend = func(v any) {
+		req, ok := v.(protocol.ACPRPCRequest)
+		if !ok {
+			return
+		}
+		_ = tr.emit(protocol.ACPRPCResponse{
+			JSONRPC: protocol.ACPRPCVersion,
+			ID:      req.ID,
+			Result:  json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{},"legacy":true}`),
+		})
+	}
+
+	conn := NewOwnedConn(tr)
+	t.Cleanup(func() { _ = conn.Close() })
+	var out protocol.InitializeResult
+	err := conn.Send(context.Background(), protocol.MethodInitialize, protocol.InitializeParams{}, &out)
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("send error=%v, want unknown field rejection", err)
+	}
+}
+
 func TestOwnedConn_IncomingRequestDispatchesAndReplies(t *testing.T) {
 	tr := newFakeOwnedTransport()
 	conn := NewOwnedConn(tr)
@@ -5678,6 +5718,65 @@ func TestInstanceRejectsInvalidACPUpdateBeforeCallbacks(t *testing.T) {
 	}
 }
 
+func TestInstanceRejectsUnknownCallbackParamField(t *testing.T) {
+	inst := NewInstance("third-party", &fakeConn{})
+	_, err := inst.HandleACPRequest(context.Background(), 1, protocol.MethodFSRead, json.RawMessage(`{"sessionId":"s1","path":"missing","legacy":true}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("callback error=%v, want unknown field rejection", err)
+	}
+}
+
+func TestCodexAppRejectsUnknownACPRequestField(t *testing.T) {
+	conn := newCodexappConnWithRuntime(nil, t.TempDir())
+	var result protocol.InitializeResult
+	err := conn.Send(context.Background(), protocol.MethodInitialize, map[string]any{
+		"protocolVersion":    1,
+		"clientCapabilities": map[string]any{},
+		"legacy":             true,
+	}, &result)
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("initialize error=%v, want unknown field rejection", err)
+	}
+}
+
+func TestInstancePreservesButDoesNotAuthorizeUnnegotiatedMessageLifecycle(t *testing.T) {
+	fc := &fakeConn{}
+	inst := NewInstance("third-party", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{
+		ProtocolVersion: 1,
+		ClientCapabilities: protocol.ClientCapabilities{
+			Meta: protocol.BuildWMClientCapabilitiesMeta(nil),
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cb := &fakeCallbacks{}
+	inst.SetCallbacks(cb)
+	meta := json.RawMessage(`{"wm":{"messagePhase":"commentary","messageComplete":true,"steered":true},"vendor":{"trace":"keep"}}`)
+	fc.resp(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"acp-1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"change"},"messageId":"m1","_meta":`+string(meta)+`}}`))
+
+	if cb.updateCount != 1 {
+		t.Fatalf("updates=%d, want 1", cb.updateCount)
+	}
+	if cb.lastEvent.MessageLifecycle {
+		t.Fatal("unnegotiated message lifecycle was authorized")
+	}
+	message, ok := cb.lastEvent.Update.(protocol.AgentMessageEvent)
+	if !ok {
+		t.Fatalf("update type=%T", cb.lastEvent.Update)
+	}
+	if !protocol.EqualSessionUpdateMeta(message.Meta, meta) {
+		t.Fatalf("meta=%s, want %s", message.Meta, meta)
+	}
+	legacy, err := cb.lastEvent.LegacySessionUpdate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Update.MessageLifecycle == nil || *legacy.Update.MessageLifecycle {
+		t.Fatalf("legacy lifecycle authorization=%v, want false", legacy.Update.MessageLifecycle)
+	}
+}
+
 func TestInstanceSteerUsesNegotiatedWMRequest(t *testing.T) {
 	fc := &fakeConn{agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
 		SessionActions: protocol.WMSessionActionCapabilities{Steer: true},
@@ -5722,6 +5821,39 @@ func TestInstanceRejectsUnnegotiatedWMActionAndGoalNotification(t *testing.T) {
 	fc.resp(context.Background(), protocol.MethodWMSessionGoal, json.RawMessage(`{"sessionId":"s1","event":"cleared"}`))
 	if cb.updateCount != 0 {
 		t.Fatalf("unnegotiated Goal notification dispatched %d events", cb.updateCount)
+	}
+}
+
+func TestInstanceLogsInvalidNegotiatedGoalNotification(t *testing.T) {
+	var buf bytes.Buffer
+	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelWarn}); err != nil {
+		t.Fatalf("setup logger: %v", err)
+	}
+	defer logger.Close()
+	logger.SetOutput(&buf)
+	defer logger.SetOutput(os.Stderr)
+
+	fc := &fakeConn{agentMeta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
+		GoalLifecycle: true,
+	})}
+	inst := NewInstance("third-party", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{
+		ProtocolVersion: 1,
+		ClientCapabilities: protocol.ClientCapabilities{
+			Meta: protocol.BuildWMClientCapabilitiesMeta(nil),
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cb := &fakeCallbacks{}
+	inst.SetCallbacks(cb)
+	fc.resp(context.Background(), protocol.MethodWMSessionGoal, json.RawMessage(`{"sessionId":"s1","event":"updated"}`))
+
+	if cb.updateCount != 0 {
+		t.Fatalf("invalid Goal dispatched %d events", cb.updateCount)
+	}
+	if got := buf.String(); !strings.Contains(got, "invalid Goal notification") || !strings.Contains(got, "s1") {
+		t.Fatalf("diagnostic log=%q", got)
 	}
 }
 
@@ -5813,6 +5945,7 @@ type fakeCallbacks struct {
 	permissionCount int
 	lastRequestID   int64
 	lastMessageID   string
+	lastEvent       protocol.AgentEvent
 }
 
 func (f *fakeCallbacks) AgentEvent(event protocol.AgentEvent) {
@@ -5822,6 +5955,7 @@ func (f *fakeCallbacks) AgentEvent(event protocol.AgentEvent) {
 	}
 	f.updateCount++
 	f.lastMessageID = params.Update.MessageID
+	f.lastEvent = event
 }
 
 func (f *fakeCallbacks) SessionRequestPermission(_ context.Context, requestID int64, _ protocol.PermissionRequestParams) (protocol.PermissionResult, error) {

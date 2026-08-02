@@ -906,7 +906,7 @@ func codexappWMActionError(err error) error {
 	if err == nil {
 		return nil
 	}
-	code := protocol.WMActionErrorInvalid
+	code := ""
 	switch {
 	case errors.Is(err, ErrSessionSteerInactive):
 		code = protocol.WMActionErrorInactive
@@ -916,6 +916,10 @@ func codexappWMActionError(err error) error {
 		code = protocol.WMActionErrorUnavailable
 	case errors.Is(err, ErrSessionActionUnsupported), errors.Is(err, ErrSessionArchiveUnsupported):
 		code = protocol.WMActionErrorUnsupported
+	case errors.Is(err, ErrSessionActionInvalid):
+		code = protocol.WMActionErrorInvalid
+	default:
+		return err
 	}
 	return protocol.NewWMActionRPCError(code, err.Error())
 }
@@ -3029,7 +3033,7 @@ func assignResult(result any, value any) error {
 		*out = append((*out)[:0], raw...)
 		return nil
 	}
-	return json.Unmarshal(raw, result)
+	return protocol.DecodeStrictACPJSON(raw, result)
 }
 
 func remarshal(in any, out any) error {
@@ -3037,7 +3041,7 @@ func remarshal(in any, out any) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(raw, out); err != nil {
+	if err := protocol.DecodeStrictACPJSON(raw, out); err != nil {
 		return err
 	}
 	return nil

@@ -13,8 +13,9 @@ import (
 // AgentEvent is the provider-neutral event consumed by Session. It is an
 // internal model and is never marshaled as ACP.
 type AgentEvent struct {
-	SessionID string
-	Update    AgentUpdate
+	SessionID        string
+	Update           AgentUpdate
+	MessageLifecycle bool
 }
 
 type AgentUpdate interface {
@@ -150,7 +151,11 @@ func (event AgentEvent) LegacySessionUpdate() (SessionUpdateParams, error) {
 		if err != nil {
 			return SessionUpdateParams{}, err
 		}
-		params.Update = SessionUpdate{SessionUpdate: update.Kind, Content: content, MessageID: update.MessageID, Meta: cloneRaw(update.Meta)}
+		messageLifecycle := event.MessageLifecycle
+		params.Update = SessionUpdate{
+			SessionUpdate: update.Kind, Content: content, MessageID: update.MessageID,
+			Meta: cloneRaw(update.Meta), MessageLifecycle: &messageLifecycle,
+		}
 	case AgentToolEvent:
 		params.Update = SessionUpdate{SessionUpdate: update.Kind, ToolCallID: update.ToolCallID, Title: update.Title, Kind: update.ToolKind, Status: update.Status, ToolCallContent: cloneToolCallContent(update.Content), Locations: cloneToolCallLocations(update.Locations), RawInput: cloneRaw(update.RawInput), RawOutput: cloneRaw(update.RawOutput), Meta: cloneRaw(update.Meta)}
 	case AgentPlanEvent:
