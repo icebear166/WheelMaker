@@ -2266,13 +2266,15 @@ textarea,
   width: 38px;
   height: 22px;
   margin: 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--text-tertiary) 38%, var(--border-subtle));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-active) 62%, var(--surface-raised));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000 22%, transparent);
   cursor: pointer;
   transition:
     background var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard);
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .settings-switch::after {
@@ -2283,20 +2285,29 @@ textarea,
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: var(--text-secondary);
+  background: var(--text-tertiary);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 40%, transparent);
   transition:
     transform var(--motion-fast) var(--ease-standard),
-    background var(--motion-fast) var(--ease-standard);
+    background var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .settings-switch:checked {
-  border-color: color-mix(in srgb, var(--accent-primary) 68%, var(--border-subtle));
+  border-color: var(--accent-primary);
   background: color-mix(in srgb, var(--accent-primary) 62%, var(--surface-raised));
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000 18%, transparent);
 }
 
 .settings-switch:checked::after {
   transform: translateX(16px);
   background: #fff;
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 35%, transparent);
+}
+
+.settings-switch:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .settings-switch:focus-visible {
@@ -2753,4 +2764,44 @@ textarea,
 
 .device-sessions-skeleton-short {
   width: 62%;
+}
+
+/* ---- settings root sub-groups (voice input / speech) ---- */
+.settings-subsection {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.settings-subsection-title {
+  padding: 10px 14px 4px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.settings-subsection + .settings-subsection {
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+.settings-subsection-rows .settings-row,
+.settings-subsection-rows .secret-compact-row {
+  padding-left: 26px;
+}
+
+/* ---- database page danger zone ---- */
+.database-clear-card {
+  border-color: color-mix(in srgb, var(--state-danger) 32%, var(--border-subtle));
+}
+
+.database-clear-icon {
+  color: var(--state-danger);
+}
+
+.database-clear-note {
+  line-height: 1.4;
 }

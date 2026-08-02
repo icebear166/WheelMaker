@@ -268,20 +268,12 @@ export class WorkspaceStore {
     this.persistence.deleteProjectChatSession(projectId, sessionId);
   }
 
-  setDisableFileCache(disableFileCache: boolean): void {
-    this.persistence.patchGlobalState({disableFileCache});
-  }
-
-  clearFileCache(): void {
-    this.persistence.clearFileCache();
-  }
-
-  clearLocalCache(): void {
-    this.persistence.clearCache();
-  }
-
   dumpDatabase(): Promise<WorkspaceDatabaseDump> {
     return this.persistence.dumpDatabase();
+  }
+
+  resetDatabase(): Promise<void> {
+    return this.persistence.resetDatabase();
   }
 }
 

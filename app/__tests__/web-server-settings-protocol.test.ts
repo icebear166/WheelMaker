@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-import {redactRegistryDebugEnvelope} from '../web/src/debug/registryDebug';
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import {RegistryMethods} from '../web/src/registry/registryMethods';
 import {
@@ -67,17 +66,5 @@ describe('server settings protocol', () => {
     expect(selection).not.toMatch(/userAgent|navigator\.platform/i);
   });
 
-  test('redacts Android credential from both envelope and serialized debug JSON', () => {
-    const redacted = redactRegistryDebugEnvelope({
-      type: 'response' as const,
-      method: 'server.androidSpeechCredential.get',
-      payload: {accessToken: 'must-not-log', version: 'v1', model: 'doubao-streaming-asr-2.0'},
-    });
-    expect(redacted).toEqual(expect.objectContaining({
-      payload: {accessToken: '[redacted]', version: 'v1', model: 'doubao-streaming-asr-2.0'},
-    }));
-    expect(JSON.stringify(redacted)).toContain('[redacted]');
-    expect(JSON.stringify(redacted)).not.toContain('must-not-log');
-  });
 });
 

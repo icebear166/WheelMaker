@@ -70,7 +70,6 @@ describe('web chat integration', () => {
     const nonSelectableSelectors = [
       '.desktop-window-controls',
       '.floating-control-stack',
-      '.registry-debug-panel-header',
       '.item',
       '.wide-project-toggle',
       '.wide-session-row',
@@ -1713,11 +1712,14 @@ describe('web chat integration', () => {
     expect(chatStart).toBeGreaterThanOrEqual(0);
     expect(codeStart).toBeGreaterThan(chatStart);
     const chatSection = settingsRootTsx.slice(chatStart, codeStart);
-    expect(chatSection).toContain('Voice Input Key');
-    expect(chatSection).toContain('Voice Input Model');
-    expect(chatSection).toContain('Speech Key');
-    expect(chatSection).toContain('Speech Model');
-    expect(chatSection).toContain('Speech Voice');
+    expect(chatSection).toContain('settings-subsection-title">Voice Input');
+    expect(chatSection).toContain('settings-subsection-title">Speech');
+    expect(chatSection.indexOf('settings-subsection-title">Voice Input')).toBeLessThan(
+      chatSection.indexOf('settings-subsection-title">Speech'),
+    );
+    expect(chatSection).toContain('label="Key"');
+    expect(chatSection).toContain('label="Model"');
+    expect(chatSection).toContain('label="Voice"');
     expect(chatSection).not.toContain('type="password"');
     expect(chatSection).not.toContain('API Key');
     expect(chatSection).not.toContain('Volcengine API Key');

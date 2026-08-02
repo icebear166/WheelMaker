@@ -1,4 +1,6 @@
 import React from 'react';
+
+import {Icon} from '../common/Icon';
 import type {WorkspaceDatabaseStorageStats} from '../workspace/WorkspacePersistence';
 
 type DatabaseSettingsDetailProps = {
@@ -6,6 +8,7 @@ type DatabaseSettingsDetailProps = {
   error: string;
   dumpText: string;
   storageStats: WorkspaceDatabaseStorageStats | null;
+  onClearDatabase: () => void;
 };
 
 function formatStorageBytes(bytes: number | null): string {
@@ -31,6 +34,7 @@ export function DatabaseSettingsDetail({
   error,
   dumpText,
   storageStats,
+  onClearDatabase,
 }: DatabaseSettingsDetailProps) {
   const storagePercent = storageStats
     ? formatStoragePercent(storageStats.usageBytes, storageStats.quotaBytes)
@@ -88,6 +92,27 @@ export function DatabaseSettingsDetail({
       {!loading && !error ? (
         <pre className="settings-database-dump">{dumpText}</pre>
       ) : null}
+      <section className="set-card database-clear-card">
+        <div className="set-card-head">
+          <Icon name="trash" size={15} className="database-clear-icon" />
+          <span className="set-card-title">Clear Database</span>
+          <span className="set-card-spacer" />
+          <button
+            type="button"
+            className="set-btn set-btn--danger"
+            onClick={onClearDatabase}
+            disabled={loading}
+            aria-label="Clear database"
+          >
+            <Icon name="trash" size={13} />
+            Clear Database
+          </button>
+        </div>
+        <p className="set-muted database-clear-note">
+          Deletes every store in the local workspace database, including settings, projects, chat history and file
+          cache. The app reloads and you must sign in again.
+        </p>
+      </section>
     </>
   );
 }

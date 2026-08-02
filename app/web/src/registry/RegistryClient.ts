@@ -1,9 +1,5 @@
-import type {RegistryDebugCaptureEvent, RegistryDebugConnection} from '../debug/registryDebug';
-import {redactRegistryDebugEnvelope} from '../debug/registryDebug';
 import type {RegistryConnectInitPayload, RegistryEnvelope, RegistryErrorPayload} from './registryTypes';
 import {RegistryMethods} from './registryMethods';
-
-export type RegistryDebugSink = (event: RegistryDebugCaptureEvent) => void;
 
 type PendingRequest = {
   resolve: (value: RegistryEnvelope) => void;
@@ -55,15 +51,12 @@ export class RegistryClient {
 
   constructor(
     private readonly timeoutMs = 8000,
-    private readonly debugSink?: RegistryDebugSink,
-    private readonly debugConnection: RegistryDebugConnection = 'Remote',
   ) {}
 
   async connect(url: string): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
-    this.emitDebug({kind: 'lifecycle', lifecycle: {phase: 'connect_start', url}});
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url);
       let settled = false;
@@ -97,23 +90,12 @@ export class RegistryClient {
         clearTimeout(connectTimer);
         this.ws = ws;
         this.bind(ws);
-        this.emitDebug({kind: 'lifecycle', lifecycle: {phase: 'connect_open', url}});
         resolve();
       };
       ws.onerror = () => {
         sawErrorEvent = true;
-        this.emitDebug({kind: 'lifecycle', lifecycle: {phase: 'connect_error', url}});
       };
       ws.onclose = event => {
-        this.emitDebug({
-          kind: 'lifecycle',
-          lifecycle: {
-            phase: 'connect_close',
-            url,
-            code: event.code,
-            reason: event.reason,
-          },
-        });
         if (!settled) {
           const suffix = sawErrorEvent ? ' (after websocket error event)' : '';
           fail(
@@ -178,12 +160,6 @@ export class RegistryClient {
         : undefined;
       args.signal?.addEventListener('abort', handleAbort, {once: true});
       this.pending.set(requestId, {resolve, reject, timer, removeAbortListener});
-      const debugEnvelope = redactRegistryDebugEnvelope(envelope);
-      if (debugEnvelope === envelope) {
-        this.emitDebug({kind: 'outbound', envelope, raw});
-      } else {
-        this.emitDebug({kind: 'outbound', envelope: debugEnvelope, raw: JSON.stringify(debugEnvelope)});
-      }
       this.ws?.send(raw);
     });
   }
@@ -205,8 +181,6 @@ export class RegistryClient {
       ...(args.hubId ? {hubId: args.hubId} : {}),
     };
     const raw = JSON.stringify(envelope);
-    const debugEnvelope = redactRegistryDebugEnvelope(envelope);
-    this.emitDebug({kind: 'outbound', envelope: debugEnvelope, raw: JSON.stringify(debugEnvelope)});
     this.ws.send(raw);
   }
 
@@ -220,9 +194,6 @@ export class RegistryClient {
     this.pending.clear();
     const closingWs = this.ws;
     closingWs?.close();
-    if (closingWs) {
-      this.emitDebug({kind: 'lifecycle', lifecycle: {phase: 'connect_close'}});
-    }
     this.ws = null;
     this.emitClosed();
     this.closing = false;
@@ -248,15 +219,8 @@ export class RegistryClient {
       let envelope: RegistryEnvelope;
       try {
         envelope = JSON.parse(event.data) as RegistryEnvelope;
-      } catch (error) {
-        this.emitDebug({kind: 'parse_error', raw: event.data, error: error instanceof Error ? error.message : String(error)});
+      } catch {
         return;
-      }
-      const debugEnvelope = redactRegistryDebugEnvelope(envelope);
-      if (debugEnvelope === envelope) {
-        this.emitDebug({kind: 'inbound', envelope, raw: event.data});
-      } else {
-        this.emitDebug({kind: 'inbound', envelope: debugEnvelope, raw: JSON.stringify(debugEnvelope)});
       }
       if (envelope.type === 'event') {
         this.emitEvent(envelope);
@@ -277,7 +241,6 @@ export class RegistryClient {
     };
     ws.onclose = () => this.handleSocketClosed(ws);
     ws.onerror = () => {
-      this.emitDebug({kind: 'lifecycle', lifecycle: {phase: 'connect_error'}});
       // Error events may fire transiently; wait for onclose before treating as disconnect.
       if (ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED) {
         this.handleSocketClosed(ws);
@@ -297,15 +260,10 @@ export class RegistryClient {
     }
   }
 
-  private emitDebug(event: RegistryDebugCaptureEvent): void {
-    this.debugSink?.({...event, connection: this.debugConnection});
-  }
-
   private handleSocketClosed(ws: WebSocket): void {
     if (this.ws !== ws) {
       return;
     }
-    this.emitDebug({kind: 'lifecycle', lifecycle: {phase: 'connect_close'}});
     this.ws = null;
     for (const [id, pending] of this.pending.entries()) {
       clearTimeout(pending.timer);

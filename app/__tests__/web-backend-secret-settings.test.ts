@@ -12,12 +12,17 @@ describe('server settings', () => {
 
     expect(chat).toBeGreaterThanOrEqual(0);
     expect(code).toBeGreaterThan(chat);
-    expect(chatBlock.indexOf('Voice Input Key')).toBeLessThan(chatBlock.indexOf('Voice Input Model'));
-    expect(chatBlock.indexOf('Voice Input Model')).toBeLessThan(chatBlock.indexOf('Speech Key'));
-    expect(chatBlock.indexOf('Speech Key')).toBeLessThan(chatBlock.indexOf('Speech Model'));
-    expect(chatBlock.indexOf('Speech Model')).toBeLessThan(chatBlock.indexOf('Speech Voice'));
-    expect(chatBlock).toMatch(/Voice Input Key[\s\S]*configured=\{serverSettings\.voiceInput\.configured\}/);
-    expect(chatBlock).toMatch(/Speech Key[\s\S]*configured=\{serverSettings\.textToSpeech\.configured\}/);
+    const voiceGroupStart = chatBlock.indexOf('settings-subsection-title">Voice Input');
+    const speechGroupStart = chatBlock.indexOf('settings-subsection-title">Speech');
+    expect(voiceGroupStart).toBeGreaterThanOrEqual(0);
+    expect(speechGroupStart).toBeGreaterThan(voiceGroupStart);
+    const voiceGroup = chatBlock.slice(voiceGroupStart, speechGroupStart);
+    const speechGroup = chatBlock.slice(speechGroupStart);
+    expect(voiceGroup.indexOf('label="Key"')).toBeLessThan(voiceGroup.indexOf('label="Model"'));
+    expect(speechGroup.indexOf('label="Key"')).toBeLessThan(speechGroup.indexOf('label="Model"'));
+    expect(speechGroup.indexOf('label="Model"')).toBeLessThan(speechGroup.indexOf('label="Voice"'));
+    expect(voiceGroup).toMatch(/label="Key"[\s\S]*configured=\{serverSettings\.voiceInput\.configured\}/);
+    expect(speechGroup).toMatch(/label="Key"[\s\S]*configured=\{serverSettings\.textToSpeech\.configured\}/);
     expect(chatBlock).not.toContain('DeepSeek');
   });
 

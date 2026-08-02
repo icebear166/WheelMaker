@@ -4,9 +4,7 @@ import {
   type RegistryRepository,
 } from './RegistryRepository';
 import {RegistryRequestError} from './RegistryClient';
-import type {RegistryDebugSink} from './RegistryClient';
 import {RegistryMethods} from './registryMethods';
-import type {RegistryDebugConnection} from '../debug/registryDebug';
 import {HubStore} from '../hubState/hubStore';
 import {ReleasePublishStore} from './releasePublishStore';
 import type {ServerSettings, ServerSettingsUpdate, SpeechModelId} from '../settings/serverSettings';
@@ -101,7 +99,7 @@ export type WorkspaceSession = {
 };
 
 export type RegistryWorkspaceServiceOptions = {
-  createRepository?: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;
+  createRepository?: () => RegistryRepository;
   clientName?: RegistryClientName;
 };
 
@@ -134,10 +132,10 @@ export class RegistryWorkspaceService {
   private closeListeners = new Set<() => void>();
   private unsubscribeRepositoryEvent: (() => void) | null = null;
   private unsubscribeRepositoryClose: (() => void) | null = null;
-  private readonly createRepository: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;
+  private readonly createRepository: () => RegistryRepository;
   private readonly clientName: RegistryClientName;
 
-  constructor(private readonly debugSink?: RegistryDebugSink, options: RegistryWorkspaceServiceOptions = {}) {
+  constructor(options: RegistryWorkspaceServiceOptions = {}) {
     this.createRepository = options.createRepository ?? createRegistryRepository;
     this.clientName = options.clientName ?? 'wheelmaker-web';
     this.hubStore = new HubStore({
@@ -150,7 +148,7 @@ export class RegistryWorkspaceService {
   }
 
   async connect(wsUrl: string): Promise<WorkspaceSession> {
-    const repository = this.createRepository(this.debugSink, 'Remote');
+    const repository = this.createRepository();
     try {
       await repository.initialize(wsUrl, this.clientName);
       const previousRepository = this.repository;

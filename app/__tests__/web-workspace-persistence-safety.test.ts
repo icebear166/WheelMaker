@@ -76,6 +76,16 @@ class MemoryWorkspaceDatabase {
     await this.mutateStores(storeNames.map(storeName => ({storeName, clear: true})));
   }
 
+  async resetDatabase(): Promise<void> {
+    this.stores.clear();
+    this.mutationLog.push([{storeName: '*', clear: true}]);
+    for (const waiter of [...this.mutationWaiters]) {
+      if (this.mutationLog.length < waiter.count) continue;
+      this.mutationWaiters.delete(waiter);
+      waiter.resolve();
+    }
+  }
+
   rows<T>(storeName: string): T[] {
     return clone((this.stores.get(storeName) ?? []) as T[]);
   }
@@ -415,7 +425,7 @@ describe('workspace persistence safety', () => {
     expect(fileKeys).toContain('fc:p-new:file:new.txt');
   });
 
-  test('clears rebuildable caches while preserving all settings', async () => {
+  test('resetDatabase wipes every store and resets in-memory state', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
       wm_project_state: [{
@@ -438,25 +448,21 @@ describe('workspace persistence safety', () => {
     }));
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
-    const globalBefore = db.rows('wm_global_kv');
-    const projectsBefore = db.rows('wm_project_state');
     db.resetMutationLog();
 
-    repository.clearCache();
-    await repository.flushPendingWrites();
+    await repository.resetDatabase();
 
     expect(repository.getGlobalState()).toMatchObject({
-      themeMode: 'light',
+      themeMode: 'dark',
     });
     expect(repository.getProjectState('p1')).toMatchObject({
       selectedChatSessionId: '',
     });
-    expect(db.rows('wm_global_kv')).toEqual(globalBefore);
-    expect(db.rows('wm_project_state')).toEqual(projectsBefore);
+    expect(db.rows('wm_global_kv')).toEqual([]);
+    expect(db.rows('wm_project_state')).toEqual([]);
     expect(db.rows('wm_chat_session_index')).toEqual([]);
     expect(db.rows('wm_chat_session_content')).toEqual([]);
     expect(db.rows('wm_file_cache')).toEqual([]);
-    expect(db.mutationsFor('wm_global_kv')).toEqual([]);
   });
 
   test('reports one quota error through the store and replays it to late subscribers', async () => {

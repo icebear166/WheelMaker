@@ -60,13 +60,8 @@ type SettingsRootContentProps = {
   codeTabSize: number;
   setCodeTabSize: (value: number) => void;
   clampCodeTabSize: (value: number) => number;
-  messageViewerEnabled: boolean;
-  setMessageViewerEnabled: (value: boolean) => void;
   logLevel: AppDiagnosticLogLevel;
   setLogLevel: (value: AppDiagnosticLogLevel) => void;
-  disableFileCache: boolean;
-  setDisableFileCache: (value: boolean) => void;
-  requestClearLocalCache: () => void;
   handleRegistryDebugLogout: () => void;
 };
 
@@ -160,13 +155,8 @@ export function SettingsRootContent({
   codeTabSize,
   setCodeTabSize,
   clampCodeTabSize,
-  messageViewerEnabled,
-  setMessageViewerEnabled,
   logLevel,
   setLogLevel,
-  disableFileCache,
-  setDisableFileCache,
-  requestClearLocalCache,
   handleRegistryDebugLogout,
 }: SettingsRootContentProps) {
   return (
@@ -230,88 +220,98 @@ export function SettingsRootContent({
           {notificationPermissionState === 'denied' ? (
             <div className="settings-row-note">Blocked by system permission</div>
           ) : null}
-          <SecretEditor
-            compact
-            label="Voice Input Key"
-            configured={serverSettings.voiceInput.configured}
-            updatedAt={serverSettings.voiceInput.updatedAt}
-            busy={serverSettingsBusy}
-            onSet={value => updateServerSetting({section: 'voiceInput', field: 'key', action: 'set', value})}
-            onClear={() => updateServerSetting({section: 'voiceInput', field: 'key', action: 'clear'})}
-          />
-          <SettingsControlRow
-            icon="bot"
-            label="Voice Input Model"
-            control={(
-              <select
-                className="sidebar-setting-select"
-                title="Doubao Streaming ASR 2.0"
-                value={serverSettings.voiceInput.model}
-                disabled={serverSettingsBusy}
-                onChange={event => void updateServerSetting({
-                  section: 'voiceInput',
-                  field: 'model',
-                  action: 'set',
-                  value: event.target.value,
-                }).catch(() => undefined)}
-              >
-                {SPEECH_MODEL_OPTIONS.map(item => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-            )}
-          />
-          <SecretEditor
-            compact
-            label="Speech Key"
-            configured={serverSettings.textToSpeech.configured}
-            updatedAt={serverSettings.textToSpeech.updatedAt}
-            busy={serverSettingsBusy}
-            onSet={value => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'set', value})}
-            onClear={() => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'clear'})}
-          />
-          <SettingsControlRow
-            icon="bot"
-            label="Speech Model"
-            control={(
-              <select
-                className="sidebar-setting-select"
-                value={serverSettings.textToSpeech.model}
-                disabled={serverSettingsBusy}
-                onChange={event => void updateServerSetting({
-                  section: 'textToSpeech',
-                  field: 'model',
-                  action: 'set',
-                  value: event.target.value as TtsModelId,
-                }).catch(() => undefined)}
-              >
-                {TTS_MODEL_OPTIONS.map(item => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-            )}
-          />
-          <SettingsControlRow
-            icon="userRound"
-            label="Speech Voice"
-            control={(
-              <select
-                className="sidebar-setting-select"
-                value={serverSettings.textToSpeech.voice}
-                disabled={serverSettingsBusy}
-                onChange={event => void updateServerSetting({
-                  section: 'textToSpeech',
-                  field: 'voice',
-                  action: 'set',
-                  value: event.target.value as TtsVoiceId,
-                }).catch(() => undefined)}
-              >
-                {TTS_VOICE_OPTIONS.map(item => (
-                  <option key={item.id} value={item.id}>{item.label}</option>
-                ))}
-              </select>
-            )}
-          />
+          <div className="settings-subsection">
+            <div className="settings-subsection-title">Voice Input</div>
+            <div className="settings-subsection-rows">
+              <SecretEditor
+                compact
+                label="Key"
+                configured={serverSettings.voiceInput.configured}
+                updatedAt={serverSettings.voiceInput.updatedAt}
+                busy={serverSettingsBusy}
+                onSet={value => updateServerSetting({section: 'voiceInput', field: 'key', action: 'set', value})}
+                onClear={() => updateServerSetting({section: 'voiceInput', field: 'key', action: 'clear'})}
+              />
+              <SettingsControlRow
+                icon="bot"
+                label="Model"
+                control={(
+                  <select
+                    className="sidebar-setting-select"
+                    title="Doubao Streaming ASR 2.0"
+                    value={serverSettings.voiceInput.model}
+                    disabled={serverSettingsBusy}
+                    onChange={event => void updateServerSetting({
+                      section: 'voiceInput',
+                      field: 'model',
+                      action: 'set',
+                      value: event.target.value,
+                    }).catch(() => undefined)}
+                  >
+                    {SPEECH_MODEL_OPTIONS.map(item => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                )}
+              />
+            </div>
+          </div>
+          <div className="settings-subsection">
+            <div className="settings-subsection-title">Speech</div>
+            <div className="settings-subsection-rows">
+              <SecretEditor
+                compact
+                label="Key"
+                configured={serverSettings.textToSpeech.configured}
+                updatedAt={serverSettings.textToSpeech.updatedAt}
+                busy={serverSettingsBusy}
+                onSet={value => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'set', value})}
+                onClear={() => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'clear'})}
+              />
+              <SettingsControlRow
+                icon="bot"
+                label="Model"
+                control={(
+                  <select
+                    className="sidebar-setting-select"
+                    value={serverSettings.textToSpeech.model}
+                    disabled={serverSettingsBusy}
+                    onChange={event => void updateServerSetting({
+                      section: 'textToSpeech',
+                      field: 'model',
+                      action: 'set',
+                      value: event.target.value as TtsModelId,
+                    }).catch(() => undefined)}
+                  >
+                    {TTS_MODEL_OPTIONS.map(item => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                )}
+              />
+              <SettingsControlRow
+                icon="userRound"
+                label="Voice"
+                control={(
+                  <select
+                    className="sidebar-setting-select"
+                    value={serverSettings.textToSpeech.voice}
+                    disabled={serverSettingsBusy}
+                    onChange={event => void updateServerSetting({
+                      section: 'textToSpeech',
+                      field: 'voice',
+                      action: 'set',
+                      value: event.target.value as TtsVoiceId,
+                    }).catch(() => undefined)}
+                  >
+                    {TTS_VOICE_OPTIONS.map(item => (
+                      <option key={item.id} value={item.id}>{item.label}</option>
+                    ))}
+                  </select>
+                )}
+              />
+            </div>
+          </div>
           {serverSettingsError ? (
             <div className="settings-row-note settings-row-note-error">{serverSettingsError}</div>
           ) : null}
@@ -452,12 +452,6 @@ export function SettingsRootContent({
             onClick={() => openSettingsDetail('database')}
           />
           <SettingsNavRow
-            icon="eraser"
-            label="Clear Local Cache"
-            danger
-            onClick={requestClearLocalCache}
-          />
-          <SettingsNavRow
             icon="logOut"
             label="Logout"
             danger
@@ -467,30 +461,6 @@ export function SettingsRootContent({
       )} />
       <SettingsSection id="debug" title="Debug" icon="bug" rows={(
         <>
-          <SettingsControlRow
-            icon="eye"
-            label="Message Viewer"
-            control={(
-              <input
-                type="checkbox"
-                className="settings-switch"
-                checked={messageViewerEnabled}
-                onChange={event => setMessageViewerEnabled(event.target.checked)}
-              />
-            )}
-          />
-          <SettingsControlRow
-            icon="ban"
-            label="Disable File Cache"
-            control={(
-              <input
-                type="checkbox"
-                className="settings-switch"
-                checked={disableFileCache}
-                onChange={event => setDisableFileCache(event.target.checked)}
-              />
-            )}
-          />
           <div className="settings-row settings-log-level-row">
             <span>
               <Icon name="filter" className="settings-row-icon" />

@@ -43,7 +43,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       onClose: jest.fn(() => () => undefined),
       close: jest.fn(),
     };
-    const service = new RegistryWorkspaceService(undefined, {
+    const service = new RegistryWorkspaceService({
       createRepository: jest.fn(() => repository as never),
     });
 
@@ -82,7 +82,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       onClose: jest.fn(() => () => undefined),
       close: jest.fn(),
     };
-    const service = new RegistryWorkspaceService(undefined, {
+    const service = new RegistryWorkspaceService({
       createRepository: jest.fn(() => repository as never),
     });
 
@@ -115,7 +115,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       onClose: jest.fn(() => () => undefined),
       close: jest.fn(),
     };
-    const service = new RegistryWorkspaceService(undefined, {
+    const service = new RegistryWorkspaceService({
       createRepository: jest.fn(() => repository as never),
     });
 
@@ -140,7 +140,7 @@ describe('registry workspace project-scoped chat service methods', () => {
         onClose: jest.fn(() => () => undefined),
         close: jest.fn(),
       };
-      const service = new RegistryWorkspaceService(undefined, {
+      const service = new RegistryWorkspaceService({
         createRepository: jest.fn(() => repository as never),
       });
 

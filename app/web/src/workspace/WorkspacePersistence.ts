@@ -58,9 +58,7 @@ export type PersistedGlobalState = {
   wrapLines: boolean;
   showLineNumbers: boolean;
   showMonitor: boolean;
-  messageViewerEnabled: boolean;
   logLevel: PersistedLogLevel;
-  disableFileCache: boolean;
   promptCompletionNotificationsEnabled: boolean;
   selectedProjectId: string;
   selectedChatProjectId: string;
@@ -277,9 +275,7 @@ const GLOBAL_KEYS = {
   showMonitor: 'showMonitor',
   showLimitsMonitor: 'showLimitsMonitor',
   showModelEfficiency: 'showModelEfficiency',
-  messageViewerEnabled: 'messageViewerEnabled',
   logLevel: 'logLevel',
-  disableFileCache: 'disableFileCache',
   promptCompletionNotificationsEnabled: 'promptCompletionNotificationsEnabled',
   selectedProjectId: 'selectedProjectId',
   selectedChatProjectId: 'selectedChatProjectId',
@@ -313,9 +309,7 @@ function defaultGlobalState(): PersistedGlobalState {
     wrapLines: false,
     showLineNumbers: true,
     showMonitor: true,
-    messageViewerEnabled: false,
     logLevel: 'warning',
-    disableFileCache: false,
     promptCompletionNotificationsEnabled: true,
     selectedProjectId: '',
     selectedChatProjectId: '',
@@ -536,9 +530,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
     showMonitor,
-    messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled,
     logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
-    disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
     promptCompletionNotificationsEnabled: typeof input.promptCompletionNotificationsEnabled === 'boolean' ? input.promptCompletionNotificationsEnabled : base.promptCompletionNotificationsEnabled,
     selectedProjectId: typeof input.selectedProjectId === 'string' ? input.selectedProjectId : base.selectedProjectId,
     selectedChatProjectId: typeof input.selectedChatProjectId === 'string' ? input.selectedChatProjectId : base.selectedChatProjectId,
@@ -673,6 +665,7 @@ export interface WorkspaceDatabaseAdapter {
   putRow(storeName: string, row: unknown): Promise<void>;
   deleteRow(storeName: string, key: IDBValidKey): Promise<void>;
   clearStores(storeNames: string[]): Promise<void>;
+  resetDatabase(): Promise<void>;
 }
 
 class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
@@ -769,6 +762,23 @@ class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
 
   async clearStores(storeNames: string[]): Promise<void> {
     await this.mutateStores(storeNames.map(storeName => ({storeName, clear: true})));
+  }
+
+  async resetDatabase(): Promise<void> {
+    if (this.openPromise) {
+      const db = await this.openPromise.catch(() => null);
+      db?.close();
+      this.openPromise = null;
+    }
+    if (!globalThis.indexedDB) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const req = globalThis.indexedDB.deleteDatabase(WORKSPACE_DB_NAME);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error ?? new Error('delete workspace db failed'));
+      req.onblocked = () => reject(new Error('delete workspace db blocked'));
+    });
   }
 
   async mutateStores(mutations: WorkspaceDatabaseMutation[]): Promise<void> {
@@ -1106,9 +1116,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt},
       {k: GLOBAL_KEYS.showMonitor, v: serialize(this.state.global.showMonitor), updatedAt},
-      {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt},
       {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},
-      {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt},
       {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt},
       {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt},
       {k: GLOBAL_KEYS.selectedChatProjectId, v: serialize(this.state.global.selectedChatProjectId), updatedAt},
@@ -1513,32 +1521,16 @@ export class WorkspacePersistenceRepository {
     }]);
   }
 
-  clearFileCache(): void {
-    this.fileCache.clear();
-    this.enqueueCacheMutation('clear file cache', [{storeName: TABLE_FILE_CACHE, clear: true}]);
-  }
-
-  clearCache(): void {
-    this.chatSessionIndex.clear();
-    this.chatSessionContent.clear();
-    this.chatSessionContentUpdatedAt.clear();
-    this.fileCache.clear();
-
-    const now = Date.now();
-    this.enqueueCacheMutation('clear local cache', [
-      {storeName: TABLE_CHAT_SESSION_INDEX, clear: true},
-      {storeName: TABLE_CHAT_SESSION_CONTENT, clear: true},
-      {storeName: TABLE_FILE_CACHE, clear: true},
-      {
-        storeName: TABLE_META,
-        puts: [{
-          k: 'cacheClearedAt',
-          v: serialize(new Date(now).toISOString()),
-          updatedAt: now,
-        }],
-      },
-    ]);
-  }
+      async resetDatabase(): Promise<void> {
+        await this.flushPendingWrites();
+        this.state = defaultWorkspaceState();
+        this.chatSessionIndex.clear();
+        this.chatSessionContent.clear();
+        this.chatSessionContentUpdatedAt.clear();
+        this.fileCache.clear();
+        this.lastStorageError = null;
+        await this.db.resetDatabase();
+      }
 
   async dumpDatabase(): Promise<WorkspaceDatabaseDump> {
     await this.flushPendingWrites();

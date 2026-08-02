@@ -1,73 +1,20 @@
-import {
-  createRegistryDebugStore,
-  redactRegistryDebugEnvelope,
-} from '../web/src/debug/registryDebug';
+import fs from 'fs';
+import path from 'path';
+
 import {
   createRegistrySpeechClient,
   isSpeechErrorEvent,
   isSpeechTranscriptEvent,
 } from '../web/src/features/speech/registrySpeechClient';
 import type {RegistryEnvelope} from '../web/src/registry/registryTypes';
-import fs from 'fs';
-import path from 'path';
 
-describe('web speech registry debug redaction', () => {
-  test('speech start has no API key and speech chunk PCM is redacted', () => {
-    const startEnvelope = redactRegistryDebugEnvelope({
-      requestId: 1,
-      type: 'request',
-      method: 'speech.start',
-      payload: {
-        provider: 'volcengine',
-      },
-    });
-    expect(startEnvelope.payload).toEqual({provider: 'volcengine'});
-
-    const chunkEnvelope = redactRegistryDebugEnvelope({
-      requestId: 2,
-      type: 'request',
-      method: 'speech.chunk',
-      payload: {
-        streamId: 'speech-1',
-        seq: 3,
-        pcm: 'AQIDBA==',
-      },
-    });
-    expect(JSON.stringify(chunkEnvelope)).not.toContain('AQIDBA==');
-    expect(chunkEnvelope.payload).toMatchObject({
-      streamId: 'speech-1',
-      seq: 3,
-      pcm: '[base64 omitted]',
-      byteCount: 4,
-    });
-  });
-
+describe('web speech settings', () => {
   test('speech settings and start DTO do not persist a Volcengine key', () => {
-	const root = path.resolve(__dirname, '..');
-	const settings = fs.readFileSync(path.join(root, 'web/src/settings/serverSettings.ts'), 'utf8');
-	const types = fs.readFileSync(path.join(root, 'web/src/registry/registryTypes.ts'), 'utf8');
-	expect(settings).not.toContain('volcengineApiKey');
-	expect(types).not.toMatch(/RegistrySpeechStartPayload[\s\S]{0,300}apiKey/);
-  });
-
-  test('debug store records speech start without credentials', () => {
-    const store = createRegistryDebugStore(() => 1000);
-    store.setEnabled(true);
-
-    store.recordOutbound({
-      envelope: {
-        requestId: 7,
-        type: 'request',
-        method: 'speech.start',
-        payload: {
-          provider: 'volcengine',
-        },
-      },
-      raw: '{"provider":"volcengine"}',
-    });
-
-    const [record] = store.getRecords();
-    expect(record.envelope?.payload).toEqual({provider: 'volcengine'});
+    const root = path.resolve(__dirname, '..');
+    const settings = fs.readFileSync(path.join(root, 'web/src/settings/serverSettings.ts'), 'utf8');
+    const types = fs.readFileSync(path.join(root, 'web/src/registry/registryTypes.ts'), 'utf8');
+    expect(settings).not.toContain('volcengineApiKey');
+    expect(types).not.toMatch(/RegistrySpeechStartPayload[\s\S]{0,300}apiKey/);
   });
 });
 

@@ -1,5 +1,4 @@
-import { RegistryClient, type RegistryDebugSink } from './RegistryClient';
-import type {RegistryDebugConnection} from '../debug/registryDebug';
+import {RegistryClient} from './RegistryClient';
 import {RegistryMethods, RegistryProtocolVersion} from './registryMethods';
 import {
   normalizeServerSettings,
@@ -2632,11 +2631,8 @@ function normalizeDeepSeekUsageResponse(
   };
 }
 
-export const createRegistryRepository = (
-  debugSink?: RegistryDebugSink,
-  debugConnection: RegistryDebugConnection = 'Remote',
-): RegistryRepository => {
-  return new RegistryRepository(new RegistryClient(8000, debugSink, debugConnection));
+export const createRegistryRepository = (): RegistryRepository => {
+  return new RegistryRepository(new RegistryClient(8000));
 };
 
 export type RegistryResponse<TPayload> = RegistryEnvelope<TPayload>;

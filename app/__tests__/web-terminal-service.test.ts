@@ -1,18 +1,16 @@
-import { redactRegistryDebugEnvelope } from '../web/src/debug/registryDebug';
 import { RegistryClient } from '../web/src/registry/RegistryClient';
 import { RegistryRepository } from '../web/src/registry/RegistryRepository';
 import { RegistryWorkspaceService } from '../web/src/registry/RegistryWorkspaceService';
 import { RegistryMethods } from '../web/src/registry/registryMethods';
 
 describe('terminal registry service', () => {
-  test('sends terminal input as a redacted one-way event', () => {
+  test('sends terminal input as a one-way event', () => {
     const originalWebSocket = globalThis.WebSocket;
     const send = jest.fn();
-    const debugSink = jest.fn();
     (
       globalThis as typeof globalThis & { WebSocket: { OPEN: number } }
     ).WebSocket = { OPEN: 1 };
-    const client = new RegistryClient(8000, debugSink);
+    const client = new RegistryClient(8000);
     Object.assign(client as unknown as { ws: unknown }, {
       ws: { readyState: 1, send },
     });
@@ -31,13 +29,6 @@ describe('terminal registry service', () => {
         payload: { terminalId: 'term-1', runId: 'run-1', data: 'c2VjcmV0' },
       });
       expect(raw).not.toContain('requestId');
-      const debug = debugSink.mock.calls[0][0];
-      expect(debug.raw).not.toContain('c2VjcmV0');
-      expect(debug.envelope.payload).toMatchObject({
-        terminalId: 'term-1',
-        runId: 'run-1',
-        byteCount: 6,
-      });
     } finally {
       (
         globalThis as typeof globalThis & { WebSocket?: typeof WebSocket }
@@ -175,25 +166,6 @@ describe('terminal registry service', () => {
       terminalId: 'term-1',
       runId: 'run-1',
       data: 'YQ==',
-    });
-  });
-
-  test('redacts terminal snapshots and ownership tokens from debug capture', () => {
-    const redacted = redactRegistryDebugEnvelope({
-      type: 'response',
-      method: RegistryMethods.TerminalGet,
-      payload: {
-        terminal: { terminalId: 'term-1', runId: 'run-1' },
-        snapshotSeq: 4,
-        snapshot: 'c2VjcmV0LXNuYXBzaG90',
-        resizeToken: 'private-token',
-      },
-    });
-    expect(JSON.stringify(redacted)).not.toContain('c2VjcmV0LXNuYXBzaG90');
-    expect(JSON.stringify(redacted)).not.toContain('private-token');
-    expect(redacted.payload).toMatchObject({
-      snapshotSeq: 4,
-      snapshotByteCount: 15,
     });
   });
 });

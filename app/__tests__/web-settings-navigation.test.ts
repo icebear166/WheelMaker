@@ -57,7 +57,8 @@ describe('settings navigation model', () => {
     expect(root).not.toContain('Release publishing');
     expect(root).not.toContain('Port Relay');
     expect(root).toContain('Code Theme');
-    expect(root).toContain('Voice Input Key');
+    expect(root).toContain('settings-subsection-title">Voice Input');
+    expect(root).toContain('settings-subsection-title">Speech');
     expect(root).toContain('Connection Status');
     expect(root).toContain('Log Level');
   });

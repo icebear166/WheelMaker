@@ -316,8 +316,6 @@ import {
   outputMarkdownHtml,
   reserveMarkdownHtmlShare,
 } from '../chat/export/markdownHtmlOutput';
-import {createRegistryDebugStore} from '../debug/registryDebug';
-import type {RegistryDebugRecord} from '../debug/registryDebug';
 import {
   extractChatConfirmationReply,
   extractChatOptionReplies,
@@ -691,9 +689,6 @@ import type {
   RegistryDeviceSession,
 } from '../registry/registryTypes';
 
-const RegistryDebugPanel = React.lazy(() => import('../debug/RegistryDebugPanel').then(module => ({
-  default: module.RegistryDebugPanel,
-})));
 const loadSettingsBundle = () => import(/* webpackChunkName: "settings" */ '../settings/SettingsBundle');
 const DebugLogsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.DebugLogsSettingsDetail,
@@ -1059,13 +1054,12 @@ const nativeShellHost = isNativeShellHost();
 if (nativeShellHost) {
   cleanupNativeWebViewPWA().catch(() => undefined);
 }
-const registryDebugStore = createRegistryDebugStore();
 const registryClientName = isAndroidNativeSpeechHost()
   ? 'wheelmaker-android'
   : getDesktopWindowBridge()
     ? 'wheelmaker-desktop'
     : 'wheelmaker-web';
-const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent, {clientName: registryClientName});
+const service = new RegistryWorkspaceService({clientName: registryClientName});
 scrubLegacyBrowserCredentials();
 const workspaceStore = new WorkspaceStore();
 const workspaceController = new WorkspaceController(service, workspaceStore);
@@ -2757,18 +2751,8 @@ export function App() {
       ? persistedGlobal.showMonitor
       : true,
   );
-  const [messageViewerEnabled, setMessageViewerEnabled] = useState(
-    typeof persistedGlobal.messageViewerEnabled === 'boolean'
-      ? persistedGlobal.messageViewerEnabled
-      : false,
-  );
   const [logLevel, setLogLevel] = useState(
     normalizeAppDiagnosticLogLevel(persistedGlobal.logLevel),
-  );
-  const [disableFileCache, setDisableFileCache] = useState(
-    typeof persistedGlobal.disableFileCache === 'boolean'
-      ? persistedGlobal.disableFileCache
-      : false,
   );
   const [promptCompletionNotificationsEnabled, setPromptCompletionNotificationsEnabled] = useState(
     typeof persistedGlobal.promptCompletionNotificationsEnabled === 'boolean'
@@ -2793,11 +2777,6 @@ export function App() {
   }, [registryAuthController]);
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle');
   const ttsActiveTurnIndexRef = useRef<number | null>(null);
-  const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
-  const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);
-  const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState('All');
-  const [selectedRegistryDebugSessionId, setSelectedRegistryDebugSessionId] = useState('All');
-  const [registryDebugIncludeMultiSessionRecords, setRegistryDebugIncludeMultiSessionRecords] = useState(false);
   const codeFontFamily = useMemo(
     () => resolveCodeFontFamily(codeFont),
     [codeFont],
@@ -3627,18 +3606,6 @@ export function App() {
     generation: number;
   } | null>(null);
   const sessionSearchHighlightTimerRef = useRef<number | null>(null);
-  const registryDebugSessionLabels = useMemo(() => {
-    const labels: Record<string, string> = {};
-    for (const projectItem of projects) {
-      const projectName = projectItem.name || projectItem.projectId;
-      const projectSessions = projectSessionsByProjectId[projectItem.projectId] ?? [];
-      for (const session of projectSessions) {
-        const sessionTitle = resolveChatSessionTitle(session.title ?? '') || session.sessionId;
-        labels[session.sessionId] = `${projectName} / ${sessionTitle}`;
-      }
-    }
-    return labels;
-  }, [projectSessionsByProjectId, projects]);
   const [wideProjectActionMenu, setWideProjectActionMenu, wideProjectActionMenuExiting] = useMenuExitState<WideProjectActionMenuState>();
   const [mobileProjectActionMenu, setMobileProjectActionMenu, mobileProjectActionMenuExiting] = useMenuExitState<MobileProjectActionMenuState>();
   const [mobileRelayTargetSheet, setMobileRelayTargetSheet, mobileRelayTargetSheetExiting] =
@@ -6582,17 +6549,6 @@ export function App() {
   }, [chatConfigDisplay.status.coreOptions.length]);
 
   useEffect(() => {
-    return registryDebugStore.subscribe((records: RegistryDebugRecord[]) => {
-      setRegistryDebugRecords(records);
-      setSelectedRegistryDebugRecordId(current =>
-        current !== null && records.some(record => record.id === current)
-          ? current
-          : records[records.length - 1]?.id ?? null,
-      );
-    });
-  }, []);
-
-  useEffect(() => {
     appDiagnosticStore.setLogLevel(logLevel);
     void setNativeDiagnosticLogLevel(logLevel);
   }, [logLevel]);
@@ -6614,24 +6570,6 @@ export function App() {
       window.clearInterval(interval);
     };
   }, [logLevel]);
-
-  useEffect(() => {
-    registryDebugStore.setEnabled(messageViewerEnabled);
-    if (!messageViewerEnabled) {
-      setSelectedRegistryDebugRecordId(null);
-      setSelectedRegistryDebugScope('All');
-      setSelectedRegistryDebugSessionId('All');
-      setRegistryDebugIncludeMultiSessionRecords(false);
-    }
-  }, [messageViewerEnabled]);
-
-  useEffect(() => {
-    workspaceStore.setDisableFileCache(disableFileCache);
-    if (disableFileCache) {
-      workspaceStore.clearFileCache();
-      dirHashRef.current = {};
-    }
-  }, [disableFileCache]);
 
   useEffect(() => {
     promptCompletionNotificationsEnabledRef.current = promptCompletionNotificationsEnabled;
@@ -6679,7 +6617,6 @@ export function App() {
       wrapLines,
       showLineNumbers,
       showMonitor,
-      messageViewerEnabled,
       logLevel,
       promptCompletionNotificationsEnabled,
       selectedProjectId: projectId,
@@ -6704,7 +6641,6 @@ export function App() {
     wrapLines,
     showLineNumbers,
     showMonitor,
-    messageViewerEnabled,
     logLevel,
     promptCompletionNotificationsEnabled,
     projectId,
@@ -8219,7 +8155,6 @@ export function App() {
     const loadKey = fileMemoryCacheKey(targetProjectId, path);
     if (previewDirectoryLoadKeysRef.current.has(loadKey)) return;
     previewDirectoryLoadKeysRef.current.add(loadKey);
-    const fileCacheDisabled = disableFileCache === true;
     setChatFilePreviewDirErrorsByProject(prev => ({
       ...prev,
       [targetProjectId]: {...(prev[targetProjectId] ?? {}), [path]: ''},
@@ -8229,11 +8164,9 @@ export function App() {
       [targetProjectId]: {...(prev[targetProjectId] ?? {}), [path]: true},
     }));
     try {
-      const persistedCache = !fileCacheDisabled
-        ? workspaceStore.getCachedDirectory(targetProjectId, path)
-        : null;
+      const persistedCache = workspaceStore.getCachedDirectory(targetProjectId, path);
       const cachedEntries = persistedCache?.entries;
-      const knownHash = !fileCacheDisabled && cachedEntries
+      const knownHash = cachedEntries
         ? dirHashRef.current[loadKey] || persistedCache?.hash || ''
         : '';
       const result = await fetchPreviewDirectoryEntries({
@@ -8254,12 +8187,10 @@ export function App() {
         },
       }));
       const nextHash = result.hash || persistedCache?.hash || '';
-      if (!fileCacheDisabled && nextHash) {
+      if (nextHash) {
         dirHashRef.current[loadKey] = nextHash;
       }
-      if (!fileCacheDisabled) {
-        workspaceStore.cacheDirectory(targetProjectId, path, nextHash, entries);
-      }
+      workspaceStore.cacheDirectory(targetProjectId, path, nextHash, entries);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       setChatFilePreviewDirErrorsByProject(prev => ({
@@ -12301,7 +12232,6 @@ export function App() {
     setError('');
     setAutoConnecting(false);
     setReconnecting(false);
-    setMessageViewerEnabled(false);
     setConnected(false);
     clearChatRuntimeState();
     service.close();
@@ -13879,13 +13809,15 @@ export function App() {
     URL.revokeObjectURL(objectUrl);
   };
 
-  const requestClearLocalCache = () => {
+  const requestClearDatabase = () => {
     setConfirmError('');
-    setConfirmTarget({kind: 'clearCache'});
+    setConfirmTarget({kind: 'clearDatabase'});
   };
 
-  const clearLocalCache = () => {
-    workspaceStore.clearLocalCache();
+  const clearDatabase = async () => {
+    void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
+    await registryAuthController.logout().catch(() => undefined);
+    await workspaceStore.resetDatabase();
     window.location.reload();
   };
 
@@ -15624,6 +15556,7 @@ export function App() {
           error={databaseError}
           dumpText={databaseDumpText}
           storageStats={databaseStorageStats}
+          onClearDatabase={requestClearDatabase}
         />
       </React.Suspense>,
     );
@@ -15759,13 +15692,8 @@ export function App() {
         codeTabSize={codeTabSize}
         setCodeTabSize={setCodeTabSize}
         clampCodeTabSize={clampCodeTabSize}
-        messageViewerEnabled={messageViewerEnabled}
-        setMessageViewerEnabled={setMessageViewerEnabled}
         logLevel={logLevel}
         setLogLevel={setLogLevel}
-        disableFileCache={disableFileCache}
-        setDisableFileCache={setDisableFileCache}
-        requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
       />
     </React.Suspense>
@@ -20742,8 +20670,8 @@ export function App() {
         .catch(err => setConfirmError(err instanceof Error ? err.message : String(err)));
       return;
     }
-    if (confirmTarget.kind === 'clearCache') {
-      clearLocalCache();
+    if (confirmTarget.kind === 'clearDatabase') {
+      void clearDatabase();
       return;
     }
     if (confirmTarget.kind === 'delete') {
@@ -20882,24 +20810,6 @@ export function App() {
       }}
     />
   );
-  const registryDebugPanel = isWide && messageViewerEnabled ? (
-    <React.Suspense fallback={null}>
-      <RegistryDebugPanel
-        records={registryDebugRecords}
-        selectedRecordId={selectedRegistryDebugRecordId}
-        onSelectedRecordIdChange={setSelectedRegistryDebugRecordId}
-        selectedScope={selectedRegistryDebugScope}
-        onSelectedScopeChange={setSelectedRegistryDebugScope}
-        selectedSessionId={selectedRegistryDebugSessionId}
-        onSelectedSessionIdChange={setSelectedRegistryDebugSessionId}
-        sessionLabels={registryDebugSessionLabels}
-        includeMultiSessionRecords={registryDebugIncludeMultiSessionRecords}
-        onIncludeMultiSessionRecordsChange={setRegistryDebugIncludeMultiSessionRecords}
-        onClear={() => registryDebugStore.clear()}
-        onClose={() => setMessageViewerEnabled(false)}
-      />
-    </React.Suspense>
-  ) : null;
   const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
@@ -20947,7 +20857,6 @@ export function App() {
       {mobileRelayTargetSheetNode}
       {chatTitlePromptMenu}
       {portRelayClearSiteDataFrame}
-      {registryDebugPanel}
       {markdownHtmlExportRequest ? (
         <MarkdownHtmlExportSurface
           key={markdownHtmlExportRequest.id}
