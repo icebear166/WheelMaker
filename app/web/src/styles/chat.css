@@ -5931,7 +5931,7 @@ button.chat-hub-skill-name:disabled {
 
 .chat-stop-pill-stage {
   position: relative;
-  width: 28px;
+  width: 30px;
   height: 16px;
   display: inline-flex;
   align-items: center;
@@ -5951,7 +5951,7 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-stop-bike-wheel-anim {
-  animation: chat-stop-bike-spin 0.55s linear infinite;
+  animation: chat-stop-bike-spin 0.9s linear infinite;
 }
 
 .chat-stop-bike-crank {
@@ -5967,17 +5967,12 @@ button.chat-hub-skill-name:disabled {
 
 .chat-stop-bike-wind path {
   transform-box: fill-box;
-  animation: chat-stop-bike-wind 0.72s linear infinite;
+  animation: chat-stop-bike-wind 0.9s linear infinite;
 }
 
 .chat-stop-bike-wind path:nth-child(2) {
-  animation-duration: 0.58s;
-  animation-delay: -0.2s;
-}
-
-.chat-stop-bike-wind path:nth-child(3) {
-  animation-duration: 0.86s;
-  animation-delay: -0.45s;
+  animation-duration: 1.05s;
+  animation-delay: -0.35s;
 }
 
 /* Braking: the wheels freeze mid-turn and the wind dies immediately. */
@@ -6037,14 +6032,14 @@ button.chat-hub-skill-name:disabled {
 @keyframes chat-stop-bike-wind {
   0% {
     opacity: 0;
-    transform: translateX(2.5px) scaleX(0.6);
+    transform: translateX(1.5px) scaleX(0.7);
   }
   35% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateX(-6px) scaleX(1);
+    transform: translateX(-4.5px) scaleX(1);
   }
 }
 

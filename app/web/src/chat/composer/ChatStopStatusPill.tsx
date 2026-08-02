@@ -19,9 +19,9 @@ const STOP_ARM_TIMEOUT_MS = 2000;
 function ChatPedalingBikeGlyph() {
   return (
     <svg
-      viewBox="0 0 39 20"
-      width={28}
-      height={14}
+      viewBox="0 0 40 20"
+      width={30}
+      height={15}
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
@@ -31,46 +31,44 @@ function ChatPedalingBikeGlyph() {
       className="chat-stop-bike"
     >
       <g className="chat-stop-bike-wind" strokeWidth={1.2}>
-        <path d="M1 6.5h6" />
-        <path d="M0 10.5h7.5" />
-        <path d="M1 15h5.5" />
+        <path d="M1 8.5h5.5" />
+        <path d="M0.5 12.5h6.5" />
       </g>
-      <g className="chat-stop-bike-wheel-anim" strokeWidth={1.4}>
-        <circle cx="14" cy="14" r="5" />
-        <g strokeWidth={1}>
-          <path d="M9.7 14h8.6" />
-          <path d="M11.85 10.28l4.3 7.44" />
-          <path d="M11.85 17.72l4.3-7.44" />
+      <g className="chat-stop-bike-wheel-anim" strokeWidth={1.3}>
+        <circle cx="14.5" cy="14" r="5" />
+        <g strokeWidth={1.1}>
+          <path d="M10.2 14h8.6" />
+          <path d="M12.35 10.28l4.3 7.44" />
+          <path d="M12.35 17.72l4.3-7.44" />
         </g>
       </g>
-      <g className="chat-stop-bike-wheel-anim" strokeWidth={1.4}>
-        <circle cx="32" cy="14" r="5" />
-        <g strokeWidth={1}>
-          <path d="M27.7 14h8.6" />
-          <path d="M29.85 10.28l4.3 7.44" />
-          <path d="M29.85 17.72l4.3-7.44" />
+      <g className="chat-stop-bike-wheel-anim" strokeWidth={1.3}>
+        <circle cx="32.5" cy="14" r="5" />
+        <g strokeWidth={1.1}>
+          <path d="M28.2 14h8.6" />
+          <path d="M30.35 10.28l4.3 7.44" />
+          <path d="M30.35 17.72l4.3-7.44" />
         </g>
       </g>
-      <g strokeWidth={1.4}>
-        <path d="M14 14 18.2 7.6" />
-        <path d="M20.5 14.3 18.2 7.6" />
-        <path d="M18.2 7.6 27.3 8" />
-        <path d="M20.5 14.3 27.3 8" />
-        <path d="M27.3 8 32 14" />
-        <path d="M14 14h6.5" />
-        <path d="M16.8 6.4h3" />
-        <path d="M27.3 8l1.2-1.9h2" />
+      <g strokeWidth={1.3}>
+        <path d="M14.5 14 21.5 14.2" />
+        <path d="M21.5 14.2 19 8.2" />
+        <path d="M19 8.2 27.4 8.2" />
+        <path d="M21.5 14.2 27.4 8.2" />
+        <path d="M27.4 8.2 32.5 14" />
+        <path d="M17.2 7h3.4" />
+        <path d="M27.4 8.2 28.8 6.2h2.2" />
       </g>
-      <g strokeWidth={1.4}>
-        <circle cx="24.9" cy="3.3" r="1.5" />
-        <path d="M18.8 8.3 23.9 6.3" />
-        <path d="M23.9 6.3 29.2 6.5" />
-        <path d="M18.8 8.3 21 10.7" />
+      <g strokeWidth={1.3}>
+        <circle cx="25" cy="3.4" r="1.5" />
+        <path d="M19.6 8.6 24 6.7" />
+        <path d="M24 6.7 28.6 6.6" />
+        <path d="M19.6 8.6 21.9 11.2" />
       </g>
       <g className="chat-stop-bike-crank" strokeWidth={1.2}>
-        <path d="M20.5 12v4.6" />
-        <circle cx="20.5" cy="12" r="0.9" fill="currentColor" stroke="none" />
-        <circle cx="20.5" cy="16.6" r="0.9" fill="currentColor" stroke="none" />
+        <path d="M21.5 12.5v3.4" />
+        <circle cx="21.5" cy="12.5" r="0.9" fill="currentColor" stroke="none" />
+        <circle cx="21.5" cy="15.9" r="0.9" fill="currentColor" stroke="none" />
       </g>
     </svg>
   );

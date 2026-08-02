@@ -2755,7 +2755,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
     expect(stylesCss).toMatch(/\.chat-stop-pill \{[\s\S]*justify-content: center;[\s\S]*height: 24px;[\s\S]*border-radius: 999px;/);
-    expect(stylesCss).toMatch(/\.chat-stop-bike-wheel-anim \{[\s\S]*animation: chat-stop-bike-spin 0\.55s linear infinite;/);
+    expect(stylesCss).toMatch(/\.chat-stop-bike-wheel-anim \{[\s\S]*animation: chat-stop-bike-spin 0\.9s linear infinite;/);
   });
 
   test('keeps running chat editable and queues another send for that chat', () => {
