@@ -1107,21 +1107,26 @@
 
 .app-session-status-copy {
   appearance: none;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle);
   border-radius: 5px;
-  background: transparent;
-  color: var(--text-tertiary);
-  display: inline-grid;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  display: inline-flex;
   flex: 0 0 auto;
-  place-items: center;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
 }
 
 .app-session-status-copy:hover {
-  background: var(--surface-raised);
-  color: var(--text-secondary);
+  background: var(--hover);
+  border-color: color-mix(in srgb, var(--border-subtle) 55%, var(--text-tertiary));
+  color: var(--text-primary);
 }
 
 .app-session-status-copy:focus-visible {

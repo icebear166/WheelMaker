@@ -168,6 +168,7 @@ export type AppSessionStatusDialogProps = {
   error: string;
   onClose: () => void;
   onRefresh: () => void;
+  onCopied: () => void;
 };
 
 function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall' | 'reinstall'): string {
@@ -752,6 +753,7 @@ export function AppSessionStatusDialog({
   error,
   onClose,
   onRefresh,
+  onCopied,
 }: AppSessionStatusDialogProps) {
   React.useEffect(() => {
     if (!sessionId) return undefined;
@@ -789,10 +791,13 @@ export function AppSessionStatusDialog({
                   aria-label="Copy session ID"
                   title="Copy session ID"
                   onClick={() => {
-                    void writeTextToClipboard(sessionId).catch(() => undefined);
+                    void writeTextToClipboard(sessionId)
+                      .then(() => onCopied())
+                      .catch(() => undefined);
                   }}
                 >
-                  <Icon name="copy" />
+                  <Icon name="copy" size={13} />
+                  <span>Copy</span>
                 </button>
               </span>
             </div>

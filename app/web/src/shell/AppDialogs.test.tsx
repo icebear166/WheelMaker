@@ -4,8 +4,14 @@ import TestRenderer, {act} from 'react-test-renderer';
 import {
   AppConfirmDialog,
   AppHtmlExportNameDialog,
+  AppSessionStatusDialog,
   type ConfirmTarget,
 } from './AppDialogs';
+import {writeTextToClipboard} from '../platform/clipboard';
+
+jest.mock('../platform/clipboard', () => ({
+  writeTextToClipboard: jest.fn(() => Promise.resolve()),
+}));
 
 function confirmCopy(target: ConfirmTarget): string {
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -22,6 +28,34 @@ function confirmCopy(target: ConfirmTarget): string {
   });
   return renderer.root.findByProps({className: 'app-confirm-copy'}).children.join('');
 }
+
+test('session status copy button writes the ID and reports the copy', async () => {
+  const onCopied = jest.fn();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppSessionStatusDialog
+        sessionId="sess-123"
+        status={null}
+        loading={false}
+        error=""
+        onClose={() => undefined}
+        onRefresh={() => undefined}
+        onCopied={onCopied}
+      />,
+    );
+  });
+
+  const copyButton = renderer.root.findByProps({className: 'app-session-status-copy'});
+  expect(copyButton.findByType('span').children.join('')).toBe('Copy');
+
+  await act(async () => {
+    copyButton.props.onClick();
+  });
+
+  expect(writeTextToClipboard).toHaveBeenCalledWith('sess-123');
+  expect(onCopied).toHaveBeenCalledTimes(1);
+});
 
 test('npm confirmation explains automatic Agent availability reload', () => {
   const copy = confirmCopy({

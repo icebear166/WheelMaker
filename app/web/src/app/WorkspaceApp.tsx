@@ -20913,6 +20913,7 @@ export function App() {
       loading={sessionStatusDialog?.loading === true}
       error={sessionStatusDialog?.error ?? ''}
       onClose={() => setSessionStatusDialog(null)}
+      onCopied={() => setToastMessage('Session ID copied to clipboard.')}
       onRefresh={() => {
         if (sessionStatusDialog) {
           refreshSessionStatusDialog(sessionStatusDialog.projectId, sessionStatusDialog.sessionId)
