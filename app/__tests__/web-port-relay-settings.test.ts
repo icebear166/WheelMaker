@@ -271,6 +271,7 @@ describe('port relay settings UI source structure', () => {
     expect(detailTsx).toContain('selectPortRelayTarget(target)');
     expect(detailTsx).toContain('deletePortRelayTarget(target)');
     expect(detailTsx).toContain('commitPortRelayDraftTarget();');
+    expect(detailTsx).toContain('Add one to enable Port Relay.');
     expect(portRelaySettingsSource).not.toContain('<span>Target Host</span>');
     expect(portRelaySettingsSource).not.toContain('onClick={openPortRelay}');
     expect(mainTsx).toContain('if (!portRelayScreenOpen || portRelayAccessCode || portRelaySnapshot.enabled) {');
@@ -333,5 +334,16 @@ describe('port relay settings UI source structure', () => {
     expect(detailTsx).toContain("portRelayAccessCodeUnknown ? 'Reset' : 'Generate'");
     expect(mainTsx).toContain("setPortRelayError('Access code is unknown on this device. Generate a new code before copying.');");
     expect(mainTsx).toContain('setPortRelayKnownAccessCodeGeneration(typeof snapshot.accessCodeGeneration === \'number\' ? snapshot.accessCodeGeneration : null);');
+  });
+
+  test('makes target rows clickable and validates listen port input', () => {
+    const targetRowClick = detailTsx.match(/onClick=\{event => \{[\s\S]{0,200}selectPortRelayTarget\(target\)/);
+    expect(targetRowClick).not.toBeNull();
+    expect(detailTsx).toContain("event.target as HTMLElement).tagName === 'INPUT'");
+    expect(detailTsx).toContain('const [listenPortError, setListenPortError] = React.useState');
+    expect(detailTsx).toContain('Listen port must be 1-65535.');
+    expect(detailTsx).toContain('aria-label="New relay target hub"');
+    const hubSelectKeyDown = detailTsx.match(/aria-label="New relay target hub"[\s\S]{0,400}onKeyDown=\{event => \{[\s\S]{0,240}commitDraft\(\)/);
+    expect(hubSelectKeyDown).not.toBeNull();
   });
 });

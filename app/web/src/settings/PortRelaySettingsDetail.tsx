@@ -69,6 +69,7 @@ export function PortRelaySettingsDetail({
   disablePortRelay,
 }: PortRelaySettingsDetailProps) {
   const [addingTarget, setAddingTarget] = React.useState(false);
+  const [listenPortError, setListenPortError] = React.useState('');
   const selectedTarget = selectedPortRelayTarget ?? portRelayTargets[0] ?? null;
   const statusClass = String(portRelaySnapshot.status || 'Disabled').toLowerCase();
   const statusVariant = relayStatusVariant(statusClass);
@@ -123,11 +124,19 @@ export function PortRelaySettingsDetail({
               const nextValue = event.target.value.replace(/[^\d]/g, '').slice(0, 5);
               const nextPort = Number(nextValue);
               setPortRelayListenPort(nextValue);
+              if (nextValue && (!Number.isInteger(nextPort) || nextPort < 1 || nextPort > 65535)) {
+                setListenPortError('Listen port must be 1-65535.');
+              } else {
+                setListenPortError('');
+              }
               if (Number.isInteger(nextPort) && nextPort >= 1 && nextPort <= 65535) {
                 persistPortRelaySettings({listenPort: nextPort});
               }
             }}
           />
+          {listenPortError ? (
+            <div className="set-error">{listenPortError}</div>
+          ) : null}
         </div>
         <div className="set-field">
           <span className="set-field-label">Access Code</span>
@@ -175,6 +184,14 @@ export function PortRelaySettingsDetail({
               <div
                 key={`${target.hubId}:${target.targetPort}`}
                 className={`port-relay-target-row${selected ? ' selected' : ''}`}
+                onClick={event => {
+                  if ((event.target as HTMLElement).tagName === 'INPUT') {
+                    return;
+                  }
+                  if (!selected) {
+                    selectPortRelayTarget(target).catch(() => undefined);
+                  }
+                }}
               >
                 <input
                   type="checkbox"
@@ -203,7 +220,7 @@ export function PortRelaySettingsDetail({
             );
           })}
           {portRelayTargets.length === 0 ? (
-            <div className="set-muted port-relay-target-empty">No targets yet.</div>
+            <div className="set-muted port-relay-target-empty">No targets yet. Add one to enable Port Relay.</div>
           ) : null}
         </div>
 
@@ -215,6 +232,13 @@ export function PortRelaySettingsDetail({
               onChange={event => setPortRelayDraftHubId(event.target.value)}
               disabled={hubIds.length === 0}
               aria-label="New relay target hub"
+              onKeyDown={event => {
+                if (event.key !== 'Enter') {
+                  return;
+                }
+                event.preventDefault();
+                commitDraft();
+              }}
             >
               <option value="">{hubIds.length === 0 ? 'No hub' : 'Hub'}</option>
               {hubIds.map(hubId => (

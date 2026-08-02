@@ -73,8 +73,10 @@ test('sends temporary Web directly to the selected Web Hub', async () => {
   await act(async () => {
     tree = create(<ReleasePublishSettings hubIds={['publisher', 'release-server', 'web-server']} start={start} query={async () => ({ok: true, status: 'running'})} />);
   });
-  const button = tree!.root.findAllByType('button').find(item => item.children.join('') === 'Publish temporary Web');
+  const button = tree!.root.findAllByType('button').find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish temporary Web')));
   await act(async () => { button!.props.onClick(); await Promise.resolve(); });
+  const publishButton = tree!.root.findAllByType('button').find(item => item.children.some(child => typeof child === 'string' && child.trim() === 'Publish'));
+  await act(async () => { publishButton!.props.onClick(); await Promise.resolve(); await Promise.resolve(); });
   expect(start).toHaveBeenCalledWith('publisher', {
     kind: 'debugWeb',
     sourcePath: '/src/WheelMaker',
@@ -94,8 +96,8 @@ test('requires a Web Hub only for temporary Web publishing', async () => {
     tree = create(<ReleasePublishSettings hubIds={['publisher']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} />);
   });
   const buttons = tree!.root.findAllByType('button');
-  expect(buttons.find(item => item.children.join('') === 'Publish version')!.props.disabled).toBe(false);
-  expect(buttons.find(item => item.children.join('') === 'Publish temporary Web')!.props.disabled).toBe(true);
+  expect(buttons.find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish version')))!.props.disabled).toBe(false);
+  expect(buttons.find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish temporary Web')))!.props.disabled).toBe(true);
   expect(JSON.stringify(tree!.toJSON())).toContain('Web Hub');
   tree!.unmount();
 });
