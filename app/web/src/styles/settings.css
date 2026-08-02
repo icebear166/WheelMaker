@@ -2704,7 +2704,8 @@ textarea,
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   width: min(100%, 760px);
-  padding: 4px 0 20px;
+  margin: 0 auto;
+  padding: 10px 14px 24px;
 }
 
 .release-publish-check {

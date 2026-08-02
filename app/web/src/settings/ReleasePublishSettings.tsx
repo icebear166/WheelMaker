@@ -152,8 +152,6 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
 
   return (
     <div className="release-publish-page">
-      <p className="set-muted">Run a persistent publishing task on the Hub that owns the source checkout.</p>
-
       <section className="set-card" aria-label="Publishing source">
         <div className="set-card-head">
           <Icon name="folder" size={15} className="port-relay-section-icon" />

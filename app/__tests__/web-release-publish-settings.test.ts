@@ -22,6 +22,8 @@ describe('release publish settings UI', () => {
     expect(detailTsx).toContain('className="set-error" role="alert"');
     expect(detailTsx).not.toContain('settings-inline-error');
     expect(detailTsx).not.toContain('release-publish-section');
+    expect(detailTsx).not.toContain('Run a persistent publishing task');
+    expect(stylesCss).toMatch(/\.release-publish-page \{[\s\S]*margin: 0 auto;[\s\S]*padding: 10px 14px 24px;/);
   });
 
   test('confirms publish actions through the shared app dialog', () => {
