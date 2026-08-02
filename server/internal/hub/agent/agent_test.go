@@ -2329,6 +2329,58 @@ func TestCodexAppGoalNotificationsDriveAutomaticTurnLifecycle(t *testing.T) {
 	}
 }
 
+func TestCodexAppAgentMessageDeltaCarriesMessagePhaseMeta(t *testing.T) {
+	conn := newCodexappConnWithRuntime(nil, t.TempDir())
+	conn.bindSessionIDs("session-stable", "thread-runtime")
+	updates := make(chan protocol.SessionUpdateParams, 4)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	conn.handleAppServerNotification("item/started", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"turnId":   "turn-1",
+		"item": map[string]any{
+			"id": "message-1", "type": "agentMessage", "phase": "commentary",
+		},
+	}))
+	conn.handleAppServerNotification("item/agentMessage/delta", mustRaw(map[string]any{
+		"threadId": "thread-runtime", "turnId": "turn-1", "itemId": "message-1", "delta": "working",
+	}))
+	commentary := waitForCodexappUpdate(t, updates)
+	if got := protocol.SessionUpdateMetaMessagePhase(commentary.Update.Meta); got != protocol.SessionMessagePhaseCommentary {
+		t.Fatalf("commentary phase = %q, meta=%s", got, commentary.Update.Meta)
+	}
+
+	conn.handleAppServerNotification("item/completed", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"turnId":   "turn-1",
+		"item": map[string]any{
+			"id": "message-1", "type": "agentMessage", "phase": "commentary", "text": "working",
+		},
+	}))
+	conn.handleAppServerNotification("item/agentMessage/delta", mustRaw(map[string]any{
+		"threadId": "thread-runtime", "turnId": "turn-1", "itemId": "message-1", "delta": "late",
+	}))
+	late := waitForCodexappUpdate(t, updates)
+	if got := protocol.SessionUpdateMetaMessagePhase(late.Update.Meta); got != "" {
+		t.Fatalf("late phase = %q, want empty after item completion", got)
+	}
+
+	conn.handleAppServerNotification("item/started", mustRaw(map[string]any{
+		"threadId": "thread-runtime",
+		"turnId":   "turn-1",
+		"item": map[string]any{
+			"id": "message-2", "type": "agentMessage", "phase": "final_answer",
+		},
+	}))
+	conn.handleAppServerNotification("item/agentMessage/delta", mustRaw(map[string]any{
+		"threadId": "thread-runtime", "turnId": "turn-1", "itemId": "message-2", "delta": "done",
+	}))
+	final := waitForCodexappUpdate(t, updates)
+	if got := protocol.SessionUpdateMetaMessagePhase(final.Update.Meta); got != protocol.SessionMessagePhaseFinalAnswer {
+		t.Fatalf("final phase = %q, meta=%s", got, final.Update.Meta)
+	}
+}
+
 func TestCodexAppGoalTurnCanSteerWithoutPromptDone(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)
@@ -4312,7 +4364,7 @@ func TestCodexAppSessionLoadReplaysThreadTurnsBeforeReturning(t *testing.T) {
 									"text_elements": []any{},
 								}},
 							},
-							{"id": "agent-1", "type": "agentMessage", "text": "world"},
+							{"id": "agent-1", "type": "agentMessage", "text": "world", "phase": "final_answer"},
 						},
 					}},
 				},
@@ -4356,6 +4408,9 @@ func TestCodexAppSessionLoadReplaysThreadTurnsBeforeReturning(t *testing.T) {
 	}
 	if agentContent.Text != "world" {
 		t.Fatalf("agent replay text=%q", agentContent.Text)
+	}
+	if got := protocol.SessionUpdateMetaMessagePhase(second.Update.Meta); got != protocol.SessionMessagePhaseFinalAnswer {
+		t.Fatalf("agent replay phase=%q, meta=%s", got, second.Update.Meta)
 	}
 }
 

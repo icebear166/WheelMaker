@@ -652,6 +652,7 @@ type codexappConn struct {
 	compactItemID  string
 	compactGen     uint64
 	startedTools   map[string]bool
+	messagePhases  map[string]string
 	goal           *protocol.SessionGoal
 	goalTurnActive bool
 
@@ -1366,6 +1367,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
 	c.pendingTurnDiffs = nil
+	c.messagePhases = nil
 	c.mu.Unlock()
 
 	var resp appServerTurnStartResponse
@@ -1483,7 +1485,13 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "item/agentMessage/delta":
 		var p appServerAgentMessageDeltaParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" && p.Delta != "" {
-			c.emitTurnTextUpdate(p.ThreadID, p.TurnID, protocol.SessionUpdateAgentMessageChunk, p.Delta)
+			c.emitTurnTextUpdateWithMeta(
+				p.ThreadID,
+				p.TurnID,
+				protocol.SessionUpdateAgentMessageChunk,
+				p.Delta,
+				protocol.BuildSessionUpdateMetaMessagePhase(c.messagePhase(p.TurnID, p.ItemID)),
+			)
 		}
 	case "item/reasoning/textDelta", "item/reasoning/summaryTextDelta":
 		var p appServerAgentMessageDeltaParams
@@ -1493,13 +1501,20 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "item/started", "item/completed":
 		var p appServerItemEventParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
-			if method == "item/started" && c.handleSteerUserMessage(p) {
+			completed := method == "item/completed"
+			if !completed && p.Item.Type == "agentMessage" {
+				c.rememberMessagePhase(p.TurnID, p.Item.ID, p.Item.Phase)
+			}
+			if !completed && c.handleSteerUserMessage(p) {
 				return
 			}
-			if c.handleCompactionItem(p, method == "item/completed") {
+			if c.handleCompactionItem(p, completed) {
 				return
 			}
-			c.emitItemUpdate(p, method == "item/completed")
+			c.emitItemUpdate(p, completed)
+			if completed && p.Item.Type == "agentMessage" {
+				c.forgetMessagePhase(p.TurnID, p.Item.ID)
+			}
 		}
 	case "item/commandExecution/outputDelta", "item/fileChange/outputDelta":
 		var p appServerAgentMessageDeltaParams
@@ -2205,11 +2220,16 @@ func (c *codexappConn) replayThreadItem(acpSessionID string, item appServerThrea
 		})
 	case "agentMessage":
 		if item.Text != "" {
-			c.emitReplayText(acpSessionID, protocol.SessionUpdateAgentMessageChunk, item.Text)
+			c.emitReplayText(
+				acpSessionID,
+				protocol.SessionUpdateAgentMessageChunk,
+				item.Text,
+				protocol.BuildSessionUpdateMetaMessagePhase(item.Phase),
+			)
 		}
 	case "reasoning":
 		if text := codexappItemText(item.Summary, item.Content, item.Text); text != "" {
-			c.emitReplayText(acpSessionID, protocol.SessionUpdateAgentThoughtChunk, text)
+			c.emitReplayText(acpSessionID, protocol.SessionUpdateAgentThoughtChunk, text, nil)
 		}
 	case "plan":
 		if text := codexappItemText(nil, item.Content, item.Text); text != "" {
@@ -2241,12 +2261,18 @@ func (c *codexappConn) replayThreadItem(acpSessionID string, item appServerThrea
 	}
 }
 
-func (c *codexappConn) emitReplayText(acpSessionID string, updateType string, text string) {
+func (c *codexappConn) emitReplayText(
+	acpSessionID string,
+	updateType string,
+	text string,
+	meta json.RawMessage,
+) {
 	c.emitSessionUpdate(protocol.SessionUpdateParams{
 		SessionID: acpSessionID,
 		Update: protocol.SessionUpdate{
 			SessionUpdate: updateType,
 			Content:       mustRaw(protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: text}),
+			Meta:          protocol.CloneSessionUpdateMeta(meta),
 		},
 	})
 }
@@ -2357,17 +2383,71 @@ func (c *codexappConn) emitTextUpdate(sessionID string, updateType string, text 
 }
 
 func (c *codexappConn) emitTurnTextUpdate(sessionID string, turnID string, updateType string, text string) {
+	c.emitTurnTextUpdateWithMeta(sessionID, turnID, updateType, text, nil)
+}
+
+func (c *codexappConn) emitTurnTextUpdateWithMeta(
+	sessionID string,
+	turnID string,
+	updateType string,
+	text string,
+	meta json.RawMessage,
+) {
 	update := protocol.SessionUpdateParams{
 		SessionID: c.outboundSessionID(sessionID),
 		Update: protocol.SessionUpdate{
 			SessionUpdate: updateType,
 			Content:       mustRaw(protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: text}),
+			Meta:          protocol.CloneSessionUpdateMeta(meta),
 		},
 	}
 	if c.deferOrDropTurnUpdate(turnID, update) {
 		return
 	}
 	c.emitSessionUpdate(update)
+}
+
+func codexappMessagePhaseKey(turnID string, itemID string) string {
+	turnID = strings.TrimSpace(turnID)
+	itemID = strings.TrimSpace(itemID)
+	if turnID == "" || itemID == "" {
+		return ""
+	}
+	return turnID + "\x00" + itemID
+}
+
+func (c *codexappConn) rememberMessagePhase(turnID string, itemID string, phase string) {
+	key := codexappMessagePhaseKey(turnID, itemID)
+	phase = protocol.NormalizeSessionMessagePhase(phase)
+	if key == "" || phase == "" {
+		return
+	}
+	c.mu.Lock()
+	if c.messagePhases == nil {
+		c.messagePhases = map[string]string{}
+	}
+	c.messagePhases[key] = phase
+	c.mu.Unlock()
+}
+
+func (c *codexappConn) messagePhase(turnID string, itemID string) string {
+	key := codexappMessagePhaseKey(turnID, itemID)
+	if key == "" {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.messagePhases[key]
+}
+
+func (c *codexappConn) forgetMessagePhase(turnID string, itemID string) {
+	key := codexappMessagePhaseKey(turnID, itemID)
+	if key == "" {
+		return
+	}
+	c.mu.Lock()
+	delete(c.messagePhases, key)
+	c.mu.Unlock()
 }
 
 func (c *codexappConn) emitTurnUpdate(sessionID string, turnID string, update protocol.SessionUpdate) {
@@ -2490,6 +2570,7 @@ func (c *codexappConn) completePrompt(turnID string, stopReason string) {
 		c.pendingPromptUpdates = nil
 		c.pendingTurnDiffs = nil
 	}
+	c.messagePhases = nil
 	c.activeTurnID = ""
 	c.goalTurnActive = false
 	sessionID := c.acpSessionID
@@ -2578,6 +2659,7 @@ func (c *codexappConn) synthesizePromptCancelled(done chan codexappPromptResult)
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
 	c.pendingTurnDiffs = nil
+	c.messagePhases = nil
 	c.mu.Unlock()
 	select {
 	case done <- codexappPromptResult{stopReason: protocol.StopReasonCancelled}:
@@ -2596,6 +2678,7 @@ func (c *codexappConn) failActivePrompt(err error) {
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
 	c.pendingTurnDiffs = nil
+	c.messagePhases = nil
 	c.mu.Unlock()
 	if done != nil {
 		select {
@@ -2612,6 +2695,7 @@ func (c *codexappConn) clearPromptDone(done chan codexappPromptResult) {
 		c.pendingPromptStops = nil
 		c.pendingPromptUpdates = nil
 		c.pendingTurnDiffs = nil
+		c.messagePhases = nil
 	}
 	c.mu.Unlock()
 }
