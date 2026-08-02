@@ -87,7 +87,7 @@ describe('web registry debug settings', () => {
     const stateSectionStart = settingsRootTsx.indexOf('<SettingsSection id="state"');
     const stateSection = settingsRootTsx.slice(stateSectionStart, debugSectionStart);
     expect(stateSection).toContain('Logout');
-    expect(stateSection).toContain('handleRegistryLogout');
+    expect(stateSection).toContain('requestLogout');
     expect(stateSection).not.toContain('Clear Local Cache');
   });
 

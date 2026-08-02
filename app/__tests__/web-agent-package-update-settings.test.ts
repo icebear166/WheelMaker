@@ -189,7 +189,7 @@ describe('agent package update settings UI source structure', () => {
     expect(debugStart).toBeGreaterThan(stateStart);
     const stateSection = settingsRootTsx.slice(stateStart, debugStart);
     expect(stateSection.indexOf("openSettingsDetail('database')")).toBeGreaterThanOrEqual(0);
-    expect(stateSection.indexOf("openSettingsDetail('database')")).toBeLessThan(stateSection.indexOf('handleRegistryLogout'));
+    expect(stateSection.indexOf("openSettingsDetail('database')")).toBeLessThan(stateSection.indexOf('requestLogout'));
     expect(stateSection).not.toContain('requestClearLocalCache');
     const debugSection = settingsRootTsx.slice(debugStart);
     expect(debugSection).not.toContain("setSettingsDetailView('update')");

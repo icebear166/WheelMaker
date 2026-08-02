@@ -96,6 +96,36 @@ describe('web clear database settings', () => {
 
     expect(mainTsx).not.toContain('handleRegistryDebugLogout');
     expect(settingsRootTsx).not.toContain('handleRegistryDebugLogout');
-    expect(mainTsx).toContain('handleRegistryLogout={handleRegistryLogout}');
+    expect(mainTsx).toContain('requestLogout={requestLogout}');
+  });
+
+  test('logout confirms and wipes all local data before reloading', () => {
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+    const appDialogsTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'shell', 'AppDialogs.tsx'),
+      'utf8',
+    );
+    const settingsRootTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'),
+      'utf8',
+    );
+
+    expect(settingsRootTsx).toContain('onClick={requestLogout}');
+    expect(settingsRootTsx).not.toContain('onClick={handleRegistryLogout}');
+    expect(mainTsx).toContain("setConfirmTarget({kind: 'logout'});");
+    expect(mainTsx).toContain("confirmTarget.kind === 'logout'");
+    expect(mainTsx).toContain('workspaceStore.resetDatabase();');
+    expect(mainTsx).toContain('registryAuthController.logout();');
+    expect(mainTsx).toContain('window.localStorage.clear();');
+    expect(mainTsx).toContain('window.sessionStorage.clear();');
+    expect(mainTsx).toContain('caches.keys()');
+    expect(mainTsx).toContain('window.location.reload();');
+
+    expect(appDialogsTsx).toContain("kind: 'logout'");
+    expect(appDialogsTsx).toContain('Logout?');
+    expect(appDialogsTsx).toContain('Logout');
   });
 });

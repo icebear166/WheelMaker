@@ -49,6 +49,7 @@ export type ConfirmTarget =
       objective: string;
     }
   | {kind: 'clearDatabase'}
+  | {kind: 'logout'}
   | {
       kind: 'npmPackage';
       action: 'install' | 'update' | 'uninstall' | 'reinstall';
@@ -175,6 +176,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'hideMonitor') return 'Hide monitor?';
   if (target.kind === 'terminalClose') return 'Close running terminal?';
   if (target.kind === 'clearDatabase') return 'Clear database?';
+  if (target.kind === 'logout') return 'Logout?';
   if (target.kind === 'archiveBatch') return `Archive sessions older than ${target.days} days?`;
   if (target.kind === 'restoreArchived') return 'Restore archived session?';
   if (target.kind === 'delete') return 'Delete session?';
@@ -196,6 +198,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'hideMonitor') return 'Monitor';
   if (target.kind === 'terminalClose') return target.label;
   if (target.kind === 'clearDatabase') return 'All local data in this browser.';
+  if (target.kind === 'logout') return 'All local data in this browser.';
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
   if (target.kind === 'delete') return target.title || 'Untitled session';
@@ -222,6 +225,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
   }
   if (target.kind === 'clearDatabase') {
     return 'Every store in the local workspace database will be deleted, including settings, projects, chat history and file cache. The app will reload and you will need to sign in again.';
+  }
+  if (target.kind === 'logout') {
+    return 'The registry session, saved settings, server preferences, tokens and every browser cache will be deleted. The app will reload and you must sign in again.';
   }
   if (target.kind === 'archiveBatch') {
     return 'Runs one archive call at a time across all known projects. Running sessions are skipped.';
@@ -274,6 +280,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'hideMonitor') return 'eyeOff';
   if (target.kind === 'terminalClose') return 'ban';
   if (target.kind === 'clearDatabase') return 'trash';
+  if (target.kind === 'logout') return 'logOut';
   if (target.kind === 'restoreArchived') return 'archiveRestore';
   if (target.kind === 'delete') return 'trash';
   if (target.kind === 'goalClear') return 'trash';
@@ -294,6 +301,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'hideMonitor') return 'Hide';
   if (target.kind === 'terminalClose') return 'Close Terminal';
   if (target.kind === 'clearDatabase') return 'Clear Database';
+  if (target.kind === 'logout') return 'Logout';
   if (target.kind === 'restoreArchived') return 'Restore';
   if (target.kind === 'delete') return 'Delete';
   if (target.kind === 'goalClear') return 'Clear Goal';
@@ -311,6 +319,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
 function isDangerConfirmTarget(target: ConfirmTarget): boolean {
   return (
     target.kind === 'clearDatabase' ||
+    target.kind === 'logout' ||
     target.kind === 'delete' ||
     target.kind === 'goalClear' ||
     target.kind === 'terminalClose' ||

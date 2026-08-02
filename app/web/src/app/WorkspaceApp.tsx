@@ -1065,6 +1065,37 @@ const service = new RegistryWorkspaceService({clientName: registryClientName});
 scrubLegacyBrowserCredentials();
 const workspaceStore = new WorkspaceStore();
 const workspaceController = new WorkspaceController(service, workspaceStore);
+
+const wipeBrowserStorage = async (): Promise<void> => {
+  try {
+    window.localStorage.clear();
+  } catch {
+    // ignore storage access failures
+  }
+  try {
+    window.sessionStorage.clear();
+  } catch {
+    // ignore storage access failures
+  }
+  try {
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(key => caches.delete(key)));
+    }
+  } catch {
+    // ignore cache access failures
+  }
+  try {
+    document.cookie.split(';').forEach(cookie => {
+      const name = cookie.split('=')[0]?.trim();
+      if (name) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+      }
+    });
+  } catch {
+    // ignore cookie access failures
+  }
+};
 const MAX_AUTO_RENDER_DIFF_CHARS = 200000;
 const RECONNECT_RETRY_DELAY_MS = 1000;
 const RECONNECT_GRACE_PERIOD_MS = 30_000;
@@ -3082,6 +3113,8 @@ export function App() {
   const [databaseStorageStats, setDatabaseStorageStats] = useState<WorkspaceDatabaseStorageStats | null>(null);
   const [clearDatabasePending, setClearDatabasePending] = useState(false);
   const clearDatabasePendingRef = useRef(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const logoutPendingRef = useRef(false);
   const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);
   const [releasePublishingOpen, setReleasePublishingOpen] = useState(false);
   const [portRelayScreenOpen, setPortRelayScreenOpen] = useState(false);
@@ -12228,18 +12261,40 @@ export function App() {
     service.close();
   };
 
-  const handleRegistryLogout = () => {
-    void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
-    supervisorManagedCloseRef.current = true;
-    clearReconnectTimer();
-    reconnectStartedAtRef.current = null;
-    setError('');
-    setAutoConnecting(false);
-    setReconnecting(false);
-    setConnected(false);
-    clearChatRuntimeState();
-    service.close();
-    void registryAuthController.logout();
+  const requestLogout = () => {
+    setConfirmError('');
+    setConfirmTarget({kind: 'logout'});
+  };
+
+  const handleRegistryLogout = async () => {
+    if (logoutPendingRef.current) {
+      return;
+    }
+    logoutPendingRef.current = true;
+    setLogoutPending(true);
+    setConfirmError('');
+    try {
+      supervisorManagedCloseRef.current = true;
+      clearReconnectTimer();
+      reconnectStartedAtRef.current = null;
+      setError('');
+      setAutoConnecting(false);
+      setReconnecting(false);
+      setConnected(false);
+      clearChatRuntimeState();
+      service.close();
+      await androidSpeechRuntimeRef.current?.clearCredential();
+      await registryAuthController.logout();
+      await workspaceStore.resetDatabase();
+      await wipeBrowserStorage();
+      window.location.reload();
+    } catch (logoutError) {
+      const message = logoutError instanceof Error ? logoutError.message : String(logoutError);
+      setConfirmError(message);
+    } finally {
+      logoutPendingRef.current = false;
+      setLogoutPending(false);
+    }
   };
 
   const maybeNotifyPromptCompletion = (
@@ -15701,7 +15756,7 @@ export function App() {
         clampCodeTabSize={clampCodeTabSize}
         logLevel={logLevel}
         setLogLevel={setLogLevel}
-        handleRegistryLogout={handleRegistryLogout}
+        requestLogout={requestLogout}
       />
     </React.Suspense>
   );
@@ -20673,10 +20728,12 @@ export function App() {
         action: skillConfirmTarget.kind,
       })
     : '';
-  const confirmBusy = confirmTarget?.kind === 'clearDatabase'
-    ? clearDatabasePending
-    : archiveTarget
-      ? chatArchivingSessionId === archiveTarget.sessionId
+  const confirmBusy = confirmTarget?.kind === 'logout'
+    ? logoutPending
+    : confirmTarget?.kind === 'clearDatabase'
+      ? clearDatabasePending
+      : archiveTarget
+        ? chatArchivingSessionId === archiveTarget.sessionId
       : archiveBatchTarget
       ? !!archiveBatchProgress && archiveBatchProgress.completed < archiveBatchProgress.total
       : restoreArchivedTarget
@@ -20718,10 +20775,14 @@ export function App() {
         .catch(err => setConfirmError(err instanceof Error ? err.message : String(err)));
       return;
     }
-    if (confirmTarget.kind === 'clearDatabase') {
-      void clearDatabase();
-      return;
-    }
+        if (confirmTarget.kind === 'clearDatabase') {
+          void clearDatabase();
+          return;
+        }
+        if (confirmTarget.kind === 'logout') {
+          void handleRegistryLogout();
+          return;
+        }
     if (confirmTarget.kind === 'delete') {
       handleDeleteProjectSession(
         confirmTarget.projectId,
