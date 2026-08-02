@@ -31,7 +31,7 @@ export function settingsDetailTitle(detail: SettingsDetail): string {
     case 'database':
       return 'Database';
     case 'connectionStatus':
-      return 'Connection Status';
+      return 'Status';
     case 'deviceSessions':
       return 'Devices';
     case 'debugLogs':

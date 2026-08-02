@@ -143,10 +143,11 @@ describe('web registry debug settings', () => {
     expect(debugSectionIndex).toBeGreaterThan(stateSectionIndex);
 
     const stateSection = settingsRootTsx.slice(stateSectionIndex, debugSectionIndex);
-    expect(stateSection.indexOf('Connection Status')).toBeLessThan(stateSection.indexOf('Devices'));
     expect(stateSection.indexOf('Devices')).toBeLessThan(stateSection.indexOf('Database'));
-    expect(stateSection.indexOf('Database')).toBeLessThan(stateSection.indexOf('Logout'));
+    expect(stateSection.indexOf('Database')).toBeLessThan(stateSection.indexOf('label="Status"'));
+    expect(stateSection.indexOf('label="Status"')).toBeLessThan(stateSection.indexOf('Logout'));
     expect(stateSection).not.toContain('Clear Local Cache');
+    expect(stateSection).not.toContain('Connection Status');
 
     const debugSection = settingsRootTsx.slice(debugSectionIndex);
     expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('aria-label="Open logs"'));

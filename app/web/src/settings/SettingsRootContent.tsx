@@ -437,11 +437,6 @@ export function SettingsRootContent({
       <SettingsSection id="state" title="State" icon="activity" rows={(
         <>
           <SettingsNavRow
-            icon="radioTower"
-            label="Connection Status"
-            onClick={() => openSettingsDetail('connectionStatus')}
-          />
-          <SettingsNavRow
             icon="laptop"
             label="Devices"
             onClick={() => openSettingsDetail('deviceSessions')}
@@ -450,6 +445,11 @@ export function SettingsRootContent({
             icon="database"
             label="Database"
             onClick={() => openSettingsDetail('database')}
+          />
+          <SettingsNavRow
+            icon="radioTower"
+            label="Status"
+            onClick={() => openSettingsDetail('connectionStatus')}
           />
           <SettingsNavRow
             icon="logOut"

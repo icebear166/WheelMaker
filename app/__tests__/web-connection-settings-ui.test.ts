@@ -12,7 +12,7 @@ describe('connection settings UI source structure', () => {
 
     expect(mainTsx).toContain("'connectionStatus'");
     expect(settingsSurfaceTsx).toContain("case 'connectionStatus':");
-    expect(settingsSurfaceTsx).toContain("return 'Connection Status';");
+    expect(settingsSurfaceTsx).toContain("return 'Status';");
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('renderConnectionStatusSettingsDetail()');
     expect(mainTsx).toContain('<ConnectionStatusSettingsDetail');
@@ -22,7 +22,7 @@ describe('connection settings UI source structure', () => {
     expect(mainTsx).not.toContain('resolveWebResourceConnectionStatus,');
     expect(settingsRootTsx).toContain('<SettingsSection id="state"');
     expect(settingsRootTsx).toContain("openSettingsDetail('connectionStatus')");
-    expect(settingsRootTsx).toContain('Connection Status');
+    expect(settingsRootTsx).toContain('label="Status"');
     expect(settingsRootTsx).not.toContain('Local Hub Read');
     expect(fs.existsSync(detailPath)).toBe(true);
     expect(detailTsx).not.toContain('Web Resources');
@@ -37,12 +37,17 @@ describe('connection settings UI source structure', () => {
     const stateSectionStart = settingsRootTsx.indexOf('<SettingsSection id="state"');
     const debugSectionStart = settingsRootTsx.indexOf('<SettingsSection id="debug"');
     const stateSection = settingsRootTsx.slice(stateSectionStart, debugSectionStart);
-    const connectionStatusIndex = stateSection.indexOf('Connection Status');
+    const statusIndex = stateSection.indexOf('label="Status"');
+    const databaseIndex = stateSection.indexOf('label="Database"');
+    const logoutIndex = stateSection.indexOf('label="Logout"');
 
     expect(chatSectionStart).toBeGreaterThanOrEqual(0);
     expect(codeSectionStart).toBeGreaterThan(chatSectionStart);
     expect(stateSectionStart).toBeGreaterThan(codeSectionStart);
     expect(debugSectionStart).toBeGreaterThan(stateSectionStart);
-    expect(connectionStatusIndex).toBeGreaterThanOrEqual(0);
+    expect(databaseIndex).toBeGreaterThanOrEqual(0);
+    expect(statusIndex).toBeGreaterThan(databaseIndex);
+    expect(logoutIndex).toBeGreaterThan(statusIndex);
+    expect(stateSection).not.toContain('Connection Status');
   });
 });

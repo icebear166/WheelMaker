@@ -29,7 +29,7 @@ describe('settings navigation model', () => {
   });
 
   test('keeps settings detail titles stable', () => {
-    expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
+    expect(settingsDetailTitle('connectionStatus')).toBe('Status');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
     expect(settingsDetailTitle('deviceSessions')).toBe('Devices');
@@ -59,7 +59,7 @@ describe('settings navigation model', () => {
     expect(root).toContain('Code Theme');
     expect(root).toContain('settings-subsection-title">Voice Input');
     expect(root).toContain('settings-subsection-title">Speech');
-    expect(root).toContain('Connection Status');
+    expect(root).toContain('label="Status"');
     expect(root).toContain('Log Level');
   });
 
