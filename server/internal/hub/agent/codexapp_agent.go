@@ -637,24 +637,25 @@ type codexappConn struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	mu             sync.Mutex
-	reqHandler     ACPRequestHandler
-	respHandler    ACPResponseHandler
-	acpSessionID   string
-	threadID       string
-	projectName    string
-	config         codexappConfigState
-	activeTurnID   string
-	lastTurnID     string
-	promptDone     chan codexappPromptResult
-	compactDone    chan SessionCompactResult
-	compactTurnID  string
-	compactItemID  string
-	compactGen     uint64
-	startedTools   map[string]bool
-	messagePhases  map[string]string
-	goal           *protocol.SessionGoal
-	goalTurnActive bool
+	mu                sync.Mutex
+	reqHandler        ACPRequestHandler
+	respHandler       ACPResponseHandler
+	acpSessionID      string
+	threadID          string
+	projectName       string
+	config            codexappConfigState
+	activeTurnID      string
+	lastTurnID        string
+	promptDone        chan codexappPromptResult
+	compactDone       chan SessionCompactResult
+	compactTurnID     string
+	compactItemID     string
+	compactGen        uint64
+	startedTools      map[string]bool
+	messagePhases     map[string]string
+	completedMessages map[string]bool
+	goal              *protocol.SessionGoal
+	goalTurnActive    bool
 
 	pendingPromptStops   map[string]string
 	pendingPromptUpdates map[string][]protocol.SessionUpdateParams
@@ -1485,12 +1486,16 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "item/agentMessage/delta":
 		var p appServerAgentMessageDeltaParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" && p.Delta != "" {
+			if c.messageCompleted(p.TurnID, p.ItemID) {
+				return
+			}
 			c.emitTurnTextUpdateWithMeta(
 				p.ThreadID,
 				p.TurnID,
 				protocol.SessionUpdateAgentMessageChunk,
 				p.Delta,
 				protocol.BuildSessionUpdateMetaMessagePhase(c.messagePhase(p.TurnID, p.ItemID)),
+				p.ItemID,
 			)
 		}
 	case "item/reasoning/textDelta", "item/reasoning/summaryTextDelta":
@@ -1511,10 +1516,12 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 			if c.handleCompactionItem(p, completed) {
 				return
 			}
-			c.emitItemUpdate(p, completed)
 			if completed && p.Item.Type == "agentMessage" {
-				c.forgetMessagePhase(p.TurnID, p.Item.ID)
+				phase := c.completeMessagePhase(p.TurnID, p.Item.ID, p.Item.Phase)
+				c.emitTurnMessageCompletion(p.ThreadID, p.TurnID, p.Item.ID, phase)
+				return
 			}
+			c.emitItemUpdate(p, completed)
 		}
 	case "item/commandExecution/outputDelta", "item/fileChange/outputDelta":
 		var p appServerAgentMessageDeltaParams
@@ -1627,12 +1634,19 @@ func (c *codexappConn) handleSteerUserMessage(p appServerItemEventParams) bool {
 	if tracker == nil || tracker.turnID != strings.TrimSpace(p.TurnID) {
 		return false
 	}
-	c.emitTurnUpdate(p.ThreadID, p.TurnID, protocol.SessionUpdate{
-		SessionUpdate:   protocol.SessionUpdateUserMessageChunk,
-		ContentBlocks:   cloneCodexappContentBlocks(tracker.blocks),
-		ClientMessageID: clientID,
-		Steered:         true,
-	})
+	blocks := cloneCodexappContentBlocks(tracker.blocks)
+	for i, block := range blocks {
+		var meta json.RawMessage
+		if i == len(blocks)-1 {
+			meta = protocol.BuildSessionUpdateMetaLifecycle("", true, true)
+		}
+		c.emitTurnUpdate(p.ThreadID, p.TurnID, protocol.SessionUpdate{
+			SessionUpdate: protocol.SessionUpdateUserMessageChunk,
+			Content:       mustRaw(block),
+			MessageID:     clientID,
+			Meta:          meta,
+		})
+	}
 	return true
 }
 
@@ -2204,20 +2218,28 @@ func (c *codexappConn) replayThreadItem(acpSessionID string, item appServerThrea
 		if len(blocks) == 0 {
 			return
 		}
-		var legacyContent json.RawMessage
-		if blocks[0].Type == protocol.ContentBlockTypeText {
-			legacyContent = mustRaw(blocks[0])
+		messageID := strings.TrimSpace(item.ID)
+		if steered && strings.TrimSpace(item.ClientID) != "" {
+			messageID = strings.TrimSpace(item.ClientID)
 		}
-		c.emitSessionUpdate(protocol.SessionUpdateParams{
-			SessionID: acpSessionID,
-			Update: protocol.SessionUpdate{
-				SessionUpdate:   protocol.SessionUpdateUserMessageChunk,
-				Content:         legacyContent,
-				ContentBlocks:   blocks,
-				ClientMessageID: item.ClientID,
-				Steered:         steered,
-			},
-		})
+		if messageID == "" {
+			messageID = strings.TrimSpace(item.ClientID)
+		}
+		for i, block := range blocks {
+			var meta json.RawMessage
+			if i == len(blocks)-1 {
+				meta = protocol.BuildSessionUpdateMetaLifecycle("", true, steered)
+			}
+			c.emitSessionUpdate(protocol.SessionUpdateParams{
+				SessionID: acpSessionID,
+				Update: protocol.SessionUpdate{
+					SessionUpdate: protocol.SessionUpdateUserMessageChunk,
+					Content:       mustRaw(block),
+					MessageID:     messageID,
+					Meta:          meta,
+				},
+			})
+		}
 	case "agentMessage":
 		if item.Text != "" {
 			c.emitReplayText(
@@ -2225,11 +2247,13 @@ func (c *codexappConn) replayThreadItem(acpSessionID string, item appServerThrea
 				protocol.SessionUpdateAgentMessageChunk,
 				item.Text,
 				protocol.BuildSessionUpdateMetaMessagePhase(item.Phase),
+				item.ID,
+				true,
 			)
 		}
 	case "reasoning":
 		if text := codexappItemText(item.Summary, item.Content, item.Text); text != "" {
-			c.emitReplayText(acpSessionID, protocol.SessionUpdateAgentThoughtChunk, text, nil)
+			c.emitReplayText(acpSessionID, protocol.SessionUpdateAgentThoughtChunk, text, nil, item.ID, true)
 		}
 	case "plan":
 		if text := codexappItemText(nil, item.Content, item.Text); text != "" {
@@ -2266,13 +2290,22 @@ func (c *codexappConn) emitReplayText(
 	updateType string,
 	text string,
 	meta json.RawMessage,
+	messageID string,
+	complete bool,
 ) {
+	if complete {
+		lifecycle := protocol.BuildSessionUpdateMetaLifecycle(protocol.SessionUpdateMetaMessagePhase(meta), true, false)
+		if merged, err := protocol.MergeSessionUpdateMeta(meta, lifecycle); err == nil {
+			meta = merged
+		}
+	}
 	c.emitSessionUpdate(protocol.SessionUpdateParams{
 		SessionID: acpSessionID,
 		Update: protocol.SessionUpdate{
 			SessionUpdate: updateType,
 			Content:       mustRaw(protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: text}),
 			Meta:          protocol.CloneSessionUpdateMeta(meta),
+			MessageID:     strings.TrimSpace(messageID),
 		},
 	})
 }
@@ -2383,7 +2416,7 @@ func (c *codexappConn) emitTextUpdate(sessionID string, updateType string, text 
 }
 
 func (c *codexappConn) emitTurnTextUpdate(sessionID string, turnID string, updateType string, text string) {
-	c.emitTurnTextUpdateWithMeta(sessionID, turnID, updateType, text, nil)
+	c.emitTurnTextUpdateWithMeta(sessionID, turnID, updateType, text, nil, "")
 }
 
 func (c *codexappConn) emitTurnTextUpdateWithMeta(
@@ -2392,6 +2425,7 @@ func (c *codexappConn) emitTurnTextUpdateWithMeta(
 	updateType string,
 	text string,
 	meta json.RawMessage,
+	messageID string,
 ) {
 	update := protocol.SessionUpdateParams{
 		SessionID: c.outboundSessionID(sessionID),
@@ -2399,6 +2433,27 @@ func (c *codexappConn) emitTurnTextUpdateWithMeta(
 			SessionUpdate: updateType,
 			Content:       mustRaw(protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: text}),
 			Meta:          protocol.CloneSessionUpdateMeta(meta),
+			MessageID:     strings.TrimSpace(messageID),
+		},
+	}
+	if c.deferOrDropTurnUpdate(turnID, update) {
+		return
+	}
+	c.emitSessionUpdate(update)
+}
+
+func (c *codexappConn) emitTurnMessageCompletion(sessionID string, turnID string, messageID string, phase string) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return
+	}
+	update := protocol.SessionUpdateParams{
+		SessionID: c.outboundSessionID(sessionID),
+		Update: protocol.SessionUpdate{
+			SessionUpdate: protocol.SessionUpdateAgentMessageChunk,
+			Content:       mustRaw(protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: ""}),
+			MessageID:     messageID,
+			Meta:          protocol.BuildSessionUpdateMetaLifecycle(phase, true, false),
 		},
 	}
 	if c.deferOrDropTurnUpdate(turnID, update) {
@@ -2427,6 +2482,7 @@ func (c *codexappConn) rememberMessagePhase(turnID string, itemID string, phase 
 		c.messagePhases = map[string]string{}
 	}
 	c.messagePhases[key] = phase
+	delete(c.completedMessages, key)
 	c.mu.Unlock()
 }
 
@@ -2440,14 +2496,33 @@ func (c *codexappConn) messagePhase(turnID string, itemID string) string {
 	return c.messagePhases[key]
 }
 
-func (c *codexappConn) forgetMessagePhase(turnID string, itemID string) {
+func (c *codexappConn) completeMessagePhase(turnID string, itemID string, phase string) string {
 	key := codexappMessagePhaseKey(turnID, itemID)
 	if key == "" {
-		return
+		return protocol.NormalizeSessionMessagePhase(phase)
 	}
 	c.mu.Lock()
+	phase = protocol.NormalizeSessionMessagePhase(phase)
+	if phase == "" {
+		phase = c.messagePhases[key]
+	}
 	delete(c.messagePhases, key)
+	if c.completedMessages == nil {
+		c.completedMessages = map[string]bool{}
+	}
+	c.completedMessages[key] = true
 	c.mu.Unlock()
+	return phase
+}
+
+func (c *codexappConn) messageCompleted(turnID string, itemID string) bool {
+	key := codexappMessagePhaseKey(turnID, itemID)
+	if key == "" {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.completedMessages[key]
 }
 
 func (c *codexappConn) emitTurnUpdate(sessionID string, turnID string, update protocol.SessionUpdate) {

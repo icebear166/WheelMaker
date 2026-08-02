@@ -2346,6 +2346,9 @@ func TestCodexAppAgentMessageDeltaCarriesMessagePhaseMeta(t *testing.T) {
 		"threadId": "thread-runtime", "turnId": "turn-1", "itemId": "message-1", "delta": "working",
 	}))
 	commentary := waitForCodexappUpdate(t, updates)
+	if commentary.Update.MessageID != "message-1" {
+		t.Fatalf("messageId=%q, want message-1", commentary.Update.MessageID)
+	}
 	if got := protocol.SessionUpdateMetaMessagePhase(commentary.Update.Meta); got != protocol.SessionMessagePhaseCommentary {
 		t.Fatalf("commentary phase = %q, meta=%s", got, commentary.Update.Meta)
 	}
@@ -2354,15 +2357,30 @@ func TestCodexAppAgentMessageDeltaCarriesMessagePhaseMeta(t *testing.T) {
 		"threadId": "thread-runtime",
 		"turnId":   "turn-1",
 		"item": map[string]any{
-			"id": "message-1", "type": "agentMessage", "phase": "commentary", "text": "working",
+			"id": "message-1", "type": "agentMessage", "phase": "final_answer", "text": "working",
 		},
 	}))
+	completed := waitForCodexappUpdate(t, updates)
+	var completedContent protocol.ContentBlock
+	if err := json.Unmarshal(completed.Update.Content, &completedContent); err != nil {
+		t.Fatal(err)
+	}
+	if completed.Update.MessageID != "message-1" || completedContent.Text != "" {
+		t.Fatalf("completed=%#v, want metadata-only message-1", completed.Update)
+	}
+	if got := protocol.SessionUpdateMetaMessagePhase(completed.Update.Meta); got != protocol.SessionMessagePhaseFinalAnswer {
+		t.Fatalf("completed phase=%q, meta=%s", got, completed.Update.Meta)
+	}
+	if !protocol.SessionUpdateMetaMessageComplete(completed.Update.Meta) {
+		t.Fatalf("completed meta=%s", completed.Update.Meta)
+	}
 	conn.handleAppServerNotification("item/agentMessage/delta", mustRaw(map[string]any{
 		"threadId": "thread-runtime", "turnId": "turn-1", "itemId": "message-1", "delta": "late",
 	}))
-	late := waitForCodexappUpdate(t, updates)
-	if got := protocol.SessionUpdateMetaMessagePhase(late.Update.Meta); got != "" {
-		t.Fatalf("late phase = %q, want empty after item completion", got)
+	select {
+	case late := <-updates:
+		t.Fatalf("late delta emitted %#v", late)
+	case <-time.After(25 * time.Millisecond):
 	}
 
 	conn.handleAppServerNotification("item/started", mustRaw(map[string]any{
@@ -3131,12 +3149,17 @@ func TestCodexAppSteerAcceptsCorrelatedUserMessageBeforeResponse(t *testing.T) {
 	}
 	update := waitForCodexappUpdate(t, updates)
 	if update.Update.SessionUpdate != protocol.SessionUpdateUserMessageChunk ||
-		update.Update.ClientMessageID != "queued-1" ||
-		!update.Update.Steered {
+		update.Update.MessageID != "queued-1" ||
+		!protocol.SessionUpdateMetaSteered(update.Update.Meta) ||
+		!protocol.SessionUpdateMetaMessageComplete(update.Update.Meta) {
 		t.Fatalf("steer update = %#v", update.Update)
 	}
-	if len(update.Update.ContentBlocks) != 1 || update.Update.ContentBlocks[0].Text != "steer me" {
-		t.Fatalf("steer blocks = %#v", update.Update.ContentBlocks)
+	var steerContent protocol.ContentBlock
+	if err := json.Unmarshal(update.Update.Content, &steerContent); err != nil || steerContent.Text != "steer me" {
+		t.Fatalf("steer content = %#v err=%v", steerContent, err)
+	}
+	if len(update.Update.ContentBlocks) != 0 || update.Update.ClientMessageID != "" || update.Update.Steered {
+		t.Fatalf("steer update retained private roots = %#v", update.Update)
 	}
 }
 
@@ -3242,8 +3265,10 @@ func TestCodexAppSteerReturnsAfterControlAcceptanceBeforeUserMessage(t *testing.
 	}
 	update := waitForCodexappUpdate(t, updates)
 	if update.Update.SessionUpdate != protocol.SessionUpdateUserMessageChunk ||
-		update.Update.ClientMessageID != "queued-1" ||
-		!update.Update.Steered {
+		update.Update.MessageID != "queued-1" ||
+		!protocol.SessionUpdateMetaSteered(update.Update.Meta) ||
+		!protocol.SessionUpdateMetaMessageComplete(update.Update.Meta) ||
+		len(update.Update.ContentBlocks) != 0 || update.Update.ClientMessageID != "" || update.Update.Steered {
 		t.Fatalf("steer update = %#v", update.Update)
 	}
 }
@@ -3292,7 +3317,8 @@ func TestCodexAppSteerKeepsSameTurnUpdatesFlowingBeforeAcceptance(t *testing.T) 
 	second := waitForCodexappUpdate(t, updates)
 	if first.Update.SessionUpdate != protocol.SessionUpdateAgentMessageChunk ||
 		second.Update.SessionUpdate != protocol.SessionUpdateUserMessageChunk ||
-		!second.Update.Steered {
+		!protocol.SessionUpdateMetaSteered(second.Update.Meta) ||
+		!protocol.SessionUpdateMetaMessageComplete(second.Update.Meta) {
 		t.Fatalf("update order = %#v then %#v", first.Update, second.Update)
 	}
 }
@@ -3349,10 +3375,10 @@ func TestCodexAppReplayMarksAdditionalUserMessagesSteered(t *testing.T) {
 	}})
 	first := waitForCodexappUpdate(t, updates)
 	second := waitForCodexappUpdate(t, updates)
-	if first.Update.Steered {
+	if protocol.SessionUpdateMetaSteered(first.Update.Meta) {
 		t.Fatalf("initial user message marked steered: %#v", first.Update)
 	}
-	if !second.Update.Steered || second.Update.ClientMessageID != "queued-1" {
+	if !protocol.SessionUpdateMetaSteered(second.Update.Meta) || second.Update.MessageID != "queued-1" || !protocol.SessionUpdateMetaMessageComplete(second.Update.Meta) {
 		t.Fatalf("additional user message = %#v", second.Update)
 	}
 }
@@ -4408,6 +4434,9 @@ func TestCodexAppSessionLoadReplaysThreadTurnsBeforeReturning(t *testing.T) {
 	}
 	if agentContent.Text != "world" {
 		t.Fatalf("agent replay text=%q", agentContent.Text)
+	}
+	if second.Update.MessageID != "agent-1" || !protocol.SessionUpdateMetaMessageComplete(second.Update.Meta) {
+		t.Fatalf("agent replay lifecycle=%#v meta=%s", second.Update, second.Update.Meta)
 	}
 	if got := protocol.SessionUpdateMetaMessagePhase(second.Update.Meta); got != protocol.SessionMessagePhaseFinalAnswer {
 		t.Fatalf("agent replay phase=%q, meta=%s", got, second.Update.Meta)

@@ -213,6 +213,32 @@ func TestSessionUpdateMetaRoundTripPreservesUnknownFields(t *testing.T) {
 	}
 }
 
+func TestMergeSessionUpdateMetaDeepMergesLifecycleAndUnknownFields(t *testing.T) {
+	base := json.RawMessage(`{"wm":{"messagePhase":"commentary","nested":{"left":1}},"vendor":{"trace":"keep","array":[1]}}`)
+	incoming := json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true,"nested":{"right":2}},"vendor":{"array":[2]}}`)
+	merged, err := MergeSessionUpdateMeta(base, incoming)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true,"nested":{"left":1,"right":2}},"vendor":{"trace":"keep","array":[2]}}`)
+	if !jsonEqual(merged, want) {
+		t.Fatalf("merged=%s, want %s", merged, want)
+	}
+	if phase := SessionUpdateMetaMessagePhase(merged); phase != SessionMessagePhaseFinalAnswer {
+		t.Fatalf("phase=%q", phase)
+	}
+	if !SessionUpdateMetaMessageComplete(merged) {
+		t.Fatal("messageComplete=false")
+	}
+}
+
+func TestBuildSessionUpdateMetaLifecyclePreservesSteered(t *testing.T) {
+	meta := BuildSessionUpdateMetaLifecycle("", true, true)
+	if SessionUpdateMetaMessagePhase(meta) != "" || !SessionUpdateMetaMessageComplete(meta) || !SessionUpdateMetaSteered(meta) {
+		t.Fatalf("meta=%s", meta)
+	}
+}
+
 func containsAny(value string, needles ...string) bool {
 	for _, needle := range needles {
 		if len(needle) > 0 && len(value) >= len(needle) {

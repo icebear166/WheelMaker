@@ -75,23 +75,31 @@ type SessionTurnPromptArtifactFile struct {
 }
 
 type SessionTurnTextResult struct {
-	Text string          `json:"text"`
-	Meta json.RawMessage `json:"_meta,omitempty"`
+	Text            string          `json:"text"`
+	MessageID       string          `json:"messageId,omitempty"`
+	MessageComplete bool            `json:"messageComplete,omitempty"`
+	Meta            json.RawMessage `json:"_meta,omitempty"`
 }
 
 type SessionTurnUserMessage struct {
 	Text            string          `json:"text,omitempty"`
 	ContentBlocks   []ContentBlock  `json:"contentBlocks,omitempty"`
 	ClientMessageID string          `json:"clientMessageId,omitempty"`
+	MessageID       string          `json:"messageId,omitempty"`
+	MessageComplete bool            `json:"messageComplete,omitempty"`
 	Steered         bool            `json:"steered,omitempty"`
 	Meta            json.RawMessage `json:"_meta,omitempty"`
 }
 
 type SessionTurnToolResult struct {
-	Cmd    string          `json:"cmd,omitempty"`
-	Kind   string          `json:"kind,omitempty"`
-	Status string          `json:"status,omitempty"`
-	Meta   json.RawMessage `json:"_meta,omitempty"`
+	Cmd       string             `json:"cmd,omitempty"`
+	Kind      string             `json:"kind,omitempty"`
+	Status    string             `json:"status,omitempty"`
+	Content   []ToolCallContent  `json:"content,omitempty"`
+	Locations []ToolCallLocation `json:"locations,omitempty"`
+	RawInput  json.RawMessage    `json:"rawInput,omitempty"`
+	RawOutput json.RawMessage    `json:"rawOutput,omitempty"`
+	Meta      json.RawMessage    `json:"_meta,omitempty"`
 }
 
 type SessionTurnPlanPayload struct {

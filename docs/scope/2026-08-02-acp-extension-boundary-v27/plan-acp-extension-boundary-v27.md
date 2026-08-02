@@ -155,7 +155,7 @@ Run: `go test ./internal/protocol -count=1`
 
 Expected: PASS with strict allowlist and metadata round-trip tests.
 
-- [ ] **Step 6: Commit strict ACP types**
+- [x] **Step 6: Commit strict ACP types**
 
 ```bash
 git add server/internal/protocol
@@ -234,13 +234,13 @@ Create `ProjectSessionUpdate(SessionUpdateVariant, receivedAt)` and make `Callba
 
 In `HandleACPResponse`, decode `session/update` through `DecodeSessionUpdate`, project to `AgentEvent`, and dispatch only the internal event. Add a per-Instance FIFO capped at 256 events while callbacks are nil; flush under ordering protection after `SetCallbacks`, and clear the slice on `Close` or failed session setup.
 
-- [ ] **Step 5: Run focused and package tests**
+- [x] **Step 5: Run focused and package tests**
 
 Run: `go test ./internal/protocol ./internal/hub/agent ./internal/hub/client -run 'TestProjectACPUpdate|TestInstance|TestSessionRecorder|TestPrompt' -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the internal event boundary**
+- [x] **Step 6: Commit the internal event boundary**
 
 ```bash
 git add server/internal/protocol/agent_event.go server/internal/protocol/agent_event_test.go server/internal/hub/agent server/internal/hub/client/session.go server/internal/hub/client/session_recorder.go
@@ -258,7 +258,7 @@ git commit -m "refactor(agent): separate ACP wire from session events"
 - Modify: `server/internal/hub/client/client_test.go`
 - Modify: `server/internal/hub/client/session_queue_test.go`
 
-- [ ] **Step 1: Write lifecycle RED tests**
+- [x] **Step 1: Write lifecycle RED tests**
 
 Add tests for: two text chunks with the same messageId merge; a zero-text completion marker updates the same turn; nested unknown metadata deep-merges; completed phase is authoritative; invalid completed phase preserves the prior valid phase; a late chunk does not reopen completion; and Steer text/image/resource blocks become one WMT2 user turn.
 
@@ -274,13 +274,13 @@ func TestRecorderCompletionMarkerUpdatesMessageWithoutNewTurn(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run recorder tests and verify RED**
+- [x] **Step 2: Run recorder tests and verify RED**
 
 Run: `go test ./internal/hub/client -run 'TestRecorder.*Message|TestRecorder.*Meta|Test.*Steer.*Blocks|TestSessionSearch.*Steered' -count=1`
 
 Expected: FAIL because WMT2 turns do not carry stable message IDs/completion state and metadata merge is shallow/adjacency-based.
 
-- [ ] **Step 3: Implement lifecycle metadata helpers**
+- [x] **Step 3: Implement lifecycle metadata helpers**
 
 Add typed helpers for `messagePhase`, `messageComplete`, and `steered`, plus recursive object merge:
 
@@ -292,11 +292,11 @@ func WithMessageLifecycle(meta json.RawMessage, phase SessionMessagePhase, compl
 
 Objects recurse, arrays/scalars overwrite, and untouched unknown namespaces remain byte-equivalent in JSON value semantics.
 
-- [ ] **Step 4: Persist internal message and tool fidelity**
+- [x] **Step 4: Persist internal message and tool fidelity**
 
 Extend internal WMT2 message params with `messageId`, full `meta`, and `messageComplete`; extend tool params with `content`, `locations`, `rawInput`, `rawOutput`, and `meta`. Index active messages by `method + "\x00" + messageId`; use the existing adjacency rule only when messageId is empty. Preserve the old `contentBlocks`, `clientMessageId`, and `steered` reader path because these are internal historical fields.
 
-- [ ] **Step 5: Emit standard Steer chunks**
+- [x] **Step 5: Emit standard Steer chunks**
 
 Map one accepted block to one standard `user_message_chunk`, share `messageId=clientMessageID`, and attach this metadata only to the last real block:
 
@@ -306,13 +306,13 @@ Map one accepted block to one standard `user_message_chunk`, share `messageId=cl
 
 Recorder aggregates the chunks back into one internal user turn and completes the queue item once.
 
-- [ ] **Step 6: Run persistence regressions**
+- [x] **Step 6: Run persistence regressions**
 
 Run: `go test ./internal/hub/client -run 'TestRecorder|Test.*Steer|TestSessionSearch|Test.*Fork|Test.*Attachment' -count=1`
 
 Expected: PASS, including old WMT2 fixtures without messageId.
 
-- [ ] **Step 7: Commit lifecycle storage**
+- [x] **Step 7: Commit lifecycle storage**
 
 ```bash
 git add server/internal/protocol/acp_meta.go server/internal/protocol/session_turn.go server/internal/hub/client

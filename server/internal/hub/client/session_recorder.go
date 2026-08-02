@@ -1003,6 +1003,9 @@ func (r *SessionRecorder) addMessageTurn(state *sessionPromptState, event parsed
 		payload:   event.payload,
 		finished:  !isSessionTextTurnMethod(event.method),
 	}
+	if text, ok := event.payload.(acp.SessionTurnTextResult); ok && text.MessageComplete {
+		turn.finished = true
+	}
 
 	mergedTurnIndex := int64(0)
 	switch event.method {
@@ -1022,7 +1025,9 @@ func (r *SessionRecorder) addMessageTurn(state *sessionPromptState, event parsed
 			}
 		}
 	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought:
-		if len(state.turns) > 0 {
+		if event.turnKey != "" {
+			mergedTurnIndex = state.turnIndexByKey[event.turnKey]
+		} else if len(state.turns) > 0 {
 			if existing := state.turns[len(state.turns)-1]; existing.method == event.method && sessionTextTurnMetaEqual(existing.payload, event.payload) {
 				mergedTurnIndex = existing.turnIndex
 			}
@@ -1853,16 +1858,26 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				if text == "" {
 					text = extractUpdateText(params.Update.Content)
 				}
+				messageID := strings.TrimSpace(params.Update.MessageID)
+				steered := params.Update.Steered || acp.SessionUpdateMetaSteered(meta)
+				complete := acp.SessionUpdateMetaMessageComplete(meta)
 				clientMessageID := strings.TrimSpace(params.Update.ClientMessageID)
+				if clientMessageID == "" && steered {
+					clientMessageID = messageID
+				}
 				turnKey := ""
-				if clientMessageID != "" {
+				if messageID != "" {
+					turnKey = "user:" + messageID
+				} else if clientMessageID != "" {
 					turnKey = "user:" + clientMessageID
 				}
 				parsed.setJSONMessage(method, acp.SessionTurnUserMessage{
 					Text:            text,
 					ContentBlocks:   blocks,
 					ClientMessageID: clientMessageID,
-					Steered:         params.Update.Steered,
+					MessageID:       messageID,
+					MessageComplete: complete,
+					Steered:         steered,
 					Meta:            meta,
 				}, turnKey)
 			case acp.SessionUpdateAgentMessageChunk, acp.SessionUpdateAgentThoughtChunk:
@@ -1870,13 +1885,27 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				if method == acp.SessionUpdateAgentThoughtChunk && strings.TrimSpace(text) == "" {
 					return parsed, nil
 				}
-				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: text, Meta: meta}, "")
+				messageID := strings.TrimSpace(params.Update.MessageID)
+				turnKey := ""
+				if messageID != "" {
+					turnKey = method + ":" + messageID
+				}
+				parsed.setJSONMessage(method, acp.SessionTurnTextResult{
+					Text:            text,
+					MessageID:       messageID,
+					MessageComplete: acp.SessionUpdateMetaMessageComplete(meta),
+					Meta:            meta,
+				}, turnKey)
 			case acp.SessionUpdateToolCall, acp.SessionUpdateToolCallUpdate:
 				parsed.setJSONMessage(acp.SessionTurnMethodToolCall, acp.SessionTurnToolResult{
-					Cmd:    strings.TrimSpace(params.Update.Title),
-					Kind:   strings.TrimSpace(params.Update.Kind),
-					Status: strings.TrimSpace(params.Update.Status),
-					Meta:   meta,
+					Cmd:       strings.TrimSpace(params.Update.Title),
+					Kind:      strings.TrimSpace(params.Update.Kind),
+					Status:    strings.TrimSpace(params.Update.Status),
+					Content:   cloneJSON(params.Update.ToolCallContent),
+					Locations: cloneJSON(params.Update.Locations),
+					RawInput:  append(json.RawMessage(nil), params.Update.RawInput...),
+					RawOutput: append(json.RawMessage(nil), params.Update.RawOutput...),
+					Meta:      meta,
 				}, strings.TrimSpace(params.Update.ToolCallID))
 			case acp.SessionUpdatePlan:
 				entries := make([]acp.SessionTurnPlanResult, 0, len(params.Update.Entries))
@@ -1952,8 +1981,18 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 	case acp.SessionUpdateUserMessageChunk:
 		base := existing.payload.(acp.SessionTurnUserMessage)
 		inc := incoming.payload.(acp.SessionTurnUserMessage)
-		if len(inc.Meta) == 0 {
-			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+		if base.MessageComplete {
+			existing.payload = base
+			break
+		}
+		inc.Text = base.Text + inc.Text
+		inc.ContentBlocks = append(cloneSessionContentBlocks(base.ContentBlocks), inc.ContentBlocks...)
+		inc.ClientMessageID = firstNonEmpty(inc.ClientMessageID, base.ClientMessageID)
+		inc.MessageID = firstNonEmpty(inc.MessageID, base.MessageID)
+		inc.Steered = inc.Steered || base.Steered
+		inc.MessageComplete = inc.MessageComplete || base.MessageComplete
+		if merged, err := acp.MergeSessionUpdateMeta(base.Meta, inc.Meta); err == nil {
+			inc.Meta = merged
 		}
 		existing.payload = inc
 	case acp.SessionTurnMethodToolCall:
@@ -1968,8 +2007,20 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 		if inc.Status == "" {
 			inc.Status = base.Status
 		}
-		if len(inc.Meta) == 0 {
-			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+		if len(inc.Content) == 0 {
+			inc.Content = cloneJSON(base.Content)
+		}
+		if len(inc.Locations) == 0 {
+			inc.Locations = cloneJSON(base.Locations)
+		}
+		if len(inc.RawInput) == 0 {
+			inc.RawInput = cloneJSON(base.RawInput)
+		}
+		if len(inc.RawOutput) == 0 {
+			inc.RawOutput = cloneJSON(base.RawOutput)
+		}
+		if merged, err := acp.MergeSessionUpdateMeta(base.Meta, inc.Meta); err == nil {
+			inc.Meta = merged
 		}
 		existing.payload = inc
 	case acp.SessionTurnMethodAgentPlan:
@@ -1982,14 +2033,32 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought:
 		base := existing.payload.(acp.SessionTurnTextResult)
 		inc := incoming.payload.(acp.SessionTurnTextResult)
-		inc.Text = base.Text + inc.Text
-		if inc.Text == "" {
+		if base.MessageComplete {
 			inc.Text = base.Text
-		}
-		if len(inc.Meta) == 0 {
+			inc.MessageID = firstNonEmpty(base.MessageID, inc.MessageID)
+			inc.MessageComplete = true
 			inc.Meta = acp.CloneSessionUpdateMeta(base.Meta)
+			existing.payload = inc
+			existing.finished = true
+			break
+		}
+		inc.Text = base.Text + inc.Text
+		inc.MessageID = firstNonEmpty(inc.MessageID, base.MessageID)
+		inc.MessageComplete = inc.MessageComplete || base.MessageComplete
+		if inc.MessageComplete && acp.SessionUpdateMetaMessagePhase(inc.Meta) == "" {
+			basePhase := acp.SessionUpdateMetaMessagePhase(base.Meta)
+			if basePhase != "" {
+				correction := acp.BuildSessionUpdateMetaLifecycle(basePhase, true, false)
+				if corrected, err := acp.MergeSessionUpdateMeta(inc.Meta, correction); err == nil {
+					inc.Meta = corrected
+				}
+			}
+		}
+		if merged, err := acp.MergeSessionUpdateMeta(base.Meta, inc.Meta); err == nil {
+			inc.Meta = merged
 		}
 		existing.payload = inc
+		existing.finished = inc.MessageComplete
 	default:
 		existing.payload = incoming.payload
 	}

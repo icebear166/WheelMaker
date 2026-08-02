@@ -9934,8 +9934,28 @@ func TestSessionViewToolCallAndUpdateMergeByToolCallID(t *testing.T) {
 		t.Fatalf("RecordEvent user message: %v", err)
 	}
 
-	toolStart := acp.SessionUpdate{SessionUpdate: acp.SessionUpdateToolCall, ToolCallID: "call-1", Status: "in_progress", Title: "build"}
-	toolDone := acp.SessionUpdate{SessionUpdate: acp.SessionUpdateToolCallUpdate, ToolCallID: "call-1", Status: "completed", Title: "build"}
+	toolStart := acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateToolCall,
+		ToolCallID:    "call-1",
+		Status:        "in_progress",
+		Title:         "build",
+		Kind:          acp.ToolKindExecute,
+		ToolCallContent: []acp.ToolCallContent{{
+			Type:    "content",
+			Content: &acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "building"},
+		}},
+		RawInput: json.RawMessage(`{"target":"app"}`),
+		Meta:     json.RawMessage(`{"vendor":{"start":true}}`),
+	}
+	toolDone := acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateToolCallUpdate,
+		ToolCallID:    "call-1",
+		Status:        "completed",
+		Title:         "build",
+		Locations:     []acp.ToolCallLocation{{Path: "app/main.go"}},
+		RawOutput:     json.RawMessage(`{"exitCode":0}`),
+		Meta:          json.RawMessage(`{"vendor":{"done":true}}`),
+	}
 
 	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-1", toolStart)); err != nil {
 		t.Fatalf("RecordEvent tool start: %v", err)
@@ -9959,6 +9979,184 @@ func TestSessionViewToolCallAndUpdateMergeByToolCallID(t *testing.T) {
 	if update.Status != "completed" {
 		t.Fatalf("tool turn status = %q, want %q", update.Status, "completed")
 	}
+	var toolMessage acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(toolTurn), &toolMessage); err != nil {
+		t.Fatal(err)
+	}
+	var toolPayload acp.SessionTurnToolResult
+	if err := json.Unmarshal(toolMessage.Param, &toolPayload); err != nil {
+		t.Fatal(err)
+	}
+	if toolPayload.Kind != acp.ToolKindExecute || len(toolPayload.Content) != 1 ||
+		len(toolPayload.Locations) != 1 || string(toolPayload.RawInput) != `{"target":"app"}` ||
+		string(toolPayload.RawOutput) != `{"exitCode":0}` {
+		t.Fatalf("tool fidelity lost: %#v", toolPayload)
+	}
+	wantToolMeta := json.RawMessage(`{"vendor":{"start":true,"done":true}}`)
+	if !jsonEqualForTest(toolPayload.Meta, wantToolMeta) {
+		t.Fatalf("tool meta=%s, want %s", toolPayload.Meta, wantToolMeta)
+	}
+}
+
+func TestSessionRecorderCompletionMarkerUpdatesMessageWithoutNewTurn(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-message-complete", "Lifecycle")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-message-complete", "answer", nil)); err != nil {
+		t.Fatal(err)
+	}
+	first := acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "answer"}),
+		MessageID:     "message-1",
+		Meta:          json.RawMessage(`{"wm":{"messagePhase":"commentary","nested":{"left":1}},"vendor":{"trace":"keep"}}`),
+	}
+	completed := acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: ""}),
+		MessageID:     "message-1",
+		Meta:          json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true,"nested":{"right":2}}}`),
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-message-complete", first)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-message-complete", completed)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-message-complete", "")); err != nil {
+		t.Fatal(err)
+	}
+
+	turns := listRecordedPromptTurns(ctx, t, c, "sess-message-complete", 1)
+	if len(turns) != 3 {
+		t.Fatalf("turns=%d, want prompt + one message + done", len(turns))
+	}
+	var message acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(turns[1]), &message); err != nil {
+		t.Fatal(err)
+	}
+	var payload acp.SessionTurnTextResult
+	if err := json.Unmarshal(message.Param, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Text != "answer" || payload.MessageID != "message-1" || !payload.MessageComplete {
+		t.Fatalf("payload=%#v", payload)
+	}
+	wantMeta := json.RawMessage(`{"wm":{"messagePhase":"final_answer","messageComplete":true,"nested":{"left":1,"right":2}},"vendor":{"trace":"keep"}}`)
+	if !jsonEqualForTest(payload.Meta, wantMeta) {
+		t.Fatalf("meta=%s, want %s", payload.Meta, wantMeta)
+	}
+}
+
+func TestSessionRecorderCompletionPreservesValidPhaseAndIgnoresLateChunk(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-message-late", "Lifecycle")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-message-late", "answer", nil)); err != nil {
+		t.Fatal(err)
+	}
+	updates := []acp.SessionUpdate{
+		{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "answer"}),
+			MessageID:     "message-1",
+			Meta:          acp.BuildSessionUpdateMetaMessagePhase("commentary"),
+		},
+		{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: ""}),
+			MessageID:     "message-1",
+			Meta:          json.RawMessage(`{"wm":{"messagePhase":"future_phase","messageComplete":true}}`),
+		},
+		{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: " late"}),
+			MessageID:     "message-1",
+		},
+	}
+	for _, update := range updates {
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-message-late", update)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-message-late", "")); err != nil {
+		t.Fatal(err)
+	}
+	turns := listRecordedPromptTurns(ctx, t, c, "sess-message-late", 1)
+	if len(turns) != 3 {
+		t.Fatalf("turns=%d, want prompt + one message + done", len(turns))
+	}
+	var message acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(turns[1]), &message); err != nil {
+		t.Fatal(err)
+	}
+	var payload acp.SessionTurnTextResult
+	if err := json.Unmarshal(message.Param, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Text != "answer" || !payload.MessageComplete || acp.SessionUpdateMetaMessagePhase(payload.Meta) != "commentary" {
+		t.Fatalf("payload=%#v meta=%s", payload, payload.Meta)
+	}
+}
+
+func TestSessionRecorderAggregatesStandardSteeredChunks(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-steer-standard", "Steer")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-steer-standard", "start", nil)); err != nil {
+		t.Fatal(err)
+	}
+	blocks := []acp.ContentBlock{
+		{Type: acp.ContentBlockTypeText, Text: "change"},
+		{Type: acp.ContentBlockTypeImage, MimeType: "image/png", Data: "abc"},
+		{Type: acp.ContentBlockTypeResourceLink, URI: "file:///tmp/note.txt", Name: "note.txt"},
+	}
+	for index, block := range blocks {
+		meta := json.RawMessage(nil)
+		if index == len(blocks)-1 {
+			meta = acp.BuildSessionUpdateMetaLifecycle("", true, true)
+		}
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-steer-standard", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateUserMessageChunk,
+			Content:       mustJSON(block),
+			MessageID:     "queue-item-1",
+			Meta:          meta,
+		})); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-steer-standard", "")); err != nil {
+		t.Fatal(err)
+	}
+	turns := listRecordedPromptTurns(ctx, t, c, "sess-steer-standard", 1)
+	if len(turns) != 3 {
+		t.Fatalf("turns=%d, want prompt + one steer + done", len(turns))
+	}
+	var message acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(turns[1]), &message); err != nil {
+		t.Fatal(err)
+	}
+	var payload acp.SessionTurnUserMessage
+	if err := json.Unmarshal(message.Param, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.ContentBlocks) != 3 || payload.ClientMessageID != "queue-item-1" || payload.MessageID != "queue-item-1" || !payload.Steered || !payload.MessageComplete {
+		t.Fatalf("payload=%#v", payload)
+	}
+}
+
+func jsonEqualForTest(left, right []byte) bool {
+	var leftValue, rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
+		return false
+	}
+	return reflect.DeepEqual(leftValue, rightValue)
 }
 
 func TestSessionViewBufferedUpdatesDoNotLeakAcrossPrompts(t *testing.T) {

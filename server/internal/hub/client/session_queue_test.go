@@ -691,23 +691,23 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 		t.Fatal("steering item was prioritized")
 	}
 
-	s.SessionUpdate(acp.SessionUpdateParams{
+	s.AgentEvent(acp.AgentEvent{
 		SessionID: "sess-steer",
-		Update: acp.SessionUpdate{
-			SessionUpdate:   acp.SessionUpdateUserMessageChunk,
-			Steered:         true,
-			ClientMessageID: "different",
+		Update: acp.AgentMessageEvent{
+			Kind:      acp.SessionUpdateUserMessageChunk,
+			MessageID: "different",
+			Meta:      acp.BuildSessionUpdateMetaLifecycle("", true, true),
 		},
 	})
 	if len(s.queueSnapshot(true).WaitingItems) != 1 {
 		t.Fatal("unrelated transcript removed the item")
 	}
-	s.SessionUpdate(acp.SessionUpdateParams{
+	s.AgentEvent(acp.AgentEvent{
 		SessionID: "sess-steer",
-		Update: acp.SessionUpdate{
-			SessionUpdate:   acp.SessionUpdateUserMessageChunk,
-			Steered:         true,
-			ClientMessageID: "steer-1",
+		Update: acp.AgentMessageEvent{
+			Kind:      acp.SessionUpdateUserMessageChunk,
+			MessageID: "steer-1",
+			Meta:      acp.BuildSessionUpdateMetaLifecycle("", true, true),
 		},
 	})
 	eventuallyQueue(t, func() bool { return len(s.queueSnapshot(true).WaitingItems) == 0 })
