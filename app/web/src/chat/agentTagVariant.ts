@@ -11,7 +11,7 @@ const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
   opencode: 3,
   codebuddy: 4,
   mimo: 5,
-  // Cyan keeps kimi clear of claude's orange (old yellow read as claude-family).
+  // Violet keeps kimi clear of codex blue and claude orange.
   kimi: 9,
   flicker: 8,
   // Claude-compatible profiles ride claude's accent (variant 2) — same family.
