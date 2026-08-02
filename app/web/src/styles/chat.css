@@ -3444,21 +3444,46 @@ button.chat-hub-skill-name:disabled {
   height: 28px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0;
+  gap: 6px;
+  padding: 0 6px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
+  font: inherit;
   cursor: pointer;
+  outline: none;
   text-align: left;
   user-select: none;
+}
+
+.chat-work-group-header:hover,
+.chat-work-group-header:focus-visible {
+  background: color-mix(in srgb, var(--hover) 78%, transparent);
+  color: var(--text-primary);
+}
+
+.chat-work-group-header:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--border-strong) 56%, transparent);
+  outline-offset: -1px;
+}
+
+.chat-work-group-open .chat-work-group-header {
+  background: color-mix(in srgb, var(--hover) 52%, transparent);
+  color: var(--text-primary);
 }
 
 .chat-work-group-chevron {
   flex: 0 0 auto;
   color: var(--text-tertiary);
-  opacity: 0.72;
+  opacity: 0.64;
   transition: transform 140ms ease;
+}
+
+.chat-work-group-header:hover .chat-work-group-chevron,
+.chat-work-group-header:focus-visible .chat-work-group-chevron,
+.chat-work-group-open .chat-work-group-chevron {
+  opacity: 0.9;
 }
 
 .chat-work-group-open .chat-work-group-chevron {
@@ -3470,6 +3495,8 @@ button.chat-hub-skill-name:disabled {
   overflow: hidden;
   color: var(--text-secondary);
   font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

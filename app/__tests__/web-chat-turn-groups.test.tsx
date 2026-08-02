@@ -91,11 +91,26 @@ describe('chat turn groups', () => {
     const header = styles.match(/\.chat-work-group-header \{([\s\S]*?)\}/)?.[1] ?? '';
     const group = styles.match(/\.chat-work-group \{([\s\S]*?)\}/)?.[1] ?? '';
     const chevron = styles.match(/\.chat-work-group-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
+    const label = styles.match(/\.chat-work-group-label \{([\s\S]*?)\}/)?.[1] ?? '';
 
     expect(header).toContain('height: 28px;');
     expect(header).toContain('background: transparent;');
+    expect(header).toContain('border-radius: 6px;');
+    expect(header).toContain('padding: 0 6px;');
+    expect(header).toContain('font: inherit;');
     expect(group).not.toContain('accent-primary');
     expect(chevron).toContain('color: var(--text-tertiary);');
+    expect(label).toContain('font-weight: 500;');
+    expect(label).toContain('font-variant-numeric: tabular-nums;');
+    expect(styles).toMatch(
+      /\.chat-work-group-header:hover,[\s\S]*?\.chat-work-group-header:focus-visible\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--hover\) 78%, transparent\);/,
+    );
+    expect(styles).toMatch(
+      /\.chat-work-group-header:focus-visible\s*\{[^}]*outline:\s*1px solid color-mix\(in srgb, var\(--border-strong\) 56%, transparent\);/,
+    );
+    expect(styles).toMatch(
+      /\.chat-work-group-open \.chat-work-group-header\s*\{[^}]*color:\s*var\(--text-primary\);/,
+    );
     expect(styles).toContain('.chat-work-group-open .chat-work-group-chevron');
     expect(styles).toContain('.chat-work-group-child.compact');
   });
