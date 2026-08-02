@@ -86,7 +86,7 @@ git commit -m "docs(protocol): define ACP extension boundary and registry 2.7"
 - Modify: `server/internal/protocol/acp_meta.go`
 - Modify: `server/internal/protocol/acp_test.go`
 
-- [ ] **Step 1: Write strict encode/decode tests**
+- [x] **Step 1: Write strict encode/decode tests**
 
 Add table tests that decode every implemented `sessionUpdate` discriminator, reject a message chunk with `contentBlocks`, reject a tool update with `toolCallContent`, reject `modeId`, and round-trip unknown metadata:
 
@@ -106,13 +106,13 @@ func TestDecodeSessionUpdateRejectsPrivateRootFields(t *testing.T) {
 
 Assert valid message JSON contains only `sessionUpdate`, `content`, `messageId`, `_meta`; valid tool JSON uses `content`; and nested ContentBlock/ToolCallContent/MCP Server/Config Option unions reject fields from another variant.
 
-- [ ] **Step 2: Run protocol tests and verify RED**
+- [x] **Step 2: Run protocol tests and verify RED**
 
 Run: `go test ./internal/protocol -run 'TestDecodeSessionUpdate|TestACP.*Meta|TestACP.*Union|TestACP.*Allowlist' -count=1`
 
 Expected: FAIL because `DecodeSessionUpdate` and strict variants do not exist and current wide structs accept private roots.
 
-- [ ] **Step 3: Add discriminated wire variants**
+- [x] **Step 3: Add discriminated wire variants**
 
 Define an interface and concrete structs in `acp_wire_update.go`:
 
@@ -149,7 +149,7 @@ Implement `DecodeSessionUpdate` by reading the discriminator, decoding with `jso
 
 Remove from wire structs and constants: `contentBlocks`, `clientMessageId`, `steered`, `toolCallContent`, Goal update discriminators/fields, `SessionNewResult.title`, root prompt-result `message`, `StopReasonFailed`, `usage_update.updatedAt`, and response-side `Artifacts`/`ForkPoint`. Keep corresponding fields only in `session_turn.go`, `session_actions.go`, or the internal event types introduced next.
 
-- [ ] **Step 5: Run protocol tests**
+- [x] **Step 5: Run protocol tests**
 
 Run: `go test ./internal/protocol -count=1`
 
@@ -173,7 +173,7 @@ git commit -m "refactor(acp): add strict v1 wire variants"
 - Modify: `server/internal/hub/client/session.go`
 - Modify: `server/internal/hub/client/session_recorder.go`
 
-- [ ] **Step 1: Write event projection and buffer tests**
+- [x] **Step 1: Write event projection and buffer tests**
 
 Test that standard message/tool/session-info/usage wire variants become typed events with full metadata, illegal wire JSON never reaches callbacks, and notifications arriving between `session/new` and `SetCallbacks` flush in order. Include a close test proving the bounded buffer is cleared.
 
@@ -190,13 +190,13 @@ func TestInstanceBuffersEarlySessionEventsUntilCallbacks(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `go test ./internal/protocol ./internal/hub/agent -run 'TestProjectACPUpdate|TestInstanceBuffersEarly|TestInstanceRejectsInvalidWire' -count=1`
 
 Expected: FAIL because the typed event projection and early-event buffer do not exist.
 
-- [ ] **Step 3: Define the internal boundary**
+- [x] **Step 3: Define the internal boundary**
 
 Add concrete internal types that are never marshaled as ACP:
 
@@ -230,7 +230,7 @@ type PromptOutcome struct {
 
 Create `ProjectSessionUpdate(SessionUpdateVariant, receivedAt)` and make `Callbacks.AgentEvent(protocol.AgentEvent)` the Session-facing callback. Session prompt request/result recording calls typed recorder methods directly instead of manufacturing ACP-shaped JSON.
 
-- [ ] **Step 4: Decode both built-in and external notifications in Instance**
+- [x] **Step 4: Decode both built-in and external notifications in Instance**
 
 In `HandleACPResponse`, decode `session/update` through `DecodeSessionUpdate`, project to `AgentEvent`, and dispatch only the internal event. Add a per-Instance FIFO capped at 256 events while callbacks are nil; flush under ordering protection after `SetCallbacks`, and clear the slice on `Close` or failed session setup.
 

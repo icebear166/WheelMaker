@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 // Callbacks defines business callback handlers owned by instance users.
 type Callbacks interface {
-	SessionUpdate(params protocol.SessionUpdateParams)
+	AgentEvent(event protocol.AgentEvent)
 	SessionRequestPermission(ctx context.Context, requestID int64, params protocol.PermissionRequestParams) (protocol.PermissionResult, error)
 }
 
@@ -103,9 +104,12 @@ type instance struct {
 	tools     *instanceTools
 
 	mu              sync.RWMutex
+	dispatchMu      sync.Mutex
 	acpSessionReady bool
 	acpSessionID    string
 	initResult      protocol.InitializeResult
+	pendingEvents   []protocol.AgentEvent
+	closed          bool
 }
 
 var _ Instance = (*instance)(nil)
@@ -147,9 +151,19 @@ func (i *instance) Alive() bool {
 }
 
 func (i *instance) SetCallbacks(callbacks Callbacks) {
+	i.dispatchMu.Lock()
+	defer i.dispatchMu.Unlock()
 	i.mu.Lock()
 	i.callbacks = callbacks
+	pending := append([]protocol.AgentEvent(nil), i.pendingEvents...)
+	i.pendingEvents = nil
 	i.mu.Unlock()
+	if callbacks == nil {
+		return
+	}
+	for _, event := range pending {
+		callbacks.AgentEvent(event)
+	}
 }
 
 func (i *instance) Initialize(ctx context.Context, p protocol.InitializeParams) (protocol.InitializeResult, error) {
@@ -378,16 +392,41 @@ func (i *instance) ForkSession(ctx context.Context, sessionID string, lastTurnID
 
 func (i *instance) HandleACPResponse(_ context.Context, method string, params json.RawMessage) {
 	if method == protocol.MethodSessionUpdate {
-		var p protocol.SessionUpdateParams
-		if err := json.Unmarshal(params, &p); err != nil {
+		wire, err := protocol.DecodeSessionUpdateParams(params)
+		if err != nil {
 			return
 		}
-		cb := i.currentCallbacks()
-		if cb == nil {
+		event, err := protocol.ProjectSessionUpdate(wire, time.Now().UTC())
+		if err != nil {
 			return
 		}
-		cb.SessionUpdate(p)
+		i.dispatchAgentEvent(event)
 	}
+}
+
+const maxPendingAgentEvents = 256
+
+func (i *instance) dispatchAgentEvent(event protocol.AgentEvent) {
+	i.dispatchMu.Lock()
+	defer i.dispatchMu.Unlock()
+	i.mu.Lock()
+	if i.closed {
+		i.mu.Unlock()
+		return
+	}
+	callbacks := i.callbacks
+	if callbacks == nil {
+		if len(i.pendingEvents) == maxPendingAgentEvents {
+			copy(i.pendingEvents, i.pendingEvents[1:])
+			i.pendingEvents[len(i.pendingEvents)-1] = event
+		} else {
+			i.pendingEvents = append(i.pendingEvents, event)
+		}
+		i.mu.Unlock()
+		return
+	}
+	i.mu.Unlock()
+	callbacks.AgentEvent(event)
 }
 
 func (i *instance) HandleACPRequest(ctx context.Context, requestID int64, method string, params json.RawMessage) (any, error) {
@@ -442,6 +481,13 @@ func (i *instance) HandleACPRequest(ctx context.Context, requestID int64, method
 }
 
 func (i *instance) Close() error {
+	i.dispatchMu.Lock()
+	i.mu.Lock()
+	i.closed = true
+	i.pendingEvents = nil
+	i.callbacks = nil
+	i.mu.Unlock()
+	i.dispatchMu.Unlock()
 	if i.tools != nil {
 		i.tools.Close()
 	}

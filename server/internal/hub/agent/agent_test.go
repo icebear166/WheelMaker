@@ -5554,10 +5554,7 @@ func TestInstance_HandleInboundDispatch(t *testing.T) {
 		t.Fatal("expected ACP request/response handler registration")
 	}
 
-	updateRaw, _ := json.Marshal(protocol.SessionUpdateParams{
-		SessionID: "acp-1",
-		Update:    protocol.SessionUpdate{SessionUpdate: "agent_message_chunk"},
-	})
+	updateRaw := json.RawMessage(`{"sessionId":"acp-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"messageId":"m1"}}`)
 	fc.resp(context.Background(), protocol.MethodSessionUpdate, updateRaw)
 	if cb.updateCount != 1 {
 		t.Fatalf("updateCount=%d, want 1", cb.updateCount)
@@ -5587,6 +5584,29 @@ func TestInstance_HandleInboundDispatch(t *testing.T) {
 	}
 
 	_ = inst
+}
+
+func TestInstanceBuffersEarlySessionEventsUntilCallbacks(t *testing.T) {
+	fc := &fakeConn{}
+	inst := NewInstance("codex", fc)
+	fc.resp(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"acp-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"messageId":"m1"}}`))
+
+	cb := &fakeCallbacks{}
+	inst.SetCallbacks(cb)
+	if cb.updateCount != 1 || cb.lastMessageID != "m1" {
+		t.Fatalf("updates=%d messageId=%q, want one buffered m1 event", cb.updateCount, cb.lastMessageID)
+	}
+}
+
+func TestInstanceRejectsInvalidACPUpdateBeforeCallbacks(t *testing.T) {
+	fc := &fakeConn{}
+	inst := NewInstance("codex", fc)
+	cb := &fakeCallbacks{}
+	inst.SetCallbacks(cb)
+	fc.resp(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"acp-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"contentBlocks":[]}}`))
+	if cb.updateCount != 0 {
+		t.Fatalf("updates=%d, want invalid wire dropped", cb.updateCount)
+	}
 }
 
 func newUpdate(acpSessionID, name string) protocol.SessionUpdateParams {
@@ -5637,10 +5657,16 @@ type fakeCallbacks struct {
 	updateCount     int
 	permissionCount int
 	lastRequestID   int64
+	lastMessageID   string
 }
 
-func (f *fakeCallbacks) SessionUpdate(_ protocol.SessionUpdateParams) {
+func (f *fakeCallbacks) AgentEvent(event protocol.AgentEvent) {
+	params, err := event.LegacySessionUpdate()
+	if err != nil {
+		return
+	}
 	f.updateCount++
+	f.lastMessageID = params.Update.MessageID
 }
 
 func (f *fakeCallbacks) SessionRequestPermission(_ context.Context, requestID int64, _ protocol.PermissionRequestParams) (protocol.PermissionResult, error) {
@@ -5653,8 +5679,11 @@ type fakeCodexappCallbacks struct {
 	updates chan protocol.SessionUpdateParams
 }
 
-func (f *fakeCodexappCallbacks) SessionUpdate(p protocol.SessionUpdateParams) {
-	f.updates <- p
+func (f *fakeCodexappCallbacks) AgentEvent(event protocol.AgentEvent) {
+	params, err := event.LegacySessionUpdate()
+	if err == nil {
+		f.updates <- params
+	}
 }
 
 func (f *fakeCodexappCallbacks) SessionRequestPermission(context.Context, int64, protocol.PermissionRequestParams) (protocol.PermissionResult, error) {

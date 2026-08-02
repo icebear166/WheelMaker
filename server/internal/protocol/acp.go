@@ -11,6 +11,7 @@ type InitializeParams struct {
 	ProtocolVersion    int                `json:"protocolVersion"`
 	ClientCapabilities ClientCapabilities `json:"clientCapabilities"`
 	ClientInfo         *AgentInfo         `json:"clientInfo,omitempty"`
+	Meta               json.RawMessage    `json:"_meta,omitempty"`
 }
 
 // InitializeResult is returned by the agent during the initialize handshake.
@@ -19,59 +20,70 @@ type InitializeResult struct {
 	AgentCapabilities AgentCapabilities `json:"agentCapabilities"`
 	AgentInfo         *AgentInfo        `json:"agentInfo,omitempty"`
 	AuthMethods       []AuthMethod      `json:"authMethods,omitempty"`
+	Meta              json.RawMessage   `json:"_meta,omitempty"`
 }
 
 // ClientCapabilities declares which client-side callbacks the client supports.
 type ClientCapabilities struct {
 	FS       *FSCapabilities `json:"fs,omitempty"`
 	Terminal bool            `json:"terminal,omitempty"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // FSCapabilities declares file system callback support.
 type FSCapabilities struct {
-	ReadTextFile  bool `json:"readTextFile,omitempty"`
-	WriteTextFile bool `json:"writeTextFile,omitempty"`
+	ReadTextFile  bool            `json:"readTextFile,omitempty"`
+	WriteTextFile bool            `json:"writeTextFile,omitempty"`
+	Meta          json.RawMessage `json:"_meta,omitempty"`
 }
 
 // AgentCapabilities declares what the agent supports.
 type AgentCapabilities struct {
 	LoadSession         bool                 `json:"loadSession,omitempty"`
 	PromptCapabilities  *PromptCapabilities  `json:"promptCapabilities,omitempty"`
-	MCPCapabilities     *MCPCapabilities     `json:"mcp,omitempty"`
+	MCPCapabilities     *MCPCapabilities     `json:"mcpCapabilities,omitempty"`
 	SessionCapabilities *SessionCapabilities `json:"sessionCapabilities,omitempty"`
+	Meta                json.RawMessage      `json:"_meta,omitempty"`
 }
 
 // PromptCapabilities declares which content block types the agent accepts in prompts.
 type PromptCapabilities struct {
-	Image           bool `json:"image,omitempty"`
-	Audio           bool `json:"audio,omitempty"`
-	EmbeddedContext bool `json:"embeddedContext,omitempty"`
+	Image           bool            `json:"image,omitempty"`
+	Audio           bool            `json:"audio,omitempty"`
+	EmbeddedContext bool            `json:"embeddedContext,omitempty"`
+	Meta            json.RawMessage `json:"_meta,omitempty"`
 }
 
 // MCPCapabilities declares which MCP transport types the agent supports.
 type MCPCapabilities struct {
-	HTTP bool `json:"http,omitempty"`
-	SSE  bool `json:"sse,omitempty"`
+	HTTP bool            `json:"http,omitempty"`
+	SSE  bool            `json:"sse,omitempty"`
+	Meta json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionCapabilities declares optional session-level capabilities.
 type SessionCapabilities struct {
 	List *SessionListCapability `json:"list,omitempty"`
+	Meta json.RawMessage        `json:"_meta,omitempty"`
 }
 
 // SessionListCapability is an opaque marker indicating session/list is supported.
-type SessionListCapability struct{}
+type SessionListCapability struct {
+	Meta json.RawMessage `json:"_meta,omitempty"`
+}
 
 // AgentInfo identifies the client or agent.
 type AgentInfo struct {
-	Name    string `json:"name"`
-	Title   string `json:"title,omitempty"`
-	Version string `json:"version,omitempty"`
+	Name    string          `json:"name"`
+	Title   string          `json:"title,omitempty"`
+	Version string          `json:"version,omitempty"`
+	Meta    json.RawMessage `json:"_meta,omitempty"`
 }
 
 // AuthMethodVar is an environment variable required by an auth method.
 type AuthMethodVar struct {
-	Name string `json:"name"`
+	Name string          `json:"name"`
+	Meta json.RawMessage `json:"_meta,omitempty"`
 }
 
 // AuthMethod is an authentication option offered by the agent during initialize.
@@ -81,13 +93,15 @@ type AuthMethod struct {
 	Name        string          `json:"name,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Vars        []AuthMethodVar `json:"vars,omitempty"`
+	Meta        json.RawMessage `json:"_meta,omitempty"`
 }
 
 // ConfigOptionValue is a selectable value for a config option.
 type ConfigOptionValue struct {
-	Value       string `json:"value"`
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
+	Value       string          `json:"value"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Meta        json.RawMessage `json:"_meta,omitempty"`
 }
 
 // ConfigOption is a configurable session parameter (e.g. mode, model, reasoning effort).
@@ -99,62 +113,77 @@ type ConfigOption struct {
 	Type         string              `json:"type,omitempty"`
 	CurrentValue string              `json:"currentValue,omitempty"`
 	Options      []ConfigOptionValue `json:"options,omitempty"`
+	Meta         json.RawMessage     `json:"_meta,omitempty"`
+}
+
+// AvailableCommandInput is the ACP v1 slash-command input hint.
+type AvailableCommandInput struct {
+	Hint string          `json:"hint"`
+	Meta json.RawMessage `json:"_meta,omitempty"`
 }
 
 // AvailableCommand is a slash command advertised by the agent via session/update.
 type AvailableCommand struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	Input       json.RawMessage `json:"input,omitempty"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Input       *AvailableCommandInput `json:"input,omitempty"`
+	Meta        json.RawMessage        `json:"_meta,omitempty"`
 }
 
 // SessionNewParams creates a new ACP session.
 type SessionNewParams struct {
-	CWD        string      `json:"cwd"`
-	MCPServers []MCPServer `json:"mcpServers"`
+	CWD        string          `json:"cwd"`
+	MCPServers []MCPServer     `json:"mcpServers"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionNewResult is returned after a successful session/new.
 type SessionNewResult struct {
-	SessionID     string         `json:"sessionId"`
-	Title         string         `json:"title,omitempty"`
-	ConfigOptions []ConfigOption `json:"configOptions,omitempty"`
+	SessionID     string          `json:"sessionId"`
+	Title         string          `json:"title,omitempty"`
+	ConfigOptions []ConfigOption  `json:"configOptions,omitempty"`
+	Meta          json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionLoadParams resumes an existing ACP session.
 type SessionLoadParams struct {
-	SessionID  string      `json:"sessionId"`
-	CWD        string      `json:"cwd"`
-	MCPServers []MCPServer `json:"mcpServers"`
+	SessionID  string          `json:"sessionId"`
+	CWD        string          `json:"cwd"`
+	MCPServers []MCPServer     `json:"mcpServers"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // EnvVariable is a name/value environment variable pair.
 type EnvVariable struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string          `json:"name"`
+	Value string          `json:"value"`
+	Meta  json.RawMessage `json:"_meta,omitempty"`
 }
 
 // HttpHeader is a name/value HTTP header pair (used by HTTP/SSE MCP transports).
 type HttpHeader struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
+	Name  string          `json:"name"`
+	Value string          `json:"value"`
+	Meta  json.RawMessage `json:"_meta,omitempty"`
 }
 
 // MCPServer represents a Model Context Protocol server configuration.
 type MCPServer struct {
-	Type    string        `json:"type,omitempty"`
-	Name    string        `json:"name"`
-	Command string        `json:"command,omitempty"`
-	Args    []string      `json:"args,omitempty"`
-	Env     []EnvVariable `json:"env,omitempty"`
-	URL     string        `json:"url,omitempty"`
-	Headers []HttpHeader  `json:"headers,omitempty"`
+	Type    string          `json:"type,omitempty"`
+	Name    string          `json:"name"`
+	Command string          `json:"command,omitempty"`
+	Args    []string        `json:"args,omitempty"`
+	Env     []EnvVariable   `json:"env,omitempty"`
+	URL     string          `json:"url,omitempty"`
+	Headers []HttpHeader    `json:"headers,omitempty"`
+	Meta    json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionPromptParams sends a prompt to the agent.
 type SessionPromptParams struct {
-	SessionID string         `json:"sessionId"`
-	Prompt    []ContentBlock `json:"prompt"`
+	SessionID string          `json:"sessionId"`
+	Prompt    []ContentBlock  `json:"prompt"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionPromptResult is the final result after a prompt completes.
@@ -163,6 +192,7 @@ type SessionPromptResult struct {
 	Message    string                         `json:"message,omitempty"`
 	Artifacts  []SessionPromptArtifactPayload `json:"-"`
 	ForkPoint  *SessionForkPoint              `json:"-"`
+	Meta       json.RawMessage                `json:"_meta,omitempty"`
 }
 
 // SessionPromptArtifactPayload is internal side-band data attached to a prompt
@@ -175,19 +205,22 @@ type SessionPromptArtifactPayload struct {
 
 // SessionCancelParams cancels an in-progress prompt.
 type SessionCancelParams struct {
-	SessionID string `json:"sessionId"`
+	SessionID string          `json:"sessionId"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionUpdateParams is the payload of a session/update notification.
 type SessionUpdateParams struct {
-	SessionID string        `json:"sessionId"`
-	Update    SessionUpdate `json:"update"`
+	SessionID string          `json:"sessionId"`
+	Update    SessionUpdate   `json:"update"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionUpdate is the body of a single streaming update from the agent.
 type SessionUpdate struct {
 	SessionUpdate     string             `json:"sessionUpdate"`
 	Content           json.RawMessage    `json:"content,omitempty"`
+	MessageID         string             `json:"messageId,omitempty"`
 	Meta              json.RawMessage    `json:"_meta,omitempty"`
 	ContentBlocks     []ContentBlock     `json:"contentBlocks,omitempty"`
 	ClientMessageID   string             `json:"clientMessageId,omitempty"`
@@ -216,42 +249,47 @@ type SessionUpdate struct {
 
 // SessionUsage is the current context-window usage snapshot for a session.
 type SessionUsage struct {
-	Used      int64  `json:"used"`
-	Size      int64  `json:"size,omitempty"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	Used      int64           `json:"used"`
+	Size      int64           `json:"size,omitempty"`
+	UpdatedAt string          `json:"updatedAt,omitempty"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // PlanEntry is a single step in an agent execution plan.
 type PlanEntry struct {
-	Content  string `json:"content"`
-	Priority string `json:"priority"`
-	Status   string `json:"status"`
+	Content  string          `json:"content"`
+	Priority string          `json:"priority"`
+	Status   string          `json:"status"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // ToolCallLocation is a file location affected by a tool call.
 type ToolCallLocation struct {
-	Path string `json:"path"`
-	Line *int   `json:"line,omitempty"`
+	Path string          `json:"path"`
+	Line *int            `json:"line,omitempty"`
+	Meta json.RawMessage `json:"_meta,omitempty"`
 }
 
 // ToolCallContent is a content entry within a tool call (§7.3).
 // Type is one of "content", "diff", "terminal".
 type ToolCallContent struct {
-	Type       string        `json:"type"`
-	Content    *ContentBlock `json:"content,omitempty"`    // type="content"
-	Path       string        `json:"path,omitempty"`       // type="diff"
-	OldText    *string       `json:"oldText,omitempty"`    // type="diff" (null = new file)
-	NewText    string        `json:"newText,omitempty"`    // type="diff"
-	TerminalID string        `json:"terminalId,omitempty"` // type="terminal"
+	Type       string          `json:"type"`
+	Content    *ContentBlock   `json:"content,omitempty"`    // type="content"
+	Path       string          `json:"path,omitempty"`       // type="diff"
+	OldText    *string         `json:"oldText,omitempty"`    // type="diff" (null = new file)
+	NewText    string          `json:"newText,omitempty"`    // type="diff"
+	TerminalID string          `json:"terminalId,omitempty"` // type="terminal"
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // EmbeddedResource is the nested payload for ContentBlock type "resource".
 // Text resources carry Text; blob resources carry Blob (base64-encoded).
 type EmbeddedResource struct {
-	URI      string `json:"uri"`
-	MimeType string `json:"mimeType,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Blob     string `json:"blob,omitempty"`
+	URI      string          `json:"uri"`
+	MimeType string          `json:"mimeType,omitempty"`
+	Text     string          `json:"text,omitempty"`
+	Blob     string          `json:"blob,omitempty"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // ContentBlock is a piece of content within a session update or prompt.
@@ -274,6 +312,7 @@ type ContentBlock struct {
 	Size        int               `json:"size,omitempty"`
 	Resource    *EmbeddedResource `json:"resource,omitempty"`
 	Annotations json.RawMessage   `json:"annotations,omitempty"`
+	Meta        json.RawMessage   `json:"_meta,omitempty"`
 }
 
 // ToolCallRef is the tool call object sent with permission requests.
@@ -285,6 +324,7 @@ type ToolCallRef struct {
 	Status     string            `json:"status,omitempty"`
 	Kind       string            `json:"kind,omitempty"`
 	Content    []ToolCallContent `json:"content,omitempty"`
+	Meta       json.RawMessage   `json:"_meta,omitempty"`
 }
 
 // PermissionRequestParams is sent by the agent when it needs permission to use a tool.
@@ -292,83 +332,96 @@ type PermissionRequestParams struct {
 	SessionID string             `json:"sessionId"`
 	ToolCall  ToolCallRef        `json:"toolCall"`
 	Options   []PermissionOption `json:"options"`
+	Meta      json.RawMessage    `json:"_meta,omitempty"`
 }
 
 // PermissionOption is a choice the client can make for a permission request.
 type PermissionOption struct {
-	OptionID string `json:"optionId"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
+	OptionID string          `json:"optionId"`
+	Name     string          `json:"name"`
+	Kind     string          `json:"kind"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // PermissionResult is the inner permission outcome.
 type PermissionResult struct {
-	Outcome  string `json:"outcome"`
-	OptionID string `json:"optionId,omitempty"`
+	Outcome  string          `json:"outcome"`
+	OptionID string          `json:"optionId,omitempty"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // PermissionResponse is the JSON-RPC result for session/request_permission.
 type PermissionResponse struct {
 	Outcome PermissionResult `json:"outcome"`
+	Meta    json.RawMessage  `json:"_meta,omitempty"`
 }
 
 // SessionLoadResult is the response to session/load.
 type SessionLoadResult struct {
-	ConfigOptions []ConfigOption `json:"configOptions,omitempty"`
+	ConfigOptions []ConfigOption  `json:"configOptions,omitempty"`
+	Meta          json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionSetConfigOptionParams sets a configuration option on an active session.
 type SessionSetConfigOptionParams struct {
-	SessionID string `json:"sessionId"`
-	ConfigID  string `json:"configId"`
-	Value     string `json:"value"`
+	SessionID string          `json:"sessionId"`
+	ConfigID  string          `json:"configId"`
+	Value     string          `json:"value"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // FSReadTextFileParams is sent by the agent to request a file read.
 type FSReadTextFileParams struct {
-	SessionID string `json:"sessionId"`
-	Path      string `json:"path"`
-	Line      *int   `json:"line,omitempty"`
-	Limit     *int   `json:"limit,omitempty"`
+	SessionID string          `json:"sessionId"`
+	Path      string          `json:"path"`
+	Line      *int            `json:"line,omitempty"`
+	Limit     *int            `json:"limit,omitempty"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // FSReadTextFileResult is the client's response with the file content.
 type FSReadTextFileResult struct {
-	Content string `json:"content"`
+	Content string          `json:"content"`
+	Meta    json.RawMessage `json:"_meta,omitempty"`
 }
 
 // FSWriteTextFileParams is sent by the agent to request a file write.
 type FSWriteTextFileParams struct {
-	SessionID string `json:"sessionId"`
-	Path      string `json:"path"`
-	Content   string `json:"content"`
+	SessionID string          `json:"sessionId"`
+	Path      string          `json:"path"`
+	Content   string          `json:"content"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalCreateParams is sent by the agent to spawn a terminal process.
 type TerminalCreateParams struct {
-	SessionID       string        `json:"sessionId"`
-	Command         string        `json:"command"`
-	Args            []string      `json:"args,omitempty"`
-	CWD             string        `json:"cwd,omitempty"`
-	Env             []EnvVariable `json:"env,omitempty"`
-	OutputByteLimit *int          `json:"outputByteLimit,omitempty"`
+	SessionID       string          `json:"sessionId"`
+	Command         string          `json:"command"`
+	Args            []string        `json:"args,omitempty"`
+	CWD             string          `json:"cwd,omitempty"`
+	Env             []EnvVariable   `json:"env,omitempty"`
+	OutputByteLimit *int            `json:"outputByteLimit,omitempty"`
+	Meta            json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalCreateResult is the client's response with the new terminal ID.
 type TerminalCreateResult struct {
-	TerminalID string `json:"terminalId"`
+	TerminalID string          `json:"terminalId"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalOutputParams requests buffered output from a terminal.
 type TerminalOutputParams struct {
-	SessionID  string `json:"sessionId"`
-	TerminalID string `json:"terminalId"`
+	SessionID  string          `json:"sessionId"`
+	TerminalID string          `json:"terminalId"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalExitStatus is the exit status object returned in TerminalOutputResult.
 type TerminalExitStatus struct {
-	ExitCode *int    `json:"exitCode,omitempty"`
-	Signal   *string `json:"signal,omitempty"`
+	ExitCode *int            `json:"exitCode,omitempty"`
+	Signal   *string         `json:"signal,omitempty"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalOutputResult returns the accumulated output and exit status if done.
@@ -376,50 +429,58 @@ type TerminalOutputResult struct {
 	Output     string              `json:"output"`
 	Truncated  bool                `json:"truncated"`
 	ExitStatus *TerminalExitStatus `json:"exitStatus,omitempty"`
+	Meta       json.RawMessage     `json:"_meta,omitempty"`
 }
 
 // TerminalWaitForExitParams blocks until the terminal process exits.
 type TerminalWaitForExitParams struct {
-	SessionID  string `json:"sessionId"`
-	TerminalID string `json:"terminalId"`
+	SessionID  string          `json:"sessionId"`
+	TerminalID string          `json:"terminalId"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalWaitForExitResult contains the process exit information.
 type TerminalWaitForExitResult struct {
-	ExitCode *int    `json:"exitCode,omitempty"`
-	Signal   *string `json:"signal,omitempty"`
+	ExitCode *int            `json:"exitCode,omitempty"`
+	Signal   *string         `json:"signal,omitempty"`
+	Meta     json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalKillParams requests termination of a terminal process.
 type TerminalKillParams struct {
-	SessionID  string `json:"sessionId"`
-	TerminalID string `json:"terminalId"`
+	SessionID  string          `json:"sessionId"`
+	TerminalID string          `json:"terminalId"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // TerminalReleaseParams releases terminal resources.
 type TerminalReleaseParams struct {
-	SessionID  string `json:"sessionId"`
-	TerminalID string `json:"terminalId"`
+	SessionID  string          `json:"sessionId"`
+	TerminalID string          `json:"terminalId"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionListParams requests a paginated list of sessions.
 type SessionListParams struct {
-	CWD    string `json:"cwd,omitempty"`
-	Cursor string `json:"cursor,omitempty"`
+	CWD    string          `json:"cwd,omitempty"`
+	Cursor string          `json:"cursor,omitempty"`
+	Meta   json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionInfo is a single entry in a session list.
 type SessionInfo struct {
-	SessionID string `json:"sessionId"`
-	CWD       string `json:"cwd"`
-	Title     string `json:"title,omitempty"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	SessionID string          `json:"sessionId"`
+	CWD       string          `json:"cwd"`
+	Title     string          `json:"title,omitempty"`
+	UpdatedAt string          `json:"updatedAt,omitempty"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 // SessionListResult is the response to session/list.
 type SessionListResult struct {
-	Sessions   []SessionInfo `json:"sessions"`
-	NextCursor string        `json:"nextCursor,omitempty"`
+	Sessions   []SessionInfo   `json:"sessions"`
+	NextCursor string          `json:"nextCursor,omitempty"`
+	Meta       json.RawMessage `json:"_meta,omitempty"`
 }
 
 // --- Session config helpers ---

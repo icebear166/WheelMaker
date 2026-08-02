@@ -1,10 +1,42 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"testing"
 )
+
+func TestACPImplementedTypesPreserveMeta(t *testing.T) {
+	types := []any{
+		&InitializeParams{}, &InitializeResult{}, &ClientCapabilities{}, &FSCapabilities{},
+		&AgentCapabilities{}, &PromptCapabilities{}, &MCPCapabilities{}, &SessionCapabilities{},
+		&AgentInfo{}, &AuthMethodVar{}, &AuthMethod{}, &AvailableCommand{}, &AvailableCommandInput{},
+		&SessionNewParams{}, &SessionNewResult{}, &SessionLoadParams{}, &EnvVariable{}, &HttpHeader{},
+		&MCPServer{}, &SessionPromptParams{}, &SessionPromptResult{}, &SessionCancelParams{},
+		&SessionUsage{}, &PlanEntry{}, &ToolCallLocation{}, &ToolCallContent{}, &EmbeddedResource{},
+		&ContentBlock{}, &ToolCallRef{}, &PermissionRequestParams{}, &PermissionOption{},
+		&PermissionResult{}, &PermissionResponse{}, &SessionLoadResult{}, &SessionSetConfigOptionParams{},
+		&FSReadTextFileParams{}, &FSReadTextFileResult{}, &FSWriteTextFileParams{},
+		&TerminalCreateParams{}, &TerminalCreateResult{}, &TerminalOutputParams{}, &TerminalExitStatus{},
+		&TerminalOutputResult{}, &TerminalWaitForExitParams{}, &TerminalWaitForExitResult{},
+		&TerminalKillParams{}, &TerminalReleaseParams{}, &SessionListParams{}, &SessionInfo{}, &SessionListResult{},
+	}
+	for _, target := range types {
+		t.Run(reflect.TypeOf(target).Elem().Name(), func(t *testing.T) {
+			if err := json.Unmarshal([]byte(`{"_meta":{"future":{"value":7}}}`), target); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(raw, []byte(`"_meta":{"future":{"value":7}}`)) {
+				t.Fatalf("%T dropped metadata: %s", target, raw)
+			}
+		})
+	}
+}
 
 func TestCXDeepSeekProviderIdentity(t *testing.T) {
 	provider, ok := ParseACPProvider(" CX-DeepSeek ")

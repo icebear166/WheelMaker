@@ -1215,6 +1215,16 @@ func (s *Session) isRunning() bool {
 }
 
 // SessionUpdate receives session/update notifications from the agent.
+func (s *Session) AgentEvent(event acp.AgentEvent) {
+	params, err := event.LegacySessionUpdate()
+	if err != nil {
+		return
+	}
+	s.SessionUpdate(params)
+}
+
+// SessionUpdate consumes WheelMaker's normalized WMT2 update shape. Real ACP
+// notifications enter through AgentEvent after strict decoding in Instance.
 func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	s.mu.Lock()
 	sessID := s.acpSessionID

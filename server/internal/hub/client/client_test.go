@@ -207,7 +207,7 @@ func (i *testInjectedInstance) SessionLoad(ctx context.Context, params acp.Sessi
 			params.SessionID = i.sessionID
 		}
 		if i.callbacks != nil {
-			i.callbacks.SessionUpdate(params)
+			emitInjectedSessionUpdate(i.callbacks, params)
 		}
 	}
 	return i.loadResult, i.loadErr
@@ -236,13 +236,21 @@ func (i *testInjectedInstance) SessionPrompt(ctx context.Context, p acp.SessionP
 			params.SessionID = p.SessionID
 		}
 		if i.callbacks != nil {
-			i.callbacks.SessionUpdate(params)
+			emitInjectedSessionUpdate(i.callbacks, params)
 		}
 	}
 	if strings.TrimSpace(result.StopReason) == "" {
 		result.StopReason = acp.StopReasonEndTurn
 	}
 	return result, nil
+}
+
+func emitInjectedSessionUpdate(callbacks agent.Callbacks, params acp.SessionUpdateParams) {
+	session, ok := callbacks.(*Session)
+	if !ok {
+		panic(fmt.Sprintf("test callback type %T does not expose normalized session updates", callbacks))
+	}
+	session.SessionUpdate(params)
 }
 func (i *testInjectedInstance) SessionCancel(_ string) error {
 	if i.cancelFn != nil {
@@ -548,7 +556,7 @@ func TestSessionRequestPermissionWaitsForUserResponse(t *testing.T) {
 	if err := <-errCh; err != nil {
 		t.Fatalf("SessionRequestPermission: %v", err)
 	}
-	if result := <-resultCh; result != accepted {
+	if result := <-resultCh; !reflect.DeepEqual(result, accepted) {
 		t.Fatalf("permission result=%+v, want %+v", result, accepted)
 	}
 }
@@ -735,7 +743,7 @@ func TestSessionPermissionRespondConcurrentChoicesHaveOneWinner(t *testing.T) {
 		t.Fatalf("unexpected duplicate response: %+v", duplicate)
 	default:
 	}
-	if result := <-agentResult; result != winner {
+	if result := <-agentResult; !reflect.DeepEqual(result, winner) {
 		t.Fatalf("agent result=%+v, winner=%+v", result, winner)
 	}
 }
