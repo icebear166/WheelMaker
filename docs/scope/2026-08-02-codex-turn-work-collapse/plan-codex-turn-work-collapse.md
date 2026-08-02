@@ -929,7 +929,7 @@ git commit -m "docs: record codex work collapse behavior"
 **Files:**
 - All task files from Tasks 1-7
 
-- [ ] **Step 1: Synchronize branch**
+- [x] **Step 1: Synchronize branch**
 
 ```powershell
 git fetch origin main
@@ -938,7 +938,7 @@ git rebase origin/main
 
 Expected: clean rebase. Resolve only mechanical conflicts automatically; stop for semantic conflicts.
 
-- [ ] **Step 2: Re-run focused post-rebase verification**
+- [x] **Step 2: Re-run focused post-rebase verification**
 
 ```powershell
 Set-Location server
@@ -951,9 +951,11 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 3: Execute required completion tail exactly**
+- [x] **Step 3: Execute required completion tail exactly**
 
 Update this plan's final checkboxes and verification evidence, then run:
+
+Post-rebase verification (2026-08-02): branch was already current with `origin/main`; focused Server packages passed 3/3; focused Jest passed 3/3 suites and 54/54 tests; `tsc:web` passed.
 
 ```powershell
 git add -A
