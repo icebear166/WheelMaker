@@ -62,7 +62,7 @@ type SettingsRootContentProps = {
   clampCodeTabSize: (value: number) => number;
   logLevel: AppDiagnosticLogLevel;
   setLogLevel: (value: AppDiagnosticLogLevel) => void;
-  handleRegistryDebugLogout: () => void;
+  handleRegistryLogout: () => void;
 };
 
 type SettingsSectionId = 'chat' | 'code' | 'state' | 'debug';
@@ -157,7 +157,7 @@ export function SettingsRootContent({
   clampCodeTabSize,
   logLevel,
   setLogLevel,
-  handleRegistryDebugLogout,
+  handleRegistryLogout,
 }: SettingsRootContentProps) {
   return (
     <div className="settings-list">
@@ -455,7 +455,7 @@ export function SettingsRootContent({
             icon="logOut"
             label="Logout"
             danger
-            onClick={handleRegistryDebugLogout}
+            onClick={handleRegistryLogout}
           />
         </>
       )} />

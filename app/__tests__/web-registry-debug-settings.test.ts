@@ -23,8 +23,10 @@ describe('web registry debug settings', () => {
     expect(workspacePersistence).toContain(
       '{k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt}',
     );
-    expect(workspacePersistence).not.toContain('messageViewerEnabled');
-    expect(workspacePersistence).not.toContain('disableFileCache');
+    expect(workspacePersistence).not.toContain('messageViewerEnabled: boolean;');
+    expect(workspacePersistence).not.toContain("messageViewerEnabled: 'messageViewerEnabled'");
+    expect(workspacePersistence).not.toContain('disableFileCache: boolean;');
+    expect(workspacePersistence).not.toContain("disableFileCache: 'disableFileCache'");
     expect(workspacePersistence).not.toContain('registryDebug: boolean;');
   });
 
@@ -85,7 +87,7 @@ describe('web registry debug settings', () => {
     const stateSectionStart = settingsRootTsx.indexOf('<SettingsSection id="state"');
     const stateSection = settingsRootTsx.slice(stateSectionStart, debugSectionStart);
     expect(stateSection).toContain('Logout');
-    expect(stateSection).toContain('handleRegistryDebugLogout');
+    expect(stateSection).toContain('handleRegistryLogout');
     expect(stateSection).not.toContain('Clear Local Cache');
   });
 

@@ -297,6 +297,17 @@ const GLOBAL_KEYS = {
   previewWorkbenchSnapshot: 'previewWorkbenchSnapshot',
 } as const;
 
+const REMOVED_GLOBAL_PREFERENCE_KEYS = new Set([
+  'messageViewerEnabled',
+  'disableFileCache',
+]);
+
+function removedGlobalPreferenceRows(rows: ReadonlyArray<{k: string}>): string[] {
+  return [...new Set(rows
+    .map(row => row.k)
+    .filter(key => REMOVED_GLOBAL_PREFERENCE_KEYS.has(key)))];
+}
+
 function defaultGlobalState(): PersistedGlobalState {
   return {
     themeMode: 'dark',
@@ -670,8 +681,12 @@ export interface WorkspaceDatabaseAdapter {
 
 class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
   private openPromise: Promise<IDBDatabase> | null = null;
+  private invalidated = false;
 
   private open(): Promise<IDBDatabase> {
+    if (this.invalidated) {
+      return Promise.reject(new Error('Workspace database changed. Reload the app before writing more data.'));
+    }
     if (!globalThis.indexedDB) {
       return Promise.reject(new Error('IndexedDB is unavailable in this environment.'));
     }
@@ -707,7 +722,15 @@ class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
           db.createObjectStore(TABLE_META, {keyPath: 'k'});
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => {
+          this.invalidated = true;
+          db.close();
+          this.openPromise = null;
+        };
+        resolve(db);
+      };
       req.onerror = () => reject(req.error ?? new Error('open workspace db failed'));
     });
     return this.openPromise;
@@ -765,6 +788,7 @@ class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
   }
 
   async resetDatabase(): Promise<void> {
+    this.invalidated = true;
     if (this.openPromise) {
       const db = await this.openPromise.catch(() => null);
       db?.close();
@@ -860,7 +884,10 @@ export class WorkspacePersistenceRepository {
       this.db.getAllRows<RawFileCacheRow>(TABLE_FILE_CACHE),
     ]);
 
-    const obsoleteRows = obsoleteBrowserCredentialRows(globalRows);
+    const obsoleteRows = [...new Set([
+      ...obsoleteBrowserCredentialRows(globalRows),
+      ...removedGlobalPreferenceRows(globalRows),
+    ])];
     if (obsoleteRows.length > 0) {
       await this.db.mutateStores([{
         storeName: TABLE_GLOBAL_KV,
@@ -1521,16 +1548,16 @@ export class WorkspacePersistenceRepository {
     }]);
   }
 
-      async resetDatabase(): Promise<void> {
-        await this.flushPendingWrites();
-        this.state = defaultWorkspaceState();
-        this.chatSessionIndex.clear();
-        this.chatSessionContent.clear();
-        this.chatSessionContentUpdatedAt.clear();
-        this.fileCache.clear();
-        this.lastStorageError = null;
-        await this.db.resetDatabase();
-      }
+  async resetDatabase(): Promise<void> {
+    await this.flushPendingWrites();
+    await this.db.resetDatabase();
+    this.state = defaultWorkspaceState();
+    this.chatSessionIndex.clear();
+    this.chatSessionContent.clear();
+    this.chatSessionContentUpdatedAt.clear();
+    this.fileCache.clear();
+    this.lastStorageError = null;
+  }
 
   async dumpDatabase(): Promise<WorkspaceDatabaseDump> {
     await this.flushPendingWrites();

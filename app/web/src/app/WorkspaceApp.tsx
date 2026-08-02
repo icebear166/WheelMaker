@@ -3078,6 +3078,8 @@ export function App() {
   const [databaseError, setDatabaseError] = useState('');
   const [databaseDumpText, setDatabaseDumpText] = useState('');
   const [databaseStorageStats, setDatabaseStorageStats] = useState<WorkspaceDatabaseStorageStats | null>(null);
+  const [clearDatabasePending, setClearDatabasePending] = useState(false);
+  const clearDatabasePendingRef = useRef(false);
   const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);
   const [releasePublishingOpen, setReleasePublishingOpen] = useState(false);
   const [portRelayScreenOpen, setPortRelayScreenOpen] = useState(false);
@@ -12224,7 +12226,7 @@ export function App() {
     service.close();
   };
 
-  const handleRegistryDebugLogout = () => {
+  const handleRegistryLogout = () => {
     void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
     supervisorManagedCloseRef.current = true;
     clearReconnectTimer();
@@ -13815,10 +13817,24 @@ export function App() {
   };
 
   const clearDatabase = async () => {
-    void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
-    await registryAuthController.logout().catch(() => undefined);
-    await workspaceStore.resetDatabase();
-    window.location.reload();
+    if (clearDatabasePendingRef.current) {
+      return;
+    }
+    clearDatabasePendingRef.current = true;
+    setClearDatabasePending(true);
+    setConfirmError('');
+    try {
+      await androidSpeechRuntimeRef.current?.clearCredential();
+      await registryAuthController.logout();
+      await workspaceStore.resetDatabase();
+      window.location.reload();
+    } catch (clearError) {
+      const message = clearError instanceof Error ? clearError.message : String(clearError);
+      setConfirmError(message);
+    } finally {
+      clearDatabasePendingRef.current = false;
+      setClearDatabasePending(false);
+    }
   };
 
   const syncWorkspaceProject = async (
@@ -15694,7 +15710,7 @@ export function App() {
         clampCodeTabSize={clampCodeTabSize}
         logLevel={logLevel}
         setLogLevel={setLogLevel}
-        handleRegistryDebugLogout={handleRegistryDebugLogout}
+        handleRegistryLogout={handleRegistryLogout}
       />
     </React.Suspense>
   );
@@ -20627,9 +20643,11 @@ export function App() {
         action: skillConfirmTarget.kind,
       })
     : '';
-  const confirmBusy = archiveTarget
-    ? chatArchivingSessionId === archiveTarget.sessionId
-    : archiveBatchTarget
+  const confirmBusy = confirmTarget?.kind === 'clearDatabase'
+    ? clearDatabasePending
+    : archiveTarget
+      ? chatArchivingSessionId === archiveTarget.sessionId
+      : archiveBatchTarget
       ? !!archiveBatchProgress && archiveBatchProgress.completed < archiveBatchProgress.total
       : restoreArchivedTarget
         ? archivedRestoringSessionId === buildChatRuntimeKey(restoreArchivedTarget.projectId, restoreArchivedTarget.sessionId)

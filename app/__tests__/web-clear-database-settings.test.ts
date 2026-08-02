@@ -45,6 +45,21 @@ describe('web clear database settings', () => {
     expect(appDialogsTsx).not.toContain('Settings will be preserved.');
   });
 
+  test('keeps the destructive action single-flight and surfaces failures in the confirm dialog', () => {
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(mainTsx).toContain('const [clearDatabasePending, setClearDatabasePending] = useState(false);');
+    expect(mainTsx).toContain('const clearDatabasePendingRef = useRef(false);');
+    expect(mainTsx).toContain('if (clearDatabasePendingRef.current)');
+    expect(mainTsx).toContain('setConfirmError(message);');
+    expect(mainTsx).toMatch(/confirmTarget\?\.kind === 'clearDatabase'[\s\S]{0,160}clearDatabasePending/);
+    expect(mainTsx).not.toContain('registryAuthController.logout().catch(() => undefined)');
+    expect(mainTsx).toContain('await androidSpeechRuntimeRef.current?.clearCredential();');
+  });
+
   test('drops the whole IndexedDB and resets in-memory workspace state', () => {
     const workspaceStore = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
@@ -60,8 +75,27 @@ describe('web clear database settings', () => {
     expect(workspacePersistence).toContain('async resetDatabase(): Promise<void>');
     expect(workspacePersistence).toContain('indexedDB.deleteDatabase(WORKSPACE_DB_NAME)');
     expect(workspacePersistence).toContain('db?.close();');
+    expect(workspacePersistence).toContain('db.onversionchange = () => {');
+    expect(workspacePersistence).toContain('this.invalidated = true;');
     expect(workspacePersistence).not.toContain('clearCache(): void {');
-    expect(workspacePersistence).not.toContain('messageViewerEnabled');
-    expect(workspacePersistence).not.toContain('disableFileCache');
+    expect(workspacePersistence).not.toContain('messageViewerEnabled: boolean;');
+    expect(workspacePersistence).not.toContain("messageViewerEnabled: 'messageViewerEnabled'");
+    expect(workspacePersistence).not.toContain('disableFileCache: boolean;');
+    expect(workspacePersistence).not.toContain("disableFileCache: 'disableFileCache'");
+  });
+
+  test('removes registry-debug naming from the remaining logout action', () => {
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+    const settingsRootTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'),
+      'utf8',
+    );
+
+    expect(mainTsx).not.toContain('handleRegistryDebugLogout');
+    expect(settingsRootTsx).not.toContain('handleRegistryDebugLogout');
+    expect(mainTsx).toContain('handleRegistryLogout={handleRegistryLogout}');
   });
 });

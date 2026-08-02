@@ -19,6 +19,7 @@ class MemoryWorkspaceDatabase {
   private readonly stores = new Map<string, unknown[]>();
   private readonly mutationLog: DatabaseMutation[][] = [];
   private readonly mutationFailures: unknown[] = [];
+  private readonly resetFailures: unknown[] = [];
   private readonly mutationWaiters = new Set<{count: number; resolve: () => void}>();
 
   constructor(seed: Record<string, unknown[]> = {}) {
@@ -77,6 +78,8 @@ class MemoryWorkspaceDatabase {
   }
 
   async resetDatabase(): Promise<void> {
+    const failure = this.resetFailures.shift();
+    if (failure) throw failure;
     this.stores.clear();
     this.mutationLog.push([{storeName: '*', clear: true}]);
     for (const waiter of [...this.mutationWaiters]) {
@@ -108,6 +111,10 @@ class MemoryWorkspaceDatabase {
 
   failNextMutation(error: unknown): void {
     this.mutationFailures.push(error);
+  }
+
+  failNextReset(error: unknown): void {
+    this.resetFailures.push(error);
   }
 
   clearedStores(): string[] {
@@ -162,6 +169,25 @@ describe('workspace persistence safety', () => {
     expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBeUndefined();
     expect(rowValue(db.rows('wm_global_kv'), 'speechSettings')).toBeUndefined();
     expect(rowValue(db.rows('wm_global_kv'), 'ttsSettings')).toBeUndefined();
+  });
+
+  test('deletes removed settings rows at startup without disabling the active file cache', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase({
+      wm_global_kv: [
+        {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
+        {k: 'messageViewerEnabled', v: JSON.stringify(true), updatedAt: now},
+        {k: 'disableFileCache', v: JSON.stringify(true), updatedAt: now},
+      ],
+      wm_file_cache: [{k: 'fc:p1:dir:.', hash: 'hash', v: '[]', updatedAt: now}],
+    });
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+
+    const globalKeys = db.rows<Array<{k: string}>[number]>('wm_global_kv').map(row => row.k);
+    expect(globalKeys).not.toContain('messageViewerEnabled');
+    expect(globalKeys).not.toContain('disableFileCache');
+    expect(repository.getCachedFile('p1', 'dir', '.')).toMatchObject({hash: 'hash', value: '[]'});
   });
 
   test('evicts expired entries first and then the least recently used entries', () => {
@@ -463,6 +489,22 @@ describe('workspace persistence safety', () => {
     expect(db.rows('wm_chat_session_index')).toEqual([]);
     expect(db.rows('wm_chat_session_content')).toEqual([]);
     expect(db.rows('wm_file_cache')).toEqual([]);
+  });
+
+  test('resetDatabase preserves in-memory state when deleting the database fails', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
+      wm_file_cache: [{k: 'fc:p1:dir:.', hash: 'hash', v: '[]', updatedAt: now}],
+    }));
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.failNextReset(new Error('delete workspace db blocked'));
+
+    await expect(repository.resetDatabase()).rejects.toThrow('delete workspace db blocked');
+
+    expect(repository.getGlobalState()).toMatchObject({themeMode: 'light'});
+    expect(repository.getCachedFile('p1', 'dir', '.')).toMatchObject({hash: 'hash', value: '[]'});
+    expect(db.rows('wm_file_cache')).toHaveLength(1);
   });
 
   test('reports one quota error through the store and replays it to late subscribers', async () => {
