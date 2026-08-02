@@ -2793,6 +2793,16 @@ textarea,
   padding-left: 26px;
 }
 
+.settings-subsection-rows .secret-compact-row {
+  flex-wrap: nowrap;
+}
+
+.settings-subsection-rows .secret-compact-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  order: 0;
+}
+
 /* ---- database page danger zone ---- */
 .database-clear-card {
   border-color: color-mix(in srgb, var(--state-danger) 32%, var(--border-subtle));

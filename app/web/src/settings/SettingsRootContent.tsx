@@ -223,15 +223,6 @@ export function SettingsRootContent({
           <div className="settings-subsection">
             <div className="settings-subsection-title">Voice Input</div>
             <div className="settings-subsection-rows">
-              <SecretEditor
-                compact
-                label="Key"
-                configured={serverSettings.voiceInput.configured}
-                updatedAt={serverSettings.voiceInput.updatedAt}
-                busy={serverSettingsBusy}
-                onSet={value => updateServerSetting({section: 'voiceInput', field: 'key', action: 'set', value})}
-                onClear={() => updateServerSetting({section: 'voiceInput', field: 'key', action: 'clear'})}
-              />
               <SettingsControlRow
                 icon="bot"
                 label="Model"
@@ -254,20 +245,20 @@ export function SettingsRootContent({
                   </select>
                 )}
               />
+              <SecretEditor
+                compact
+                label="Key"
+                configured={serverSettings.voiceInput.configured}
+                updatedAt={serverSettings.voiceInput.updatedAt}
+                busy={serverSettingsBusy}
+                onSet={value => updateServerSetting({section: 'voiceInput', field: 'key', action: 'set', value})}
+                onClear={() => updateServerSetting({section: 'voiceInput', field: 'key', action: 'clear'})}
+              />
             </div>
           </div>
           <div className="settings-subsection">
             <div className="settings-subsection-title">Speech</div>
             <div className="settings-subsection-rows">
-              <SecretEditor
-                compact
-                label="Key"
-                configured={serverSettings.textToSpeech.configured}
-                updatedAt={serverSettings.textToSpeech.updatedAt}
-                busy={serverSettingsBusy}
-                onSet={value => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'set', value})}
-                onClear={() => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'clear'})}
-              />
               <SettingsControlRow
                 icon="bot"
                 label="Model"
@@ -288,6 +279,15 @@ export function SettingsRootContent({
                     ))}
                   </select>
                 )}
+              />
+              <SecretEditor
+                compact
+                label="Key"
+                configured={serverSettings.textToSpeech.configured}
+                updatedAt={serverSettings.textToSpeech.updatedAt}
+                busy={serverSettingsBusy}
+                onSet={value => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'set', value})}
+                onClear={() => updateServerSetting({section: 'textToSpeech', field: 'key', action: 'clear'})}
               />
               <SettingsControlRow
                 icon="userRound"

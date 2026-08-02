@@ -18,12 +18,16 @@ describe('server settings', () => {
     expect(speechGroupStart).toBeGreaterThan(voiceGroupStart);
     const voiceGroup = chatBlock.slice(voiceGroupStart, speechGroupStart);
     const speechGroup = chatBlock.slice(speechGroupStart);
-    expect(voiceGroup.indexOf('label="Key"')).toBeLessThan(voiceGroup.indexOf('label="Model"'));
-    expect(speechGroup.indexOf('label="Key"')).toBeLessThan(speechGroup.indexOf('label="Model"'));
-    expect(speechGroup.indexOf('label="Model"')).toBeLessThan(speechGroup.indexOf('label="Voice"'));
+    expect(voiceGroup.indexOf('label="Model"')).toBeLessThan(voiceGroup.indexOf('label="Key"'));
+    expect(speechGroup.indexOf('label="Model"')).toBeLessThan(speechGroup.indexOf('label="Key"'));
+    expect(speechGroup.indexOf('label="Key"')).toBeLessThan(speechGroup.indexOf('label="Voice"'));
     expect(voiceGroup).toMatch(/label="Key"[\s\S]*configured=\{serverSettings\.voiceInput\.configured\}/);
     expect(speechGroup).toMatch(/label="Key"[\s\S]*configured=\{serverSettings\.textToSpeech\.configured\}/);
     expect(chatBlock).not.toContain('DeepSeek');
+
+    const styles = fs.readFileSync(path.join(root, 'web/src/styles/settings.css'), 'utf8');
+    expect(styles).toMatch(/\.settings-subsection-rows \.secret-compact-row \{[\s\S]*flex-wrap: nowrap;/);
+    expect(styles).toMatch(/\.settings-subsection-rows \.secret-compact-input \{[\s\S]*min-width: 0;/);
   });
 
   test('renders set-only password editors and never binds a server secret value', () => {
