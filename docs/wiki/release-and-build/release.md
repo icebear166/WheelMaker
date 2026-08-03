@@ -139,6 +139,8 @@ Registry 只向受限 Hub 放行现有 `hub.state.refresh` 的 `wheelmakerUpdate
 
 状态写入 `~/.wheelmaker/staging/status.json`，更新租约写入 `lock.json`。主要状态包括 `queued`、`downloading`、`verifying`、`applying`、`restarting`、`succeeded` 和 `failed`。
 
+陈旧恢复：租约心跳超过 2 小时（`deploy-core.mjs` 的 `STALE_LEASE_MS`）视为卡死。更新器自身再次运行时可抢占陈旧租约；Hub 的 UpdateCommand 在查询或收到新更新请求时发现陈旧活跃 job，会写入 `failed`（`errorCode: updater_stalled`）并删除 `lock.json`，使 `canRequestUpdate` 恢复、新请求重新触发更新器。手工恢复等价于删除 `staging/lock.json` 与 `status.json`。
+
 目标机替换 `bin/` 和 `web/`，但不会清空或覆盖现有 `WheelMakerDesktop.exe`。Windows 平台包不再包含独立 Desktop updater；升级部署保留旧机器已有的 `desktop/update.exe`，全新安装不创建它。Desktop 主程序仍通过独立命令更新，不随每次 Hub/Web 部署更新。
 
 ## Windows Desktop 自更新边界
