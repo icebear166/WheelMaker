@@ -32,11 +32,11 @@ function planSnapshot(): ChatPlanSnapshot {
 }
 
 describe('ChatPlanSurface', () => {
-  test('renders Recent Sessions, Plan, and Monitor in one desktop-only left stack', () => {
+  test('renders Recent Sessions, Plan, Git, and Monitor in one desktop-only left stack', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stackStart = mainSource.indexOf('chat-edge-surface-stack');
-    const stackSource = stackStart >= 0 ? mainSource.slice(stackStart, stackStart + 2600) : '';
+    const stackSource = stackStart >= 0 ? mainSource.slice(stackStart, stackStart + 3800) : '';
 
     expect(stackStart).toBeGreaterThanOrEqual(0);
     expect(stackSource).toContain('showFloatingSessionPanel ? (');
@@ -44,6 +44,9 @@ describe('ChatPlanSurface', () => {
       stackSource.indexOf('<ChatPlanSurface'),
     );
     expect(stackSource.indexOf('<ChatPlanSurface')).toBeLessThan(
+      stackSource.indexOf('<GitStatusSurface'),
+    );
+    expect(stackSource.indexOf('<GitStatusSurface')).toBeLessThan(
       stackSource.indexOf('<MonitorSurface'),
     );
     expect(stackSource).toContain("showMonitor ? (");

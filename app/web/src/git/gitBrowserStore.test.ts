@@ -172,3 +172,20 @@ test('preserves known Git state while a project is offline', async () => {
     statusLoaded: true,
   });
 });
+
+test('keeps stale data and resolves when revision refresh fails', async () => {
+  const api = gateway({
+    getRev: jest.fn(async () => { throw new Error('offline'); }),
+  });
+  const store = new GitBrowserStore(api);
+  await store.syncProjects([project('p1')]);
+  await store.ensureStatus('p1');
+
+  await expect(store.refresh('p1')).resolves.toBeUndefined();
+
+  expect(store.project('p1')).toMatchObject({
+    available: true,
+    currentBranch: 'main',
+    statusLoaded: true,
+  });
+});

@@ -289,7 +289,8 @@ export class GitBrowserStore {
         if (!this.isCurrent(projectId, revisionOperation, generation)) return;
         const latest = this.project(projectId);
         this.setProject(projectId, {...latest, ...next});
-      });
+      })
+      .catch(() => undefined);
     await Promise.all([
       revision,
       this.ensureRefs(projectId, true),

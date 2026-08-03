@@ -1050,7 +1050,7 @@ git commit -m "feat(git): add desktop status card"
 - Modify: `app/__tests__/web-git-diff-startup-boundary.test.ts`
 - Modify: `app/web/src/styles/chat.css`
 
-- [ ] **Step 1: Write failing workspace integration assertions**
+- [x] **Step 1: Write failing workspace integration assertions**
 
 ```ts
 test('wires the shared store into Preview and desktop edge surfaces without restoring a top-level Git tab', () => {
@@ -1079,7 +1079,7 @@ test('keeps Git off mobile Floating Nav', () => {
 
 Add assertions for `gitProjectAvailable`, offline retention, history load only when `drawerMode === 'git'`, status load only for the desktop card, revision ingestion from `projects`, worktree Diff reload, Prompt Diff still using `UnifiedDiffPreview`, `gitdiff-parser` remaining dynamically loaded, and absence of `setInterval`/poll timers in the Git browser path.
 
-- [ ] **Step 2: Run the workspace integration/boundary tests and confirm failure**
+- [x] **Step 2: Run the workspace integration/boundary tests and confirm failure**
 
 ```powershell
 npm --prefix app test -- --runInBand __tests__/web-git-browser-workspace.test.tsx __tests__/web-workspace-tab-removal.test.ts __tests__/web-main-surface-boundary.test.ts __tests__/web-chat-plan-surface.test.tsx __tests__/web-git-diff-startup-boundary.test.ts
@@ -1087,7 +1087,7 @@ npm --prefix app test -- --runInBand __tests__/web-git-browser-workspace.test.ts
 
 Expected: FAIL because no components/store are wired and retired-boundary tests still ban all new Git UI modules/styles.
 
-- [ ] **Step 3: Instantiate one store and subscribe once**
+- [x] **Step 3: Instantiate one store and subscribe once**
 
 Create the gateway beside the existing module-level `service`. Implement `GitBrowserStore.subscribe` and `snapshot` as arrow properties so they are stable `useSyncExternalStore` callbacks:
 
@@ -1103,7 +1103,7 @@ const gitBrowserStore = new GitBrowserStore({
 
 Inside `App`, use `useSyncExternalStore` with stable bound callbacks, call `void gitBrowserStore.syncProjects(projects)` in an effect, and select two snapshots: Preview uses `previewWorkbench.activeProjectId`; the desktop card uses the current selected Chat/project ID. Do not add Git data to `WorkspacePersistence`.
 
-- [ ] **Step 4: Wire lazy history/status loads and manual actions**
+- [x] **Step 4: Wire lazy history/status loads and manual actions**
 
 Use effects with explicit visibility:
 
@@ -1122,7 +1122,7 @@ useEffect(() => {
 
 `refresh` calls store refresh; branch selection, commit expansion, and load more call their store methods. The Git entry exists when `available` is true even if `online` is false; disable requests and keep stale content while offline. Hide both entry points when `available` is false.
 
-- [ ] **Step 5: Implement Git Diff open/load/reload handlers**
+- [x] **Step 5: Implement Git Diff open/load/reload handlers**
 
 Open one tab from both components with:
 
@@ -1160,7 +1160,7 @@ Bind each host with its own project ID:
 
 Add `loadGitDiffPreviewTab(tab)` and call it from the existing restored-active-tab loader. It must use `beginPreviewTabLoad` and `updatePreviewTabAfterLoad`, read commit/worktree data through the explicit project service methods, and fill `diff`, `isBinary`, `truncated`, `loading`, `error`, and `loadedWorktreeRev`. A worktree tab reloads only when it is active and its `loadedWorktreeRev !== projectGitSnapshot.worktreeRev`; a commit tab with populated Diff never reloads because SHA content is stable. Request IDs must prevent a late load from overwriting a reopened/reloaded tab.
 
-- [ ] **Step 6: Render the dedicated Git Diff tab with the shared viewer**
+- [x] **Step 6: Render the dedicated Git Diff tab with the shared viewer**
 
 Add `git-diff` to `previewWorkbenchTabIcon`, `renderPreviewWorkbenchTabBody`, Preview search availability, desktop path actions, and rendered-tab caching. Render:
 
@@ -1182,17 +1182,17 @@ Add `git-diff` to `previewWorkbenchTabIcon`, `renderPreviewWorkbenchTabBody`, Pr
 />
 ```
 
-- [ ] **Step 7: Insert History and the desktop card in their exact hosts**
+- [x] **Step 7: Insert History and the desktop card in their exact hosts**
 
 Pass `GitHistoryPanel` as `gitDrawer` to `PreviewWorkbenchChrome`. Insert `GitStatusSurface` immediately after `ChatPlanSurface` and before `MonitorSurface`. Update `showChatEdgeSurfaces` so an available desktop Git project reserves the existing left edge-surface geometry even if Recent/Plan/Monitor are absent. Do not render `GitStatusSurface` outside `isWide && !archivedMode`, and do not change mobile navigation.
 
 Both `onFileOpen` bindings must leave `previewWorkbench.drawerMode` unchanged, so selecting a file switches Preview content while the Git drawer stays open.
 
-- [ ] **Step 8: Update retirement/design boundaries to distinguish old page from new browser**
+- [x] **Step 8: Update retirement/design boundaries to distinguish old page from new browser**
 
 Keep assertions banning `GitSurface`, `GitSidebar`, `type Tab = ... 'git'`, `tab === 'git'`, old `.git-sidebar`, and top-level navigation. Replace assertions banning any `git.css`/Git component with positive assertions for `GitHistoryPanel`, `GitStatusSurface`, and `git-diff` Preview tabs. Keep the parser lazy-load assertion unchanged.
 
-- [ ] **Step 9: Run the focused integration set and TypeScript**
+- [x] **Step 9: Run the focused integration set and TypeScript**
 
 ```powershell
 npm --prefix app test -- --runInBand __tests__/web-git-browser-workspace.test.tsx __tests__/web-workspace-tab-removal.test.ts __tests__/web-main-surface-boundary.test.ts __tests__/web-chat-plan-surface.test.tsx __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-preview-workbench-state.test.ts __tests__/web-preview-file-regressions.test.tsx __tests__/web-git-diff-startup-boundary.test.ts web/src/git/GitHistoryPanel.test.tsx web/src/git/GitStatusSurface.test.tsx
@@ -1201,7 +1201,7 @@ npm --prefix app run tsc:web
 
 Expected: all Jest suites PASS and TypeScript exits 0.
 
-- [ ] **Step 10: Commit the workspace integration**
+- [x] **Step 10: Commit the workspace integration**
 
 ```powershell
 git add app/web/src/app/WorkspaceApp.tsx app/web/src/preview/PreviewWorkbenchChrome.tsx app/web/src/styles/chat.css app/web/src/styles/git.css app/__tests__/web-git-browser-workspace.test.tsx app/__tests__/web-workspace-tab-removal.test.ts app/__tests__/web-main-surface-boundary.test.ts app/__tests__/web-chat-plan-surface.test.tsx app/__tests__/web-git-diff-startup-boundary.test.ts

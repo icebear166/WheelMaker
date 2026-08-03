@@ -21,6 +21,8 @@ describe('main surface boundaries', () => {
     expect(workspaceApp).toContain("} from '../shell/AppDialogs';");
     expect(workspaceApp).toContain("import { FileExplorerTree } from '../file/FileExplorerTree';");
     expect(workspaceApp).not.toContain("../git/GitSidebar");
+    expect(workspaceApp).toContain("from '../git/GitHistoryPanel';");
+    expect(workspaceApp).toContain("from '../git/GitStatusSurface';");
     expect(workspaceApp).toContain("import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
 
     expect(workspaceApp).not.toContain('const renderFileTree = (');

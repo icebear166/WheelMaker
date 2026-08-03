@@ -22,6 +22,7 @@ describe('web git diff startup boundary', () => {
     expect(mainTsx).not.toContain("require('gitdiff-parser')");
     expect(mainTsx).not.toContain('declare const require');
     expect(mainTsx).not.toContain('ShikiDiffPane');
+    expect(mainTsx).toContain('<UnifiedDiffPreview');
     expect(unifiedDiffTsx).toContain('<ShikiDiffPane');
     expect(shikiBlockTsx).toMatch(
       /import\(\s*\/\* webpackChunkName: "git-diff" \*\/\s*'\.\.\/git\/diffRows'\s*\)/,

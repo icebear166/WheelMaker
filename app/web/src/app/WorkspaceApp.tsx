@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, {useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore} from 'react';
 import {createPortal} from 'react-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import {resolveSessionsShortcutAction, resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
@@ -448,6 +448,9 @@ import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileVi
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {MobileUsageDialog} from '../usage/MobileUsageDialog';
 import {MonitorSurface} from '../usage/MonitorSurface';
+import {GitHistoryPanel} from '../git/GitHistoryPanel';
+import {GitStatusSurface} from '../git/GitStatusSurface';
+import {GitBrowserStore} from '../git/gitBrowserStore';
 import {UsageHistoryDialog, type UsageHistoryDialogState} from '../usage/UsageHistoryDialog';
 import {loadUsageHistoryFromSources} from '../usage/usageHistory';
 import {DeepSeekUsageDialog, type DeepSeekUsageDialogState} from '../usage/DeepSeekUsageDialog';
@@ -612,6 +615,8 @@ import {
   updatePreviewTabAfterLoad,
   type AttachmentPreviewTab,
   type FilePreviewTab,
+  type GitDiffFileMeta,
+  type GitDiffSource,
   type PreviewWorkbenchTab,
   type PreviewSearchMatch,
   type PromptDiffPreviewFile,
@@ -1067,6 +1072,13 @@ const registryClientName = isAndroidNativeSpeechHost()
     ? 'wheelmaker-desktop'
     : 'wheelmaker-web';
 const service = new RegistryWorkspaceService({clientName: registryClientName});
+const gitBrowserStore = new GitBrowserStore({
+  getRev: projectId => service.getProjectGitRev(projectId),
+  getRefs: projectId => service.listProjectGitBranches(projectId),
+  getLog: (projectId, options) => service.listProjectGitCommits(projectId, options),
+  getCommitFiles: (projectId, sha) => service.listProjectGitCommitFiles(projectId, sha),
+  getStatus: projectId => service.getProjectGitStatus(projectId),
+});
 scrubLegacyBrowserCredentials();
 const workspaceStore = new WorkspaceStore();
 const workspaceController = new WorkspaceController(service, workspaceStore);
@@ -3433,6 +3445,7 @@ export function App() {
   const chatFilePeekReadSeqRef = useRef(0);
   const chatAttachmentReadSeqRef = useRef(0);
   const chatPromptArtifactReadSeqRef = useRef(0);
+  const gitDiffReadSeqRef = useRef(0);
   const chatFilePeekHistoryActiveRef = useRef(false);
   const chatFilePeekResizeRef = useRef<DesktopSidebarResizeState | null>(null);
   const [chatFilePeekWidth, setChatFilePeekWidth] = useState(CHAT_FILE_PEEK_WIDTH_DEFAULT);
@@ -5417,6 +5430,45 @@ export function App() {
   );
   const visibleProjectItems = visibility.visibleProjects;
   const chatPreviewProjectId = selectedChatKey?.projectId || projectId || projectIdRef.current;
+  const gitBrowserSnapshot = useSyncExternalStore(
+    gitBrowserStore.subscribe,
+    gitBrowserStore.snapshot,
+    gitBrowserStore.snapshot,
+  );
+  const previewGitSnapshot = gitBrowserSnapshot[previewWorkbench.activeProjectId]
+    ?? gitBrowserStore.project(previewWorkbench.activeProjectId);
+  const desktopGitSnapshot = gitBrowserSnapshot[chatPreviewProjectId]
+    ?? gitBrowserStore.project(chatPreviewProjectId);
+
+  useEffect(() => {
+    void gitBrowserStore.syncProjects(projects);
+  }, [projects]);
+
+  useEffect(() => {
+    if (
+      previewWorkbench.drawerMode !== 'git'
+      || !previewGitSnapshot.available
+      || !previewGitSnapshot.online
+    ) return;
+    void gitBrowserStore.ensureHistory(previewGitSnapshot.projectId);
+    void gitBrowserStore.ensureStatus(previewGitSnapshot.projectId);
+  }, [
+    previewWorkbench.drawerMode,
+    previewGitSnapshot.projectId,
+    previewGitSnapshot.available,
+    previewGitSnapshot.online,
+  ]);
+
+  useEffect(() => {
+    if (!isWide || archivedMode || !desktopGitSnapshot.available || !desktopGitSnapshot.online) return;
+    void gitBrowserStore.ensureStatus(desktopGitSnapshot.projectId);
+  }, [
+    isWide,
+    archivedMode,
+    desktopGitSnapshot.projectId,
+    desktopGitSnapshot.available,
+    desktopGitSnapshot.online,
+  ]);
   const hiddenProjectItems = visibility.hiddenProjects;
   const hiddenProjectIdSet = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds]);
   useEffect(() => {
@@ -5649,7 +5701,12 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
-  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || showMonitor);
+  const showChatEdgeSurfaces = isWide && !archivedMode && (
+    showFloatingSessionPanel
+    || !!selectedChatPlan
+    || desktopGitSnapshot.available
+    || showMonitor
+  );
   const chatMainClassName = isWide
     ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
@@ -8302,6 +8359,31 @@ export function App() {
     }
   }, []);
 
+  const openGitDiffPreview = useCallback((
+    targetProjectId: string,
+    source: GitDiffSource,
+    file: GitDiffFileMeta,
+  ) => {
+    if (!targetProjectId) return;
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
+    const tabId = previewTabId({type: 'git-diff', source});
+    setPreviewWorkbench(current => {
+      const opened = openPreviewTab(current, {
+        type: 'git-diff',
+        projectId: targetProjectId,
+        title: file.path.split('/').pop() || file.path,
+        source,
+        file,
+      });
+      return updatePreviewTab(opened, targetProjectId, tabId, tab =>
+        tab.type === 'git-diff' && tab.error
+          ? {...tab, error: '', requestId: 0}
+          : tab,
+      );
+    });
+  }, []);
+
   const loadRestoredPreviewTab = useCallback(async (tab: PreviewWorkbenchTab) => {
     if (!connectedRef.current) {
       return;
@@ -8364,6 +8446,68 @@ export function App() {
         if (previewFileLoadControllersRef.current.get(loadKey) === controller) {
           previewFileLoadControllersRef.current.delete(loadKey);
         }
+      }
+      return;
+    }
+    if (tab.type === 'git-diff') {
+      const projectGitSnapshot = gitBrowserStore.project(tab.projectId);
+      if (!projectGitSnapshot.available || !projectGitSnapshot.online || tab.loading) {
+        return;
+      }
+      if (
+        tab.requestId > 0
+        && !tab.error
+        && (
+          tab.source.kind === 'commit'
+          || tab.loadedWorktreeRev === projectGitSnapshot.worktreeRev
+        )
+      ) {
+        return;
+      }
+      if (tab.error && tab.requestId > 0) {
+        return;
+      }
+      const requestSeq = gitDiffReadSeqRef.current + 1;
+      gitDiffReadSeqRef.current = requestSeq;
+      setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
+      try {
+        const result = tab.source.kind === 'commit'
+          ? await service.readProjectGitFileDiff(tab.projectId, tab.source.sha, tab.source.path)
+          : await service.readProjectWorkingTreeFileDiff(
+            tab.projectId,
+            tab.source.path,
+            tab.source.scope,
+          );
+        setPreviewWorkbench(current =>
+          updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
+            currentTab.type === 'git-diff'
+              ? {
+                ...currentTab,
+                file: {
+                  ...currentTab.file,
+                  diff: result.diff,
+                  expanded: true,
+                  isBinary: result.isBinary,
+                  truncated: result.truncated,
+                },
+                loadedWorktreeRev: projectGitSnapshot.worktreeRev,
+                loading: false,
+                error: '',
+              }
+              : currentTab,
+          ),
+        );
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        setPreviewWorkbench(current =>
+          failPreviewTabLoad(
+            current,
+            tab.projectId,
+            tab.id,
+            requestSeq,
+            `Failed to load Git diff: ${reason}`,
+          ),
+        );
       }
       return;
     }
@@ -8477,11 +8621,27 @@ export function App() {
       return;
     }
     const restoredActiveTab = activePreviewTab(previewWorkbench);
-    if (!restoredActiveTab) {
+    if (!restoredActiveTab || restoredActiveTab.type === 'git-diff') {
       return;
     }
     loadRestoredPreviewTab(restoredActiveTab).catch(() => undefined);
   }, [connected, loadRestoredPreviewTab, previewWorkbench]);
+
+  useEffect(() => {
+    const activeTab = activePreviewTab(previewWorkbench);
+    if (!connected || activeTab?.type !== 'git-diff') return;
+    const gitDiffNeedsLoad = activeTab.source.kind === 'commit'
+      ? activeTab.requestId === 0
+      : activeTab.source.kind === 'worktree'
+        && activeTab.loadedWorktreeRev !== previewGitSnapshot.worktreeRev;
+    if (!gitDiffNeedsLoad || activeTab.loading || activeTab.error) return;
+    void loadRestoredPreviewTab(activeTab);
+  }, [
+    connected,
+    loadRestoredPreviewTab,
+    previewGitSnapshot.worktreeRev,
+    previewWorkbench,
+  ]);
 
   const resolvePromptAttachmentThumbnail = useCallback((
     block: RegistrySessionContentBlock,
@@ -18119,6 +18279,14 @@ export function App() {
                 mode="desktop"
                 plan={selectedChatPlan}
               />
+              {desktopGitSnapshot.available ? (
+                <GitStatusSurface
+                  snapshot={desktopGitSnapshot}
+                  onRefresh={() => { void gitBrowserStore.refresh(desktopGitSnapshot.projectId); }}
+                  onRetry={() => { void gitBrowserStore.refresh(desktopGitSnapshot.projectId); }}
+                  onFileOpen={(source, file) => openGitDiffPreview(desktopGitSnapshot.projectId, source, file)}
+                />
+              ) : null}
               {showMonitor ? (
                 <MonitorSurface
                   usageSnapshot={visibleUsageSnapshot}
@@ -20125,6 +20293,25 @@ export function App() {
         />
       );
     }
+    if (tab.type === 'git-diff') {
+      return (
+        <UnifiedDiffPreview
+          files={[tab.file]}
+          activeFilePath={tab.file.path}
+          loading={tab.loading}
+          error={tab.error}
+          overviewLabel={`${tab.source.kind === 'commit' ? tab.source.sha.slice(0, 7) : tab.source.scope} · ${tab.file.path}`}
+          onToggleFile={() => undefined}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontFamily={codeFontFamily}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+        />
+      );
+    }
     if (tab.type === 'attachment') {
       return (
         <ChatAttachmentPreviewViewer
@@ -20344,6 +20531,17 @@ export function App() {
       </button>
     </>
   );
+  const previewGitHistoryDrawer = previewGitSnapshot.available ? (
+    <GitHistoryPanel
+      snapshot={previewGitSnapshot}
+      onSelectedRefsChange={refs => { void gitBrowserStore.setSelectedRefs(previewGitSnapshot.projectId, refs); }}
+      onToggleCommit={sha => { void gitBrowserStore.toggleCommit(previewGitSnapshot.projectId, sha); }}
+      onFileOpen={(source, file) => openGitDiffPreview(previewGitSnapshot.projectId, source, file)}
+      onRefresh={() => { void gitBrowserStore.refresh(previewGitSnapshot.projectId); }}
+      onLoadMore={() => { void gitBrowserStore.loadMore(previewGitSnapshot.projectId); }}
+      onRetry={() => { void gitBrowserStore.refresh(previewGitSnapshot.projectId); }}
+    />
+  ) : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchChrome
       mode={mode}
@@ -20352,7 +20550,7 @@ export function App() {
       drawerMode={previewWorkbench.drawerMode}
       fileDrawer={chatFilePreviewTreeContent}
       fileDrawerSearch={previewFileTreeSearch}
-      gitDrawer={null}
+      gitDrawer={previewGitHistoryDrawer}
       actions={renderPreviewWorkbenchActions()}
       actionsMenuOpen={previewWorkbenchActionsMenuOpen}
       onClose={closeChatFilePeekFromChrome}

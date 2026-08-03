@@ -40,6 +40,9 @@ describe('chat-only top-level workspace', () => {
     expect(workspaceApp).toContain('openChatFilePeek');
     expect(workspaceApp).toContain("from '../file/fileSearchResultTree'");
     expect(workspaceApp).toContain("from '../git/unifiedDiffFiles'");
+    expect(workspaceApp).toContain("from '../git/GitHistoryPanel'");
+    expect(workspaceApp).toContain("from '../git/GitStatusSurface'");
+    expect(workspaceApp).toContain("type === 'git-diff'");
   });
 
   test('keeps filesystem and Git registry APIs for later reuse', () => {
@@ -49,6 +52,8 @@ describe('chat-only top-level workspace', () => {
     expect(registryService).toContain('async listGitBranches(');
     expect(registryService).toContain('async readGitFileDiff(');
     expect(registryService).toContain('async readWorkingTreeFileDiff(');
+    expect(registryService).toContain('async listProjectGitCommits(');
+    expect(registryService).toContain('async readProjectGitFileDiff(');
   });
 
   test('removes retired Git page caches and migrates their IndexedDB stores away', () => {

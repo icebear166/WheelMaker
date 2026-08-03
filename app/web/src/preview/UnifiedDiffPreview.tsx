@@ -61,7 +61,7 @@ export function UnifiedDiffPreview({
   if (error) {
     return (
       <div className="chat-file-peek-error" role="alert">
-        <Icon name="circleX" />
+        <Icon name="x" />
         <span>{error}</span>
       </div>
     );

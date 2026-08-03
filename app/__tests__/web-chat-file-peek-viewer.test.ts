@@ -484,7 +484,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('aria-label="Toggle Git history"');
     expect(chromeTsx).toContain("onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')");
     expect(mainTsx).toContain('fileDrawer={chatFilePreviewTreeContent}');
-    expect(mainTsx).toContain('gitDrawer={null}');
+    expect(mainTsx).toContain('gitDrawer={previewGitHistoryDrawer}');
     expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
     expect(stylesCss).toContain('.preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel');
