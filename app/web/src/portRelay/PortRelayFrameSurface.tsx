@@ -42,7 +42,7 @@ export function PortRelayFrameSurface({
         </div>
       ) : null}
       <iframe
-        data-tooltip="Port Relay"
+        title="Port Relay"
         src={url}
         className="port-relay-frame"
         allow="clipboard-read; clipboard-write"

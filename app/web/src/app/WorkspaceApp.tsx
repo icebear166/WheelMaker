@@ -19590,7 +19590,7 @@ export function App() {
   ) : null;
   const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
     <iframe
-      data-tooltip="Port Relay site data cleanup"
+      title="Port Relay site data cleanup"
       src={portRelayClearSiteDataUrl}
       className="port-relay-clear-site-data-frame"
       aria-hidden="true"

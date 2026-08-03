@@ -143,7 +143,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('const [portRelayFrameReloadKey, setPortRelayFrameReloadKey] = useState(0);');
     expect(mainTsx).toContain('const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (');
     expect(mainTsx).toContain('className="port-relay-clear-site-data-frame"');
-    expect(mainTsx).toContain('data-tooltip="Port Relay site data cleanup"');
+    expect(mainTsx).toContain('title="Port Relay site data cleanup"');
     expect(mainTsx).toContain('{portRelayClearSiteDataFrame}');
     expect(mainTsx).toContain('key={`workbench:${activePortRelayPreview.id}:${activePortRelayPreview.reloadKey}:${portRelayFrameUrl}`}');
   });

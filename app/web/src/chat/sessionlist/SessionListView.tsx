@@ -110,7 +110,7 @@ export function SessionListView(props: SessionListViewProps) {
       <SessionRow
         key={`${projectId}:${recent ? 'recent' : mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
         title={title}
-        rowTitleAttr={recent ? title : undefined}
+        rowTitleAttr={title}
         agentLabel={agent ? props.agentLabel(agent) : undefined}
         agentClassName={agent ? props.sessionAgentClass(agent) : undefined}
         timeLabel={props.formatAge(session.updatedAt ?? '')}
