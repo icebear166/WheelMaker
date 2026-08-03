@@ -76,7 +76,7 @@ export function MonitorSurface({
           type="button"
           className="chat-function-action"
           aria-label="Hide monitor"
-          title="Hide monitor"
+          data-tooltip="Hide monitor"
           onClick={onRequestHide}
         >
           <SessionIcon name="eyeOff" />
@@ -85,7 +85,7 @@ export function MonitorSurface({
           type="button"
           className="chat-function-action"
           aria-label={detail ? 'Hide monitor details' : 'Show monitor details'}
-          title={detail ? 'Compact monitor' : 'Show monitor details'}
+          data-tooltip={detail ? 'Compact monitor' : 'Show monitor details'}
           onClick={() => setDetail(value => !value)}
         >
           <SessionIcon name={detail ? 'list' : 'layoutGrid'} />
@@ -94,7 +94,7 @@ export function MonitorSurface({
           type="button"
           className="chat-function-action"
           aria-label="Refresh monitor"
-          title={`${refreshing ? 'Refreshing monitor' : 'Refresh monitor'} · Limits: ${limitsFreshness} · IQ: ${iqFreshness}`}
+          data-tooltip={`${refreshing ? 'Refreshing monitor' : 'Refresh monitor'} · Limits: ${limitsFreshness} · IQ: ${iqFreshness}`}
           disabled={refreshDisabled}
           onClick={handleRefresh}
         >

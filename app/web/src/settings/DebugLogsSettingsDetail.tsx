@@ -95,7 +95,7 @@ export function DebugLogsSettingsDetail({
             <div
               key={record.id}
               className={`debug-log-line ${record.level}`}
-              title={formatAppDiagnosticRecordLine(record)}
+              data-tooltip={formatAppDiagnosticRecordLine(record)}
             >
               {formatAppDiagnosticRecordLine(record)}
             </div>

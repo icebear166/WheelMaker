@@ -39,7 +39,7 @@ export function RecentSessionsSection({
             type="button"
             className="wide-project-toggle"
             onClick={onToggleCollapsed}
-            title={collapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+            data-tooltip={collapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
             aria-expanded={!collapsed}
           >
             <span className="wide-project-folder-wrap">
@@ -52,7 +52,7 @@ export function RecentSessionsSection({
           <button
             type="button"
             className="wide-project-action-btn recent-sessions-collapse-btn"
-            title={collapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+            data-tooltip={collapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
             aria-label={collapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
             aria-expanded={!collapsed}
             onClick={onToggleCollapsed}
@@ -72,7 +72,7 @@ export function RecentSessionsSection({
             >
               <div className="recent-project-divider">
                 <SessionIcon name="folder" size={13} className="recent-project-divider-icon" />
-                <span className="recent-project-divider-name" title={group.projectName}>
+                <span className="recent-project-divider-name" data-tooltip={group.projectName}>
                   {group.projectName}
                 </span>
                 <span className={`wide-project-hub-tag recent-project-divider-hub ${group.hubVariantClass}`} style={group.hubAccentStyle}>
@@ -82,7 +82,7 @@ export function RecentSessionsSection({
                 <button
                   type="button"
                   className="recent-project-divider-create"
-                  title={`New session in ${group.projectName}`}
+                  data-tooltip={`New session in ${group.projectName}`}
                   aria-label={`New session in ${group.projectName}`}
                   onClick={event => onNewInProject(group.projectId, event)}
                 >

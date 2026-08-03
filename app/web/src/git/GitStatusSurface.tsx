@@ -41,7 +41,7 @@ export function GitStatusSurface({
   const changeLabel = `${total} ${total === 1 ? 'change' : 'changes'}`;
   const toolbar = (
     <>
-      <span className="git-status-summary" title={`${snapshot.currentBranch} · ${changeLabel}`}>
+      <span className="git-status-summary" data-tooltip={`${snapshot.currentBranch} · ${changeLabel}`}>
         <Icon name="gitBranch" />
         <span>{snapshot.currentBranch || 'Detached HEAD'} · {changeLabel}</span>
       </span>
@@ -49,7 +49,7 @@ export function GitStatusSurface({
         type="button"
         className="chat-function-action"
         aria-label="Refresh Git status"
-        title="Refresh Git status"
+        data-tooltip="Refresh Git status"
         disabled={!snapshot.online || snapshot.statusLoading}
         onClick={onRefresh}
       >
@@ -111,7 +111,7 @@ export function GitStatusSurface({
                         type="button"
                         className="git-status-file"
                         aria-label={`Open ${file.path} diff`}
-                        title={`${group.label} · ${file.path}`}
+                        data-tooltip={`${group.label} · ${file.path}`}
                         onClick={() => onFileOpen(
                           {kind: 'worktree', scope: group.scope, path: file.path},
                           meta,

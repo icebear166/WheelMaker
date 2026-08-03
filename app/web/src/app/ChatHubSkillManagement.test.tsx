@@ -79,7 +79,7 @@ test('aligns skill rows, opens details from the name, and keeps External beside 
   expect(managed.findAllByType('button').map(button => button.props['aria-label']))
     .toEqual(['View baseline-ui details', 'Update baseline-ui', 'Uninstall baseline-ui']);
   expect(managed.findByProps({className: 'chat-hub-skill-name'}).type).toBe('button');
-  expect(managed.findByProps({className: 'chat-hub-skill-name'}).props.title).toBe('baseline-ui');
+  expect(managed.findByProps({className: 'chat-hub-skill-name'}).props['data-tooltip']).toBe('baseline-ui');
 
   const external = renderer.root.findByProps({'data-skill-name': 'external-skill'});
   const externalNameCell = external.findByProps({className: 'chat-hub-skill-name-cell'});
@@ -161,7 +161,7 @@ test('shows non-blocking directory sync diagnostics on affected skill rows', asy
   });
 
   const diagnostic = renderer.root.findByProps({className: 'chat-hub-skill-sync'});
-  expect(diagnostic.props.title).toBe('.agents and .claude content differs');
+  expect(diagnostic.props['data-tooltip']).toBe('.agents and .claude content differs');
   expect(diagnostic.children.join('')).toContain('Content differs');
   expect(renderer.root.findByProps({'aria-label': 'Update scope'})).toBeTruthy();
 });

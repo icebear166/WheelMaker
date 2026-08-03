@@ -36,7 +36,7 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
             onClick={onToggleSlideOut}
             aria-expanded={!!slideOutOpen}
             aria-label={slideOutOpen ? 'Close all sessions' : 'Show all sessions'}
-            title={slideOutOpen ? 'Close all sessions' : 'Show all sessions'}
+            data-tooltip={slideOutOpen ? 'Close all sessions' : 'Show all sessions'}
           >
             <SessionIcon name={slideOutOpen ? 'panelLeftClose' : 'panelLeft'} />
           </button>
@@ -48,7 +48,7 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
             onClick={onTogglePin}
             aria-pressed={!!pinActive}
             aria-label={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
-            title={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
+            data-tooltip={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
           >
             <SessionIcon name="pin" />
           </button>

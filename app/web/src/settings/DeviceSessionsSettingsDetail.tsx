@@ -116,7 +116,7 @@ export function DeviceSessionsSettingsDetail({
         <section className="set-card device-session-card" key={session.deviceId}>
           <div className="set-card-head device-sessions-head">
             <Icon name="laptop" size={16} className="device-sessions-overview-icon" />
-            <span className="set-card-title device-session-name" title={session.deviceName}>
+            <span className="set-card-title device-session-name" data-tooltip={session.deviceName}>
               {session.deviceName}
             </span>
             {session.current ? (

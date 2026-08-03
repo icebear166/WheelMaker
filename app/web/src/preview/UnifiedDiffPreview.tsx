@@ -91,7 +91,7 @@ export function UnifiedDiffPreview({
               onClick={() => onToggleFile(file.path)}
               aria-expanded={file.expanded}
               aria-current={active || undefined}
-              title={file.path}
+              data-tooltip={file.path}
             >
               <Icon name={file.expanded ? 'chevronDown' : 'chevronRight'} />
               <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>

@@ -70,5 +70,5 @@ test('renders managed state, markdown, and supporting files in detail content', 
     .toEqual(['External']);
   expect(renderer.root.findByProps({className: 'skill-detail-markdown markdown-preview'}))
     .toBeTruthy();
-  expect(renderer.root.findByProps({title: 'references/a.md'})).toBeTruthy();
+  expect(renderer.root.findByProps({'data-tooltip': 'references/a.md'})).toBeTruthy();
 });

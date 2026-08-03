@@ -78,7 +78,7 @@ export function MobileUsageDialog({
               type="button"
               className="usage-mobile-action"
               aria-label="Refresh monitor"
-              title="Refresh monitor"
+              data-tooltip="Refresh monitor"
               disabled={refreshDisabled}
               onClick={handleRefresh}
             >
@@ -88,7 +88,7 @@ export function MobileUsageDialog({
               type="button"
               className="usage-mobile-action"
               aria-label="Close monitor"
-              title="Close monitor"
+              data-tooltip="Close monitor"
               onClick={onClose}
             >
               <SessionIcon name="x" />

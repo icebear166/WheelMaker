@@ -229,7 +229,7 @@ export function SettingsRootContent({
                 control={(
                   <select
                     className="sidebar-setting-select"
-                    title="Doubao Streaming ASR 2.0"
+                    data-tooltip="Doubao Streaming ASR 2.0"
                     value={serverSettings.voiceInput.model}
                     disabled={serverSettingsBusy}
                     onChange={event => void updateServerSetting({
@@ -482,7 +482,7 @@ export function SettingsRootContent({
                 type="button"
                 className="settings-row-nav-btn"
                 aria-label="Open logs"
-                title="Open logs"
+                data-tooltip="Open logs"
                 onClick={() => openSettingsDetail('debugLogs')}
               >
                 <Icon name="chevronRight" />

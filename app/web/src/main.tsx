@@ -13,13 +13,14 @@ import '@fontsource/ibm-plex-sans/latin-ext-600.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-ext-400.css';
 import { App, workspaceAppReady } from './app/WorkspaceApp';
+import { GlobalTooltip } from './common/Tooltip';
 import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';
 import './styles/index.css';
 
 requestPersistentBrowserStorageOnStartup();
 
 workspaceAppReady.then(() => {
-  createRoot(document.getElementById('root')!).render(<App />);
+  createRoot(document.getElementById('root')!).render(<><App /><GlobalTooltip /></>);
 }).catch(error => {
   const root = document.getElementById('root');
   if (!root) return;

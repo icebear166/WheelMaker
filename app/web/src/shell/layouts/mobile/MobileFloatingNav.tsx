@@ -42,7 +42,7 @@ export function MobileFloatingNav({
         data-current={current}
         onPointerDown={onButtonPointerDown}
         onClick={onCurrentSelect}
-        title="Open navigation"
+        data-tooltip="Open navigation"
         aria-label="Open navigation"
         aria-haspopup="menu"
         aria-expanded={false}
@@ -80,7 +80,7 @@ export function MobileFloatingNav({
               }
               onSelect(item.id);
             }}
-            title={isCurrent ? 'Close navigation' : item.label}
+            data-tooltip={isCurrent ? 'Close navigation' : item.label}
             aria-label={isCurrent ? `${item.label}, current surface` : item.label}
           >
             <Icon name={item.icon} size={20} />

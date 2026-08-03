@@ -58,7 +58,7 @@ export function SessionRow({
       <button
         type="button"
         className={`wide-session-row${recent ? ' recent-session-row' : ''}${selected ? ' selected' : ''}`}
-        title={rowTitleAttr}
+        data-tooltip={rowTitleAttr}
         {...gestureHandlers}
         onClick={onClick}
       >
@@ -74,14 +74,14 @@ export function SessionRow({
           <span className={`wide-session-agent-tag ${agentClassName ?? ''}`}>{agentLabel}</span>
         ) : null}
         {!pinned ? (
-          <span className="wide-session-time compact-age" title={timeTitle ?? ''}>{timeLabel}</span>
+          <span className="wide-session-time compact-age" data-tooltip={timeTitle ?? ''}>{timeLabel}</span>
         ) : null}
       </button>
       {pinned && onUnpin ? (
         <button
           type="button"
           className="wide-session-pin-btn"
-          title="Unpin session"
+          data-tooltip="Unpin session"
           aria-label={unpinLabel ?? `Unpin session ${title}`}
           aria-pressed={true}
           disabled={pinning}
@@ -139,14 +139,14 @@ export function DraftSessionRow({
       <button
         type="button"
         className={`wide-session-row draft-session-row${statusClassName ? ` ${statusClassName}` : ''}${selected ? ' selected' : ''}`}
-        title={failed ? errorMessage : title}
+        data-tooltip={failed ? errorMessage : title}
         onClick={onClick}
       >
         <span className="wide-session-title">{title}</span>
         {agentLabel ? (
           <span className={`wide-session-agent-tag ${agentClassName ?? ''}`}>{agentLabel}</span>
         ) : null}
-        <span className="wide-session-time" title={failed ? errorMessage : createdAtTitle ?? ''}>
+        <span className="wide-session-time" data-tooltip={failed ? errorMessage : createdAtTitle ?? ''}>
           {statusLabel}
         </span>
       </button>
@@ -154,7 +154,7 @@ export function DraftSessionRow({
         <button
           type="button"
           className="draft-session-dismiss"
-          title="Dismiss"
+          data-tooltip="Dismiss"
           aria-label="Dismiss draft session"
           onClick={onDismiss}
         >

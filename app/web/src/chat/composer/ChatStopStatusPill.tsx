@@ -124,7 +124,7 @@ export function ChatStopStatusPill({cancelling, onCancel, armOnTap = false}: Cha
       disabled={cancelling}
       aria-label={cancelling ? 'Cancelling prompt' : 'Stop generating'}
       aria-busy={cancelling}
-      title={cancelling ? 'Cancelling prompt' : 'Stop generating'}
+      data-tooltip={cancelling ? 'Cancelling prompt' : 'Stop generating'}
     >
       <span className="chat-stop-pill-stage" aria-hidden="true">
         <ChatPedalingBikeGlyph />

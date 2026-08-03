@@ -126,7 +126,7 @@ describe('web session search UI wiring', () => {
     expect(main).not.toContain(') : row.result.source === \'prompt\' ? (');
     expect(main).not.toContain('session-search-result-meta');
     expect(main).not.toContain("row.result.source !== 'title'");
-    expect(main).toContain('title={title}');
+    expect(main).toContain('data-tooltip={title}');
 
     const hubButtonBlock = (styles.match(/\.chat-hub-summary-button \{[\s\S]*?\n\}/g) ?? [])
       .find(block => block.includes('height: 24px;')) ?? '';

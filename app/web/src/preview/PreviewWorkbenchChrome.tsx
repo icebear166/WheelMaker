@@ -87,7 +87,7 @@ export function PreviewWorkbenchChrome({
           className={`chat-preview-icon-button${searchActive ? ' active' : ''}`}
           onClick={onSearch}
           disabled={searchDisabled}
-          title="Search in preview"
+          data-tooltip="Search in preview"
           aria-label="Search in preview"
           aria-pressed={searchActive}
         >
@@ -100,7 +100,7 @@ export function PreviewWorkbenchChrome({
             type="button"
             className="chat-preview-icon-button"
             onClick={onActionsMenuToggle}
-            title="Preview actions"
+            data-tooltip="Preview actions"
             aria-label="Preview actions"
             aria-haspopup="menu"
             aria-expanded={actionsMenuOpen}
@@ -171,7 +171,7 @@ export function PreviewWorkbenchChrome({
           <div
             key={`preview-tab:${tab.projectId}:${tab.id}`}
             className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
-            title={tooltip}
+            data-tooltip={tooltip}
           >
             <button
               type="button"
@@ -188,7 +188,7 @@ export function PreviewWorkbenchChrome({
               className="chat-file-workbench-tab-close"
               onClick={() => onTabClose(tab.id)}
               aria-label={`Close ${tab.title}`}
-              title="Close"
+              data-tooltip="Close"
             >
               <Icon name="x" />
             </button>
@@ -217,7 +217,7 @@ export function PreviewWorkbenchChrome({
                 className={`preview-workbench-drawer-fab${drawerMode === 'files' ? ' active' : ''}`}
                 onClick={() => onDrawerModeChange(drawerMode === 'files' ? 'closed' : 'files')}
                 aria-label="Toggle files"
-                title="Toggle files"
+                data-tooltip="Toggle files"
                 aria-pressed={drawerMode === 'files'}
               >
                 <Icon name="files" />
@@ -229,7 +229,7 @@ export function PreviewWorkbenchChrome({
                 className={`preview-workbench-drawer-fab${drawerMode === 'git' ? ' active' : ''}`}
                 onClick={() => onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')}
                 aria-label="Toggle Git history"
-                title="Toggle Git history"
+                data-tooltip="Toggle Git history"
                 aria-pressed={drawerMode === 'git'}
               >
                 <Icon name="gitBranch" />
@@ -248,7 +248,7 @@ export function PreviewWorkbenchChrome({
           type="button"
           className="preview-workbench-mobile-port-relay-refresh"
           onClick={onMobilePortRelayRefresh}
-          title="Refresh relay page"
+          data-tooltip="Refresh relay page"
           aria-label="Refresh relay page"
         >
           <Icon name="refreshCw" />

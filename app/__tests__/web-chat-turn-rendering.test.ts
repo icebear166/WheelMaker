@@ -200,12 +200,12 @@ describe('web chat turn rendering', () => {
     expect(main).not.toContain('reconcileSteeredChatPrompts');
     expect(chatTurn).toContain('chat-prompt-status-queued');
     expect(chatTurn).toContain('Queued');
-    expect(chatTurn).toContain('title="Steer"');
+    expect(chatTurn).toContain('data-tooltip="Steer"');
     expect(chatTurn).toContain('aria-label="Steer"');
     expect(chatTurn).toContain('<ChatIcon name="cornerDownLeft"');
     expect(chatTurn).toContain('aria-label="Prioritize"');
     expect(chatTurn).toContain('<ChatIcon name="arrowUpToLine"');
-    expect(chatTurn).toContain('title="Cancel"');
+    expect(chatTurn).toContain('data-tooltip="Cancel"');
     expect(chatTurn).not.toContain('Send next');
     expect(chatTurn).toContain('chat-prompt-steered-label');
     expect(styles).toContain('.chat-prompt-status-queued');

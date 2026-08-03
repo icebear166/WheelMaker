@@ -43,7 +43,7 @@ export function ConnectionStatusSettingsDetail({
           <span className="settings-metadata-title">Registry</span>
           <span className="agent-package-status">{registryStatus.label}</span>
         </div>
-        <div className="settings-metadata-line settings-connection-value" title={registryStatus.detail}>
+        <div className="settings-metadata-line settings-connection-value" data-tooltip={registryStatus.detail}>
           {registryStatus.detail}
         </div>
       </div>
@@ -52,7 +52,7 @@ export function ConnectionStatusSettingsDetail({
           <span className="settings-metadata-title">Voice Input</span>
           <span className="agent-package-status">{voiceStatus.label}</span>
         </div>
-        <div className="settings-metadata-line settings-connection-value" title={voiceStatus.detail}>
+        <div className="settings-metadata-line settings-connection-value" data-tooltip={voiceStatus.detail}>
           {voiceStatus.detail}
         </div>
       </div>

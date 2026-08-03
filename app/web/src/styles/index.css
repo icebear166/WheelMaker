@@ -1,5 +1,6 @@
 @import './tokens.css';
 @import './base.css';
+@import './tooltip.css';
 @import './shell.css';
 @import './localDev.css';
 @import './settings.css';

@@ -616,7 +616,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('onActionsMenuToggle: () => void;');
     expect(chromeTsx).toContain('onActionsMenuClose: () => void;');
     expect(chromeTsx).toContain('className="preview-workbench-actions-menu"');
-    expect(chromeTsx).toContain('title="Preview actions"');
+    expect(chromeTsx).toContain('data-tooltip="Preview actions"');
     expect(chromeTsx).toContain('aria-haspopup="menu"');
 
     expect(mainTsx).toContain('const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);');

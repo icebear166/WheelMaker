@@ -92,7 +92,7 @@ export function SettingsScreen({
               className="mobile-settings-back"
               onClick={onBack}
               aria-label={backAriaLabel}
-              title="Back"
+              data-tooltip="Back"
             >
               <Icon name="arrowLeft" size={18} />
             </button>

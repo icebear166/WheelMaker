@@ -302,7 +302,7 @@ export function VoiceInputButton({
           ? 'Send message, hold for voice input'
           : 'Start voice input'
       }
-      title={
+      data-tooltip={
         recording
           ? 'Finish voice input'
           : hasSendableContent

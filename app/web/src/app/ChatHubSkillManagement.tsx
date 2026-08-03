@@ -239,19 +239,19 @@ export function ChatHubSkillScopeDetail({
                     type="button"
                     className="chat-hub-skill-name"
                     aria-label={`View ${skill.name} details`}
-                    title={skill.name}
+                    data-tooltip={skill.name}
                     disabled={loading || selectionMode}
                     onClick={() => actions.onDetail({...target, skillName: skill.name})}
                   >
                     {skill.name}
                   </button>
                   {!managed ? (
-                    <span className="chat-hub-skill-external" title="External skill">
+                    <span className="chat-hub-skill-external" data-tooltip="External skill">
                       <Icon name="link" />
                     </span>
                   ) : null}
                   {syncPresentation ? (
-                    <span className="chat-hub-skill-sync" title={syncPresentation.title}>
+                    <span className="chat-hub-skill-sync" data-tooltip={syncPresentation.title}>
                       {syncPresentation.label}
                     </span>
                   ) : null}

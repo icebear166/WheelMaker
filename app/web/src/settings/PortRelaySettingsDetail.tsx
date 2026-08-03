@@ -97,7 +97,7 @@ export function PortRelaySettingsDetail({
           <span className={`set-status ${statusVariant}`}>{portRelaySnapshot.status}</span>
           <span className="set-card-spacer" />
         </div>
-        <code className="port-relay-target-display set-mono" title={portRelayTargetDisplay}>
+        <code className="port-relay-target-display set-mono" data-tooltip={portRelayTargetDisplay}>
           {portRelayTargetDisplay}
         </code>
         {hasPendingListenPortChange ? (
@@ -204,14 +204,14 @@ export function PortRelaySettingsDetail({
                   }}
                   aria-label={`Use ${target.hubId}:${target.targetPort}`}
                 />
-                <span className="port-relay-target-hub" title={target.hubId}>{target.hubId}</span>
+                <span className="port-relay-target-hub" data-tooltip={target.hubId}>{target.hubId}</span>
                 <code className="port-relay-target-port set-mono">{target.targetPort}</code>
                 <button
                   type="button"
                   className="set-btn set-btn--icon set-btn--danger"
                   onClick={() => deletePortRelayTarget(target).catch(() => undefined)}
                   disabled={portRelayLoading}
-                  title="Delete target"
+                  data-tooltip="Delete target"
                   aria-label={`Delete ${target.hubId}:${target.targetPort}`}
                 >
                   <Icon name="x" size={14} />

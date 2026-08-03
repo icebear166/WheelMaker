@@ -356,7 +356,7 @@ export function WheelMakerAppMenu({
           className={`app-menu-trigger ${triggerClassName}`.trim()}
           aria-label="Open WheelMaker menu"
           aria-expanded={menuOpen}
-          title="WheelMaker menu"
+          data-tooltip="WheelMaker menu"
           onClick={toggleMenu}
         >
           <img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />

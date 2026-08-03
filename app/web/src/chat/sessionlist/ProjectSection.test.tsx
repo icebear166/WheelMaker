@@ -39,12 +39,12 @@ describe('ProjectSection', () => {
     const {tree} = await renderSection();
     expect(tree.root.findByProps({className: 'wide-project-name'}).children).toEqual(['WheelMaker']);
     expect(tree.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('wide-project-hub-tag'))).toHaveLength(1);
-    const addBtn = tree.root.findByProps({title: 'New session'});
+    const addBtn = tree.root.findByProps({'data-tooltip': 'New session'});
     expect(addBtn.props.className).toContain('sl-action-primary');
-    const resumeBtn = tree.root.findByProps({title: 'Resume session'});
+    const resumeBtn = tree.root.findByProps({'data-tooltip': 'Resume session'});
     expect(resumeBtn.props.className).toContain('sl-action-secondary');
     expect(resumeBtn.findByType('svg').props['data-icon-name']).toBe('import');
-    expect(tree.root.findByProps({title: 'Pin project to top'}).props.className).toContain('sl-action-secondary');
+    expect(tree.root.findByProps({'data-tooltip': 'Pin project to top'}).props.className).toContain('sl-action-secondary');
   });
 
   it('applies the hub accent to the folder icon as well as the hub tag', async () => {
@@ -62,6 +62,6 @@ describe('ProjectSection', () => {
 
     const pinned = await renderSection({pinned: true});
     expect(pinned.tree.root.findAll(node => node.type === 'svg' && typeof node.props.className === 'string' && node.props.className.includes('wide-project-pin-badge'))).toHaveLength(1);
-    expect(pinned.tree.root.findByProps({title: 'Unpin project'}).props.className).toContain('active');
+    expect(pinned.tree.root.findByProps({'data-tooltip': 'Unpin project'}).props.className).toContain('active');
   });
 });

@@ -79,7 +79,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
         type="button"
         className="terminal-toolbar-action"
         aria-label="Create terminal"
-        title="Create terminal"
+        data-tooltip="Create terminal"
         onClick={props.onCreate}
       >
         <Icon name="plus" />
@@ -90,7 +90,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
           type="button"
           className="terminal-toolbar-action terminal-fit"
           aria-label="Fit terminal to this screen"
-          title="Fit terminal to this screen"
+          data-tooltip="Fit terminal to this screen"
           onClick={props.onClaimResize}
         >
           <Icon name="maximize" />
@@ -103,7 +103,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
             type="button"
             className="workbench-chrome-icon-button"
             aria-label="Terminal actions"
-            title="Terminal actions"
+            data-tooltip="Terminal actions"
             aria-haspopup="menu"
             aria-expanded={actionsMenuOpen}
             onClick={() => setActionsMenuOpen(open => !open)}
@@ -165,7 +165,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
               aria-selected={key === props.activeKey}
               className="terminal-tab-open"
               onClick={() => props.onSelect(key)}
-              title={`${item.hubId} · ${item.initialCwd}`}
+              data-tooltip={`${item.hubId} · ${item.initialCwd}`}
             >
               <span className={`terminal-status ${unavailable ? 'unavailable' : item.status}`} aria-hidden="true" />
               <span className="terminal-tab-label">{label}</span>
@@ -174,7 +174,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
               type="button"
               className="terminal-tab-close"
               aria-label={`Close terminal ${label}`}
-              title={`Close terminal ${label}`}
+              data-tooltip={`Close terminal ${label}`}
               onClick={event => {
                 event.stopPropagation();
                 props.onRequestClose(item);

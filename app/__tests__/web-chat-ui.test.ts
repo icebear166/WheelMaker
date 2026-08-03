@@ -376,7 +376,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('attachmentDraftGeneration);');
     expect(mainTsx).toContain('if (chatSendDisabled) {');
     expect(mainTsx).toContain('disabled={selectedChatSubmitPending}');
-    expect(mainTsx).toContain('title="Attach file"');
+    expect(mainTsx).toContain('data-tooltip="Attach file"');
     expect(mainTsx).not.toContain('respondToChatPermission');
     expect(mainTsx).not.toContain("const [chatSessions] = useState(['General', 'WheelMaker App', 'Go Service']);");
     expect(stylesCss).toContain('.chat-composer');
@@ -435,7 +435,7 @@ describe('web chat integration', () => {
     expect(chatTurnTsx).toContain('onExportPromptDoneImage');
     expect(chatTurnTsx).toContain('onExportPromptDoneHtml');
     expect(chatTurnTsx).toContain('exportHtmlBusy');
-    expect(chatTurnTsx).toContain('title="Export response HTML"');
+    expect(chatTurnTsx).toContain('data-tooltip="Export response HTML"');
     expect(chatTurnTsx).toContain('aria-label="Export response markdown as HTML"');
     expect(chatTurnTsx).toContain('<ChatIcon name="fileCode" size={13} />');
     expect(mainTsx).toContain('exportPromptDoneMarkdownImageEvent(doneTurnIndex)');
@@ -626,7 +626,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('project-menu-state');
     expect(mainTsx).not.toContain("projectItem.online ? 'online' : 'offline'");
     expect(mainTsx).not.toContain('+{chatConfigOverflowOptions.length}');
-    expect(mainTsx).not.toContain("title={chatConfigOverflowOpen ? 'Hide config options' : 'Show config options'}");
+    expect(mainTsx).not.toContain("data-tooltip={chatConfigOverflowOpen ? 'Hide config options' : 'Show config options'}");
     expect(mainTsx).not.toContain('function chooseChatEntryText(previousText: string, nextText: string): string {');
     expect(mainTsx).not.toContain('text: chooseChatEntryText(previous.text, text),');
     expect(mainTsx).not.toContain('function groupChatMessagesByPrompt(');
@@ -1084,14 +1084,14 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("className={`chat-composer-frame${chatComposerDragActive ? ' drag-over' : ''}`}");
     expect(mainTsx).toContain('className="chat-composer-input-row"');
     expect(mainTsx).not.toContain('chatComposerStopTriggerClassName');
-    expect(mainTsx).toContain('title="Commands and skills"');
+    expect(mainTsx).toContain('data-tooltip="Commands and skills"');
     expect(mainTsx).toContain('aria-label="Open commands and skills"');
     expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).not.toContain('className="chat-composer-skill-trigger chat-slash-button"');
     expect(mainTsx).toContain('<SessionIcon name="terminal" />');
     expect(mainTsx).not.toContain('className="codicon codicon-terminal" aria-hidden="true"');
     expect(mainTsx).not.toContain('className="chat-composer-quick-trigger"');
-    expect(mainTsx).not.toContain('title="Quick replies"');
+    expect(mainTsx).not.toContain('data-tooltip="Quick replies"');
     expect(mainTsx).not.toContain('aria-label="Quick replies"');
     expect(mainTsx).not.toContain('className="chat-quick-reply-menu"');
     expect(mainTsx).not.toContain('className="chat-quick-reply-item"');
@@ -1113,7 +1113,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-tools"');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain('chat-composer-stop-slot${chatStopPillExiting');
-    expect(mainTsx).toContain("title={isWide ? 'Attach files' : 'Attach files or photos'}");
+    expect(mainTsx).toContain("data-tooltip={isWide ? 'Attach files' : 'Attach files or photos'}");
     expect(mainTsx).toContain('aria-haspopup={isWide ? undefined : \'menu\'}');
     expect(mainTsx).toContain('aria-expanded={isWide ? undefined : chatAttachmentTrayOpen}');
     expect(mainTsx).toContain('{!isWide && chatAttachmentTrayOpen ? (');
@@ -1131,7 +1131,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('chat-slash-symbol');
     expect(mainTsx).not.toContain('chat-at-symbol');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-mention-button"');
-    expect(mainTsx).toContain('title="Mention files"');
+    expect(mainTsx).toContain('data-tooltip="Mention files"');
     expect(mainTsx).toContain('aria-label="Mention files"');
     expect(mainTsx).not.toContain('className="chat-mention-symbol"');
     expect(mainTsx).toContain('chat-file-mention-menu${chatComposerMenuExiting');
@@ -1882,8 +1882,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('renderDatabaseSettingsDetail()');
     expect(settingsRootTsx).toContain('className="settings-section-title"');
     expect(settingsRootTsx).toContain('settings-detail-row');
-    expect(mainTsx).not.toContain('title="Token stats"');
-    expect(mainTsx).not.toContain('title="Agent info"');
+    expect(mainTsx).not.toContain('data-tooltip="Token stats"');
+    expect(mainTsx).not.toContain('data-tooltip="Agent info"');
     expect(mainTsx).not.toContain('className="chat-session-swipe-row');
 
     const mobileSheetStart = mainTsx.indexOf('const renderMobileChatSessionSheet = () => {');
@@ -2452,7 +2452,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-title-actions"');
     expect(mainTsx).toContain('{!mobile ? (\n          <>');
     expect(mainTsx).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
-    expect(mainTsx).toContain('title={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
+    expect(mainTsx).toContain('data-tooltip={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
     expect(mainTsx).toContain('aria-label={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
     expect(mainTsx).toContain('aria-pressed={chatPreviewOpen}');
     expect(mainTsx).toContain('onClick={toggleChatPreviewFromTitle}');
@@ -2625,7 +2625,7 @@ describe('web chat integration', () => {
     expect(promptAttachmentsTs).toContain('isProjectFileResourceLinkBlock');
     expect(mainTsx).not.toContain('className="chat-file-mention-chip"');
     expect(mainTsx).toContain('className={`chat-file-mention-option chat-file-mention-option-row${selected ? \' active\' : \'\'}`}');
-    expect(mainTsx).toContain('title={result.path}');
+    expect(mainTsx).toContain('data-tooltip={result.path}');
     expect(mainTsx).toContain('role="option"');
     expect(mainTsx).toContain('aria-selected={index === chatFileMentionActiveIndex}');
     expect(mainTsx).toContain('chatFileMentionActiveIndex');

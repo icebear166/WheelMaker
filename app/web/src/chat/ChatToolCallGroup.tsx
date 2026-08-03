@@ -82,7 +82,7 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
         aria-expanded={open}
         aria-label={`${open ? 'Collapse' : 'Expand'} ${count} tool ${count === 1 ? 'call' : 'calls'}`}
         onClick={() => setOpen(current => !current)}
-        title={open ? undefined : latest.title}
+        data-tooltip={open ? undefined : latest.title}
       >
         <ChatIcon name="chevronRight" size={11} className="chat-tool-group-chevron" />
         <ChatIcon name="wrench" size={11} className="chat-tool-group-summary-icon" />
@@ -107,7 +107,7 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
                 spin={toolCallRunning(call.status)}
                 className={`chat-tool-group-status ${toolStatusClass(call.status)}`}
               />
-              <span className="chat-tool-group-row-title" title={call.title}>{call.title}</span>
+              <span className="chat-tool-group-row-title" data-tooltip={call.title}>{call.title}</span>
               {call.kind ? <span className="chat-tool-group-kind">{call.kind}</span> : null}
             </div>
           ))}

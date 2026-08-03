@@ -504,7 +504,7 @@ function ChatHubFlickerRow({
                 className={selected ? 'selected' : ''}
                 aria-label={`Use Flicker Bridge ${mode.toUpperCase()}`}
                 aria-pressed={selected}
-                title={flickerStatus?.modeErrors[mode]}
+                data-tooltip={flickerStatus?.modeErrors[mode]}
                 disabled={busy || selected || !available}
                 onClick={() => selectSegment(mode)}
               >
@@ -558,7 +558,7 @@ function ChatHubSettingsSection({
         />
       ) : null}
       {flickerAvailable && inlineError ? (
-        <div className="chat-hub-settings-hint error" title={inlineError}>{inlineError}</div>
+        <div className="chat-hub-settings-hint error" data-tooltip={inlineError}>{inlineError}</div>
       ) : null}
       {configView?.loading && !config ? (
         <div className="chat-hub-settings-hint">Loading hub config…</div>
@@ -626,7 +626,7 @@ function ChatHubDisclosureButton({
       className={`chat-hub-action chat-hub-disclosure-action${expanded ? ' expanded' : ''}`}
       aria-expanded={expanded}
       aria-label={ariaLabel ?? `${label} details`}
-      title={label}
+      data-tooltip={label}
       onClick={onToggle}
     >
       <Icon name={pending ? 'loader' : icon} spin={pending} />
@@ -693,7 +693,7 @@ function ChatHubNpmDetail({
         return (
           <div key={pkg.packageName} className="chat-hub-npm-row">
             <span className="chat-hub-npm-name-cell">
-              <span className={capsuleClass} title={pkg.packageName}>
+              <span className={capsuleClass} data-tooltip={pkg.packageName}>
                 {pkg.displayName}
               </span>
               <span className="chat-hub-npm-versions">
@@ -873,7 +873,7 @@ function ChatHubProjectSkillsDetail({
           aria-haspopup="listbox"
           aria-expanded={projectPickerOpen}
           data-selected-project={selectedProject.projectName}
-          title={selectedProject.projectName}
+          data-tooltip={selectedProject.projectName}
           onClick={() => setProjectPickerOpen(current => !current)}
         >
           <span className="chat-hub-project-skill-name">{selectedProject.projectName}</span>
@@ -892,7 +892,7 @@ function ChatHubProjectSkillsDetail({
                   aria-selected={selected}
                   className={`chat-hub-project-skill-option${selected ? ' selected' : ''}`}
                   data-project-name={project.projectName}
-                  title={project.projectName}
+                  data-tooltip={project.projectName}
                   onClick={() => {
                     setSelectedProjectName(project.projectName);
                     setProjectPickerOpen(false);
@@ -952,7 +952,7 @@ function ChatHubScanDetail({
       </div>
       {ops.index.projects.map(project => (
         <div key={project.projectId} className="chat-hub-scan-row">
-          <span className="chat-hub-scan-name" title={project.projectId}>{project.name}</span>
+          <span className="chat-hub-scan-name" data-tooltip={project.projectId}>{project.name}</span>
           <span className={`chat-hub-scan-status status-${project.status}`}>{project.status}</span>
           <button
             type="button"
@@ -1225,7 +1225,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                         event.stopPropagation();
                         onToggleProject(projectItem.projectId, !visible);
                       }}
-                      title={projectItem.path || projectItem.projectId}
+                      data-tooltip={projectItem.path || projectItem.projectId}
                     >
                       <span className="chat-hub-project-check" aria-hidden="true">
                         {visible ? <Icon name="check" /> : null}

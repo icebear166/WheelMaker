@@ -71,7 +71,7 @@ function GitFileRow({
       type="button"
       className="git-file-row"
       aria-label={ariaLabel}
-      title={file.path}
+      data-tooltip={file.path}
       onClick={onClick}
     >
       <span className={`git-file-status status-${file.status.toLowerCase()}`}>{file.status}</span>
@@ -221,7 +221,7 @@ export function GitHistoryPanel({
           type="button"
           className="git-toolbar-button icon-only"
           aria-label="Refresh Git history"
-          title="Refresh Git history"
+          data-tooltip="Refresh Git history"
           disabled={!snapshot.online || snapshot.historyLoading || snapshot.statusLoading}
           onClick={onRefresh}
         >
@@ -302,8 +302,8 @@ export function GitHistoryPanel({
                         <span>{commit.author || 'Unknown author'}</span>
                         {commit.email ? <span>{commit.email}</span> : null}
                       </div>
-                      <time dateTime={commit.time} title={commit.time}>{time.absolute || commit.time}</time>
-                      <div className="git-full-sha" title={commit.sha}>{commit.sha}</div>
+                      <time dateTime={commit.time} data-tooltip={commit.time}>{time.absolute || commit.time}</time>
+                      <div className="git-full-sha" data-tooltip={commit.sha}>{commit.sha}</div>
                       <div className="git-ref-context">
                         {commit.sha === snapshot.headSha ? <span className="git-head-pill">Current HEAD</span> : null}
                         {snapshot.selectedRefs.map(ref => <span key={ref} className="git-ref-pill">Filter · {ref}</span>)}

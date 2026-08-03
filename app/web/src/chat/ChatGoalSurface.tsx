@@ -38,7 +38,7 @@ function GoalAction({
       type="button"
       className={`chat-goal-action${destructive ? ' destructive' : ''}`}
       aria-label={label}
-      title={label}
+      data-tooltip={label}
       onClick={onClick}
     >
       <Icon name={icon} size={14} />
@@ -173,7 +173,7 @@ export const ChatGoalSurface = React.memo(function ChatGoalSurface({
           className="chat-goal-compact-trigger"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse goal details' : 'Expand goal details'}
-          title={expanded ? 'Collapse goal details' : 'Expand goal details'}
+          data-tooltip={expanded ? 'Collapse goal details' : 'Expand goal details'}
           onClick={() => setExpanded(value => !value)}
         >
           <Icon name="target" size={16} />

@@ -61,7 +61,7 @@ function AccountRail({
   const balance = balanceSummary(account);
   const content = (
     <>
-      <span className="usage-provider-name" title={displayName}>{displayName}</span>
+      <span className="usage-provider-name" data-tooltip={displayName}>{displayName}</span>
       {limits.some(limit => limit !== null) ? (
         <span className="usage-provider-metrics">
           {limits.map((limit, index) => (
@@ -142,7 +142,7 @@ function AccountDetails({
           <span className="usage-limit-label">{shortLimitLabel(limit)}</span>
           <QuotaRail remainingPercent={limit.remainingPercent} />
           <strong>{Math.round(limit.remainingPercent)}%</strong>
-          <span className="usage-limit-reset" title={formatResetUTC(limit.resetsAt)}>
+          <span className="usage-limit-reset" data-tooltip={formatResetUTC(limit.resetsAt)}>
             {limit.resetsAt ? `Reset ${formatResetCountdown(limit.resetsAt)}` : 'No reset'}
           </span>
         </div>

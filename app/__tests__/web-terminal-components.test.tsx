@@ -715,7 +715,7 @@ describe('terminal components', () => {
     const root = renderer!.root;
     expect(root.findByProps({className: 'workbench-chrome-toolbar'})).toBeTruthy();
     expect(root.findByProps({className: 'workbench-chrome-title'}).children).toEqual(['p1']);
-    expect(root.findByProps({className: 'workbench-chrome-title'}).props.title).toBe('hub-a · C:\\src\\p1');
+    expect(root.findByProps({className: 'workbench-chrome-title'}).props['data-tooltip']).toBe('hub-a · C:\\src\\p1');
     expect(root.findByProps({role: 'tablist'}).props['aria-label']).toBe('Terminals');
     expect(root.findAllByProps({className: 'terminal-tab-hub'})).toHaveLength(0);
     const press = (label: string) => root.findByProps({'aria-label': label}).props.onClick();
@@ -751,7 +751,7 @@ describe('terminal components', () => {
     });
 
     const fit = renderer!.root.findByProps({'aria-label': 'Fit terminal to this screen'});
-    expect(fit.props.title).toBe('Fit terminal to this screen');
+    expect(fit.props['data-tooltip']).toBe('Fit terminal to this screen');
     expect(fit.findByProps({'data-icon-name': 'maximize'})).toBeTruthy();
     expect(fit.findByType('span').children).toEqual(['Fit']);
     expect(renderer!.root.findByProps({'aria-label': 'Create terminal'}).findByType('span').children).toEqual(['New']);

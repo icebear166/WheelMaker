@@ -43,7 +43,7 @@ function renderDetailMetaRow(label: string, value?: string) {
   return (
     <div className="settings-skills-detail-meta-row">
       <span>{label}</span>
-      <span title={value}>{value}</span>
+      <span data-tooltip={value}>{value}</span>
     </div>
   );
 }
@@ -52,7 +52,7 @@ function renderSupportingFile(file: RegistrySkillSupportingFile) {
   return (
     <div key={file.relativePath} className="settings-skills-detail-file">
       <Icon name={file.directory ? 'folder' : 'file'} size={13} />
-      <span title={file.relativePath}>{file.relativePath}</span>
+      <span data-tooltip={file.relativePath}>{file.relativePath}</span>
       <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
     </div>
   );

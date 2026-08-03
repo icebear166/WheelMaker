@@ -563,7 +563,7 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
   const externalActions = rows[1].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
   expect(rows[1].findAllByProps({className: 'chat-hub-action-slot'})).toHaveLength(2);
   const externalName = rows[1].findByProps({className: 'chat-hub-skill-name'});
-  expect(externalName.props.title).toBe('external-skill');
+  expect(externalName.props['data-tooltip']).toBe('external-skill');
   expect(externalName.props.disabled).not.toBe(true);
   expect(externalActions).toHaveLength(0);
   const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
@@ -801,7 +801,7 @@ test('Project Skills lists only online projects and keeps every action in the se
   const selectedBeta = renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'});
   expect(selectedBeta.props['aria-expanded']).toBe(false);
   expect(selectedBeta.props['data-selected-project']).toBe('beta-project');
-  expect(selectedBeta.props.title).toBe('beta-project');
+  expect(selectedBeta.props['data-tooltip']).toBe('beta-project');
   act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
   expect(callbacks.onRequestSkillInstall).toHaveBeenLastCalledWith({
     hubId: 'hub-a',
@@ -1045,7 +1045,7 @@ test('flicker segment disables unavailable modes and surfaces the inline error',
 
   expect(renderer.root.findByProps({'aria-label': 'Use Flicker Bridge V2'}).props).toMatchObject({
     disabled: true,
-    title: 'Node.js 22 is required',
+    'data-tooltip': 'Node.js 22 is required',
   });
   expect(renderer.root.findByProps({className: 'chat-hub-settings-hint error'}).children)
     .toEqual(['V2 unavailable · Node.js 22 is required']);

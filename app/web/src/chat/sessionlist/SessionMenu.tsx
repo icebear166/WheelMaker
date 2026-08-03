@@ -127,7 +127,7 @@ export function SessionMenu({
             className="session-menu-close"
             data-menu-close="true"
             aria-label="Close session actions"
-            title="Close"
+            data-tooltip="Close"
             onClick={onClose}
           >
             <SessionIcon name="x" />
@@ -136,7 +136,7 @@ export function SessionMenu({
       ) : sessionTitle ? (
         /* Desktop popover: the row the user clicked is the context, so the
            header shrinks to a quiet eyebrow with just the session title. */
-        <div className="session-menu-eyebrow" title={sessionTitle}>{sessionTitle}</div>
+        <div className="session-menu-eyebrow" data-tooltip={sessionTitle}>{sessionTitle}</div>
       ) : null}
       <div className="session-menu-body">
         {items.map(item =>
@@ -158,7 +158,7 @@ export function SessionMenu({
                     role="menuitemradio"
                     aria-label={`Mark ${option.color}`}
                     aria-checked={markColor === option.color}
-                    title={`${option.label} mark`}
+                    data-tooltip={`${option.label} mark`}
                     disabled={marking}
                     onClick={event => {
                       event.stopPropagation();
@@ -173,7 +173,7 @@ export function SessionMenu({
                   role="menuitemradio"
                   aria-label="Clear mark"
                   aria-checked={!markColor}
-                  title="Clear mark"
+                  data-tooltip="Clear mark"
                   disabled={marking}
                   onClick={event => {
                     event.stopPropagation();

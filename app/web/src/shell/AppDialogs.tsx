@@ -790,7 +790,7 @@ export function AppSessionStatusDialog({
                   type="button"
                   className="app-session-status-copy"
                   aria-label="Copy session ID"
-                  title="Copy session ID"
+                  data-tooltip="Copy session ID"
                   onClick={() => {
                     void writeTextToClipboard(sessionId)
                       .then(() => onCopied())

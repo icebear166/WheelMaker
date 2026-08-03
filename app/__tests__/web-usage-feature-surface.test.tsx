@@ -176,8 +176,8 @@ describe('MonitorSurface module', () => {
     let refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
     expect(refresh.props.disabled).toBe(false);
     expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('sl-icon-spin');
-    expect(refresh.props.title).toContain('Limits: Hub cache');
-    expect(refresh.props.title).toContain('IQ: 2026-07-22 09:30 UTC');
+    expect(refresh.props['data-tooltip']).toContain('Limits: Hub cache');
+    expect(refresh.props['data-tooltip']).toContain('IQ: 2026-07-22 09:30 UTC');
 
     act(() => view!.update(
       <MonitorSurface

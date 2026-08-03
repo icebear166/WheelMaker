@@ -11,7 +11,7 @@ describe('main surface boundaries', () => {
     expect(main).toContain("import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';");
     expect(main).toContain('requestPersistentBrowserStorageOnStartup();');
     expect(main).toContain('workspaceAppReady.then(() => {');
-    expect(main).toContain("createRoot(document.getElementById('root')!).render(<App />);");
+    expect(main).toContain("createRoot(document.getElementById('root')!).render(<><App /><GlobalTooltip /></>);");
     expect(main).not.toContain('AppConfirmDialog');
     expect(main).not.toContain('<ChatVirtuosoTurnList');
   });

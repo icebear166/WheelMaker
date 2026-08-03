@@ -96,7 +96,7 @@ function renderCompactTrigger({
       onClick={onClick}
       aria-expanded={expanded}
       aria-label={expanded ? 'Collapse current plan' : 'Expand current plan'}
-      title={expanded ? 'Collapse current plan' : 'Expand current plan'}
+      data-tooltip={expanded ? 'Collapse current plan' : 'Expand current plan'}
     >
       <SessionIcon
         name={activeEntry ? planStepIconName(activeEntry) : 'listChecks'}

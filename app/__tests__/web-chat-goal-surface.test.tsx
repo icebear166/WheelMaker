@@ -66,7 +66,7 @@ describe('ChatGoalSurface', () => {
     expect(renderer.root.findByProps({className: 'chat-goal-budget-value'}).children).toContain('Unlimited');
     expect(renderer.root.findAllByProps({'aria-label': 'Resume goal'})).toHaveLength(0);
     const pause = renderer.root.findByProps({'aria-label': 'Pause goal'});
-    expect(pause.props.title).toBe('Pause goal');
+    expect(pause.props['data-tooltip']).toBe('Pause goal');
     expect(renderer.root.findAllByProps({'data-icon-name': 'target'})).toHaveLength(1);
     expect(renderer.root.findAllByProps({'data-icon-name': 'pause'})).toHaveLength(1);
     const styles = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'), 'utf8');

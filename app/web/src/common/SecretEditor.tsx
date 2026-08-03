@@ -41,7 +41,7 @@ export function SecretEditor({label, configured, updatedAt, busy, compact = fals
           className={`secret-compact-status${configured ? ' configured' : ''}`}
           role="img"
           aria-label={configured ? 'Configured' : 'Not configured'}
-          title={configured ? `Configured${configuredAt ? ` · ${configuredAt}` : ''}` : 'Not configured'}
+          data-tooltip={configured ? `Configured${configuredAt ? ` · ${configuredAt}` : ''}` : 'Not configured'}
         >
           <Icon name={configured ? 'check' : 'x'} />
         </span>

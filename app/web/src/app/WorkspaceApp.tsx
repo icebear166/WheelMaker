@@ -2398,12 +2398,12 @@ const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
           type="button"
           className="chat-preview-icon-button"
           onClick={onClose}
-          title={mode === 'mobile' ? 'Back' : 'Close preview'}
+          data-tooltip={mode === 'mobile' ? 'Back' : 'Close preview'}
           aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
         >
           <ChatIcon name={mode === 'mobile' ? 'arrowLeft' : 'x'} />
         </button>
-        <div className="chat-preview-title" title="Preview">Preview</div>
+        <div className="chat-preview-title" data-tooltip="Preview">Preview</div>
       </div>
       <div className="chat-empty-preview-body">
         <ChatIcon name="appWindow" size={16} />
@@ -6850,7 +6850,7 @@ export function App() {
                     />
                   </span>
                   <span className="wide-project-title-group">
-                    <span className="wide-project-name" title={projectItem.name}>
+                    <span className="wide-project-name" data-tooltip={projectItem.name}>
                       {projectItem.name}
                     </span>
                     <span
@@ -6866,7 +6866,7 @@ export function App() {
                   <button
                     type="button"
                     className="wide-project-action-btn chat-hidden-project-restore-btn"
-                    title={`Show ${projectItem.name}`}
+                    data-tooltip={`Show ${projectItem.name}`}
                     aria-label={`Show hidden project ${projectItem.name}`}
                     onClick={() => {
                       setHiddenProjectIds(current =>
@@ -9456,7 +9456,7 @@ export function App() {
             ? 'Completed, click to view'
             : undefined;
     return (
-      <span className={`session-state-marker ${state}`} title={title}>
+      <span className={`session-state-marker ${state}`} data-tooltip={title}>
         {state === 'running' || state === 'completed-unviewed' || state === 'failed-unviewed' ? (
           <span className="session-state-dot" />
         ) : null}
@@ -9470,7 +9470,7 @@ export function App() {
       return (
         <span
           className="session-state-leading permission-pending"
-          title={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
+          data-tooltip={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
           aria-label={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
         >
           <SessionIcon name="help" />
@@ -9493,7 +9493,7 @@ export function App() {
           ? 'Failed, click to view'
           : 'Completed, click to view';
     return (
-      <span className={`session-state-leading ${state}`} title={title}>
+      <span className={`session-state-leading ${state}`} data-tooltip={title}>
         <span className="session-state-dot" />
       </span>
     );
@@ -14259,7 +14259,7 @@ export function App() {
             type="button"
             className="session-search-icon-btn chat-menu-icon-button"
             onClick={() => setSessionSearchOpen(true)}
-            title="Search sessions"
+            data-tooltip="Search sessions"
             aria-label="Search sessions"
           >
             <SessionIcon name="search" />
@@ -14288,7 +14288,7 @@ export function App() {
           <button
             type="submit"
             className="session-search-icon-btn"
-            title="Start search"
+            data-tooltip="Start search"
             aria-label="Start search"
           >
             <SessionIcon name="check" />
@@ -14296,7 +14296,7 @@ export function App() {
           <button
             type="button"
             className="session-search-icon-btn"
-            title="Close search"
+            data-tooltip="Close search"
             aria-label="Close search"
             onClick={() => {
               if (hasActiveSearch) {
@@ -14325,7 +14325,7 @@ export function App() {
           type="button"
           className="session-search-icon-btn chat-menu-icon-button"
           onClick={() => setSessionArchiveMenuOpen(value => !value)}
-          title="Archive"
+          data-tooltip="Archive"
           aria-label="Archive"
           aria-haspopup="menu"
           aria-expanded={sessionArchiveMenuOpen}
@@ -14663,7 +14663,7 @@ export function App() {
         <button
           type="button"
           className={`wide-session-row session-search-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
-          title={title}
+          data-tooltip={title}
           onClick={() => {
             handleSessionSearchResultClick(targetProjectId, row, {
               closeMobileDrawer: mobile,
@@ -14678,7 +14678,7 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          <span className="wide-session-time" title={row.session.updatedAt || ''}>
+          <span className="wide-session-time" data-tooltip={row.session.updatedAt || ''}>
             {formatCompactRelativeAge(row.session.updatedAt)}
           </span>
         </button>
@@ -14717,7 +14717,7 @@ export function App() {
                     />
                   </span>
                   <span className="wide-project-title-group">
-                    <span className="wide-project-name" title={section.project.name}>
+                    <span className="wide-project-name" data-tooltip={section.project.name}>
                       {section.project.name}
                     </span>
                     <span className={`wide-project-hub-tag ${projectHubVariant}`} style={hubAccentStyle(projectHub)}>
@@ -14777,7 +14777,7 @@ export function App() {
             type="button"
             className="session-archive-progress-dismiss"
             aria-label="Close archive status"
-            title="Close archive status"
+            data-tooltip="Close archive status"
             disabled={archiveBatchRunning}
             onClick={clearArchiveBatchStatus}
           >
@@ -14856,7 +14856,7 @@ export function App() {
                     />
                   </span>
                   <span className="wide-project-title-group">
-                    <span className="wide-project-name" title={section.project.name}>
+                    <span className="wide-project-name" data-tooltip={section.project.name}>
                       {section.project.name}
                     </span>
                     <span className={`wide-project-hub-tag ${projectHubVariant}`} style={hubAccentStyle(projectHub)}>
@@ -14884,7 +14884,7 @@ export function App() {
                       <button
                         type="button"
                         className={`wide-session-row archived-session-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
-                        title={resolveSessionDisplayTitle(session) || session.sessionId}
+                        data-tooltip={resolveSessionDisplayTitle(session) || session.sessionId}
                         onClick={() => {
                           loadArchivedSessionPreview(
                             section.project.projectId,
@@ -14903,7 +14903,7 @@ export function App() {
                             {displaySessionAgent}
                           </span>
                         ) : null}
-                        <span className="wide-session-time" title={session.archivedAt || session.updatedAt || ''}>
+                        <span className="wide-session-time" data-tooltip={session.archivedAt || session.updatedAt || ''}>
                           {formatCompactRelativeAge(session.archivedAt || session.updatedAt)}
                         </span>
                       </button>
@@ -15941,7 +15941,7 @@ export function App() {
               className="mobile-project-sheet-close"
               onClick={() => setMobileProjectActionMenu(null)}
               aria-label="Close"
-              title="Close"
+              data-tooltip="Close"
             >
               <SessionIcon name="x" />
             </button>
@@ -16325,7 +16325,7 @@ export function App() {
             type="button"
             className={`desktop-sidebar-resize-handle${desktopSidebarResizing ? ' resizing' : ''}`}
             aria-label="Resize sidebar"
-            title="Resize sidebar"
+            data-tooltip="Resize sidebar"
             onPointerDown={beginDesktopSidebarResize}
             onPointerMove={moveDesktopSidebarResize}
             onPointerUp={finishDesktopSidebarResize}
@@ -16362,7 +16362,7 @@ export function App() {
           <a
             className="chat-relay-link chat-relay-code-link"
             href={codeText.trim()}
-            title="Open through Port Relay"
+            data-tooltip="Open through Port Relay"
             onClick={event => {
               event.preventDefault();
               openChatPortRelayLink(relayLocalUrl).catch(() => undefined);
@@ -16438,7 +16438,7 @@ export function App() {
             href={fallbackHref}
             target={isFileLink || relayLocalUrl ? undefined : '_blank'}
             rel={isFileLink || relayLocalUrl ? undefined : 'noreferrer'}
-            title={
+            data-tooltip={
               isFileLink && jumpLine
                 ? `${targetFile.path}:${jumpLine}`
                 : relayLocalUrl
@@ -17756,12 +17756,12 @@ export function App() {
         setChatTitlePromptMenuOpen(false);
         setChatTitleProjectMenuOpen(open => !open);
       }}
-      title="Switch project"
+      data-tooltip="Switch project"
       aria-label="Switch project"
       aria-haspopup="menu"
       aria-expanded={chatTitleProjectMenuOpen}
     >
-      <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+      <span className="breadcrumb-project-name" data-tooltip={activeChatBreadcrumbProjectName}>
         {activeChatBreadcrumbProjectName}
       </span>
       <SessionIcon name="chevronDown" />
@@ -17773,7 +17773,7 @@ export function App() {
         ref={chatTitlePromptButtonRef}
         type="button"
         className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
-        title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+        data-tooltip={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
         aria-label="Show prompt history"
         aria-haspopup="menu"
         aria-expanded={chatTitlePromptMenuOpen}
@@ -17782,7 +17782,7 @@ export function App() {
       >
         <SessionIcon name="history" />
       </button>
-      <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
+      <span className="chat-title-session-text title-text breadcrumb-current" data-tooltip={activeChatBreadcrumbLabel}>
         {activeChatBreadcrumbLabel}
       </span>
     </div>
@@ -17798,12 +17798,12 @@ export function App() {
           setChatTitlePromptMenuOpen(false);
           setChatTitleProjectMenuOpen(open => !open);
         }}
-        title="Switch project"
+        data-tooltip="Switch project"
         aria-label="Switch project"
         aria-haspopup="menu"
         aria-expanded={chatTitleProjectMenuOpen}
       >
-        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+        <span className="breadcrumb-project-name" data-tooltip={activeChatBreadcrumbProjectName}>
           {activeChatBreadcrumbProjectName}
         </span>
         <SessionIcon name="chevronDown" />
@@ -17812,7 +17812,7 @@ export function App() {
         ref={chatTitlePromptButtonRef}
         type="button"
         className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? ' open' : ''}`}
-        title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+        data-tooltip={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
         aria-label="Show prompt history"
         aria-haspopup="menu"
         aria-expanded={chatTitlePromptMenuOpen}
@@ -17834,7 +17834,7 @@ export function App() {
           type="button"
           className={`chat-search-toggle${chatSearchOpen ? ' active' : ''}`}
           onClick={() => (chatSearchOpen ? closeChatSearch() : openChatSearch())}
-          title="Search current session (Ctrl+F)"
+          data-tooltip="Search current session (Ctrl+F)"
           aria-label="Search current session"
           aria-pressed={chatSearchOpen}
         >
@@ -17846,7 +17846,7 @@ export function App() {
               type="button"
               className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
               onClick={toggleTerminalFromTitle}
-              title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+              data-tooltip={terminalOpen ? 'Hide terminal' : 'Show terminal'}
               aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
               aria-pressed={terminalOpen}
             >
@@ -17856,7 +17856,7 @@ export function App() {
               type="button"
               className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
               onClick={toggleChatPreviewFromTitle}
-              title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+              data-tooltip={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
               aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
               aria-pressed={chatPreviewOpen}
             >
@@ -17922,7 +17922,7 @@ export function App() {
             type="button"
             className="chat-config-pill"
             disabled={updating || optionValues.length === 0}
-            title={optionLabel}
+            data-tooltip={optionLabel}
             aria-label={optionLabel}
             aria-haspopup="menu"
             aria-expanded={open}
@@ -18005,7 +18005,7 @@ export function App() {
             ref={chatCoreConfigTriggerRef}
             type="button"
             className="chat-core-config-trigger"
-            title={title}
+            data-tooltip={title}
             aria-label={title}
             aria-haspopup="menu"
             aria-expanded={chatCoreConfigPanelOpen}
@@ -18051,7 +18051,7 @@ export function App() {
                       const optionLabel = option.name || option.id;
                       return (
                         <div key={`more:${option.id}`} className="chat-config-overflow-group">
-                          <div className="chat-config-item-label" title={optionLabel}>
+                          <div className="chat-config-item-label" data-tooltip={optionLabel}>
                             {optionLabel}
                           </div>
                           <div className="chat-config-overflow-values">
@@ -18389,7 +18389,7 @@ export function App() {
                 type="button"
                 className="chat-scroll-bottom-button"
                 onClick={forceChatScrollToBottom}
-                title="Scroll to bottom"
+                data-tooltip="Scroll to bottom"
                 aria-label="Scroll to bottom"
               >
                 <span className="chat-scroll-bottom-glyph" aria-hidden="true">
@@ -18491,7 +18491,7 @@ export function App() {
                             type="button"
                             className="chat-attachment-retry"
                             onClick={() => retryChatAttachment(attachment.id)}
-                            title="Queue retry"
+                            data-tooltip="Queue retry"
                             aria-label="Queue retry"
                           >
                             <ChatIcon name="refreshCw" />
@@ -18508,7 +18508,7 @@ export function App() {
                             }, 140);
                           }}
                           disabled={pending}
-                          title={pending ? 'Uploading' : 'Remove attachment'}
+                          data-tooltip={pending ? 'Uploading' : 'Remove attachment'}
                           aria-label={pending ? 'Uploading' : 'Remove attachment'}
                         >
                           <ChatIcon name="x" />
@@ -18704,7 +18704,7 @@ export function App() {
                       className="chat-send-button"
                       onClick={() => sendChatMessage().catch(() => undefined)}
                       disabled={chatSendDisabled}
-                      title="Send"
+                      data-tooltip="Send"
                       aria-label="Send message"
                     >
                       <ChatIcon name="send" size={17} />
@@ -18741,7 +18741,7 @@ export function App() {
                           className={`chat-file-mention-option chat-file-mention-option-row${selected ? ' active' : ''}`}
                           role="option"
                           aria-selected={index === chatFileMentionActiveIndex}
-                          title={result.path}
+                          data-tooltip={result.path}
                           onMouseEnter={() => setChatFileMentionActiveIndex(index)}
                         >
                           <button
@@ -18759,7 +18759,7 @@ export function App() {
                             className="chat-file-mention-preview-button"
                             onMouseDown={event => event.preventDefault()}
                             onClick={() => openChatFileMentionPreview(result)}
-                            title={`Open ${name} preview`}
+                            data-tooltip={`Open ${name} preview`}
                             aria-label={`Open ${name} preview`}
                           >
                             <ChatIcon name="eye" />
@@ -18799,7 +18799,7 @@ export function App() {
                               aria-selected={selected}
                               aria-disabled={!option.enabled}
                               disabled={!option.enabled}
-                              title={option.enabled ? option.description : option.disabledReason}
+                              data-tooltip={option.enabled ? option.description : option.disabledReason}
                               onMouseEnter={() => setChatSlashActiveIndex(index)}
                               onMouseDown={event => event.preventDefault()}
                               onClick={() => applyChatSlashCommand(option)}
@@ -18846,7 +18846,7 @@ export function App() {
                     className="chat-tool-button chat-slash-button"
                     onPointerDown={event => event.preventDefault()}
                     onClick={openChatPromptMenu}
-                    title="Commands and skills"
+                    data-tooltip="Commands and skills"
                     aria-label="Open commands and skills"
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
@@ -18859,7 +18859,7 @@ export function App() {
                     className="chat-tool-button chat-file-mention-trigger-button"
                     onPointerDown={event => event.preventDefault()}
                     onClick={openChatFileMentionShortcut}
-                    title="Mention files"
+                    data-tooltip="Mention files"
                     aria-label="Mention files"
                     aria-haspopup="listbox"
                     aria-expanded={chatFileMentionMenuOpen}
@@ -18883,7 +18883,7 @@ export function App() {
                       }
                       toggleChatAttachmentTray();
                     }}
-                    title={isWide ? 'Attach files' : 'Attach files or photos'}
+                    data-tooltip={isWide ? 'Attach files' : 'Attach files or photos'}
                     aria-label={isWide ? 'Attach files' : 'Attach files or photos'}
                     aria-haspopup={isWide ? undefined : 'menu'}
                     aria-expanded={isWide ? undefined : chatAttachmentTrayOpen}
@@ -18918,7 +18918,7 @@ export function App() {
                           chatFileInputRef.current?.click();
                         }}
                         disabled={selectedChatSubmitPending}
-                        title="Attach file"
+                        data-tooltip="Attach file"
                         aria-label="Attach file"
                         role="menuitem"
                       >
@@ -18937,7 +18937,7 @@ export function App() {
                           chatImageInputRef.current?.click();
                         }}
                         disabled={selectedChatSubmitPending}
-                        title="Attach photo"
+                        data-tooltip="Attach photo"
                         aria-label="Attach photo"
                         role="menuitem"
                       >
@@ -19325,7 +19325,7 @@ export function App() {
             <span className="project-menu-name">{projectItem.name}</span>
             <span
               className="project-menu-path"
-              title={projectItem.path || ''}
+              data-tooltip={projectItem.path || ''}
             >
               {projectItem.path || '-'}
             </span>
@@ -19363,7 +19363,7 @@ export function App() {
           <div
             key={`chat-title-project:${projectItem.projectId}`}
             className={`chat-title-project-menu-item${selected ? ' selected' : ''}`}
-            title={projectItem.path || projectItem.projectId}
+            data-tooltip={projectItem.path || projectItem.projectId}
           >
             <button
               type="button"
@@ -19385,7 +19385,7 @@ export function App() {
               className="chat-title-project-menu-create"
               role="menuitem"
               aria-label={`New session in ${projectItem.name}`}
-              title="New session"
+              data-tooltip="New session"
               onPointerDown={event => event.stopPropagation()}
               onClick={event => {
                 event.stopPropagation();
@@ -19418,7 +19418,7 @@ export function App() {
           type="button"
           className="chat-title-prompt-menu-item"
           role="menuitem"
-          title={item.preview}
+          data-tooltip={item.preview}
           onClick={() => jumpToChatPromptTurn(item.turnIndex)}
         >
           <span className="chat-title-prompt-menu-label">{item.label}</span>
@@ -19516,7 +19516,7 @@ export function App() {
             className="mobile-project-sheet-close"
             onClick={() => setMobileRelayTargetSheet(null)}
             aria-label="Close"
-            title="Close"
+            data-tooltip="Close"
           >
             <SessionIcon name="x" />
           </button>
@@ -19623,7 +19623,7 @@ export function App() {
   ) : null;
   const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
     <iframe
-      title="Port Relay site data cleanup"
+      data-tooltip="Port Relay site data cleanup"
       src={portRelayClearSiteDataUrl}
       className="port-relay-clear-site-data-frame"
       aria-hidden="true"
@@ -19703,7 +19703,7 @@ export function App() {
               className="preview-workbench-file-search-node dir"
               style={{paddingLeft}}
               onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}
-              title={node.path}
+              data-tooltip={node.path}
               aria-expanded={!collapsed}
             >
               <Icon name={collapsed ? 'chevronRight' : 'chevronDown'} className="caret" />
@@ -19730,7 +19730,7 @@ export function App() {
             }
           }}
           onClick={() => openPreviewFileTreeSearchResult(node.result)}
-          title={node.path}
+          data-tooltip={node.path}
         >
           <span className="caret placeholder" aria-hidden="true" />
           <span
@@ -20395,7 +20395,7 @@ export function App() {
         className="chat-preview-icon-button"
         onClick={() => navigatePreviewSearchMatch(-1)}
         disabled={previewSearchMatches.length === 0}
-        title="Previous match"
+        data-tooltip="Previous match"
         aria-label="Previous match"
       >
         <Icon name="chevronUp" />
@@ -20405,7 +20405,7 @@ export function App() {
         className="chat-preview-icon-button"
         onClick={() => navigatePreviewSearchMatch(1)}
         disabled={previewSearchMatches.length === 0}
-        title="Next match"
+        data-tooltip="Next match"
         aria-label="Next match"
       >
         <Icon name="chevronDown" />
@@ -20414,7 +20414,7 @@ export function App() {
         type="button"
         className="chat-preview-icon-button"
         onClick={closePreviewSearch}
-        title="Close search"
+        data-tooltip="Close search"
         aria-label="Close search"
       >
         <Icon name="x" />
@@ -20476,7 +20476,7 @@ export function App() {
         className="chat-search-icon-button"
         onClick={() => navigateChatSearchMatch(-1)}
         disabled={chatSearchMatches.length === 0}
-        title="Previous match"
+        data-tooltip="Previous match"
         aria-label="Previous match"
       >
         <Icon name="chevronUp" />
@@ -20486,7 +20486,7 @@ export function App() {
         className="chat-search-icon-button"
         onClick={() => navigateChatSearchMatch(1)}
         disabled={chatSearchMatches.length === 0}
-        title="Next match"
+        data-tooltip="Next match"
         aria-label="Next match"
       >
         <Icon name="chevronDown" />
@@ -20495,7 +20495,7 @@ export function App() {
         type="button"
         className="chat-search-icon-button"
         onClick={closeChatSearch}
-        title="Close search"
+        data-tooltip="Close search"
         aria-label="Close search"
       >
         <Icon name="x" />
@@ -20519,7 +20519,7 @@ export function App() {
         className="preview-workbench-tree-tool-button"
         onClick={locateActivePreviewFileInTree}
         disabled={!chatFilePeek?.path || isAbsolutePreviewFilePath(chatFilePeek.path)}
-        title={chatFilePeek?.path ? 'Locate current file' : 'No current file to locate'}
+        data-tooltip={chatFilePeek?.path ? 'Locate current file' : 'No current file to locate'}
         aria-label="Locate current file"
       >
         <Icon name="locateFixed" />
@@ -20582,7 +20582,7 @@ export function App() {
         type="button"
         className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
         aria-label="Resize preview"
-        title="Resize preview"
+        data-tooltip="Resize preview"
         onPointerDown={beginChatFilePeekResize}
         onPointerMove={moveChatFilePeekResize}
         onPointerUp={finishChatFilePeekResize}
@@ -20689,7 +20689,7 @@ export function App() {
       <div className="quick-file-search-panel" onPointerDown={event => event.stopPropagation()}>
         <div className="quick-file-search-header">
           <Icon name="search" />
-          <span className="quick-file-search-project" title={quickFileProjectName}>
+          <span className="quick-file-search-project" data-tooltip={quickFileProjectName}>
             {quickFileProjectName}
           </span>
         </div>
@@ -20732,7 +20732,7 @@ export function App() {
                   aria-selected={selected}
                   onMouseEnter={() => setQuickFileActiveIndex(index)}
                   onClick={() => openQuickFileResult(result)}
-                  title={result.path}
+                  data-tooltip={result.path}
                 >
                   <Icon name="fileCode" />
                   <span className="quick-file-search-name">{name}</span>

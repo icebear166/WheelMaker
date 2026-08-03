@@ -44,7 +44,7 @@ export function CodeBlockFrame({ language, content, children }: CodeBlockFramePr
           type="button"
           className="code-frame-copy"
           aria-label={copied ? 'Copied' : 'Copy code'}
-          title={copied ? 'Copied' : 'Copy code'}
+          data-tooltip={copied ? 'Copied' : 'Copy code'}
           onClick={handleCopy}
         >
           <ChatIcon name={copied ? 'check' : 'copy'} size={14} />

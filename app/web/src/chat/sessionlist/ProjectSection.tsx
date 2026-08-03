@@ -47,7 +47,7 @@ export function ProjectSection({
           className="wide-project-toggle"
           {...projectGestureHandlers}
           onClick={onToggleCollapsed}
-          title={collapsed ? 'Expand project' : 'Collapse project'}
+          data-tooltip={collapsed ? 'Expand project' : 'Collapse project'}
           aria-expanded={!collapsed}
         >
           <span className="wide-project-folder-wrap">
@@ -62,7 +62,7 @@ export function ProjectSection({
             ) : null}
           </span>
           <span className="wide-project-title-group">
-            <span className="wide-project-name" title={name}>{name}</span>
+            <span className="wide-project-name" data-tooltip={name}>{name}</span>
             <span className={`wide-project-hub-tag ${hubVariantClass}`} style={hubAccentStyle}>
               <span className="wide-project-hub-dot" aria-hidden="true" />
               <span className="wide-project-hub-label">{hubLabel}</span>
@@ -73,7 +73,7 @@ export function ProjectSection({
           <button
             type="button"
             className="wide-project-action-btn sl-action-secondary"
-            title="Resume session"
+            data-tooltip="Resume session"
             aria-label={`Resume session in ${name}`}
             onPointerDown={event => event.stopPropagation()}
             onClick={onResume}
@@ -83,7 +83,7 @@ export function ProjectSection({
           <button
             type="button"
             className={`wide-project-action-btn wide-project-pin-btn sl-action-secondary${pinned ? ' active' : ''}`}
-            title={pinned ? 'Unpin project' : 'Pin project to top'}
+            data-tooltip={pinned ? 'Unpin project' : 'Pin project to top'}
             aria-label={pinned ? `Unpin project ${name}` : `Pin project ${name}`}
             aria-pressed={pinned}
             onPointerDown={event => event.stopPropagation()}
@@ -97,7 +97,7 @@ export function ProjectSection({
           <button
             type="button"
             className="wide-project-action-btn sl-action-primary"
-            title="New session"
+            data-tooltip="New session"
             aria-label={`New session in ${name}`}
             onPointerDown={event => event.stopPropagation()}
             onClick={onNew}

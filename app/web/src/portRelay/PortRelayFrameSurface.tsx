@@ -26,17 +26,17 @@ export function PortRelayFrameSurface({
             type="button"
             className="chat-preview-icon-button"
             onClick={onCloseChrome}
-            title={mode === 'mobile' ? 'Back' : 'Close preview'}
+            data-tooltip={mode === 'mobile' ? 'Back' : 'Close preview'}
             aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
           >
             <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} size={16} />
           </button>
-          <div className="chat-preview-title" title={url}>{url}</div>
+          <div className="chat-preview-title" data-tooltip={url}>{url}</div>
           <button
             type="button"
             className="chat-preview-icon-button"
             onClick={onOpenInBrowser}
-            title="Open relay page in browser"
+            data-tooltip="Open relay page in browser"
             aria-label="Open relay page in browser"
           >
             <Icon name="externalLink" size={16} />
@@ -44,7 +44,7 @@ export function PortRelayFrameSurface({
         </div>
       ) : null}
       <iframe
-        title="Port Relay"
+        data-tooltip="Port Relay"
         src={url}
         className="port-relay-frame"
         allow="clipboard-read; clipboard-write"

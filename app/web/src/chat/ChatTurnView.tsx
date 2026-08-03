@@ -217,7 +217,7 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
       >
         <ChatIcon name="chevronRight" size={11} className="chat-thought-chevron" />
         <ChatIcon name="lightbulb" size={11} className="chat-thought-icon" />
-        <span className="chat-thought-title" title={!open && finished ? firstLine : undefined}>
+        <span className="chat-thought-title" data-tooltip={!open && finished ? firstLine : undefined}>
           {title}
           {!finished ? <ChatActivityDots /> : null}
         </span>
@@ -281,7 +281,7 @@ function renderPromptInlineParts(
       <span
         key={`${part.type}:${index}:${part.type === 'file' ? part.path : part.command}`}
         className={`chat-prompt-inline-capsule ${part.type}`}
-        title={part.type === 'file' ? part.path : part.command}
+        data-tooltip={part.type === 'file' ? part.path : part.command}
       >
         <span className="chat-prompt-inline-capsule-icon" aria-hidden="true">
           <ChatIcon name={part.type === 'skill' ? 'wand' : 'file'} size={11} />
@@ -374,7 +374,7 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
     <button
       type="button"
       className={`chat-prompt-attachment-chip ${isPromptImageAttachmentContentBlock(block) ? 'image' : 'file'}`}
-      title={meta ? `${label} | ${meta}` : label}
+      data-tooltip={meta ? `${label} | ${meta}` : label}
       onClick={() => onOpenPromptAttachment?.(block, message)}
     >
       {imageAttachment && thumbnailSrc ? (
@@ -652,13 +652,13 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               </div>
             ) : null}
             {steered ? (
-              <span className="chat-prompt-steered-label" title="Inserted into the active turn">
+              <span className="chat-prompt-steered-label" data-tooltip="Inserted into the active turn">
                 <ChatIcon name="cornerDownLeft" size={11} />
                 <span>Steered</span>
               </span>
             ) : null}
             {promptStatus === 'responding' ? (
-              <span className="chat-prompt-status chat-prompt-status-responding" title="Responding">
+              <span className="chat-prompt-status chat-prompt-status-responding" data-tooltip="Responding">
                 <span className="chat-prompt-status-dots" aria-hidden="true">
                   <span>.</span>
                   <span>.</span>
@@ -667,14 +667,14 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               </span>
             ) : null}
             {promptStatus === 'confirming' ? (
-              <span className="chat-prompt-status chat-prompt-status-confirming" title="Sending">
+              <span className="chat-prompt-status chat-prompt-status-confirming" data-tooltip="Sending">
                 <ChatIcon name="refreshCw" size={12} />
               </span>
             ) : null}
             {queueStatus ? (
               <span
                 className={`chat-prompt-status chat-prompt-status-queued ${queueStatus}`}
-                title={queueStatusLabel}
+                data-tooltip={queueStatusLabel}
               >
                 {queueStatusLabel}
               </span>
@@ -685,7 +685,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                   <button
                     type="button"
                     className="chat-prompt-queue-action"
-                    title="Steer"
+                    data-tooltip="Steer"
                     aria-label="Steer"
                     onClick={queueActions.steer}
                   >
@@ -696,7 +696,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                   <button
                     type="button"
                     className="chat-prompt-queue-action"
-                    title="Next"
+                    data-tooltip="Next"
                     aria-label="Prioritize"
                     onClick={queueActions.prioritize}
                   >
@@ -707,7 +707,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                   <button
                     type="button"
                     className="chat-prompt-queue-action danger"
-                    title="Cancel"
+                    data-tooltip="Cancel"
                     aria-label="Cancel"
                     onClick={queueActions.cancel}
                   >
@@ -797,7 +797,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                     onClick={() => onOpenPromptArtifact?.(artifact, message)}
                     disabled={loading}
                     aria-busy={loading}
-                    title="Open full diff"
+                    data-tooltip="Open full diff"
                   >
                     <ChatIcon name={loading ? 'loader' : 'fileDiff'} spin={loading} />
                     <span>{promptArtifactCountLabel(artifact.fileCount || artifact.files?.length || 0)}</span>
@@ -813,7 +813,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                           onContextMenu={event =>
                             onOpenPromptArtifactFileContextMenu?.(artifact, message, file, event)
                           }
-                          title={file.path}
+                          data-tooltip={file.path}
                         >
                           <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
                             {file.status}
@@ -850,7 +850,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 type="button"
                 className="chat-prompt-action-button"
                 onClick={onRetryFailedPrompt}
-                title="Retry failed prompt"
+                data-tooltip="Retry failed prompt"
                 aria-label="Retry failed prompt"
               >
                 <ChatIcon name="refreshCw" size={13} />
@@ -863,7 +863,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 onClick={() => onForkPromptDone?.()}
                 disabled={forkBusy}
                 aria-busy={forkBusy}
-                title="Fork session from here"
+                data-tooltip="Fork session from here"
                 aria-label="Fork session from here"
               >
                 <ChatIcon name={forkBusy ? 'loader' : 'gitBranch'} size={13} spin={forkBusy} />
@@ -875,7 +875,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               onClick={() => onReadAloud?.()}
               disabled={copyDisabled || !readAloudEnabled || ttsState === 'loading'}
               aria-busy={ttsState === 'loading'}
-              title={ttsState === 'playing' ? 'Stop reading' : 'Read aloud'}
+              data-tooltip={ttsState === 'playing' ? 'Stop reading' : 'Read aloud'}
               aria-label={ttsState === 'playing' ? 'Stop reading aloud' : 'Read response aloud'}
             >
               {ttsState === 'loading' ? (
@@ -891,7 +891,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               className="chat-prompt-action-button"
               onClick={() => onCopyPromptDone?.()}
               disabled={copyDisabled}
-              title="Copy response"
+              data-tooltip="Copy response"
               aria-label="Copy response markdown"
             >
               <ChatIcon name="copy" size={13} />
@@ -902,7 +902,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               onClick={() => onExportPromptDoneImage?.()}
               disabled={copyDisabled || exportBusy}
               aria-busy={exportBusy}
-              title="Export response image"
+              data-tooltip="Export response image"
               aria-label="Export response markdown image"
             >
               <ChatIcon name="camera" size={13} />
@@ -913,7 +913,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               onClick={() => onExportPromptDoneHtml?.()}
               disabled={copyDisabled || exportHtmlBusy}
               aria-busy={exportHtmlBusy}
-              title="Export response HTML"
+              data-tooltip="Export response HTML"
               aria-label="Export response markdown as HTML"
             >
               <ChatIcon name="fileCode" size={13} />
