@@ -2516,6 +2516,160 @@ func TestUpdateRequestReplacesStaleJobAndRetriggers(t *testing.T) {
 	}
 }
 
+func TestUpdateRequestRetriggersQueuedJobAfterGrace(t *testing.T) {
+	baseDir := t.TempDir()
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "queued-job",
+		Owner:       "web",
+		State:       "queued",
+		StartedAt:   "2026-08-03T11:50:00Z",
+		HeartbeatAt: "2026-08-03T11:57:00Z",
+	})
+	trigger := &fakeUpdateTrigger{}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+	cmd.now = func() time.Time {
+		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     "queued-job",
+		State:     "queued",
+		StartedAt: "2026-08-03T11:50:00Z",
+		UpdatedAt: "2026-08-03T11:57:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if got.JobID != "queued-job" || !got.Accepted {
+		t.Fatalf("response=%+v, want existing queued job", got)
+	}
+	if trigger.Calls() != 1 {
+		t.Fatalf("trigger calls=%d, want 1 (retrigger after grace)", trigger.Calls())
+	}
+	lockRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
+	if err != nil {
+		t.Fatalf("read lock: %v", err)
+	}
+	var lock updateLease
+	if err := json.Unmarshal(lockRaw, &lock); err != nil {
+		t.Fatalf("parse lock: %v", err)
+	}
+	if lock.JobID != "queued-job" {
+		t.Fatalf("lock=%+v, want adopted job kept", lock)
+	}
+}
+
+func TestUpdateRequestDoesNotRetriggerFreshQueuedJob(t *testing.T) {
+	baseDir := t.TempDir()
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "queued-job",
+		Owner:       "web",
+		State:       "queued",
+		StartedAt:   "2026-08-03T11:59:00Z",
+		HeartbeatAt: "2026-08-03T11:59:30Z",
+	})
+	trigger := &fakeUpdateTrigger{}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+	cmd.now = func() time.Time {
+		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	}
+
+	got := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if got.JobID != "queued-job" {
+		t.Fatalf("response=%+v, want existing queued job", got)
+	}
+	if trigger.Calls() != 0 {
+		t.Fatalf("trigger calls=%d, want 0 within grace", trigger.Calls())
+	}
+}
+
+func TestUpdateRequestLeavesActiveJobUntouched(t *testing.T) {
+	baseDir := t.TempDir()
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "active-job",
+		Owner:       "web",
+		State:       "downloading",
+		StartedAt:   "2026-08-03T11:50:00Z",
+		HeartbeatAt: "2026-08-03T11:57:00Z",
+	})
+	trigger := &fakeUpdateTrigger{}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+	cmd.now = func() time.Time {
+		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     "active-job",
+		State:     "downloading",
+		StartedAt: "2026-08-03T11:50:00Z",
+		UpdatedAt: "2026-08-03T11:57:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if got.JobID != "active-job" || got.Job == nil || got.Job.State != "downloading" {
+		t.Fatalf("response=%+v, want untouched active job", got)
+	}
+	if trigger.Calls() != 0 {
+		t.Fatalf("trigger calls=%d, want 0 for active job", trigger.Calls())
+	}
+}
+
+func TestUpdateRequestFailsQueuedJobWhenRetriggerFails(t *testing.T) {
+	baseDir := t.TempDir()
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "queued-job",
+		Owner:       "web",
+		State:       "queued",
+		StartedAt:   "2026-08-03T11:50:00Z",
+		HeartbeatAt: "2026-08-03T11:57:00Z",
+	})
+	trigger := &fakeUpdateTrigger{err: errors.New("scheduled task missing")}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+	cmd.now = func() time.Time {
+		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     "queued-job",
+		State:     "queued",
+		StartedAt: "2026-08-03T11:50:00Z",
+		UpdatedAt: "2026-08-03T11:57:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr == nil {
+		t.Fatal("request succeeded despite retrigger failure")
+	}
+	status := cmd.readJobStatus()
+	if status == nil || status.State != "failed" || status.ErrorCode != "updater_trigger_failed" {
+		t.Fatalf("status=%+v, want failed updater_trigger_failed", status)
+	}
+	if _, err := os.Stat(filepath.Join(baseDir, "staging", "lock.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("lock.json was not removed after retrigger failure: %v", err)
+	}
+}
+
 func TestUpdaterTriggerSpecUsesKnownCurrentUserRuntime(t *testing.T) {
 	windows := updaterTriggerSpec("windows", "501")
 	if windows.Name != "powershell" || !strings.Contains(strings.Join(windows.Args, " "), "Start-ScheduledTask") || !strings.Contains(strings.Join(windows.Args, " "), "WheelMakerUpdater") {

@@ -31,6 +31,11 @@ const (
 	// staleUpdateLeaseThreshold mirrors STALE_LEASE_MS in scripts/deploy/deploy-core.mjs:
 	// an active job whose lease heartbeat is older than this is treated as stalled.
 	staleUpdateLeaseThreshold = 2 * time.Hour
+	// queuedUpdateRetriggerGrace is how long a queued job may sit without the
+	// updater adopting it before a new request force-retriggers the updater.
+	// A started updater advances to downloading within seconds, so an aged
+	// queued lease means the trigger was lost and retriggering is safe.
+	queuedUpdateRetriggerGrace = 2 * time.Minute
 )
 
 type installedRelease struct {
@@ -257,13 +262,19 @@ func (c *UpdateCommand) request(ctx context.Context, hubID string) (updateComman
 		return updateCommandResponse{}, internalUpdateError("failed to create update lease")
 	}
 	if !created && c.updateLeaseStale(existing) {
-		c.reapStaleUpdateJob(existing.JobID)
+		c.failUpdateJob(existing.JobID, "updater_stalled")
 		created, existing, err = createUpdateLease(leasePath, lease)
 		if err != nil {
 			return updateCommandResponse{}, internalUpdateError("failed to create update lease")
 		}
 	}
 	if !created {
+		if existing.State == "queued" && c.updateLeaseHeartbeatAge(existing) > queuedUpdateRetriggerGrace {
+			if err := c.trigger.Trigger(ctx); err != nil {
+				c.failUpdateJob(existing.JobID, "updater_trigger_failed")
+				return updateCommandResponse{}, internalUpdateError("failed to trigger updater runtime")
+			}
+		}
 		job := c.readJobStatus()
 		if job == nil || job.JobID != existing.JobID {
 			job = &updateJobStatus{
@@ -456,7 +467,7 @@ func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
 		return job, false
 	}
 	if c.updateLeaseStale(lease) {
-		c.reapStaleUpdateJob(lease.JobID)
+		c.failUpdateJob(lease.JobID, "updater_stalled")
 		if reaped := c.readJobStatus(); reaped != nil {
 			return reaped, false
 		}
@@ -474,27 +485,33 @@ func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
 	return job, activeUpdateState(job.State)
 }
 
-// updateLeaseStale reports whether the lease heartbeat is older than the shared
-// 2h threshold (deploy-core.mjs STALE_LEASE_MS). A missing or unparseable
-// heartbeat counts as stale so the job can always recover.
-func (c *UpdateCommand) updateLeaseStale(lease updateLease) bool {
+// updateLeaseHeartbeatAge returns how long ago the lease last heartbeated. A
+// missing or unparseable heartbeat counts as beyond the stale threshold so the
+// job can always recover.
+func (c *UpdateCommand) updateLeaseHeartbeatAge(lease updateLease) time.Duration {
 	heartbeat := lease.HeartbeatAt
 	if heartbeat == "" {
 		heartbeat = lease.StartedAt
 	}
 	at, err := time.Parse(time.RFC3339Nano, heartbeat)
 	if err != nil {
-		return true
+		return staleUpdateLeaseThreshold + time.Nanosecond
 	}
-	return c.now().Sub(at) > staleUpdateLeaseThreshold
+	return c.now().Sub(at)
 }
 
-// reapStaleUpdateJob marks the stalled job failed and removes its lease so a new
-// update can be requested. Terminal statuses are left untouched.
-func (c *UpdateCommand) reapStaleUpdateJob(jobID string) {
+// updateLeaseStale reports whether the lease heartbeat is older than the shared
+// 2h threshold (deploy-core.mjs STALE_LEASE_MS).
+func (c *UpdateCommand) updateLeaseStale(lease updateLease) bool {
+	return c.updateLeaseHeartbeatAge(lease) > staleUpdateLeaseThreshold
+}
+
+// failUpdateJob marks the job failed and removes its lease so a new update can
+// be requested. Terminal statuses are left untouched.
+func (c *UpdateCommand) failUpdateJob(jobID string, errorCode string) {
 	if status := c.readJobStatus(); status != nil && status.JobID == jobID && activeUpdateState(status.State) {
 		status.State = "failed"
-		status.ErrorCode = "updater_stalled"
+		status.ErrorCode = errorCode
 		status.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
 		_ = c.writeJobStatus(*status)
 	}
