@@ -1437,6 +1437,81 @@ func TestSkillsWatcherObservesSkillRootCreatedAfterTracking(t *testing.T) {
 	}
 }
 
+func TestSkillsWatcherSkipsHomeRootToAvoidPrivacyPrompts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Desktop", "Documents", "Downloads"} {
+		if err := os.MkdirAll(filepath.Join(home, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		OnChange: func(skillsWatchTarget) {},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	if err := watcher.Error(); err != nil {
+		t.Fatalf("create native watcher: %v", err)
+	}
+	watcher.TrackHub(home)
+
+	watched := watcher.watchedPathsForTest()
+	if _, ok := watched[filepath.Clean(home)]; ok {
+		t.Fatalf("home root must not be watched, watched = %v", watched)
+	}
+	if _, ok := watched[filepath.Join(home, ".claude", "skills")]; !ok {
+		t.Fatalf("hub skills root must stay watched, watched = %v", watched)
+	}
+}
+
+func TestSkillsWatcherSkipsProjectRootWhenRootedAtHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := os.MkdirAll(filepath.Join(home, ".agents", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		OnChange: func(skillsWatchTarget) {},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	if err := watcher.Error(); err != nil {
+		t.Fatalf("create native watcher: %v", err)
+	}
+	watcher.TrackProject("hub-a:home", "home", home)
+
+	watched := watcher.watchedPathsForTest()
+	if _, ok := watched[filepath.Clean(home)]; ok {
+		t.Fatalf("project root equal to home must not be watched, watched = %v", watched)
+	}
+	if _, ok := watched[filepath.Join(home, ".agents", "skills")]; !ok {
+		t.Fatalf("project skills root must stay watched, watched = %v", watched)
+	}
+}
+
+func TestSkillsWatcherWatchesOrdinaryProjectRoot(t *testing.T) {
+	home := t.TempDir()
+	root := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		OnChange: func(skillsWatchTarget) {},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	if err := watcher.Error(); err != nil {
+		t.Fatalf("create native watcher: %v", err)
+	}
+	watcher.TrackProject("hub-a:project", "project", root)
+
+	watched := watcher.watchedPathsForTest()
+	if _, ok := watched[filepath.Clean(root)]; !ok {
+		t.Fatalf("ordinary project root must be watched to observe skills-lock.json, watched = %v", watched)
+	}
+}
+
 func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {

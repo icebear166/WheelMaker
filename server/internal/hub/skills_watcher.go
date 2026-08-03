@@ -12,6 +12,11 @@ import (
 
 const skillsWatchDebounce = 750 * time.Millisecond
 
+// skillsWatchReconcileInterval re-resolves watch targets periodically. The home
+// directory itself is never watched (see reconcileWatches), so skill roots that
+// appear after startup are discovered by this poll instead of by a parent watch.
+const skillsWatchReconcileInterval = 30 * time.Second
+
 type skillsWatchTarget struct {
 	Scope       string
 	ProjectID   string
@@ -75,6 +80,16 @@ func (w *skillsWatcher) Error() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.err
+}
+
+func (w *skillsWatcher) watchedPathsForTest() map[string]struct{} {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make(map[string]struct{}, len(w.watched))
+	for path := range w.watched {
+		out[path] = struct{}{}
+	}
+	return out
 }
 
 func (w *skillsWatcher) TrackHub(home string) {
@@ -161,10 +176,14 @@ func (w *skillsWatcher) run() {
 	defer close(w.done)
 	events := w.events
 	errors := w.errors
+	reconcile := time.NewTicker(skillsWatchReconcileInterval)
+	defer reconcile.Stop()
 	for {
 		select {
 		case <-w.stop:
 			return
+		case <-reconcile.C:
+			w.reconcileWatches()
 		case event, ok := <-events:
 			if !ok {
 				events = nil
@@ -271,7 +290,14 @@ func (w *skillsWatcher) reconcileWatches() {
 
 	desired := map[string]struct{}{}
 	for _, target := range targets {
-		addExistingWatchDir(desired, target.Root)
+		// Never watch the target root when it is the user home directory. On
+		// macOS fsnotify uses kqueue, and adding a directory opens every entry
+		// inside it, which touches TCC-protected folders such as ~/Desktop,
+		// ~/Documents and ~/Downloads and triggers privacy prompts. Hub scope is
+		// always rooted at home; a project may also be configured with "~".
+		if shouldWatchTargetRoot(target) {
+			addExistingWatchDir(desired, target.Root)
+		}
 		for _, relative := range []string{".agents", filepath.Join(".agents", "skills"), ".claude", filepath.Join(".claude", "skills")} {
 			root := filepath.Join(target.Root, relative)
 			addExistingWatchDir(desired, root)
@@ -312,6 +338,30 @@ func addExistingWatchDir(paths map[string]struct{}, path string) {
 	if err == nil && info.IsDir() {
 		paths[filepath.Clean(path)] = struct{}{}
 	}
+}
+
+// shouldWatchTargetRoot reports whether a target root may be watched directly.
+// Hub scope roots are always the user home directory and are only used as a
+// prefix for ~/.agents and ~/.claude, which are watched explicitly, so watching
+// the root adds nothing. Project scope roots must be watched to observe
+// skills-lock.json, unless the project is rooted at the home directory.
+func shouldWatchTargetRoot(target skillsWatchTarget) bool {
+	if target.Scope == "hub" {
+		return false
+	}
+	return !isUserHomeDir(target.Root)
+}
+
+func isUserHomeDir(path string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	home = cleanAbsolutePath(home)
+	if home == "" {
+		return false
+	}
+	return normalizeWatchPath(path) == normalizeWatchPath(home)
 }
 
 func cleanAbsolutePath(path string) string {
