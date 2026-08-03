@@ -301,7 +301,7 @@ describe('agent package update settings UI source structure', () => {
     expect(deriveBlock).toContain('hub.sections.skills');
     expect(deriveBlock).toContain('hub.sections.flickerBridge');
     expect(mainTsx).not.toMatch(/set(?:WheelMakerUpdateHubs|AgentPackageHubs|ProjectIndexByHubId|SkillHubs)/);
-    expect(mainTsx).toContain('card.agentPackage?.hub?.capabilities.myFlicker === true');
+    expect(mainTsx).toContain('card.agentPackage?.hub?.capabilities?.myFlicker === true');
     expect(mainTsx).not.toContain('hasMyFlickerPackage');
     expect(mainTsx).not.toContain('filterMyFlickerAgentTypes');
   });

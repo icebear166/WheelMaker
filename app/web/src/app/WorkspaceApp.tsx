@@ -13177,7 +13177,7 @@ export function App() {
           loading: card.agentPackage?.loading === true,
           pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
           outdatedCount: npmUpdatable.length,
-          myFlickerAvailable: card.agentPackage?.hub?.capabilities.myFlicker === true,
+          myFlickerAvailable: card.agentPackage?.hub?.capabilities?.myFlicker === true,
           packages: hubPackages.map(pkg => ({
             packageName: pkg.packageName,
             displayName: pkg.displayName,

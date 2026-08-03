@@ -352,6 +352,7 @@ export class RegistryRepository {
 
   normalizeHubState(raw: unknown, fallbackHubId: string): RegistryHubState {
     const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const hubId = typeof input.hubId === 'string' && input.hubId ? input.hubId : fallbackHubId;
     const sectionsInput = input.sections && typeof input.sections === 'object' && !Array.isArray(input.sections)
       ? input.sections as Record<string, unknown>
       : {};
@@ -375,11 +376,13 @@ export class RegistryRepository {
         updatedAt: typeof sectionInput.updatedAt === 'string' ? sectionInput.updatedAt : undefined,
         lastAttemptAt: typeof sectionInput.lastAttemptAt === 'string' ? sectionInput.lastAttemptAt : undefined,
         lastError: typeof sectionInput.lastError === 'string' ? sectionInput.lastError : undefined,
-        data: sectionInput.data,
+        data: name === 'agentPackages' && sectionInput.data !== undefined
+          ? normalizeNpmCommandResponse(sectionInput.data, hubId)
+          : sectionInput.data,
       };
     }
     return {
-      hubId: typeof input.hubId === 'string' && input.hubId ? input.hubId : fallbackHubId,
+      hubId,
       instanceId: typeof input.instanceId === 'string' ? input.instanceId : '',
       sections,
     };

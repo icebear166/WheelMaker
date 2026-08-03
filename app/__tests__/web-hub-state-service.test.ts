@@ -1,6 +1,7 @@
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import type {RegistryClient} from '../web/src/registry/RegistryClient';
 import {RegistryMethods} from '../web/src/registry/registryMethods';
+import type {RegistryNpmCommandResponse} from '../web/src/registry/registryTypes';
 import fs from 'fs';
 import path from 'path';
 
@@ -37,6 +38,47 @@ describe('hub state registry service', () => {
       payload: {sections: ['agentPackages']},
       timeoutMs: 15000,
     });
+  });
+
+  test('defaults missing capabilities in legacy agentPackages HubState data', async () => {
+    const client = {
+      request: jest.fn().mockResolvedValue({
+        type: 'response',
+        payload: {
+          state: {
+            hubId: 'hub-legacy',
+            instanceId: 'instance-legacy',
+            sections: {
+              agentPackages: {
+                availability: 'ready',
+                updateStatus: 'idle',
+                revision: 4,
+                data: {
+                  ok: true,
+                  updatedAt: '2026-08-03T08:00:00Z',
+                  hub: {
+                    hubId: 'hub-legacy',
+                    nodeVersion: 'v22.15.0',
+                    npmVersion: '10.9.2',
+                    npmPrefix: '/opt/wheelmaker',
+                    warning: '',
+                    error: '',
+                    packages: [],
+                  },
+                  operation: null,
+                },
+              },
+            },
+          },
+        },
+      }),
+    } as unknown as RegistryClient;
+    const repository = new RegistryRepository(client);
+
+    const state = await repository.getHubState('hub-legacy', ['agentPackages']);
+    const agentPackages = state.sections.agentPackages.data as RegistryNpmCommandResponse;
+
+    expect(agentPackages.hub?.capabilities).toEqual({myFlicker: false});
   });
 
   test('refreshes selected hub state sections', async () => {
