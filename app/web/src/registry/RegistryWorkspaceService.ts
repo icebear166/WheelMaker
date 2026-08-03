@@ -103,6 +103,13 @@ export type RegistryWorkspaceServiceOptions = {
   clientName?: RegistryClientName;
 };
 
+export type ProjectGitLogOptions = {
+  ref?: string;
+  refs?: string[];
+  cursor?: string;
+  limit?: number;
+};
+
 export function translateExternalFileError(error: unknown): never {
   const details = error instanceof RegistryRequestError
     && error.details
@@ -392,51 +399,96 @@ export class RegistryWorkspaceService {
   }
 
   async listGitCommits(ref = 'HEAD', refs: string[] = []): Promise<RegistryGitCommit[]> {
-    if (!this.session || !this.repository) return [];
-    return this.repository.gitLog(this.session.selectedProjectId, ref, '', 50, refs);
+    return this.listProjectGitCommits(this.session?.selectedProjectId ?? '', {ref, refs});
+  }
+
+  async listProjectGitCommits(
+    projectId: string,
+    options: ProjectGitLogOptions = {},
+  ): Promise<RegistryGitCommit[]> {
+    if (!this.repository || !projectId) return [];
+    return this.repository.gitLog(
+      projectId,
+      options.ref ?? 'HEAD',
+      options.cursor ?? '',
+      options.limit ?? 50,
+      options.refs ?? [],
+    );
   }
 
   async getGitRev(): Promise<RegistryGitRev> {
-    if (!this.session || !this.repository) {
-      return {gitRev: '', worktreeRev: ''};
-    }
-    return this.repository.gitRev(this.session.selectedProjectId);
+    return this.getProjectGitRev(this.session?.selectedProjectId ?? '');
+  }
+
+  async getProjectGitRev(projectId: string): Promise<RegistryGitRev> {
+    if (!this.repository || !projectId) return {gitRev: '', worktreeRev: ''};
+    return this.repository.gitRev(projectId);
   }
 
   async listGitBranches(): Promise<{current: string; branches: string[]; remoteBranches: string[]}> {
-    if (!this.session || !this.repository) {
+    return this.listProjectGitBranches(this.session?.selectedProjectId ?? '');
+  }
+
+  async listProjectGitBranches(
+    projectId: string,
+  ): Promise<{current: string; branches: string[]; remoteBranches: string[]}> {
+    if (!this.repository || !projectId) {
       return {current: '', branches: [], remoteBranches: []};
     }
-    return this.repository.gitBranches(this.session.selectedProjectId);
+    return this.repository.gitBranches(projectId);
   }
 
   async listGitCommitFiles(sha: string): Promise<RegistryGitCommitFile[]> {
-    if (!this.session || !this.repository) return [];
-    return this.repository.gitCommitFiles(this.session.selectedProjectId, sha);
+    return this.listProjectGitCommitFiles(this.session?.selectedProjectId ?? '', sha);
+  }
+
+  async listProjectGitCommitFiles(projectId: string, sha: string): Promise<RegistryGitCommitFile[]> {
+    if (!this.repository || !projectId) return [];
+    return this.repository.gitCommitFiles(projectId, sha);
   }
 
   async readGitFileDiff(sha: string, path: string): Promise<RegistryGitFileDiff> {
-    if (!this.session || !this.repository) {
+    return this.readProjectGitFileDiff(this.session?.selectedProjectId ?? '', sha, path);
+  }
+
+  async readProjectGitFileDiff(
+    projectId: string,
+    sha: string,
+    path: string,
+  ): Promise<RegistryGitFileDiff> {
+    if (!this.repository || !projectId) {
       return {sha, path, isBinary: false, diff: '', truncated: false};
     }
-    return this.repository.gitCommitFileDiff(this.session.selectedProjectId, sha, path, 3);
+    return this.repository.gitCommitFileDiff(projectId, sha, path, 3);
   }
 
   async getGitStatus(): Promise<RegistryGitStatus> {
-    if (!this.session || !this.repository) {
+    return this.getProjectGitStatus(this.session?.selectedProjectId ?? '');
+  }
+
+  async getProjectGitStatus(projectId: string): Promise<RegistryGitStatus> {
+    if (!this.repository || !projectId) {
       return {dirty: false, worktreeRev: '', staged: [], unstaged: [], untracked: []};
     }
-    return this.repository.gitStatus(this.session.selectedProjectId);
+    return this.repository.gitStatus(projectId);
   }
 
   async readWorkingTreeFileDiff(
     path: string,
     scope: 'staged' | 'unstaged' | 'untracked' = 'unstaged',
   ): Promise<RegistryWorkingTreeFileDiff> {
-    if (!this.session || !this.repository) {
+    return this.readProjectWorkingTreeFileDiff(this.session?.selectedProjectId ?? '', path, scope);
+  }
+
+  async readProjectWorkingTreeFileDiff(
+    projectId: string,
+    path: string,
+    scope: 'staged' | 'unstaged' | 'untracked',
+  ): Promise<RegistryWorkingTreeFileDiff> {
+    if (!this.repository || !projectId) {
       return {path, scope, isBinary: false, diff: '', truncated: false};
     }
-    return this.repository.gitWorkingTreeFileDiff(this.session.selectedProjectId, path, scope, 3);
+    return this.repository.gitWorkingTreeFileDiff(projectId, path, scope, 3);
   }
 
   async listProjects(): Promise<RegistryProject[]> {
