@@ -22,6 +22,8 @@ const items: ModelEfficiencyItem[] = [
   {family: 'gpt-5.6-luna', effort: 'max', score: 128, averageCostUsd: 1.8, averageTaskSeconds: 330},
   {family: 'gpt-5.6-luna', effort: 'high', score: 120.6},
   {family: 'gpt-5.6-luna', effort: 'low', score: 104, averageCostUsd: 0.2, averageTaskSeconds: 80},
+  {family: 'deepseek-v4-flash', effort: 'max', score: 84.4, averageCostUsd: 0.1, averageTaskSeconds: 1586},
+  {family: 'deepseek-v4-flash', effort: 'high', score: 65.6, averageCostUsd: 0.09, averageTaskSeconds: 1649},
 ];
 
 function renderedText(node: TestRenderer.ReactTestInstance): string {
@@ -44,10 +46,14 @@ describe('ModelEfficiencyContent', () => {
       'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-5.6-luna',
+      'deepseek-v4-flash',
     ]);
     const solCards = rows[0].findAll(node => node.props['data-model-efficiency-card']);
     expect(solCards).toHaveLength(3);
+    expect(renderedText(rows[0].findByProps({className: 'model-efficiency-family-brand'}))).toBe('GPT');
     expect(renderedText(rows[0].findByProps({className: 'model-efficiency-family-name'}))).toBe('Sol');
+    expect(renderedText(rows[3].findByProps({className: 'model-efficiency-family-brand'}))).toBe('DeepSeek');
+    expect(renderedText(rows[3].findByProps({className: 'model-efficiency-family-name'}))).toBe('V4 Flash');
     expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-effort'}))))
       .toEqual(['Max', 'Xhigh', 'High']);
     expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-score'}))))
@@ -71,11 +77,12 @@ describe('ModelEfficiencyContent', () => {
     });
 
     const rows = view!.root.findAll(node => node.props['data-model-efficiency-family']);
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     expect(rows[0].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(0);
     expect(rows[0].findAllByProps({className: 'model-efficiency-family-name'})).toHaveLength(0);
-    expect(rows[2].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(1);
-    expect(renderedText(rows[2])).not.toContain('—');
+    expect(rows[2].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(0);
+    expect(rows[3].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(1);
+    expect(renderedText(rows[3])).not.toContain('—');
   });
 
   test('renders Detail tables in fixed family and effort order with missing values', () => {
@@ -86,9 +93,10 @@ describe('ModelEfficiencyContent', () => {
 
     const tables = view!.root.findAllByType('table');
     expect(tables.map(table => table.props['aria-label'])).toEqual([
-      'Sol model efficiency',
-      'Terra model efficiency',
-      'Luna model efficiency',
+      'GPT Sol model efficiency',
+      'GPT Terra model efficiency',
+      'GPT Luna model efficiency',
+      'DeepSeek V4 Flash model efficiency',
     ]);
     expect(tables[0].findAllByType('th').map(renderedText)).toEqual([
       'Effort',
@@ -106,6 +114,8 @@ describe('ModelEfficiencyContent', () => {
     ]);
     const lunaHigh = tables[2].findByProps({'data-model-efficiency-effort': 'high'});
     expect(renderedText(lunaHigh)).toBe('high121——');
+    const deepSeekRows = tables[3].findAll(node => node.props['data-model-efficiency-effort']);
+    expect(deepSeekRows.map(row => row.props['data-model-efficiency-effort'])).toEqual(['max', 'high']);
   });
 });
 
@@ -130,10 +140,11 @@ describe('ModelEfficiency styling', () => {
     expect(recommendationRule).not.toContain('background:');
     expect(recommendationRule).not.toContain('box-shadow');
     expect(familyRule).toContain('border-left: 2px solid');
-    expect(familyRule).toContain('grid-template-columns: 34px minmax(0, 1fr);');
+    expect(familyRule).toContain('grid-template-columns: 48px minmax(0, 1fr);');
     expect(familyRule).not.toContain('grid-template-rows:');
     expect(familyNameRule).toContain('font-size: 10px;');
     expect(familyHeaderRule).toContain('padding-top: 5px;');
+    expect(styles).toContain("[data-model-efficiency-family='deepseek-v4-flash']");
     expect(recommendationsRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(recommendationRule).toContain("'score-line'\n    'meta';");
     expect(scoreLineRule).toContain('display: flex;');
@@ -177,9 +188,9 @@ describe('ModelEfficiency styling', () => {
       );
     });
 
-    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-row'})).toHaveLength(3);
-    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-family-label'})).toHaveLength(3);
-    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-rail'})).toHaveLength(9);
+    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-row'})).toHaveLength(4);
+    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-family-label'})).toHaveLength(4);
+    expect(view!.root.findAllByProps({className: 'model-efficiency-skeleton-rail'})).toHaveLength(12);
     expect(renderedText(view!.root)).not.toContain('Loading CodexRadar');
   });
 });

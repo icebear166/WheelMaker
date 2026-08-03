@@ -17,7 +17,7 @@
 
 .model-efficiency-family-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
   gap: 6px;
   min-width: 0;
   padding: 0 0 0 8px;
@@ -40,17 +40,37 @@
   --model-efficiency-family-color: #858f91;
 }
 
+.model-efficiency-family-row[data-model-efficiency-family='deepseek-v4-flash'] {
+  --model-efficiency-family-color: #4d6bfe;
+}
+
 .model-efficiency-family-heading {
-  display: block;
+  display: grid;
+  align-content: start;
   min-width: 0;
   min-height: 0;
+  gap: 1px;
   padding-top: 5px;
 }
 
+.model-efficiency-family-brand {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .model-efficiency-family-name {
+  min-width: 0;
+  overflow: hidden;
   color: color-mix(in srgb, var(--model-efficiency-family-color) 62%, var(--text-primary));
   font-size: 10px;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-efficiency-family-recommendations {

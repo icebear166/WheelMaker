@@ -2,6 +2,7 @@ export const MODEL_FAMILIES = [
   'gpt-5.6-sol',
   'gpt-5.6-terra',
   'gpt-5.6-luna',
+  'deepseek-v4-flash',
 ] as const;
 
 export const EFFORT_ORDER = [

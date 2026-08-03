@@ -21,7 +21,7 @@ function item(
 }
 
 describe('model efficiency normalization', () => {
-  test('reads the webpage efficiency feed and filters its 19 points to 17 supported rows', () => {
+  test('reads the webpage efficiency feed and filters its 21 points to 19 supported rows', () => {
     const point = (
       model: string,
       effort: string,
@@ -57,21 +57,24 @@ describe('model efficiency normalization', () => {
         point('gpt-5.6-luna', 'max', 95.09, 2.51, 35.79),
         point('gpt-5.5', 'high', 80.36, 3.58, 15.55),
         point('gpt-5.5', 'xhigh', 97.77, 5.83, 22.35),
+        point('deepseek-v4-flash', 'max', 84.38, 0.1, 26.43),
+        point('deepseek-v4-flash', 'high', 65.63, 0.09, 27.48),
       ],
     };
 
     const normalized = normalizeModelEfficiencyPayload(payload);
-    expect(normalized).toHaveLength(17);
+    expect(normalized).toHaveLength(19);
     expect(normalized.filter(entry => entry.family === 'gpt-5.6-sol')).toHaveLength(6);
     expect(normalized.filter(entry => entry.family === 'gpt-5.6-terra')).toHaveLength(6);
     expect(normalized.filter(entry => entry.family === 'gpt-5.6-luna')).toHaveLength(5);
+    expect(normalized.filter(entry => entry.family === 'deepseek-v4-flash')).toHaveLength(2);
     expect(normalized[0]).toEqual(item('ultra', 101.79, 26.09, 3225.6));
     expect(normalized.at(-1)).toEqual({
-      family: 'gpt-5.6-luna',
-      effort: 'low',
-      score: 6.7,
-      averageCostUsd: 0.15,
-      averageTaskSeconds: 467.4,
+      family: 'deepseek-v4-flash',
+      effort: 'high',
+      score: 65.63,
+      averageCostUsd: 0.09,
+      averageTaskSeconds: 1648.8,
     });
     expect(readModelEfficiencyUpdatedAt(payload)).toBe('2026-07-22T13:58:55+08:00');
   });

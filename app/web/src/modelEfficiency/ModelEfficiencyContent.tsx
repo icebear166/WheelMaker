@@ -9,10 +9,25 @@ import {
   type ModelEfficiencySnapshot,
 } from './modelEfficiencyTypes';
 
-const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
+const FAMILY_BRANDS: Record<ModelEfficiencyFamily, string> = {
+  'gpt-5.6-sol': 'GPT',
+  'gpt-5.6-terra': 'GPT',
+  'gpt-5.6-luna': 'GPT',
+  'deepseek-v4-flash': 'DeepSeek',
+};
+
+const FAMILY_NAMES: Record<ModelEfficiencyFamily, string> = {
   'gpt-5.6-sol': 'Sol',
   'gpt-5.6-terra': 'Terra',
   'gpt-5.6-luna': 'Luna',
+  'deepseek-v4-flash': 'V4 Flash',
+};
+
+const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
+  'gpt-5.6-sol': 'GPT Sol',
+  'gpt-5.6-terra': 'GPT Terra',
+  'gpt-5.6-luna': 'GPT Luna',
+  'deepseek-v4-flash': 'DeepSeek V4 Flash',
 };
 
 function formatScore(score: number): string {
@@ -67,7 +82,8 @@ export function ModelEfficiencySimpleContent({items}: {items: readonly ModelEffi
             {recommendations.length > 0 ? (
               <>
                 <header className="model-efficiency-family-heading">
-                  <span className="model-efficiency-family-name">{FAMILY_LABELS[family]}</span>
+                  <span className="model-efficiency-family-brand">{FAMILY_BRANDS[family]}</span>
+                  <span className="model-efficiency-family-name">{FAMILY_NAMES[family]}</span>
                 </header>
                 <div className="model-efficiency-family-recommendations">
                   {recommendations.map(item => <ScoreCard item={item} key={item.effort} />)}
