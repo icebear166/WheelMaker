@@ -16,6 +16,7 @@ describe('web chat file peek viewer', () => {
   const projectRoot = path.join(__dirname, '..');
   const mainPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
   const shellPath = path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx');
+  const unifiedDiffPath = path.join(projectRoot, 'web', 'src', 'preview', 'UnifiedDiffPreview.tsx');
 
   test('chat file links open the peek viewer without switching to the File tab', () => {
     const mainTsx = readSourceText(mainPath);
@@ -87,6 +88,7 @@ describe('web chat file peek viewer', () => {
 
   test('prompt diff active file selection survives open, load, restore, and header toggles', () => {
     const mainTsx = readSourceText(mainPath);
+    const unifiedDiffTsx = readSourceText(unifiedDiffPath);
     const restoreStart = mainTsx.indexOf('const loadRestoredPreviewTab = useCallback(');
     const restoreEnd = mainTsx.indexOf('const resolvePromptAttachmentThumbnail', restoreStart);
     const restoreBody = mainTsx.slice(restoreStart, restoreEnd);
@@ -118,9 +120,10 @@ describe('web chat file peek viewer', () => {
     expect(toggleBody).toContain('activeFilePath: path,');
     expect(toggleBody).toContain("file.path === path ? {...file, expanded: !file.expanded} : file");
     expect(viewerBody).toContain('const activeFilePath = resolvePromptDiffActiveFilePath(preview.files, preview.activeFilePath);');
-    expect(viewerBody).toContain('const active = file.path === activeFilePath;');
-    expect(viewerBody).toContain("className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}");
-    expect(viewerBody).toContain('aria-current={active || undefined}');
+    expect(viewerBody).toContain('<UnifiedDiffPreview');
+    expect(unifiedDiffTsx).toContain('const active = file.path === activeFilePath;');
+    expect(unifiedDiffTsx).toContain("className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}");
+    expect(unifiedDiffTsx).toContain('aria-current={active || undefined}');
     expect(viewerComparatorBody).toContain('prev.preview === next.preview');
   });
 
@@ -300,6 +303,7 @@ describe('web chat file peek viewer', () => {
 
   test('chat preview code and diff panes force line numbers and no wrapping', () => {
     const mainTsx = readSourceText(mainPath);
+    const unifiedDiffTsx = readSourceText(unifiedDiffPath);
 
     const fileViewerStart = mainTsx.indexOf('const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer');
     const fileViewerEnd = mainTsx.indexOf('}, (prev, next) => {', fileViewerStart);
@@ -312,14 +316,10 @@ describe('web chat file peek viewer', () => {
     expect(fileCodeBlock).toContain('wrap={false}');
     expect(fileCodeBlock).toContain('lineNumbers={true}');
 
-    const artifactViewerStart = mainTsx.indexOf('const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPreviewViewer');
-    const artifactViewerEnd = mainTsx.indexOf('}, (prev, next) => (', artifactViewerStart);
-    expect(artifactViewerStart).toBeGreaterThanOrEqual(0);
-    expect(artifactViewerEnd).toBeGreaterThan(artifactViewerStart);
-    const artifactViewerBody = mainTsx.slice(artifactViewerStart, artifactViewerEnd);
-    const diffPaneStart = artifactViewerBody.indexOf('<ShikiDiffPane');
-    const diffPaneEnd = artifactViewerBody.indexOf('/>', diffPaneStart);
-    const diffPaneBlock = artifactViewerBody.slice(diffPaneStart, diffPaneEnd);
+    const diffPaneStart = unifiedDiffTsx.indexOf('<ShikiDiffPane');
+    const diffPaneEnd = unifiedDiffTsx.indexOf('/>', diffPaneStart);
+    const diffPaneBlock = unifiedDiffTsx.slice(diffPaneStart, diffPaneEnd);
+    expect(diffPaneStart).toBeGreaterThanOrEqual(0);
     expect(diffPaneBlock).toContain('wrap={false}');
     expect(diffPaneBlock).toContain('lineNumbers={true}');
   });

@@ -509,7 +509,8 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from '../code/shikiSettings';
-import { ShikiCodeBlock, ShikiDiffPane, preloadShikiRenderer } from '../code/ShikiCodeBlock';
+import {ShikiCodeBlock, preloadShikiRenderer} from '../code/ShikiCodeBlock';
+import {detectCodeLanguage} from '../code/codeLanguage';
 import {
   MarkdownPreview,
   markdownCodeRenderer,
@@ -517,6 +518,7 @@ import {
   useMarkdownCapabilityPlugins,
 } from '../code/markdownPreview';
 import {HtmlPreview} from '../preview/HtmlPreview';
+import {UnifiedDiffPreview} from '../preview/UnifiedDiffPreview';
 import {
   isHtmlPreviewAttachment,
   isHtmlPreviewPath,
@@ -1860,70 +1862,6 @@ function isMarkdownPath(path: string): boolean {
   return ext === 'md' || ext === 'markdown';
 }
 
-function detectCodeLanguage(path: string): string {
-  const ext = getFileExtension(path);
-  switch (ext) {
-    case 'ts':
-      return 'typescript';
-    case 'tsx':
-      return 'tsx';
-    case 'js':
-    case 'cjs':
-    case 'mjs':
-      return 'javascript';
-    case 'jsx':
-      return 'jsx';
-    case 'json':
-      return 'json';
-    case 'go':
-      return 'go';
-    case 'c':
-      return 'c';
-    case 'cc':
-    case 'cpp':
-    case 'cxx':
-    case 'h':
-    case 'hh':
-    case 'hpp':
-      return 'cpp';
-    case 'rs':
-      return 'rust';
-    case 'lua':
-      return 'lua';
-    case 'hlsl':
-    case 'fx':
-    case 'fxh':
-      return 'hlsl';
-    case 'glsl':
-    case 'vert':
-    case 'frag':
-    case 'geom':
-    case 'comp':
-      return 'glsl';
-    case 'sh':
-    case 'bash':
-      return 'shellscript';
-    case 'ps1':
-    case 'psm1':
-      return 'powershell';
-    case 'py':
-      return 'python';
-    case 'yml':
-    case 'yaml':
-      return 'yaml';
-    case 'md':
-    case 'markdown':
-      return 'markdown';
-    case 'diff':
-    case 'patch':
-      return 'diff';
-    case 'html':
-      return 'markup';
-    default:
-      return 'clike';
-  }
-}
-
 function inferImageMimeType(path: string): string {
   const ext = getFileExtension(path);
   switch (ext) {
@@ -2630,84 +2568,23 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
   scrollRef,
 }: ChatPromptArtifactPreviewViewerProps) {
   const activeFilePath = resolvePromptDiffActiveFilePath(preview.files, preview.activeFilePath);
-  let body: React.ReactNode;
-  if (preview.loading) {
-    body = <div className="muted block">Loading diff...</div>;
-  } else if (preview.error) {
-    body = (
-      <div className="chat-file-peek-error" role="alert">
-        <ChatIcon name="circleX" />
-        <span>{preview.error}</span>
-      </div>
-    );
-  } else if (preview.files.length === 0) {
-    body = <div className="muted block">No diff available</div>;
-  } else {
-    body = (
-      <div className="chat-prompt-diff-preview">
-        <div className="chat-prompt-diff-overview">
-          <ChatIcon name="fileDiff" />
-          <span>{promptArtifactPreviewCountLabel(preview.files.length)}</span>
-        </div>
-        {preview.files.map(file => {
-          const {fileName, parentPath} = splitPathForDisplay(file.path);
-          const active = file.path === activeFilePath;
-          return (
-            <section
-              key={file.path}
-              className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}
-              data-preview-diff-path={file.path}
-            >
-              <button
-                type="button"
-                className="chat-prompt-diff-file-header"
-                onClick={() => onToggleFile(file.path)}
-                aria-expanded={file.expanded}
-                aria-current={active || undefined}
-                title={file.path}
-              >
-                <ChatIcon name={file.expanded ? 'chevronDown' : 'chevronRight'} />
-                <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
-                  {file.status}
-                </span>
-                <span className="chat-prompt-diff-file-title">
-                  <span className="chat-prompt-diff-file-name">{fileName || file.path}</span>
-                  {parentPath ? <span className="chat-prompt-diff-file-path">{parentPath}</span> : null}
-                </span>
-                <span className="chat-prompt-diff-file-counts">
-                  {file.additions > 0 ? <span className="additions">+{file.additions}</span> : null}
-                  {file.deletions > 0 ? <span className="deletions">-{file.deletions}</span> : null}
-                </span>
-              </button>
-              {file.expanded ? (
-                <div className="chat-prompt-diff-file-body">
-                  {file.diff ? (
-                    <ShikiDiffPane
-                      content={file.diff}
-                      language={detectCodeLanguage(file.path)}
-                      wrap={false}
-                      lineNumbers={true}
-                      themeMode={themeMode}
-                      codeTheme={codeTheme}
-                      codeFont={codeFont}
-                      codeFontFamily={codeFontFamily}
-                      codeFontSize={codeFontSize}
-                      codeLineHeight={codeLineHeight}
-                      codeTabSize={codeTabSize}
-                    />
-                  ) : (
-                    <div className="muted block">File diff unavailable</div>
-                  )}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
-      </div>
-    );
-  }
-
-  return <>{body}</>;
+  return (
+    <UnifiedDiffPreview
+      files={preview.files}
+      activeFilePath={activeFilePath}
+      loading={preview.loading}
+      error={preview.error}
+      overviewLabel={promptArtifactPreviewCountLabel(preview.files.length)}
+      onToggleFile={onToggleFile}
+      themeMode={themeMode}
+      codeTheme={codeTheme}
+      codeFont={codeFont}
+      codeFontFamily={codeFontFamily}
+      codeFontSize={codeFontSize}
+      codeLineHeight={codeLineHeight}
+      codeTabSize={codeTabSize}
+    />
+  );
 }, (prev, next) => (
   prev.preview === next.preview &&
   prev.mode === next.mode &&

@@ -563,7 +563,7 @@ git commit -m "feat(preview): persist git diff tabs"
 - Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
 - Modify: `app/__tests__/web-git-diff-startup-boundary.test.ts`
 
-- [ ] **Step 1: Write failing extraction/component tests**
+- [x] **Step 1: Write failing extraction/component tests**
 
 ```ts
 // app/web/src/code/codeLanguage.test.ts
@@ -613,7 +613,7 @@ test('renders binary and truncated states without losing file metadata', () => {
 });
 ```
 
-- [ ] **Step 2: Run the new and existing Diff tests and confirm failure**
+- [x] **Step 2: Run the new and existing Diff tests and confirm failure**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/code/codeLanguage.test.ts web/src/preview/UnifiedDiffPreview.test.tsx __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-git-diff-startup-boundary.test.ts
@@ -621,7 +621,7 @@ npm --prefix app test -- --runInBand web/src/code/codeLanguage.test.ts web/src/p
 
 Expected: FAIL because the extracted modules do not exist and Prompt Diff still renders inline in `WorkspaceApp.tsx`.
 
-- [ ] **Step 3: Move language detection and implement the shared renderer**
+- [x] **Step 3: Move language detection and implement the shared renderer**
 
 Move the complete existing extension switch from `WorkspaceApp.tsx` to:
 
@@ -675,11 +675,11 @@ export function detectCodeLanguage(path: string): string {
 
 `UnifiedDiffPreview` must accept `files`, `activeFilePath`, load/error labels, `onToggleFile`, and the existing Shiki theme/font props. Move the complete `.chat-prompt-diff-*` markup into this component, add binary/truncated notices before the `ShikiDiffPane`, and keep `wrap={false}` plus `lineNumbers={true}`. Change `ChatPromptArtifactPreviewViewer` to only adapt its `PromptDiffPreviewFile[]` into `UnifiedDiffPreview`; do not duplicate file-row markup.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run the Step 2 command. Expected: PASS. Confirm the startup-boundary test still finds the dynamic import of `../git/diffRows` only in `ShikiCodeBlock.tsx`.
 
-- [ ] **Step 5: Commit the shared renderer**
+- [x] **Step 5: Commit the shared renderer**
 
 ```powershell
 git add app/web/src/code/codeLanguage.ts app/web/src/code/codeLanguage.test.ts app/web/src/preview/UnifiedDiffPreview.tsx app/web/src/preview/UnifiedDiffPreview.test.tsx app/web/src/app/WorkspaceApp.tsx app/__tests__/web-chat-file-peek-viewer.test.ts app/__tests__/web-git-diff-startup-boundary.test.ts
