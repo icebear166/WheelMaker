@@ -538,7 +538,7 @@ describe('preview file regressions', () => {
     expect(main).toContain("from '../preview/previewDirectoryLoader';");
     expect(main).toContain('fetchPreviewDirectoryEntries({');
     expect(main).toContain('togglePreviewDirectoryExpansion(');
-    expect(main).toContain('if (!previewWorkbench.treeOpen) return;');
+    expect(main).toContain("if (previewWorkbench.drawerMode !== 'files') return;");
     expect(main).toContain('rootState={chatFilePreviewRootState}');
     expect(main).toContain('onRetryRoot={retryPreviewRootDirectory}');
     expect(main).toContain("from '../preview/previewLineNavigation';");

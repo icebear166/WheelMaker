@@ -3180,7 +3180,9 @@ export function App() {
     activeWorkbenchTab &&
     (
       (activeWorkbenchTab.type === 'file' && isHtmlPreviewPath(activeWorkbenchTab.path)) ||
-      (activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff')
+      (activeWorkbenchTab.type !== 'file'
+        && activeWorkbenchTab.type !== 'prompt-diff'
+        && activeWorkbenchTab.type !== 'git-diff')
     )
       ? 'Search is not available for this preview.'
       : '';
@@ -3200,8 +3202,7 @@ export function App() {
   }, []);
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
   const fileIconResourcesNeeded = chatPreviewOpen &&
-    previewWorkbench.treeOpen &&
-    (!activeWorkbenchTab || activeWorkbenchTab.type === 'file');
+    previewWorkbench.drawerMode === 'files';
 
   useEffect(() => {
     if (!fileIconResourcesNeeded || fileIconResources) {
@@ -8177,14 +8178,14 @@ export function App() {
   };
 
   useEffect(() => {
-    if (!previewWorkbench.treeOpen) return;
+    if (previewWorkbench.drawerMode !== 'files') return;
     const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
     if (chatFilePreviewDirEntriesByProject[targetProjectId]?.['.']) return;
     loadPreviewDirectory(targetProjectId, '.').catch(() => undefined);
   }, [
     previewWorkbench.activeProjectId,
-    previewWorkbench.treeOpen,
+    previewWorkbench.drawerMode,
     chatFilePreviewDirEntriesByProject,
   ]);
 
@@ -8844,7 +8845,7 @@ export function App() {
       if (previewFileTreeSearchQuery) {
         updatePreviewFileTreeSearchQuery('');
       } else {
-        setPreviewWorkbench(current => ({...current, treeOpen: false}));
+        setPreviewWorkbench(current => ({...current, drawerMode: 'closed'}));
       }
       return;
     }
@@ -8880,12 +8881,12 @@ export function App() {
   }, [clearPreviewFileTreeSearchTimer]);
 
   useEffect(() => {
-    if (previewWorkbench.treeOpen) {
+    if (previewWorkbench.drawerMode === 'files') {
       focusPreviewFileTreeSearch();
     } else {
       resetPreviewFileTreeSearchSession();
     }
-  }, [focusPreviewFileTreeSearch, previewWorkbench.treeOpen, resetPreviewFileTreeSearchSession]);
+  }, [focusPreviewFileTreeSearch, previewWorkbench.drawerMode, resetPreviewFileTreeSearchSession]);
 
   const clearQuickFileSearchTimer = useCallback(() => {
     if (quickFileSearchTimerRef.current !== null) {
@@ -19481,7 +19482,7 @@ export function App() {
   const scrollLocatedPreviewFileIntoView = () => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        const selected = document.querySelector('.preview-workbench-tree-panel .preview-workbench-file-tree-content .item.selected');
+        const selected = document.querySelector('.preview-workbench-drawer-panel .preview-workbench-file-tree-content .item.selected');
         if (selected instanceof HTMLElement) {
           selected.scrollIntoView({block: 'center'});
         }
@@ -19497,7 +19498,7 @@ export function App() {
       return;
     }
     const ancestors = previewFileAncestorDirs(targetPath);
-    setPreviewWorkbench(current => ({...current, treeOpen: true}));
+    setPreviewWorkbench(current => ({...current, drawerMode: 'files'}));
     updatePreviewFileTreeSearchQuery('');
     setChatFilePreviewExpandedDirsByProject(current => {
       const next = [...(current[targetProjectId] ?? ['.'])];
@@ -19618,7 +19619,10 @@ export function App() {
     </div>
   );
   const toggleChatFilePreviewTree = () => {
-    setPreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
+    setPreviewWorkbench(current => ({
+      ...current,
+      drawerMode: current.drawerMode === 'files' ? 'closed' : 'files',
+    }));
   };
   const selectWorkbenchTab = (tabId: string) => {
     setPreviewWorkbench(current => {
@@ -19681,7 +19685,7 @@ export function App() {
     }
   };
   const handlePreviewFileTreeKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (!previewWorkbench.treeOpen || event.defaultPrevented) {
+    if (previewWorkbench.drawerMode !== 'files' || event.defaultPrevented) {
       return;
     }
     const target = event.target instanceof HTMLElement ? event.target : null;
@@ -20080,7 +20084,7 @@ export function App() {
           peek={tab}
           mode={mode}
           tabs={EMPTY_PREVIEW_WORKBENCH_TABS}
-          treeOpen={previewWorkbench.treeOpen}
+          treeOpen={previewWorkbench.drawerMode === 'files'}
           themeMode={themeMode}
           codeTheme={codeTheme}
           codeFont={codeFont}
@@ -20340,22 +20344,21 @@ export function App() {
       </button>
     </>
   );
-  const previewWorkbenchFileTreeContent = !activeWorkbenchTab || activeWorkbenchTab.type === 'file' ? chatFilePreviewTreeContent : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchChrome
       mode={mode}
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
-      fileTreeOpen={previewWorkbench.treeOpen}
-      fileTree={previewWorkbenchFileTreeContent}
-      fileTreeSearch={previewFileTreeSearch}
+      drawerMode={previewWorkbench.drawerMode}
+      fileDrawer={chatFilePreviewTreeContent}
+      fileDrawerSearch={previewFileTreeSearch}
+      gitDrawer={null}
       actions={renderPreviewWorkbenchActions()}
       actionsMenuOpen={previewWorkbenchActionsMenuOpen}
       onClose={closeChatFilePeekFromChrome}
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
-      onFileTreeToggle={toggleChatFilePreviewTree}
-      onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}
+      onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}
       onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}
       onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}
       searchActive={previewSearchOpen}

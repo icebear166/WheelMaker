@@ -694,7 +694,7 @@ git commit -m "refactor(preview): share unified diff rendering"
 - Modify: `app/web/src/styles/file.css`
 - Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
 
-- [ ] **Step 1: Add failing Chrome boundary tests**
+- [x] **Step 1: Add failing Chrome boundary tests**
 
 Add assertions that `PreviewWorkbenchChrome` receives `drawerMode`, `fileDrawer`, `gitDrawer`, and `onDrawerModeChange`; renders `Toggle files` and `Toggle Git history` buttons together; uses one shared panel ref; closes the active drawer on outside pointer/Escape; and exposes the file drawer even when the active tab is Prompt Diff or attachment.
 
@@ -707,7 +707,7 @@ expect(mainTsx).toContain('fileDrawer={chatFilePreviewTreeContent}');
 expect(mainTsx).not.toContain("!activeWorkbenchTab || activeWorkbenchTab.type === 'file'");
 ```
 
-- [ ] **Step 2: Run the Preview Chrome test and confirm failure**
+- [x] **Step 2: Run the Preview Chrome test and confirm failure**
 
 ```powershell
 npm --prefix app test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts
@@ -715,7 +715,7 @@ npm --prefix app test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts
 
 Expected: FAIL because Chrome still has a boolean file-tree API.
 
-- [ ] **Step 3: Replace the boolean tree API with one drawer API**
+- [x] **Step 3: Replace the boolean tree API with one drawer API**
 
 Use this prop contract:
 
@@ -749,7 +749,7 @@ type PreviewWorkbenchChromeProps = {
 
 Render both buttons in `.preview-workbench-body-tools` when their content exists. Render `fileDrawerSearch` only for `drawerMode === 'files'`. Put either drawer body into one `.preview-workbench-drawer-panel`, so outside-click and Escape logic need one panel ref. Update all `WorkspaceApp` setters to write `drawerMode`; opening Files/Git must be mutually exclusive. Root directory loading depends on `drawerMode === 'files'`; Git loading will be added in Task 8.
 
-- [ ] **Step 4: Update shared drawer geometry without Git-specific styling**
+- [x] **Step 4: Update shared drawer geometry without Git-specific styling**
 
 Rename only the generic selectors in `file.css`:
 
@@ -770,7 +770,7 @@ Rename only the generic selectors in `file.css`:
 
 Keep `.preview-workbench-file-tree-content` for Files-only content. Make the two FABs a vertical two-button rail with the existing dimensions, focus ring, hover, active state, and mobile safe-area offsets.
 
-- [ ] **Step 5: Run Preview and state regressions**
+- [x] **Step 5: Run Preview and state regressions**
 
 ```powershell
 npm --prefix app test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-preview-workbench-state.test.ts __tests__/web-preview-file-regressions.test.tsx
@@ -778,7 +778,7 @@ npm --prefix app test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the generic drawer**
+- [x] **Step 6: Commit the generic drawer**
 
 ```powershell
 git add app/web/src/preview/PreviewWorkbenchChrome.tsx app/web/src/app/WorkspaceApp.tsx app/web/src/styles/file.css app/__tests__/web-chat-file-peek-viewer.test.ts

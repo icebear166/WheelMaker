@@ -2,6 +2,7 @@ import React from 'react';
 import {
   previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
+  type PreviewWorkbenchDrawerMode,
   type PreviewWorkbenchTab,
   type PreviewWorkbenchTabType,
 } from './previewWorkbenchState';
@@ -14,16 +15,16 @@ type PreviewWorkbenchChromeProps = {
   mode: PreviewWorkbenchChromeMode;
   activeTab: PreviewWorkbenchTab | null;
   tabs: PreviewWorkbenchTab[];
-  fileTreeOpen: boolean;
-  fileTree: React.ReactNode;
-  fileTreeSearch?: React.ReactNode;
+  drawerMode: PreviewWorkbenchDrawerMode;
+  fileDrawer: React.ReactNode;
+  fileDrawerSearch?: React.ReactNode;
+  gitDrawer: React.ReactNode;
+  onDrawerModeChange: (mode: PreviewWorkbenchDrawerMode) => void;
   actions?: React.ReactNode;
   actionsMenuOpen: boolean;
   onClose: () => void;
   onTabSelect: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
-  onFileTreeToggle: () => void;
-  onFileTreeClose: () => void;
   onActionsMenuToggle: () => void;
   onActionsMenuClose: () => void;
   onWorkbenchKeyDown?: React.KeyboardEventHandler<HTMLElement>;
@@ -38,7 +39,7 @@ type PreviewWorkbenchChromeProps = {
 
 function previewWorkbenchTabIcon(type: PreviewWorkbenchTabType): IconName {
   if (type === 'file') return 'fileCode';
-  if (type === 'prompt-diff') return 'fileDiff';
+  if (type === 'prompt-diff' || type === 'git-diff') return 'fileDiff';
   if (type === 'attachment') return 'paperclip';
   return 'radioTower';
 }
@@ -47,16 +48,16 @@ export function PreviewWorkbenchChrome({
   mode,
   activeTab,
   tabs,
-  fileTreeOpen,
-  fileTree,
-  fileTreeSearch,
+  drawerMode,
+  fileDrawer,
+  fileDrawerSearch,
+  gitDrawer,
+  onDrawerModeChange,
   actions,
   actionsMenuOpen,
   onClose,
   onTabSelect,
   onTabClose,
-  onFileTreeToggle,
-  onFileTreeClose,
   onActionsMenuToggle,
   onActionsMenuClose,
   onWorkbenchKeyDown,
@@ -68,11 +69,16 @@ export function PreviewWorkbenchChrome({
   onMobileFullscreenChange,
   children,
 }: PreviewWorkbenchChromeProps) {
-  const fileTreeButtonRef = React.useRef<HTMLButtonElement | null>(null);
-  const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);
-  const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
+  const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);
+  const drawerPanelRef = React.useRef<HTMLDivElement | null>(null);
   const actionsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const activeTitle = previewWorkbenchHeaderTitle(activeTab);
+  const drawerOpen = drawerMode !== 'closed';
+  const drawerContent = drawerMode === 'files'
+    ? fileDrawer
+    : drawerMode === 'git'
+      ? gitDrawer
+      : null;
   const toolbarActions = (
     <>
       {onSearch ? (
@@ -112,19 +118,18 @@ export function PreviewWorkbenchChrome({
   );
 
   React.useEffect(() => {
-    if (!fileTreeOpen && !actionsMenuOpen) {
+    if (!drawerOpen && !actionsMenuOpen) {
       return undefined;
     }
     const containsTarget = (node: HTMLElement | null, target: Node | null) =>
       !!node && !!target && node.contains(target);
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target instanceof Node ? event.target : null;
-      if (fileTreeOpen &&
-        !containsTarget(fileTreeButtonRef.current, target) &&
-        !containsTarget(fileTreeSearchRef.current, target) &&
-        !containsTarget(fileTreePanelRef.current, target)
+      if (drawerOpen &&
+        !containsTarget(drawerToolsRef.current, target) &&
+        !containsTarget(drawerPanelRef.current, target)
       ) {
-        onFileTreeClose();
+        onDrawerModeChange('closed');
       }
       if (actionsMenuOpen && !containsTarget(actionsMenuRef.current, target)) {
         onActionsMenuClose();
@@ -132,8 +137,8 @@ export function PreviewWorkbenchChrome({
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (fileTreeOpen) {
-          onFileTreeClose();
+        if (drawerOpen) {
+          onDrawerModeChange('closed');
         }
         if (actionsMenuOpen) {
           onActionsMenuClose();
@@ -146,7 +151,7 @@ export function PreviewWorkbenchChrome({
       window.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [actionsMenuOpen, fileTreeOpen, onActionsMenuClose, onFileTreeClose]);
+  }, [actionsMenuOpen, drawerOpen, onActionsMenuClose, onDrawerModeChange]);
 
   return (
     <WorkbenchChrome
@@ -195,33 +200,47 @@ export function PreviewWorkbenchChrome({
       bodyClassName="preview-workbench-body"
       onKeyDown={onWorkbenchKeyDown}
     >
-      {fileTree ? (
-        <div className="preview-workbench-body-tools">
-          {fileTreeSearch ? (
+      {fileDrawer || gitDrawer ? (
+        <div ref={drawerToolsRef} className="preview-workbench-body-tools">
+          {fileDrawerSearch && drawerMode === 'files' ? (
             <div
-              ref={fileTreeSearchRef}
               className="preview-workbench-tree-search-shell"
-              data-open={fileTreeOpen}
+              data-open="true"
             >
-              {fileTreeSearch}
+              {fileDrawerSearch}
             </div>
           ) : null}
-          <button
-            ref={fileTreeButtonRef}
-            type="button"
-            className={`preview-workbench-tree-fab${fileTreeOpen ? ' active' : ''}`}
-            onClick={onFileTreeToggle}
-            aria-label="Toggle file tree"
-            title="Toggle file tree"
-            aria-pressed={fileTreeOpen}
-          >
-            <Icon name="files" />
-          </button>
+          <div className="preview-workbench-drawer-fab-rail">
+            {fileDrawer ? (
+              <button
+                type="button"
+                className={`preview-workbench-drawer-fab${drawerMode === 'files' ? ' active' : ''}`}
+                onClick={() => onDrawerModeChange(drawerMode === 'files' ? 'closed' : 'files')}
+                aria-label="Toggle files"
+                title="Toggle files"
+                aria-pressed={drawerMode === 'files'}
+              >
+                <Icon name="files" />
+              </button>
+            ) : null}
+            {gitDrawer ? (
+              <button
+                type="button"
+                className={`preview-workbench-drawer-fab${drawerMode === 'git' ? ' active' : ''}`}
+                onClick={() => onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')}
+                aria-label="Toggle Git history"
+                title="Toggle Git history"
+                aria-pressed={drawerMode === 'git'}
+              >
+                <Icon name="gitBranch" />
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
-      {fileTreeOpen && fileTree ? (
-        <div ref={fileTreePanelRef} className="preview-workbench-tree-panel">
-          {fileTree}
+      {drawerOpen && drawerContent ? (
+        <div ref={drawerPanelRef} className="preview-workbench-drawer-panel">
+          {drawerContent}
         </div>
       ) : null}
       {mode === 'mobile' && activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (

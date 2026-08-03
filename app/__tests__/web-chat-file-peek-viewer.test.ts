@@ -392,7 +392,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('openChatFilePeek(path, null, resolveChatFilePreviewProjectId())');
   });
 
-  test('chat file workbench renders unified tab strip, tab close controls, and a desktop tree panel', () => {
+  test('chat file workbench renders unified tab strip, tab close controls, and a desktop drawer', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
 
@@ -400,12 +400,12 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).not.toContain('projectMenuOpen={previewProjectMenuOpen}');
     expect(mainTsx).not.toContain('onProjectSelect={selectPreviewProjectFromMenu}');
     expect(mainTsx).toContain('onTabClose={closeWorkbenchTab}');
-    expect(mainTsx).toContain('onFileTreeToggle={toggleChatFilePreviewTree}');
+    expect(mainTsx).toContain('onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}');
     expect(mainTsx).toContain('closePreviewTab(');
 
     expect(stylesCss).toContain('.chat-file-workbench-tabs');
     expect(stylesCss).not.toContain('.preview-workbench-project-pill');
-    expect(stylesCss).toContain('.preview-workbench-tree-panel');
+    expect(stylesCss).toContain('.preview-workbench-drawer-panel');
     expect(stylesCss).toContain('.chat-file-workbench-empty');
   });
 
@@ -473,19 +473,22 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('surfaceClassName="preview-workbench-surface chat-file-peek-surface"');
   });
 
-  test('file tree toggle is a floating body button on desktop and mobile', () => {
+  test('files and Git toggles share a floating body rail on desktop and mobile', () => {
     const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(chromeTsx).toContain('preview-workbench-tree-fab');
-    expect(chromeTsx).toContain('fileTree ? (');
-    expect(chromeTsx).toContain('fileTreeOpen && fileTree ? (');
-    expect(mainTsx).toContain("fileTree={previewWorkbenchFileTreeContent}");
+    expect(chromeTsx).toContain('drawerMode: PreviewWorkbenchDrawerMode;');
+    expect(chromeTsx).toContain('preview-workbench-drawer-fab');
+    expect(chromeTsx).toContain('aria-label="Toggle files"');
+    expect(chromeTsx).toContain('aria-label="Toggle Git history"');
+    expect(chromeTsx).toContain("onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')");
+    expect(mainTsx).toContain('fileDrawer={chatFilePreviewTreeContent}');
+    expect(mainTsx).toContain('gitDrawer={null}');
     expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
     expect(stylesCss).toContain('.preview-workbench-body-tools');
-    expect(stylesCss).toContain('.preview-workbench-tree-panel');
-    expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-tree-panel');
+    expect(stylesCss).toContain('.preview-workbench-drawer-panel');
+    expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-drawer-panel');
   });
 
   test('preview file tree opens with inline search and renders search results as a tree', () => {
@@ -493,9 +496,9 @@ describe('web chat file peek viewer', () => {
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(chromeTsx).toContain('fileTreeSearch');
-    expect(chromeTsx).toContain('const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);');
-    expect(chromeTsx).toContain('!containsTarget(fileTreeSearchRef.current, target)');
+    expect(chromeTsx).toContain('fileDrawerSearch');
+    expect(chromeTsx).toContain('const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);');
+    expect(chromeTsx).toContain('!containsTarget(drawerToolsRef.current, target)');
     expect(chromeTsx).toContain('className="preview-workbench-tree-search-shell"');
     expect(chromeTsx).toContain("mode === 'mobile'");
 
@@ -511,7 +514,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('depthIndent={previewFileTreeDepthIndent}');
     expect(mainTsx).toContain('const locateActivePreviewFileInTree = () => {');
     expect(mainTsx).toContain('const ancestors = previewFileAncestorDirs(targetPath);');
-    expect(mainTsx).toContain("document.querySelector('.preview-workbench-tree-panel .preview-workbench-file-tree-content .item.selected')");
+    expect(mainTsx).toContain("document.querySelector('.preview-workbench-drawer-panel .preview-workbench-file-tree-content .item.selected')");
     expect(mainTsx).toContain('const previewFileTreeSearchTree = useMemo(');
     expect(mainTsx).toContain('buildFileSearchResultTree(previewFileTreeSearchResults, {');
     expect(mainTsx).toContain('dirEntries: chatFilePreviewDirEntries');
@@ -545,10 +548,10 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('const previewWorkbenchFileTreeContent = !activeWorkbenchTab || activeWorkbenchTab.type === \'file\' ? chatFilePreviewTreeContent : null;');
+    expect(mainTsx).not.toContain("!activeWorkbenchTab || activeWorkbenchTab.type === 'file'");
     expect(mainTsx).toContain('className="chat-file-workbench-empty-action"');
     expect(mainTsx).toContain('onClick={toggleChatFilePreviewTree}');
-    expect(mainTsx).toContain('fileTree={previewWorkbenchFileTreeContent}');
+    expect(mainTsx).toContain('fileDrawer={chatFilePreviewTreeContent}');
     expect(stylesCss).toContain('.chat-file-workbench-empty-action');
   });
 
@@ -591,17 +594,17 @@ describe('web chat file peek viewer', () => {
     expect(closeButtonStart).toBeGreaterThan(openButtonStart);
   });
 
-  test('preview workbench closes open file-tree popovers on outside interactions', () => {
+  test('preview workbench closes the active drawer on outside interactions', () => {
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const mainTsx = readSourceText(mainPath);
 
-    expect(chromeTsx).toContain('onFileTreeClose: () => void;');
+    expect(chromeTsx).toContain('onDrawerModeChange: (mode: PreviewWorkbenchDrawerMode) => void;');
     expect(chromeTsx).not.toContain('projectMenuRef');
-    expect(chromeTsx).toContain('const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);');
+    expect(chromeTsx).toContain('const drawerPanelRef = React.useRef<HTMLDivElement | null>(null);');
     expect(chromeTsx).toContain("window.addEventListener('pointerdown', handlePointerDown, true);");
     expect(chromeTsx).toContain("if (event.key === 'Escape') {");
     expect(mainTsx).not.toContain('onProjectMenuClose');
-    expect(mainTsx).toContain('onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}');
+    expect(mainTsx).toContain('onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}');
   });
 
   test('preview title actions are consolidated into an accessible menu with current-project indexing', () => {
