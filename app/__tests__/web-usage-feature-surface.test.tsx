@@ -135,7 +135,7 @@ describe('MonitorSurface module', () => {
     act(() => view!.root.findByProps({'aria-label': 'Show monitor details'}).props.onClick());
     act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props.onClick());
     expect(view!.root.findByProps({'aria-label': 'Monitor'}).props['data-mode']).toBe('detail');
-    expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
+    expect(view!.root.findByProps({'aria-label': 'GPT Sol model efficiency'})).toBeDefined();
   });
 
   it('refreshes both data sources from one action', () => {
@@ -547,7 +547,7 @@ describe('UsageFeatureSurface', () => {
 
     act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props.onClick());
     expect(view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props['aria-selected']).toBe(true);
-    expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
+    expect(view!.root.findByProps({'aria-label': 'GPT Sol model efficiency'})).toBeDefined();
     expect(view!.root.findAllByProps({'data-usage-account': 'codex:acct-a'})).toHaveLength(0);
     expect(view!.root.findAllByProps({className: 'usage-mobile-footer'})).toHaveLength(0);
     expect(renderedText(view!.root)).not.toContain('Data from CodexRadar');

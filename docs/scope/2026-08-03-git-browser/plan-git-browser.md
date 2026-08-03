@@ -1255,7 +1255,7 @@ git status --short --branch
 
 Expected: no retired top-level Git page/navigation or Git write controls; matches for `stage/unstage` are only read-only scope labels/tests; the protocol-path diff command prints nothing, proving protocol version and Registry protocol docs were unchanged; `git diff --check` exits 0.
 
-- [ ] **Step 4: Rebase the feature branch onto the latest remote baseline**
+- [x] **Step 4: Rebase the feature branch onto the latest remote baseline**
 
 First make the task commits clean, then run:
 
@@ -1266,7 +1266,7 @@ git rebase origin/main
 
 Expected: rebase completes without semantic conflicts. If conflicts are mechanically clear, resolve them and rerun the focused/full verification affected by the resolution; if intent is ambiguous, stop and ask the user.
 
-- [ ] **Step 5: Rerun the full verification after rebase**
+- [x] **Step 5: Rerun the full verification after rebase**
 
 ```powershell
 npm --prefix app run tsc:web
@@ -1277,7 +1277,7 @@ git diff --check
 
 Expected: all commands exit 0.
 
-- [ ] **Step 6: Record verification in this plan and run the exact completion tail**
+- [x] **Step 6: Record verification in this plan and run the exact completion tail**
 
 Mark every completed checkbox in this plan and append one concise verification line below this task with actual suite/test counts and build result. Then execute this exact final command sequence with no intervening command:
 
@@ -1288,3 +1288,5 @@ git push origin feature/git-browser
 ```
 
 Expected: commit succeeds and `feature/git-browser` is pushed. Because the root `main` worktree contained unrelated user edits when this worktree was created, do not merge into `main`, delete the branch, or remove the worktree unless the root worktree is clean at delivery time; report the preserved state instead.
+
+**Verification (2026-08-03):** `tsc:web` passed; 263 Jest suites / 1618 tests passed; webpack 5.105.4 production build succeeded after rebasing onto `origin/main`; protocol-path diff and `git diff --check` were clean.
