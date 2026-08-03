@@ -4732,6 +4732,114 @@ func TestSessionReadReturnsTurnsEnvelopeWithLatestTurnIndex(t *testing.T) {
 	}
 }
 
+func TestSessionReadPaginationReturnsStableContiguousPages(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-page", "Paged Task")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	for _, prompt := range []string{"first", "second"} {
+		if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-page", prompt, nil)); err != nil {
+			t.Fatalf("RecordEvent prompt: %v", err)
+		}
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-page", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: prompt + " answer"}),
+		})); err != nil {
+			t.Fatalf("RecordEvent answer: %v", err)
+		}
+		if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-page", acp.StopReasonEndTurn)); err != nil {
+			t.Fatalf("RecordEvent prompt finished: %v", err)
+		}
+	}
+
+	first, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"sess-page","maxTurns":2,"maxBytes":1048576}`))
+	if err != nil {
+		t.Fatalf("first session.read: %v", err)
+	}
+	firstBody := first.(map[string]any)
+	if got := firstBody["latestTurnIndex"]; got != int64(6) {
+		t.Fatalf("first latestTurnIndex = %v, want 6", got)
+	}
+	if got := firstBody["hasMore"]; got != true {
+		t.Fatalf("first hasMore = %v, want true", got)
+	}
+	if got := firstBody["nextAfterTurnIndex"]; got != int64(2) {
+		t.Fatalf("first nextAfterTurnIndex = %v, want 2", got)
+	}
+	firstTurns := firstBody["turns"].([]sessionViewTurn)
+	if len(firstTurns) != 2 || firstTurns[0].TurnIndex != 1 || firstTurns[1].TurnIndex != 2 {
+		t.Fatalf("first turns = %#v, want indexes 1 and 2", firstTurns)
+	}
+
+	second, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"sess-page","afterTurnIndex":2,"throughTurnIndex":6,"maxTurns":2,"maxBytes":1048576}`))
+	if err != nil {
+		t.Fatalf("second session.read: %v", err)
+	}
+	secondBody := second.(map[string]any)
+	if got := secondBody["latestTurnIndex"]; got != int64(6) {
+		t.Fatalf("second latestTurnIndex = %v, want stable snapshot 6", got)
+	}
+	if got := secondBody["hasMore"]; got != true {
+		t.Fatalf("second hasMore = %v, want true", got)
+	}
+	if got := secondBody["nextAfterTurnIndex"]; got != int64(4) {
+		t.Fatalf("second nextAfterTurnIndex = %v, want 4", got)
+	}
+	secondTurns := secondBody["turns"].([]sessionViewTurn)
+	if len(secondTurns) != 2 || secondTurns[0].TurnIndex != 3 || secondTurns[1].TurnIndex != 4 {
+		t.Fatalf("second turns = %#v, want indexes 3 and 4", secondTurns)
+	}
+}
+
+func TestSessionReadPaginationHonorsEncodedResponseByteLimit(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-bytes", "Byte Limited Task")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	for index := 0; index < 6; index++ {
+		if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-bytes", fmt.Sprintf("prompt-%d", index), nil)); err != nil {
+			t.Fatalf("RecordEvent prompt %d: %v", index, err)
+		}
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-bytes", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: strings.Repeat("x", 8*1024)}),
+		})); err != nil {
+			t.Fatalf("RecordEvent answer %d: %v", index, err)
+		}
+		if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-bytes", acp.StopReasonEndTurn)); err != nil {
+			t.Fatalf("RecordEvent prompt finished %d: %v", index, err)
+		}
+	}
+
+	const maxBytes = 24 * 1024
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"sess-bytes","maxTurns":128,"maxBytes":24576}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest: %v", err)
+	}
+	body := resp.(map[string]any)
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("json.Marshal(response): %v", err)
+	}
+	if len(encoded) > maxBytes {
+		t.Fatalf("encoded response bytes = %d, want <= %d", len(encoded), maxBytes)
+	}
+	if got := body["hasMore"]; got != true {
+		t.Fatalf("hasMore = %v, want true", got)
+	}
+	turns := body["turns"].([]sessionViewTurn)
+	if len(turns) == 0 || len(turns) >= 18 {
+		t.Fatalf("turns len = %d, want a non-empty partial page", len(turns))
+	}
+	if got := body["nextAfterTurnIndex"]; got != turns[len(turns)-1].TurnIndex {
+		t.Fatalf("nextAfterTurnIndex = %v, want %d", got, turns[len(turns)-1].TurnIndex)
+	}
+}
+
 func TestSessionReadVerboseLogIncludesTurnCursor(t *testing.T) {
 	var logs bytes.Buffer
 	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelVerbose}); err != nil {
@@ -6000,6 +6108,33 @@ func TestSessionSummaryExposesRunningDoneAndReadState(t *testing.T) {
 	}
 	if got := doneSummary["lastReadTurnIndex"]; got != float64(0) {
 		t.Fatalf("done summary lastReadTurnIndex = %#v, want 0", got)
+	}
+}
+
+func TestSessionSummaryTreatsCancelledPromptAsUnsuccessful(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-cancelled-summary", "Cancelled Status")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-cancelled-summary", "run", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt started: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-cancelled-summary", acp.StopReasonCancelled)); err != nil {
+		t.Fatalf("RecordEvent prompt cancelled: %v", err)
+	}
+
+	sessions, err := c.listSessionViews(ctx)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions len = %d, want 1", len(sessions))
+	}
+	summary := sessionSummaryMap(t, sessions[0])
+	if got := summary["lastDoneSuccess"]; got != false {
+		t.Fatalf("cancelled summary lastDoneSuccess = %#v, want false", got)
 	}
 }
 

@@ -184,7 +184,10 @@ describe('web chat integration', () => {
     expect(registryTypes).not.toContain('lastIndex');
     expect(repositoryTs).toContain('RegistryMethods.SessionList');
     expect(repositoryTs).toContain('RegistryMethods.SessionRead');
-    expect(repositoryTs).toContain('payload: afterTurnIndex > 0 ? {sessionId, afterTurnIndex} : {sessionId}');
+    expect(repositoryTs).toContain('maxTurns: SESSION_READ_PAGE_MAX_TURNS');
+    expect(repositoryTs).toContain('maxBytes: SESSION_READ_PAGE_MAX_BYTES');
+    expect(repositoryTs).toContain('{throughTurnIndex: snapshotLatestTurnIndex}');
+    expect(repositoryTs).toContain('payload.hasMore !== true');
     expect(repositoryTs).toContain('turns?: unknown[];');
     expect(repositoryTs).toContain('normalizeSessionReadPayload(');
     expect(registryTypes).toContain('export interface RegistrySessionTurn');

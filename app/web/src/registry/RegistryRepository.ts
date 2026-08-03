@@ -130,6 +130,8 @@ export type RegistryFileRequestOptions = {
 
 const SESSION_CREATE_TIMEOUT_MS = 120000;
 const SESSION_FORK_TIMEOUT_MS = SESSION_CREATE_TIMEOUT_MS;
+const SESSION_READ_PAGE_MAX_TURNS = 128;
+const SESSION_READ_PAGE_MAX_BYTES = 4 * 1024 * 1024;
 
 function normalizeAgentType(agentType: unknown): string | undefined {
   if (typeof agentType !== 'string') {
@@ -972,48 +974,99 @@ export class RegistryRepository {
     afterTurnIndex: number,
     method: typeof RegistryMethods.SessionRead,
   ): Promise<RegistrySessionReadResponse> {
-    const resp = await this.client.request({
-      method,
-      projectId,
-      payload: afterTurnIndex > 0 ? {sessionId, afterTurnIndex} : {sessionId},
-      timeoutMs: 15000,
-    });
-    const payload = (resp.payload ?? {}) as {
-      sessionId?: unknown;
-      session?: unknown;
-      latestTurnIndex?: unknown;
-      turns?: unknown[];
-    };
-    const latestTurnIndex = typeof payload.latestTurnIndex === 'number' && Number.isFinite(payload.latestTurnIndex)
-      ? Math.max(0, Math.trunc(payload.latestTurnIndex))
+    const initialAfterTurnIndex = Number.isFinite(afterTurnIndex)
+      ? Math.max(0, Math.trunc(afterTurnIndex))
       : 0;
-    const normalized = normalizeSessionReadPayload(
-      payload,
-      sessionId,
-      raw => this.normalizeSessionSummary(raw),
-    );
-    if (!normalized) {
-      return {
-        sessionId: '',
-        turns: [],
-        messages: [],
-        latestTurnIndex,
+    let cursor = initialAfterTurnIndex;
+    let snapshotLatestTurnIndex: number | undefined;
+    let session: RegistrySessionSummary | undefined;
+    const turnsByIndex = new Map<number, RegistrySessionTurn>();
+    let firstPage = true;
+
+    while (true) {
+      const resp = await this.client.request({
+        method,
+        projectId,
+        payload: {
+          sessionId,
+          ...(cursor > 0 ? {afterTurnIndex: cursor} : {}),
+          ...(snapshotLatestTurnIndex !== undefined ? {throughTurnIndex: snapshotLatestTurnIndex} : {}),
+          maxTurns: SESSION_READ_PAGE_MAX_TURNS,
+          maxBytes: SESSION_READ_PAGE_MAX_BYTES,
+        },
+        timeoutMs: 15000,
+      });
+      const payload = (resp.payload ?? {}) as {
+        sessionId?: unknown;
+        session?: unknown;
+        latestTurnIndex?: unknown;
+        turns?: unknown[];
+        hasMore?: unknown;
+        nextAfterTurnIndex?: unknown;
       };
+      const pageLatestTurnIndex = typeof payload.latestTurnIndex === 'number' && Number.isFinite(payload.latestTurnIndex)
+        ? Math.max(0, Math.trunc(payload.latestTurnIndex))
+        : 0;
+      const normalized = normalizeSessionReadPayload(
+        payload,
+        sessionId,
+        raw => this.normalizeSessionSummary(raw),
+      );
+      if (!normalized) {
+        if (firstPage) {
+          return {
+            sessionId: '',
+            turns: [],
+            messages: [],
+            latestTurnIndex: pageLatestTurnIndex,
+          };
+        }
+        throw new Error('session.read returned an invalid pagination response');
+      }
+
+      if (snapshotLatestTurnIndex === undefined) {
+        snapshotLatestTurnIndex = normalized.latestTurnIndex;
+      } else if (normalized.latestTurnIndex !== snapshotLatestTurnIndex) {
+        throw new Error('session.read pagination changed its snapshot cursor');
+      }
+      if (normalized.session) {
+        session = normalized.session;
+      }
+      normalized.turns.forEach(turn => {
+        if (turn.turnIndex > initialAfterTurnIndex && turn.turnIndex <= snapshotLatestTurnIndex!) {
+          turnsByIndex.set(turn.turnIndex, turn);
+        }
+      });
+
+      if (payload.hasMore !== true) {
+        break;
+      }
+      const nextAfterTurnIndex = typeof payload.nextAfterTurnIndex === 'number' && Number.isFinite(payload.nextAfterTurnIndex)
+        ? Math.trunc(payload.nextAfterTurnIndex)
+        : 0;
+      if (nextAfterTurnIndex <= cursor || nextAfterTurnIndex > snapshotLatestTurnIndex) {
+        throw new Error('session.read pagination did not advance');
+      }
+      cursor = nextAfterTurnIndex;
+      firstPage = false;
     }
-    if (normalized.session) {
-      normalized.session.latestTurnIndex = normalized.latestTurnIndex;
+
+    const latestTurnIndex = snapshotLatestTurnIndex ?? 0;
+    if (session) {
+      session.latestTurnIndex = latestTurnIndex;
     }
-    const normalizedTurns: RegistrySessionTurn[] = normalized.turns;
+    const normalizedTurns: RegistrySessionTurn[] = Array.from(turnsByIndex.values())
+      .sort((a, b) => a.turnIndex - b.turnIndex);
     const normalizedMessages: RegistrySessionMessage[] = normalizedTurns
-      .map(turn => decodeSessionTurnToMessage(normalized.sessionId, turn))
+      .map(turn => decodeSessionTurnToMessage(sessionId, turn))
       .filter((item): item is RegistrySessionMessage => !!item);
 
     return {
-      sessionId: normalized.sessionId,
+      sessionId,
       turns: normalizedTurns,
-      ...(normalized.session ? {session: normalized.session} : {}),
+      ...(session ? {session} : {}),
       messages: normalizedMessages,
-      latestTurnIndex: normalized.latestTurnIndex,
+      latestTurnIndex,
     };
   }
   async initialize(url: string, clientName: RegistryClientName): Promise<void> {

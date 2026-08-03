@@ -747,8 +747,11 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		return map[string]any{"sessions": sessions}, nil
 	case acp.RegistryMethodSessionRead:
 		var req struct {
-			SessionID      string `json:"sessionId"`
-			AfterTurnIndex int64  `json:"afterTurnIndex,omitempty"`
+			SessionID        string `json:"sessionId"`
+			AfterTurnIndex   int64  `json:"afterTurnIndex,omitempty"`
+			ThroughTurnIndex int64  `json:"throughTurnIndex,omitempty"`
+			MaxTurns         int    `json:"maxTurns,omitempty"`
+			MaxBytes         int    `json:"maxBytes,omitempty"`
 		}
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.read payload: %w", err)
@@ -758,11 +761,34 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if afterTurnIndex < 0 {
 			afterTurnIndex = 0
 		}
+		paginated := req.MaxTurns != 0 || req.MaxBytes != 0 || req.ThroughTurnIndex != 0
+		if req.ThroughTurnIndex > 0 && req.ThroughTurnIndex < afterTurnIndex {
+			return nil, fmt.Errorf("throughTurnIndex must not be less than afterTurnIndex")
+		}
+		maxTurns := req.MaxTurns
+		if maxTurns <= 0 {
+			maxTurns = 128
+		} else if maxTurns > 512 {
+			maxTurns = 512
+		}
+		maxBytes := req.MaxBytes
+		if maxBytes <= 0 {
+			maxBytes = 4 * 1024 * 1024
+		} else if maxBytes > 8*1024*1024 {
+			maxBytes = 8 * 1024 * 1024
+		}
 		log := hubLogger(c.projectName)
 		if log.VerboseEnabled() {
 			log.Verbose("session.read request sessionId=%s afterTurnIndex=%d", sessionID, afterTurnIndex)
 		}
-		latestTurnIndex, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, sessionID, afterTurnIndex)
+		var latestTurnIndex int64
+		var turns []sessionViewTurn
+		var err error
+		if paginated {
+			latestTurnIndex, turns, err = c.sessionRecorder.ReadSessionTurnPage(ctx, sessionID, afterTurnIndex, req.ThroughTurnIndex, maxTurns)
+		} else {
+			latestTurnIndex, turns, err = c.sessionRecorder.ReadSessionTurns(ctx, sessionID, afterTurnIndex)
+		}
 		if err != nil {
 			if log.VerboseEnabled() {
 				log.Verbose("session.read error sessionId=%s afterTurnIndex=%d error=%s", sessionID, afterTurnIndex, err)
@@ -787,7 +813,13 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if log.VerboseEnabled() {
 			log.Verbose("session.read result sessionId=%s afterTurnIndex=%d latestTurnIndex=%d turnCount=%d lastDoneTurnIndex=%d lastReadTurnIndex=%d lastDoneSuccess=%t running=%t", sessionID, afterTurnIndex, latestTurnIndex, len(turns), summary.LastDoneTurnIndex, summary.LastReadTurnIndex, summary.LastDoneSuccess, summary.Running)
 		}
-		return map[string]any{"sessionId": sessionID, "latestTurnIndex": latestTurnIndex, "session": summary, "turns": turns}, nil
+		response := map[string]any{"sessionId": sessionID, "latestTurnIndex": latestTurnIndex, "session": summary, "turns": turns}
+		if paginated {
+			if err := constrainSessionReadPage(response, afterTurnIndex, maxBytes); err != nil {
+				return nil, err
+			}
+		}
+		return response, nil
 	case acp.RegistryMethodSessionSearch:
 		if c.sessionSearch == nil {
 			c.sessionSearch = newSessionSearchManager(c)
@@ -1207,6 +1239,37 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
+	}
+}
+
+func constrainSessionReadPage(response map[string]any, afterTurnIndex int64, maxBytes int) error {
+	turns, _ := response["turns"].([]sessionViewTurn)
+	latestTurnIndex, _ := response["latestTurnIndex"].(int64)
+	for {
+		nextAfterTurnIndex := afterTurnIndex
+		if len(turns) > 0 {
+			nextAfterTurnIndex = turns[len(turns)-1].TurnIndex
+		}
+		hasMore := nextAfterTurnIndex < latestTurnIndex
+		response["hasMore"] = hasMore
+		if hasMore {
+			response["nextAfterTurnIndex"] = nextAfterTurnIndex
+		} else {
+			delete(response, "nextAfterTurnIndex")
+		}
+		response["turns"] = turns
+
+		encoded, err := json.Marshal(response)
+		if err != nil {
+			return fmt.Errorf("encode session.read page: %w", err)
+		}
+		if len(encoded) <= maxBytes {
+			return nil
+		}
+		if len(turns) <= 1 {
+			return fmt.Errorf("session.read turn exceeds maxBytes: encoded=%d maxBytes=%d", len(encoded), maxBytes)
+		}
+		turns = turns[:len(turns)-1]
 	}
 }
 

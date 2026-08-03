@@ -387,7 +387,7 @@ func (r *SessionRecorder) InitializeForkedSession(
 			continue
 		}
 		lastDoneTurnIndex = int64(index + 1)
-		lastDoneSuccess = strings.TrimSpace(result.StopReason) != acp.SessionTurnStopReasonFailed
+		lastDoneSuccess = sessionStopReasonSuccess(result.StopReason)
 	}
 	projection := sessionSyncProjection{
 		LatestPersistedTurnIndex: latestTurnIndex,
@@ -791,6 +791,17 @@ func (r *SessionRecorder) ReadSessionSummary(ctx context.Context, sessionID stri
 }
 
 func (r *SessionRecorder) ReadSessionTurns(ctx context.Context, sessionID string, afterTurnIndex int64) (int64, []sessionViewTurn, error) {
+	return r.readSessionTurns(ctx, sessionID, afterTurnIndex, 0, 0)
+}
+
+func (r *SessionRecorder) ReadSessionTurnPage(ctx context.Context, sessionID string, afterTurnIndex, throughTurnIndex int64, maxTurns int) (int64, []sessionViewTurn, error) {
+	if maxTurns <= 0 {
+		return 0, nil, fmt.Errorf("maxTurns must be positive")
+	}
+	return r.readSessionTurns(ctx, sessionID, afterTurnIndex, throughTurnIndex, maxTurns)
+}
+
+func (r *SessionRecorder) readSessionTurns(ctx context.Context, sessionID string, afterTurnIndex, throughTurnIndex int64, maxTurns int) (int64, []sessionViewTurn, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	rec, err := r.store.LoadSession(ctx, r.projectName, sessionID)
 	if err != nil {
@@ -803,24 +814,7 @@ func (r *SessionRecorder) ReadSessionTurns(ctx context.Context, sessionID string
 		afterTurnIndex = 0
 	}
 	persistedLatest := sessionSyncLatestPersistedTurnIndex(rec.SessionSyncJSON)
-	turns := []sessionViewTurn{}
-	if persistedLatest > afterTurnIndex {
-		if r.turnStore != nil {
-			readTurns, err := r.turnStore.ReadTurns(ctx, r.projectName, sessionID, afterTurnIndex, persistedLatest)
-			if err != nil {
-				return 0, nil, err
-			}
-			turns = append(turns, readTurns...)
-		} else {
-			r.writeMu.Lock()
-			for _, turn := range r.finishedTurns[sessionID] {
-				if turn.TurnIndex > afterTurnIndex && turn.TurnIndex <= persistedLatest {
-					turns = append(turns, turn)
-				}
-			}
-			r.writeMu.Unlock()
-		}
-	}
+	liveTurns := []sessionViewTurn{}
 	latestTurnIndex := persistedLatest
 	r.writeMu.Lock()
 	if state := r.promptState[sessionID]; state != nil {
@@ -831,7 +825,7 @@ func (r *SessionRecorder) ReadSessionTurns(ctx context.Context, sessionID string
 			if turn.turnIndex <= afterTurnIndex || turn.turnIndex <= persistedLatest {
 				continue
 			}
-			turns = append(turns, sessionViewTurn{
+			liveTurns = append(liveTurns, sessionViewTurn{
 				TurnIndex: turn.turnIndex,
 				Content:   buildSessionTurnContentJSON(turn.method, turn.payload),
 				Finished:  turn.finished,
@@ -839,10 +833,46 @@ func (r *SessionRecorder) ReadSessionTurns(ctx context.Context, sessionID string
 		}
 	}
 	r.writeMu.Unlock()
+
+	pageLatestTurnIndex := latestTurnIndex
+	if throughTurnIndex > 0 && throughTurnIndex < pageLatestTurnIndex {
+		pageLatestTurnIndex = throughTurnIndex
+	}
+	pageEndTurnIndex := pageLatestTurnIndex
+	if maxTurns > 0 && pageEndTurnIndex-afterTurnIndex > int64(maxTurns) {
+		pageEndTurnIndex = afterTurnIndex + int64(maxTurns)
+	}
+	turns := []sessionViewTurn{}
+	persistedPageEnd := persistedLatest
+	if persistedPageEnd > pageEndTurnIndex {
+		persistedPageEnd = pageEndTurnIndex
+	}
+	if persistedPageEnd > afterTurnIndex {
+		if r.turnStore != nil {
+			readTurns, err := r.turnStore.ReadTurns(ctx, r.projectName, sessionID, afterTurnIndex, persistedPageEnd)
+			if err != nil {
+				return 0, nil, err
+			}
+			turns = append(turns, readTurns...)
+		} else {
+			r.writeMu.Lock()
+			for _, turn := range r.finishedTurns[sessionID] {
+				if turn.TurnIndex > afterTurnIndex && turn.TurnIndex <= persistedPageEnd {
+					turns = append(turns, turn)
+				}
+			}
+			r.writeMu.Unlock()
+		}
+	}
+	for _, turn := range liveTurns {
+		if turn.TurnIndex <= pageEndTurnIndex {
+			turns = append(turns, turn)
+		}
+	}
 	sort.Slice(turns, func(i, j int) bool {
 		return turns[i].TurnIndex < turns[j].TurnIndex
 	})
-	return latestTurnIndex, turns, nil
+	return pageLatestTurnIndex, turns, nil
 }
 
 func (r *SessionRecorder) MarkSessionRead(ctx context.Context, sessionID string, lastReadTurnIndex int64) (sessionViewSummary, error) {
@@ -1596,7 +1626,16 @@ func sessionDoneTurnSuccess(turn sessionTurnMessage) bool {
 	if !ok {
 		return true
 	}
-	return strings.TrimSpace(result.StopReason) != acp.SessionTurnStopReasonFailed
+	return sessionStopReasonSuccess(result.StopReason)
+}
+
+func sessionStopReasonSuccess(stopReason string) bool {
+	switch strings.TrimSpace(stopReason) {
+	case acp.SessionTurnStopReasonFailed, acp.StopReasonCancelled, "interrupted", "error":
+		return false
+	default:
+		return true
+	}
 }
 
 func boolPtr(value bool) *bool {
