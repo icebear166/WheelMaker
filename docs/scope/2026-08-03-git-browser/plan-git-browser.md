@@ -902,7 +902,7 @@ git commit -m "feat(git): add preview history panel"
 - Create: `app/web/src/git/GitStatusSurface.test.tsx`
 - Modify: `app/web/src/styles/git.css`
 
-- [ ] **Step 1: Write failing card tests**
+- [x] **Step 1: Write failing card tests**
 
 ```tsx
 import React from 'react';
@@ -975,7 +975,7 @@ test('collapsed header keeps branch and total count visible', () => {
 
 Add loading, clean worktree, stale error/retry, refresh spinner, and offline-disabled cases.
 
-- [ ] **Step 2: Run the card test and confirm failure**
+- [x] **Step 2: Run the card test and confirm failure**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/git/GitStatusSurface.test.tsx
@@ -983,7 +983,7 @@ npm --prefix app test -- --runInBand web/src/git/GitStatusSurface.test.tsx
 
 Expected: FAIL because the card does not exist.
 
-- [ ] **Step 3: Implement the card with a persistent header toolbar**
+- [x] **Step 3: Implement the card with a persistent header toolbar**
 
 `GitStatusSurface` must own only `const [collapsed, setCollapsed] = React.useState(false)`, compute the total from all three groups, and put the branch/count summary plus refresh action inside the existing `toolbar` slot so both stay visible when collapsed:
 
@@ -1018,11 +1018,11 @@ const toolbar = (
 
 Render Staged, Unstaged, Untracked only when non-empty; clean state says `Working tree clean`. File button keys must include `${scope}:${path}` and callbacks must preserve that scope.
 
-- [ ] **Step 4: Style the card within existing edge-surface geometry**
+- [x] **Step 4: Style the card within existing edge-surface geometry**
 
 Add only `.git-status-*` descendants to `git.css`. Keep the existing card width/radius/glass/shadow rules from `chat.css`; constrain the expanded body with `max-height` and internal scrolling so Git cannot starve Monitor. Ensure collapsed summary ellipsizes branch names.
 
-- [ ] **Step 5: Run card and edge-surface regressions**
+- [x] **Step 5: Run card and edge-surface regressions**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/git/GitStatusSurface.test.tsx app/web/src/chat/ChatEdgeSurfaceHeader.test.tsx __tests__/web-chat-edge-surface-geometry.test.ts __tests__/web-chat-session-panel-layout.test.tsx
@@ -1030,7 +1030,7 @@ npm --prefix app test -- --runInBand web/src/git/GitStatusSurface.test.tsx app/w
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the card**
+- [x] **Step 6: Commit the card**
 
 ```powershell
 git add app/web/src/git/GitStatusSurface.tsx app/web/src/git/GitStatusSurface.test.tsx app/web/src/styles/git.css
