@@ -450,7 +450,7 @@ git commit -m "feat(git): add shared browser store"
 - Modify: `app/web/src/preview/previewWorkbenchState.ts`
 - Modify: `app/__tests__/web-preview-workbench-state.test.ts`
 
-- [ ] **Step 1: Add failing state tests**
+- [x] **Step 1: Add failing state tests**
 
 ```ts
 test('creates stable commit and worktree git diff tab ids', () => {
@@ -490,7 +490,7 @@ test('migrates the legacy treeOpen snapshot to the files drawer', () => {
 });
 ```
 
-- [ ] **Step 2: Run the Preview state test and confirm it fails**
+- [x] **Step 2: Run the Preview state test and confirm it fails**
 
 ```powershell
 npm --prefix app test -- --runInBand __tests__/web-preview-workbench-state.test.ts
@@ -498,7 +498,7 @@ npm --prefix app test -- --runInBand __tests__/web-preview-workbench-state.test.
 
 Expected: FAIL on the missing `git-diff` union member and `drawerMode`.
 
-- [ ] **Step 3: Add the exact state contracts and backward-compatible snapshot mapping**
+- [x] **Step 3: Add the exact state contracts and backward-compatible snapshot mapping**
 
 ```ts
 export type PreviewWorkbenchDrawerMode = 'closed' | 'files' | 'git';
@@ -541,11 +541,11 @@ const drawerMode: PreviewWorkbenchDrawerMode =
       : 'closed';
 ```
 
-- [ ] **Step 4: Run state tests**
+- [x] **Step 4: Run state tests**
 
 Run the Step 2 command. Expected: PASS, including legacy snapshot coverage.
 
-- [ ] **Step 5: Commit the Preview state slice**
+- [x] **Step 5: Commit the Preview state slice**
 
 ```powershell
 git add app/web/src/preview/previewWorkbenchState.ts app/__tests__/web-preview-workbench-state.test.ts

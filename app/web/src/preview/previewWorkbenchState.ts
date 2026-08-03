@@ -1,7 +1,9 @@
 import type {RegistryFsInfo, RegistrySessionPromptArtifactFile} from '../registry/registryTypes';
+import type {GitWorkingTreeScope} from '../git/gitBrowserModel';
 import {isHtmlPreviewPath} from './htmlPreviewSource';
 
-export type PreviewWorkbenchTabType = 'file' | 'prompt-diff' | 'attachment' | 'port-relay';
+export type PreviewWorkbenchTabType = 'file' | 'prompt-diff' | 'git-diff' | 'attachment' | 'port-relay';
+export type PreviewWorkbenchDrawerMode = 'closed' | 'files' | 'git';
 
 export type PreviewWorkbenchTabBase = {
   id: string;
@@ -36,6 +38,31 @@ export type PromptDiffPreviewTab = PreviewWorkbenchTabBase & {
   activeFilePath: string;
 };
 
+export type GitDiffSource =
+  | {kind: 'commit'; sha: string; path: string}
+  | {kind: 'worktree'; scope: GitWorkingTreeScope; path: string};
+
+export type GitDiffFileMeta = {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+};
+
+export type GitDiffPreviewFile = GitDiffFileMeta & {
+  diff: string;
+  expanded: boolean;
+  isBinary: boolean;
+  truncated: boolean;
+};
+
+export type GitDiffPreviewTab = PreviewWorkbenchTabBase & {
+  type: 'git-diff';
+  source: GitDiffSource;
+  file: GitDiffPreviewFile;
+  loadedWorktreeRev: string;
+};
+
 export type AttachmentPreviewTab = PreviewWorkbenchTabBase & {
   type: 'attachment';
   sessionId: string;
@@ -60,6 +87,7 @@ export type PortRelayPreviewTab = PreviewWorkbenchTabBase & {
 export type PreviewWorkbenchTab =
   | FilePreviewTab
   | PromptDiffPreviewTab
+  | GitDiffPreviewTab
   | AttachmentPreviewTab
   | PortRelayPreviewTab;
 
@@ -81,6 +109,14 @@ export type PreviewWorkbenchOpenInput =
       promptSummary?: string;
       files: PromptDiffPreviewFile[];
       activeFilePath?: string;
+    }
+  | {
+      type: 'git-diff';
+      projectId: string;
+      title: string;
+      source: GitDiffSource;
+      file: GitDiffFileMeta;
+      loadedWorktreeRev?: string;
     }
   | {
       type: 'attachment';
@@ -107,6 +143,7 @@ export type PreviewWorkbenchOpenInput =
 export type PreviewWorkbenchTabIdInput =
   | {type: 'file'; path?: string}
   | {type: 'prompt-diff'; sessionId?: string; artifactId?: string}
+  | {type: 'git-diff'; source: GitDiffSource}
   | {type: 'attachment'; sessionId?: string; attachmentKey?: string}
   | {type: 'port-relay'; hubId?: string; targetPort?: number; framePath?: string};
 
@@ -115,7 +152,7 @@ export type PreviewWorkbenchState = {
   tabsByProjectId: Record<string, PreviewWorkbenchTab[]>;
   activeTabIdByProjectId: Record<string, string>;
   renderedTabIdsByProjectId: Record<string, string[]>;
-  treeOpen: boolean;
+  drawerMode: PreviewWorkbenchDrawerMode;
 };
 
 export const PREVIEW_WORKBENCH_SNAPSHOT_VERSION = 1;
@@ -138,6 +175,15 @@ export type PreviewWorkbenchSnapshotPromptDiffTab = {
   promptSummary: string;
   files: Array<RegistrySessionPromptArtifactFile & {expanded: boolean}>;
   activeFilePath?: string;
+};
+
+export type PreviewWorkbenchSnapshotGitDiffTab = {
+  type: 'git-diff';
+  projectId: string;
+  title: string;
+  source: GitDiffSource;
+  file: GitDiffFileMeta & {expanded: boolean};
+  loadedWorktreeRev: string;
 };
 
 export type PreviewWorkbenchSnapshotAttachmentTab = {
@@ -165,6 +211,7 @@ export type PreviewWorkbenchSnapshotPortRelayTab = {
 export type PreviewWorkbenchSnapshotTab =
   | PreviewWorkbenchSnapshotFileTab
   | PreviewWorkbenchSnapshotPromptDiffTab
+  | PreviewWorkbenchSnapshotGitDiffTab
   | PreviewWorkbenchSnapshotAttachmentTab
   | PreviewWorkbenchSnapshotPortRelayTab;
 
@@ -174,7 +221,8 @@ export type PreviewWorkbenchSnapshot = {
   tabsByProjectId: Record<string, PreviewWorkbenchSnapshotTab[]>;
   activeTabIdByProjectId: Record<string, string>;
   renderedTabIdsByProjectId: Record<string, string[]>;
-  treeOpen: boolean;
+  drawerMode?: PreviewWorkbenchDrawerMode;
+  treeOpen?: boolean;
 };
 
 export type PreviewSearchMatch =
@@ -231,6 +279,9 @@ export function resolvePreviewDesktopFilePath(tab: PreviewWorkbenchTab): string 
   if (tab.type === 'prompt-diff') {
     return resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath);
   }
+  if (tab.type === 'git-diff') {
+    return tab.file.path || tab.source.path;
+  }
   return '';
 }
 
@@ -240,6 +291,11 @@ export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
   }
   if (input.type === 'prompt-diff') {
     return `prompt-diff:${input.sessionId || ''}:${input.artifactId || ''}`;
+  }
+  if (input.type === 'git-diff') {
+    return input.source.kind === 'commit'
+      ? `git-diff:commit:${input.source.sha}:${input.source.path}`
+      : `git-diff:worktree:${input.source.scope}:${input.source.path}`;
   }
   if (input.type === 'attachment') {
     return `attachment:${input.sessionId || ''}:${input.attachmentKey || ''}`;
@@ -272,6 +328,11 @@ export function previewWorkbenchTabTooltip(tab: PreviewWorkbenchTab): string {
       paths.join(', '),
     ].filter(Boolean).join(' - ');
   }
+  if (tab.type === 'git-diff') {
+    return tab.source.kind === 'commit'
+      ? [tab.file.path, tab.source.sha].filter(Boolean).join(' - ')
+      : [tab.file.path, 'Working Tree', tab.source.scope].filter(Boolean).join(' - ');
+  }
   if (tab.type === 'attachment') {
     return [tab.title, tab.mimeType, tab.meta, tab.attachmentKey].filter(Boolean).join(' - ');
   }
@@ -290,6 +351,12 @@ export function previewWorkbenchHeaderTitle(tab: PreviewWorkbenchTab | null): st
     return summary
       ? `Prompt diff · "${summary}" · ${fileCountLabel(tab.files.length)}`
       : `Prompt diff · ${fileCountLabel(tab.files.length)}`;
+  }
+  if (tab.type === 'git-diff') {
+    const context = tab.source.kind === 'commit'
+      ? tab.source.sha.slice(0, 8)
+      : 'Working Tree';
+    return `Git diff · ${context} · ${tab.file.path}`;
   }
   if (tab.type === 'attachment') {
     return ['Attachment', tab.title, tab.mimeType].filter(Boolean).join(' · ');
@@ -322,6 +389,12 @@ export function buildPreviewSearchMatches(
         .filter(match => match.text.toLocaleLowerCase().includes(normalizedQuery)),
     );
   }
+  if (tab.type === 'git-diff') {
+    return tab.file.diff
+      .split('\n')
+      .map((text, index) => ({kind: 'diff' as const, path: tab.file.path, line: index + 1, text}))
+      .filter(match => match.text.toLocaleLowerCase().includes(normalizedQuery));
+  }
   return [];
 }
 
@@ -337,6 +410,9 @@ export function previewSearchDocumentKey(tab: PreviewWorkbenchTab | null): strin
       .map(file => `${file.path}\0${file.diff}`)
       .join('\u0001');
   }
+  if (tab.type === 'git-diff') {
+    return `${tab.file.path}\0${tab.file.diff}`;
+  }
   return '';
 }
 
@@ -350,6 +426,10 @@ function validPreviewInput(input: PreviewWorkbenchOpenInput): boolean {
   if (input.type === 'prompt-diff') {
     return hasText(input.sessionId) && hasText(input.artifactId);
   }
+  if (input.type === 'git-diff') {
+    return hasText(input.source.path)
+      && (input.source.kind === 'worktree' || hasText(input.source.sha));
+  }
   if (input.type === 'attachment') {
     return hasText(input.sessionId) && hasText(input.attachmentKey);
   }
@@ -362,7 +442,7 @@ export function createPreviewWorkbenchState(activeProjectId = ''): PreviewWorkbe
     tabsByProjectId: activeProjectId ? {[activeProjectId]: []} : {},
     activeTabIdByProjectId: {},
     renderedTabIdsByProjectId: activeProjectId ? {[activeProjectId]: []} : {},
-    treeOpen: false,
+    drawerMode: 'closed',
   };
 }
 
@@ -393,6 +473,22 @@ function previewSnapshotTab(tab: PreviewWorkbenchTab): PreviewWorkbenchSnapshotT
         deletions: file.deletions,
         expanded: file.expanded,
       })),
+    };
+  }
+  if (tab.type === 'git-diff') {
+    return {
+      type: 'git-diff',
+      projectId: tab.projectId,
+      title: tab.title,
+      source: tab.source,
+      file: {
+        path: tab.file.path,
+        status: tab.file.status,
+        additions: tab.file.additions,
+        deletions: tab.file.deletions,
+        expanded: tab.file.expanded,
+      },
+      loadedWorktreeRev: '',
     };
   }
   if (tab.type === 'attachment') {
@@ -440,7 +536,7 @@ export function previewWorkbenchSnapshotFromState(
         .map(([projectId, ids]) => [projectId, ids.filter(Boolean)])
         .filter(([, ids]) => Array.isArray(ids) && ids.length > 0),
     ),
-    treeOpen: state.treeOpen,
+    drawerMode: state.drawerMode,
   };
 }
 
@@ -472,6 +568,21 @@ function previewSnapshotInput(tab: PreviewWorkbenchSnapshotTab): PreviewWorkbenc
         expanded: file.expanded,
         diff: '',
       })),
+    };
+  }
+  if (tab.type === 'git-diff') {
+    return {
+      type: 'git-diff',
+      projectId: tab.projectId,
+      title: tab.title,
+      source: tab.source,
+      file: {
+        path: tab.file.path,
+        status: tab.file.status,
+        additions: tab.file.additions,
+        deletions: tab.file.deletions,
+      },
+      loadedWorktreeRev: '',
     };
   }
   if (tab.type === 'attachment') {
@@ -540,12 +651,18 @@ export function previewWorkbenchStateFromSnapshot(
     snapshot.activeProjectId && projectIds.includes(snapshot.activeProjectId)
       ? snapshot.activeProjectId
       : projectIds[0] ?? '';
+  const drawerMode: PreviewWorkbenchDrawerMode =
+    snapshot.drawerMode === 'files' || snapshot.drawerMode === 'git'
+      ? snapshot.drawerMode
+      : snapshot.treeOpen === true
+        ? 'files'
+        : 'closed';
   return {
     activeProjectId,
     tabsByProjectId,
     activeTabIdByProjectId,
     renderedTabIdsByProjectId,
-    treeOpen: snapshot.treeOpen === true,
+    drawerMode,
   };
 }
 
@@ -649,6 +766,21 @@ function createTab(input: PreviewWorkbenchOpenInput): PreviewWorkbenchTab {
       activeFilePath: resolvePromptDiffActiveFilePath(input.files, input.activeFilePath),
     };
   }
+  if (input.type === 'git-diff') {
+    return {
+      ...base,
+      type: 'git-diff',
+      source: input.source,
+      file: {
+        ...input.file,
+        diff: '',
+        expanded: true,
+        isBinary: false,
+        truncated: false,
+      },
+      loadedWorktreeRev: input.loadedWorktreeRev ?? '',
+    };
+  }
   if (input.type === 'attachment') {
     return {
       ...base,
@@ -687,6 +819,15 @@ function mergeTab(existing: PreviewWorkbenchTab, input: PreviewWorkbenchOpenInpu
         input.files,
         input.activeFilePath !== undefined ? input.activeFilePath : existing.activeFilePath,
       ),
+    };
+  }
+  if (existing.type === 'git-diff' && input.type === 'git-diff') {
+    return {
+      ...existing,
+      title: input.title,
+      source: input.source,
+      file: {...existing.file, ...input.file},
+      loadedWorktreeRev: input.loadedWorktreeRev ?? existing.loadedWorktreeRev,
     };
   }
   if (existing.type === 'attachment' && input.type === 'attachment') {
@@ -856,6 +997,9 @@ export const isFilePreviewTab = (tab: PreviewWorkbenchTab | null): tab is FilePr
 
 export const isPromptDiffPreviewTab = (tab: PreviewWorkbenchTab | null): tab is PromptDiffPreviewTab =>
   tab?.type === 'prompt-diff';
+
+export const isGitDiffPreviewTab = (tab: PreviewWorkbenchTab | null): tab is GitDiffPreviewTab =>
+  tab?.type === 'git-diff';
 
 export const isAttachmentPreviewTab = (tab: PreviewWorkbenchTab | null): tab is AttachmentPreviewTab =>
   tab?.type === 'attachment';

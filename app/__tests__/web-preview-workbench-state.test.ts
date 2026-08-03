@@ -424,6 +424,17 @@ describe('preview workbench state', () => {
     expect(previewTabId({type: 'port-relay', hubId: 'hub-a', targetPort: 3000, framePath: '/x'})).toBe('port-relay:hub-a:3000:/x');
   });
 
+  test('creates stable commit and worktree git diff tab ids', () => {
+    expect(previewTabId({
+      type: 'git-diff',
+      source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
+    })).toBe('git-diff:commit:abc:src/a.ts');
+    expect(previewTabId({
+      type: 'git-diff',
+      source: {kind: 'worktree', scope: 'staged', path: 'src/a.ts'},
+    })).toBe('git-diff:worktree:staged:src/a.ts');
+  });
+
   test('cycles tab ids in both directions with wraparound', () => {
     const state = openPreviewTab(
       openPreviewTab(createPreviewWorkbenchState('p1'), {
@@ -614,6 +625,73 @@ describe('preview workbench state', () => {
 
     expect(buildPreviewSearchMatches(tab, 'needle')).toEqual([]);
     expect(previewSearchDocumentKey(tab)).toBe('');
+  });
+
+  test('searches git diff content and resolves its repository path', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'git-diff',
+      projectId: 'p1',
+      title: 'a.ts',
+      source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
+      file: {path: 'src/a.ts', status: 'M', additions: 2, deletions: 1},
+    });
+    const loaded = updatePreviewTabAfterLoad(
+      state,
+      'p1',
+      'git-diff:commit:abc:src/a.ts',
+      0,
+      tab => tab.type === 'git-diff'
+        ? {...tab, file: {...tab.file, diff: '@@ -1 +1 @@\n+needle'}}
+        : tab,
+    );
+    const tab = activePreviewTab(loaded)!;
+
+    expect(resolvePreviewDesktopFilePath(tab)).toBe('src/a.ts');
+    expect(buildPreviewSearchMatches(tab, 'needle')).toMatchObject([
+      {kind: 'diff', path: 'src/a.ts', line: 2},
+    ]);
+    expect(previewSearchDocumentKey(tab)).toContain('needle');
+  });
+
+  test('round trips git diff descriptors without persisting content', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'git-diff',
+      projectId: 'p1',
+      title: 'a.ts',
+      source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
+      file: {path: 'src/a.ts', status: 'M', additions: 2, deletions: 1},
+    });
+    const loaded = updatePreviewTabAfterLoad(
+      state,
+      'p1',
+      'git-diff:commit:abc:src/a.ts',
+      0,
+      tab => tab.type === 'git-diff'
+        ? {...tab, file: {...tab.file, diff: 'diff --git a/src/a.ts b/src/a.ts'}}
+        : tab,
+    );
+    const snapshot = previewWorkbenchSnapshotFromState({...loaded, drawerMode: 'git'});
+
+    expect(JSON.stringify(snapshot)).not.toContain('diff --git');
+    const restored = previewWorkbenchStateFromSnapshot(snapshot);
+    expect(restored).toMatchObject({drawerMode: 'git'});
+    expect(activePreviewTab(restored)).toMatchObject({
+      type: 'git-diff',
+      source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
+      file: {path: 'src/a.ts', diff: ''},
+    });
+  });
+
+  test('migrates the legacy treeOpen snapshot to the files drawer', () => {
+    const restored = previewWorkbenchStateFromSnapshot({
+      version: 1,
+      activeProjectId: '',
+      tabsByProjectId: {},
+      activeTabIdByProjectId: {},
+      renderedTabIdsByProjectId: {},
+      treeOpen: true,
+    });
+    expect(restored.drawerMode).toBe('files');
   });
 
   test('serializes a lightweight restorable snapshot without preview body content', () => {
