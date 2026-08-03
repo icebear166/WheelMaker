@@ -295,7 +295,7 @@ git commit -m "feat(git): add project-scoped browser model"
 - Create: `app/web/src/git/gitBrowserStore.ts`
 - Create: `app/web/src/git/gitBrowserStore.test.ts`
 
-- [ ] **Step 1: Write failing store tests for lazy loading, paging, races, and revisions**
+- [x] **Step 1: Write failing store tests for lazy loading, paging, races, and revisions**
 
 ```ts
 import {GitBrowserStore, type GitBrowserGateway} from './gitBrowserStore';
@@ -356,7 +356,7 @@ test('refreshes only the loaded slice affected by a revision change', async () =
 });
 ```
 
-- [ ] **Step 2: Run the store test and confirm it fails**
+- [x] **Step 2: Run the store test and confirm it fails**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/git/gitBrowserStore.test.ts
@@ -364,7 +364,7 @@ npm --prefix app test -- --runInBand web/src/git/gitBrowserStore.test.ts
 
 Expected: FAIL because `GitBrowserStore` does not exist.
 
-- [ ] **Step 3: Implement the store public contract and request-generation guards**
+- [x] **Step 3: Implement the store public contract and request-generation guards**
 
 The production file must export this exact gateway and snapshot surface so later tasks do not invent parallel state:
 
@@ -429,7 +429,7 @@ if (project.online && changes.worktree && existing.statusLoaded) void this.reloa
 
 `setSelectedRefs` must never allow an empty selection when `currentBranch` exists, reset commits/cursor/done, increment the history generation, and call `ensureHistory`. `toggleCommit` must use one expanded SHA at a time and load files only if that SHA has no cache entry. Errors must leave existing commits/status/files in place and populate the matching error field.
 
-- [ ] **Step 4: Run store and model tests**
+- [x] **Step 4: Run store and model tests**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/git/gitBrowserModel.test.ts web/src/git/gitBrowserStore.test.ts
@@ -437,7 +437,7 @@ npm --prefix app test -- --runInBand web/src/git/gitBrowserModel.test.ts web/src
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the store slice**
+- [x] **Step 5: Commit the store slice**
 
 ```powershell
 git add app/web/src/git/gitBrowserStore.ts app/web/src/git/gitBrowserStore.test.ts
