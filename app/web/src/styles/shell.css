@@ -1107,26 +1107,23 @@
 
 .app-session-status-copy {
   appearance: none;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--border-subtle);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
   border-radius: 5px;
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--text-secondary);
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 5px;
-  font: inherit;
-  font-size: 11px;
-  line-height: 1;
+  justify-content: center;
   cursor: pointer;
 }
 
 .app-session-status-copy:hover {
-  background: var(--hover);
-  border-color: color-mix(in srgb, var(--border-subtle) 55%, var(--text-tertiary));
   color: var(--text-primary);
+  background: var(--hover);
 }
 
 .app-session-status-copy:focus-visible {

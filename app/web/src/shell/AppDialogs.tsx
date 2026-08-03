@@ -797,7 +797,6 @@ export function AppSessionStatusDialog({
                   }}
                 >
                   <Icon name="copy" size={13} />
-                  <span>Copy</span>
                 </button>
               </span>
             </div>

@@ -47,7 +47,7 @@ test('session status copy button writes the ID and reports the copy', async () =
   });
 
   const copyButton = renderer.root.findByProps({className: 'app-session-status-copy'});
-  expect(copyButton.findByType('span').children.join('')).toBe('Copy');
+  expect(copyButton.findByType('svg')).toBeTruthy();
 
   await act(async () => {
     copyButton.props.onClick();
