@@ -156,6 +156,24 @@ describe('chat session ordering', () => {
     });
   });
 
+  test('keeps negotiated session features when adding a session', () => {
+    const merged = mergeChatSession([], session('s1', '2026-07-20T05:00:00Z', {
+      sessionFeatures: {messageLifecycle: {version: 1}},
+    }));
+
+    expect(merged[0].sessionFeatures).toEqual({messageLifecycle: {version: 1}});
+  });
+
+  test('preserves negotiated session features across partial patches', () => {
+    const existing = [session('s1', '2026-07-20T05:00:00Z', {
+      sessionFeatures: {messageLifecycle: {version: 1}},
+    })];
+
+    const merged = mergeChatSession(existing, {sessionId: 's1', preview: 'patched'});
+
+    expect(merged[0].sessionFeatures).toEqual({messageLifecycle: {version: 1}});
+  });
+
   test('preserves pending permission count across partial patches and accepts an explicit zero', () => {
     const waiting = {
       ...session('waiting', '2026-07-20T05:00:00Z'),

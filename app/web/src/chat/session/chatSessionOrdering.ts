@@ -72,6 +72,7 @@ function mergeSessionSummary(
     commands: next.commands ?? existing?.commands,
     usage: next.usage ?? existing?.usage,
     sessionActions: next.sessionActions ?? existing?.sessionActions,
+    sessionFeatures: next.sessionFeatures ?? existing?.sessionFeatures,
     goal: hasGoal ? next.goal : existing?.goal,
     forkedFrom: next.forkedFrom ?? existing?.forkedFrom,
     queue: next.queue ?? existing?.queue,
