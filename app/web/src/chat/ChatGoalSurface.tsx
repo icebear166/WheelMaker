@@ -173,7 +173,6 @@ export const ChatGoalSurface = React.memo(function ChatGoalSurface({
           className="chat-goal-compact-trigger"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse goal details' : 'Expand goal details'}
-          data-tooltip={expanded ? 'Collapse goal details' : 'Expand goal details'}
           onClick={() => setExpanded(value => !value)}
         >
           <Icon name="target" size={16} />

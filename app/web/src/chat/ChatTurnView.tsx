@@ -217,7 +217,7 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
       >
         <ChatIcon name="chevronRight" size={11} className="chat-thought-chevron" />
         <ChatIcon name="lightbulb" size={11} className="chat-thought-icon" />
-        <span className="chat-thought-title" data-tooltip={!open && finished ? firstLine : undefined}>
+        <span className="chat-thought-title">
           {title}
           {!finished ? <ChatActivityDots /> : null}
         </span>
@@ -374,7 +374,6 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
     <button
       type="button"
       className={`chat-prompt-attachment-chip ${isPromptImageAttachmentContentBlock(block) ? 'image' : 'file'}`}
-      data-tooltip={meta ? `${label} | ${meta}` : label}
       onClick={() => onOpenPromptAttachment?.(block, message)}
     >
       {imageAttachment && thumbnailSrc ? (
@@ -674,7 +673,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             {queueStatus ? (
               <span
                 className={`chat-prompt-status chat-prompt-status-queued ${queueStatus}`}
-                data-tooltip={queueStatusLabel}
               >
                 {queueStatusLabel}
               </span>
@@ -813,7 +811,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                           onContextMenu={event =>
                             onOpenPromptArtifactFileContextMenu?.(artifact, message, file, event)
                           }
-                          data-tooltip={file.path}
                         >
                           <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
                             {file.status}
