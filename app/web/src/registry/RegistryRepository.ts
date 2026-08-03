@@ -214,6 +214,9 @@ function normalizeNpmHubSnapshot(raw: unknown, hubId: string): RegistryNpmHubSna
   const packages = Array.isArray(input.packages)
     ? input.packages.map(item => normalizeNpmPackage(item)).filter((item): item is RegistryNpmPackage => !!item)
     : [];
+  const capabilities = input.capabilities && typeof input.capabilities === 'object'
+    ? input.capabilities as Record<string, unknown>
+    : {};
   return {
     hubId: typeof input.hubId === 'string' && input.hubId ? input.hubId : hubId,
     nodeVersion: typeof input.nodeVersion === 'string' ? input.nodeVersion : '',
@@ -221,6 +224,7 @@ function normalizeNpmHubSnapshot(raw: unknown, hubId: string): RegistryNpmHubSna
     npmPrefix: typeof input.npmPrefix === 'string' ? input.npmPrefix : '',
     warning: typeof input.warning === 'string' ? input.warning : '',
     error: typeof input.error === 'string' ? input.error : '',
+    capabilities: {myFlicker: capabilities.myFlicker === true},
     packages,
   };
 }

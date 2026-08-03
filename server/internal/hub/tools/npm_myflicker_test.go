@@ -79,7 +79,11 @@ func TestNPMCommandHidesMyFlickerWhenPrivateRegistryUnavailableAndCachesProbe(t 
 		if cmdErr != nil {
 			t.Fatalf("scan %d error: %#v", i+1, cmdErr)
 		}
-		if hasNPMTestPackage(resp.(npmCommandResponse).Hub.Packages, myFlickerPackageName) {
+		body := resp.(npmCommandResponse)
+		if body.Hub.Capabilities.MyFlicker {
+			t.Fatalf("scan %d reported unavailable MyFlicker capability: %#v", i+1, resp)
+		}
+		if hasNPMTestPackage(body.Hub.Packages, myFlickerPackageName) {
 			t.Fatalf("scan %d included unavailable MyFlicker: %#v", i+1, resp)
 		}
 		waitForNPMTestOperation(t, cmd)
@@ -93,6 +97,57 @@ func TestNPMCommandHidesMyFlickerWhenPrivateRegistryUnavailableAndCachesProbe(t 
 	}
 	if fetcher.callCount(myFlickerPackageName) != 0 {
 		t.Fatal("unavailable MyFlicker should not query latest version")
+	}
+}
+
+func TestNPMCommandPublishesMyFlickerCapabilityAndNotifiesAfterProbe(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"}}}`,
+		ExitCode: 0,
+	})
+	cmd, fetcher := newNPMTestCommandWithProbe(runner, func(context.Context) bool { return true })
+	fetcher.setVersion(myFlickerPackageName, "1.0.1")
+	changed := make(chan struct{}, 2)
+	cmd.setMetadataChangedHandler(func() {
+		changed <- struct{}{}
+	})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("first scan error: %#v", cmdErr)
+	}
+	if resp.(npmCommandResponse).Hub.Capabilities.MyFlicker {
+		t.Fatal("MyFlicker capability must remain false while the first probe is pending")
+	}
+
+	select {
+	case <-changed:
+	case <-time.After(time.Second):
+		t.Fatal("scan_latest did not notify the metadata change handler")
+	}
+
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("second scan error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	if !body.Hub.Capabilities.MyFlicker {
+		t.Fatal("MyFlicker capability was not published after a successful probe")
+	}
+	if !hasNPMTestPackage(body.Hub.Packages, myFlickerPackageName) {
+		t.Fatalf("MyFlicker row missing after successful probe: %#v", body.Hub)
+	}
+	select {
+	case <-changed:
+		t.Fatal("cached follow-up scan unexpectedly notified another metadata change")
+	case <-time.After(20 * time.Millisecond):
 	}
 }
 

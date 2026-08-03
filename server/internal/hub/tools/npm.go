@@ -67,11 +67,12 @@ type NPMCommand struct {
 	lookPath     func(string) (string, error)
 	flickerProbe func(context.Context) bool
 
-	mu            sync.Mutex
-	operation     *npmOperationSnapshot
-	latestCache   map[string]npmLatestCacheEntry
-	flicker       npmPrivateRegistryState
-	operationDone func()
+	mu              sync.Mutex
+	operation       *npmOperationSnapshot
+	latestCache     map[string]npmLatestCacheEntry
+	flicker         npmPrivateRegistryState
+	operationDone   func()
+	metadataChanged func()
 }
 
 func NewNPMCommand() *NPMCommand {
@@ -239,7 +240,22 @@ func (c *NPMCommand) setOperationDoneHandler(handler func()) {
 	c.mu.Unlock()
 }
 
+func (c *NPMCommand) setMetadataChangedHandler(handler func()) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.metadataChanged = handler
+	c.mu.Unlock()
+}
+
 func (c *NPMCommand) notifyOperationDone(handler func()) {
+	if handler != nil {
+		handler()
+	}
+}
+
+func (c *NPMCommand) notifyMetadataChanged(handler func()) {
 	if handler != nil {
 		handler()
 	}
@@ -330,13 +346,18 @@ type npmCommandResponse struct {
 }
 
 type npmHubSnapshot struct {
-	HubID       string             `json:"hubId"`
-	NodeVersion string             `json:"nodeVersion"`
-	NPMVersion  string             `json:"npmVersion"`
-	NPMPrefix   string             `json:"npmPrefix"`
-	Warning     string             `json:"warning"`
-	Error       string             `json:"error"`
-	Packages    []npmPackageStatus `json:"packages"`
+	HubID        string             `json:"hubId"`
+	NodeVersion  string             `json:"nodeVersion"`
+	NPMVersion   string             `json:"npmVersion"`
+	NPMPrefix    string             `json:"npmPrefix"`
+	Warning      string             `json:"warning"`
+	Error        string             `json:"error"`
+	Capabilities npmHubCapabilities `json:"capabilities"`
+	Packages     []npmPackageStatus `json:"packages"`
+}
+
+type npmHubCapabilities struct {
+	MyFlicker bool `json:"myFlicker"`
 }
 
 type npmPackageStatus struct {
@@ -471,6 +492,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 	}
 
 	plan := c.latestPlanForScan(now)
+	hub.Capabilities.MyFlicker = plan.flickerAvailable
 	operation := c.currentOperationSnapshot()
 	if (len(plan.missing) > 0 || plan.probeFlicker) && (operation == nil || !operation.Running) {
 		started, cmdErr := c.acceptOperation("scan_latest", "", "", nil)
@@ -692,7 +714,6 @@ func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, package
 	var failed []string
 
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	for _, packageName := range refreshed {
 		result, ok := results[packageName]
 		if !ok {
@@ -709,18 +730,20 @@ func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, package
 	if probeFlicker {
 		c.flicker = npmPrivateRegistryState{known: true, available: flickerAvailable, probedAt: finished}
 	}
-	if c.operation != operation {
-		return
+	if c.operation == operation {
+		operation.Running = false
+		operation.FinishedAt = finishedAt
+		if len(failed) > 0 {
+			operation.Status = "failed"
+			operation.ErrorSummary = fmt.Sprintf("latest version check failed for %s", strings.Join(failed, ", "))
+		} else {
+			operation.Status = "succeeded"
+			operation.Message = "Latest package versions refreshed."
+		}
 	}
-	operation.Running = false
-	operation.FinishedAt = finishedAt
-	if len(failed) > 0 {
-		operation.Status = "failed"
-		operation.ErrorSummary = fmt.Sprintf("latest version check failed for %s", strings.Join(failed, ", "))
-		return
-	}
-	operation.Status = "succeeded"
-	operation.Message = "Latest package versions refreshed."
+	changed := c.metadataChanged
+	c.mu.Unlock()
+	c.notifyMetadataChanged(changed)
 }
 
 func (c *NPMCommand) startInstall(payload npmCommandPayload) (any, *npmCommandError) {

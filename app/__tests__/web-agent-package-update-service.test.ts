@@ -80,7 +80,11 @@ describe('agent package update registry service', () => {
                 data: {
                   ok: true,
                   updatedAt: '2026-05-19T10:00:00Z',
-                  hub: {hubId: 'hub-b', packages: []},
+                  hub: {
+                    hubId: 'hub-b',
+                    capabilities: {myFlicker: true},
+                    packages: [],
+                  },
                   operation: null,
                 },
               },
@@ -94,6 +98,7 @@ describe('agent package update registry service', () => {
     const result = await repository.scanNpmPackages('hub-b');
 
     expect(result.ok).toBe(true);
+    expect(result.hub?.capabilities.myFlicker).toBe(true);
     expect(client.request).toHaveBeenCalledWith({
       method: RegistryMethods.HubStateRefresh,
       hubId: 'hub-b',
@@ -146,6 +151,7 @@ describe('agent package update registry service', () => {
     const result = await repository.scanNpmPackages('hub-b');
 
     expect(result.hub?.packages[0].agentTypes).toEqual([]);
+    expect(result.hub?.capabilities.myFlicker).toBe(false);
   });
 
   test('runs agentPackages HubState actions with controlled payloads', async () => {

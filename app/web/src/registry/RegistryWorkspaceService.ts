@@ -146,7 +146,7 @@ export class RegistryWorkspaceService {
     this.createRepository = options.createRepository ?? createRegistryRepository;
     this.clientName = options.clientName ?? 'wheelmaker-web';
     this.hubStore = new HubStore({
-      get: hubId => this.getHubState(hubId, ['tokenStats']),
+      get: hubId => this.getHubState(hubId, ['tokenStats', 'agentPackages']),
       refresh: (hubId, sections, force) => {
         if (!this.repository) throw new Error('session is not ready');
         return this.repository.refreshHubState(hubId, sections, {force});

@@ -17,6 +17,7 @@ type ManagerConfig struct {
 	GlobalLockPath        string
 	HomeDir               string
 	OnNPMOperationDone    func()
+	OnNPMMetadataChanged  func()
 	OnUpdateOperationDone func()
 	OnSkillsOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
 	OnReleaseJobUpdated   func(ReleasePublishJob)
@@ -78,6 +79,7 @@ func NewManager(config ManagerConfig) *Manager {
 	config.Projects = append([]ProjectInfo(nil), config.Projects...)
 	npmCommand := NewNPMCommand()
 	npmCommand.setOperationDoneHandler(config.OnNPMOperationDone)
+	npmCommand.setMetadataChangedHandler(config.OnNPMMetadataChanged)
 	updateCommand := NewUpdateCommand(config.StateDir)
 	updateCommand.setOperationDoneHandler(config.OnUpdateOperationDone)
 	if config.ReleaseCommand != nil {
@@ -125,6 +127,7 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 		if m.npmCommand == nil {
 			m.npmCommand = NewNPMCommand()
 			m.npmCommand.setOperationDoneHandler(m.cfg.OnNPMOperationDone)
+			m.npmCommand.setMetadataChangedHandler(m.cfg.OnNPMMetadataChanged)
 		}
 		out, err := m.npmCommand.Handle(ctx, payload)
 		return out, npmErr(err)

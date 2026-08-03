@@ -262,6 +262,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		Projects:              cp,
 		StateDir:              stateDir,
 		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnNPMMetadataChanged:  r.onNPMMetadataChanged,
 		OnUpdateOperationDone: r.onUpdateOperationDone,
 		OnSkillsOperationDone: r.onSkillsOperationDone,
 		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
@@ -1187,6 +1188,10 @@ func (r *Reporter) publishCurrentHubState(reason string) {
 
 func (r *Reporter) onNPMOperationDone() {
 	r.reloadAgentRuntimeAfterNPMOperation()
+	r.onNPMMetadataChanged()
+}
+
+func (r *Reporter) onNPMMetadataChanged() {
 	_, _ = r.ensureHubStateManager().enqueueRefresh(
 		[]string{hubStateSectionAgentPackages},
 		true,
@@ -1900,7 +1905,8 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		HubID:                 r.cfg.HubID,
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
-		OnNPMOperationDone:    r.reloadAgentRuntimeAfterNPMOperation,
+		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnNPMMetadataChanged:  r.onNPMMetadataChanged,
 		OnUpdateOperationDone: r.onUpdateOperationDone,
 		OnSkillsOperationDone: r.onSkillsOperationDone,
 		OnReleaseJobUpdated:   r.onReleaseJobUpdated,

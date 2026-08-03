@@ -126,7 +126,13 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       restartVisible: true,
       updateAvailable: true,
     },
-    npm: {loading: false, pending: false, outdatedCount: 2, packages: []},
+    npm: {
+      loading: false,
+      pending: false,
+      outdatedCount: 2,
+      myFlickerAvailable: false,
+      packages: [],
+    },
     skills: {
       loading: false,
       operationRunning: false,
@@ -146,16 +152,8 @@ function flickerOpsView(): ChatHubOpsView {
       loading: false,
       pending: false,
       outdatedCount: 0,
-      packages: [{
-        packageName: '@myflicker/cli',
-        displayName: 'MyFlicker CLI',
-        agentTypes: ['flicker'],
-        installedVersion: '0.3.13',
-        latestVersion: '0.3.13',
-        action: null,
-        canUninstall: true,
-        pending: false,
-      }],
+      myFlickerAvailable: true,
+      packages: [],
     },
   });
 }
@@ -325,7 +323,26 @@ test('hub row uses independent update and restart actions with three icon-count 
 test('MCP opens a local inline zero-state without dispatching an operation', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['mcp']},
-    opsByHubId: {'hub-a': opsView()},
+    opsByHubId: {
+      'hub-a': opsView({
+        npm: {
+          loading: false,
+          pending: false,
+          outdatedCount: 0,
+          myFlickerAvailable: false,
+          packages: [{
+            packageName: '@openai/codex',
+            displayName: 'Codex',
+            agentTypes: ['codex'],
+            installedVersion: '0.129.0',
+            latestVersion: '0.129.0',
+            action: null,
+            canUninstall: true,
+            pending: false,
+          }],
+        },
+      }),
+    },
   });
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -353,7 +370,13 @@ test('hub row disables unavailable actions', async () => {
           restartVisible: false,
           updateAvailable: false,
         },
-        npm: {loading: false, pending: false, outdatedCount: 0, packages: []},
+        npm: {
+          loading: false,
+          pending: false,
+          outdatedCount: 0,
+          myFlickerAvailable: false,
+          packages: [],
+        },
       }),
     },
   });
@@ -465,6 +488,7 @@ test('npm detail keeps version next to the name and hugs actions right', async (
       'hub-a': opsView({
         npm: {
           loading: false, pending: false, outdatedCount: 1,
+          myFlickerAvailable: false,
           packages: [
             {packageName: '@a/one', displayName: 'One', agentTypes: ['claude'], installedVersion: '1.0', latestVersion: '1.1', action: 'update', canUninstall: true, pending: false},
             {packageName: '@a/two', displayName: 'Two', agentTypes: ['codex'], installedVersion: '', latestVersion: '2.0', action: 'install', canUninstall: false, pending: false},

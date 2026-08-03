@@ -1521,6 +1521,45 @@ func TestReporterFlickerBridgeLifecycleReloadsAgentAvailability(t *testing.T) {
 	}
 }
 
+func TestReporterNPMMetadataChangeRefreshesPackagesWithoutReloadingAgents(t *testing.T) {
+	refreshed := make(chan struct{}, 1)
+	reloaded := make(chan struct{}, 1)
+	reporter := NewReporter(ReporterConfig{
+		HubID:    "hub-npm-metadata",
+		StateDir: t.TempDir(),
+		ReloadAgentRuntime: func(context.Context, map[hubconfig.APIKeyName]string) error {
+			reloaded <- struct{}{}
+			return nil
+		},
+	}, nil)
+	reporter.hubStateManager = newHubStateManager(
+		"hub-npm-metadata",
+		"instance-a",
+		map[string]hubStateSectionHandler{
+			hubStateSectionAgentPackages: {
+				Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+					refreshed <- struct{}{}
+					return map[string]any{"ok": true}, nil
+				},
+			},
+		},
+		nil,
+	)
+
+	reporter.onNPMMetadataChanged()
+
+	select {
+	case <-refreshed:
+	case <-time.After(time.Second):
+		t.Fatal("NPM metadata change did not refresh agentPackages")
+	}
+	select {
+	case <-reloaded:
+		t.Fatal("NPM metadata change unexpectedly reloaded agent runtime")
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
 func TestReporterHubConfigAPIKeyUpdateAndSnapshot(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{HubID: "hub-config", StateDir: t.TempDir()}, nil)
 	if err := reporter.applyHubConfigUpdate(hubConfigUpdatePayload{

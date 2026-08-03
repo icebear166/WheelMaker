@@ -99,7 +99,10 @@ describe('registry workspace project-scoped chat service methods', () => {
     await connect;
 
     expect(winner).toBe('connected');
-    expect(repository.getHubState).toHaveBeenCalledWith('hub-background', ['tokenStats']);
+    expect(repository.getHubState).toHaveBeenCalledWith(
+      'hub-background',
+      ['tokenStats', 'agentPackages'],
+    );
   });
 
   test('connect selects project metadata regardless of the project online flag', async () => {

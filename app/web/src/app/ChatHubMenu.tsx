@@ -4,7 +4,6 @@ import {createPortal} from 'react-dom';
 import {Icon, type IconName} from '../common/Icon';
 import {SecretEditor} from '../common/SecretEditor';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
-import {hasMyFlickerPackage} from './myFlickerAvailability';
 import type {
   RegistryFlickerBridgeMode,
   RegistryFlickerBridgeStatus,
@@ -120,6 +119,7 @@ export interface ChatHubOpsView {
     loading: boolean;
     pending: boolean;
     outdatedCount: number;
+    myFlickerAvailable: boolean;
     packages: ChatHubNpmPackageView[];
   };
   skills: {
@@ -164,7 +164,13 @@ const EMPTY_OPS_VIEW: ChatHubOpsView = {
     restartVisible: false,
     updateAvailable: false,
   },
-  npm: {loading: false, pending: false, outdatedCount: 0, packages: []},
+  npm: {
+    loading: false,
+    pending: false,
+    outdatedCount: 0,
+    myFlickerAvailable: false,
+    packages: [],
+  },
   skills: {
     loading: false,
     operationRunning: false,
@@ -1013,7 +1019,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const flickerStatus = flickerStatuses[hubId];
   const configView = hubConfigByHubId[hubId];
   const ops = opsByHubId[hubId] ?? EMPTY_OPS_VIEW;
-  const flickerAvailable = hasMyFlickerPackage(ops.npm.packages);
+  const flickerAvailable = ops.npm.myFlickerAvailable;
   const openSections = expandedSections[hubId] ?? [];
   const sectionOpen = (section: ChatHubDetailId) => openSections.includes(section);
   const visibleProjectCount = treeItem.projects.filter(project => !hiddenProjectIdSet.has(project.projectId)).length;

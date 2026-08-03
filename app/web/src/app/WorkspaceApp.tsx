@@ -182,7 +182,6 @@ import {ChatIcon} from '../chat/ChatIcon';
 import {Icon} from '../common/Icon';
 import {RetryToast} from '../common/RetryToast';
 import {createSkillRetryNotice, type SkillRetryNotice} from './skillRetryNotice';
-import {filterMyFlickerAgentTypes, hasMyFlickerPackage} from './myFlickerAvailability';
 import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
 import {SessionMenu} from '../chat/sessionlist/SessionMenu';
 import {SessionListView} from '../chat/sessionlist/SessionListView';
@@ -456,7 +455,6 @@ import {loadUsageHistoryFromSources} from '../usage/usageHistory';
 import {DeepSeekUsageDialog, type DeepSeekUsageDialogState} from '../usage/DeepSeekUsageDialog';
 import {normalizeDeepSeekUsage} from '../usage/deepSeekUsage';
 import {UsageStore} from '../usage/usageStore';
-import {filterUnavailableUsageSnapshot} from '../usage/usageVisibility';
 import {HubRefreshTriggers} from '../hubState/hubRefreshTriggers';
 import {
   selectComposerDiagnostic,
@@ -3356,14 +3354,6 @@ export function App() {
   const projectIndexByHubId = hubOperationalViews.indexes;
   const skillHubs = hubOperationalViews.skills;
   const chatHubFlickerBridgeStatuses = hubOperationalViews.flicker;
-  const myFlickerAvailableByHub = useMemo<Record<string, boolean>>(() => {
-    const availability: Record<string, boolean> = {};
-    for (const [hubId, view] of Object.entries(agentPackageHubs)) {
-      availability[hubId] = hasMyFlickerPackage(view.hub?.packages);
-    }
-    return availability;
-  }, [agentPackageHubs]);
-  const myFlickerAvailable = Object.values(myFlickerAvailableByHub).some(Boolean);
   useEffect(() => {
     setProjectIndexScanPendingByProjectId(current => {
       let changed = false;
@@ -3400,19 +3390,9 @@ export function App() {
     [],
   );
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
-  const visibleUsageSnapshot = useMemo(
-    () => filterUnavailableUsageSnapshot(usageSnapshot, myFlickerAvailable),
-    [myFlickerAvailable, usageSnapshot],
-  );
+  const visibleUsageSnapshot = usageSnapshot;
   const usageHistoryRequestSeqRef = useRef(0);
   const [usageHistoryDialogView, setUsageHistoryDialogView] = useState<UsageHistoryDialogView | null>(null);
-  const usageHistoryProviderId = usageHistoryDialogView?.target.provider.id;
-  useEffect(() => {
-    if (myFlickerAvailable || usageHistoryProviderId !== 'flicker') {
-      return;
-    }
-    setUsageHistoryDialogView(null);
-  }, [myFlickerAvailable, usageHistoryProviderId]);
   const deepSeekUsageRequestSeqRef = useRef(0);
   const [deepSeekUsageDialogView, setDeepSeekUsageDialogView] = useState<DeepSeekUsageDialogView | null>(null);
   const modelEfficiencyStore = useMemo(
@@ -7789,11 +7769,8 @@ export function App() {
   }, [commitChatFilePeekResize]);
   const getWideProjectAgents = useCallback(
     (projectItem: RegistryProject, sessions: RegistryChatSession[]): string[] =>
-      filterMyFlickerAgentTypes(
-        buildProjectAgentChoices(projectItem, sessions),
-        myFlickerAvailableByHub[projectItem.hubId || ''] === true,
-      ),
-    [myFlickerAvailableByHub],
+      buildProjectAgentChoices(projectItem, sessions),
+    [],
   );
   const toggleWideProjectCollapsed = useCallback(
     (targetProjectId: string) => {
@@ -13200,6 +13177,7 @@ export function App() {
           loading: card.agentPackage?.loading === true,
           pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
           outdatedCount: npmUpdatable.length,
+          myFlickerAvailable: card.agentPackage?.hub?.capabilities.myFlicker === true,
           packages: hubPackages.map(pkg => ({
             packageName: pkg.packageName,
             displayName: pkg.displayName,

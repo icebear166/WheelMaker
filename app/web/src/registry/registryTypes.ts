@@ -776,7 +776,12 @@ export interface RegistryNpmHubSnapshot {
   npmPrefix: string;
   warning: string;
   error: string;
+  capabilities: RegistryNpmHubCapabilities;
   packages: RegistryNpmPackage[];
+}
+
+export interface RegistryNpmHubCapabilities {
+  myFlicker: boolean;
 }
 
 export interface RegistryNpmOperation {

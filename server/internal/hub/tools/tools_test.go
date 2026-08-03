@@ -60,6 +60,22 @@ func TestManagerWiresNPMOperationCallback(t *testing.T) {
 	}
 }
 
+func TestManagerWiresNPMMetadataCallback(t *testing.T) {
+	called := false
+	manager := NewManager(ManagerConfig{
+		HubID: "hub-a",
+		OnNPMMetadataChanged: func() {
+			called = true
+		},
+	})
+
+	manager.npmCommand.notifyMetadataChanged(manager.npmCommand.metadataChanged)
+
+	if !called {
+		t.Fatal("npm metadata callback was not wired")
+	}
+}
+
 func TestManagerRoutesReleaseCommand(t *testing.T) {
 	source := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
