@@ -1662,6 +1662,38 @@ func anthropicToolResultOutput(raw json.RawMessage) (map[string]any, error) {
 	}
 	var blocks []anthropicContentBlock
 	if err := json.Unmarshal(raw, &blocks); err == nil {
+		hasImage := false
+		for _, block := range blocks {
+			if block.Type == "image" {
+				hasImage = true
+				break
+			}
+		}
+		if hasImage {
+			content := make([]any, 0, len(blocks))
+			for _, block := range blocks {
+				switch block.Type {
+				case "text":
+					content = append(content, map[string]any{
+						"type": "text",
+						"text": block.Text,
+					})
+				case "image":
+					image, err := anthropicImageToV3(block)
+					if err != nil {
+						return nil, err
+					}
+					content = append(content, map[string]any{
+						"type":      "media",
+						"mediaType": image["mediaType"],
+						"data":      image["data"],
+					})
+				default:
+					return nil, fmt.Errorf("unsupported tool_result content block: %s", block.Type)
+				}
+			}
+			return map[string]any{"type": "content", "value": content}, nil
+		}
 		var builder strings.Builder
 		for _, block := range blocks {
 			if block.Type != "text" {

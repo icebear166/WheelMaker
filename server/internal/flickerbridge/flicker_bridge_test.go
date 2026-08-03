@@ -738,6 +738,58 @@ func TestV2ToolResultFollowedByUserTextDoesNotFail(t *testing.T) {
 	}
 }
 
+func TestV2ToolResultImageMapsToV3MediaInBlockOrder(t *testing.T) {
+	var request anthropicMessagesRequest
+	if err := json.Unmarshal([]byte(`{
+		"max_tokens":128,
+		"messages":[
+			{"role":"assistant","content":[
+				{"type":"tool_use","id":"toolu_image","name":"Read","input":{"file_path":"image.png"}}
+			]},
+			{"role":"user","content":[
+				{"type":"tool_result","tool_use_id":"toolu_image","content":[
+					{"type":"text","text":"before"},
+					{"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"AA=="}},
+					{"type":"text","text":"after"}
+				]}
+			]}
+		],
+		"tools":[{"name":"Read","description":"read","input_schema":{"type":"object"}}]
+	}`), &request); err != nil {
+		t.Fatal(err)
+	}
+
+	converted, _, err := anthropicRequestToV3(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := converted["prompt"].([]any)
+	toolMessage := prompt[1].(map[string]any)
+	toolResult := toolMessage["content"].([]any)[0].(map[string]any)
+	output := toolResult["output"].(map[string]any)
+	if firstText(output["type"]) != "content" {
+		t.Fatalf("output type = %#v, want content", output["type"])
+	}
+	value := output["value"].([]any)
+	if len(value) != 3 {
+		t.Fatalf("output value = %#v, want three ordered parts", value)
+	}
+	if firstText(value[0].(map[string]any)["type"]) != "text" ||
+		firstText(value[0].(map[string]any)["text"]) != "before" {
+		t.Fatalf("first output part = %#v", value[0])
+	}
+	media := value[1].(map[string]any)
+	if firstText(media["type"]) != "media" ||
+		firstText(media["mediaType"]) != "image/jpeg" ||
+		firstText(media["data"]) != "AA==" {
+		t.Fatalf("image output part = %#v", media)
+	}
+	if firstText(value[2].(map[string]any)["type"]) != "text" ||
+		firstText(value[2].(map[string]any)["text"]) != "after" {
+		t.Fatalf("last output part = %#v", value[2])
+	}
+}
+
 func TestV2DropsEmptyThinkingHistoryWithoutChangingSemanticContent(t *testing.T) {
 	var request anthropicMessagesRequest
 	if err := json.Unmarshal([]byte(`{
