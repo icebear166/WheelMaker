@@ -44,7 +44,7 @@ func DecodeSessionUpdateParams(raw json.RawMessage) (SessionUpdateParamsWire, er
 		Update    json.RawMessage `json:"update"`
 		Meta      json.RawMessage `json:"_meta,omitempty"`
 	}
-	if err := decodeStrict(raw, &wire); err != nil {
+	if err := decodeACP(raw, &wire); err != nil {
 		return SessionUpdateParamsWire{}, err
 	}
 	if strings.TrimSpace(wire.SessionID) == "" {
@@ -229,15 +229,12 @@ func DecodeSessionUpdate(raw json.RawMessage) (SessionUpdateVariant, error) {
 			MessageID     string          `json:"messageId,omitempty"`
 			Meta          json.RawMessage `json:"_meta,omitempty"`
 		}
-		if err := decodeStrict(raw, &wire); err != nil {
+		if err := decodeACP(raw, &wire); err != nil {
 			return nil, err
-		}
-		if err := ValidateContentBlockJSON(wire.Content); err != nil {
-			return nil, fmt.Errorf("content: %w", err)
 		}
 		var content ContentBlock
 		if err := json.Unmarshal(wire.Content, &content); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("content: %w", err)
 		}
 		return MessageChunkUpdate{SessionUpdate: wire.SessionUpdate, Content: content, MessageID: wire.MessageID, Meta: cloneRaw(wire.Meta)}, nil
 	case SessionUpdateToolCall, SessionUpdateToolCallUpdate:
@@ -253,7 +250,7 @@ func DecodeSessionUpdate(raw json.RawMessage) (SessionUpdateVariant, error) {
 			RawOutput     json.RawMessage    `json:"rawOutput,omitempty"`
 			Meta          json.RawMessage    `json:"_meta,omitempty"`
 		}
-		if err := decodeStrict(raw, &wire); err != nil {
+		if err := decodeACP(raw, &wire); err != nil {
 			return nil, err
 		}
 		if strings.TrimSpace(wire.ToolCallID) == "" {
@@ -261,31 +258,28 @@ func DecodeSessionUpdate(raw json.RawMessage) (SessionUpdateVariant, error) {
 		}
 		content := make([]ToolCallContent, 0, len(wire.Content))
 		for index, item := range wire.Content {
-			if err := ValidateToolCallContentJSON(item); err != nil {
-				return nil, fmt.Errorf("content[%d]: %w", index, err)
-			}
 			var decoded ToolCallContent
 			if err := json.Unmarshal(item, &decoded); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("content[%d]: %w", index, err)
 			}
 			content = append(content, decoded)
 		}
 		return ToolCallUpdate{SessionUpdate: wire.SessionUpdate, ToolCallID: wire.ToolCallID, Title: wire.Title, Kind: wire.Kind, Status: wire.Status, Content: content, Locations: wire.Locations, RawInput: cloneRaw(wire.RawInput), RawOutput: cloneRaw(wire.RawOutput), Meta: cloneRaw(wire.Meta)}, nil
 	case SessionUpdatePlan:
 		var update PlanUpdate
-		if err := decodeStrict(raw, &update); err != nil {
+		if err := decodeACP(raw, &update); err != nil {
 			return nil, err
 		}
 		return update, nil
 	case SessionUpdateAvailableCommandsUpdate:
 		var update AvailableCommandsUpdate
-		if err := decodeStrict(raw, &update); err != nil {
+		if err := decodeACP(raw, &update); err != nil {
 			return nil, err
 		}
 		return update, nil
 	case SessionUpdateCurrentModeUpdate:
 		var update CurrentModeUpdate
-		if err := decodeStrict(raw, &update); err != nil {
+		if err := decodeACP(raw, &update); err != nil {
 			return nil, err
 		}
 		if strings.TrimSpace(update.CurrentModeID) == "" {
@@ -294,19 +288,19 @@ func DecodeSessionUpdate(raw json.RawMessage) (SessionUpdateVariant, error) {
 		return update, nil
 	case SessionUpdateConfigOptionUpdate:
 		var update ConfigOptionUpdate
-		if err := decodeStrict(raw, &update); err != nil {
+		if err := decodeACP(raw, &update); err != nil {
 			return nil, err
 		}
 		return update, nil
 	case SessionUpdateSessionInfoUpdate:
 		var update SessionInfoUpdate
-		if err := decodeStrict(raw, &update); err != nil {
+		if err := decodeACP(raw, &update); err != nil {
 			return nil, err
 		}
 		return update, nil
 	case SessionUpdateUsageUpdate:
 		var update UsageUpdate
-		if err := decodeStrict(raw, &update); err != nil {
+		if err := decodeACP(raw, &update); err != nil {
 			return nil, err
 		}
 		return update, nil
@@ -440,11 +434,25 @@ func decodeStrict(raw json.RawMessage, target any) error {
 	return nil
 }
 
-// DecodeStrictACPJSON decodes a standard ACP wire object while rejecting
-// unknown fields at every typed object boundary. Extension data remains valid
-// inside declared _meta fields and custom extension DTOs.
-func DecodeStrictACPJSON(raw json.RawMessage, target any) error {
-	return decodeStrict(raw, target)
+func decodeACP(raw json.RawMessage, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+// DecodeACPJSON decodes a standard ACP object while ignoring fields that this
+// client version does not understand. Known fields and custom union decoders
+// are still validated, and trailing JSON values remain invalid.
+func DecodeACPJSON(raw json.RawMessage, target any) error {
+	return decodeACP(raw, target)
 }
 
 func isMessageUpdateKind(kind string) bool {

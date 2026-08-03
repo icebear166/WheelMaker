@@ -35,6 +35,17 @@ const (
 	wmActionRPCErrorCode = -32010
 )
 
+func IsWMExtensionMethod(method string) bool {
+	return strings.HasPrefix(strings.TrimSpace(method), "_wm/")
+}
+
+// DecodeWMJSON strictly decodes a negotiated WheelMaker-private extension
+// object. Unlike standard ACP objects, private extension shapes are versioned
+// and controlled by WheelMaker.
+func DecodeWMJSON(raw json.RawMessage, target any) error {
+	return decodeStrict(raw, target)
+}
+
 type WMActionErrorData struct {
 	Code    string `json:"code"`
 	Message string `json:"message,omitempty"`

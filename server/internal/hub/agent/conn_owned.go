@@ -94,7 +94,11 @@ func (c *ownedConn) Send(ctx context.Context, method string, params any, result 
 			return resp.Error
 		}
 		if result != nil && len(resp.Result) > 0 {
-			if err := protocol.DecodeStrictACPJSON(resp.Result, result); err != nil {
+			decode := protocol.DecodeACPJSON
+			if protocol.IsWMExtensionMethod(method) {
+				decode = protocol.DecodeWMJSON
+			}
+			if err := decode(resp.Result, result); err != nil {
 				return fmt.Errorf("agent owned conn: unmarshal result: %w", err)
 			}
 		}
@@ -236,7 +240,7 @@ func (c *ownedConn) handleRawMessage(raw json.RawMessage) {
 	}
 
 	var msg protocol.ACPRPCRawMessage
-	if err := protocol.DecodeStrictACPJSON(raw, &msg); err != nil {
+	if err := protocol.DecodeACPJSON(raw, &msg); err != nil {
 		return
 	}
 

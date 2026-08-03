@@ -32,14 +32,14 @@ func TestProjectACPUpdateProducesTypedAgentEvent(t *testing.T) {
 	}
 }
 
-func TestDecodeSessionUpdateParamsRejectsUnknownEnvelopeAndInvalidUpdate(t *testing.T) {
-	for _, raw := range []json.RawMessage{
-		json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"}},"private":true}`),
-		json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"status":"streaming"}}`),
-	} {
-		if _, err := DecodeSessionUpdateParams(raw); err == nil {
-			t.Fatalf("DecodeSessionUpdateParams(%s) succeeded", raw)
-		}
+func TestDecodeSessionUpdateParamsIgnoresUnknownEnvelopeAndRejectsInvalidUpdate(t *testing.T) {
+	valid := json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"status":"streaming"},"private":true}`)
+	if _, err := DecodeSessionUpdateParams(valid); err != nil {
+		t.Fatalf("forward-compatible update: %v", err)
+	}
+	invalid := json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"future_update"}}`)
+	if _, err := DecodeSessionUpdateParams(invalid); err == nil {
+		t.Fatalf("DecodeSessionUpdateParams(%s) succeeded", invalid)
 	}
 }
 

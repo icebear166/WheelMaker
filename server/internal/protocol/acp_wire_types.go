@@ -20,16 +20,50 @@ func (s MCPServer) MarshalJSON() ([]byte, error) {
 }
 
 func (s *MCPServer) UnmarshalJSON(raw []byte) error {
-	if err := ValidateMCPServerJSON(raw); err != nil {
+	decoded, err := decodeMCPServer(raw)
+	if err != nil {
 		return err
 	}
-	type wire MCPServer
-	var decoded wire
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return err
-	}
-	*s = MCPServer(decoded)
+	*s = decoded
 	return nil
+}
+
+func decodeMCPServer(raw json.RawMessage) (MCPServer, error) {
+	var head struct {
+		Type string `json:"type"`
+	}
+	if err := decodeACP(raw, &head); err != nil {
+		return MCPServer{}, err
+	}
+	switch head.Type {
+	case "stdio":
+		var value struct {
+			Type    string          `json:"type"`
+			Name    string          `json:"name"`
+			Command string          `json:"command"`
+			Args    []string        `json:"args"`
+			Env     []EnvVariable   `json:"env"`
+			Meta    json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return MCPServer{}, err
+		}
+		return MCPServer{Type: value.Type, Name: value.Name, Command: value.Command, Args: value.Args, Env: value.Env, Meta: cloneRaw(value.Meta)}, nil
+	case "http", "sse":
+		var value struct {
+			Type    string          `json:"type"`
+			Name    string          `json:"name"`
+			URL     string          `json:"url"`
+			Headers []HttpHeader    `json:"headers"`
+			Meta    json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return MCPServer{}, err
+		}
+		return MCPServer{Type: value.Type, Name: value.Name, URL: value.URL, Headers: value.Headers, Meta: cloneRaw(value.Meta)}, nil
+	default:
+		return MCPServer{}, fmt.Errorf("unsupported MCP server type %q", head.Type)
+	}
 }
 
 func (b ContentBlock) MarshalJSON() ([]byte, error) {
@@ -45,16 +79,106 @@ func (b ContentBlock) MarshalJSON() ([]byte, error) {
 }
 
 func (b *ContentBlock) UnmarshalJSON(raw []byte) error {
-	if err := ValidateContentBlockJSON(raw); err != nil {
+	decoded, err := decodeContentBlock(raw)
+	if err != nil {
 		return err
 	}
-	type wire ContentBlock
-	var decoded wire
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return err
-	}
-	*b = ContentBlock(decoded)
+	*b = decoded
 	return nil
+}
+
+func decodeContentBlock(raw json.RawMessage) (ContentBlock, error) {
+	var head struct {
+		Type string `json:"type"`
+	}
+	if err := decodeACP(raw, &head); err != nil {
+		return ContentBlock{}, err
+	}
+	switch head.Type {
+	case ContentBlockTypeText:
+		var value struct {
+			Type        string          `json:"type"`
+			Text        string          `json:"text"`
+			Annotations json.RawMessage `json:"annotations,omitempty"`
+			Meta        json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ContentBlock{}, err
+		}
+		return ContentBlock{Type: value.Type, Text: value.Text, Annotations: cloneRaw(value.Annotations), Meta: cloneRaw(value.Meta)}, nil
+	case ContentBlockTypeImage, ContentBlockTypeAudio:
+		var value struct {
+			Type        string          `json:"type"`
+			Data        string          `json:"data"`
+			MimeType    string          `json:"mimeType"`
+			Annotations json.RawMessage `json:"annotations,omitempty"`
+			Meta        json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ContentBlock{}, err
+		}
+		return ContentBlock{Type: value.Type, Data: value.Data, MimeType: value.MimeType, Annotations: cloneRaw(value.Annotations), Meta: cloneRaw(value.Meta)}, nil
+	case ContentBlockTypeResource:
+		var value struct {
+			Type        string          `json:"type"`
+			Resource    json.RawMessage `json:"resource"`
+			Annotations json.RawMessage `json:"annotations,omitempty"`
+			Meta        json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ContentBlock{}, err
+		}
+		resource, err := decodeEmbeddedResource(value.Resource)
+		if err != nil {
+			return ContentBlock{}, err
+		}
+		return ContentBlock{Type: value.Type, Resource: &resource, Annotations: cloneRaw(value.Annotations), Meta: cloneRaw(value.Meta)}, nil
+	case ContentBlockTypeResourceLink:
+		var value struct {
+			Type        string          `json:"type"`
+			URI         string          `json:"uri"`
+			Name        string          `json:"name"`
+			MimeType    string          `json:"mimeType,omitempty"`
+			Size        int             `json:"size,omitempty"`
+			Title       string          `json:"title,omitempty"`
+			Description string          `json:"description,omitempty"`
+			Annotations json.RawMessage `json:"annotations,omitempty"`
+			Meta        json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ContentBlock{}, err
+		}
+		return ContentBlock{
+			Type: value.Type, URI: value.URI, Name: value.Name, MimeType: value.MimeType,
+			Size: value.Size, Title: value.Title, Description: value.Description,
+			Annotations: cloneRaw(value.Annotations), Meta: cloneRaw(value.Meta),
+		}, nil
+	default:
+		return ContentBlock{}, fmt.Errorf("unsupported content block type %q", head.Type)
+	}
+}
+
+func decodeEmbeddedResource(raw json.RawMessage) (EmbeddedResource, error) {
+	var value struct {
+		URI      string          `json:"uri"`
+		MimeType string          `json:"mimeType,omitempty"`
+		Text     *string         `json:"text,omitempty"`
+		Blob     *string         `json:"blob,omitempty"`
+		Meta     json.RawMessage `json:"_meta,omitempty"`
+	}
+	if err := decodeACP(raw, &value); err != nil {
+		return EmbeddedResource{}, err
+	}
+	if (value.Text == nil) == (value.Blob == nil) {
+		return EmbeddedResource{}, errors.New("resource must contain exactly one of text or blob")
+	}
+	resource := EmbeddedResource{URI: value.URI, MimeType: value.MimeType, Meta: cloneRaw(value.Meta)}
+	if value.Text != nil {
+		resource.Text = *value.Text
+	} else {
+		resource.Blob = *value.Blob
+	}
+	return resource, nil
 }
 
 func (c ToolCallContent) MarshalJSON() ([]byte, error) {
@@ -70,16 +194,61 @@ func (c ToolCallContent) MarshalJSON() ([]byte, error) {
 }
 
 func (c *ToolCallContent) UnmarshalJSON(raw []byte) error {
-	if err := ValidateToolCallContentJSON(raw); err != nil {
+	decoded, err := decodeToolCallContent(raw)
+	if err != nil {
 		return err
 	}
-	type wire ToolCallContent
-	var decoded wire
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return err
-	}
-	*c = ToolCallContent(decoded)
+	*c = decoded
 	return nil
+}
+
+func decodeToolCallContent(raw json.RawMessage) (ToolCallContent, error) {
+	var head struct {
+		Type string `json:"type"`
+	}
+	if err := decodeACP(raw, &head); err != nil {
+		return ToolCallContent{}, err
+	}
+	switch head.Type {
+	case "content":
+		var value struct {
+			Type    string          `json:"type"`
+			Content json.RawMessage `json:"content"`
+			Meta    json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ToolCallContent{}, err
+		}
+		content, err := decodeContentBlock(value.Content)
+		if err != nil {
+			return ToolCallContent{}, err
+		}
+		return ToolCallContent{Type: value.Type, Content: &content, Meta: cloneRaw(value.Meta)}, nil
+	case "diff":
+		var value struct {
+			Type    string          `json:"type"`
+			Path    string          `json:"path"`
+			OldText *string         `json:"oldText"`
+			NewText string          `json:"newText"`
+			Meta    json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ToolCallContent{}, err
+		}
+		return ToolCallContent{Type: value.Type, Path: value.Path, OldText: value.OldText, NewText: value.NewText, Meta: cloneRaw(value.Meta)}, nil
+	case "terminal":
+		var value struct {
+			Type       string          `json:"type"`
+			TerminalID string          `json:"terminalId"`
+			Meta       json.RawMessage `json:"_meta,omitempty"`
+		}
+		if err := decodeACP(raw, &value); err != nil {
+			return ToolCallContent{}, err
+		}
+		return ToolCallContent{Type: value.Type, TerminalID: value.TerminalID, Meta: cloneRaw(value.Meta)}, nil
+	default:
+		return ToolCallContent{}, fmt.Errorf("unsupported tool call content type %q", head.Type)
+	}
 }
 
 func (r SessionPromptResult) MarshalJSON() ([]byte, error) {
@@ -98,7 +267,7 @@ func (r *SessionPromptResult) UnmarshalJSON(raw []byte) error {
 		StopReason string          `json:"stopReason"`
 		Meta       json.RawMessage `json:"_meta,omitempty"`
 	}
-	if err := decodeStrict(raw, &wire); err != nil {
+	if err := decodeACP(raw, &wire); err != nil {
 		return err
 	}
 	if !IsACPStopReason(wire.StopReason) {
@@ -124,7 +293,7 @@ func (r *SessionNewResult) UnmarshalJSON(raw []byte) error {
 		ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 		Meta          json.RawMessage       `json:"_meta,omitempty"`
 	}
-	if err := decodeStrict(raw, &wire); err != nil {
+	if err := decodeACP(raw, &wire); err != nil {
 		return err
 	}
 	if strings.TrimSpace(wire.SessionID) == "" {
@@ -153,7 +322,7 @@ func (r *SessionLoadResult) UnmarshalJSON(raw []byte) error {
 		ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 		Meta          json.RawMessage       `json:"_meta,omitempty"`
 	}
-	if err := decodeStrict(raw, &wire); err != nil {
+	if err := decodeACP(raw, &wire); err != nil {
 		return err
 	}
 	options, err := NormalizeSessionConfigOptions(wire.ConfigOptions)
@@ -248,7 +417,7 @@ func (o *SessionConfigSelectOptions) UnmarshalJSON(raw []byte) error {
 		groups := make([]SessionConfigSelectGroup, 0, len(entries))
 		for index, entry := range entries {
 			var group SessionConfigSelectGroup
-			if err := decodeStrict(entry, &group); err != nil {
+			if err := decodeACP(entry, &group); err != nil {
 				return fmt.Errorf("group[%d]: %w", index, err)
 			}
 			groups = append(groups, group)
@@ -260,7 +429,7 @@ func (o *SessionConfigSelectOptions) UnmarshalJSON(raw []byte) error {
 	options := make([]SessionConfigSelectOption, 0, len(entries))
 	for index, entry := range entries {
 		var option SessionConfigSelectOption
-		if err := decodeStrict(entry, &option); err != nil {
+		if err := decodeACP(entry, &option); err != nil {
 			return fmt.Errorf("option[%d]: %w", index, err)
 		}
 		options = append(options, option)
@@ -306,7 +475,7 @@ func DecodeSessionConfigOption(raw json.RawMessage) (SessionConfigOption, error)
 			return SessionConfigOption{}, errors.New("select config currentValue is required")
 		}
 		var option SessionConfigSelect
-		if err := decodeStrict(raw, &option); err != nil {
+		if err := decodeACP(raw, &option); err != nil {
 			return SessionConfigOption{}, err
 		}
 		if strings.TrimSpace(option.ID) == "" || strings.TrimSpace(option.Name) == "" {
@@ -318,7 +487,7 @@ func DecodeSessionConfigOption(raw json.RawMessage) (SessionConfigOption, error)
 			return SessionConfigOption{}, errors.New("boolean config currentValue is required")
 		}
 		var option SessionConfigBoolean
-		if err := decodeStrict(raw, &option); err != nil {
+		if err := decodeACP(raw, &option); err != nil {
 			return SessionConfigOption{}, err
 		}
 		if strings.TrimSpace(option.ID) == "" || strings.TrimSpace(option.Name) == "" {
@@ -403,7 +572,7 @@ func DecodeSetSessionConfigOptionRequest(raw json.RawMessage) (SetSessionConfigO
 			Value     bool            `json:"value"`
 			Meta      json.RawMessage `json:"_meta,omitempty"`
 		}
-		if err := decodeStrict(raw, &wire); err != nil {
+		if err := decodeACP(raw, &wire); err != nil {
 			return SetSessionConfigOptionRequest{}, err
 		}
 		return SetSessionConfigOptionRequest{SessionID: wire.SessionID, ConfigID: wire.ConfigID, Variant: SetSessionConfigBoolean{Value: wire.Value}, Meta: cloneRaw(wire.Meta)}, nil
@@ -415,7 +584,7 @@ func DecodeSetSessionConfigOptionRequest(raw json.RawMessage) (SetSessionConfigO
 			Value     string          `json:"value"`
 			Meta      json.RawMessage `json:"_meta,omitempty"`
 		}
-		if err := decodeStrict(raw, &wire); err != nil {
+		if err := decodeACP(raw, &wire); err != nil {
 			return SetSessionConfigOptionRequest{}, err
 		}
 		return SetSessionConfigOptionRequest{SessionID: wire.SessionID, ConfigID: wire.ConfigID, Variant: SetSessionConfigValueID{Type: wire.Type, Value: wire.Value}, Meta: cloneRaw(wire.Meta)}, nil
@@ -443,7 +612,7 @@ func DecodeSetSessionConfigOptionResponse(raw json.RawMessage) (SetSessionConfig
 		ConfigOptions []SessionConfigOption `json:"configOptions"`
 		Meta          json.RawMessage       `json:"_meta,omitempty"`
 	}
-	if err := decodeStrict(raw, &wire); err != nil {
+	if err := decodeACP(raw, &wire); err != nil {
 		return SetSessionConfigOptionResponse{}, err
 	}
 	if wire.ConfigOptions == nil {
@@ -455,7 +624,7 @@ func DecodeSetSessionConfigOptionResponse(raw json.RawMessage) (SetSessionConfig
 func (i *AvailableCommandInput) UnmarshalJSON(raw []byte) error {
 	type wire AvailableCommandInput
 	var value wire
-	if err := decodeStrict(raw, &value); err != nil {
+	if err := decodeACP(raw, &value); err != nil {
 		return err
 	}
 	*i = AvailableCommandInput(value)
@@ -465,7 +634,7 @@ func (i *AvailableCommandInput) UnmarshalJSON(raw []byte) error {
 func (c *AvailableCommand) UnmarshalJSON(raw []byte) error {
 	type wire AvailableCommand
 	var value wire
-	if err := decodeStrict(raw, &value); err != nil {
+	if err := decodeACP(raw, &value); err != nil {
 		return err
 	}
 	*c = AvailableCommand(value)

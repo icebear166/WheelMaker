@@ -804,7 +804,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return c.sendSetConfigOption(result, p)
 	case protocol.MethodWMSessionSteer:
 		var p protocol.WMSessionSteerParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		out, err := c.SteerSession(ctx, p.SessionID, p.MessageID, p.Prompt)
@@ -814,7 +814,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return assignResult(result, protocol.WMSessionSteerResult{TurnID: out.ProviderTurnID})
 	case protocol.MethodWMSessionCompact:
 		var p protocol.WMSessionCompactParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		done, err := c.CompactSession(ctx, p.SessionID)
@@ -835,7 +835,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		}
 	case protocol.MethodWMSessionGoalSet:
 		var p protocol.WMSessionGoalSetParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		goal, err := c.SessionGoalSet(ctx, protocol.SessionGoalSetParams{SessionID: p.SessionID, Objective: p.Objective, Status: p.Status, TokenBudget: p.TokenBudget})
@@ -845,7 +845,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return assignResult(result, protocol.WMSessionGoalResult{Goal: &goal})
 	case protocol.MethodWMSessionGoalGet:
 		var p protocol.WMSessionGoalParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		goal, err := c.SessionGoalGet(ctx, p.SessionID)
@@ -855,7 +855,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return assignResult(result, protocol.WMSessionGoalResult{Goal: goal})
 	case protocol.MethodWMSessionGoalClear:
 		var p protocol.WMSessionGoalParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		if err := c.SessionGoalClear(ctx, p.SessionID); err != nil {
@@ -864,7 +864,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return assignResult(result, protocol.WMSessionOKResult{OK: true})
 	case protocol.MethodWMSessionForkResolve:
 		var p protocol.WMSessionForkResolveParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		points, err := c.ResolveForkPoints(ctx, p.SessionID, p.Prompts)
@@ -874,7 +874,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return assignResult(result, protocol.WMSessionForkResolveResult{ForkPoints: points})
 	case protocol.MethodWMSessionFork:
 		var p protocol.WMSessionForkParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		forked, err := c.ForkSession(ctx, p.SessionID, p.Ref, p.Prompts)
@@ -884,7 +884,7 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		return assignResult(result, protocol.WMSessionForkResult{SessionID: forked.SessionID, Title: forked.Title, ForkPoints: forked.ForkPoints})
 	case protocol.MethodWMSessionArchive:
 		var p protocol.WMSessionArchiveParams
-		if err := remarshal(params, &p); err != nil {
+		if err := remarshalWM(params, &p); err != nil {
 			return err
 		}
 		var err error
@@ -3033,7 +3033,7 @@ func assignResult(result any, value any) error {
 		*out = append((*out)[:0], raw...)
 		return nil
 	}
-	return protocol.DecodeStrictACPJSON(raw, result)
+	return protocol.DecodeACPJSON(raw, result)
 }
 
 func remarshal(in any, out any) error {
@@ -3041,10 +3041,18 @@ func remarshal(in any, out any) error {
 	if err != nil {
 		return err
 	}
-	if err := protocol.DecodeStrictACPJSON(raw, out); err != nil {
+	if err := protocol.DecodeACPJSON(raw, out); err != nil {
 		return err
 	}
 	return nil
+}
+
+func remarshalWM(in any, out any) error {
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	return protocol.DecodeWMJSON(raw, out)
 }
 
 func mustRaw(v any) json.RawMessage {

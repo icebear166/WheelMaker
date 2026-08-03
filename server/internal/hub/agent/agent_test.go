@@ -5410,7 +5410,65 @@ func TestOwnedConn_SendMatchesResponse(t *testing.T) {
 	}
 }
 
-func TestOwnedConnRejectsUnknownACPResultField(t *testing.T) {
+func TestOwnedConnAcceptsForwardCompatibleInitializeResults(t *testing.T) {
+	tests := []struct {
+		name            string
+		result          json.RawMessage
+		wantAgentName   string
+		wantAuthMethods int
+	}{
+		{
+			name:          "kimi resume capability",
+			result:        json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"audio":false,"embeddedContext":true},"mcpCapabilities":{"http":true,"sse":true},"sessionCapabilities":{"list":{},"resume":{}}},"agentInfo":{"name":"Kimi Code CLI","version":"0.31.1"}}`),
+			wantAgentName: "Kimi Code CLI",
+		},
+		{
+			name:          "claude auth and session capabilities",
+			result:        json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"_meta":{"claudeCode":{"promptQueueing":true}},"promptCapabilities":{"image":true,"embeddedContext":true},"mcpCapabilities":{"http":true,"sse":true},"auth":{"logout":{}},"providers":{},"loadSession":true,"sessionCapabilities":{"additionalDirectories":{},"close":{},"delete":{},"fork":{},"list":{},"resume":{}}},"agentInfo":{"name":"@agentclientprotocol/claude-agent-acp","title":"Claude Agent","version":"0.64.0"},"authMethods":[],"_meta":{"steering":{"supported":true}}}`),
+			wantAgentName: "@agentclientprotocol/claude-agent-acp",
+		},
+		{
+			name:            "codebuddy delegate tools capability",
+			result:          json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"promptCapabilities":{"image":true,"embeddedContext":true},"mcpCapabilities":{"http":true,"sse":true},"loadSession":true,"delegateToolsSupport":true},"authMethods":[{"id":"iOA","name":"Login with iOA","description":null},{"id":"external","name":"Login with Google/Github","description":null},{"id":"internal","name":"Login with WeChat","description":null},{"id":"selfhosted","name":"Login with Enterprise Domain","description":null}]}`),
+			wantAuthMethods: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tr := newFakeOwnedTransport()
+			tr.onSend = func(v any) {
+				req, ok := v.(protocol.ACPRPCRequest)
+				if !ok {
+					return
+				}
+				_ = tr.emit(protocol.ACPRPCResponse{
+					JSONRPC: protocol.ACPRPCVersion,
+					ID:      req.ID,
+					Result:  tt.result,
+				})
+			}
+
+			conn := NewOwnedConn(tr)
+			t.Cleanup(func() { _ = conn.Close() })
+			var out protocol.InitializeResult
+			if err := conn.Send(context.Background(), protocol.MethodInitialize, protocol.InitializeParams{}, &out); err != nil {
+				t.Fatalf("send: %v", err)
+			}
+			if out.ProtocolVersion.String() != "1" || !out.AgentCapabilities.LoadSession {
+				t.Fatalf("initialize result=%#v", out)
+			}
+			if tt.wantAgentName != "" && (out.AgentInfo == nil || out.AgentInfo.Name != tt.wantAgentName) {
+				t.Fatalf("agentInfo=%#v, want name %q", out.AgentInfo, tt.wantAgentName)
+			}
+			if len(out.AuthMethods) != tt.wantAuthMethods {
+				t.Fatalf("authMethods=%d, want %d", len(out.AuthMethods), tt.wantAuthMethods)
+			}
+		})
+	}
+}
+
+func TestOwnedConnRejectsUnknownWMResultField(t *testing.T) {
 	tr := newFakeOwnedTransport()
 	tr.onSend = func(v any) {
 		req, ok := v.(protocol.ACPRPCRequest)
@@ -5420,16 +5478,16 @@ func TestOwnedConnRejectsUnknownACPResultField(t *testing.T) {
 		_ = tr.emit(protocol.ACPRPCResponse{
 			JSONRPC: protocol.ACPRPCVersion,
 			ID:      req.ID,
-			Result:  json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{},"legacy":true}`),
+			Result:  json.RawMessage(`{"goal":null,"legacy":true}`),
 		})
 	}
 
 	conn := NewOwnedConn(tr)
 	t.Cleanup(func() { _ = conn.Close() })
-	var out protocol.InitializeResult
-	err := conn.Send(context.Background(), protocol.MethodInitialize, protocol.InitializeParams{}, &out)
+	var out protocol.WMSessionGoalResult
+	err := conn.Send(context.Background(), protocol.MethodWMSessionGoalGet, protocol.WMSessionGoalParams{}, &out)
 	if err == nil || !strings.Contains(err.Error(), "unknown field") {
-		t.Fatalf("send error=%v, want unknown field rejection", err)
+		t.Fatalf("send error=%v, want private extension unknown field rejection", err)
 	}
 }
 
@@ -5712,30 +5770,40 @@ func TestInstanceRejectsInvalidACPUpdateBeforeCallbacks(t *testing.T) {
 	inst := NewInstance("codex", fc)
 	cb := &fakeCallbacks{}
 	inst.SetCallbacks(cb)
-	fc.resp(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"acp-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"},"contentBlocks":[]}}`))
+	fc.resp(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"acp-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"future","text":"hello"}}}`))
 	if cb.updateCount != 0 {
 		t.Fatalf("updates=%d, want invalid wire dropped", cb.updateCount)
 	}
 }
 
-func TestInstanceRejectsUnknownCallbackParamField(t *testing.T) {
-	inst := NewInstance("third-party", &fakeConn{})
-	_, err := inst.HandleACPRequest(context.Background(), 1, protocol.MethodFSRead, json.RawMessage(`{"sessionId":"s1","path":"missing","legacy":true}`))
-	if err == nil || !strings.Contains(err.Error(), "unknown field") {
-		t.Fatalf("callback error=%v, want unknown field rejection", err)
+func TestDecodeACPParamsAcceptsUnknownStandardFields(t *testing.T) {
+	var params protocol.FSReadTextFileParams
+	err := decodeACPParams(protocol.MethodFSRead, json.RawMessage(`{"sessionId":"s1","path":"missing","legacy":true}`), &params)
+	if err != nil {
+		t.Fatalf("decode callback params: %v", err)
+	}
+	if params.SessionID != "s1" || params.Path != "missing" {
+		t.Fatalf("params=%#v", params)
 	}
 }
 
-func TestCodexAppRejectsUnknownACPRequestField(t *testing.T) {
-	conn := newCodexappConnWithRuntime(nil, t.TempDir())
-	var result protocol.InitializeResult
-	err := conn.Send(context.Background(), protocol.MethodInitialize, map[string]any{
+func TestCodexAppRemarshalAcceptsUnknownACPRequestField(t *testing.T) {
+	var params protocol.InitializeParams
+	err := remarshal(map[string]any{
 		"protocolVersion":    1,
 		"clientCapabilities": map[string]any{},
 		"legacy":             true,
-	}, &result)
-	if err == nil || !strings.Contains(err.Error(), "unknown field") {
-		t.Fatalf("initialize error=%v, want unknown field rejection", err)
+	}, &params)
+	if err != nil {
+		t.Fatalf("remarshal initialize params: %v", err)
+	}
+	if params.ProtocolVersion != 1 {
+		t.Fatalf("protocolVersion=%d, want 1", params.ProtocolVersion)
+	}
+
+	var privateParams protocol.WMSessionGoalParams
+	if err := remarshalWM(map[string]any{"sessionId": "s1", "legacy": true}, &privateParams); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("private remarshal error=%v, want unknown field rejection", err)
 	}
 }
 

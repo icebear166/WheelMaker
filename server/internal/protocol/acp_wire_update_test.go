@@ -6,33 +6,22 @@ import (
 	"testing"
 )
 
-func TestDecodeSessionUpdateRejectsPrivateRootFields(t *testing.T) {
+func TestDecodeSessionUpdateIgnoresUnknownRootFields(t *testing.T) {
 	for _, raw := range []string{
 		`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"contentBlocks":[]}`,
 		`{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"x"},"clientMessageId":"m1"}`,
 		`{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"x"},"steered":true}`,
 		`{"sessionUpdate":"tool_call_update","toolCallId":"c","toolCallContent":[]}`,
-		`{"sessionUpdate":"current_mode_update","modeId":"plan"}`,
 		`{"sessionUpdate":"usage_update","size":10,"used":2,"updatedAt":"2026-08-02T00:00:00Z"}`,
 	} {
 		t.Run(raw, func(t *testing.T) {
-			if _, err := DecodeSessionUpdate(json.RawMessage(raw)); err == nil {
-				t.Fatalf("DecodeSessionUpdate(%s) succeeded", raw)
+			if _, err := DecodeSessionUpdate(json.RawMessage(raw)); err != nil {
+				t.Fatalf("DecodeSessionUpdate(%s): %v", raw, err)
 			}
 		})
 	}
-}
-
-func TestDecodeStrictACPJSONRejectsUnknownInitializeFields(t *testing.T) {
-	tests := []json.RawMessage{
-		json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{},"legacy":true}`),
-		json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"legacy":true}}`),
-	}
-	for _, raw := range tests {
-		var result InitializeResult
-		if err := DecodeStrictACPJSON(raw, &result); err == nil {
-			t.Fatalf("unknown initialize field accepted: %s", raw)
-		}
+	if _, err := DecodeSessionUpdate(json.RawMessage(`{"sessionUpdate":"current_mode_update","modeId":"plan"}`)); err == nil {
+		t.Fatal("legacy mode update without currentModeId succeeded")
 	}
 }
 
@@ -110,15 +99,16 @@ func TestSessionUpdateParamsWireMarshalsACPFieldNames(t *testing.T) {
 	}
 }
 
-func TestSessionPromptResultRejectsPrivateMessageAndFailedStopReason(t *testing.T) {
-	for _, raw := range []string{
-		`{"stopReason":"end_turn","message":"private"}`,
-		`{"stopReason":"failed"}`,
-	} {
-		var result SessionPromptResult
-		if err := json.Unmarshal([]byte(raw), &result); err == nil {
-			t.Fatalf("invalid result accepted: %s", raw)
-		}
+func TestSessionPromptResultIgnoresUnknownFieldsAndRejectsInvalidStopReason(t *testing.T) {
+	var result SessionPromptResult
+	if err := json.Unmarshal([]byte(`{"stopReason":"end_turn","message":"private"}`), &result); err != nil {
+		t.Fatalf("forward-compatible result: %v", err)
+	}
+	if result.StopReason != "end_turn" {
+		t.Fatalf("stopReason=%q, want end_turn", result.StopReason)
+	}
+	if err := json.Unmarshal([]byte(`{"stopReason":"failed"}`), &result); err == nil {
+		t.Fatal("invalid failed stopReason succeeded")
 	}
 	var outcome PromptOutcome
 	if err := json.Unmarshal([]byte(`{"stopReason":"refusal","_meta":{"wm":{"message":"declined"}}}`), &outcome); err != nil {
@@ -154,6 +144,32 @@ func TestStrictNestedUnionsRejectCrossVariantFields(t *testing.T) {
 	}
 	if _, err := json.Marshal(ToolCallContent{Type: "terminal", TerminalID: "term", Path: "not-terminal"}); err == nil {
 		t.Fatal("invalid ToolCallContent marshal succeeded")
+	}
+}
+
+func TestInboundNestedUnionsIgnoreUnknownFields(t *testing.T) {
+	var content ContentBlock
+	if err := json.Unmarshal([]byte(`{"type":"text","text":"hello","data":"not-text","future":true}`), &content); err != nil {
+		t.Fatalf("content: %v", err)
+	}
+	if content.Type != ContentBlockTypeText || content.Text != "hello" || content.Data != "" {
+		t.Fatalf("content=%#v", content)
+	}
+
+	var toolContent ToolCallContent
+	if err := json.Unmarshal([]byte(`{"type":"content","content":{"type":"text","text":"done"},"path":"ignored","future":true}`), &toolContent); err != nil {
+		t.Fatalf("tool content: %v", err)
+	}
+	if toolContent.Type != "content" || toolContent.Content == nil || toolContent.Path != "" {
+		t.Fatalf("toolContent=%#v", toolContent)
+	}
+
+	var server MCPServer
+	if err := json.Unmarshal([]byte(`{"type":"stdio","name":"local","command":"server","args":[],"env":[],"url":"https://ignored.example","future":true}`), &server); err != nil {
+		t.Fatalf("mcp server: %v", err)
+	}
+	if server.Type != "stdio" || server.Command != "server" || server.URL != "" {
+		t.Fatalf("server=%#v", server)
 	}
 }
 
@@ -204,9 +220,12 @@ func TestSessionConfigOptionStrictVariants(t *testing.T) {
 	if _, ok := option.Variant.(SessionConfigBoolean); !ok {
 		t.Fatalf("variant=%T, want SessionConfigBoolean", option.Variant)
 	}
+	option, err = DecodeSessionConfigOption(json.RawMessage(`{"id":"fast","name":"Fast mode","type":"boolean","currentValue":true,"options":[],"future":true}`))
+	if err != nil {
+		t.Fatalf("forward-compatible boolean option: %v", err)
+	}
 
 	for _, raw := range []json.RawMessage{
-		json.RawMessage(`{"id":"bad","name":"Bad","type":"boolean","currentValue":true,"options":[]}`),
 		json.RawMessage(`{"id":"bad","name":"Bad","type":"select","currentValue":"x"}`),
 		json.RawMessage(`{"id":"bad","name":"Bad","type":"future","currentValue":"x"}`),
 	} {
@@ -237,7 +256,7 @@ func TestSetSessionConfigOptionStrictValueAndWrappedResponse(t *testing.T) {
 	if _, err := DecodeSetSessionConfigOptionResponse(json.RawMessage(`[]`)); err == nil {
 		t.Fatal("bare config option array response succeeded")
 	}
-	if _, err := DecodeSetSessionConfigOptionResponse(json.RawMessage(`{"configOptions":[]}`)); err != nil {
+	if _, err := DecodeSetSessionConfigOptionResponse(json.RawMessage(`{"configOptions":[],"future":true}`)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -247,9 +266,9 @@ func TestAvailableCommandInputUsesHintShape(t *testing.T) {
 	if _, err := DecodeSessionUpdate(valid); err != nil {
 		t.Fatal(err)
 	}
-	invalid := json.RawMessage(`{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"review","description":"Review changes","input":{"type":"object"}}]}`)
-	if _, err := DecodeSessionUpdate(invalid); err == nil {
-		t.Fatal("legacy JSON-schema command input succeeded")
+	forwardCompatible := json.RawMessage(`{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"review","description":"Review changes","input":{"hint":"path","type":"future"}}]}`)
+	if _, err := DecodeSessionUpdate(forwardCompatible); err != nil {
+		t.Fatalf("forward-compatible command input: %v", err)
 	}
 }
 

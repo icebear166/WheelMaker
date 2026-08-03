@@ -630,7 +630,7 @@ func (i *instance) currentCallbacks() Callbacks {
 }
 
 func decodeACPParams(method string, params json.RawMessage, out any) error {
-	if err := protocol.DecodeStrictACPJSON(params, out); err != nil {
+	if err := protocol.DecodeACPJSON(params, out); err != nil {
 		return fmt.Errorf("%s: unmarshal: %w", method, err)
 	}
 	return nil
