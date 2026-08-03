@@ -81,12 +81,17 @@ describe('workspace visual foundation', () => {
     expect(runtimeChrome).toContain('var(--state-info)');
   });
 
-  test('keeps Preview file styles and removes the retired Git page stylesheet', () => {
+  test('loads the Git browser styles without restoring the retired Git page', () => {
     const index = read('web/src/styles/index.css');
     expect(index).toContain("@import './file.css';");
-    expect(index).not.toContain("@import './git.css';");
+    expect(index).toContain("@import './git.css';");
+    expect(index.indexOf("@import './git.css';")).toBeGreaterThan(index.indexOf("@import './file.css';"));
     expect(read('web/src/styles/file.css')).not.toContain('workspace-ui-targeted-evolution');
-    expect(fs.existsSync(path.join(appRoot, 'web/src/styles/git.css'))).toBe(false);
+    expect(fs.existsSync(path.join(appRoot, 'web/src/styles/git.css'))).toBe(true);
+    const git = read('web/src/styles/git.css');
+    expect(git).toContain('.git-history-panel');
+    expect(git).not.toContain('.git-sidebar');
+    expect(git).not.toContain('.git-surface');
   });
 
   test('defines keyboard focus, disabled, loading, empty and error feedback', () => {

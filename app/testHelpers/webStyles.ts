@@ -10,6 +10,7 @@ const STYLE_ENTRY_ORDER = [
   'debug.css',
   'workbench.css',
   'file.css',
+  'git.css',
   'chat.css',
   'sessionlist.css',
   'code.css',

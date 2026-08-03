@@ -794,7 +794,7 @@ git commit -m "feat(preview): add files and git drawers"
 - Modify: `app/web/src/styles/index.css`
 - Modify: `app/__tests__/web-ui-design-system.test.ts`
 
-- [ ] **Step 1: Write failing component tests for the complete interaction**
+- [x] **Step 1: Write failing component tests for the complete interaction**
 
 ```tsx
 import React from 'react';
@@ -847,7 +847,7 @@ test('selects refs, expands commit details, opens files, and loads more', () => 
 
 Add separate cases for Working Tree scope rows, no changes, no commits, initial loading, stale data plus error, offline disabled controls, current HEAD label, binary/truncated status being deferred to the Diff tab, and `historyDone` hiding Load more.
 
-- [ ] **Step 2: Run the history component test and confirm failure**
+- [x] **Step 2: Run the history component test and confirm failure**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/git/GitHistoryPanel.test.tsx
@@ -855,7 +855,7 @@ npm --prefix app test -- --runInBand web/src/git/GitHistoryPanel.test.tsx
 
 Expected: FAIL because the component and stylesheet do not exist.
 
-- [ ] **Step 3: Implement accessible branch, worktree, and commit sections**
+- [x] **Step 3: Implement accessible branch, worktree, and commit sections**
 
 The component props must remain UI-only:
 
@@ -876,11 +876,11 @@ type GitHistoryPanelProps = {
 
 Use an accessible popover/menu for multi-select refs; toggling the last selected ref must fall back to `currentBranch`. Put Working Tree first and group files by scope; adapt status-only rows to `GitDiffFileMeta` with `additions: 0` and `deletions: 0`. Commit row activation calls `onToggleCommit`; the expanded body renders author/email, absolute and relative time, full SHA, a current-HEAD label only when `commit.sha === snapshot.headSha`, the active ref filters as query context, computed file/addition/deletion totals, and file buttons. Do not infer other ref tips. Keep one expanded commit through `snapshot.expandedCommitSha`.
 
-- [ ] **Step 4: Add intentional Git visual styling**
+- [x] **Step 4: Add intentional Git visual styling**
 
 Create `git.css`, import it after `file.css`, and use existing tokens only. The panel should read as a compact repository timeline: a single hairline lane, 6px commit nodes, restrained ref pills, 28px toolbar controls, filename-first rows with muted parent paths, green/red numeric stats, and 36px minimum touch targets on mobile. Do not restore the deleted top-level `.git-sidebar`, `.git-surface`, or old popover geometry.
 
-- [ ] **Step 5: Run history, design-system, and mobile boundary tests**
+- [x] **Step 5: Run history, design-system, and mobile boundary tests**
 
 ```powershell
 npm --prefix app test -- --runInBand web/src/git/GitHistoryPanel.test.tsx __tests__/web-ui-design-system.test.ts __tests__/web-mobile-floating-nav.test.tsx
@@ -888,7 +888,7 @@ npm --prefix app test -- --runInBand web/src/git/GitHistoryPanel.test.tsx __test
 
 Expected: PASS; mobile Floating Nav IDs remain unchanged.
 
-- [ ] **Step 6: Commit the history UI**
+- [x] **Step 6: Commit the history UI**
 
 ```powershell
 git add app/web/src/git/GitHistoryPanel.tsx app/web/src/git/GitHistoryPanel.test.tsx app/web/src/styles/git.css app/web/src/styles/index.css app/__tests__/web-ui-design-system.test.ts
