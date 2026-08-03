@@ -50,6 +50,28 @@ describe('chat option reply extraction', () => {
     ]);
   });
 
+  test('extracts bold option labels without spacing or inline label text', () => {
+    const text = [
+      '屏蔽条件是否沿用这个判断？',
+      '',
+      '**A.（推荐）私有 registry 不可用时，隐藏整个 MyFlicker/Flicker 功能；恢复可用后自动显示。**',
+      '',
+      '**B.** 仅当本机未安装 `@myflicker/cli` 时隐藏。',
+      '',
+      '**C.** 两个条件任一不满足就隐藏。',
+    ].join('\n');
+
+    expect(extractChatOptionReplies(text)).toEqual([
+      {
+        label: 'A',
+        text: '（推荐）私有 registry 不可用时，隐藏整个 MyFlicker/Flicker 功能；恢复可用后自动显示。',
+      },
+      {label: 'B', text: '仅当本机未安装 `@myflicker/cli` 时隐藏。'},
+      {label: 'C', text: '两个条件任一不满足就隐藏。'},
+    ]);
+    expect(extractChatConfirmationReply(text)).toBeNull();
+  });
+
   test('extracts numeric choices only when a choice context is nearby', () => {
     expect(extractChatOptionReplies([
       '第二个问题：更新动作要支持到什么粒度？',

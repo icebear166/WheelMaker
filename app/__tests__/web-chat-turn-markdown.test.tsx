@@ -275,6 +275,35 @@ describe('ChatTurnView Markdown reply structure', () => {
     expect(selectable.root.findByProps({'data-chat-reply-value': 'B'}).type).toBe('p');
   });
 
+  it('targets bold option labels instead of the preceding confirmation question', async () => {
+    const text = [
+      '屏蔽条件是否沿用这个判断？',
+      '',
+      '**A.（推荐）私有 registry 不可用时，隐藏整个 MyFlicker/Flicker 功能；恢复可用后自动显示。**',
+      '',
+      '**B.** 仅当本机未安装 `@myflicker/cli` 时隐藏。',
+      '',
+      '**C.** 两个条件任一不满足就隐藏。',
+    ].join('\n');
+    const selectable = await renderTurn(text, {
+      optionReplies: [
+        {
+          label: 'A',
+          text: '（推荐）私有 registry 不可用时，隐藏整个 MyFlicker/Flicker 功能；恢复可用后自动显示。',
+        },
+        {label: 'B', text: '仅当本机未安装 `@myflicker/cli` 时隐藏。'},
+        {label: 'C', text: '两个条件任一不满足就隐藏。'},
+      ],
+      onSelectOptionReply: jest.fn(),
+    });
+
+    expect(markdownSources(selectable)).toEqual([text]);
+    expect(selectable.root.findAllByProps({className: 'chat-reply-target'})).toHaveLength(3);
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'A'}).type).toBe('p');
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'B'}).type).toBe('p');
+    expect(selectable.root.findByProps({'data-chat-reply-value': 'C'}).type).toBe('p');
+  });
+
   it('adds the same geometry-free interaction to native numeric list items', async () => {
     const text = [
       '请选择一个选项：',

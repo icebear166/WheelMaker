@@ -17,7 +17,7 @@ export type ChatConfirmationReplyTextPart =
   | {type: 'confirmation'; reply: ChatConfirmationReply};
 
 const OPTION_LINE_PATTERN = /^\s*([A-H1-9])\.\s+(.+?)\s*$/;
-const BOLD_OPTION_LINE_PATTERN = /^\s*\*\*([A-H1-9])\.\s+(.+?)\*\*(.*?)\s*$/;
+const BOLD_OPTION_LINE_PATTERN = /^\s*\*\*([A-H1-9])\.\s*(.*?)\*\*(.*?)\s*$/;
 const LETTER_OPTION_LABELS = 'ABCDEFGH';
 const NUMBER_OPTION_LABELS = '123456789';
 const NUMERIC_CHOICE_CONTEXT_PATTERN =
