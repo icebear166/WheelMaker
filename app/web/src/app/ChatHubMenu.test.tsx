@@ -140,6 +140,26 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
   };
 }
 
+function flickerOpsView(): ChatHubOpsView {
+  return opsView({
+    npm: {
+      loading: false,
+      pending: false,
+      outdatedCount: 0,
+      packages: [{
+        packageName: '@myflicker/cli',
+        displayName: 'MyFlicker CLI',
+        agentTypes: ['flicker'],
+        installedVersion: '0.3.13',
+        latestVersion: '0.3.13',
+        action: null,
+        canUninstall: true,
+        pending: false,
+      }],
+    },
+  });
+}
+
 test('detail toggling is mutually exclusive only within its row group', () => {
   expect(toggleChatHubDetailSections(['settings', 'npm', 'scan'], 'skills'))
     .toEqual(['settings', 'skills', 'scan']);
@@ -910,6 +930,7 @@ test('settings section renders the flicker segment row and compact key editors',
         },
       },
     },
+    opsByHubId: {'hub-a': flickerOpsView()},
   });
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -947,6 +968,50 @@ test('settings section renders the flicker segment row and compact key editors',
     .toEqual(['Changes apply automatically.']);
 });
 
+test('hides Flicker controls, summary, and errors when MyFlicker is unavailable', async () => {
+  const {props} = createHarness({
+    expandedSections: {'hub-a': ['settings']},
+    flickerStatuses: {
+      'hub-a': {
+        configured: true,
+        supported: true,
+        state: 'failed',
+        mode: 'v1',
+        availableModes: ['v1'],
+        modeErrors: {},
+        endpoint: 'http://127.0.0.1:17999',
+        port: 17999,
+        error: 'MyFlicker registry is unavailable',
+      },
+    },
+    hubConfigByHubId: {
+      'hub-a': {
+        loading: false,
+        error: '',
+        busyField: '',
+        data: {
+          flickerBridge: {mode: 'v1', enabled: true},
+          deepSeekPlatform: {configured: false},
+          apiKeys: {
+            kimi: {configured: true, updatedAt: '2026-07-29T12:00:00Z'},
+          },
+        },
+      },
+    },
+    opsByHubId: {'hub-a': opsView()},
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  expect(renderer.root.findAllByProps({className: 'chat-hub-flicker-row'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({'aria-label': 'Use Flicker Bridge V1'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({className: 'chat-hub-settings-state'})).toHaveLength(0);
+  expect(renderer.root.findAllByProps({className: 'chat-hub-settings-hint error'})).toHaveLength(0);
+  expect(renderer.root.findAllByType('input')).toHaveLength(4);
+});
+
 test('flicker segment disables unavailable modes and surfaces the inline error', async () => {
   const {props} = createHarness({
     expandedSections: {'hub-a': ['settings']},
@@ -971,6 +1036,7 @@ test('flicker segment disables unavailable modes and surfaces the inline error',
         data: {flickerBridge: {mode: 'v1', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}},
       },
     },
+    opsByHubId: {'hub-a': flickerOpsView()},
   });
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -1009,6 +1075,7 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
         data: {flickerBridge: {mode: 'v2', enabled: true}, apiKeys: {}, deepSeekPlatform: {configured: false}},
       },
     },
+    opsByHubId: {'hub-a': flickerOpsView()},
   });
   let enabledRenderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -1035,6 +1102,7 @@ test('collapsed settings summary shows the flicker mode with a mark', async () =
         data: {flickerBridge: {mode: 'v1', enabled: false}, apiKeys: {}, deepSeekPlatform: {configured: false}},
       },
     },
+    opsByHubId: {'hub-a': flickerOpsView()},
   });
   let disabledRenderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {

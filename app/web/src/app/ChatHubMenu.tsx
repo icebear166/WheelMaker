@@ -4,6 +4,7 @@ import {createPortal} from 'react-dom';
 import {Icon, type IconName} from '../common/Icon';
 import {SecretEditor} from '../common/SecretEditor';
 import {agentTagVariantClass} from '../chat/agentTagVariant';
+import {hasMyFlickerPackage} from './myFlickerAvailability';
 import type {
   RegistryFlickerBridgeMode,
   RegistryFlickerBridgeStatus,
@@ -520,6 +521,7 @@ function ChatHubFlickerRow({
 function ChatHubSettingsSection({
   hubId,
   configView,
+  flickerAvailable,
   onUpdateHubConfig,
   flickerStatus,
   flickerBusy,
@@ -527,6 +529,7 @@ function ChatHubSettingsSection({
 }: {
   hubId: string;
   configView: ChatHubConfigView | undefined;
+  flickerAvailable: boolean;
   onUpdateHubConfig: (hubId: string, update: RegistryHubConfigUpdatePayload) => Promise<void>;
   flickerStatus: RegistryFlickerBridgeStatus | undefined;
   flickerBusy: boolean;
@@ -543,16 +546,18 @@ function ChatHubSettingsSection({
 
   return (
     <div className="chat-hub-settings">
-      <ChatHubFlickerRow
-        hubId={hubId}
-        config={config}
-        configBusy={configView?.busyField === 'flickerBridge:enabled'}
-        onUpdateHubConfig={onUpdateHubConfig}
-        flickerStatus={flickerStatus}
-        flickerBusy={flickerBusy}
-        onFlickerSwitchMode={onFlickerSwitchMode}
-      />
-      {inlineError ? (
+      {flickerAvailable ? (
+        <ChatHubFlickerRow
+          hubId={hubId}
+          config={config}
+          configBusy={configView?.busyField === 'flickerBridge:enabled'}
+          onUpdateHubConfig={onUpdateHubConfig}
+          flickerStatus={flickerStatus}
+          flickerBusy={flickerBusy}
+          onFlickerSwitchMode={onFlickerSwitchMode}
+        />
+      ) : null}
+      {flickerAvailable && inlineError ? (
         <div className="chat-hub-settings-hint error" title={inlineError}>{inlineError}</div>
       ) : null}
       {configView?.loading && !config ? (
@@ -1008,6 +1013,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const flickerStatus = flickerStatuses[hubId];
   const configView = hubConfigByHubId[hubId];
   const ops = opsByHubId[hubId] ?? EMPTY_OPS_VIEW;
+  const flickerAvailable = hasMyFlickerPackage(ops.npm.packages);
   const openSections = expandedSections[hubId] ?? [];
   const sectionOpen = (section: ChatHubDetailId) => openSections.includes(section);
   const visibleProjectCount = treeItem.projects.filter(project => !hiddenProjectIdSet.has(project.projectId)).length;
@@ -1025,12 +1031,12 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     ? flickerConfig.enabled
     : flickerStatus?.state === 'running' || flickerStatus?.state === 'starting';
   const flickerMode = (flickerStatus?.mode ?? flickerConfig?.mode ?? '').toUpperCase();
-  const settingsSummary = (
+  const settingsSummary = flickerAvailable ? (
     <span className={`chat-hub-settings-state ${flickerOn ? 'on' : 'off'}`}>
       <span className="chat-hub-settings-state-dot" aria-hidden="true" />
       {flickerOn ? flickerMode || 'On' : 'Off'}
     </span>
-  );
+  ) : null;
 
   const toggleSection = (section: ChatHubDetailId) => onToggleSection(hubId, section);
   return (
@@ -1123,6 +1129,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
                 <ChatHubSettingsSection
                   hubId={hubId}
                   configView={configView}
+                  flickerAvailable={flickerAvailable}
                   onUpdateHubConfig={onUpdateHubConfig}
                   flickerStatus={flickerStatus}
                   flickerBusy={flickerActionHubId === hubId}

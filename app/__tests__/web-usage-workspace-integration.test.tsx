@@ -116,7 +116,7 @@ describe('limits workspace integration', () => {
     const stackSource = stackStart >= 0 ? main.slice(stackStart, stackStart + 2600) : '';
     expect(stackSource).toContain("{showMonitor ? (");
     expect(stackSource).toContain('<MonitorSurface');
-    expect(stackSource).toContain('usageSnapshot={usageSnapshot}');
+    expect(stackSource).toContain('usageSnapshot={visibleUsageSnapshot}');
     expect(stackSource).toContain('efficiencySnapshot={modelEfficiencySnapshot}');
     expect(stackSource).not.toContain('<UsageFeatureSurface');
     expect(stackSource).not.toContain('<ModelEfficiencySurface');
@@ -150,7 +150,7 @@ describe('limits workspace integration', () => {
     expect(main).toContain('const [mobileUsageOpen, setMobileUsageOpen] = useState(false);');
     expect(main).toContain('const mobileUsageOverlay = !isWide && mobileUsageOpen ? (');
     expect(main).toContain('<MobileUsageDialog');
-    expect(main).toContain('snapshot={usageSnapshot}');
+    expect(main).toContain('snapshot={visibleUsageSnapshot}');
     expect(main).toContain('{mobileUsageOverlay}');
     expect(main).toContain('{terminalMobileOverlay}');
     expect(main).toContain('{chatPreviewMobileOverlay}');
