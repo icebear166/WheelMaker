@@ -397,7 +397,7 @@ test('only Restart shows loading while its restart request is pending', async ()
   const restart = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
   expect(update.props.disabled).toBe(true);
   expect(restart.props.disabled).toBe(true);
-  expect(update.findByType(Icon).props.name).toBe('cloudDownload');
+  expect(update.findByType(Icon).props.name).toBe('refreshCw');
   expect(restart.findByType(Icon).props.name).toBe('loader');
 });
 
@@ -428,7 +428,7 @@ test('only Update shows loading while its update request is pending', async () =
   expect(update.props.disabled).toBe(true);
   expect(restart.props.disabled).toBe(true);
   expect(update.findByType(Icon).props.name).toBe('loader');
-  expect(restart.findByType(Icon).props.name).toBe('refreshCw');
+  expect(restart.findByType(Icon).props.name).toBe('power');
 });
 
 test('update-only Hub keeps Update and hides Restart', async () => {
@@ -1124,9 +1124,9 @@ test('version action uses an update or restart icon instead of a detached status
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
   const updateAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
-  expect(updateAction.findByType(Icon).props.name).toBe('cloudDownload');
+  expect(updateAction.findByType(Icon).props.name).toBe('refreshCw');
   const restartAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
-  expect(restartAction.findByType(Icon).props.name).toBe('refreshCw');
+  expect(restartAction.findByType(Icon).props.name).toBe('power');
   expect(renderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);
 
   const current = createHarness({
@@ -1150,7 +1150,7 @@ test('version action uses an update or restart icon instead of a detached status
   });
   expect(currentRenderer.root.findAllByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'})).toHaveLength(0);
   const currentRestartAction = currentRenderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
-  expect(currentRestartAction.findByType(Icon).props.name).toBe('refreshCw');
+  expect(currentRestartAction.findByType(Icon).props.name).toBe('power');
 });
 
 test('settings section surfaces the unsupported-hub message', async () => {

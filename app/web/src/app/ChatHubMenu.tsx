@@ -1075,7 +1075,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               onClick={() => onRequestWheelMakerUpdate(hubId)}
             >
               <Icon
-                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'cloudDownload'}
+                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'refreshCw'}
                 spin={ops.wheelMaker.pendingAction === 'update'}
               />
               {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
@@ -1090,7 +1090,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               onClick={() => onRequestWheelMakerRestart(hubId)}
             >
               <Icon
-                name={ops.wheelMaker.pendingAction === 'restart' ? 'loader' : 'refreshCw'}
+                name={ops.wheelMaker.pendingAction === 'restart' ? 'loader' : 'power'}
                 spin={ops.wheelMaker.pendingAction === 'restart'}
               />
             </button>
@@ -1297,7 +1297,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
           disabled={updateAllAvailableCount === 0 || updateAllPending}
           onClick={onUpdateAllHubs}
         >
-          {updateAllPending ? <Icon name="loader" spin /> : <Icon name="cloudDownload" />}
+          {updateAllPending ? <Icon name="loader" spin /> : <Icon name="refreshCw" />}
           {updateAllPending ? 'Updating all hubs…' : 'Update all hubs'}
         </button>
       </div>

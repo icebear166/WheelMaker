@@ -121,7 +121,7 @@ test('marks a Hub-owned confirmation as part of the Hub interaction surface', ()
     .toMatchObject({'data-chat-hub-owned-overlay': 'true'});
 });
 
-test('Restart confirmation uses runtime-reload copy and refresh icon', () => {
+test('Restart confirmation uses runtime-reload copy and power icon', () => {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -148,7 +148,7 @@ test('Restart confirmation uses runtime-reload copy and refresh icon', () => {
   expect(renderer.root.findByProps({className: 'app-confirm-copy'}).children.join(''))
     .toContain('latest environment variables');
   const primary = renderer.root.findByProps({className: 'app-confirm-btn primary'});
-  expect(primary.findByProps({'data-icon-name': 'refreshCw'})).toBeDefined();
+  expect(primary.findByProps({'data-icon-name': 'power'})).toBeDefined();
   expect(primary.children.join('')).toContain('Restart');
 });
 

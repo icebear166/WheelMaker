@@ -308,11 +308,12 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'delete') return 'trash';
   if (target.kind === 'goalClear') return 'trash';
   if (target.kind === 'npmPackage') {
-    return target.action === 'uninstall' ? 'trash' : 'cloudDownload';
+    if (target.action === 'uninstall') return 'trash';
+    return target.action === 'install' ? 'cloudDownload' : 'refreshCw';
   }
-  if (target.kind === 'npmPackageHubUpdate') return 'cloudDownload';
-  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'refreshCw' : 'cloudDownload';
-  if (target.kind === 'wheelMakerUpdateAll') return 'cloudDownload';
+  if (target.kind === 'npmPackageHubUpdate') return 'refreshCw';
+  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'refreshCw';
+  if (target.kind === 'wheelMakerUpdateAll') return 'refreshCw';
   if (target.kind === 'skillInstall') return 'cloudDownload';
   if (target.kind === 'skillUninstall') return 'trash';
   if (target.kind === 'skillBatchUninstall') return 'trash';
