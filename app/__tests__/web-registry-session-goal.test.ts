@@ -2,7 +2,30 @@ import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import {RegistryMethods, RegistryProtocolVersion} from '../web/src/registry/registryMethods';
 import {RegistryWorkspaceService} from '../web/src/registry/RegistryWorkspaceService';
 
-describe('web Registry Session Goal transport', () => {
+describe('web Registry Session capabilities and Goal transport', () => {
+  test('normalizes message lifecycle feature from a session summary', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        sessions: [
+          {
+            sessionId: 'session-valid',
+            sessionFeatures: {messageLifecycle: {version: 1}},
+          },
+          {
+            sessionId: 'session-invalid',
+            sessionFeatures: {messageLifecycle: {version: 1.5}},
+          },
+        ],
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const sessions = await repository.listSessions('project-a');
+
+    expect(sessions[0].sessionFeatures).toEqual({messageLifecycle: {version: 1}});
+    expect(sessions[1].sessionFeatures).toBeUndefined();
+  });
+
   test('normalizes Goal capability and snapshot from a session summary', async () => {
     const request = jest.fn().mockResolvedValue({
       payload: {

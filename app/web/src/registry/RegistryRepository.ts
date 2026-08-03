@@ -722,6 +722,21 @@ export class RegistryRepository {
     };
   }
 
+  private normalizeSessionFeatures(raw: unknown): RegistrySessionSummary['sessionFeatures'] {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return undefined;
+    }
+    const messageLifecycle = (raw as Record<string, unknown>).messageLifecycle;
+    if (!messageLifecycle || typeof messageLifecycle !== 'object' || Array.isArray(messageLifecycle)) {
+      return undefined;
+    }
+    const version = (messageLifecycle as Record<string, unknown>).version;
+    if (typeof version !== 'number' || !Number.isInteger(version) || version <= 0) {
+      return undefined;
+    }
+    return {messageLifecycle: {version}};
+  }
+
   private normalizeSessionSummary(raw: unknown): RegistrySessionSummary | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -770,6 +785,7 @@ export class RegistryRepository {
         : undefined,
       usage: this.normalizeSessionUsage(input.usage),
       sessionActions: this.normalizeSessionActions(input.sessionActions),
+      sessionFeatures: this.normalizeSessionFeatures(input.sessionFeatures),
       goal: this.normalizeSessionGoal(input.goal),
       forkedFrom: this.normalizeSessionForkOrigin(input.forkedFrom),
       queue: this.normalizeSessionQueue(input.queue),
