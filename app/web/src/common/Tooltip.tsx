@@ -11,11 +11,6 @@ function resolveAnchor(target: EventTarget | null): Element | null {
   return target instanceof Element ? target.closest('[data-tooltip]') : null;
 }
 
-function hoverCapable(): boolean {
-  // jsdom has no matchMedia; treat as hover-capable so tests exercise the hover path.
-  return typeof window.matchMedia !== 'function' || window.matchMedia('(hover: hover)').matches;
-}
-
 // Global singleton tooltip: any element carrying a `data-tooltip` attribute gets a
 // styled hover/focus hint. Visual-only — accessible names stay on the element's own
 // aria-label. Disabled on touch devices ((hover: none)), mirroring native title reach.
@@ -29,6 +24,16 @@ export function GlobalTooltip(): React.JSX.Element | null {
   const pendingAnchorRef = useRef<Element | null>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverQueryRef = useRef<MediaQueryList | null>(null);
+
+  // Cached MediaQueryList (.matches updates live); constructing a query per
+  // mouseover would add avoidable work to the hottest event path. jsdom has no
+  // matchMedia; treat as hover-capable so tests exercise the hover path.
+  const hoverCapable = useCallback(() => {
+    if (typeof window.matchMedia !== 'function') return true;
+    if (!hoverQueryRef.current) hoverQueryRef.current = window.matchMedia('(hover: hover)');
+    return hoverQueryRef.current.matches;
+  }, []);
 
   const clearHoverTimer = useCallback(() => {
     pendingAnchorRef.current = null;
@@ -125,7 +130,7 @@ export function GlobalTooltip(): React.JSX.Element | null {
       clearHoverTimer();
       clearExitTimer();
     };
-  }, [show, hide, clearHoverTimer, clearExitTimer]);
+  }, [show, hide, hoverCapable, clearHoverTimer, clearExitTimer]);
 
   // Enter transition: mount hidden, flip to visible on the next frame.
   useEffect(() => {
