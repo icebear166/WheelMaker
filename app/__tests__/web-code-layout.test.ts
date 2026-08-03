@@ -6,6 +6,7 @@ describe('web code layout', () => {
   test('uses shiki renderer with transformer-based line metadata and custom diff rendering', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const codeLanguage = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'codeLanguage.ts'), 'utf8');
     const shikiBlock = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'ShikiCodeBlock.tsx'), 'utf8');
     const diffRows = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'git', 'diffRows.ts'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'shikiRenderer.ts'), 'utf8');
@@ -48,17 +49,17 @@ describe('web code layout', () => {
     expect(shikiRenderer).toContain("import('@shikijs/langs/hlsl')");
     expect(shikiRenderer).toContain("import('@shikijs/langs/glsl')");
     expect(shikiRenderer).toContain("import('@shikijs/langs/lua')");
-    expect(mainTsx).toContain("case 'lua':");
-    expect(mainTsx).toContain("return 'lua';");
-    expect(mainTsx).toContain("case 'hlsl':");
-    expect(mainTsx).toContain("return 'hlsl';");
-    expect(mainTsx).toContain("case 'glsl':");
-    expect(mainTsx).toContain("case 'frag':");
-    expect(mainTsx).toContain("return 'glsl';");
-    expect(mainTsx).toContain("case 'py':");
-    expect(mainTsx).toContain("return 'python';");
-    expect(mainTsx).toContain("case 'ps1':");
-    expect(mainTsx).toContain("return 'powershell';");
+    expect(codeLanguage).toContain("case 'lua':");
+    expect(codeLanguage).toContain("return 'lua';");
+    expect(codeLanguage).toContain("case 'hlsl':");
+    expect(codeLanguage).toContain("return 'hlsl';");
+    expect(codeLanguage).toContain("case 'glsl':");
+    expect(codeLanguage).toContain("case 'frag':");
+    expect(codeLanguage).toContain("return 'glsl';");
+    expect(codeLanguage).toContain("case 'py':");
+    expect(codeLanguage).toContain("return 'python';");
+    expect(codeLanguage).toContain("case 'ps1':");
+    expect(codeLanguage).toContain("return 'powershell';");
     expect(shikiRenderer).toContain("from './shikiSettings'");
     expect(shikiSettings).toContain('CODE_FONT_OPTIONS');
     expect(shikiSettings).toContain('resolveCodeFontFamily');

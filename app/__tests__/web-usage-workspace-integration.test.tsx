@@ -113,7 +113,8 @@ describe('limits workspace integration', () => {
     expect(main).toContain('setShowMonitor={setShowMonitor}');
     expect(main).toContain('isWide ? (');
     const stackStart = main.indexOf('chat-edge-surface-stack');
-    const stackSource = stackStart >= 0 ? main.slice(stackStart, stackStart + 2600) : '';
+    const stackEnd = main.indexOf('{isWide && chatSidebarCollapsed', stackStart);
+    const stackSource = stackStart >= 0 && stackEnd >= 0 ? main.slice(stackStart, stackEnd) : '';
     expect(stackSource).toContain("{showMonitor ? (");
     expect(stackSource).toContain('<MonitorSurface');
     expect(stackSource).toContain('usageSnapshot={visibleUsageSnapshot}');

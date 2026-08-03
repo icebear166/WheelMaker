@@ -1214,7 +1214,7 @@ git commit -m "feat(git): integrate browser into workspace"
 - Modify if verification exposes defects: files already listed in Tasks 1-8
 - Modify: `docs/scope/2026-08-03-git-browser/plan-git-browser.md`
 
-- [ ] **Step 1: Perform a focused visual-language review**
+- [x] **Step 1: Perform a focused visual-language review**
 
 Review desktop and mobile CSS against `docs/wiki/frontend-interaction/visual-language.md`, `workbench-chrome.md`, and `pc-chat-sidebar-modes.md`. Verify:
 
@@ -1234,7 +1234,7 @@ npm --prefix app test -- --runInBand __tests__/web-ui-design-system.test.ts __te
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the complete frontend verification gate**
+- [x] **Step 2: Run the complete frontend verification gate**
 
 ```powershell
 npm --prefix app run tsc:web
@@ -1244,7 +1244,7 @@ npm --prefix app run build:web
 
 Expected: TypeScript exits 0, every Jest suite passes, and webpack production build exits 0. The build writes to the configured `~/.wheelmaker/web` target; do not scan or add generated output.
 
-- [ ] **Step 3: Inspect scope and protocol boundaries**
+- [x] **Step 3: Inspect scope and protocol boundaries**
 
 ```powershell
 rg -n --glob '!**/dist/**' "GitSurface|GitSidebar|tab === 'git'|setTab\('git'\)|stage|unstage|checkout|git push" app/web/src app/__tests__
