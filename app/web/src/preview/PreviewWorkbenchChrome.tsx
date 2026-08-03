@@ -87,7 +87,6 @@ export function PreviewWorkbenchChrome({
           className={`chat-preview-icon-button${searchActive ? ' active' : ''}`}
           onClick={onSearch}
           disabled={searchDisabled}
-          data-tooltip="Search in preview"
           aria-label="Search in preview"
           aria-pressed={searchActive}
         >
@@ -100,7 +99,6 @@ export function PreviewWorkbenchChrome({
             type="button"
             className="chat-preview-icon-button"
             onClick={onActionsMenuToggle}
-            data-tooltip="Preview actions"
             aria-label="Preview actions"
             aria-haspopup="menu"
             aria-expanded={actionsMenuOpen}
@@ -188,7 +186,6 @@ export function PreviewWorkbenchChrome({
               className="chat-file-workbench-tab-close"
               onClick={() => onTabClose(tab.id)}
               aria-label={`Close ${tab.title}`}
-              data-tooltip="Close"
             >
               <Icon name="x" />
             </button>
@@ -248,7 +245,6 @@ export function PreviewWorkbenchChrome({
           type="button"
           className="preview-workbench-mobile-port-relay-refresh"
           onClick={onMobilePortRelayRefresh}
-          data-tooltip="Refresh relay page"
           aria-label="Refresh relay page"
         >
           <Icon name="refreshCw" />

@@ -376,7 +376,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('attachmentDraftGeneration);');
     expect(mainTsx).toContain('if (chatSendDisabled) {');
     expect(mainTsx).toContain('disabled={selectedChatSubmitPending}');
-    expect(mainTsx).toContain('data-tooltip="Attach file"');
+    expect(mainTsx).toContain('aria-label="Attach file"');
     expect(mainTsx).not.toContain('respondToChatPermission');
     expect(mainTsx).not.toContain("const [chatSessions] = useState(['General', 'WheelMaker App', 'Go Service']);");
     expect(stylesCss).toContain('.chat-composer');
@@ -1113,7 +1113,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-tools"');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain('chat-composer-stop-slot${chatStopPillExiting');
-    expect(mainTsx).toContain("data-tooltip={isWide ? 'Attach files' : 'Attach files or photos'}");
+    expect(mainTsx).toContain("aria-label={isWide ? 'Attach files' : 'Attach files or photos'}");
     expect(mainTsx).toContain('aria-haspopup={isWide ? undefined : \'menu\'}');
     expect(mainTsx).toContain('aria-expanded={isWide ? undefined : chatAttachmentTrayOpen}');
     expect(mainTsx).toContain('{!isWide && chatAttachmentTrayOpen ? (');

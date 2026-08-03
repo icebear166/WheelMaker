@@ -55,7 +55,7 @@ describe('MobileFloatingNav', () => {
 
   test('expanded shows the preview tab count on the Preview shortcut', () => {
     const {tree} = renderNav({expanded: true, previewTabCount: 3});
-    const previewItem = tree.root.findByProps({'data-tooltip': 'Preview'});
+    const previewItem = tree.root.findByProps({'aria-label': 'Preview'});
     const badge = previewItem.findByProps({className: 'chat-preview-badge'});
 
     expect(badge.props['aria-label']).toBe('3 preview tabs');
@@ -64,14 +64,14 @@ describe('MobileFloatingNav', () => {
 
   test('does not show a Preview badge when there are no preview tabs', () => {
     const {tree} = renderNav({expanded: true, previewTabCount: 0});
-    const previewItem = tree.root.findByProps({'data-tooltip': 'Preview'});
+    const previewItem = tree.root.findByProps({'aria-label': 'Preview'});
 
     expect(previewItem.findAllByProps({className: 'chat-preview-badge'})).toHaveLength(0);
   });
 
   test('relay item dims when the frame cannot open and shows a status dot', () => {
     const {tree} = renderNav({expanded: true, relay: {frameOpen: false, enabled: false, active: false}});
-    const relayItem = tree.root.findByProps({'data-tooltip': 'Relay'});
+    const relayItem = tree.root.findByProps({'aria-label': 'Relay'});
     expect(relayItem.props['data-enabled']).toBe(false);
     expect(relayItem.props.disabled).toBeUndefined();
     expect(relayItem.findAllByProps({className: 'floating-nav-relay-dot'})).toHaveLength(1);
@@ -82,11 +82,11 @@ describe('MobileFloatingNav', () => {
     const onCurrentSelect = jest.fn();
     const {tree} = renderNav({expanded: true, current: 'chat', onSelect, onCurrentSelect});
     act(() => {
-      tree.root.findByProps({'data-tooltip': 'Terminal'}).props.onClick();
+      tree.root.findByProps({'aria-label': 'Terminal'}).props.onClick();
     });
     expect(onSelect).toHaveBeenCalledWith('terminal');
     act(() => {
-      tree.root.findByProps({'data-tooltip': 'Close navigation'}).props.onClick();
+      tree.root.findByProps({'aria-label': 'Chat, current surface'}).props.onClick();
     });
     expect(onCurrentSelect).toHaveBeenCalledTimes(1);
   });
@@ -101,7 +101,7 @@ describe('MobileFloatingNav', () => {
     expect(tree.root.findByProps({role: 'navigation'}).props['aria-label']).toBe('Surface navigation');
     const items = tree.root.findAllByProps({className: 'floating-nav-card-item'});
     expect(items.filter(item => item.props['data-active'] === true)).toHaveLength(1);
-    expect(items.find(item => item.props['aria-current'] === 'page')?.props['data-tooltip']).toBe('Close navigation');
+    expect(items.find(item => item.props['aria-current'] === 'page')?.props['aria-label']).toBe('Settings, current surface');
     expect(tree.root.findAllByProps({role: 'menuitem'})).toHaveLength(0);
     expect(items.some(item => item.props['aria-pressed'] !== undefined)).toBe(false);
   });

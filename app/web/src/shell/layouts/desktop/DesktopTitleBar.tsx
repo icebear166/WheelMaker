@@ -74,7 +74,6 @@ export function DesktopWindowControls() {
         type="button"
         className="desktop-titlebar-button"
         aria-label="Minimize"
-        data-tooltip="Minimize"
         onClick={() => invokeDesktopAction(bridge.minimize)}
       >
         <Icon name="minus" />
@@ -83,7 +82,6 @@ export function DesktopWindowControls() {
         type="button"
         className="desktop-titlebar-button"
         aria-label="Maximize or restore"
-        data-tooltip="Maximize or restore"
         onClick={() => invokeDesktopAction(bridge.toggleMaximize)}
       >
         <Icon name="square" />
@@ -92,7 +90,6 @@ export function DesktopWindowControls() {
         type="button"
         className="desktop-titlebar-button desktop-titlebar-close"
         aria-label="Close"
-        data-tooltip="Close"
         onClick={() => invokeDesktopAction(bridge.close)}
       >
         <Icon name="x" />

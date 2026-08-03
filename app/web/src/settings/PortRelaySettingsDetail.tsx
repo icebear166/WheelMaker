@@ -211,7 +211,6 @@ export function PortRelaySettingsDetail({
                   className="set-btn set-btn--icon set-btn--danger"
                   onClick={() => deletePortRelayTarget(target).catch(() => undefined)}
                   disabled={portRelayLoading}
-                  data-tooltip="Delete target"
                   aria-label={`Delete ${target.hubId}:${target.targetPort}`}
                 >
                   <Icon name="x" size={14} />

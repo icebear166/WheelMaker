@@ -33,6 +33,7 @@
 ## 悬浮提示（Tooltip）
 
 - hover 提示统一走共享 Tooltip 体系（`web/src/common/Tooltip` 全局单例 + 元素上的 `data-tooltip` 属性，定位基于 `@floating-ui/react`），禁止新增原生 `title=` 提示；`iframe title` 等 a11y 名称属性不属于提示，不在此列。
+- tooltip 只给有信息增量的场景：icon-only 且含义不自明按钮的操作说明、截断文本的全文、附加信息（完整时间戳、路径、包名、错误详情、快捷键）。禁止为完全可见文字纯复读，禁止为不言自明控件（窗口控制、× 关闭、垃圾桶删除、纸飞机发送、回形针附件、放大镜搜索、⋯ 更多菜单）添加；可访问性名称永远由 `aria-label` 承担，不因删除 tooltip 而移除。
 - 样式是瞬态弹层的轻量变体：`surface-overlay` 烟熏半实底 + 弱 blur + `border-faint` + `--shadow-overlay` + 6px 圆角 + 11px 文字；进退场动效走 `--motion-*` / `--ease-*` tokens 并提供 `prefers-reduced-motion` 降级。
 - 仅 hover 指针设备激活，移动端不启用；hover 短延迟显示防划过闪烁，键盘 focus 立即显示、Esc/blur 关闭；tooltip 只承担视觉提示，可访问性名称仍由元素自身 `aria-label` 表达。
 

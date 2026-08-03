@@ -49,7 +49,6 @@ export function WorkbenchChrome({
         type="button"
         className="workbench-chrome-icon-button workbench-chrome-close"
         aria-label={closeLabel}
-        data-tooltip={closeLabel}
         onClick={onClose}
       >
         <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} size={16} />

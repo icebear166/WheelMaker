@@ -103,7 +103,6 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
             type="button"
             className="workbench-chrome-icon-button"
             aria-label="Terminal actions"
-            data-tooltip="Terminal actions"
             aria-haspopup="menu"
             aria-expanded={actionsMenuOpen}
             onClick={() => setActionsMenuOpen(open => !open)}
@@ -174,7 +173,6 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
               type="button"
               className="terminal-tab-close"
               aria-label={`Close terminal ${label}`}
-              data-tooltip={`Close terminal ${label}`}
               onClick={event => {
                 event.stopPropagation();
                 props.onRequestClose(item);

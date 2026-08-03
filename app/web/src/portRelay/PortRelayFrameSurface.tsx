@@ -26,7 +26,6 @@ export function PortRelayFrameSurface({
             type="button"
             className="chat-preview-icon-button"
             onClick={onCloseChrome}
-            data-tooltip={mode === 'mobile' ? 'Back' : 'Close preview'}
             aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
           >
             <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} size={16} />
@@ -36,7 +35,6 @@ export function PortRelayFrameSurface({
             type="button"
             className="chat-preview-icon-button"
             onClick={onOpenInBrowser}
-            data-tooltip="Open relay page in browser"
             aria-label="Open relay page in browser"
           >
             <Icon name="externalLink" size={16} />

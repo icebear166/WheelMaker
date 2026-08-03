@@ -154,7 +154,6 @@ export function DraftSessionRow({
         <button
           type="button"
           className="draft-session-dismiss"
-          data-tooltip="Dismiss"
           aria-label="Dismiss draft session"
           onClick={onDismiss}
         >

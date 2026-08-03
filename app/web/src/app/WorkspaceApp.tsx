@@ -2396,12 +2396,11 @@ const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
           type="button"
           className="chat-preview-icon-button"
           onClick={onClose}
-          data-tooltip={mode === 'mobile' ? 'Back' : 'Close preview'}
           aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
         >
           <ChatIcon name={mode === 'mobile' ? 'arrowLeft' : 'x'} />
         </button>
-        <div className="chat-preview-title" data-tooltip="Preview">Preview</div>
+        <div className="chat-preview-title">Preview</div>
       </div>
       <div className="chat-empty-preview-body">
         <ChatIcon name="appWindow" size={16} />
@@ -14237,7 +14236,6 @@ export function App() {
             type="button"
             className="session-search-icon-btn chat-menu-icon-button"
             onClick={() => setSessionSearchOpen(true)}
-            data-tooltip="Search sessions"
             aria-label="Search sessions"
           >
             <SessionIcon name="search" />
@@ -14266,7 +14264,6 @@ export function App() {
           <button
             type="submit"
             className="session-search-icon-btn"
-            data-tooltip="Start search"
             aria-label="Start search"
           >
             <SessionIcon name="check" />
@@ -14274,7 +14271,6 @@ export function App() {
           <button
             type="button"
             className="session-search-icon-btn"
-            data-tooltip="Close search"
             aria-label="Close search"
             onClick={() => {
               if (hasActiveSearch) {
@@ -14755,7 +14751,6 @@ export function App() {
             type="button"
             className="session-archive-progress-dismiss"
             aria-label="Close archive status"
-            data-tooltip="Close archive status"
             disabled={archiveBatchRunning}
             onClick={clearArchiveBatchStatus}
           >
@@ -15919,7 +15914,6 @@ export function App() {
               className="mobile-project-sheet-close"
               onClick={() => setMobileProjectActionMenu(null)}
               aria-label="Close"
-              data-tooltip="Close"
             >
               <SessionIcon name="x" />
             </button>
@@ -18682,7 +18676,6 @@ export function App() {
                       className="chat-send-button"
                       onClick={() => sendChatMessage().catch(() => undefined)}
                       disabled={chatSendDisabled}
-                      data-tooltip="Send"
                       aria-label="Send message"
                     >
                       <ChatIcon name="send" size={17} />
@@ -18861,7 +18854,6 @@ export function App() {
                       }
                       toggleChatAttachmentTray();
                     }}
-                    data-tooltip={isWide ? 'Attach files' : 'Attach files or photos'}
                     aria-label={isWide ? 'Attach files' : 'Attach files or photos'}
                     aria-haspopup={isWide ? undefined : 'menu'}
                     aria-expanded={isWide ? undefined : chatAttachmentTrayOpen}
@@ -18896,7 +18888,6 @@ export function App() {
                           chatFileInputRef.current?.click();
                         }}
                         disabled={selectedChatSubmitPending}
-                        data-tooltip="Attach file"
                         aria-label="Attach file"
                         role="menuitem"
                       >
@@ -18915,7 +18906,6 @@ export function App() {
                           chatImageInputRef.current?.click();
                         }}
                         disabled={selectedChatSubmitPending}
-                        data-tooltip="Attach photo"
                         aria-label="Attach photo"
                         role="menuitem"
                       >
@@ -19494,7 +19484,6 @@ export function App() {
             className="mobile-project-sheet-close"
             onClick={() => setMobileRelayTargetSheet(null)}
             aria-label="Close"
-            data-tooltip="Close"
           >
             <SessionIcon name="x" />
           </button>
@@ -20392,7 +20381,6 @@ export function App() {
         type="button"
         className="chat-preview-icon-button"
         onClick={closePreviewSearch}
-        data-tooltip="Close search"
         aria-label="Close search"
       >
         <Icon name="x" />
@@ -20473,7 +20461,6 @@ export function App() {
         type="button"
         className="chat-search-icon-button"
         onClick={closeChatSearch}
-        data-tooltip="Close search"
         aria-label="Close search"
       >
         <Icon name="x" />

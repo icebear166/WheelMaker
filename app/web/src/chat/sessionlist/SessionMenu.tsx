@@ -127,7 +127,6 @@ export function SessionMenu({
             className="session-menu-close"
             data-menu-close="true"
             aria-label="Close session actions"
-            data-tooltip="Close"
             onClick={onClose}
           >
             <SessionIcon name="x" />
