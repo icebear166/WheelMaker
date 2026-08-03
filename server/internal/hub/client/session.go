@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -490,7 +491,9 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	}
 
 	resolved := normalizeAgentConfigOptions(agentName, loadResult.ConfigOptions)
+	persistedConfigOptions = filterACPConfigOptionsForAgent(agentName, initResult.AgentInfo, persistedConfigOptions)
 	targetConfig := configPreferenceFromACPOptions(persistedConfigOptions)
+	targetConfig = filterStoredConfigOptionsForAgent(agentName, initResult.AgentInfo, targetConfig)
 	if len(resolved) > 0 {
 		if len(targetConfig) > 0 {
 			resolved = applyStoredConfigOptions(ctx, s.projectName, inst, savedSID, resolved, targetConfig)
@@ -755,6 +758,98 @@ func normalizeStoredConfigPreferences(agentName string, options []PreferenceConf
 		}
 	}
 	return normalized
+}
+
+// Existing native Kimi sessions persist 0.27.0's boolean thinking values.
+// Newer Kimi Code ACP versions expose effort levels instead.
+const kimiCodeLegacyThinkingVersion = "0.27.0"
+
+func filterStoredConfigOptionsForAgent(agentName string, agentInfo *acp.AgentInfo, options []PreferenceConfigOption) []PreferenceConfigOption {
+	normalized := append([]PreferenceConfigOption(nil), options...)
+	if !isNewKimiCodeVersion(agentName, agentInfo) {
+		return normalized
+	}
+	filtered := normalized[:0]
+	for _, option := range normalized {
+		if shouldSkipKimiLegacyThinkingOption(agentName, agentInfo, option.ID, option.CurrentValue) {
+			continue
+		}
+		filtered = append(filtered, option)
+	}
+	return filtered
+}
+
+func filterACPConfigOptionsForAgent(agentName string, agentInfo *acp.AgentInfo, options []acp.ConfigOption) []acp.ConfigOption {
+	normalized := append([]acp.ConfigOption(nil), options...)
+	if !isNewKimiCodeVersion(agentName, agentInfo) {
+		return normalized
+	}
+	filtered := normalized[:0]
+	for _, option := range normalized {
+		if shouldSkipKimiLegacyThinkingOption(agentName, agentInfo, option.ID, option.CurrentValue) {
+			continue
+		}
+		filtered = append(filtered, option)
+	}
+	return filtered
+}
+
+func shouldSkipKimiLegacyThinkingOption(agentName string, agentInfo *acp.AgentInfo, optionID, value string) bool {
+	return isNewKimiCodeVersion(agentName, agentInfo) &&
+		strings.EqualFold(strings.TrimSpace(optionID), "thinking") &&
+		(strings.EqualFold(strings.TrimSpace(value), "on") || strings.EqualFold(strings.TrimSpace(value), "off"))
+}
+
+func isNewKimiCodeVersion(agentName string, agentInfo *acp.AgentInfo) bool {
+	if !strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderKimi)) || agentInfo == nil {
+		return false
+	}
+	return compareKimiCodeVersions(agentInfo.Version, kimiCodeLegacyThinkingVersion) > 0
+}
+
+func compareKimiCodeVersions(left, right string) int {
+	leftParts, leftOK := kimiCodeVersionParts(left)
+	rightParts, rightOK := kimiCodeVersionParts(right)
+	if !leftOK || !rightOK {
+		return 0
+	}
+	for index := range leftParts {
+		if leftParts[index] != rightParts[index] {
+			if leftParts[index] < rightParts[index] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+func kimiCodeVersionParts(value string) ([]int, bool) {
+	parts := make([]int, 0, 3)
+	for index := 0; index < len(value) && len(parts) < 3; {
+		for index < len(value) && (value[index] < '0' || value[index] > '9') {
+			index++
+		}
+		if index == len(value) {
+			break
+		}
+		start := index
+		for index < len(value) && value[index] >= '0' && value[index] <= '9' {
+			index++
+		}
+		part, err := strconv.Atoi(value[start:index])
+		if err != nil {
+			return nil, false
+		}
+		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return nil, false
+	}
+	for len(parts) < 3 {
+		parts = append(parts, 0)
+	}
+	return parts, true
 }
 
 func normalizeAgentConfigOptions(agentName string, options []acp.ConfigOption) []acp.ConfigOption {

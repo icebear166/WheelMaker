@@ -464,6 +464,7 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 
 	resolved := normalizeAgentConfigOptions(agentType, newResult.ConfigOptions)
 	targetConfig := configPreferencesWithAgentDefaults(agentType, resolved, preference.ConfigOptions)
+	targetConfig = filterStoredConfigOptionsForAgent(agentType, initResult.AgentInfo, targetConfig)
 	if len(targetConfig) > 0 {
 		resolved = applyStoredConfigOptions(ctx, c.projectName, inst, sessionID, resolved, targetConfig)
 	}

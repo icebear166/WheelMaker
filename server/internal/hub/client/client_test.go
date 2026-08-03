@@ -1883,6 +1883,80 @@ func TestNormalizeStoredClaudeCompatibleEffortPreferences(t *testing.T) {
 	}
 }
 
+func TestCreateSession_KimiSkipsLegacyThinkingForNewVersion(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SaveAgentPreference(context.Background(), AgentPreferenceRecord{
+		ProjectName: "proj1",
+		AgentType:   string(acp.ACPProviderKimi),
+		PreferenceJSON: string(mustJSON(PreferenceState{ConfigOptions: []PreferenceConfigOption{{
+			ID:           "thinking",
+			CurrentValue: "on",
+		}}})),
+	}); err != nil {
+		t.Fatalf("SaveAgentPreference: %v", err)
+	}
+
+	inst := &testInjectedInstance{
+		name: "kimi",
+		initResult: acp.InitializeResult{
+			ProtocolVersion: "0.1",
+			AgentInfo:       &acp.AgentInfo{Name: "kimi", Version: "0.31.1"},
+		},
+		newResult: &acp.SessionNewResult{
+			SessionID: "acp-new",
+			ConfigOptions: []acp.ConfigOption{{
+				ID:           "thinking",
+				Category:     acp.ConfigOptionCategoryThoughtLv,
+				CurrentValue: "high",
+			}},
+		},
+	}
+
+	client := New(store, "proj1", t.TempDir())
+	client.registry = agent.NewACPFactory()
+	client.registry.Register(acp.ACPProviderKimi, func(context.Context, string) (agent.Instance, error) {
+		return inst, nil
+	})
+
+	if _, err := client.CreateSession(context.Background(), string(acp.ACPProviderKimi), ""); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(inst.setCalls) != 0 {
+		t.Fatalf("set calls = %v, want no legacy thinking replay", inst.setCalls)
+	}
+}
+
+func TestFilterStoredConfigOptionsForAgent_KimiLegacyThinkingValues(t *testing.T) {
+	tests := []struct {
+		name      string
+		agentName string
+		version   string
+		value     string
+		wantKept  bool
+	}{
+		{name: "new on", agentName: "kimi", version: "0.31.1", value: "on", wantKept: false},
+		{name: "new off", agentName: "kimi", version: "0.31.1", value: "off", wantKept: false},
+		{name: "legacy version", agentName: "kimi", version: "0.27.0", value: "on", wantKept: true},
+		{name: "other agent", agentName: "cc-kimi", version: "0.31.1", value: "on", wantKept: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := filterStoredConfigOptionsForAgent(tt.agentName, &acp.AgentInfo{Version: tt.version}, []PreferenceConfigOption{{
+				ID:           "thinking",
+				CurrentValue: tt.value,
+			}})
+			if (len(got) == 1) != tt.wantKept {
+				t.Fatalf("filtered preferences = %#v, want kept=%v", got, tt.wantKept)
+			}
+		})
+	}
+}
+
 func TestCreateSession_CCGLMMapsStoredClaudeEffortToActualLevel(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
