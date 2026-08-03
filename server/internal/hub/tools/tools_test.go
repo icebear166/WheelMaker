@@ -2421,6 +2421,101 @@ func TestUpdateQueryReportsActiveJobWithoutRetriggering(t *testing.T) {
 	}
 }
 
+func TestUpdateQueryReapsStaleActiveJob(t *testing.T) {
+	baseDir := t.TempDir()
+	writeInstalledReleaseForTest(t, baseDir, installedRelease{
+		SchemaVersion: 2,
+		Version:       "v1.22",
+		PublishedAt:   "2026-07-15T09:00:00Z",
+		SourceSHA:     strings.Repeat("a", 40),
+		ManifestSHA:   strings.Repeat("c", 64),
+		InstalledAt:   "2026-07-15T09:05:00Z",
+	})
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "stale-job",
+		Owner:       "web",
+		State:       "downloading",
+		StartedAt:   "2026-08-03T07:00:00Z",
+		HeartbeatAt: "2026-08-03T08:00:00Z",
+	})
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
+	cmd.now = func() time.Time {
+		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     "stale-job",
+		State:     "downloading",
+		StartedAt: "2026-08-03T07:00:00Z",
+		UpdatedAt: "2026-08-03T08:00:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "query",
+		"hubId":  "hub-a",
+	})
+	if got.Job == nil || got.Job.State != "failed" || got.Job.ErrorCode != "updater_stalled" {
+		t.Fatalf("job=%+v, want failed updater_stalled", got.Job)
+	}
+	if got.Status != "installed" || !got.CanRequest {
+		t.Fatalf("response=%+v, want requestable installed Hub", got)
+	}
+	if _, err := os.Stat(filepath.Join(baseDir, "staging", "lock.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale lock.json was not removed: %v", err)
+	}
+}
+
+func TestUpdateRequestReplacesStaleJobAndRetriggers(t *testing.T) {
+	baseDir := t.TempDir()
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "stale-job",
+		Owner:       "web",
+		State:       "downloading",
+		StartedAt:   "2026-08-03T07:00:00Z",
+		HeartbeatAt: "2026-08-03T08:00:00Z",
+	})
+	trigger := &fakeUpdateTrigger{}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+	cmd.now = func() time.Time {
+		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	}
+	if err := cmd.writeJobStatus(updateJobStatus{
+		Schema:    1,
+		JobID:     "stale-job",
+		State:     "downloading",
+		StartedAt: "2026-08-03T07:00:00Z",
+		UpdatedAt: "2026-08-03T08:00:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if got.JobID == "" || got.JobID == "stale-job" || !got.Accepted || got.Job == nil || got.Job.State != "queued" {
+		t.Fatalf("response=%+v, want fresh accepted queued job", got)
+	}
+	if trigger.Calls() != 1 {
+		t.Fatalf("trigger calls=%d, want 1", trigger.Calls())
+	}
+	lockRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
+	if err != nil {
+		t.Fatalf("read lock: %v", err)
+	}
+	var lock updateLease
+	if err := json.Unmarshal(lockRaw, &lock); err != nil {
+		t.Fatalf("parse lock: %v", err)
+	}
+	if lock.JobID != got.JobID {
+		t.Fatalf("lock=%+v, want fresh job %s", lock, got.JobID)
+	}
+}
+
 func TestUpdaterTriggerSpecUsesKnownCurrentUserRuntime(t *testing.T) {
 	windows := updaterTriggerSpec("windows", "501")
 	if windows.Name != "powershell" || !strings.Contains(strings.Join(windows.Args, " "), "Start-ScheduledTask") || !strings.Contains(strings.Join(windows.Args, " "), "WheelMakerUpdater") {
@@ -2468,6 +2563,21 @@ func writeInstalledReleaseForTest(t *testing.T, baseDir string, release installe
 	}
 	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), append(raw, '\n'), 0o644); err != nil {
 		t.Fatalf("write installed release: %v", err)
+	}
+}
+
+func writeUpdateLeaseForTest(t *testing.T, baseDir string, lease updateLease) {
+	t.Helper()
+	raw, err := json.Marshal(lease)
+	if err != nil {
+		t.Fatalf("marshal update lease: %v", err)
+	}
+	stagingDir := filepath.Join(baseDir, "staging")
+	if err := os.MkdirAll(stagingDir, 0o755); err != nil {
+		t.Fatalf("create staging dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stagingDir, "lock.json"), append(raw, '\n'), 0o600); err != nil {
+		t.Fatalf("write update lease: %v", err)
 	}
 }
 

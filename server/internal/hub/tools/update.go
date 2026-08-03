@@ -28,6 +28,9 @@ const (
 	updateStagingDirectoryName = "staging"
 	updateLeaseFileName        = "lock.json"
 	updateStatusFileName       = "status.json"
+	// staleUpdateLeaseThreshold mirrors STALE_LEASE_MS in scripts/deploy/deploy-core.mjs:
+	// an active job whose lease heartbeat is older than this is treated as stalled.
+	staleUpdateLeaseThreshold = 2 * time.Hour
 )
 
 type installedRelease struct {
@@ -253,6 +256,13 @@ func (c *UpdateCommand) request(ctx context.Context, hubID string) (updateComman
 	if err != nil {
 		return updateCommandResponse{}, internalUpdateError("failed to create update lease")
 	}
+	if !created && c.updateLeaseStale(existing) {
+		c.reapStaleUpdateJob(existing.JobID)
+		created, existing, err = createUpdateLease(leasePath, lease)
+		if err != nil {
+			return updateCommandResponse{}, internalUpdateError("failed to create update lease")
+		}
+	}
 	if !created {
 		job := c.readJobStatus()
 		if job == nil || job.JobID != existing.JobID {
@@ -445,6 +455,13 @@ func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
 	if err := json.Unmarshal(raw, &lease); err != nil || lease.Schema != 1 || lease.JobID == "" {
 		return job, false
 	}
+	if c.updateLeaseStale(lease) {
+		c.reapStaleUpdateJob(lease.JobID)
+		if reaped := c.readJobStatus(); reaped != nil {
+			return reaped, false
+		}
+		return job, false
+	}
 	if job == nil || job.JobID != lease.JobID {
 		job = &updateJobStatus{
 			Schema:    1,
@@ -455,6 +472,33 @@ func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
 		}
 	}
 	return job, activeUpdateState(job.State)
+}
+
+// updateLeaseStale reports whether the lease heartbeat is older than the shared
+// 2h threshold (deploy-core.mjs STALE_LEASE_MS). A missing or unparseable
+// heartbeat counts as stale so the job can always recover.
+func (c *UpdateCommand) updateLeaseStale(lease updateLease) bool {
+	heartbeat := lease.HeartbeatAt
+	if heartbeat == "" {
+		heartbeat = lease.StartedAt
+	}
+	at, err := time.Parse(time.RFC3339Nano, heartbeat)
+	if err != nil {
+		return true
+	}
+	return c.now().Sub(at) > staleUpdateLeaseThreshold
+}
+
+// reapStaleUpdateJob marks the stalled job failed and removes its lease so a new
+// update can be requested. Terminal statuses are left untouched.
+func (c *UpdateCommand) reapStaleUpdateJob(jobID string) {
+	if status := c.readJobStatus(); status != nil && status.JobID == jobID && activeUpdateState(status.State) {
+		status.State = "failed"
+		status.ErrorCode = "updater_stalled"
+		status.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
+		_ = c.writeJobStatus(*status)
+	}
+	_ = os.Remove(filepath.Join(c.baseDir, updateStagingDirectoryName, updateLeaseFileName))
 }
 
 func (c *UpdateCommand) writeJobStatus(status updateJobStatus) error {
