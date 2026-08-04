@@ -112,6 +112,14 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) bool {
 	if s.handleDebugWebAPI(w, r) {
 		return true
 	}
+	if r.URL.Path == "/api/storage" {
+		if r.Method != http.MethodGet {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+			return true
+		}
+		s.handleStorage(w, r)
+		return true
+	}
 	if r.URL.Path == "/api/publish/start" {
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed")
