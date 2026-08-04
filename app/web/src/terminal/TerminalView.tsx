@@ -369,7 +369,11 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
   return (
     <div className="terminal-xterm-surface" onContextMenu={openCopyMenu} onCopy={handleCopy}>
-      <div ref={containerRef} className="terminal-xterm-host" />
+      <div
+        ref={containerRef}
+        className="terminal-xterm-host"
+        style={{'--wm-terminal-bg': TERMINAL_THEMES[themeMode].background} as React.CSSProperties}
+      />
       {copyMenu ? (
         <div
           ref={copyMenuRef}

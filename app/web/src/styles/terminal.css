@@ -199,11 +199,21 @@
   width: 100%;
   height: 100%;
 }
+/* TerminalView sets --wm-terminal-bg to the active theme background so the
+   sub-cell remainder below the rendered rows blends with the cells instead of
+   exposing the viewport's hardcoded black, which otherwise shows as a black bar
+   that grows while resizing. */
 .terminal-xterm-host {
   width: 100%;
   height: 100%;
+  background-color: var(--wm-terminal-bg);
   touch-action: none;
   overscroll-behavior: contain;
+}
+/* Override xterm's viewport black; equal specificity but lands later because
+   terminal.css @imports the xterm stylesheet, so this wins. */
+.terminal-xterm-host .xterm-viewport {
+  background-color: var(--wm-terminal-bg);
 }
 .terminal-xterm-host .xterm { height: 100%; }
 .terminal-copy-context-menu {

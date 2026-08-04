@@ -1,4 +1,6 @@
 import React, {createRef} from 'react';
+import fs from 'fs';
+import path from 'path';
 import TestRenderer, {act} from 'react-test-renderer';
 import type {RegistryTerminal} from '../web/src/registry/registryTypes';
 import {TerminalView, type TerminalViewHandle} from '../web/src/terminal/TerminalView';
@@ -198,6 +200,45 @@ describe('terminal components', () => {
         cursor: '#242424',
       },
     });
+  });
+
+  test('exposes the terminal background on the host so the viewport gap blends in', async () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView themeMode="dark" active resizeEnabled cols={80} rows={24}
+          onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+
+    const host = renderer!.root.findByProps({className: 'terminal-xterm-host'});
+    expect(host.props.style).toMatchObject({'--wm-terminal-bg': '#1e1e1e'});
+
+    await act(async () => {
+      renderer!.update(
+        <TerminalView themeMode="light" active resizeEnabled cols={80} rows={24}
+          onInput={jest.fn()} onResize={jest.fn()} />,
+      );
+    });
+
+    const updatedHost = renderer!.root.findByProps({className: 'terminal-xterm-host'});
+    expect(updatedHost.props.style).toMatchObject({'--wm-terminal-bg': '#ffffff'});
+  });
+
+  test('terminal.css paints the xterm viewport gap with the terminal background', () => {
+    const terminalCss = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'styles', 'terminal.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    // The host carries --wm-terminal-bg (set from the active theme by TerminalView);
+    // the viewport and host must both use it so the sub-cell remainder below the
+    // rendered rows never exposes xterm.css's hardcoded #000 as a black bar.
+    expect(terminalCss).toContain('.terminal-xterm-host {');
+    expect(terminalCss).toContain('--wm-terminal-bg');
+    expect(terminalCss).toContain('.terminal-xterm-host .xterm-viewport {');
+    expect(terminalCss).toContain('background-color: var(--wm-terminal-bg)');
   });
 
   test('lets the browser copy Ctrl+C when terminal text is selected', async () => {
