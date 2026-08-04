@@ -983,11 +983,27 @@ func (c *NPMCommand) currentOperationSnapshot() *npmOperationSnapshot {
 		return cloneNPMOperation(c.operation)
 	case c.latestOperation != nil && c.latestOperation.Running:
 		return cloneNPMOperation(c.latestOperation)
-	case c.operation != nil:
-		return cloneNPMOperation(c.operation)
-	default:
+	case c.operation == nil:
 		return cloneNPMOperation(c.latestOperation)
+	case c.latestOperation == nil:
+		return cloneNPMOperation(c.operation)
+	case npmOperationSnapshotTime(c.latestOperation).After(npmOperationSnapshotTime(c.operation)):
+		return cloneNPMOperation(c.latestOperation)
+	default:
+		return cloneNPMOperation(c.operation)
 	}
+}
+
+func npmOperationSnapshotTime(operation *npmOperationSnapshot) time.Time {
+	if operation == nil {
+		return time.Time{}
+	}
+	for _, value := range []string{operation.FinishedAt, operation.StartedAt} {
+		if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }
 
 func parseNPMListDependencies(raw string) (map[string]string, error) {

@@ -1343,12 +1343,36 @@ function windowsStopScript(paths) {
 Stop-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
 $bin = (${psQuote(paths.bin)}.TrimEnd('\\') + '\\').ToLowerInvariant()
 $hub = ${psQuote(paths.hub)}.ToLowerInvariant()
-Get-CimInstance Win32_Process | Where-Object {
-  $path = [string]$_.ExecutablePath
-  -not [string]::IsNullOrWhiteSpace($path) -and
-  $path.ToLowerInvariant().StartsWith($bin) -and
-  $path.ToLowerInvariant() -eq $hub
-} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop }
+function Get-WheelMakerHubProcesses {
+  return @(Get-CimInstance Win32_Process | Where-Object {
+    $path = [string]$_.ExecutablePath
+    -not [string]::IsNullOrWhiteSpace($path) -and
+    $path.ToLowerInvariant().StartsWith($bin) -and
+    $path.ToLowerInvariant() -eq $hub
+  })
+}
+$deadline = (Get-Date).AddSeconds(10)
+do {
+  foreach ($process in @(Get-WheelMakerHubProcesses)) {
+    try {
+      Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+    } catch {
+      if ($null -ne (Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue)) {
+        Write-Verbose ("WheelMaker Hub process {0} is still running: {1}" -f $process.ProcessId, $_.Exception.Message)
+      }
+    }
+  }
+  $remaining = @(Get-WheelMakerHubProcesses)
+  if ($remaining.Count -eq 0) {
+    break
+  }
+  Start-Sleep -Milliseconds 100
+} while ((Get-Date) -lt $deadline)
+$remaining = @(Get-WheelMakerHubProcesses)
+if ($remaining.Count -gt 0) {
+  $remainingText = ($remaining | Select-Object ProcessId,Name,ExecutablePath,CommandLine | Format-List | Out-String).Trim()
+  throw ("Timed out stopping WheelMaker Hub processes:" + [Environment]::NewLine + $remainingText)
+}
 `;
 }
 

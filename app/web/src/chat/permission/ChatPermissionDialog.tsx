@@ -27,21 +27,23 @@ export const ChatPermissionDialog = React.memo(function ChatPermissionDialog({
   rootRef,
 }: ChatPermissionDialogProps) {
   const submitting = !!submittingOptionId;
+  const headline = detailsText || title;
+  const context = detailsText && title !== detailsText ? title : '';
   return (
     <section
       ref={rootRef}
       className="chat-permission-dialog"
       role="dialog"
       aria-labelledby="chat-permission-dialog-title"
-      aria-describedby={detailsText ? 'chat-permission-dialog-details' : undefined}
+      aria-describedby={context ? 'chat-permission-dialog-details' : undefined}
     >
       <div className="chat-permission-dialog-kicker">
         <ChatIcon name="help" />
         Agent needs your decision
       </div>
-      <h2 id="chat-permission-dialog-title" className="chat-permission-dialog-title">{title}</h2>
-      {detailsText ? (
-        <p id="chat-permission-dialog-details" className="chat-permission-dialog-details">{detailsText}</p>
+      <h2 id="chat-permission-dialog-title" className="chat-permission-dialog-title">{headline}</h2>
+      {context ? (
+        <p id="chat-permission-dialog-details" className="chat-permission-dialog-details">{context}</p>
       ) : null}
       <div className="chat-permission-options">
         {options.map(option => (

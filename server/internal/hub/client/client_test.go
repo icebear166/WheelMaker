@@ -4906,6 +4906,43 @@ func TestSessionReadPaginationHonorsEncodedResponseByteLimit(t *testing.T) {
 	}
 }
 
+func TestConstrainSessionReadPageUsesLogarithmicEncodingSearch(t *testing.T) {
+	turns := make([]sessionViewTurn, 1024)
+	for index := range turns {
+		turns[index] = sessionViewTurn{
+			TurnIndex: int64(index + 1),
+			Content:   strings.Repeat("x", 128),
+			Finished:  true,
+		}
+	}
+	response := map[string]any{
+		"latestTurnIndex": int64(len(turns)),
+		"turns":           turns,
+	}
+	encodeCalls := 0
+	err := constrainSessionReadPageWithEncoder(response, 0, 16*1024, func(value map[string]any) ([]byte, error) {
+		encodeCalls++
+		return json.Marshal(value)
+	})
+	if err != nil {
+		t.Fatalf("constrainSessionReadPageWithEncoder: %v", err)
+	}
+	if encodeCalls > 12 {
+		t.Fatalf("encoder calls=%d, want at most 12 for 1024 turns", encodeCalls)
+	}
+	pageTurns := response["turns"].([]sessionViewTurn)
+	if len(pageTurns) == 0 || len(pageTurns) >= len(turns) {
+		t.Fatalf("page turns=%d, want a non-empty partial page", len(pageTurns))
+	}
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > 16*1024 {
+		t.Fatalf("encoded bytes=%d, want <= %d", len(encoded), 16*1024)
+	}
+}
+
 func TestSessionReadVerboseLogIncludesTurnCursor(t *testing.T) {
 	var logs bytes.Buffer
 	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelVerbose}); err != nil {

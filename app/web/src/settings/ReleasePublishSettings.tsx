@@ -76,35 +76,52 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
   const [settings, setSettings] = React.useState<Settings>(load);
   const [job, setJob] = React.useState<RegistryReleasePublishResponse['job']>();
   const [error, setError] = React.useState('');
+  const [storageError, setStorageError] = React.useState('');
   const [pendingKind, setPendingKind] = React.useState<'version' | 'debugWeb' | null>(null);
   const [confirmTarget, setConfirmTarget] = React.useState<ConfirmTarget | null>(null);
   const [storage, setStorage] = React.useState<RegistryReleaseStorageInfo | null>(null);
   const [storageLoading, setStorageLoading] = React.useState(false);
   const [pruning, setPruning] = React.useState(false);
+  const storageRequestVersion = React.useRef(0);
 
   const canQueryStorage = Boolean(settings.publisherHubId && settings.sourcePath);
 
   const refreshStorage = React.useCallback(async () => {
-    if (!settings.publisherHubId || !settings.sourcePath) return;
+    const requestVersion = ++storageRequestVersion.current;
+    const publisherHubId = settings.publisherHubId;
+    const sourcePath = settings.sourcePath;
+    if (!publisherHubId || !sourcePath) {
+      setStorageLoading(false);
+      return;
+    }
     setStorageLoading(true);
     try {
-      const result = await queryStorage(settings.publisherHubId, settings.sourcePath);
+      const result = await queryStorage(publisherHubId, sourcePath);
+      if (requestVersion !== storageRequestVersion.current) return;
       if (result.ok && result.storage) {
         setStorage(result.storage);
-        setError('');
+        setStorageError('');
       } else {
-        setError(result.error || result.status);
+        setStorageError(result.error || result.status);
       }
     } catch (value) {
-      setError(value instanceof Error ? value.message : String(value));
+      if (requestVersion === storageRequestVersion.current) {
+        setStorageError(value instanceof Error ? value.message : String(value));
+      }
     } finally {
-      setStorageLoading(false);
+      if (requestVersion === storageRequestVersion.current) {
+        setStorageLoading(false);
+      }
     }
   }, [queryStorage, settings.publisherHubId, settings.sourcePath]);
 
   React.useEffect(() => {
     setStorage(null);
+    setStorageError('');
     void refreshStorage();
+    return () => {
+      storageRequestVersion.current += 1;
+    };
   }, [refreshStorage]);
 
   React.useEffect(() => {
@@ -195,6 +212,8 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
     if (!storage || storage.orphanCount === 0 || pruning) return;
     setConfirmTarget({
       kind: 'releaseStoragePrune',
+      publisherHubId: settings.publisherHubId,
+      sourcePath: settings.sourcePath,
       orphanCount: storage.orphanCount,
       reclaimableLabel: formatByteSize(storage.reclaimableBytes),
     });
@@ -202,15 +221,16 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
 
   const confirmPrune = async () => {
     if (!confirmTarget || confirmTarget.kind !== 'releaseStoragePrune') return;
+    const target = confirmTarget;
     setConfirmTarget(null);
     setPruning(true);
-    setError('');
+    setStorageError('');
     try {
-      const result = await pruneStorage(settings.publisherHubId, settings.sourcePath);
+      const result = await pruneStorage(target.publisherHubId, target.sourcePath);
       if (!result.ok) throw new Error(result.error || result.status || 'prune was rejected');
       await refreshStorage();
     } catch (value) {
-      setError(value instanceof Error ? value.message : String(value));
+      setStorageError(value instanceof Error ? value.message : String(value));
     } finally {
       setPruning(false);
     }
@@ -403,6 +423,9 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
 
       {error ? (
         <div className="set-error" role="alert">{error}</div>
+      ) : null}
+      {storageError ? (
+        <div className="set-error" role="alert">{storageError}</div>
       ) : null}
 
       <AppConfirmDialog

@@ -446,6 +446,20 @@ function wrapChatReplyOptionLabel(children: React.ReactNode, label: string): Rea
   return children;
 }
 
+const chatReplyInteractiveSelector = 'a, button, input, select, textarea, [role="button"], [role="link"]';
+
+function shouldActivateChatReply(event?: React.MouseEvent<HTMLElement>): boolean {
+  if (!event) return true;
+  if (event.defaultPrevented) return false;
+  const target = event.target as {closest?: (selector: string) => unknown} | null;
+  const interactive = target && typeof target.closest === 'function'
+    ? target.closest(chatReplyInteractiveSelector)
+    : null;
+  if (interactive && interactive !== event.currentTarget) return false;
+  const selection = globalThis.getSelection?.();
+  return !selection || selection.isCollapsed || selection.toString().trim() === '';
+}
+
 export const ChatTurnView = React.memo(function ChatTurnView({
   message,
   permissionRecord,
@@ -563,6 +577,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             'aria-label': reply.label,
             onClick: (event: React.MouseEvent<HTMLParagraphElement>) => {
               props.onClick?.(event);
+              if (!shouldActivateChatReply(event)) return;
               activate();
             },
             onKeyDown: (event: React.KeyboardEvent<HTMLParagraphElement>) => {
@@ -604,6 +619,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             'aria-label': reply.label,
             onClick: (event: React.MouseEvent<HTMLLIElement>) => {
               props.onClick?.(event);
+              if (!shouldActivateChatReply(event)) return;
               activate();
             },
             onKeyDown: (event: React.KeyboardEvent<HTMLLIElement>) => {

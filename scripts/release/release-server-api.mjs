@@ -3,6 +3,7 @@ import {createReadStream} from 'node:fs';
 import {Transform} from 'node:stream';
 
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const RELEASE_CONTROL_REQUEST_TIMEOUT_MS = 30_000;
 
 export class ReleaseServerHttpError extends Error {
   constructor(message, status) {
@@ -94,6 +95,7 @@ export class ReleaseServerApi {
     headers = {},
     method = 'GET',
     publish = true,
+    timeoutMs,
     writeBody,
   } = {}) {
     const url = new URL(path, `${this.baseUrl}/`);
@@ -149,6 +151,11 @@ export class ReleaseServerApi {
         return;
       }
       request.once('error', reject);
+      if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+        request.setTimeout(timeoutMs, () => {
+          request.destroy(new Error(`release server request timed out after ${timeoutMs}ms`));
+        });
+      }
       if (writeBody) {
         writeBody(request).catch(reject);
       } else {
@@ -167,12 +174,14 @@ export class ReleaseServerApi {
   storage() {
     return this.request('/api/storage', {
       method: 'GET',
+      timeoutMs: RELEASE_CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 
   prune() {
     return this.request('/api/prune', {
       method: 'POST',
+      timeoutMs: RELEASE_CONTROL_REQUEST_TIMEOUT_MS,
     });
   }
 

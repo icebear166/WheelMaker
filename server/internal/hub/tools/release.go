@@ -260,18 +260,25 @@ func (c *ReleaseCommand) prune(payload releaseCommandPayload) (releaseCommandRes
 	var result struct {
 		RemovedCount int `json:"removedCount"`
 	}
-	if err := c.runReleaseResultScript(sourcePath, "scripts/release/prune.mjs", &result); err != nil {
+	if err := c.runExclusiveReleaseResultScript(sourcePath, "scripts/release/prune.mjs", &result); err != nil {
 		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInternal, Message: err.Error()}
 	}
 	return releaseCommandResponse{OK: true, Status: "success", RemovedCount: result.RemovedCount}, nil
 }
 
-// runReleaseResultScript runs a release script that prints its result as a
-// single JSON line on stdout and decodes that line. It shares the build
-// mutex so it cannot overlap a running publish build.
-func (c *ReleaseCommand) runReleaseResultScript(sourcePath, script string, out any) error {
+// runExclusiveReleaseResultScript serializes a mutating release control
+// script with publish builds.
+func (c *ReleaseCommand) runExclusiveReleaseResultScript(sourcePath, script string, out any) error {
 	c.buildMu.Lock()
 	defer c.buildMu.Unlock()
+	return c.runReleaseResultScript(sourcePath, script, out)
+}
+
+// runReleaseResultScript runs a release script that prints its result as a
+// single JSON line on stdout and decodes that line. Read-only scripts may run
+// concurrently with a publish build; the release server owns synchronization
+// for its storage snapshot.
+func (c *ReleaseCommand) runReleaseResultScript(sourcePath, script string, out any) error {
 	var output strings.Builder
 	if err := c.runner.Run(context.Background(), sourcePath, []string{script}, func(text string) {
 		output.WriteString(text)

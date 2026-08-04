@@ -4,6 +4,16 @@ import {act, create} from 'react-test-renderer';
 
 import {ReleasePublishSettings} from './ReleasePublishSettings';
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return {promise, reject, resolve};
+}
+
 test('restores browser-only publishing settings without token or URL controls', async () => {
   const values = new Map<string, string>();
   (global as typeof globalThis & {window: Window}).window = {
@@ -215,4 +225,99 @@ test('shows storage errors in the page', async () => {
   const tree = await render();
   expect(JSON.stringify(tree.toJSON())).toContain('release token is not configured');
   tree.unmount();
+});
+
+test('ignores a stale storage response after the publishing target changes', async () => {
+  const values = new Map<string, string>();
+  values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({publisherHubId: 'publisher-a', sourcePath: '/src/a'}));
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)},
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  } as unknown as Window;
+  const first = deferred<any>();
+  const second = deferred<any>();
+  const queryStorage = jest.fn((hubId: string) => hubId === 'publisher-a' ? first.promise : second.promise);
+  let tree: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<ReleasePublishSettings
+      hubIds={['publisher-a', 'publisher-b']}
+      start={async () => ({ok: true, status: 'running'})}
+      query={async () => ({ok: true, status: 'running'})}
+      queryStorage={queryStorage}
+      pruneStorage={async () => ({ok: true, status: 'success'})}
+    />);
+    await Promise.resolve();
+  });
+  const publishingHub = tree!.root.findAllByType('select')[0];
+  await act(async () => {
+    publishingHub.props.onChange({target: {value: 'publisher-b'}});
+    await Promise.resolve();
+  });
+  await act(async () => {
+    second.resolve({ok: true, status: 'success', storage: {totalBytes: 4096, reclaimableBytes: 0, orphanCount: 0}});
+    await second.promise;
+  });
+  await act(async () => {
+    first.resolve({ok: true, status: 'success', storage: {totalBytes: 1024, reclaimableBytes: 0, orphanCount: 0}});
+    await first.promise;
+  });
+  const text = JSON.stringify(tree!.toJSON());
+  expect(text).toContain('4.0 KB');
+  expect(text).not.toContain('1.0 KB');
+  tree!.unmount();
+});
+
+test('prunes the storage target captured when confirmation opens', async () => {
+  const {pruneStorage, render} = renderWithStorage();
+  const tree = await render();
+  const cleanupButton = tree.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.includes('Clean up')))!;
+  await act(async () => { cleanupButton.props.onClick(); await Promise.resolve(); });
+  const sourceSection = tree.root.findAllByType('section').find(section => section.props['aria-label'] === 'Publishing source')!;
+  const sourceInput = sourceSection.findAllByType('input').find(input => input.props.value === '/src/WheelMaker')!;
+  await act(async () => {
+    sourceSection.findAllByType('select')[0].props.onChange({target: {value: 'publisher-b'}});
+    sourceInput.props.onChange({target: {value: '/src/other'}});
+    await Promise.resolve();
+  });
+  const confirmButton = tree.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.trim() === 'Clean up'))!;
+  await act(async () => { confirmButton.props.onClick(); await Promise.resolve(); await Promise.resolve(); });
+  expect(pruneStorage).toHaveBeenCalledWith('publisher', '/src/WheelMaker');
+  tree.unmount();
+});
+
+test('a successful storage refresh does not clear a publish error', async () => {
+  const values = new Map<string, string>();
+  values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({
+    publisherHubId: 'publisher',
+    sourcePath: '/src/WheelMaker',
+    jobId: 'job-1',
+    jobHubId: 'publisher',
+  }));
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)},
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  } as unknown as Window;
+  const storage = deferred<any>();
+  let tree: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<ReleasePublishSettings
+      hubIds={['publisher']}
+      start={async () => ({ok: true, status: 'running'})}
+      query={async () => ({ok: false, status: 'failed', error: 'publish failed visibly'})}
+      queryStorage={() => storage.promise}
+      pruneStorage={async () => ({ok: true, status: 'success'})}
+    />);
+    await Promise.resolve();
+  });
+  expect(JSON.stringify(tree!.toJSON())).toContain('publish failed visibly');
+  await act(async () => {
+    storage.resolve({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}});
+    await storage.promise;
+  });
+  expect(JSON.stringify(tree!.toJSON())).toContain('publish failed visibly');
+  tree!.unmount();
 });

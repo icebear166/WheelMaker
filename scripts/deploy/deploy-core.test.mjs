@@ -377,8 +377,13 @@ test('runtime restart delegates to each platform manager', async () => {
   // by path) followed by start, instead of a detached self-restart script.
   assert.equal(windowsCalls.length, 2);
   assert.equal(windowsCalls[0].command, 'powershell');
-  assert.match(windowsCalls[0].args.at(-1), /Stop-ScheduledTask -TaskName 'WheelMaker'/);
-  assert.match(windowsCalls[0].args.at(-1), /Stop-Process/);
+  const windowsStop = windowsCalls[0].args.at(-1);
+  assert.match(windowsStop, /Stop-ScheduledTask -TaskName 'WheelMaker'/);
+  assert.match(windowsStop, /function Get-WheelMakerHubProcesses/);
+  assert.match(windowsStop, /do \{/);
+  assert.match(windowsStop, /while \(\(Get-Date\) -lt \$deadline\)/);
+  assert.match(windowsStop, /Stop-Process/);
+  assert.match(windowsStop, /Timed out stopping WheelMaker Hub processes/);
   assert.match(windowsCalls[1].args.at(-1), /Start-ScheduledTask -TaskName 'WheelMaker'/);
   assert.equal(
     windowsCalls.some((entry) => /Start-Process/.test(entry.args.at(-1))),

@@ -1437,6 +1437,36 @@ func TestSkillsWatcherObservesSkillRootCreatedAfterTracking(t *testing.T) {
 	}
 }
 
+func TestSkillsWatcherReconcileNotifiesHubForLateUserSkillRoot(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	reconcile := make(chan time.Time, 1)
+	triggered := make(chan skillsWatchTarget, 1)
+	watcher := newSkillsWatcher(skillsWatcherOptions{
+		Reconcile: reconcile,
+		OnChange: func(target skillsWatchTarget) {
+			triggered <- target
+		},
+	})
+	t.Cleanup(func() { _ = watcher.Close() })
+	if err := watcher.Error(); err != nil {
+		t.Fatalf("create native watcher: %v", err)
+	}
+	watcher.TrackHub(home)
+	writeCanonicalSkillFixture(t, filepath.Join(home, ".agents", "skills", "late-user-skill"), "Late user skill", "description")
+
+	reconcile <- time.Now()
+	select {
+	case target := <-triggered:
+		if target.Scope != "hub" || target.Root != filepath.Clean(home) {
+			t.Fatalf("target=%#v, want hub %q", target, filepath.Clean(home))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("reconcile added late user skill watches without notifying the hub")
+	}
+}
+
 func TestSkillsWatcherSkipsHomeRootToAvoidPrivacyPrompts(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

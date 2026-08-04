@@ -63,6 +63,8 @@ export type ConfirmTarget =
     }
   | {
       kind: 'releaseStoragePrune';
+      publisherHubId: string;
+      sourcePath: string;
       orphanCount: number;
       reclaimableLabel: string;
     }

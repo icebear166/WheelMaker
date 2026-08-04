@@ -239,6 +239,46 @@ describe('ChatTurnView Markdown reply structure', () => {
     expect(onSelectOptionReply).toHaveBeenCalledWith('A');
   });
 
+  it('does not submit when the click was handled, came from an interactive child, or selected text', async () => {
+    const onSelectOptionReply = jest.fn();
+    const tree = await renderTurn(optionText, {
+      optionReplies,
+      onSelectOptionReply,
+    });
+    const optionA = tree.root.findByProps({'data-chat-reply-value': 'A'});
+
+    await act(async () => optionA.props.onClick({
+      currentTarget: {},
+      defaultPrevented: true,
+      target: {},
+    }));
+    await act(async () => optionA.props.onClick({
+      currentTarget: {},
+      defaultPrevented: false,
+      target: {closest: () => ({tagName: 'A'})},
+    }));
+
+    const originalGetSelection = globalThis.getSelection;
+    Object.defineProperty(globalThis, 'getSelection', {
+      configurable: true,
+      value: () => ({isCollapsed: false, toString: () => 'Apply the change'}),
+    });
+    try {
+      await act(async () => optionA.props.onClick({
+        currentTarget: {},
+        defaultPrevented: false,
+        target: {},
+      }));
+    } finally {
+      Object.defineProperty(globalThis, 'getSelection', {
+        configurable: true,
+        value: originalGetSelection,
+      });
+    }
+
+    expect(onSelectOptionReply).not.toHaveBeenCalled();
+  });
+
   it('colors letter option labels with a layout-neutral inline span', async () => {
     const selectable = await renderTurn(optionText, {
       optionReplies,

@@ -231,34 +231,8 @@ func NewFlickerProvider() *acpProvider {
 	return NewACPProvider(FlickerACPProviderPreset)
 }
 
-func NewKimiProvider(apiKey string) *acpProvider {
-	preset := KimiACPProviderPreset
-	preset.Env = kimiTokenLaunchEnvironment(apiKey)
-	return NewACPProvider(preset)
-}
-
-const (
-	// kimiCodeOpenAIBaseURL is the OpenAI-compatible Kimi Code endpoint used
-	// with membership API keys (the open platform uses api.moonshot.cn).
-	kimiCodeOpenAIBaseURL = "https://api.kimi.com/coding/v1"
-	// kimiTokenDefaultModel is the model id injected via KIMI_MODEL_NAME when
-	// launching with an API key. k3 is the K3 flagship (requires Moderato or
-	// above); use kimi-for-coding for an every-tier fallback.
-	kimiTokenDefaultModel = "k3"
-)
-
-// kimiTokenLaunchEnvironment returns the KIMI_MODEL_* overrides that switch
-// the kimi CLI from OAuth sign-in to API-key auth. An empty key returns no
-// overrides, preserving the OAuth login flow from ~/.kimi-code.
-func kimiTokenLaunchEnvironment(apiKey string) []string {
-	if apiKey == "" {
-		return nil
-	}
-	return []string{
-		"KIMI_MODEL_NAME=" + kimiTokenDefaultModel,
-		"KIMI_MODEL_API_KEY=" + apiKey,
-		"KIMI_MODEL_BASE_URL=" + kimiCodeOpenAIBaseURL,
-	}
+func NewKimiProvider() *acpProvider {
+	return NewACPProvider(KimiACPProviderPreset)
 }
 
 func NewQoderProvider() *acpProvider {

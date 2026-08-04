@@ -1247,12 +1247,19 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 }
 
 func constrainSessionReadPage(response map[string]any, afterTurnIndex int64, maxBytes int) error {
+	return constrainSessionReadPageWithEncoder(response, afterTurnIndex, maxBytes, func(value map[string]any) ([]byte, error) {
+		return json.Marshal(value)
+	})
+}
+
+func constrainSessionReadPageWithEncoder(response map[string]any, afterTurnIndex int64, maxBytes int, encode func(map[string]any) ([]byte, error)) error {
 	turns, _ := response["turns"].([]sessionViewTurn)
 	latestTurnIndex, _ := response["latestTurnIndex"].(int64)
-	for {
+	applyTurns := func(count int) {
+		pageTurns := turns[:count]
 		nextAfterTurnIndex := afterTurnIndex
-		if len(turns) > 0 {
-			nextAfterTurnIndex = turns[len(turns)-1].TurnIndex
+		if len(pageTurns) > 0 {
+			nextAfterTurnIndex = pageTurns[len(pageTurns)-1].TurnIndex
 		}
 		hasMore := nextAfterTurnIndex < latestTurnIndex
 		response["hasMore"] = hasMore
@@ -1261,20 +1268,51 @@ func constrainSessionReadPage(response map[string]any, afterTurnIndex int64, max
 		} else {
 			delete(response, "nextAfterTurnIndex")
 		}
-		response["turns"] = turns
-
-		encoded, err := json.Marshal(response)
-		if err != nil {
-			return fmt.Errorf("encode session.read page: %w", err)
-		}
-		if len(encoded) <= maxBytes {
-			return nil
-		}
-		if len(turns) <= 1 {
-			return fmt.Errorf("session.read turn exceeds maxBytes: encoded=%d maxBytes=%d", len(encoded), maxBytes)
-		}
-		turns = turns[:len(turns)-1]
+		response["turns"] = pageTurns
 	}
+	encodedSize := func(count int) (int, error) {
+		applyTurns(count)
+		encoded, err := encode(response)
+		if err != nil {
+			return 0, fmt.Errorf("encode session.read page: %w", err)
+		}
+		return len(encoded), nil
+	}
+
+	fullSize, err := encodedSize(len(turns))
+	if err != nil {
+		return err
+	}
+	if fullSize <= maxBytes {
+		return nil
+	}
+	if len(turns) <= 1 {
+		return fmt.Errorf("session.read turn exceeds maxBytes: encoded=%d maxBytes=%d", fullSize, maxBytes)
+	}
+
+	best := 0
+	smallestSize := fullSize
+	for low, high := 1, len(turns)-1; low <= high; {
+		middle := low + (high-low)/2
+		size, encodeErr := encodedSize(middle)
+		if encodeErr != nil {
+			return encodeErr
+		}
+		if middle == 1 {
+			smallestSize = size
+		}
+		if size <= maxBytes {
+			best = middle
+			low = middle + 1
+		} else {
+			high = middle - 1
+		}
+	}
+	if best == 0 {
+		return fmt.Errorf("session.read turn exceeds maxBytes: encoded=%d maxBytes=%d", smallestSize, maxBytes)
+	}
+	applyTurns(best)
+	return nil
 }
 
 func (c *Client) enrichLegacySessionForkPoints(ctx context.Context, sessionID string, latestTurnIndex int64, turns []sessionViewTurn) ([]sessionViewTurn, error) {

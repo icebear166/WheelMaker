@@ -193,6 +193,9 @@ test('storage requests the storage report with the publishing token', async () =
   assert.equal(new URL(requests[0].url).pathname, '/api/storage');
   assert.equal(requests[0].options.method, 'GET');
   assert.equal(requests[0].options.headers.Authorization, 'Bearer token-1');
+  assert.equal(requests[0].setTimeoutCalls.length, 1);
+  assert.equal(requests[0].setTimeoutCalls[0][0], 30_000);
+  assert.equal(typeof requests[0].setTimeoutCalls[0][1], 'function');
 });
 
 test('prune posts to the prune endpoint', async () => {
@@ -208,6 +211,8 @@ test('prune posts to the prune endpoint', async () => {
   assert.deepEqual(result, {ok: true, removedCount: 2});
   assert.equal(new URL(requests[0].url).pathname, '/api/prune');
   assert.equal(requests[0].options.method, 'POST');
+  assert.equal(requests[0].setTimeoutCalls.length, 1);
+  assert.equal(requests[0].setTimeoutCalls[0][0], 30_000);
 });
 
 test('storage surfaces server error codes', async () => {

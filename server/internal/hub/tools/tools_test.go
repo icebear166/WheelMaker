@@ -630,6 +630,28 @@ func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
 	return cmd
 }
 
+func TestNPMCurrentOperationSnapshotReturnsMostRecentlyFinishedOperation(t *testing.T) {
+	cmd, _ := newNPMTestCommand(newFakeNPMRunner())
+	cmd.operation = &npmOperationSnapshot{
+		Action:     "install",
+		Status:     "succeeded",
+		StartedAt:  "2026-08-04T01:00:00Z",
+		FinishedAt: "2026-08-04T01:01:00Z",
+	}
+	cmd.latestOperation = &npmOperationSnapshot{
+		Action:       "scan_latest",
+		Status:       "failed",
+		StartedAt:    "2026-08-04T02:00:00Z",
+		FinishedAt:   "2026-08-04T02:01:00Z",
+		ErrorSummary: "registry unavailable",
+	}
+
+	got := cmd.currentOperationSnapshot()
+	if got == nil || got.Action != "scan_latest" || got.ErrorSummary != "registry unavailable" {
+		t.Fatalf("snapshot=%#v, want the newer completed scan_latest operation", got)
+	}
+}
+
 // seedNPMPrivateRegistryState pre-caches the private registry decision so a
 // test can assert scan output without waiting for the async probe.
 func seedNPMPrivateRegistryState(cmd *NPMCommand, available bool) {
@@ -2883,6 +2905,28 @@ func (r *stubReleaseRunner) Run(_ context.Context, workingDir string, args []str
 	return r.err
 }
 
+type controlledReleaseRunnerCall struct {
+	releaseRunnerCall
+	done chan error
+}
+
+type controlledReleaseRunner struct {
+	calls chan controlledReleaseRunnerCall
+}
+
+func newControlledReleaseRunner() *controlledReleaseRunner {
+	return &controlledReleaseRunner{calls: make(chan controlledReleaseRunnerCall, 2)}
+}
+
+func (r *controlledReleaseRunner) Run(_ context.Context, workingDir string, args []string, log func(string)) error {
+	call := controlledReleaseRunnerCall{
+		releaseRunnerCall: releaseRunnerCall{WorkingDir: workingDir, Args: append([]string(nil), args...), Log: log},
+		done:              make(chan error, 1),
+	}
+	r.calls <- call
+	return <-call.done
+}
+
 func makeReleaseSourceDir(t *testing.T) string {
 	t.Helper()
 	source := t.TempDir()
@@ -2915,6 +2959,53 @@ func TestReleaseCommandStorageRunsScriptAndParsesReport(t *testing.T) {
 	}
 	if len(runner.calls) != 1 || runner.calls[0].WorkingDir != source || runner.calls[0].Args[0] != "scripts/release/storage.mjs" {
 		t.Fatalf("runner calls=%#v", runner.calls)
+	}
+}
+
+func TestReleaseCommandStorageDoesNotBlockPublishBuild(t *testing.T) {
+	source := makeReleaseSourceDir(t)
+	runner := newControlledReleaseRunner()
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+	storageFinished := make(chan *releaseCommandError, 1)
+	go func() {
+		_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+			"action": "storage", "hubId": "publisher-hub", "sourcePath": source,
+		}))
+		storageFinished <- commandErr
+	}()
+
+	storageCall := <-runner.calls
+	if got := storageCall.Args[0]; got != "scripts/release/storage.mjs" {
+		t.Fatalf("first script=%q, want storage", got)
+	}
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr != nil || !response.(releaseCommandResponse).Accepted {
+		t.Fatalf("start response=%#v error=%v", response, commandErr)
+	}
+
+	publishStartedBeforeStorageFinished := true
+	var publishCall controlledReleaseRunnerCall
+	select {
+	case publishCall = <-runner.calls:
+	case <-time.After(250 * time.Millisecond):
+		publishStartedBeforeStorageFinished = false
+		storageCall.Log(`{"totalBytes":600,"reclaimableBytes":200,"orphanCount":1}` + "\n")
+		storageCall.done <- nil
+		publishCall = <-runner.calls
+	}
+	if publishStartedBeforeStorageFinished {
+		storageCall.Log(`{"totalBytes":600,"reclaimableBytes":200,"orphanCount":1}` + "\n")
+		storageCall.done <- nil
+	}
+	publishCall.done <- nil
+	if storageErr := <-storageFinished; storageErr != nil {
+		t.Fatalf("storage error=%v", storageErr)
+	}
+	assertReleaseStatus(t, command, response.(releaseCommandResponse).Job.ID, "success")
+	if !publishStartedBeforeStorageFinished {
+		t.Fatal("publish waited for a read-only storage query to release buildMu")
 	}
 }
 
