@@ -7375,34 +7375,44 @@ button.chat-hub-skill-name:disabled {
 
 .chat-permission-history-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   min-height: 28px;
   color: var(--text-secondary);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .chat-permission-history-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
   color: var(--accent-primary);
 }
 
 .chat-permission-history-label {
+  flex-shrink: 0;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.chat-permission-history-question {
+.chat-permission-history-qa {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.chat-permission-history-question {
+  display: -webkit-box;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-primary);
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .chat-permission-history-summary {
-  flex: 0 1 auto;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -53,6 +53,7 @@ describe('request permission history row', () => {
     const renderer = await renderPermission({
       permissionId: 'perm-1', requestTurnIndex: 2, request, status: 'selected', optionId: 'allow', optionName: 'Allow',
     });
+    expect(renderer.root.findByProps({className: 'chat-permission-history-qa'})).toBeTruthy();
     expect(renderer.root.findByProps({className: 'chat-permission-history-question'}).children.join(' ')).toContain('Choose');
     expect(renderer.root.findByProps({className: 'chat-permission-history-summary'}).children.join(' ')).toContain('Allow');
     expect(renderer.root.findAllByType('button')).toHaveLength(0);
