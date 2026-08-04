@@ -6565,14 +6565,14 @@ func TestProviderPresetByNameKimi(t *testing.T) {
 
 func TestQoderProviderPreset(t *testing.T) {
 	preset := QoderACPProviderPreset
-	if preset.Name != "qoder" || preset.BinaryName != "qodercli" {
+	if preset.Name != "qoder" || preset.BinaryName != "qoderclicn" {
 		t.Fatalf("preset=%+v", preset)
 	}
 	if len(preset.Args) != 1 || preset.Args[0] != "--acp" {
 		t.Fatalf("args=%v, want [--acp]", preset.Args)
 	}
-	if preset.InstallHint != "@qoder-ai/qodercli" {
-		t.Fatalf("install hint=%q, want @qoder-ai/qodercli", preset.InstallHint)
+	if preset.InstallHint != "@qodercn-ai/qoderclicn" {
+		t.Fatalf("install hint=%q, want @qodercn-ai/qoderclicn", preset.InstallHint)
 	}
 	if preset.MissingPathErrTemplate != "qoder: binary not found in PATH: %v" {
 		t.Fatalf("missing-path template=%q, want npm-style PATH message", preset.MissingPathErrTemplate)

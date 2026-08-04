@@ -435,7 +435,7 @@ var runtimeNPMPackages = []npmPackagePolicy{
 	{PackageName: "opencode-ai", DisplayName: "OpenCode CLI", AgentTypes: []string{"opencode"}, Kind: "runtime"},
 	{PackageName: "@tencent-ai/codebuddy-code", DisplayName: "CodeBuddy CLI", AgentTypes: []string{"codebuddy"}, Kind: "runtime"},
 	{PackageName: "@moonshot-ai/kimi-code", DisplayName: "Kimi Code CLI", AgentTypes: []string{"kimi"}, BinaryName: "kimi", Kind: "runtime"},
-	{PackageName: "@qoder-ai/qodercli", DisplayName: "Qoder CLI", AgentTypes: []string{"qoder"}, BinaryName: "qodercli", Kind: "runtime"},
+	{PackageName: "@qodercn-ai/qoderclicn", DisplayName: "Qoder CLI (CN)", AgentTypes: []string{"qoder"}, BinaryName: "qoderclicn", Kind: "runtime"},
 	{PackageName: myFlickerPackageName, DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, BinaryName: "myflicker", Kind: "runtime"},
 }
 

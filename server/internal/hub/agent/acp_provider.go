@@ -127,9 +127,9 @@ var (
 	}
 	QoderACPProviderPreset = ACPProviderPreset{
 		Name:                   "qoder",
-		BinaryName:             "qodercli",
+		BinaryName:             "qoderclicn",
 		Args:                   []string{"--acp"},
-		InstallHint:            "@qoder-ai/qodercli",
+		InstallHint:            "@qodercn-ai/qoderclicn",
 		MissingPathErrTemplate: "qoder: binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".agents/skills", ".qoder/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills", "~/.qoder/skills"},

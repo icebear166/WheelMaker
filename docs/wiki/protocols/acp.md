@@ -10,7 +10,7 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 完整参考中标记为 unstable、特定工具版本、历史阶段或后续计划的内容不属于本页所述的当前稳定边界。
 
-内置 ACP provider 为 codex、claude、copilot、opencode、mimo、codebuddy、flicker、kimi、qoder；统一以 `ACPProviderPreset` 声明启动方式，kimi 走官方 Kimi Code CLI 的 `kimi acp` 子进程，登录由用户在 CLI 侧自行完成，WheelMaker 不触发 device-code 授权。kimi CLI 的安装与更新纳入 Hub npm 管理（官方包 `@moonshot-ai/kimi-code`，缺 binary 时提示 `npm install -g`），不再指向原生安装脚本。qoder 走官方 Qoder CLI 的 `qodercli --acp` 子进程，登录同样由用户在 CLI 侧完成（`qodercli login` 或 `QODER_PERSONAL_ACCESS_TOKEN` 环境变量），安装与更新一并纳入 Hub npm 管理（官方包 `@qoder-ai/qodercli`）。
+内置 ACP provider 为 codex、claude、copilot、opencode、mimo、codebuddy、flicker、kimi、qoder；统一以 `ACPProviderPreset` 声明启动方式，kimi 走官方 Kimi Code CLI 的 `kimi acp` 子进程，登录由用户在 CLI 侧自行完成，WheelMaker 不触发 device-code 授权。kimi CLI 的安装与更新纳入 Hub npm 管理（官方包 `@moonshot-ai/kimi-code`，缺 binary 时提示 `npm install -g`），不再指向原生安装脚本。qoder 走官方 Qoder CN CLI 的 `qoderclicn --acp` 子进程（国内版，数据链路与账号体系独立于国际版），登录同样由用户在 CLI 侧完成（`qoderclicn login` 或 `QODER_PERSONAL_ACCESS_TOKEN` 环境变量），安装与更新一并纳入 Hub npm 管理（官方包 `@qodercn-ai/qoderclicn`）。
 
 ## 消息与初始化
 
