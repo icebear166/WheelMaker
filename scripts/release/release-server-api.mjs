@@ -164,6 +164,18 @@ export class ReleaseServerApi {
     });
   }
 
+  storage() {
+    return this.request('/api/storage', {
+      method: 'GET',
+    });
+  }
+
+  prune() {
+    return this.request('/api/prune', {
+      method: 'POST',
+    });
+  }
+
   start(input) {
     return this.request('/api/publish/start', {
       body: {

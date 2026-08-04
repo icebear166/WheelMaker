@@ -178,3 +178,43 @@ test('stable 404 is empty, while conflict and authentication failures are action
     /insufficient storage/i,
   );
 });
+
+test('storage requests the storage report with the publishing token', async () => {
+  const requests = [];
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.example',
+    token: 'token-1',
+    requestImpl: recordingHttpsRequest(requests, [
+      {statusCode: 200, body: JSON.stringify({totalBytes: 600, reclaimableBytes: 200, orphanCount: 1})},
+    ]),
+  });
+  const report = await api.storage();
+  assert.deepEqual(report, {totalBytes: 600, reclaimableBytes: 200, orphanCount: 1});
+  assert.equal(new URL(requests[0].url).pathname, '/api/storage');
+  assert.equal(requests[0].options.method, 'GET');
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer token-1');
+});
+
+test('prune posts to the prune endpoint', async () => {
+  const requests = [];
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.example',
+    token: 'token-1',
+    requestImpl: recordingHttpsRequest(requests, [
+      {statusCode: 200, body: JSON.stringify({ok: true, removedCount: 2})},
+    ]),
+  });
+  const result = await api.prune();
+  assert.deepEqual(result, {ok: true, removedCount: 2});
+  assert.equal(new URL(requests[0].url).pathname, '/api/prune');
+  assert.equal(requests[0].options.method, 'POST');
+});
+
+test('storage surfaces server error codes', async () => {
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.example',
+    token: 'token-1',
+    requestImpl: recordingHttpsRequest([], [{statusCode: 401, body: JSON.stringify({error: 'unauthorized'})}]),
+  });
+  await assert.rejects(() => api.storage(), /publishing token was rejected/);
+});
