@@ -1,4 +1,5 @@
 import {
+  agentPackageWriteOperationRunning,
   deriveNpmPackageUpdateTargets,
   deriveRegistryHubIds,
   npmPackageUpdateSummary,
@@ -198,5 +199,18 @@ describe('agent package update view helpers', () => {
 
     await expect(pending).rejects.toThrow('hub-a scan timed out');
     jest.useRealTimers();
+  });
+
+  test('only write operations block the npm section, not scan_latest', () => {
+    expect(agentPackageWriteOperationRunning(null)).toBe(false);
+    expect(agentPackageWriteOperationRunning(undefined)).toBe(false);
+    expect(agentPackageWriteOperationRunning({running: false, action: 'install'})).toBe(false);
+    // scan_latest is a read-only latest-version refresh: it must not disable
+    // install/update buttons while it runs.
+    expect(agentPackageWriteOperationRunning({running: true, action: 'scan_latest'})).toBe(false);
+    expect(agentPackageWriteOperationRunning({running: true, action: 'install'})).toBe(true);
+    expect(agentPackageWriteOperationRunning({running: true, action: 'install_many'})).toBe(true);
+    expect(agentPackageWriteOperationRunning({running: true, action: 'uninstall'})).toBe(true);
+    expect(agentPackageWriteOperationRunning({running: true, action: 'reinstall'})).toBe(true);
   });
 });

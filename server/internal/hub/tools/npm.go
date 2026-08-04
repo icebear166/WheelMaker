@@ -69,6 +69,7 @@ type NPMCommand struct {
 
 	mu              sync.Mutex
 	operation       *npmOperationSnapshot
+	latestOperation *npmOperationSnapshot
 	latestCache     map[string]npmLatestCacheEntry
 	flicker         npmPrivateRegistryState
 	operationDone   func()
@@ -494,11 +495,8 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 
 	plan := c.latestPlanForScan(now)
 	hub.Capabilities.MyFlicker = plan.flickerAvailable
-	operation := c.currentOperationSnapshot()
-	if (len(plan.missing) > 0 || plan.probeFlicker) && (operation == nil || !operation.Running) {
-		started, cmdErr := c.acceptOperation("scan_latest", "", "", nil)
-		if cmdErr == nil {
-			operation = cloneNPMOperation(started)
+	if len(plan.missing) > 0 || plan.probeFlicker {
+		if started := c.acceptLatestOperation(); started != nil {
 			go c.runLatestOperation(started, plan.missing, plan.probeFlicker)
 		}
 	}
@@ -539,7 +537,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 			CanUninstall:     true,
 		})
 	}
-	return npmCommandResponse{OK: true, UpdatedAt: updatedAt, Hub: hub, Operation: operation}
+	return npmCommandResponse{OK: true, UpdatedAt: updatedAt, Hub: hub, Operation: c.currentOperationSnapshot()}
 }
 
 func cloneNPMStringSlice(values []string) []string {
@@ -731,7 +729,7 @@ func (c *NPMCommand) runLatestOperation(operation *npmOperationSnapshot, package
 	if probeFlicker {
 		c.flicker = npmPrivateRegistryState{known: true, available: flickerAvailable, probedAt: finished}
 	}
-	if c.operation == operation {
+	if c.latestOperation == operation {
 		operation.Running = false
 		operation.FinishedAt = finishedAt
 		if len(failed) > 0 {
@@ -873,21 +871,37 @@ func (c *NPMCommand) acceptOperation(action string, packageName string, version 
 	if c.operation != nil && c.operation.Running {
 		return nil, &npmCommandError{Code: rp.CodeConflict, Message: "npm operation already running"}
 	}
-	status := "running"
-	if action == "scan_latest" {
-		status = "checking_latest"
-	}
 	operation := &npmOperationSnapshot{
 		Running:      true,
 		Action:       action,
 		PackageName:  packageName,
 		PackageNames: cloneNPMStringSlice(packageNames),
 		Version:      version,
-		Status:       status,
+		Status:       "running",
 		StartedAt:    c.now().Format(time.RFC3339),
 	}
 	c.operation = operation
 	return operation, nil
+}
+
+// acceptLatestOperation reserves the read-only scan_latest slot. A latest-version
+// refresh is pure HTTP, so it never conflicts with write operations (installs,
+// uninstalls, reinstalls) and can run alongside them. Returns nil when a refresh
+// is already running so repeated scans do not stack duplicate lookups.
+func (c *NPMCommand) acceptLatestOperation() *npmOperationSnapshot {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.latestOperation != nil && c.latestOperation.Running {
+		return nil
+	}
+	operation := &npmOperationSnapshot{
+		Running:   true,
+		Action:    "scan_latest",
+		Status:    "checking_latest",
+		StartedAt: c.now().Format(time.RFC3339),
+	}
+	c.latestOperation = operation
+	return operation
 }
 
 func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name string, args ...string) {
@@ -964,7 +978,16 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 func (c *NPMCommand) currentOperationSnapshot() *npmOperationSnapshot {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return cloneNPMOperation(c.operation)
+	switch {
+	case c.operation != nil && c.operation.Running:
+		return cloneNPMOperation(c.operation)
+	case c.latestOperation != nil && c.latestOperation.Running:
+		return cloneNPMOperation(c.latestOperation)
+	case c.operation != nil:
+		return cloneNPMOperation(c.operation)
+	default:
+		return cloneNPMOperation(c.latestOperation)
+	}
 }
 
 func parseNPMListDependencies(raw string) (map[string]string, error) {

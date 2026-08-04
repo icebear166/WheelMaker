@@ -226,6 +226,19 @@ export function deriveNpmUpdatableTargets(packages: RegistryNpmPackage[]): NpmPa
     }));
 }
 
+// agentPackageWriteOperationRunning reports whether a running npm hub operation
+// is a write operation (install / install_many / uninstall / reinstall). A
+// running scan_latest is a read-only latest-version refresh and must not block
+// package installs or updates, so it returns false for that action.
+export function agentPackageWriteOperationRunning(
+  operation: {running: boolean; action: string} | null | undefined,
+): boolean {
+  if (!operation || operation.running !== true) {
+    return false;
+  }
+  return operation.action !== 'scan_latest';
+}
+
 export function npmPackageUpdateSummary(count: number): string {
   if (count <= 0) return 'No npm updates';
   return `${count} npm ${count === 1 ? 'update' : 'updates'}`;

@@ -470,6 +470,7 @@ import {
 } from '../modelEfficiency/modelEfficiencyStore';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {
+  agentPackageWriteOperationRunning,
   deriveNpmPackageUpdateTargets,
   deriveNpmUpdatableTargets,
   deriveOperationalHubIds,
@@ -13179,7 +13180,8 @@ export function App() {
         },
         npm: {
           loading: card.agentPackage?.loading === true,
-          pending: agentPackageHubUpdatePendingId === card.hubId || card.agentPackage?.operation?.running === true,
+          pending: agentPackageHubUpdatePendingId === card.hubId
+            || agentPackageWriteOperationRunning(card.agentPackage?.operation),
           outdatedCount: npmUpdatable.length,
           myFlickerAvailable: card.agentPackage?.hub?.capabilities?.myFlicker === true,
           packages: hubPackages.map(pkg => ({

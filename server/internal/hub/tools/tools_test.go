@@ -547,6 +547,7 @@ type fakeNPMLatestFetcher struct {
 	errs     map[string]error
 	calls    []string
 	fallback string
+	hold     chan struct{}
 }
 
 func newFakeNPMLatestFetcher() *fakeNPMLatestFetcher {
@@ -557,7 +558,17 @@ func newFakeNPMLatestFetcher() *fakeNPMLatestFetcher {
 	}
 }
 
-func (f *fakeNPMLatestFetcher) LatestVersion(_ context.Context, packageName string) (string, error) {
+func (f *fakeNPMLatestFetcher) LatestVersion(ctx context.Context, packageName string) (string, error) {
+	f.mu.Lock()
+	hold := f.hold
+	f.mu.Unlock()
+	if hold != nil {
+		select {
+		case <-hold:
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, packageName)
@@ -580,6 +591,17 @@ func (f *fakeNPMLatestFetcher) setError(packageName string, err error) {
 	f.mu.Lock()
 	f.errs[packageName] = err
 	f.mu.Unlock()
+}
+
+// holdLatest blocks every LatestVersion call until the returned channel is
+// closed, letting a test keep a scan_latest operation running while it drives
+// other actions.
+func (f *fakeNPMLatestFetcher) holdLatest() chan struct{} {
+	ch := make(chan struct{})
+	f.mu.Lock()
+	f.hold = ch
+	f.mu.Unlock()
+	return ch
 }
 
 func (f *fakeNPMLatestFetcher) callCount(packageName string) int {
@@ -1253,6 +1275,41 @@ func TestNPMCommandRejectsConcurrentOperationsAndQueryIsUnsupported(t *testing.T
 		t.Fatalf("conflictErr=%#v, want CONFLICT", conflictErr)
 	}
 	close(block)
+	waitForNPMTestOperation(t, cmd)
+}
+
+func TestNPMCommandScanLatestDoesNotBlockInstall(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{}`,
+		ExitCode: 0,
+	})
+	fetcher := newFakeNPMLatestFetcher()
+	fetcher.setVersion("@openai/codex", "0.130.0")
+	releaseLatest := fetcher.holdLatest()
+	cmd := newNPMCommandWithDependencies(runner, fetcher, func(context.Context) bool { return true })
+
+	if _, err := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); err != nil {
+		t.Fatalf("scan error: %#v", err)
+	}
+
+	// scan_latest is still running (the fetcher is held). Installing a package
+	// is a write operation and must not be rejected as a conflicting op.
+	installBlock := runner.block("npm", []string{"install", "-g", "@openai/codex@latest"})
+	_, installErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+	}))
+	if installErr != nil {
+		t.Fatalf("install must not be blocked by scan_latest: %#v", installErr)
+	}
+
+	close(installBlock)
+	close(releaseLatest)
 	waitForNPMTestOperation(t, cmd)
 }
 
