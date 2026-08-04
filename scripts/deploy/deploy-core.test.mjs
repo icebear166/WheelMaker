@@ -361,18 +361,29 @@ test('runtime restart delegates to each platform manager', async () => {
     options: undefined,
   });
 
-  let windowsScript = '';
+  const windowsCalls = [];
   const windows = createRuntimeAdapter({
     paths: RUNTIME_PATHS,
     platform: 'win32',
-    runner: async (_command, args) => {
-      windowsScript = args.at(-1);
+    runner: async (command, args) => {
+      windowsCalls.push({ args, command });
       return { code: 0, stderr: '', stdout: '' };
     },
   });
   await windows.restart();
-  assert.match(windowsScript, /Stop-ScheduledTask -TaskName 'WheelMaker'/);
-  assert.match(windowsScript, /Start-ScheduledTask -TaskName 'WheelMaker'/);
+  // Windows has no atomic "restart task + workers" primitive: Stop-ScheduledTask
+  // only ends the guardian and leaves detached worker grandchildren alive. Restart
+  // must therefore reuse the proven stop (which kills every wheelmaker.exe worker
+  // by path) followed by start, instead of a detached self-restart script.
+  assert.equal(windowsCalls.length, 2);
+  assert.equal(windowsCalls[0].command, 'powershell');
+  assert.match(windowsCalls[0].args.at(-1), /Stop-ScheduledTask -TaskName 'WheelMaker'/);
+  assert.match(windowsCalls[0].args.at(-1), /Stop-Process/);
+  assert.match(windowsCalls[1].args.at(-1), /Start-ScheduledTask -TaskName 'WheelMaker'/);
+  assert.equal(
+    windowsCalls.some((entry) => /Start-Process/.test(entry.args.at(-1))),
+    false,
+  );
 });
 
 test('runtime health requires the registered task and an actual Hub worker', async () => {

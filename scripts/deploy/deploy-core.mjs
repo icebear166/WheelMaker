@@ -1352,14 +1352,6 @@ Get-CimInstance Win32_Process | Where-Object {
 `;
 }
 
-function windowsRestartScript() {
-  return `$ErrorActionPreference = 'Stop'
-$restartCommand = "Start-Sleep -Milliseconds 500; Start-ScheduledTask -TaskName 'WheelMaker' -ErrorAction Stop"
-Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $restartCommand) -WindowStyle Hidden
-Stop-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
-`;
-}
-
 async function checkLinuxPrerequisites(runner) {
   await runner('systemctl', ['--user', 'show-environment']);
   let userName = process.env.USER;
@@ -1471,14 +1463,15 @@ export function createRuntimeAdapter({
     if (!['start', 'stop', 'restart'].includes(name)) {
       throw new Error(`unknown runtime action: ${name}`);
     }
+    if (name === 'restart' && platform === 'win32') {
+      // Windows has no atomic "restart task + workers" primitive: Stop-ScheduledTask
+      // ends only the guardian and leaves detached worker grandchildren orphaned.
+      // Reuse the proven stop (kills every wheelmaker.exe worker by path) then start.
+      await action('stop');
+      await action('start');
+      return;
+    }
     if (platform === 'win32') {
-      if (name === 'restart') {
-        await runner(
-          'powershell',
-          ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsRestartScript()],
-          { cwd: paths.home },
-        );
-      }
       if (name === 'stop') {
         await runner(
           'powershell',
