@@ -1363,6 +1363,22 @@ describe('web chat integration', () => {
     }
     expect(stylesCss).toContain('.chat-reply-target:hover {');
     expect(stylesCss).toContain('.chat-reply-target:focus-visible {');
+    expect(cssRuleBlock(stylesCss, '.chat-reply-target')).toContain(
+      'background: color-mix(in srgb, var(--accent-primary) 5%, transparent);',
+    );
+    expect(cssRuleBlock(stylesCss, '.chat-reply-target:hover')).toContain(
+      'background: color-mix(in srgb, var(--accent-primary) 11%, transparent);',
+    );
+    expect(cssRuleBlock(stylesCss, '.chat-reply-target:focus-visible')).toContain(
+      'background: color-mix(in srgb, var(--accent-primary) 12%, transparent);',
+    );
+    expect(cssRuleBlock(stylesCss, ".chat-reply-target[aria-disabled='true']")).toContain(
+      'background: transparent;',
+    );
+    expect(cssRuleBlock(stylesCss, '.chat-reply-label')).toContain('color: var(--accent-primary);');
+    expect(cssRuleBlock(stylesCss, 'li.chat-reply-target::marker')).toContain(
+      'color: var(--accent-primary);',
+    );
     expect(stylesCss).not.toContain('.chat-option-reply-line');
     expect(stylesCss).not.toContain('.chat-option-reply-inline-button');
     expect(stylesCss).not.toContain('.chat-option-reply-static');

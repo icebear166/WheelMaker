@@ -1,6 +1,6 @@
 import {execFileSync} from 'child_process';
 import React from 'react';
-import {act, create, type ReactTestRenderer} from 'react-test-renderer';
+import {act, create, type ReactTestInstance, type ReactTestRenderer} from 'react-test-renderer';
 
 jest.mock('react-markdown', () => {
   const ReactModule = require('react') as typeof React;
@@ -72,7 +72,11 @@ jest.mock('react-markdown', () => {
                   },
                 },
               };
-          return ReactModule.createElement(Paragraph, props, block);
+          const boldLead = /^\*\*(.+?)\*\*([\s\S]*)$/.exec(block);
+          const paragraphChildren = boldLead
+            ? [ReactModule.createElement('strong', {key: 'lead'}, boldLead[1]), boldLead[2]]
+            : block;
+          return ReactModule.createElement(Paragraph, props, paragraphChildren);
         }),
       );
     },
@@ -184,17 +188,16 @@ function renderWithRealReactMarkdown(source: string): string {
   });
 }
 
+function collectRenderedText(node: ReactTestInstance): string {
+  return node.children
+    .map(child => (typeof child === 'string' ? child : collectRenderedText(child)))
+    .join('');
+}
+
 function renderedMarkdownBlocks(tree: ReactTestRenderer): Array<{type: string; text: string}> {
   return tree.root
     .findAll(node => node.type === 'p' || node.type === 'ul')
-    .map(node => ({
-      type: String(node.type),
-      text: node
-        .findAll(child => typeof child.children[0] === 'string')
-        .flatMap(child => child.children)
-        .filter((child): child is string => typeof child === 'string')
-        .join(''),
-    }));
+    .map(node => ({type: String(node.type), text: collectRenderedText(node)}));
 }
 
 describe('ChatTurnView Markdown reply structure', () => {
@@ -234,6 +237,71 @@ describe('ChatTurnView Markdown reply structure', () => {
 
     expect(optionA.type).toBe('p');
     expect(onSelectOptionReply).toHaveBeenCalledWith('A');
+  });
+
+  it('colors letter option labels with a layout-neutral inline span', async () => {
+    const selectable = await renderTurn(optionText, {
+      optionReplies,
+      onSelectOptionReply: jest.fn(),
+    });
+
+    const optionA = selectable.root.findByProps({'data-chat-reply-value': 'A'});
+    const labels = optionA.findAllByProps({className: 'chat-reply-label'});
+    expect(labels).toHaveLength(1);
+    expect(labels[0].children.join('')).toBe('A.');
+  });
+
+  it('colors bold letter option labels inside the strong element', async () => {
+    const selectable = await renderTurn(boldOptionText, {
+      optionReplies: [
+        {label: 'A', text: '所有移动端主界面都常驻（推荐）'},
+        {label: 'B', text: '只在 Chat、Preview、Terminal 常驻'},
+      ],
+      onSelectOptionReply: jest.fn(),
+    });
+
+    const optionA = selectable.root.findByProps({'data-chat-reply-value': 'A'});
+    const labels = optionA.findAllByProps({className: 'chat-reply-label'});
+    expect(labels).toHaveLength(1);
+    expect(labels[0].children.join('')).toBe('A.');
+  });
+
+  it('leaves numeric list option text without inline label spans', async () => {
+    const text = [
+      '请选择一个选项：',
+      '',
+      '1. **采用方案一**',
+      '2. 保持现状',
+    ].join('\n');
+    const selectable = await renderTurn(text, {
+      optionReplies: [
+        {label: '1', text: '**采用方案一**'},
+        {label: '2', text: '保持现状'},
+      ],
+      onSelectOptionReply: jest.fn(),
+    });
+
+    expect(selectable.root.findByProps({'data-chat-reply-value': '1'}).type).toBe('li');
+    expect(selectable.root.findAllByProps({className: 'chat-reply-label'})).toHaveLength(0);
+  });
+
+  it('leaves confirmation reply text without inline label spans', async () => {
+    const selectable = await renderTurn('建议使用现有实现。\n\n按这个方向修改可以吗？', {
+      confirmationReply: {
+        sentence: '按这个方向修改可以吗？',
+        replyText: '确认',
+      },
+      onSelectConfirmationReply: jest.fn(),
+    });
+
+    expect(selectable.root.findByProps({'data-chat-reply-value': '确认'}).type).toBe('p');
+    expect(selectable.root.findAllByProps({className: 'chat-reply-label'})).toHaveLength(0);
+  });
+
+  it('omits inline label spans when options are not selectable', async () => {
+    const historical = await renderTurn(optionText);
+
+    expect(historical.root.findAllByProps({className: 'chat-reply-label'})).toHaveLength(0);
   });
 
   it('adds interaction to option paragraphs wrapped in Markdown bold markers', async () => {

@@ -399,6 +399,53 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
   );
 });
 
+const CHAT_REPLY_OPTION_LABEL_PATTERN = /^[A-H1-9]$/;
+
+/**
+ * Wraps the leading "X." option label in a color-only span so selectable reply
+ * rows read as tappable without hover. The span must stay metric-neutral
+ * (color only) so precomputed virtual row heights stay valid. Rows whose text
+ * does not start with the label (numeric list markers, confirmation
+ * sentences) are returned untouched.
+ */
+function wrapChatReplyOptionLabel(children: React.ReactNode, label: string): React.ReactNode {
+  if (!CHAT_REPLY_OPTION_LABEL_PATTERN.test(label)) {
+    return children;
+  }
+  const splitLeadingLabel = (text: string): [React.ReactNode, string] | null => {
+    if (text.length < 2 || text[0].toUpperCase() !== label || text[1] !== '.') {
+      return null;
+    }
+    return [
+      <span key="chat-reply-label" className="chat-reply-label">{text.slice(0, 2)}</span>,
+      text.slice(2),
+    ];
+  };
+  const list = React.Children.toArray(children);
+  const first = list[0];
+  if (typeof first === 'string') {
+    const split = splitLeadingLabel(first);
+    return split ? [...split, ...list.slice(1)] : children;
+  }
+  if (
+    React.isValidElement<{children?: React.ReactNode}>(first) &&
+    (first.type === 'strong' || first.type === 'em')
+  ) {
+    const inner = React.Children.toArray(first.props.children);
+    const leading = inner[0];
+    if (typeof leading === 'string') {
+      const split = splitLeadingLabel(leading);
+      if (split) {
+        return [
+          React.cloneElement(first, undefined, ...split, ...inner.slice(1)),
+          ...list.slice(1),
+        ];
+      }
+    }
+  }
+  return children;
+}
+
 export const ChatTurnView = React.memo(function ChatTurnView({
   message,
   permissionRecord,
@@ -499,6 +546,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     };
     const renderParagraph: NonNullable<Components['p']> = ({node, children, ...props}) => {
       const reply = resolveReply(node, children);
+      const content = reply ? wrapChatReplyOptionLabel(children, reply.value) : children;
       const activate = () => {
         if (!optionRepliesDisabled) {
           reply?.submit();
@@ -531,14 +579,15 @@ export const ChatTurnView = React.memo(function ChatTurnView({
         React.createElement(
           BaseParagraph as React.ElementType,
           {node, ...paragraphProps},
-          children,
+          content,
         )
       ) : (
-        <p {...paragraphProps}>{children}</p>
+        <p {...paragraphProps}>{content}</p>
       );
     };
     const renderListItem: NonNullable<Components['li']> = ({node, children, ...props}) => {
       const reply = resolveReply(node, children);
+      const content = reply ? wrapChatReplyOptionLabel(children, reply.value) : children;
       const activate = () => {
         if (!optionRepliesDisabled) {
           reply?.submit();
@@ -571,10 +620,10 @@ export const ChatTurnView = React.memo(function ChatTurnView({
         React.createElement(
           BaseListItem as React.ElementType,
           {node, ...listItemProps},
-          children,
+          content,
         )
       ) : (
-        <li {...listItemProps}>{children}</li>
+        <li {...listItemProps}>{content}</li>
       );
     };
     return {

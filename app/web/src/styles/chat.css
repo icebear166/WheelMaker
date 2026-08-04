@@ -4632,7 +4632,7 @@ button.chat-hub-skill-name:disabled {
   outline: 1px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-subtle));
   outline-offset: 3px;
   border-radius: 4px;
-  background: transparent;
+  background: color-mix(in srgb, var(--accent-primary) 5%, transparent);
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -4643,11 +4643,11 @@ button.chat-hub-skill-name:disabled {
 
 .chat-reply-target:hover {
   outline-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
-  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 11%, transparent);
 }
 
 .chat-reply-target:focus-visible {
-  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 3px;
 }
@@ -4656,6 +4656,14 @@ button.chat-hub-skill-name:disabled {
   outline-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
   background: transparent;
   cursor: default;
+}
+
+.chat-reply-label {
+  color: var(--accent-primary);
+}
+
+li.chat-reply-target::marker {
+  color: var(--accent-primary);
 }
 .chat-main-message a:hover,
 .chat-main-message a:focus-visible {
