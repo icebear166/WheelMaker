@@ -19,8 +19,8 @@ type releaseVersionDir struct {
 }
 
 // referencedVersions returns every version that must keep its directory:
-// the stable version, the versions pointed to by stable Desktop/Android
-// pointers, and every version listed in the release history.
+// the stable version and the versions pointed to by stable Desktop/Android
+// pointers. History entries alone do not protect a version.
 func (s *Server) referencedVersions() (map[string]bool, *stableDocument, error) {
 	stable, err := s.readStable()
 	if err != nil {
@@ -35,13 +35,6 @@ func (s *Server) referencedVersions() (map[string]bool, *stableDocument, error) 
 		if stable.Android != nil {
 			referenced[stable.Android.Version] = true
 		}
-	}
-	history, err := s.readHistory()
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, entry := range history.Releases {
-		referenced[entry.Version] = true
 	}
 	return referenced, stable, nil
 }
@@ -131,10 +124,31 @@ func (s *Server) handlePrune(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusConflict, "stable_missing")
 		return
 	}
+	history, err := s.readHistory()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_metadata_invalid")
+		return
+	}
 	dirs, err := s.listReleaseVersionDirs()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "storage_scan_failed")
 		return
+	}
+	// Trim the history before deleting directories: if anything fails after
+	// this point, leftover directories simply become unreferenced orphans that
+	// a later prune removes, instead of history pointing at missing files.
+	kept := make([]releaseHistoryEntry, 0, len(history.Releases))
+	for _, entry := range history.Releases {
+		if referenced[entry.Version] {
+			kept = append(kept, entry)
+		}
+	}
+	if len(kept) != len(history.Releases) {
+		history.Releases = kept
+		if err := s.writeJSON(filepath.Join(s.config.DataRoot, "public", "releases.json"), history, 0o640); err != nil {
+			writeError(w, http.StatusInternalServerError, "prune_failed")
+			return
+		}
 	}
 	removed := 0
 	for _, dir := range dirs {

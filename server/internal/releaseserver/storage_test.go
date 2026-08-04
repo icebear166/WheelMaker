@@ -93,8 +93,8 @@ func TestStorageReportsTotalAndReclaimableBytes(t *testing.T) {
 	root := t.TempDir()
 	writeStorageStableFixture(t, root, "v1.3")
 	writeStorageHistoryFixture(t, root, "v1.1", "v1.2", "v1.3")
-	writeStorageVersionDir(t, root, "v1.1", 100)
-	writeStorageVersionDir(t, root, "v1.3", 300)
+	writeStorageVersionDir(t, root, "v1.1", 100) // history alone does not protect a version
+	writeStorageVersionDir(t, root, "v1.3", 300) // stable
 	writeStorageVersionDir(t, root, "v1.9", 200) // orphan: not referenced anywhere
 
 	handler := newStorageTestHandler(t, root)
@@ -111,8 +111,8 @@ func TestStorageReportsTotalAndReclaimableBytes(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.TotalBytes != 600 || body.ReclaimableBytes != 200 || body.OrphanCount != 1 {
-		t.Fatalf("storage = %+v, want total 600 reclaimable 200 orphans 1", body)
+	if body.TotalBytes != 600 || body.ReclaimableBytes != 300 || body.OrphanCount != 2 {
+		t.Fatalf("storage = %+v, want total 600 reclaimable 300 orphans 2", body)
 	}
 }
 
@@ -175,11 +175,11 @@ func TestStorageTreatsDesktopAndAndroidPointerVersionsAsReferenced(t *testing.T)
 	}
 }
 
-func TestPruneDeletesOnlyUnreferencedVersionDirs(t *testing.T) {
+func TestPruneKeepsOnlyStableAndTrimsHistory(t *testing.T) {
 	root := t.TempDir()
 	writeStorageStableFixture(t, root, "v1.3")
 	writeStorageHistoryFixture(t, root, "v1.1", "v1.3")
-	writeStorageVersionDir(t, root, "v1.1", 100) // referenced by history
+	writeStorageVersionDir(t, root, "v1.1", 100) // history alone does not protect a version
 	writeStorageVersionDir(t, root, "v1.3", 100) // stable
 	writeStorageVersionDir(t, root, "v1.7", 100) // orphan
 	writeStorageVersionDir(t, root, "v1.9", 100) // orphan
@@ -202,25 +202,78 @@ func TestPruneDeletesOnlyUnreferencedVersionDirs(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if !body.OK || body.RemovedCount != 2 {
-		t.Fatalf("prune = %+v, want ok with 2 removals", body)
+	if !body.OK || body.RemovedCount != 3 {
+		t.Fatalf("prune = %+v, want ok with 3 removals", body)
 	}
-	for _, kept := range []string{"v1.1", "v1.3", "notes"} {
+	for _, kept := range []string{"v1.3", "notes"} {
 		if _, err := os.Stat(filepath.Join(root, "public", "releases", kept)); err != nil {
 			t.Fatalf("%s must be kept: %v", kept, err)
 		}
 	}
-	for _, removed := range []string{"v1.7", "v1.9"} {
+	for _, removed := range []string{"v1.1", "v1.7", "v1.9"} {
 		if _, err := os.Stat(filepath.Join(root, "public", "releases", removed)); !os.IsNotExist(err) {
 			t.Fatalf("%s must be removed", removed)
 		}
 	}
-	// metadata files are untouched
+	// stable is untouched; history is trimmed to the stable entry only
 	if _, err := os.Stat(filepath.Join(root, "public", "stable.json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "public", "releases.json")); err != nil {
+	var history releaseHistory
+	readJSONTestFile(t, filepath.Join(root, "public", "releases.json"), &history)
+	if history.Schema != 1 || len(history.Releases) != 1 || history.Releases[0].Version != "v1.3" {
+		raw, _ := os.ReadFile(filepath.Join(root, "public", "releases.json"))
+		t.Fatalf("history after prune = %s, want only v1.3", raw)
+	}
+}
+
+func TestPruneKeepsStablePointerVersions(t *testing.T) {
+	root := t.TempDir()
+	writeStorageStableFixture(t, root, "v1.3")
+	// stable Desktop pointer references an older version directory
+	stablePath := filepath.Join(root, "public", "stable.json")
+	raw, err := os.ReadFile(stablePath)
+	if err != nil {
 		t.Fatal(err)
+	}
+	var stable map[string]any
+	if err := json.Unmarshal(raw, &stable); err != nil {
+		t.Fatal(err)
+	}
+	stable["desktopExe"] = map[string]any{
+		"version": "v1.2", "path": "/releases/v1.2/WheelMakerDesktop.exe", "sha256": strings.Repeat("a", 64),
+	}
+	raw, err = json.Marshal(stable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stablePath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeStorageHistoryFixture(t, root, "v1.1", "v1.2", "v1.3")
+	writeStorageVersionDir(t, root, "v1.1", 100)
+	writeStorageVersionDir(t, root, "v1.2", 100)
+	writeStorageVersionDir(t, root, "v1.3", 100)
+
+	handler := newStorageTestHandler(t, root)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, storageAuthorizedRequest(http.MethodPost, "/api/prune"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.1")); !os.IsNotExist(err) {
+		t.Fatal("v1.1 must be removed")
+	}
+	for _, kept := range []string{"v1.2", "v1.3"} {
+		if _, err := os.Stat(filepath.Join(root, "public", "releases", kept)); err != nil {
+			t.Fatalf("%s must be kept: %v", kept, err)
+		}
+	}
+	var history releaseHistory
+	readJSONTestFile(t, filepath.Join(root, "public", "releases.json"), &history)
+	if len(history.Releases) != 2 || history.Releases[0].Version != "v1.2" || history.Releases[1].Version != "v1.3" {
+		raw, _ := os.ReadFile(filepath.Join(root, "public", "releases.json"))
+		t.Fatalf("history after prune = %s, want v1.2 and v1.3", raw)
 	}
 }
 

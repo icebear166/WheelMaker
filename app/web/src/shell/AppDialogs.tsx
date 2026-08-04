@@ -221,7 +221,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'clearDatabase') return 'All local data in this browser.';
   if (target.kind === 'logout') return 'All local data in this browser.';
   if (target.kind === 'releasePublish') return target.sourcePath;
-  if (target.kind === 'releaseStoragePrune') return `${target.orphanCount} unreferenced version${target.orphanCount === 1 ? '' : 's'}`;
+  if (target.kind === 'releaseStoragePrune') return `${target.orphanCount} old version${target.orphanCount === 1 ? '' : 's'}`;
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
   if (target.kind === 'delete') return target.title || 'Untitled session';
@@ -259,7 +259,7 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     return `Publisher: ${target.publisherHubId}. Source: ${target.sourcePath}. Web Hub: ${target.webHubId}.`;
   }
   if (target.kind === 'releaseStoragePrune') {
-    return `Deletes ${target.orphanCount} version ${target.orphanCount === 1 ? 'directory' : 'directories'} on the release server that are not referenced by stable.json or releases.json, reclaiming about ${target.reclaimableLabel}. Referenced versions and release metadata are kept.`;
+    return `Deletes ${target.orphanCount} old version ${target.orphanCount === 1 ? 'directory' : 'directories'} on the release server, keeping only the current stable release and reclaiming about ${target.reclaimableLabel}. Release history is trimmed to the versions that remain.`;
   }
   if (target.kind === 'archiveBatch') {
     return 'Runs one archive call at a time across all known projects. Running sessions are skipped.';

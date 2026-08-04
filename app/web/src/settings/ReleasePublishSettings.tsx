@@ -363,7 +363,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
               onClick={requestPrune}
             >
               <Icon name={pruning ? 'loader' : 'trash'} spin={pruning} size={13} />
-              {pruning ? 'Cleaning...' : 'Clean up unreferenced versions'}
+              {pruning ? 'Cleaning...' : 'Clean up old versions'}
             </button>
           </div>
         </div>
