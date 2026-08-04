@@ -89,10 +89,18 @@ type ReleasePublishJob struct {
 }
 
 type releaseCommandResponse struct {
-	OK       bool               `json:"ok"`
-	Accepted bool               `json:"accepted,omitempty"`
-	Status   string             `json:"status"`
-	Job      *ReleasePublishJob `json:"job,omitempty"`
+	OK           bool                `json:"ok"`
+	Accepted     bool                `json:"accepted,omitempty"`
+	Status       string              `json:"status"`
+	Job          *ReleasePublishJob  `json:"job,omitempty"`
+	Storage      *releaseStorageInfo `json:"storage,omitempty"`
+	RemovedCount int                 `json:"removedCount,omitempty"`
+}
+
+type releaseStorageInfo struct {
+	TotalBytes       int64 `json:"totalBytes"`
+	ReclaimableBytes int64 `json:"reclaimableBytes"`
+	OrphanCount      int   `json:"orphanCount"`
 }
 
 type releaseCommandError struct {
@@ -159,6 +167,10 @@ func (c *ReleaseCommand) Handle(_ context.Context, raw json.RawMessage) (any, *r
 		return c.start(payload)
 	case "status":
 		return c.status(payload)
+	case "storage":
+		return c.storage(payload)
+	case "prune":
+		return c.prune(payload)
 	default:
 		return nil, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.release action"}
 	}
@@ -226,6 +238,57 @@ func (c *ReleaseCommand) status(payload releaseCommandPayload) (releaseCommandRe
 	response := releaseCommandResponse{OK: true, Status: job.Status, Job: cloneReleaseJob(job)}
 	c.mu.Unlock()
 	return response, nil
+}
+
+func (c *ReleaseCommand) storage(payload releaseCommandPayload) (releaseCommandResponse, *releaseCommandError) {
+	sourcePath, err := releaseSourcePath(payload.SourcePath, "version")
+	if err != nil {
+		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: err.Error()}
+	}
+	var info releaseStorageInfo
+	if err := c.runReleaseResultScript(sourcePath, "scripts/release/storage.mjs", &info); err != nil {
+		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	return releaseCommandResponse{OK: true, Status: "success", Storage: &info}, nil
+}
+
+func (c *ReleaseCommand) prune(payload releaseCommandPayload) (releaseCommandResponse, *releaseCommandError) {
+	sourcePath, err := releaseSourcePath(payload.SourcePath, "version")
+	if err != nil {
+		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: err.Error()}
+	}
+	var result struct {
+		RemovedCount int `json:"removedCount"`
+	}
+	if err := c.runReleaseResultScript(sourcePath, "scripts/release/prune.mjs", &result); err != nil {
+		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	return releaseCommandResponse{OK: true, Status: "success", RemovedCount: result.RemovedCount}, nil
+}
+
+// runReleaseResultScript runs a release script that prints its result as a
+// single JSON line on stdout and decodes that line. It shares the build
+// mutex so it cannot overlap a running publish build.
+func (c *ReleaseCommand) runReleaseResultScript(sourcePath, script string, out any) error {
+	c.buildMu.Lock()
+	defer c.buildMu.Unlock()
+	var output strings.Builder
+	if err := c.runner.Run(context.Background(), sourcePath, []string{script}, func(text string) {
+		output.WriteString(text)
+	}); err != nil {
+		return err
+	}
+	lines := strings.Split(output.String(), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		if err := json.Unmarshal([]byte(line), out); err == nil {
+			return nil
+		}
+	}
+	return errors.New("release script did not report a result")
 }
 
 func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, sourcePath string) {

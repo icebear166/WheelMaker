@@ -2868,3 +2868,106 @@ func (f *fakeUpdateTrigger) Calls() int {
 	defer f.mu.Unlock()
 	return f.calls
 }
+
+type stubReleaseRunner struct {
+	output string
+	err    error
+	calls  []releaseRunnerCall
+}
+
+func (r *stubReleaseRunner) Run(_ context.Context, workingDir string, args []string, log func(string)) error {
+	r.calls = append(r.calls, releaseRunnerCall{WorkingDir: workingDir, Args: append([]string(nil), args...)})
+	if r.output != "" {
+		log(r.output)
+	}
+	return r.err
+}
+
+func makeReleaseSourceDir(t *testing.T) string {
+	t.Helper()
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return source
+}
+
+func TestReleaseCommandStorageRunsScriptAndParsesReport(t *testing.T) {
+	source := makeReleaseSourceDir(t)
+	runner := &stubReleaseRunner{output: `{"totalBytes":600,"reclaimableBytes":200,"orphanCount":1}` + "\n"}
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "storage", "hubId": "publisher-hub", "sourcePath": source,
+	}))
+	if commandErr != nil {
+		t.Fatalf("Handle() error=%v", commandErr)
+	}
+	body := response.(releaseCommandResponse)
+	if !body.OK || body.Storage == nil {
+		t.Fatalf("response=%#v", body)
+	}
+	if body.Storage.TotalBytes != 600 || body.Storage.ReclaimableBytes != 200 || body.Storage.OrphanCount != 1 {
+		t.Fatalf("storage=%#v", body.Storage)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].WorkingDir != source || runner.calls[0].Args[0] != "scripts/release/storage.mjs" {
+		t.Fatalf("runner calls=%#v", runner.calls)
+	}
+}
+
+func TestReleaseCommandPruneRunsScriptAndReturnsRemovedCount(t *testing.T) {
+	source := makeReleaseSourceDir(t)
+	runner := &stubReleaseRunner{output: `{"ok":true,"removedCount":2}` + "\n"}
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "prune", "hubId": "publisher-hub", "sourcePath": source,
+	}))
+	if commandErr != nil {
+		t.Fatalf("Handle() error=%v", commandErr)
+	}
+	body := response.(releaseCommandResponse)
+	if !body.OK || body.RemovedCount != 2 {
+		t.Fatalf("response=%#v", body)
+	}
+	if runner.calls[0].Args[0] != "scripts/release/prune.mjs" {
+		t.Fatalf("runner calls=%#v", runner.calls)
+	}
+}
+
+func TestReleaseCommandStorageRequiresValidSourcePath(t *testing.T) {
+	command := newReleaseCommandWithDependencies(t.TempDir(), &stubReleaseRunner{}, nil)
+	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "storage", "hubId": "publisher-hub", "sourcePath": t.TempDir(),
+	}))
+	if commandErr == nil || commandErr.Code != rp.CodeInvalidArgument {
+		t.Fatalf("error=%v, want INVALID_ARGUMENT", commandErr)
+	}
+}
+
+func TestReleaseCommandStorageFailsWhenScriptHasNoResult(t *testing.T) {
+	source := makeReleaseSourceDir(t)
+	runner := &stubReleaseRunner{output: "some log noise\n"}
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "storage", "hubId": "publisher-hub", "sourcePath": source,
+	}))
+	if commandErr == nil || commandErr.Code != rp.CodeInternal {
+		t.Fatalf("error=%v, want INTERNAL", commandErr)
+	}
+}
+
+func TestReleaseCommandStoragePropagatesScriptFailure(t *testing.T) {
+	source := makeReleaseSourceDir(t)
+	runner := &stubReleaseRunner{err: errors.New("exit code 1"), output: "[release-storage] unauthorized\n"}
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "storage", "hubId": "publisher-hub", "sourcePath": source,
+	}))
+	if commandErr == nil || commandErr.Code != rp.CodeInternal {
+		t.Fatalf("error=%v, want INTERNAL", commandErr)
+	}
+}
