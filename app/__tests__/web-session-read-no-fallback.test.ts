@@ -74,15 +74,15 @@ describe('registry session.read', () => {
     expect(request).toHaveBeenCalledTimes(2);
     expect(request.mock.calls[0][0].payload).toEqual({
       sessionId: 'sess-1',
-      maxTurns: 128,
-      maxBytes: 4 * 1024 * 1024,
+      maxTurns: 1024,
+      maxBytes: 14 * 1024 * 1024,
     });
     expect(request.mock.calls[1][0].payload).toEqual({
       sessionId: 'sess-1',
       afterTurnIndex: 2,
       throughTurnIndex: 4,
-      maxTurns: 128,
-      maxBytes: 4 * 1024 * 1024,
+      maxTurns: 1024,
+      maxBytes: 14 * 1024 * 1024,
     });
   });
 

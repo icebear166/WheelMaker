@@ -4793,6 +4793,72 @@ func TestSessionReadPaginationReturnsStableContiguousPages(t *testing.T) {
 	}
 }
 
+func TestSessionReadPaginationAllows1024TurnPages(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	const sessionID = "sess-large-page"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent(sessionID, "Large Page")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent(sessionID, "run", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	for index := 0; index < 600; index++ {
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "x"}),
+			MessageID:     fmt.Sprintf("message-%d", index),
+		})); err != nil {
+			t.Fatalf("RecordEvent message %d: %v", index, err)
+		}
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"sess-large-page","maxTurns":1024,"maxBytes":14680064}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest: %v", err)
+	}
+	body := resp.(map[string]any)
+	turns := body["turns"].([]sessionViewTurn)
+	if len(turns) != 601 {
+		t.Fatalf("turns len = %d, want 601", len(turns))
+	}
+	if got := body["hasMore"]; got != false {
+		t.Fatalf("hasMore = %v, want false", got)
+	}
+}
+
+func TestSessionReadPaginationAllows14MiBPages(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	const sessionID = "sess-large-byte-page"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent(sessionID, "Large Byte Page")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent(sessionID, "run", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: strings.Repeat("x", 9*1024*1024)}),
+		MessageID:     "message-large",
+	})); err != nil {
+		t.Fatalf("RecordEvent message: %v", err)
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionRead, "proj1", json.RawMessage(`{"sessionId":"sess-large-byte-page","maxTurns":1024,"maxBytes":14680064}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest: %v", err)
+	}
+	body := resp.(map[string]any)
+	turns := body["turns"].([]sessionViewTurn)
+	if len(turns) != 2 {
+		t.Fatalf("turns len = %d, want prompt and message", len(turns))
+	}
+	if got := body["hasMore"]; got != false {
+		t.Fatalf("hasMore = %v, want false", got)
+	}
+}
+
 func TestSessionReadPaginationHonorsEncodedResponseByteLimit(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
@@ -11825,6 +11891,33 @@ func TestFileSessionTurnStoreWritesVersion2FilesWith256Turns(t *testing.T) {
 		if turn.Content != contents[wantIndex-1] {
 			t.Fatalf("turn[%d].Content = %q, want %q", i, turn.Content, contents[wantIndex-1])
 		}
+	}
+}
+
+func TestFileSessionTurnStoreReadsOneFileRangeWithoutPerTurnFileAllocations(t *testing.T) {
+	store := newFileSessionTurnStore(t.TempDir())
+	ctx := context.Background()
+	contents := make([]string, sessionTurnsPerFile)
+	for index := range contents {
+		contents[index] = fmt.Sprintf(`{"method":"system","param":{"text":"turn-%03d"}}`, index+1)
+	}
+	if _, err := store.WriteTurns(ctx, "proj1", "sess-1", 1, contents); err != nil {
+		t.Fatalf("WriteTurns: %v", err)
+	}
+
+	var turns []sessionViewTurn
+	var readErr error
+	allocs := testing.AllocsPerRun(1, func() {
+		turns, readErr = store.ReadTurns(ctx, "proj1", "sess-1", 0, sessionTurnsPerFile)
+	})
+	if readErr != nil {
+		t.Fatalf("ReadTurns: %v", readErr)
+	}
+	if len(turns) != sessionTurnsPerFile {
+		t.Fatalf("turns len = %d, want %d", len(turns), sessionTurnsPerFile)
+	}
+	if allocs > 400 {
+		t.Fatalf("ReadTurns allocations = %.0f, want <= 400 for one turn file", allocs)
 	}
 }
 

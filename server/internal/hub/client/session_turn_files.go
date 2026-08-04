@@ -106,27 +106,67 @@ func (s *fileSessionTurnStore) ReadTurns(ctx context.Context, projectName, sessi
 		return nil, nil
 	}
 	out := make([]sessionViewTurn, 0, latestTurnIndex-afterTurnIndex)
-	for turnIndex := afterTurnIndex + 1; turnIndex <= latestTurnIndex; turnIndex++ {
-		content, err := s.readTurn(ctx, projectName, sessionID, turnIndex)
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
+	firstTurnIndex := afterTurnIndex + 1
+	firstFileNo := (firstTurnIndex - 1) / sessionTurnsPerFile
+	lastFileNo := (latestTurnIndex - 1) / sessionTurnsPerFile
+	for fileNo := firstFileNo; fileNo <= lastFileNo; fileNo++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		path := filepath.Join(s.turnDir(projectName, sessionID), fmt.Sprintf("t%06d.bin", fileNo))
+		raw, err := os.ReadFile(path)
+		fileMissing := os.IsNotExist(err)
+		if err != nil && !fileMissing {
+			return nil, fmt.Errorf("read turn file: %w", err)
+		}
+		if !fileMissing {
+			if len(raw) < sessionTurnFileHeadSize {
+				return nil, fmt.Errorf("turn file header too short")
 			}
-			if !errors.Is(err, errSessionTurnMissing) {
+			if err := validateTurnHeader(raw[:sessionTurnFileHeadSize]); err != nil {
 				return nil, err
+			}
+		}
+
+		fileFirstTurnIndex := fileNo*sessionTurnsPerFile + 1
+		startSlot := 0
+		if firstTurnIndex > fileFirstTurnIndex {
+			startSlot = int(firstTurnIndex - fileFirstTurnIndex)
+		}
+		endSlot := sessionTurnsPerFile - 1
+		fileLastTurnIndex := fileFirstTurnIndex + sessionTurnsPerFile - 1
+		if latestTurnIndex < fileLastTurnIndex {
+			endSlot = int(latestTurnIndex - fileFirstTurnIndex)
+		}
+		for slot := startSlot; slot <= endSlot; slot++ {
+			turnIndex := fileFirstTurnIndex + int64(slot)
+			if fileMissing {
+				out = append(out, sessionViewTurn{
+					TurnIndex: turnIndex,
+					Content:   sessionGapTurnJSON(turnIndex),
+					Finished:  true,
+				})
+				continue
+			}
+			offset, length := turnSlot(raw[:sessionTurnFileHeadSize], slot)
+			if offset == 0 || length == 0 {
+				out = append(out, sessionViewTurn{
+					TurnIndex: turnIndex,
+					Content:   sessionGapTurnJSON(turnIndex),
+					Finished:  true,
+				})
+				continue
+			}
+			end := int(offset) + int(length)
+			if int(offset) < sessionTurnFileHeadSize || end > len(raw) {
+				return nil, fmt.Errorf("turn %d slot points outside file", turnIndex)
 			}
 			out = append(out, sessionViewTurn{
 				TurnIndex: turnIndex,
-				Content:   sessionGapTurnJSON(turnIndex),
+				Content:   string(raw[int(offset):end]),
 				Finished:  true,
 			})
-			continue
 		}
-		out = append(out, sessionViewTurn{
-			TurnIndex: turnIndex,
-			Content:   string(content),
-			Finished:  true,
-		})
 	}
 	return out, nil
 }

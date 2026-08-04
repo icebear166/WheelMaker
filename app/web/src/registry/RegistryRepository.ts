@@ -131,8 +131,8 @@ export type RegistryFileRequestOptions = {
 
 const SESSION_CREATE_TIMEOUT_MS = 120000;
 const SESSION_FORK_TIMEOUT_MS = SESSION_CREATE_TIMEOUT_MS;
-const SESSION_READ_PAGE_MAX_TURNS = 128;
-const SESSION_READ_PAGE_MAX_BYTES = 4 * 1024 * 1024;
+const SESSION_READ_PAGE_MAX_TURNS = 1024;
+const SESSION_READ_PAGE_MAX_BYTES = 14 * 1024 * 1024;
 
 function normalizeAgentType(agentType: unknown): string | undefined {
   if (typeof agentType !== 'string') {

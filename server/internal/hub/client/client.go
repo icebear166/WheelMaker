@@ -19,7 +19,11 @@ import (
 	acp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
-const acpClientProtocolVersion = 1
+const (
+	acpClientProtocolVersion = 1
+	sessionReadPageMaxTurns  = 1024
+	sessionReadPageMaxBytes  = 14 * 1024 * 1024
+)
 
 var acpClientInfo = &acp.AgentInfo{Name: "wheelmaker", Version: "0.1"}
 
@@ -767,15 +771,15 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		}
 		maxTurns := req.MaxTurns
 		if maxTurns <= 0 {
-			maxTurns = 128
-		} else if maxTurns > 512 {
-			maxTurns = 512
+			maxTurns = sessionReadPageMaxTurns
+		} else if maxTurns > sessionReadPageMaxTurns {
+			maxTurns = sessionReadPageMaxTurns
 		}
 		maxBytes := req.MaxBytes
 		if maxBytes <= 0 {
-			maxBytes = 4 * 1024 * 1024
-		} else if maxBytes > 8*1024*1024 {
-			maxBytes = 8 * 1024 * 1024
+			maxBytes = sessionReadPageMaxBytes
+		} else if maxBytes > sessionReadPageMaxBytes {
+			maxBytes = sessionReadPageMaxBytes
 		}
 		log := hubLogger(c.projectName)
 		if log.VerboseEnabled() {
