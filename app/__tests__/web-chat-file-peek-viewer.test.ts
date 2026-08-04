@@ -274,7 +274,7 @@ describe('web chat file peek viewer', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
-    expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);');
+    expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(true);');
     expect(mainTsx).toContain('const chatPreviewHasContent =');
     expect(mainTsx).toContain('const chatPreviewHasContent = previewWorkbenchHasTabs;');
     expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');

@@ -3121,7 +3121,9 @@ export function App() {
     previewWorkbenchStateFromSnapshot(persistedGlobal.previewWorkbenchSnapshot),
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
-  const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
+  // Default to collapsed so preview tabs restored from the snapshot do not
+  // auto-open the pane on launch; in-session opens reset this to expand again.
+  const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(true);
   const [mobileUsageOpen, setMobileUsageOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalFullscreen, setTerminalFullscreen] = useState(false);
