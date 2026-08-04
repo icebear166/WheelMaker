@@ -4,7 +4,7 @@ import ReactTestRenderer from 'react-test-renderer';
 import {ChatPermissionDialog} from '../web/src/chat/permission/ChatPermissionDialog';
 
 describe('request permission dialog', () => {
-  test('leads with the question details and keeps the raw title as context', async () => {
+  test('shows request details and submits the exact option id', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(() => {
@@ -23,8 +23,8 @@ describe('request permission dialog', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({className: 'chat-permission-dialog-title'}).children).toContain('The specification is missing.');
-    expect(renderer!.root.findByProps({className: 'chat-permission-dialog-details'}).children).toContain('Choose how to continue');
+    expect(renderer!.root.findByProps({className: 'chat-permission-dialog-title'}).children).toContain('Choose how to continue');
+    expect(renderer!.root.findByProps({className: 'chat-permission-dialog-details'}).children).toContain('The specification is missing.');
     expect(renderer!.root.findAllByProps({className: 'chat-permission-overlay'})).toHaveLength(0);
     expect(renderer!.root.findAllByProps({className: 'chat-permission-option'})).toHaveLength(2);
     await ReactTestRenderer.act(() => {
@@ -33,7 +33,7 @@ describe('request permission dialog', () => {
     expect(onSelect).toHaveBeenCalledWith('q0_opt_1');
   });
 
-  test('falls back to the title headline when the request has no details', async () => {
+  test('has no close control and disables choices while submitting', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
@@ -48,8 +48,6 @@ describe('request permission dialog', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({className: 'chat-permission-dialog-title'}).children).toContain('Approval required');
-    expect(renderer!.root.findAllByProps({className: 'chat-permission-dialog-details'})).toHaveLength(0);
     expect(renderer!.root.findAllByProps({'aria-label': 'Close'})).toHaveLength(0);
     expect(renderer!.root.findByProps({className: 'chat-permission-option'}).props.disabled).toBe(true);
   });

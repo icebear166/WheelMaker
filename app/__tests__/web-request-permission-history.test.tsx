@@ -25,12 +25,20 @@ const request: RegistryChatMessage = {
   finished: true,
 };
 
-async function renderPermission(permissionRecord: ChatPermissionRecord) {
+const requestWithDetails: RegistryChatMessage = {
+  sessionId: 'sess-1',
+  turnIndex: 3,
+  method: 'permission_request',
+  param: {permissionId: 'perm-2', title: 'AskUserQuestion', detailsText: 'Which directory should be cleaned?'},
+  finished: true,
+};
+
+async function renderPermission(permissionRecord: ChatPermissionRecord, message: RegistryChatMessage = request) {
   let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
   await ReactTestRenderer.act(() => {
     renderer = ReactTestRenderer.create(
       <ChatTurnView
-        message={request}
+        message={message}
         permissionRecord={permissionRecord}
         markdownComponents={{}}
         markdownUrlTransform={value => value}
@@ -45,6 +53,7 @@ describe('request permission history row', () => {
     const renderer = await renderPermission({
       permissionId: 'perm-1', requestTurnIndex: 2, request, status: 'selected', optionId: 'allow', optionName: 'Allow',
     });
+    expect(renderer.root.findByProps({className: 'chat-permission-history-question'}).children.join(' ')).toContain('Choose');
     expect(renderer.root.findByProps({className: 'chat-permission-history-summary'}).children.join(' ')).toContain('Allow');
     expect(renderer.root.findAllByType('button')).toHaveLength(0);
   });
@@ -54,5 +63,13 @@ describe('request permission history row', () => {
       permissionId: 'perm-1', requestTurnIndex: 2, request, status: 'unanswered', unansweredReason: 'failed',
     });
     expect(renderer.root.findByProps({className: 'chat-permission-history-summary'}).children.join(' ')).toContain('Failed');
+  });
+
+  test('prefers the request details text as the remembered question', async () => {
+    const renderer = await renderPermission({
+      permissionId: 'perm-2', requestTurnIndex: 3, request: requestWithDetails, status: 'selected', optionId: 'q0_opt_0', optionName: 'Release output',
+    }, requestWithDetails);
+    expect(renderer.root.findByProps({className: 'chat-permission-history-question'}).children.join(' ')).toContain('Which directory should be cleaned?');
+    expect(renderer.root.findByProps({className: 'chat-permission-history-summary'}).children.join(' ')).toContain('Release output');
   });
 });

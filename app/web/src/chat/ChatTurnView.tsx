@@ -32,7 +32,7 @@ import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatProm
 import {msgText} from './chatMessageText';
 import {splitChatSearchHighlightSegments} from './search/chatSearchState';
 import {createChatSearchHighlightPlugin} from './search/chatSearchHighlightPlugin';
-import type {ChatPermissionRecord} from './permission/chatPermissionState';
+import {permissionRequestView, type ChatPermissionRecord} from './permission/chatPermissionState';
 
 function renderChatTextWithHighlight(text: string, query: string | undefined) {
   if (!query) {
@@ -602,11 +602,16 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const summary = permissionRecord.status === 'selected'
       ? `Selected: ${permissionRecord.optionName || permissionRecord.optionId || 'Unknown option'}`
       : reasonLabels[permissionRecord.unansweredReason ?? 'ended'];
+    const requestView = permissionRequestView(message);
+    const question = requestView.detailsText || requestView.title;
     return (
       <div className="chat-permission-history-row" role="status">
         <ChatIcon name="help" className="chat-permission-history-icon" />
         <span className="chat-permission-history-label">Permission</span>
-        <span className="chat-permission-history-summary">{summary}</span>
+        {question ? (
+          <span className="chat-permission-history-question" title={question}>{question}</span>
+        ) : null}
+        <span className="chat-permission-history-summary" title={summary}>{summary}</span>
       </div>
     );
   }
