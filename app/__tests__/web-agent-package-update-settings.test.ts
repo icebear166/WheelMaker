@@ -329,7 +329,7 @@ describe('agent package update settings UI source structure', () => {
     expect(agentTagBlock).toContain('font-size: 10.5px;');
     expect(agentTagBlock).toContain('border-radius: 999px;');
     expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent, #666) 14%, transparent);');
-    expect(stylesCss).toContain('.wide-session-agent-8 { --agent-accent: #38d9a9; }');
+    expect(stylesCss).toContain('.wide-session-agent-8 { --agent-accent: #22d3ee; }');
     expect(stylesCss).not.toContain('.token-stats-');
   });
 
