@@ -34,6 +34,7 @@ import type {
   RegistryUsageHistoryResponse,
   RegistryDeepSeekUsageResponse,
 	RegistryReleasePublishResponse,
+	RegistryReleaseStorageResponse,
   RegistryNpmCommandResponse,
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
@@ -1090,6 +1091,16 @@ export class RegistryWorkspaceService {
   async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {
     if (!this.repository) throw new Error('session is not ready');
     return this.repository.queryReleasePublish(hubId, jobId);
+  }
+
+  async queryReleaseStorage(hubId: string, sourcePath: string): Promise<RegistryReleaseStorageResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.queryReleaseStorage(hubId, sourcePath);
+  }
+
+  async pruneReleaseStorage(hubId: string, sourcePath: string): Promise<RegistryReleaseStorageResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.pruneReleaseStorage(hubId, sourcePath);
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {

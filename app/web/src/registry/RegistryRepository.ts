@@ -42,6 +42,7 @@ import type {
   RegistryUsageHistoryLimit,
   RegistryUsageHistoryResponse,
 	RegistryReleasePublishResponse,
+	RegistryReleaseStorageResponse,
   RegistryNpmCommandResponse,
   RegistryNpmHubSnapshot,
   RegistryNpmPackage,
@@ -2508,6 +2509,26 @@ export class RegistryRepository {
       timeoutMs: 15000,
     });
     return response.payload as RegistryReleasePublishResponse;
+  }
+
+  async queryReleaseStorage(hubId: string, sourcePath: string): Promise<RegistryReleaseStorageResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.ReleaseStorageGet,
+      hubId,
+      payload: {sourcePath},
+      timeoutMs: 60000,
+    });
+    return response.payload as RegistryReleaseStorageResponse;
+  }
+
+  async pruneReleaseStorage(hubId: string, sourcePath: string): Promise<RegistryReleaseStorageResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.ReleaseStoragePrune,
+      hubId,
+      payload: {sourcePath},
+      timeoutMs: 60000,
+    });
+    return response.payload as RegistryReleaseStorageResponse;
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {

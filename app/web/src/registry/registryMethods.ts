@@ -81,6 +81,8 @@ export const RegistryMethods = {
   ReleasePublishStart: 'release.publish.start',
   ReleasePublishGet: 'release.publish.get',
   ReleasePublishUpdated: 'release.publish.updated',
+  ReleaseStorageGet: 'release.storage.get',
+  ReleaseStoragePrune: 'release.storage.prune',
   SpeechStart: 'speech.start',
   SpeechChunk: 'speech.chunk',
   SpeechFinish: 'speech.finish',

@@ -257,6 +257,20 @@ export interface RegistryReleasePublishResponse {
   job?: RegistryReleasePublishJob;
 }
 
+export interface RegistryReleaseStorageInfo {
+  totalBytes: number;
+  reclaimableBytes: number;
+  orphanCount: number;
+}
+
+export interface RegistryReleaseStorageResponse {
+  ok: boolean;
+  status: string;
+  error?: string;
+  storage?: RegistryReleaseStorageInfo;
+  removedCount?: number;
+}
+
 export interface RegistrySessionContentBlock {
   type: 'text' | 'image' | 'resource_link';
   text?: string;
