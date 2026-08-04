@@ -60,6 +60,8 @@ const (
 	RegistryMethodReleasePublishStart       = "release.publish.start"
 	RegistryMethodReleasePublishGet         = "release.publish.get"
 	RegistryMethodReleasePublishUpdated     = "release.publish.updated"
+	RegistryMethodReleaseStorageGet         = "release.storage.get"
+	RegistryMethodReleaseStoragePrune       = "release.storage.prune"
 	RegistryMethodHubReleaseNotify          = "hub.release.notify"
 	RegistryMethodHubReleaseApply           = "hub.release.apply"
 	RegistryMethodHubDebugWebTransferStart  = "hub.debugWeb.transfer.start"
@@ -190,6 +192,8 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodReleasePublishStart:              registryReleasePublishMethod(RegistryMethodReleasePublishStart, RegistryRoleClient, RegistryRouteReleasePublish),
 	RegistryMethodReleasePublishGet:                registryReleasePublishMethod(RegistryMethodReleasePublishGet, RegistryRoleClient, RegistryRouteReleasePublish),
 	RegistryMethodReleasePublishUpdated:            registryReleasePublishMethod(RegistryMethodReleasePublishUpdated, RegistryRoleHub, RegistryRouteClientEvent),
+	RegistryMethodReleaseStorageGet:                registryReleasePublishMethod(RegistryMethodReleaseStorageGet, RegistryRoleClient, RegistryRouteReleasePublish),
+	RegistryMethodReleaseStoragePrune:              registryReleasePublishMethod(RegistryMethodReleaseStoragePrune, RegistryRoleClient, RegistryRouteReleasePublish),
 	RegistryMethodHubReleaseNotify:                 registryHubReleaseNotifyMethod(RegistryMethodHubReleaseNotify),
 	RegistryMethodHubDebugWebTransferStart:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferStart),
 	RegistryMethodHubDebugWebTransferChunk:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferChunk),

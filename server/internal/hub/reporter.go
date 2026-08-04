@@ -750,6 +750,10 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyReleasePublish(conn, in, "start")
 	case rp.RegistryMethodReleasePublishGet:
 		r.replyReleasePublish(conn, in, "status")
+	case rp.RegistryMethodReleaseStorageGet:
+		r.replyReleasePublish(conn, in, "storage")
+	case rp.RegistryMethodReleaseStoragePrune:
+		r.replyReleasePublish(conn, in, "prune")
 	case rp.RegistryMethodHubConfigGet:
 		r.replyHubConfigGet(conn, in)
 	case rp.RegistryMethodHubConfigUpdate:

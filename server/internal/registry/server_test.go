@@ -2003,6 +2003,49 @@ func TestReleasePublishRequestRoutesToPublishingHub(t *testing.T) {
 	}
 }
 
+func TestReleaseStorageRequestRoutesToPublishingHub(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "publisher")
+	defer hub.Close()
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := map[string]any{"sourcePath": "D:/Code/WheelMaker"}
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    rp.RegistryMethodReleaseStorageGet,
+		HubID:     "publisher",
+		Payload:   payload,
+	})
+	_ = hub.SetReadDeadline(time.Now().Add(2 * time.Second))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Method != rp.RegistryMethodReleaseStorageGet || forwarded.HubID != "publisher" {
+		t.Fatalf("forwarded = %#v", forwarded)
+	}
+	if !reflect.DeepEqual(forwarded.Payload, payload) {
+		t.Fatalf("forwarded payload = %#v, want %#v", forwarded.Payload, payload)
+	}
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    rp.RegistryMethodReleaseStorageGet,
+		HubID:     "publisher",
+		Payload:   map[string]any{"ok": true, "storage": map[string]any{"totalBytes": 600}},
+	})
+	response := mustReadEnvelope(t, client)
+	if response.RequestID != 3 || response.Method != rp.RegistryMethodReleaseStorageGet {
+		t.Fatalf("response = %#v", response)
+	}
+	if response.Payload["ok"] != true {
+		t.Fatalf("response payload = %#v", response.Payload)
+	}
+}
+
 func TestUsageHistoryGetForwardsByEnvelopeHubID(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())

@@ -643,3 +643,27 @@ func TestSessionActionStatusResultSessionLocalJSON(t *testing.T) {
 		t.Fatalf("agentType=%q, want codex", decoded.AgentType)
 	}
 }
+
+func TestReleaseStorageMethodsAreRegisteredWithoutVersionChange(t *testing.T) {
+	for _, method := range []string{
+		RegistryMethodReleaseStorageGet,
+		RegistryMethodReleaseStoragePrune,
+	} {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("%s is not registered", method)
+		}
+		if !desc.RequiresHubID {
+			t.Fatalf("%s must require hubId", method)
+		}
+		if desc.Route != RegistryRouteReleasePublish {
+			t.Fatalf("%s route=%q, want %q", method, desc.Route, RegistryRouteReleasePublish)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("%s must allow client role", method)
+		}
+	}
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("protocol version = %q, want 2.7", DefaultProtocolVersion)
+	}
+}
