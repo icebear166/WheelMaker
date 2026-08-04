@@ -9,7 +9,6 @@ type Settings = {
   publisherHubId: string;
   sourcePath: string;
   serverHubId: string;
-  webHubId: string;
   autoPull: boolean;
   desktop: boolean;
   android: boolean;
@@ -21,7 +20,6 @@ const empty: Settings = {
   publisherHubId: '',
   sourcePath: '',
   serverHubId: '',
-  webHubId: '',
   autoPull: false,
   desktop: false,
   android: false,
@@ -31,7 +29,13 @@ const empty: Settings = {
 
 function load(): Settings {
   try {
-    return {...empty, ...JSON.parse(window.localStorage.getItem(key) || '{}')};
+    const parsed = JSON.parse(window.localStorage.getItem(key) || '{}') as Record<string, unknown>;
+    const merged = {...empty, ...parsed} as Settings & {webHubId?: string};
+    if (!merged.serverHubId && typeof merged.webHubId === 'string' && merged.webHubId) {
+      merged.serverHubId = merged.webHubId;
+    }
+    delete merged.webHubId;
+    return merged;
   } catch {
     return empty;
   }
@@ -110,7 +114,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
     try {
       const input = kind === 'version'
         ? {kind, sourcePath: settings.sourcePath, baseUrl: WHEELMAKER_RELEASE_BASE_URL, desktop: settings.desktop, android: settings.android, targetHubId: settings.serverHubId || undefined, autoPull: Boolean(settings.serverHubId && settings.autoPull)}
-        : {kind, sourcePath: settings.sourcePath, webHubId: settings.webHubId};
+        : {kind, sourcePath: settings.sourcePath, webHubId: settings.serverHubId};
       const result = await start(settings.publisherHubId, input);
       if (!result.ok || !result.job) throw new Error(result.error || result.status || 'publish task was rejected');
       setJob(result.job);
@@ -124,14 +128,14 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
 
   const requestPublish = (kind: 'version' | 'debugWeb') => {
     if (!settings.publisherHubId || !settings.sourcePath || pendingKind) return;
-    if (kind === 'debugWeb' && !settings.webHubId) return;
+    if (kind === 'debugWeb' && !settings.serverHubId) return;
     setConfirmTarget({
       kind: 'releasePublish',
       action: kind,
       publisherHubId: settings.publisherHubId,
       sourcePath: settings.sourcePath,
       serverHubId: settings.serverHubId,
-      webHubId: settings.webHubId,
+      webHubId: settings.serverHubId,
       desktop: settings.desktop,
       android: settings.android,
       autoPull: settings.autoPull,
@@ -147,7 +151,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
 
   const pending = pendingKind !== null;
   const canStartVersion = Boolean(settings.publisherHubId && settings.sourcePath) && !pending;
-  const canStartDebugWeb = Boolean(settings.publisherHubId && settings.sourcePath && settings.webHubId) && !pending;
+  const canStartDebugWeb = Boolean(settings.publisherHubId && settings.sourcePath && settings.serverHubId) && !pending;
   const jobVariant = job ? resolveJobStatusVariant(job) : 'is-idle';
 
   return (
@@ -178,15 +182,6 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
               placeholder="Absolute source checkout path"
             />
           </div>
-        </div>
-      </section>
-
-      <section className="set-card" aria-label="Version release">
-        <div className="set-card-head">
-          <Icon name="cloudDownload" size={15} className="port-relay-section-icon" />
-          <span className="set-card-title">Version release</span>
-        </div>
-        <div className="set-card-body">
           <div className="set-field">
             <span className="set-field-label">Server Hub</span>
             <select
@@ -207,6 +202,15 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
             />
             Auto pull after publish
           </label>
+        </div>
+      </section>
+
+      <section className="set-card" aria-label="Version release">
+        <div className="set-card-head">
+          <Icon name="cloudDownload" size={15} className="port-relay-section-icon" />
+          <span className="set-card-title">Version release</span>
+        </div>
+        <div className="set-card-body">
           <div className="release-publish-options">
             <label>
               <input
@@ -246,17 +250,6 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
         </div>
         <div className="set-card-body">
           <p className="set-muted">Build Web only and apply it directly to an online Hub. Stable release metadata is not changed.</p>
-          <div className="set-field">
-            <span className="set-field-label">Web Hub</span>
-            <select
-              className="set-field-control"
-              value={settings.webHubId}
-              onChange={event => update({webHubId: event.target.value})}
-            >
-              <option value="">Select Web Hub</option>
-              {hubIds.map(id => <option key={id} value={id}>{id}</option>)}
-            </select>
-          </div>
           <div className="release-publish-actions">
             <button
               type="button"

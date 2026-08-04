@@ -54,7 +54,7 @@ test('shows the publishing Hub failure instead of a missing state response', asy
   tree!.unmount();
 });
 
-test('sends temporary Web directly to the selected Web Hub', async () => {
+test('sends temporary Web to the configured Server Hub', async () => {
   const values = new Map<string, string>();
   values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({
     publisherHubId: 'publisher',
@@ -80,12 +80,12 @@ test('sends temporary Web directly to the selected Web Hub', async () => {
   expect(start).toHaveBeenCalledWith('publisher', {
     kind: 'debugWeb',
     sourcePath: '/src/WheelMaker',
-    webHubId: 'web-server',
+    webHubId: 'release-server',
   });
   tree!.unmount();
 });
 
-test('requires a Web Hub only for temporary Web publishing', async () => {
+test('requires a Server Hub only for temporary Web publishing', async () => {
   const values = new Map<string, string>();
   values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({publisherHubId: 'publisher', sourcePath: '/src/WheelMaker'}));
   (global as typeof globalThis & {window: Window}).window = {
@@ -98,6 +98,39 @@ test('requires a Web Hub only for temporary Web publishing', async () => {
   const buttons = tree!.root.findAllByType('button');
   expect(buttons.find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish version')))!.props.disabled).toBe(false);
   expect(buttons.find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish temporary Web')))!.props.disabled).toBe(true);
-  expect(JSON.stringify(tree!.toJSON())).toContain('Web Hub');
+  expect(JSON.stringify(tree!.toJSON())).toContain('Server Hub');
+  const source = tree!.root.findAllByType('section').find(section => section.props['aria-label'] === 'Publishing source')!;
+  expect(source.findAllByType('select')).toHaveLength(2);
+  expect(source.findAllByProps({className: 'set-field-label'}).some(label => label.children.includes('Server Hub'))).toBe(true);
+  tree!.unmount();
+});
+
+test('migrates a legacy Web Hub setting into the Server Hub field', async () => {
+  const values = new Map<string, string>();
+  values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({
+    publisherHubId: 'publisher',
+    sourcePath: '/src/WheelMaker',
+    webHubId: 'web-server',
+  }));
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)},
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  } as unknown as Window;
+  let tree: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<ReleasePublishSettings
+      hubIds={['publisher', 'web-server']}
+      start={async () => ({ok: true, status: 'running'})}
+      query={async () => ({ok: true, status: 'running'})}
+      queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})}
+      pruneStorage={async () => ({ok: true, status: 'success'})}
+    />);
+  });
+  const selects = tree!.root.findAllByType('select');
+  expect(selects.some(select => select.props.value === 'web-server')).toBe(true);
+  const persisted = JSON.parse(values.get('wheelmaker.settings.release-publish.v1')!);
+  expect(persisted.serverHubId).toBe('web-server');
+  expect('webHubId' in persisted).toBe(false);
   tree!.unmount();
 });
