@@ -62,6 +62,11 @@ export type ConfirmTarget =
       autoPull: boolean;
     }
   | {
+      kind: 'releaseStoragePrune';
+      orphanCount: number;
+      reclaimableLabel: string;
+    }
+  | {
       kind: 'npmPackage';
       action: 'install' | 'update' | 'uninstall' | 'reinstall';
       hubId: string;
@@ -192,6 +197,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'releasePublish') {
     return target.action === 'version' ? 'Publish version?' : 'Publish temporary Web?';
   }
+  if (target.kind === 'releaseStoragePrune') return 'Clean up release storage?';
   if (target.kind === 'archiveBatch') return `Archive sessions older than ${target.days} days?`;
   if (target.kind === 'restoreArchived') return 'Restore archived session?';
   if (target.kind === 'delete') return 'Delete session?';
@@ -215,6 +221,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'clearDatabase') return 'All local data in this browser.';
   if (target.kind === 'logout') return 'All local data in this browser.';
   if (target.kind === 'releasePublish') return target.sourcePath;
+  if (target.kind === 'releaseStoragePrune') return `${target.orphanCount} unreferenced version${target.orphanCount === 1 ? '' : 's'}`;
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
   if (target.kind === 'delete') return target.title || 'Untitled session';
@@ -250,6 +257,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
       return `Publisher: ${target.publisherHubId}. Source: ${target.sourcePath}.${target.serverHubId ? ` Server Hub: ${target.serverHubId}${target.autoPull ? ' (auto pull)' : ''}.` : ' No automatic apply.'} Desktop: ${target.desktop ? 'yes' : 'no'}. Android: ${target.android ? 'yes' : 'no'}.`;
     }
     return `Publisher: ${target.publisherHubId}. Source: ${target.sourcePath}. Web Hub: ${target.webHubId}.`;
+  }
+  if (target.kind === 'releaseStoragePrune') {
+    return `Deletes ${target.orphanCount} version ${target.orphanCount === 1 ? 'directory' : 'directories'} on the release server that are not referenced by stable.json or releases.json, reclaiming about ${target.reclaimableLabel}. Referenced versions and release metadata are kept.`;
   }
   if (target.kind === 'archiveBatch') {
     return 'Runs one archive call at a time across all known projects. Running sessions are skipped.';
@@ -304,6 +314,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'clearDatabase') return 'trash';
   if (target.kind === 'logout') return 'logOut';
   if (target.kind === 'releasePublish') return 'cloudDownload';
+  if (target.kind === 'releaseStoragePrune') return 'trash';
   if (target.kind === 'restoreArchived') return 'archiveRestore';
   if (target.kind === 'delete') return 'trash';
   if (target.kind === 'goalClear') return 'trash';
@@ -327,6 +338,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'clearDatabase') return 'Clear Database';
   if (target.kind === 'logout') return 'Logout';
   if (target.kind === 'releasePublish') return 'Publish';
+  if (target.kind === 'releaseStoragePrune') return 'Clean up';
   if (target.kind === 'restoreArchived') return 'Restore';
   if (target.kind === 'delete') return 'Delete';
   if (target.kind === 'goalClear') return 'Clear Goal';
@@ -348,6 +360,7 @@ function isDangerConfirmTarget(target: ConfirmTarget): boolean {
     target.kind === 'delete' ||
     target.kind === 'goalClear' ||
     target.kind === 'terminalClose' ||
+    target.kind === 'releaseStoragePrune' ||
     (target.kind === 'npmPackage' && target.action === 'uninstall') ||
     target.kind === 'skillUninstall' ||
     target.kind === 'skillBatchUninstall'

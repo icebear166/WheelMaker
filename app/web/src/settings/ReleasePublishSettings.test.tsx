@@ -14,7 +14,7 @@ test('restores browser-only publishing settings without token or URL controls', 
   } as unknown as Window;
   values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({publisherHubId: 'publisher', sourcePath: '/src/WheelMaker'}));
   let tree: ReturnType<typeof create>;
-  await act(async () => { tree = create(<ReleasePublishSettings hubIds={['publisher', 'server']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} />); });
+  await act(async () => { tree = create(<ReleasePublishSettings hubIds={['publisher', 'server']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})} pruneStorage={async () => ({ok: true, status: 'success'})} />); });
   const inputs = tree!.root.findAllByType('input');
   expect(inputs.some(input => input.props.value === '/src/WheelMaker')).toBe(true);
   expect(inputs.some(input => input.props.type === 'checkbox' && input.props.disabled === true)).toBe(true);
@@ -27,10 +27,10 @@ test('uses a single-column publish page layout', async () => {
     localStorage: {getItem: () => null, setItem: () => undefined},
   } as unknown as Window;
   let tree: ReturnType<typeof create>;
-  await act(async () => { tree = create(<ReleasePublishSettings hubIds={['publisher']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} />); });
+  await act(async () => { tree = create(<ReleasePublishSettings hubIds={['publisher']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})} pruneStorage={async () => ({ok: true, status: 'success'})} />); });
   expect(tree!.root.findAllByProps({className: 'release-publish-page'})).toHaveLength(1);
-  expect(tree!.root.findAllByProps({className: 'release-publish-actions'})).toHaveLength(2);
-  expect(tree!.root.findAllByType('section').map(section => section.props['aria-label'])).toEqual(['Publishing source', 'Version release', 'Temporary Web']);
+  expect(tree!.root.findAllByProps({className: 'release-publish-actions'})).toHaveLength(3);
+  expect(tree!.root.findAllByType('section').map(section => section.props['aria-label'])).toEqual(['Publishing source', 'Version release', 'Temporary Web', 'Release storage']);
 });
 
 test('shows the publishing Hub failure instead of a missing state response', async () => {
@@ -47,6 +47,8 @@ test('shows the publishing Hub failure instead of a missing state response', asy
       hubIds={['publisher']}
       start={async () => ({ok: true, status: 'running'})}
       query={async () => ({ok: false, status: 'failed', error: 'release token is not configured'})}
+      queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})}
+      pruneStorage={async () => ({ok: true, status: 'success'})}
     />);
     await Promise.resolve();
   });
@@ -71,7 +73,7 @@ test('sends temporary Web to the configured Server Hub', async () => {
   const start = jest.fn(async () => ({ok: false, status: 'failed', error: 'expected test rejection'}));
   let tree: ReturnType<typeof create>;
   await act(async () => {
-    tree = create(<ReleasePublishSettings hubIds={['publisher', 'release-server', 'web-server']} start={start} query={async () => ({ok: true, status: 'running'})} />);
+    tree = create(<ReleasePublishSettings hubIds={['publisher', 'release-server', 'web-server']} start={start} query={async () => ({ok: true, status: 'running'})} queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})} pruneStorage={async () => ({ok: true, status: 'success'})} />);
   });
   const button = tree!.root.findAllByType('button').find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish temporary Web')));
   await act(async () => { button!.props.onClick(); await Promise.resolve(); });
@@ -93,7 +95,7 @@ test('requires a Server Hub only for temporary Web publishing', async () => {
   } as unknown as Window;
   let tree: ReturnType<typeof create>;
   await act(async () => {
-    tree = create(<ReleasePublishSettings hubIds={['publisher']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} />);
+    tree = create(<ReleasePublishSettings hubIds={['publisher']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})} pruneStorage={async () => ({ok: true, status: 'success'})} />);
   });
   const buttons = tree!.root.findAllByType('button');
   expect(buttons.find(item => item.children.some(child => typeof child === 'string' && child.includes('Publish version')))!.props.disabled).toBe(false);
@@ -133,4 +135,84 @@ test('migrates a legacy Web Hub setting into the Server Hub field', async () => 
   expect(persisted.serverHubId).toBe('web-server');
   expect('webHubId' in persisted).toBe(false);
   tree!.unmount();
+});
+
+
+function renderWithStorage({
+  storageResult = {ok: true, status: 'success', storage: {totalBytes: 2048, reclaimableBytes: 1024, orphanCount: 1}},
+  pruneResult = {ok: true, status: 'success', removedCount: 1},
+  settings = {publisherHubId: 'publisher', sourcePath: '/src/WheelMaker'},
+} = {}) {
+  const values = new Map<string, string>();
+  values.set('wheelmaker.settings.release-publish.v1', JSON.stringify(settings));
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)},
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  } as unknown as Window;
+  const queryStorage = jest.fn(async () => storageResult);
+  const pruneStorage = jest.fn(async () => pruneResult);
+  return {
+    queryStorage,
+    pruneStorage,
+    async render() {
+      let tree: ReturnType<typeof create>;
+      await act(async () => {
+        tree = create(<ReleasePublishSettings
+          hubIds={['publisher']}
+          start={async () => ({ok: true, status: 'running'})}
+          query={async () => ({ok: true, status: 'running'})}
+          queryStorage={queryStorage}
+          pruneStorage={pruneStorage}
+        />);
+        await Promise.resolve();
+      });
+      return tree!;
+    },
+  };
+}
+
+test('loads release storage on mount and shows totals', async () => {
+  const {queryStorage, render} = renderWithStorage();
+  const tree = await render();
+  expect(queryStorage).toHaveBeenCalledWith('publisher', '/src/WheelMaker');
+  const text = JSON.stringify(tree.toJSON());
+  expect(text).toContain('Release storage');
+  expect(text).toContain('2.0 KB');
+  expect(text).toContain('1.0 KB');
+  tree.unmount();
+});
+
+test('prunes unreferenced versions after confirmation and refreshes', async () => {
+  const {queryStorage, pruneStorage, render} = renderWithStorage();
+  const tree = await render();
+  const cleanupButton = tree.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.includes('Clean up')))!;
+  await act(async () => { cleanupButton.props.onClick(); await Promise.resolve(); });
+  const confirmButton = tree.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.trim() === 'Clean up'))!;
+  await act(async () => { confirmButton.props.onClick(); await Promise.resolve(); await Promise.resolve(); });
+  expect(pruneStorage).toHaveBeenCalledWith('publisher', '/src/WheelMaker');
+  expect(queryStorage.mock.calls.length).toBeGreaterThanOrEqual(2);
+  tree.unmount();
+});
+
+test('disables cleanup when there is nothing to reclaim', async () => {
+  const {render} = renderWithStorage({
+    storageResult: {ok: true, status: 'success', storage: {totalBytes: 100, reclaimableBytes: 0, orphanCount: 0}},
+  });
+  const tree = await render();
+  const cleanupButton = tree.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.includes('Clean up')))!;
+  expect(cleanupButton.props.disabled).toBe(true);
+  tree.unmount();
+});
+
+test('shows storage errors in the page', async () => {
+  const {render} = renderWithStorage({
+    storageResult: {ok: false, status: 'failed', error: 'release token is not configured'},
+  });
+  const tree = await render();
+  expect(JSON.stringify(tree.toJSON())).toContain('release token is not configured');
+  tree.unmount();
 });

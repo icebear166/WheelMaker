@@ -3,7 +3,7 @@ import React from 'react';
 import {Icon} from '../common/Icon';
 import {AppConfirmDialog, type ConfirmTarget} from '../shell/AppDialogs';
 import {WHEELMAKER_RELEASE_BASE_URL} from './releaseChannel';
-import type {RegistryReleasePublishResponse} from '../registry/registryTypes';
+import type {RegistryReleasePublishResponse, RegistryReleaseStorageInfo, RegistryReleaseStorageResponse} from '../registry/registryTypes';
 
 type Settings = {
   publisherHubId: string;
@@ -46,6 +46,18 @@ function formatDate(value: string): string {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : value;
 }
 
+function formatByteSize(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '-';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${unit === 0 ? size : size >= 100 ? Math.round(size) : size.toFixed(1)} ${units[unit]}`;
+}
+
 function resolveJobStatusVariant(job: NonNullable<RegistryReleasePublishResponse['job']>): string {
   if (job.targetState === 'success' || /success/i.test(job.status)) return 'is-ok';
   if (job.targetState === 'failed' || job.errorCode || /fail|error/i.test(job.status)) return 'is-error';
@@ -53,17 +65,47 @@ function resolveJobStatusVariant(job: NonNullable<RegistryReleasePublishResponse
   return 'is-idle';
 }
 
-export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
+export function ReleasePublishSettings({hubIds, start, query, subscribe, queryStorage, pruneStorage}: {
   hubIds: string[];
   start: (hubId: string, input: Record<string, unknown>) => Promise<RegistryReleasePublishResponse>;
   query: (hubId: string, jobId: string) => Promise<RegistryReleasePublishResponse>;
   subscribe?: (listener: (hubId: string, job: NonNullable<RegistryReleasePublishResponse['job']>) => void) => () => void;
+  queryStorage: (hubId: string, sourcePath: string) => Promise<RegistryReleaseStorageResponse>;
+  pruneStorage: (hubId: string, sourcePath: string) => Promise<RegistryReleaseStorageResponse>;
 }) {
   const [settings, setSettings] = React.useState<Settings>(load);
   const [job, setJob] = React.useState<RegistryReleasePublishResponse['job']>();
   const [error, setError] = React.useState('');
   const [pendingKind, setPendingKind] = React.useState<'version' | 'debugWeb' | null>(null);
   const [confirmTarget, setConfirmTarget] = React.useState<ConfirmTarget | null>(null);
+  const [storage, setStorage] = React.useState<RegistryReleaseStorageInfo | null>(null);
+  const [storageLoading, setStorageLoading] = React.useState(false);
+  const [pruning, setPruning] = React.useState(false);
+
+  const canQueryStorage = Boolean(settings.publisherHubId && settings.sourcePath);
+
+  const refreshStorage = React.useCallback(async () => {
+    if (!settings.publisherHubId || !settings.sourcePath) return;
+    setStorageLoading(true);
+    try {
+      const result = await queryStorage(settings.publisherHubId, settings.sourcePath);
+      if (result.ok && result.storage) {
+        setStorage(result.storage);
+        setError('');
+      } else {
+        setError(result.error || result.status);
+      }
+    } catch (value) {
+      setError(value instanceof Error ? value.message : String(value));
+    } finally {
+      setStorageLoading(false);
+    }
+  }, [queryStorage, settings.publisherHubId, settings.sourcePath]);
+
+  React.useEffect(() => {
+    setStorage(null);
+    void refreshStorage();
+  }, [refreshStorage]);
 
   React.useEffect(() => {
     window.localStorage.setItem(key, JSON.stringify(settings));
@@ -147,6 +189,31 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
     const kind = confirmTarget.action;
     setConfirmTarget(null);
     void submit(kind);
+  };
+
+  const requestPrune = () => {
+    if (!storage || storage.orphanCount === 0 || pruning) return;
+    setConfirmTarget({
+      kind: 'releaseStoragePrune',
+      orphanCount: storage.orphanCount,
+      reclaimableLabel: formatByteSize(storage.reclaimableBytes),
+    });
+  };
+
+  const confirmPrune = async () => {
+    if (!confirmTarget || confirmTarget.kind !== 'releaseStoragePrune') return;
+    setConfirmTarget(null);
+    setPruning(true);
+    setError('');
+    try {
+      const result = await pruneStorage(settings.publisherHubId, settings.sourcePath);
+      if (!result.ok) throw new Error(result.error || result.status || 'prune was rejected');
+      await refreshStorage();
+    } catch (value) {
+      setError(value instanceof Error ? value.message : String(value));
+    } finally {
+      setPruning(false);
+    }
   };
 
   const pending = pendingKind !== null;
@@ -264,6 +331,44 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
         </div>
       </section>
 
+      <section className="set-card" aria-label="Release storage">
+        <div className="set-card-head">
+          <Icon name="database" size={15} className="port-relay-section-icon" />
+          <span className="set-card-title">Release storage</span>
+          <span className="set-card-spacer" />
+          <button
+            type="button"
+            className="set-btn"
+            disabled={!canQueryStorage || storageLoading}
+            onClick={() => void refreshStorage()}
+          >
+            <Icon name="refreshCw" size={13} spin={storageLoading} />
+            Refresh
+          </button>
+        </div>
+        <div className="set-card-body">
+          <div className="set-kv">
+            <span className="set-kv-key">Total</span>
+            <span className="set-kv-value set-num">{storage ? formatByteSize(storage.totalBytes) : '-'}</span>
+          </div>
+          <div className="set-kv">
+            <span className="set-kv-key">Reclaimable</span>
+            <span className="set-kv-value set-num">{storage ? formatByteSize(storage.reclaimableBytes) : '-'}</span>
+          </div>
+          <div className="release-publish-actions">
+            <button
+              type="button"
+              className="set-btn set-btn--primary"
+              disabled={!storage || storage.orphanCount === 0 || pruning || storageLoading}
+              onClick={requestPrune}
+            >
+              <Icon name={pruning ? 'loader' : 'trash'} spin={pruning} size={13} />
+              {pruning ? 'Cleaning...' : 'Clean up unreferenced versions'}
+            </button>
+          </div>
+        </div>
+      </section>
+
       {job ? (
         <section className="set-card" aria-label="Publish task">
           <div className="set-card-head">
@@ -305,7 +410,13 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe}: {
         busy={false}
         error=""
         onCancel={() => setConfirmTarget(null)}
-        onPrimary={confirmPublish}
+        onPrimary={() => {
+          if (confirmTarget?.kind === 'releaseStoragePrune') {
+            void confirmPrune();
+          } else {
+            confirmPublish();
+          }
+        }}
       />
     </div>
   );
