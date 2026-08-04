@@ -6522,9 +6522,37 @@ func TestKimiProviderPreset(t *testing.T) {
 	assertContainsDir(preset.SkillUserDirs, "~/.agents/skills")
 	assertContainsDir(preset.SkillUserDirs, "~/.kimi-code/skills")
 
-	provider := NewKimiProvider()
+	provider := NewKimiProvider("")
 	if provider.Name() != "kimi" {
 		t.Fatalf("provider name=%q, want kimi", provider.Name())
+	}
+}
+
+func TestKimiProviderTokenEnvironment(t *testing.T) {
+	envOf := func(provider *acpProvider) map[string]string {
+		t.Helper()
+		env := map[string]string{}
+		for _, entry := range provider.preset.Env {
+			name, value, _ := strings.Cut(entry, "=")
+			env[name] = value
+		}
+		return env
+	}
+
+	want := map[string]string{
+		"KIMI_MODEL_NAME":     "k3",
+		"KIMI_MODEL_API_KEY":  "kimi-test-key",
+		"KIMI_MODEL_BASE_URL": "https://api.kimi.com/coding/v1",
+	}
+	if got := envOf(NewKimiProvider("kimi-test-key")); !reflect.DeepEqual(got, want) {
+		t.Fatalf("env=%v, want %v", got, want)
+	}
+
+	if env := NewKimiProvider("").preset.Env; len(env) != 0 {
+		t.Fatalf("env without key=%v, want none (OAuth sign-in)", env)
+	}
+	if len(KimiACPProviderPreset.Env) != 0 {
+		t.Fatalf("shared preset mutated: env=%v", KimiACPProviderPreset.Env)
 	}
 }
 

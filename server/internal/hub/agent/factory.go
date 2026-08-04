@@ -101,6 +101,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 	if available(codexProvider) {
 		f.Register(protocol.ACPProviderCodex, codexappInstanceCreator(codexProvider))
 	}
+	kimiKey := strings.TrimSpace(options.KimiAPIKey)
 	candidates := []struct {
 		provider protocol.ACPProvider
 		build    func() ACPProvider
@@ -111,7 +112,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		{provider: protocol.ACPProviderMimo, build: func() ACPProvider { return NewMimoProvider() }},
 		{provider: protocol.ACPProviderCodeBuddy, build: func() ACPProvider { return NewCodeBuddyProvider() }},
 		{provider: protocol.ACPProviderFlicker, build: func() ACPProvider { return NewFlickerProvider() }},
-		{provider: protocol.ACPProviderKimi, build: func() ACPProvider { return NewKimiProvider() }},
+		{provider: protocol.ACPProviderKimi, build: func() ACPProvider { return NewKimiProvider(kimiKey) }},
 		{provider: protocol.ACPProviderQoder, build: func() ACPProvider { return NewQoderProvider() }},
 	}
 	for _, candidate := range candidates {
@@ -132,7 +133,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		}
 		registerConfiguredProvider(f, protocol.ACPProviderCCDeepSeek, NewCCDeepSeekProvider(options.StateDir, deepseekKey), available)
 	}
-	if kimiKey := strings.TrimSpace(options.KimiAPIKey); kimiKey != "" {
+	if kimiKey != "" {
 		registerConfiguredProvider(f, protocol.ACPProviderCCKimi, NewCCKimiProvider(options.StateDir, kimiKey), available)
 	}
 	if qwenKey := strings.TrimSpace(options.QwenAPIKey); qwenKey != "" {
