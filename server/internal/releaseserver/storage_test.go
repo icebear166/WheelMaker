@@ -174,3 +174,98 @@ func TestStorageTreatsDesktopAndAndroidPointerVersionsAsReferenced(t *testing.T)
 		t.Fatalf("storage = %+v, want nothing reclaimable", body)
 	}
 }
+
+func TestPruneDeletesOnlyUnreferencedVersionDirs(t *testing.T) {
+	root := t.TempDir()
+	writeStorageStableFixture(t, root, "v1.3")
+	writeStorageHistoryFixture(t, root, "v1.1", "v1.3")
+	writeStorageVersionDir(t, root, "v1.1", 100) // referenced by history
+	writeStorageVersionDir(t, root, "v1.3", 100) // stable
+	writeStorageVersionDir(t, root, "v1.7", 100) // orphan
+	writeStorageVersionDir(t, root, "v1.9", 100) // orphan
+	// a non-version directory must never be touched
+	miscDir := filepath.Join(root, "public", "releases", "notes")
+	if err := os.MkdirAll(miscDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := newStorageTestHandler(t, root)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, storageAuthorizedRequest(http.MethodPost, "/api/prune"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var body struct {
+		OK           bool `json:"ok"`
+		RemovedCount int  `json:"removedCount"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.OK || body.RemovedCount != 2 {
+		t.Fatalf("prune = %+v, want ok with 2 removals", body)
+	}
+	for _, kept := range []string{"v1.1", "v1.3", "notes"} {
+		if _, err := os.Stat(filepath.Join(root, "public", "releases", kept)); err != nil {
+			t.Fatalf("%s must be kept: %v", kept, err)
+		}
+	}
+	for _, removed := range []string{"v1.7", "v1.9"} {
+		if _, err := os.Stat(filepath.Join(root, "public", "releases", removed)); !os.IsNotExist(err) {
+			t.Fatalf("%s must be removed", removed)
+		}
+	}
+	// metadata files are untouched
+	if _, err := os.Stat(filepath.Join(root, "public", "stable.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases.json")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPruneRefusesWhenStableIsMissing(t *testing.T) {
+	root := t.TempDir()
+	writeStorageHistoryFixture(t, root, "v1.1")
+	writeStorageVersionDir(t, root, "v1.9", 100)
+
+	handler := newStorageTestHandler(t, root)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, storageAuthorizedRequest(http.MethodPost, "/api/prune"))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.9")); err != nil {
+		t.Fatal("orphan must survive when stable is missing")
+	}
+}
+
+func TestPruneRefusesWhenStableIsCorrupt(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "public", "stable.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeStorageVersionDir(t, root, "v1.9", 100)
+
+	handler := newStorageTestHandler(t, root)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, storageAuthorizedRequest(http.MethodPost, "/api/prune"))
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.9")); err != nil {
+		t.Fatal("orphan must survive when stable is corrupt")
+	}
+}
+
+func TestPruneRequiresPublisherToken(t *testing.T) {
+	handler := newStorageTestHandler(t, t.TempDir())
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/prune", nil))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", recorder.Code)
+	}
+}

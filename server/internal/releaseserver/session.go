@@ -120,6 +120,14 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) bool {
 		s.handleStorage(w, r)
 		return true
 	}
+	if r.URL.Path == "/api/prune" {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+			return true
+		}
+		s.handlePrune(w, r)
+		return true
+	}
 	if r.URL.Path == "/api/publish/start" {
 		if r.Method != http.MethodPost {
 			writeError(w, http.StatusMethodNotAllowed, "method_not_allowed")

@@ -113,3 +113,39 @@ func (s *Server) handleStorage(w http.ResponseWriter, _ *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, response)
 }
+
+type pruneResponse struct {
+	OK           bool `json:"ok"`
+	RemovedCount int  `json:"removedCount"`
+}
+
+func (s *Server) handlePrune(w http.ResponseWriter, _ *http.Request) {
+	s.commitMu.Lock()
+	defer s.commitMu.Unlock()
+	referenced, stable, err := s.referencedVersions()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_metadata_invalid")
+		return
+	}
+	if stable == nil {
+		writeError(w, http.StatusConflict, "stable_missing")
+		return
+	}
+	dirs, err := s.listReleaseVersionDirs()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_scan_failed")
+		return
+	}
+	removed := 0
+	for _, dir := range dirs {
+		if referenced[dir.version] {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(s.config.DataRoot, "public", "releases", dir.version)); err != nil {
+			writeError(w, http.StatusInternalServerError, "prune_failed")
+			return
+		}
+		removed++
+	}
+	writeJSON(w, http.StatusOK, pruneResponse{OK: true, RemovedCount: removed})
+}
