@@ -13618,6 +13618,14 @@ export function App() {
     service.queryReleasePublish(hubId, jobId)
   ), []);
 
+  const queryReleaseStorage = useCallback((hubId: string, sourcePath: string) => (
+    service.queryReleaseStorage(hubId, sourcePath)
+  ), []);
+
+  const pruneReleaseStorage = useCallback((hubId: string, sourcePath: string) => (
+    service.pruneReleaseStorage(hubId, sourcePath)
+  ), []);
+
   const handleScanProjectIndex = useCallback(async (hubId: string, projectId: string) => {
     if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
       return;
@@ -15713,6 +15721,8 @@ export function App() {
         start={startReleasePublish}
         query={queryReleasePublish}
         subscribe={listener => service.releasePublishStore.subscribe(listener)}
+        queryStorage={queryReleaseStorage}
+        pruneStorage={pruneReleaseStorage}
       />
     </React.Suspense>
   );
