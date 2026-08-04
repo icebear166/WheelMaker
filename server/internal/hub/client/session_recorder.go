@@ -2122,7 +2122,7 @@ func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) se
 			inc.Meta = merged
 		}
 		existing.payload = inc
-		existing.finished = inc.MessageComplete
+		existing.finished = existing.finished || inc.MessageComplete
 	default:
 		existing.payload = incoming.payload
 	}

@@ -8202,6 +8202,51 @@ func TestSessionRecorderAppendsPermissionRequestAndResponseTurns(t *testing.T) {
 	}
 }
 
+func TestSessionRecorderLateMessageChunkDoesNotReopenPermissionSealedTurn(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	const sessionID = "sess-permission-late-message"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent(sessionID, "Permission Boundary")); err != nil {
+		t.Fatalf("RecordEvent created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent(sessionID, "run protected", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	message := acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "answer"}),
+		MessageID:     "message-1",
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent(sessionID, message)); err != nil {
+		t.Fatalf("RecordEvent message: %v", err)
+	}
+	if _, err := c.RecordPermissionRequest(ctx, sessionID, acp.SessionTurnPermissionRequest{
+		PermissionID: "perm-1",
+		Title:        "Choose",
+		Options:      []acp.SessionTurnPermissionOption{{OptionID: "allow", Name: "Allow", Kind: "allow_once"}},
+	}); err != nil {
+		t.Fatalf("RecordPermissionRequest: %v", err)
+	}
+	message.Content = mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: " late"})
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent(sessionID, message)); err != nil {
+		t.Fatalf("RecordEvent late message: %v", err)
+	}
+
+	latest, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, sessionID, 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	if latest != 3 || len(turns) != 3 {
+		t.Fatalf("latest=%d turns=%#v", latest, turns)
+	}
+	if !turns[1].Finished {
+		t.Fatalf("late message chunk reopened permission-sealed turn: %#v", turns[1])
+	}
+	if method := decodeTurnMethod(t, turns[2].Content); method != acp.SessionTurnMethodPermissionRequest {
+		t.Fatalf("tail method=%q, want permission request", method)
+	}
+}
+
 func TestSessionRecorderPermissionSummaryCountTracksLiveTurns(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
