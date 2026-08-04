@@ -160,6 +160,7 @@ import {
   deriveChatPermissionState,
   permissionRequestView,
 } from '../chat/permission/chatPermissionState';
+import {useChatPermissionDialogHeight} from '../chat/permission/useChatPermissionDialogHeight';
 import {
   ChatPermissionReadGate,
   type ChatPermissionReadToken,
@@ -1118,6 +1119,9 @@ const CHAT_NEW_DRAFT_SESSION_KEY = '__new__';
 const CHAT_DRAFT_KEY_PROJECT_FALLBACK = '__no_project__';
 const RECENT_SESSIONS_VIRTUAL_PROJECT_ID = '__recent_sessions__';
 const CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD = 80;
+// Extra scroll space below the last turn while the floating permission dialog
+// is open: its 10px float offset above the composer plus breathing room.
+const CHAT_PERMISSION_DIALOG_SCROLL_GAP = 16;
 const CHAT_KEYBOARD_INSET_SETTLE_DELAY_MS = 120;
 const CHAT_PENDING_CONFIRM_TIMEOUT_MS = 5000;
 const CHAT_ATTACHMENT_CHUNK_SIZE = 1024 * 1024;
@@ -3890,6 +3894,7 @@ export function App() {
     }
     return selectedPermissionState.active;
   }, [archivedMode, connected, permissionReadRevision, selectedChatEncodedKey, selectedPermissionState]);
+  const {dialogRef: chatPermissionDialogRef, height: chatPermissionDialogHeight} = useChatPermissionDialogHeight();
   const selectedActivePermissionView = useMemo(
     () => selectedActivePermission ? permissionRequestView(selectedActivePermission.request) : null,
     [selectedActivePermission],
@@ -18191,6 +18196,7 @@ export function App() {
                   displayIndex={activeChatDisplayIndex}
                   runtimeKey={activeChatRuntimeKey}
                   atBottomThreshold={CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD}
+                  bottomBuffer={chatPermissionDialogHeight > 0 ? chatPermissionDialogHeight + CHAT_PERMISSION_DIALOG_SCROLL_GAP : 0}
                   onAtBottomChange={handleChatAtBottomChange}
                   shouldAutoscroll={shouldAutoscrollChat}
                   renderItem={renderChatVirtuosoItem}
@@ -18340,6 +18346,7 @@ export function App() {
             <div className="chat-composer-content">
             {selectedActivePermission && selectedActivePermissionView ? (
               <ChatPermissionDialog
+                rootRef={chatPermissionDialogRef}
                 title={selectedActivePermissionView.title}
                 detailsText={selectedActivePermissionView.detailsText}
                 options={selectedActivePermissionView.options}

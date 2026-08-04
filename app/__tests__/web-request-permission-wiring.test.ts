@@ -49,4 +49,16 @@ describe('request permission workspace wiring', () => {
     expect(styles).toMatch(/\.chat-permission-dialog\s*\{[^}]*position:\s*absolute;/s);
     expect(styles).not.toMatch(/\.chat-permission-dialog\s*\{[^}]*backdrop-filter:/s);
   });
+
+  test('reserves bottom scroll space matching the open dialog height', () => {
+    const hookSource = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'chat', 'permission', 'useChatPermissionDialogHeight.ts'),
+      'utf8',
+    );
+    expect(hookSource).toContain('ResizeObserver');
+    expect(source).toContain('useChatPermissionDialogHeight');
+    expect(source).toContain('rootRef={chatPermissionDialogRef}');
+    expect(source).toContain('bottomBuffer={chatPermissionDialogHeight > 0');
+    expect(dialogSource).toContain('rootRef?: React.Ref<HTMLElement>');
+  });
 });
