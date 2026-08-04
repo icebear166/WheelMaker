@@ -112,6 +112,7 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		{provider: protocol.ACPProviderCodeBuddy, build: func() ACPProvider { return NewCodeBuddyProvider() }},
 		{provider: protocol.ACPProviderFlicker, build: func() ACPProvider { return NewFlickerProvider() }},
 		{provider: protocol.ACPProviderKimi, build: func() ACPProvider { return NewKimiProvider() }},
+		{provider: protocol.ACPProviderQoder, build: func() ACPProvider { return NewQoderProvider() }},
 	}
 	for _, candidate := range candidates {
 		prov := candidate.build()

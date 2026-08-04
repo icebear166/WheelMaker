@@ -6,3 +6,9 @@ describe('cx.deepseek agent color', () => {
     expect(agentTagVariantClass('cx-deepseek')).toBe(agentTagVariantClass('codex'));
   });
 });
+
+describe('qoder agent color', () => {
+  it('uses the mapped yellow variant', () => {
+    expect(agentTagVariantClass('qoder')).toBe('wide-session-agent-7');
+  });
+});

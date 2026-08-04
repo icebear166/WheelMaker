@@ -125,6 +125,15 @@ var (
 		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
 	}
+	QoderACPProviderPreset = ACPProviderPreset{
+		Name:                   "qoder",
+		BinaryName:             "qodercli",
+		Args:                   []string{"--acp"},
+		InstallHint:            "@qoder-ai/qodercli",
+		MissingPathErrTemplate: "qoder: binary not found in PATH: %v",
+		SkillProjectDirs:       []string{".agents/skills", ".qoder/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills", "~/.qoder/skills"},
+	}
 	ClaudeCompatibleDeepSeekProviderPreset = ACPProviderPreset{
 		Name:                   "cc-deepseek",
 		BinaryName:             "claude-agent-acp",
@@ -224,6 +233,10 @@ func NewFlickerProvider() *acpProvider {
 
 func NewKimiProvider() *acpProvider {
 	return NewACPProvider(KimiACPProviderPreset)
+}
+
+func NewQoderProvider() *acpProvider {
+	return NewACPProvider(QoderACPProviderPreset)
 }
 
 func NewCCDeepSeekProvider(stateDir, apiKey string) *acpProvider {

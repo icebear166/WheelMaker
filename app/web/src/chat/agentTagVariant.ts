@@ -14,6 +14,8 @@ const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
   // Violet keeps kimi clear of codex blue and claude orange.
   kimi: 9,
   flicker: 8,
+  // Yellow keeps qoder clear of codex/kimi blues and claude orange.
+  qoder: 7,
   // Claude-compatible profiles ride claude's accent (variant 2) — same family.
   'cc-deepseek': 2,
   'cc-glm': 2,

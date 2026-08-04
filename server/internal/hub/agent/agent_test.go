@@ -1217,6 +1217,22 @@ func TestParseACPProviderKimi(t *testing.T) {
 	}
 }
 
+func TestParseACPProviderQoder(t *testing.T) {
+	provider, ok := protocol.ParseACPProvider("Qoder")
+	if !ok || provider != protocol.ACPProviderQoder {
+		t.Fatalf("ParseACPProvider(Qoder)=(%q,%v), want %q,true", provider, ok, protocol.ACPProviderQoder)
+	}
+	found := false
+	for _, name := range protocol.ACPProviderNames() {
+		if name == string(protocol.ACPProviderQoder) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("ACPProviderNames missing qoder: %v", protocol.ACPProviderNames())
+	}
+}
+
 func TestParseACPProviderClaudeCompatible(t *testing.T) {
 	provider, ok := protocol.ParseACPProvider("CC-GLM")
 	if !ok || provider != protocol.ACPProviderCCGLM {
@@ -6519,6 +6535,50 @@ func TestProviderPresetByNameKimi(t *testing.T) {
 	}
 }
 
+func TestQoderProviderPreset(t *testing.T) {
+	preset := QoderACPProviderPreset
+	if preset.Name != "qoder" || preset.BinaryName != "qodercli" {
+		t.Fatalf("preset=%+v", preset)
+	}
+	if len(preset.Args) != 1 || preset.Args[0] != "--acp" {
+		t.Fatalf("args=%v, want [--acp]", preset.Args)
+	}
+	if preset.InstallHint != "@qoder-ai/qodercli" {
+		t.Fatalf("install hint=%q, want @qoder-ai/qodercli", preset.InstallHint)
+	}
+	if preset.MissingPathErrTemplate != "qoder: binary not found in PATH: %v" {
+		t.Fatalf("missing-path template=%q, want npm-style PATH message", preset.MissingPathErrTemplate)
+	}
+	if !strings.Contains(preset.MissingPathErrTemplate, "%v") {
+		t.Fatalf("missing-path template must consume the underlying error: %q", preset.MissingPathErrTemplate)
+	}
+	assertContainsDir := func(dirs []string, want string) {
+		t.Helper()
+		for _, dir := range dirs {
+			if strings.EqualFold(strings.TrimSpace(dir), want) {
+				return
+			}
+		}
+		t.Fatalf("dirs %v missing %q", dirs, want)
+	}
+	assertContainsDir(preset.SkillProjectDirs, ".agents/skills")
+	assertContainsDir(preset.SkillProjectDirs, ".qoder/skills")
+	assertContainsDir(preset.SkillUserDirs, "~/.agents/skills")
+	assertContainsDir(preset.SkillUserDirs, "~/.qoder/skills")
+
+	provider := NewQoderProvider()
+	if provider.Name() != "qoder" {
+		t.Fatalf("provider name=%q, want qoder", provider.Name())
+	}
+}
+
+func TestProviderPresetByNameQoder(t *testing.T) {
+	preset, ok := providerPresetByName("qoder")
+	if !ok || preset.Name != "qoder" {
+		t.Fatalf("providerPresetByName(qoder)=(%#v,%v), want qoder,true", preset, ok)
+	}
+}
+
 func TestClaudeCompatibleProviderPresetsShareClaudeUserSkills(t *testing.T) {
 	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen", "cc-flicker"} {
 		t.Run(name, func(t *testing.T) {
@@ -6619,6 +6679,18 @@ func TestConfiguredACPFactoryRegistersCXDeepSeekFromExistingKey(t *testing.T) {
 				t.Fatalf("PreferredName() selected cx-deepseek: %q", preferred)
 			}
 		})
+	}
+}
+
+func TestConfiguredACPFactoryRegistersQoderWhenAvailable(t *testing.T) {
+	factory := newACPFactoryWithOptions(ACPFactoryOptions{}, func(provider ACPProvider) bool {
+		return provider.Name() == string(protocol.ACPProviderQoder)
+	})
+	if factory.Creator(protocol.ACPProviderQoder) == nil {
+		t.Fatalf("qoder not registered; names=%v", factory.Names())
+	}
+	if got := factory.Names(); len(got) != 1 || got[0] != string(protocol.ACPProviderQoder) {
+		t.Fatalf("factory.Names() = %v, want [qoder]", got)
 	}
 }
 

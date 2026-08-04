@@ -789,6 +789,64 @@ func TestNPMCommandScanIncludesKimiCodePackage(t *testing.T) {
 	}
 }
 
+func TestNPMCommandScanIncludesQoderPackage(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@qoder-ai/qodercli":{"version":"0.1.0"}}}`,
+		ExitCode: 0,
+	})
+
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@qoder-ai/qodercli", "0.2.0")
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	qoder := findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@qoder-ai/qodercli")
+	if qoder.Kind != "runtime" || qoder.DisplayName != "Qoder CLI" {
+		t.Fatalf("qoder package metadata=%#v", qoder)
+	}
+	if !reflect.DeepEqual(qoder.AgentTypes, []string{"qoder"}) {
+		t.Fatalf("qoder agentTypes=%v, want [qoder]", qoder.AgentTypes)
+	}
+	if qoder.InstalledVersion != "0.1.0" || !qoder.Installed || !qoder.CanUninstall {
+		t.Fatalf("qoder package=%#v", qoder)
+	}
+
+	waitForNPMTestOperation(t, cmd)
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle second scan error: %#v", cmdErr)
+	}
+	qoder = findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@qoder-ai/qodercli")
+	if qoder.Status != "update_available" || qoder.LatestVersion != "0.2.0" || !qoder.CanUpdate {
+		t.Fatalf("qoder package after latest=%#v", qoder)
+	}
+
+	_, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@qoder-ai/qodercli",
+		"version":     "latest",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("qoder install error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+	if !runner.hasCall("npm", "install", "-g", "@qoder-ai/qodercli@latest") {
+		t.Fatalf("qoder install call not found: %#v", runner.calls)
+	}
+	if runner.hasCall("npm", "install", "-g", "@qoder-ai/qodercli@latest", "--registry="+myFlickerRegistry) {
+		t.Fatalf("qoder install was routed through MyFlicker registry: %#v", runner.calls)
+	}
+}
+
 func TestNPMCommandScanDeprecatedCodexACPUsesEmptyAgentTypes(t *testing.T) {
 	runner := newFakeNPMRunner()
 	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
