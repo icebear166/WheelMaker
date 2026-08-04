@@ -23,11 +23,13 @@
 
 如果提交时版本已存在，发布器重新读取 `stable.json`、分配下一个 `v1.x` 并重试，最多三次。
 
+发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与无引用目录占用；`POST /api/prune` 只删除 `stable.json` 与 `releases.json` 都不引用的 `v1.x` 版本目录（孤儿目录），不修改任何元数据文件，被引用的历史版本一律保留。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
+
 ## Hub 驱动发布与临时 Web
 
-Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，或只构建并发布临时 Web。发布 Hub、源码目录、可选 Server Hub、Web Hub 与 auto pull 是浏览器本地设置；发布 Token 只保存在发布 Hub 的受保护配置中，前端不保存或传输它。已接受的发布任务在 Hub 内继续执行，页面关闭不会取消任务，重开后继续从发布 Hub 读取状态和日志。
+Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，或只构建并发布临时 Web。发布 Hub、源码目录、可选 Server Hub 与 auto pull 是浏览器本地设置，正式版本发布与临时 Web 共用同一个 Server Hub 作为目标；发布 Token 只保存在发布 Hub 的受保护配置中，前端不保存或传输它。已接受的发布任务在 Hub 内继续执行，页面关闭不会取消任务，重开后继续从发布 Hub 读取状态和日志。
 
-正式版本发布仍使用现有 `v1.x` 事务，并只保留 Desktop、Android 选项。临时 Web 不经过 Release Server：发布页面选择构建源码的 Target Hub 和独立的 Web Hub，Target Hub 构建 ZIP 后经 Registry 在线分块传给 Web Hub。它不改写 `stable.json`、正式发布状态或历史。
+正式版本发布仍使用现有 `v1.x` 事务，并只保留 Desktop、Android 选项。临时 Web 不经过 Release Server：发布 Hub 构建 ZIP 后经 Registry 在线分块传给页面配置的 Server Hub（即临时 Web 的 Web Hub）。它不改写 `stable.json`、正式发布状态或历史。
 
 Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZIP。每个分块最多 `4 MiB`，发送方逐块等待目标确认。Web Hub 必须在线；它在 `~/.wheelmaker/staging/debug-web-<jobId>/` 接收完整 ZIP，并复用更新租约防止与正式部署并发，校验声明的文件大小和 SHA-256 后才原子替换 `~/.wheelmaker/web`。离线、断线、顺序错误或摘要不符都会使任务失败且保留原 Web；Target Hub 保留 `~/.wheelmaker/release-jobs/<jobId>/debug-web.zip` 供之后显式重试。Target Hub 持久化任务状态与日志，因此页面关闭不影响构建或传输，页面重新打开后仍从 Target Hub 查询结果。
 
