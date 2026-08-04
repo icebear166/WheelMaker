@@ -1779,7 +1779,7 @@ func TestCreateSession_ClaudeCompatibleProvidersExposeOnlyActualEffortLevels(t *
 		},
 		{
 			agentType:   acp.ACPProviderCCQwen,
-			model:       "qwen3.8-max-preview",
+			model:       "qwen3.8-max",
 			wantCurrent: "default",
 			wantOptions: []acp.ConfigOptionValue{
 				{Value: "default", Name: "Default"},
