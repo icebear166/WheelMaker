@@ -330,3 +330,19 @@ test('launcher source contains one render marker and one stable path', async () 
   assert.equal(STABLE_URL, '__WHEELMAKER_RELEASE_BASE_URL__/stable.json');
   assert.equal(source.match(/__WHEELMAKER_RELEASE_BASE_URL__/g)?.length, 1);
 });
+
+test('published deploy core is self-contained and has no local module imports', async () => {
+  const directory = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(directory, '..', '..');
+  const source = await readFile(resolve(repoRoot, 'scripts', 'deploy', 'deploy-core.mjs'), 'utf8');
+  assert.doesNotMatch(source, /^\s*import\s+[^;]+from\s+['"]\.\//m);
+  assert.doesNotMatch(source, /^\s*import\s*\(\s*['"]\.\//m);
+});
+
+test('published deploy launcher is self-contained and has no local module imports', async () => {
+  const directory = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(directory, '..', '..');
+  const source = await readFile(resolve(repoRoot, 'scripts', 'deploy', 'deploy.mjs'), 'utf8');
+  assert.doesNotMatch(source, /^\s*import\s+[^;]+from\s+['"]\.\//m);
+  assert.doesNotMatch(source, /^\s*import\s*\(\s*['"]\.\//m);
+});

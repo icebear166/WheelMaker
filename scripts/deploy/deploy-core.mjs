@@ -17,12 +17,8 @@ import { createZstdDecompress } from 'node:zlib';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
-import {
-  configureWorkspaceSite,
-  createGatewayQuestioner,
-  gatewayHome,
-  parseGatewayOptions,
-} from './gateway-config.mjs';
+import { isIP } from 'node:net';
+import { createInterface } from 'node:readline/promises';
 
 const BLOCK_SIZE = 512;
 const DEFAULT_MAX_ENTRIES = 20_000;
@@ -2032,7 +2028,6 @@ async function executeDeployment(internalUpdate, deps, runtime) {
 
 async function executeGatewayDeployment(deps, {force = false} = {}) {
   if (!deps.trustedStable) throw new Error('trusted stable metadata is required');
-  const {installGatewayFromStable} = await import('./gateway-install.mjs');
   const result = await installGatewayFromStable({
     stable: deps.trustedStable,
     releaseBaseUrl: deps.trustedReleaseBaseUrl,
@@ -2152,4 +2147,948 @@ export async function runCore(args, deps = {}) {
   }
   if (args.length === 0) return executeDeployment(false, deps, runtime);
   throw new Error('deployment application is not implemented yet');
+}
+
+// Gateway configuration, runtime and installation are embedded in the published core.
+export const GATEWAY_SCHEMA = 1;
+export const WORKSPACE_SITE_KIND = 'workspace';
+export const RELEASE_SERVER_SITE_KIND = 'release-server';
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const LOG_LEVELS = new Set(['DEBUG', 'INFO', 'WARN', 'ERROR']);
+
+function gatewayJsonBytes(value) {
+  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function readGatewayJsonIfPresent(path) {
+  try {
+    return JSON.parse(await readFile(path, 'utf8'));
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw new Error(`failed to read ${path}: ${error.message}`, { cause: error });
+  }
+}
+
+function requireObject(value, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+}
+
+function rejectUnknownKeys(value, allowed, label) {
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) throw new Error(`${label} contains unsupported field ${key}`);
+  }
+}
+
+function parsePublicUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('publicUrl is required');
+  }
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('publicUrl must be a valid URL');
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
+      url.search || url.hash || (url.pathname !== '' && url.pathname !== '/')) {
+    throw new Error('publicUrl must contain only scheme, host, optional port, and / path');
+  }
+  if (!url.hostname) throw new Error('publicUrl must include a host');
+  return url;
+}
+
+function parseUpstream(value) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('upstream is required');
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('upstream must be a loopback http URL');
+  }
+  if (url.protocol !== 'http:' || url.username || url.password || url.search || url.hash ||
+      (url.pathname !== '' && url.pathname !== '/')) {
+    throw new Error('upstream must be a loopback http URL');
+  }
+  const hostname = url.hostname.toLowerCase();
+  let loopback = LOOPBACK_HOSTS.has(hostname);
+  if (!loopback) {
+    // URL.hostname keeps IPv6 brackets in some Node versions; normalize both forms.
+    const candidate = hostname.replace(/^\[|\]$/g, '');
+    loopback = candidate === '::1' || (isIP(candidate) === 4 && candidate.startsWith('127.'));
+  }
+  if (!loopback) throw new Error('upstream must use a loopback address');
+  return url;
+}
+
+function validateTLS(tls) {
+  requireObject(tls ?? {}, 'tls');
+  rejectUnknownKeys(tls ?? {}, new Set(['certificateFile', 'keyFile']), 'tls');
+  const certificateFile = tls.certificateFile ?? '';
+  const keyFile = tls.keyFile ?? '';
+  if (typeof certificateFile !== 'string' || typeof keyFile !== 'string') {
+    throw new Error('tls certificateFile and keyFile must be strings');
+  }
+  if (Boolean(certificateFile) !== Boolean(keyFile)) {
+    throw new Error('tls certificateFile and keyFile must be provided as a pair');
+  }
+  if (certificateFile && (!isAbsolute(certificateFile) || !isAbsolute(keyFile))) {
+    throw new Error('tls certificateFile and keyFile must be absolute paths');
+  }
+  return { certificateFile, keyFile };
+}
+
+export function validateGatewayGlobal(config = {}) {
+  requireObject(config, 'Gateway config');
+  rejectUnknownKeys(config, new Set(['schema', 'acme', 'log']), 'Gateway config');
+  if (config.schema !== undefined && config.schema !== GATEWAY_SCHEMA) {
+    throw new Error(`unsupported Gateway config schema ${config.schema}`);
+  }
+  const acme = config.acme ?? {};
+  const log = config.log ?? {};
+  requireObject(acme, 'Gateway config acme');
+  requireObject(log, 'Gateway config log');
+  rejectUnknownKeys(acme, new Set(['email']), 'Gateway config acme');
+  rejectUnknownKeys(log, new Set(['level']), 'Gateway config log');
+  if (acme.email !== undefined && typeof acme.email !== 'string') {
+    throw new Error('Gateway config acme.email must be a string');
+  }
+  const level = String(log.level ?? 'INFO').toUpperCase();
+  if (!LOG_LEVELS.has(level)) throw new Error(`unsupported Gateway log level ${level}`);
+  return {
+    schema: GATEWAY_SCHEMA,
+    acme: { email: acme.email ?? '' },
+    log: { level: level.toLowerCase() === 'warning' ? 'warn' : level.toLowerCase() },
+  };
+}
+
+export function validateGatewaySite(site, {kind} = {}) {
+  requireObject(site, 'Gateway site');
+  rejectUnknownKeys(site, new Set(['schema', 'kind', 'publicUrl', 'webRoot', 'publicRoot', 'upstream', 'tls']), 'Gateway site');
+  if (site.schema !== GATEWAY_SCHEMA) throw new Error(`unsupported Gateway site schema ${site.schema}`);
+  const siteKind = kind ?? site.kind;
+  if (![WORKSPACE_SITE_KIND, RELEASE_SERVER_SITE_KIND].includes(siteKind)) {
+    throw new Error(`unsupported Gateway site kind ${siteKind}`);
+  }
+  if (site.kind !== siteKind) throw new Error(`Gateway site kind must be ${siteKind}`);
+  const publicUrl = parsePublicUrl(site.publicUrl);
+  const upstream = parseUpstream(site.upstream);
+  const staticRoot = siteKind === WORKSPACE_SITE_KIND ? site.webRoot : site.publicRoot;
+  if (typeof staticRoot !== 'string' || !isAbsolute(staticRoot)) {
+    throw new Error('static root must be an absolute path');
+  }
+  if (siteKind === WORKSPACE_SITE_KIND && site.publicRoot !== undefined) {
+    throw new Error('workspace site cannot set publicRoot');
+  }
+  if (siteKind === RELEASE_SERVER_SITE_KIND && site.webRoot !== undefined) {
+    throw new Error('release-server site cannot set webRoot');
+  }
+  const tls = validateTLS(site.tls);
+  return {
+    schema: GATEWAY_SCHEMA,
+    kind: siteKind,
+    publicUrl: publicUrl.href.replace(/\/$/, ''),
+    ...(siteKind === WORKSPACE_SITE_KIND ? { webRoot: resolve(staticRoot) } : { publicRoot: resolve(staticRoot) }),
+    upstream: upstream.href.replace(/\/$/, ''),
+    tls,
+  };
+}
+
+export function gatewayHome({
+  home,
+  userHome = homedir(),
+} = {}) {
+  if (home !== undefined) {
+    if (!isAbsolute(home)) throw new Error('Gateway home must be an absolute path');
+    return resolve(home);
+  }
+  return resolve(userHome, '.wheelmaker', 'gateway');
+}
+
+export function gatewayConfigPaths(home) {
+  const root = gatewayHome({home});
+  return {
+    home: root,
+    config: join(root, 'config.json'),
+    sites: join(root, 'sites'),
+    workspace: join(root, 'sites', 'workspace.json'),
+    releaseServer: join(root, 'sites', 'release-server.json'),
+    generated: join(root, 'generated', 'caddy.json'),
+    state: join(root, 'state', 'release.json'),
+    data: join(root, 'data'),
+    logs: join(root, 'logs'),
+    downloads: join(root, 'downloads'),
+    rollback: join(root, 'rollback'),
+    bin: join(root, 'bin'),
+  };
+}
+
+export async function readGatewayConfiguration(home) {
+  const paths = gatewayConfigPaths(home);
+  const [global, workspace, releaseServer] = await Promise.all([
+    readGatewayJsonIfPresent(paths.config),
+    readGatewayJsonIfPresent(paths.workspace),
+    readGatewayJsonIfPresent(paths.releaseServer),
+  ]);
+  if (global !== null) validateGatewayGlobal(global);
+  if (workspace !== null) validateGatewaySite(workspace, {kind: WORKSPACE_SITE_KIND});
+  if (releaseServer !== null) validateGatewaySite(releaseServer, {kind: RELEASE_SERVER_SITE_KIND});
+  return {paths, global, workspace, releaseServer};
+}
+
+async function gatewayConfigAtomicWrite(path, bytes, mode = 0o600) {
+  await mkdir(join(path, '..'), {recursive: true});
+  const temporary = join(join(path, '..'), `.${path.split(/[\\/]/).pop()}.${randomUUID()}.tmp`);
+  await writeFile(temporary, bytes, {mode});
+  try {
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, {force: true});
+  }
+}
+
+export async function writeWorkspaceSite(home, site) {
+  const validated = validateGatewaySite(site, {kind: WORKSPACE_SITE_KIND});
+  const paths = gatewayConfigPaths(home);
+  await mkdir(paths.sites, {recursive: true});
+  await gatewayConfigAtomicWrite(paths.workspace, gatewayJsonBytes(validated), 0o600);
+  return validated;
+}
+
+export function workspaceSiteCandidate({
+  publicUrl,
+  webRoot,
+  upstream = 'http://127.0.0.1:9630',
+  certificateFile = '',
+  keyFile = '',
+} = {}) {
+  return validateGatewaySite({
+    schema: GATEWAY_SCHEMA,
+    kind: WORKSPACE_SITE_KIND,
+    publicUrl,
+    webRoot,
+    upstream,
+    tls: {certificateFile, keyFile},
+  }, {kind: WORKSPACE_SITE_KIND});
+}
+
+function defaultAsk() {
+  return async () => '';
+}
+
+export function createGatewayQuestioner({input = process.stdin, output = process.stdout} = {}) {
+  const readline = createInterface({input, output});
+  return {
+    ask: async (question, defaultValue = '') => {
+      const suffix = defaultValue ? ` [${defaultValue}]` : '';
+      const answer = await readline.question(`${question}${suffix} `);
+      return answer === '' ? defaultValue : answer;
+    },
+    close: () => readline.close(),
+  };
+}
+
+export function parseGatewayOptions(args) {
+  const options = {
+    commandArgs: [],
+    explicit: false,
+    mode: 'none',
+    publicUrl: undefined,
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token.startsWith('--gateway=')) {
+      if (options.explicit) throw new Error('--gateway may only be specified once');
+      const mode = token.slice('--gateway='.length);
+      if (!['none', 'caddy'].includes(mode)) {
+        throw new Error('--gateway must be none or caddy');
+      }
+      options.explicit = true;
+      options.mode = mode;
+      continue;
+    }
+    if (token === '--gateway-public-url' || token.startsWith('--gateway-public-url=')) {
+      if (options.publicUrl !== undefined) {
+        throw new Error('--gateway-public-url may only be specified once');
+      }
+      if (token.includes('=')) {
+        options.publicUrl = token.slice(token.indexOf('=') + 1);
+      } else {
+        const value = args[index + 1];
+        if (!value || value.startsWith('--')) {
+          throw new Error('--gateway-public-url requires a value');
+        }
+        options.publicUrl = value;
+        index += 1;
+      }
+      continue;
+    }
+    options.commandArgs.push(token);
+  }
+  if (options.publicUrl !== undefined && options.mode !== 'caddy') {
+    throw new Error('--gateway-public-url is only valid with --gateway=caddy');
+  }
+  return options;
+}
+
+export async function configureWorkspaceSite({
+  home,
+  ask,
+  mode = 'none',
+  publicUrl,
+  webRoot,
+  upstream = 'http://127.0.0.1:9630',
+} = {}) {
+  if (mode === 'none') return {written: false};
+  if (mode !== 'caddy') throw new Error(`unsupported Gateway mode ${mode}`);
+  const paths = gatewayConfigPaths(home);
+  const existingValue = await readGatewayJsonIfPresent(paths.workspace);
+  const existing = existingValue === null
+    ? null
+    : validateGatewaySite(existingValue, {kind: WORKSPACE_SITE_KIND});
+  let selectedPublicUrl = publicUrl ?? existing?.publicUrl;
+  if (!selectedPublicUrl && ask) {
+    selectedPublicUrl = await ask('Workspace public URL', 'https://workspace.example.com');
+  }
+  if (!selectedPublicUrl) {
+    throw new Error('first non-interactive Caddy deployment requires --gateway-public-url');
+  }
+  const candidate = workspaceSiteCandidate({publicUrl: selectedPublicUrl, webRoot, upstream});
+  await writeWorkspaceSite(home, candidate);
+  return {existing, paths, site: candidate, written: true};
+}
+
+export async function gatewayConfigExists(home) {
+  try {
+    await access(gatewayConfigPaths(home).config);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+const SERVICE_NAME = 'wheelmaker-gateway';
+const WINDOWS_TASK_NAME = 'WheelMakerGateway';
+const DARWIN_LABEL = 'com.wheelmaker.gateway';
+
+function gatewayRuntimeShellQuote(value) {
+  return `'${String(value).replaceAll("'", `\"'\"'`)}'`;
+}
+
+function gatewayRuntimePsQuote(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function gatewayRuntimeSystemdQuote(value) {
+  return `"${String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
+
+function gatewayRuntimeXmlEscape(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+export function gatewayRuntimePaths({
+  gatewayHome,
+  gatewayBinary,
+  nodePath = process.execPath,
+  userHome = homedir(),
+  uid = typeof process.getuid === 'function' ? process.getuid() : 0,
+}) {
+  if (!gatewayHome || !gatewayBinary) {
+    throw new Error('Gateway home and binary are required');
+  }
+  return {
+    home: gatewayHome,
+    binary: gatewayBinary,
+    config: join(gatewayHome, 'generated', 'caddy.json'),
+    node: nodePath,
+    serviceName: SERVICE_NAME,
+    serviceUnit: `${SERVICE_NAME}.service`,
+    taskName: WINDOWS_TASK_NAME,
+    plistLabel: DARWIN_LABEL,
+    plist: join(userHome ?? '', 'Library', 'LaunchAgents', `${DARWIN_LABEL}.plist`),
+    uid,
+    userHome,
+  };
+}
+
+export function windowsGatewayRuntimePlan(paths) {
+  const home = gatewayRuntimePsQuote(paths.home);
+  const binary = gatewayRuntimePsQuote(paths.binary);
+  const currentUser = '$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name';
+  const taskScript = `$ErrorActionPreference = 'Stop'
+${currentUser}
+$principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
+$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -StartWhenAvailable -MultipleInstances IgnoreNew
+$action = New-ScheduledTaskAction -Execute ${binary} -Argument ${gatewayRuntimePsQuote(`serve --home ${paths.home}`)} -WorkingDirectory ${home}
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+Register-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+Start-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}'
+`;
+  const encoded = Buffer.from(taskScript, 'utf16le').toString('base64');
+  const script = `$ErrorActionPreference = 'Stop'
+$taskScript = @'
+${taskScript}
+'@
+$encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($taskScript))
+$process = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded) -Verb RunAs -Wait -PassThru -WindowStyle Hidden
+if ($process.ExitCode -ne 0) { throw "elevated Gateway task registration failed with exit code $($process.ExitCode)" }`;
+  return { names: [WINDOWS_TASK_NAME], script };
+}
+
+export function linuxGatewayRuntimeFiles(paths) {
+  return {
+    [paths.serviceUnit ?? `${SERVICE_NAME}.service`]: `[Unit]
+Description=WheelMaker Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${paths.home}
+ExecStart=${gatewayRuntimeSystemdQuote(paths.binary)} serve --home ${gatewayRuntimeSystemdQuote(paths.home)}
+Restart=always
+RestartSec=5
+Environment=HOME=${gatewayRuntimeSystemdQuote(paths.userHome ?? '')}
+
+[Install]
+WantedBy=default.target
+`,
+  };
+}
+
+function gatewayLaunchAgentPlist(paths) {
+  const args = [paths.binary, 'serve', '--home', paths.home]
+    .map((value) => `    <string>${gatewayRuntimeXmlEscape(value)}</string>`)
+    .join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${gatewayRuntimeXmlEscape(paths.plistLabel ?? DARWIN_LABEL)}</string>
+  <key>WorkingDirectory</key>
+  <string>${gatewayRuntimeXmlEscape(paths.home)}</string>
+  <key>ProgramArguments</key>
+  <array>
+${args}
+  </array>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
+`;
+}
+
+export function darwinGatewayRuntimeFiles(paths) {
+  return {
+    [`${paths.plistLabel ?? DARWIN_LABEL}.plist`]: gatewayLaunchAgentPlist(paths),
+  };
+}
+
+export function gatewayWrapperFiles(paths, platform = process.platform) {
+  const unit = paths.serviceUnit ?? `${SERVICE_NAME}.service`;
+  if (platform === 'win32') {
+    return {
+      'start.bat': `@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}'"\r\n`,
+      'stop.bat': `@echo off\r\npowershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Stop-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction SilentlyContinue"\r\n`,
+    };
+  }
+  if (platform === 'linux') {
+    return {
+      'start.sh': `#!/bin/sh\nset -eu\nexec systemctl --user start ${gatewayRuntimeShellQuote(unit)}\n`,
+      'stop.sh': `#!/bin/sh\nset -eu\nexec systemctl --user stop ${gatewayRuntimeShellQuote(unit)}\n`,
+    };
+  }
+  if (platform === 'darwin') {
+    const target = `gui/${paths.uid}/${paths.plistLabel ?? DARWIN_LABEL}`;
+    return {
+      'start.sh': `#!/bin/sh\nset -eu\nexec launchctl kickstart -k ${gatewayRuntimeShellQuote(target)}\n`,
+      'stop.sh': `#!/bin/sh\nset -eu\nexec launchctl kill SIGTERM ${gatewayRuntimeShellQuote(target)}\n`,
+    };
+  }
+  throw new Error(`unsupported Gateway runtime platform: ${platform}`);
+}
+
+async function gatewayRuntimeAtomicWrite(path, body, mode = 0o600) {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = join(dirname(path), `.${randomUUID()}.${process.pid}.tmp`);
+  await writeFile(temporary, body, { mode });
+  try {
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
+function windowsActionScript(action) {
+  if (action === 'start') {
+    return `Start-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction Stop`;
+  }
+  if (action === 'stop') {
+    return `Stop-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction SilentlyContinue`;
+  }
+  throw new Error(`unsupported Gateway Windows action: ${action}`);
+}
+
+export function createGatewayRuntimeAdapter({
+  paths,
+  platform = process.platform,
+  runner,
+  fetchImpl = globalThis.fetch,
+  environment = process.env,
+}) {
+  if (!paths?.home || !paths?.binary) {
+    throw new Error('Gateway runtime paths are required');
+  }
+  const run = runner ?? (async () => ({ code: 0, stderr: '', stdout: '' }));
+
+  async function install() {
+    const wrappers = gatewayWrapperFiles(paths, platform);
+    for (const [name, body] of Object.entries(wrappers)) {
+      const wrapperPath = join(paths.home, name);
+      await gatewayRuntimeAtomicWrite(wrapperPath, body, 0o755);
+      if (platform !== 'win32') await chmod(wrapperPath, 0o755);
+    }
+    if (platform === 'win32') {
+      const plan = windowsGatewayRuntimePlan(paths);
+      await run('powershell', [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        plan.script,
+      ], { cwd: paths.home });
+      return;
+    }
+    if (platform === 'linux') {
+      const directory = join(environment.XDG_CONFIG_HOME ?? join(paths.userHome, '.config'), 'systemd', 'user');
+      const files = linuxGatewayRuntimeFiles(paths);
+      for (const [name, body] of Object.entries(files)) {
+        await gatewayRuntimeAtomicWrite(join(directory, name), body, 0o644);
+      }
+      const runtimeUser = environment.USER ?? environment.USERNAME;
+      if (runtimeUser) {
+        await run('sudo', ['loginctl', 'enable-linger', runtimeUser]);
+      }
+      await run('sudo', ['setcap', 'cap_net_bind_service=+ep', paths.binary]);
+      await run('systemctl', ['--user', 'daemon-reload']);
+      await run('systemctl', ['--user', 'enable', paths.serviceUnit ?? `${SERVICE_NAME}.service`]);
+      await run('systemctl', ['--user', 'start', paths.serviceUnit ?? `${SERVICE_NAME}.service`]);
+      return;
+    }
+    if (platform === 'darwin') {
+      const directory = join(paths.userHome, 'Library', 'LaunchAgents');
+      const files = darwinGatewayRuntimeFiles(paths);
+      for (const [name, body] of Object.entries(files)) {
+        await gatewayRuntimeAtomicWrite(join(directory, name), body, 0o644);
+      }
+      const domain = `gui/${paths.uid}`;
+      await run('launchctl', ['bootout', `${domain}/${paths.plistLabel ?? DARWIN_LABEL}`], { allowFailure: true });
+      await run('launchctl', ['bootstrap', domain, join(directory, `${paths.plistLabel ?? DARWIN_LABEL}.plist`)]);
+      await run('launchctl', ['kickstart', '-k', `${domain}/${paths.plistLabel ?? DARWIN_LABEL}`]);
+      return;
+    }
+    throw new Error(`unsupported Gateway runtime platform: ${platform}`);
+  }
+
+  async function action(name) {
+    if (!['start', 'stop', 'restart'].includes(name)) {
+      throw new Error(`unknown Gateway runtime action: ${name}`);
+    }
+    if (platform === 'win32') {
+      await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsActionScript(name === 'restart' ? 'stop' : name)], { cwd: paths.home, allowFailure: name === 'stop' });
+      if (name === 'restart') {
+        await run('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsActionScript('start')], { cwd: paths.home });
+      }
+      return;
+    }
+    if (platform === 'linux') {
+      const unit = paths.serviceUnit ?? `${SERVICE_NAME}.service`;
+      if (name === 'restart') {
+        await run('systemctl', ['--user', 'restart', unit]);
+      } else {
+        await run('systemctl', ['--user', name, unit], { allowFailure: name === 'stop' });
+      }
+      return;
+    }
+    if (platform === 'darwin') {
+      const target = `gui/${paths.uid}/${paths.plistLabel ?? DARWIN_LABEL}`;
+      if (name === 'start' || name === 'restart') {
+        await run('launchctl', ['kickstart', '-k', target]);
+      } else {
+        await run('launchctl', ['kill', 'SIGTERM', target], { allowFailure: true });
+      }
+      return;
+    }
+    throw new Error(`unsupported Gateway runtime platform: ${platform}`);
+  }
+
+  async function reload(configBytes) {
+    if (typeof fetchImpl !== 'function') {
+      throw new Error('Gateway reload requires fetch');
+    }
+    const body = configBytes === undefined
+      ? await readFile(paths.config)
+      : configBytes;
+    const response = await fetchImpl('http://127.0.0.1:2019/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: Buffer.from(body).toString('utf8'),
+    });
+    if (!response.ok) {
+      const detail = typeof response.text === 'function' ? await response.text() : '';
+      throw new Error(`Gateway reload failed (${response.status}): ${detail}`.trim());
+    }
+  }
+
+  async function health() {
+    if (typeof fetchImpl !== 'function') {
+      throw new Error('Gateway health check requires fetch');
+    }
+    const response = await fetchImpl('http://127.0.0.1:2019/config/', {
+      method: 'GET',
+    });
+    if (!response.ok) {
+      const detail = typeof response.text === 'function' ? await response.text() : '';
+      throw new Error(`Gateway health check failed (${response.status}): ${detail}`.trim());
+    }
+  }
+
+  async function isRunning() {
+    if (platform === 'win32') {
+      const result = await run('powershell', ['-NoProfile', '-Command', `if ((Get-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction SilentlyContinue).State -eq 'Running') { exit 0 } else { exit 1 }`], { allowFailure: true });
+      return result.code === 0;
+    }
+    if (platform === 'linux') {
+      const result = await run('systemctl', ['--user', 'is-active', '--quiet', paths.serviceUnit ?? `${SERVICE_NAME}.service`], { allowFailure: true });
+      return result.code === 0;
+    }
+    if (platform === 'darwin') {
+      const result = await run('launchctl', ['print', `gui/${paths.uid}/${paths.plistLabel ?? DARWIN_LABEL}`], { allowFailure: true });
+      return result.code === 0;
+    }
+    throw new Error(`unsupported Gateway runtime platform: ${platform}`);
+  }
+
+  return {
+    install,
+    start: () => action('start'),
+    stop: () => action('stop'),
+    restart: () => action('restart'),
+    reload,
+    health,
+    isRunning,
+  };
+}
+
+const GATEWAY_TARGETS = new Set([
+  'windows-amd64',
+  'linux-amd64',
+  'darwin-amd64',
+  'darwin-arm64',
+]);
+const GATEWAY_ARCHIVE_PATTERN = /^wheelmaker-gateway-v1\.(0|[1-9]\d*)-(windows-amd64|linux-amd64|darwin-amd64|darwin-arm64)\.tar\.zst$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const SOURCE_SHA_PATTERN = /^[0-9a-f]{40}$/;
+const VERSION_PATTERN = /^v1\.(0|[1-9]\d*)$/;
+
+function gatewayInstallRunProcess(command, args, {cwd, allowFailure = false} = {}) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(command, args, {cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on('data', chunk => stdout.push(chunk));
+    child.stderr.on('data', chunk => stderr.push(chunk));
+    child.once('error', rejectPromise);
+    child.once('exit', code => {
+      const result = {
+        code,
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: Buffer.concat(stderr).toString('utf8'),
+      };
+      if (code !== 0 && !allowFailure) {
+        rejectPromise(new Error(`${command} ${args.join(' ')} failed (${code}): ${result.stderr.trim()}`));
+      } else {
+        resolvePromise(result);
+      }
+    });
+  });
+}
+
+function gatewayInstallSha256Bytes(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function gatewayInstallJsonBytes(value) {
+  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function gatewayInstallResolveReleasePath(baseUrl, path, label) {
+  let base;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    throw new Error('trusted release base URL is invalid');
+  }
+  if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/' || base.search || base.hash || baseUrl !== base.origin) {
+    throw new Error('trusted release base URL is invalid');
+  }
+  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('?') || path.includes('#')) {
+    throw new Error(`${label} path is invalid`);
+  }
+  const resolved = new URL(path, `${base.origin}/`);
+  if (resolved.origin !== base.origin) throw new Error(`${label} path must stay on the trusted release origin`);
+  return resolved.href;
+}
+
+function validatePointer(pointer) {
+  if (!pointer) return null;
+  if (typeof pointer !== 'object' || Array.isArray(pointer) || !VERSION_PATTERN.test(pointer.version ?? '') ||
+      !SOURCE_SHA_PATTERN.test(pointer.sourceSha ?? '') || pointer.manifestPath !== '/gateway/current/gateway-manifest.json' ||
+      !SHA256_PATTERN.test(pointer.manifestSha256 ?? '')) {
+    throw new Error('stable Gateway pointer is invalid');
+  }
+  return pointer;
+}
+
+export function validateGatewayManifest(manifest, pointer) {
+  validatePointer(pointer);
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest) || manifest.schema !== 1 ||
+      manifest.version !== pointer.version || manifest.sourceSha !== pointer.sourceSha ||
+      manifest.path !== '/gateway/current/gateway-manifest.json') {
+    throw new Error('Gateway manifest identity is invalid');
+  }
+  // Release Server serializes artifacts as an object keyed by platform. Accepting
+  // only that shape prevents an attacker from smuggling paths through an array.
+  if (!manifest.artifacts || typeof manifest.artifacts !== 'object' || Array.isArray(manifest.artifacts)) {
+    throw new Error('Gateway manifest artifacts are invalid');
+  }
+  const normalized = {};
+  for (const target of GATEWAY_TARGETS) {
+    const artifact = manifest.artifacts[target];
+    if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact) ||
+        typeof artifact.path !== 'string' || !artifact.path.startsWith('/gateway/current/') ||
+        artifact.path.includes('..') || artifact.path.includes('?') || artifact.path.includes('#') ||
+        !SHA256_PATTERN.test(artifact.sha256 ?? '') || !Number.isSafeInteger(artifact.size) || artifact.size < 1) {
+      throw new Error(`Gateway artifact metadata/path is invalid: ${target}`);
+    }
+    const name = artifact.path.slice('/gateway/current/'.length);
+    const expected = `wheelmaker-gateway-${manifest.version}-${target}.tar.zst`;
+    if (name !== expected || !GATEWAY_ARCHIVE_PATTERN.test(name)) {
+      throw new Error(`Gateway artifact path is invalid: ${target}`);
+    }
+    normalized[target] = {...artifact, name};
+  }
+  if (Object.keys(manifest.artifacts).some(key => !GATEWAY_TARGETS.has(key))) {
+    throw new Error('Gateway manifest contains an unsupported platform');
+  }
+  return normalized;
+}
+
+async function gatewayInstallAtomicWrite(path, bytes, mode = 0o600) {
+  await mkdir(resolve(path, '..'), {recursive: true});
+  const temporary = join(resolve(path, '..'), `.${path.split(/[\\/]/).pop()}.${randomUUID()}.tmp`);
+  await writeFile(temporary, bytes, {mode});
+  try {
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, {force: true});
+  }
+}
+
+async function copyFileAtomic(source, destination) {
+  const bytes = await readFile(source);
+  await gatewayInstallAtomicWrite(destination, bytes, 0o755);
+}
+
+async function fileExists(path) {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function validateBinary({binary, home, runner}) {
+  if (runner) {
+    await runner(binary, ['validate', '--home', home]);
+    return;
+  }
+  // Callers that install the service normally provide a platform runner. Keep
+  // the default explicit so a deployment cannot silently skip validation.
+  throw new Error('Gateway binary validation runner is required');
+}
+
+async function waitForGatewayStopped(runtime, {attempts = 20, intervalMs = 250} = {}) {
+  if (typeof runtime?.isRunning !== 'function') return;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!(await runtime.isRunning())) return;
+    await new Promise(resolvePromise => setTimeout(resolvePromise, intervalMs));
+  }
+  throw new Error('Gateway service did not stop before binary replacement');
+}
+
+function gatewayBinaryName(platformKey) {
+  return platformKey === 'windows-amd64' ? 'wheelmaker-gateway.exe' : 'wheelmaker-gateway';
+}
+
+export function gatewayInstallPaths(home, platformKey) {
+  const paths = gatewayConfigPaths(home);
+  const binaryName = gatewayBinaryName(platformKey);
+  return {
+    ...paths,
+    binaryName,
+    binary: join(paths.bin, binaryName),
+    rollbackBinary: join(paths.rollback, binaryName),
+  };
+}
+
+export async function installGatewayFromStable({
+  stable,
+  releaseBaseUrl,
+  fetchBytes,
+  gatewayHome: configuredHome,
+  userHome,
+  platformKey = currentPlatformKey(),
+  platform = process.platform,
+  arch = process.arch,
+  nodePath = process.execPath,
+  uid,
+  runner,
+  gatewayRuntime,
+  validateBinary: validateBinaryOverride,
+  now = () => new Date().toISOString(),
+  reportStatus,
+  force = false,
+} = {}) {
+  const pointer = validatePointer(stable?.gateway);
+  if (!pointer) return {skipped: true, reason: 'missing-pointer'};
+  if (!fetchBytes || !releaseBaseUrl) throw new Error('Gateway download dependencies are required');
+  if (!GATEWAY_TARGETS.has(platformKey)) throw new Error(`unsupported Gateway platform: ${platformKey}`);
+
+  const home = gatewayHome({home: configuredHome, userHome});
+  const paths = gatewayInstallPaths(home, platformKey);
+  const commandRunner = runner ?? gatewayInstallRunProcess;
+  await mkdir(paths.bin, {recursive: true});
+  await mkdir(paths.downloads, {recursive: true});
+  await mkdir(paths.rollback, {recursive: true});
+  await mkdir(join(paths.home, 'state'), {recursive: true});
+
+  const runtime = gatewayRuntime ?? createGatewayRuntimeAdapter({
+    paths: gatewayRuntimePaths({gatewayHome: home, gatewayBinary: paths.binary, nodePath, userHome, uid}),
+    platform,
+    runner: commandRunner,
+  });
+
+  const manifestURL = gatewayInstallResolveReleasePath(releaseBaseUrl, pointer.manifestPath, 'Gateway manifest');
+  const manifestBytes = await fetchBytes(manifestURL, {label: 'Gateway manifest'});
+  if (gatewayInstallSha256Bytes(manifestBytes) !== pointer.manifestSha256) throw new Error('Gateway manifest SHA-256 verification failed');
+  let manifest;
+  try {
+    manifest = JSON.parse(Buffer.from(manifestBytes).toString('utf8'));
+  } catch {
+    throw new Error('Gateway manifest is not valid JSON');
+  }
+  const artifacts = validateGatewayManifest(manifest, pointer);
+  const artifact = artifacts[platformKey];
+  const statePath = join(paths.home, 'state', 'release.json');
+  const previousState = await (async () => {
+    try { return JSON.parse(await readFile(statePath, 'utf8')); } catch (error) { if (error?.code === 'ENOENT') return null; throw error; }
+  })();
+  if (!force && previousState?.version === pointer.version && previousState?.manifestSha256 === pointer.manifestSha256 && await fileExists(paths.binary)) {
+    let running = false;
+    if (typeof runtime.isRunning === 'function') {
+      running = await runtime.isRunning();
+    } else {
+      try {
+        await runtime.health();
+        running = true;
+      } catch {
+        // Start and verify the existing binary below.
+      }
+    }
+    if (running) {
+      try {
+        await runtime.health();
+        return {skipped: true, reason: 'already-installed', home, paths, pointer, manifest};
+      } catch (error) {
+        reportStatus?.(`Existing Gateway health check failed; reinstalling service: ${error.message}`);
+      }
+    }
+    try {
+      await runtime.start();
+      await runtime.health();
+      return {skipped: true, reason: 'started-existing', home, paths, pointer, manifest};
+    } catch (error) {
+      reportStatus?.(`Existing Gateway service could not start; reinstalling service: ${error.message}`);
+    }
+  }
+
+  reportStatus?.(`Downloading Gateway ${pointer.version} (${platformKey})`);
+  const archiveURL = gatewayInstallResolveReleasePath(releaseBaseUrl, artifact.path, 'Gateway artifact');
+  const archiveBytes = await fetchBytes(archiveURL, {label: `Gateway ${platformKey}`});
+  if (archiveBytes.length !== artifact.size) throw new Error('Gateway archive size verification failed');
+  if (gatewayInstallSha256Bytes(archiveBytes) !== artifact.sha256) throw new Error('Gateway archive SHA-256 verification failed');
+
+  const job = `${process.pid}-${randomUUID()}`;
+  const downloadPath = join(paths.downloads, `${artifact.name}.${job}`);
+  const extractionPath = join(paths.downloads, `extract-${job}`);
+  const stagedBinary = join(extractionPath, paths.binaryName);
+  await writeFile(downloadPath, archiveBytes, {mode: 0o600});
+  try {
+    await extractTarZst(archiveBytes, extractionPath);
+    await access(stagedBinary);
+    const candidateHome = home;
+    const validate = validateBinaryOverride ?? validateBinary;
+    await validate({binary: stagedBinary, home: candidateHome, runner: commandRunner});
+
+    const hadCurrent = await fileExists(paths.binary);
+    await runtime.stop().catch((error) => {
+      if (!hadCurrent) return;
+      throw error;
+    });
+    await waitForGatewayStopped(runtime);
+    await rm(paths.rollbackBinary, {force: true});
+    if (hadCurrent) await rename(paths.binary, paths.rollbackBinary);
+    try {
+      await copyFileAtomic(stagedBinary, paths.binary);
+      await chmod(paths.binary, 0o755);
+      await runtime.install();
+      await runtime.health();
+      await gatewayInstallAtomicWrite(statePath, gatewayInstallJsonBytes({schema: 1, version: pointer.version, sourceSha: pointer.sourceSha, manifestSha256: pointer.manifestSha256, installedAt: now()}), 0o600);
+      await rm(paths.rollbackBinary, {force: true});
+      return {skipped: false, home, paths, pointer, manifest};
+    } catch (error) {
+      reportStatus?.(`Gateway ${pointer.version} failed to start; restoring previous version`);
+      await runtime.stop().catch(() => {});
+      await waitForGatewayStopped(runtime).catch(() => {});
+      await rm(paths.binary, {force: true});
+      if (hadCurrent && await fileExists(paths.rollbackBinary)) {
+        await rename(paths.rollbackBinary, paths.binary);
+        await runtime.install().catch(() => {});
+        await runtime.health().catch(() => {});
+      }
+      throw new Error(`Gateway installation failed and rollback was attempted: ${error.message}`, {cause: error});
+    }
+  } finally {
+    await rm(downloadPath, {force: true});
+    await rm(extractionPath, {recursive: true, force: true});
+  }
+}
+
+export async function validateInstalledGatewayConfiguration(home) {
+  return readGatewayConfiguration(home);
 }

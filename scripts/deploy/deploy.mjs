@@ -5,8 +5,6 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { parseGatewayOptions } from './gateway-config.mjs';
-
 export const RELEASE_BASE_URL = '__WHEELMAKER_RELEASE_BASE_URL__';
 export const STABLE_PATH = '/stable.json';
 export const STABLE_URL = `${RELEASE_BASE_URL}${STABLE_PATH}`;
@@ -223,9 +221,24 @@ export function parseDeployArgs(args) {
   ) {
     return [...args];
   }
-  const gateway = parseGatewayOptions(args);
-  if (gateway.explicit) {
-    if (gateway.commandArgs.length > 0) {
+  const hasGatewayOptions = args.some((token) =>
+    token.startsWith('--gateway=') ||
+    token === '--gateway-public-url' ||
+    token.startsWith('--gateway-public-url='));
+  if (hasGatewayOptions) {
+    for (let index = 0; index < args.length; index += 1) {
+      const token = args[index];
+      if (token.startsWith('--gateway=') || token.startsWith('--gateway-public-url=')) {
+        continue;
+      }
+      if (token === '--gateway-public-url') {
+        const value = args[index + 1];
+        if (!value || value.startsWith('--')) {
+          throw new Error('--gateway-public-url requires a value');
+        }
+        index += 1;
+        continue;
+      }
       throw new Error('Gateway configuration options are only valid for a full deployment');
     }
     return [...args];
