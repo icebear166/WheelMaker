@@ -37,10 +37,6 @@ const (
 	dwmwaUseImmersiveDarkMode = 20
 	dwmwaBorderColor          = 34
 	dwmwaCaptionColor         = 35
-
-	smCXSizeFrame    = 32
-	smCYSizeFrame    = 33
-	smCXPaddedBorder = 92
 )
 
 var (
@@ -50,8 +46,6 @@ var (
 	procSetWindowLongPtrW     = user32.NewProc("SetWindowLongPtrW")
 	procSetWindowPos          = user32.NewProc("SetWindowPos")
 	procGetWindowRect         = user32.NewProc("GetWindowRect")
-	procMonitorFromWindow     = user32.NewProc("MonitorFromWindow")
-	procGetMonitorInfoW       = user32.NewProc("GetMonitorInfoW")
 	procReleaseCapture        = user32.NewProc("ReleaseCapture")
 	procSendMessageW          = user32.NewProc("SendMessageW")
 	procPostMessageW          = user32.NewProc("PostMessageW")
@@ -59,7 +53,6 @@ var (
 	procMessageBoxW           = user32.NewProc("MessageBoxW")
 	procIsZoomed              = user32.NewProc("IsZoomed")
 	procIsWindow              = user32.NewProc("IsWindow")
-	procGetSystemMetrics      = user32.NewProc("GetSystemMetrics")
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
 
@@ -70,27 +63,11 @@ const (
 	idYes         = 6
 )
 
-const monitorDefaultToNearest = 2
-
 type desktopWindowRect struct {
 	left   int32
 	top    int32
 	right  int32
 	bottom int32
-}
-
-type desktopWindowFrameInsets struct {
-	x int32
-	y int32
-}
-
-func (r desktopWindowRect) expandedBy(insets desktopWindowFrameInsets) desktopWindowRect {
-	return desktopWindowRect{
-		left:   r.left - insets.x,
-		top:    r.top - insets.y,
-		right:  r.right + insets.x,
-		bottom: r.bottom + insets.y,
-	}
 }
 
 func (r desktopWindowRect) width() int32 {
@@ -99,13 +76,6 @@ func (r desktopWindowRect) width() int32 {
 
 func (r desktopWindowRect) height() int32 {
 	return r.bottom - r.top
-}
-
-type monitorInfo struct {
-	cbSize    uint32
-	rcMonitor desktopWindowRect
-	rcWork    desktopWindowRect
-	dwFlags   uint32
 }
 
 func getWindowLongPtr(hwnd uintptr, index int32) uintptr {
@@ -125,31 +95,6 @@ func getWindowRect(hwnd uintptr) (desktopWindowRect, bool) {
 	var rect desktopWindowRect
 	result, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 	return rect, result != 0
-}
-
-func getMonitorWorkArea(hwnd uintptr) (desktopWindowRect, bool) {
-	monitor, _, _ := procMonitorFromWindow.Call(hwnd, monitorDefaultToNearest)
-	if monitor == 0 {
-		return desktopWindowRect{}, false
-	}
-	info := monitorInfo{cbSize: uint32(unsafe.Sizeof(monitorInfo{}))}
-	result, _, _ := procGetMonitorInfoW.Call(monitor, uintptr(unsafe.Pointer(&info)))
-	if result == 0 {
-		return desktopWindowRect{}, false
-	}
-	return info.rcWork, true
-}
-
-func moveWindowToRect(hwnd uintptr, rect desktopWindowRect) {
-	procSetWindowPos.Call(
-		hwnd,
-		0,
-		uintptr(uint32(rect.left)),
-		uintptr(uint32(rect.top)),
-		uintptr(uint32(rect.width())),
-		uintptr(uint32(rect.height())),
-		swpNoZOrder|swpNoOwnerZOrder,
-	)
 }
 
 func releaseCapture() {
@@ -180,21 +125,6 @@ func isWindow(hwnd uintptr) bool {
 
 func setWindowPosRect(hwnd uintptr, x, y, width, height int32, flags uintptr) {
 	procSetWindowPos.Call(hwnd, 0, uintptr(uint32(x)), uintptr(uint32(y)), uintptr(width), uintptr(height), flags)
-}
-
-func getWindowFrameInsets() desktopWindowFrameInsets {
-	sizeFrameX := getSystemMetric(smCXSizeFrame)
-	sizeFrameY := getSystemMetric(smCYSizeFrame)
-	paddedBorder := getSystemMetric(smCXPaddedBorder)
-	return desktopWindowFrameInsets{
-		x: sizeFrameX + paddedBorder,
-		y: sizeFrameY + paddedBorder,
-	}
-}
-
-func getSystemMetric(index int32) int32 {
-	result, _, _ := procGetSystemMetrics.Call(uintptr(index))
-	return int32(result)
 }
 
 func setDwmWindowAttribute(hwnd uintptr, attribute uint32, value unsafe.Pointer, size uint32) error {

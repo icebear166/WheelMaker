@@ -18,6 +18,11 @@
   user-select: none;
 }
 
+.page.theme-light,
+.workspace.theme-light {
+  --desktop-top-surface: var(--surface-workspace-content);
+}
+
 .workspace {
   display: flex;
   flex-direction: column;

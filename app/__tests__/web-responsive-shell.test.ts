@@ -139,6 +139,9 @@ describe('web responsive shell split', () => {
 
     expect(stylesCss).toContain('--desktop-window-controls-width: 138px;');
     expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));');
+    expect(stylesCss).toMatch(
+      /\.page\.theme-light,\s*\.workspace\.theme-light \{[\s\S]*--desktop-top-surface: var\(--surface-workspace-content\);[\s\S]*\}/,
+    );
     expect(stylesCss).not.toContain('.desktop-titlebar {');
     expect(stylesCss).not.toContain('.desktop-activity-bar {');
 
