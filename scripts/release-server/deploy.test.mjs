@@ -78,6 +78,13 @@ test('release server deployment accepts only the unified Gateway selector', () =
   assert.throws(() => parseReleaseServerArgs(['--unknown']), /unknown release server option/);
 });
 
+test('release server deployment describes a Home installation', async () => {
+  const source = await readFile(new URL('./deploy.mjs', import.meta.url), 'utf8');
+
+  assert.match(source, /Installing Release Server in the SSH user Home/);
+  assert.doesNotMatch(source, /Migrating Release Server/);
+});
+
 test('Release Server template is a hardened user unit rooted in Home', async () => {
   const unit = await readFile(new URL('./wheelmaker-release-server.service', import.meta.url), 'utf8');
 
