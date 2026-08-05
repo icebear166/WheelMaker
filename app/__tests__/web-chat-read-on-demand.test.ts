@@ -67,4 +67,29 @@ describe('web chat read-on-demand behavior', () => {
     expect(loadChatSessionBlock).toContain('await chatDurablePersistQueueRef.current.flush(runtimeKey);');
     expect(mainTsx).toContain('scheduleSelectedChatLoadRetry(runtimeKey);');
   });
+
+  test('a successful selected-session read keeps the read-attempt marker so empty sessions do not loop', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    const resetStart = mainTsx.indexOf('const resetSelectedChatLoadRetry = (');
+    const resetEnd = mainTsx.indexOf('const scheduleSelectedChatLoadRetry = (', resetStart);
+    expect(resetStart).toBeGreaterThan(-1);
+    expect(resetEnd).toBeGreaterThan(resetStart);
+    const resetBlock = mainTsx.slice(resetStart, resetEnd);
+    // A successful read must keep the attempt marker. Otherwise an empty
+    // session never satisfies `selectedVisible` (visibleMessageCount > 0) and
+    // the recovery effect re-issues read-session every time chatLoading flips
+    // back to false, toggling the spinner against the empty panel forever.
+    expect(resetBlock).not.toContain("chatSelectedLoadAttemptRuntimeKeyRef.current = ''");
+
+    const scheduleEnd = mainTsx.indexOf('useEffect(() => () => {', resetEnd);
+    expect(scheduleEnd).toBeGreaterThan(resetEnd);
+    const scheduleBlock = mainTsx.slice(resetEnd, scheduleEnd);
+    // The failure-retry path must still clear the marker so backoff can re-read.
+    expect(scheduleBlock).toContain("chatSelectedLoadAttemptRuntimeKeyRef.current = ''");
+  });
 });

@@ -9911,9 +9911,13 @@ export function App() {
       window.clearTimeout(chatSelectedLoadRetryTimerRef.current);
       chatSelectedLoadRetryTimerRef.current = null;
     }
-    if (chatSelectedLoadAttemptRuntimeKeyRef.current === runtimeKey) {
-      chatSelectedLoadAttemptRuntimeKeyRef.current = '';
-    }
+    // Intentionally do NOT clear chatSelectedLoadAttemptRuntimeKeyRef here.
+    // A successful read must keep the marker so that an empty session (zero
+    // messages, zero cache) still resolves to the 'none' recovery branch via
+    // `attemptedRuntimeKey === selectedRuntimeKey`. Clearing it here made the
+    // recovery effect re-issue read-session on every chatLoading flip, which
+    // looped forever for empty sessions and flickered the panel. The
+    // failure-retry path (scheduleSelectedChatLoadRetry) still clears it.
   };
 
   const scheduleSelectedChatLoadRetry = (runtimeKey: string) => {
