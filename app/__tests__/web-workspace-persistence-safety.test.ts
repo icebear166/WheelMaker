@@ -154,6 +154,15 @@ function rowValue(rows: Array<{k: string; v: string}>, key: string): unknown {
 }
 
 describe('workspace persistence safety', () => {
+  test('uses a shared 512 MiB chat content cache budget for every web client', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('const CHAT_CONTENT_CACHE_MAX_BYTES = 512 * 1024 * 1024;');
+  });
+
   test('deletes obsolete browser credential and server-settings rows at startup', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase({
