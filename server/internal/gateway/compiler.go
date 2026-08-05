@@ -1,0 +1,251 @@
+package gateway
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+func CompileConfig(global GlobalConfig, sites []SiteConfig) ([]byte, error) {
+	return CompileConfigAt(global, sites, "")
+}
+
+func CompileConfigAt(global GlobalConfig, sites []SiteConfig, storageRoot string) ([]byte, error) {
+	if err := ValidateGlobal(global); err != nil {
+		return nil, err
+	}
+	ordered := append([]SiteConfig(nil), sites...)
+	for _, site := range ordered {
+		if err := ValidateSite(site); err != nil {
+			return nil, fmt.Errorf("site %q: %w", site.Kind, err)
+		}
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].Host() == ordered[j].Host() {
+			return ordered[i].Kind < ordered[j].Kind
+		}
+		return ordered[i].Host() < ordered[j].Host()
+	})
+
+	document := map[string]any{
+		"admin": map[string]any{
+			"listen": "127.0.0.1:2019",
+		},
+		"apps": map[string]any{
+			"http": compileHTTPApp(ordered),
+			"tls":  compileTLSApp(global, ordered),
+		},
+		"logging": map[string]any{
+			"logs": map[string]any{
+				"default": map[string]any{
+					"level": normalizeLogLevel(global.Log.Level),
+				},
+			},
+		},
+	}
+	if storageRoot != "" {
+		document["storage"] = map[string]any{
+			"module": "file_system",
+			"root":   storageRoot,
+		}
+	}
+	return json.MarshalIndent(document, "", "  ")
+}
+
+func compileHTTPApp(sites []SiteConfig) map[string]any {
+	httpsRoutes := make([]any, 0, len(sites))
+	httpRoutes := make([]any, 0, len(sites))
+	for _, site := range sites {
+		httpsRoute := hostRoute(site, siteRoutes(site))
+		if site.HTTPS() {
+			httpsRoutes = append(httpsRoutes, httpsRoute)
+			httpRoutes = append(httpRoutes, hostRoute(site, []any{map[string]any{
+				"handle": []any{httpsRedirectHandler()},
+			}}))
+		} else {
+			httpRoutes = append(httpRoutes, httpsRoute)
+		}
+	}
+	servers := map[string]any{}
+	if len(httpRoutes) > 0 {
+		servers["http"] = map[string]any{
+			"listen": []string{":80"},
+			"routes": httpRoutes,
+		}
+	}
+	if len(httpsRoutes) > 0 {
+		servers["https"] = map[string]any{
+			"listen": []string{":443"},
+			"routes": httpsRoutes,
+		}
+	}
+	return map[string]any{"servers": servers}
+}
+
+func compileTLSApp(global GlobalConfig, sites []SiteConfig) map[string]any {
+	policies := make([]any, 0)
+	loadFiles := make([]any, 0)
+	for _, site := range sites {
+		if !site.HTTPS() {
+			continue
+		}
+		if site.TLS.CertificateFile != "" {
+			loadFiles = append(loadFiles, map[string]any{
+				"certificate": []string{site.TLS.CertificateFile},
+				"key":         site.TLS.KeyFile,
+			})
+			continue
+		}
+		issuer := map[string]any{"module": "acme"}
+		if global.ACME.Email != "" {
+			issuer["email"] = global.ACME.Email
+		}
+		policies = append(policies, map[string]any{
+			"subjects": []string{site.Host()},
+			"issuers":  []any{issuer},
+		})
+	}
+	certificates := map[string]any{}
+	if len(loadFiles) > 0 {
+		certificates["load_files"] = loadFiles
+	}
+	automation := map[string]any{}
+	if len(policies) > 0 {
+		automation["policies"] = policies
+	}
+	tls := map[string]any{}
+	if len(certificates) > 0 {
+		tls["certificates"] = certificates
+	}
+	if len(automation) > 0 {
+		tls["automation"] = automation
+	}
+	return tls
+}
+
+func hostRoute(site SiteConfig, routes []any) map[string]any {
+	return map[string]any{
+		"match": []any{map[string]any{"host": []string{site.Host()}}},
+		"handle": []any{map[string]any{
+			"handler": "subroute",
+			"routes":  routes,
+		}},
+		"terminal": true,
+	}
+}
+
+func siteRoutes(site SiteConfig) []any {
+	if site.Kind == SiteReleaseServer {
+		return releaseServerRoutes(site)
+	}
+	return workspaceRoutes(site)
+}
+
+func workspaceRoutes(site SiteConfig) []any {
+	root := site.StaticRoot()
+	return []any{
+		map[string]any{
+			"match":  []any{map[string]any{"path": []string{"/ws*"}}},
+			"handle": []any{reverseProxyHandler(site.UpstreamAddress())},
+		},
+		map[string]any{
+			"match": []any{map[string]any{"file": map[string]any{
+				"root":      root,
+				"try_files": []string{"{http.request.uri.path}"},
+			}}},
+			"handle": []any{securityHeadersHandler(), fileServerHandler(root)},
+		},
+		map[string]any{
+			"handle": []any{
+				securityHeadersHandler(),
+				map[string]any{"handler": "rewrite", "uri": "/index.html"},
+				fileServerHandler(root),
+			},
+		},
+	}
+}
+
+func releaseServerRoutes(site SiteConfig) []any {
+	root := site.StaticRoot()
+	return []any{
+		map[string]any{
+			"match":  []any{map[string]any{"path": []string{"/api/*", "/healthz"}}},
+			"handle": []any{reverseProxyHandler(site.UpstreamAddress())},
+		},
+		map[string]any{
+			"match": []any{map[string]any{
+				"method": []string{"GET", "HEAD"},
+				"path":   []string{"/*"},
+			}},
+			"handle": []any{
+				corsHeadersHandler(),
+				fileServerHandler(root),
+			},
+		},
+	}
+}
+
+func reverseProxyHandler(upstream string) map[string]any {
+	return map[string]any{
+		"handler": "reverse_proxy",
+		"upstreams": []any{map[string]any{
+			"dial": upstream,
+		}},
+		"headers": map[string]any{
+			"request": map[string]any{
+				"set": map[string]any{
+					"X-Forwarded-Proto": []string{"{http.request.scheme}"},
+				},
+			},
+		},
+	}
+}
+
+func fileServerHandler(root string) map[string]any {
+	return map[string]any{
+		"handler": "file_server",
+		"root":    root,
+	}
+}
+
+func corsHeadersHandler() map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"response": map[string]any{
+			"set": map[string]any{
+				"X-Content-Type-Options":       []string{"nosniff"},
+				"Referrer-Policy":              []string{"no-referrer"},
+				"Access-Control-Allow-Origin":  []string{"*"},
+				"Access-Control-Allow-Methods": []string{"GET, HEAD, OPTIONS"},
+				"Access-Control-Allow-Headers": []string{"Content-Type, Authorization"},
+			},
+		},
+	}
+}
+
+func securityHeadersHandler() map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"response": map[string]any{
+			"set": map[string]any{
+				"X-Content-Type-Options": []string{"nosniff"},
+				"Referrer-Policy":        []string{"no-referrer"},
+			},
+		},
+	}
+}
+
+func httpsRedirectHandler() map[string]any {
+	return map[string]any{
+		"handler":     "static_response",
+		"status_code": 308,
+		"headers": map[string]any{
+			"Location": []string{"https://{http.request.host}{http.request.uri}"},
+		},
+	}
+}
+
+func normalizeLogLevel(level string) string {
+	return strings.ToUpper(level)
+}

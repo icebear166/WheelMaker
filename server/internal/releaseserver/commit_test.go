@@ -88,6 +88,114 @@ func TestCommitCarriesOptionalPointersAcrossVersions(t *testing.T) {
 	}
 }
 
+func TestGatewayCommitUsesFixedCurrentAndPreviousSlots(t *testing.T) {
+	server, root := newAuthenticatedSessionTestServer(t)
+	first := prepareCompleteTestSession(t, server, startRequest{
+		Version:     "v1.1",
+		SourceSHA:   strings.Repeat("a", 40),
+		Publisher:   "local",
+		WithGateway: true,
+	})
+	firstStable, firstStatus := commitTestSession(t, server, first.SessionID)
+	if firstStatus != http.StatusOK || firstStable.Gateway == nil {
+		t.Fatalf("first Gateway stable = %+v, status = %d", firstStable.Gateway, firstStatus)
+	}
+	firstManifest, err := os.ReadFile(filepath.Join(root, "public", "gateway", "current", "gateway-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.1", "gateway-manifest.json")); !os.IsNotExist(err) {
+		t.Fatalf("Gateway manifest leaked into version release: %v", err)
+	}
+
+	second := prepareCompleteTestSession(t, server, startRequest{
+		Version:     "v1.2",
+		SourceSHA:   strings.Repeat("b", 40),
+		Publisher:   "local",
+		WithGateway: true,
+	})
+	secondStable, secondStatus := commitTestSession(t, server, second.SessionID)
+	if secondStatus != http.StatusOK || secondStable.Gateway == nil || secondStable.Gateway.Version != "v1.2" {
+		t.Fatalf("second Gateway stable = %+v, status = %d", secondStable.Gateway, secondStatus)
+	}
+	previousManifest, err := os.ReadFile(filepath.Join(root, "public", "gateway", "previous", "gateway-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(previousManifest, firstManifest) {
+		t.Fatal("Gateway previous slot does not contain the previous manifest")
+	}
+}
+
+func TestGatewayPointerCarriesForwardWhenReleaseOmitsGateway(t *testing.T) {
+	server, _ := newAuthenticatedSessionTestServer(t)
+	first := prepareCompleteTestSession(t, server, startRequest{
+		Version:     "v1.1",
+		SourceSHA:   strings.Repeat("a", 40),
+		Publisher:   "local",
+		WithGateway: true,
+	})
+	firstStable, firstStatus := commitTestSession(t, server, first.SessionID)
+	if firstStatus != http.StatusOK || firstStable.Gateway == nil {
+		t.Fatalf("first Gateway stable = %+v, status = %d", firstStable.Gateway, firstStatus)
+	}
+	second := prepareCompleteTestSession(t, server, startRequest{
+		Version:   "v1.2",
+		SourceSHA: strings.Repeat("b", 40),
+		Publisher: "local",
+	})
+	secondStable, secondStatus := commitTestSession(t, server, second.SessionID)
+	if secondStatus != http.StatusOK || secondStable.Gateway == nil {
+		t.Fatalf("Gateway pointer was not carried forward: %+v, status = %d", secondStable.Gateway, secondStatus)
+	}
+	if *secondStable.Gateway != *firstStable.Gateway {
+		t.Fatalf("Gateway pointer changed without a Gateway publish: first=%+v second=%+v", *firstStable.Gateway, *secondStable.Gateway)
+	}
+}
+
+func TestGatewayStableWriteFailureRestoresCurrentAndStagingFiles(t *testing.T) {
+	server, root := newAuthenticatedSessionTestServer(t)
+	first := prepareCompleteTestSession(t, server, startRequest{
+		Version:     "v1.1",
+		SourceSHA:   strings.Repeat("a", 40),
+		Publisher:   "local",
+		WithGateway: true,
+	})
+	if _, status := commitTestSession(t, server, first.SessionID); status != http.StatusOK {
+		t.Fatalf("first commit status = %d", status)
+	}
+	previousCurrent, err := os.ReadFile(filepath.Join(root, "public", "gateway", "current", "gateway-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := prepareCompleteTestSession(t, server, startRequest{
+		Version:     "v1.2",
+		SourceSHA:   strings.Repeat("b", 40),
+		Publisher:   "local",
+		WithGateway: true,
+	})
+	originalWrite := server.writeJSON
+	server.writeJSON = func(path string, value any, mode os.FileMode) error {
+		if filepath.Base(path) == "stable.json" {
+			return errors.New("injected Gateway stable failure")
+		}
+		return originalWrite(path, value, mode)
+	}
+	if _, status := commitTestSession(t, server, second.SessionID); status != http.StatusInternalServerError {
+		t.Fatalf("second commit status = %d", status)
+	}
+	current, err := os.ReadFile(filepath.Join(root, "public", "gateway", "current", "gateway-manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(current, previousCurrent) {
+		t.Fatal("Gateway current slot changed after stable write failure")
+	}
+	if _, err := os.Stat(filepath.Join(root, "staging", second.SessionID, "files", "gateway-manifest.json")); err != nil {
+		t.Fatalf("failed Gateway transaction was not restored to staging: %v", err)
+	}
+}
+
 func TestStableWriteFailureLeavesPreviousStableBytesUntouched(t *testing.T) {
 	server, root := newAuthenticatedSessionTestServer(t)
 	first := prepareCompleteTestSession(t, server, validStartRequest())
@@ -240,6 +348,31 @@ func prepareCompleteTestSession(t *testing.T, server *Server, request startReque
 		}
 		files["android-release.json"] = append(androidManifest, '\n')
 	}
+	if request.WithGateway {
+		gatewayArtifacts := map[string]any{}
+		for _, platform := range []string{"windows-amd64", "linux-amd64", "darwin-amd64", "darwin-arm64"} {
+			name := "wheelmaker-gateway-" + request.Version + "-" + platform + ".tar.zst"
+			body := []byte("gateway archive " + platform)
+			files[name] = body
+			gatewayArtifacts[platform] = map[string]any{
+				"path":   "/gateway/current/" + name,
+				"sha256": sha256BytesHex(body),
+				"size":   len(body),
+			}
+		}
+		gatewayManifest, err := json.Marshal(map[string]any{
+			"schema":      1,
+			"version":     request.Version,
+			"publishedAt": started.PublishedAt,
+			"sourceSha":   request.SourceSHA,
+			"path":        "/gateway/current/gateway-manifest.json",
+			"artifacts":   gatewayArtifacts,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		files["gateway-manifest.json"] = append(gatewayManifest, '\n')
+	}
 
 	artifacts := map[string]artifact{}
 	for _, platform := range []string{"windows-amd64", "linux-amd64", "darwin-amd64", "darwin-arm64"} {
@@ -251,13 +384,22 @@ func prepareCompleteTestSession(t *testing.T, server *Server, request startReque
 			Size:   int64(len(body)),
 		}
 	}
-	manifestRaw, err := json.Marshal(releaseManifest{
-		Schema:      2,
-		Version:     request.Version,
-		PublishedAt: started.PublishedAt,
-		SourceSHA:   request.SourceSHA,
-		Artifacts:   artifacts,
-	})
+	manifestValue := map[string]any{
+		"schema":      2,
+		"version":     request.Version,
+		"publishedAt": started.PublishedAt,
+		"sourceSha":   request.SourceSHA,
+		"artifacts":   artifacts,
+	}
+	if request.WithGateway {
+		manifestValue["gateway"] = map[string]any{
+			"manifestPath":   "/gateway/current/gateway-manifest.json",
+			"manifestSha256": sha256BytesHex(files["gateway-manifest.json"]),
+			"sourceSha":      request.SourceSHA,
+			"version":        request.Version,
+		}
+	}
+	manifestRaw, err := json.Marshal(manifestValue)
 	if err != nil {
 		t.Fatal(err)
 	}

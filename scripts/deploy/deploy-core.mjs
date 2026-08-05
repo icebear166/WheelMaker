@@ -17,6 +17,13 @@ import { createZstdDecompress } from 'node:zlib';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
+import {
+  configureWorkspaceSite,
+  createGatewayQuestioner,
+  gatewayHome,
+  parseGatewayOptions,
+} from './gateway-config.mjs';
+
 const BLOCK_SIZE = 512;
 const DEFAULT_MAX_ENTRIES = 20_000;
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024 * 1024;
@@ -1917,6 +1924,76 @@ async function executeDeployment(internalUpdate, deps, runtime) {
     if (phase !== 'verifying') await setState('verifying');
     if (!internalUpdate) await ensureRuntimeConfig(home, deps, platform);
 
+    // Gateway is deliberately outside the Hub update transaction. A normal
+    // `deploy.mjs update` never enters this block, while a full deployment
+    // installs/starts the independent Gateway before stopping the Hub.
+    if (!internalUpdate && deps.gatewayEnabled) {
+      const gatewayOptions = deps.gatewayOptions ?? {};
+      if (!deps.interactive && !gatewayOptions.explicit) {
+        throw new Error(
+          'non-interactive deployment requires --gateway-write or --gateway-skip',
+        );
+      }
+      let questioner;
+      try {
+        if (deps.interactive && !deps.gatewayQuestion) {
+          questioner = createGatewayQuestioner();
+        }
+        const configResult = await configureWorkspaceSite({
+          home: deps.gatewayHome ?? gatewayHome({installDirectory: home}),
+          interactive: Boolean(deps.interactive),
+          ask: deps.gatewayQuestion ?? questioner?.ask,
+          defaults: {
+            publicUrl: deps.workspacePublicUrl,
+            webRoot: join(home, 'web'),
+            upstream: deps.workspaceUpstream ?? 'http://127.0.0.1:9630',
+          },
+          write: gatewayOptions.mode === 'write',
+          site: gatewayOptions.mode === 'write'
+            ? {
+                schema: 1,
+                kind: 'workspace',
+                publicUrl: gatewayOptions.values.publicUrl ?? deps.workspacePublicUrl,
+                webRoot: gatewayOptions.values.webRoot ?? join(home, 'web'),
+                upstream: gatewayOptions.values.upstream ?? deps.workspaceUpstream ?? 'http://127.0.0.1:9630',
+                tls: {
+                  certificateFile: gatewayOptions.values.certificateFile ?? '',
+                  keyFile: gatewayOptions.values.keyFile ?? '',
+                },
+              }
+            : undefined,
+          decision: gatewayOptions.mode === 'skip' ? {write: false} : undefined,
+        });
+        if (configResult.written) deps.reportStatus?.('Workspace Gateway configuration written');
+        else deps.reportStatus?.('Workspace Gateway configuration unchanged');
+      } finally {
+        questioner?.close();
+      }
+
+      const {installGatewayFromStable} = await import('./gateway-install.mjs');
+      const gatewayResult = await installGatewayFromStable({
+        stable: deps.trustedStable,
+        releaseBaseUrl: deps.trustedReleaseBaseUrl,
+        fetchBytes: deps.fetchBytes,
+        gatewayHome: deps.gatewayHome ?? gatewayHome({installDirectory: home}),
+        installDirectory: home,
+        userHome: deps.userHome ?? homedir(),
+        platformKey: deps.gatewayPlatformKey ?? currentPlatformKey(platform, deps.arch ?? process.arch),
+        platform,
+        arch: deps.arch ?? process.arch,
+        nodePath: deps.nodePath ?? process.execPath,
+        uid: deps.uid,
+        runner: deps.gatewayRunner ?? deps.runner,
+        gatewayRuntime: deps.gatewayRuntime,
+        validateBinary: deps.validateGatewayBinary,
+        now,
+        reportStatus: deps.reportStatus,
+      });
+      if (gatewayResult.skipped && gatewayResult.reason === 'missing-pointer') {
+        deps.reportStatus?.('No Gateway artifact is published; leaving Gateway unchanged');
+      }
+    }
+
     await setState('applying');
     await runtime.stop();
     runtimeStopped = true;
@@ -1991,7 +2068,41 @@ async function executeDeployment(internalUpdate, deps, runtime) {
   if (cleanupError) throw cleanupError;
 }
 
+async function executeGatewayDeployment(deps, {force = false} = {}) {
+  if (!deps.trustedStable) throw new Error('trusted stable metadata is required');
+  const {installGatewayFromStable} = await import('./gateway-install.mjs');
+  const result = await installGatewayFromStable({
+    stable: deps.trustedStable,
+    releaseBaseUrl: deps.trustedReleaseBaseUrl,
+    fetchBytes: deps.fetchBytes,
+    gatewayHome: deps.gatewayHome ?? gatewayHome({installDirectory: deps.installDirectory}),
+    installDirectory: deps.installDirectory,
+    userHome: deps.userHome ?? homedir(),
+    platformKey: deps.gatewayPlatformKey ?? currentPlatformKey(deps.platform ?? process.platform, deps.arch ?? process.arch),
+    platform: deps.platform ?? process.platform,
+    arch: deps.arch ?? process.arch,
+    nodePath: deps.nodePath ?? process.execPath,
+    uid: deps.uid,
+    runner: deps.gatewayRunner ?? deps.runner,
+    gatewayRuntime: deps.gatewayRuntime,
+    validateBinary: deps.validateGatewayBinary,
+    now: deps.now,
+    reportStatus: deps.reportStatus,
+    force,
+  });
+  if (result.skipped && result.reason === 'missing-pointer') {
+    throw new Error('stable release has no Gateway artifact; publish a release with Gateway first');
+  }
+  deps.reportStatus?.(`Gateway deployment completed: ${result.pointer?.version ?? deps.trustedStable.gateway?.version}`);
+  return result;
+}
+
 export async function runCore(args, deps = {}) {
+  const gatewayInvocation = parseGatewayOptions(args);
+  args = gatewayInvocation.commandArgs;
+  if (gatewayInvocation.explicit) {
+    deps = {...deps, gatewayOptions: gatewayInvocation};
+  }
   if (args.length === 1 && args[0] === 'migrate-uninstall') {
     deps.reportStatus?.('Removing legacy services and files');
     await executeLegacyMigration(deps);
@@ -2043,6 +2154,9 @@ export async function runCore(args, deps = {}) {
     await executeDesktopUpdate(deps);
     deps.reportStatus?.('Desktop update completed');
     return;
+  }
+  if (args.length === 1 && (args[0] === 'gateway' || args[0] === 'gateway-update')) {
+    return executeGatewayDeployment(deps, {force: args[0] === 'gateway-update'});
   }
   const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {

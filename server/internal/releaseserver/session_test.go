@@ -25,6 +25,7 @@ func TestStartSessionUsesServerIdentityAndFixedWhitelist(t *testing.T) {
 		Publisher:   "local",
 		WithDesktop: true,
 		WithAndroid: true,
+		WithGateway: true,
 	})
 
 	if response.Schema != 1 || response.SessionID != strings.Repeat("01", 16) {
@@ -37,14 +38,17 @@ func TestStartSessionUsesServerIdentityAndFixedWhitelist(t *testing.T) {
 	if session.Version != "v1.1" || session.Publisher != "local" || !session.WithDesktop || !session.WithAndroid {
 		t.Fatalf("session = %+v", session)
 	}
-	if len(session.AllowedFiles) != 10 {
-		t.Fatalf("allowed file count = %d, want 10", len(session.AllowedFiles))
+	if len(session.AllowedFiles) != 15 {
+		t.Fatalf("allowed file count = %d, want 15", len(session.AllowedFiles))
 	}
 	if _, ok := session.AllowedFiles["WheelMakerDesktop.exe"]; !ok {
 		t.Fatal("Desktop file missing from whitelist")
 	}
 	if _, ok := session.AllowedFiles["WheelMakerAndroid.apk"]; !ok {
 		t.Fatal("Android file missing from whitelist")
+	}
+	if _, ok := session.AllowedFiles["gateway-manifest.json"]; !ok {
+		t.Fatal("Gateway manifest missing from whitelist")
 	}
 }
 

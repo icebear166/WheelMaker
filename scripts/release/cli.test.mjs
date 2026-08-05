@@ -146,12 +146,22 @@ test('CLI flags remain independent and reject retired command syntax', () => {
     publish: false,
     withAndroid: false,
     withDesktop: false,
+    withGateway: false,
   });
   assert.deepEqual(
     parseReleaseArgs(['--with-desktop', '--with-android', '--publish']),
-    {publish: true, withAndroid: true, withDesktop: true},
+    {publish: true, withAndroid: true, withDesktop: true, withGateway: false},
   );
   assert.throws(() => parseReleaseArgs(['build']), /unknown option/);
+});
+
+test('CLI accepts the optional Gateway artifact flag without a separate version', () => {
+  assert.deepEqual(parseReleaseArgs(['--with-gateway']), {
+    publish: false,
+    withAndroid: false,
+    withDesktop: false,
+    withGateway: true,
+  });
 });
 
 test('local release holds the shared build lock through asset construction', async () => {
@@ -262,6 +272,16 @@ test('publish starts its remote session before building and uses server publishe
     'cleanup',
   ]);
   assert.deepEqual(result, {mode: 'publish', stable: {schema: 2, version: 'v1.24'}});
+});
+
+test('publish propagates Gateway selection through session and build without a separate version', async () => {
+  const deps = fakeCliDeps();
+  await runRelease(
+    {publish: true, withGateway: true},
+    deps,
+  );
+  assert.equal(deps.state.sessions[0].withGateway, true);
+  assert.equal(deps.state.builds[0].withGateway, true);
 });
 
 test('a failed build exposes only a generic failed status and cancels the session', async () => {

@@ -115,6 +115,16 @@ describe('chat turn groups', () => {
     expect(styles).toContain('.chat-work-group-child.compact');
   });
 
+  test('keeps expanded work children flush with the transcript column', () => {
+    const styles = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'),
+      'utf8',
+    );
+    expect(styles).toMatch(
+      /\.chat-view-width-fixed-800 \.chat-work-group \.chat-view-content,\s*\n\s*\.chat-view-width-fixed-800-edge-surfaces \.chat-work-group \.chat-view-content\s*\{[^}]*width:\s*100%;[^}]*margin-left:\s*0;[^}]*margin-right:\s*0;/,
+    );
+  });
+
   test('highlights matching characters inside structured prompt text', async () => {
     let view!: ReactTestRenderer.ReactTestRenderer;
     await ReactTestRenderer.act(() => {

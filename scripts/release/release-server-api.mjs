@@ -193,6 +193,7 @@ export class ReleaseServerApi {
         version: input.version,
         withAndroid: input.withAndroid ?? false,
         withDesktop: input.withDesktop ?? false,
+        withGateway: input.withGateway ?? false,
       },
       method: 'POST',
     });

@@ -157,6 +157,16 @@ test('unknown commands fail before launcher files are mutated', async () => {
   assert.deepEqual(deps.events, []);
 });
 
+test('Gateway deployment commands accept explicit config modes', () => {
+  assert.deepEqual(parseDeployArgs(['gateway']), ['gateway']);
+  assert.deepEqual(parseDeployArgs(['gateway-update']), ['gateway-update']);
+  assert.deepEqual(
+    parseDeployArgs(['--gateway-write', '--gateway-public-url=https://workspace.example.com']),
+    ['--gateway-write', '--gateway-public-url=https://workspace.example.com'],
+  );
+  assert.throws(() => parseDeployArgs(['update', '--gateway-skip']), /only valid for a full deployment/);
+});
+
 test('Desktop self-update accepts only a positive parent PID', () => {
   assert.deepEqual(
     parseDeployArgs(['desktop-self-update', '--parent-pid', '42']),

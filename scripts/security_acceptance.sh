@@ -94,7 +94,7 @@ gate 'Android JVM tests and lint'
 (cd "$android_root" && gradle test lint)
 
 gate 'Node release and deployment tests'
-node --test "$repo_root"/scripts/release-server/*.test.mjs "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs
+node --test "$repo_root"/scripts/release-server/*.test.mjs "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs "$repo_root"/scripts/disable-nginx.test.mjs
 
 gate 'Publish and deployment script tests'
 for script_test in \
@@ -127,12 +127,12 @@ else
 fi
 
 release_deploy="$repo_root/scripts/release-server/deploy.mjs"
-release_nginx="$repo_root/scripts/release-server/nginx.conf"
 publisher_config="$repo_root/scripts/release/publisher-config.mjs"
 grep -F '"listen":"127.0.0.1:9680"' "$release_deploy" >/dev/null || fail 'release service application listener is not loopback-only'
-grep -F 'location /api/' "$release_nginx" >/dev/null || fail 'release publish API location is missing'
-if sed -n '/location \/api\//,/location = \/healthz/p' "$release_nginx" | grep -F 'Access-Control-Allow-Origin' >/dev/null; then
-  fail 'release publish API exposes wildcard CORS'
+grep -F '/etc/wheelmaker-gateway/home' "$release_deploy" >/dev/null || fail 'release deployment does not discover the fixed Gateway home'
+grep -F 'release-server.json' "$release_deploy" >/dev/null || fail 'release deployment does not write the semantic Gateway site'
+if grep -E 'Caddyfile|apt-get|systemctl (enable|restart) caddy|systemctl (stop|disable) nginx' "$release_deploy" >/dev/null; then
+  fail 'release server deployment contains external proxy or Nginx lifecycle actions'
 fi
 grep -F "join(homeDirectory, '.wheelmaker')" "$publisher_config" >/dev/null || fail 'publisher Token config is not rooted below the publisher user home'
 if sed -n '/const files = \[/,/\];/p' "$release_deploy" | grep -E 'release-server\.json|WHEELMAKER_RELEASE_TOKEN|identityFile' >/dev/null; then

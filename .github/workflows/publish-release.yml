@@ -17,6 +17,11 @@ on:
         default: false
         required: true
         type: boolean
+      with_gateway:
+        description: Build and publish wheelmaker-gateway for all supported platforms
+        default: false
+        required: true
+        type: boolean
 
 permissions:
   contents: read
@@ -103,5 +108,8 @@ jobs:
           fi
           if [[ "${{ inputs.with_android }}" == "true" ]]; then
             args+=(--with-android)
+          fi
+          if [[ "${{ inputs.with_gateway }}" == "true" ]]; then
+            args+=(--with-gateway)
           fi
           node scripts/release.mjs "${args[@]}"

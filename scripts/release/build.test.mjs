@@ -513,6 +513,32 @@ test('optional Android is built once with the unified release identity', async (
   }
 });
 
+test('optional Gateway is built once per supported platform with the unified release identity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-integration-'));
+  const repoRoot = join(root, 'repo');
+  const runner = recordingRunner();
+  try {
+    await mkdir(join(repoRoot, 'app'), { recursive: true });
+    await mkdir(join(repoRoot, 'server'), { recursive: true });
+    const result = await buildRelease({
+      outputRoot: join(root, 'out'),
+      repoRoot,
+      runner,
+      sourceSha: '0'.repeat(40),
+      version: 'v1.24',
+      withGateway: true,
+    });
+    assert.equal(result.gatewayPlatforms.length, RELEASE_TARGETS.length);
+    const gatewayBuilds = runner.calls.filter(
+      ({ command, args }) => command === 'go' && args.at(-1) === './cmd/wheelmaker-gateway',
+    );
+    assert.equal(gatewayBuilds.length, RELEASE_TARGETS.length);
+    assert.equal(gatewayBuilds.every(({ args }) => args.some(arg => arg.includes('main.version=v1.24'))), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('Windows command resolution runs npm CLI through Node without a shell', () => {
   assert.deepEqual(resolveCommand('npm', 'win32', 'C:\\Node\\node.exe'), {
     args: ['C:\\Node\\node_modules\\npm\\bin\\npm-cli.js'],

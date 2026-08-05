@@ -47,7 +47,10 @@ async function collectEntries(sourceDir, relative = '') {
     entries.push({
       body: await readFile(sourcePath),
       mode:
-        tarPath === 'hub/wheelmaker' || tarPath === 'hub/wheelmaker.exe'
+        tarPath === 'hub/wheelmaker' ||
+        tarPath === 'hub/wheelmaker.exe' ||
+        tarPath === 'wheelmaker-gateway' ||
+        tarPath === 'wheelmaker-gateway.exe'
           ? 0o755
           : 0o644,
       path: tarPath,

@@ -56,25 +56,31 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
     const templateRoot = join(dependencies.repoRoot, 'scripts', 'release-server');
     const files = [
       binaryPath,
-      join(templateRoot, 'nginx-bootstrap.conf'),
-      join(templateRoot, 'nginx.conf'),
       join(templateRoot, 'wheelmaker-release-server.service'),
       join(templateRoot, 'index.html'),
       join(templateRoot, 'release-home.js'),
     ];
     dependencies.write(`Uploading release server files to ${remote.host}`);
     await dependencies.upload({files, remote, remoteDirectory});
-    dependencies.write('Installing release server, Nginx, and systemd configuration');
+    dependencies.write('Installing release server and systemd configuration; validating Gateway site');
     await dependencies.install({
       domain: origin.hostname,
       remote,
       remoteDirectory,
       script: buildRemoteInstallScript(),
       sourceSha: source.sha,
+      publicUrl: origin.origin,
     });
     const healthURL = `${channel.baseUrl}/healthz`;
     dependencies.write(`Checking ${healthURL}`);
-    await dependencies.health(healthURL);
+    try {
+      await dependencies.health(healthURL);
+    } catch (error) {
+      // Public HTTPS is informational when the independently managed Gateway
+      // is stopped or DNS is not yet pointed at this host. The remote script
+      // already verified the Release Server loopback health endpoint.
+      dependencies.write(`Public Gateway health is not ready yet: ${error.message}`);
+    }
     dependencies.write(`Release server deployed from ${source.sha}`);
     return {host: remote.host, sourceSha: source.sha};
   } finally {
@@ -88,14 +94,17 @@ export function buildRemoteInstallScript() {
 set -euo pipefail
 
 source_sha="$1"
-domain="$2"
+public_url="$2"
 upload_dir="$3"
 
 case "$source_sha" in
   *[!0-9a-f]*|'') echo "invalid source SHA" >&2; exit 1 ;;
 esac
 [ "$(printf '%s' "$source_sha" | wc -c)" -eq 40 ] || { echo "invalid source SHA length" >&2; exit 1; }
-[ "$domain" = "release.wheelmaker.top" ] || { echo "invalid release domain" >&2; exit 1; }
+case "$public_url" in
+  https://* ) ;;
+  *) echo "release server public URL must use HTTPS" >&2; exit 1 ;;
+esac
 [ "$upload_dir" = "/tmp/wheelmaker-release-server-$source_sha" ] || { echo "invalid upload directory" >&2; exit 1; }
 trap 'rm -rf -- "$upload_dir"' EXIT
 
@@ -114,6 +123,27 @@ install -d -o wheelmaker-release -g www-data -m 2750 /srv/wheelmaker-release/pub
 install -d -o wheelmaker-release -g wheelmaker-release -m 0700 /srv/wheelmaker-release/staging /srv/wheelmaker-release/data
 install -d -o root -g wheelmaker-release -m 2750 /etc/wheelmaker-release-server
 install -d -o root -g root -m 0755 /opt/wheelmaker-release-server/versions
+
+# Gateway is a separately installed host service. Release Server deployment
+# discovers its fixed home from the installer metadata and never installs,
+# starts, stops, or upgrades that service.
+gateway_meta="/etc/wheelmaker-gateway/home"
+if [ ! -r "$gateway_meta" ]; then
+  echo "WheelMaker Gateway is not installed; run the explicit Gateway deployment first" >&2
+  exit 1
+fi
+gateway_home="$(cat "$gateway_meta")"
+case "$gateway_home" in
+  /*) ;;
+  *) echo "Gateway metadata contains an invalid home" >&2; exit 1 ;;
+esac
+gateway_binary="$gateway_home/bin/wheelmaker-gateway"
+[ -x "$gateway_binary" ] || { echo "Gateway binary is missing at $gateway_binary; run the explicit Gateway deployment first" >&2; exit 1; }
+gateway_user="$(stat -c '%U' "$gateway_home" 2>/dev/null || stat -f '%Su' "$gateway_home")"
+[ -n "$gateway_user" ] && [ "$gateway_user" != "root" ] || { echo "Gateway metadata must identify a non-root runtime user" >&2; exit 1; }
+gateway_group="$(id -gn "$gateway_user")"
+gateway_paths_json="$($gateway_binary paths --home "$gateway_home")"
+printf '%s' "$gateway_paths_json" | grep -F '"home"' >/dev/null || { echo "Gateway paths command returned invalid metadata" >&2; exit 1; }
 
 if [ ! -f /etc/wheelmaker-release-server/config.json ]; then
   config_tmp="/etc/wheelmaker-release-server/.config-$source_sha.tmp"
@@ -134,32 +164,52 @@ mv -Tf /opt/wheelmaker-release-server/current.next /opt/wheelmaker-release-serve
 install -o root -g root -m 0644 "$upload_dir/wheelmaker-release-server.service" /etc/systemd/system/wheelmaker-release-server.service
 install -o wheelmaker-release -g www-data -m 0644 "$upload_dir/index.html" /srv/wheelmaker-release/public/index.html
 install -o wheelmaker-release -g www-data -m 0644 "$upload_dir/release-home.js" /srv/wheelmaker-release/public/release-home.js
+
+# Grant only directory traversal/read access to the Gateway runtime user. Do
+# not make the release tree world-readable and do not change its owner.
+if command -v setfacl >/dev/null 2>&1; then
+  setfacl -m "u:$gateway_user:rx" /srv/wheelmaker-release /srv/wheelmaker-release/public
+else
+  [ "$gateway_user" = "wheelmaker-release" ] || {
+    echo "setfacl is required to grant Gateway read access to the release tree" >&2
+    exit 1
+  }
+fi
+
+gateway_sites="$gateway_home/sites"
+install -d -o "$gateway_user" -g "$gateway_group" -m 0750 "$gateway_sites"
+gateway_site_tmp="$gateway_sites/.release-server-$source_sha.tmp"
+printf '{"schema":1,"kind":"release-server","publicUrl":"%s","publicRoot":"/srv/wheelmaker-release/public","upstream":"http://127.0.0.1:9680","tls":{"certificateFile":"","keyFile":""}}\n' "$public_url" > "$gateway_site_tmp"
+chown "$gateway_user:$gateway_group" "$gateway_site_tmp"
+chmod 0600 "$gateway_site_tmp"
+mv -f "$gateway_site_tmp" "$gateway_sites/release-server.json"
+"$gateway_binary" validate --home "$gateway_home"
+"$gateway_binary" render --home "$gateway_home"
+
 systemctl daemon-reload
 systemctl enable wheelmaker-release-server.service
 systemctl restart wheelmaker-release-server.service
 
-site_available="/etc/nginx/sites-available/$domain"
-site_enabled="/etc/nginx/sites-enabled/$domain"
-if [ ! -f "/etc/letsencrypt/live/$domain/fullchain.pem" ]; then
-  install -o root -g root -m 0644 "$upload_dir/nginx-bootstrap.conf" "$site_available"
-  ln -sfn "$site_available" "$site_enabled"
-  nginx -t
-  systemctl reload nginx
-  certbot certonly --webroot --non-interactive --agree-tos --webroot-path /srv/wheelmaker-release/public --domain "$domain"
-fi
-install -o root -g root -m 0644 "$upload_dir/nginx.conf" "$site_available"
-ln -sfn "$site_available" "$site_enabled"
-nginx -t
-systemctl reload nginx
 health_ready=0
 for attempt in $(seq 1 15); do
-  if curl --fail --silent --show-error "https://$domain/healthz" >/dev/null; then
+  if curl --fail --silent --show-error http://127.0.0.1:9680/healthz >/dev/null; then
     health_ready=1
     break
   fi
   sleep 1
 done
-[ "$health_ready" -eq 1 ] || { echo "release server HTTPS health check timed out" >&2; exit 1; }
+[ "$health_ready" -eq 1 ] || { echo "release server loopback health check timed out" >&2; exit 1; }
+
+# If Gateway is running, apply the generated config through its local admin
+# endpoint. If it is stopped, leave it stopped; the new site applies on the
+# next explicit Gateway start.
+if curl --fail --silent http://127.0.0.1:2019/config/ >/dev/null 2>&1; then
+  curl --fail --silent --show-error -X POST -H 'Content-Type: application/json' \
+    --data-binary @"$gateway_home/generated/caddy.json" \
+    http://127.0.0.1:2019/load >/dev/null
+else
+  echo "Gateway is stopped; release-server.json will apply on the next manual Gateway start" >&2
+fi
 `;
 }
 
@@ -234,13 +284,13 @@ export function createDefaultDependencies() {
         {cwd: defaultRepoRoot},
       );
     },
-    async install({domain, remote, remoteDirectory, script, sourceSha}) {
+    async install({publicUrl, remote, remoteDirectory, script, sourceSha}) {
       await runProcess(
         'ssh',
         [
           ...sshArguments(remote),
           `${remote.user}@${remote.host}`,
-          `bash -s -- ${sourceSha} ${domain} ${remoteDirectory}`,
+          `bash -s -- ${sourceSha} ${publicUrl} ${remoteDirectory}`,
         ],
         {cwd: defaultRepoRoot, input: script},
       );
