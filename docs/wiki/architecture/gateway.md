@@ -6,15 +6,14 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 
 ## 运行时边界
 
-- Gateway 使用与本机 Hub 相同的操作系统用户和普通权限，但拥有独立系统服务。没有 Hub 的 Release-only 主机使用执行显式 Gateway 部署的当前非 root 用户。
+- Gateway 使用与本机 Hub 相同的操作系统用户和普通权限，但拥有独立系统服务。没有 Hub 的 Release-only 主机使用执行显式 Gateway 部署的当前用户；Workspace 与 Release Server 同机时必须由同一登录用户部署，才能共享一个 Gateway Home。
 - 首次安装通过管理员权限注册开机自启和低位端口能力，安装后立即尝试启动。`start` / `stop` 只控制当前运行状态，不改变开机自启设置。
-- 旧 Nginx Release-only 主机迁移时，`bootstrap-release-gateway.bat` 是一次性例外：它从干净源码安装固定 `/srv/wheelmaker-release/gateway`，注册服务但默认不启动，等待 Nginx 停止后再由 `start.sh` 启动。
-- Hub/Web 的普通 `deploy.mjs update` 不下载、更新、重启或修改 Gateway。Gateway 显式升级可有数秒中断；启动失败时恢复本地上一版。
+- Hub/Web 的普通完整部署和 `deploy.mjs update` 都不下载、安装、更新、启动、重启或修改 Gateway。Gateway 只由显式 `gateway`、`gateway-update` 和 start/stop 入口管理；显式升级可有数秒中断，启动失败时恢复本地上一版。
 - Gateway 和部署器不停止、卸载或修改 Nginx，也不修改 DNS、本机防火墙或云安全组。
 
 ## 配置所有权
 
-Gateway Home 在首次安装时确定为绝对路径，例如 `~/.wheelmaker/gateway/`：
+Gateway Home 始终属于执行部署的实际用户，路径为 `~/.wheelmaker/gateway/`：
 
 ```text
 gateway/
@@ -25,7 +24,13 @@ gateway/
   data/                         # Caddy ACME 证书和状态
 ```
 
-`config.json` 只存放宿主机级共享设置，已存在时部署不覆盖。部署器只修改自己的站点文件，不直接编辑聚合后的 Caddy JSON。`kind` 限定路由合同，不允许原始 Caddyfile、任意 Caddy JSON 或非 loopback 上游。
+`config.json` 只存放宿主机级共享设置，已存在时部署不覆盖。Workspace 与 Release Server 部署器分别只修改 `workspace.json` 和 `release-server.json`，不直接编辑聚合后的 Caddy JSON，也不通过 `/srv` 或 `/etc/wheelmaker-gateway/home` 发现 Gateway Home。`kind` 限定路由合同，不允许原始 Caddyfile、任意 Caddy JSON 或非 loopback 上游。
+
+两个部署入口统一使用 `--gateway=none|caddy`：
+
+- `none` 是严格无操作，不创建、覆盖或删除 Gateway 目录和站点文件；已有 Nginx 或其他入口继续工作。
+- `caddy` 只自动创建站点目录并原子写入当前组件拥有的语义 JSON；它不要求 Caddy 已安装，也不触发 Gateway 校验、渲染或 reload。
+- 非交互调用未传参数时按 `none` 处理。Workspace 完整交互部署未传参数时每次询问，默认选择 `none`；`deploy.mjs update` 永远不进入该流程。
 
 ## 站点合同
 
@@ -36,22 +41,24 @@ gateway/
 
 ## 生命周期
 
-Gateway 校验全局配置和全部站点后生成运行时 Caddy JSON。合法变更使用原子写入和热加载；无效变更保留上一份有效配置。Release Server 部署只写入自己的站点文件，不启动或停止 Gateway；如果 Gateway 正在运行，有效配置会被检测并热加载。
+Gateway 进程校验全局配置和全部站点后生成运行时 Caddy JSON。合法变更使用原子写入和热加载；无效变更保留上一份有效配置。站点部署器只负责写文件，不判断 Gateway 是否正在运行，配置消费属于 Gateway 自身生命周期。
 
 部署入口：
 
 ```text
-node deploy.mjs --gateway-skip                 # 完整部署，保留 Workspace 站点
-node deploy.mjs --gateway-write --gateway-public-url=https://workspace.example.com
+node deploy.mjs --gateway=none                 # 完整部署，不触碰入口配置
+node deploy.mjs --gateway=caddy --gateway-public-url=https://workspace.example.com
 node deploy.mjs gateway                         # 只安装/启动 stable 中的 Gateway
 node deploy.mjs gateway-update                 # 显式下载、校验并更新 Gateway，可回滚
-deploy-release-server.bat --legacy-nginx       # 一次性先升级旧 Nginx 后的 Release Server
-bootstrap-release-gateway.bat                 # 一次性安装 Release-only Gateway，默认不启动
+deploy-release-server.bat --gateway=none       # 部署 Release Server，不触碰入口配置
+deploy-release-server.bat --gateway=caddy      # 另写 release-server.json
 ~/.wheelmaker/gateway/start.sh|stop.sh          # 只控制 Gateway 当前运行状态
 ```
 
-完整部署的交互模式每次询问是否写 `workspace.json`；回答否不会删除现有文件，但 Gateway 下载、安装和启动仍按默认流程执行。普通 `node deploy.mjs update` 不读取 Gateway 状态，也不触碰其服务。
+Workspace 的 `workspace.json` 已存在且没有显式新 URL 时复用原值；显式 `--gateway-public-url` 时更新。首次交互配置询问公网 URL，首次非交互 Caddy 配置必须提供该参数。Release Server 的公网 URL 固定读取 release channel；两个部署器都不接受 web root、upstream 或证书路径覆盖参数。
 
 旧 Nginx 不由 Gateway 或 Release Server 部署流程处理。需要迁移时，运维者可单独运行 `scripts/disable-nginx.sh` 或 `scripts/disable-nginx.ps1`；脚本只停止并禁止已识别的 Nginx 服务自启，不删除软件包、配置和证书。无法安全识别服务时脚本返回人工处理提示。
 
 > 详细设计：[`docs/scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md)
+>
+> 配置选择与 Release Server 迁移决策：[`docs/scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md`](../../scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md)

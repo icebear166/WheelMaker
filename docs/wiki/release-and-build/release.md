@@ -27,9 +27,23 @@
 
 现有发布选项中另增 Gateway，行为与 Android APK 选项一致。勾选时使用本次 WheelMaker 版本构建四个 Gateway 平台产物，使用同一发布会话上传，以大小和 SHA-256 校验并与主版本一起提交。Gateway 不进入 `releases/v1.x/`，而是使用固定 `/gateway/` 命名空间，保留当前和上一版清单/产物。`stable.json` 携带 Gateway 当前指针；未勾选时继承上一个指针。Gateway 构建、上传或提交失败会使整次发布失败并保留旧 stable。
 
-目标机的完整部署会默认下载、安装并启动 Gateway；日常 `deploy.mjs update` 不检查或触碰 Gateway。Gateway 的站点配置位于固定 Gateway Home，与 Hub 的 `config.json` 分开，各个部署器只维护自己的站点文件。
+Gateway 产物发布与目标机入口配置是两条独立控制流。目标机的普通完整部署与日常 `deploy.mjs update` 都不下载、安装或启动 Gateway；显式 `deploy.mjs gateway`、`gateway-update` 和 start/stop 入口保留。Gateway 的站点配置位于部署用户的 `~/.wheelmaker/gateway/sites`，与 Hub 的 `config.json` 分开，各个部署器只维护自己的站点文件。
+
+Hub/Web 与 Release Server 部署入口统一接受 `--gateway=none|caddy`。`none` 对 Gateway 文件严格无操作；`caddy` 只写当前组件的站点 JSON，不安装、验证、渲染、reload 或控制 Nginx/Caddy。Workspace 同机使用 `workspace.json`，Release Server 使用 `release-server.json`；同一用户部署时两者自然聚合到同一 Gateway Home。
 
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
+
+### Release Server 目标机部署
+
+Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不创建专门运行用户。版本化二进制和配置位于 `~/.wheelmaker/release-server`，service 位于用户 systemd 目录；发布数据、staging 与公开资产继续位于 `/srv/wheelmaker-release`，保持旧 Nginx 的静态目录和 `127.0.0.1:9680` upstream 不变。部署器管理 Release Server 自身的 user unit、linger、重启和健康检查，但不管理入口服务。
+
+普通部署同时承担旧系统级 `wheelmaker-release-server.service` 的一次性安全迁移：停止旧服务前完成环境预检与新版本 staging，原样迁移 `/etc/wheelmaker-release-server/config.json` 的 Token 哈希并记录旧服务状态和数据权限；随后停止并禁用旧服务、把数据目录写权限交给 SSH 用户、启动用户服务，并检查 loopback 与公网 healthz。失败时恢复旧权限和旧服务状态；成功后保留旧 unit、`/opt` 二进制、`/etc` 配置和旧系统用户，但维持旧服务 disabled。
+
+选择 `--gateway=caddy` 时只在 SSH 用户 Home 写 `release-server.json`，公网 URL 从 `scripts/release/channel.json` 读取。机器尚未安装 Caddy 时该文件保持休眠，旧 Nginx 仍使用相同公开目录和 upstream，因此部署不会依赖入口切换。
+
+首次发布 Token 初始化也使用同一 SSH 用户、Home 中的二进制与配置以及用户级 systemd。未选择 Gateway 发布产物时，发布器省略 `withGateway` 字段，以兼容仍采用严格请求校验的旧 Release Server；该兼容不改变协议版本。
+
+> 决策来源：[`docs/scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md`](../../scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md)
 
 ## Hub 驱动发布与临时 Web
 
