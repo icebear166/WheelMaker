@@ -129,7 +129,7 @@ test('Linux Gateway install grants low-port capability once and starts the user 
   const flattenedCalls = calls
     .flatMap(({command, args}) => [command, ...args])
     .join(' ');
-  assert.equal(flattenedCalls.includes('/etc/wheelmaker-gateway/home'), false);
+  assert.equal(flattenedCalls.includes('/etc/wheelmaker-' + 'gateway/home'), false);
 });
 
 test('Gateway reload posts the generated semantic result to the local Caddy admin API', async () => {

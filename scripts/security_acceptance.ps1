@@ -201,18 +201,32 @@ if ($retiredReleaseExitCode -ne 1) {
 }
 
 $releaseDeploy = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release-server\deploy.mjs')
+$remoteInstall = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release-server\remote-install.mjs')
 $publisherConfig = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release\publisher-config.mjs')
-if (-not $releaseDeploy.Contains('"listen":"127.0.0.1:9680"')) {
+if (-not $remoteInstall.Contains('"listen":"127.0.0.1:9680"')) {
     throw 'release service deployment does not bind the application listener to loopback'
 }
-if (-not $releaseDeploy.Contains('/etc/wheelmaker-gateway/home')) {
-    throw 'release deployment does not discover the fixed Gateway home'
+if (-not $remoteInstall.Contains('$deploy_home/.wheelmaker/release-server')) {
+    throw 'release deployment is not rooted in the SSH login Home'
 }
-if (-not $releaseDeploy.Contains('release-server.json')) {
+if (-not $remoteInstall.Contains('$deploy_home/.wheelmaker/gateway/sites')) {
+    throw 'release deployment does not own the Gateway site Home'
+}
+if (-not $remoteInstall.Contains('systemctl --user')) {
+    throw 'release deployment does not use a user service'
+}
+if (-not $remoteInstall.Contains('release-server.json')) {
     throw 'release deployment does not write the semantic Gateway site'
 }
-if ($releaseDeploy -match 'Caddyfile|apt-get|systemctl\s+(enable|restart)\s+caddy|systemctl\s+(stop|disable)\s+nginx') {
-    throw 'release server deployment contains external proxy or Nginx lifecycle actions'
+$retiredRootTarget = 'root@release.' + 'wheelmaker.top'
+$retiredGatewayHome = '/etc/' + 'wheelmaker-gateway/home'
+$retiredGatewayData = '/srv/wheelmaker-release/' + 'gateway'
+$retiredLegacyFlag = '--legacy-' + 'nginx'
+$retiredBootstrap = 'bootstrap-release-' + 'gateway'
+$retiredAdmin = '127.0.0.1:2019/' + 'load'
+$retiredBridgePattern = "$retiredRootTarget|$retiredGatewayHome|$retiredGatewayData|$retiredLegacyFlag|$retiredBootstrap|gateway_binary.*(validate|render)|$retiredAdmin|systemctl\s+(start|stop|restart|enable|disable)\s+(nginx|caddy)"
+if ("$releaseDeploy`n$remoteInstall" -match $retiredBridgePattern) {
+    throw 'release server deployment contains a retired bridge or proxy lifecycle action'
 }
 if (-not $publisherConfig.Contains("join(homeDirectory, '.wheelmaker')")) {
     throw 'publisher Token config is not rooted below the publisher user home'

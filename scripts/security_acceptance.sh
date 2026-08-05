@@ -127,12 +127,22 @@ else
 fi
 
 release_deploy="$repo_root/scripts/release-server/deploy.mjs"
+remote_install="$repo_root/scripts/release-server/remote-install.mjs"
 publisher_config="$repo_root/scripts/release/publisher-config.mjs"
-grep -F '"listen":"127.0.0.1:9680"' "$release_deploy" >/dev/null || fail 'release service application listener is not loopback-only'
-grep -F '/etc/wheelmaker-gateway/home' "$release_deploy" >/dev/null || fail 'release deployment does not discover the fixed Gateway home'
-grep -F 'release-server.json' "$release_deploy" >/dev/null || fail 'release deployment does not write the semantic Gateway site'
-if grep -E 'Caddyfile|apt-get|systemctl (enable|restart) caddy|systemctl (stop|disable) nginx' "$release_deploy" >/dev/null; then
-  fail 'release server deployment contains external proxy or Nginx lifecycle actions'
+grep -F '"listen":"127.0.0.1:9680"' "$remote_install" >/dev/null || fail 'release service application listener is not loopback-only'
+grep -F '$deploy_home/.wheelmaker/release-server' "$remote_install" >/dev/null || fail 'release deployment is not rooted in the SSH login Home'
+grep -F '$deploy_home/.wheelmaker/gateway/sites' "$remote_install" >/dev/null || fail 'release deployment does not own the Gateway site Home'
+grep -F 'systemctl --user' "$remote_install" >/dev/null || fail 'release deployment does not use a user service'
+grep -F 'release-server.json' "$remote_install" >/dev/null || fail 'release deployment does not write the semantic Gateway site'
+retired_root_target='root@release.'"wheelmaker.top"
+retired_gateway_home='/etc/'"wheelmaker-gateway/home"
+retired_gateway_data='/srv/wheelmaker-release/'"gateway"
+retired_legacy_flag='--legacy-'"nginx"
+retired_bootstrap='bootstrap-release-'"gateway"
+retired_admin='127.0.0.1:2019/'"load"
+retired_bridge_pattern="$retired_root_target|$retired_gateway_home|$retired_gateway_data|$retired_legacy_flag|$retired_bootstrap|gateway_binary.*(validate|render)|$retired_admin|systemctl\s+(start|stop|restart|enable|disable)\s+(nginx|caddy)"
+if rg -n -e "$retired_bridge_pattern" "$release_deploy" "$remote_install" >"$scan_output" 2>&1; then
+  fail 'release server deployment contains a retired bridge or proxy lifecycle action'
 fi
 grep -F "join(homeDirectory, '.wheelmaker')" "$publisher_config" >/dev/null || fail 'publisher Token config is not rooted below the publisher user home'
 if sed -n '/const files = \[/,/\];/p' "$release_deploy" | grep -E 'release-server\.json|WHEELMAKER_RELEASE_TOKEN|identityFile' >/dev/null; then

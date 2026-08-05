@@ -167,7 +167,7 @@ test('Gateway configuration selector is valid only for a full deployment', () =>
   );
   assert.throws(() => parseDeployArgs(['update', '--gateway=none']), /only valid for a full deployment/);
   assert.throws(() => parseDeployArgs(['gateway', '--gateway=caddy']), /only valid for a full deployment/);
-  assert.throws(() => parseDeployArgs(['--gateway-write']), /unknown deploy command/);
+  assert.throws(() => parseDeployArgs(['--gateway-' + 'write']), /unknown deploy command/);
 });
 
 test('Desktop self-update accepts only a positive parent PID', () => {

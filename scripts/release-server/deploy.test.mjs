@@ -73,7 +73,7 @@ test('release server deployment accepts only the unified Gateway selector', () =
   assert.deepEqual(parseReleaseServerArgs(['--gateway=none']), {gateway: 'none'});
   assert.deepEqual(parseReleaseServerArgs(['--gateway=caddy']), {gateway: 'caddy'});
   assert.throws(() => parseReleaseServerArgs(['--gateway=nginx']), /none or caddy/);
-  assert.throws(() => parseReleaseServerArgs(['--legacy-nginx']), /unknown release server option/);
+  assert.throws(() => parseReleaseServerArgs(['--legacy-' + 'nginx']), /unknown release server option/);
   assert.throws(() => parseReleaseServerArgs(['--gateway=caddy', '--gateway=none']), /only be specified once/);
   assert.throws(() => parseReleaseServerArgs(['--unknown']), /unknown release server option/);
 });

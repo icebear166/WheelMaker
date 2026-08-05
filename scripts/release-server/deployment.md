@@ -1,118 +1,99 @@
 # WheelMaker Release Server deployment
 
-This document describes the current hard-migrated deployment flow. It does not
-install or manage an external reverse proxy.
+The Release Server deployment is independent of the product release version.
+It builds and migrates the loopback Go service as the SSH login user. Gateway
+configuration is optional data owned by the component; the deployment never
+installs, starts, stops, reloads, validates, or renders Caddy or Nginx.
 
-## Boundaries
+## Boundaries and paths
 
-- The Go `wheelmaker-release-server` process runs as the non-root
-  `wheelmaker-release` user and listens only on `127.0.0.1:9680`.
-- `wheelmaker-gateway` is a separate host service with embedded Caddy. In the
-  steady state, install it first with the explicit Gateway deployment mode
-  (`node deploy.mjs gateway`). For an existing Nginx Release-only host, use the
-  one-time bridge below instead.
-- This deployment never installs, upgrades, starts, stops, disables, or removes
-  Nginx/Caddy, and never changes DNS, firewall, cloud security groups, or TLS
-  certificates. To disable an old Nginx service, run the standalone
-  `scripts/disable-nginx.sh` or `.ps1` helper.
-- `~/.wheelmaker/release-server.json` remains the publisher token file; the
-  token is never put in a command line, URL, public file, or site configuration.
+- The service listens only on `127.0.0.1:9680`.
+- The SSH configuration chooses the remote login user. Workspace and Release
+  Server must use the same user when they share a machine.
+- The login user needs noninteractive `sudo` for `/srv/wheelmaker-release`, the
+  legacy system-service state, ACL backup/restore, and login linger.
+- The service runs as the login user's user-level systemd unit:
 
-## Migration from the legacy Nginx host
+  ```text
+  ~/.wheelmaker/release-server/config.json
+  ~/.wheelmaker/release-server/versions/<source-sha>/wheelmaker-release-server
+  ~/.wheelmaker/release-server/current
+  ~/.config/systemd/user/wheelmaker-release-server.service
+  /srv/wheelmaker-release
+  ```
 
-The old Release Server rejects the new `withGateway` field. Do not publish a
-Gateway release to it first. Run this one-time sequence from a clean source
-tree:
+- `--gateway=none` does not create or modify Gateway files.
+- `--gateway=caddy` atomically writes only
+  `~/.wheelmaker/gateway/sites/release-server.json`; it does not require Caddy
+  to be installed or running.
+- The independent Gateway lifecycle remains available through the explicit
+  Workspace `gateway`, `gateway-update`, `start`, and `stop` commands. The
+  standalone `scripts/disable-nginx.sh` and `.ps1` helpers remain independent
+  tools for stopping and disabling an old Nginx service.
 
-1. `deploy-release-server.bat --legacy-nginx` upgrades only the loopback Go
-   service. It leaves the existing Nginx, certificates, and public static entry
-   untouched.
-2. `bootstrap-release-gateway.bat` builds the Linux/amd64 Gateway from the same
-   source and installs it at `/srv/wheelmaker-release/gateway`. It registers
-   `wheelmaker-gateway.service`, writes `release-server.json`, and enables boot
-   start, but does not start while Nginx owns ports 80/443. Pass `--start` only
-   when those ports are already free.
-3. Run `scripts/disable-nginx.sh`, then
-   `/srv/wheelmaker-release/gateway/start.sh` and verify HTTPS plus `/healthz`.
-4. Run `deploy-release-server.bat` without the bridge flag once; subsequent
-   deployments use the normal Gateway-owned site configuration path.
+## Deployment commands
 
-The old Nginx configuration remains available for rollback. The bootstrap is a
-separate one-time migration tool; normal Release Server deployment never owns
-Gateway lifecycle.
+Run from a clean source tree:
 
-## Preconditions
+```text
+deploy-release-server.bat --gateway=none
+  Deploy/migrate the Release Server and do not touch Gateway files.
 
-1. Confirm the channel in `scripts/release/channel.json` is the intended HTTPS
-   origin and that DNS plus public ports 80/443 point to the host.
-2. Confirm the host is Linux/amd64 and has `go`, `ssh`, `scp`, `systemd`, and
-   `curl`. The release service owns its data under `/srv/wheelmaker-release`.
-3. In steady state, install Gateway separately as the intended non-root user.
-   Its installer records the absolute Home in `/etc/wheelmaker-gateway/home`
-   and creates the `start.sh`/`stop.sh` wrappers. During the migration above,
-   the bootstrap creates the same metadata and wrappers for the Release-only
-   host.
+deploy-release-server.bat --gateway=caddy
+  Perform the same deploy/migration and atomically write
+  ~/.wheelmaker/gateway/sites/release-server.json.
+```
 
-If `/etc/wheelmaker-gateway/home` or the Gateway binary is missing, the Release
-Server deployment stops with an actionable instruction to run the explicit
-Gateway deployment. It verifies the recorded Home with `wheelmaker-gateway
-paths --home` and never guesses another user's Home.
+Omitting the option is equivalent to `none`. The option changes only whether
+the Release Server semantic site file is written; it never changes the binary
+download, staging, migration, health checks, or service lifecycle.
 
-## Automated deployment
+The local script reads the HTTPS origin from `scripts/release/channel.json`,
+uses the SSH identity configured for the channel host, checks Linux/amd64,
+cross-compiles with `CGO_ENABLED=0`, uploads a short-lived staging directory,
+and invokes the remote transaction. SSH aliases and `User` settings determine
+the actual login name; no `root@...` target is embedded in the script.
 
-Run `deploy-release-server.bat` from a clean source tree. The script:
+## Automatic migration from the old system service
 
-1. reads the channel URL and uses the fixed root SSH identity;
-2. checks the remote Linux/amd64 architecture;
-3. cross-compiles the Go service with `CGO_ENABLED=0`;
-4. uploads only the service binary, systemd unit, and public homepage assets;
-5. atomically switches `/opt/wheelmaker-release-server/current` and restarts
-   only `wheelmaker-release-server.service`;
-6. writes and validates the Gateway-owned semantic site file:
+The first deployment on an old Nginx machine performs a preflight before
+stopping anything. It stages the binary, candidate config, user unit, and
+homepage; validates the candidate with `validate-config`; verifies user
+systemd, sudo, ACL, and platform prerequisites; copies the existing
+`tokenSha256`; and records the old system/user service, linger, symlink, unit,
+and data ACL state.
 
-   ```json
-   {
-     "schema": 1,
-     "kind": "release-server",
-     "publicUrl": "https://release.wheelmaker.top",
-     "publicRoot": "/srv/wheelmaker-release/public",
-     "upstream": "http://127.0.0.1:9680",
-     "tls": {"certificateFile": "", "keyFile": ""}
-   }
-   ```
-
-   The site is written atomically to
-   `<gateway-home>/sites/release-server.json`. The Release Server user keeps
-   write access to its data; the Gateway user receives only read/traverse ACLs
-   for the public tree.
-
-7. runs `wheelmaker-gateway validate --home <gateway-home>` and
-   `render --home <gateway-home>`;
-8. checks `http://127.0.0.1:9680/healthz`. If the Gateway admin endpoint is
-   available, it hot-loads the generated JSON. If Gateway is stopped, it stays
-   stopped and the site applies on the next manual Gateway `start`.
-
-Public HTTPS health is informational in this flow: a stopped Gateway or DNS
-cutover must not be reported as a failed Go service deployment.
+After the preflight it enables user linger, stops and disables only the old
+system Release Server unit, grants the login user access to the stable data
+root while retaining the `www-data` public group and setgid directory, then
+atomically switches the user config, unit, and `current` link. It must pass
+both `http://127.0.0.1:9680/healthz` and the public HTTPS `/healthz` check.
+Any failure restores the previous service state, link, config, unit, ACLs,
+assets, and linger setting. On success the old unit, files, and service user
+remain present but disabled, so the existing Nginx configuration and upstream
+continue to work unchanged. Caddy is not needed for this migration.
 
 ## Gateway TLS and routes
 
-The semantic site owns no raw Caddyfile or arbitrary Caddy JSON. For an
-`https://` URL with empty certificate fields, embedded Caddy obtains and renews
-ACME certificates under Gateway Home. A complete certificate/key pair uses
-those files; `http://` explicitly disables TLS. ACME/DNS/port failures are
-reported and never silently downgraded to HTTP or a self-signed certificate.
+The `caddy` option writes a semantic site with the fixed loopback upstream and
+empty certificate fields. An independently managed embedded Caddy interprets
+an `https://` public URL as automatic ACME certificate management. The Release
+Server deployment does not call a Caddy admin API, inspect generated Caddy
+JSON, or change Nginx, DNS, firewall, or certificates.
 
-Gateway serves anonymous `GET`/`HEAD`/Range files from `publicRoot`, proxies
-`/api/*` and `/healthz` to loopback, and keeps upload validation in the Go
-service. The Release Server deployment does not edit `config.json`,
-`workspace.json`, or generated Caddy JSON directly.
+## Publisher Token
 
-## Failure and recovery
+The first local public publish creates the local
+`~/.wheelmaker/release-server.json` Token document. It sends only the SHA-256
+digest to the login user's
+`$HOME/.wheelmaker/release-server/current/wheelmaker-release-server` with
+`configure-token`, then restarts
+`systemctl --user restart wheelmaker-release-server.service`. The raw Token
+never appears in a command line, URL, public file, or site configuration.
 
-- A dirty source tree, unsupported remote architecture, missing Gateway metadata,
-  invalid semantic site, or failed loopback health check aborts before reporting
-  success.
-- Existing release data and Gateway configuration are not deleted on failure.
-- The Gateway service lifecycle is independent: ordinary `node deploy.mjs
-  update` does not inspect or restart it.
+## Updates and recovery
+
+Normal Workspace updates and Release Server deployments do not inspect or
+restart Gateway. A Gateway update is an explicit, separate operation. If a
+deployment fails before the remote transaction commits, the temporary upload
+is removed and the old Release Server/Nginx serving path remains available.
