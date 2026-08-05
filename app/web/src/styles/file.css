@@ -534,6 +534,14 @@
   padding: 6px 0;
 }
 
+.preview-workbench-file-tree-content .tree-children {
+  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
+.preview-workbench-file-search-children {
+  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
 .preview-workbench-file-search-tree {
   padding: 6px 0;
 }
@@ -552,6 +560,7 @@
   padding-top: 3px;
   padding-right: 8px;
   padding-bottom: 3px;
+  padding-left: 10px;
   text-align: left;
   font-size: 12px;
 }

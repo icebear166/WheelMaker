@@ -52,6 +52,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain("import {Icon} from '../common/Icon';");
     expect(chromeTsx).toContain("import {Icon, type IconName} from '../common/Icon';");
     expect(fileTreeTsx).toContain("import {Icon} from '../common/Icon';");
+    expect(fileTreeTsx).toContain('className="tree-children"');
   });
 
   test('file mention preview reuses chat peek without inserting or closing the menu', () => {
@@ -514,8 +515,8 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('className="preview-workbench-tree-tool-button"');
     expect(mainTsx).toContain('onClick={locateActivePreviewFileInTree}');
     expect(mainTsx).toContain('<Icon name="locateFixed"');
-    expect(mainTsx).toContain('const previewFileTreeDepthIndent = 8;');
-    expect(mainTsx).toContain('const paddingLeft = 10 + depth * previewFileTreeDepthIndent;');
+    expect(mainTsx).toContain('const previewFileTreeDepthIndent = 14;');
+    expect(mainTsx).toContain('className="preview-workbench-file-search-children"');
     expect(mainTsx).toContain('depthIndent={previewFileTreeDepthIndent}');
     expect(mainTsx).toContain('const locateActivePreviewFileInTree = () => {');
     expect(mainTsx).toContain('const ancestors = previewFileAncestorDirs(targetPath);');
@@ -538,7 +539,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);');
     expect(mainTsx).toContain('onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}');
     expect(mainTsx).toContain("<Icon name={collapsed ? 'chevronRight' : 'chevronDown'}");
-    expect(mainTsx).toContain('{collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}');
+    expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(node.children, depth + 1)');
     expect(mainTsx).not.toContain('className="path"');
 
     expect(stylesCss).toContain('.preview-workbench-drawer-search');
@@ -546,6 +547,8 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-tree-tool-button');
     expect(stylesCss).toContain('.preview-workbench-file-search-tree');
     expect(stylesCss).toContain('.preview-workbench-file-search-node');
+    expect(stylesCss).toContain('.preview-workbench-file-search-children');
+    expect(stylesCss).toContain('.tree-children');
     expect(stylesCss).not.toContain('.preview-workbench-file-search-node .path');
   });
 

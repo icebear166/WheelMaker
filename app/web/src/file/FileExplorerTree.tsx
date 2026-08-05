@@ -44,8 +44,7 @@ export function FileExplorerTree({
         return (
           <div key={entry.path}>
             <div
-              className="item"
-              style={{ paddingLeft: 10 + depth * depthIndent }}
+              className="item dir"
               onClick={() => {
                 toggleDirectory(entry.path);
               }}
@@ -63,7 +62,11 @@ export function FileExplorerTree({
                 <span className="muted">...</span>
               ) : null}
             </div>
-            {expanded ? renderFileTree(entry.path, depth + 1) : null}
+            {expanded ? (
+              <div className="tree-children" style={{marginLeft: depthIndent}}>
+                {renderFileTree(entry.path, depth + 1)}
+              </div>
+            ) : null}
           </div>
         );
       }
@@ -72,8 +75,7 @@ export function FileExplorerTree({
       return (
         <div
           key={entry.path}
-          className={`item ${selectedFile === entry.path ? 'selected' : ''}`}
-          style={{ paddingLeft: 10 + depth * depthIndent }}
+          className={`item file${selectedFile === entry.path ? ' selected' : ''}`}
           onClick={() => {
             onFileSelect(entry.path);
           }}
