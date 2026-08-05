@@ -4,14 +4,14 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 import {
-  buildRemoteInstallScript,
   deployReleaseServer,
   parseReleaseServerArgs,
 } from './deploy.mjs';
+import {buildRemoteInstallScript} from './remote-install.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 
-test('release server deploy uses fixed derived SSH defaults', async () => {
+test('release server deploy derives host and lets SSH choose the login user', async () => {
   const state = {
     builds: [],
     cleanups: [],
@@ -20,7 +20,7 @@ test('release server deploy uses fixed derived SSH defaults', async () => {
     remoteChecks: [],
     uploads: [],
   };
-  const dependencies = recordingDependencies(state);
+  const dependencies = recordingDependencies(state, {gateway: 'caddy'});
 
   const result = await deployReleaseServer(dependencies);
 
@@ -30,8 +30,12 @@ test('release server deploy uses fixed derived SSH defaults', async () => {
     host: 'release.wheelmaker.top',
     identityFile: 'C:\\Users\\tester\\.ssh\\wheelmaker-release-server_ed25519',
     port: 22,
-    user: 'root',
   }]);
+  assert.equal('user' in state.remoteChecks[0], false);
+  assert.equal(state.installs[0].gateway, 'caddy');
+  assert.equal(state.installs[0].publicUrl, 'https://release.wheelmaker.top');
+  assert.equal(state.installs[0].sourceSha, SOURCE_SHA);
+  assert.equal(state.installs[0].remoteDirectory, `/tmp/wheelmaker-release-server-${SOURCE_SHA}`);
   assert.equal(state.uploads.length, 1);
   assert.equal(state.uploads[0].files.length, 4);
   assert.deepEqual(
@@ -47,7 +51,7 @@ test('release server deploy uses fixed derived SSH defaults', async () => {
     state.uploads[0].files.some(path => path.endsWith('wheelmaker-release-server_ed25519')),
     false,
   );
-  assert.deepEqual(state.healthChecks, ['https://release.wheelmaker.top/healthz']);
+  assert.deepEqual(state.healthChecks ?? [], []);
   assert.equal(state.cleanups.length, 1);
 });
 
@@ -64,56 +68,23 @@ test('release server deploy rejects a dirty tree and always cleans local staging
   assert.equal(state.cleanups.length, 1);
 });
 
-test('remote install script is idempotent and preserves public releases and config', () => {
-  const script = buildRemoteInstallScript();
-
-  assert.match(script, /id -u wheelmaker-release/);
-  assert.match(script, /if \[ ! -f \/etc\/wheelmaker-release-server\/config\.json \]/);
-  assert.match(script, /127\.0\.0\.1:9680/);
-  assert.match(script, /systemctl daemon-reload/);
-  assert.match(script, /\/etc\/wheelmaker-gateway\/home/);
-  assert.match(script, /run the explicit Gateway deployment first/);
-  assert.match(script, /release-server\.json/);
-  assert.match(script, /gateway_binary.*validate --home/);
-  assert.match(script, /gateway_binary.*render --home/);
-  assert.match(script, /gateway_binary paths --home/);
-  assert.match(script, /127\.0\.0\.1:2019\/load/);
-  assert.match(script, /Gateway is stopped/);
-  assert.match(
-    script,
-    /release-home\.js" \/srv\/wheelmaker-release\/public\/release-home\.js/,
-  );
-  assert.doesNotMatch(script, /rm -rf[^\n]*public\/releases/);
-  assert.doesNotMatch(script, /PRIVATE KEY|wheelmaker-release-server_ed25519/);
-  assert.doesNotMatch(script, /Caddyfile|nginx|certbot|apt-get|systemctl\s+(enable|restart)\s+caddy/i);
-  assert.doesNotMatch(script, /nginx-bootstrap/);
-  assert.doesNotMatch(script, /nginx -t/);
-  assert.doesNotMatch(script, /sites-available|sites-enabled/);
-});
-
-test('legacy Nginx mode upgrades the Release Server without requiring Gateway', () => {
-  const script = buildRemoteInstallScript({legacyNginx: true});
-
-  assert.match(script, /legacy Nginx ingress remains in place/i);
-  assert.match(script, /systemctl restart wheelmaker-release-server\.service/);
-  assert.doesNotMatch(script, /\/etc\/wheelmaker-gateway\/home/);
-  assert.doesNotMatch(script, /release-server\.json/);
-  assert.doesNotMatch(script, /gateway_binary/);
-  assert.doesNotMatch(script, /setfacl/);
-  assert.doesNotMatch(script, /nginx -t|systemctl\s+(stop|disable|restart|reload)\s+nginx/i);
-});
-
-test('release server deployment accepts only the explicit legacy Nginx flag', () => {
-  assert.deepEqual(parseReleaseServerArgs([]), {legacyNginx: false});
-  assert.deepEqual(parseReleaseServerArgs(['--legacy-nginx']), {legacyNginx: true});
+test('release server deployment accepts only the unified Gateway selector', () => {
+  assert.deepEqual(parseReleaseServerArgs([]), {gateway: 'none'});
+  assert.deepEqual(parseReleaseServerArgs(['--gateway=none']), {gateway: 'none'});
+  assert.deepEqual(parseReleaseServerArgs(['--gateway=caddy']), {gateway: 'caddy'});
+  assert.throws(() => parseReleaseServerArgs(['--gateway=nginx']), /none or caddy/);
+  assert.throws(() => parseReleaseServerArgs(['--legacy-nginx']), /unknown release server option/);
+  assert.throws(() => parseReleaseServerArgs(['--gateway=caddy', '--gateway=none']), /only be specified once/);
   assert.throws(() => parseReleaseServerArgs(['--unknown']), /unknown release server option/);
 });
 
-test('templates enforce non-root loopback service', async () => {
+test('Release Server template is a hardened user unit rooted in Home', async () => {
   const unit = await readFile(new URL('./wheelmaker-release-server.service', import.meta.url), 'utf8');
 
-  assert.match(unit, /^User=wheelmaker-release$/m);
-  assert.match(unit, /^Group=wheelmaker-release$/m);
+  assert.match(unit, /^ExecStart=%h\/\.wheelmaker\/release-server\/current\/wheelmaker-release-server serve --config %h\/\.wheelmaker\/release-server\/config\.json$/m);
+  assert.match(unit, /^WantedBy=default\.target$/m);
+  assert.match(unit, /^ProtectHome=read-only$/m);
+  assert.doesNotMatch(unit, /^User=|^Group=|\/opt\/|\/etc\/wheelmaker-release-server/m);
   assert.match(unit, /NoNewPrivileges=true/);
   assert.match(unit, /ProtectSystem=strict/);
   assert.match(unit, /ReadWritePaths=\/srv\/wheelmaker-release/);

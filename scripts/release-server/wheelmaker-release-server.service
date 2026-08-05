@@ -1,14 +1,12 @@
 [Unit]
 Description=WheelMaker Release Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=wheelmaker-release
-Group=wheelmaker-release
-SupplementaryGroups=www-data
 WorkingDirectory=/srv/wheelmaker-release
-ExecStart=/opt/wheelmaker-release-server/current/wheelmaker-release-server serve --config /etc/wheelmaker-release-server/config.json
+ExecStart=%h/.wheelmaker/release-server/current/wheelmaker-release-server serve --config %h/.wheelmaker/release-server/config.json
 Restart=on-failure
 RestartSec=3s
 UMask=0027
@@ -16,7 +14,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -25,4 +23,4 @@ LockPersonality=true
 ReadWritePaths=/srv/wheelmaker-release
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
