@@ -468,7 +468,6 @@ export function createDefaultLauncherDependencies({
         trustedStable: context.stable,
         trustedStableBytes: context.stableBytes,
         trustedReleaseBaseUrl: context.releaseBaseUrl,
-        gatewayEnabled: true,
         gatewayOptions: context.gatewayOptions,
         interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
       });

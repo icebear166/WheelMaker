@@ -119,8 +119,6 @@ test('Linux Gateway install grants low-port capability once and starts the user 
   assert.deepEqual(
     calls.map(({ command, args }) => [command, ...args]),
     [
-      ['sudo', 'install', '-d', '-m', '0755', '/etc/wheelmaker-gateway'],
-      ['sudo', 'sh', '-c', "printf '%s\\n' '/home/alice/.wheelmaker/gateway' > /etc/wheelmaker-gateway/home"],
       ['sudo', 'loginctl', 'enable-linger', 'alice'],
       ['sudo', 'setcap', 'cap_net_bind_service=+ep', PATHS.binary],
       ['systemctl', '--user', 'daemon-reload'],
@@ -128,6 +126,10 @@ test('Linux Gateway install grants low-port capability once and starts the user 
       ['systemctl', '--user', 'start', 'wheelmaker-gateway.service'],
     ],
   );
+  const flattenedCalls = calls
+    .flatMap(({command, args}) => [command, ...args])
+    .join(' ');
+  assert.equal(flattenedCalls.includes('/etc/wheelmaker-gateway/home'), false);
 });
 
 test('Gateway reload posts the generated semantic result to the local Caddy admin API', async () => {

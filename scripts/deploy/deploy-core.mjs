@@ -1924,73 +1924,35 @@ async function executeDeployment(internalUpdate, deps, runtime) {
     if (phase !== 'verifying') await setState('verifying');
     if (!internalUpdate) await ensureRuntimeConfig(home, deps, platform);
 
-    // Gateway is deliberately outside the Hub update transaction. A normal
-    // `deploy.mjs update` never enters this block, while a full deployment
-    // installs/starts the independent Gateway before stopping the Hub.
-    if (!internalUpdate && deps.gatewayEnabled) {
-      const gatewayOptions = deps.gatewayOptions ?? {};
-      if (!deps.interactive && !gatewayOptions.explicit) {
-        throw new Error(
-          'non-interactive deployment requires --gateway-write or --gateway-skip',
-        );
-      }
+    // Gateway configuration is deliberately outside the Hub update transaction.
+    // A normal `deploy.mjs update` never enters this block, and a full deployment
+    // only writes the semantic Workspace site when explicitly selected.
+    if (!internalUpdate) {
+      const gatewayOptions = deps.gatewayOptions ?? parseGatewayOptions([]);
+      let mode = gatewayOptions.mode;
       let questioner;
       try {
-        if (deps.interactive && !deps.gatewayQuestion) {
-          questioner = createGatewayQuestioner();
+        if (!gatewayOptions.explicit && deps.interactive) {
+          if (!deps.gatewayQuestion) questioner = createGatewayQuestioner();
+          const ask = deps.gatewayQuestion ?? questioner.ask;
+          const answer = String(
+            await ask('Write Workspace Caddy configuration? [y/N]', 'n'),
+          ).trim().toLowerCase();
+          mode = ['y', 'yes'].includes(answer) ? 'caddy' : 'none';
         }
-        const configResult = await configureWorkspaceSite({
-          home: deps.gatewayHome ?? gatewayHome({installDirectory: home}),
-          interactive: Boolean(deps.interactive),
-          ask: deps.gatewayQuestion ?? questioner?.ask,
-          defaults: {
-            publicUrl: deps.workspacePublicUrl,
+        if (mode === 'caddy') {
+          const configResult = await configureWorkspaceSite({
+            ask: deps.gatewayQuestion ?? questioner?.ask,
+            home: deps.gatewayHome ?? gatewayHome({userHome: deps.userHome ?? homedir()}),
+            mode,
+            publicUrl: gatewayOptions.publicUrl,
+            upstream: 'http://127.0.0.1:9630',
             webRoot: join(home, 'web'),
-            upstream: deps.workspaceUpstream ?? 'http://127.0.0.1:9630',
-          },
-          write: gatewayOptions.mode === 'write',
-          site: gatewayOptions.mode === 'write'
-            ? {
-                schema: 1,
-                kind: 'workspace',
-                publicUrl: gatewayOptions.values.publicUrl ?? deps.workspacePublicUrl,
-                webRoot: gatewayOptions.values.webRoot ?? join(home, 'web'),
-                upstream: gatewayOptions.values.upstream ?? deps.workspaceUpstream ?? 'http://127.0.0.1:9630',
-                tls: {
-                  certificateFile: gatewayOptions.values.certificateFile ?? '',
-                  keyFile: gatewayOptions.values.keyFile ?? '',
-                },
-              }
-            : undefined,
-          decision: gatewayOptions.mode === 'skip' ? {write: false} : undefined,
-        });
-        if (configResult.written) deps.reportStatus?.('Workspace Gateway configuration written');
-        else deps.reportStatus?.('Workspace Gateway configuration unchanged');
+          });
+          if (configResult.written) deps.reportStatus?.('Workspace Caddy configuration written');
+        }
       } finally {
         questioner?.close();
-      }
-
-      const {installGatewayFromStable} = await import('./gateway-install.mjs');
-      const gatewayResult = await installGatewayFromStable({
-        stable: deps.trustedStable,
-        releaseBaseUrl: deps.trustedReleaseBaseUrl,
-        fetchBytes: deps.fetchBytes,
-        gatewayHome: deps.gatewayHome ?? gatewayHome({installDirectory: home}),
-        installDirectory: home,
-        userHome: deps.userHome ?? homedir(),
-        platformKey: deps.gatewayPlatformKey ?? currentPlatformKey(platform, deps.arch ?? process.arch),
-        platform,
-        arch: deps.arch ?? process.arch,
-        nodePath: deps.nodePath ?? process.execPath,
-        uid: deps.uid,
-        runner: deps.gatewayRunner ?? deps.runner,
-        gatewayRuntime: deps.gatewayRuntime,
-        validateBinary: deps.validateGatewayBinary,
-        now,
-        reportStatus: deps.reportStatus,
-      });
-      if (gatewayResult.skipped && gatewayResult.reason === 'missing-pointer') {
-        deps.reportStatus?.('No Gateway artifact is published; leaving Gateway unchanged');
       }
     }
 
@@ -2075,8 +2037,7 @@ async function executeGatewayDeployment(deps, {force = false} = {}) {
     stable: deps.trustedStable,
     releaseBaseUrl: deps.trustedReleaseBaseUrl,
     fetchBytes: deps.fetchBytes,
-    gatewayHome: deps.gatewayHome ?? gatewayHome({installDirectory: deps.installDirectory}),
-    installDirectory: deps.installDirectory,
+    gatewayHome: deps.gatewayHome ?? gatewayHome({userHome: deps.userHome ?? homedir()}),
     userHome: deps.userHome ?? homedir(),
     platformKey: deps.gatewayPlatformKey ?? currentPlatformKey(deps.platform ?? process.platform, deps.arch ?? process.arch),
     platform: deps.platform ?? process.platform,

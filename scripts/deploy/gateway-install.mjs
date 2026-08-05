@@ -176,7 +176,6 @@ export async function installGatewayFromStable({
   releaseBaseUrl,
   fetchBytes,
   gatewayHome: configuredHome,
-  installDirectory,
   userHome,
   platformKey = currentPlatformKey(),
   platform = process.platform,
@@ -195,7 +194,7 @@ export async function installGatewayFromStable({
   if (!fetchBytes || !releaseBaseUrl) throw new Error('Gateway download dependencies are required');
   if (!GATEWAY_TARGETS.has(platformKey)) throw new Error(`unsupported Gateway platform: ${platformKey}`);
 
-  const home = gatewayHome({home: configuredHome, installDirectory, userHome});
+  const home = gatewayHome({home: configuredHome, userHome});
   const paths = gatewayInstallPaths(home, platformKey);
   const commandRunner = runner ?? runProcess;
   await mkdir(paths.bin, {recursive: true});

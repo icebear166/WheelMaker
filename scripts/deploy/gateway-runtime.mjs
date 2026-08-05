@@ -210,14 +210,6 @@ export function createGatewayRuntimeAdapter({
       for (const [name, body] of Object.entries(files)) {
         await atomicWrite(join(directory, name), body, 0o644);
       }
-      // Release Server discovery uses this host-level record instead of
-      // guessing a different user's HOME during a root SSH deployment.
-      await run('sudo', ['install', '-d', '-m', '0755', '/etc/wheelmaker-gateway']);
-      await run('sudo', [
-        'sh',
-        '-c',
-        `printf '%s\\n' ${shellQuote(paths.home)} > /etc/wheelmaker-gateway/home`,
-      ]);
       const runtimeUser = environment.USER ?? environment.USERNAME;
       if (runtimeUser) {
         await run('sudo', ['loginctl', 'enable-linger', runtimeUser]);

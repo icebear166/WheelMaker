@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -287,6 +287,36 @@ test('normal update never enters Gateway install or configuration paths', async 
     },
   });
   assert.deepEqual(events, ['stop', 'apply', 'start']);
+});
+
+test('full deployment writes Caddy config without installing Gateway', async (t) => {
+  const fixture = await installFixture(t);
+  const userHome = join(dirname(fixture.home), 'login-home');
+  fixture.deps.userHome = userHome;
+  fixture.deps.interactive = false;
+  fixture.deps.trustedStable.gateway = {version: 'invalid-implicit-pointer'};
+  await runCore([
+    '--gateway=caddy',
+    '--gateway-public-url=https://workspace.example.com',
+  ], fixture.deps);
+  const sitePath = join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json');
+  const site = JSON.parse(await readFile(sitePath, 'utf8'));
+  assert.equal(site.publicUrl, 'https://workspace.example.com');
+  assert.equal(site.webRoot, join(fixture.home, 'web'));
+});
+
+test('noninteractive default and update leave Gateway Home absent', async (t) => {
+  for (const args of [[], ['update']]) {
+    const fixture = await installFixture(t);
+    const userHome = join(dirname(fixture.home), args.length === 0 ? 'full-home' : 'update-home');
+    fixture.deps.userHome = userHome;
+    fixture.deps.interactive = false;
+    await runCore(args, fixture.deps);
+    await assert.rejects(
+      () => access(join(userHome, '.wheelmaker', 'gateway')),
+      {code: 'ENOENT'},
+    );
+  }
 });
 
 test('runtime start command builds a default adapter from the install directory', async () => {
