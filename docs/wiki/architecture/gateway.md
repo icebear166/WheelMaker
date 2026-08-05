@@ -10,6 +10,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 - 首次安装通过管理员权限注册开机自启和低位端口能力，安装后立即尝试启动。`start` / `stop` 只控制当前运行状态，不改变开机自启设置。
 - Hub/Web 的普通完整部署和 `deploy.mjs update` 都不下载、安装、更新、启动、重启或修改 Gateway。Gateway 只由显式 `gateway`、`gateway-update` 和 start/stop 入口管理；显式升级可有数秒中断，启动失败时恢复本地上一版。
 - Gateway 和部署器不停止、卸载或修改 Nginx，也不修改 DNS、本机防火墙或云安全组。
+- Release Server 的普通部署只写 SSH 登录用户 Home，不探测旧 systemd/Nginx，也不依赖 `/srv`、`www-data` 或 ACL。旧机切换属于运维者执行的一次性人工迁移，不是 Gateway 生命周期的一部分。
 
 ## 配置所有权
 
@@ -25,6 +26,19 @@ gateway/
 ```
 
 `config.json` 只存放宿主机级共享设置，已存在时部署不覆盖。Workspace 与 Release Server 部署器分别只修改 `workspace.json` 和 `release-server.json`，不直接编辑聚合后的 Caddy JSON，也不通过 `/srv` 或宿主机级元数据发现 Gateway Home；Home 始终由实际登录用户解析为 `~/.wheelmaker/gateway`。`kind` 限定路由合同，不允许原始 Caddyfile、任意 Caddy JSON 或非 loopback 上游。
+
+Release Server 的普通部署使用同一登录用户的 Home：
+
+```text
+~/.wheelmaker/release-server/
+  config.json
+  versions/<source-sha>/wheelmaker-release-server
+  current -> versions/<source-sha>
+  data/public/
+  data/staging/
+```
+
+`release-server.json` 的 `publicRoot` 指向该用户的 `data/public` 绝对路径；Release Server、Gateway 和 Workspace 同用户时不需要 ACL 或 `www-data` 共享权限。
 
 两个部署入口统一使用 `--gateway=none|caddy`：
 
@@ -57,7 +71,7 @@ deploy-release-server.bat --gateway=caddy      # 另写 release-server.json
 
 Workspace 的 `workspace.json` 已存在且没有显式新 URL 时复用原值；显式 `--gateway-public-url` 时更新。首次交互配置询问公网 URL，首次非交互 Caddy 配置必须提供该参数。Release Server 的公网 URL 固定读取 release channel；两个部署器都不接受 web root、upstream 或证书路径覆盖参数。
 
-旧 Nginx 不由 Gateway 或 Release Server 部署流程处理。需要迁移时，运维者可单独运行 `scripts/disable-nginx.sh` 或 `scripts/disable-nginx.ps1`；脚本只停止并禁止已识别的 Nginx 服务自启，不删除软件包、配置和证书。无法安全识别服务时脚本返回人工处理提示。
+普通 Gateway/Release Server 部署不处理旧 Nginx。旧机从 `/srv/wheelmaker-release` 切换到 Home 时，运维者一次性把 Release Server 的 Nginx 静态根调整到新的 `data/public`，其他站点、证书和入口配置保持不变。需要停用 Nginx 时，仍可单独运行 `scripts/disable-nginx.sh` 或 `scripts/disable-nginx.ps1`；脚本只停止并禁止已识别的 Nginx 服务自启，不删除软件包、配置和证书。无法安全识别服务时脚本返回人工处理提示。
 
 > 详细设计：[`docs/scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md)
 >

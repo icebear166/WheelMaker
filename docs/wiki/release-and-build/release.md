@@ -35,15 +35,27 @@ Hub/Web 与 Release Server 部署入口统一接受 `--gateway=none|caddy`。`no
 
 ### Release Server 目标机部署
 
-Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不创建专门运行用户。版本化二进制和配置位于 `~/.wheelmaker/release-server`，service 位于用户 systemd 目录；发布数据、staging 与公开资产继续位于 `/srv/wheelmaker-release`，保持旧 Nginx 的静态目录和 `127.0.0.1:9680` upstream 不变。部署器管理 Release Server 自身的 user unit、linger、重启和健康检查，但不管理入口服务。
+Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不创建专门运行用户。普通部署的持久化布局为：
 
-普通部署同时承担旧系统级 `wheelmaker-release-server.service` 的一次性安全迁移：停止旧服务前完成环境预检与新版本 staging，原样迁移 `/etc/wheelmaker-release-server/config.json` 的 Token 哈希并记录旧服务状态和数据权限；随后停止并禁用旧服务、把数据目录写权限交给 SSH 用户、启动用户服务，并检查 loopback 与公网 healthz。失败时恢复旧权限和旧服务状态；成功后保留旧 unit、`/opt` 二进制、`/etc` 配置和旧系统用户，但维持旧服务 disabled。
+```text
+~/.wheelmaker/release-server/
+  config.json
+  versions/<source-sha>/wheelmaker-release-server
+  current -> versions/<source-sha>
+  data/public/
+  data/staging/
+~/.config/systemd/user/wheelmaker-release-server.service
+```
 
-选择 `--gateway=caddy` 时只在 SSH 用户 Home 写 `release-server.json`，公网 URL 从 `scripts/release/channel.json` 读取。机器尚未安装 Caddy 时该文件保持休眠，旧 Nginx 仍使用相同公开目录和 upstream，因此部署不会依赖入口切换。
+配置的 `dataRoot` 指向 Home 下的 `data` 绝对路径。部署器管理 Release Server 自身的 user unit、linger、重启和 loopback 健康检查；普通部署不探测或迁移旧 systemd 服务，不依赖 `/srv`、`www-data`、ACL 或入口服务权限。
+
+`--gateway=none` 对 Gateway 文件严格无操作；`--gateway=caddy` 只在 SSH 用户 Home 写 `~/.wheelmaker/gateway/sites/release-server.json`，`publicRoot` 指向 Home 中的 `data/public`，公网 URL 从 `scripts/release/channel.json` 读取。机器尚未安装 Caddy 时该文件保持休眠，部署不安装、启动、停止、重载或验证 Caddy。
+
+仍在运行旧系统级 `wheelmaker-release-server.service` 的机器，必须先由运维者直接 SSH 执行一次性迁移：备份旧 `/etc` 配置和 `/srv/wheelmaker-release` 数据，复制 token 哈希、发布数据和公开资产到 Home，安装并启动用户服务，验证 loopback 与外部 healthz；成功后停止并禁用旧服务，保留旧 unit、`/opt` 二进制、`/etc` 配置、旧数据和运行用户。迁移时只一次性把 Release Server 的 Nginx 静态根调整到 Home 的 `data/public`，不改变其他站点或证书；失败则恢复旧服务，不删除旧文件。普通部署不提供或调用迁移脚本。
 
 首次发布 Token 初始化也使用同一 SSH 用户、Home 中的二进制与配置以及用户级 systemd。未选择 Gateway 发布产物时，发布器省略 `withGateway` 字段，以兼容仍采用严格请求校验的旧 Release Server；该兼容不改变协议版本。
 
-> 决策来源：[`docs/scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md`](../../scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md)
+> 决策来源：[`docs/scope/2026-08-05-release-home-deployment/spec-release-home-deployment.md`](../../scope/2026-08-05-release-home-deployment/spec-release-home-deployment.md)
 
 ## Hub 驱动发布与临时 Web
 

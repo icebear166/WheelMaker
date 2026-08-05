@@ -1,6 +1,6 @@
 # WheelMaker Release Server 部署
 
-Release Server 的部署流程独立于产品版本。它以 SSH 登录用户构建并迁移
+Release Server 的部署流程独立于产品版本。它以 SSH 登录用户构建并安装
 loopback Go 服务；Gateway 配置只是可选的组件数据。本流程不安装、启动、停止、
 重载、校验或渲染 Caddy/Nginx。
 
@@ -9,16 +9,17 @@ loopback Go 服务；Gateway 配置只是可选的组件数据。本流程不安
 - 服务只监听 `127.0.0.1:9680`。
 - 远端登录用户由 SSH 配置决定。同一台机器上部署 Workspace 和 Release Server
   时必须使用同一个用户。
-- 登录用户需要免交互 `sudo`，用于 `/srv/wheelmaker-release`、旧 systemd 服务状态、
-  ACL 备份/恢复和 login linger。
+- 安装完全由登录用户拥有，只要求该用户有可用的 user systemd manager，并在尚未
+  启用时能够开启 linger；不需要 `/srv`、`www-data`、ACL 工具或旧服务权限。
 - 服务运行在登录用户的 user-level systemd unit 中：
 
   ```text
   ~/.wheelmaker/release-server/config.json
   ~/.wheelmaker/release-server/versions/<source-sha>/wheelmaker-release-server
   ~/.wheelmaker/release-server/current
+  ~/.wheelmaker/release-server/data/public
+  ~/.wheelmaker/release-server/data/staging
   ~/.config/systemd/user/wheelmaker-release-server.service
-  /srv/wheelmaker-release
   ```
 
 - `--gateway=none` 不创建、不修改 Gateway 文件。
@@ -35,35 +36,38 @@ loopback Go 服务；Gateway 配置只是可选的组件数据。本流程不安
 
 ```text
 deploy-release-server.bat --gateway=none
-  部署/迁移 Release Server，不触碰 Gateway 文件。
+  安装 Release Server，不触碰 Gateway 文件。
 
 deploy-release-server.bat --gateway=caddy
-  执行相同的部署/迁移，并原子写入
+  执行相同的安装，并原子写入
   ~/.wheelmaker/gateway/sites/release-server.json。
 ```
 
 省略参数等同于 `none`。参数只决定是否写入 Release Server 语义站点文件，不改变
-二进制下载、staging、迁移、健康检查或服务生命周期。
+二进制下载、staging、健康检查或 Gateway 生命周期。
 
 本地脚本读取 `scripts/release/channel.json` 的 HTTPS 源，使用该主机配置的 SSH
 身份，检查 Linux/amd64，以 `CGO_ENABLED=0` 交叉编译，上传短期临时目录并调用远端
 事务。SSH alias 和 `User` 配置决定实际登录用户；脚本不内置 `root@...`。
 
-## 旧 systemd 服务自动迁移
+## 旧 Nginx 主机的一次性迁移
 
-旧 Nginx 机器的第一次部署会先完成预检，不会立即停服：暂存二进制、候选配置、user
-unit 和首页资源，用 `validate-config` 校验候选配置，检查 user systemd、sudo、ACL
-和平台前置条件，复制现有 `tokenSha256`，并记录旧 system/user 服务、linger、current
-链接、unit、数据 ACL 状态。
+普通部署不会探测、停止、禁用或迁移旧 systemd 服务。如果主机仍从
+`/srv/wheelmaker-release` 提供 Release Server，先完成普通 Home 安装，再通过 SSH
+手动迁移：
 
-预检通过后才启用 user linger，停止并禁用旧的系统级 Release Server unit；登录用户
-获得稳定数据目录访问权，同时保留公开目录的 `www-data` 组和 setgid；随后原子切换
-user 配置、unit 和 `current` 链接。必须同时通过
-`http://127.0.0.1:9680/healthz` 和公网 HTTPS `/healthz` 检查。
+1. 将 `/etc/wheelmaker-release-server/config.json`、旧数据目录、旧 unit 和匹配的
+   Release Server Nginx 配置备份到登录用户 Home 下带时间戳的目录。
+2. 把 token 摘要、发布数据和公开资源复制到
+   `~/.wheelmaker/release-server/data`；生成 `config.json` 时使用 Home 下的绝对
+   `dataRoot`，旧文件全部保留以便回滚。
+3. 启动并检查 user unit 的 loopback
+   `http://127.0.0.1:9680/healthz`，然后只把 Release Server 的 Nginx 静态根调整到
+   `~/.wheelmaker/release-server/data/public`，其他 Nginx 站点、证书和入口配置不变。
+4. loopback 和外部 HTTPS `/healthz` 都成功后，停止并禁用旧 systemd unit，但不删除它。
+   任一检查失败时，停止 user unit、恢复 Nginx 备份并启动旧 unit。
 
-任何失败都会恢复原服务状态、链接、配置、unit、ACL、首页资源和 linger。成功后旧
-unit、文件和服务用户仍保留但处于 disabled，原有 Nginx 配置和 upstream 可继续工作；
-迁移不需要 Caddy。
+该迁移是运维者的一次性操作，不属于 Node 安装器或 Gateway 生命周期，也不提供迁移脚本。
 
 ## Gateway TLS 与路由
 
