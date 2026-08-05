@@ -6,6 +6,7 @@ import {
   nextV1Version,
   nextVersionFromStableBytes,
   sha256Bytes,
+  validateStableMetadata,
   stableVersionFromBytes,
 } from './metadata.mjs';
 
@@ -45,5 +46,49 @@ test('stable metadata rejects unknown schemas and malformed versions', () => {
   assert.throws(
     () => stableVersionFromBytes(Buffer.from('{"schema":2,"version":"local-deadbeef"}')),
     /stable metadata schema is invalid/,
+  );
+});
+
+test('stable metadata accepts an optional fixed-namespace Gateway pointer', () => {
+  const stable = {
+    schema: 2,
+    version: 'v1.23',
+    gateway: {
+      manifestPath: '/gateway/current/gateway-manifest.json',
+      manifestSha256: 'a'.repeat(64),
+      sourceSha: 'b'.repeat(40),
+      version: 'v1.23',
+    },
+  };
+  assert.deepEqual(validateStableMetadata(stable), stable);
+});
+
+test('stable metadata allows a previous Gateway pointer to carry forward', () => {
+  const stable = {
+    schema: 2,
+    version: 'v1.24',
+    gateway: {
+      manifestPath: '/gateway/current/gateway-manifest.json',
+      manifestSha256: 'a'.repeat(64),
+      sourceSha: 'b'.repeat(40),
+      version: 'v1.23',
+    },
+  };
+  assert.deepEqual(validateStableMetadata(stable), stable);
+});
+
+test('stable metadata rejects an invalid Gateway pointer', () => {
+  assert.throws(
+    () => validateStableMetadata({
+      schema: 2,
+      version: 'v1.23',
+      gateway: {
+        manifestPath: '/releases/v1.23/gateway-manifest.json',
+        manifestSha256: 'a'.repeat(64),
+        sourceSha: 'b'.repeat(40),
+        version: 'v1.23',
+      },
+    }),
+    /Gateway pointer is invalid/,
   );
 });

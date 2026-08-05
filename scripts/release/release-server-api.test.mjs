@@ -121,6 +121,31 @@ test('client keeps stable anonymous and authenticates every publishing request',
   );
 });
 
+test('publish start sends the optional Gateway selection to the release server', async () => {
+  const requests = [];
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.wheelmaker.top',
+    token: 'token',
+    requestImpl: recordingHttpsRequest(requests, [
+      {statusCode: 201, body: JSON.stringify({schema: 1, sessionId: 'e'.repeat(32), version: 'v1.9'})},
+    ]),
+  });
+  await api.start({
+    publisher: 'local',
+    sourceSha: '1'.repeat(40),
+    version: 'v1.9',
+    withGateway: true,
+  });
+  assert.deepEqual(JSON.parse(requests[0].body.toString('utf8')), {
+    publisher: 'local',
+    sourceSha: '1'.repeat(40),
+    version: 'v1.9',
+    withAndroid: false,
+    withDesktop: false,
+    withGateway: true,
+  });
+});
+
 test('debug web client uses its isolated authenticated API without stable reads', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-debug-web-api-'));
   const path = join(root, 'web.zip');

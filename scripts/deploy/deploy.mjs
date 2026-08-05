@@ -5,6 +5,8 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { parseGatewayOptions } from './gateway-config.mjs';
+
 export const RELEASE_BASE_URL = '__WHEELMAKER_RELEASE_BASE_URL__';
 export const STABLE_PATH = '/stable.json';
 export const STABLE_URL = `${RELEASE_BASE_URL}${STABLE_PATH}`;
@@ -16,6 +18,8 @@ const PROGRESS_PERCENT_STEP = 5;
 const PROGRESS_BYTES_STEP = 1024 * 1024;
 const ALLOWED_COMMANDS = new Set([
   'desktop-update',
+  'gateway',
+  'gateway-update',
   'migrate-uninstall',
   'update',
 ]);
@@ -219,6 +223,13 @@ export function parseDeployArgs(args) {
   ) {
     return [...args];
   }
+  const gateway = parseGatewayOptions(args);
+  if (gateway.explicit) {
+    if (gateway.commandArgs.length > 1 || (gateway.commandArgs.length === 1 && !['gateway', 'gateway-update'].includes(gateway.commandArgs[0]))) {
+      throw new Error('Gateway configuration options are only valid for a full deployment');
+    }
+    return [...args];
+  }
   if (args.length !== 1 || !ALLOWED_COMMANDS.has(args[0])) {
     throw new Error(`unknown deploy command: ${args.join(' ')}`);
   }
@@ -271,6 +282,21 @@ function validateStable(stable, releaseBaseUrl) {
       throw new Error('Android APK metadata is invalid');
     }
     resolveReleasePath(releaseBaseUrl, android.path, 'Android APK');
+  }
+  if (stable.gateway !== undefined) {
+    const gateway = stable.gateway;
+    if (
+      !gateway ||
+      typeof gateway !== 'object' ||
+      Array.isArray(gateway) ||
+      !/^v1\.(0|[1-9]\d*)$/.test(gateway.version ?? '') ||
+      !/^[0-9a-f]{40}$/.test(gateway.sourceSha ?? '') ||
+      gateway.manifestPath !== '/gateway/current/gateway-manifest.json' ||
+      !/^[0-9a-f]{64}$/.test(gateway.manifestSha256 ?? '')
+    ) {
+      throw new Error('Gateway metadata is invalid');
+    }
+    resolveReleasePath(releaseBaseUrl, gateway.manifestPath, 'Gateway manifest');
   }
   return stable;
 }
@@ -346,11 +372,13 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
       ? `Starting update to ${stable.version}`
       : args[0] === 'migrate-uninstall'
         ? 'Starting legacy migration cleanup'
-        : args[0] === 'desktop-update'
-          ? 'Starting Desktop update'
-          : args[0] === 'desktop-self-update'
-            ? 'Starting Desktop self-update'
-          : `Running ${args.join(' ')}`;
+        : ['gateway', 'gateway-update'].includes(args[0])
+          ? 'Starting Gateway deployment'
+          : args[0] === 'desktop-update'
+            ? 'Starting Desktop update'
+            : args[0] === 'desktop-self-update'
+              ? 'Starting Desktop self-update'
+              : `Running ${args.join(' ')}`;
   deps.reportStatus?.(operation);
 
   return deps.runCore(args, {
@@ -440,6 +468,9 @@ export function createDefaultLauncherDependencies({
         trustedStable: context.stable,
         trustedStableBytes: context.stableBytes,
         trustedReleaseBaseUrl: context.releaseBaseUrl,
+        gatewayEnabled: true,
+        gatewayOptions: context.gatewayOptions,
+        interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
       });
     },
     stageLauncher(bytes) {

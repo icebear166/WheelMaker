@@ -23,6 +23,9 @@ async function runPublish(deps) {
   const withAndroid = affirmative(
     await deps.prompt('是否包含 WheelMaker Android APK？[y/N] '),
   );
+  const withGateway = affirmative(
+    await deps.prompt('是否包含 WheelMaker Gateway？[y/N] '),
+  );
   const publish = affirmative(
     await deps.prompt('是否发布到 public release server？[y/N] '),
   );
@@ -30,13 +33,14 @@ async function runPublish(deps) {
   const args = [releaseScriptPath(deps)];
   if (withDesktop) args.push('--with-desktop');
   if (withAndroid) args.push('--with-android');
+  if (withGateway) args.push('--with-gateway');
   if (publish) args.push('--publish');
   await deps.run(
     process.execPath,
     args,
     { cwd: deps.repoRoot },
   );
-  return { publish, withAndroid, withDesktop };
+  return { publish, withAndroid, withDesktop, withGateway };
 }
 
 async function runAction(deps) {
@@ -57,13 +61,17 @@ async function runAction(deps) {
   const withAndroid = affirmative(
     await deps.prompt('是否包含 WheelMaker Android APK？[y/N] '),
   );
+  const withGateway = affirmative(
+    await deps.prompt('是否包含 WheelMaker Gateway？[y/N] '),
+  );
   deps.write(`Workflow branch: ${git.branch}`);
   deps.write(`Source SHA: ${git.head}`);
   deps.write(`Desktop: ${withDesktop ? 'included' : 'not included'}`);
   deps.write(`Android: ${withAndroid ? 'included' : 'not included'}`);
+  deps.write(`Gateway: ${withGateway ? 'included' : 'not included'}`);
   if (!affirmative(await deps.prompt('确认触发 GitHub Action？[y/N] '))) {
     deps.write('已取消触发。');
-    return { cancelled: true, withAndroid, withDesktop };
+    return { cancelled: true, withAndroid, withDesktop, withGateway };
   }
 
   const startedAt = deps.now();
@@ -81,6 +89,8 @@ async function runAction(deps) {
       `with_desktop=${withDesktop}`,
       '-f',
       `with_android=${withAndroid}`,
+      '-f',
+      `with_gateway=${withGateway}`,
     ],
     { cwd: deps.repoRoot },
   );
@@ -110,6 +120,7 @@ async function runAction(deps) {
     runId: workflowRun.databaseId,
     withAndroid,
     withDesktop,
+    withGateway,
   };
 }
 

@@ -15,14 +15,35 @@ export function stableVersionFromBytes(bytes) {
   } catch {
     throw new Error('stable metadata schema is invalid');
   }
+  return validateStableMetadata(stable).version;
+}
+
+export function validateStableMetadata(stable) {
   if (
-    stable?.schema !== 2 ||
+    !stable ||
+    typeof stable !== 'object' ||
+    Array.isArray(stable) ||
+    stable.schema !== 2 ||
     typeof stable.version !== 'string' ||
     !/^v1\.(0|[1-9]\d*)$/.test(stable.version)
   ) {
     throw new Error('stable metadata schema is invalid');
   }
-  return stable.version;
+  if (stable.gateway !== undefined) {
+    const gateway = stable.gateway;
+    if (
+      !gateway ||
+      typeof gateway !== 'object' ||
+      Array.isArray(gateway) ||
+      !/^v1\.(0|[1-9]\d*)$/.test(gateway.version ?? '') ||
+      gateway.manifestPath !== '/gateway/current/gateway-manifest.json' ||
+      !/^[0-9a-f]{64}$/.test(gateway.manifestSha256 ?? '') ||
+      !/^[0-9a-f]{40}$/.test(gateway.sourceSha ?? '')
+    ) {
+      throw new Error('Gateway pointer is invalid');
+    }
+  }
+  return stable;
 }
 
 export function nextVersionFromStableBytes(bytes) {

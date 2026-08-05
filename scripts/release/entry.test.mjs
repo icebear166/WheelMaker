@@ -44,19 +44,37 @@ function fakeDependencies(overrides = {}) {
   };
 }
 
-test('local release entry asks three questions and defaults to build only', async () => {
+test('local release entry asks four questions and defaults to build only', async () => {
   const deps = fakeDependencies();
   await runReleaseEntry('publish', deps);
 
-  assert.equal(deps.state.prompts.length, 3);
+  assert.equal(deps.state.prompts.length, 4);
   assert.match(deps.state.prompts[0], /Desktop.*\[y\/N\]/i);
   assert.match(deps.state.prompts[1], /Android.*\[y\/N\]/i);
-  assert.match(deps.state.prompts[2], /public release server.*\[y\/N\]/i);
+  assert.match(deps.state.prompts[2], /Gateway.*\[y\/N\]/i);
+  assert.match(deps.state.prompts[3], /public release server.*\[y\/N\]/i);
   assert.deepEqual(deps.state.commands[0].args, ['scripts/release.mjs']);
 });
 
+test('local release entry can include Gateway in the same WheelMaker release', async () => {
+  const answers = ['n', 'n', 'y', 'y'];
+  const deps = fakeDependencies({
+    async prompt(question) {
+      deps.state.prompts.push(question);
+      return answers.shift();
+    },
+  });
+  await runReleaseEntry('publish', deps);
+  assert.match(deps.state.prompts[2], /Gateway/i);
+  assert.deepEqual(deps.state.commands[0].args, [
+    'scripts/release.mjs',
+    '--with-gateway',
+    '--publish',
+  ]);
+});
+
 test('local release entry passes Desktop and publish choices in one invocation', async () => {
-  const answers = ['y', 'y', 'y'];
+  const answers = ['y', 'y', 'y', 'y'];
   const deps = fakeDependencies({
     async prompt(question) {
       deps.state.prompts.push(question);
@@ -69,12 +87,13 @@ test('local release entry passes Desktop and publish choices in one invocation',
     'scripts/release.mjs',
     '--with-desktop',
     '--with-android',
+    '--with-gateway',
     '--publish',
   ]);
 });
 
 test('action entry requires a clean pushed commit and passes optional asset choices', async () => {
-  const answers = ['y', 'y', 'y'];
+  const answers = ['y', 'y', 'y', 'y'];
   const deps = fakeDependencies({
     async prompt(question) {
       deps.state.prompts.push(question);
@@ -96,6 +115,8 @@ test('action entry requires a clean pushed commit and passes optional asset choi
     'with_desktop=true',
     '-f',
     'with_android=true',
+    '-f',
+    'with_gateway=true',
   ]);
   assert.deepEqual(deps.state.runQueries, [
     {
@@ -118,7 +139,7 @@ test('action entry requires a clean pushed commit and passes optional asset choi
 });
 
 test('action entry prints failed step logs when the watched run fails', async () => {
-  const answers = ['n', 'n', 'y'];
+  const answers = ['n', 'n', 'n', 'y'];
   const deps = fakeDependencies({
     async prompt(question) {
       deps.state.prompts.push(question);
@@ -194,6 +215,8 @@ test('manual Action builds and publishes in one release invocation with one serv
   assert.match(workflow, /args\+?=\(--publish\)/);
   assert.match(workflow, /with_android:/);
   assert.match(workflow, /if: \$\{\{ inputs\.with_android \}\}/);
+  assert.match(workflow, /with_gateway:/);
+  assert.match(workflow, /args\+?=\(--with-gateway\)/);
   assert.match(workflow, /actions\/setup-java@v4/);
   assert.match(workflow, /android-actions\/setup-android@v3/);
   assert.match(workflow, /gradle\/actions\/setup-gradle@v4/);

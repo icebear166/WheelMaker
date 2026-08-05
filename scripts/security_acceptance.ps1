@@ -154,6 +154,7 @@ $nodeTests = @(
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\release-server') -Filter '*.test.mjs' -File
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\release') -Filter '*.test.mjs' -File
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\deploy') -Filter '*.test.mjs' -File
+    Get-Item -LiteralPath (Join-Path $repoRoot 'scripts\disable-nginx.test.mjs')
 ) | ForEach-Object { $_.FullName }
 & node --test @nodeTests
 Assert-ExitCode 'Node release and deployment tests' $LASTEXITCODE
@@ -200,18 +201,18 @@ if ($retiredReleaseExitCode -ne 1) {
 }
 
 $releaseDeploy = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release-server\deploy.mjs')
-$releaseNginx = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release-server\nginx.conf')
 $publisherConfig = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release\publisher-config.mjs')
 if (-not $releaseDeploy.Contains('"listen":"127.0.0.1:9680"')) {
     throw 'release service deployment does not bind the application listener to loopback'
 }
-$apiStart = $releaseNginx.IndexOf('location /api/', [StringComparison]::Ordinal)
-if ($apiStart -lt 0) {
-    throw 'release publish API location is missing'
+if (-not $releaseDeploy.Contains('/etc/wheelmaker-gateway/home')) {
+    throw 'release deployment does not discover the fixed Gateway home'
 }
-$apiEnd = $releaseNginx.IndexOf('location = /healthz', $apiStart, [StringComparison]::Ordinal)
-if ($apiEnd -le $apiStart -or $releaseNginx.Substring($apiStart, $apiEnd - $apiStart).Contains('Access-Control-Allow-Origin')) {
-    throw 'release publish API must not expose wildcard CORS'
+if (-not $releaseDeploy.Contains('release-server.json')) {
+    throw 'release deployment does not write the semantic Gateway site'
+}
+if ($releaseDeploy -match 'Caddyfile|apt-get|systemctl\s+(enable|restart)\s+caddy|systemctl\s+(stop|disable)\s+nginx') {
+    throw 'release server deployment contains external proxy or Nginx lifecycle actions'
 }
 if (-not $publisherConfig.Contains("join(homeDirectory, '.wheelmaker')")) {
     throw 'publisher Token config is not rooted below the publisher user home'

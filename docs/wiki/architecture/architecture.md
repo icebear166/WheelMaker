@@ -5,6 +5,7 @@
 ## 页面
 
 - [`hub-state.md`](hub-state.md)：Hub 运行态 Section 的所有权、原子更新、同步触发和前端消费边界。
+- [`gateway.md`](gateway.md)：Gateway 的宿主机级入口、站点配置、TLS 和运行时边界。
 - [`server-runtime.md`](server-runtime.md)：App-only Session 运行时架构、组件职责和生命周期边界。
 - [`session-management-and-sync.md`](session-management-and-sync.md)：Session 数据模型、Turn 语义、持久化、同步和归档机制。
 

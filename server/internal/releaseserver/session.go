@@ -46,6 +46,7 @@ type startRequest struct {
 	Publisher   string `json:"publisher"`
 	WithDesktop bool   `json:"withDesktop"`
 	WithAndroid bool   `json:"withAndroid"`
+	WithGateway bool   `json:"withGateway"`
 }
 
 type startResponse struct {
@@ -63,6 +64,7 @@ type publishSession struct {
 	Publisher    string              `json:"publisher"`
 	WithDesktop  bool                `json:"withDesktop"`
 	WithAndroid  bool                `json:"withAndroid"`
+	WithGateway  bool                `json:"withGateway"`
 	PublishedAt  string              `json:"publishedAt"`
 	UpdatedAt    string              `json:"updatedAt"`
 	AllowedFiles map[string]fileRule `json:"allowedFiles"`
@@ -200,6 +202,7 @@ func (s *Server) handleStart(w http.ResponseWriter, r *http.Request) {
 			Publisher:    request.Publisher,
 			WithDesktop:  request.WithDesktop,
 			WithAndroid:  request.WithAndroid,
+			WithGateway:  request.WithGateway,
 			PublishedAt:  now,
 			UpdatedAt:    now,
 			AllowedFiles: allowedFiles,
@@ -592,6 +595,13 @@ func allowedReleaseFiles(request startRequest) map[string]fileRule {
 	if request.WithAndroid {
 		files["WheelMakerAndroid.apk"] = fileRule{MaxSize: maxBinaryFileSize}
 		files["android-release.json"] = fileRule{MaxSize: maxControlFileSize}
+	}
+	if request.WithGateway {
+		files["gateway-manifest.json"] = fileRule{MaxSize: maxControlFileSize}
+		for _, platform := range releasePlatforms {
+			name := "wheelmaker-gateway-" + request.Version + "-" + platform + ".tar.zst"
+			files[name] = fileRule{MaxSize: maxBinaryFileSize}
+		}
 	}
 	return files
 }

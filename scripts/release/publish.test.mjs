@@ -10,6 +10,7 @@ import {
   publishBuiltRelease,
   ReleaseVersionConflictError,
 } from './publish.mjs';
+import { GATEWAY_TARGETS } from './gateway.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 const PUBLISHED_AT = '2026-07-17T09:00:00Z';
@@ -133,6 +134,32 @@ test('packaging rejects a launcher with zero or multiple render markers', async 
       '__WHEELMAKER_RELEASE_BASE_URL__ __WHEELMAKER_RELEASE_BASE_URL__',
     );
     await assert.rejects(packageBuiltRelease(release), /exactly one release base URL marker/i);
+  } finally {
+    await release.cleanup();
+  }
+});
+
+test('packaging includes optional Gateway artifacts in the fixed namespace pointer', async () => {
+  const release = await fixtureRelease();
+  const gatewayRoot = join(release.stagingRoot, 'gateway-build');
+  release.gatewayPlatforms = [];
+  try {
+    for (const target of GATEWAY_TARGETS) {
+      const directory = join(gatewayRoot, target.key);
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, target.binary), `gateway-${target.key}`);
+      release.gatewayPlatforms.push({ ...target, directory, binaryPath: join(directory, target.binary) });
+    }
+    const packaged = await packageBuiltRelease(release);
+    const manifest = JSON.parse(await readFile(packaged.manifestPath, 'utf8'));
+    assert.equal(manifest.gateway.version, 'v1.1');
+    assert.match(manifest.gateway.manifestPath, /^\/gateway\/current\/gateway-manifest\.json$/);
+    assert.match(manifest.gateway.manifestSha256, /^[0-9a-f]{64}$/);
+    assert.equal(
+      packaged.assets.filter(asset => asset.name.startsWith('wheelmaker-gateway-')).length,
+      GATEWAY_TARGETS.length,
+    );
+    assert.equal(packaged.assets.some(asset => asset.name === 'gateway-manifest.json'), true);
   } finally {
     await release.cleanup();
   }

@@ -14,6 +14,7 @@ import {join} from 'node:path';
 import {encodeJsonBytes} from './metadata.mjs';
 import {validateReleaseChannel, versionAssetPath} from './channel.mjs';
 import {createTarZst} from './tar.mjs';
+import {packageGatewayArtifacts} from './gateway.mjs';
 
 const RELEASE_BASE_URL_MARKER = '__WHEELMAKER_RELEASE_BASE_URL__';
 
@@ -113,6 +114,19 @@ export async function packageBuiltRelease(release) {
   await addAsset(assets, deployMjsPath, 'deploy.mjs');
   await addAsset(assets, corePath, 'deploy-core.mjs');
 
+  let gatewayPackaged;
+  if (release.gatewayPlatforms) {
+    gatewayPackaged = await packageGatewayArtifacts({
+      packageRoot,
+      platforms: release.gatewayPlatforms,
+      publishedAt: release.publishedAt,
+      sourceSha: release.sourceSha,
+      stagingRoot: release.stagingRoot,
+      version: release.version,
+    });
+    assets.push(...gatewayPackaged.assets);
+  }
+
   const manifest = {
     schema: 2,
     version: release.version,
@@ -120,6 +134,14 @@ export async function packageBuiltRelease(release) {
     sourceSha: release.sourceSha,
     artifacts,
   };
+  if (gatewayPackaged) {
+    manifest.gateway = {
+      manifestPath: gatewayPackaged.manifest.path,
+      manifestSha256: gatewayPackaged.assets.find(asset => asset.name === 'gateway-manifest.json').sha256,
+      sourceSha: release.sourceSha,
+      version: release.version,
+    };
+  }
   const manifestBytes = encodeJsonBytes(manifest);
   const manifestPath = join(packageRoot, 'release-manifest.json');
   await writeFile(manifestPath, manifestBytes);
@@ -169,6 +191,7 @@ export async function packageBuiltRelease(release) {
     desktopExePath: desktopExePath ? join(versionRoot, 'WheelMakerDesktop.exe') : undefined,
     manifestBytes,
     manifestPath: join(versionRoot, 'release-manifest.json'),
+    gatewayManifestPath: gatewayPackaged ? join(versionRoot, 'gateway-manifest.json') : undefined,
     platforms,
     version: release.version,
     versionRoot,

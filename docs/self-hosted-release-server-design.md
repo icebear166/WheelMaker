@@ -1,12 +1,12 @@
 # WheelMaker 自建发布服务器设计
 
-日期：2026-07-17
-状态：已实施
-生产验证：2026-07-17，`https://release.wheelmaker.top`
+日期：2026-08-05
+状态：已实施（Gateway 迁移）
+生产验证：待在受控主机验证，`https://release.wheelmaker.top`
 
 ## 目标
 
-WheelMaker 已完成预构建发布改造，但公开控制文件和安装包仍托管在 GitHub，国内网络下载速度无法满足安装与更新。新方案将公开发布面完整迁移到 `https://release.wheelmaker.top`：源码继续保持私有，本地 Windows 和私有仓库的手动 GitHub Action 仍负责构建，独立 Go 服务负责接收、校验和原子发布，Nginx 负责公开 HTTPS 下载。
+WheelMaker 已完成预构建发布改造，但公开控制文件和安装包仍托管在 GitHub，国内网络下载速度无法满足安装与更新。新方案将公开发布面完整迁移到 `https://release.wheelmaker.top`：源码继续保持私有，本地 Windows 和私有仓库的手动 GitHub Action 仍负责构建，独立 Go 服务负责接收、校验和原子发布，宿主机级 `wheelmaker-gateway`（内嵌 Caddy）负责公开 HTTPS 下载。Release Server 部署不再安装或管理外部 Caddy/Nginx。
 
 GitHub Release、公开 `wheelmaker-release` 仓库及其 API 不再参与发布、部署或 Web 查询。既有 GitHub 客户端不设置过渡桥接，旧用户必须重新执行新域名提供的一行迁移安装命令。
 
@@ -24,7 +24,7 @@ GitHub Release、公开 `wheelmaker-release` 仓库及其 API 不再参与发布
           │ HTTPS + Bearer Token
           ▼
 release.wheelmaker.top:443
-  └─ Nginx
+  └─ wheelmaker-gateway (embedded Caddy)
       ├─ /api/*  ───────────────► 127.0.0.1:9680 Go 发布服务
       ├─ /healthz ──────────────► 127.0.0.1:9680
       └─ 其他 GET/HEAD/Range ───► /srv/wheelmaker-release/public
@@ -35,7 +35,7 @@ release.wheelmaker.top:443
                                       └─ releases/v1.x/...
 ```
 
-服务器使用现有 Ubuntu 26.04、标准 systemd Nginx 和 Certbot。Go 服务以非登录用户 `wheelmaker-release` 运行，只监听 loopback；不在服务器安装源码、Git、Go、Node、Docker或数据库。Nginx 对公开文件只读，发布服务是公开目录的唯一写入者。
+服务器使用现有 Ubuntu 26.04 和标准 systemd。Go 服务以非登录用户 `wheelmaker-release` 运行，只监听 loopback；Gateway 使用独立的非 root 用户和服务，读取公开文件。服务器不安装源码、Git、Go、Node、Docker或数据库；Release Server 部署不会停止或修改已有 Nginx。
 
 ## 公开内容与 URL
 
@@ -59,6 +59,8 @@ release.wheelmaker.top:443
 /deploy.mjs               最新的小型安装/自更新启动器
 /deploy-core.mjs          最新 core 副本
 /releases/v1.x/*          不可变 MJS、版本清单、平台包及可选 Desktop/Android
+/gateway/current/*        当前 Gateway 清单和四个平台归档
+/gateway/previous/*       上一版 Gateway 清单和归档（供提交回滚）
 ```
 
 所有公开路径允许匿名 `GET`、`HEAD` 和 Range 下载，并返回 `Access-Control-Allow-Origin: *`；目录列表关闭。上传 API 不开放浏览器 CORS。
@@ -116,11 +118,11 @@ DELETE /api/publish/{session}
 
 除 `healthz` 外，所有 `/api/` 请求必须使用 `Authorization: Bearer <token>`。本地发布与 GitHub Action 共用一个至少 32 字节随机 Token；服务端只保存 `tokenSha256` 并使用常量时间比较。Token 不写入仓库、URL、状态文件或日志：本地明文位于 `~/.wheelmaker/release-server.json`，Action 明文位于私有源码仓库的 GitHub Actions Secret `WHEELMAKER_RELEASE_TOKEN`。
 
-`start` 只接收版本、源码 SHA、`local|action` 展示标识以及是否包含 Desktop/Android；开始时间来自服务器 UTC 时钟。服务端据此推导本轮固定文件白名单。每个文件的 `PUT` 请求使用 `Content-Length` 和 `X-WheelMaker-SHA256` 声明构建后才能确定的大小与摘要；文件名禁止路径分隔符、编码绕过和白名单外取值。上传按流处理，在写入 staging 的同时计算并复核大小与 SHA-256，不把大文件完整读入内存。Nginx 关闭请求缓冲，Go 服务先验证请求头再读取请求体。
+`start` 只接收版本、源码 SHA、`local|action` 展示标识以及是否包含 Desktop/Android/Gateway；开始时间来自服务器 UTC 时钟。服务端据此推导本轮固定文件白名单。每个文件的 `PUT` 请求使用 `Content-Length` 和 `X-WheelMaker-SHA256` 声明构建后才能确定的大小与摘要；文件名禁止路径分隔符、编码绕过和白名单外取值。上传按流处理，在写入 staging 的同时计算并复核大小与 SHA-256，不把大文件完整读入内存。Gateway 只做流式反向代理，Go 服务先验证请求头再读取请求体。
 
 固定上限为每个 MJS/JSON 5 MiB、每个二进制资产 2 GiB、每个会话最多 10 个文件且总计不超过 8 GiB。客户端和代理不设置总时长截止，只对连接无数据活动设置超时，因此慢速但持续传输的上传不会被固定分钟数中断。
 
-发布会话不是持久发布锁。相同版本可以并行准备，但 `commit` 在进程内短暂串行化，并要求提交版本严格等于当前 stable 的下一个 `v1.x`；先成功者生效，其他提交收到 `409 Conflict`。不存在需要人工删除的锁文件。超过 24 小时无活动的会话由维护任务标记为 `publisher_timeout` 并清理。
+发布会话不是持久发布锁。相同版本可以并行准备，但 `commit` 在进程内短暂串行化，并要求提交版本严格等于当前 stable 的下一个 `v1.x`；先成功者生效，其他提交收到 `409 Conflict`。选中 Gateway 时，四个平台归档和清单先校验并切换固定 `current/previous` 槽位，`stable.json` 最后写入；未选中时继承旧 Gateway 指针。不存在需要人工删除的锁文件。超过 24 小时无活动的会话由维护任务标记为 `publisher_timeout` 并清理。
 
 ## 原子提交
 
@@ -129,12 +131,12 @@ DELETE /api/publish/{session}
 ```text
 读取 stable，计算下一个 v1.x
   → start 会话并写 validating/building 状态
-  → 构建 Web、四平台 Hub 和可选 Desktop/Android
+  → 构建 Web、四平台 Hub 和可选 Desktop/Android/Gateway
   → 打包并登记预期大小与 SHA-256
   → 流式上传全部文件
   → commit
   → 服务端复核文件、manifest、版本与继承指针
-  → 发布包含 MJS 和资产的不可变 releases/v1.x
+  → 发布包含 MJS 和资产的不可变 releases/v1.x；Gateway 写入固定命名空间
   → 原子替换 stable.json
   → 刷新根 MJS、releases.json 和 succeeded 状态
 ```
@@ -160,7 +162,7 @@ DELETE /api/publish/{session}
   → 检测远端 linux/amd64
   → CGO_ENABLED=0 交叉编译 Go 服务
   → SCP 到远端临时路径
-  → 首次运行时创建用户、目录、空 Token 配置、systemd、Nginx 和 Certbot 配置
+  → 首次运行时创建用户、目录、空 Token 配置和 Release Server systemd 配置
   → 安装到 /opt/wheelmaker-release-server/versions/<source-sha>/
   → 原子切换 current 链接并重启
   → 检查 https://release.wheelmaker.top/healthz
@@ -176,8 +178,8 @@ DELETE /api/publish/{session}
 ```text
 /etc/wheelmaker-release-server/config.json
 /etc/systemd/system/wheelmaker-release-server.service
-/etc/nginx/sites-available/release.wheelmaker.top
-/etc/nginx/sites-enabled/release.wheelmaker.top
+/etc/wheelmaker-gateway/home       # Gateway 安装时写入的固定 Home 元数据
+~/.wheelmaker/gateway/sites/release-server.json
 ```
 
 ## 目标端与 Web 迁移
@@ -192,9 +194,9 @@ Web 从 `/stable.json`、`/publish-status.json` 和 `/releases.json` 读取全�
 
 ## 运维与安全边界
 
-- Nginx 负责 TLS、公开静态下载、Range、上传大小限制、访问日志和 `/api/` 反向代理；继续使用现有 Certbot 自动续期，不引入 Caddy。
+- Gateway 负责 TLS、公开静态下载、Range、访问日志和 `/api/` 反向代理；`https://` 站点由内嵌 Caddy 自动签发与续期证书，不再依赖 Certbot。Release Server 部署只生成并校验自己的 semantic site 文件。
 - Go 服务监听 `127.0.0.1:9680`，systemd journal 记录结构化服务日志；日志禁止记录 Authorization、完整请求体和本地 Token。
-- `/srv/wheelmaker-release/public` 与 staging/data 由 `wheelmaker-release` 拥有；Nginx 只有公开目录读取权限。
+- `/srv/wheelmaker-release/public` 与 staging/data 由 `wheelmaker-release` 拥有；部署器只为 Gateway 运行用户授予公开目录的读取和目录穿越权限。
 - 上传限制文件数量、单文件大小、总大小和会话时长；失败上传只留在不可公开的 staging，随后自动清理。
 - SSH root 密钥只保存在发布者本机，不上传服务器、不进入源码仓库；服务器仅保存对应公钥。
 - 单服务器是第一版明确接受的可用性边界。服务器磁盘或主机故障时，需要从私有源码和本地发布能力重新构建发布面。
