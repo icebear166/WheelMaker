@@ -3155,6 +3155,7 @@ export function App() {
   const [previewFileTreeSearchActiveIndex, setPreviewFileTreeSearchActiveIndex] = useState(0);
   const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);
   const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewDrawerHost, setPreviewDrawerHost] = useState<HTMLDivElement | null>(null);
   const previewFileTreeSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const previewFileTreeSearchGenerationRef = useRef(0);
   const previewFileTreeSearchQueryIdRef = useRef(0);
@@ -20634,6 +20635,7 @@ export function App() {
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
       drawerMode={previewWorkbench.drawerMode}
+      drawerPortalTarget={mode === 'desktop' ? previewDrawerHost : null}
       fileDrawer={chatFilePreviewTreeContent}
       fileDrawerSearch={previewFileTreeSearch}
       gitDrawer={previewGitHistoryDrawer}
@@ -20665,23 +20667,30 @@ export function App() {
     </PreviewWorkbenchChrome>
   );
   const chatPreviewDesktopPane = isWide && chatPreviewOpen ? (
-    <aside
-      className="chat-preview-pane"
-      style={{ '--chat-file-peek-width': `${effectiveChatFilePeekWidth}px` } as React.CSSProperties}
-    >
-      <button
-        type="button"
-        className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
-        aria-label="Resize preview"
-        data-tooltip="Resize preview"
-        onPointerDown={beginChatFilePeekResize}
-        onPointerMove={moveChatFilePeekResize}
-        onPointerUp={finishChatFilePeekResize}
-        onPointerCancel={finishChatFilePeekResize}
-        onLostPointerCapture={commitChatFilePeekResize}
+    <>
+      <aside
+        className="chat-preview-pane"
+        style={{ '--chat-file-peek-width': `${effectiveChatFilePeekWidth}px` } as React.CSSProperties}
+      >
+        <button
+          type="button"
+          className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
+          aria-label="Resize preview"
+          data-tooltip="Resize preview"
+          onPointerDown={beginChatFilePeekResize}
+          onPointerMove={moveChatFilePeekResize}
+          onPointerUp={finishChatFilePeekResize}
+          onPointerCancel={finishChatFilePeekResize}
+          onLostPointerCapture={commitChatFilePeekResize}
+        />
+        {renderPreviewWorkbenchSurface('desktop')}
+      </aside>
+      <div
+        ref={setPreviewDrawerHost}
+        className="chat-preview-drawer-host"
+        style={{right: `${effectiveChatFilePeekWidth}px`}}
       />
-      {renderPreviewWorkbenchSurface('desktop')}
-    </aside>
+    </>
   ) : null;
   const chatPreviewMobileOverlay = !isWide ? (
     <div
