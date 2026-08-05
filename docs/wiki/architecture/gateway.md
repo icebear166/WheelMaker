@@ -8,6 +8,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 
 - Gateway 使用与本机 Hub 相同的操作系统用户和普通权限，但拥有独立系统服务。没有 Hub 的 Release-only 主机使用执行显式 Gateway 部署的当前非 root 用户。
 - 首次安装通过管理员权限注册开机自启和低位端口能力，安装后立即尝试启动。`start` / `stop` 只控制当前运行状态，不改变开机自启设置。
+- 旧 Nginx Release-only 主机迁移时，`bootstrap-release-gateway.bat` 是一次性例外：它从干净源码安装固定 `/srv/wheelmaker-release/gateway`，注册服务但默认不启动，等待 Nginx 停止后再由 `start.sh` 启动。
 - Hub/Web 的普通 `deploy.mjs update` 不下载、更新、重启或修改 Gateway。Gateway 显式升级可有数秒中断；启动失败时恢复本地上一版。
 - Gateway 和部署器不停止、卸载或修改 Nginx，也不修改 DNS、本机防火墙或云安全组。
 
@@ -44,6 +45,8 @@ node deploy.mjs --gateway-skip                 # 完整部署，保留 Workspace
 node deploy.mjs --gateway-write --gateway-public-url=https://workspace.example.com
 node deploy.mjs gateway                         # 只安装/启动 stable 中的 Gateway
 node deploy.mjs gateway-update                 # 显式下载、校验并更新 Gateway，可回滚
+deploy-release-server.bat --legacy-nginx       # 一次性先升级旧 Nginx 后的 Release Server
+bootstrap-release-gateway.bat                 # 一次性安装 Release-only Gateway，默认不启动
 ~/.wheelmaker/gateway/start.sh|stop.sh          # 只控制 Gateway 当前运行状态
 ```
 

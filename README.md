@@ -632,7 +632,7 @@ Release downloads from `https://release.wheelmaker.top` are anonymous; uploads u
 
 The self-hosted channel starts fresh at `v1.1`; it does not import or compare the retired GitHub stable/history. Public stable and manifests use schema 2 root-relative paths resolved against the single release origin. Each version directory includes `deploy.mjs` and `deploy-core.mjs` beside the platform archives—not inside them. The release server verifies every streamed upload and writes `stable.json` last. Published assets are retained indefinitely; insufficient disk space fails the session without changing stable. Web release history comes from `releases.json`, while each Hub reports only its own installed `release.json` state.
 
-The release service has an independent deployment entrypoint, `deploy-release-server.bat`. It requires Windows `go`, `ssh`, and `scp`, the private key `~/.ssh/wheelmaker-release-server_ed25519`, a clean source commit, and root SSH access to `release.wheelmaker.top`. It cross-compiles Linux/amd64, installs the non-root systemd service and Nginx configuration idempotently, and never deletes published product assets.
+The release service has an independent deployment entrypoint, `deploy-release-server.bat`. It requires Windows `go`, `ssh`, and `scp`, the private key `~/.ssh/wheelmaker-release-server_ed25519`, a clean source commit, and root SSH access to `release.wheelmaker.top`. Normal mode idempotently updates the loopback non-root service and its independent Gateway site declaration without owning Gateway lifecycle, and never deletes published product assets. For a legacy Nginx host, run `deploy-release-server.bat --legacy-nginx`, then `bootstrap-release-gateway.bat`, disable Nginx, and start Gateway manually.
 
 ## License
 

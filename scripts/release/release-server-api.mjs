@@ -186,15 +186,16 @@ export class ReleaseServerApi {
   }
 
   start(input) {
+    const body = {
+      publisher: input.publisher,
+      sourceSha: input.sourceSha,
+      version: input.version,
+      withAndroid: input.withAndroid ?? false,
+      withDesktop: input.withDesktop ?? false,
+      ...(input.withGateway ? {withGateway: true} : {}),
+    };
     return this.request('/api/publish/start', {
-      body: {
-        publisher: input.publisher,
-        sourceSha: input.sourceSha,
-        version: input.version,
-        withAndroid: input.withAndroid ?? false,
-        withDesktop: input.withDesktop ?? false,
-        withGateway: input.withGateway ?? false,
-      },
+      body,
       method: 'POST',
     });
   }

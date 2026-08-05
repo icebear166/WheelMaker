@@ -279,6 +279,7 @@ test('release server deployment wrapper delegates to Node and pauses', async () 
     'utf8',
   );
   assert.match(source, /scripts\\release-server\\deploy\.mjs/);
+  assert.match(source, /deploy\.mjs" %\*/i);
   assert.match(source, /set "EXIT_CODE=%ERRORLEVEL%"/i);
   assert.match(source, /pause/i);
   assert.match(source, /exit \/b %EXIT_CODE%/i);

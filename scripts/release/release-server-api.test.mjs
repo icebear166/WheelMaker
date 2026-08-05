@@ -146,6 +146,32 @@ test('publish start sends the optional Gateway selection to the release server',
   });
 });
 
+test('publish start omits Gateway selection for legacy-compatible releases', async () => {
+  const requests = [];
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.wheelmaker.top',
+    token: 'token',
+    requestImpl: recordingHttpsRequest(requests, [
+      {statusCode: 201, body: JSON.stringify({schema: 1, sessionId: 'f'.repeat(32), version: 'v1.9'})},
+    ]),
+  });
+  await api.start({
+    publisher: 'local',
+    sourceSha: '1'.repeat(40),
+    version: 'v1.9',
+  });
+
+  const body = JSON.parse(requests[0].body.toString('utf8'));
+  assert.deepEqual(body, {
+    publisher: 'local',
+    sourceSha: '1'.repeat(40),
+    version: 'v1.9',
+    withAndroid: false,
+    withDesktop: false,
+  });
+  assert.equal('withGateway' in body, false);
+});
+
 test('debug web client uses its isolated authenticated API without stable reads', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-debug-web-api-'));
   const path = join(root, 'web.zip');

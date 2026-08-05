@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import {
   buildRemoteInstallScript,
   deployReleaseServer,
+  parseReleaseServerArgs,
 } from './deploy.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
@@ -88,6 +89,24 @@ test('remote install script is idempotent and preserves public releases and conf
   assert.doesNotMatch(script, /nginx-bootstrap/);
   assert.doesNotMatch(script, /nginx -t/);
   assert.doesNotMatch(script, /sites-available|sites-enabled/);
+});
+
+test('legacy Nginx mode upgrades the Release Server without requiring Gateway', () => {
+  const script = buildRemoteInstallScript({legacyNginx: true});
+
+  assert.match(script, /legacy Nginx ingress remains in place/i);
+  assert.match(script, /systemctl restart wheelmaker-release-server\.service/);
+  assert.doesNotMatch(script, /\/etc\/wheelmaker-gateway\/home/);
+  assert.doesNotMatch(script, /release-server\.json/);
+  assert.doesNotMatch(script, /gateway_binary/);
+  assert.doesNotMatch(script, /setfacl/);
+  assert.doesNotMatch(script, /nginx -t|systemctl\s+(stop|disable|restart|reload)\s+nginx/i);
+});
+
+test('release server deployment accepts only the explicit legacy Nginx flag', () => {
+  assert.deepEqual(parseReleaseServerArgs([]), {legacyNginx: false});
+  assert.deepEqual(parseReleaseServerArgs(['--legacy-nginx']), {legacyNginx: true});
+  assert.throws(() => parseReleaseServerArgs(['--unknown']), /unknown release server option/);
 });
 
 test('templates enforce non-root loopback service', async () => {

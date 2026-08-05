@@ -171,6 +171,26 @@ DELETE /api/publish/{session}
 
 后续运行复用同一脚本，仅安装新二进制、同步受版本管理的配置、重启并健康检查。服务器不通过自己的发布 API自更新。Token 不由服务器部署脚本询问或生成，而由第一次本地 public 发布自动初始化。
 
+旧 Nginx 主机的首次迁移使用一次性桥接顺序，不能直接把带 Gateway 字段的发布请求发给旧 Release Server：
+
+```text
+deploy-release-server.bat --legacy-nginx
+  → 只升级 loopback Release Server，保留旧 Nginx、证书和静态入口
+bootstrap-release-gateway.bat
+  → 从当前干净源码构建 Linux/amd64 Gateway，安装到
+    /srv/wheelmaker-release/gateway，注册开机自启，默认不启动
+scripts/disable-nginx.sh
+  → 停止并禁止旧 Nginx 自启（不删除配置和证书）
+/srv/wheelmaker-release/gateway/start.sh
+  → 启动 Gateway，完成 Caddy HTTPS/healthz 检查
+deploy-release-server.bat
+  → 进入正常 Gateway 站点配置与热加载流程
+```
+
+桥接模式只用于这一次协议迁移，不改动 Nginx 配置；Gateway bootstrap 也是独立入口，
+不属于普通 Release Server 更新。完成切换后，发布器才可以在新版服务上选择 Gateway
+并将产物写入固定 `/gateway/` 命名空间。
+
 第一次本地 public 发布发现 `~/.wheelmaker/release-server.json` 不存在时，自动生成 32 字节随机 Token，并以 schema 1 JSON 保存；文件只含 Token，不保存 `baseUrl`、主机或 SSH 参数。发布器将 Token 的 SHA-256 通过 `root@release.wheelmaker.top:22` 和默认私钥 `~/.ssh/wheelmaker-release-server_ed25519` 写入远端配置，再开始 HTTPS 上传，全程不要求用户输入。若本机已有可用 `gh` 登录，发布器同时通过标准输入将同一 Token 写入当前私有仓库的 `WHEELMAKER_RELEASE_TOKEN` Secret；没有 `gh` 时只跳过 Action Secret 初始化，不影响本地发布。
 
 后续本地发布直接复用该文件，不再连接 SSH；Action 只读取同一个 Secret。服务端只有一个 `tokenSha256`，不实现 Token 列表、轮换、撤销或管理 API。`release-server.json` 必须限制为当前用户可读，不能复制到服务器或源码仓库。基础地址仍只来自源码 channel 配置。远端固定配置与 unit 路径为：
@@ -179,7 +199,7 @@ DELETE /api/publish/{session}
 /etc/wheelmaker-release-server/config.json
 /etc/systemd/system/wheelmaker-release-server.service
 /etc/wheelmaker-gateway/home       # Gateway 安装时写入的固定 Home 元数据
-~/.wheelmaker/gateway/sites/release-server.json
+/srv/wheelmaker-release/gateway/sites/release-server.json
 ```
 
 ## 目标端与 Web 迁移

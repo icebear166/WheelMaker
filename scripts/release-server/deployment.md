@@ -7,8 +7,10 @@ install or manage an external reverse proxy.
 
 - The Go `wheelmaker-release-server` process runs as the non-root
   `wheelmaker-release` user and listens only on `127.0.0.1:9680`.
-- `wheelmaker-gateway` is a separate host service with embedded Caddy. Install
-  it first with the explicit Gateway deployment mode (`node deploy.mjs gateway`).
+- `wheelmaker-gateway` is a separate host service with embedded Caddy. In the
+  steady state, install it first with the explicit Gateway deployment mode
+  (`node deploy.mjs gateway`). For an existing Nginx Release-only host, use the
+  one-time bridge below instead.
 - This deployment never installs, upgrades, starts, stops, disables, or removes
   Nginx/Caddy, and never changes DNS, firewall, cloud security groups, or TLS
   certificates. To disable an old Nginx service, run the standalone
@@ -16,15 +18,40 @@ install or manage an external reverse proxy.
 - `~/.wheelmaker/release-server.json` remains the publisher token file; the
   token is never put in a command line, URL, public file, or site configuration.
 
+## Migration from the legacy Nginx host
+
+The old Release Server rejects the new `withGateway` field. Do not publish a
+Gateway release to it first. Run this one-time sequence from a clean source
+tree:
+
+1. `deploy-release-server.bat --legacy-nginx` upgrades only the loopback Go
+   service. It leaves the existing Nginx, certificates, and public static entry
+   untouched.
+2. `bootstrap-release-gateway.bat` builds the Linux/amd64 Gateway from the same
+   source and installs it at `/srv/wheelmaker-release/gateway`. It registers
+   `wheelmaker-gateway.service`, writes `release-server.json`, and enables boot
+   start, but does not start while Nginx owns ports 80/443. Pass `--start` only
+   when those ports are already free.
+3. Run `scripts/disable-nginx.sh`, then
+   `/srv/wheelmaker-release/gateway/start.sh` and verify HTTPS plus `/healthz`.
+4. Run `deploy-release-server.bat` without the bridge flag once; subsequent
+   deployments use the normal Gateway-owned site configuration path.
+
+The old Nginx configuration remains available for rollback. The bootstrap is a
+separate one-time migration tool; normal Release Server deployment never owns
+Gateway lifecycle.
+
 ## Preconditions
 
 1. Confirm the channel in `scripts/release/channel.json` is the intended HTTPS
    origin and that DNS plus public ports 80/443 point to the host.
 2. Confirm the host is Linux/amd64 and has `go`, `ssh`, `scp`, `systemd`, and
    `curl`. The release service owns its data under `/srv/wheelmaker-release`.
-3. Install Gateway separately as the intended non-root user. Its installer
-   records the absolute Home in `/etc/wheelmaker-gateway/home` and creates the
-   `start.sh`/`stop.sh` wrappers.
+3. In steady state, install Gateway separately as the intended non-root user.
+   Its installer records the absolute Home in `/etc/wheelmaker-gateway/home`
+   and creates the `start.sh`/`stop.sh` wrappers. During the migration above,
+   the bootstrap creates the same metadata and wrappers for the Release-only
+   host.
 
 If `/etc/wheelmaker-gateway/home` or the Gateway binary is missing, the Release
 Server deployment stops with an actionable instruction to run the explicit

@@ -6,13 +6,33 @@
 
 - Go `wheelmaker-release-server` 以非 root 用户 `wheelmaker-release` 运行，
   只监听 `127.0.0.1:9680`。
-- `wheelmaker-gateway` 是独立宿主机服务，进程内嵌 Caddy。先以显式 Gateway
-  模式（`node deploy.mjs gateway`）安装它。
+- `wheelmaker-gateway` 是独立宿主机服务，进程内嵌 Caddy。稳定状态下先以显式
+  Gateway 模式（`node deploy.mjs gateway`）安装它。已有 Nginx 的 Release-only
+  主机使用下面的一次性桥接流程。
 - 本流程不安装、升级、启动、停止、禁用或卸载 Nginx/Caddy，也不修改 DNS、
   防火墙、云安全组或证书。停用旧 Nginx 请单独运行
   `scripts/disable-nginx.sh` 或 `scripts/disable-nginx.ps1`。
 - `~/.wheelmaker/release-server.json` 仍是发布 Token 文件；Token 不进入命令
   行、URL、公开文件或站点配置。
+
+## 从旧 Nginx 主机迁移
+
+旧 Release Server 不认识新的 `withGateway` 字段，不能先向它发布 Gateway。
+从干净源码树按以下顺序执行一次：
+
+1. `deploy-release-server.bat --legacy-nginx` 只升级 loopback Go 服务，保留原有
+   Nginx、证书和公开静态入口不动。
+2. `bootstrap-release-gateway.bat` 从同一源码构建 Linux/amd64 Gateway，安装到
+   `/srv/wheelmaker-release/gateway`，注册 `wheelmaker-gateway.service`，写入
+   `release-server.json` 并设置开机自启；默认不启动，因为 Nginx 仍占用 80/443。
+   只有端口已空闲时才传 `--start`。
+3. 运行 `scripts/disable-nginx.sh`，再运行
+   `/srv/wheelmaker-release/gateway/start.sh`，检查 HTTPS 和 `/healthz`。
+4. 不带桥接参数再次运行 `deploy-release-server.bat`；之后均使用正常的
+   Gateway 站点配置流程。
+
+旧 Nginx 配置保留用于回滚。Bootstrap 是一次性迁移工具，普通 Release Server
+部署不拥有 Gateway 生命周期。
 
 ## 前置条件
 
@@ -20,8 +40,9 @@
    已指向服务器。
 2. 服务器必须是 Linux/amd64，并提供 `go`、`ssh`、`scp`、`systemd`、`curl`。
    Release Server 数据位于 `/srv/wheelmaker-release`。
-3. 以目标非 root 用户单独安装 Gateway。安装器会把绝对 Home 写入
-   `/etc/wheelmaker-gateway/home`，并生成 `start.sh`/`stop.sh`。
+3. 稳定状态下，以目标非 root 用户单独安装 Gateway。安装器会把绝对 Home 写入
+   `/etc/wheelmaker-gateway/home`，并生成 `start.sh`/`stop.sh`。上述迁移流程中，
+   Bootstrap 会为 Release-only 主机生成同样的元数据和脚本。
 
 缺少该元数据或 Gateway 二进制时，Release Server 部署会明确提示先运行
 显式 Gateway 部署，并用 `wheelmaker-gateway paths --home` 校验记录的 Home，
