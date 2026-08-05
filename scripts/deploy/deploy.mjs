@@ -225,7 +225,7 @@ export function parseDeployArgs(args) {
   }
   const gateway = parseGatewayOptions(args);
   if (gateway.explicit) {
-    if (gateway.commandArgs.length > 1 || (gateway.commandArgs.length === 1 && !['gateway', 'gateway-update'].includes(gateway.commandArgs[0]))) {
+    if (gateway.commandArgs.length > 0) {
       throw new Error('Gateway configuration options are only valid for a full deployment');
     }
     return [...args];

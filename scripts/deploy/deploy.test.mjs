@@ -157,14 +157,17 @@ test('unknown commands fail before launcher files are mutated', async () => {
   assert.deepEqual(deps.events, []);
 });
 
-test('Gateway deployment commands accept explicit config modes', () => {
+test('Gateway configuration selector is valid only for a full deployment', () => {
   assert.deepEqual(parseDeployArgs(['gateway']), ['gateway']);
   assert.deepEqual(parseDeployArgs(['gateway-update']), ['gateway-update']);
+  assert.deepEqual(parseDeployArgs(['--gateway=none']), ['--gateway=none']);
   assert.deepEqual(
-    parseDeployArgs(['--gateway-write', '--gateway-public-url=https://workspace.example.com']),
-    ['--gateway-write', '--gateway-public-url=https://workspace.example.com'],
+    parseDeployArgs(['--gateway=caddy', '--gateway-public-url=https://workspace.example.com']),
+    ['--gateway=caddy', '--gateway-public-url=https://workspace.example.com'],
   );
-  assert.throws(() => parseDeployArgs(['update', '--gateway-skip']), /only valid for a full deployment/);
+  assert.throws(() => parseDeployArgs(['update', '--gateway=none']), /only valid for a full deployment/);
+  assert.throws(() => parseDeployArgs(['gateway', '--gateway=caddy']), /only valid for a full deployment/);
+  assert.throws(() => parseDeployArgs(['--gateway-write']), /unknown deploy command/);
 });
 
 test('Desktop self-update accepts only a positive parent PID', () => {

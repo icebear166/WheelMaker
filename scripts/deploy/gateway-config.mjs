@@ -153,14 +153,12 @@ export function validateGatewaySite(site, {kind} = {}) {
 
 export function gatewayHome({
   home,
-  installDirectory,
   userHome = homedir(),
 } = {}) {
   if (home !== undefined) {
     if (!isAbsolute(home)) throw new Error('Gateway home must be an absolute path');
     return resolve(home);
   }
-  if (installDirectory) return resolve(installDirectory, 'gateway');
   return resolve(userHome, '.wheelmaker', 'gateway');
 }
 
@@ -249,105 +247,72 @@ export function createGatewayQuestioner({input = process.stdin, output = process
 
 export function parseGatewayOptions(args) {
   const options = {
-    explicit: false,
-    mode: undefined,
-    values: {},
     commandArgs: [],
+    explicit: false,
+    mode: 'none',
+    publicUrl: undefined,
   };
-  const valueFlags = new Map([
-    ['--gateway-public-url', 'publicUrl'],
-    ['--gateway-web-root', 'webRoot'],
-    ['--gateway-upstream', 'upstream'],
-    ['--gateway-tls-certificate', 'certificateFile'],
-    ['--gateway-tls-key', 'keyFile'],
-  ]);
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
-    if (token === '--gateway-write' || token === '--gateway-config=write') {
+    if (token.startsWith('--gateway=')) {
+      if (options.explicit) throw new Error('--gateway may only be specified once');
+      const mode = token.slice('--gateway='.length);
+      if (!['none', 'caddy'].includes(mode)) {
+        throw new Error('--gateway must be none or caddy');
+      }
       options.explicit = true;
-      options.mode = 'write';
+      options.mode = mode;
       continue;
     }
-    if (token === '--gateway-skip' || token === '--skip-gateway-config' || token === '--gateway-config=skip') {
-      options.explicit = true;
-      options.mode = 'skip';
-      continue;
-    }
-    const equal = token.indexOf('=');
-    const flag = equal === -1 ? token : token.slice(0, equal);
-    const key = valueFlags.get(flag);
-    if (key) {
-      options.explicit = true;
-      if (equal !== -1) options.values[key] = token.slice(equal + 1);
-      else {
-        if (index + 1 >= args.length || args[index + 1].startsWith('--')) {
-          throw new Error(`${flag} requires a value`);
+    if (token === '--gateway-public-url' || token.startsWith('--gateway-public-url=')) {
+      if (options.publicUrl !== undefined) {
+        throw new Error('--gateway-public-url may only be specified once');
+      }
+      if (token.includes('=')) {
+        options.publicUrl = token.slice(token.indexOf('=') + 1);
+      } else {
+        const value = args[index + 1];
+        if (!value || value.startsWith('--')) {
+          throw new Error('--gateway-public-url requires a value');
         }
-        options.values[key] = args[++index];
+        options.publicUrl = value;
+        index += 1;
       }
       continue;
     }
     options.commandArgs.push(token);
   }
-  if (options.mode === 'skip' && Object.keys(options.values).length > 0) {
-    throw new Error('Gateway config values cannot be used with skip mode');
+  if (options.publicUrl !== undefined && options.mode !== 'caddy') {
+    throw new Error('--gateway-public-url is only valid with --gateway=caddy');
   }
   return options;
 }
 
-export async function promptWorkspaceSite({
-  existing,
-  defaults = {},
-  ask = defaultAsk(),
-} = {}) {
-  const current = existing ? validateGatewaySite(existing, {kind: WORKSPACE_SITE_KIND}) : null;
-  const currentLabel = current
-    ? ` (current: ${current.publicUrl}, TLS: ${current.publicUrl.startsWith('https:') ? 'automatic/custom' : 'disabled'})`
-    : '';
-  const shouldWrite = String(await ask(`Write Workspace Gateway configuration${currentLabel}? [y/N]`, current ? 'n' : 'n')).trim().toLowerCase();
-  if (!['y', 'yes'].includes(shouldWrite)) return {write: false, site: current};
-
-  const useExisting = current
-    ? String(await ask(`Reuse current Workspace Gateway values? [Y/n]`, 'y')).trim().toLowerCase()
-    : 'n';
-  if (current && ['', 'y', 'yes'].includes(useExisting)) return {write: true, site: current};
-
-  const publicUrl = await ask('Workspace public URL', current?.publicUrl ?? defaults.publicUrl ?? 'https://workspace.example.com');
-  const webRoot = await ask('Workspace web root', current?.webRoot ?? defaults.webRoot ?? '');
-  const upstream = await ask('Workspace upstream', current?.upstream ?? defaults.upstream ?? 'http://127.0.0.1:9630');
-  const certificateFile = await ask('TLS certificate file (blank for automatic HTTPS)', current?.tls?.certificateFile ?? defaults.certificateFile ?? '');
-  const keyFile = await ask('TLS private key file (blank for automatic HTTPS)', current?.tls?.keyFile ?? defaults.keyFile ?? '');
-  return {write: true, site: workspaceSiteCandidate({publicUrl, webRoot, upstream, certificateFile, keyFile})};
-}
-
 export async function configureWorkspaceSite({
   home,
-  interactive = false,
-  decision,
   ask,
-  defaults,
-  write = false,
-  site,
+  mode = 'none',
+  publicUrl,
+  webRoot,
+  upstream = 'http://127.0.0.1:9630',
 } = {}) {
-  const config = await readGatewayConfiguration(home);
-  let result;
-  if (decision) {
-    result = typeof decision === 'function'
-      ? await decision({existing: config.workspace, paths: config.paths})
-      : decision;
-  } else if (interactive) {
-    result = await promptWorkspaceSite({existing: config.workspace, defaults, ask});
-  } else if (write) {
-    result = {write: true, site};
-  } else {
-    result = {write: false, site: config.workspace};
+  if (mode === 'none') return {written: false};
+  if (mode !== 'caddy') throw new Error(`unsupported Gateway mode ${mode}`);
+  const paths = gatewayConfigPaths(home);
+  const existingValue = await readJsonIfPresent(paths.workspace);
+  const existing = existingValue === null
+    ? null
+    : validateGatewaySite(existingValue, {kind: WORKSPACE_SITE_KIND});
+  let selectedPublicUrl = publicUrl ?? existing?.publicUrl;
+  if (!selectedPublicUrl && ask) {
+    selectedPublicUrl = await ask('Workspace public URL', 'https://workspace.example.com');
   }
-  if (result?.write) {
-    const candidate = validateGatewaySite(result.site, {kind: WORKSPACE_SITE_KIND});
-    await writeWorkspaceSite(home, candidate);
-    return {written: true, site: candidate, existing: config.workspace, paths: config.paths};
+  if (!selectedPublicUrl) {
+    throw new Error('first non-interactive Caddy deployment requires --gateway-public-url');
   }
-  return {written: false, site: config.workspace, existing: config.workspace, paths: config.paths};
+  const candidate = workspaceSiteCandidate({publicUrl: selectedPublicUrl, webRoot, upstream});
+  await writeWorkspaceSite(home, candidate);
+  return {existing, paths, site: candidate, written: true};
 }
 
 export async function gatewayConfigExists(home) {
