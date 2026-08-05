@@ -1,92 +1,98 @@
 # WheelMaker Release Server 部署
 
-Release Server 的部署流程独立于产品版本。它以 SSH 登录用户构建并安装
-loopback Go 服务；Gateway 配置只是可选的组件数据。本流程不安装、启动、停止、
-重载、校验或渲染 Caddy/Nginx。
+Release Server 独立于产品版本部署。它以 SSH 登录用户运行，只监听
+`127.0.0.1:9680`，同时提供发布 API 和全部匿名公开文件。Nginx 或内置 Gateway
+只需把整个公网 origin 反向代理到该 loopback 监听地址。
 
 ## 边界与路径
 
-- 服务只监听 `127.0.0.1:9680`。
-- 远端登录用户由 SSH 配置决定。同一台机器上部署 Workspace 和 Release Server
-  时必须使用同一个用户。
-- 安装完全由登录用户拥有，只要求该用户有可用的 user systemd manager，并在尚未
-  启用时能够开启 linger；不需要 `/srv`、`www-data`、ACL 工具或旧服务权限。
-- 服务运行在登录用户的 user-level systemd unit 中：
+- 远端用户由 SSH 配置决定。同一台机器同时部署 Workspace 和 Release Server，且
+  希望共用一个 Gateway Home 时，必须使用同一登录用户。
+- 部署只使用该用户的 Home，不依赖 `/srv`、`www-data`、ACL 工具或旧服务权限。
+- 部署器管理 Release Server 的 user-level systemd unit，但不安装、停止、重载或
+  配置 Nginx、Caddy、DNS、证书、防火墙。
 
-  ```text
-  ~/.wheelmaker/release-server/config.json
-  ~/.wheelmaker/release-server/versions/<source-sha>/wheelmaker-release-server
-  ~/.wheelmaker/release-server/current
-  ~/.wheelmaker/release-server/data/public
-  ~/.wheelmaker/release-server/data/staging
-  ~/.config/systemd/user/wheelmaker-release-server.service
-  ```
+```text
+~/.wheelmaker/release-server/config.json
+~/.wheelmaker/release-server/versions/<source-sha>/wheelmaker-release-server
+~/.wheelmaker/release-server/current
+~/.wheelmaker/release-server/data/public
+~/.wheelmaker/release-server/data/staging
+~/.config/systemd/user/wheelmaker-release-server.service
 
-- `--gateway=none` 不创建、不修改 Gateway 文件。
-- `--gateway=caddy` 只原子写入
-  `~/.wheelmaker/gateway/sites/release-server.json`，即使没有安装或运行 Caddy
-  也可以部署。
-- Gateway 生命周期仍由 Workspace 的显式 `gateway`、`gateway-update`、`start`、
-  `stop` 命令负责。`scripts/disable-nginx.sh` 和 `.ps1` 仍是独立的旧 Nginx
-  停止并禁止自启工具。
+~/.wheelmaker/gateway/sites/release-server.json
+```
+
+`config.json` 保存 `publicUrl`、`listen`、`dataRoot` 和发布 Token 摘要。公开地址来自
+`scripts/release/channel.json`。每次部署保留 Token 与数据路径，更新 `publicUrl`，并
+重新生成 Gateway 站点声明。该声明固定代理 `http://127.0.0.1:9680`，不再包含静态
+`publicRoot`。
+
+生成站点声明不表示已安装 Gateway；继续使用 Nginx 时可以忽略该文件。
 
 ## 部署命令
 
 在干净源码树运行：
 
 ```text
-deploy-release-server.bat --gateway=none
-  安装 Release Server，不触碰 Gateway 文件。
-
-deploy-release-server.bat --gateway=caddy
-  执行相同的安装，并原子写入
-  ~/.wheelmaker/gateway/sites/release-server.json。
+deploy-release-server.bat
 ```
 
-省略参数等同于 `caddy`。如果必须保持现有 Nginx 或其他入口完全不变，请显式使用
-`--gateway=none`。参数只决定是否写入 Release Server 语义站点文件，不改变二进制
-下载、staging、健康检查或 Gateway 生命周期。
+命令不再接受 Gateway selector。它从 `scripts/release/channel.json` 读取 HTTPS origin
+与 SSH 主机，交叉编译 Linux/amd64 二进制，上传短期 staging 目录，再执行远端事务。
+实际登录用户由 SSH alias 和 `User` 配置决定；脚本不内置 `root@...`。
 
-本地脚本读取 `scripts/release/channel.json` 的 HTTPS 源，使用该主机配置的 SSH
-身份，检查 Linux/amd64，以 `CGO_ENABLED=0` 交叉编译，上传短期临时目录并调用远端
-事务。SSH alias 和 `User` 配置决定实际登录用户；脚本不内置 `root@...`。
+远端事务安装版本、升级配置、启动用户服务、检查 loopback 健康、写入站点声明并删除
+上传目录。提交前失败时保留原安装版本。
 
-## 旧 Nginx 主机的一次性迁移
+## 反向代理合同
 
-普通部署不会探测、停止、禁用或迁移旧 systemd 服务。如果主机仍从
-`/srv/wheelmaker-release` 提供 Release Server，先完成普通 Home 安装，再通过 SSH
-手动迁移：
+Release Server 自己提供 `/`、顶层部署脚本、发布元数据、版本产物、`/healthz` 和
+`/api/*`。Nginx 只需代理整个 host：
 
-1. 将 `/etc/wheelmaker-release-server/config.json`、旧数据目录、旧 unit 和匹配的
-   Release Server Nginx 配置备份到登录用户 Home 下带时间戳的目录。
-2. 把 token 摘要、发布数据和公开资源复制到
-   `~/.wheelmaker/release-server/data`；生成 `config.json` 时使用 Home 下的绝对
-   `dataRoot`，旧文件全部保留以便回滚。
-3. 启动并检查 user unit 的 loopback
-   `http://127.0.0.1:9680/healthz`，然后只把 Release Server 的 Nginx 静态根调整到
-   `~/.wheelmaker/release-server/data/public`，其他 Nginx 站点、证书和入口配置不变。
-4. loopback 和外部 HTTPS `/healthz` 都成功后，停止并禁用旧 systemd unit，但不删除它。
-   任一检查失败时，停止 user unit、恢复 Nginx 备份并启动旧 unit。
+```nginx
+server {
+    listen 443 ssl;
+    server_name release.example.com;
 
-该迁移是运维者的一次性操作，不属于 Node 安装器或 Gateway 生命周期，也不提供迁移脚本。
+    # 在这里配置 ssl_certificate 与 ssl_certificate_key。
+    location / {
+        proxy_pass http://127.0.0.1:9680;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
 
-## Gateway TLS 与路由
+Nginx worker 不需要读取 `~/.wheelmaker`。公开文件支持 GET、HEAD、CORS 和字节 Range；
+API 鉴权保持不变。
 
-`caddy` 模式写入固定 loopback upstream 和空证书字段的语义站点。独立管理的内嵌
-Caddy 会将 `https://` 公网地址用于 ACME 证书申请与续期。Release Server 部署不调用
-Caddy admin API、不检查生成的 Caddy JSON，也不修改 Nginx、DNS、防火墙或证书。
+如需使用内置 Caddy 入口，单独执行发布首页提供的命令：
 
-## 发布 Token
+```text
+node ~/.wheelmaker/deploy.mjs gateway
+```
 
-第一次本地 public 发布生成 `~/.wheelmaker/release-server.json`。它只把 SHA-256
-摘要发送到登录用户的
-`$HOME/.wheelmaker/release-server/current/wheelmaker-release-server`，执行
-`configure-token`，然后执行
-`systemctl --user restart wheelmaker-release-server.service`。原始 Token 不进入
-命令行、URL、公开文件或站点配置。
+该命令幂等安装或升级 Gateway、注册开机服务并确保其运行。Workspace 与 Release
+Server 的业务部署不会调用这条生命周期命令。
 
-## 更新与恢复
+## TLS 与外部端口
 
-普通 Workspace 更新和 Release Server 部署不会检查或重启 Gateway。Gateway 更新必须
-显式执行、独立完成。远端事务提交前失败会清理临时上传目录，旧 Release Server 和
-Nginx 服务路径继续保留。
+Gateway 把 `https://` `publicUrl` 解释为自动证书管理。DNS 和所需公网端口必须已经
+指向本机；`publicUrl` 中显式配置的外部端口会保留在 HTTP 到 HTTPS 跳转中。Release
+Server 部署不管理这些前置条件。
+
+## 发布 Token 与发布恢复
+
+第一次本地 public 发布在本机创建 `~/.wheelmaker/release-server.json`，只把 Token 的
+SHA-256 摘要发送给远端 `configure-token` 命令。原始 Token 不进入 URL、公开文件或
+站点声明。
+
+正式发布最后才让 `stable.json` 可见，然后通过 `config.json.publicUrl` 下载并验证
+新 stable、部署脚本、manifest 和 Range 产物。公网验证失败时，服务会恢复旧 stable
+和全部派生公开文件，再向发布端返回失败。
+
+旧 `/srv` 或系统级服务不属于普通部署范围。需要先由运维者一次性迁移数据、停用旧
+服务，再复用 `9680` 端口。

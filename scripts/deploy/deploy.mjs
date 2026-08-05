@@ -17,7 +17,6 @@ const PROGRESS_BYTES_STEP = 1024 * 1024;
 const ALLOWED_COMMANDS = new Set([
   'desktop-update',
   'gateway',
-  'gateway-update',
   'migrate-uninstall',
   'update',
 ]);
@@ -221,25 +220,23 @@ export function parseDeployArgs(args) {
   ) {
     return [...args];
   }
-  const hasGatewayOptions = args.some((token) =>
-    token.startsWith('--gateway=') ||
-    token === '--gateway-public-url' ||
-    token.startsWith('--gateway-public-url='));
-  if (hasGatewayOptions) {
+  const hasPublicURLOption = args.some((token) =>
+    token === '--public-url' || token.startsWith('--public-url='));
+  if (hasPublicURLOption) {
     for (let index = 0; index < args.length; index += 1) {
       const token = args[index];
-      if (token.startsWith('--gateway=') || token.startsWith('--gateway-public-url=')) {
+      if (token.startsWith('--public-url=')) {
         continue;
       }
-      if (token === '--gateway-public-url') {
+      if (token === '--public-url') {
         const value = args[index + 1];
         if (!value || value.startsWith('--')) {
-          throw new Error('--gateway-public-url requires a value');
+          throw new Error('--public-url requires a value');
         }
         index += 1;
         continue;
       }
-      throw new Error('Gateway configuration options are only valid for a full deployment');
+      throw new Error('--public-url is only valid for a full deployment');
     }
     return [...args];
   }
@@ -385,7 +382,7 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
       ? `Starting update to ${stable.version}`
       : args[0] === 'migrate-uninstall'
         ? 'Starting legacy migration cleanup'
-        : ['gateway', 'gateway-update'].includes(args[0])
+        : args[0] === 'gateway'
           ? 'Starting Gateway deployment'
           : args[0] === 'desktop-update'
             ? 'Starting Desktop update'

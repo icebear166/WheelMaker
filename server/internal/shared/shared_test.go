@@ -61,6 +61,17 @@ func TestLoadConfig_AllowsDebugLogLevel(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowsWorkspacePublicURL(t *testing.T) {
+	path := writeTempConfig(t, `{"publicUrl":"https://workspace.example.com:8443","projects":[]}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.PublicURL != "https://workspace.example.com:8443" {
+		t.Fatalf("publicUrl = %q", cfg.PublicURL)
+	}
+}
+
 func TestLoadConfig_RejectsRemovedMonitor(t *testing.T) {
 	path := writeTempConfig(t, `{
 		"monitor": {"server": "127.0.0.1", "port": 9631},

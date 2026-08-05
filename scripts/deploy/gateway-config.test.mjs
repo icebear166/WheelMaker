@@ -7,7 +7,7 @@ import test from 'node:test';
 import {
   configureWorkspaceSite,
   gatewayConfigPaths,
-  parseGatewayOptions,
+  parsePublicURLDeploymentOptions,
   validateGatewaySite,
 } from './gateway-config.mjs';
 
@@ -16,7 +16,6 @@ test('Gateway config validates loopback workspace site and writes only workspace
   t.after(() => rm(root, {recursive: true, force: true}));
   const result = await configureWorkspaceSite({
     home: root,
-    mode: 'caddy',
     publicUrl: 'https://workspace.example.com',
     webRoot: join(root, 'web'),
   });
@@ -28,75 +27,49 @@ test('Gateway config validates loopback workspace site and writes only workspace
   );
 });
 
-test('Gateway options accept only none or caddy and default to none', () => {
-  assert.deepEqual(parseGatewayOptions([]), {
+test('deployment options accept one normalized business public URL', () => {
+  assert.deepEqual(parsePublicURLDeploymentOptions([]), {
     commandArgs: [],
-    explicit: false,
-    mode: 'none',
     publicUrl: undefined,
   });
-  assert.equal(parseGatewayOptions(['--gateway=none']).mode, 'none');
   assert.deepEqual(
-    parseGatewayOptions([
-      '--gateway=caddy',
-      '--gateway-public-url=https://workspace.example.com',
+    parsePublicURLDeploymentOptions([
+      '--public-url=https://workspace.example.com:8443/',
     ]),
     {
       commandArgs: [],
-      explicit: true,
-      mode: 'caddy',
-      publicUrl: 'https://workspace.example.com',
+      publicUrl: 'https://workspace.example.com:8443',
     },
   );
-  assert.throws(() => parseGatewayOptions(['--gateway=nginx']), /none or caddy/);
-  assert.throws(() => parseGatewayOptions(['--gateway=caddy', '--gateway=none']), /only be specified once/);
+  assert.deepEqual(
+    parsePublicURLDeploymentOptions(['update']),
+    {commandArgs: ['update'], publicUrl: undefined},
+  );
+  assert.throws(() => parsePublicURLDeploymentOptions([
+    '--public-url=https://one.example.com',
+    '--public-url=https://two.example.com',
+  ]), /only be specified once/);
   assert.throws(
-    () => parseGatewayOptions(['--gateway=none', '--gateway-public-url=https://example.com']),
-    /only valid with --gateway=caddy/,
+    () => parsePublicURLDeploymentOptions(['--public-url=https://example.com/path']),
+    /only scheme, host, optional port/,
   );
 });
 
-test('none mode does not read or create Gateway files', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-none-'));
-  t.after(() => rm(root, {recursive: true, force: true}));
-  const missingHome = join(root, 'missing', 'gateway');
-  assert.deepEqual(
-    await configureWorkspaceSite({home: missingHome, mode: 'none'}),
-    {written: false},
-  );
-  await assert.rejects(() => access(missingHome), {code: 'ENOENT'});
-  const existingHome = join(root, 'existing', 'gateway');
-  const paths = gatewayConfigPaths(existingHome);
-  await mkdir(paths.sites, {recursive: true});
-  await writeFile(paths.workspace, 'not-json\n');
-  const before = await readFile(paths.workspace, 'utf8');
-  assert.deepEqual(
-    await configureWorkspaceSite({home: existingHome, mode: 'none'}),
-    {written: false},
-  );
-  assert.equal(await readFile(paths.workspace, 'utf8'), before);
-});
-
-test('caddy mode reuses or explicitly replaces only Workspace publicUrl', async (t) => {
+test('Workspace site generation always uses the business public URL', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-caddy-'));
   t.after(() => rm(root, {recursive: true, force: true}));
   const webRoot = join(root, 'web');
   await configureWorkspaceSite({
     home: root,
-    mode: 'caddy',
     publicUrl: 'https://old.example.com',
     webRoot,
   });
-  await configureWorkspaceSite({home: root, mode: 'caddy', webRoot});
-  let site = JSON.parse(await readFile(gatewayConfigPaths(root).workspace, 'utf8'));
-  assert.equal(site.publicUrl, 'https://old.example.com');
   await configureWorkspaceSite({
     home: root,
-    mode: 'caddy',
     publicUrl: 'https://new.example.com',
     webRoot,
   });
-  site = JSON.parse(await readFile(gatewayConfigPaths(root).workspace, 'utf8'));
+  const site = JSON.parse(await readFile(gatewayConfigPaths(root).workspace, 'utf8'));
   assert.equal(site.publicUrl, 'https://new.example.com');
   assert.equal(site.webRoot, resolve(webRoot));
   assert.equal(site.upstream, 'http://127.0.0.1:9630');
@@ -112,7 +85,6 @@ test('Workspace writes do not validate or replace another component site', async
   const before = await readFile(paths.releaseServer, 'utf8');
   await configureWorkspaceSite({
     home: root,
-    mode: 'caddy',
     publicUrl: 'https://workspace.example.com',
     webRoot: join(root, 'web'),
   });
@@ -153,4 +125,28 @@ test('Gateway site rejects non-loopback upstreams and incomplete TLS', () => {
     tls: {certificateFile: '', keyFile: ''},
     routes: [],
   }), /unsupported field/);
+});
+
+test('Release Server site is a reverse proxy and rejects static roots', () => {
+  assert.deepEqual(validateGatewaySite({
+    schema: 1,
+    kind: 'release-server',
+    publicUrl: 'https://release.example.com',
+    upstream: 'http://127.0.0.1:9680',
+    tls: {certificateFile: '', keyFile: ''},
+  }), {
+    schema: 1,
+    kind: 'release-server',
+    publicUrl: 'https://release.example.com',
+    upstream: 'http://127.0.0.1:9680',
+    tls: {certificateFile: '', keyFile: ''},
+  });
+  assert.throws(() => validateGatewaySite({
+    schema: 1,
+    kind: 'release-server',
+    publicUrl: 'https://release.example.com',
+    publicRoot: 'C:\\releases',
+    upstream: 'http://127.0.0.1:9680',
+    tls: {certificateFile: '', keyFile: ''},
+  }), /publicRoot/);
 });

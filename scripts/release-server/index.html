@@ -151,6 +151,14 @@
       grid-template-columns: minmax(0, 1fr);
       gap: 16px;
     }
+    .command-group-title {
+      margin: 8px 0 -4px;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .command-group-title:first-child { margin-top: 0; }
     .panel {
       min-width: 0;
       border: 1px solid var(--border);
@@ -380,7 +388,7 @@
   <main class="shell">
     <section class="hero">
       <h1>Install WheelMaker</h1>
-      <p class="sub">One command downloads the installer and sets up the latest release. Run it from any directory.</p>
+      <p class="sub">Deploy WheelMaker and the built-in Gateway independently. Run either command from any directory.</p>
       <div class="hero-actions">
         <a class="guide-link" href="/deployment.md">AI deployment guide</a>
         <a class="guide-link" href="/deployment.zh-CN.md">中文部署指南</a>
@@ -388,12 +396,13 @@
     </section>
 
     <section class="commands" aria-label="Install commands">
+      <h2 class="command-group-title">Deploy WheelMaker</h2>
       <article class="panel">
         <div class="panel-head">
           <h2>Windows PowerShell</h2>
           <button class="copy" type="button" data-copy="cmd-windows">Copy</button>
         </div>
-        <pre><code id="cmd-windows">$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { &amp; node $m }</code></pre>
+        <pre><code id="cmd-windows">$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m</code></pre>
       </article>
 
       <article class="panel">
@@ -401,11 +410,28 @@
           <h2>macOS / Linux</h2>
           <button class="copy" type="button" data-copy="cmd-unix">Copy</button>
         </div>
-        <pre><code id="cmd-unix">(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" migrate-uninstall &amp;&amp; node "$d/deploy.mjs")</code></pre>
+        <pre><code id="cmd-unix">(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs")</code></pre>
+      </article>
+
+      <h2 class="command-group-title">Deploy built-in Gateway</h2>
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Windows PowerShell</h2>
+          <button class="copy" type="button" data-copy="cmd-gateway-windows">Copy</button>
+        </div>
+        <pre><code id="cmd-gateway-windows">$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m gateway</code></pre>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>macOS / Linux</h2>
+          <button class="copy" type="button" data-copy="cmd-gateway-unix">Copy</button>
+        </div>
+        <pre><code id="cmd-gateway-unix">(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" gateway)</code></pre>
       </article>
     </section>
 
-    <p class="note">Requires Node.js. Older installations are migrated automatically.</p>
+    <p class="note">Requires Node.js. WheelMaker writes the site configuration; use the built-in Gateway command or configure Nginx separately.</p>
 
     <section class="latest-clients" aria-label="Client downloads">
       <div id="clients-loading" class="client-loading" aria-label="Loading latest clients">

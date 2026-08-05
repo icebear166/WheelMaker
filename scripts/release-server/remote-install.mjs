@@ -5,7 +5,6 @@ set -Eeuo pipefail
 source_sha="$1"
 public_url="$2"
 upload_dir="$3"
-gateway_mode="$4"
 user_unit="wheelmaker-release-server.service"
 deploy_user="$(id -un)"
 deploy_uid="$(id -u)"
@@ -168,11 +167,6 @@ esac
   echo "invalid upload directory" >&2
   exit 1
 }
-case "$gateway_mode" in
-  none|caddy) ;;
-  *) echo "gateway mode must be none or caddy" >&2; exit 1 ;;
-esac
-
 [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ] || {
   echo "release server requires Linux/amd64" >&2
   exit 1
@@ -220,6 +214,7 @@ else
   printf '{"schema":1,"listen":"127.0.0.1:9680","dataRoot":"%s","tokenSha256":""}\n' "$data_root" > "$config_candidate"
 fi
 chmod 0600 "$config_candidate"
+"$stage_binary" configure-public-url --config "$config_candidate" --public-url "$public_url"
 "$stage_binary" validate-config --config "$config_candidate"
 
 if [ -f "$unit_path" ]; then
@@ -285,24 +280,21 @@ json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-if [ "$gateway_mode" = "caddy" ]; then
-  gateway_sites="$deploy_home/.wheelmaker/gateway/sites"
-  gateway_site_path="$gateway_sites/release-server.json"
-  install -d -m 0700 "$gateway_sites"
-  if [ -f "$gateway_site_path" ]; then
-    gateway_site_existed=1
-    gateway_site_backup="$gateway_sites/.release-server-$source_sha.backup"
-    cp -f "$gateway_site_path" "$gateway_site_backup"
-  fi
-  public_url_json="$(json_escape "$public_url")"
-  public_root_json="$(json_escape "$public_root")"
-  gateway_site_tmp="$gateway_sites/.release-server-$source_sha.tmp"
-  printf '{"schema":1,"kind":"release-server","publicUrl":"%s","publicRoot":"%s","upstream":"http://127.0.0.1:9680","tls":{"certificateFile":"","keyFile":""}}\n' \
-    "$public_url_json" "$public_root_json" > "$gateway_site_tmp"
-  chmod 0600 "$gateway_site_tmp"
-  mv -Tf "$gateway_site_tmp" "$gateway_site_path"
-  gateway_site_changed=1
+gateway_sites="$deploy_home/.wheelmaker/gateway/sites"
+gateway_site_path="$gateway_sites/release-server.json"
+install -d -m 0700 "$gateway_sites"
+if [ -f "$gateway_site_path" ]; then
+  gateway_site_existed=1
+  gateway_site_backup="$gateway_sites/.release-server-$source_sha.backup"
+  cp -f "$gateway_site_path" "$gateway_site_backup"
 fi
+public_url_json="$(json_escape "$public_url")"
+gateway_site_tmp="$gateway_sites/.release-server-$source_sha.tmp"
+printf '{"schema":1,"kind":"release-server","publicUrl":"%s","upstream":"http://127.0.0.1:9680","tls":{"certificateFile":"","keyFile":""}}\n' \
+  "$public_url_json" > "$gateway_site_tmp"
+chmod 0600 "$gateway_site_tmp"
+mv -Tf "$gateway_site_tmp" "$gateway_site_path"
+gateway_site_changed=1
 
 rollback_armed=0
 trap - ERR INT TERM

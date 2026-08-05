@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ type Server struct {
 	random         io.Reader
 	diskFree       func(string) (uint64, error)
 	writeJSON      func(string, any, os.FileMode) error
+	verifyPublic   func(stableDocument, publishSession) error
 	randomMu       sync.Mutex
 	sessionLocksMu sync.Mutex
 	sessionLocks   map[string]*sync.Mutex
@@ -33,7 +35,7 @@ type Server struct {
 }
 
 func New(cfg Config) (*Server, error) {
-	return newServer(cfg, defaultServerDependencies())
+	return newServer(cfg, defaultServerDependencies(cfg))
 }
 
 func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
@@ -48,6 +50,9 @@ func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 	}
 	if dependencies.writeJSON == nil {
 		dependencies.writeJSON = writeJSONFileAtomic
+	}
+	if dependencies.verifyPublic == nil {
+		dependencies.verifyPublic = func(stableDocument, publishSession) error { return nil }
 	}
 	for path, mode := range map[string]os.FileMode{
 		filepath.Join(cfg.DataRoot, "public"):  0o750,
@@ -64,6 +69,7 @@ func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 		random:       dependencies.random,
 		diskFree:     dependencies.diskFree,
 		writeJSON:    dependencies.writeJSON,
+		verifyPublic: dependencies.verifyPublic,
 		sessionLocks: map[string]*sync.Mutex{},
 	}, nil
 }
@@ -93,8 +99,67 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if s.handleAPI(w, r) {
 			return
 		}
+		writeError(w, http.StatusNotFound, "not_found")
+		return
 	}
-	writeError(w, http.StatusNotFound, "not_found")
+	s.servePublicFile(w, r)
+}
+
+func (s *Server) servePublicFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed")
+		return
+	}
+	for _, segment := range strings.Split(r.URL.Path, "/") {
+		if segment == ".." {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	if encodedPathEscapesSegments(r.URL) {
+		http.NotFound(w, r)
+		return
+	}
+	cleaned := path.Clean("/" + r.URL.Path)
+	relative := strings.TrimPrefix(cleaned, "/")
+	if relative == "" || strings.HasSuffix(r.URL.Path, "/") {
+		relative = path.Join(relative, "index.html")
+	}
+	root, err := os.OpenRoot(filepath.Join(s.config.DataRoot, "public"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer root.Close()
+	file, err := root.Open(filepath.FromSlash(relative))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	if immutablePublicPath(cleaned) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+func immutablePublicPath(value string) bool {
+	if strings.HasPrefix(value, "/releases/") {
+		return true
+	}
+	return strings.HasPrefix(value, "/gateway/current/wheelmaker-gateway-")
 }
 
 func authenticate(header string, configured string) error {

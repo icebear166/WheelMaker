@@ -25,7 +25,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("command is required: serve, validate-config, or configure-token")
+		return errors.New("command is required: serve, validate-config, configure-token, or configure-public-url")
 	}
 	switch args[0] {
 	case "serve":
@@ -63,6 +63,18 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 			return errors.New("configure-token requires exactly --config and --sha256")
 		}
 		return releaseserver.ConfigureTokenHash(*configPath, *digest)
+	case "configure-public-url":
+		flags := flag.NewFlagSet("configure-public-url", flag.ContinueOnError)
+		flags.SetOutput(stderr)
+		configPath := flags.String("config", "", "release server config path")
+		publicURL := flags.String("public-url", "", "release server public URL")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *configPath == "" || *publicURL == "" || flags.NArg() != 0 {
+			return errors.New("configure-public-url requires exactly --config and --public-url")
+		}
+		return releaseserver.ConfigurePublicURL(*configPath, *publicURL)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

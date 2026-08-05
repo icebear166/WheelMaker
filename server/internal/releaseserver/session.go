@@ -104,10 +104,11 @@ type statusOwner struct {
 }
 
 type serverDependencies struct {
-	now       func() time.Time
-	random    io.Reader
-	diskFree  func(string) (uint64, error)
-	writeJSON func(string, any, os.FileMode) error
+	now          func() time.Time
+	random       io.Reader
+	diskFree     func(string) (uint64, error)
+	writeJSON    func(string, any, os.FileMode) error
+	verifyPublic func(stableDocument, publishSession) error
 }
 
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) bool {
@@ -687,11 +688,18 @@ func encodedPathEscapesSegments(value *url.URL) bool {
 	return strings.Contains(escaped, "%2f") || strings.Contains(escaped, "%5c")
 }
 
-func defaultServerDependencies() serverDependencies {
+func defaultServerDependencies(cfg Config) serverDependencies {
+	client, err := newPublicVerificationClient(cfg.PublicURL)
 	return serverDependencies{
 		now:       time.Now,
 		random:    rand.Reader,
 		diskFree:  availableDiskBytes,
 		writeJSON: writeJSONFileAtomic,
+		verifyPublic: func(stable stableDocument, session publishSession) error {
+			if err != nil {
+				return fmt.Errorf("create public verification client: %w", err)
+			}
+			return verifyPublicRelease(cfg.PublicURL, stable, session, client)
+		},
 	}
 }

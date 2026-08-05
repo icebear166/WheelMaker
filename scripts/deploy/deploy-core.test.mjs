@@ -274,49 +274,99 @@ test('internal update restarts existing runtime without mutating registration', 
   assert.deepEqual(events, ['stop', 'applyUpdate', 'start']);
 });
 
-test('normal update never enters Gateway install or configuration paths', async () => {
-  const events = [];
-  await runCore(['update'], {
-    gatewayEnabled: true,
-    gatewayInstall: async () => { throw new Error('Gateway must remain untouched'); },
-    gatewayConfig: async () => { throw new Error('Gateway config must remain untouched'); },
-    async applyUpdate() { events.push('apply'); },
-    runtime: {
-      async stop() { events.push('stop'); },
-      async start() { events.push('start'); },
-    },
-  });
-  assert.deepEqual(events, ['stop', 'apply', 'start']);
-});
-
-test('full deployment writes Caddy config without installing Gateway', async (t) => {
+test('full deployment stores its public URL and writes Gateway config without installing Gateway', async (t) => {
   const fixture = await installFixture(t);
   const userHome = join(dirname(fixture.home), 'login-home');
   fixture.deps.userHome = userHome;
   fixture.deps.interactive = false;
   fixture.deps.trustedStable.gateway = {version: 'invalid-implicit-pointer'};
-  await runCore([
-    '--gateway=caddy',
-    '--gateway-public-url=https://workspace.example.com',
-  ], fixture.deps);
+  await runCore(['--public-url=https://workspace.example.com'], fixture.deps);
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal(config.publicUrl, 'https://workspace.example.com');
   const sitePath = join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json');
   const site = JSON.parse(await readFile(sitePath, 'utf8'));
   assert.equal(site.publicUrl, 'https://workspace.example.com');
   assert.equal(site.webRoot, join(fixture.home, 'web'));
 });
 
-test('noninteractive default and update leave Gateway Home absent', async (t) => {
-  for (const args of [[], ['update']]) {
-    const fixture = await installFixture(t);
-    const userHome = join(dirname(fixture.home), args.length === 0 ? 'full-home' : 'update-home');
-    fixture.deps.userHome = userHome;
-    fixture.deps.interactive = false;
-    await runCore(args, fixture.deps);
-    await assert.rejects(
-      () => access(join(userHome, '.wheelmaker', 'gateway')),
-      {code: 'ENOENT'},
-    );
-  }
+test('first noninteractive full deployment requires a public URL', async (t) => {
+  const fixture = await installFixture(t);
+  fixture.deps.interactive = false;
+
+  await assert.rejects(() => runCore([], fixture.deps), /--public-url/);
+});
+
+test('first interactive full deployment asks for and stores the server public URL', async (t) => {
+  const fixture = await installFixture(t);
+  const questions = [];
+  fixture.deps.interactive = true;
+  const ask = async (question) => {
+    questions.push(question);
+    return 'https://workspace.example.com:8443';
+  };
+  fixture.deps.publicURLQuestion = ask;
+  fixture.deps.gatewayQuestion = ask;
+
+  await runCore([], fixture.deps);
+
+  assert.deepEqual(questions, ['WheelMaker server public URL']);
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal(config.publicUrl, 'https://workspace.example.com:8443');
+});
+
+test('full deployment reuses the configured public URL without asking', async (t) => {
+  const fixture = await installFixture(t);
+  await mkdir(fixture.home, {recursive: true});
+  await writeFile(join(fixture.home, 'config.json'), JSON.stringify({
+    projects: [],
+    publicUrl: 'https://workspace.example.com',
+  }));
+  fixture.deps.interactive = true;
+  fixture.deps.publicURLQuestion = async () => {
+    throw new Error('configured public URL must be reused');
+  };
+  fixture.deps.gatewayQuestion = fixture.deps.publicURLQuestion;
+
+  await runCore([], fixture.deps);
+
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal(config.publicUrl, 'https://workspace.example.com');
+});
+
+test('update regenerates Workspace site from config without managing Gateway', async (t) => {
+  const fixture = await installFixture(t);
+  const userHome = join(dirname(fixture.home), 'update-home');
+  fixture.deps.userHome = userHome;
+  await mkdir(fixture.home, {recursive: true});
+  await writeFile(join(fixture.home, 'config.json'), JSON.stringify({
+    projects: [],
+    publicUrl: 'https://workspace.example.com:8443',
+  }));
+
+  await runCore(['update'], fixture.deps);
+
+  const site = JSON.parse(await readFile(
+    join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json'),
+    'utf8',
+  ));
+  assert.equal(site.publicUrl, 'https://workspace.example.com:8443');
+  assert.equal(site.webRoot, join(fixture.home, 'web'));
+});
+
+test('legacy update warns and skips site generation when public URL is absent', async (t) => {
+  const fixture = await installFixture(t);
+  const userHome = join(dirname(fixture.home), 'legacy-update-home');
+  fixture.deps.userHome = userHome;
+  await mkdir(fixture.home, {recursive: true});
+  await writeFile(join(fixture.home, 'config.json'), '{"projects":[]}\n');
+
+  await runCore(['update'], fixture.deps);
+
+  assert.equal(fixture.messages.some(message => /public URL.*skipping/i.test(message)), true);
+  await assert.rejects(
+    () => access(join(userHome, '.wheelmaker', 'gateway')),
+    {code: 'ENOENT'},
+  );
 });
 
 test('runtime start command builds a default adapter from the install directory', async () => {
@@ -700,7 +750,7 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
     await writeFile(join(fixture.home, name), name);
   }
 
-  await runCore([], fixture.deps);
+  await runCore(['--public-url=https://workspace.example.com'], fixture.deps);
 
   assert.equal(await exists(join(fixture.home, 'bin', 'wheelmaker.exe')), true);
   assert.equal(await readFile(join(fixture.home, 'web', 'index.html'), 'utf8'), 'new-web');
@@ -726,6 +776,7 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   assert.deepEqual(fixture.messages, [
     'Downloading release v1.23',
     'Verifying release v1.23',
+    'Workspace Gateway configuration written',
     'Applying Hub and Web',
     'Configuring runtime',
     'Starting Hub',
@@ -733,6 +784,7 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   ]);
 
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal(config.publicUrl, 'https://workspace.example.com');
   assert.deepEqual(config.projects, []);
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
 });
@@ -740,7 +792,7 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
 test('fresh Windows deploy does not create a Desktop updater binary', async (t) => {
   const fixture = await installFixture(t);
 
-  await runCore([], fixture.deps);
+  await runCore(['--public-url=https://workspace.example.com'], fixture.deps);
 
   assert.equal(
     await exists(join(fixture.home, 'desktop', 'update.exe')),
@@ -765,7 +817,7 @@ test('normal deploy migrates legacy config and secures it without losing user fi
   const secured = [];
   fixture.deps.secureConfigFile = async (path) => secured.push(path);
 
-  await runCore([], fixture.deps);
+  await runCore(['--public-url=https://workspace.example.com'], fixture.deps);
 
   const config = JSON.parse(await readFile(configPath, 'utf8'));
   assert.equal('monitor' in config, false);
@@ -773,6 +825,7 @@ test('normal deploy migrates legacy config and secures it without losing user fi
   assert.deepEqual(config.projects, [{ name: 'Existing', path: 'D:\\Existing' }]);
   assert.equal(config.registry.hubId, 'existing-hub');
   assert.equal(config.registry.listen, false);
+  assert.equal(config.publicUrl, 'https://workspace.example.com');
   assert.notEqual(config.registry.token, 'wheelmaker-local-token');
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
   assert.deepEqual(secured, [configPath]);

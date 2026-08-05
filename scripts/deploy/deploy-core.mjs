@@ -1665,7 +1665,7 @@ async function secureRuntimeConfig(path, platform, runner = runProcess) {
   ]);
 }
 
-async function ensureRuntimeConfig(home, deps, platform) {
+async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
   const configPath = join(home, 'config.json');
   let config = await readJsonIfPresent(configPath);
   let changed = false;
@@ -1710,6 +1710,25 @@ async function ensureRuntimeConfig(home, deps, platform) {
       changed = true;
     }
   }
+  let selectedPublicUrl = publicUrl ?? config.publicUrl;
+  if (!selectedPublicUrl && deps.interactive) {
+    let questioner;
+    try {
+      if (!deps.publicURLQuestion) questioner = createGatewayQuestioner();
+      const ask = deps.publicURLQuestion ?? questioner.ask;
+      selectedPublicUrl = await ask('WheelMaker server public URL');
+    } finally {
+      questioner?.close();
+    }
+  }
+  if (!selectedPublicUrl) {
+    throw new Error('first non-interactive deployment requires --public-url');
+  }
+  const normalizedPublicUrl = parsePublicUrl(selectedPublicUrl).href.replace(/\/$/, '');
+  if (config.publicUrl !== normalizedPublicUrl) {
+    config.publicUrl = normalizedPublicUrl;
+    changed = true;
+  }
   if (changed) {
     await atomicWrite(configPath, jsonBytes(config), 0o600);
   }
@@ -1717,7 +1736,14 @@ async function ensureRuntimeConfig(home, deps, platform) {
     deps.secureConfigFile ??
     ((path) => secureRuntimeConfig(path, platform, deps.runner));
   await secureConfigFile(configPath);
-  return changed;
+  return config;
+}
+
+async function readWorkspacePublicUrl(home) {
+  const config = await readJsonIfPresent(join(home, 'config.json'));
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
+  if (!config.publicUrl) return null;
+  return parsePublicUrl(config.publicUrl).href.replace(/\/$/, '');
 }
 
 function transientWindowsFileError(error) {
@@ -1918,38 +1944,25 @@ async function executeDeployment(internalUpdate, deps, runtime) {
         deps.platformKey ?? currentPlatformKey(platform, deps.arch ?? process.arch),
     });
     if (phase !== 'verifying') await setState('verifying');
-    if (!internalUpdate) await ensureRuntimeConfig(home, deps, platform);
+    const runtimeConfig = internalUpdate
+      ? null
+      : await ensureRuntimeConfig(home, deps, platform, {
+          publicUrl: deps.deploymentOptions?.publicUrl,
+        });
 
-    // Gateway configuration is deliberately outside the Hub update transaction.
-    // A normal `deploy.mjs update` never enters this block, and a full deployment
-    // only writes the semantic Workspace site when explicitly selected.
-    if (!internalUpdate) {
-      const gatewayOptions = deps.gatewayOptions ?? parseGatewayOptions([]);
-      let mode = gatewayOptions.mode;
-      let questioner;
-      try {
-        if (!gatewayOptions.explicit && deps.interactive) {
-          if (!deps.gatewayQuestion) questioner = createGatewayQuestioner();
-          const ask = deps.gatewayQuestion ?? questioner.ask;
-          const answer = String(
-            await ask('Write Workspace Caddy configuration? [y/N]', 'n'),
-          ).trim().toLowerCase();
-          mode = ['y', 'yes'].includes(answer) ? 'caddy' : 'none';
-        }
-        if (mode === 'caddy') {
-          const configResult = await configureWorkspaceSite({
-            ask: deps.gatewayQuestion ?? questioner?.ask,
-            home: deps.gatewayHome ?? gatewayHome({userHome: deps.userHome ?? homedir()}),
-            mode,
-            publicUrl: gatewayOptions.publicUrl,
-            upstream: 'http://127.0.0.1:9630',
-            webRoot: join(home, 'web'),
-          });
-          if (configResult.written) deps.reportStatus?.('Workspace Caddy configuration written');
-        }
-      } finally {
-        questioner?.close();
-      }
+    // Site declarations are derived business configuration. They are always
+    // refreshed when a public URL is known, without managing Gateway itself.
+    const workspacePublicUrl = runtimeConfig?.publicUrl ?? await readWorkspacePublicUrl(home);
+    if (workspacePublicUrl) {
+      await configureWorkspaceSite({
+        home: deps.gatewayHome ?? gatewayHome({userHome: deps.userHome ?? homedir()}),
+        publicUrl: workspacePublicUrl,
+        upstream: 'http://127.0.0.1:9630',
+        webRoot: join(home, 'web'),
+      });
+      deps.reportStatus?.('Workspace Gateway configuration written');
+    } else if (internalUpdate) {
+      deps.reportStatus?.('Workspace public URL is not configured; skipping Gateway configuration');
     }
 
     await setState('applying');
@@ -2026,7 +2039,7 @@ async function executeDeployment(internalUpdate, deps, runtime) {
   if (cleanupError) throw cleanupError;
 }
 
-async function executeGatewayDeployment(deps, {force = false} = {}) {
+async function executeGatewayDeployment(deps) {
   if (!deps.trustedStable) throw new Error('trusted stable metadata is required');
   const result = await installGatewayFromStable({
     stable: deps.trustedStable,
@@ -2044,7 +2057,6 @@ async function executeGatewayDeployment(deps, {force = false} = {}) {
     validateBinary: deps.validateGatewayBinary,
     now: deps.now,
     reportStatus: deps.reportStatus,
-    force,
   });
   if (result.skipped && result.reason === 'missing-pointer') {
     throw new Error('stable release has no Gateway artifact; publish a release with Gateway first');
@@ -2054,10 +2066,13 @@ async function executeGatewayDeployment(deps, {force = false} = {}) {
 }
 
 export async function runCore(args, deps = {}) {
-  const gatewayInvocation = parseGatewayOptions(args);
-  args = gatewayInvocation.commandArgs;
-  if (gatewayInvocation.explicit) {
-    deps = {...deps, gatewayOptions: gatewayInvocation};
+  const deploymentOptions = parsePublicURLDeploymentOptions(args);
+  args = deploymentOptions.commandArgs;
+  if (deploymentOptions.publicUrl !== undefined) {
+    if (args.length !== 0) {
+      throw new Error('--public-url is only valid for a full deployment');
+    }
+    deps = {...deps, deploymentOptions};
   }
   if (args.length === 1 && args[0] === 'migrate-uninstall') {
     deps.reportStatus?.('Removing legacy services and files');
@@ -2111,8 +2126,8 @@ export async function runCore(args, deps = {}) {
     deps.reportStatus?.('Desktop update completed');
     return;
   }
-  if (args.length === 1 && (args[0] === 'gateway' || args[0] === 'gateway-update')) {
-    return executeGatewayDeployment(deps, {force: args[0] === 'gateway-update'});
+  if (args.length === 1 && args[0] === 'gateway') {
+    return executeGatewayDeployment(deps);
   }
   const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {
@@ -2266,7 +2281,7 @@ export function validateGatewayGlobal(config = {}) {
 
 export function validateGatewaySite(site, {kind} = {}) {
   requireObject(site, 'Gateway site');
-  rejectUnknownKeys(site, new Set(['schema', 'kind', 'publicUrl', 'webRoot', 'publicRoot', 'upstream', 'tls']), 'Gateway site');
+  rejectUnknownKeys(site, new Set(['schema', 'kind', 'publicUrl', 'webRoot', 'upstream', 'tls']), 'Gateway site');
   if (site.schema !== GATEWAY_SCHEMA) throw new Error(`unsupported Gateway site schema ${site.schema}`);
   const siteKind = kind ?? site.kind;
   if (![WORKSPACE_SITE_KIND, RELEASE_SERVER_SITE_KIND].includes(siteKind)) {
@@ -2275,12 +2290,8 @@ export function validateGatewaySite(site, {kind} = {}) {
   if (site.kind !== siteKind) throw new Error(`Gateway site kind must be ${siteKind}`);
   const publicUrl = parsePublicUrl(site.publicUrl);
   const upstream = parseUpstream(site.upstream);
-  const staticRoot = siteKind === WORKSPACE_SITE_KIND ? site.webRoot : site.publicRoot;
-  if (typeof staticRoot !== 'string' || !isAbsolute(staticRoot)) {
+  if (siteKind === WORKSPACE_SITE_KIND && (typeof site.webRoot !== 'string' || !isAbsolute(site.webRoot))) {
     throw new Error('static root must be an absolute path');
-  }
-  if (siteKind === WORKSPACE_SITE_KIND && site.publicRoot !== undefined) {
-    throw new Error('workspace site cannot set publicRoot');
   }
   if (siteKind === RELEASE_SERVER_SITE_KIND && site.webRoot !== undefined) {
     throw new Error('release-server site cannot set webRoot');
@@ -2290,7 +2301,7 @@ export function validateGatewaySite(site, {kind} = {}) {
     schema: GATEWAY_SCHEMA,
     kind: siteKind,
     publicUrl: publicUrl.href.replace(/\/$/, ''),
-    ...(siteKind === WORKSPACE_SITE_KIND ? { webRoot: resolve(staticRoot) } : { publicRoot: resolve(staticRoot) }),
+    ...(siteKind === WORKSPACE_SITE_KIND ? { webRoot: resolve(site.webRoot) } : {}),
     upstream: upstream.href.replace(/\/$/, ''),
     tls,
   };
@@ -2390,35 +2401,23 @@ export function createGatewayQuestioner({input = process.stdin, output = process
   };
 }
 
-export function parseGatewayOptions(args) {
+export function parsePublicURLDeploymentOptions(args) {
   const options = {
     commandArgs: [],
-    explicit: false,
-    mode: 'none',
     publicUrl: undefined,
   };
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
-    if (token.startsWith('--gateway=')) {
-      if (options.explicit) throw new Error('--gateway may only be specified once');
-      const mode = token.slice('--gateway='.length);
-      if (!['none', 'caddy'].includes(mode)) {
-        throw new Error('--gateway must be none or caddy');
-      }
-      options.explicit = true;
-      options.mode = mode;
-      continue;
-    }
-    if (token === '--gateway-public-url' || token.startsWith('--gateway-public-url=')) {
+    if (token === '--public-url' || token.startsWith('--public-url=')) {
       if (options.publicUrl !== undefined) {
-        throw new Error('--gateway-public-url may only be specified once');
+        throw new Error('--public-url may only be specified once');
       }
       if (token.includes('=')) {
         options.publicUrl = token.slice(token.indexOf('=') + 1);
       } else {
         const value = args[index + 1];
         if (!value || value.startsWith('--')) {
-          throw new Error('--gateway-public-url requires a value');
+          throw new Error('--public-url requires a value');
         }
         options.publicUrl = value;
         index += 1;
@@ -2427,35 +2426,24 @@ export function parseGatewayOptions(args) {
     }
     options.commandArgs.push(token);
   }
-  if (options.publicUrl !== undefined && options.mode !== 'caddy') {
-    throw new Error('--gateway-public-url is only valid with --gateway=caddy');
+  if (options.publicUrl !== undefined) {
+    options.publicUrl = parsePublicUrl(options.publicUrl).href.replace(/\/$/, '');
   }
   return options;
 }
 
 export async function configureWorkspaceSite({
   home,
-  ask,
-  mode = 'none',
   publicUrl,
   webRoot,
   upstream = 'http://127.0.0.1:9630',
 } = {}) {
-  if (mode === 'none') return {written: false};
-  if (mode !== 'caddy') throw new Error(`unsupported Gateway mode ${mode}`);
   const paths = gatewayConfigPaths(home);
   const existingValue = await readGatewayJsonIfPresent(paths.workspace);
   const existing = existingValue === null
     ? null
     : validateGatewaySite(existingValue, {kind: WORKSPACE_SITE_KIND});
-  let selectedPublicUrl = publicUrl ?? existing?.publicUrl;
-  if (!selectedPublicUrl && ask) {
-    selectedPublicUrl = await ask('Workspace public URL', 'https://workspace.example.com');
-  }
-  if (!selectedPublicUrl) {
-    throw new Error('first non-interactive Caddy deployment requires --gateway-public-url');
-  }
-  const candidate = workspaceSiteCandidate({publicUrl: selectedPublicUrl, webRoot, upstream});
+  const candidate = workspaceSiteCandidate({publicUrl, webRoot, upstream});
   await writeWorkspaceSite(home, candidate);
   return {existing, paths, site: candidate, written: true};
 }
@@ -2781,8 +2769,37 @@ export function createGatewayRuntimeAdapter({
     throw new Error(`unsupported Gateway runtime platform: ${platform}`);
   }
 
+  async function uninstall() {
+    if (platform === 'win32') {
+      await run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        `Unregister-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue`,
+      ], {cwd: paths.home, allowFailure: true});
+    } else if (platform === 'linux') {
+      const unit = paths.serviceUnit ?? `${SERVICE_NAME}.service`;
+      await run('systemctl', ['--user', 'disable', '--now', unit], {allowFailure: true});
+      const directory = join(environment.XDG_CONFIG_HOME ?? join(paths.userHome, '.config'), 'systemd', 'user');
+      await rm(join(directory, unit), {force: true});
+      await run('systemctl', ['--user', 'daemon-reload'], {allowFailure: true});
+    } else if (platform === 'darwin') {
+      const target = `gui/${paths.uid}/${paths.plistLabel ?? DARWIN_LABEL}`;
+      await run('launchctl', ['bootout', target], {allowFailure: true});
+      await rm(paths.plist, {force: true});
+    } else {
+      throw new Error(`unsupported Gateway runtime platform: ${platform}`);
+    }
+    for (const name of Object.keys(gatewayWrapperFiles(paths, platform))) {
+      await rm(join(paths.home, name), {force: true});
+    }
+  }
+
   return {
     install,
+    uninstall,
     start: () => action('start'),
     stop: () => action('stop'),
     restart: () => action('restart'),
@@ -2972,7 +2989,6 @@ export async function installGatewayFromStable({
   validateBinary: validateBinaryOverride,
   now = () => new Date().toISOString(),
   reportStatus,
-  force = false,
 } = {}) {
   const pointer = validatePointer(stable?.gateway);
   if (!pointer) return {skipped: true, reason: 'missing-pointer'};
@@ -3008,7 +3024,7 @@ export async function installGatewayFromStable({
   const previousState = await (async () => {
     try { return JSON.parse(await readFile(statePath, 'utf8')); } catch (error) { if (error?.code === 'ENOENT') return null; throw error; }
   })();
-  if (!force && previousState?.version === pointer.version && previousState?.manifestSha256 === pointer.manifestSha256 && await fileExists(paths.binary)) {
+  if (previousState?.version === pointer.version && previousState?.manifestSha256 === pointer.manifestSha256 && await fileExists(paths.binary)) {
     let running = false;
     if (typeof runtime.isRunning === 'function') {
       running = await runtime.isRunning();
@@ -3080,6 +3096,9 @@ export async function installGatewayFromStable({
         await rename(paths.rollbackBinary, paths.binary);
         await runtime.install().catch(() => {});
         await runtime.health().catch(() => {});
+      } else {
+        await runtime.uninstall?.().catch(() => {});
+        await rm(statePath, {force: true});
       }
       throw new Error(`Gateway installation failed and rollback was attempted: ${error.message}`, {cause: error});
     }

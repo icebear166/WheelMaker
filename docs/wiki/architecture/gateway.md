@@ -2,80 +2,93 @@
 
 # Gateway
 
-WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程内嵌入 Caddy。每台物理机只运行一个 Gateway，由它统一占用 `80/443`，按主机名聚合 Workspace 和 Release Server 站点。Gateway 不合并进 Hub，也不将 Web 构建产物嵌入二进制。
+WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程内嵌入 Caddy。
+每台物理机只运行一个 Gateway，由它统一占用公网端口并按主机名聚合 Workspace 与
+Release Server 站点。Gateway 不合并进 Hub 或 Release Server，也不把 Workspace Web
+编译进二进制。
 
 ## 运行时边界
 
-- Gateway 使用与本机 Hub 相同的操作系统用户和普通权限，但拥有独立系统服务。没有 Hub 的 Release-only 主机使用执行显式 Gateway 部署的当前用户；Workspace 与 Release Server 同机时必须由同一登录用户部署，才能共享一个 Gateway Home。
-- 首次安装通过管理员权限注册开机自启和低位端口能力，安装后立即尝试启动。`start` / `stop` 只控制当前运行状态，不改变开机自启设置。
-- Hub/Web 的普通完整部署和 `deploy.mjs update` 都不下载、安装、更新、启动、重启或修改 Gateway。Gateway 只由显式 `gateway`、`gateway-update` 和 start/stop 入口管理；显式升级可有数秒中断，启动失败时恢复本地上一版。
-- Gateway 和部署器不停止、卸载或修改 Nginx，也不修改 DNS、本机防火墙或云安全组。
-- Release Server 的普通部署只写 SSH 登录用户 Home，不探测旧 systemd/Nginx，也不依赖 `/srv`、`www-data` 或 ACL。旧机切换属于运维者执行的一次性人工迁移，不是 Gateway 生命周期的一部分。
+- Gateway 使用执行部署的操作系统用户，拥有独立于 Hub 和 Release Server 的服务。
+  两个业务服务位于同一机器且希望共用 Gateway 时，必须由同一用户部署。
+- 只有 `node deploy.mjs gateway` 管理 Gateway 生命周期。该命令幂等安装或升级 stable
+  指向的版本，注册开机服务并确保进程健康；不再有 `gateway-update`。
+- Workspace 完整部署、`deploy.mjs update` 和 Release Server 部署只写各自站点声明，
+  不下载、安装、启停、重载或验证 Gateway。
+- `~/.wheelmaker/gateway/start.*` 与 `stop.*` 只控制当前运行状态，不改变开机自启设置。
+- Gateway 与全部部署器都不修改 Nginx、DNS、防火墙、云安全组或用户证书。
+- 首次安装失败会撤销本次注册的 service/task/LaunchAgent，并删除本次产生的包装器、
+  二进制和 release state；升级失败恢复上一版。
 
 ## 配置所有权
 
-Gateway Home 始终属于执行部署的实际用户，路径为 `~/.wheelmaker/gateway/`：
-
 ```text
-gateway/
-  config.json                   # 宿主机级全局配置
-  sites/workspace.json          # WheelMaker 部署器所有
-  sites/release-server.json     # Release Server 部署器所有
-  generated/caddy.json          # 由全部站点聚合生成
-  data/                         # Caddy ACME 证书和状态
+~/.wheelmaker/
+├─ config.json                         # Workspace/Hub 配置，含 publicUrl
+├─ web/                                # Workspace Web 根目录
+├─ release-server/
+│  └─ config.json                      # Release Server 配置，含 publicUrl
+└─ gateway/
+   ├─ config.json                      # 宿主机级 ACME、日志设置
+   ├─ sites/
+   │  ├─ workspace.json                # WheelMaker 部署器所有
+   │  └─ release-server.json           # Release Server 部署器所有
+   ├─ generated/caddy.json             # 聚合后的运行时配置
+   └─ data/                            # Caddy ACME 状态
 ```
 
-`config.json` 只存放宿主机级共享设置，已存在时部署不覆盖。Workspace 与 Release Server 部署器分别只修改 `workspace.json` 和 `release-server.json`，不直接编辑聚合后的 Caddy JSON，也不通过 `/srv` 或宿主机级元数据发现 Gateway Home；Home 始终由实际登录用户解析为 `~/.wheelmaker/gateway`。`kind` 限定路由合同，不允许原始 Caddyfile、任意 Caddy JSON 或非 loopback 上游。
+业务服务自己的 `config.json.publicUrl` 是站点公开 origin 的事实源。Gateway 的
+`config.json` 不存站点域名。Workspace 与 Release Server 部署器分别从业务配置原子
+生成自己的语义站点 JSON，不编辑另一个组件的文件，也不直接编辑生成后的 Caddy JSON。
 
-Release Server 的普通部署使用同一登录用户的 Home：
+站点文件使用受限的 `kind` 合同，不接受原始 Caddyfile、任意 Caddy JSON 或非 loopback
+upstream。是否生成站点配置和是否采用内置 Gateway 是两件独立的事：站点文件始终生成，
+使用 Nginx 时可以忽略。
 
-```text
-~/.wheelmaker/release-server/
-  config.json
-  versions/<source-sha>/wheelmaker-release-server
-  current -> versions/<source-sha>
-  data/public/
-  data/staging/
-```
+## 公开地址
 
-`release-server.json` 的 `publicRoot` 指向该用户的 `data/public` 绝对路径；Release Server、Gateway 和 Workspace 同用户时不需要 ACL 或 `www-data` 共享权限。
-
-两个部署入口统一使用 `--gateway=none|caddy`：
-
-- `none` 是严格无操作，不创建、覆盖或删除 Gateway 目录和站点文件；已有 Nginx 或其他入口继续工作。
-- `caddy` 只自动创建站点目录并原子写入当前组件拥有的语义 JSON；它不要求 Caddy 已安装，也不触发 Gateway 校验、渲染或 reload。
-- Release Server 部署未传参数时按 `caddy` 处理；如需保持旧入口不变，必须显式使用
-  `--gateway=none`。Workspace 完整交互部署未传参数时每次询问，默认选择 `none`；
-  `deploy.mjs update` 永远不进入该流程。
+- `publicUrl` 必须是只包含 HTTP(S) 协议、hostname、可选端口和根路径 `/` 的完整
+  origin，例如 `https://wheelmaker.example.com` 或 `https://example.com:28800`。
+- Workspace 已有 `~/.wheelmaker/config.json.publicUrl` 时复用。首次交互完整部署会
+  询问 “WheelMaker server public URL”；首次非交互部署必须传 `--public-url`。
+- `deploy.mjs update` 从已有配置重新生成 `workspace.json`。旧配置缺少地址时只警告并
+  跳过站点生成，不阻断 Hub/Web 更新。
+- Release Server 的地址来自 `scripts/release/channel.json`，部署时写回它自己的
+  `config.json` 并生成站点声明。
 
 ## 站点合同
 
-- `workspace` 站点以 `webRoot` 提供 Web 和 SPA fallback，将 `/ws` 路由到 loopback Registry 端口 `9630`。
-- `release-server` 站点以 `publicRoot` 提供发布静态文件、Range 和 CORS，将 `/api/*` 与 `/healthz` 路由到 loopback Release Server 端口 `9680`。
-- 站点用 `publicUrl` 表达域名、协议和可选外部端口。`https://` 未指定证书时由 Caddy 自动申请和续期；证书与私钥同时指定时使用用户证书；`http://` 明确表示不启用 TLS。
-- 自动 TLS 依赖 DNS 指向主机且公网 `80/443` 可达。失败时不降级为 HTTP 或不受信自签名。
+- `workspace`：Gateway 从 `webRoot` 提供 Workspace Web 与 SPA fallback，把 `/ws`
+  代理到 `http://127.0.0.1:9630`。
+- `release-server`：Gateway 把整个 host 代理到 `http://127.0.0.1:9680`。Release
+  Server 自己提供首页、部署脚本、元数据、发布产物、健康检查和 API；站点声明没有
+  `publicRoot`。
+- 聚合时按大小写不敏感的 hostname 检查唯一性。任意两个站点声明相同 hostname 都会
+  使新配置被拒绝，上一份有效配置继续运行。
+- `https://` 且未指定用户证书时使用 Caddy 自动证书管理；显式证书和私钥必须同时存在；
+  `http://` 不启用 TLS，也不生成 HTTPS 跳转。
+- HTTP 到 HTTPS 跳转使用 `publicUrl` 的 authority，因此会保留显式外部端口；matcher
+  与 TLS SNI 只使用 hostname。
 
-## 生命周期
+自动 TLS 依赖 DNS 指向本机且所需公网端口可达。失败时不会降级为 HTTP 或不受信任的
+自签名证书。
 
-Gateway 进程校验全局配置和全部站点后生成运行时 Caddy JSON。合法变更使用原子写入和热加载；无效变更保留上一份有效配置。站点部署器只负责写文件，不判断 Gateway 是否正在运行，配置消费属于 Gateway 自身生命周期。
-
-部署入口：
+## 部署入口
 
 ```text
-node deploy.mjs --gateway=none                 # 完整部署，不触碰入口配置
-node deploy.mjs --gateway=caddy --gateway-public-url=https://workspace.example.com
-node deploy.mjs gateway                         # 只安装/启动 stable 中的 Gateway
-node deploy.mjs gateway-update                 # 显式下载、校验并更新 Gateway，可回滚
-deploy-release-server.bat                    # 默认写入 release-server.json
-deploy-release-server.bat --gateway=none     # 部署 Release Server，不触碰入口配置
-deploy-release-server.bat --gateway=caddy     # 显式写入 release-server.json
-~/.wheelmaker/gateway/start.sh|stop.sh          # 只控制 Gateway 当前运行状态
+node deploy.mjs                                      # 部署 Hub/Web；必要时询问 publicUrl
+node deploy.mjs --public-url=https://host.example   # 非交互完整部署
+node deploy.mjs update                               # 更新 Hub/Web 并刷新站点声明
+node deploy.mjs gateway                              # 幂等安装/升级/启动内置 Gateway
+deploy-release-server.bat                            # 部署服务并刷新 release-server.json
+~/.wheelmaker/gateway/start.sh|stop.sh               # 只控制 Gateway 当前运行状态
 ```
 
-Workspace 的 `workspace.json` 已存在且没有显式新 URL 时复用原值；显式 `--gateway-public-url` 时更新。首次交互配置询问公网 URL，首次非交互 Caddy 配置必须提供该参数。Release Server 的公网 URL 固定读取 release channel；两个部署器都不接受 web root、upstream 或证书路径覆盖参数。
+业务部署不处理旧 Nginx。如果要停用旧 Nginx，可单独运行 `scripts/disable-nginx.sh` 或
+`scripts/disable-nginx.ps1`；它们只停止并禁止已识别服务自启，不删除软件包、配置或
+证书。Release Server 继续使用 Nginx 时，应把整个公开 host 反代到
+`127.0.0.1:9680`，Nginx worker 不需要读取用户 Home。
 
-普通 Gateway/Release Server 部署不处理旧 Nginx。旧机从 `/srv/wheelmaker-release` 切换到 Home 时，运维者一次性把 Release Server 的 Nginx 静态根调整到新的 `data/public`，其他站点、证书和入口配置保持不变。需要停用 Nginx 时，仍可单独运行 `scripts/disable-nginx.sh` 或 `scripts/disable-nginx.ps1`；脚本只停止并禁止已识别的 Nginx 服务自启，不删除软件包、配置和证书。无法安全识别服务时脚本返回人工处理提示。
-
-> 详细设计：[`docs/scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md)
+> 当前设计：[`docs/scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md`](../../scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md)
 >
-> 配置选择与 Release Server 迁移决策：[`docs/scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md`](../../scope/2026-08-05-gateway-config-and-release-server-migration/spec-gateway-config-and-release-server-migration.md)
+> 原始 Gateway 设计（历史）：[`docs/scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md)

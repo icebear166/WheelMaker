@@ -20,7 +20,7 @@ test('release server deploy derives host and lets SSH choose the login user', as
     remoteChecks: [],
     uploads: [],
   };
-  const dependencies = recordingDependencies(state, {gateway: 'caddy'});
+  const dependencies = recordingDependencies(state);
 
   const result = await deployReleaseServer(dependencies);
 
@@ -32,7 +32,7 @@ test('release server deploy derives host and lets SSH choose the login user', as
     port: 22,
   }]);
   assert.equal('user' in state.remoteChecks[0], false);
-  assert.equal(state.installs[0].gateway, 'caddy');
+  assert.equal('gateway' in state.installs[0], false);
   assert.equal(state.installs[0].publicUrl, 'https://release.wheelmaker.top');
   assert.equal(state.installs[0].sourceSha, SOURCE_SHA);
   assert.equal(state.installs[0].remoteDirectory, `/tmp/wheelmaker-release-server-${SOURCE_SHA}`);
@@ -68,13 +68,11 @@ test('release server deploy rejects a dirty tree and always cleans local staging
   assert.equal(state.cleanups.length, 1);
 });
 
-test('release server deployment accepts only the unified Gateway selector', () => {
-  assert.deepEqual(parseReleaseServerArgs([]), {gateway: 'caddy'});
-  assert.deepEqual(parseReleaseServerArgs(['--gateway=none']), {gateway: 'none'});
-  assert.deepEqual(parseReleaseServerArgs(['--gateway=caddy']), {gateway: 'caddy'});
-  assert.throws(() => parseReleaseServerArgs(['--gateway=nginx']), /none or caddy/);
+test('release server deployment has no Gateway selector', () => {
+  assert.deepEqual(parseReleaseServerArgs([]), {});
+  assert.throws(() => parseReleaseServerArgs(['--gateway=none']), /unknown release server option/);
+  assert.throws(() => parseReleaseServerArgs(['--gateway=caddy']), /unknown release server option/);
   assert.throws(() => parseReleaseServerArgs(['--legacy-' + 'nginx']), /unknown release server option/);
-  assert.throws(() => parseReleaseServerArgs(['--gateway=caddy', '--gateway=none']), /only be specified once/);
   assert.throws(() => parseReleaseServerArgs(['--unknown']), /unknown release server option/);
 });
 
@@ -82,6 +80,7 @@ test('release server deployment describes a Home installation', async () => {
   const source = await readFile(new URL('./deploy.mjs', import.meta.url), 'utf8');
 
   assert.match(source, /Installing Release Server in the SSH user Home/);
+  assert.doesNotMatch(source, /Gateway:/);
   assert.doesNotMatch(source, /Migrating Release Server/);
 });
 
@@ -229,6 +228,23 @@ test('release homepage declares direct downloads and Desktop update command', as
   assert.match(html, /data-copy="cmd-desktop-update"/);
   assert.match(html, /deploy\.mjs[^<]*desktop-update/);
   assert.match(html, /src="\/release-home\.js"/);
+});
+
+test('release homepage separates WheelMaker and built-in Gateway deployment', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+  const commands = html.match(
+    /<section class="commands" aria-label="Install commands">([\s\S]*?)<section class="latest-clients"/,
+  )?.[1] ?? '';
+
+  assert.match(commands, /Deploy WheelMaker/);
+  assert.match(commands, /Deploy built-in Gateway/);
+  assert.match(commands, /id="cmd-windows"/);
+  assert.match(commands, /id="cmd-unix"/);
+  assert.match(commands, /id="cmd-gateway-windows"/);
+  assert.match(commands, /id="cmd-gateway-unix"/);
+  assert.match(commands, /node \$m gateway/);
+  assert.match(commands, /node "\$d\/deploy\.mjs" gateway/);
+  assert.doesNotMatch(commands, /migrate-uninstall|--gateway(?:=|\s)|gateway-update/);
 });
 
 test('release homepage copy feedback restores each button label', async () => {

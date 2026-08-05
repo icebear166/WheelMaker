@@ -18,7 +18,7 @@ This README uses the current two-machine shape discussed for this repository:
   - runs one hub
   - hosts the registry service
   - publishes the Web UI
-  - exposes a single HTTPS entrypoint through Nginx
+  - exposes a single HTTPS entrypoint through the built-in Gateway or Nginx
 - **Machine B**
   - runs another hub
   - reports its projects to Machine A through the registry
@@ -35,8 +35,8 @@ This model works well when you want one machine to expose the public entrypoint 
 
 | Location | Endpoint | Purpose |
 | --- | --- | --- |
-| Machine A / Nginx | `https://<host>:28800/` | Web UI |
-| Machine A / Nginx | `wss://<host>:28800/ws` | Registry WebSocket |
+| Machine A / entrypoint | `https://<host>:28800/` | Web UI |
+| Machine A / entrypoint | `wss://<host>:28800/ws` | Registry WebSocket |
 | Machine A / internal | `127.0.0.1:9630` | Registry listener |
 
 ### 1. Deploy the prebuilt release
@@ -51,7 +51,9 @@ The target machine does not need the WheelMaker source tree, Git, Go, npm, or a 
 sudo loginctl enable-linger "$USER"
 ```
 
-For either a new installation or a one-time migration from the old source deployment, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the one-line command for your platform. It can run from any directory: it downloads the launcher to `~/.wheelmaker`, removes legacy services/programs when present while preserving user data, and installs the current stable release. Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
+For a new installation, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the **Deploy WheelMaker** command for your platform. It can run from any directory, downloads the launcher to `~/.wheelmaker`, and installs the current stable release. The first interactive install asks for the WheelMaker server public URL; automation can pass `--public-url=https://host.example`. Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
+
+The homepage also provides an independent **Deploy built-in Gateway** command. It runs `node deploy.mjs gateway`, which idempotently installs or upgrades the embedded-Caddy entrypoint and ensures its service is running. Normal WheelMaker deploys and updates only generate `gateway/sites/workspace.json`; they never install, stop, or restart Gateway. Nginx remains supported and can ignore that generated file.
 
 Every normal deploy replaces Hub and Web together. The resulting layout is:
 
@@ -65,7 +67,8 @@ Every normal deploy replaces Hub and Web together. The resulting layout is:
   deploy-core.mjs
   deploy.bat or deploy.sh    # normal deployment wrapper for the current platform
   release.json               # installed release schema v2
-  config.json                # preserved across deploys
+  config.json                # preserved across deploys; includes publicUrl
+  gateway/sites/workspace.json # generated reverse-proxy site declaration
 ```
 
 Normal deployment registers only current-user runtimes and does not require administrator privileges:
@@ -104,7 +107,7 @@ To update Desktop independently, close WheelMaker Desktop first and run:
 
 The stable release carries the latest available Desktop pointer, so a Hub/Web update can skip Desktop publishing without losing an older Desktop release. A running Desktop is never killed or replaced later on reboot; close it and retry.
 
-The deploy scripts do not install or configure Nginx, Caddy, certificates, or public ports. Point your own reverse proxy at this contract:
+Normal Hub/Web deploys do not install or configure Nginx, Caddy, certificates, or public ports. If you do not run the independent Gateway command, point your own reverse proxy at this contract:
 
 | External path | Local target |
 | --- | --- |
@@ -123,6 +126,7 @@ Example for Machine A:
 
 ```json
 {
+  "publicUrl": "https://machine-a.example.com:28800",
   "projects": [
     {
       "name": "WheelMaker",
@@ -144,6 +148,7 @@ Example for Machine A:
 
 Notes:
 
+- `publicUrl` is the complete public HTTP(S) origin and is also the source for the generated Workspace site declaration.
 - `registry.listen: true` means Machine A hosts the registry server.
 - `registry.port` is the internal registry port.
 - `registry.token` is shared by trusted non-browser hubs and clients. Browsers authenticate through the Registry login endpoint and then use a session cookie.
@@ -624,15 +629,15 @@ Release and script overview:
 - `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA, Desktop choice, and Android choice.
 - `node scripts/release.mjs [--with-desktop] [--with-android] [--publish]` — non-interactive equivalent; without `--publish` it builds the next public version locally.
 - `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref`, optional Desktop, and optional Android; Android setup is skipped when unused, Web builds once, and Hub binaries cross-compile for Windows amd64, Linux amd64, macOS Intel (amd64), and macOS Apple Silicon (arm64).
-- [release.wheelmaker.top](https://release.wheelmaker.top/) command — download the launcher and perform a new install or one-time legacy migration from any directory.
+- [release.wheelmaker.top](https://release.wheelmaker.top/) commands — independently deploy WheelMaker or the built-in Gateway from any directory.
 - Installed `~/.wheelmaker/deploy.bat` / `deploy.sh` — platform wrapper for a normal `node deploy.mjs`; the Windows wrapper pauses when it finishes.
 - Installed `~/.wheelmaker/update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.
 
 Release downloads from `https://release.wheelmaker.top` are anonymous; uploads use one automatically generated shared publishing Token. The first local public publish stores it with private permissions in `~/.wheelmaker/release-server.json`, sends only its SHA-256 to the server over SSH, and, when an authenticated `gh` is available, pipes the raw value through standard input into the private repository Secret `WHEELMAKER_RELEASE_TOKEN`. GitHub Actions reads only that Secret and never uses SSH. A missing Action Secret does not affect local publishing.
 
-The self-hosted channel starts fresh at `v1.1`; it does not import or compare the retired GitHub stable/history. Public stable and manifests use schema 2 root-relative paths resolved against the single release origin. Each version directory includes `deploy.mjs` and `deploy-core.mjs` beside the platform archives—not inside them. The release server verifies every streamed upload and writes `stable.json` last. Published assets are retained indefinitely; insufficient disk space fails the session without changing stable. Web release history comes from `releases.json`, while each Hub reports only its own installed `release.json` state.
+The self-hosted channel starts fresh at `v1.1`; it does not import or compare the retired GitHub stable/history. Public stable and manifests use schema 2 root-relative paths resolved against the single release origin. Each version directory includes `deploy.mjs` and `deploy-core.mjs` beside the platform archives—not inside them. The release server verifies every streamed upload, writes `stable.json` last, and then verifies metadata, scripts, manifests, and ranged assets through its configured public URL. Public verification failure restores the previous visible release. Published assets are retained indefinitely; insufficient disk space fails the session without changing stable. Web release history comes from `releases.json`, while each Hub reports only its own installed `release.json` state.
 
-The release service has an independent deployment entrypoint, `deploy-release-server.bat`. It requires Windows `go`, `ssh`, and `scp`, the private key `~/.ssh/wheelmaker-release-server_ed25519`, and a clean source commit. SSH configuration chooses the login user; that same user must deploy Workspace and Release Server when they share a machine, and it needs noninteractive sudo for the `/srv` data root and legacy service migration. `deploy-release-server.bat --gateway=none` performs the deploy/migration without touching Gateway files. `deploy-release-server.bat --gateway=caddy` performs the same transaction and atomically writes `~/.wheelmaker/gateway/sites/release-server.json`; it does not install or start Caddy. The remote transaction preflights, preserves the old Token, migrates the system service to a user unit, checks loopback and public health, and rolls back on failure. Existing Nginx paths and upstream remain usable when Caddy is absent. Gateway lifecycle remains explicit and separate, and published product assets are never deleted.
+The release service has an independent deployment entrypoint, `deploy-release-server.bat`. It requires Windows `go`, `ssh`, and `scp`, the private key `~/.ssh/wheelmaker-release-server_ed25519`, and a clean source commit. SSH configuration chooses the login user; that same user must deploy Workspace and Release Server when they share a machine. The Home-based transaction preserves the publishing Token, stores the release channel origin as `config.json.publicUrl`, starts the user service, checks loopback health, and always writes the proxy-only `~/.wheelmaker/gateway/sites/release-server.json`; it does not install or start Gateway. Release Server itself serves all public files, so an existing Nginx only needs to proxy the complete host to `127.0.0.1:9680` and requires no access to user Home files. Gateway lifecycle remains explicit and separate, and published product assets are never deleted.
 
 ## License
 

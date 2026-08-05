@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const configSchema = 1
@@ -16,6 +18,7 @@ const releaseServerListenAddress = "127.0.0.1:9680"
 type Config struct {
 	Schema      int    `json:"schema"`
 	Listen      string `json:"listen"`
+	PublicURL   string `json:"publicUrl"`
 	DataRoot    string `json:"dataRoot"`
 	TokenSHA256 string `json:"tokenSha256"`
 }
@@ -27,6 +30,9 @@ func (c Config) Validate() error {
 	if c.Listen != releaseServerListenAddress {
 		return fmt.Errorf("listen must be %s", releaseServerListenAddress)
 	}
+	if _, err := normalizePublicURL(c.PublicURL); err != nil {
+		return fmt.Errorf("publicUrl: %w", err)
+	}
 	if !filepath.IsAbs(c.DataRoot) {
 		return errors.New("dataRoot must be absolute")
 	}
@@ -37,6 +43,17 @@ func (c Config) Validate() error {
 }
 
 func LoadConfig(path string) (Config, error) {
+	cfg, err := decodeConfig(path)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, fmt.Errorf("validate release server config: %w", err)
+	}
+	return cfg, nil
+}
+
+func decodeConfig(path string) (Config, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("open release server config: %w", err)
@@ -55,9 +72,6 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, errors.New("decode release server config: multiple JSON values")
 		}
 		return Config{}, fmt.Errorf("decode release server config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return Config{}, fmt.Errorf("validate release server config: %w", err)
 	}
 	return cfg, nil
 }
@@ -111,6 +125,33 @@ func ConfigureTokenHash(path string, digest string) error {
 	}
 	cfg.TokenSHA256 = digest
 	return WriteConfig(path, cfg)
+}
+
+func ConfigurePublicURL(path string, value string) error {
+	normalized, err := normalizePublicURL(value)
+	if err != nil {
+		return fmt.Errorf("public URL: %w", err)
+	}
+	cfg, err := decodeConfig(path)
+	if err != nil {
+		return err
+	}
+	cfg.PublicURL = normalized
+	return WriteConfig(path, cfg)
+}
+
+func normalizePublicURL(value string) (string, error) {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return "", errors.New("must be a valid URL")
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return "", errors.New("must be an HTTP(S) origin")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+		return "", errors.New("must contain only scheme, host, and optional port")
+	}
+	return strings.TrimSuffix(parsed.Scheme+"://"+parsed.Host, "/"), nil
 }
 
 func validLowerHex(value string, byteLength int) bool {

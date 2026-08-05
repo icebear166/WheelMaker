@@ -14,8 +14,16 @@
 → packaging
 → uploading
 → committing
-→ 服务端原子更新 stable.json
+→ 写版本与派生公开文件
+→ 服务端最后原子更新 stable.json
+→ 通过 publicUrl 做匿名公网验证
 ```
+
+`stable.json` 是新版本的可见性提交点，必须晚于顶层 `deploy.mjs`、
+`deploy-core.mjs`、release/Gateway manifest、历史与成功状态。提交后服务端通过
+`config.json.publicUrl` 验证 stable 身份、摘要链和二进制 Range 下载。任一步失败都会
+恢复旧 stable、顶层别名、历史、状态、Gateway current 和版本目录，发布端得到失败而
+不是半完成的成功。
 
 正式发布在认证、创建会话和构建前读取当前 `stable.json`。如果干净源码工作树的当前 Git HEAD 与 `stable.sourceSha` 相同，发布器直接返回 `unchanged`，不构建、不打包且不占用新版本号；本地只构建模式不受此规则影响。版本冲突后的重试也会重新检查该 SHA，避免并发操作为同一源码提交生成两个正式版本。
 
@@ -27,9 +35,16 @@
 
 现有发布选项中另增 Gateway，行为与 Android APK 选项一致。勾选时使用本次 WheelMaker 版本构建四个 Gateway 平台产物，使用同一发布会话上传，以大小和 SHA-256 校验并与主版本一起提交。Gateway 不进入 `releases/v1.x/`，而是使用固定 `/gateway/` 命名空间，保留当前和上一版清单/产物。`stable.json` 携带 Gateway 当前指针；未勾选时继承上一个指针。Gateway 构建、上传或提交失败会使整次发布失败并保留旧 stable。
 
-Gateway 产物发布与目标机入口配置是两条独立控制流。目标机的普通完整部署与日常 `deploy.mjs update` 都不下载、安装或启动 Gateway；显式 `deploy.mjs gateway`、`gateway-update` 和 start/stop 入口保留。Gateway 的站点配置位于部署用户的 `~/.wheelmaker/gateway/sites`，与 Hub 的 `config.json` 分开，各个部署器只维护自己的站点文件。
+Gateway 产物发布与目标机入口配置是两条独立控制流。目标机的普通完整部署与日常
+`deploy.mjs update` 都不下载、安装或启动 Gateway；唯一安装/升级入口是幂等的
+`deploy.mjs gateway`，start/stop 包装器只控制运行状态。Gateway 的站点配置位于部署
+用户的 `~/.wheelmaker/gateway/sites`，各个部署器只维护自己的站点文件。
 
-Hub/Web 与 Release Server 部署入口统一接受 `--gateway=none|caddy`。`none` 对 Gateway 文件严格无操作；`caddy` 只写当前组件的站点 JSON，不安装、验证、渲染、reload 或控制 Nginx/Caddy。Workspace 同机使用 `workspace.json`，Release Server 使用 `release-server.json`；同一用户部署时两者自然聚合到同一 Gateway Home。
+业务服务不再接受 Gateway selector。Workspace 的 `config.json.publicUrl` 由已有配置、
+交互询问或完整部署的 `--public-url` 获得；Release Server 的 `publicUrl` 来自 release
+channel。Workspace 完整部署与 update 始终派生 `workspace.json`，Release Server 部署
+始终派生 `release-server.json`。写站点 JSON 不安装、验证、render、reload 或控制
+Nginx/Caddy；同一用户部署时两者自然聚合到同一 Gateway Home。
 
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
 
@@ -47,11 +62,21 @@ Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不�
 ~/.config/systemd/user/wheelmaker-release-server.service
 ```
 
-配置的 `dataRoot` 指向 Home 下的 `data` 绝对路径。部署器管理 Release Server 自身的 user unit、linger、重启和 loopback 健康检查；普通部署不探测或迁移旧 systemd 服务，不依赖 `/srv`、`www-data`、ACL 或入口服务权限。
+配置的 `dataRoot` 指向 Home 下的 `data` 绝对路径，`publicUrl` 来自
+`scripts/release/channel.json`。部署器管理 Release Server 自身的 user unit、linger、
+重启和 loopback 健康检查；普通部署不探测或迁移旧 systemd 服务，不依赖 `/srv`、
+`www-data`、ACL 或入口服务权限。
 
-`--gateway=none` 对 Gateway 文件严格无操作；`--gateway=caddy` 只在 SSH 用户 Home 写 `~/.wheelmaker/gateway/sites/release-server.json`，`publicRoot` 指向 Home 中的 `data/public`，公网 URL 从 `scripts/release/channel.json` 读取。Release Server 部署省略参数时默认使用 `caddy`；需要保持旧 Nginx 或其他入口不变时显式使用 `--gateway=none`。机器尚未安装 Caddy 时该文件保持休眠，部署不安装、启动、停止、重载或验证 Caddy。
+每次部署都在 SSH 用户 Home 原子写入
+`~/.wheelmaker/gateway/sites/release-server.json`。该站点没有 `publicRoot`，而是把整个
+host 代理到 `http://127.0.0.1:9680`；Release Server 进程自己提供首页、部署脚本、
+元数据和发布产物。机器未安装 Gateway 时文件保持休眠，部署不会安装、启动、停止、
+重载或验证 Caddy。继续使用 Nginx 时也只需全站反代 loopback，worker 无需读取 Home。
 
-仍在运行旧系统级 `wheelmaker-release-server.service` 的机器，必须先由运维者直接 SSH 执行一次性迁移：备份旧 `/etc` 配置和 `/srv/wheelmaker-release` 数据，复制 token 哈希、发布数据和公开资产到 Home，安装并启动用户服务，验证 loopback 与外部 healthz；成功后停止并禁用旧服务，保留旧 unit、`/opt` 二进制、`/etc` 配置、旧数据和运行用户。迁移时只一次性把 Release Server 的 Nginx 静态根调整到 Home 的 `data/public`，不改变其他站点或证书；失败则恢复旧服务，不删除旧文件。普通部署不提供或调用迁移脚本。
+仍在运行旧系统级 `wheelmaker-release-server.service` 的机器，必须先由运维者直接 SSH
+完成一次性数据迁移并停用占用 `9680` 的旧服务。旧 Nginx 配置应改为把整个 Release
+Server host 反代到 loopback，不再读取迁移后的 Home 静态目录。普通部署不提供或调用
+迁移脚本，也不删除旧文件。
 
 首次发布 Token 初始化也使用同一 SSH 用户、Home 中的二进制与配置以及用户级 systemd。未选择 Gateway 发布产物时，发布器省略 `withGateway` 字段，以兼容仍采用严格请求校验的旧 Release Server；该兼容不改变协议版本。
 
@@ -115,6 +140,7 @@ Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZI
 |---|---|---|
 | `node deploy.mjs` | 完整安装或重新部署 Hub 和 Web | 是 |
 | `node deploy.mjs update` | 日常更新 Hub 和 Web | 否 |
+| `node deploy.mjs gateway` | 幂等安装或升级内置 Gateway，并确保运行 | 是 |
 | `node deploy.mjs runtime start` | 启动 Hub | 否 |
 | `node deploy.mjs runtime stop` | 停止 Hub | 否 |
 | `node deploy.mjs runtime restart` | 重启托管 Hub runtime 并重新加载服务管理器环境 | 否 |

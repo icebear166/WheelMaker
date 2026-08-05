@@ -13,28 +13,13 @@ const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = resolve(moduleDirectory, '..', '..');
 
 export function parseReleaseServerArgs(args) {
-  let gateway = 'caddy';
-  let seenGateway = false;
   for (const arg of args) {
-    if (arg.startsWith('--gateway=')) {
-      if (seenGateway) throw new Error('--gateway may only be specified once');
-      gateway = arg.slice('--gateway='.length);
-      if (!['none', 'caddy'].includes(gateway)) {
-        throw new Error('--gateway must be none or caddy');
-      }
-      seenGateway = true;
-      continue;
-    }
     throw new Error(`unknown release server option: ${arg}`);
   }
-  return {gateway};
+  return {};
 }
 
 export async function deployReleaseServer(dependencies = createDefaultDependencies()) {
-  const gateway = dependencies.gateway ?? 'caddy';
-  if (!['none', 'caddy'].includes(gateway)) {
-    throw new Error('--gateway must be none or caddy');
-  }
   const channelValue = dependencies.loadChannel
     ? await dependencies.loadChannel()
     : dependencies.channel;
@@ -86,10 +71,9 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
     ];
     dependencies.write(`Uploading release server files to ${remote.host}`);
     await dependencies.upload({files, remote, remoteDirectory});
-    dependencies.write(`Installing Release Server in the SSH user Home (Gateway: ${gateway})`);
+    dependencies.write('Installing Release Server in the SSH user Home');
     await dependencies.install({
       domain: origin.hostname,
-      gateway,
       remote,
       remoteDirectory,
       script: buildRemoteInstallScript(),
@@ -107,8 +91,8 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
 }
 
 export function createDefaultDependencies(options = parseReleaseServerArgs(process.argv.slice(2))) {
+  void options;
   return {
-    gateway: options.gateway ?? 'caddy',
     homeDirectory: homedir(),
     repoRoot: defaultRepoRoot,
     async loadChannel() {
@@ -178,13 +162,13 @@ export function createDefaultDependencies(options = parseReleaseServerArgs(proce
         {cwd: defaultRepoRoot},
       );
     },
-    async install({gateway, publicUrl, remote, remoteDirectory, script, sourceSha}) {
+    async install({publicUrl, remote, remoteDirectory, script, sourceSha}) {
       await runProcess(
         'ssh',
         [
           ...sshArguments(remote),
           remote.host,
-          `bash -s -- ${[sourceSha, publicUrl, remoteDirectory, gateway].map(shellQuote).join(' ')}`,
+          `bash -s -- ${[sourceSha, publicUrl, remoteDirectory].map(shellQuote).join(' ')}`,
         ],
         {cwd: defaultRepoRoot, input: script},
       );

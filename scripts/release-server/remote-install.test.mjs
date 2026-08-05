@@ -38,16 +38,14 @@ test('remote installer does not depend on upload transport executable bits', () 
   assert.doesNotMatch(script, /\[ -x "\$upload_dir\/wheelmaker-release-server" \]/);
 });
 
-test('caddy mode writes the Home public root and none mode never creates Gateway paths', () => {
+test('installer always writes a reverse-proxy-only Release Server site', () => {
   const script = buildRemoteInstallScript();
-  const branch = 'if [ "$gateway_mode" = "caddy" ]; then';
-  const directory = 'gateway_sites="$deploy_home/.wheelmaker/gateway/sites"';
-  assert.match(script, /if \[ "\$gateway_mode" = "caddy" \]; then/);
   assert.match(script, /gateway_sites="\$deploy_home\/\.wheelmaker\/gateway\/sites"/);
   assert.match(script, /gateway_site_path="\$gateway_sites\/release-server\.json"/);
-  assert.match(script, /publicRoot.*\$public_root/s);
-  assert.ok(script.indexOf(branch) > 0);
-  assert.ok(script.indexOf(directory) > script.indexOf(branch));
+  assert.match(script, /"kind":"release-server"/);
+  assert.match(script, /"upstream":"http:\/\/127\.0\.0\.1:9680"/);
+  assert.doesNotMatch(script, /gateway_mode|publicRoot/);
+  assert.match(script, /configure-public-url --config "\$config_candidate" --public-url "\$public_url"/);
 });
 
 test('ordinary cutover rolls back only user-owned state', () => {
@@ -61,13 +59,13 @@ test('ordinary cutover rolls back only user-owned state', () => {
   assert.doesNotMatch(script, /ACL|acl_backup|root_command systemctl/);
 });
 
-test('remote installer owns only its user service and optional semantic site', () => {
+test('remote installer owns only its user service and semantic site', () => {
   const script = buildRemoteInstallScript();
   assert.match(script, /versions_home="\$release_home\/versions"/);
   assert.match(script, /unit_home="\$deploy_home\/\.config\/systemd\/user"/);
   assert.match(script, /unit_path="\$unit_home\/\$user_unit"/);
   assert.match(script, /gateway_site_path="\$gateway_sites\/release-server\.json"/);
-  assert.match(script, /gateway_mode.*none.*caddy/s);
+  assert.doesNotMatch(script, /gateway_mode.*none.*caddy/s);
   assert.match(script, /http:\/\/127\.0\.0\.1:9680\/healthz/);
   assert.doesNotMatch(script, /wheelmaker-gateway|127\.0\.0\.1:2019|Caddyfile|nginx -t/);
   assert.doesNotMatch(script, /systemctl\s+(start|stop|restart|enable|disable)\s+(nginx|caddy)/i);

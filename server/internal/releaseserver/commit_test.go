@@ -236,6 +236,120 @@ func TestStableWriteFailureLeavesPreviousStableBytesUntouched(t *testing.T) {
 	}
 }
 
+func TestDerivedWriteFailureDoesNotAdvanceStable(t *testing.T) {
+	server, root := newAuthenticatedSessionTestServer(t)
+	first := prepareCompleteTestSession(t, server, validStartRequest())
+	if _, status := commitTestSession(t, server, first.SessionID); status != http.StatusOK {
+		t.Fatalf("first commit status = %d", status)
+	}
+	stableBefore, err := os.ReadFile(filepath.Join(root, "public", "stable.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployBefore, err := os.ReadFile(filepath.Join(root, "public", "deploy.mjs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second := prepareCompleteTestSession(t, server, startRequest{
+		Version: "v1.2", SourceSHA: strings.Repeat("b", 40), Publisher: "local",
+	})
+	originalWrite := server.writeJSON
+	server.writeJSON = func(path string, value any, mode os.FileMode) error {
+		if filepath.Base(path) == "releases.json" {
+			return errors.New("injected history failure")
+		}
+		return originalWrite(path, value, mode)
+	}
+	if _, status := commitTestSession(t, server, second.SessionID); status != http.StatusInternalServerError {
+		t.Fatalf("second commit status = %d", status)
+	}
+	for name, want := range map[string][]byte{"stable.json": stableBefore, "deploy.mjs": deployBefore} {
+		got, err := os.ReadFile(filepath.Join(root, "public", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("%s changed after derived write failure", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.2")); !os.IsNotExist(err) {
+		t.Fatalf("failed version remains public: %v", err)
+	}
+}
+
+func TestPublicVerificationFailureRestoresPreviousVisibleRelease(t *testing.T) {
+	server, root := newAuthenticatedSessionTestServer(t)
+	first := prepareCompleteTestSession(t, server, validStartRequest())
+	if _, status := commitTestSession(t, server, first.SessionID); status != http.StatusOK {
+		t.Fatalf("first commit status = %d", status)
+	}
+	before := map[string][]byte{}
+	for _, name := range []string{"stable.json", "deploy.mjs", "deploy-core.mjs", "releases.json"} {
+		raw, err := os.ReadFile(filepath.Join(root, "public", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = raw
+	}
+	server.verifyPublic = func(stableDocument, publishSession) error {
+		return errors.New("injected public origin failure")
+	}
+	second := prepareCompleteTestSession(t, server, startRequest{
+		Version: "v1.2", SourceSHA: strings.Repeat("b", 40), Publisher: "local",
+	})
+	if _, status := commitTestSession(t, server, second.SessionID); status != http.StatusInternalServerError {
+		t.Fatalf("second commit status = %d", status)
+	}
+	for name, want := range before {
+		got, err := os.ReadFile(filepath.Join(root, "public", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("%s changed after public verification failure", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.2")); !os.IsNotExist(err) {
+		t.Fatalf("failed version remains public: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "staging", second.SessionID, "files", "deploy.mjs")); err != nil {
+		t.Fatalf("failed transaction was not restored to staging: %v", err)
+	}
+}
+
+func TestCommitWritesStableAfterDerivedMetadataAndBeforePublicVerification(t *testing.T) {
+	server, _ := newAuthenticatedSessionTestServer(t)
+	events := []string{}
+	originalWrite := server.writeJSON
+	server.writeJSON = func(path string, value any, mode os.FileMode) error {
+		name := filepath.Base(path)
+		if name == "releases.json" || name == "publish-status.json" || name == "stable.json" {
+			events = append(events, name)
+		}
+		return originalWrite(path, value, mode)
+	}
+	server.verifyPublic = func(stableDocument, publishSession) error {
+		events = append(events, "public-verify")
+		return nil
+	}
+	started := prepareCompleteTestSession(t, server, validStartRequest())
+	if _, status := commitTestSession(t, server, started.SessionID); status != http.StatusOK {
+		t.Fatalf("commit status = %d", status)
+	}
+	index := func(name string) int {
+		for position, event := range events {
+			if event == name {
+				return position
+			}
+		}
+		return -1
+	}
+	if !(index("releases.json") >= 0 && index("releases.json") < index("stable.json") && index("stable.json") < index("public-verify")) {
+		t.Fatalf("commit order = %v", events)
+	}
+}
+
 func TestConcurrentSameVersionHasOneWinner(t *testing.T) {
 	server, _ := newAuthenticatedSessionTestServer(t)
 	first := prepareCompleteTestSession(t, server, validStartRequest())

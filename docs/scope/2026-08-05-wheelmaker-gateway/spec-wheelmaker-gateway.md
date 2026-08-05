@@ -1,5 +1,7 @@
 > 由 scope skill 于 2026-08-05 生成
 
+> **历史规格：** 本文已由 [发布、部署与 Gateway 简化](../2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md) 取代；正文仅保留决策历史。
+
 # WheelMaker Gateway
 
 ## 目标

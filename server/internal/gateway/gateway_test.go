@@ -110,11 +110,10 @@ func TestCompileConfigIncludesWorkspaceRoutesAndAutomaticTLS(t *testing.T) {
 func TestCompileConfigProducesCaddyValidHTTPSDocument(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, ACME: ACMEConfig{Email: "ops@example.com"}, Log: LogConfig{Level: "INFO"}}
 	site := SiteConfig{
-		Schema:     SiteSchemaVersion,
-		Kind:       SiteReleaseServer,
-		PublicURL:  "https://release.example.com",
-		PublicRoot: filepath.Join(t.TempDir(), "releases"),
-		Upstream:   "http://127.0.0.1:9680",
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteReleaseServer,
+		PublicURL: "https://release.example.com",
+		Upstream:  "http://127.0.0.1:9680",
 	}
 	compiled, err := CompileConfig(global, []SiteConfig{site})
 	if err != nil {
@@ -122,6 +121,9 @@ func TestCompileConfigProducesCaddyValidHTTPSDocument(t *testing.T) {
 	}
 	if err := ValidateJSON(compiled); err != nil {
 		t.Fatalf("ValidateJSON() error = %v", err)
+	}
+	if strings.Contains(string(compiled), "file_server") || !strings.Contains(string(compiled), "reverse_proxy") {
+		t.Fatalf("Release Server route must be proxy-only: %s", compiled)
 	}
 }
 
@@ -138,20 +140,34 @@ func TestCompileConfigStripsExternalPortFromHostMatchers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompileConfig() error = %v", err)
 	}
-	if strings.Contains(string(compiled), "workspace.example.com:8443") {
-		t.Fatal("compiled host/TLS matcher must not include the external port")
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(string(compiled), "workspace.example.com") {
-		t.Fatal("compiled config omitted the hostname")
+	if got := deepString(document, "apps", "http", "servers", "https", "routes", "0", "match", "0", "host", "0"); got != "workspace.example.com" {
+		t.Fatalf("HTTPS host matcher = %q", got)
+	}
+	if got := deepString(document, "apps", "http", "servers", "http", "routes", "0", "handle", "0", "routes", "0", "handle", "0", "headers", "Location", "0"); got != "https://workspace.example.com:8443{http.request.uri}" {
+		t.Fatalf("redirect Location = %q", got)
+	}
+}
+
+func TestCompileConfigRejectsDuplicateHostnames(t *testing.T) {
+	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
+	sites := []SiteConfig{
+		{Schema: SiteSchemaVersion, Kind: SiteWorkspace, PublicURL: "https://SAME.example.com", WebRoot: filepath.Join(t.TempDir(), "web"), Upstream: "http://127.0.0.1:9630"},
+		{Schema: SiteSchemaVersion, Kind: SiteReleaseServer, PublicURL: "https://same.example.com", Upstream: "http://127.0.0.1:9680"},
+	}
+	if _, err := CompileConfig(global, sites); err == nil || !strings.Contains(err.Error(), "duplicate hostname") {
+		t.Fatalf("CompileConfig() error = %v", err)
 	}
 }
 
 func TestCompileConfigIsDeterministic(t *testing.T) {
 	webRoot := filepath.Join(t.TempDir(), "web")
-	releaseRoot := filepath.Join(t.TempDir(), "releases")
 	global := GlobalConfig{Schema: GlobalSchemaVersion, ACME: ACMEConfig{Email: "ops@example.com"}, Log: LogConfig{Level: "INFO"}}
 	sites := []SiteConfig{
-		{Schema: SiteSchemaVersion, Kind: SiteReleaseServer, PublicURL: "https://release.example.com", PublicRoot: releaseRoot, Upstream: "http://127.0.0.1:9680"},
+		{Schema: SiteSchemaVersion, Kind: SiteReleaseServer, PublicURL: "https://release.example.com", Upstream: "http://127.0.0.1:9680"},
 		{Schema: SiteSchemaVersion, Kind: SiteWorkspace, PublicURL: "https://workspace.example.com", WebRoot: webRoot, Upstream: "http://127.0.0.1:9630"},
 	}
 

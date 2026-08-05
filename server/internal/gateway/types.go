@@ -43,13 +43,12 @@ type TLSConfig struct {
 }
 
 type SiteConfig struct {
-	Schema     int       `json:"schema"`
-	Kind       SiteKind  `json:"kind"`
-	PublicURL  string    `json:"publicUrl"`
-	WebRoot    string    `json:"webRoot,omitempty"`
-	PublicRoot string    `json:"publicRoot,omitempty"`
-	Upstream   string    `json:"upstream"`
-	TLS        TLSConfig `json:"tls"`
+	Schema    int       `json:"schema"`
+	Kind      SiteKind  `json:"kind"`
+	PublicURL string    `json:"publicUrl"`
+	WebRoot   string    `json:"webRoot,omitempty"`
+	Upstream  string    `json:"upstream"`
+	TLS       TLSConfig `json:"tls"`
 }
 
 type Paths struct {
@@ -166,15 +165,8 @@ func ValidateSite(site SiteConfig) error {
 	if !isLoopbackHost(upstream.Hostname()) {
 		return fmt.Errorf("upstream must use a loopback address")
 	}
-	root := site.WebRoot
-	if site.Kind == SiteReleaseServer {
-		root = site.PublicRoot
-	}
-	if root == "" || !filepath.IsAbs(root) {
+	if site.Kind == SiteWorkspace && (site.WebRoot == "" || !filepath.IsAbs(site.WebRoot)) {
 		return fmt.Errorf("static root must be an absolute path")
-	}
-	if site.Kind == SiteWorkspace && site.PublicRoot != "" {
-		return fmt.Errorf("workspace site cannot set publicRoot")
 	}
 	if site.Kind == SiteReleaseServer && site.WebRoot != "" {
 		return fmt.Errorf("release-server site cannot set webRoot")
@@ -199,9 +191,6 @@ func isLoopbackHost(host string) bool {
 }
 
 func (s SiteConfig) StaticRoot() string {
-	if s.Kind == SiteReleaseServer {
-		return s.PublicRoot
-	}
 	return s.WebRoot
 }
 

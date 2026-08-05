@@ -272,6 +272,7 @@ func newSessionTestServer(t *testing.T, now func() time.Time) (*Server, string) 
 		Config{
 			Schema:      1,
 			Listen:      "127.0.0.1:9680",
+			PublicURL:   "https://release.example.com",
 			DataRoot:    root,
 			TokenSHA256: sha256String(testPublisherToken),
 		},

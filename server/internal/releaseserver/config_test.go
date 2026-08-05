@@ -13,9 +13,10 @@ import (
 func TestWriteAndLoadConfigRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	want := Config{
-		Schema:   1,
-		Listen:   "127.0.0.1:9680",
-		DataRoot: filepath.Join(t.TempDir(), "release-data"),
+		Schema:    1,
+		Listen:    "127.0.0.1:9680",
+		PublicURL: "https://release.example.com",
+		DataRoot:  filepath.Join(t.TempDir(), "release-data"),
 	}
 
 	if err := WriteConfig(path, want); err != nil {
@@ -40,9 +41,10 @@ func TestWriteAndLoadConfigRoundTrip(t *testing.T) {
 func TestConfigureTokenHashWritesOnlyDigest(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	cfg := Config{
-		Schema:   1,
-		Listen:   "127.0.0.1:9680",
-		DataRoot: filepath.Join(t.TempDir(), "data"),
+		Schema:    1,
+		Listen:    "127.0.0.1:9680",
+		PublicURL: "https://release.example.com",
+		DataRoot:  filepath.Join(t.TempDir(), "data"),
 	}
 	if err := WriteConfig(path, cfg); err != nil {
 		t.Fatal(err)
@@ -67,22 +69,64 @@ func TestConfigureTokenHashWritesOnlyDigest(t *testing.T) {
 	}
 }
 
+func TestConfigurePublicURLUpgradesLegacyConfigWithoutChangingToken(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	dataRoot := filepath.Join(t.TempDir(), "data")
+	digest := strings.Repeat("a", 64)
+	legacy := fmt.Sprintf(
+		`{"schema":1,"listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":%q}`,
+		dataRoot,
+		digest,
+	)
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ConfigurePublicURL(path, "https://release.example.com:8443/"); err != nil {
+		t.Fatalf("ConfigurePublicURL() error = %v", err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PublicURL != "https://release.example.com:8443" || cfg.DataRoot != dataRoot || cfg.TokenSHA256 != digest {
+		t.Fatalf("config = %+v", cfg)
+	}
+}
+
+func TestConfigRejectsInvalidPublicURL(t *testing.T) {
+	for name, value := range map[string]string{
+		"missing":     "",
+		"credentials": "https://user@example.com",
+		"path":        "https://example.com/releases",
+		"query":       "https://example.com?x=1",
+		"fragment":    "https://example.com#x",
+		"scheme":      "ftp://example.com",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := Config{Schema: 1, Listen: "127.0.0.1:9680", PublicURL: value, DataRoot: t.TempDir()}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() error = nil")
+			}
+		})
+	}
+}
+
 func TestConfigRejectsUnknownFieldsAndInvalidBoundaries(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	absoluteRoot := filepath.Join(dir, "data")
 	for name, raw := range map[string]string{
 		"unknown field": fmt.Sprintf(
-			`{"schema":1,"listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":"","extra":true}`,
+			`{"schema":1,"listen":"127.0.0.1:9680","publicUrl":"https://release.example.com","dataRoot":%q,"tokenSha256":"","extra":true}`,
 			absoluteRoot,
 		),
 		"wrong listen": fmt.Sprintf(
-			`{"schema":1,"listen":"0.0.0.0:9680","dataRoot":%q,"tokenSha256":""}`,
+			`{"schema":1,"listen":"0.0.0.0:9680","publicUrl":"https://release.example.com","dataRoot":%q,"tokenSha256":""}`,
 			absoluteRoot,
 		),
-		"relative root": `{"schema":1,"listen":"127.0.0.1:9680","dataRoot":"data","tokenSha256":""}`,
+		"relative root": `{"schema":1,"listen":"127.0.0.1:9680","publicUrl":"https://release.example.com","dataRoot":"data","tokenSha256":""}`,
 		"uppercase hash": fmt.Sprintf(
-			`{"schema":1,"listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":"%s"}`,
+			`{"schema":1,"listen":"127.0.0.1:9680","publicUrl":"https://release.example.com","dataRoot":%q,"tokenSha256":"%s"}`,
 			absoluteRoot,
 			strings.Repeat("A", 64),
 		),
@@ -103,7 +147,7 @@ func TestConfigModeAllowsOnlyRootWriteAndServiceGroupRead(t *testing.T) {
 		t.Skip("Windows does not report POSIX group mode bits")
 	}
 	path := filepath.Join(t.TempDir(), "config.json")
-	cfg := Config{Schema: 1, Listen: "127.0.0.1:9680", DataRoot: t.TempDir()}
+	cfg := Config{Schema: 1, Listen: "127.0.0.1:9680", PublicURL: "https://release.example.com", DataRoot: t.TempDir()}
 	if err := WriteConfig(path, cfg); err != nil {
 		t.Fatal(err)
 	}

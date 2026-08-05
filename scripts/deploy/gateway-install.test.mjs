@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -34,7 +34,7 @@ test('Gateway manifest requires fixed four-platform current paths', () => {
   artifacts['linux-amd64'].path = '/gateway/current/../../secret';
   assert.throws(() => validateGatewayManifest({schema: 1, version: 'v1.4', sourceSha: 'a'.repeat(40), path: pointer.manifestPath, artifacts}, pointer), /path/);
 });
-test('Gateway install verifies archive and uses rollback on service failure', async (t) => {
+test('Gateway first install removes the registered service and files when health fails', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-install-'));
   t.after(() => rm(root, {recursive: true, force: true}));
   const source = join(root, 'source');
@@ -73,8 +73,9 @@ test('Gateway install verifies archive and uses rollback on service failure', as
   const calls = [];
   const runtime = {
     async stop() { calls.push('stop'); },
-    async install() { calls.push('install'); throw new Error('start failed'); },
-    async health() { calls.push('health'); },
+    async install() { calls.push('install'); },
+    async health() { calls.push('health'); throw new Error('health failed'); },
+    async uninstall() { calls.push('uninstall'); },
   };
   await assert.rejects(() => installGatewayFromStable({
     stable: {gateway: pointer},
@@ -86,5 +87,13 @@ test('Gateway install verifies archive and uses rollback on service failure', as
     gatewayRuntime: runtime,
     validateBinary: async () => {},
   }), /rollback/);
-  assert.deepEqual(calls, ['stop', 'install', 'stop']);
+  assert.deepEqual(calls, ['stop', 'install', 'health', 'stop', 'uninstall']);
+  await assert.rejects(
+    () => access(join(root, 'gateway', 'bin', 'wheelmaker-gateway')),
+    {code: 'ENOENT'},
+  );
+  await assert.rejects(
+    () => access(join(root, 'gateway', 'state', 'release.json')),
+    {code: 'ENOENT'},
+  );
 });

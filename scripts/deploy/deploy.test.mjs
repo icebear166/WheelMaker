@@ -157,17 +157,23 @@ test('unknown commands fail before launcher files are mutated', async () => {
   assert.deepEqual(deps.events, []);
 });
 
-test('Gateway configuration selector is valid only for a full deployment', () => {
+test('public URL is valid only for a full deployment and Gateway has one command', () => {
   assert.deepEqual(parseDeployArgs(['gateway']), ['gateway']);
-  assert.deepEqual(parseDeployArgs(['gateway-update']), ['gateway-update']);
-  assert.deepEqual(parseDeployArgs(['--gateway=none']), ['--gateway=none']);
   assert.deepEqual(
-    parseDeployArgs(['--gateway=caddy', '--gateway-public-url=https://workspace.example.com']),
-    ['--gateway=caddy', '--gateway-public-url=https://workspace.example.com'],
+    parseDeployArgs(['--public-url=https://workspace.example.com']),
+    ['--public-url=https://workspace.example.com'],
   );
-  assert.throws(() => parseDeployArgs(['update', '--gateway=none']), /only valid for a full deployment/);
-  assert.throws(() => parseDeployArgs(['gateway', '--gateway=caddy']), /only valid for a full deployment/);
-  assert.throws(() => parseDeployArgs(['--gateway-' + 'write']), /unknown deploy command/);
+  assert.deepEqual(
+    parseDeployArgs(['--public-url', 'https://workspace.example.com:8443']),
+    ['--public-url', 'https://workspace.example.com:8443'],
+  );
+  assert.throws(() => parseDeployArgs(['update', '--public-url=https://workspace.example.com']), /only valid for a full deployment/);
+  assert.throws(() => parseDeployArgs(['gateway-update']), /unknown deploy command/);
+  assert.throws(() => parseDeployArgs(['--gateway=caddy']), /unknown deploy command/);
+  assert.throws(
+    () => parseDeployArgs(['--gateway-public-url=https://workspace.example.com']),
+    /unknown deploy command/,
+  );
 });
 
 test('Desktop self-update accepts only a positive parent PID', () => {

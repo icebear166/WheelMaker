@@ -10,15 +10,15 @@
 
 Registry 入口机额外需要：
 
-- Nginx
-- 推荐准备 TLS 证书和私钥
+- 内置 Gateway，或自行管理的 Nginx/其他反向代理
+- 使用 Nginx 时准备 TLS 证书和私钥；内置 Gateway 可自动管理公开 HTTPS 证书
 
 执行原则：
 
 - 先检测 Node，再安装或升级；不要在目标机安装无关的源码构建工具链。
 - Windows 可使用现有 Scoop 或 winget 安装 Node；不要自动安装 Scoop。
 - Linux 发行版包不满足 Node 22.15 时，先提出 NodeSource、nvm 等方案让用户确认。
-- 只有 Registry 入口机才处理 Nginx。
+- 只有 Registry 入口机才需要部署 Gateway 或配置 Nginx。
 - 正常部署和 `deploy.mjs update` 不需要管理员权限。Windows 一次性迁移仅在发现旧 Windows Service 时弹 UAC。
 
 常用检测：
@@ -47,19 +47,34 @@ sudo loginctl enable-linger "$USER"
 
 ## 2. 获取公共部署启动器
 
-全新安装和旧源码模式迁移都不需要克隆或进入源码仓库。以下整行命令可在任意目录执行：它把公共 `deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，先幂等清理可能存在的旧运行时，再安装当前 stable。
+全新安装不需要克隆或进入源码仓库。以下整行命令可在任意目录执行：它把公共
+`deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，再安装当前 stable。首次交互部署会
+询问 “WheelMaker server public URL”，并把完整 HTTP(S) origin 保存到
+`~/.wheelmaker/config.json.publicUrl`。
 
 Windows PowerShell：
 
 ```powershell
-$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; & node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { & node $m }
+$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; & node $m
 ```
 
 macOS/Linux：
 
 ```bash
-(d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 --progress-bar 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs" migrate-uninstall && node "$d/deploy.mjs")
+(d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 --progress-bar 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs")
 ```
+
+非交互完整部署必须显式提供地址，例如
+`node ~/.wheelmaker/deploy.mjs --public-url=https://wheelmaker.example.com`。如需内置
+Gateway，使用发布首页的另一条独立命令，或在 launcher 已下载后运行：
+
+```bash
+node "$HOME/.wheelmaker/deploy.mjs" gateway
+```
+
+该命令幂等安装/升级并启动 Gateway。普通完整部署与 `update` 只生成
+`~/.wheelmaker/gateway/sites/workspace.json`，不会管理 Gateway 生命周期；使用 Nginx
+时可以忽略该文件。
 
 启动器从 `https://release.wheelmaker.top` 匿名下载 schema 2 `stable.json`，把其中的根相对路径限制在同一个 Origin，并按固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。自建通道从 `v1.1` 重新开始，不迁移或比较旧 GitHub 通道的 stable、历史和版本号。
 
@@ -71,14 +86,16 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 
 ## 4. 首次部署
 
-全新安装或旧源码发布模式迁移都已由第 2 节的一行命令完成。源码仓库根目录不再提供迁移 wrapper，当前目录不会参与安装。
+全新安装已由第 2 节的一行命令完成。源码仓库根目录不再提供部署 wrapper，当前目录
+不会参与安装。旧源码模式需要清理时，运维者可在安装前单独执行
+`node ~/.wheelmaker/deploy.mjs migrate-uninstall`；公共首页不会自动执行迁移。
 
 说明：
 
-- 一行命令下载公共 launcher，调用一次 `migrate-uninstall`，再执行正常部署。后续日常部署不要再调用迁移模式。
+- 一行命令下载公共 launcher 并执行一次正常完整部署。
 - 迁移会删除旧 Hub/updater/deploy/monitor 运行时、`~/.wheelmaker/build`、`mobile`、`tmp`、旧 `cache/go-build`、`update-now.signal` 和退役的 restart/status helper，但保留配置、数据库、日志、Desktop 与当前 agent cache。
 - Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
-- 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，写 schema v2 `release.json`，并启动 Hub。
+- 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，保存 `publicUrl`，写 schema v2 `release.json` 与 Workspace 站点声明，并启动 Hub。
 - 正常部署会在安装目录生成当前平台的日常部署入口：Windows 双击 `~/.wheelmaker/deploy.bat`，macOS/Linux 执行 `~/.wheelmaker/deploy.sh`。两者只调用 `node deploy.mjs`，不执行迁移；Windows 完成后会暂停窗口以便查看结果。
 - 固定的 03:00 updater 和 Web 手动更新都调用 `node ~/.wheelmaker/deploy.mjs update`。该命令只停止/替换/启动现有运行时，不安装或卸载服务/任务，也不需要管理员权限。
 - Windows Desktop 按需单独更新：先关闭 Desktop，再运行 `~/.wheelmaker/update_exe.bat`。若本次 stable 版本没有发布新 EXE，会继续使用 stable 中继承的上一版 Desktop 指针。
@@ -101,12 +118,13 @@ Registry 入口机负责：
 - `registry.listen: true`
 - 本机运行 Registry listener
 - 发布 Web UI
-- 配置 Nginx，对外提供 Web UI 和 `/ws`
+- 部署内置 Gateway 或配置 Nginx，对外提供 Web UI 和 `/ws`
 
 编辑 `~/.wheelmaker/config.json`：
 
 ```json
 {
+  "publicUrl": "https://wheelmaker.example.com:28800",
   "projects": [
     {
       "name": "WheelMaker",
@@ -128,6 +146,7 @@ Registry 入口机负责：
 
 要点：
 
+- `publicUrl` 是客户端访问的完整 HTTP(S) origin，也是生成 Workspace 站点声明的来源。
 - `projects[].path` 改成实际 checkout 路径。
 - `registry.server` 在 Registry 入口机上用 `127.0.0.1`。
 - `registry.token` 使用共享 token。
@@ -199,9 +218,13 @@ Worker 机器负责：
 - `registry.token` 必须和入口机一致。
 - 每台机器的 `registry.hubId` 必须唯一。
 
-## 7. Nginx 配置
+## 7. Gateway 或 Nginx 配置
 
-只在 Registry 入口机配置 Nginx。
+只在 Registry 入口机配置公网入口。执行 `node ~/.wheelmaker/deploy.mjs gateway` 时，
+Gateway 会读取部署器已生成的 `workspace.json`；配置为 HTTPS 时由内嵌 Caddy 自动管理
+证书。DNS、公网端口和防火墙仍由运维者准备。
+
+如果继续使用 Nginx，则按以下合同配置。
 
 写配置前先确认：
 
@@ -382,4 +405,14 @@ Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/a
 
 第一次本地正式发布会自动生成 32-byte Token，先以私有权限写入 `~/.wheelmaker/release-server.json.pending`，通过 SSH 只把 SHA-256 配到服务器，确认 `/healthz` 后再原子改名为 `~/.wheelmaker/release-server.json`。中断后会复用 pending Token，不会生成第二个不匹配的值。若 `gh --version` 和 `gh auth status` 都成功，发布器还会通过标准输入设置私有源码仓库的 `WHEELMAKER_RELEASE_TOKEN` Secret；该步骤失败只给出警告，不影响已经可用的本地发布。Action 只读取这个 Secret，且不使用 SSH。
 
-发布服务单独通过 `deploy-release-server.bat` 部署。运行前需要 Windows 上可用的 `go`、`ssh`、`scp`、干净的源码 commit 和 `~/.ssh/wheelmaker-release-server_ed25519`。SSH 配置决定登录用户；同一台机器上 Workspace 与 Release Server 必须使用同一个用户，并为 `/srv` 数据根和旧服务迁移提供免交互 sudo。`deploy-release-server.bat --gateway=none` 部署/迁移 Release Server 且不触碰 Gateway 文件；`deploy-release-server.bat --gateway=caddy` 执行相同事务并原子写入 `~/.wheelmaker/gateway/sites/release-server.json`，不安装或启动 Caddy。远端事务会预检、保留旧 Token，将系统服务迁移为用户 unit，检查 loopback 与公网健康并在失败时回滚；Caddy 尚未安装时原有 Nginx 路径和 upstream 仍可工作。Gateway 生命周期保持独立，发布资产不会被删除。产品发布以 HTTPS 流式上传；所有文件通过大小和 SHA-256 校验后才提交，`stable.json` 最后原子替换。schema 2 元数据只保存根相对 `path`，每个版本的 MJS 与 tar.gz 并列，资产永久保留；磁盘不足返回失败并保持旧 stable。
+发布服务单独通过无参数的 `deploy-release-server.bat` 部署。运行前需要 Windows 上可用的
+`go`、`ssh`、`scp`、干净的源码 commit 和
+`~/.ssh/wheelmaker-release-server_ed25519`。SSH 配置决定登录用户；同一台机器上
+Workspace 与 Release Server 要共用 Gateway 时必须使用同一个用户。Home 部署不依赖
+`/srv`、`www-data` 或 ACL；它保留旧 Token，把 release channel origin 写入
+`config.json.publicUrl`，启动用户服务、检查 loopback，并始终原子写入代理整个 host 的
+`~/.wheelmaker/gateway/sites/release-server.json`，但不安装或启动 Gateway。Release
+Server 自己提供全部公开文件，现有 Nginx 只需把整个域名反代到
+`127.0.0.1:9680`。产品发布以 HTTPS 流式上传；所有文件通过大小和 SHA-256 校验后，
+`stable.json` 最后原子替换，再经公网验证。验证失败会回滚旧公开版本；资产永久保留，
+磁盘不足也不会改变旧 stable。

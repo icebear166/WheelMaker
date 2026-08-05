@@ -120,68 +120,93 @@ func (s *Server) commitSession(session publishSession) (stableDocument, error) {
 		}
 		return stableDocument{}, err
 	}
+	projectionSnapshots, err := captureFileSnapshots([]string{
+		filepath.Join(s.config.DataRoot, "public", "stable.json"),
+		filepath.Join(s.config.DataRoot, "public", "deploy.mjs"),
+		filepath.Join(s.config.DataRoot, "public", "deploy-core.mjs"),
+		filepath.Join(s.config.DataRoot, "public", "releases.json"),
+		filepath.Join(s.config.DataRoot, "public", "publish-status.json"),
+		filepath.Join(s.config.DataRoot, "data", "publish-status-owner.json"),
+	})
+	if err != nil {
+		if gatewayStage != "" {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+		}
+		return stableDocument{}, fmt.Errorf("snapshot public projections: %w", err)
+	}
 	session.UpdatedAt = s.now().UTC().Format(time.RFC3339)
 	if err := s.writePublicStatus(session.SessionID, publishStatusForSession(session, "running", "updating-stable", "")); err != nil {
+		_ = restoreFileSnapshots(projectionSnapshots)
 		if gatewayStage != "" {
 			_ = restoreGatewayStage(gatewayStage, filesDirectory)
 		}
 		return stableDocument{}, err
 	}
 	if err := os.Rename(filesDirectory, versionDirectory); err != nil {
+		_ = restoreFileSnapshots(projectionSnapshots)
 		if gatewayStage != "" {
 			_ = restoreGatewayStage(gatewayStage, filesDirectory)
 		}
 		return stableDocument{}, fmt.Errorf("publish version directory: %w", err)
 	}
-	rollback := func() {
+	rollbackVersion := func() {
 		if err := os.Rename(versionDirectory, filesDirectory); err != nil {
 			log.Printf("release server: restore failed transaction version=%s: %v", session.Version, err)
+		}
+	}
+	rollback := func(gatewaySwap *gatewaySwapState) {
+		rollbackVersion()
+		if gatewaySwap != nil {
+			if err := gatewaySwap.restore(); err != nil {
+				log.Printf("release server: Gateway restore failed version=%s: %v", session.Version, err)
+			}
+		} else if gatewayStage != "" {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+		}
+		if err := restoreFileSnapshots(projectionSnapshots); err != nil {
+			log.Printf("release server: public projection restore failed version=%s: %v", session.Version, err)
 		}
 	}
 	var gatewaySwap *gatewaySwapState
 	if session.WithGateway {
 		gatewaySwap, err = s.swapGateway(gatewayStage, session.SessionID)
 		if err != nil {
-			rollback()
+			rollbackVersion()
 			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+			_ = restoreFileSnapshots(projectionSnapshots)
 			return stableDocument{}, fmt.Errorf("publish Gateway artifacts: %w", err)
 		}
 	}
+	for _, name := range []string{"deploy.mjs", "deploy-core.mjs"} {
+		if err := copyFileAtomic(filepath.Join(versionDirectory, name), filepath.Join(s.config.DataRoot, "public", name), 0o640); err != nil {
+			rollback(gatewaySwap)
+			return stableDocument{}, fmt.Errorf("write public %s: %w", name, err)
+		}
+	}
+	if err := s.writeJSON(filepath.Join(s.config.DataRoot, "public", "releases.json"), history, 0o640); err != nil {
+		rollback(gatewaySwap)
+		return stableDocument{}, fmt.Errorf("write release history: %w", err)
+	}
+	if err := s.writePublicStatus(session.SessionID, publishStatusForSession(session, "succeeded", "updating-stable", "")); err != nil {
+		rollback(gatewaySwap)
+		return stableDocument{}, fmt.Errorf("write release status: %w", err)
+	}
 	stablePath := filepath.Join(s.config.DataRoot, "public", "stable.json")
 	if err := s.writeJSON(stablePath, stable, 0o640); err != nil {
-		rollback()
-		if gatewaySwap != nil {
-			if restoreErr := gatewaySwap.restore(); restoreErr != nil {
-				log.Printf("release server: Gateway restore failed version=%s: %v", session.Version, restoreErr)
-			}
-		} else if gatewayStage != "" {
-			_ = restoreGatewayStage(gatewayStage, filesDirectory)
-		}
+		rollback(gatewaySwap)
 		return stableDocument{}, fmt.Errorf("write stable: %w", err)
+	}
+	if err := s.verifyPublic(stable, session); err != nil {
+		rollback(gatewaySwap)
+		return stableDocument{}, fmt.Errorf("verify public release: %w", err)
 	}
 	if gatewaySwap != nil {
 		if err := gatewaySwap.finalize(); err != nil {
 			log.Printf("release server: Gateway finalize failed version=%s: %v", session.Version, err)
 		}
 	}
-
-	derivedErrors := make([]error, 0, 4)
-	for _, name := range []string{"deploy.mjs", "deploy-core.mjs"} {
-		if err := copyFileAtomic(filepath.Join(versionDirectory, name), filepath.Join(s.config.DataRoot, "public", name), 0o640); err != nil {
-			derivedErrors = append(derivedErrors, err)
-		}
-	}
-	if err := s.writeJSON(filepath.Join(s.config.DataRoot, "public", "releases.json"), history, 0o640); err != nil {
-		derivedErrors = append(derivedErrors, err)
-	}
-	if err := s.writePublicStatus(session.SessionID, publishStatusForSession(session, "succeeded", "updating-stable", "")); err != nil {
-		derivedErrors = append(derivedErrors, err)
-	}
 	if err := os.RemoveAll(filepath.Join(s.config.DataRoot, "staging", session.SessionID)); err != nil {
-		derivedErrors = append(derivedErrors, err)
-	}
-	for _, derivedErr := range derivedErrors {
-		log.Printf("release server: repairable post-stable error version=%s: %v", session.Version, derivedErr)
+		log.Printf("release server: committed staging cleanup failed version=%s: %v", session.Version, err)
 	}
 	return stable, nil
 }
@@ -503,6 +528,51 @@ func copyFileAtomic(source string, destination string, mode os.FileMode) error {
 		return err
 	}
 	return writeBytesFileAtomic(destination, raw, mode)
+}
+
+type fileSnapshot struct {
+	path    string
+	raw     []byte
+	mode    os.FileMode
+	existed bool
+}
+
+func captureFileSnapshots(paths []string) ([]fileSnapshot, error) {
+	snapshots := make([]fileSnapshot, 0, len(paths))
+	for _, path := range paths {
+		raw, err := os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			snapshots = append(snapshots, fileSnapshot{path: path})
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		snapshots = append(snapshots, fileSnapshot{
+			path: path, raw: raw, mode: info.Mode().Perm(), existed: true,
+		})
+	}
+	return snapshots, nil
+}
+
+func restoreFileSnapshots(snapshots []fileSnapshot) error {
+	var restoreErrors []error
+	for _, snapshot := range snapshots {
+		if snapshot.existed {
+			if err := writeBytesFileAtomic(snapshot.path, snapshot.raw, snapshot.mode); err != nil {
+				restoreErrors = append(restoreErrors, err)
+			}
+			continue
+		}
+		if err := os.Remove(snapshot.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			restoreErrors = append(restoreErrors, err)
+		}
+	}
+	return errors.Join(restoreErrors...)
 }
 
 type gatewaySwapState struct {

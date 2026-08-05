@@ -9,12 +9,14 @@ import (
 
 // AppConfig is the top-level config.json structure.
 type AppConfig struct {
-	Projects []ProjectConfig `json:"projects"`
-	Registry RegistryConfig  `json:"registry,omitempty"`
-	Log      LogConfig       `json:"log,omitempty"`
+	PublicURL string          `json:"publicUrl,omitempty"`
+	Projects  []ProjectConfig `json:"projects"`
+	Registry  RegistryConfig  `json:"registry,omitempty"`
+	Log       LogConfig       `json:"log,omitempty"`
 }
 
 type appConfigInput struct {
+	PublicURL         string          `json:"publicUrl,omitempty"`
 	Projects          []ProjectConfig `json:"projects"`
 	Registry          RegistryConfig  `json:"registry,omitempty"`
 	Log               LogConfig       `json:"log,omitempty"`
@@ -107,9 +109,10 @@ func LoadConfig(path string) (*AppConfig, error) {
 		Warn("config api_keys is deprecated and ignored; configure Hub API keys in Hub settings")
 	}
 	return &AppConfig{
-		Projects: input.Projects,
-		Registry: input.Registry,
-		Log:      input.Log,
+		PublicURL: input.PublicURL,
+		Projects:  input.Projects,
+		Registry:  input.Registry,
+		Log:       input.Log,
 	}, nil
 }
 

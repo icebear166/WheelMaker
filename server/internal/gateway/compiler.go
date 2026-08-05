@@ -16,10 +16,16 @@ func CompileConfigAt(global GlobalConfig, sites []SiteConfig, storageRoot string
 		return nil, err
 	}
 	ordered := append([]SiteConfig(nil), sites...)
+	seenHosts := make(map[string]SiteKind, len(ordered))
 	for _, site := range ordered {
 		if err := ValidateSite(site); err != nil {
 			return nil, fmt.Errorf("site %q: %w", site.Kind, err)
 		}
+		host := strings.ToLower(site.Host())
+		if previous, ok := seenHosts[host]; ok {
+			return nil, fmt.Errorf("duplicate hostname %q for %q and %q", host, previous, site.Kind)
+		}
+		seenHosts[host] = site.Kind
 	}
 	sort.SliceStable(ordered, func(i, j int) bool {
 		if ordered[i].Host() == ordered[j].Host() {
@@ -61,7 +67,7 @@ func compileHTTPApp(sites []SiteConfig) map[string]any {
 		if site.HTTPS() {
 			httpsRoutes = append(httpsRoutes, httpsRoute)
 			httpRoutes = append(httpRoutes, hostRoute(site, []any{map[string]any{
-				"handle": []any{httpsRedirectHandler()},
+				"handle": []any{httpsRedirectHandler(site)},
 			}}))
 		} else {
 			httpRoutes = append(httpRoutes, httpsRoute)
@@ -167,21 +173,9 @@ func workspaceRoutes(site SiteConfig) []any {
 }
 
 func releaseServerRoutes(site SiteConfig) []any {
-	root := site.StaticRoot()
 	return []any{
 		map[string]any{
-			"match":  []any{map[string]any{"path": []string{"/api/*", "/healthz"}}},
 			"handle": []any{reverseProxyHandler(site.UpstreamAddress())},
-		},
-		map[string]any{
-			"match": []any{map[string]any{
-				"method": []string{"GET", "HEAD"},
-				"path":   []string{"/*"},
-			}},
-			"handle": []any{
-				corsHeadersHandler(),
-				fileServerHandler(root),
-			},
 		},
 	}
 }
@@ -236,12 +230,12 @@ func securityHeadersHandler() map[string]any {
 	}
 }
 
-func httpsRedirectHandler() map[string]any {
+func httpsRedirectHandler(site SiteConfig) map[string]any {
 	return map[string]any{
 		"handler":     "static_response",
 		"status_code": 308,
 		"headers": map[string]any{
-			"Location": []string{"https://{http.request.host}{http.request.uri}"},
+			"Location": []string{strings.TrimSuffix(site.PublicURL, "/") + "{http.request.uri}"},
 		},
 	}
 }

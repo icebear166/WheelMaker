@@ -76,7 +76,7 @@ func writeStorageVersionDir(t *testing.T, dataRoot string, version string, size 
 
 func newStorageTestHandler(t *testing.T, dataRoot string) *Server {
 	t.Helper()
-	handler, err := New(Config{Schema: 1, Listen: "127.0.0.1:9680", DataRoot: dataRoot, TokenSHA256: sha256String("release-token")})
+	handler, err := New(Config{Schema: 1, Listen: "127.0.0.1:9680", PublicURL: "https://release.example.com", DataRoot: dataRoot, TokenSHA256: sha256String("release-token")})
 	if err != nil {
 		t.Fatal(err)
 	}
