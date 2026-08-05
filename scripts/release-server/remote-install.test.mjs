@@ -25,7 +25,8 @@ test('caddy mode writes the Home public root and none mode never creates Gateway
   const branch = 'if [ "$gateway_mode" = "caddy" ]; then';
   const directory = 'gateway_sites="$deploy_home/.wheelmaker/gateway/sites"';
   assert.match(script, /if \[ "\$gateway_mode" = "caddy" \]; then/);
-  assert.match(script, /gateway_site_path="\$deploy_home\/\.wheelmaker\/gateway\/sites\/release-server\.json"/);
+  assert.match(script, /gateway_sites="\$deploy_home\/\.wheelmaker\/gateway\/sites"/);
+  assert.match(script, /gateway_site_path="\$gateway_sites\/release-server\.json"/);
   assert.match(script, /publicRoot.*\$public_root/s);
   assert.ok(script.indexOf(branch) > 0);
   assert.ok(script.indexOf(directory) > script.indexOf(branch));
@@ -44,9 +45,10 @@ test('ordinary cutover rolls back only user-owned state', () => {
 
 test('remote installer owns only its user service and optional semantic site', () => {
   const script = buildRemoteInstallScript();
-  assert.match(script, /\.wheelmaker\/release-server\/versions/);
-  assert.match(script, /\.config\/systemd\/user\/wheelmaker-release-server\.service/);
-  assert.match(script, /\.wheelmaker\/gateway\/sites\/release-server\.json/);
+  assert.match(script, /versions_home="\$release_home\/versions"/);
+  assert.match(script, /unit_home="\$deploy_home\/\.config\/systemd\/user"/);
+  assert.match(script, /unit_path="\$unit_home\/\$user_unit"/);
+  assert.match(script, /gateway_site_path="\$gateway_sites\/release-server\.json"/);
   assert.match(script, /gateway_mode.*none.*caddy/s);
   assert.match(script, /http:\/\/127\.0\.0\.1:9680\/healthz/);
   assert.doesNotMatch(script, /wheelmaker-gateway|127\.0\.0\.1:2019|Caddyfile|nginx -t/);
@@ -56,7 +58,7 @@ test('remote installer owns only its user service and optional semantic site', (
 test('cutover failures stay inside the user rollback window', () => {
   const script = buildRemoteInstallScript();
   const armed = script.indexOf('rollback_armed=1');
-  const disarmed = script.indexOf('rollback_armed=0');
+  const disarmed = script.lastIndexOf('rollback_armed=0');
   assert.ok(armed > 0);
   assert.ok(disarmed > armed);
   for (const marker of [

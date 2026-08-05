@@ -86,7 +86,7 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
     ];
     dependencies.write(`Uploading release server files to ${remote.host}`);
     await dependencies.upload({files, remote, remoteDirectory});
-    dependencies.write(`Migrating Release Server as the SSH login user (Gateway: ${gateway})`);
+    dependencies.write(`Installing Release Server in the SSH user Home (Gateway: ${gateway})`);
     await dependencies.install({
       domain: origin.hostname,
       gateway,
