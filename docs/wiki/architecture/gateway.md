@@ -17,8 +17,9 @@ Release Server 站点。Gateway 不合并进 Hub 或 Release Server，也不把 
   不下载、安装、启停、重载或验证 Gateway。
 - `~/.wheelmaker/gateway/start.*` 与 `stop.*` 只控制当前运行状态，不改变开机自启设置。
 - Gateway 与全部部署器都不修改 Nginx、DNS、防火墙、云安全组或用户证书。
-- 首次安装失败会撤销本次注册的 service/task/LaunchAgent，并删除本次产生的包装器、
-  二进制和 release state；升级失败恢复上一版。
+- 安装或升级切换后如果服务无法启动，不会自动回滚、卸载或删除本次安装的包装器、
+  二进制和 release state。部署器会停止失败的服务并报告原因；修复端口、权限或配置
+  后重新运行 `node deploy.mjs gateway`，继续使用已保留的版本。
 
 ## 配置所有权
 

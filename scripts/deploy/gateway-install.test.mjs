@@ -34,7 +34,7 @@ test('Gateway manifest requires fixed four-platform current paths', () => {
   artifacts['linux-amd64'].path = '/gateway/current/../../secret';
   assert.throws(() => validateGatewayManifest({schema: 1, version: 'v1.4', sourceSha: 'a'.repeat(40), path: pointer.manifestPath, artifacts}, pointer), /path/);
 });
-test('Gateway first install removes the registered service and files when health fails', async (t) => {
+test('Gateway install keeps the version and service files when health fails', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-install-'));
   t.after(() => rm(root, {recursive: true, force: true}));
   const source = join(root, 'source');
@@ -86,14 +86,8 @@ test('Gateway first install removes the registered service and files when health
     fetchBytes: async (url) => url.endsWith('gateway-manifest.json') ? manifestBytes : archiveBytes,
     gatewayRuntime: runtime,
     validateBinary: async () => {},
-  }), /rollback/);
-  assert.deepEqual(calls, ['stop', 'install', 'health', 'stop', 'uninstall']);
-  await assert.rejects(
-    () => access(join(root, 'gateway', 'bin', 'wheelmaker-gateway')),
-    {code: 'ENOENT'},
-  );
-  await assert.rejects(
-    () => access(join(root, 'gateway', 'state', 'release.json')),
-    {code: 'ENOENT'},
-  );
+  }), /Gateway installation failed after install/);
+  assert.deepEqual(calls, ['stop', 'install', 'health', 'stop']);
+  await access(join(root, 'gateway', 'bin', 'wheelmaker-gateway'));
+  await access(join(root, 'gateway', 'state', 'release.json'));
 });

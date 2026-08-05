@@ -1,7 +1,5 @@
 import assert from 'node:assert/strict';
-import {access, mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
-import { join } from 'node:path';
+import {join} from 'node:path';
 import test from 'node:test';
 
 import {
@@ -67,7 +65,7 @@ test('macOS Gateway plist runs at login and keeps the service alive', () => {
   assert.match(files['com.wheelmaker.gateway.plist'], /serve/);
 });
 
-test('Gateway runtime exposes current-state actions and explicit rollback uninstall', async () => {
+test('Gateway runtime exposes current-state actions without rollback uninstall', async () => {
   const calls = [];
   const adapter = createGatewayRuntimeAdapter({
     paths: PATHS,
@@ -81,7 +79,7 @@ test('Gateway runtime exposes current-state actions and explicit rollback uninst
   assert.equal(typeof adapter.install, 'function');
   assert.equal(typeof adapter.start, 'function');
   assert.equal(typeof adapter.stop, 'function');
-  assert.equal(typeof adapter.uninstall, 'function');
+  assert.equal('uninstall' in adapter, false);
   assert.equal(typeof adapter.reload, 'function');
   assert.equal('enable' in adapter, false);
   assert.equal('disable' in adapter, false);
@@ -95,47 +93,6 @@ test('Gateway runtime exposes current-state actions and explicit rollback uninst
       ['systemctl', '--user', 'stop', 'wheelmaker-gateway.service'],
     ],
   );
-});
-
-test('Linux Gateway uninstall disables the user unit and removes generated files', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-runtime-uninstall-'));
-  t.after(() => rm(root, {recursive: true, force: true}));
-  const home = join(root, 'gateway');
-  const configHome = join(root, 'config');
-  const paths = gatewayRuntimePaths({
-    gatewayHome: home,
-    gatewayBinary: join(home, 'bin', 'wheelmaker-gateway'),
-    nodePath: process.execPath,
-    userHome: root,
-    uid: 1000,
-  });
-  await mkdir(home, {recursive: true});
-  await mkdir(join(configHome, 'systemd', 'user'), {recursive: true});
-  for (const name of ['start.sh', 'stop.sh']) {
-    await writeFile(join(home, name), name);
-  }
-  const unitPath = join(configHome, 'systemd', 'user', paths.serviceUnit);
-  await writeFile(unitPath, 'unit');
-  const calls = [];
-  const adapter = createGatewayRuntimeAdapter({
-    environment: {XDG_CONFIG_HOME: configHome},
-    paths,
-    platform: 'linux',
-    async runner(command, args, options) {
-      calls.push({command, args, options});
-      return {code: 0, stderr: '', stdout: ''};
-    },
-  });
-
-  await adapter.uninstall();
-
-  for (const file of [join(home, 'start.sh'), join(home, 'stop.sh'), unitPath]) {
-    await assert.rejects(() => access(file), {code: 'ENOENT'});
-  }
-  assert.deepEqual(calls.map(({command, args}) => [command, ...args]), [
-    ['systemctl', '--user', 'disable', '--now', 'wheelmaker-gateway.service'],
-    ['systemctl', '--user', 'daemon-reload'],
-  ]);
 });
 
 test('Gateway Home receives only start and stop wrappers', () => {

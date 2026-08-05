@@ -106,8 +106,10 @@ Release Server 的 `publicUrl` 来自 `scripts/release/channel.json`。部署已
 1. 读取 stable 中的 Gateway 指针和清单。
 2. 校验清单、平台产物、大小和 SHA-256。
 3. 已安装同版本且健康时保持幂等；同版本未运行时启动并验证；版本变化或服务损坏时重新安装。
-4. 升级失败时恢复上一版二进制和服务。
-5. 首次安装失败时停止并卸载本次注册的 service/task/LaunchAgent，删除本次产生的包装器、二进制和 release state，不留下开机自启的坏服务。
+4. 安装或升级切换后启动/健康检查失败时，停止失败的服务，但不恢复上一版、不卸载
+   service/task/LaunchAgent，也不删除本次产生的包装器、二进制或 release state。
+5. 用户修复端口、权限或配置后，可重复执行 `node deploy.mjs gateway`，复用已保留的
+   版本继续启动和验证；Release Server 的发布事务回滚仍独立保留。
 
 ## Release Server HTTP 合同
 

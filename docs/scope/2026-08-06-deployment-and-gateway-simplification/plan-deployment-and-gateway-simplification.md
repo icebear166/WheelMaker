@@ -294,17 +294,19 @@ git commit -m "refactor(gateway): proxy release server as one origin"
 
 Assert `gateway-update` is unknown, `gateway` invokes `installGatewayFromStable` without a force distinction, and the same command starts an installed stopped version or reinstalls a damaged service.
 
-- [x] **Step 2: Write failing first-install cleanup tests**
+- [x] **Step 2: Write failing failed-start retention tests**
 
-Inject a runtime with recorded `install`, `health`, `stop`, and `uninstall` calls. Make health fail after install and assert:
+Inject a runtime with recorded `install`, `health`, and `stop` calls. Make health fail after
+install and assert:
 
 ```js
-assert.deepEqual(calls, ['stop', 'install', 'health', 'stop', 'uninstall']);
-assert.equal(await exists(paths.binary), false);
-assert.equal(await exists(join(paths.home, 'state', 'release.json')), false);
+assert.deepEqual(calls, ['stop', 'install', 'health', 'stop']);
+assert.equal(await exists(paths.binary), true);
+assert.equal(await exists(join(paths.home, 'state', 'release.json')), true);
 ```
 
-Add platform adapter tests proving uninstall tolerantly disables/removes the Windows scheduled task, Linux user unit, or Darwin LaunchAgent and removes generated wrappers.
+The runtime adapter exposes no uninstall operation. The failed version and generated service
+files remain available for a later retry after the operator fixes the prerequisite.
 
 - [x] **Step 3: Run focused tests and verify RED**
 
@@ -312,18 +314,21 @@ Add platform adapter tests proving uninstall tolerantly disables/removes the Win
 node --test scripts/deploy/deploy.test.mjs scripts/deploy/deploy-core.test.mjs scripts/deploy/gateway-install.test.mjs scripts/deploy/gateway-runtime.test.mjs
 ```
 
-Expected: `gateway-update` remains accepted and the adapter has no uninstall method.
+Expected: `gateway-update` is unknown and the adapter has no uninstall method.
 
-- [x] **Step 4: Implement one Gateway command and rollback cleanup**
+- [x] **Step 4: Implement one Gateway command without Gateway rollback**
 
-Remove force routing and `gateway-update`. Add `runtime.uninstall()` with idempotent platform commands and wrapper/service-definition cleanup. Track whether a current binary existed before replacement; on first-install failure call uninstall before deleting the binary/state, while upgrades continue restoring and reinstalling the previous binary.
+Remove force routing and `gateway-update`. Keep the selected binary, state, wrappers and service
+definition when install or health checks fail. Stop the failed service and report a retryable
+error; do not add an uninstall operation or restore the previous binary. The existing
+idempotence path starts the retained version on the next `gateway` invocation.
 
 - [x] **Step 5: Run tests and commit**
 
 ```powershell
 node --test scripts/deploy/deploy.test.mjs scripts/deploy/deploy-core.test.mjs scripts/deploy/gateway-install.test.mjs scripts/deploy/gateway-runtime.test.mjs
 git add scripts/deploy/deploy.mjs scripts/deploy/deploy-core.mjs scripts/deploy/deploy.test.mjs scripts/deploy/deploy-core.test.mjs scripts/deploy/gateway-install.test.mjs scripts/deploy/gateway-runtime.test.mjs
-git commit -m "fix(gateway): make deployment idempotent and rollback cleanly"
+git commit -m "fix(gateway): retain failed installs for retry"
 ```
 
 ### Task 5: Commit stable last and verify the public origin

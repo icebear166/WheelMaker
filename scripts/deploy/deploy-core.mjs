@@ -2331,7 +2331,6 @@ export function gatewayConfigPaths(home) {
     data: join(root, 'data'),
     logs: join(root, 'logs'),
     downloads: join(root, 'downloads'),
-    rollback: join(root, 'rollback'),
     bin: join(root, 'bin'),
   };
 }
@@ -2769,37 +2768,8 @@ export function createGatewayRuntimeAdapter({
     throw new Error(`unsupported Gateway runtime platform: ${platform}`);
   }
 
-  async function uninstall() {
-    if (platform === 'win32') {
-      await run('powershell', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        `Unregister-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue`,
-      ], {cwd: paths.home, allowFailure: true});
-    } else if (platform === 'linux') {
-      const unit = paths.serviceUnit ?? `${SERVICE_NAME}.service`;
-      await run('systemctl', ['--user', 'disable', '--now', unit], {allowFailure: true});
-      const directory = join(environment.XDG_CONFIG_HOME ?? join(paths.userHome, '.config'), 'systemd', 'user');
-      await rm(join(directory, unit), {force: true});
-      await run('systemctl', ['--user', 'daemon-reload'], {allowFailure: true});
-    } else if (platform === 'darwin') {
-      const target = `gui/${paths.uid}/${paths.plistLabel ?? DARWIN_LABEL}`;
-      await run('launchctl', ['bootout', target], {allowFailure: true});
-      await rm(paths.plist, {force: true});
-    } else {
-      throw new Error(`unsupported Gateway runtime platform: ${platform}`);
-    }
-    for (const name of Object.keys(gatewayWrapperFiles(paths, platform))) {
-      await rm(join(paths.home, name), {force: true});
-    }
-  }
-
   return {
     install,
-    uninstall,
     start: () => action('start'),
     stop: () => action('stop'),
     restart: () => action('restart'),
@@ -2969,7 +2939,6 @@ export function gatewayInstallPaths(home, platformKey) {
     ...paths,
     binaryName,
     binary: join(paths.bin, binaryName),
-    rollbackBinary: join(paths.rollback, binaryName),
   };
 }
 
@@ -3000,7 +2969,6 @@ export async function installGatewayFromStable({
   const commandRunner = runner ?? gatewayInstallRunProcess;
   await mkdir(paths.bin, {recursive: true});
   await mkdir(paths.downloads, {recursive: true});
-  await mkdir(paths.rollback, {recursive: true});
   await mkdir(join(paths.home, 'state'), {recursive: true});
 
   const runtime = gatewayRuntime ?? createGatewayRuntimeAdapter({
@@ -3077,30 +3045,23 @@ export async function installGatewayFromStable({
       throw error;
     });
     await waitForGatewayStopped(runtime);
-    await rm(paths.rollbackBinary, {force: true});
-    if (hadCurrent) await rename(paths.binary, paths.rollbackBinary);
     try {
       await copyFileAtomic(stagedBinary, paths.binary);
       await chmod(paths.binary, 0o755);
-      await runtime.install();
-      await runtime.health();
       await gatewayInstallAtomicWrite(statePath, gatewayInstallJsonBytes({schema: 1, version: pointer.version, sourceSha: pointer.sourceSha, manifestSha256: pointer.manifestSha256, installedAt: now()}), 0o600);
-      await rm(paths.rollbackBinary, {force: true});
+      try {
+        await runtime.install();
+        await runtime.health();
+      } catch (error) {
+        reportStatus?.(`Gateway ${pointer.version} was installed but failed to start; fix prerequisites and rerun gateway`);
+        await runtime.stop().catch(() => {});
+        await waitForGatewayStopped(runtime).catch(() => {});
+        throw new Error(`Gateway installation failed after install: ${error.message}`, {cause: error});
+      }
       return {skipped: false, home, paths, pointer, manifest};
     } catch (error) {
-      reportStatus?.(`Gateway ${pointer.version} failed to start; restoring previous version`);
-      await runtime.stop().catch(() => {});
-      await waitForGatewayStopped(runtime).catch(() => {});
-      await rm(paths.binary, {force: true});
-      if (hadCurrent && await fileExists(paths.rollbackBinary)) {
-        await rename(paths.rollbackBinary, paths.binary);
-        await runtime.install().catch(() => {});
-        await runtime.health().catch(() => {});
-      } else {
-        await runtime.uninstall?.().catch(() => {});
-        await rm(statePath, {force: true});
-      }
-      throw new Error(`Gateway installation failed and rollback was attempted: ${error.message}`, {cause: error});
+      if (error?.message?.startsWith('Gateway installation failed after install:')) throw error;
+      throw new Error(`Gateway installation failed after install: ${error.message}`, {cause: error});
     }
   } finally {
     await rm(downloadPath, {force: true});
