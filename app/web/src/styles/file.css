@@ -538,6 +538,21 @@
   border-left: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
+.preview-workbench-file-tree-content .item.dir,
+.preview-workbench-file-tree-content .item.file {
+  min-height: 26px;
+  font-size: 12px;
+}
+
+.preview-workbench-file-tree-content .item.dir .label {
+  font-weight: 550;
+}
+
+.preview-workbench-file-tree-content .item.selected {
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
 .preview-workbench-file-search-children {
   border-left: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
@@ -573,13 +588,14 @@
   cursor: pointer;
 }
 
-.preview-workbench-file-search-node.dir:hover {
-  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+.preview-workbench-file-search-node.dir:hover,
+.preview-workbench-file-search-node.file:hover {
+  background: var(--hover);
 }
 
-.preview-workbench-file-search-node.file:hover,
 .preview-workbench-file-search-node.file.selected {
   background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
 }
 
 .preview-workbench-file-search-node .label {
