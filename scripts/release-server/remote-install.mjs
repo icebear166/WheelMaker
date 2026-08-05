@@ -253,7 +253,7 @@ poll_health() {
   health_url="$1"
   health_ready=0
   for attempt in $(seq 1 30); do
-    if curl --fail --silent --show-error "$health_url" >/dev/null; then
+    if curl --fail --silent "$health_url" >/dev/null 2>&1; then
       health_ready=1
       break
     fi

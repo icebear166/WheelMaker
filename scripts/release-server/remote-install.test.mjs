@@ -20,6 +20,12 @@ test('ordinary installer only checks loopback health', () => {
   assert.doesNotMatch(script, /poll_health "\$public_url\/healthz"/);
 });
 
+test('health retries suppress transient curl errors', () => {
+  const script = buildRemoteInstallScript();
+  assert.match(script, /curl --fail --silent "\$health_url" >\/dev\/null 2>&1/);
+  assert.doesNotMatch(script, /curl --fail --silent --show-error "\$health_url"/);
+});
+
 test('remote installer does not depend on upload transport executable bits', () => {
   const script = buildRemoteInstallScript();
   const uploadedBinary = script.indexOf('[ -f "$upload_dir/wheelmaker-release-server" ]');
