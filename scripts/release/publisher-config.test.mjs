@@ -52,6 +52,24 @@ test('first local publish creates one token and sends only its hash', async () =
   const flattened = deps.state.sshCalls.flat();
   assert.equal(flattened.includes(token), false);
   assert.equal(flattened.includes(createHash('sha256').update(token).digest('hex')), true);
+  const [configure, restart] = deps.state.sshCalls;
+  assert.equal(configure.includes('root@release.wheelmaker.top'), false);
+  assert.equal(restart.includes('root@release.wheelmaker.top'), false);
+  assert.equal(configure.includes('release.wheelmaker.top'), true);
+  assert.equal(
+    configure.includes('$HOME/.wheelmaker/release-server/current/wheelmaker-release-server'),
+    true,
+  );
+  assert.equal(
+    configure.includes('$HOME/.wheelmaker/release-server/config.json'),
+    true,
+  );
+  assert.deepEqual(restart.slice(-4), [
+    'systemctl',
+    '--user',
+    'restart',
+    'wheelmaker-release-server.service',
+  ]);
   assert.equal(deps.state.ghStdin, token);
   assert.equal(deps.state.ghArgs.includes(token), false);
   assert.deepEqual(deps.state.ghArgs, ['secret', 'set', 'WHEELMAKER_RELEASE_TOKEN']);

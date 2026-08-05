@@ -91,22 +91,23 @@ export async function resolvePublisherToken({actions}, deps) {
     deps.identityFile,
     '-p',
     '22',
-    `root@${deps.host}`,
+    deps.host,
   ];
   await deps.configureRemote([
     ...sshPrefix,
-    '/opt/wheelmaker-release-server/current/wheelmaker-release-server',
+    '$HOME/.wheelmaker/release-server/current/wheelmaker-release-server',
     'configure-token',
     '--config',
-    '/etc/wheelmaker-release-server/config.json',
+    '$HOME/.wheelmaker/release-server/config.json',
     '--sha256',
     tokenHash,
   ]);
   await deps.restartRemote([
     ...sshPrefix,
     'systemctl',
+    '--user',
     'restart',
-    'wheelmaker-release-server',
+    'wheelmaker-release-server.service',
   ]);
   await deps.waitForHealth();
   await deps.promotePending();
