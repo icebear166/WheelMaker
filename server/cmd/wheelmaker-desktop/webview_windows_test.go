@@ -8,6 +8,18 @@ import (
 	"testing"
 )
 
+type recordingDesktopDwmWindowOps struct {
+	attributes map[uint32]uint32
+}
+
+func (r *recordingDesktopDwmWindowOps) setWindowAttribute(_ uintptr, attribute, value uint32) error {
+	if r.attributes == nil {
+		r.attributes = make(map[uint32]uint32)
+	}
+	r.attributes[attribute] = value
+	return nil
+}
+
 func TestDesktopWebViewUsesNativeNavigationAndProfileAdapter(t *testing.T) {
 	var source strings.Builder
 	for _, name := range []string{"webview_windows.go", "webview_profile_windows.go"} {
@@ -29,6 +41,56 @@ func TestDesktopWebViewUsesNativeNavigationAndProfileAdapter(t *testing.T) {
 	}
 	if strings.Contains(source.String(), "Insecure"+"SkipVerify") {
 		t.Fatal("Windows WebView integration must not bypass certificate validation")
+	}
+}
+
+func TestDesktopWebViewInstallsWorkAreaConstraintForCustomTitleBar(t *testing.T) {
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceText := string(source)
+	frameIndex := strings.Index(sourceText, "applyCustomTitleBarFrame(hwnd)")
+	installIndex := strings.Index(sourceText, "installDesktopWindowWorkAreaConstraintWithOps(hwnd, win32DesktopWindowSubclassOps{})")
+	cleanupIndex := strings.Index(sourceText, "defer cleanupWindowWorkAreaConstraint()")
+	themeIndex := strings.Index(sourceText, "applyDesktopWindowTheme(hwnd, opts.ThemeColor)")
+	suppressBorderIndex := strings.Index(sourceText, "suppressDesktopWindowBorder(hwnd)")
+	bridgeIndex := strings.Index(sourceText, "bindDesktopWindowBridge(w, hwnd, opts.Runtime)")
+	if frameIndex < 0 || installIndex < frameIndex || cleanupIndex < installIndex || themeIndex < cleanupIndex ||
+		suppressBorderIndex < themeIndex || bridgeIndex < suppressBorderIndex {
+		t.Fatalf(
+			"custom frame setup order is incomplete: frame=%d install=%d cleanup=%d theme=%d suppress=%d bridge=%d",
+			frameIndex,
+			installIndex,
+			cleanupIndex,
+			themeIndex,
+			suppressBorderIndex,
+			bridgeIndex,
+		)
+	}
+}
+
+func TestCustomTitleBarSuppressesNativeDwmBorder(t *testing.T) {
+	ops := &recordingDesktopDwmWindowOps{}
+
+	suppressDesktopWindowBorderWithOps(42, ops)
+
+	if got := ops.attributes[dwmwaBorderColor]; got != dwmColorNone {
+		t.Fatalf("DWM border color=%#x, want DWMWA_COLOR_NONE %#x", got, uint32(dwmColorNone))
+	}
+}
+
+func TestDesktopWindowThemeKeepsNativeTitleBarBorderColor(t *testing.T) {
+	ops := &recordingDesktopDwmWindowOps{}
+
+	applyDesktopWindowThemeWithOps(42, "#1e1e1e", ops)
+
+	want, ok := parseColorRef("#1e1e1e")
+	if !ok {
+		t.Fatal("test color should parse")
+	}
+	if got := ops.attributes[dwmwaBorderColor]; got != want {
+		t.Fatalf("DWM border color=%#x, want theme color %#x", got, want)
 	}
 }
 

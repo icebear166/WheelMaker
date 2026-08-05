@@ -48,8 +48,16 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 	if hwnd != 0 {
 		if opts.CustomTitleBar {
 			applyCustomTitleBarFrame(hwnd)
+			cleanupWindowWorkAreaConstraint, err := installDesktopWindowWorkAreaConstraintWithOps(hwnd, win32DesktopWindowSubclassOps{})
+			if err != nil {
+				return err
+			}
+			defer cleanupWindowWorkAreaConstraint()
 		}
 		applyDesktopWindowTheme(hwnd, opts.ThemeColor)
+		if opts.CustomTitleBar {
+			suppressDesktopWindowBorder(hwnd)
+		}
 		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime); err != nil {
 			return err
 		}
@@ -306,13 +314,34 @@ func applyCustomTitleBarFrame(hwnd uintptr) {
 	setWindowPos(hwnd, swpNoMove|swpNoSize|swpNoZOrder|swpNoOwnerZOrder|swpFrameChanged)
 }
 
+type desktopDwmWindowOps interface {
+	setWindowAttribute(hwnd uintptr, attribute, value uint32) error
+}
+
+type win32DesktopDwmWindowOps struct{}
+
+func (win32DesktopDwmWindowOps) setWindowAttribute(hwnd uintptr, attribute, value uint32) error {
+	return setDwmWindowAttribute(hwnd, attribute, unsafe.Pointer(&value), uint32(unsafe.Sizeof(value)))
+}
+
 func applyDesktopWindowTheme(hwnd uintptr, hexColor string) {
-	var darkMode int32 = 1
-	_ = setDwmWindowAttribute(hwnd, dwmwaUseImmersiveDarkMode, unsafe.Pointer(&darkMode), uint32(unsafe.Sizeof(darkMode)))
+	applyDesktopWindowThemeWithOps(hwnd, hexColor, win32DesktopDwmWindowOps{})
+}
+
+func applyDesktopWindowThemeWithOps(hwnd uintptr, hexColor string, ops desktopDwmWindowOps) {
+	_ = ops.setWindowAttribute(hwnd, dwmwaUseImmersiveDarkMode, 1)
 	if color, ok := parseColorRef(hexColor); ok {
-		_ = setDwmWindowAttribute(hwnd, dwmwaCaptionColor, unsafe.Pointer(&color), uint32(unsafe.Sizeof(color)))
-		_ = setDwmWindowAttribute(hwnd, dwmwaBorderColor, unsafe.Pointer(&color), uint32(unsafe.Sizeof(color)))
+		_ = ops.setWindowAttribute(hwnd, dwmwaCaptionColor, color)
+		_ = ops.setWindowAttribute(hwnd, dwmwaBorderColor, color)
 	}
+}
+
+func suppressDesktopWindowBorder(hwnd uintptr) {
+	suppressDesktopWindowBorderWithOps(hwnd, win32DesktopDwmWindowOps{})
+}
+
+func suppressDesktopWindowBorderWithOps(hwnd uintptr, ops desktopDwmWindowOps) {
+	_ = ops.setWindowAttribute(hwnd, dwmwaBorderColor, dwmColorNone)
 }
 
 func startWindowDrag(hwnd uintptr) {
