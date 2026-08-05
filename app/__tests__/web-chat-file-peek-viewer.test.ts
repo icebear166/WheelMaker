@@ -479,7 +479,9 @@ describe('web chat file peek viewer', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(chromeTsx).toContain('drawerMode: PreviewWorkbenchDrawerMode;');
-    expect(chromeTsx).toContain('preview-workbench-drawer-fab');
+    expect(chromeTsx).toContain('preview-workbench-drawer-tool');
+    expect(chromeTsx).toContain('drawerPortalTarget');
+    expect(chromeTsx).toContain('createPortal(');
     expect(chromeTsx).toContain('aria-label="Toggle files"');
     expect(chromeTsx).toContain('aria-label="Toggle Git history"');
     expect(chromeTsx).toContain("onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')");
@@ -499,7 +501,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('fileDrawerSearch');
     expect(chromeTsx).toContain('const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);');
     expect(chromeTsx).toContain('!containsTarget(drawerToolsRef.current, target)');
-    expect(chromeTsx).toContain('className="preview-workbench-tree-search-shell"');
+    expect(chromeTsx).toContain('className="preview-workbench-drawer-search"');
     expect(chromeTsx).toContain("mode === 'mobile'");
 
     expect(mainTsx).toContain('const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);');

@@ -1,4 +1,5 @@
 import React from 'react';
+import {createPortal} from 'react-dom';
 import {
   previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
@@ -19,6 +20,7 @@ type PreviewWorkbenchChromeProps = {
   fileDrawer: React.ReactNode;
   fileDrawerSearch?: React.ReactNode;
   gitDrawer: React.ReactNode;
+  drawerPortalTarget?: HTMLElement | null;
   onDrawerModeChange: (mode: PreviewWorkbenchDrawerMode) => void;
   actions?: React.ReactNode;
   actionsMenuOpen: boolean;
@@ -52,6 +54,7 @@ export function PreviewWorkbenchChrome({
   fileDrawer,
   fileDrawerSearch,
   gitDrawer,
+  drawerPortalTarget = null,
   onDrawerModeChange,
   actions,
   actionsMenuOpen,
@@ -79,6 +82,21 @@ export function PreviewWorkbenchChrome({
     : drawerMode === 'git'
       ? gitDrawer
       : null;
+  const useDrawerPortal = mode === 'desktop' && !!drawerPortalTarget;
+  const drawerPanel = drawerOpen && drawerContent ? (
+    <div
+      ref={drawerPanelRef}
+      className={`preview-workbench-drawer-panel${useDrawerPortal ? ' external' : ''}`}
+    >
+      {drawerMode === 'files' && fileDrawerSearch ? (
+        <div className="preview-workbench-drawer-search">{fileDrawerSearch}</div>
+      ) : null}
+      <div className="preview-workbench-drawer-content">{drawerContent}</div>
+    </div>
+  ) : null;
+  const renderedDrawerPanel = useDrawerPortal && drawerPanel
+    ? createPortal(drawerPanel, drawerPortalTarget)
+    : drawerPanel;
   const toolbarActions = (
     <>
       {onSearch ? (
@@ -199,47 +217,33 @@ export function PreviewWorkbenchChrome({
     >
       {fileDrawer || gitDrawer ? (
         <div ref={drawerToolsRef} className="preview-workbench-body-tools">
-          {fileDrawerSearch && drawerMode === 'files' ? (
-            <div
-              className="preview-workbench-tree-search-shell"
-              data-open="true"
+          {fileDrawer ? (
+            <button
+              type="button"
+              className={`preview-workbench-drawer-tool${drawerMode === 'files' ? ' active' : ''}`}
+              onClick={() => onDrawerModeChange(drawerMode === 'files' ? 'closed' : 'files')}
+              aria-label="Toggle files"
+              data-tooltip="Toggle files"
+              aria-pressed={drawerMode === 'files'}
             >
-              {fileDrawerSearch}
-            </div>
+              <Icon name="files" />
+            </button>
           ) : null}
-          <div className="preview-workbench-drawer-fab-rail">
-            {fileDrawer ? (
-              <button
-                type="button"
-                className={`preview-workbench-drawer-fab${drawerMode === 'files' ? ' active' : ''}`}
-                onClick={() => onDrawerModeChange(drawerMode === 'files' ? 'closed' : 'files')}
-                aria-label="Toggle files"
-                data-tooltip="Toggle files"
-                aria-pressed={drawerMode === 'files'}
-              >
-                <Icon name="files" />
-              </button>
-            ) : null}
-            {gitDrawer ? (
-              <button
-                type="button"
-                className={`preview-workbench-drawer-fab${drawerMode === 'git' ? ' active' : ''}`}
-                onClick={() => onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')}
-                aria-label="Toggle Git history"
-                data-tooltip="Toggle Git history"
-                aria-pressed={drawerMode === 'git'}
-              >
-                <Icon name="gitBranch" />
-              </button>
-            ) : null}
-          </div>
+          {gitDrawer ? (
+            <button
+              type="button"
+              className={`preview-workbench-drawer-tool${drawerMode === 'git' ? ' active' : ''}`}
+              onClick={() => onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')}
+              aria-label="Toggle Git history"
+              data-tooltip="Toggle Git history"
+              aria-pressed={drawerMode === 'git'}
+            >
+              <Icon name="gitBranch" />
+            </button>
+          ) : null}
         </div>
       ) : null}
-      {drawerOpen && drawerContent ? (
-        <div ref={drawerPanelRef} className="preview-workbench-drawer-panel">
-          {drawerContent}
-        </div>
-      ) : null}
+      {renderedDrawerPanel}
       {mode === 'mobile' && activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (
         <button
           type="button"
