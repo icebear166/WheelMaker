@@ -42,6 +42,27 @@ func TestRunConfigureTokenUpdatesOnlyDigest(t *testing.T) {
 	}
 }
 
+func TestRunValidateConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := releaseserver.Config{
+		Schema:   1,
+		Listen:   "127.0.0.1:9680",
+		DataRoot: filepath.Join(t.TempDir(), "data"),
+	}
+	if err := releaseserver.WriteConfig(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"validate-config", "--config", path}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("valid config: run() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"schema":1,"listen":"invalid","dataRoot":"/tmp/data"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"validate-config", "--config", path}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
+		t.Fatal("invalid config: run() error = nil")
+	}
+}
+
 func TestRunRejectsUnknownCommandAndRawTokenFlag(t *testing.T) {
 	for name, args := range map[string][]string{
 		"unknown command": {"rotate-token"},

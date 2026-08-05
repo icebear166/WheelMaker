@@ -25,7 +25,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("command is required: serve or configure-token")
+		return errors.New("command is required: serve, validate-config, or configure-token")
 	}
 	switch args[0] {
 	case "serve":
@@ -39,6 +39,18 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 			return errors.New("serve requires exactly --config")
 		}
 		return serve(*configPath, stdout)
+	case "validate-config":
+		flags := flag.NewFlagSet("validate-config", flag.ContinueOnError)
+		flags.SetOutput(stderr)
+		configPath := flags.String("config", "", "release server config path")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *configPath == "" || flags.NArg() != 0 {
+			return errors.New("validate-config requires exactly --config")
+		}
+		_, err := releaseserver.LoadConfig(*configPath)
+		return err
 	case "configure-token":
 		flags := flag.NewFlagSet("configure-token", flag.ContinueOnError)
 		flags.SetOutput(stderr)
