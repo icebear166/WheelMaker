@@ -23,6 +23,12 @@
 
 如果提交时版本已存在，发布器重新读取 `stable.json`、分配下一个 `v1.x` 并重试，最多三次。
 
+### Gateway 发布通道
+
+现有发布选项中另增 Gateway，行为与 Android APK 选项一致。勾选时使用本次 WheelMaker 版本构建四个 Gateway 平台产物，使用同一发布会话上传，以大小和 SHA-256 校验并与主版本一起提交。Gateway 不进入 `releases/v1.x/`，而是使用固定 `/gateway/` 命名空间，保留当前和上一版清单/产物。`stable.json` 携带 Gateway 当前指针；未勾选时继承上一个指针。Gateway 构建、上传或提交失败会使整次发布失败并保留旧 stable。
+
+目标机的完整部署会默认下载、安装并启动 Gateway；日常 `deploy.mjs update` 不检查或触碰 Gateway。Gateway 的站点配置位于固定 Gateway Home，与 Hub 的 `config.json` 分开，各个部署器只维护自己的站点文件。
+
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
 
 ## Hub 驱动发布与临时 Web

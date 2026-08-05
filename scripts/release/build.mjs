@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { runCommand } from './commands.mjs';
 import { buildAndroidRelease } from './android.mjs';
+import { buildGatewayRelease } from './gateway.mjs';
 
 export const RELEASE_TARGETS = Object.freeze([
   {
@@ -33,6 +34,7 @@ export const RELEASE_TARGETS = Object.freeze([
 
 export async function buildRelease({
   androidBuilder = buildAndroidRelease,
+  gatewayBuilder = buildGatewayRelease,
   progress,
   repoRoot,
   sourceSha,
@@ -41,6 +43,7 @@ export async function buildRelease({
   stagingRoot = join(workRoot, 'tmp', `release-${version}`),
   withDesktop = false,
   withAndroid = false,
+  withGateway = false,
   runner = runCommand,
 }) {
   if (!/^v1\.(0|[1-9]\d*)$/.test(version)) {
@@ -95,6 +98,7 @@ export async function buildRelease({
   const jobs = [];
   let androidApk;
   let desktopExe;
+  let gatewayPlatforms;
 
   if (withAndroid) {
     jobs.push(() => task('Building Android', async () => {
@@ -106,6 +110,21 @@ export async function buildRelease({
         version,
         workRoot,
       });
+    }));
+  }
+
+  if (withGateway) {
+    jobs.push(() => task('Building Gateway', async () => {
+      const gateway = await gatewayBuilder({
+        progress,
+        repoRoot,
+        sourceSha,
+        stagingRoot: join(versionRoot, 'gateway-build'),
+        version,
+        workRoot,
+        runner,
+      });
+      gatewayPlatforms = gateway.platforms;
     }));
   }
 
@@ -203,6 +222,7 @@ export async function buildRelease({
   return {
     androidApk,
     desktopExe,
+    gatewayPlatforms,
     platforms,
     version,
     versionRoot,

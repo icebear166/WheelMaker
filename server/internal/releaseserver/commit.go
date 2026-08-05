@@ -21,8 +21,10 @@ var errInvalidTransaction = errors.New("release transaction is invalid")
 var errInsufficientStorage = errors.New("release server has insufficient storage")
 
 type validatedTransaction struct {
-	manifest releaseManifest
-	android  *androidReleaseManifest
+	manifest        releaseManifest
+	android         *androidReleaseManifest
+	gatewayManifest *gatewayManifest
+	gateway         *gatewayPointer
 }
 
 func (s *Server) handleCommit(w http.ResponseWriter, sessionID string) {
@@ -101,14 +103,34 @@ func (s *Server) commitSession(session publishSession) (stableDocument, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return stableDocument{}, err
 	}
+	var gatewayStage string
+	if session.WithGateway {
+		gatewayStage = filepath.Join(s.config.DataRoot, "staging", session.SessionID, "gateway")
+		if err := stageGatewayFiles(filesDirectory, gatewayStage, session.Version); err != nil {
+			return stableDocument{}, err
+		}
+		if err := makePublicTree(gatewayStage); err != nil {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+			return stableDocument{}, err
+		}
+	}
 	if err := makePublicTree(filesDirectory); err != nil {
+		if gatewayStage != "" {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+		}
 		return stableDocument{}, err
 	}
 	session.UpdatedAt = s.now().UTC().Format(time.RFC3339)
 	if err := s.writePublicStatus(session.SessionID, publishStatusForSession(session, "running", "updating-stable", "")); err != nil {
+		if gatewayStage != "" {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+		}
 		return stableDocument{}, err
 	}
 	if err := os.Rename(filesDirectory, versionDirectory); err != nil {
+		if gatewayStage != "" {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+		}
 		return stableDocument{}, fmt.Errorf("publish version directory: %w", err)
 	}
 	rollback := func() {
@@ -116,10 +138,31 @@ func (s *Server) commitSession(session publishSession) (stableDocument, error) {
 			log.Printf("release server: restore failed transaction version=%s: %v", session.Version, err)
 		}
 	}
+	var gatewaySwap *gatewaySwapState
+	if session.WithGateway {
+		gatewaySwap, err = s.swapGateway(gatewayStage, session.SessionID)
+		if err != nil {
+			rollback()
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+			return stableDocument{}, fmt.Errorf("publish Gateway artifacts: %w", err)
+		}
+	}
 	stablePath := filepath.Join(s.config.DataRoot, "public", "stable.json")
 	if err := s.writeJSON(stablePath, stable, 0o640); err != nil {
 		rollback()
+		if gatewaySwap != nil {
+			if restoreErr := gatewaySwap.restore(); restoreErr != nil {
+				log.Printf("release server: Gateway restore failed version=%s: %v", session.Version, restoreErr)
+			}
+		} else if gatewayStage != "" {
+			_ = restoreGatewayStage(gatewayStage, filesDirectory)
+		}
 		return stableDocument{}, fmt.Errorf("write stable: %w", err)
+	}
+	if gatewaySwap != nil {
+		if err := gatewaySwap.finalize(); err != nil {
+			log.Printf("release server: Gateway finalize failed version=%s: %v", session.Version, err)
+		}
 	}
 
 	derivedErrors := make([]error, 0, 4)
@@ -181,8 +224,40 @@ func (s *Server) validateTransaction(session publishSession) (validatedTransacti
 			return validatedTransaction{}, fmt.Errorf("manifest artifact mismatch %s", platform)
 		}
 	}
-
 	validated := validatedTransaction{manifest: manifest}
+	if session.WithGateway {
+		if manifest.Gateway == nil {
+			return validatedTransaction{}, errors.New("release manifest Gateway pointer is missing")
+		}
+		gatewayManifestRaw, err := os.ReadFile(filepath.Join(filesDirectory, "gateway-manifest.json"))
+		if err != nil {
+			return validatedTransaction{}, err
+		}
+		var gateway gatewayManifest
+		if err := decodeStrictJSON(bytesReader(gatewayManifestRaw), maxControlFileSize, &gateway); err != nil {
+			return validatedTransaction{}, errors.New("Gateway manifest is invalid")
+		}
+		if gateway.Schema != 1 || gateway.Version != session.Version || gateway.PublishedAt != session.PublishedAt || gateway.SourceSHA != session.SourceSHA || gateway.Path != "/gateway/current/gateway-manifest.json" || len(gateway.Artifacts) != len(releasePlatforms) {
+			return validatedTransaction{}, errors.New("Gateway manifest identity does not match session")
+		}
+		gatewayManifestInfo := session.Files["gateway-manifest.json"]
+		if manifest.Gateway.ManifestPath != gateway.Path || manifest.Gateway.ManifestSHA256 != gatewayManifestInfo.SHA256 || manifest.Gateway.Version != session.Version || manifest.Gateway.SourceSHA != session.SourceSHA {
+			return validatedTransaction{}, errors.New("release manifest Gateway pointer does not match Gateway manifest")
+		}
+		for _, platform := range releasePlatforms {
+			name := "wheelmaker-gateway-" + session.Version + "-" + platform + ".tar.zst"
+			want := session.Files[name]
+			got, ok := gateway.Artifacts[platform]
+			if !ok || got.Path != "/gateway/current/"+name || got.SHA256 != want.SHA256 || got.Size != want.Size {
+				return validatedTransaction{}, fmt.Errorf("Gateway manifest artifact mismatch %s", platform)
+			}
+		}
+		validated.gatewayManifest = &gateway
+		validated.gateway = manifest.Gateway
+	} else if manifest.Gateway != nil {
+		return validatedTransaction{}, errors.New("release manifest contains an unexpected Gateway pointer")
+	}
+
 	if session.WithAndroid {
 		raw, err := os.ReadFile(filepath.Join(filesDirectory, "android-release.json"))
 		if err != nil {
@@ -227,6 +302,7 @@ func buildStableDocument(previous *stableDocument, session publishSession, valid
 	if previous != nil {
 		stable.Desktop = previous.Desktop
 		stable.Android = previous.Android
+		stable.Gateway = previous.Gateway
 	}
 	if session.WithDesktop {
 		stable.Desktop = &desktopPointer{
@@ -248,15 +324,27 @@ func buildStableDocument(previous *stableDocument, session publishSession, valid
 			Size:        session.Files["WheelMakerAndroid.apk"].Size,
 		}
 	}
+	if session.WithGateway && validated.gateway != nil {
+		stable.Gateway = &gatewayPointer{
+			Version:        validated.gateway.Version,
+			SourceSHA:      validated.gateway.SourceSHA,
+			ManifestPath:   validated.gateway.ManifestPath,
+			ManifestSHA256: validated.gateway.ManifestSHA256,
+		}
+	}
 	return stable
 }
 
 func historyEntry(session publishSession) releaseHistoryEntry {
 	assets := make([]releaseAsset, 0, len(session.Files))
 	for name, file := range session.Files {
+		assetPath := releasePath(session.Version, name)
+		if session.WithGateway && isGatewayAsset(name) {
+			assetPath = gatewayAssetPath(name)
+		}
 		assets = append(assets, releaseAsset{
 			Name:   name,
-			Path:   releasePath(session.Version, name),
+			Path:   assetPath,
 			Size:   file.Size,
 			SHA256: file.SHA256,
 		})
@@ -269,6 +357,14 @@ func historyEntry(session publishSession) releaseHistoryEntry {
 		ManifestSHA256: session.Files["release-manifest.json"].SHA256,
 		Assets:         assets,
 	}
+}
+
+func isGatewayAsset(name string) bool {
+	return name == "gateway-manifest.json" || (len(name) > len("wheelmaker-gateway-") && name[:len("wheelmaker-gateway-")] == "wheelmaker-gateway-")
+}
+
+func gatewayAssetPath(name string) string {
+	return "/gateway/current/" + name
 }
 
 func (s *Server) readStable() (*stableDocument, error) {
@@ -324,6 +420,11 @@ func validateStableDocument(stable stableDocument) error {
 		versionCode, ok := releaseVersionNumber(stable.Android.Version)
 		if !ok || stable.Android.VersionName != stable.Android.Version[1:] || stable.Android.VersionCode != versionCode || stable.Android.Path != releasePath(stable.Android.Version, "WheelMakerAndroid.apk") || !validLowerHex(stable.Android.SourceSHA, 20) || !validLowerHex(stable.Android.SHA256, sha256.Size) || stable.Android.Size <= 0 {
 			return errors.New("stable Android pointer is invalid")
+		}
+	}
+	if stable.Gateway != nil {
+		if !versionPattern.MatchString(stable.Gateway.Version) || !validLowerHex(stable.Gateway.SourceSHA, 20) || stable.Gateway.ManifestPath != "/gateway/current/gateway-manifest.json" || !validLowerHex(stable.Gateway.ManifestSHA256, sha256.Size) {
+			return errors.New("stable Gateway pointer is invalid")
 		}
 	}
 	return nil
@@ -404,6 +505,170 @@ func copyFileAtomic(source string, destination string, mode os.FileMode) error {
 	return writeBytesFileAtomic(destination, raw, mode)
 }
 
+type gatewaySwapState struct {
+	root           string
+	current        string
+	previous       string
+	backup         string
+	stage          string
+	filesDirectory string
+	currentBacked  bool
+	previousBacked bool
+}
+
+func stageGatewayFiles(filesDirectory, stage, version string) error {
+	if err := os.MkdirAll(stage, 0o750); err != nil {
+		return err
+	}
+	names := []string{"gateway-manifest.json"}
+	for _, platform := range releasePlatforms {
+		names = append(names, "wheelmaker-gateway-"+version+"-"+platform+".tar.zst")
+	}
+	moved := make([]string, 0, len(names))
+	for _, name := range names {
+		source := filepath.Join(filesDirectory, name)
+		destination := filepath.Join(stage, name)
+		if err := os.Rename(source, destination); err != nil {
+			for _, movedName := range moved {
+				_ = os.Rename(filepath.Join(stage, movedName), filepath.Join(filesDirectory, movedName))
+			}
+			return fmt.Errorf("stage Gateway file %s: %w", name, err)
+		}
+		moved = append(moved, name)
+	}
+	return nil
+}
+
+func restoreGatewayStage(stage, filesDirectory string) error {
+	entries, err := os.ReadDir(stage)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filesDirectory, 0o750); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("Gateway stage contains non-file %s", entry.Name())
+		}
+		if err := os.Rename(filepath.Join(stage, entry.Name()), filepath.Join(filesDirectory, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return os.Remove(stage)
+}
+
+func (s *Server) swapGateway(stage, sessionID string) (*gatewaySwapState, error) {
+	root := filepath.Join(s.config.DataRoot, "public", "gateway")
+	state := &gatewaySwapState{
+		root:           root,
+		current:        filepath.Join(root, "current"),
+		previous:       filepath.Join(root, "previous"),
+		backup:         filepath.Join(s.config.DataRoot, "staging", sessionID, "gateway-backup"),
+		stage:          stage,
+		filesDirectory: filepath.Join(s.config.DataRoot, "staging", sessionID, "files"),
+	}
+	if err := os.MkdirAll(state.root, 0o750); err != nil {
+		return state, err
+	}
+	// Gateway artifacts are anonymous public downloads. Keep the namespace
+	// traversable for the separately running Gateway user even when the Release
+	// Server data tree itself is private.
+	if err := os.Chmod(state.root, 0o755); err != nil {
+		return state, err
+	}
+	if err := os.RemoveAll(state.backup); err != nil {
+		return state, err
+	}
+	if err := os.MkdirAll(state.backup, 0o750); err != nil {
+		return state, err
+	}
+	if present, err := moveIfPresentWithPresence(state.current, filepath.Join(state.backup, "current")); err != nil {
+		return state, err
+	} else {
+		state.currentBacked = present
+	}
+	if present, err := moveIfPresentWithPresence(state.previous, filepath.Join(state.backup, "previous")); err != nil {
+		_ = state.restoreSlots()
+		return state, err
+	} else {
+		state.previousBacked = present
+	}
+	if err := os.Rename(stage, state.current); err != nil {
+		_ = state.restoreSlots()
+		return state, err
+	}
+	return state, nil
+}
+
+func moveIfPresent(source, destination string) error {
+	_, err := moveIfPresentWithPresence(source, destination)
+	return err
+}
+
+func moveIfPresentWithPresence(source, destination string) (bool, error) {
+	if _, err := os.Stat(source); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, os.Rename(source, destination)
+}
+
+func (state *gatewaySwapState) restoreSlots() error {
+	if state.currentBacked {
+		if err := os.RemoveAll(state.current); err != nil {
+			return err
+		}
+	}
+	if state.previousBacked {
+		if err := os.RemoveAll(state.previous); err != nil {
+			return err
+		}
+	}
+	if state.currentBacked {
+		if err := moveIfPresent(filepath.Join(state.backup, "current"), state.current); err != nil {
+			return err
+		}
+	}
+	if state.previousBacked {
+		if err := moveIfPresent(filepath.Join(state.backup, "previous"), state.previous); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (state *gatewaySwapState) restore() error {
+	if _, err := os.Stat(state.current); err == nil {
+		if err := os.RemoveAll(state.stage); err != nil {
+			return err
+		}
+		if err := os.Rename(state.current, state.stage); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := state.restoreSlots(); err != nil {
+		return err
+	}
+	return restoreGatewayStage(state.stage, state.filesDirectory)
+}
+
+func (state *gatewaySwapState) finalize() error {
+	if err := os.RemoveAll(state.previous); err != nil {
+		return err
+	}
+	if err := moveIfPresent(filepath.Join(state.backup, "current"), state.previous); err != nil {
+		return err
+	}
+	return os.RemoveAll(state.backup)
+}
+
 func writeBytesFileAtomic(path string, raw []byte, mode os.FileMode) (retErr error) {
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".file-*.tmp")
 	if err != nil {
@@ -469,6 +734,9 @@ func (s *Server) recoverPublishedState() error {
 	if stable == nil {
 		return nil
 	}
+	if err := s.recoverGatewayState(*stable); err != nil {
+		return err
+	}
 	versionDirectory := filepath.Join(releasesRoot, stable.Version)
 	if info, err := os.Stat(versionDirectory); err != nil || !info.IsDir() {
 		if err == nil {
@@ -511,6 +779,51 @@ func (s *Server) recoverPublishedState() error {
 		history.Releases = append(history.Releases, entry)
 	}
 	return s.writeJSON(filepath.Join(s.config.DataRoot, "public", "releases.json"), history, 0o640)
+}
+
+func (s *Server) recoverGatewayState(stable stableDocument) error {
+	if stable.Gateway == nil {
+		return nil
+	}
+	namespace := filepath.Join(s.config.DataRoot, "public", "gateway")
+	if err := os.Chmod(namespace, 0o755); err != nil {
+		return fmt.Errorf("make Gateway namespace traversable: %w", err)
+	}
+	root := filepath.Join(namespace, "current")
+	manifestPath := filepath.Join(root, "gateway-manifest.json")
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("stable Gateway manifest is unavailable: %w", err)
+	}
+	identity, err := inspectFile(manifestPath)
+	if err != nil || identity.SHA256 != stable.Gateway.ManifestSHA256 {
+		if err == nil {
+			err = errors.New("stable Gateway manifest digest mismatch")
+		}
+		return err
+	}
+	var manifest gatewayManifest
+	if err := decodeStrictJSON(bytesReader(raw), maxControlFileSize, &manifest); err != nil {
+		return errors.New("stable Gateway manifest is invalid")
+	}
+	if manifest.Schema != 1 || manifest.Version != stable.Gateway.Version || manifest.SourceSHA != stable.Gateway.SourceSHA || manifest.Path != stable.Gateway.ManifestPath || len(manifest.Artifacts) != len(releasePlatforms) {
+		return errors.New("stable Gateway manifest identity is invalid")
+	}
+	for _, platform := range releasePlatforms {
+		name := "wheelmaker-gateway-" + manifest.Version + "-" + platform + ".tar.zst"
+		artifact, ok := manifest.Artifacts[platform]
+		if !ok || artifact.Path != gatewayAssetPath(name) {
+			return fmt.Errorf("stable Gateway artifact pointer is invalid: %s", platform)
+		}
+		actual, err := inspectFile(filepath.Join(root, name))
+		if err != nil || actual != (fileInfo{Size: artifact.Size, SHA256: artifact.SHA256}) {
+			if err == nil {
+				err = fmt.Errorf("stable Gateway artifact digest mismatch: %s", platform)
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) quarantineVersionDirectory(version string) error {

@@ -9,6 +9,7 @@ type stableDocument struct {
 	Release     manifestPointer `json:"release"`
 	Desktop     *desktopPointer `json:"desktopExe,omitempty"`
 	Android     *androidPointer `json:"androidApk,omitempty"`
+	Gateway     *gatewayPointer `json:"gateway,omitempty"`
 }
 
 type deployPointer struct {
@@ -40,11 +41,28 @@ type androidPointer struct {
 	Size        int64  `json:"size"`
 }
 
+type gatewayPointer struct {
+	Version        string `json:"version"`
+	SourceSHA      string `json:"sourceSha"`
+	ManifestPath   string `json:"manifestPath"`
+	ManifestSHA256 string `json:"manifestSha256"`
+}
+
 type releaseManifest struct {
 	Schema      int                 `json:"schema"`
 	Version     string              `json:"version"`
 	PublishedAt string              `json:"publishedAt"`
 	SourceSHA   string              `json:"sourceSha"`
+	Artifacts   map[string]artifact `json:"artifacts"`
+	Gateway     *gatewayPointer     `json:"gateway,omitempty"`
+}
+
+type gatewayManifest struct {
+	Schema      int                 `json:"schema"`
+	Version     string              `json:"version"`
+	PublishedAt string              `json:"publishedAt"`
+	SourceSHA   string              `json:"sourceSha"`
+	Path        string              `json:"path"`
 	Artifacts   map[string]artifact `json:"artifacts"`
 }
 

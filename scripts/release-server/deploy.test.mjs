@@ -32,13 +32,11 @@ test('release server deploy uses fixed derived SSH defaults', async () => {
     user: 'root',
   }]);
   assert.equal(state.uploads.length, 1);
-  assert.equal(state.uploads[0].files.length, 6);
+  assert.equal(state.uploads[0].files.length, 4);
   assert.deepEqual(
     state.uploads[0].files.map(path => path.split(/[\\/]/).at(-1)).sort(),
     [
       'index.html',
-      'nginx-bootstrap.conf',
-      'nginx.conf',
       'release-home.js',
       'wheelmaker-release-server',
       'wheelmaker-release-server.service',
@@ -72,40 +70,35 @@ test('remote install script is idempotent and preserves public releases and conf
   assert.match(script, /if \[ ! -f \/etc\/wheelmaker-release-server\/config\.json \]/);
   assert.match(script, /127\.0\.0\.1:9680/);
   assert.match(script, /systemctl daemon-reload/);
-  assert.match(script, /certbot certonly --webroot/);
-  assert.match(script, /nginx -t/);
-  assert.match(script, /for attempt in \$\(seq 1 15\)/);
-  assert.match(script, /sleep 1/);
+  assert.match(script, /\/etc\/wheelmaker-gateway\/home/);
+  assert.match(script, /run the explicit Gateway deployment first/);
+  assert.match(script, /release-server\.json/);
+  assert.match(script, /gateway_binary.*validate --home/);
+  assert.match(script, /gateway_binary.*render --home/);
+  assert.match(script, /gateway_binary paths --home/);
+  assert.match(script, /127\.0\.0\.1:2019\/load/);
+  assert.match(script, /Gateway is stopped/);
   assert.match(
     script,
     /release-home\.js" \/srv\/wheelmaker-release\/public\/release-home\.js/,
   );
   assert.doesNotMatch(script, /rm -rf[^\n]*public\/releases/);
   assert.doesNotMatch(script, /PRIVATE KEY|wheelmaker-release-server_ed25519/);
+  assert.doesNotMatch(script, /Caddyfile|nginx|certbot|apt-get|systemctl\s+(enable|restart)\s+caddy/i);
+  assert.doesNotMatch(script, /nginx-bootstrap/);
+  assert.doesNotMatch(script, /nginx -t/);
+  assert.doesNotMatch(script, /sites-available|sites-enabled/);
 });
 
-test('templates enforce non-root loopback service and API without wildcard CORS', async () => {
+test('templates enforce non-root loopback service', async () => {
   const unit = await readFile(new URL('./wheelmaker-release-server.service', import.meta.url), 'utf8');
-  const nginx = await readFile(new URL('./nginx.conf', import.meta.url), 'utf8');
-  const bootstrap = await readFile(new URL('./nginx-bootstrap.conf', import.meta.url), 'utf8');
 
   assert.match(unit, /^User=wheelmaker-release$/m);
   assert.match(unit, /^Group=wheelmaker-release$/m);
   assert.match(unit, /NoNewPrivileges=true/);
   assert.match(unit, /ProtectSystem=strict/);
   assert.match(unit, /ReadWritePaths=\/srv\/wheelmaker-release/);
-  const api = nginx.slice(nginx.indexOf('location /api/'), nginx.indexOf('location = /healthz'));
-  assert.match(api, /proxy_pass http:\/\/127\.0\.0\.1:9680/);
-  assert.match(api, /proxy_request_buffering off/);
-  assert.doesNotMatch(api, /Access-Control-Allow-Origin/);
-  assert.match(nginx, /ssl_certificate \/etc\/letsencrypt\/live\/release\.wheelmaker\.top\/fullchain\.pem/);
-  const homepageScript = nginx.slice(
-    nginx.indexOf('location = /release-home.js'),
-    nginx.indexOf('location ^~ /releases/'),
-  );
-  assert.match(homepageScript, /Cache-Control "no-cache"/);
-  assert.match(bootstrap, /\.well-known\/acme-challenge/);
-  assert.doesNotMatch(bootstrap, /ssl_certificate/);
+  assert.doesNotMatch(unit, /caddy|nginx/i);
 });
 
 test('release homepage resolves the latest same-origin client downloads', async () => {

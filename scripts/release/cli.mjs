@@ -28,7 +28,7 @@ import {ReleaseServerApi} from './release-server-api.mjs';
 const execFileAsync = promisify(execFile);
 
 export function releaseBuildSummary(build) {
-  return {
+  const summary = {
     androidApk: build.androidApkPath ?? null,
     desktopExe: build.desktopExePath ?? null,
     manifest: build.manifestPath,
@@ -38,24 +38,34 @@ export function releaseBuildSummary(build) {
     })),
     versionRoot: build.versionRoot,
   };
+  if (build.gatewayPlatforms) {
+    summary.gateway = build.gatewayPlatforms.map(({binaryPath, key}) => ({
+      binary: binaryPath,
+      key,
+    }));
+  }
+  return summary;
 }
 
 export function parseReleaseArgs(args) {
   let publish = false;
   let withAndroid = false;
   let withDesktop = false;
+  let withGateway = false;
   for (const option of args) {
     if (option === '--with-desktop' && !withDesktop) {
       withDesktop = true;
     } else if (option === '--with-android' && !withAndroid) {
       withAndroid = true;
+    } else if (option === '--with-gateway' && !withGateway) {
+      withGateway = true;
     } else if (option === '--publish' && !publish) {
       publish = true;
     } else {
       throw new Error(`unknown option: ${option}`);
     }
   }
-  return {publish, withAndroid, withDesktop};
+  return {publish, withAndroid, withDesktop, withGateway};
 }
 
 function failureCode(phase, error) {
@@ -132,6 +142,7 @@ export async function runRelease(options, deps) {
             version,
             withAndroid: options.withAndroid ?? false,
             withDesktop: options.withDesktop ?? false,
+            ...(options.withGateway ? {withGateway: true} : {}),
           }),
         );
         await api.status(session.sessionId, {
@@ -158,6 +169,7 @@ export async function runRelease(options, deps) {
           workRoot: deps.workRoot,
           withAndroid: options.withAndroid ?? false,
           withDesktop: options.withDesktop ?? false,
+          ...(options.withGateway ? {withGateway: true} : {}),
         }),
       );
 

@@ -274,6 +274,21 @@ test('internal update restarts existing runtime without mutating registration', 
   assert.deepEqual(events, ['stop', 'applyUpdate', 'start']);
 });
 
+test('normal update never enters Gateway install or configuration paths', async () => {
+  const events = [];
+  await runCore(['update'], {
+    gatewayEnabled: true,
+    gatewayInstall: async () => { throw new Error('Gateway must remain untouched'); },
+    gatewayConfig: async () => { throw new Error('Gateway config must remain untouched'); },
+    async applyUpdate() { events.push('apply'); },
+    runtime: {
+      async stop() { events.push('stop'); },
+      async start() { events.push('start'); },
+    },
+  });
+  assert.deepEqual(events, ['stop', 'apply', 'start']);
+});
+
 test('runtime start command builds a default adapter from the install directory', async () => {
   let capturedPaths;
   let startCalls = 0;

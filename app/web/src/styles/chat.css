@@ -3505,6 +3505,15 @@ button.chat-hub-skill-name:disabled {
   margin-top: 10px;
 }
 
+/* Expanded children render their own chat-view-content wrappers; keep them flush
+   with the transcript column instead of re-applying the fixed-column layout. */
+.chat-view-width-fixed-800 .chat-work-group .chat-view-content,
+.chat-view-width-fixed-800-edge-surfaces .chat-work-group .chat-view-content {
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+
 .chat-work-group-child {
   padding-bottom: 10px;
 }
