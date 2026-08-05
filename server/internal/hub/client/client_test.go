@@ -7523,6 +7523,26 @@ func TestSessionReadEnrichesLegacyCodexPromptDoneWithoutRewritingWMT2(t *testing
 	}
 }
 
+func TestSessionTurnsNeedForkPointIgnoresCancelledPrompt(t *testing.T) {
+	cancelled := []sessionViewTurn{{
+		TurnIndex: 2,
+		Content:   `{"method":"prompt_done","param":{"stopReason":"cancelled"}}`,
+		Finished:  true,
+	}}
+	if sessionTurnsNeedForkPoint(cancelled) {
+		t.Fatal("cancelled prompt unexpectedly requires legacy fork-point enrichment")
+	}
+
+	completed := []sessionViewTurn{{
+		TurnIndex: 2,
+		Content:   `{"method":"prompt_done","param":{"stopReason":"end_turn"}}`,
+		Finished:  true,
+	}}
+	if !sessionTurnsNeedForkPoint(completed) {
+		t.Fatal("completed prompt without a fork point should require legacy enrichment")
+	}
+}
+
 func TestSessionReadCXDeepSeekEnrichesLegacyForkPointWithProviderIdentity(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(t.TempDir())

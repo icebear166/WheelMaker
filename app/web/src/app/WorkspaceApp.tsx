@@ -369,11 +369,13 @@ import {
 import {
   resolveChatListSelection,
   resolveSelectedChatVisibilityRecovery,
+  selectedChatReadRetryDelay,
   shouldApplyLoadedChatSelection,
   shouldApplyPreservedChatLoad,
   shouldApplySentChatSelection,
 } from '../chat/chatSelectionGuard';
 import { RegistryWorkspaceService } from '../registry/RegistryWorkspaceService';
+import type {RegistrySessionReadOptions} from '../registry/RegistryRepository';
 import {RegistryMethods} from '../registry/registryMethods';
 import {TerminalView, type TerminalViewHandle} from '../terminal/TerminalView';
 import {TerminalWorkbench} from '../terminal/TerminalWorkbench';
@@ -3471,6 +3473,9 @@ export function App() {
   const selectedChatKeyRef = useRef<ChatSessionKey | null>(null);
   const chatVisibleRuntimeKeyRef = useRef('');
   const chatSelectedLoadAttemptRuntimeKeyRef = useRef('');
+  const chatSelectedLoadFailureCountRef = useRef<Record<string, number>>({});
+  const chatSelectedLoadRetryTimerRef = useRef<number | null>(null);
+  const [chatSelectedLoadRetryTick, setChatSelectedLoadRetryTick] = useState(0);
   const chatFinishedCursorRef = useRef<Record<string, number>>({});
   const chatMessageStoreRef = useRef<Record<string, RegistryChatMessage[]>>({});
   const chatRealtimeFlushSchedulerRef = useRef<ChatRealtimeFlushScheduler | null>(null);
@@ -9506,14 +9511,17 @@ export function App() {
     activeProjectId: string,
     sessionId: string,
     afterTurnIndex: number,
+    readOptions: RegistrySessionReadOptions = {},
+    onCacheReset?: () => void,
   ): Promise<{result: Awaited<ReturnType<typeof service.readProjectSession>>; appliedAfterTurnIndex: number}> => {
     const checkpoint = Math.max(0, Math.trunc(afterTurnIndex));
-    const result = await service.readProjectSession(activeProjectId, sessionId, checkpoint);
+    const result = await service.readProjectSession(activeProjectId, sessionId, checkpoint, readOptions);
     if (!isStaleSessionReadResult(checkpoint, result.latestTurnIndex)) {
       return {result, appliedAfterTurnIndex: checkpoint};
     }
     clearProjectSessionCache(activeProjectId, sessionId);
-    const repairedResult = await service.readProjectSession(activeProjectId, sessionId, 0);
+    onCacheReset?.();
+    const repairedResult = await service.readProjectSession(activeProjectId, sessionId, 0, readOptions);
     return {result: repairedResult, appliedAfterTurnIndex: 0};
   };
 
@@ -9567,6 +9575,8 @@ export function App() {
         checkpointTurnIndex > 0;
       const useIncremental = requestedIncremental && !fallbackToFullRead;
       const requestedAfterTurnIndex = useIncremental ? checkpointTurnIndex : 0;
+      let turnsAtReadStart = buildMergedRawTurns(turnState);
+      const selectionSnapshot = options?.selectionSnapshot ?? '';
       const finishSessionReadDiagnostic = startWorkspaceDiagnosticSpan('session_read', {
         projectId: activeProjectId,
         sessionId,
@@ -9580,8 +9590,41 @@ export function App() {
           activeProjectId,
           sessionId,
           requestedAfterTurnIndex,
+          {
+            onPage: page => {
+              const pageSessionId = page.sessionId || page.session?.sessionId || sessionId;
+              const pageRuntimeKey = buildChatRuntimeKey(activeProjectId, pageSessionId);
+              const pageTurnState = ensureChatTurnStore(pageRuntimeKey);
+              applySessionReadResult(
+                pageTurnState,
+                page.afterTurnIndex,
+                page.turns,
+                page.throughTurnIndex,
+                turnsAtReadStart,
+              );
+              const pageMessages = messagesFromTurnStore(pageRuntimeKey, pageSessionId);
+              chatMessageStoreRef.current[pageRuntimeKey] = pageMessages;
+              chatFinishedCursorRef.current[pageRuntimeKey] = pageTurnState.cursor.turnIndex;
+              markChatSessionTurnsDirty(pageRuntimeKey);
+              if (encodeChatSessionKey(selectedChatKeyRef.current) === pageRuntimeKey) {
+                setVisibleChatMessagesForRuntimeKey(
+                  pageRuntimeKey,
+                  pageMessages,
+                  resolveChatSessionReadWindowUpdate({
+                    useIncremental: page.afterTurnIndex > 0,
+                    followsLatest: chatAutoScrollFollowRef.current,
+                    revealTurnIndex,
+                  }),
+                );
+              }
+            },
+          },
+          () => {
+            turnsAtReadStart = [];
+          },
         );
       } catch (err) {
+        await chatDurablePersistQueueRef.current.flush(runtimeKey);
         const readError = err instanceof Error ? err.message : String(err);
         finishSessionReadDiagnostic({ok: false, error: readError}, 'error');
         throw err;
@@ -9595,7 +9638,6 @@ export function App() {
         messageCount: result.messages.length,
         payloadBytes: estimateSessionReadPayloadBytes(result),
       });
-      const selectionSnapshot = options?.selectionSnapshot ?? '';
       if (
         options?.preserveUserSelection &&
         !shouldApplyPreservedChatLoad(selectedChatKeyRef.current, selectionSnapshot)
@@ -9605,12 +9647,6 @@ export function App() {
       const resultSessionId = result.sessionId || result.session?.sessionId || sessionId;
       const resultRuntimeKey = buildChatRuntimeKey(activeProjectId, resultSessionId);
       const resultTurnState = ensureChatTurnStore(resultRuntimeKey);
-      applySessionReadResult(
-        resultTurnState,
-        appliedAfterTurnIndex,
-        result.turns,
-        result.latestTurnIndex,
-      );
       const nextMessages = messagesFromTurnStore(resultRuntimeKey, resultSessionId);
       forgetPendingPromptIfResolved(resultRuntimeKey, nextMessages);
 
@@ -9687,10 +9723,35 @@ export function App() {
     try {
       const turnState = ensureChatTurnStore(runtimeKey);
       const checkpointTurnIndex = turnState.cursor.turnIndex;
-      const {result, appliedAfterTurnIndex} = await readProjectSessionWithStaleCacheRepair(
+      let turnsAtReadStart = buildMergedRawTurns(turnState);
+      const {result} = await readProjectSessionWithStaleCacheRepair(
         activeProjectId,
         sessionId,
         checkpointTurnIndex,
+        {
+          onPage: page => {
+            const pageSessionId = page.sessionId || page.session?.sessionId || sessionId;
+            const pageRuntimeKey = buildChatRuntimeKey(activeProjectId, pageSessionId);
+            const pageTurnState = ensureChatTurnStore(pageRuntimeKey);
+            applySessionReadResult(
+              pageTurnState,
+              page.afterTurnIndex,
+              page.turns,
+              page.throughTurnIndex,
+              turnsAtReadStart,
+            );
+            const pageMessages = messagesFromTurnStore(pageRuntimeKey, pageSessionId);
+            chatMessageStoreRef.current[pageRuntimeKey] = pageMessages;
+            chatFinishedCursorRef.current[pageRuntimeKey] = pageTurnState.cursor.turnIndex;
+            markChatSessionTurnsDirty(pageRuntimeKey);
+            if (encodeChatSessionKey(selectedChatKeyRef.current) === pageRuntimeKey) {
+              setVisibleChatMessagesForRuntimeKey(pageRuntimeKey, pageMessages);
+            }
+          },
+        },
+        () => {
+          turnsAtReadStart = [];
+        },
       );
       if (!shouldApplyPreservedChatLoad(selectedChatKeyRef.current, selectionSnapshot)) {
         return false;
@@ -9698,12 +9759,6 @@ export function App() {
       const resultSessionId = result.sessionId || result.session?.sessionId || sessionId;
       const resultRuntimeKey = buildChatRuntimeKey(activeProjectId, resultSessionId);
       const resultTurnState = ensureChatTurnStore(resultRuntimeKey);
-      applySessionReadResult(
-        resultTurnState,
-        appliedAfterTurnIndex,
-        result.turns,
-        result.latestTurnIndex,
-      );
       const nextMessages = messagesFromTurnStore(resultRuntimeKey, resultSessionId);
       forgetPendingPromptIfResolved(resultRuntimeKey, nextMessages);
 
@@ -9850,6 +9905,39 @@ export function App() {
     }
   };
 
+  const resetSelectedChatLoadRetry = (runtimeKey: string) => {
+    delete chatSelectedLoadFailureCountRef.current[runtimeKey];
+    if (chatSelectedLoadRetryTimerRef.current !== null) {
+      window.clearTimeout(chatSelectedLoadRetryTimerRef.current);
+      chatSelectedLoadRetryTimerRef.current = null;
+    }
+    if (chatSelectedLoadAttemptRuntimeKeyRef.current === runtimeKey) {
+      chatSelectedLoadAttemptRuntimeKeyRef.current = '';
+    }
+  };
+
+  const scheduleSelectedChatLoadRetry = (runtimeKey: string) => {
+    const failureCount = (chatSelectedLoadFailureCountRef.current[runtimeKey] ?? 0) + 1;
+    chatSelectedLoadFailureCountRef.current[runtimeKey] = failureCount;
+    if (chatSelectedLoadRetryTimerRef.current !== null) {
+      window.clearTimeout(chatSelectedLoadRetryTimerRef.current);
+    }
+    chatSelectedLoadRetryTimerRef.current = window.setTimeout(() => {
+      chatSelectedLoadRetryTimerRef.current = null;
+      if (chatSelectedLoadAttemptRuntimeKeyRef.current === runtimeKey) {
+        chatSelectedLoadAttemptRuntimeKeyRef.current = '';
+      }
+      setChatSelectedLoadRetryTick(value => value + 1);
+    }, selectedChatReadRetryDelay(failureCount));
+  };
+
+  useEffect(() => () => {
+    if (chatSelectedLoadRetryTimerRef.current !== null) {
+      window.clearTimeout(chatSelectedLoadRetryTimerRef.current);
+      chatSelectedLoadRetryTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     const selectedKey = selectedChatKeyRef.current;
     const runtimeKey = encodeChatSessionKey(selectedKey);
@@ -9865,6 +9953,12 @@ export function App() {
     const cachedMessages = shouldInspectCache
       ? hydrateChatSessionContentFromCache(selectedKey.sessionId, selectedKey.projectId)
       : [];
+    if (
+      chatVisibleRuntimeKeyRef.current === runtimeKey &&
+      chatMessagesRef.current.length > 0
+    ) {
+      resetSelectedChatLoadRetry(runtimeKey);
+    }
     const selectedVisibilityRecovery = resolveSelectedChatVisibilityRecovery({
       tab: 'chat',
       connected,
@@ -9892,16 +9986,23 @@ export function App() {
         preserveUserSelection: true,
         selectionSnapshot: runtimeKey,
       }).then(loaded => {
-        if (!loaded && chatSelectedLoadAttemptRuntimeKeyRef.current === runtimeKey) {
-          chatSelectedLoadAttemptRuntimeKeyRef.current = '';
+        if (loaded) {
+          resetSelectedChatLoadRetry(runtimeKey);
+        } else {
+          scheduleSelectedChatLoadRetry(runtimeKey);
         }
       }).catch(() => {
-        if (chatSelectedLoadAttemptRuntimeKeyRef.current === runtimeKey) {
-          chatSelectedLoadAttemptRuntimeKeyRef.current = '';
-        }
+        scheduleSelectedChatLoadRetry(runtimeKey);
       });
     }
-  }, [connected, selectedChatEncodedKey, chatMessages.length, chatLoading, setVisibleChatMessagesForRuntimeKey]);
+  }, [
+    connected,
+    selectedChatEncodedKey,
+    chatMessages.length,
+    chatLoading,
+    chatSelectedLoadRetryTick,
+    setVisibleChatMessagesForRuntimeKey,
+  ]);
   const resetChatComposer = () => {
     chatAttachmentsRef.current.forEach(revokeChatAttachmentObjectUrl);
     chatComposerTextRef.current = '';

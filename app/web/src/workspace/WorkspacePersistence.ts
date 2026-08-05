@@ -162,6 +162,7 @@ export type CacheBudgetLimits = {
   maxAgeMs: number;
   maxEntries: number;
   maxBytes: number;
+  minEntries?: number;
 };
 
 export function selectCacheEvictionKeys(
@@ -177,11 +178,15 @@ export function selectCacheEvictionKeys(
   const evicted = [...expiredKeys];
   let remainingCount = survivors.length;
   let bytes = survivors.reduce((sum, item) => sum + item.approximateBytes, 0);
+  const minEntries = Math.max(0, Math.trunc(limits.minEntries ?? 0));
   const oldestFirst = [...survivors].sort(
     (left, right) => left.updatedAt - right.updatedAt || left.key.localeCompare(right.key),
   );
   for (const item of oldestFirst) {
-    if (remainingCount <= limits.maxEntries && bytes <= limits.maxBytes) break;
+    if (
+      remainingCount <= minEntries ||
+      (remainingCount <= limits.maxEntries && bytes <= limits.maxBytes)
+    ) break;
     evicted.push(item.key);
     remainingCount -= 1;
     bytes -= item.approximateBytes;
@@ -1061,12 +1066,14 @@ export class WorkspacePersistenceRepository {
     maxEntries: number,
     maxBytes: number,
     now: number,
+    minEntries = 0,
   ): string[] {
     return selectCacheEvictionKeys(entries, {
       now,
       maxAgeMs: CACHE_MAX_AGE_MS,
       maxEntries,
       maxBytes,
+      minEntries,
     });
   }
 
@@ -1076,6 +1083,7 @@ export class WorkspacePersistenceRepository {
       CHAT_CONTENT_CACHE_MAX_ENTRIES,
       CHAT_CONTENT_CACHE_MAX_BYTES,
       now,
+      1,
     );
     const indexRows: RawChatSessionIndexRow[] = [];
     for (const key of keys) {

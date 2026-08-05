@@ -2611,6 +2611,11 @@ func TestProjectForwardTimeoutsMatchOperationCost(t *testing.T) {
 			method: rp.RegistryMethodSessionCreate,
 			want:   120 * time.Second,
 		},
+		{
+			name:   "session read",
+			method: rp.RegistryMethodSessionRead,
+			want:   30 * time.Second,
+		},
 	}
 
 	for _, tt := range tests {

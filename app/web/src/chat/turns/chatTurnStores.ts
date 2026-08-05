@@ -31,6 +31,10 @@ function sortTurns(turns: RegistrySessionTurn[]): RegistrySessionTurn[] {
   return [...turns].sort((a, b) => a.turnIndex - b.turnIndex);
 }
 
+function sameTurn(left: RegistrySessionTurn | undefined, right: RegistrySessionTurn): boolean {
+  return !!left && left.content === right.content && left.finished === right.finished;
+}
+
 function upsertTurn(turns: RegistrySessionTurn[], incoming: RegistrySessionTurn): RegistrySessionTurn[] {
   const index = turns.findIndex(item => item.turnIndex === incoming.turnIndex);
   if (index < 0) return sortTurns([...turns, cloneTurn(incoming)]);
@@ -172,6 +176,7 @@ export function applySessionReadResult(
   afterTurnIndex: number,
   turns: RegistrySessionTurn[],
   latestTurnIndex: number,
+  turnsAtReadStart?: RegistrySessionTurn[],
 ): ChatTurnStoreState {
   const after = Math.max(0, Math.trunc(afterTurnIndex ?? 0));
   if (isStaleSessionReadResult(after, latestTurnIndex)) {
@@ -190,15 +195,36 @@ export function applySessionReadResult(
       throw new Error('invalid session.read result: unfinished tail must be last');
     }
   }
-  state.finished = state.finished.filter(turn => turn.turnIndex <= after || turn.turnIndex > latest);
-  state.live = state.live.filter(turn => turn.turnIndex <= after || turn.turnIndex > latest);
-  for (const turn of normalized) {
+  const turnsAtReadStartByIndex = new Map(
+    (turnsAtReadStart ?? []).map(turn => [turn.turnIndex, turn]),
+  );
+  const freshRealtimeTurns = turnsAtReadStart
+    ? buildMergedRawTurns(state).filter(turn => (
+        turn.turnIndex > after &&
+        turn.turnIndex <= latest &&
+        !sameTurn(turnsAtReadStartByIndex.get(turn.turnIndex), turn)
+      ))
+    : [];
+  const finishedByIndex = new Map(
+    state.finished
+      .filter(turn => turn.turnIndex <= after || turn.turnIndex > latest)
+      .map(turn => [turn.turnIndex, cloneTurn(turn)]),
+  );
+  const liveByIndex = new Map(
+    state.live
+      .filter(turn => turn.turnIndex <= after || turn.turnIndex > latest)
+      .map(turn => [turn.turnIndex, cloneTurn(turn)]),
+  );
+  for (const turn of [...normalized, ...freshRealtimeTurns]) {
     if (turn.finished) {
-      state.finished = upsertTurn(state.finished, turn);
-    } else {
-      state.live = upsertTurn(state.live, turn);
+      finishedByIndex.set(turn.turnIndex, cloneTurn(turn));
+      liveByIndex.delete(turn.turnIndex);
+    } else if (!finishedByIndex.has(turn.turnIndex)) {
+      liveByIndex.set(turn.turnIndex, cloneTurn(turn));
     }
   }
+  state.finished = sortTurns(Array.from(finishedByIndex.values()));
+  state.live = sortTurns(Array.from(liveByIndex.values()));
   state.cursor = getFinishedCursor(state.finished);
   state.finished = getDurableTurnPrefix(state.finished, state.cursor);
   return state;

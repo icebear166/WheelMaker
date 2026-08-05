@@ -85,6 +85,44 @@ describe('raw chat turn stores', () => {
     expect(() => applySessionReadResult(state, 3, [turn(4, false), turn(5, true)], 5)).toThrow(/unfinished tail/);
   });
 
+  test('read response preserves a same-turn realtime update received after the read started', () => {
+    const state = hydrateFinishedStore([turn(1)]);
+    mergeRealtimeTurn(state, turn(2, false, 'before read'));
+    const turnsAtReadStart = buildMergedRawTurns(state);
+    mergeRealtimeTurn(state, turn(2, false, 'new realtime content'));
+
+    applySessionReadResult(
+      state,
+      1,
+      [turn(2, false, 'stale read content')],
+      2,
+      turnsAtReadStart,
+    );
+
+    expect(buildMergedRawTurns(state)).toEqual([
+      turn(1),
+      turn(2, false, 'new realtime content'),
+    ]);
+  });
+
+  test('read response preserves the first realtime turn received after an empty read baseline', () => {
+    const state = createEmptyChatTurnStore();
+    const turnsAtReadStart = buildMergedRawTurns(state);
+    mergeRealtimeTurn(state, turn(1, false, 'new realtime content'));
+
+    applySessionReadResult(
+      state,
+      0,
+      [turn(1, false, 'stale read content')],
+      1,
+      turnsAtReadStart,
+    );
+
+    expect(buildMergedRawTurns(state)).toEqual([
+      turn(1, false, 'new realtime content'),
+    ]);
+  });
+
   test('stale read response resets local turns when server latest is behind cursor', () => {
     const state = hydrateFinishedStore([turn(1), turn(2), turn(3)]);
     mergeRealtimeTurn(state, turn(4, false, 'dirty live'));

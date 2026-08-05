@@ -11,6 +11,11 @@ export type ChatListSelectionResolution = {
 
 export type SelectedChatVisibilityRecovery = 'none' | 'restore-cache' | 'read-session';
 
+export function selectedChatReadRetryDelay(failureCount: number): number {
+  const normalizedFailureCount = Math.max(1, Math.trunc(failureCount));
+  return Math.min(30000, 2000 * (2 ** (normalizedFailureCount - 1)));
+}
+
 export function shouldApplyPreservedChatLoad(
   currentKey: ChatSessionKey | null | undefined,
   selectionSnapshot: string,

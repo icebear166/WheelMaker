@@ -205,6 +205,21 @@ describe('workspace persistence safety', () => {
     expect(evicted).toEqual(['expired', 'old']);
   });
 
+  test('keeps the newest chat entry when it alone exceeds the soft byte budget', () => {
+    const evicted = selectCacheEvictionKeys([
+      {key: 'old-small', updatedAt: 90, approximateBytes: 4},
+      {key: 'new-oversize', updatedAt: 100, approximateBytes: 12},
+    ], {
+      now: 110,
+      maxAgeMs: 100,
+      maxEntries: 250,
+      maxBytes: 5,
+      minEntries: 1,
+    });
+
+    expect(evicted).toEqual(['old-small']);
+  });
+
   test('repairs stale chat cache after the one-time credential scrub', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase({

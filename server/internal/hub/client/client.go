@@ -1358,7 +1358,9 @@ func sessionTurnsNeedForkPoint(turns []sessionViewTurn) bool {
 			continue
 		}
 		var result acp.SessionTurnPromptResult
-		if json.Unmarshal(message.Param, &result) == nil && cloneSessionForkPoint(result.ForkPoint) == nil {
+		if json.Unmarshal(message.Param, &result) == nil &&
+			result.StopReason != acp.StopReasonCancelled &&
+			cloneSessionForkPoint(result.ForkPoint) == nil {
 			return true
 		}
 	}

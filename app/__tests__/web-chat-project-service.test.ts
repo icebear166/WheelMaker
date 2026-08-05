@@ -215,7 +215,8 @@ describe('registry workspace project-scoped chat service methods', () => {
       },
     });
 
-    await (service as any).readProjectSession('chat-project', 's1', 7);
+    const readOptions = {onPage: jest.fn()};
+    await (service as any).readProjectSession('chat-project', 's1', 7, readOptions);
     await (service as any).enqueueProjectSessionItem('chat-project', 's1', {
       itemId: 'item-1',
       kind: 'prompt',
@@ -258,7 +259,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       attachmentId: 'sha256-a',
     });
 
-    expect(repository.readSession).toHaveBeenCalledWith('chat-project', 's1', 7);
+    expect(repository.readSession).toHaveBeenCalledWith('chat-project', 's1', 7, readOptions);
     expect(repository.mutateSessionQueue).toHaveBeenNthCalledWith(1, 'chat-project', {
       sessionId: 's1',
       action: 'enqueue',

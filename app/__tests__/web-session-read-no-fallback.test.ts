@@ -75,14 +75,51 @@ describe('registry session.read', () => {
     expect(request.mock.calls[0][0].payload).toEqual({
       sessionId: 'sess-1',
       maxTurns: 1024,
-      maxBytes: 14 * 1024 * 1024,
+      maxBytes: 6 * 1024 * 1024,
     });
+    expect(request.mock.calls[0][0].timeoutMs).toBe(30000);
     expect(request.mock.calls[1][0].payload).toEqual({
       sessionId: 'sess-1',
       afterTurnIndex: 2,
       throughTurnIndex: 4,
       maxTurns: 1024,
-      maxBytes: 14 * 1024 * 1024,
+      maxBytes: 6 * 1024 * 1024,
+    });
+  });
+
+  test('publishes a completed page before a later page fails', async () => {
+    const request = jest.fn()
+      .mockResolvedValueOnce({
+        type: 'response',
+        payload: {
+          sessionId: 'sess-1',
+          latestTurnIndex: 4,
+          turns: [
+            {turnIndex: 1, content: JSON.stringify({method: 'prompt_request', param: {text: 'run'}}), finished: true},
+            {turnIndex: 2, content: JSON.stringify({method: 'agent_message_chunk', param: {text: 'part 1'}}), finished: true},
+          ],
+          hasMore: true,
+          nextAfterTurnIndex: 2,
+        },
+      })
+      .mockRejectedValueOnce(new Error('second page timeout'));
+    const repository = new RegistryRepository({request} as unknown as RegistryClient);
+    const onPage = jest.fn();
+
+    await expect(repository.readSession('project-1', 'sess-1', 0, {onPage})).rejects.toThrow(
+      'second page timeout',
+    );
+
+    expect(onPage).toHaveBeenCalledTimes(1);
+    expect(onPage.mock.calls[0][0]).toMatchObject({
+      sessionId: 'sess-1',
+      afterTurnIndex: 0,
+      throughTurnIndex: 2,
+      latestTurnIndex: 4,
+      turns: [
+        expect.objectContaining({turnIndex: 1}),
+        expect.objectContaining({turnIndex: 2}),
+      ],
     });
   });
 

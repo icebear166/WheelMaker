@@ -1359,6 +1359,8 @@ func projectForwardRequestTimeout(method string) time.Duration {
 	switch method {
 	case rp.RegistryMethodSessionCreate:
 		return 120 * time.Second
+	case rp.RegistryMethodSessionRead:
+		return 30 * time.Second
 	default:
 		return defaultRequestTimeout
 	}

@@ -132,7 +132,17 @@ export type RegistryFileRequestOptions = {
 const SESSION_CREATE_TIMEOUT_MS = 120000;
 const SESSION_FORK_TIMEOUT_MS = SESSION_CREATE_TIMEOUT_MS;
 const SESSION_READ_PAGE_MAX_TURNS = 1024;
-const SESSION_READ_PAGE_MAX_BYTES = 14 * 1024 * 1024;
+const SESSION_READ_PAGE_MAX_BYTES = 6 * 1024 * 1024;
+const SESSION_READ_PAGE_TIMEOUT_MS = 30000;
+
+export interface RegistrySessionReadPage extends RegistrySessionReadResponse {
+  afterTurnIndex: number;
+  throughTurnIndex: number;
+}
+
+export type RegistrySessionReadOptions = {
+  onPage?: (page: RegistrySessionReadPage) => Promise<void> | void;
+};
 
 function normalizeAgentType(agentType: unknown): string | undefined {
   if (typeof agentType !== 'string') {
@@ -974,6 +984,7 @@ export class RegistryRepository {
     sessionId: string,
     afterTurnIndex: number,
     method: typeof RegistryMethods.SessionRead,
+    options: RegistrySessionReadOptions = {},
   ): Promise<RegistrySessionReadResponse> {
     const initialAfterTurnIndex = Number.isFinite(afterTurnIndex)
       ? Math.max(0, Math.trunc(afterTurnIndex))
@@ -982,6 +993,7 @@ export class RegistryRepository {
     let snapshotLatestTurnIndex: number | undefined;
     let session: RegistrySessionSummary | undefined;
     const turnsByIndex = new Map<number, RegistrySessionTurn>();
+    const messagesByIndex = new Map<number, RegistrySessionMessage>();
     let firstPage = true;
 
     while (true) {
@@ -995,7 +1007,7 @@ export class RegistryRepository {
           maxTurns: SESSION_READ_PAGE_MAX_TURNS,
           maxBytes: SESSION_READ_PAGE_MAX_BYTES,
         },
-        timeoutMs: 15000,
+        timeoutMs: SESSION_READ_PAGE_TIMEOUT_MS,
       });
       const payload = (resp.payload ?? {}) as {
         sessionId?: unknown;
@@ -1033,20 +1045,51 @@ export class RegistryRepository {
       if (normalized.session) {
         session = normalized.session;
       }
-      normalized.turns.forEach(turn => {
-        if (turn.turnIndex > initialAfterTurnIndex && turn.turnIndex <= snapshotLatestTurnIndex!) {
-          turnsByIndex.set(turn.turnIndex, turn);
+      const pageTurns = normalized.turns.filter(turn => (
+        turn.turnIndex > cursor && turn.turnIndex <= snapshotLatestTurnIndex!
+      ));
+      pageTurns.forEach(turn => {
+        turnsByIndex.set(turn.turnIndex, turn);
+      });
+      const pageTurnIndexes = new Set(pageTurns.map(turn => turn.turnIndex));
+      const pageMessages = normalized.messages.filter(message => (
+        pageTurnIndexes.has(Math.trunc(message.turnIndex ?? 0))
+      ));
+      pageMessages.forEach(message => {
+        const turnIndex = Math.trunc(message.turnIndex ?? 0);
+        if (turnIndex > 0) {
+          messagesByIndex.set(turnIndex, message);
         }
       });
 
-      if (payload.hasMore !== true) {
-        break;
-      }
-      const nextAfterTurnIndex = typeof payload.nextAfterTurnIndex === 'number' && Number.isFinite(payload.nextAfterTurnIndex)
+      const hasMore = payload.hasMore === true;
+      const nextAfterTurnIndex = hasMore && typeof payload.nextAfterTurnIndex === 'number' && Number.isFinite(payload.nextAfterTurnIndex)
         ? Math.trunc(payload.nextAfterTurnIndex)
         : 0;
-      if (nextAfterTurnIndex <= cursor || nextAfterTurnIndex > snapshotLatestTurnIndex) {
+      if (hasMore && (nextAfterTurnIndex <= cursor || nextAfterTurnIndex > snapshotLatestTurnIndex)) {
         throw new Error('session.read pagination did not advance');
+      }
+      const throughTurnIndex = hasMore
+        ? nextAfterTurnIndex
+        : pageTurns.reduce((latest, turn) => Math.max(latest, turn.turnIndex), cursor);
+      if (
+        options.onPage &&
+        snapshotLatestTurnIndex >= initialAfterTurnIndex &&
+        throughTurnIndex > cursor
+      ) {
+        await options.onPage({
+          sessionId,
+          ...(normalized.session ? {session: normalized.session} : {}),
+          turns: pageTurns,
+          messages: pageMessages,
+          latestTurnIndex: snapshotLatestTurnIndex,
+          afterTurnIndex: cursor,
+          throughTurnIndex,
+        });
+      }
+
+      if (!hasMore) {
+        break;
       }
       cursor = nextAfterTurnIndex;
       firstPage = false;
@@ -1058,9 +1101,8 @@ export class RegistryRepository {
     }
     const normalizedTurns: RegistrySessionTurn[] = Array.from(turnsByIndex.values())
       .sort((a, b) => a.turnIndex - b.turnIndex);
-    const normalizedMessages: RegistrySessionMessage[] = normalizedTurns
-      .map(turn => decodeSessionTurnToMessage(sessionId, turn))
-      .filter((item): item is RegistrySessionMessage => !!item);
+    const normalizedMessages: RegistrySessionMessage[] = Array.from(messagesByIndex.values())
+      .sort((a, b) => (a.turnIndex ?? 0) - (b.turnIndex ?? 0));
 
     return {
       sessionId,
@@ -1553,8 +1595,13 @@ export class RegistryRepository {
     return this.listSessionsByMethod(projectId, RegistryMethods.SessionList);
   }
 
-  async readSession(projectId: string, sessionId: string, afterTurnIndex = 0): Promise<RegistrySessionReadResponse> {
-    return this.readSessionByMethod(projectId, sessionId, afterTurnIndex, RegistryMethods.SessionRead);
+  async readSession(
+    projectId: string,
+    sessionId: string,
+    afterTurnIndex = 0,
+    options: RegistrySessionReadOptions = {},
+  ): Promise<RegistrySessionReadResponse> {
+    return this.readSessionByMethod(projectId, sessionId, afterTurnIndex, RegistryMethods.SessionRead, options);
   }
 
   async readSessionArtifact(

@@ -30,7 +30,7 @@ describe('web chat read-on-demand behavior', () => {
     expect(mainTsx).toContain('readProjectSessionWithStaleCacheRepair(');
     expect(mainTsx).toContain('isStaleSessionReadResult(');
     expect(mainTsx).toContain('clearProjectSessionCache(activeProjectId, sessionId);');
-    expect(mainTsx).toContain('service.readProjectSession(activeProjectId, sessionId, 0);');
+    expect(mainTsx).toContain('service.readProjectSession(activeProjectId, sessionId, 0, readOptions);');
     expect(mainTsx).toContain("startWorkspaceDiagnosticSpan('session_read'");
     expect(mainTsx).toContain('requestedAfterTurnIndex:');
     expect(mainTsx).toContain('cacheHit: existingMessages.length > 0');
@@ -61,5 +61,10 @@ describe('web chat read-on-demand behavior', () => {
     );
     expect(loadChatSessionBlock).toContain('if (canApplyLoadedSelection) {');
     expect(loadChatSessionBlock).toContain('return canApplyLoadedSelection;');
+    expect(loadChatSessionBlock).toContain('onPage: page => {');
+    expect(loadChatSessionBlock).toContain('turnsAtReadStart');
+    expect(loadChatSessionBlock).toContain('markChatSessionTurnsDirty(pageRuntimeKey);');
+    expect(loadChatSessionBlock).toContain('await chatDurablePersistQueueRef.current.flush(runtimeKey);');
+    expect(mainTsx).toContain('scheduleSelectedChatLoadRetry(runtimeKey);');
   });
 });

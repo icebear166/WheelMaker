@@ -187,7 +187,7 @@ describe('web chat integration', () => {
     expect(repositoryTs).toContain('maxTurns: SESSION_READ_PAGE_MAX_TURNS');
     expect(repositoryTs).toContain('maxBytes: SESSION_READ_PAGE_MAX_BYTES');
     expect(repositoryTs).toContain('{throughTurnIndex: snapshotLatestTurnIndex}');
-    expect(repositoryTs).toContain('payload.hasMore !== true');
+    expect(repositoryTs).toContain('const hasMore = payload.hasMore === true');
     expect(repositoryTs).toContain('turns?: unknown[];');
     expect(repositoryTs).toContain('normalizeSessionReadPayload(');
     expect(registryTypes).toContain('export interface RegistrySessionTurn');

@@ -1,6 +1,7 @@
 import {
   resolveChatListSelection,
   resolveSelectedChatVisibilityRecovery,
+  selectedChatReadRetryDelay,
   shouldApplyLoadedChatSelection,
   shouldApplyPreservedChatLoad,
   shouldApplySentChatSelection,
@@ -8,6 +9,17 @@ import {
 import { chatSessionKeyFromParts, encodeChatSessionKey } from '../web/src/chat/session/chatSessionKey';
 
 describe('web chat selection guards', () => {
+  test('backs off repeated selected-session read failures', () => {
+    expect(selectedChatReadRetryDelay).toBeDefined();
+    expect([1, 2, 3, 4, 8].map(selectedChatReadRetryDelay)).toEqual([
+      2000,
+      4000,
+      8000,
+      16000,
+      30000,
+    ]);
+  });
+
   test('preserved session reads can only write back to the same composite selected key', () => {
     const selected = chatSessionKeyFromParts('project-a', 'session-a');
     const staleSnapshot = encodeChatSessionKey(chatSessionKeyFromParts('project-b', 'session-b'));

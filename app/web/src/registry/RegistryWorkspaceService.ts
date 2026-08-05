@@ -2,6 +2,7 @@ import {
   createRegistryRepository,
   type RegistryFileRequestOptions,
   type RegistryRepository,
+  type RegistrySessionReadOptions,
 } from './RegistryRepository';
 import {RegistryRequestError} from './RegistryClient';
 import {RegistryMethods} from './registryMethods';
@@ -547,7 +548,12 @@ export class RegistryWorkspaceService {
     return this.repository.readSession(this.session.selectedProjectId, sessionId, afterTurnIndex);
   }
 
-  async readProjectSession(projectId: string, sessionId: string, afterTurnIndex = 0): Promise<RegistrySessionReadResponse> {
+  async readProjectSession(
+    projectId: string,
+    sessionId: string,
+    afterTurnIndex = 0,
+    options: RegistrySessionReadOptions = {},
+  ): Promise<RegistrySessionReadResponse> {
     if (!this.repository) {
       return {
         sessionId: '',
@@ -556,7 +562,7 @@ export class RegistryWorkspaceService {
         latestTurnIndex: 0,
       };
     }
-    return this.repository.readSession(projectId, sessionId, afterTurnIndex);
+    return this.repository.readSession(projectId, sessionId, afterTurnIndex, options);
   }
 
   async readSessionArtifact(
