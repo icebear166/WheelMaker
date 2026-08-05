@@ -20,6 +20,18 @@ test('ordinary installer only checks loopback health', () => {
   assert.doesNotMatch(script, /poll_health "\$public_url\/healthz"/);
 });
 
+test('remote installer does not depend on upload transport executable bits', () => {
+  const script = buildRemoteInstallScript();
+  const uploadedBinary = script.indexOf('[ -f "$upload_dir/wheelmaker-release-server" ]');
+  const stagedBinary = script.indexOf(
+    'install -m 0755 "$upload_dir/wheelmaker-release-server" "$stage_binary"',
+  );
+
+  assert.ok(uploadedBinary > 0);
+  assert.ok(stagedBinary > uploadedBinary);
+  assert.doesNotMatch(script, /\[ -x "\$upload_dir\/wheelmaker-release-server" \]/);
+});
+
 test('caddy mode writes the Home public root and none mode never creates Gateway paths', () => {
   const script = buildRemoteInstallScript();
   const branch = 'if [ "$gateway_mode" = "caddy" ]; then';

@@ -190,7 +190,6 @@ XDG_RUNTIME_DIR="/run/user/$deploy_uid" systemctl --user show-environment >/dev/
 
 [ -d "$upload_dir" ] || { echo "uploaded release directory is missing" >&2; exit 1; }
 [ -f "$upload_dir/wheelmaker-release-server" ] || { echo "uploaded release binary is missing" >&2; exit 1; }
-[ -x "$upload_dir/wheelmaker-release-server" ] || { echo "uploaded release binary is not executable" >&2; exit 1; }
 [ -f "$upload_dir/wheelmaker-release-server.service" ] || { echo "uploaded user unit is missing" >&2; exit 1; }
 [ -f "$upload_dir/index.html" ] || { echo "uploaded homepage is missing" >&2; exit 1; }
 [ -f "$upload_dir/release-home.js" ] || { echo "uploaded homepage script is missing" >&2; exit 1; }
