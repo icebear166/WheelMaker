@@ -69,7 +69,7 @@ test('release server deploy rejects a dirty tree and always cleans local staging
 });
 
 test('release server deployment accepts only the unified Gateway selector', () => {
-  assert.deepEqual(parseReleaseServerArgs([]), {gateway: 'none'});
+  assert.deepEqual(parseReleaseServerArgs([]), {gateway: 'caddy'});
   assert.deepEqual(parseReleaseServerArgs(['--gateway=none']), {gateway: 'none'});
   assert.deepEqual(parseReleaseServerArgs(['--gateway=caddy']), {gateway: 'caddy'});
   assert.throws(() => parseReleaseServerArgs(['--gateway=nginx']), /none or caddy/);

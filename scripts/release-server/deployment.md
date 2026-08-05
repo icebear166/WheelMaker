@@ -47,9 +47,10 @@ deploy-release-server.bat --gateway=caddy
   ~/.wheelmaker/gateway/sites/release-server.json.
 ```
 
-Omitting the option is equivalent to `none`. The option changes only whether
-the Release Server semantic site file is written; it never changes the binary
-download, staging, health checks, or Gateway lifecycle.
+Omitting the option is equivalent to `caddy`. Use `--gateway=none` when an
+existing Nginx or other entry point must remain untouched. The option changes
+only whether the Release Server semantic site file is written; it never
+changes the binary download, staging, health checks, or Gateway lifecycle.
 
 The local script reads the HTTPS origin from `scripts/release/channel.json`,
 uses the SSH identity configured for the channel host, checks Linux/amd64,

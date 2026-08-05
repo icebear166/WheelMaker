@@ -43,8 +43,9 @@ deploy-release-server.bat --gateway=caddy
   ~/.wheelmaker/gateway/sites/release-server.json。
 ```
 
-省略参数等同于 `none`。参数只决定是否写入 Release Server 语义站点文件，不改变
-二进制下载、staging、健康检查或 Gateway 生命周期。
+省略参数等同于 `caddy`。如果必须保持现有 Nginx 或其他入口完全不变，请显式使用
+`--gateway=none`。参数只决定是否写入 Release Server 语义站点文件，不改变二进制
+下载、staging、健康检查或 Gateway 生命周期。
 
 本地脚本读取 `scripts/release/channel.json` 的 HTTPS 源，使用该主机配置的 SSH
 身份，检查 Linux/amd64，以 `CGO_ENABLED=0` 交叉编译，上传短期临时目录并调用远端

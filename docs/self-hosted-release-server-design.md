@@ -182,7 +182,7 @@ deploy-release-server.bat --gateway=caddy
     ~/.wheelmaker/gateway/sites/release-server.json
 ```
 
-省略参数等同于 `none`。该选项只影响是否写入 Release Server 语义站点，不管理
+省略参数等同于 `caddy`；需要保持旧入口不变时显式使用 `--gateway=none`。该选项只影响是否写入 Release Server 语义站点，不管理
 Caddy/Nginx 的安装、启动、停止、重载、校验或渲染。Caddy 尚未安装时，旧 Nginx
 仍可继续使用原有端口、证书、公开根目录和 loopback upstream；`--gateway=caddy`
 仍然可以先生成 dormant site 文件。停用旧 Nginx 仍使用独立的

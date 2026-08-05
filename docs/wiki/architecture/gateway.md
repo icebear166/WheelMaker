@@ -44,7 +44,9 @@ Release Server 的普通部署使用同一登录用户的 Home：
 
 - `none` 是严格无操作，不创建、覆盖或删除 Gateway 目录和站点文件；已有 Nginx 或其他入口继续工作。
 - `caddy` 只自动创建站点目录并原子写入当前组件拥有的语义 JSON；它不要求 Caddy 已安装，也不触发 Gateway 校验、渲染或 reload。
-- 非交互调用未传参数时按 `none` 处理。Workspace 完整交互部署未传参数时每次询问，默认选择 `none`；`deploy.mjs update` 永远不进入该流程。
+- Release Server 部署未传参数时按 `caddy` 处理；如需保持旧入口不变，必须显式使用
+  `--gateway=none`。Workspace 完整交互部署未传参数时每次询问，默认选择 `none`；
+  `deploy.mjs update` 永远不进入该流程。
 
 ## 站点合同
 
@@ -64,8 +66,9 @@ node deploy.mjs --gateway=none                 # 完整部署，不触碰入口�
 node deploy.mjs --gateway=caddy --gateway-public-url=https://workspace.example.com
 node deploy.mjs gateway                         # 只安装/启动 stable 中的 Gateway
 node deploy.mjs gateway-update                 # 显式下载、校验并更新 Gateway，可回滚
-deploy-release-server.bat --gateway=none       # 部署 Release Server，不触碰入口配置
-deploy-release-server.bat --gateway=caddy      # 另写 release-server.json
+deploy-release-server.bat                    # 默认写入 release-server.json
+deploy-release-server.bat --gateway=none     # 部署 Release Server，不触碰入口配置
+deploy-release-server.bat --gateway=caddy     # 显式写入 release-server.json
 ~/.wheelmaker/gateway/start.sh|stop.sh          # 只控制 Gateway 当前运行状态
 ```
 

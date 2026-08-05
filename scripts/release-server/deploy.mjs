@@ -13,7 +13,7 @@ const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = resolve(moduleDirectory, '..', '..');
 
 export function parseReleaseServerArgs(args) {
-  let gateway = 'none';
+  let gateway = 'caddy';
   let seenGateway = false;
   for (const arg of args) {
     if (arg.startsWith('--gateway=')) {
@@ -31,7 +31,7 @@ export function parseReleaseServerArgs(args) {
 }
 
 export async function deployReleaseServer(dependencies = createDefaultDependencies()) {
-  const gateway = dependencies.gateway ?? 'none';
+  const gateway = dependencies.gateway ?? 'caddy';
   if (!['none', 'caddy'].includes(gateway)) {
     throw new Error('--gateway must be none or caddy');
   }
@@ -108,7 +108,7 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
 
 export function createDefaultDependencies(options = parseReleaseServerArgs(process.argv.slice(2))) {
   return {
-    gateway: options.gateway ?? 'none',
+    gateway: options.gateway ?? 'caddy',
     homeDirectory: homedir(),
     repoRoot: defaultRepoRoot,
     async loadChannel() {

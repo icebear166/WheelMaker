@@ -49,7 +49,7 @@ Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不�
 
 配置的 `dataRoot` 指向 Home 下的 `data` 绝对路径。部署器管理 Release Server 自身的 user unit、linger、重启和 loopback 健康检查；普通部署不探测或迁移旧 systemd 服务，不依赖 `/srv`、`www-data`、ACL 或入口服务权限。
 
-`--gateway=none` 对 Gateway 文件严格无操作；`--gateway=caddy` 只在 SSH 用户 Home 写 `~/.wheelmaker/gateway/sites/release-server.json`，`publicRoot` 指向 Home 中的 `data/public`，公网 URL 从 `scripts/release/channel.json` 读取。机器尚未安装 Caddy 时该文件保持休眠，部署不安装、启动、停止、重载或验证 Caddy。
+`--gateway=none` 对 Gateway 文件严格无操作；`--gateway=caddy` 只在 SSH 用户 Home 写 `~/.wheelmaker/gateway/sites/release-server.json`，`publicRoot` 指向 Home 中的 `data/public`，公网 URL 从 `scripts/release/channel.json` 读取。Release Server 部署省略参数时默认使用 `caddy`；需要保持旧 Nginx 或其他入口不变时显式使用 `--gateway=none`。机器尚未安装 Caddy 时该文件保持休眠，部署不安装、启动、停止、重载或验证 Caddy。
 
 仍在运行旧系统级 `wheelmaker-release-server.service` 的机器，必须先由运维者直接 SSH 执行一次性迁移：备份旧 `/etc` 配置和 `/srv/wheelmaker-release` 数据，复制 token 哈希、发布数据和公开资产到 Home，安装并启动用户服务，验证 loopback 与外部 healthz；成功后停止并禁用旧服务，保留旧 unit、`/opt` 二进制、`/etc` 配置、旧数据和运行用户。迁移时只一次性把 Release Server 的 Nginx 静态根调整到 Home 的 `data/public`，不改变其他站点或证书；失败则恢复旧服务，不删除旧文件。普通部署不提供或调用迁移脚本。
 
