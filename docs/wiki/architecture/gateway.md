@@ -24,7 +24,7 @@ gateway/
   data/                         # Caddy ACME 证书和状态
 ```
 
-`config.json` 只存放宿主机级共享设置，已存在时部署不覆盖。Workspace 与 Release Server 部署器分别只修改 `workspace.json` 和 `release-server.json`，不直接编辑聚合后的 Caddy JSON，也不通过 `/srv` 或 `/etc/wheelmaker-gateway/home` 发现 Gateway Home。`kind` 限定路由合同，不允许原始 Caddyfile、任意 Caddy JSON 或非 loopback 上游。
+`config.json` 只存放宿主机级共享设置，已存在时部署不覆盖。Workspace 与 Release Server 部署器分别只修改 `workspace.json` 和 `release-server.json`，不直接编辑聚合后的 Caddy JSON，也不通过 `/srv` 或宿主机级元数据发现 Gateway Home；Home 始终由实际登录用户解析为 `~/.wheelmaker/gateway`。`kind` 限定路由合同，不允许原始 Caddyfile、任意 Caddy JSON 或非 loopback 上游。
 
 两个部署入口统一使用 `--gateway=none|caddy`：
 
