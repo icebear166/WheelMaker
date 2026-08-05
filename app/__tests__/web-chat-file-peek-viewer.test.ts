@@ -491,6 +491,9 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel');
     expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-drawer-panel');
+    expect(stylesCss).toContain('.chat-preview-drawer-host');
+    expect(stylesCss).toContain('.preview-workbench-drawer-panel.external');
+    expect(stylesCss).toContain('.preview-workbench-drawer-tool');
   });
 
   test('preview file tree opens with inline search and renders search results as a tree', () => {
@@ -538,8 +541,8 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('{collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}');
     expect(mainTsx).not.toContain('className="path"');
 
-    expect(stylesCss).toContain('.preview-workbench-tree-search-shell');
-    expect(stylesCss).toContain('.preview-workbench-tree-search-shell[data-open=\'true\']');
+    expect(stylesCss).toContain('.preview-workbench-drawer-search');
+    expect(stylesCss).toContain('.preview-workbench-drawer-content');
     expect(stylesCss).toContain('.preview-workbench-tree-tool-button');
     expect(stylesCss).toContain('.preview-workbench-file-search-tree');
     expect(stylesCss).toContain('.preview-workbench-file-search-node');
