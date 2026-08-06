@@ -20732,6 +20732,7 @@ export function App() {
       onRefresh={() => { void gitBrowserStore.refresh(previewGitSnapshot.projectId); }}
       onLoadMore={() => { void gitBrowserStore.loadMore(previewGitSnapshot.projectId); }}
       onRetry={() => { void gitBrowserStore.refresh(previewGitSnapshot.projectId); }}
+      onCopyCommitSha={sha => { writeTextToClipboard(sha).catch(() => undefined); }}
     />
   ) : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (

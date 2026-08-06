@@ -14,6 +14,7 @@ export type GitHistoryPanelProps = {
   onRefresh: () => void;
   onLoadMore: () => void;
   onRetry: () => void;
+  onCopyCommitSha: (sha: string) => void;
 };
 
 const WORKTREE_SCOPES: Array<{scope: GitWorkingTreeScope; label: string}> = [
@@ -74,7 +75,6 @@ function GitFileRow({
       data-tooltip={file.path}
       onClick={onClick}
     >
-      <span className={`git-file-status status-${file.status.toLowerCase()}`}>{file.status}</span>
       <span className="git-file-path">
         <span className="git-file-name">{name || file.path}</span>
         {parent ? <span className="git-file-parent">{parent}</span> : null}
@@ -136,6 +136,7 @@ export function GitHistoryPanel({
   onRefresh,
   onLoadMore,
   onRetry,
+  onCopyCommitSha,
 }: GitHistoryPanelProps) {
   const [branchMenuOpen, setBranchMenuOpen] = React.useState(false);
   const branchMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -282,28 +283,33 @@ export function GitHistoryPanel({
               return (
                 <article key={commit.sha} className={`git-commit${expanded ? ' expanded' : ''}`}>
                   <span className="git-commit-node" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="git-commit-trigger"
-                    aria-label={`Toggle commit ${commit.sha}`}
-                    aria-expanded={expanded}
-                    onClick={() => onToggleCommit(commit.sha)}
-                  >
-                    <span className="git-commit-title">{commit.title || '(untitled commit)'}</span>
-                    <span className="git-commit-summary">
-                      <span>{commit.author || commit.email || 'Unknown author'}</span>
-                      <span className="git-short-sha">{commit.sha.slice(0, 8)}</span>
-                      {time.relative ? <span>{time.relative}</span> : null}
-                    </span>
-                  </button>
+                  <div className="git-commit-head">
+                    <button
+                      type="button"
+                      className="git-commit-trigger"
+                      aria-label={`Toggle commit ${commit.sha}`}
+                      aria-expanded={expanded}
+                      onClick={() => onToggleCommit(commit.sha)}
+                    >
+                      <span className="git-commit-title">{commit.title || '(untitled commit)'}</span>
+                      <span className="git-commit-summary">
+                        <span data-tooltip={commit.email || undefined}>{commit.author || commit.email || 'Unknown author'}</span>
+                        <span className="git-short-sha">{commit.sha.slice(0, 8)}</span>
+                        {time.relative ? <span data-tooltip={time.absolute || undefined}>{time.relative}</span> : null}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="git-commit-copy"
+                      aria-label={`Copy full SHA ${commit.sha}`}
+                      data-tooltip="Copy full SHA"
+                      onClick={() => onCopyCommitSha(commit.sha)}
+                    >
+                      <Icon name="copy" />
+                    </button>
+                  </div>
                   {expanded ? (
                     <div className="git-commit-details">
-                      <div className="git-commit-identity">
-                        <span>{commit.author || 'Unknown author'}</span>
-                        {commit.email ? <span>{commit.email}</span> : null}
-                      </div>
-                      <time dateTime={commit.time} data-tooltip={commit.time}>{time.absolute || commit.time}</time>
-                      <div className="git-full-sha" data-tooltip={commit.sha}>{commit.sha}</div>
                       <div className="git-ref-context">
                         {commit.sha === snapshot.headSha ? <span className="git-head-pill">Current HEAD</span> : null}
                         {snapshot.selectedRefs.map(ref => <span key={ref} className="git-ref-pill">Filter · {ref}</span>)}

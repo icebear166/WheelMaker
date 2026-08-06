@@ -58,6 +58,7 @@ async function render(
     onRefresh: jest.fn(),
     onLoadMore: jest.fn(),
     onRetry: jest.fn(),
+    onCopyCommitSha: jest.fn(),
   };
   let view!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -154,6 +155,31 @@ test('shows loading, empty, stale-error, and completed-history states', async ()
     view.root.findAllByProps({'aria-label': 'Retry Git history'})[0].props.onClick();
   });
   expect(handlers.onRetry).toHaveBeenCalled();
+});
+
+test('copies the full sha from the commit header and keeps file rows free of status letters', async () => {
+  const {view, handlers} = await render({
+    snapshot: snapshot({
+      worktree: {
+        staged: [{path: 'src/staged.ts', status: 'M', scope: 'staged' as const}],
+        unstaged: [],
+        untracked: [{path: 'src/new.ts', status: 'U', scope: 'untracked' as const}],
+      },
+    }),
+  });
+  const root = view.root;
+  const text = JSON.stringify(view.toJSON());
+
+  expect(text).not.toContain('git-full-sha');
+  expect(text).not.toContain('git-file-status');
+  expect(root.findAll(node => node.props['data-tooltip'] === 'ada@example.com').length).toBeGreaterThan(0);
+  expect(root.findAll(node => typeof node.props['data-tooltip'] === 'string'
+    && (node.props['data-tooltip'] as string).includes('2026')).length).toBeGreaterThan(0);
+
+  await act(async () => {
+    root.findByProps({'aria-label': 'Copy full SHA abc'}).props.onClick();
+  });
+  expect(handlers.onCopyCommitSha).toHaveBeenCalledWith('abc');
 });
 
 test('keeps stale data visible but disables network controls while offline', async () => {
