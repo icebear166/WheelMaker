@@ -422,6 +422,7 @@ func TestIsAgentExitError(t *testing.T) {
 		"io: broken pipe",
 		"read tcp ... connection reset by peer",
 		"EOF",
+		"codexapp runtime stopped",
 	}
 	for _, c := range cases {
 		if !isAgentExitError(errors.New(c)) {

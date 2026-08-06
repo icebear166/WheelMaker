@@ -1806,7 +1806,8 @@ func isAgentExitError(err error) bool {
 		strings.Contains(s, "conn is closed") ||
 		strings.Contains(s, "broken pipe") ||
 		strings.Contains(s, "connection reset") ||
-		strings.Contains(s, "process stdout closed")
+		strings.Contains(s, "process stdout closed") ||
+		strings.Contains(s, "codexapp runtime stopped")
 }
 
 func (s *Session) resetDeadConnection(err error) bool {
