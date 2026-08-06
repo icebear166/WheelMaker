@@ -18940,7 +18940,7 @@ export function App() {
                           return;
                         }
                       }
-                      const shouldSendChatOnEnter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing;
+                      const shouldSendChatOnEnter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey && !event.nativeEvent.isComposing;
                       if (!shouldSendChatOnEnter) {
                         return;
                       }
