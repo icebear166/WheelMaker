@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+const (
+	immutableCacheControl = "public, max-age=31536000, immutable"
+	noCacheControl        = "no-cache"
+	immutableAssetRegexp  = `^/.+\.[0-9a-fA-F]{8,}\.(js|css|woff2?|ttf|eot|svg|ico|png|jpe?g|gif|webp|avif|wasm)$`
+)
+
 func CompileConfig(global GlobalConfig, sites []SiteConfig) ([]byte, error) {
 	return CompileConfigAt(global, sites, "")
 }
@@ -156,15 +162,31 @@ func workspaceRoutes(site SiteConfig) []any {
 			"handle": []any{reverseProxyHandler(site.UpstreamAddress())},
 		},
 		map[string]any{
-			"match": []any{map[string]any{"file": map[string]any{
-				"root":      root,
-				"try_files": []string{"{http.request.uri.path}"},
-			}}},
-			"handle": []any{securityHeadersHandler(), fileServerHandler(root)},
+			"match": []any{map[string]any{
+				"file":        fileMatcher(root),
+				"path_regexp": map[string]any{"name": "immutable-assets", "pattern": immutableAssetRegexp},
+			}},
+			"handle": []any{
+				securityHeadersHandler(),
+				cacheHeadersHandler(immutableCacheControl),
+				encodeHandler(),
+				fileServerHandler(root),
+			},
+		},
+		map[string]any{
+			"match": []any{map[string]any{"file": fileMatcher(root)}},
+			"handle": []any{
+				securityHeadersHandler(),
+				cacheHeadersHandler(noCacheControl),
+				encodeHandler(),
+				fileServerHandler(root),
+			},
 		},
 		map[string]any{
 			"handle": []any{
 				securityHeadersHandler(),
+				cacheHeadersHandler(noCacheControl),
+				encodeHandler(),
 				map[string]any{"handler": "rewrite", "uri": "/index.html"},
 				fileServerHandler(root),
 			},
@@ -175,8 +197,15 @@ func workspaceRoutes(site SiteConfig) []any {
 func releaseServerRoutes(site SiteConfig) []any {
 	return []any{
 		map[string]any{
-			"handle": []any{reverseProxyHandler(site.UpstreamAddress())},
+			"handle": []any{encodeHandler(), reverseProxyHandler(site.UpstreamAddress())},
 		},
+	}
+}
+
+func fileMatcher(root string) map[string]any {
+	return map[string]any{
+		"root":      root,
+		"try_files": []string{"{http.request.uri.path}"},
 	}
 }
 
@@ -200,6 +229,29 @@ func fileServerHandler(root string) map[string]any {
 	return map[string]any{
 		"handler": "file_server",
 		"root":    root,
+	}
+}
+
+func encodeHandler() map[string]any {
+	return map[string]any{
+		"handler": "encode",
+		"encodings": map[string]any{
+			"gzip": map[string]any{},
+			"zstd": map[string]any{},
+		},
+		"prefer":         []string{"zstd", "gzip"},
+		"minimum_length": 512,
+	}
+}
+
+func cacheHeadersHandler(value string) map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"response": map[string]any{
+			"set": map[string]any{
+				"Cache-Control": []string{value},
+			},
+		},
 	}
 }
 

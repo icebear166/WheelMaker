@@ -91,6 +91,9 @@ func TestCompileConfigIncludesWorkspaceRoutesAndAutomaticTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompileConfig() error = %v", err)
 	}
+	if err := ValidateJSON(compiled); err != nil {
+		t.Fatalf("ValidateJSON() error = %v", err)
+	}
 
 	var document map[string]any
 	if err := json.Unmarshal(compiled, &document); err != nil {
@@ -104,6 +107,97 @@ func TestCompileConfigIncludesWorkspaceRoutesAndAutomaticTLS(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("compiled config does not contain %q", want)
 		}
+	}
+}
+
+func TestCompileConfigAddsCompressionAndCacheHeadersToWorkspaceAssets(t *testing.T) {
+	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
+	site := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteWorkspace,
+		PublicURL: "https://workspace.example.com",
+		WebRoot:   filepath.Join(t.TempDir(), "web"),
+		Upstream:  "http://127.0.0.1:9630",
+	}
+	compiled, err := CompileConfig(global, []SiteConfig{site})
+	if err != nil {
+		t.Fatalf("CompileConfig() error = %v", err)
+	}
+	if err := ValidateJSON(compiled); err != nil {
+		t.Fatalf("ValidateJSON() error = %v", err)
+	}
+
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatalf("compiled JSON is invalid: %v", err)
+	}
+	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
+	if !ok || len(routes) < 4 {
+		t.Fatalf("workspace routes = %#v, want websocket, immutable, static, and fallback routes", routes)
+	}
+
+	if containsHandler(routes[0], "encode") {
+		t.Fatal("WebSocket route must not install the encode handler")
+	}
+	immutable := routes[1]
+	if !containsHandler(immutable, "encode") {
+		t.Fatal("immutable asset route must install the encode handler")
+	}
+	encodings, ok := deepValue(immutable, "handle", "2", "encodings").(map[string]any)
+	if !ok || len(encodings) != 2 {
+		t.Fatalf("immutable encodings = %#v, want zstd and gzip", encodings)
+	}
+	for _, name := range []string{"zstd", "gzip"} {
+		if _, ok := encodings[name]; !ok {
+			t.Errorf("immutable encodings missing %q", name)
+		}
+	}
+	if got := deepString(immutable, "match", "0", "path_regexp", "pattern"); got == "" {
+		t.Fatal("immutable asset route must match hashed asset paths")
+	}
+	if got := deepString(immutable, "handle", "1", "response", "set", "Cache-Control", "0"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("immutable Cache-Control = %q", got)
+	}
+
+	static := routes[2]
+	if !containsHandler(static, "encode") {
+		t.Fatal("static route must install the encode handler")
+	}
+	if got := deepString(static, "handle", "1", "response", "set", "Cache-Control", "0"); got != "no-cache" {
+		t.Fatalf("static Cache-Control = %q, want no-cache", got)
+	}
+	fallback := routes[len(routes)-1]
+	if !containsHandler(fallback, "encode") {
+		t.Fatal("SPA fallback route must install the encode handler")
+	}
+	if got := deepString(fallback, "handle", "1", "response", "set", "Cache-Control", "0"); got != "no-cache" {
+		t.Fatalf("fallback Cache-Control = %q, want no-cache", got)
+	}
+}
+
+func TestCompileConfigAddsCompressionToReleaseServerResponses(t *testing.T) {
+	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
+	site := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteReleaseServer,
+		PublicURL: "https://release.example.com",
+		Upstream:  "http://127.0.0.1:9680",
+	}
+	compiled, err := CompileConfig(global, []SiteConfig{site})
+	if err != nil {
+		t.Fatalf("CompileConfig() error = %v", err)
+	}
+
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatalf("compiled JSON is invalid: %v", err)
+	}
+	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
+	if !ok || len(routes) != 1 {
+		t.Fatalf("release server routes = %#v, want one route", routes)
+	}
+	if !containsHandler(routes[0], "encode") {
+		t.Fatal("release server route must install the encode handler")
 	}
 }
 
@@ -227,6 +321,12 @@ func TestValidateJSONRejectsMalformedGeneratedConfig(t *testing.T) {
 }
 
 func deepString(value any, path ...string) string {
+	value = deepValue(value, path...)
+	result, _ := value.(string)
+	return result
+}
+
+func deepValue(value any, path ...string) any {
 	for _, part := range path {
 		switch current := value.(type) {
 		case map[string]any:
@@ -234,15 +334,35 @@ func deepString(value any, path ...string) string {
 		case []any:
 			var index int
 			if err := parseIndex(part, &index); err != nil || index < 0 || index >= len(current) {
-				return ""
+				return nil
 			}
 			value = current[index]
 		default:
-			return ""
+			return nil
 		}
 	}
-	result, _ := value.(string)
-	return result
+	return value
+}
+
+func containsHandler(value any, want string) bool {
+	switch current := value.(type) {
+	case map[string]any:
+		if handler, ok := current["handler"].(string); ok && handler == want {
+			return true
+		}
+		for _, child := range current {
+			if containsHandler(child, want) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if containsHandler(child, want) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func parseIndex(value string, target *int) (err error) {
