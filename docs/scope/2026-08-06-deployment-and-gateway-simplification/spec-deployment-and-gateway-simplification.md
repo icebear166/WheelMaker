@@ -12,7 +12,7 @@
 
 - **入口实现是否属于业务部署参数？** 不属于。删除 Workspace 和 Release Server 的 `--gateway=none|caddy`。
 - **公开地址存在哪里？** 存在对应业务服务自己的 `config.json`，字段统一为 `publicUrl`。Gateway Home 的 `config.json` 仍只存宿主机级 ACME 和日志设置，不存站点域名。
-- **Workspace 如何获得公开地址？** 已有 `~/.wheelmaker/config.json.publicUrl` 时复用；首次交互部署缺失时询问“WheelMaker server public URL”；首次非交互部署缺失时要求 `--public-url`。公开地址必须是仅含协议、host 和可选端口的 HTTP(S) origin。
+- **Workspace 如何获得公开地址？** 已有 `~/.wheelmaker/config.json.publicUrl` 时复用；首次交互部署缺失时询问“WheelMaker server public URL”；首次非交互部署缺失时要求 `--public-url`。输入接受裸域名或带协议的地址，保存前统一为仅含协议、host 和可选端口的 HTTP(S) origin；裸域名默认使用 `https://`。
 - **站点配置何时写？** Workspace 完整部署和 `update` 均从业务配置重新生成 `~/.wheelmaker/gateway/sites/workspace.json`；Release Server 每次远程部署均生成 `release-server.json`。写站点文件不检查、不安装、不升级、不启停 Gateway。
 - **旧 Workspace 如何升级？** `update` 遇到缺少 `publicUrl` 的旧配置时警告并跳过站点文件生成，但不阻断 Hub/Web 升级。下一次完整交互部署补齐地址。
 - **Caddy 如何单独部署？** 只保留 `node deploy.mjs gateway`。它幂等地安装或升级 stable 指向的 Gateway、注册开机服务并确保运行。删除 `gateway-update`。

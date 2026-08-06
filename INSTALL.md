@@ -49,8 +49,9 @@ sudo loginctl enable-linger "$USER"
 
 全新安装不需要克隆或进入源码仓库。以下整行命令可在任意目录执行：它把公共
 `deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，再安装当前 stable。首次交互部署会
-询问 “WheelMaker server public URL”，并把完整 HTTP(S) origin 保存到
-`~/.wheelmaker/config.json.publicUrl`。
+询问 “WheelMaker server public URL:”，并把地址保存到
+`~/.wheelmaker/config.json.publicUrl`。可以输入裸域名（例如
+`wheelmaker.example.com`）或带 `https://` 的地址；裸域名会自动按 HTTPS 保存。
 
 Windows PowerShell：
 
@@ -146,7 +147,8 @@ Registry 入口机负责：
 
 要点：
 
-- `publicUrl` 是客户端访问的完整 HTTP(S) origin，也是生成 Workspace 站点声明的来源。
+- `publicUrl` 是客户端访问的完整 HTTP(S) origin，也是生成 Workspace 站点声明的来源；
+  部署交互输入裸域名时会自动补全 `https://`。
 - `projects[].path` 改成实际 checkout 路径。
 - `registry.server` 在 Registry 入口机上用 `127.0.0.1`。
 - `registry.token` 使用共享 token。

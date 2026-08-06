@@ -2205,9 +2205,13 @@ function parsePublicUrl(value) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error('publicUrl is required');
   }
+  const input = value.trim();
+  const normalizedInput = /^[a-z][a-z\d+.-]*:\/\//i.test(input)
+    ? input
+    : `https://${input}`;
   let url;
   try {
-    url = new URL(value);
+    url = new URL(normalizedInput);
   } catch {
     throw new Error('publicUrl must be a valid URL');
   }
@@ -2386,7 +2390,8 @@ export function createGatewayQuestioner({input = process.stdin, output = process
   return {
     ask: async (question, defaultValue = '') => {
       const suffix = defaultValue ? ` [${defaultValue}]` : '';
-      const answer = await readline.question(`${question}${suffix} `);
+      const label = question.endsWith(':') ? question : `${question}:`;
+      const answer = await readline.question(`${label}${suffix}\n`);
       return answer === '' ? defaultValue : answer;
     },
     close: () => readline.close(),

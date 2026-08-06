@@ -42,6 +42,13 @@ test('deployment options accept one normalized business public URL', () => {
     },
   );
   assert.deepEqual(
+    parsePublicURLDeploymentOptions(['--public-url=workspace.example.com']),
+    {
+      commandArgs: [],
+      publicUrl: 'https://workspace.example.com',
+    },
+  );
+  assert.deepEqual(
     parsePublicURLDeploymentOptions(['update']),
     {commandArgs: ['update'], publicUrl: undefined},
   );

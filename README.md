@@ -51,7 +51,7 @@ The target machine does not need the WheelMaker source tree, Git, Go, npm, or a 
 sudo loginctl enable-linger "$USER"
 ```
 
-For a new installation, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the **Deploy WheelMaker** command for your platform. It can run from any directory, downloads the launcher to `~/.wheelmaker`, and installs the current stable release. The first interactive install asks for the WheelMaker server public URL; automation can pass `--public-url=https://host.example`. Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
+For a new installation, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the **Deploy WheelMaker** command for your platform. It can run from any directory, downloads the launcher to `~/.wheelmaker`, and installs the current stable release. The first interactive install asks for the WheelMaker server public URL; enter either a bare hostname or an `https://` URL (bare hostnames are stored as HTTPS), and automation can pass `--public-url=https://host.example`. Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
 
 The homepage also provides an independent **Deploy built-in Gateway** command. It runs `node deploy.mjs gateway`, which idempotently installs or upgrades the embedded-Caddy entrypoint and ensures its service is running. Normal WheelMaker deploys and updates only generate `gateway/sites/workspace.json`; they never install, stop, or restart Gateway. Nginx remains supported and can ignore that generated file.
 

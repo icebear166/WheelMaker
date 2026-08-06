@@ -54,8 +54,9 @@ upstream。是否生成站点配置和是否采用内置 Gateway 是两件独立
 
 ## 公开地址
 
-- `publicUrl` 必须是只包含 HTTP(S) 协议、hostname、可选端口和根路径 `/` 的完整
+- `publicUrl` 最终保存为只包含 HTTP(S) 协议、hostname、可选端口和根路径 `/` 的完整
   origin，例如 `https://wheelmaker.example.com` 或 `https://example.com:28800`。
+  交互输入和 `--public-url` 同时接受裸域名；没有协议时自动按 `https://` 规范化。
 - Workspace 已有 `~/.wheelmaker/config.json.publicUrl` 时复用。首次交互完整部署会
   询问 “WheelMaker server public URL”；首次非交互部署必须传 `--public-url`。
 - `deploy.mjs update` 从已有配置重新生成 `workspace.json`。旧配置缺少地址时只警告并

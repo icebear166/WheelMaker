@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 
 import {
@@ -9,6 +10,7 @@ import {
   createLegacyMigrationAdapter,
   createRuntimeAdapter,
   currentPlatformKey,
+  createGatewayQuestioner,
   darwinRuntimeFiles,
   finishUpdate,
   linuxRuntimeFiles,
@@ -298,11 +300,13 @@ test('first noninteractive full deployment requires a public URL', async (t) => 
 
 test('first interactive full deployment asks for and stores the server public URL', async (t) => {
   const fixture = await installFixture(t);
+  const userHome = join(dirname(fixture.home), 'login-home');
+  fixture.deps.userHome = userHome;
   const questions = [];
   fixture.deps.interactive = true;
   const ask = async (question) => {
     questions.push(question);
-    return 'https://workspace.example.com:8443';
+    return 'workspace.example.com:8443';
   };
   fixture.deps.publicURLQuestion = ask;
   fixture.deps.gatewayQuestion = ask;
@@ -312,6 +316,24 @@ test('first interactive full deployment asks for and stores the server public UR
   assert.deepEqual(questions, ['WheelMaker server public URL']);
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.equal(config.publicUrl, 'https://workspace.example.com:8443');
+  const site = JSON.parse(await readFile(
+    join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json'),
+    'utf8',
+  ));
+  assert.equal(site.publicUrl, 'https://workspace.example.com:8443');
+});
+
+test('interactive public URL prompt uses a visible colon and a new line', async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const chunks = [];
+  output.on('data', chunk => chunks.push(chunk));
+  const questioner = createGatewayQuestioner({input, output});
+  const answerPromise = questioner.ask('WheelMaker server public URL');
+  input.end('workspace.example.com\n');
+  assert.equal(await answerPromise, 'workspace.example.com');
+  questioner.close();
+  assert.match(Buffer.concat(chunks).toString('utf8'), /WheelMaker server public URL:\r?\n/);
 });
 
 test('full deployment reuses the configured public URL without asking', async (t) => {

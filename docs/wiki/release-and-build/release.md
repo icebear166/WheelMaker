@@ -41,7 +41,8 @@ Gateway 产物发布与目标机入口配置是两条独立控制流。目标机
 用户的 `~/.wheelmaker/gateway/sites`，各个部署器只维护自己的站点文件。
 
 业务服务不再接受 Gateway selector。Workspace 的 `config.json.publicUrl` 由已有配置、
-交互询问或完整部署的 `--public-url` 获得；Release Server 的 `publicUrl` 来自 release
+交互询问或完整部署的 `--public-url` 获得；输入可以是裸域名或带 `https://` 的地址，
+部署器会统一保存为规范化 HTTP(S) origin，裸域名默认使用 HTTPS；Release Server 的 `publicUrl` 来自 release
 channel。Workspace 完整部署与 update 始终派生 `workspace.json`，Release Server 部署
 始终派生 `release-server.json`。写站点 JSON 不安装、验证、render、reload 或控制
 Nginx/Caddy；同一用户部署时两者自然聚合到同一 Gateway Home。
