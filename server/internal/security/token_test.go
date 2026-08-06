@@ -45,8 +45,12 @@ var _ io.Reader = errorReader{}
 
 func TestValidateRegistryTokenRejectsUnsafeValues(t *testing.T) {
 	for _, token := range []string{"", "   ", "wheelmaker-local-token"} {
-		if err := ValidateRegistryToken(token); err == nil {
+		err := ValidateRegistryToken(token)
+		if err == nil {
 			t.Fatalf("ValidateRegistryToken(%q) succeeded, want rejection", token)
+		}
+		if err.Error() != "token must be a non-default value" {
+			t.Fatalf("ValidateRegistryToken(%q) error=%q, want top-level token field", token, err)
 		}
 	}
 }

@@ -13,7 +13,7 @@ const registryTokenBytes = 32
 
 const LegacyRegistryToken = "wheelmaker-local-token"
 
-var ErrUnsafeRegistryToken = errors.New("registry.token must be a non-default value")
+var ErrUnsafeRegistryToken = errors.New("token must be a non-default value")
 
 // NewRegistryToken returns a 256-bit Base64URL token from source.
 func NewRegistryToken(source io.Reader) (string, error) {
