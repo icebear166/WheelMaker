@@ -485,6 +485,8 @@ export interface RegistrySessionUsage {
 export interface RegistrySessionActionCapability {
   supported: boolean;
   reason?: string;
+  currentSession?: boolean;
+  historicalTurn?: boolean;
 }
 
 export interface RegistrySessionActionCapabilities {

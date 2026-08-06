@@ -783,6 +783,42 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 			return err
 		}
 		return c.sendSessionPrompt(ctx, p, result)
+	case protocol.MethodSessionSteering:
+		var p protocol.SessionSteeringParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		messageID := protocol.WMSessionSteeringMessageID(p.Meta)
+		if messageID == "" {
+			messageID = fmt.Sprintf("native-steer-%d", time.Now().UnixNano())
+		}
+		out, err := c.SteerSession(ctx, p.SessionID, messageID, p.Prompt)
+		if err != nil {
+			return err
+		}
+		return assignResult(result, protocol.SessionSteeringResponse{
+			Outcome:        protocol.SessionSteeringOutcomeInjected,
+			ProviderTurnID: out.ProviderTurnID,
+		})
+	case protocol.MethodSessionFork:
+		var p protocol.SessionForkParams
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		var forked protocol.SessionForkResult
+		var err error
+		if extension, ok := protocol.WMSessionForkExtensionFromMeta(p.Meta); ok {
+			forked, err = c.ForkSession(ctx, p.SessionID, extension.Ref, extension.Prompts)
+		} else {
+			forked, err = c.ForkCurrentSession(ctx, p.SessionID)
+		}
+		if err != nil {
+			return err
+		}
+		return assignResult(result, protocol.SessionForkResponse{
+			SessionID:     forked.SessionID,
+			ConfigOptions: append([]protocol.ConfigOption(nil), forked.ConfigOptions...),
+		})
 	case protocol.MethodSetConfigOption:
 		var request protocol.SetSessionConfigOptionRequest
 		if err := remarshal(params, &request); err != nil {
@@ -1054,7 +1090,10 @@ func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.Initi
 				Audio:           false,
 				EmbeddedContext: false,
 			},
-			SessionCapabilities: &protocol.SessionCapabilities{List: &protocol.SessionListCapability{}},
+			SessionCapabilities: &protocol.SessionCapabilities{
+				List: &protocol.SessionListCapability{},
+				Fork: &protocol.SessionForkCapability{},
+			},
 			Meta: protocol.BuildWMAgentCapabilitiesMeta(nil, protocol.WMAgentExtensionCapabilities{
 				MessageLifecycle: true,
 				GoalLifecycle:    true,
@@ -1063,6 +1102,7 @@ func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.Initi
 				},
 			}),
 		},
+		Meta: json.RawMessage(`{"steering":{"supported":true}}`),
 	}
 	c.mu.Lock()
 	c.wmInitialized = true
@@ -1432,6 +1472,44 @@ func (c *codexappConn) ForkSession(ctx context.Context, sessionID string, lastTu
 		SessionID:  targetThreadID,
 		Title:      strings.TrimSpace(resp.Thread.displayTitle()),
 		ForkPoints: points,
+	}, nil
+}
+
+func (c *codexappConn) ForkCurrentSession(ctx context.Context, sessionID string) (protocol.SessionForkResult, error) {
+	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), c.mappedThreadID(sessionID), strings.TrimSpace(sessionID))
+	if threadID == "" {
+		return protocol.SessionForkResult{}, errors.New("codexapp current fork requires sessionId")
+	}
+	c.mu.Lock()
+	lastTurnID := strings.TrimSpace(c.lastTurnID)
+	c.mu.Unlock()
+	if lastTurnID == "" {
+		var resp appServerThreadStartResponse
+		if err := c.runtime.request(ctx, "thread/read", appServerThreadReadParams{ThreadID: threadID, IncludeTurns: true}, &resp); err != nil {
+			return protocol.SessionForkResult{}, err
+		}
+		for index := len(resp.Thread.Turns) - 1; index >= 0; index-- {
+			turn := resp.Thread.Turns[index]
+			if strings.TrimSpace(turn.ID) != "" && strings.EqualFold(strings.TrimSpace(turn.Status), "completed") {
+				lastTurnID = strings.TrimSpace(turn.ID)
+				break
+			}
+		}
+	}
+	if lastTurnID == "" {
+		return protocol.SessionForkResult{}, errors.New("codexapp current fork requires a completed turn")
+	}
+	var resp appServerThreadStartResponse
+	if err := c.runtime.request(ctx, "thread/fork", appServerThreadForkParams{ThreadID: threadID, LastTurnID: lastTurnID}, &resp); err != nil {
+		return protocol.SessionForkResult{}, err
+	}
+	targetThreadID := strings.TrimSpace(resp.Thread.ID)
+	if targetThreadID == "" {
+		return protocol.SessionForkResult{}, errors.New("codexapp thread/fork returned empty thread id")
+	}
+	return protocol.SessionForkResult{
+		SessionID: targetThreadID,
+		Title:     strings.TrimSpace(resp.Thread.displayTitle()),
 	}, nil
 }
 

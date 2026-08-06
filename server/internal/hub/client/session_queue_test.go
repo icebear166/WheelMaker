@@ -714,16 +714,24 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 	if len(s.queueSnapshot(true).WaitingItems) != 1 {
 		t.Fatal("unnegotiated lifecycle metadata removed the item")
 	}
-	s.AgentEvent(acp.AgentEvent{
-		SessionID:        "sess-steer",
-		MessageLifecycle: true,
+	correlated := acp.AgentEvent{
+		SessionID: "sess-steer",
 		Update: acp.AgentMessageEvent{
-			Kind:      acp.SessionUpdateUserMessageChunk,
-			MessageID: "steer-1",
-			Meta:      acp.BuildSessionUpdateMetaLifecycle("", true, true),
+			Kind:            acp.SessionUpdateUserMessageChunk,
+			Content:         acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "change direction"},
+			MessageID:       "provider-message",
+			ClientMessageID: "steer-1",
+			Steered:         true,
 		},
-	})
-	eventuallyQueue(t, func() bool { return len(s.queueSnapshot(true).WaitingItems) == 0 })
+	}
+	projected, err := correlated.LegacySessionUpdate()
+	if err != nil || !projected.Update.Steered || projected.Update.ClientMessageID != "steer-1" {
+		t.Fatalf("native steer projection = %#v err=%v", projected, err)
+	}
+	s.AgentEvent(correlated)
+	if got := s.queueSnapshot(true); len(got.WaitingItems) != 0 {
+		t.Fatalf("provider-neutral native steer correlation did not remove queue item: %#v", got)
+	}
 	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
 }
 

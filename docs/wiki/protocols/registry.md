@@ -641,6 +641,8 @@ Registry 2.7 的普通 Session summary/read 与新 archive manifest/read 都可�
 
 该字段来自 ACP initialize 的双向扩展协商，决定 App 是否启用 Completed Work；新实时 Session 不按 agent ID 猜测。旧 WMT2/manifest 缺失字段时保持缺失，仅展示层可为历史 codex/cx-deepseek 数据保留回退。
 
+Session summary 的 provider-neutral `sessionActions` 同时投影 ACP native capability 与 WheelMaker WM capability。`sessionActions.fork.historicalTurn=true` 表示可以从带 fork point 的历史 turn 分叉，`currentSession=true` 表示可以从当前 Session 分叉。标准 ACP `fork + loadSession` 声明不会自动开启 current mode；它还需要通过 target 独立 load/继续 prompt E2E 并显式开启 WheelMaker release gate。旧 summary 缺少 mode 时按 `historicalTurn=true, currentSession=false` 解释。App 根据这两个 capability 选择历史消息上的 fork button 或 Session Header/Menu 的 current-session fork 入口，不按 `agentType` 分支。
+
 ### Session Queue
 
 `session.queue` 是 prompt 与 compact 的统一入口，替换 `session.send`、`session.compact`、`session.cancel` 和 `session.steer`，不保留旧方法兼容。Payload 使用 action union，action 仅为：
@@ -691,9 +693,9 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
 
 > 决策来源：[`docs/scope/2026-07-26-session-color-mark/spec-session-color-mark.md`](../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md)
 
-### Codex 会话分叉
+### Session 会话分叉
 
-`session.fork` 从一个已经完成且有精确原生映射的 `prompt_done` 创建独立会话：
+`session.fork` 统一使用一个 method。缺少 `turnIndex` 表示当前 session fork；携带 `turnIndex` 表示 historical turn fork。历史 turn fork 要求已经完成且有精确原生映射的 `prompt_done`，显式的零或负数 `turnIndex` 无效：
 
 ```json
 {
@@ -705,6 +707,20 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
   }
 }
 ```
+
+当前 session fork：
+
+```json
+{
+  "method": "session.fork",
+  "projectId": "hub-a:WheelMaker",
+  "payload": {
+    "sessionId": "source-session",
+  }
+}
+```
+
+Hub 只在 source summary 明确携带 `currentSession=true` 时接受无 `turnIndex` 请求，并在发布本地 child 前用独立 Agent instance 验证 target `session/load`。`claude-agent-acp 0.65.0` 当前未通过该验证（返回的 target ID load 为 `Resource not found`），因此 Claude summary 不发布该 mode，App 不显示入口。
 
 成功响应：
 
@@ -724,17 +740,18 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
 
 持久化和显示规则：
 
-- 新完成的 `prompt_done.param` 可携带 provider-neutral 的 `forkPoint: {provider, ref}`。Codex 的 `ref` 是原生 turn ID，但通用会话层不保存 `codexTurnId` 之类的 provider 专用字段。
+- 新完成的 `prompt_done.param` 可携带 provider-neutral 的 `forkPoint: {provider, ref}`。Codex 的 `ref` 是原生 turn ID，但通用会话层不保存 `codexTurnId` 之类的 provider 专用字段。携带 `turnIndex` 时使用该映射；当前 session fork 不伪造历史 fork point。
 - 老 Codex 历史没有 `forkPoint` 时，`session.read` 通过 `thread/read` 对完整 prompt 序列做精确匹配，只在响应内存中补充映射；不匹配时不猜测，也不重写 WMT2。
 - 目标会话复制所选完成 turn 之前的 WMT2 历史、diff artifacts 和被引用附件，并把所有已映射的 `forkPoint` 改写成目标 Codex thread 的 turn ID。源会话和目标会话没有共享的可变历史文件。
 - 目标摘要携带 `forkedFrom`，归档 manifest 与恢复流程保留该来源标记。复制历史末尾追加一个已完成的 `session_operation`，其中 `type:"fork"` 且携带相同的 `forkedFrom`，供前端显示被动提示行。
-- `forkPoint`、`forkedFrom` 与 `session.fork` 属于 Registry 2.7 Session 契约；WMT2 文件版本不变。
+- Codex 的历史 turn fork 继续通过 `_wm/session/fork/resolve` 与 `_wm/session/fork` 传递 provider ref 和 prompt history；统一 method 由 Hub 将其封装到 `session/fork` 的 `_meta.wm.fork`；通过 release gate 的 Claude-compatible provider 才会把无 `turnIndex` 请求映射到 ACP `session/fork`，且不提供历史 turn fork。
+- `forkPoint`、`forkedFrom`、可选 `turnIndex` 与 `session.fork` 属于 Registry 2.7 Session 契约；WMT2 文件版本不变。旧 summary 缺少 fork mode 时保持历史 turn UI 行为。
 
-> 决策与实施计划：[`docs/scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md`](../../scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md)
+> 历史 turn fork 决策与实施计划：[`docs/scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md`](../../scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md)。Claude ACP 对齐决策：[`docs/scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md)
 
 ## 9. Registry Relay
 
-Session 的可选 Agent 控制面继续使用 project-scoped forwarding。Goal 使用 `session.goal.create`、`session.goal.get`、`session.goal.update`、`session.goal.stop`、`session.goal.clear`；Session summary 的 `sessionActions.goal` 声明 provider support，`goal` 携带最新 snapshot。Hub 到 Agent 的调用统一映射为 capability-gated `_wm/session/*` ACP 扩展，不再走隐藏 provider 接口。字段和状态语义见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。
+Session 的可选 Agent 控制面继续使用 project-scoped forwarding。Goal 使用 `session.goal.create`、`session.goal.get`、`session.goal.update`、`session.goal.stop`、`session.goal.clear`；Session summary 的 `sessionActions.goal` 声明 provider support，`goal` 携带最新 snapshot。Hub 到 Agent 的调用按能力映射：Claude steering 使用 native `_session/steering`，通过 release gate 的当前 session fork 使用 `session/fork`，Codex 历史 fork 与 WheelMaker-specific compact/goal/archive 继续使用 capability-gated `_wm/session/*` ACP 扩展。字段和状态语义见 [`../agents/session-capabilities.md`](../agents/session-capabilities.md)。
 
 Relay 是 Registry 自有全局控制器，不进入 HubState。
 
@@ -903,7 +920,7 @@ Debug：
 1. 正常 App/Hub 连接硬切到 `2.7`，不读写旧 ACP 私有根字段；`2.6` Hub 只保留 `update_only` 升级通道，`2.6` App 拒绝连接。
 2. Session summary/read 与新 archive manifest/read 新增 `sessionFeatures.messageLifecycle:{version:1}`，作为 Completed Work 的实时能力依据。
 3. ACP 消息统一使用标准 `content`、`messageId` 和完整 `_meta`；tool rich content 完整进入内部 WMT2 投影，WMT2 仍为 v2。
-4. WheelMaker ACP 扩展统一进入 `_meta.wm` 与 `_wm/*`，Session action 不再依赖隐藏的 provider transport。
+4. WheelMaker-specific ACP 扩展继续进入 `_meta.wm` 与 `_wm/*`；Claude-compatible native steering 通过已协商的 ACP method 接入，current-session fork 还受真实 lifecycle release gate 约束，Session action 不依赖 provider name 猜测。
 
 决策来源：[`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
 

@@ -44,6 +44,33 @@ type AgentCapabilities struct {
 	MCPCapabilities     *MCPCapabilities     `json:"mcpCapabilities,omitempty"`
 	SessionCapabilities *SessionCapabilities `json:"sessionCapabilities,omitempty"`
 	Meta                json.RawMessage      `json:"_meta,omitempty"`
+	unknown             map[string]json.RawMessage
+}
+
+// MarshalJSON preserves capabilities introduced by newer ACP versions while
+// keeping known fields authoritative.
+func (c AgentCapabilities) MarshalJSON() ([]byte, error) {
+	type wire AgentCapabilities
+	return marshalCapabilitiesJSON(wire(c), c.unknown,
+		"loadSession", "promptCapabilities", "mcpCapabilities", "sessionCapabilities", "_meta")
+}
+
+// UnmarshalJSON decodes known capabilities and retains unknown ones for later
+// persistence and forwarding.
+func (c *AgentCapabilities) UnmarshalJSON(raw []byte) error {
+	type wire AgentCapabilities
+	var decoded wire
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	unknown, err := decodeUnknownCapabilitiesJSON(raw,
+		"loadSession", "promptCapabilities", "mcpCapabilities", "sessionCapabilities", "_meta")
+	if err != nil {
+		return err
+	}
+	*c = AgentCapabilities(decoded)
+	c.unknown = unknown
+	return nil
 }
 
 // PromptCapabilities declares which content block types the agent accepts in prompts.
@@ -63,12 +90,100 @@ type MCPCapabilities struct {
 
 // SessionCapabilities declares optional session-level capabilities.
 type SessionCapabilities struct {
-	List *SessionListCapability `json:"list,omitempty"`
-	Meta json.RawMessage        `json:"_meta,omitempty"`
+	List                  *SessionListCapability      `json:"list,omitempty"`
+	Fork                  *SessionForkCapability      `json:"fork,omitempty"`
+	Delete                *SessionLifecycleCapability `json:"delete,omitempty"`
+	Resume                *SessionLifecycleCapability `json:"resume,omitempty"`
+	Close                 *SessionLifecycleCapability `json:"close,omitempty"`
+	AdditionalDirectories *SessionLifecycleCapability `json:"additionalDirectories,omitempty"`
+	Meta                  json.RawMessage             `json:"_meta,omitempty"`
+	unknown               map[string]json.RawMessage
+}
+
+// MarshalJSON preserves session capabilities introduced by newer ACP
+// versions while keeping known fields authoritative.
+func (c SessionCapabilities) MarshalJSON() ([]byte, error) {
+	type wire SessionCapabilities
+	return marshalCapabilitiesJSON(wire(c), c.unknown,
+		"list", "fork", "delete", "resume", "close", "additionalDirectories", "_meta")
+}
+
+// UnmarshalJSON decodes known session capabilities and retains unknown ones
+// for later persistence and forwarding.
+func (c *SessionCapabilities) UnmarshalJSON(raw []byte) error {
+	type wire SessionCapabilities
+	var decoded wire
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	unknown, err := decodeUnknownCapabilitiesJSON(raw,
+		"list", "fork", "delete", "resume", "close", "additionalDirectories", "_meta")
+	if err != nil {
+		return err
+	}
+	*c = SessionCapabilities(decoded)
+	c.unknown = unknown
+	return nil
+}
+
+func marshalCapabilitiesJSON(known any, unknown map[string]json.RawMessage, knownKeys ...string) ([]byte, error) {
+	raw, err := json.Marshal(known)
+	if err != nil {
+		return nil, err
+	}
+	if len(unknown) == 0 {
+		return raw, nil
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	reserved := make(map[string]struct{}, len(knownKeys))
+	for _, key := range knownKeys {
+		reserved[key] = struct{}{}
+	}
+	for key, value := range unknown {
+		if _, known := reserved[key]; known {
+			continue
+		}
+		object[key] = cloneRaw(value)
+	}
+	return json.Marshal(object)
+}
+
+func decodeUnknownCapabilitiesJSON(raw []byte, knownKeys ...string) (map[string]json.RawMessage, error) {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	for _, key := range knownKeys {
+		delete(object, key)
+	}
+	if len(object) == 0 {
+		return nil, nil
+	}
+	unknown := make(map[string]json.RawMessage, len(object))
+	for key, value := range object {
+		unknown[key] = cloneRaw(value)
+	}
+	return unknown, nil
 }
 
 // SessionListCapability is an opaque marker indicating session/list is supported.
 type SessionListCapability struct {
+	Meta json.RawMessage `json:"_meta,omitempty"`
+}
+
+// SessionForkCapability is an opaque marker indicating standard session/fork
+// is supported. ACP providers may add provider-specific metadata to it.
+type SessionForkCapability struct {
+	Meta json.RawMessage `json:"_meta,omitempty"`
+}
+
+// SessionLifecycleCapability is an opaque marker for standard session
+// lifecycle operations such as delete, resume, close, and additional
+// directory support.
+type SessionLifecycleCapability struct {
 	Meta json.RawMessage `json:"_meta,omitempty"`
 }
 
@@ -282,6 +397,62 @@ type PermissionResponse struct {
 type SessionLoadResult struct {
 	ConfigOptions []ConfigOption  `json:"configOptions,omitempty"`
 	Meta          json.RawMessage `json:"_meta,omitempty"`
+}
+
+// SessionForkParams creates a child session from the current ACP session.
+// WheelMaker's Codex historical fork adapter may add _meta.wm.fork.
+type SessionForkParams struct {
+	SessionID             string          `json:"sessionId"`
+	CWD                   string          `json:"cwd"`
+	MCPServers            []MCPServer     `json:"mcpServers,omitempty"`
+	AdditionalDirectories []string        `json:"additionalDirectories,omitempty"`
+	Meta                  json.RawMessage `json:"_meta,omitempty"`
+}
+
+// SessionForkResponse is returned after a standard session/fork request.
+type SessionForkResponse struct {
+	SessionID     string          `json:"sessionId"`
+	ConfigOptions []ConfigOption  `json:"configOptions,omitempty"`
+	Meta          json.RawMessage `json:"_meta,omitempty"`
+}
+
+type SessionDeleteParams struct {
+	SessionID string          `json:"sessionId"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
+}
+
+type SessionDeleteResult struct {
+	Meta json.RawMessage `json:"_meta,omitempty"`
+}
+
+// SessionSteeringParams is the Claude-compatible ACP steering request.
+type SessionSteeringParams struct {
+	SessionID string          `json:"sessionId"`
+	Prompt    []ContentBlock  `json:"prompt"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
+}
+
+// SessionSteeringResponse reports how a provider handled a steering request.
+type SessionSteeringResponse struct {
+	Outcome        string          `json:"outcome"`
+	ProviderTurnID string          `json:"turnId,omitempty"`
+	Meta           json.RawMessage `json:"_meta,omitempty"`
+}
+
+// BuildSessionSteeringPromptRequiredMeta requests the ACP provider to report
+// an inactive session instead of silently starting a detached provider turn.
+func BuildSessionSteeringPromptRequiredMeta(base json.RawMessage) json.RawMessage {
+	addition, err := json.Marshal(map[string]any{"steering": map[string]string{
+		"idleBehavior": "promptRequired",
+	}})
+	if err != nil {
+		return CloneSessionUpdateMeta(base)
+	}
+	merged, err := MergeSessionUpdateMeta(base, addition)
+	if err != nil {
+		return addition
+	}
+	return merged
 }
 
 // FSReadTextFileParams is sent by the agent to request a file read.

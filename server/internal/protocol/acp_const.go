@@ -27,6 +27,9 @@ const (
 	MethodSessionCancel     = "session/cancel"
 	MethodSessionLoad       = "session/load"
 	MethodSessionList       = "session/list"
+	MethodSessionFork       = "session/fork"
+	MethodSessionDelete     = "session/delete"
+	MethodSessionSteering   = "_session/steering"
 	MethodSetConfigOption   = "session/set_config_option"
 	MethodRequestPermission = "session/request_permission"
 	MethodFSRead            = "fs/read_text_file"
@@ -37,6 +40,12 @@ const (
 	MethodTerminalKill      = "terminal/kill"
 	MethodTerminalRelease   = "terminal/release"
 	MethodSessionUpdate     = "session/update"
+)
+
+const (
+	SessionSteeringOutcomeInjected       = "injected"
+	SessionSteeringOutcomePromptRequired = "promptRequired"
+	SessionSteeringOutcomeStartedNewTurn = "startedNewTurn"
 )
 
 // --- ACP statuses ---

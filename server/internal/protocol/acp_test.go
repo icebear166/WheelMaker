@@ -11,9 +11,12 @@ func TestACPImplementedTypesPreserveMeta(t *testing.T) {
 	types := []any{
 		&InitializeParams{}, &InitializeResult{}, &ClientCapabilities{}, &FSCapabilities{},
 		&AgentCapabilities{}, &PromptCapabilities{}, &MCPCapabilities{}, &SessionCapabilities{},
+		&SessionListCapability{}, &SessionForkCapability{}, &SessionLifecycleCapability{},
 		&AgentInfo{}, &AuthMethodVar{}, &AuthMethod{}, &AvailableCommand{}, &AvailableCommandInput{},
 		&SessionNewParams{}, &SessionLoadParams{}, &EnvVariable{}, &HttpHeader{},
 		&SessionPromptParams{}, &SessionCancelParams{},
+		&SessionForkParams{}, &SessionForkResponse{}, &SessionDeleteParams{}, &SessionDeleteResult{},
+		&SessionSteeringParams{}, &SessionSteeringResponse{},
 		&PlanEntry{}, &ToolCallLocation{}, &EmbeddedResource{},
 		&ToolCallRef{}, &PermissionRequestParams{}, &PermissionOption{},
 		&PermissionResult{}, &PermissionResponse{}, &SessionLoadResult{},
@@ -268,6 +271,84 @@ func TestWithoutSessionUpdateLifecyclePreservesOtherMetadata(t *testing.T) {
 	want := json.RawMessage(`{"wm":{"future":7},"vendor":{"trace":"keep"}}`)
 	if !jsonEqual(got, want) {
 		t.Fatalf("metadata=%s, want %s", got, want)
+	}
+}
+
+func TestSessionCapabilitiesRoundTripPreservesStandardLifecycleFields(t *testing.T) {
+	raw := []byte(`{"sessionCapabilities":{"fork":{},"delete":{},"resume":{},"close":{},"additionalDirectories":{}}}`)
+	var capabilities AgentCapabilities
+	if err := json.Unmarshal(raw, &capabilities); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(capabilities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"\"fork\"", "\"delete\"", "\"resume\"", "\"close\"", "\"additionalDirectories\""} {
+		if !bytes.Contains(encoded, []byte(field)) {
+			t.Fatalf("encoded capabilities=%s, missing %s", encoded, field)
+		}
+	}
+}
+
+func TestAgentCapabilitiesRoundTripPreservesUnknownFields(t *testing.T) {
+	raw := []byte(`{"loadSession":true,"providers":{"list":{}},"sessionCapabilities":{"fork":{},"futureLifecycle":{"mode":"future"}}}`)
+	var capabilities AgentCapabilities
+	if err := json.Unmarshal(raw, &capabilities); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(capabilities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"\"providers\"", "\"futureLifecycle\""} {
+		if !bytes.Contains(encoded, []byte(field)) {
+			t.Fatalf("encoded capabilities=%s, missing %s", encoded, field)
+		}
+	}
+}
+
+func TestSessionActionsRequireVerifiedCurrentForkAndExposeLegacyHistoricalFork(t *testing.T) {
+	var standard AgentCapabilities
+	if err := json.Unmarshal([]byte(`{"sessionCapabilities":{"fork":{}}}`), &standard); err != nil {
+		t.Fatal(err)
+	}
+	standard.LoadSession = true
+	standardActions := SessionActionsFromAgentCapabilities(standard)
+	if standardActions.Fork.Supported || standardActions.Fork.CurrentSession {
+		t.Fatalf("unverified standard fork actions=%#v, want hidden", standardActions.Fork)
+	}
+
+	verified := standard
+	verified.Meta = BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+		SessionActions: WMSessionActionCapabilities{CurrentSession: true},
+	})
+	verifiedActions := SessionActionsFromAgentCapabilities(verified)
+	if !verifiedActions.Fork.Supported || !verifiedActions.Fork.CurrentSession || verifiedActions.Fork.HistoricalTurn {
+		t.Fatalf("verified standard fork actions=%#v, want current-only", verifiedActions.Fork)
+	}
+
+	codex := AgentCapabilities{
+		LoadSession:         true,
+		SessionCapabilities: &SessionCapabilities{Fork: &SessionForkCapability{}},
+		Meta: BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+			SessionActions: WMSessionActionCapabilities{Fork: true},
+		}),
+	}
+	codexActions := SessionActionsFromAgentCapabilities(codex)
+	if !codexActions.Fork.Supported || codexActions.Fork.CurrentSession || !codexActions.Fork.HistoricalTurn {
+		t.Fatalf("codex fork actions=%#v, want historical-only", codexActions.Fork)
+	}
+
+	legacy := AgentCapabilities{Meta: BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
+		SessionActions: WMSessionActionCapabilities{Fork: true},
+	})}
+	legacyJSON, err := json.Marshal(SessionActionsFromAgentCapabilities(legacy))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(legacyJSON, []byte(`"historicalTurn":true`)) {
+		t.Fatalf("legacy fork actions=%s, want historicalTurn=true", legacyJSON)
 	}
 }
 

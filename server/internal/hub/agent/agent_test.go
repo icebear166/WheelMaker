@@ -3424,6 +3424,160 @@ func TestInstanceSteerRoutesThroughNegotiatedExtension(t *testing.T) {
 	}
 }
 
+func TestInstanceSteerUsesNativeClaudeMethodAndPromptRequiredFallback(t *testing.T) {
+	fc := &fakeConn{
+		initializeMeta:     json.RawMessage(`{"steering":{"supported":true}}`),
+		nativeSteerOutcome: "promptRequired",
+	}
+	inst := NewInstance("claude", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	steerer := inst.(SessionSteerer)
+	_, err := steerer.SteerSession(context.Background(), "s1", "m1", []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "change"}})
+	if !errors.Is(err, ErrSessionSteerInactive) {
+		t.Fatalf("native promptRequired error=%v, want inactive", err)
+	}
+	if fc.lastMethod != protocol.MethodSessionSteering {
+		t.Fatalf("native steering method=%q, want %q", fc.lastMethod, protocol.MethodSessionSteering)
+	}
+	params, ok := fc.lastParams.(protocol.SessionSteeringParams)
+	if !ok || params.SessionID != "s1" || len(params.Prompt) != 1 || !bytes.Contains(params.Meta, []byte(`"idleBehavior":"promptRequired"`)) {
+		t.Fatalf("native steering params=%#v", fc.lastParams)
+	}
+
+	fc.nativeSteerOutcome = "injected"
+	result, err := steerer.SteerSession(context.Background(), "s1", "m2", []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "again"}})
+	if err != nil {
+		t.Fatalf("native injected error=%v", err)
+	}
+	if result.Outcome != "injected" || fc.lastMethod != protocol.MethodSessionSteering {
+		t.Fatalf("native injected result=%#v method=%q", result, fc.lastMethod)
+	}
+}
+
+func TestInstanceNativeSteeringRejectsEmptyPrompt(t *testing.T) {
+	fc := &fakeConn{
+		initializeMeta:     json.RawMessage(`{"steering":{"supported":true}}`),
+		nativeSteerOutcome: protocol.SessionSteeringOutcomeInjected,
+	}
+	inst := NewInstance("claude", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := inst.(SessionSteerer).SteerSession(context.Background(), "s1", "m1", nil)
+	if !errors.Is(err, ErrSessionActionInvalid) {
+		t.Fatalf("empty native prompt error=%v, want %v", err, ErrSessionActionInvalid)
+	}
+	if fc.lastMethod != protocol.MethodInitialize {
+		t.Fatalf("empty native prompt sent method=%q", fc.lastMethod)
+	}
+}
+
+func TestInstanceCorrelatesNativeSteeringEchoToClientMessageID(t *testing.T) {
+	fc := &fakeConn{
+		initializeMeta:     json.RawMessage(`{"steering":{"supported":true}}`),
+		nativeSteerOutcome: protocol.SessionSteeringOutcomeInjected,
+	}
+	inst := NewInstance("claude", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	callbacks := &fakeCallbacks{}
+	inst.SetCallbacks(callbacks)
+	if _, err := inst.(SessionSteerer).SteerSession(context.Background(), "s1", "queued-1", []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "change"}}); err != nil {
+		t.Fatalf("native steer: %v", err)
+	}
+	inst.HandleACPResponse(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"unidentified"}}}`))
+	if callbacks.lastMessageID != "" {
+		t.Fatalf("unidentified user chunk consumed native correlation: %#v", callbacks.lastEvent)
+	}
+	if message, ok := callbacks.lastEvent.Update.(protocol.AgentMessageEvent); !ok || protocol.SessionUpdateMetaSteered(message.Meta) {
+		t.Fatalf("unidentified user chunk was marked steered: %#v", callbacks.lastEvent)
+	}
+	inst.HandleACPResponse(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"change"},"messageId":"provider-message","_meta":{"vendor":{"trace":1}}}}`))
+	if callbacks.lastMessageID != "provider-message" {
+		t.Fatalf("correlated provider messageId=%q, want provider-message", callbacks.lastMessageID)
+	}
+	message, ok := callbacks.lastEvent.Update.(protocol.AgentMessageEvent)
+	if !ok || message.ClientMessageID != "queued-1" || !message.Steered {
+		t.Fatalf("correlated event=%#v", callbacks.lastEvent)
+	}
+	if protocol.SessionUpdateMetaSteered(message.Meta) || protocol.SessionUpdateMetaMessageComplete(message.Meta) {
+		t.Fatalf("native correlation fabricated WM lifecycle metadata: %#v", message.Meta)
+	}
+	if !bytes.Contains(message.Meta, []byte(`"trace":1`)) {
+		t.Fatalf("native correlation lost provider metadata: %#v", message.Meta)
+	}
+}
+
+func TestInstanceForkUsesStandardSessionForkForClaude(t *testing.T) {
+	fc := &fakeConn{
+		agentCapabilities: protocol.AgentCapabilities{
+			SessionCapabilities: &protocol.SessionCapabilities{Fork: &protocol.SessionForkCapability{}},
+		},
+		standardForkSessionID: "child-1",
+	}
+	inst := NewInstance("claude", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	type currentForker interface {
+		ForkCurrentSession(context.Context, string, string) (protocol.SessionForkResult, error)
+	}
+	forker, ok := inst.(currentForker)
+	if !ok {
+		t.Fatalf("instance does not implement current fork adapter: %T", inst)
+	}
+	result, err := forker.ForkCurrentSession(context.Background(), "source-1", `C:\workspace`)
+	if err != nil {
+		t.Fatalf("ForkCurrentSession(): %v", err)
+	}
+	if result.SessionID != "child-1" || fc.lastMethod != protocol.MethodSessionFork {
+		t.Fatalf("result=%#v method=%q", result, fc.lastMethod)
+	}
+	params, ok := fc.lastParams.(protocol.SessionForkParams)
+	if !ok || params.SessionID != "source-1" || params.CWD != `C:\workspace` || len(params.Meta) != 0 {
+		t.Fatalf("standard fork params=%#v", fc.lastParams)
+	}
+}
+
+func TestInstanceHistoricalForkUsesStandardMethodWithWmExtension(t *testing.T) {
+	fc := &fakeConn{
+		agentCapabilities: protocol.AgentCapabilities{
+			SessionCapabilities: &protocol.SessionCapabilities{Fork: &protocol.SessionForkCapability{}},
+		},
+		standardForkSessionID: "child-2",
+	}
+	inst := NewInstance("codex", fc)
+	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	type historicalForker interface {
+		ForkSessionWithCWD(context.Context, string, string, string, []protocol.SessionForkPrompt) (protocol.SessionForkResult, error)
+	}
+	forker, ok := inst.(historicalForker)
+	if !ok {
+		t.Fatalf("instance does not implement historical fork adapter: %T", inst)
+	}
+	prompts := []protocol.SessionForkPrompt{{DoneTurnIndex: 3, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "follow up"}}}}
+	result, err := forker.ForkSessionWithCWD(context.Background(), "source-1", `C:\workspace`, "turn-3", prompts)
+	if err != nil {
+		t.Fatalf("ForkSessionWithCWD(): %v", err)
+	}
+	if result.SessionID != "child-2" || fc.lastMethod != protocol.MethodSessionFork {
+		t.Fatalf("result=%#v method=%q", result, fc.lastMethod)
+	}
+	params, ok := fc.lastParams.(protocol.SessionForkParams)
+	if !ok {
+		t.Fatalf("standard historical params=%#v", fc.lastParams)
+	}
+	fork, ok := protocol.WMSessionForkExtensionFromMeta(params.Meta)
+	if !ok || fork.Ref != "turn-3" || len(fork.Prompts) != 1 || fork.Prompts[0].DoneTurnIndex != 3 {
+		t.Fatalf("wm fork extension=%#v meta=%s", fork, params.Meta)
+	}
+}
+
 func TestInstanceSessionGoalController(t *testing.T) {
 	goal := protocol.SessionGoal{
 		SessionID: "session-1",
@@ -4748,6 +4902,93 @@ func TestCodexAppForkSessionUsesLastTurnIDAndRemapsTargetTurns(t *testing.T) {
 	}
 }
 
+func TestCodexAppStandardForkCarriesWmHistoricalExtension(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/fork":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "thread-source" || params["lastTurnId"] != "source-turn-2" {
+				t.Errorf("thread/fork params=%#v", params)
+			}
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"thread": map[string]any{
+					"id":      "thread-target",
+					"preview": "Forked thread",
+					"turns": []map[string]any{
+						codexappTestPromptTurn("target-turn-1", "first"),
+					},
+				},
+			}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj")
+	conn.bindSessionIDs("thread-source", "thread-source")
+	var out protocol.SessionForkResponse
+	meta := protocol.BuildWMSessionForkMeta(nil, protocol.WMSessionForkExtension{
+		Ref: "source-turn-2",
+		Prompts: []protocol.SessionForkPrompt{{
+			DoneTurnIndex: 3,
+			ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "first"}},
+		}},
+	})
+	err := conn.Send(context.Background(), protocol.MethodSessionFork, protocol.SessionForkParams{
+		SessionID: "thread-source",
+		CWD:       t.TempDir(),
+		Meta:      meta,
+	}, &out)
+	if err != nil {
+		t.Fatalf("standard session/fork: %v", err)
+	}
+	if out.SessionID != "thread-target" {
+		t.Fatalf("session/fork result=%#v", out)
+	}
+}
+
+func TestCodexAppCurrentForkUsesUnifiedSessionForkFacade(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		if method != "thread/fork" {
+			t.Errorf("unexpected app-server method %q", method)
+			return
+		}
+		params := msg["params"].(map[string]any)
+		if params["threadId"] != "thread-source" || params["lastTurnId"] != "source-turn-2" {
+			t.Errorf("thread/fork params=%#v", params)
+		}
+		_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+			"thread": map[string]any{"id": "thread-target", "preview": "Current fork"},
+		}})
+	}
+
+	conn := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj")
+	conn.bindSessionIDs("thread-source", "thread-source")
+	conn.mu.Lock()
+	conn.lastTurnID = "source-turn-2"
+	conn.mu.Unlock()
+	var out protocol.SessionForkResponse
+	if err := conn.Send(context.Background(), protocol.MethodSessionFork, protocol.SessionForkParams{
+		SessionID: "thread-source",
+		CWD:       t.TempDir(),
+	}, &out); err != nil {
+		t.Fatalf("standard current session/fork: %v", err)
+	}
+	if out.SessionID != "thread-target" {
+		t.Fatalf("session/fork result=%#v", out)
+	}
+}
+
 func codexappTestPromptTurn(turnID string, text string) map[string]any {
 	return map[string]any{
 		"id":        turnID,
@@ -5971,13 +6212,17 @@ func newUpdate(acpSessionID, name string) protocol.SessionUpdateParams {
 }
 
 type fakeConn struct {
-	req        ACPRequestHandler
-	resp       ACPResponseHandler
-	agentMeta  json.RawMessage
-	lastMethod string
-	lastParams any
-	goal       *protocol.SessionGoal
-	sendErr    error
+	req                   ACPRequestHandler
+	resp                  ACPResponseHandler
+	agentMeta             json.RawMessage
+	agentCapabilities     protocol.AgentCapabilities
+	initializeMeta        json.RawMessage
+	nativeSteerOutcome    string
+	standardForkSessionID string
+	lastMethod            string
+	lastParams            any
+	goal                  *protocol.SessionGoal
+	sendErr               error
 }
 
 func (f *fakeConn) Send(_ context.Context, method string, params any, result any) error {
@@ -5990,11 +6235,21 @@ func (f *fakeConn) Send(_ context.Context, method string, params any, result any
 	case protocol.MethodInitialize:
 		if out, ok := result.(*protocol.InitializeResult); ok {
 			out.ProtocolVersion = json.Number("1")
+			out.AgentCapabilities = f.agentCapabilities
 			out.AgentCapabilities.Meta = protocol.CloneSessionUpdateMeta(f.agentMeta)
+			out.Meta = protocol.CloneSessionUpdateMeta(f.initializeMeta)
 		}
 	case protocol.MethodWMSessionSteer:
 		if out, ok := result.(*protocol.WMSessionSteerResult); ok {
 			out.TurnID = "turn-1"
+		}
+	case protocol.MethodSessionSteering:
+		if out, ok := result.(*protocol.SessionSteeringResponse); ok {
+			out.Outcome = f.nativeSteerOutcome
+		}
+	case protocol.MethodSessionFork:
+		if out, ok := result.(*protocol.SessionForkResponse); ok {
+			out.SessionID = f.standardForkSessionID
 		}
 	case protocol.MethodWMSessionGoalGet:
 		if out, ok := result.(*protocol.WMSessionGoalResult); ok {

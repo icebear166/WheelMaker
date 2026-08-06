@@ -1342,7 +1342,10 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 			summary.Goal = &goal
 		}
 		summary.SessionFeatures = cloneSessionFeatures(acp.SessionFeaturesFromAgentCapabilities(agentState.AgentCapabilities))
-		summary.SessionActions = acp.SessionActionsFromAgentCapabilities(agentState.AgentCapabilities)
+		summary.SessionActions = acp.SessionActionsFromState(acp.SessionCapabilityState{
+			AgentCapabilities: agentState.AgentCapabilities,
+			InitializeMeta:    agentState.InitializeMeta,
+		})
 	}
 	if summary.SessionFeatures == nil {
 		summary.SessionFeatures = cloneSessionFeatures(projection.SessionFeatures)

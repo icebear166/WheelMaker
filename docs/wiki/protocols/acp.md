@@ -35,9 +35,21 @@ WheelMaker 只使用 ACP v1 规定的两类扩展点：数据放在 `_meta.wm`�
 - `clientCapabilities._meta.wm` 与 `agentCapabilities._meta.wm` 分别声明双方支持的扩展版本；当前 `messageLifecycle`、`goalLifecycle`、`sessionActions` 均为 version 1。
 - 消息继续使用标准 `agent_message_chunk` / `agent_thought_chunk`、单个 `content` 和可选 `messageId`。`_meta.wm.messagePhase`、`messageComplete`、`steered` 只补充生命周期，不替代标准内容。
 - Codex/CX 收到原生 item completed 时，以相同 `messageId` 发送空文本标准 chunk，并用 `_meta.wm.messageComplete=true` 与权威 phase 完成已有消息；replay 则发送完整文本和完成标记。
-- Goal 状态使用 `_wm/session/goal` notification；Steer、Compact、Goal、Fork、Archive 使用 `_wm/session/*` request。通用 Session 层通过已协商能力调用这些 request，不再依赖隐藏的 provider Go 可选接口。
+- Goal 状态使用 `_wm/session/goal` notification；Codex/CX 的 Compact、Goal、Archive 和历史 turn Fork 继续使用 `_wm/session/*` request。Claude-compatible steering 使用 Agent 原生 `_session/steering`，当前 session fork 使用兼容的 `session/fork`；通用 Session 层通过已协商能力选择 native ACP、provider adapter 或 WM request，不按 provider 名称猜测。
+- `InitializeResult._meta` 顶层元数据必须和 `agentCapabilities._meta` 一样完整保存。Claude 的 `_meta.steering.supported` 属于顶层初始化元数据，不能只保存 `agentCapabilities` 后丢失；旧 `_meta.wm` 能力继续可读。
+- Compact 仍属于 WheelMaker provider-neutral action：支持该 action 的 provider 统一走已协商的 `_wm/session/compact`，不增加 `session/compact` ACP method，也不把 `/compact` 当普通 `session/prompt`。
 
-扩展契约见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
+扩展契约见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)；Claude ACP 对齐决策见 [`../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md)。
+
+### Claude-compatible Session 控制面
+
+Claude ACP 的 `_session/steering` 是 Claude-specific ACP method，不放入 `_meta.wm`。Codex/CX 对外提供同形 facade，但底层继续调用原有 App Server `turn/steer`，因此不会改变 Codex 的 active-turn、queue 或 Recorder 行为。
+
+统一的 `session/fork` method 表示从 session 派生；缺少 `turnIndex` 时是当前 session fork，携带 `turnIndex` 时由 Hub 走 Codex historical source selector。历史 turn fork 需要 provider fork point 和 prompt history，并通过标准 method 的 `_meta.wm.fork` extension 传递；旧 `_wm/session/fork/resolve` 与 `_wm/session/fork` 仍保留兼容，不能把标准当前 session fork 当成历史 turn fork。
+
+Session summary 的 provider-neutral `sessionActions.fork` 携带 `currentSession` 与 `historicalTurn`：前者显示 Session Header/Menu 的当前分支入口，后者显示历史消息上的分支入口。标准 `fork + loadSession` capability 只作为 transport 声明保存；只有真实 target 独立 load/继续 prompt E2E 通过并显式开启 WheelMaker release gate 后，才投影 `currentSession=true`。旧 summary 缺少 mode 时按 `historicalTurn=true, currentSession=false` 处理。
+
+当前验证基线 `claude-agent-acp 0.65.0` 能返回 fork target ID，但独立 ACP instance 对该 ID 执行 `session/load` 会得到 `Resource not found`，所以 Claude current fork gate 保持关闭。Hub 仍保留 fork 后 target-load 验证和失败 cleanup，避免发布不可恢复的本地 child。
 
 ## 内容、工具与权限
 
@@ -88,7 +100,7 @@ WheelMaker 只使用 ACP v1 规定的两类扩展点：数据放在 `_meta.wm`�
 
 ### Codex Responses provider 约定
 
-`cx-deepseek` 是独立 ACP provider，复用原生 Codex App Server bridge，但使用 DeepSeek Responses 上游和独立 Codex home。协议、Session 与 Registry payload 始终保留稳定 agent ID `cx-deepseek`；`cx.deepseek` 仅是 App 展示名。它与原生 Codex 共用严格 ACP v1、`_meta.wm.messageLifecycle` 和 `_wm/*` 扩展，不引入 provider 私有根字段；现有 `model/list` 与标准 `configOptions` 链路继续作为模型和推理档位来源。
+`cx-deepseek` 是独立 ACP provider，复用原生 Codex App Server bridge，但使用 DeepSeek Responses 上游和独立 Codex home。协议、Session 与 Registry payload 始终保留稳定 agent ID `cx-deepseek`；`cx.deepseek` 仅是 App 展示名。它与原生 Codex 共用严格 ACP v1、Claude-compatible steering/current-session fork facade、`_meta.wm.messageLifecycle` 和 `_wm/*` 扩展；`_wm/*` 继续承载 compact、goal、archive 和历史 turn fork，不引入 provider 私有根字段；现有 `model/list` 与标准 `configOptions` 链路继续作为模型和推理档位来源。
 
 provider 只在 Hub 配置 DeepSeek Key 且本机 Codex CLI 满足最低版本时注册。Key、上游地址和模型 provider 设置属于 Hub 本地启动配置，不进入 ACP wire payload 或 Registry metadata。Session 恢复以 agent ID 和 `<stateDir>/.data/cx-deepseek` 为边界，禁止从原生 `codex` 或任意 `cc-*` provider 导入历史。
 

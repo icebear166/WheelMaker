@@ -23,11 +23,13 @@ type AgentUpdate interface {
 }
 
 type AgentMessageEvent struct {
-	Kind       string
-	Content    ContentBlock
-	MessageID  string
-	Meta       json.RawMessage
-	ReceivedAt time.Time
+	Kind            string
+	Content         ContentBlock
+	MessageID       string
+	ClientMessageID string
+	Steered         bool
+	Meta            json.RawMessage
+	ReceivedAt      time.Time
 }
 
 func (AgentMessageEvent) agentUpdate() {}
@@ -154,6 +156,7 @@ func (event AgentEvent) LegacySessionUpdate() (SessionUpdateParams, error) {
 		messageLifecycle := event.MessageLifecycle
 		params.Update = SessionUpdate{
 			SessionUpdate: update.Kind, Content: content, MessageID: update.MessageID,
+			ClientMessageID: update.ClientMessageID, Steered: update.Steered,
 			Meta: cloneRaw(update.Meta), MessageLifecycle: &messageLifecycle,
 		}
 	case AgentToolEvent:

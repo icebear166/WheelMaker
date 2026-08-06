@@ -35,6 +35,7 @@ type SessionAgentState struct {
 	UpdatedAt         string                 `json:"updatedAt,omitempty"`
 	Usage             *acp.SessionUsage      `json:"usage,omitempty"`
 	AgentCapabilities acp.AgentCapabilities  `json:"agentCapabilities,omitempty"`
+	InitializeMeta    json.RawMessage        `json:"initializeMeta,omitempty"`
 	AgentInfo         *acp.AgentInfo         `json:"agentInfo,omitempty"`
 	AuthMethods       []acp.AuthMethod       `json:"authMethods,omitempty"`
 	Goal              *acp.SessionGoal       `json:"goal,omitempty"`
@@ -136,6 +137,7 @@ func cloneSessionAgentState(src *SessionAgentState) *SessionAgentState {
 	cp.ConfigOptions = append([]acp.ConfigOption(nil), src.ConfigOptions...)
 	cp.Commands = append([]acp.AvailableCommand(nil), src.Commands...)
 	cp.AuthMethods = append([]acp.AuthMethod(nil), src.AuthMethods...)
+	cp.InitializeMeta = append(json.RawMessage(nil), src.InitializeMeta...)
 	cp.AgentInfo = cloneAgentInfo(src.AgentInfo)
 	if src.Usage != nil {
 		usage := *src.Usage
@@ -383,6 +385,7 @@ func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, 
 			AgentCapabilities: s.agentState.AgentCapabilities,
 			AgentInfo:         cloneAgentInfo(s.agentState.AgentInfo),
 			AuthMethods:       append([]acp.AuthMethod(nil), s.agentState.AuthMethods...),
+			Meta:              append(json.RawMessage(nil), s.agentState.InitializeMeta...),
 		}
 		s.mu.Unlock()
 		return result, nil
@@ -424,6 +427,7 @@ func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, 
 
 	s.mu.Lock()
 	s.agentState.AgentCapabilities = initResult.AgentCapabilities
+	s.agentState.InitializeMeta = append(json.RawMessage(nil), initResult.Meta...)
 	s.agentState.AgentInfo = cloneAgentInfo(initResult.AgentInfo)
 	s.agentState.AuthMethods = append([]acp.AuthMethod(nil), initResult.AuthMethods...)
 	s.initialized = true
@@ -511,6 +515,7 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	}
 	state.Commands = append([]acp.AvailableCommand(nil), resolvedCommands...)
 	state.AgentCapabilities = initResult.AgentCapabilities
+	state.InitializeMeta = append(json.RawMessage(nil), initResult.Meta...)
 	state.AgentInfo = cloneAgentInfo(initResult.AgentInfo)
 	state.AuthMethods = initResult.AuthMethods
 	s.ready = true
@@ -590,18 +595,55 @@ func (s *Session) ForkSession(ctx context.Context, lastTurnID string, prompts []
 	s.mu.Lock()
 	inst := s.instance
 	sessionID := s.acpSessionID
+	cwd := s.cwd
 	s.mu.Unlock()
 	forker, ok := inst.(agent.SessionForker)
 	if !ok {
 		return acp.SessionForkResult{}, agent.ErrSessionActionUnsupported
 	}
+	if standard, ok := inst.(agent.SessionForkWithCWDer); ok {
+		return standard.ForkSessionWithCWD(ctx, sessionID, cwd, lastTurnID, prompts)
+	}
 	return forker.ForkSession(ctx, sessionID, lastTurnID, prompts)
+}
+
+func (s *Session) ForkCurrentSession(ctx context.Context, beforeFork func() error) (acp.SessionForkResult, error) {
+	if err := s.beginExecution(acp.SessionOperationTypeFork); err != nil {
+		return acp.SessionForkResult{}, err
+	}
+	defer s.endExecution()
+	if err := s.ensureInstance(ctx); err != nil {
+		return acp.SessionForkResult{}, err
+	}
+	if err := s.ensureReady(ctx); err != nil {
+		return acp.SessionForkResult{}, err
+	}
+	s.mu.Lock()
+	inst := s.instance
+	sessionID := s.acpSessionID
+	cwd := s.cwd
+	s.mu.Unlock()
+	forker, ok := inst.(agent.SessionCurrentForker)
+	if !ok {
+		return acp.SessionForkResult{}, agent.ErrSessionActionUnsupported
+	}
+	if beforeFork != nil {
+		if err := beforeFork(); err != nil {
+			return acp.SessionForkResult{}, err
+		}
+	}
+	return forker.ForkCurrentSession(ctx, sessionID, cwd)
 }
 
 func (s *Session) ArchiveForkTarget(ctx context.Context, sessionID string) error {
 	s.mu.Lock()
 	inst := s.instance
 	s.mu.Unlock()
+	if deleter, ok := inst.(agent.SessionDeleter); ok {
+		if err := deleter.DeleteSession(ctx, sessionID); err == nil {
+			return nil
+		}
+	}
 	archiver, ok := inst.(agent.SessionArchiver)
 	if !ok {
 		return agent.ErrSessionArchiveUnsupported

@@ -36,6 +36,7 @@ type testInjectedInstance struct {
 	promptFn       func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.PromptOutcome, error)
 	lastPrompt     []acp.ContentBlock
 	cancelFn       func() error
+	initializeFn   func()
 	initResult     acp.InitializeResult
 	loadResult     acp.SessionLoadResult
 	loadUpdates    []acp.SessionUpdateParams
@@ -61,6 +62,7 @@ type testInjectedInstance struct {
 	compactErr     error
 	resolveForkFn  func(context.Context, string, []acp.SessionForkPrompt) (map[int64]acp.SessionForkPoint, error)
 	forkSessionFn  func(context.Context, string, string, []acp.SessionForkPrompt) (acp.SessionForkResult, error)
+	forkCurrentFn  func(context.Context, string, string) (acp.SessionForkResult, error)
 	goal           *acp.SessionGoal
 	goalSetCalls   []acp.SessionGoalSetParams
 	goalClearCalls []string
@@ -193,6 +195,9 @@ func (i *testInjectedInstance) HandleACPRequest(context.Context, int64, string, 
 func (i *testInjectedInstance) HandleACPResponse(context.Context, string, json.RawMessage) {}
 func (i *testInjectedInstance) Initialize(context.Context, acp.InitializeParams) (acp.InitializeResult, error) {
 	i.initCalls++
+	if i.initializeFn != nil {
+		i.initializeFn()
+	}
 	if i.initResult.ProtocolVersion != "" || i.initResult.AgentInfo != nil || i.initResult.AgentCapabilities.LoadSession {
 		return i.initResult, nil
 	}
@@ -320,6 +325,13 @@ func (i *testInjectedInstance) ForkSession(ctx context.Context, sessionID string
 		return acp.SessionForkResult{}, agent.ErrSessionActionUnsupported
 	}
 	return i.forkSessionFn(ctx, sessionID, lastTurnID, prompts)
+}
+
+func (i *testInjectedInstance) ForkCurrentSession(ctx context.Context, sessionID string, cwd string) (acp.SessionForkResult, error) {
+	if i.forkCurrentFn == nil {
+		return acp.SessionForkResult{}, agent.ErrSessionActionUnsupported
+	}
+	return i.forkCurrentFn(ctx, sessionID, cwd)
 }
 
 func (i *testInjectedInstance) SessionGoalSet(_ context.Context, params acp.SessionGoalSetParams) (acp.SessionGoal, error) {
@@ -12228,5 +12240,186 @@ func TestSessionStatusActionAlwaysSupported(t *testing.T) {
 	}
 	if c.sessionSupportsAction(sess, acp.SessionActionCompact) {
 		t.Fatal("nil registry dispatch should reject compact")
+	}
+}
+
+func TestSessionAgentStateRoundTripPreservesInitializeMeta(t *testing.T) {
+	raw := []byte(`{"initializeMeta":{"steering":{"supported":true}}}`)
+	var state SessionAgentState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(encoded, []byte(`"initializeMeta"`)) {
+		t.Fatalf("encoded agent state=%s, missing initializeMeta", encoded)
+	}
+}
+
+func TestHandleSessionForkWithoutTurnIndexUsesCurrentSessionFork(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	ctx := context.Background()
+	sourceID := "sess-current-fork-source"
+	targetID := "sess-current-fork-target"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "Current source", string(acp.ACPProviderClaude))); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	recordPromptWithProviderForkPointForTest(t, c, sourceID, "first", string(acp.ACPProviderClaude), "source-turn-1")
+	c.InjectForwarder(string(acp.ACPProviderClaude), sourceID, nil, nil)
+	sess := c.sessions[sourceID]
+	runtime := sess.instance.(*testInjectedInstance)
+	runtime.initializeFn = func() {
+		recordPromptWithProviderForkPointForTest(t, c, sourceID, "second", string(acp.ACPProviderClaude), "source-turn-2")
+	}
+	runtime.initResult = acp.InitializeResult{
+		ProtocolVersion: "1",
+		AgentCapabilities: acp.AgentCapabilities{
+			LoadSession:         true,
+			SessionCapabilities: &acp.SessionCapabilities{Fork: &acp.SessionForkCapability{}},
+			Meta: acp.BuildWMAgentCapabilitiesMeta(nil, acp.WMAgentExtensionCapabilities{
+				SessionActions: acp.WMSessionActionCapabilities{CurrentSession: true},
+			}),
+		},
+	}
+	runtime.forkCurrentFn = func(_ context.Context, gotSessionID string, cwd string) (acp.SessionForkResult, error) {
+		if gotSessionID != sourceID || cwd == "" {
+			t.Fatalf("current fork input session=%q cwd=%q", gotSessionID, cwd)
+		}
+		return acp.SessionForkResult{SessionID: targetID, Title: "Current child"}, nil
+	}
+	probe := &testInjectedInstance{
+		name:      string(acp.ACPProviderClaude),
+		sessionID: targetID,
+		alive:     true,
+		initResult: acp.InitializeResult{ProtocolVersion: "1", AgentCapabilities: acp.AgentCapabilities{
+			LoadSession: true,
+		}},
+		loadResult: acp.SessionLoadResult{ConfigOptions: []acp.ConfigOption{{ID: "model", CurrentValue: "validated-model"}}},
+	}
+	c.InjectAgentFactory(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		return probe, nil
+	})
+
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-current-fork-source"}`))
+	if err != nil {
+		t.Fatalf("session.fork current: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	if body["ok"] != true {
+		t.Fatalf("response=%#v", body)
+	}
+	var summary sessionViewSummary
+	raw, err := json.Marshal(body["session"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &summary); err != nil {
+		t.Fatal(err)
+	}
+	sourceSummary, err := c.sessionRecorder.ReadSessionSummary(ctx, sourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.SessionID != targetID || summary.ForkedFrom == nil || summary.ForkedFrom.SessionID != sourceID || summary.ForkedFrom.TurnIndex != sourceSummary.LastDoneTurnIndex {
+		t.Fatalf("summary=%#v", summary)
+	}
+	if probe.loadCalls != 1 {
+		t.Fatalf("target validation load calls=%d, want 1", probe.loadCalls)
+	}
+	if len(summary.ConfigOptions) != 1 || summary.ConfigOptions[0].CurrentValue != "validated-model" {
+		t.Fatalf("validated config options=%#v", summary.ConfigOptions)
+	}
+}
+
+func TestCurrentSessionForkRejectsUnresumableTargetWithoutPublishingChild(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	ctx := context.Background()
+	sourceID := "sess-current-fork-load-failure-source"
+	targetID := "sess-current-fork-load-failure-target"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "Current source", string(acp.ACPProviderClaude))); err != nil {
+		t.Fatal(err)
+	}
+	recordPromptWithProviderForkPointForTest(t, c, sourceID, "first", string(acp.ACPProviderClaude), "source-turn-1")
+	c.InjectForwarder(string(acp.ACPProviderClaude), sourceID, nil, nil)
+	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
+	runtime.initResult = acp.InitializeResult{ProtocolVersion: "1", AgentCapabilities: acp.AgentCapabilities{
+		LoadSession: true, SessionCapabilities: &acp.SessionCapabilities{Fork: &acp.SessionForkCapability{}},
+		Meta: acp.BuildWMAgentCapabilitiesMeta(nil, acp.WMAgentExtensionCapabilities{
+			SessionActions: acp.WMSessionActionCapabilities{CurrentSession: true},
+		}),
+	}}
+	runtime.forkCurrentFn = func(context.Context, string, string) (acp.SessionForkResult, error) {
+		return acp.SessionForkResult{SessionID: targetID}, nil
+	}
+	probe := &testInjectedInstance{
+		name: string(acp.ACPProviderClaude), sessionID: targetID, alive: true,
+		initResult: acp.InitializeResult{ProtocolVersion: "1", AgentCapabilities: acp.AgentCapabilities{LoadSession: true}},
+		loadErr:    errors.New("target cannot be loaded"),
+	}
+	c.InjectAgentFactory(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) { return probe, nil })
+
+	_, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-current-fork-load-failure-source"}`))
+	if err == nil || !strings.Contains(err.Error(), "target cannot be loaded") {
+		t.Fatalf("current fork error=%v, want target load failure", err)
+	}
+	if probe.loadCalls != 1 {
+		t.Fatalf("target validation load calls=%d, want 1", probe.loadCalls)
+	}
+	if c.HasSessionInMemoryForTest(targetID) {
+		t.Fatal("unresumable target was published in memory")
+	}
+	stored, loadErr := c.store.LoadSession(ctx, "proj1", targetID)
+	if loadErr != nil || stored != nil {
+		t.Fatalf("unresumable target persisted: record=%#v err=%v", stored, loadErr)
+	}
+	if len(runtime.archiveCalls) != 1 || runtime.archiveCalls[0] != targetID {
+		t.Fatalf("provider cleanup calls=%#v, want target", runtime.archiveCalls)
+	}
+}
+
+func TestCurrentSessionForkRejectsEmptySourceBeforeProviderMutation(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	sourceID := "sess-current-fork-empty-source"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "Empty source", string(acp.ACPProviderClaude))); err != nil {
+		t.Fatal(err)
+	}
+	c.InjectForwarder(string(acp.ACPProviderClaude), sourceID, nil, nil)
+	runtime := c.sessions[sourceID].instance.(*testInjectedInstance)
+	runtime.initResult = acp.InitializeResult{ProtocolVersion: "1", AgentCapabilities: acp.AgentCapabilities{
+		LoadSession: true, SessionCapabilities: &acp.SessionCapabilities{Fork: &acp.SessionForkCapability{}},
+		Meta: acp.BuildWMAgentCapabilitiesMeta(nil, acp.WMAgentExtensionCapabilities{
+			SessionActions: acp.WMSessionActionCapabilities{CurrentSession: true},
+		}),
+	}}
+	forkCalls := 0
+	runtime.forkCurrentFn = func(context.Context, string, string) (acp.SessionForkResult, error) {
+		forkCalls++
+		return acp.SessionForkResult{SessionID: "must-not-exist"}, nil
+	}
+
+	_, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-current-fork-empty-source"}`))
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "completed turn") {
+		t.Fatalf("empty current fork error=%v, want completed turn validation", err)
+	}
+	if forkCalls != 0 {
+		t.Fatalf("provider fork calls=%d, want 0", forkCalls)
+	}
+}
+
+func TestHandleSessionForkRejectsExplicitNonPositiveTurnIndex(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	sourceID := "sess-explicit-zero-fork"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "Source", string(acp.ACPProviderClaude))); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	_, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-explicit-zero-fork","turnIndex":0}`))
+	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "positive") {
+		t.Fatalf("session.fork error=%v, want positive turnIndex validation", err)
 	}
 }

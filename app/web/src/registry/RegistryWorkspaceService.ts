@@ -753,7 +753,7 @@ export class RegistryWorkspaceService {
     return this.repository.clearSessionGoal(projectId, sessionId);
   }
 
-  async forkProjectSession(projectId: string, sessionId: string, turnIndex: number): Promise<RegistrySessionForkResponse> {
+  async forkProjectSession(projectId: string, sessionId: string, turnIndex?: number): Promise<RegistrySessionForkResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }

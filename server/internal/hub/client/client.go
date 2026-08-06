@@ -213,7 +213,10 @@ func (c *Client) restoreActiveGoals(ctx context.Context) {
 			state.Goal == nil || state.Goal.Status != acp.SessionGoalStatusActive {
 			continue
 		}
-		if !acp.SessionActionsFromAgentCapabilities(state.AgentCapabilities).Goal.Supported {
+		if !acp.SessionActionsFromState(acp.SessionCapabilityState{
+			AgentCapabilities: state.AgentCapabilities,
+			InitializeMeta:    state.InitializeMeta,
+		}).Goal.Supported {
 			continue
 		}
 		session, loadErr := c.SessionByID(ctx, record.ID)
@@ -482,6 +485,7 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 		Title:             sessionTitle,
 		CreateRequestID:   createRequestID,
 		AgentCapabilities: initResult.AgentCapabilities,
+		InitializeMeta:    append(json.RawMessage(nil), initResult.Meta...),
 		AgentInfo:         cloneAgentInfo(initResult.AgentInfo),
 		AuthMethods:       append([]acp.AuthMethod(nil), initResult.AuthMethods...),
 	}
@@ -1206,12 +1210,18 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 	case acp.RegistryMethodSessionFork:
 		var req struct {
 			SessionID string `json:"sessionId"`
-			TurnIndex int64  `json:"turnIndex"`
+			TurnIndex *int64 `json:"turnIndex"`
 		}
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.fork payload: %w", err)
 		}
-		return c.forkSessionAtTurn(ctx, req.SessionID, req.TurnIndex)
+		if req.TurnIndex == nil {
+			return c.forkCurrentSession(ctx, req.SessionID)
+		}
+		if *req.TurnIndex <= 0 {
+			return nil, fmt.Errorf("turnIndex must be positive when provided")
+		}
+		return c.forkSessionAtTurn(ctx, req.SessionID, *req.TurnIndex)
 	case acp.RegistryMethodSessionPermissionRespond:
 		var req struct {
 			SessionID    string `json:"sessionId"`
@@ -1455,22 +1465,19 @@ func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, 
 	if err != nil {
 		return nil, err
 	}
-	if turnIndex > latestTurnIndex {
-		return nil, fmt.Errorf("fork turn %d exceeds latest turn %d", turnIndex, latestTurnIndex)
-	}
 	sourceSummary, err := c.sessionRecorder.ReadSessionSummary(ctx, sourceSessionID)
 	if err != nil {
 		return nil, err
 	}
-	sourceAgentType := strings.ToLower(normalizeAgentType(sourceSummary.AgentType))
-	if !isCodexAppAgentType(sourceAgentType) {
-		return nil, fmt.Errorf("%w: fork", agent.ErrSessionActionUnsupported)
+	if turnIndex > latestTurnIndex {
+		return nil, fmt.Errorf("fork turn %d exceeds latest turn %d", turnIndex, latestTurnIndex)
 	}
+	sourceAgentType := strings.ToLower(normalizeAgentType(sourceSummary.AgentType))
 	sourceSession, err := c.SessionByID(ctx, sourceSessionID)
 	if err != nil {
 		return nil, err
 	}
-	if !c.sessionSupportsAction(sourceSession, acp.SessionActionFork) {
+	if !c.sessionSupportsHistoricalFork(sourceSession) {
 		return nil, fmt.Errorf("%w: fork", agent.ErrSessionActionUnsupported)
 	}
 	sourceTurns, err = c.enrichLegacySessionForkPoints(ctx, sourceSessionID, latestTurnIndex, sourceTurns)
@@ -1567,6 +1574,218 @@ func (c *Client) forkSessionAtTurn(ctx context.Context, sourceSessionID string, 
 	return map[string]any{"ok": true, "session": summary}, nil
 }
 
+func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string) (any, error) {
+	sourceSessionID = strings.TrimSpace(sourceSessionID)
+	if sourceSessionID == "" {
+		return nil, fmt.Errorf("sessionId is required")
+	}
+	sourceSession, err := c.SessionByID(ctx, sourceSessionID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := sourceSession.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+	if !c.sessionSupportsCurrentFork(sourceSession) {
+		return nil, fmt.Errorf("%w: current session fork", agent.ErrSessionActionUnsupported)
+	}
+	var sourceTurns []sessionViewTurn
+	var forkTurnIndex int64
+	forkResult, err := sourceSession.ForkCurrentSession(ctx, func() error {
+		latestPersistedTurnIndex, turns, readErr := c.sessionRecorder.ReadSessionTurns(ctx, sourceSessionID, 0)
+		if readErr != nil {
+			return readErr
+		}
+		summary, readErr := c.sessionRecorder.ReadSessionSummary(ctx, sourceSessionID)
+		if readErr != nil {
+			return readErr
+		}
+		turnIndex := summary.LastDoneTurnIndex
+		if turnIndex < 0 || turnIndex > latestPersistedTurnIndex {
+			turnIndex = latestPersistedTurnIndex
+		}
+		if turnIndex <= 0 {
+			return fmt.Errorf("current session fork requires a completed turn")
+		}
+		sourceTurns = turns
+		forkTurnIndex = turnIndex
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	targetSessionID := strings.TrimSpace(forkResult.SessionID)
+	if targetSessionID == "" || targetSessionID == sourceSessionID {
+		return nil, fmt.Errorf("provider returned invalid forked session id")
+	}
+	cleanupProviderTarget := func() {
+		if cleanupErr := sourceSession.ArchiveForkTarget(context.Background(), targetSessionID); cleanupErr != nil {
+			hubLogger(c.projectName).Warn("cleanup fork target failed source=%s target=%s err=%v", sourceSessionID, targetSessionID, cleanupErr)
+		}
+	}
+	validatedLoad, err := c.validateCurrentForkTarget(ctx, sourceSession, targetSessionID)
+	if err != nil {
+		cleanupProviderTarget()
+		return nil, fmt.Errorf("validate fork target: %w", err)
+	}
+	if len(validatedLoad.ConfigOptions) > 0 {
+		forkResult.ConfigOptions = append([]acp.ConfigOption(nil), validatedLoad.ConfigOptions...)
+	}
+	localTargetCreated := false
+	cleanupTarget := func() {
+		if localTargetCreated {
+			_ = c.deleteActiveSession(context.Background(), targetSessionID, false)
+		}
+		cleanupProviderTarget()
+	}
+	existing, err := c.store.LoadSession(ctx, c.projectName, targetSessionID)
+	if err != nil {
+		cleanupProviderTarget()
+		return nil, err
+	}
+	if existing != nil {
+		cleanupTarget()
+		return nil, fmt.Errorf("forked session already exists: %s", targetSessionID)
+	}
+	sourceRecord, err := c.store.LoadSession(ctx, c.projectName, sourceSessionID)
+	if err != nil || sourceRecord == nil {
+		cleanupTarget()
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("source session not found: %s", sourceSessionID)
+	}
+	targetSession, err := c.newForkTargetSession(sourceSession, targetSessionID, forkResult.Title)
+	if err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	if len(forkResult.ConfigOptions) > 0 {
+		targetSession.agentState.ConfigOptions = append([]acp.ConfigOption(nil), forkResult.ConfigOptions...)
+	}
+	localTargetCreated = true
+	if err := targetSession.persistSession(ctx); err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	contents := []string{}
+	if forkTurnIndex > 0 {
+		targetForkPoints := cloneSessionForkPointMap(forkResult.ForkPoints)
+		if len(targetForkPoints) == 0 {
+			targetForkPoints = sessionForkPointsFromTurns(sourceTurns)
+		}
+		contents, err = c.buildForkHistoryContents(ctx, sourceSessionID, targetSessionID, forkTurnIndex, sourceTurns, targetForkPoints)
+		if err != nil {
+			cleanupTarget()
+			return nil, err
+		}
+	}
+	origin := acp.SessionForkOrigin{
+		SessionID: sourceSessionID,
+		TurnIndex: forkTurnIndex,
+		Title:     sessionForkOriginTitle(sourceRecord.Title),
+	}
+	now := time.Now().UTC()
+	if err := c.sessionRecorder.InitializeForkedSession(ctx, targetSessionID, contents, sourceRecord.Title, origin, now); err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	if err := c.sessionRecorder.RecordSessionOperation(ctx, targetSessionID, acp.SessionOperationPayload{
+		OperationID: uuid.NewString(),
+		Type:        acp.SessionOperationTypeFork,
+		Status:      acp.SessionOperationStatusCompleted,
+		CompletedAt: now.Format(time.RFC3339),
+		ForkedFrom:  &origin,
+	}); err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	c.mu.Lock()
+	c.sessions[targetSessionID] = targetSession
+	c.mu.Unlock()
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, targetSessionID)
+	if err != nil {
+		cleanupTarget()
+		return nil, err
+	}
+	summary.ConfigOptions = targetSession.CurrentConfigOptions()
+	return map[string]any{"ok": true, "session": summary}, nil
+}
+
+func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session, targetSessionID string) (acp.SessionLoadResult, error) {
+	if c == nil || source == nil || c.registry == nil {
+		return acp.SessionLoadResult{}, fmt.Errorf("agent factory is required")
+	}
+	source.mu.Lock()
+	agentType := source.agentType
+	cwd := source.cwd
+	source.mu.Unlock()
+	creator := c.registry.CreatorByName(agentType)
+	if creator == nil {
+		return acp.SessionLoadResult{}, fmt.Errorf("no agent registered for %q", agentType)
+	}
+	probe, err := creator(agent.WithProjectName(ctx, c.projectName), cwd)
+	if err != nil {
+		return acp.SessionLoadResult{}, err
+	}
+	defer func() {
+		if closeErr := probe.Close(); closeErr != nil {
+			hubLogger(c.projectName).Warn("close fork target probe failed target=%s err=%v", targetSessionID, closeErr)
+		}
+	}()
+	probe.SetCallbacks(nil)
+	initResult, err := probe.Initialize(ctx, acp.InitializeParams{
+		ProtocolVersion: acpClientProtocolVersion,
+		ClientCapabilities: acp.ClientCapabilities{
+			FS:       &acp.FSCapabilities{ReadTextFile: true, WriteTextFile: true},
+			Terminal: true,
+			Meta:     acp.BuildWMClientCapabilitiesMeta(nil),
+		},
+		ClientInfo: acpClientInfo,
+	})
+	if err != nil {
+		return acp.SessionLoadResult{}, fmt.Errorf("initialize target probe: %w", err)
+	}
+	if !initResult.AgentCapabilities.LoadSession {
+		return acp.SessionLoadResult{}, fmt.Errorf("agent %q does not support target session/load", agentType)
+	}
+	loaded, err := probe.SessionLoad(ctx, acp.SessionLoadParams{
+		SessionID:  targetSessionID,
+		CWD:        cwd,
+		MCPServers: emptyMCPServers(),
+	})
+	if err != nil {
+		return acp.SessionLoadResult{}, fmt.Errorf("session/load target %s: %w", targetSessionID, err)
+	}
+	return loaded, nil
+}
+
+func (c *Client) sessionSupportsCurrentFork(sess *Session) bool {
+	if c == nil || sess == nil {
+		return false
+	}
+	sess.mu.Lock()
+	state := acp.SessionCapabilityState{
+		AgentCapabilities: sess.agentState.AgentCapabilities,
+		InitializeMeta:    sess.agentState.InitializeMeta,
+	}
+	sess.mu.Unlock()
+	return acp.SessionActionsFromState(state).Fork.CurrentSession
+}
+
+func (c *Client) sessionSupportsHistoricalFork(sess *Session) bool {
+	if c == nil || sess == nil {
+		return false
+	}
+	sess.mu.Lock()
+	state := acp.SessionCapabilityState{
+		AgentCapabilities: sess.agentState.AgentCapabilities,
+		InitializeMeta:    sess.agentState.InitializeMeta,
+	}
+	sess.mu.Unlock()
+	return acp.SessionActionsFromState(state).Fork.HistoricalTurn
+}
+
 func (c *Client) newForkTargetSession(source *Session, targetSessionID, providerTitle string) (*Session, error) {
 	source.mu.Lock()
 	agentType := source.agentType
@@ -1616,6 +1835,16 @@ func sessionForkPointAtTurn(turns []sessionViewTurn, turnIndex int64) *acp.Sessi
 		return cloneSessionForkPoint(result.ForkPoint)
 	}
 	return nil
+}
+
+func sessionForkPointsFromTurns(turns []sessionViewTurn) map[int64]acp.SessionForkPoint {
+	points := make(map[int64]acp.SessionForkPoint)
+	for _, turn := range turns {
+		if point := sessionForkPointAtTurn(turns, turn.TurnIndex); point != nil {
+			points[turn.TurnIndex] = *point
+		}
+	}
+	return points
 }
 
 func (c *Client) buildForkHistoryContents(
@@ -1748,9 +1977,12 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 		return true
 	}
 	sess.mu.Lock()
-	capabilities := sess.agentState.AgentCapabilities
+	capabilityState := acp.SessionCapabilityState{
+		AgentCapabilities: sess.agentState.AgentCapabilities,
+		InitializeMeta:    sess.agentState.InitializeMeta,
+	}
 	sess.mu.Unlock()
-	support := acp.SessionActionsFromAgentCapabilities(capabilities)
+	support := acp.SessionActionsFromState(capabilityState)
 	switch action {
 	case acp.SessionActionCompact:
 		return support.Compact.Supported

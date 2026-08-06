@@ -74,12 +74,14 @@ func WMActionErrorCode(err error) (string, bool) {
 }
 
 type WMSessionActionCapabilities struct {
-	Version int  `json:"version,omitempty"`
-	Steer   bool `json:"steer,omitempty"`
-	Compact bool `json:"compact,omitempty"`
-	Goal    bool `json:"goal,omitempty"`
-	Fork    bool `json:"fork,omitempty"`
-	Archive bool `json:"archive,omitempty"`
+	Version        int  `json:"version,omitempty"`
+	Steer          bool `json:"steer,omitempty"`
+	Compact        bool `json:"compact,omitempty"`
+	Goal           bool `json:"goal,omitempty"`
+	Fork           bool `json:"fork,omitempty"`
+	Archive        bool `json:"archive,omitempty"`
+	CurrentSession bool `json:"currentSession,omitempty"`
+	HistoricalTurn bool `json:"historicalTurn,omitempty"`
 }
 
 type WMAgentExtensionCapabilities struct {
@@ -155,7 +157,7 @@ func BuildWMAgentCapabilitiesMeta(base json.RawMessage, capabilities WMAgentExte
 		wm.GoalLifecycle = &wmAgentGoalLifecycle{Version: WMExtensionVersion, Notification: MethodWMSessionGoal}
 	}
 	actions := capabilities.SessionActions
-	if actions.Steer || actions.Compact || actions.Goal || actions.Fork || actions.Archive {
+	if actions.Steer || actions.Compact || actions.Goal || actions.Fork || actions.Archive || actions.CurrentSession || actions.HistoricalTurn {
 		actions.Version = WMExtensionVersion
 		wm.SessionActions = &actions
 	}
@@ -233,6 +235,38 @@ type WMSessionSteerParams struct {
 type WMSessionSteerResult struct {
 	TurnID string          `json:"turnId,omitempty"`
 	Meta   json.RawMessage `json:"_meta,omitempty"`
+}
+
+type wmSessionSteeringMetaEnvelope struct {
+	WM struct {
+		Steering struct {
+			MessageID string `json:"messageId,omitempty"`
+		} `json:"steering,omitempty"`
+	} `json:"wm"`
+}
+
+// BuildWMSessionSteeringMeta carries the Hub's internal correlation ID while
+// keeping the public Claude-compatible steering params provider-neutral.
+func BuildWMSessionSteeringMeta(base json.RawMessage, messageID string) json.RawMessage {
+	addition, err := json.Marshal(map[string]any{"wm": map[string]any{
+		"steering": map[string]string{"messageId": strings.TrimSpace(messageID)},
+	}})
+	if err != nil {
+		return CloneSessionUpdateMeta(base)
+	}
+	merged, err := MergeSessionUpdateMeta(base, addition)
+	if err != nil {
+		return addition
+	}
+	return merged
+}
+
+func WMSessionSteeringMessageID(meta json.RawMessage) string {
+	var envelope wmSessionSteeringMetaEnvelope
+	if json.Unmarshal(meta, &envelope) != nil {
+		return ""
+	}
+	return strings.TrimSpace(envelope.WM.Steering.MessageID)
 }
 
 type WMSessionCompactParams struct {
@@ -347,6 +381,44 @@ type WMSessionForkResult struct {
 	Title      string                     `json:"title,omitempty"`
 	ForkPoints map[int64]SessionForkPoint `json:"forkPoints,omitempty"`
 	Meta       json.RawMessage            `json:"_meta,omitempty"`
+}
+
+// WMSessionForkExtension is the typed Codex historical-fork payload carried
+// under the standard session/fork request's _meta.wm.fork object.
+type WMSessionForkExtension struct {
+	Ref       string              `json:"ref"`
+	Prompts   []SessionForkPrompt `json:"prompts,omitempty"`
+	TurnIndex *int64              `json:"turnIndex,omitempty"`
+}
+
+type wmSessionForkMetaEnvelope struct {
+	WM struct {
+		Fork *WMSessionForkExtension `json:"fork,omitempty"`
+	} `json:"wm"`
+}
+
+// BuildWMSessionForkMeta merges the historical fork extension into existing
+// metadata without discarding provider metadata supplied by the caller.
+func BuildWMSessionForkMeta(base json.RawMessage, fork WMSessionForkExtension) json.RawMessage {
+	addition, err := json.Marshal(map[string]any{"wm": map[string]any{"fork": fork}})
+	if err != nil {
+		return CloneSessionUpdateMeta(base)
+	}
+	merged, err := MergeSessionUpdateMeta(base, addition)
+	if err != nil {
+		return addition
+	}
+	return merged
+}
+
+// WMSessionForkExtensionFromMeta returns the optional Codex historical fork
+// extension embedded in standard session/fork metadata.
+func WMSessionForkExtensionFromMeta(meta json.RawMessage) (WMSessionForkExtension, bool) {
+	var envelope wmSessionForkMetaEnvelope
+	if json.Unmarshal(meta, &envelope) != nil || envelope.WM.Fork == nil {
+		return WMSessionForkExtension{}, false
+	}
+	return *envelope.WM.Fork, true
 }
 
 type WMSessionArchiveParams struct {

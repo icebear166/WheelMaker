@@ -494,8 +494,21 @@ export class RegistryRepository {
       status: this.normalizeSessionActionCapability(input.status),
       compact: this.normalizeSessionActionCapability(input.compact),
       steer: this.normalizeSessionActionCapability(input.steer),
-      fork: this.normalizeSessionActionCapability(input.fork),
+      fork: this.normalizeSessionForkModes(input.fork),
       goal: this.normalizeSessionActionCapability(input.goal),
+    };
+  }
+
+  private normalizeSessionForkModes(raw: unknown): RegistrySessionActionCapability {
+    const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const capability = this.normalizeSessionActionCapability(raw);
+    const currentSession = capability.supported && input.currentSession === true;
+    const historicalTurn = capability.supported && (input.historicalTurn === true || (!currentSession && input.historicalTurn !== false));
+    return {
+      supported: capability.supported,
+      ...(capability.reason ? {reason: capability.reason} : {}),
+      currentSession,
+      historicalTurn,
     };
   }
   private normalizeSessionGoalStatus(raw: unknown): RegistrySessionGoalStatus | null {
@@ -1820,12 +1833,15 @@ export class RegistryRepository {
     };
   }
 
-  async forkSession(projectId: string, sessionId: string, turnIndex: number): Promise<RegistrySessionForkResponse> {
-    const normalizedTurnIndex = Number.isFinite(turnIndex) ? Math.max(0, Math.trunc(turnIndex)) : 0;
+  async forkSession(projectId: string, sessionId: string, turnIndex?: number): Promise<RegistrySessionForkResponse> {
+    const payload: {sessionId: string; turnIndex?: number} = {sessionId};
+    if (turnIndex !== undefined) {
+      payload.turnIndex = Number.isFinite(turnIndex) ? Math.max(0, Math.trunc(turnIndex)) : 0;
+    }
     const resp = await this.client.request({
       method: RegistryMethods.SessionFork,
       projectId,
-      payload: {sessionId, turnIndex: normalizedTurnIndex},
+      payload,
       timeoutMs: SESSION_FORK_TIMEOUT_MS,
     });
     const body = resp.payload && typeof resp.payload === 'object'

@@ -1,5 +1,7 @@
 package protocol
 
+import "encoding/json"
+
 // Session action names are provider-neutral capabilities exposed in session summaries.
 const (
 	SessionActionStatus  = "status"
@@ -35,14 +37,15 @@ type SessionForkPoint struct {
 }
 
 type SessionForkPrompt struct {
-	DoneTurnIndex int64
-	ContentBlocks []ContentBlock
+	DoneTurnIndex int64          `json:"doneTurnIndex"`
+	ContentBlocks []ContentBlock `json:"contentBlocks"`
 }
 
 type SessionForkResult struct {
-	SessionID  string
-	Title      string
-	ForkPoints map[int64]SessionForkPoint
+	SessionID     string
+	Title         string
+	ForkPoints    map[int64]SessionForkPoint
+	ConfigOptions []ConfigOption
 }
 
 type SessionForkOrigin struct {
@@ -52,8 +55,10 @@ type SessionForkOrigin struct {
 }
 
 type SessionActionCapability struct {
-	Supported bool   `json:"supported"`
-	Reason    string `json:"reason,omitempty"`
+	Supported      bool   `json:"supported"`
+	Reason         string `json:"reason,omitempty"`
+	CurrentSession bool   `json:"currentSession,omitempty"`
+	HistoricalTurn bool   `json:"historicalTurn,omitempty"`
 }
 
 type SessionActionCapabilities struct {
@@ -72,6 +77,18 @@ type SessionFeatures struct {
 	MessageLifecycle *SessionFeatureVersion `json:"messageLifecycle,omitempty"`
 }
 
+// SessionCapabilityState is the complete capability snapshot persisted for a
+// session. AgentCapabilities contains standard ACP capabilities, while
+// InitializeMeta contains top-level initialize metadata such as Claude's
+// steering declaration. WMActions is retained as a derived field so callers
+// loading an old snapshot do not need to renegotiate private extensions.
+type SessionCapabilityState struct {
+	AgentCapabilities AgentCapabilities
+	InitializeMeta    json.RawMessage
+	Commands          []AvailableCommand
+	WMActions         WMSessionActionCapabilities
+}
+
 func SessionFeaturesFromAgentCapabilities(capabilities AgentCapabilities) *SessionFeatures {
 	negotiated := NegotiateWMExtensions(BuildWMClientCapabilitiesMeta(nil), capabilities.Meta)
 	if !negotiated.MessageLifecycle {
@@ -84,22 +101,49 @@ func SessionFeaturesFromAgentCapabilities(capabilities AgentCapabilities) *Sessi
 // through the WheelMaker ACP extension. Status is implemented locally by the
 // Hub and therefore does not require an Agent extension.
 func SessionActionsFromAgentCapabilities(capabilities AgentCapabilities) SessionActionCapabilities {
+	return SessionActionsFromState(SessionCapabilityState{AgentCapabilities: capabilities})
+}
+
+// SessionActionsFromState projects standard ACP capabilities and negotiated
+// WheelMaker capabilities into the product-neutral session action contract.
+func SessionActionsFromState(state SessionCapabilityState) SessionActionCapabilities {
 	const unsupported = "Current Agent does not support this action."
-	negotiated := NegotiateWMExtensions(BuildWMClientCapabilitiesMeta(nil), capabilities.Meta)
-	actions := negotiated.SessionActions
-	capability := func(supported bool) SessionActionCapability {
+	negotiated := NegotiateWMExtensions(BuildWMClientCapabilitiesMeta(nil), state.AgentCapabilities.Meta)
+	actions := state.WMActions
+	if actions.Version == 0 {
+		actions = negotiated.SessionActions
+	}
+	capability := func(supported bool, current, historical bool) SessionActionCapability {
 		if supported {
-			return SessionActionCapability{Supported: true}
+			return SessionActionCapability{Supported: true, CurrentSession: current, HistoricalTurn: historical}
 		}
 		return SessionActionCapability{Reason: unsupported}
 	}
+	standardFork := state.AgentCapabilities.SessionCapabilities != nil && state.AgentCapabilities.SessionCapabilities.Fork != nil
+	nativeSteering := InitializeSteeringSupported(state.InitializeMeta)
+	// A standard fork marker only proves that the request can return a child ID.
+	// WheelMaker also requires the child to survive an independent session/load
+	// before it can publish a product session. Keep current fork behind an
+	// explicit WheelMaker release gate until that lifecycle has passed a live
+	// provider fixture; claude-agent-acp 0.65.0 currently fails that check.
+	currentFork := standardFork && state.AgentCapabilities.LoadSession && actions.Version > 0 && actions.CurrentSession
+	historicalFork := actions.Fork || actions.HistoricalTurn
 	return SessionActionCapabilities{
 		Status:  SessionActionCapability{Supported: true},
-		Compact: capability(actions.Compact),
-		Steer:   capability(actions.Steer),
-		Fork:    capability(actions.Fork),
-		Goal:    capability(actions.Goal),
+		Compact: capability(actions.Compact, false, false),
+		Steer:   capability(actions.Steer || nativeSteering, false, false),
+		Fork:    capability(currentFork || historicalFork, currentFork, historicalFork),
+		Goal:    capability(actions.Goal, false, false),
 	}
+}
+
+func InitializeSteeringSupported(meta json.RawMessage) bool {
+	var envelope struct {
+		Steering struct {
+			Supported bool `json:"supported"`
+		} `json:"steering"`
+	}
+	return json.Unmarshal(meta, &envelope) == nil && envelope.Steering.Supported
 }
 
 type SessionGoal struct {

@@ -107,6 +107,7 @@
 }
 
 .chat-title-prompt-icon-button,
+.chat-session-fork-current,
 .chat-search-toggle,
 .chat-terminal-toggle,
 .chat-preview-toggle {
@@ -131,6 +132,7 @@
 
 .chat-title-prompt-icon-button:hover,
 .chat-title-prompt-icon-button.open,
+.chat-session-fork-current:hover,
 .chat-search-toggle:hover,
 .chat-terminal-toggle:hover,
 .chat-preview-toggle:hover {
@@ -148,6 +150,16 @@
 .chat-title-prompt-icon-button:disabled {
   opacity: 0.52;
   cursor: default;
+}
+
+.chat-session-fork-current:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.chat-session-fork-current:disabled:hover {
+  background: transparent;
+  color: var(--text-tertiary);
 }
 
 .chat-title-prompt-icon-button:disabled:hover {

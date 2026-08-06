@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 )
@@ -88,5 +89,27 @@ func TestWMExtensionMethodsUseReservedNamespace(t *testing.T) {
 		if len(method) < 4 || method[:4] != "_wm/" {
 			t.Fatalf("method=%q", method)
 		}
+	}
+}
+
+func TestWMSessionForkExtensionUsesStablePromptFieldNames(t *testing.T) {
+	turnIndex := int64(7)
+	meta := BuildWMSessionForkMeta(nil, WMSessionForkExtension{
+		Ref:       "turn-7",
+		TurnIndex: &turnIndex,
+		Prompts: []SessionForkPrompt{{
+			DoneTurnIndex: 7,
+			ContentBlocks: []ContentBlock{{Type: ContentBlockTypeText, Text: "follow up"}},
+		}},
+	})
+	if !bytes.Contains(meta, []byte(`"doneTurnIndex":7`)) || !bytes.Contains(meta, []byte(`"contentBlocks"`)) {
+		t.Fatalf("fork metadata=%s, want stable prompt field names", meta)
+	}
+	decoded, ok := WMSessionForkExtensionFromMeta(meta)
+	if !ok || decoded.Ref != "turn-7" || decoded.TurnIndex == nil || *decoded.TurnIndex != 7 || len(decoded.Prompts) != 1 {
+		t.Fatalf("decoded fork extension=%#v, ok=%v", decoded, ok)
+	}
+	if decoded.Prompts[0].DoneTurnIndex != 7 || len(decoded.Prompts[0].ContentBlocks) != 1 {
+		t.Fatalf("decoded prompts=%#v", decoded.Prompts)
 	}
 }

@@ -139,6 +139,76 @@ describe('web session action protocol', () => {
     });
   });
 
+  test('normalizes legacy fork capability to historical-turn mode', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        sessions: [{
+          sessionId: 'legacy-session',
+          title: 'Legacy',
+          preview: '',
+          updatedAt: '',
+          messageCount: 1,
+          sessionActions: {fork: {supported: true}},
+        }],
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const [summary] = await repository.listSessions('project-a');
+
+    expect(summary.sessionActions?.fork).toEqual({
+      supported: true,
+      currentSession: false,
+      historicalTurn: true,
+    });
+  });
+
+  test('omits turnIndex for a current-session fork request', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        session: {
+          sessionId: 'current-child',
+          title: 'Current child',
+          preview: '',
+          updatedAt: '',
+          messageCount: 1,
+        },
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    await (repository.forkSession as unknown as (projectId: string, sessionId: string) => Promise<unknown>)('project-a', 'source-session');
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: RegistryMethods.SessionFork,
+      payload: {sessionId: 'source-session'},
+    }));
+  });
+
+  test('does not reinterpret an invalid explicit turnIndex as a current-session fork', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        session: {
+          sessionId: 'unused-child',
+          title: 'Unused child',
+          preview: '',
+          updatedAt: '',
+          messageCount: 1,
+        },
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    await repository.forkSession('project-a', 'source-session', Number.NaN);
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: RegistryMethods.SessionFork,
+      payload: {sessionId: 'source-session', turnIndex: 0},
+    }));
+  });
+
   test('warns that a timed out session fork may still complete', () => {
     const projectRoot = path.join(__dirname, '..');
     const workspaceSource = fs.readFileSync(
