@@ -72,6 +72,25 @@ func TestDesktopWebViewInstallsWorkAreaConstraintForCustomTitleBar(t *testing.T)
 	}
 }
 
+func TestDesktopWebViewInstallsResizeHitTestBridgeForCustomTitleBar(t *testing.T) {
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceText := string(source)
+	installIndex := strings.Index(sourceText, "installDesktopWindowWorkAreaConstraintWithOps(hwnd, win32DesktopWindowSubclassOps{})")
+	resizeBridgeIndex := strings.Index(sourceText, "installDesktopWindowResizeHitTestOverlay(hwnd)")
+	frameIndex := strings.Index(sourceText, "applyCustomTitleBarFrame(hwnd)")
+	if installIndex < 0 || resizeBridgeIndex < installIndex || frameIndex < resizeBridgeIndex {
+		t.Fatalf(
+			"custom frame must install resize hit-test bridge after window hook and before frame change: install=%d resizeBridge=%d frame=%d",
+			installIndex,
+			resizeBridgeIndex,
+			frameIndex,
+		)
+	}
+}
+
 func TestCustomTitleBarSuppressesNativeDwmBorder(t *testing.T) {
 	ops := &recordingDesktopDwmWindowOps{}
 

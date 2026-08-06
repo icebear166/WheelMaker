@@ -114,6 +114,9 @@ func desktopWindowWorkAreaProcWithInfo(hwnd, msg, wparam, lparam uintptr, info *
 	if info != nil {
 		constrainDesktopMaximizeToWorkArea(hwnd, info, subclass.ops)
 	}
+	if msg == wmSize || msg == wmWindowPosChanged || msg == wmDpiChanged {
+		syncDesktopWindowResizeHitTestOverlay(hwnd)
+	}
 	if msg == wmNCDestroy {
 		desktopWindowSubclasses.Delete(hwnd)
 	}

@@ -52,7 +52,13 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 				return err
 			}
 			defer cleanupWindowWorkAreaConstraint()
+			cleanupResizeHitTestOverlay, err := installDesktopWindowResizeHitTestOverlay(hwnd)
+			if err != nil {
+				return err
+			}
+			defer cleanupResizeHitTestOverlay()
 			applyCustomTitleBarFrame(hwnd)
+			syncDesktopWindowResizeHitTestOverlay(hwnd)
 		}
 		if !opts.CustomTitleBar {
 			applyDesktopWindowTheme(hwnd, opts.ThemeColor)
