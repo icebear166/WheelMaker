@@ -12,8 +12,6 @@ import (
 	"strings"
 )
 
-const defaultRegistryPort = 9630
-
 // MigrationBackupPath returns the private pre-migration copy used by the
 // deployment fallback path while a new runtime is being validated.
 func MigrationBackupPath(path string) string {
@@ -132,17 +130,13 @@ func canonicalizeConfig(root map[string]json.RawMessage) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	legacyPort, portPresent, err := readOptionalInt(registry, "port")
-	if err != nil {
+	if _, _, err := readOptionalInt(registry, "port"); err != nil {
 		return false, err
-	}
-	if !portPresent || legacyPort <= 0 {
-		legacyPort = defaultRegistryPort
 	}
 
 	if serverPresent {
 		if !listen && legacyServer != "" {
-			canonical, loopback, err := normalizeRegistryOrigin(legacyServer, legacyPort)
+			canonical, loopback, err := normalizeRegistryOrigin(legacyServer, 0)
 			if err != nil {
 				return false, fmt.Errorf("registry.server is invalid: %w", err)
 			}

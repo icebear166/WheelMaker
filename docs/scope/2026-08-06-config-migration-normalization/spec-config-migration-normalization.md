@@ -133,11 +133,11 @@ origin；凭据、query、fragment、非 `/ws` 的路径和非法端口不自动
   `registry.port` 保留为本机 listener 端口。
 - `listen: false` 时，旧 `registry.server` 表示远程 Registry 入口：
   - 旧 server 为回环地址时，直接删除并保留 publicUrl 为空，自动使用本机 loopback；
-  - 旧 server 为非回环地址且 publicUrl 缺失时，把旧 server（必要时使用旧
-    `registry.port` 补齐无端口地址）自动迁移为 publicUrl；
+  - 旧 server 为非回环地址且 publicUrl 缺失时，把旧 server 自动迁移为
+    publicUrl；旧 server 自带的显式端口保留，不使用 `registry.port` 补公网端口；
   - publicUrl 已存在时始终保留 publicUrl，旧 server 无论是否一致都删除；
-  - `registry.port` 始终保留为 loopback listener/默认连接端口，不再承担远程 URL
-    的持久化语义。
+  - `registry.port` 始终保留为 loopback listener/默认连接端口，不承担远程 URL
+    的持久化语义，也不参与远程 publicUrl 的端口补全。
 - `listen: false` 且 publicUrl、旧 server 都缺失时，直接使用本机 loopback，不等待
   用户输入。
 - 旧 server 非法且无法判断为回环或远程 origin 时，迁移失败并保留原文件；失败是
@@ -184,8 +184,8 @@ loopback 默认值。
   成功后旧字段始终删除。
 - 入口机不再读取 `registry.server`，仍监听 loopback；入口 Hub 和 Worker 有
   `publicUrl` 时使用正确的 `wss://.../ws`，没有时自动使用 loopback。
-- Worker 迁移旧 server 时，旧 `registry.port` 只用于补齐非回环无端口地址，迁移后
-  仍保留为 loopback listener/默认连接端口。
+- Worker 迁移旧 server 时，旧 server 自带的显式端口保留在 publicUrl；旧
+  `registry.port` 不用于补远程端口，迁移后仍保留为 loopback listener/默认连接端口。
 - publicUrl 的旧 `ws/wss/http/https` 地址和 `/ws` 后缀都保存为 HTTPS origin；Hub
   运行时仍连接正确的 `wss://.../ws`，且不会静默降级到明文远程连接。
 - 本地 loopback 连接仍使用 `ws://127.0.0.1:9630/ws`，不要求本地 TLS。

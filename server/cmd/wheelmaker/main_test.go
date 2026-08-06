@@ -97,7 +97,7 @@ func TestLoadValidatedRuntimeConfigMigratesBeforeStrictLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadValidatedRuntimeConfig(): %v", err)
 	}
-	if cfg.PublicURL != "https://registry.example.com:28800" || cfg.Token != "user-supplied-random-token" || cfg.HubID != "legacy-hub" {
+	if cfg.PublicURL != "https://registry.example.com" || cfg.Token != "user-supplied-random-token" || cfg.HubID != "legacy-hub" {
 		t.Fatalf("migrated config = %+v", cfg)
 	}
 	data, err := os.ReadFile(configPath)

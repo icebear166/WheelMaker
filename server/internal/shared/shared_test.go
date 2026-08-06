@@ -245,12 +245,21 @@ func TestMigrateConfigCanonicalizesLegacyLayouts(t *testing.T) {
 			wantListen: true,
 		},
 		{
-			name:       "worker server becomes public url",
+			name:       "worker server becomes public url without borrowing local port",
 			input:      `{"projects":[],"registry":{"listen":false,"port":28800,"server":"registry.example.com","token":"t","hubId":"h"}}`,
-			wantPublic: "https://registry.example.com:28800",
+			wantPublic: "https://registry.example.com",
 			wantToken:  "t",
 			wantHubID:  "h",
 			wantPort:   28800,
+			wantListen: false,
+		},
+		{
+			name:       "worker server keeps its explicit public port",
+			input:      `{"projects":[],"registry":{"listen":false,"port":9630,"server":"registry.example.com:28800","token":"t","hubId":"h"}}`,
+			wantPublic: "https://registry.example.com:28800",
+			wantToken:  "t",
+			wantHubID:  "h",
+			wantPort:   9630,
 			wantListen: false,
 		},
 		{

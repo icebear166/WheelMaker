@@ -29,7 +29,7 @@ malformed input, idempotence, concurrent callers, private permissions, and the
 them. Use these expected endpoint values:
 
 ```text
-legacy worker server=registry.example.com, port=28800 -> publicUrl=https://registry.example.com:28800
+legacy worker server=registry.example.com, port=28800 -> publicUrl=https://registry.example.com
 legacy loopback server=127.0.0.1, publicUrl absent -> publicUrl absent, loopback runtime fallback
 top-level non-empty token/hubId/publicUrl -> preserve top-level values, remove nested legacy keys
 publicUrl and old server differ -> keep publicUrl, remove old server without prompting
@@ -77,10 +77,11 @@ only after strict parsing and token validation succeed.
 
 Apply deterministic rules: non-empty top-level identity wins over nested identity; Go migration
 never generates identity; `listen:true` treats old server as a bind host and deletes it; a
-`listen:false` non-loopback old server becomes publicUrl when publicUrl is absent, folding in
-registry.port only when no URL port exists; loopback or missing old server leaves publicUrl empty
-for the loopback default; existing publicUrl always wins; registry.port remains the local/default
-loopback port. Normalize remote origins to HTTPS and loopback origins to HTTP, reject credentials,
+`listen:false` non-loopback old server becomes publicUrl when publicUrl is absent, preserving
+only a port explicitly present in the old server; loopback or missing old server leaves publicUrl
+empty for the loopback default; existing publicUrl always wins; registry.port remains the
+local/default loopback port and never fills a remote public URL port. Normalize remote origins to
+HTTPS and loopback origins to HTTP, reject credentials,
 query/fragment, non-root paths, invalid ports, and unclassifiable non-loopback servers without
 changing the original file.
 
