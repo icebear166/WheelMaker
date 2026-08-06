@@ -483,6 +483,14 @@
   color: var(--text-secondary);
 }
 
+.preview-workbench-surface.desktop .preview-workbench-search-bar {
+  padding-left: 52px;
+}
+
+.preview-workbench-surface.mobile .preview-workbench-search-bar {
+  padding-right: calc(max(10px, var(--wm-safe-area-right)) + 42px);
+}
+
 .preview-workbench-search-input {
   min-width: 0;
   height: 24px;
@@ -546,11 +554,12 @@
   height: 32px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 68%, transparent);
+  backdrop-filter: blur(10px);
   color: var(--text-secondary);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
 }
 
 .preview-workbench-drawer-tool:hover {
@@ -566,7 +575,7 @@
 .preview-workbench-drawer-tool.active {
   color: var(--accent-primary);
   border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
-  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));
+  background: color-mix(in srgb, var(--accent-primary) 22%, transparent);
 }
 
 .preview-workbench-tree-search-icon {
@@ -614,7 +623,7 @@
   top: 0;
   bottom: 0;
   z-index: 30;
-  width: 360px;
+  width: 400px;
   pointer-events: none;
 }
 
