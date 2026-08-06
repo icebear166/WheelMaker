@@ -54,11 +54,11 @@ upstream。是否生成站点配置和是否采用内置 Gateway 是两件独立
 
 ## 公开地址
 
-- `publicUrl` 最终保存为只包含 HTTP(S) 协议、hostname、可选端口和根路径 `/` 的完整
-  origin，例如 `https://wheelmaker.example.com` 或 `https://example.com:28800`。
-  交互输入和 `--public-url` 同时接受裸域名；没有协议时自动按 `https://` 规范化。
-- Workspace 已有 `~/.wheelmaker/config.json.publicUrl` 时复用。首次交互完整部署会
-  询问 “WheelMaker server public URL”；首次非交互部署必须传 `--public-url`。
+- `publicUrl` 最终保存为只包含 HTTPS origin 的完整地址（loopback 例外保留 HTTP），
+  例如 `https://wheelmaker.example.com` 或 `https://example.com:28800`。输入也接受裸域名、
+  `ws/wss` 方案和末尾 `/ws`，写入时统一规范化。
+- Workspace 已有 `~/.wheelmaker/config.json.publicUrl` 时复用；缺少时 Hub 自动使用本机
+  loopback Registry，不要求交互补填。显式 `--public-url` 才会写入新的公网地址。
 - `deploy.mjs update` 从已有配置重新生成 `workspace.json`。旧配置缺少地址时只警告并
   跳过站点生成，不阻断 Hub/Web 更新。
 - Release Server 的地址来自 `scripts/release/channel.json`，部署时写回它自己的
@@ -123,7 +123,7 @@ tunnel，必须重新 enable。公网 DNS、防火墙、NAT、安全组和证书
 ## 部署入口
 
 ```text
-node deploy.mjs                                      # 部署 Hub/Web；必要时询问 publicUrl
+node deploy.mjs                                      # 部署 Hub/Web；缺省使用 loopback
 node deploy.mjs --public-url=https://host.example   # 非交互完整部署
 node deploy.mjs update                               # 更新 Hub/Web 并刷新站点声明
 node deploy.mjs gateway                              # 幂等安装/升级/启动内置 Gateway

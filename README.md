@@ -51,7 +51,7 @@ The target machine does not need the WheelMaker source tree, Git, Go, npm, or a 
 sudo loginctl enable-linger "$USER"
 ```
 
-For a new installation, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the **Deploy WheelMaker** command for your platform. It can run from any directory, downloads the launcher to `~/.wheelmaker`, and installs the current stable release. The first interactive install asks for the WheelMaker server public URL; enter either a bare hostname or an `https://` URL (bare hostnames are stored as HTTPS), and automation can pass `--public-url=https://host.example`. Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
+For a new installation, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the **Deploy WheelMaker** command for your platform. It can run from any directory, downloads the launcher to `~/.wheelmaker`, and installs the current stable release. New installations use the local loopback Registry by default; pass `--public-url` when a public Registry origin is needed. Bare hostnames, `https://`, and compatible `wss://.../ws` input are accepted and persisted as a canonical HTTPS origin (loopback remains HTTP). Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
 
 The homepage also provides an independent **Deploy built-in Gateway** command. It runs `node deploy.mjs gateway`, which idempotently installs or upgrades the embedded-Caddy entrypoint and ensures its service is running. Normal WheelMaker deploys and updates only generate `gateway/sites/workspace.json`; they never install, stop, or restart Gateway. Nginx remains supported and can ignore that generated file.
 
@@ -135,11 +135,10 @@ Example for Machine A:
   ],
   "registry": {
     "listen": true,
-    "port": 9630,
-    "server": "127.0.0.1",
-    "token": "replace-with-shared-token",
-    "hubId": "hub-a"
+    "port": 9630
   },
+  "token": "replace-with-shared-token",
+  "hubId": "hub-a",
   "log": {
     "level": "warn"
   }
@@ -151,8 +150,8 @@ Notes:
 - `publicUrl` is the complete public HTTP(S) origin and is also the source for the generated Workspace site declaration.
 - `registry.listen: true` means Machine A hosts the registry server.
 - `registry.port` is the internal registry port.
-- `registry.token` is shared by trusted non-browser hubs and clients. Browsers authenticate through the Registry login endpoint and then use a session cookie.
-- `registry.hubId` should be stable and recognizable, for example `hub-a`.
+- top-level `token` is shared by trusted non-browser hubs and clients. Browsers authenticate through the Registry login endpoint and then use a session cookie.
+- top-level `hubId` should be stable and recognizable, for example `hub-a`.
 
 After signing in through the HTTPS page, configure DeepSeek, Volcengine ASR, and MiMo TTS under **Settings > Server**. A Key's presence determines whether its feature is available; there are no separate enable switches. These values are stored only on Machine A in `~/.wheelmaker/db/server-data.json`, with private file permissions and atomic replacement. The file contains plaintext secrets required at runtime, so protect its backups like credentials and never commit it.
 
@@ -164,6 +163,9 @@ Machine B does not expose the public entrypoint. It only reports projects to Mac
 
 ```json
 {
+  "publicUrl": "https://machine-a.example.com:28800",
+  "token": "replace-with-shared-token",
+  "hubId": "hub-b",
   "projects": [
     {
       "name": "Project-B",
@@ -172,10 +174,7 @@ Machine B does not expose the public entrypoint. It only reports projects to Mac
   ],
   "registry": {
     "listen": false,
-    "port": 9630,
-    "server": "https://machine-a.example.com:28800",
-    "token": "replace-with-shared-token",
-    "hubId": "hub-b"
+    "port": 9630
   },
   "log": {
     "level": "warn"
@@ -185,9 +184,9 @@ Machine B does not expose the public entrypoint. It only reports projects to Mac
 
 Notes:
 
-- `registry.server` can be `https://machine-a.example.com:28800`. WheelMaker will convert it to `wss://.../ws`.
-- `registry.token` must match Machine A.
-- `hubId` must be unique, for example `hub-b`.
+- `publicUrl` can be `https://machine-a.example.com:28800`. WheelMaker will convert it to `wss://.../ws`; it may be omitted for a same-machine loopback Registry.
+- top-level `token` must match Machine A.
+- top-level `hubId` must be unique, for example `hub-b`.
 - `listen: false` means Machine B does not host its own registry listener.
 - Machine B does not need a copy of `server-data.json`; provider settings belong to the Registry entry machine.
 
@@ -479,8 +478,8 @@ The Web UI requests an update by creating one atomic job in `staging/lock.json`;
 After deployment:
 
 1. Open `https://<host>:28800/` and confirm the Web UI loads.
-2. Confirm Machine B points `registry.server` at Machine A.
-3. Confirm both machines use the same `registry.token`.
+2. Confirm Machine B points `publicUrl` at Machine A, or intentionally uses loopback.
+3. Confirm both machines use the same top-level `token`.
 4. Confirm projects from multiple hubs appear in the UI.
 5. Confirm the browser offers **Install app** / **Add to Home Screen** when opened over HTTPS.
 

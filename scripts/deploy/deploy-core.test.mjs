@@ -291,14 +291,31 @@ test('full deployment stores its public URL and writes Gateway config without in
   assert.equal(site.webRoot, join(fixture.home, 'web'));
 });
 
-test('first noninteractive full deployment requires a public URL', async (t) => {
+test('public URL input accepts websocket origin syntax and persists HTTPS origin', async (t) => {
+  const fixture = await installFixture(t);
+  await runCore(['--public-url=wss://registry.example.com:28800/ws'], fixture.deps);
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal(config.publicUrl, 'https://registry.example.com:28800');
+});
+
+test('loopback public URL input remains plain HTTP for local development', async (t) => {
+  const fixture = await installFixture(t);
+  await runCore(['--public-url=http://127.0.0.2:9630/ws'], fixture.deps);
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal(config.publicUrl, 'http://127.0.0.2:9630');
+});
+
+test('first noninteractive full deployment uses loopback when public URL is omitted', async (t) => {
   const fixture = await installFixture(t);
   fixture.deps.interactive = false;
 
-  await assert.rejects(() => runCore([], fixture.deps), /--public-url/);
+  await runCore([], fixture.deps);
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.equal('publicUrl' in config, false);
+  assert.match(config.token, /^[A-Za-z0-9_-]{43}$/);
 });
 
-test('first interactive full deployment asks for and stores the server public URL', async (t) => {
+test('first interactive full deployment does not prompt when public URL is omitted', async (t) => {
   const fixture = await installFixture(t);
   const userHome = join(dirname(fixture.home), 'login-home');
   fixture.deps.userHome = userHome;
@@ -306,21 +323,20 @@ test('first interactive full deployment asks for and stores the server public UR
   fixture.deps.interactive = true;
   const ask = async (question) => {
     questions.push(question);
-    return 'workspace.example.com:8443';
+    throw new Error('public URL prompt should not run');
   };
   fixture.deps.publicURLQuestion = ask;
   fixture.deps.gatewayQuestion = ask;
 
   await runCore([], fixture.deps);
 
-  assert.deepEqual(questions, ['WheelMaker server public URL']);
+  assert.deepEqual(questions, []);
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
-  assert.equal(config.publicUrl, 'https://workspace.example.com:8443');
-  const site = JSON.parse(await readFile(
-    join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json'),
-    'utf8',
-  ));
-  assert.equal(site.publicUrl, 'https://workspace.example.com:8443');
+  assert.equal('publicUrl' in config, false);
+  await assert.rejects(
+    () => access(join(userHome, '.wheelmaker', 'gateway')),
+    {code: 'ENOENT'},
+  );
 });
 
 test('interactive public URL prompt uses a visible colon and a new line', async () => {
@@ -808,7 +824,11 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.equal(config.publicUrl, 'https://workspace.example.com');
   assert.deepEqual(config.projects, []);
-  assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(config.token, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(config.hubId, 'local-hub');
+  assert.equal('server' in config.registry, false);
+  assert.equal('token' in config.registry, false);
+  assert.equal('hubId' in config.registry, false);
 });
 
 test('fresh Windows deploy does not create a Desktop updater binary', async (t) => {
@@ -833,6 +853,7 @@ test('normal deploy migrates legacy config and secures it without losing user fi
     registry: {
       hubId: 'existing-hub',
       listen: false,
+      server: '127.0.0.1',
       token: 'wheelmaker-local-token',
     },
   }));
@@ -847,10 +868,57 @@ test('normal deploy migrates legacy config and secures it without losing user fi
   assert.deepEqual(config.projects, [{ name: 'Existing', path: 'D:\\Existing' }]);
   assert.equal(config.registry.hubId, 'existing-hub');
   assert.equal(config.registry.listen, false);
+  assert.equal(config.registry.server, '127.0.0.1');
   assert.equal(config.publicUrl, 'https://workspace.example.com');
   assert.notEqual(config.registry.token, 'wheelmaker-local-token');
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
   assert.deepEqual(secured, [configPath]);
+});
+
+test('normal deploy preserves canonical top-level identity placement', async (t) => {
+  const fixture = await installFixture(t);
+  const configPath = join(fixture.home, 'config.json');
+  await mkdir(fixture.home, { recursive: true });
+  await writeFile(configPath, JSON.stringify({
+    projects: [],
+    publicUrl: 'https://workspace.example.com',
+    token: 'existing-top-level-token',
+    hubId: 'existing-top-level-hub',
+    registry: { listen: false, port: 9630 },
+  }));
+
+  await runCore([], fixture.deps);
+
+  const config = JSON.parse(await readFile(configPath, 'utf8'));
+  assert.equal(config.token, 'existing-top-level-token');
+  assert.equal(config.hubId, 'existing-top-level-hub');
+  assert.equal('token' in config.registry, false);
+  assert.equal('hubId' in config.registry, false);
+});
+
+test('normal deploy keeps legacy server text when no public URL is supplied', async (t) => {
+  const fixture = await installFixture(t);
+  const configPath = join(fixture.home, 'config.json');
+  await mkdir(fixture.home, { recursive: true });
+  await writeFile(configPath, JSON.stringify({
+    projects: [],
+    registry: {
+      listen: false,
+      server: 'registry.example.com:28800',
+      token: 'existing-token',
+    },
+  }));
+  fixture.deps.interactive = true;
+  fixture.deps.publicURLQuestion = async () => {
+    throw new Error('existing config must not prompt for public URL');
+  };
+
+  await runCore([], fixture.deps);
+
+  const config = JSON.parse(await readFile(configPath, 'utf8'));
+  assert.equal('publicUrl' in config, false);
+  assert.equal(config.registry.server, 'registry.example.com:28800');
+  assert.equal(config.registry.token, 'existing-token');
 });
 
 test('normal Linux deploy checks runtime prerequisites before staging files', async (t) => {
@@ -1498,6 +1566,46 @@ test('Hub health timeout persists failure and removes the update lock', async (t
   assert.equal('stack' in status, false);
   assert.equal('message' in status, false);
   assert.equal(await exists(join(fixture.home, 'staging', 'timer-job')), false);
+});
+
+test('deployment fallback restores Go pre-migration config before starting old runtime', async (t) => {
+  const fixture = await installFixture(t);
+  const configPath = join(fixture.home, 'config.json');
+  const backupPath = `${configPath}.pre-migration`;
+  await mkdir(fixture.home, { recursive: true });
+  const legacy = JSON.stringify({
+    projects: [],
+    registry: {
+      listen: false,
+      port: 9630,
+      server: '127.0.0.1',
+      token: 'legacy-token',
+      hubId: 'legacy-hub',
+    },
+  });
+  await writeFile(backupPath, legacy);
+  await writeFile(configPath, JSON.stringify({
+    projects: [],
+    token: 'new-token',
+    hubId: 'new-hub',
+    registry: { listen: false, port: 9630 },
+  }));
+  fixture.deps.secureConfigFile = async () => {};
+  let starts = 0;
+  const originalStart = fixture.deps.runtime.start;
+  fixture.deps.runtime.start = async () => {
+    starts += 1;
+    if (starts === 1) throw new Error('new runtime failed');
+    const restored = JSON.parse(await readFile(configPath, 'utf8'));
+    assert.equal(restored.registry.server, '127.0.0.1');
+    assert.equal(restored.registry.token, 'legacy-token');
+    assert.equal(restored.registry.hubId, 'legacy-hub');
+    await originalStart();
+  };
+
+  await assert.rejects(() => runCore([], fixture.deps), /new runtime failed/);
+  assert.equal(starts, 2);
+  assert.equal(await exists(backupPath), false);
 });
 
 async function installFixture(t, { hubRunning = true, platform = 'win32' } = {}) {

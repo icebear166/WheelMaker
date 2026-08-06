@@ -1680,12 +1680,11 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
   if (config === null) {
     config = {
       projects: [],
+      token: randomBytes(32).toString('base64url'),
+      hubId: 'local-hub',
       registry: {
         listen: true,
         port: 9630,
-        server: '127.0.0.1',
-        token: randomBytes(32).toString('base64url'),
-        hubId: 'local-hub',
       },
       log: { level: 'warn' },
     };
@@ -1698,44 +1697,44 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
       delete config.monitor;
       changed = true;
     }
-    if (!Object.hasOwn(config, 'registry')) {
-      config.registry = {};
-      changed = true;
-    }
+    const hasRegistry = Object.hasOwn(config, 'registry');
     if (
-      typeof config.registry !== 'object' ||
-      config.registry === null ||
-      Array.isArray(config.registry)
+      hasRegistry &&
+      (typeof config.registry !== 'object' ||
+        config.registry === null ||
+        Array.isArray(config.registry))
     ) {
       throw new Error('config.json registry must be an object');
     }
-    const token = config.registry.token;
-    if (token !== undefined && typeof token !== 'string') {
-      throw new Error('config.json registry.token must be a string');
+    const registry = hasRegistry ? config.registry : null;
+    for (const field of ['token', 'hubId']) {
+      if (config[field] !== undefined && typeof config[field] !== 'string') {
+        throw new Error(`config.json ${field} must be a string`);
+      }
+      if (registry?.[field] !== undefined && typeof registry[field] !== 'string') {
+        throw new Error(`config.json registry.${field} must be a string`);
+      }
     }
-    if (!token?.trim() || token === 'wheelmaker-local-token') {
-      config.registry.token = randomBytes(32).toString('base64url');
+    const topToken = config.token;
+    const nestedToken = registry?.token;
+    const hasUsableTopToken = typeof topToken === 'string' &&
+      topToken.trim() && topToken !== 'wheelmaker-local-token';
+    const hasUsableNestedToken = typeof nestedToken === 'string' &&
+      nestedToken.trim() && nestedToken !== 'wheelmaker-local-token';
+    if (!hasUsableTopToken && !hasUsableNestedToken) {
+      const target = Object.hasOwn(config, 'token') || Object.hasOwn(config, 'hubId') || !registry
+        ? config
+        : registry;
+      target.token = randomBytes(32).toString('base64url');
       changed = true;
     }
   }
-  let selectedPublicUrl = publicUrl ?? config.publicUrl;
-  if (!selectedPublicUrl && deps.interactive) {
-    let questioner;
-    try {
-      if (!deps.publicURLQuestion) questioner = createGatewayQuestioner();
-      const ask = deps.publicURLQuestion ?? questioner.ask;
-      selectedPublicUrl = await ask('WheelMaker server public URL');
-    } finally {
-      questioner?.close();
+  if (publicUrl !== undefined) {
+    const normalizedPublicUrl = parsePublicUrl(publicUrl).href.replace(/\/$/, '');
+    if (config.publicUrl !== normalizedPublicUrl) {
+      config.publicUrl = normalizedPublicUrl;
+      changed = true;
     }
-  }
-  if (!selectedPublicUrl) {
-    throw new Error('first non-interactive deployment requires --public-url');
-  }
-  const normalizedPublicUrl = parsePublicUrl(selectedPublicUrl).href.replace(/\/$/, '');
-  if (config.publicUrl !== normalizedPublicUrl) {
-    config.publicUrl = normalizedPublicUrl;
-    changed = true;
   }
   if (changed) {
     await atomicWrite(configPath, jsonBytes(config), 0o600);
@@ -1752,6 +1751,22 @@ async function readWorkspacePublicUrl(home) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
   if (!config.publicUrl) return null;
   return parsePublicUrl(config.publicUrl).href.replace(/\/$/, '');
+}
+
+async function restorePreMigrationConfig(home, secureConfigFile) {
+  const configPath = join(home, 'config.json');
+  const backupPath = `${configPath}.pre-migration`;
+  let bytes;
+  try {
+    bytes = await readFile(backupPath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+    throw error;
+  }
+  await atomicWrite(configPath, bytes, 0o600);
+  if (secureConfigFile) await secureConfigFile(configPath);
+  await rm(backupPath, {force: true});
+  return true;
 }
 
 function transientWindowsFileError(error) {
@@ -2014,7 +2029,17 @@ async function executeDeployment(internalUpdate, deps, runtime) {
   } catch (error) {
     deps.reportStatus?.(`Deployment failed during ${phase}`);
     if (runtimeStopped && !runtimeStarted) {
-      await runtime.start().catch(() => {});
+      const secureConfigFile =
+        deps.secureConfigFile ??
+        ((path) => secureRuntimeConfig(path, platform, deps.runner));
+      let canStartFallback = true;
+      try {
+        await restorePreMigrationConfig(home, secureConfigFile);
+      } catch (restoreError) {
+        canStartFallback = false;
+        deps.reportStatus?.(`Unable to restore pre-migration config: ${restoreError.message}`);
+      }
+      if (canStartFallback) await runtime.start().catch(() => {});
     }
     await finishUpdate(stagingDirectory, {
       errorCode: updateErrorCode(phase, error),
@@ -2208,18 +2233,26 @@ function parsePublicUrl(value) {
   const input = value.trim();
   const normalizedInput = /^[a-z][a-z\d+.-]*:\/\//i.test(input)
     ? input
-    : `https://${input}`;
+    : isIP(input) === 6
+      ? `https://[${input}]`
+      : `https://${input}`;
   let url;
   try {
     url = new URL(normalizedInput);
   } catch {
     throw new Error('publicUrl must be a valid URL');
   }
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
-      url.search || url.hash || (url.pathname !== '' && url.pathname !== '/')) {
-    throw new Error('publicUrl must contain only scheme, host, optional port, and / path');
+  if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol) || url.username || url.password ||
+      url.search || url.hash || (url.pathname !== '' && url.pathname !== '/' && url.pathname !== '/ws')) {
+    throw new Error('publicUrl must contain only scheme, host, optional port, and /ws path');
   }
   if (!url.hostname) throw new Error('publicUrl must include a host');
+  const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const loopback = hostname === 'localhost' ||
+    (isIP(hostname) === 4 && hostname.split('.')[0] === '127') ||
+    (isIP(hostname) === 6 && hostname === '::1');
+  url.protocol = loopback ? 'http:' : 'https:';
+  url.pathname = '';
   return url;
 }
 

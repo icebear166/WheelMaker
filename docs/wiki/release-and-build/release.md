@@ -40,9 +40,10 @@ Gateway 产物发布与目标机入口配置是两条独立控制流。目标机
 `deploy.mjs gateway`，start/stop 包装器只控制运行状态。Gateway 的站点配置位于部署
 用户的 `~/.wheelmaker/gateway/sites`，各个部署器只维护自己的站点文件。
 
-业务服务不再接受 Gateway selector。Workspace 的 `config.json.publicUrl` 由已有配置、
-交互询问或完整部署的 `--public-url` 获得；输入可以是裸域名或带 `https://` 的地址，
-部署器会统一保存为规范化 HTTP(S) origin，裸域名默认使用 HTTPS；Release Server 的 `publicUrl` 来自 release
+业务服务不再接受 Gateway selector。Workspace 的 `config.json.publicUrl` 由已有配置或
+完整部署显式提供的 `--public-url` 获得；输入可以是裸域名、HTTP(S)/WS(S) 方案和末尾
+`/ws`，部署器会统一保存为规范化 HTTPS origin（loopback 例外保留 HTTP）；publicUrl
+省略时 Hub 自动使用本机 loopback Registry。Release Server 的 `publicUrl` 来自 release
 channel。Workspace 完整部署与 update 始终派生 `workspace.json`，Release Server 部署
 始终派生 `release-server.json`。写站点 JSON 不安装、验证、render、reload 或控制
 Nginx/Caddy；同一用户部署时两者自然聚合到同一 Gateway Home。
@@ -188,7 +189,7 @@ Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `ga
 → 下载当前平台包
 → 校验包大小和 SHA-256
 → 安全解压到 staging/<jobId>/package
-→ 初始化或迁移 config.json
+→ 初始化 config.json（既有配置由 Go 启动前自动迁移，不由 MJS 改写旧 server）
 → 进入 applying
 → 停止 Hub
 → 替换 bin/wheelmaker(.exe) 和 web/
@@ -200,6 +201,11 @@ Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `ga
 → 标记成功
 → 清理 staging/<jobId>
 ```
+
+Go 启动前的配置迁移是非交互的：顶层 `token`/`hubId` 优先，历史回环
+`registry.server` 删除后使用 loopback；历史非回环 server 在缺少 `publicUrl` 时自动
+写入 `publicUrl`，已有 `publicUrl` 始终保留。`registry.listen`/`registry.port` 只
+控制本机 listener 和 loopback 默认端口。迁移失败不会留下半份配置，也不会询问用户。
 
 状态写入 `~/.wheelmaker/staging/status.json`，更新租约写入 `lock.json`。主要状态包括 `queued`、`downloading`、`verifying`、`applying`、`restarting`、`succeeded` 和 `failed`。`deploy-core.mjs` 是这些状态的唯一写入者：它在 `node deploy.mjs update` 内创建、心跳、完成或失败并清理租约。
 
