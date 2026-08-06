@@ -83,6 +83,30 @@
   scrollbar-width: thin;
 }
 
+.workbench-chrome-tabs-row {
+  display: flex;
+  flex: 0 0 34px;
+  align-items: stretch;
+  min-width: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sidebar);
+}
+
+.workbench-chrome-tabs-row > .workbench-chrome-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.workbench-chrome-tabs-accessory {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
 .workbench-chrome-body {
   position: relative;
   flex: 1 1 auto;
@@ -104,6 +128,7 @@
 }
 
 .workbench-chrome.mobile[data-mobile-fullscreen='true'] > .workbench-chrome-toolbar,
-.workbench-chrome.mobile[data-mobile-fullscreen='true'] > .workbench-chrome-tabs {
+.workbench-chrome.mobile[data-mobile-fullscreen='true'] > .workbench-chrome-tabs,
+.workbench-chrome.mobile[data-mobile-fullscreen='true'] > .workbench-chrome-tabs-row {
   display: none;
 }

@@ -16,6 +16,8 @@ type WorkbenchChromeProps = {
   tabsAriaLabel: string;
   tabs: ReactNode;
   tabsClassName?: string;
+  tabsAccessory?: ReactNode;
+  tabsListRef?: React.Ref<HTMLDivElement>;
   mobileFullscreen?: boolean;
   onMobileFullscreenChange?: (fullscreen: boolean) => void;
   bodyClassName?: string;
@@ -36,6 +38,8 @@ export function WorkbenchChrome({
   tabsAriaLabel,
   tabs,
   tabsClassName,
+  tabsAccessory,
+  tabsListRef,
   mobileFullscreen = false,
   onMobileFullscreenChange,
   bodyClassName,
@@ -60,6 +64,17 @@ export function WorkbenchChrome({
     </>
   );
 
+  const tabsList = (
+    <div
+      ref={tabsListRef}
+      className={`workbench-chrome-tabs${tabsClassName ? ` ${tabsClassName}` : ''}`}
+      role="tablist"
+      aria-label={tabsAriaLabel}
+    >
+      {tabs}
+    </div>
+  );
+
   return (
     <section
       className={`workbench-chrome ${surfaceClassName} ${mode}`}
@@ -74,13 +89,12 @@ export function WorkbenchChrome({
       ) : (
         <div className="workbench-chrome-toolbar">{toolbar}</div>
       )}
-      <div
-        className={`workbench-chrome-tabs${tabsClassName ? ` ${tabsClassName}` : ''}`}
-        role="tablist"
-        aria-label={tabsAriaLabel}
-      >
-        {tabs}
-      </div>
+      {tabsAccessory ? (
+        <div className="workbench-chrome-tabs-row">
+          {tabsList}
+          <div className="workbench-chrome-tabs-accessory">{tabsAccessory}</div>
+        </div>
+      ) : tabsList}
       <div className={`workbench-chrome-body${bodyClassName ? ` ${bodyClassName}` : ''}`}>
         {children}
       </div>

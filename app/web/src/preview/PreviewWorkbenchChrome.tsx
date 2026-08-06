@@ -77,6 +77,10 @@ export function PreviewWorkbenchChrome({
   const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);
   const drawerPanelRef = React.useRef<HTMLDivElement | null>(null);
   const actionsMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const tabsBarRef = React.useRef<HTMLDivElement | null>(null);
+  const overflowRef = React.useRef<HTMLDivElement | null>(null);
+  const [tabsOverflowing, setTabsOverflowing] = React.useState(false);
+  const [tabListOpen, setTabListOpen] = React.useState(false);
   const activeTitle = previewWorkbenchHeaderTitle(activeTab);
   const drawerOpen = drawerMode !== 'closed';
   const drawerContent = drawerMode === 'files'
@@ -171,6 +175,102 @@ export function PreviewWorkbenchChrome({
     };
   }, [actionsMenuOpen, drawerOpen, onActionsMenuClose, onDrawerModeChange]);
 
+  React.useEffect(() => {
+    const node = tabsBarRef.current;
+    if (!node) {
+      return undefined;
+    }
+    const update = () => {
+      const overflowing = node.scrollWidth > node.clientWidth + 1;
+      setTabsOverflowing(overflowing);
+      if (!overflowing) {
+        setTabListOpen(false);
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [tabs.length]);
+
+  React.useEffect(() => {
+    if (!tabListOpen) {
+      return undefined;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (target && !overflowRef.current?.contains(target)) {
+        setTabListOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTabListOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [tabListOpen]);
+
+  const tabsAccessory = tabsOverflowing ? (
+    <div ref={overflowRef} className="preview-workbench-tabs-overflow">
+      <button
+        type="button"
+        className={`preview-workbench-tabs-overflow-button${tabListOpen ? ' active' : ''}`}
+        aria-label="Show all open tabs"
+        aria-haspopup="menu"
+        aria-expanded={tabListOpen}
+        data-tooltip="Show all open tabs"
+        onClick={() => setTabListOpen(open => !open)}
+      >
+        <Icon name="listCollapse" />
+      </button>
+      {tabListOpen ? (
+        <div className="preview-workbench-tabs-overflow-list" role="menu" aria-label="Open tabs">
+          {tabs.map(tab => {
+            const active = activeTab?.id === tab.id;
+            return (
+              <div
+                key={`overflow-tab:${tab.projectId}:${tab.id}`}
+                className={`preview-workbench-tabs-overflow-row${active ? ' active' : ''}`}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="preview-workbench-tabs-overflow-open"
+                  data-tooltip={previewWorkbenchTabTooltip(tab)}
+                  onClick={() => {
+                    onTabSelect(tab.id);
+                    setTabListOpen(false);
+                  }}
+                >
+                  <Icon name={previewWorkbenchTabIcon(tab.type)} className="preview-workbench-tab-icon" />
+                  <span className="preview-workbench-tab-label">{tab.title}</span>
+                </button>
+                <button
+                  type="button"
+                  className="preview-workbench-tabs-overflow-close"
+                  aria-label={`Close ${tab.title}`}
+                  onClick={() => onTabClose(tab.id)}
+                >
+                  <Icon name="x" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <WorkbenchChrome
       mode={mode}
@@ -182,6 +282,8 @@ export function PreviewWorkbenchChrome({
       actions={toolbarActions}
       tabsAriaLabel="Open preview tabs"
       tabsClassName="chat-file-workbench-tabs preview-workbench-tabs"
+      tabsAccessory={tabsAccessory}
+      tabsListRef={tabsBarRef}
       tabs={tabs.map(tab => {
         const active = activeTab?.id === tab.id;
         const tooltip = previewWorkbenchTabTooltip(tab);

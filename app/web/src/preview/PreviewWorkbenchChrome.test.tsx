@@ -23,6 +23,28 @@ const fileTab: PreviewWorkbenchTab = {
   info: null,
 };
 
+const secondTab: PreviewWorkbenchTab = {
+  ...fileTab,
+  id: 'file:src/b.ts',
+  title: 'b.ts',
+  path: 'src/b.ts',
+};
+
+class MockResizeObserver {
+  static instances: MockResizeObserver[] = [];
+  private callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    MockResizeObserver.instances.push(this);
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  trigger() {
+    this.callback([], this as unknown as ResizeObserver);
+  }
+}
+
 function createProps(overrides: Partial<React.ComponentProps<typeof PreviewWorkbenchChrome>> = {}) {
   return {
     mode: 'desktop' as const,
@@ -47,6 +69,11 @@ function createProps(overrides: Partial<React.ComponentProps<typeof PreviewWorkb
 describe('PreviewWorkbenchChrome drawer', () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
+
+  beforeEach(() => {
+    MockResizeObserver.instances = [];
+    (globalThis as unknown as {ResizeObserver: typeof MockResizeObserver}).ResizeObserver = MockResizeObserver;
+  });
 
   afterEach(() => {
     if (root) {
@@ -76,6 +103,48 @@ describe('PreviewWorkbenchChrome drawer', () => {
       document.body.dispatchEvent(new window.KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}));
     });
   };
+
+  const overflowTabsBar = () => {
+    const bar = document.querySelector('.workbench-chrome-tabs') as HTMLElement;
+    expect(bar).toBeTruthy();
+    Object.defineProperty(bar, 'scrollWidth', {configurable: true, value: 800});
+    Object.defineProperty(bar, 'clientWidth', {configurable: true, value: 300});
+    act(() => {
+      MockResizeObserver.instances.forEach(instance => instance.trigger());
+    });
+  };
+
+  test('shows the overflow button only when the tabs bar overflows', () => {
+    render(createProps({tabs: [fileTab, secondTab], activeTab: fileTab}));
+    expect(document.querySelector('[aria-label="Show all open tabs"]')).toBeNull();
+
+    overflowTabsBar();
+
+    expect(document.querySelector('[aria-label="Show all open tabs"]')).toBeTruthy();
+  });
+
+  test('overflow list selects a tab and closes; row close keeps the list open', () => {
+    const props = createProps({tabs: [fileTab, secondTab], activeTab: fileTab});
+    render(props);
+    overflowTabsBar();
+
+    act(() => (document.querySelector('[aria-label="Show all open tabs"]') as HTMLButtonElement).click());
+    expect(document.querySelectorAll('.preview-workbench-tabs-overflow-row').length).toBe(2);
+
+    const openButtons = document.querySelectorAll('.preview-workbench-tabs-overflow-open');
+    act(() => (openButtons[1] as HTMLButtonElement).click());
+    expect(props.onTabSelect).toHaveBeenCalledWith('file:src/b.ts');
+    expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeNull();
+
+    act(() => (document.querySelector('[aria-label="Show all open tabs"]') as HTMLButtonElement).click());
+    const closeButtons = document.querySelectorAll('.preview-workbench-tabs-overflow-close');
+    act(() => (closeButtons[1] as HTMLButtonElement).click());
+    expect(props.onTabClose).toHaveBeenCalledWith('file:src/b.ts');
+    expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeTruthy();
+
+    escape();
+    expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeNull();
+  });
 
   test('tool buttons toggle files and git drawer modes', () => {
     const props = createProps();
