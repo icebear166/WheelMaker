@@ -3155,6 +3155,7 @@ export function App() {
   const [previewFileTreeSearchActiveIndex, setPreviewFileTreeSearchActiveIndex] = useState(0);
   const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);
   const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewDrawerHost, setPreviewDrawerHost] = useState<HTMLDivElement | null>(null);
   const previewFileTreeSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const previewFileTreeSearchGenerationRef = useRef(0);
   const previewFileTreeSearchQueryIdRef = useRef(0);
@@ -19734,7 +19735,7 @@ export function App() {
       />
   ) : null;
   const previewWorkbenchActiveTab = activeWorkbenchTab;
-  const previewFileTreeDepthIndent = 8;
+  const previewFileTreeDepthIndent = 14;
   const scrollLocatedPreviewFileIntoView = () => {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
@@ -19786,7 +19787,6 @@ export function App() {
     depth = 0,
   ): React.ReactNode =>
     nodes.map(node => {
-      const paddingLeft = 10 + depth * previewFileTreeDepthIndent;
       if (node.kind === 'dir') {
         const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);
         return (
@@ -19794,7 +19794,6 @@ export function App() {
             <button
               type="button"
               className="preview-workbench-file-search-node dir"
-              style={{paddingLeft}}
               onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}
               data-tooltip={node.path}
               aria-expanded={!collapsed}
@@ -19803,7 +19802,14 @@ export function App() {
               <Icon name={collapsed ? 'folder' : 'folderOpen'} className="node-icon" />
               <span className="label">{node.name}</span>
             </button>
-            {collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}
+            {collapsed ? null : (
+              <div
+                className="preview-workbench-file-search-children"
+                style={{marginLeft: previewFileTreeDepthIndent}}
+              >
+                {renderPreviewFileTreeSearchResults(node.children, depth + 1)}
+              </div>
+            )}
           </div>
         );
       }
@@ -19816,7 +19822,6 @@ export function App() {
           key={`preview-file-search-file:${node.path}`}
           type="button"
           className={`preview-workbench-file-search-node file${selected ? ' selected' : ''}`}
-          style={{paddingLeft}}
           onMouseEnter={() => {
             if (resultIndex >= 0) {
               setPreviewFileTreeSearchActiveIndex(resultIndex);
@@ -20634,6 +20639,7 @@ export function App() {
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
       drawerMode={previewWorkbench.drawerMode}
+      drawerPortalTarget={mode === 'desktop' ? previewDrawerHost : null}
       fileDrawer={chatFilePreviewTreeContent}
       fileDrawerSearch={previewFileTreeSearch}
       gitDrawer={previewGitHistoryDrawer}
@@ -20665,23 +20671,30 @@ export function App() {
     </PreviewWorkbenchChrome>
   );
   const chatPreviewDesktopPane = isWide && chatPreviewOpen ? (
-    <aside
-      className="chat-preview-pane"
-      style={{ '--chat-file-peek-width': `${effectiveChatFilePeekWidth}px` } as React.CSSProperties}
-    >
-      <button
-        type="button"
-        className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
-        aria-label="Resize preview"
-        data-tooltip="Resize preview"
-        onPointerDown={beginChatFilePeekResize}
-        onPointerMove={moveChatFilePeekResize}
-        onPointerUp={finishChatFilePeekResize}
-        onPointerCancel={finishChatFilePeekResize}
-        onLostPointerCapture={commitChatFilePeekResize}
+    <>
+      <aside
+        className="chat-preview-pane"
+        style={{ '--chat-file-peek-width': `${effectiveChatFilePeekWidth}px` } as React.CSSProperties}
+      >
+        <button
+          type="button"
+          className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
+          aria-label="Resize preview"
+          data-tooltip="Resize preview"
+          onPointerDown={beginChatFilePeekResize}
+          onPointerMove={moveChatFilePeekResize}
+          onPointerUp={finishChatFilePeekResize}
+          onPointerCancel={finishChatFilePeekResize}
+          onLostPointerCapture={commitChatFilePeekResize}
+        />
+        {renderPreviewWorkbenchSurface('desktop')}
+      </aside>
+      <div
+        ref={setPreviewDrawerHost}
+        className="chat-preview-drawer-host"
+        style={{right: `${effectiveChatFilePeekWidth}px`}}
       />
-      {renderPreviewWorkbenchSurface('desktop')}
-    </aside>
+    </>
   ) : null;
   const chatPreviewMobileOverlay = !isWide ? (
     <div

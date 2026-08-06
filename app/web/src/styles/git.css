@@ -180,7 +180,7 @@
 
 .git-file-row {
   width: 100%;
-  min-height: 32px;
+  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -192,7 +192,19 @@
 }
 
 .git-file-row:hover {
-  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  background: var(--hover);
+}
+
+.git-file-status.status-a {
+  color: var(--state-success);
+}
+
+.git-file-status.status-m {
+  color: var(--accent-primary);
+}
+
+.git-file-status.status-d {
+  color: var(--state-danger);
 }
 
 .git-file-status {
@@ -225,6 +237,7 @@
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  opacity: 0.75;
 }
 
 .git-file-stats,
@@ -235,6 +248,19 @@
   color: var(--text-secondary);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+.git-file-stats {
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+}
+
+.git-worktree-group-label .git-count,
+.git-section-heading .git-count {
+  min-width: 16px;
+  border-radius: 999px;
+  padding: 1px 5px;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  text-align: center;
 }
 
 .git-file-stats .additions,
@@ -322,7 +348,7 @@
 }
 
 .git-commit-trigger:hover {
-  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  background: var(--hover);
 }
 
 .git-commit-title {

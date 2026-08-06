@@ -52,6 +52,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain("import {Icon} from '../common/Icon';");
     expect(chromeTsx).toContain("import {Icon, type IconName} from '../common/Icon';");
     expect(fileTreeTsx).toContain("import {Icon} from '../common/Icon';");
+    expect(fileTreeTsx).toContain('className="tree-children"');
   });
 
   test('file mention preview reuses chat peek without inserting or closing the menu', () => {
@@ -479,7 +480,9 @@ describe('web chat file peek viewer', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(chromeTsx).toContain('drawerMode: PreviewWorkbenchDrawerMode;');
-    expect(chromeTsx).toContain('preview-workbench-drawer-fab');
+    expect(chromeTsx).toContain('preview-workbench-drawer-tool');
+    expect(chromeTsx).toContain('drawerPortalTarget');
+    expect(chromeTsx).toContain('createPortal(');
     expect(chromeTsx).toContain('aria-label="Toggle files"');
     expect(chromeTsx).toContain('aria-label="Toggle Git history"');
     expect(chromeTsx).toContain("onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')");
@@ -489,6 +492,9 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel');
     expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-drawer-panel');
+    expect(stylesCss).toContain('.chat-preview-drawer-host');
+    expect(stylesCss).toContain('.preview-workbench-drawer-panel.external');
+    expect(stylesCss).toContain('.preview-workbench-drawer-tool');
   });
 
   test('preview file tree opens with inline search and renders search results as a tree', () => {
@@ -499,7 +505,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('fileDrawerSearch');
     expect(chromeTsx).toContain('const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);');
     expect(chromeTsx).toContain('!containsTarget(drawerToolsRef.current, target)');
-    expect(chromeTsx).toContain('className="preview-workbench-tree-search-shell"');
+    expect(chromeTsx).toContain('className="preview-workbench-drawer-search"');
     expect(chromeTsx).toContain("mode === 'mobile'");
 
     expect(mainTsx).toContain('const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);');
@@ -509,8 +515,8 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('className="preview-workbench-tree-tool-button"');
     expect(mainTsx).toContain('onClick={locateActivePreviewFileInTree}');
     expect(mainTsx).toContain('<Icon name="locateFixed"');
-    expect(mainTsx).toContain('const previewFileTreeDepthIndent = 8;');
-    expect(mainTsx).toContain('const paddingLeft = 10 + depth * previewFileTreeDepthIndent;');
+    expect(mainTsx).toContain('const previewFileTreeDepthIndent = 14;');
+    expect(mainTsx).toContain('className="preview-workbench-file-search-children"');
     expect(mainTsx).toContain('depthIndent={previewFileTreeDepthIndent}');
     expect(mainTsx).toContain('const locateActivePreviewFileInTree = () => {');
     expect(mainTsx).toContain('const ancestors = previewFileAncestorDirs(targetPath);');
@@ -533,14 +539,16 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);');
     expect(mainTsx).toContain('onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}');
     expect(mainTsx).toContain("<Icon name={collapsed ? 'chevronRight' : 'chevronDown'}");
-    expect(mainTsx).toContain('{collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}');
+    expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(node.children, depth + 1)');
     expect(mainTsx).not.toContain('className="path"');
 
-    expect(stylesCss).toContain('.preview-workbench-tree-search-shell');
-    expect(stylesCss).toContain('.preview-workbench-tree-search-shell[data-open=\'true\']');
+    expect(stylesCss).toContain('.preview-workbench-drawer-search');
+    expect(stylesCss).toContain('.preview-workbench-drawer-content');
     expect(stylesCss).toContain('.preview-workbench-tree-tool-button');
     expect(stylesCss).toContain('.preview-workbench-file-search-tree');
     expect(stylesCss).toContain('.preview-workbench-file-search-node');
+    expect(stylesCss).toContain('.preview-workbench-file-search-children');
+    expect(stylesCss).toContain('.tree-children');
     expect(stylesCss).not.toContain('.preview-workbench-file-search-node .path');
   });
 

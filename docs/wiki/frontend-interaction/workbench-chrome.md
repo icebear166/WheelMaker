@@ -1,8 +1,8 @@
-> 摘要：本页维护 Preview 与 Terminal Workbench 的共享 Chrome、标题标签层级、平台操作和移动端全屏约定。
+> 摘要：本页维护 Preview 与 Terminal Workbench 的共享 Chrome、标题标签层级、平台操作、文件/Git 抽屉和移动端全屏约定。
 
 # Workbench Chrome
 
-> 来源：[`../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md)
+> 来源：[`../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md)、[`../../scope/2026-08-06-preview-drawer-toolbar/spec-preview-drawer-toolbar.md`](../../scope/2026-08-06-preview-drawer-toolbar/spec-preview-drawer-toolbar.md)
 
 Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者共享“标题工具栏 + 标签栏”两层结构、尺寸层级、图标按钮样式和无障碍语义；文件树、搜索、xterm、Terminal 快捷键栏等能力仍由各自功能模块拥有。
 
@@ -11,6 +11,14 @@ Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者
 - 第一层标题工具栏由 leading action、当前内容标题和页面级 actions 组成。
 - 第二层只承载可切换、可关闭的标签。标签关闭必须使用原生 button，不在 tab button 内嵌套模拟按钮。
 - 移动端 leading action 是直接返回 Chat 的返回按钮；PC Terminal 使用收起桌面 Terminal 面板的关闭按钮。移动端 Floating Nav 与返回按钮并存，分别承担全局切换和一步返回。
+
+## Preview 文件/Git 抽屉
+
+- 文件树与 Git 历史通过竖排 drawer 工具条进入：PC 端工具条悬浮在 Preview 内侧左缘，移动端位于右上角；双端共用同一套按钮样式，激活态与 drawer 内容对应。
+- PC 端 drawer 在 Preview 左侧外部打开，覆盖 chat 列、不占用 Preview 空间，Preview resize 时跟随其左缘；移动端 drawer 仍在 Preview 内部左缘滑出。
+- drawer 是临时层：点击树内文件不关闭 drawer；点击 drawer 外区域、Esc 或再点激活按钮关闭；点击另一工具按钮原地切换内容。
+- 文件搜索框固定在 files drawer 面板顶部（含定位当前文件）；Git drawer 无搜索。
+- 文件树（含搜索结果树）与 Git 面板共享一套行视觉：缩进参考线、目录/文件层级区分、hover/选中/当前预览文件高亮；Git 文件保持平铺结构，不做树形化。
 
 ## Terminal 呈现
 

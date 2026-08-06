@@ -966,6 +966,10 @@
   overflow: hidden;
 }
 
+.desktop-shell > .body {
+  position: relative;
+}
+
 .workspace-left {
   position: relative;
   width: var(--desktop-sidebar-width, 380px);
