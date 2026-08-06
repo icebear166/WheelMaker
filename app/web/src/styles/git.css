@@ -204,7 +204,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
 }
 
 .git-file-name {
@@ -504,7 +503,6 @@
   align-items: baseline;
   gap: 5px;
   overflow: hidden;
-  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
   font-size: 10px;
 }
 
