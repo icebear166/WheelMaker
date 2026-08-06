@@ -54,6 +54,8 @@ type Config struct {
 	Token              string
 	ProtocolVersion    string
 	ServerVersion      string
+	GatewayConfigPath  string
+	RelayPortProvider  portrelay.RelayPortProvider
 	LogDir             string
 	StateDir           string
 	ServerData         ServerDataStore
@@ -409,9 +411,17 @@ func New(cfg Config) *Server {
 	s.codexRadarEfficiencyLoader = codexRadarFetcher.load
 	s.speech = newSpeechService(speechprovider.NewVolcengineProvider(), s.resolveVolcengineASRSecret)
 	s.tts = newTTSService(ttsprovider.NewClient(), s.resolveMiMoTTSSecret)
+	relayPortProvider := cfg.RelayPortProvider
+	if relayPortProvider == nil && cfg.GatewayConfigPath != "" {
+		relayPortProvider = newGatewayRelayPortProvider(cfg.GatewayConfigPath)
+	}
+	if relayPortProvider == nil {
+		relayPortProvider = func() (int, error) { return 0, nil }
+	}
 	relay, relayErr := portrelay.NewController(portrelay.ControllerConfig{
 		RegistryAddr:      cfg.Addr,
 		ForwardHubRequest: s.forwardRelayHubRequest,
+		RelayPortProvider: relayPortProvider,
 	})
 	s.relay = relay
 	s.relayInitErr = relayErr

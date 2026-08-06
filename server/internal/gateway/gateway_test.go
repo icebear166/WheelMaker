@@ -246,6 +246,154 @@ func TestCompileConfigStripsExternalPortFromHostMatchers(t *testing.T) {
 	}
 }
 
+func TestLoadGlobalReadsFixedRelayPort(t *testing.T) {
+	global, err := LoadGlobal(strings.NewReader(`{"schema":1,"relay":{"listenPort":28810},"log":{"level":"INFO"}}`))
+	if err != nil {
+		t.Fatalf("LoadGlobal(): %v", err)
+	}
+	if global.Relay.ListenPort != 28810 {
+		t.Fatalf("Relay.ListenPort=%d, want 28810", global.Relay.ListenPort)
+	}
+}
+
+func TestValidateGlobalRejectsReservedRelayPorts(t *testing.T) {
+	for _, port := range []int{80, 443, 9630, 9680, 2019, -1, 65536} {
+		err := ValidateGlobal(GlobalConfig{
+			Schema: GlobalSchemaVersion,
+			Relay:  RelayConfig{ListenPort: port},
+			Log:    LogConfig{Level: "INFO"},
+		})
+		if err == nil {
+			t.Fatalf("ValidateGlobal(port=%d)=nil, want rejection", port)
+		}
+	}
+}
+
+func TestCompileConfigAddsFixedHTTPRelayServer(t *testing.T) {
+	global := GlobalConfig{
+		Schema: GlobalSchemaVersion,
+		Relay:  RelayConfig{ListenPort: 28810},
+		Log:    LogConfig{Level: "INFO"},
+	}
+	site := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteWorkspace,
+		PublicURL: "http://workspace.example.com",
+		WebRoot:   filepath.Join(t.TempDir(), "web"),
+		Upstream:  "http://127.0.0.1:9630",
+	}
+	compiled, err := CompileConfig(global, []SiteConfig{site})
+	if err != nil {
+		t.Fatalf("CompileConfig(): %v", err)
+	}
+	if err := ValidateJSON(compiled); err != nil {
+		t.Fatalf("ValidateJSON(): %v", err)
+	}
+
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatalf("compiled JSON is invalid: %v", err)
+	}
+	relay := deepValue(document, "apps", "http", "servers", "relay")
+	if relay == nil {
+		t.Fatalf("fixed relay server is missing from HTTP app: %s", compiled)
+	}
+	if got := deepString(relay, "listen", "0"); got != ":28810" {
+		t.Fatalf("relay listen=%q, want :28810", got)
+	}
+	if got := deepString(relay, "routes", "0", "match", "0", "host", "0"); got != "workspace.example.com" {
+		t.Fatalf("relay host matcher=%q", got)
+	}
+	relayRoute := deepValue(relay, "routes", "0", "handle", "0", "routes", "0")
+	deleteMarker := deepValue(relayRoute, "handle", "0")
+	if !containsString(deepValue(deleteMarker, "request", "delete"), "X-WheelMaker-Relay") {
+		t.Fatal("relay must delete an incoming marker before setting its own marker")
+	}
+	requestHeaders := deepValue(relayRoute, "handle", "1")
+	if got := deepString(requestHeaders, "request", "set", "X-WheelMaker-Relay", "0"); got != "1" {
+		t.Fatalf("relay marker=%q, want 1", got)
+	}
+	proxy := deepValue(relayRoute, "handle", "2")
+	if got := deepString(proxy, "upstreams", "0", "dial"); got != "127.0.0.1:9630" {
+		t.Fatalf("relay upstream=%q", got)
+	}
+	if got := deepString(requestHeaders, "request", "set", "X-Forwarded-Proto", "0"); got != "{http.request.scheme}" {
+		t.Fatalf("relay forwarded proto=%q", got)
+	}
+	if containsHandler(relay, "file_server") {
+		t.Fatal("fixed relay server must not contain Workspace static-file handlers")
+	}
+}
+
+func TestCompileConfigAddsFixedHTTPSRelayServerWithTLSPolicy(t *testing.T) {
+	global := GlobalConfig{
+		Schema: GlobalSchemaVersion,
+		Relay:  RelayConfig{ListenPort: 28810},
+		Log:    LogConfig{Level: "INFO"},
+	}
+	site := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteWorkspace,
+		PublicURL: "https://workspace.example.com",
+		WebRoot:   filepath.Join(t.TempDir(), "web"),
+		Upstream:  "http://127.0.0.1:9630",
+	}
+	compiled, err := CompileConfig(global, []SiteConfig{site})
+	if err != nil {
+		t.Fatalf("CompileConfig(): %v", err)
+	}
+	if err := ValidateJSON(compiled); err != nil {
+		t.Fatalf("ValidateJSON(): %v", err)
+	}
+
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatalf("compiled JSON is invalid: %v", err)
+	}
+	relay := deepValue(document, "apps", "http", "servers", "relay")
+	if relay == nil {
+		t.Fatalf("fixed relay server is missing from HTTPS Workspace config: %s", compiled)
+	}
+	if got := deepString(relay, "listen", "0"); got != ":28810" {
+		t.Fatalf("relay listen=%q, want :28810", got)
+	}
+	if got := deepString(relay, "tls_connection_policies", "0", "match", "sni", "0"); got != "workspace.example.com" {
+		t.Fatalf("relay TLS SNI=%q, want workspace.example.com", got)
+	}
+	if got := deepString(document, "apps", "http", "servers", "https", "tls_connection_policies", "0", "match", "sni", "0"); got != "workspace.example.com" {
+		t.Fatalf("Workspace TLS SNI=%q, want workspace.example.com", got)
+	}
+}
+
+func TestCompileConfigDoesNotAddRelayWithoutWorkspaceSite(t *testing.T) {
+	global := GlobalConfig{
+		Schema: GlobalSchemaVersion,
+		Relay:  RelayConfig{ListenPort: 28810},
+		Log:    LogConfig{Level: "INFO"},
+	}
+	site := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteReleaseServer,
+		PublicURL: "https://release.example.com",
+		Upstream:  "http://127.0.0.1:9680",
+	}
+	compiled, err := CompileConfig(global, []SiteConfig{site})
+	if err != nil {
+		t.Fatalf("CompileConfig(): %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatalf("compiled JSON is invalid: %v", err)
+	}
+	servers, ok := deepValue(document, "apps", "http", "servers").(map[string]any)
+	if !ok {
+		t.Fatalf("HTTP servers=%#v, want server map", deepValue(document, "apps", "http", "servers"))
+	}
+	if _, ok := servers["relay"]; ok {
+		t.Fatal("fixed relay server must require a Workspace site")
+	}
+}
+
 func TestCompileConfigRejectsDuplicateHostnames(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
 	sites := []SiteConfig{
@@ -360,6 +508,19 @@ func containsHandler(value any, want string) bool {
 			if containsHandler(child, want) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func containsString(value any, want string) bool {
+	values, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range values {
+		if item == want {
+			return true
 		}
 	}
 	return false

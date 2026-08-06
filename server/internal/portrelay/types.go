@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -32,7 +33,14 @@ const (
 	defaultStreamWait = 10 * time.Second
 
 	BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+
+	RelayMarkerHeader = "X-WheelMaker-Relay"
+	RelayMarkerValue  = "1"
 )
+
+// ErrRelayPortClientManaged tells the controller that an edge proxy such as
+// Nginx owns the public port and the client supplies it for each enable.
+var ErrRelayPortClientManaged = errors.New("relay port is client-managed")
 
 type ControlResult struct {
 	Payload json.RawMessage
@@ -43,9 +51,12 @@ type ControlResult struct {
 
 type ForwardHubRequestFunc func(ctx context.Context, hubID string, method string, payload any) ControlResult
 
+type RelayPortProvider func() (int, error)
+
 type ControllerConfig struct {
 	RegistryAddr      string
 	ForwardHubRequest ForwardHubRequestFunc
+	RelayPortProvider RelayPortProvider
 	TunnelWait        time.Duration
 	Random            io.Reader
 	Now               func() time.Time
@@ -58,10 +69,13 @@ type Controller struct {
 	random       io.Reader
 	loginGuard   *loginGuard
 
-	mu       sync.RWMutex
-	slot     relaySlot
-	listener *relayListener
-	tunnel   *registryTunnel
+	mu             sync.RWMutex
+	slot           relaySlot
+	tunnel         *registryTunnel
+	configuredPort int
+	clientManaged  bool
+	clientPort     int
+	providerError  string
 }
 
 type relaySlot struct {
@@ -90,6 +104,9 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 	if cfg.Random == nil {
 		cfg.Random = rand.Reader
 	}
+	if cfg.RelayPortProvider == nil {
+		cfg.RelayPortProvider = func() (int, error) { return 0, ErrRelayPortClientManaged }
+	}
 	secret := make([]byte, 32)
 	if _, err := io.ReadFull(cfg.Random, secret); err != nil {
 		return nil, fmt.Errorf("generate relay controller secret: %w", err)
@@ -106,6 +123,52 @@ func NewController(cfg ControllerConfig) (*Controller, error) {
 			Status: rp.RelayStatusDisabled,
 		},
 	}, nil
+}
+
+func (c *Controller) reconcileGatewayPort() {
+	port, err := c.cfg.RelayPortProvider()
+	clientManaged := errors.Is(err, ErrRelayPortClientManaged)
+	providerError := ""
+	if clientManaged {
+		err = nil
+		port = 0
+	} else if err != nil {
+		providerError = err.Error()
+		port = 0
+	} else if port != 0 && !validPort(port) {
+		providerError = fmt.Sprintf("relay listen port must be in 1..65535, got %d", port)
+		port = 0
+	}
+
+	var oldSlot relaySlot
+	var oldTunnel *registryTunnel
+	closeReason := "gateway_port_changed"
+	c.mu.Lock()
+	modeChanged := c.clientManaged != clientManaged
+	c.configuredPort = port
+	c.clientManaged = clientManaged
+	c.providerError = providerError
+	if modeChanged {
+		c.clientPort = 0
+	}
+	if c.slot.Enabled && (providerError != "" || modeChanged || (!clientManaged && (port == 0 || c.slot.ListenPort != port))) {
+		oldSlot = c.slot
+		oldTunnel = c.tunnel
+		c.tunnel = nil
+		c.slot = relaySlot{Status: rp.RelayStatusDisabled}
+		c.loginGuard.reset(0)
+		if providerError != "" || port == 0 {
+			closeReason = "gateway_port_unavailable"
+		}
+	}
+	c.mu.Unlock()
+
+	if oldTunnel != nil {
+		oldTunnel.Close()
+	}
+	if oldSlot.Enabled && oldSlot.HubID != "" && oldSlot.RelayID != "" {
+		go c.forwardClose(context.Background(), oldSlot.HubID, oldSlot.RelayID, closeReason)
+	}
 }
 
 func (c *Controller) Handle(ctx context.Context, method string, raw json.RawMessage, controlHost string, secure bool) (any, *rp.ErrorPayload) {
@@ -158,6 +221,28 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 		return c.Status(), relayError(rp.CodeInternal, "relay forwarder is not configured", nil)
 	}
 
+	c.reconcileGatewayPort()
+	c.mu.RLock()
+	configuredPort := c.configuredPort
+	providerError := c.providerError
+	c.mu.RUnlock()
+	if providerError != "" {
+		return c.Status(), relayError(rp.CodeUnavailable, "relay port configuration is unavailable", map[string]any{"error": providerError})
+	}
+	clientManaged := false
+	c.mu.RLock()
+	clientManaged = c.clientManaged
+	c.mu.RUnlock()
+	if !clientManaged && configuredPort == 0 {
+		return c.Status(), relayError(rp.CodeUnavailable, "relay port is not configured", nil)
+	}
+	listenPort := configuredPort
+	if clientManaged {
+		listenPort = payload.ListenPort
+	} else if payload.ListenPort != configuredPort {
+		return c.Status(), relayError(rp.CodeInvalidArgument, fmt.Sprintf("listenPort must equal configured Gateway Relay port %d", configuredPort), map[string]any{"configuredPort": configuredPort})
+	}
+
 	relayID, err := randomToken(c.random, "relay_", 16)
 	if err != nil {
 		return c.Status(), relayError(rp.CodeInternal, "generate relay id failed", nil)
@@ -173,45 +258,19 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 	if publicHost == "" {
 		publicHost = "127.0.0.1"
 	}
-	relayURL := buildPublicRelayURL(publicHost, payload.ListenPort, secure)
-	tunnelURL := buildTunnelRelayURL(publicHost, payload.ListenPort, secure)
+	relayURL := buildPublicRelayURL(publicHost, listenPort, secure)
+	tunnelURL := buildTunnelRelayURL(publicHost, listenPort, secure)
 
-	var listener *relayListener
-	var oldListener *relayListener
 	var oldTunnel *registryTunnel
-	var closeOldAfterOpen bool
 
 	c.mu.Lock()
 	oldSlot := c.slot
 	oldGeneration := oldSlot.AccessCodeGeneration
-	if c.listener != nil && oldSlot.ListenPort == payload.ListenPort {
-		listener = c.listener
-	} else {
-		c.mu.Unlock()
-		started, startErr := newRelayListener(payload.ListenPort, c)
-		if startErr != nil {
-			c.mu.Lock()
-			if c.slot.Enabled {
-				c.slot.Error = startErr.Error()
-				snapshot := c.snapshotLocked()
-				c.mu.Unlock()
-				return snapshot, nil
-			}
-			c.slot = relaySlot{Status: rp.RelayStatusError, Error: startErr.Error()}
-			snapshot := c.snapshotLocked()
-			c.mu.Unlock()
-			return snapshot, nil
-		}
-		listener = started
-		c.mu.Lock()
-		oldListener = c.listener
-		closeOldAfterOpen = oldListener != nil
-	}
 	ready := make(chan struct{})
 	c.slot = relaySlot{
 		Enabled:              true,
 		Status:               rp.RelayStatusOpening,
-		ListenPort:           payload.ListenPort,
+		ListenPort:           listenPort,
 		HubID:                payload.HubID,
 		TargetHost:           payload.TargetHost,
 		TargetPort:           payload.TargetPort,
@@ -223,8 +282,10 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 		Nonce:                nonce,
 		Ready:                ready,
 	}
+	if clientManaged {
+		c.clientPort = listenPort
+	}
 	c.loginGuard.reset(c.slot.AccessCodeGeneration)
-	c.listener = listener
 	if c.tunnel != nil {
 		oldTunnel = c.tunnel
 		c.tunnel = nil
@@ -234,9 +295,6 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 
 	if oldTunnel != nil {
 		oldTunnel.Close()
-	}
-	if closeOldAfterOpen && oldListener != nil {
-		_ = oldListener.Close()
 	}
 	if oldSlot.Enabled && oldSlot.HubID != "" && oldSlot.RelayID != "" {
 		go c.forwardClose(context.Background(), oldSlot.HubID, oldSlot.RelayID, "replaced")
@@ -253,7 +311,6 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 	})
 	if result.Code != "" {
 		c.markError(relayID, result.Message)
-		_ = listener.Close()
 		return c.Status(), relayError(result.Code, result.Message, result.Details)
 	}
 
@@ -268,21 +325,18 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 }
 
 func (c *Controller) Disable(ctx context.Context) (rp.RelaySnapshot, *rp.ErrorPayload) {
+	c.reconcileGatewayPort()
 	c.mu.Lock()
 	oldSlot := c.slot
-	oldListener := c.listener
 	oldTunnel := c.tunnel
 	c.slot = relaySlot{Status: rp.RelayStatusDisabled}
-	c.listener = nil
 	c.tunnel = nil
+	c.loginGuard.reset(0)
 	snapshot := c.snapshotLocked()
 	c.mu.Unlock()
 
 	if oldTunnel != nil {
 		oldTunnel.Close()
-	}
-	if oldListener != nil {
-		_ = oldListener.Close()
 	}
 	if oldSlot.Enabled && oldSlot.HubID != "" && oldSlot.RelayID != "" {
 		c.forwardClose(ctx, oldSlot.HubID, oldSlot.RelayID, "disabled")
@@ -291,6 +345,7 @@ func (c *Controller) Disable(ctx context.Context) (rp.RelaySnapshot, *rp.ErrorPa
 }
 
 func (c *Controller) RegenerateAccessCode(accessCode string) (rp.RelaySnapshot, *rp.ErrorPayload) {
+	c.reconcileGatewayPort()
 	accessCode = strings.TrimSpace(accessCode)
 	if !validAccessCode(accessCode) {
 		return c.Status(), relayError(rp.CodeInvalidArgument, "accessCode must be 6 digits", nil)
@@ -307,12 +362,14 @@ func (c *Controller) RegenerateAccessCode(accessCode string) (rp.RelaySnapshot, 
 }
 
 func (c *Controller) Status() rp.RelaySnapshot {
+	c.reconcileGatewayPort()
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.snapshotLocked()
 }
 
 func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	c.reconcileGatewayPort()
 	c.handleDataPlane(w, r)
 }
 
@@ -368,13 +425,29 @@ func (c *Controller) markTunnelClosed(relayID string) {
 
 func (c *Controller) snapshotLocked() rp.RelaySnapshot {
 	if !c.slot.Enabled {
-		return rp.RelaySnapshot{OK: true, Enabled: false, Status: rp.RelayStatusDisabled}
+		listenPort := c.configuredPort
+		if c.clientManaged {
+			listenPort = c.clientPort
+		}
+		errorMessage := c.providerError
+		if listenPort == 0 && errorMessage == "" && !c.clientManaged {
+			errorMessage = "relay port is not configured"
+		}
+		return rp.RelaySnapshot{
+			OK:                true,
+			Enabled:           false,
+			Status:            rp.RelayStatusDisabled,
+			ListenPort:        listenPort,
+			ListenPortManaged: !c.clientManaged,
+			Error:             errorMessage,
+		}
 	}
 	return rp.RelaySnapshot{
 		OK:                   true,
 		Enabled:              c.slot.Enabled,
 		Status:               c.slot.Status,
 		ListenPort:           c.slot.ListenPort,
+		ListenPortManaged:    !c.clientManaged,
 		HubID:                c.slot.HubID,
 		TargetHost:           c.slot.TargetHost,
 		TargetPort:           c.slot.TargetPort,

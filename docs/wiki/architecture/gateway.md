@@ -36,7 +36,7 @@ Release Server 站点。Gateway 不合并进 Hub 或 Release Server，也不把 
 ├─ release-server/
 │  └─ config.json                      # Release Server 配置，含 publicUrl
 └─ gateway/
-   ├─ config.json                      # 宿主机级 ACME、日志设置
+   ├─ config.json                      # 宿主机级 ACME、日志和固定 Relay 端口设置
    ├─ sites/
    │  ├─ workspace.json                # WheelMaker 部署器所有
    │  └─ release-server.json           # Release Server 部署器所有
@@ -80,6 +80,45 @@ upstream。是否生成站点配置和是否采用内置 Gateway 是两件独立
 自动 TLS 依赖 DNS 指向本机且所需公网端口可达。失败时不会降级为 HTTP 或不受信任的
 自签名证书。
 
+## 固定端口 Port Relay
+
+Gateway 的 `config.json` 可声明：
+
+```json
+{
+  "relay": {
+    "listenPort": 28810
+  }
+}
+```
+
+`relay.listenPort` 是宿主机唯一的 Relay 公网端口。字段缺失或为 `0` 时不生成 Relay
+listener；配置端口必须避开 Gateway 的 `80/443`、Registry 的 `9630`、Release Server
+的 `9680` 和 Caddy admin 的 `2019`。Relay listener 依附 Workspace site；没有有效
+Workspace `publicUrl` 时不生成该 listener，但不影响其他 site。
+
+Gateway 在固定端口按 Workspace `publicUrl` 的 scheme 监听 HTTP 或 HTTPS，把所有 URI
+（包括普通页面、绝对资源路径、query 和 WebSocket）反向代理到 Registry
+`127.0.0.1:9630`。代理会删除客户端传入的 `X-WheelMaker-Relay`，再写入
+`X-WheelMaker-Relay: 1`；Registry 以该标记选择 Relay 数据面，Relay access code 仍是
+实际认证机制。HTTPS 固定端口复用 Workspace hostname 的 Caddy 自动证书或显式证书，
+HTTP 不自动升级为 HTTPS。
+
+Gateway 存在时，Registry worker 与 Gateway 使用同一份 Gateway global config，通过只读
+provider 获取当前固定端口；App 的 LocalStorage 不能覆盖服务端配置。若 Gateway config
+缺失，Registry 进入 client-managed standalone 模式，允许 App 在 `enable.listenPort`
+中提供端口，适用于手工配置 Nginx；Registry 不验证 Nginx 是否真的监听该端口。
+Registry 继续只在 loopback `9630` 提供主 HTTP listener，不再为每次
+`registry.relay.enable` 创建 TCP listener。固定 Caddy/Nginx listener 即使 Relay disabled
+也可以保持运行；enable/disable 只切换 Registry 内的 singleton slot 和 Hub tunnel，不触发
+边缘代理 reload。Gateway 模式下 `registry.relay.enable.listenPort` 必须等于固定端口；
+standalone 模式下该字段就是客户端选择的 Nginx 端口。
+
+Gateway 站点或端口配置的有效变更按现有 hot-load 流程应用；无效配置或新端口绑定失败
+时保留上一份有效 Caddy 配置。配置变更导致固定端口移除或改变时，Registry 会关闭旧
+tunnel，必须重新 enable。公网 DNS、防火墙、NAT、安全组和证书申请前置条件仍由部署者
+负责。
+
 ## 部署入口
 
 ```text
@@ -97,5 +136,7 @@ deploy-release-server.bat                            # 部署服务并刷新 rel
 `127.0.0.1:9680`，Nginx worker 不需要读取用户 Home。
 
 > 当前设计：[`docs/scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md`](../../scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md)
+>
+> 固定端口 Port Relay：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md)
 >
 > 原始 Gateway 设计（历史）：[`docs/scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md)

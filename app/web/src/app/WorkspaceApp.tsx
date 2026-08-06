@@ -1211,6 +1211,17 @@ const EMPTY_PREVIEW_WORKBENCH_TABS: FilePreviewTab[] = [];
 const EMPTY_HIGHLIGHTED_LINES = new Set<number>();
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
 
+function effectivePortRelayListenPort(snapshot: RegistryPortRelaySnapshot, clientPort: string): number {
+  if (snapshot.listenPortManaged === true) {
+    return typeof snapshot.listenPort === 'number' ? snapshot.listenPort : 0;
+  }
+  if (typeof snapshot.listenPort === 'number' && Number.isInteger(snapshot.listenPort) && snapshot.listenPort > 0) {
+    return snapshot.listenPort;
+  }
+  const parsed = Number(clientPort);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function useStableEvent<T extends (...args: any[]) => any>(handler: T): T {
   const handlerRef = useRef(handler);
   useLayoutEffect(() => {
@@ -3277,19 +3288,20 @@ export function App() {
   );
   const portRelayFrameAccessCode = portRelayAccessCodeUnknown ? '' : portRelayAccessCode;
   const portRelayFrameUrl = useMemo(() => {
-    if (!portRelayReady) {
+    const listenPort = effectivePortRelayListenPort(portRelaySnapshot, portRelayListenPort);
+    if (!portRelayReady || listenPort < 1) {
       return '';
     }
     const baseUrl = resolvePortRelayOpenUrl({
       relayUrl: portRelaySnapshot.relayUrl,
       registryAddress,
-      listenPort: portRelaySnapshot.listenPort || portRelayListenPort,
+      listenPort,
     });
     return appendPortRelayAutoAuthCode(
       appendPortRelayOpenPath(baseUrl, portRelayFramePath),
       portRelayFrameAccessCode,
     );
-  }, [registryAddress, portRelayFrameAccessCode, portRelayFramePath, portRelayListenPort, portRelayReady, portRelaySnapshot.listenPort, portRelaySnapshot.relayUrl]);
+  }, [portRelayListenPort, registryAddress, portRelayFrameAccessCode, portRelayFramePath, portRelayReady, portRelaySnapshot.listenPort, portRelaySnapshot.listenPortManaged, portRelaySnapshot.relayUrl]);
   const snapshotPortRelayTarget = useMemo(() => normalizePortRelayTarget({
     hubId: portRelaySnapshot.hubId,
     targetPort: portRelaySnapshot.targetPort,
@@ -12760,9 +12772,11 @@ export function App() {
 
   const applyPortRelaySnapshot = useCallback((snapshot: RegistryPortRelaySnapshot) => {
     setPortRelaySnapshot(snapshot);
-    if (typeof snapshot.listenPort === 'number') {
+    if (typeof snapshot.listenPort === 'number' && snapshot.listenPort > 0) {
       setPortRelayListenPort(String(snapshot.listenPort));
-      persistPortRelaySettings({listenPort: snapshot.listenPort});
+      if (snapshot.listenPortManaged !== true) {
+        persistPortRelaySettings({listenPort: snapshot.listenPort});
+      }
     }
     if (!snapshot.enabled) {
       return;
@@ -12781,7 +12795,6 @@ export function App() {
     persistPortRelaySettings({
       targets: reconciled.targets,
       selectedTarget: reconciled.selectedTarget,
-      listenPort: snapshot.listenPort,
     });
   }, [persistPortRelaySettings, portRelayTargets, selectedPortRelayTarget]);
 
@@ -12862,11 +12875,10 @@ export function App() {
 
   const enablePortRelayForTarget = useCallback(async (
     target: PortRelayTarget | null,
-    listenPortValue = portRelayListenPort,
     options: {framePath?: string; openFrame?: boolean} = {},
   ): Promise<RegistryPortRelaySnapshot | null> => {
     const normalizedTarget = normalizePortRelayTarget(target);
-    const listenPort = Number(listenPortValue);
+    const listenPort = effectivePortRelayListenPort(portRelaySnapshot, portRelayListenPort);
     if (portRelayAccessCodeUnknown) {
       setPortRelayError('Access code is unknown on this device. Generate a new code before switching target.');
       return null;
@@ -12877,7 +12889,7 @@ export function App() {
     const accessCode = portRelayAccessCode || generatePortRelayAccessCode();
     setPortRelayAccessCode(accessCode);
     if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
-      setPortRelayError('Listen port must be in 1..65535.');
+      setPortRelayError('Relay server port is not configured.');
       return null;
     }
     if (!normalizedTarget) {
@@ -12912,7 +12924,7 @@ export function App() {
     } finally {
       setPortRelayLoading(false);
     }
-  }, [applyPortRelaySnapshot, isWide, persistPortRelaySettings, portRelayAccessCode, portRelayAccessCodeUnknown, portRelayListenPort, portRelayTargets]);
+  }, [applyPortRelaySnapshot, isWide, persistPortRelaySettings, portRelayAccessCode, portRelayAccessCodeUnknown, portRelayListenPort, portRelaySnapshot.listenPort, portRelaySnapshot.listenPortManaged, portRelayTargets]);
 
   const openPortRelayWorkbenchTab = useCallback(async (
     target: PortRelayTarget | null,
@@ -12937,9 +12949,9 @@ export function App() {
       setPortRelayError('Project is required to open Port Relay.');
       return;
     }
-    const listenPort = Number(portRelayListenPort);
+    const listenPort = effectivePortRelayListenPort(portRelaySnapshot, portRelayListenPort);
     if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
-      setPortRelayError('Listen port must be in 1..65535.');
+      setPortRelayError('Relay server port is not configured.');
       openPortRelayScreen();
       return;
     }
@@ -12978,7 +12990,7 @@ export function App() {
       portRelaySnapshot.listenPort === listenPort &&
       samePortRelayTarget(activeTarget, normalizedTarget);
     if (!activeRelayMatches) {
-      await enablePortRelayForTarget(normalizedTarget, portRelayListenPort, {
+      await enablePortRelayForTarget(normalizedTarget, {
         framePath,
         openFrame: true,
       });
@@ -13001,6 +13013,7 @@ export function App() {
     portRelaySnapshot.enabled,
     portRelaySnapshot.hubId,
     portRelaySnapshot.listenPort,
+    portRelaySnapshot.listenPortManaged,
     portRelaySnapshot.status,
     portRelaySnapshot.targetPort,
     setDrawerOpen,
@@ -13143,11 +13156,10 @@ export function App() {
     if (!portRelaySnapshot.enabled || samePortRelayTarget(selectedPortRelayTarget, target)) {
       return;
     }
-    await enablePortRelayForTarget(target, String(portRelaySnapshot.listenPort || portRelayListenPort), {framePath: ''});
+    await enablePortRelayForTarget(target, {framePath: ''});
   }, [
     enablePortRelayForTarget,
     persistPortRelaySettings,
-    portRelayListenPort,
     portRelaySnapshot.enabled,
     portRelaySnapshot.listenPort,
     selectedPortRelayTarget,
@@ -13214,14 +13226,12 @@ export function App() {
     persistPortRelaySettings({
       targets: nextTargets,
       selectedTarget: target,
-      listenPort: Number(portRelayListenPort),
     });
     await openPortRelayWorkbenchTab(target, localUrl.path, {source: 'chat'});
   }, [
     currentProject?.hubId,
     openPortRelayWorkbenchTab,
     persistPortRelaySettings,
-    portRelayListenPort,
     portRelayTargets,
   ]);
 

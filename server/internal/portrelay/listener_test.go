@@ -62,9 +62,11 @@ func TestControllerRandomFailureFailsClosed(t *testing.T) {
 		{name: "nonce", remaining: 32 + 16},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			fixedPort := reserveRelayTestPort(t)
 			forwardCalled := false
 			controller, err := NewController(ControllerConfig{
-				Random: &failAfterReader{remaining: testCase.remaining},
+				Random:            &failAfterReader{remaining: testCase.remaining},
+				RelayPortProvider: func() (int, error) { return fixedPort, nil },
 				ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
 					forwardCalled = true
 					return ControlResult{}
@@ -74,7 +76,7 @@ func TestControllerRandomFailureFailsClosed(t *testing.T) {
 				t.Fatalf("NewController(): %v", err)
 			}
 			_, failure := controller.Enable(context.Background(), rp.RelayEnablePayload{
-				ListenPort: reserveRelayTestPort(t),
+				ListenPort: fixedPort,
 				HubID:      "hub-local",
 				TargetHost: "127.0.0.1",
 				TargetPort: 80,
@@ -83,33 +85,143 @@ func TestControllerRandomFailureFailsClosed(t *testing.T) {
 			if failure == nil || failure.Code != rp.CodeInternal {
 				t.Fatalf("Enable() failure=%#v, want internal random failure", failure)
 			}
-			if controller.listener != nil || forwardCalled {
-				t.Fatalf("random failure started relay listener=%v forwardCalled=%v", controller.listener != nil, forwardCalled)
+			if forwardCalled {
+				t.Fatalf("random failure forwarded Hub request")
 			}
 		})
 	}
 }
 
-func TestRelayListenerBindsLoopbackOnly(t *testing.T) {
+func TestEnableUsesConfiguredPortWithoutCreatingListener(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("reserve relay listener port: %v", err)
+		t.Fatalf("reserve configured relay port: %v", err)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	_ = ln.Close()
+	defer ln.Close()
+	fixedPort := ln.Addr().(*net.TCPAddr).Port
+	forwarded := false
+	controller := newTestController(t, ControllerConfig{
+		RelayPortProvider: func() (int, error) { return fixedPort, nil },
+		ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
+			forwarded = true
+			return ControlResult{Code: rp.CodeUnavailable, Message: "test tunnel"}
+		},
+	})
+	_, failure := controller.Enable(context.Background(), rp.RelayEnablePayload{
+		ListenPort: fixedPort, HubID: "hub-local", TargetHost: "127.0.0.1", TargetPort: 43210, AccessCode: "123456",
+	}, "relay.example.com", true)
+	if failure == nil || !forwarded {
+		t.Fatalf("Enable() failure=%#v forwarded=%v, want forwarded open attempt", failure, forwarded)
+	}
+}
 
-	listener, err := newRelayListener(port, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	if err != nil {
-		t.Fatalf("newRelayListener() err=%v", err)
+func TestEnableRejectsPortDifferentFromGateway(t *testing.T) {
+	fixedPort := reserveRelayTestPort(t)
+	forwarded := false
+	controller := newTestController(t, ControllerConfig{
+		RelayPortProvider: func() (int, error) { return fixedPort, nil },
+		ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
+			forwarded = true
+			return ControlResult{}
+		},
+	})
+	_, failure := controller.Enable(context.Background(), rp.RelayEnablePayload{
+		ListenPort: fixedPort + 1, HubID: "hub-local", TargetHost: "127.0.0.1", TargetPort: 43210, AccessCode: "123456",
+	}, "relay.example.com", true)
+	if failure == nil || failure.Code != rp.CodeInvalidArgument || forwarded {
+		t.Fatalf("Enable() failure=%#v forwarded=%v, want invalid_argument without Hub request", failure, forwarded)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
+}
 
-	addr, ok := listener.ln.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("listener addr=%T, want *net.TCPAddr", listener.ln.Addr())
+func TestEnableRejectsUnconfiguredGatewayRelayPort(t *testing.T) {
+	controller := newTestController(t, ControllerConfig{
+		RelayPortProvider: func() (int, error) { return 0, nil },
+		ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
+			t.Fatal("ForwardHubRequest must not be called when Relay is unconfigured")
+			return ControlResult{}
+		},
+	})
+	snapshot, failure := controller.Enable(context.Background(), rp.RelayEnablePayload{
+		ListenPort: 28810, HubID: "hub-local", TargetHost: "127.0.0.1", TargetPort: 43210, AccessCode: "123456",
+	}, "relay.example.com", true)
+	if failure == nil || failure.Code != rp.CodeUnavailable {
+		t.Fatalf("Enable() failure=%#v, want unavailable", failure)
 	}
-	if !addr.IP.Equal(net.ParseIP("127.0.0.1")) {
-		t.Fatalf("listener IP=%s, want 127.0.0.1", addr.IP.String())
+	if snapshot.Enabled || snapshot.Status != rp.RelayStatusDisabled || !snapshot.ListenPortManaged || snapshot.Error != "relay port is not configured" {
+		t.Fatalf("Enable() snapshot=%+v, want disabled unconfigured snapshot", snapshot)
+	}
+}
+
+func TestClientManagedPortAcceptsPayloadAndRetainsPort(t *testing.T) {
+	listenPort := reserveRelayTestPort(t)
+	controller := newTestController(t, ControllerConfig{
+		RelayPortProvider: func() (int, error) { return 0, ErrRelayPortClientManaged },
+		ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
+			return ControlResult{Code: rp.CodeUnavailable, Message: "test tunnel"}
+		},
+	})
+	unconfigured := controller.Status()
+	if unconfigured.ListenPortManaged || unconfigured.Error != "" {
+		t.Fatalf("initial standalone snapshot=%+v, want editable port without configuration error", unconfigured)
+	}
+	snapshot, failure := controller.Enable(context.Background(), rp.RelayEnablePayload{
+		ListenPort: listenPort, HubID: "hub-local", TargetHost: "127.0.0.1", TargetPort: 43210, AccessCode: "123456",
+	}, "relay.example.com", true)
+	if failure == nil || failure.Code != rp.CodeUnavailable {
+		t.Fatalf("Enable() failure=%#v, want unavailable tunnel failure", failure)
+	}
+	if snapshot.ListenPort != listenPort || snapshot.ListenPortManaged {
+		t.Fatalf("standalone snapshot=%+v, want client-managed port %d", snapshot, listenPort)
+	}
+
+	disabled, disableFailure := controller.Disable(context.Background())
+	if disableFailure != nil {
+		t.Fatalf("Disable() failure=%v", disableFailure)
+	}
+	if disabled.ListenPort != listenPort || disabled.ListenPortManaged {
+		t.Fatalf("disabled standalone snapshot=%+v, want client-managed port %d", disabled, listenPort)
+	}
+}
+
+func TestDisableKeepsConfiguredPortInDisabledSnapshot(t *testing.T) {
+	fixedPort := reserveRelayTestPort(t)
+	controller := newTestController(t, ControllerConfig{
+		RelayPortProvider: func() (int, error) { return fixedPort, nil },
+	})
+	snapshot, failure := controller.Disable(context.Background())
+	if failure != nil {
+		t.Fatalf("Disable() failure=%v", failure)
+	}
+	if snapshot.Enabled || snapshot.Status != rp.RelayStatusDisabled || snapshot.ListenPort != fixedPort || !snapshot.ListenPortManaged {
+		t.Fatalf("Disable() snapshot=%+v, want disabled fixed port %d", snapshot, fixedPort)
+	}
+}
+
+func TestProviderPortChangeInvalidatesActiveSlotBeforeDataPlaneRequest(t *testing.T) {
+	fixedPort := reserveRelayTestPort(t)
+	configuredPort := fixedPort
+	controller := newTestController(t, ControllerConfig{
+		RelayPortProvider: func() (int, error) { return configuredPort, nil },
+	})
+	controller.mu.Lock()
+	controller.slot = relaySlot{
+		Enabled:    true,
+		Status:     rp.RelayStatusUp,
+		ListenPort: fixedPort,
+		RelayID:    "relay-active",
+		HubID:      "hub-local",
+	}
+	controller.mu.Unlock()
+	configuredPort = fixedPort + 1
+
+	req := httptest.NewRequest(http.MethodGet, internalStatusPath, nil)
+	resp := httptest.NewRecorder()
+	controller.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status code=%d, want 200", resp.Code)
+	}
+	if snapshot := controller.Status(); snapshot.Enabled || snapshot.Status != rp.RelayStatusDisabled || snapshot.ListenPort != configuredPort {
+		t.Fatalf("post-change snapshot=%+v, want disabled port %d", snapshot, configuredPort)
 	}
 }
 
@@ -135,6 +247,20 @@ func TestFilterRequestHeadersDropsConditionalCacheHeaders(t *testing.T) {
 	}
 	if got := filtered["Accept-Encoding"]; len(got) != 1 || got[0] != "gzip, br" {
 		t.Fatalf("filterRequestHeaders dropped Accept-Encoding: %#v", filtered)
+	}
+}
+
+func TestFilterRequestHeadersDropsGatewayRelayMarker(t *testing.T) {
+	headers := http.Header{}
+	headers.Set(RelayMarkerHeader, RelayMarkerValue)
+	headers.Set("Accept", "application/json")
+
+	filtered := filterRequestHeaders(headers)
+	if _, ok := filtered[RelayMarkerHeader]; ok {
+		t.Fatalf("filterRequestHeaders forwarded %s: %#v", RelayMarkerHeader, filtered)
+	}
+	if got := strings.Join(filtered["Accept"], ","); got != "application/json" {
+		t.Fatalf("filterRequestHeaders dropped Accept: %#v", filtered)
 	}
 }
 
@@ -671,17 +797,6 @@ func TestRelaySensitiveResponsesSetHeaders(t *testing.T) {
 		if got := response.Header().Get("Referrer-Policy"); got != "no-referrer" {
 			t.Errorf("%s Referrer-Policy=%q", target, got)
 		}
-	}
-}
-
-func TestRelayListenerHeadersAndTimeouts(t *testing.T) {
-	listener, err := newRelayListener(0, http.NotFoundHandler())
-	if err != nil {
-		t.Fatalf("newRelayListener(): %v", err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-	if listener.srv.ReadHeaderTimeout != 5*time.Second || listener.srv.ReadTimeout != 15*time.Second || listener.srv.WriteTimeout != 30*time.Second || listener.srv.IdleTimeout != 60*time.Second {
-		t.Fatalf("relay server timeouts=%s/%s/%s/%s", listener.srv.ReadHeaderTimeout, listener.srv.ReadTimeout, listener.srv.WriteTimeout, listener.srv.IdleTimeout)
 	}
 }
 

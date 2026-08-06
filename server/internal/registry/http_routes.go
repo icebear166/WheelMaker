@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+
+	"github.com/swm8023/wheelmaker/internal/portrelay"
 )
 
 type registryBasePathContextKey struct{}
@@ -40,6 +42,14 @@ func requestRegistryBasePath(r *http.Request) string {
 }
 
 func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(portrelay.RelayMarkerHeader) == portrelay.RelayMarkerValue {
+		if s.relay == nil {
+			http.Error(w, "relay controller unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		s.relay.ServeHTTP(w, r)
+		return
+	}
 	if basePath, ok := registryHTMLPreviewBasePath(r.URL.Path); ok {
 		if r.URL.RawQuery != "" {
 			http.NotFound(w, r)

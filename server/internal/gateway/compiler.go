@@ -45,7 +45,7 @@ func CompileConfigAt(global GlobalConfig, sites []SiteConfig, storageRoot string
 			"listen": "127.0.0.1:2019",
 		},
 		"apps": map[string]any{
-			"http": compileHTTPApp(ordered),
+			"http": compileHTTPApp(global, ordered),
 			"tls":  compileTLSApp(global, ordered),
 		},
 		"logging": map[string]any{
@@ -65,10 +65,15 @@ func CompileConfigAt(global GlobalConfig, sites []SiteConfig, storageRoot string
 	return json.MarshalIndent(document, "", "  ")
 }
 
-func compileHTTPApp(sites []SiteConfig) map[string]any {
+func compileHTTPApp(global GlobalConfig, sites []SiteConfig) map[string]any {
 	httpsRoutes := make([]any, 0, len(sites))
 	httpRoutes := make([]any, 0, len(sites))
+	workspace := (*SiteConfig)(nil)
 	for _, site := range sites {
+		if site.Kind == SiteWorkspace && workspace == nil {
+			copy := site
+			workspace = &copy
+		}
 		httpsRoute := hostRoute(site, siteRoutes(site))
 		if site.HTTPS() {
 			httpsRoutes = append(httpsRoutes, httpsRoute)
@@ -87,12 +92,53 @@ func compileHTTPApp(sites []SiteConfig) map[string]any {
 		}
 	}
 	if len(httpsRoutes) > 0 {
-		servers["https"] = map[string]any{
+		httpsServer := map[string]any{
 			"listen": []string{":443"},
 			"routes": httpsRoutes,
 		}
+		policies := tlsConnectionPolicies(sites)
+		if len(policies) > 0 {
+			httpsServer["tls_connection_policies"] = policies
+		}
+		servers["https"] = httpsServer
+	}
+	if global.Relay.ListenPort > 0 && workspace != nil {
+		relayServer := map[string]any{
+			"listen": []string{fmt.Sprintf(":%d", global.Relay.ListenPort)},
+			"routes": []any{hostRoute(*workspace, []any{
+				map[string]any{
+					"handle": []any{
+						relayDeleteMarkerHandler(),
+						relaySetHeadersHandler(),
+						relayReverseProxyHandler(workspace.UpstreamAddress()),
+					},
+				},
+			})},
+		}
+		if workspace.HTTPS() {
+			relayServer["tls_connection_policies"] = tlsConnectionPolicies([]SiteConfig{*workspace})
+		} else {
+			relayServer["automatic_https"] = map[string]any{
+				"disable": true,
+			}
+		}
+		servers["relay"] = relayServer
 	}
 	return map[string]any{"servers": servers}
+}
+
+func tlsConnectionPolicies(sites []SiteConfig) []any {
+	policies := make([]any, 0, len(sites))
+	for _, site := range sites {
+		if site.HTTPS() {
+			policies = append(policies, map[string]any{
+				"match": map[string]any{
+					"sni": []string{site.Host()},
+				},
+			})
+		}
+	}
+	return policies
 }
 
 func compileTLSApp(global GlobalConfig, sites []SiteConfig) map[string]any {
@@ -220,6 +266,36 @@ func reverseProxyHandler(upstream string) map[string]any {
 				"set": map[string]any{
 					"X-Forwarded-Proto": []string{"{http.request.scheme}"},
 				},
+			},
+		},
+	}
+}
+
+func relayReverseProxyHandler(upstream string) map[string]any {
+	return map[string]any{
+		"handler": "reverse_proxy",
+		"upstreams": []any{map[string]any{
+			"dial": upstream,
+		}},
+	}
+}
+
+func relayDeleteMarkerHandler() map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"request": map[string]any{
+			"delete": []string{"X-WheelMaker-Relay"},
+		},
+	}
+}
+
+func relaySetHeadersHandler() map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"request": map[string]any{
+			"set": map[string]any{
+				"X-WheelMaker-Relay": []string{"1"},
+				"X-Forwarded-Proto":  []string{"{http.request.scheme}"},
 			},
 		},
 	}

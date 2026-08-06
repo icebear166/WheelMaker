@@ -26,6 +26,7 @@ type RelaySnapshot struct {
 	Enabled              bool        `json:"enabled"`
 	Status               RelayStatus `json:"status"`
 	ListenPort           int         `json:"listenPort,omitempty"`
+	ListenPortManaged    bool        `json:"listenPortManaged,omitempty"`
 	HubID                string      `json:"hubId,omitempty"`
 	TargetHost           string      `json:"targetHost,omitempty"`
 	TargetPort           int         `json:"targetPort,omitempty"`

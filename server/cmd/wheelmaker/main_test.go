@@ -74,9 +74,14 @@ func TestLoadValidatedRuntimeConfigAcceptsCustomRegistryToken(t *testing.T) {
 
 func TestRunRegistryConfigIncludesStateDir(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), ".wheelmaker")
-	cfg := registryServerConfig("127.0.0.1:9630", "token", stateDir)
+	userHome := filepath.Join(t.TempDir(), "home")
+	cfg := registryServerConfig("127.0.0.1:9630", "token", stateDir, userHome)
 	if cfg.Addr != "127.0.0.1:9630" || cfg.Token != "token" || cfg.StateDir != stateDir || cfg.LogDir != filepath.Join(stateDir, "log") || cfg.ServerData == nil {
 		t.Fatalf("registryServerConfig()=%+v", cfg)
+	}
+	wantGatewayConfig := filepath.Join(userHome, ".wheelmaker", "gateway", "config.json")
+	if cfg.GatewayConfigPath != wantGatewayConfig {
+		t.Fatalf("GatewayConfigPath=%q, want %q", cfg.GatewayConfigPath, wantGatewayConfig)
 	}
 	if err := cfg.ServerData.UpdateSecret(serverdata.SecretDeepSeek, "set", "short", time.Now()); err != nil {
 		t.Fatalf("ServerData.UpdateSecret(): %v", err)

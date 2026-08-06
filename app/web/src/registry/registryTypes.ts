@@ -1108,6 +1108,7 @@ export interface RegistryPortRelaySnapshot {
   enabled: boolean;
   status: RegistryPortRelayStatus;
   listenPort?: number;
+  listenPortManaged?: boolean;
   hubId?: string;
   targetHost?: string;
   targetPort?: number;

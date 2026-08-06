@@ -336,10 +336,15 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('setPortRelayKnownAccessCodeGeneration(typeof snapshot.accessCodeGeneration === \'number\' ? snapshot.accessCodeGeneration : null);');
   });
 
-  test('makes target rows clickable and validates listen port input', () => {
+  test('makes target rows clickable and supports managed and client-owned server ports', () => {
     const targetRowClick = detailTsx.match(/onClick=\{event => \{[\s\S]{0,200}selectPortRelayTarget\(target\)/);
     expect(targetRowClick).not.toBeNull();
     expect(detailTsx).toContain("event.target as HTMLElement).tagName === 'INPUT'");
+    expect(detailTsx).toContain('Server Listen Port');
+    expect(detailTsx).toContain('Listen Port');
+    expect(detailTsx).toContain('portRelaySnapshot.listenPort');
+    expect(detailTsx).toContain('portRelaySnapshot.listenPortManaged');
+    expect(detailTsx).toContain('Not configured');
     expect(detailTsx).toContain('const [listenPortError, setListenPortError] = React.useState');
     expect(detailTsx).toContain('Listen port must be 1-65535.');
     expect(detailTsx).toContain('aria-label="New relay target hub"');

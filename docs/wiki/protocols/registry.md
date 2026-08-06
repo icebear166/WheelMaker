@@ -769,6 +769,32 @@ Registry 下发给 Hub 的内部方法：
 - `listenPort` 与 `targetPort` 必须在 `1..65535`。
 - `hubId` 必须指向在线 Hub。
 
+### Gateway 固定端口数据面
+
+Relay 的公网入口由宿主机 Gateway/Caddy 或手工 Nginx 提供，不再由 Registry 在
+`listenPort` 上创建独立 TCP listener。Gateway 存在时，固定端口事实源是与 Gateway 共用的
+`~/.wheelmaker/gateway/config.json` 中的 `relay.listenPort`；缺失该文件时，Registry
+进入 client-managed standalone 模式，允许客户端在 enable payload 中提供 Nginx 端口。
+Gateway 模式下 App 的 LocalStorage 不能覆盖服务端端口；standalone 模式下 LocalStorage
+只作为客户端端口输入的持久化值，Nginx 必须手工保持一致。
+
+当存在 Workspace site 时，Gateway 在固定端口按 Workspace `publicUrl` 的 scheme 监听
+HTTP 或 HTTPS，把所有 URI 和 WebSocket 连接反代到 Registry loopback `9630`，并覆盖写入
+`X-WheelMaker-Relay: 1`。Registry `handleHTTP` 在普通 `/ws` 和 HTML preview 路由之前
+检查该标记，将请求交给现有 `portrelay.Controller.ServeHTTP`；Controller 继续负责
+access code、Relay cookie、HTTP/WS stream、Hub tunnel 和 singleton slot。固定端口上的
+`/__wheelmaker/relay/hub` 仍是 Hub 主动连接的 tunnel path。
+
+Gateway 模式下 `registry.relay.enable.listenPort` 必须等于当前固定端口，否则返回
+`INVALID_ARGUMENT` 且不发送 `hub.relay.open`；standalone 模式下该字段由客户端提供。
+Relay enable/disable 不触发边缘代理 reload；disable 只关闭当前 tunnel/streams，监听器可以
+继续存在并返回 `Disabled`/unavailable。Gateway 端口配置移除、变更或 provider 出错时，
+Registry 先失效旧 slot，不允许旧 tunnel 继续访问 target。Relay 方法、Hub 方法、frame
+协议和 Registry protocol version 均不变；status 额外用 `listenPortManaged` 标识端口是否由
+Gateway 管理。
+
+> 固定端口 Port Relay 设计来源：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md)
+
 ## 10. Hub 间临时 Web 传输
 
 临时 Debug Web 由构建源码的 Target Hub 通过 Registry 在线分块传给选定的 Web Hub。Registry 认证发送方与目标 Hub、维护短暂传输会话、按序转发分块并传回确认，但不在内存以外保存 ZIP，也不提供公开下载地址。

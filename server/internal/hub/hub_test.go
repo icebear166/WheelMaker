@@ -257,7 +257,22 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	}
 	targetHost, targetPort := splitHostPortForTest(t, targetURL.Host)
 
-	reg := registry.New(registry.Config{})
+	relayListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen fixed relay gateway: %v", err)
+	}
+	relayPort := relayListener.Addr().(*net.TCPAddr).Port
+	reg := registry.New(registry.Config{RelayPortProvider: func() (int, error) { return relayPort, nil }})
+	relayServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del("X-WheelMaker-Relay")
+		r.Header.Set("X-WheelMaker-Relay", "1")
+		reg.Handler().ServeHTTP(w, r)
+	})}
+	go func() { _ = relayServer.Serve(relayListener) }()
+	t.Cleanup(func() {
+		_ = relayServer.Close()
+		_ = relayListener.Close()
+	})
 	registryAddr := newRegistryServer(t, reg.Handler())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -278,24 +293,35 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	}()
 
 	waitForRelayHubOnline(t, registryAddr, "hub-relay-smoke")
-	relayPort := reservePortForHubTest(t)
 	client := dialWS(t, "http://"+registryAddr+"/ws")
 	defer client.Close()
 	connectClient(t, client, "")
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "registry.relay.enable",
-		Payload: map[string]any{
-			"listenPort": relayPort,
-			"hubId":      "hub-relay-smoke",
-			"targetHost": targetHost,
-			"targetPort": targetPort,
-			"accessCode": "483921",
-		},
-	})
-	enableResp := mustReadEnvelope(t, client)
-	if enableResp.Type != "response" || enableResp.Payload["status"] != "Up" {
+	var enableResp testEnvelope
+	enableUp := false
+	for attempt := 0; attempt < 10; attempt++ {
+		if attempt > 0 {
+			waitForRelayHubOnline(t, registryAddr, "hub-relay-smoke")
+		}
+		mustWriteJSON(t, client, testEnvelope{
+			RequestID: int64(2 + attempt),
+			Type:      "request",
+			Method:    "registry.relay.enable",
+			Payload: map[string]any{
+				"listenPort": relayPort,
+				"hubId":      "hub-relay-smoke",
+				"targetHost": targetHost,
+				"targetPort": targetPort,
+				"accessCode": "483921",
+			},
+		})
+		enableResp = mustReadEnvelope(t, client)
+		if enableResp.Type == "response" && enableResp.Payload["status"] == "Up" {
+			enableUp = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !enableUp {
 		t.Fatalf("registry.relay.enable response=%#v, want Up", enableResp)
 	}
 
@@ -443,20 +469,6 @@ func splitHostPortForTest(t *testing.T, hostport string) (string, int) {
 		t.Fatalf("parse port: %v", err)
 	}
 	return host, port
-}
-
-func reservePortForHubTest(t *testing.T) int {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve relay port: %v", err)
-	}
-	defer ln.Close()
-	addr, ok := ln.Addr().(*net.TCPAddr)
-	if !ok {
-		t.Fatalf("reserved addr=%v is not tcp", ln.Addr())
-	}
-	return addr.Port
 }
 
 type testEnvelope struct {

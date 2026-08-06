@@ -69,6 +69,7 @@ export function PortRelaySettingsDetail({
   disablePortRelay,
 }: PortRelaySettingsDetailProps) {
   const [addingTarget, setAddingTarget] = React.useState(false);
+  const listenPortManaged = portRelaySnapshot.listenPortManaged === true;
   const [listenPortError, setListenPortError] = React.useState('');
   const selectedTarget = selectedPortRelayTarget ?? portRelayTargets[0] ?? null;
   const statusClass = String(portRelaySnapshot.status || 'Disabled').toLowerCase();
@@ -76,6 +77,7 @@ export function PortRelaySettingsDetail({
   const portRelayTargetDisplay = selectedTarget ? `${selectedTarget.hubId} → 127.0.0.1:${selectedTarget.targetPort}` : 'No target';
   const listenPortNumber = Number(portRelayListenPort);
   const hasPendingListenPortChange =
+    !listenPortManaged &&
     portRelaySnapshot.enabled &&
     typeof portRelaySnapshot.listenPort === 'number' &&
     Number.isInteger(listenPortNumber) &&
@@ -100,11 +102,11 @@ export function PortRelaySettingsDetail({
         <code className="port-relay-target-display set-mono" data-tooltip={portRelayTargetDisplay}>
           {portRelayTargetDisplay}
         </code>
-        {hasPendingListenPortChange ? (
-          <div className="set-status is-warn port-relay-pending-note">Listen port change applies on Enable.</div>
-        ) : null}
       </section>
 
+      {hasPendingListenPortChange ? (
+        <div className="set-status is-warn port-relay-pending-note">Listen port change applies on Enable.</div>
+      ) : null}
       {portRelayError || portRelaySnapshot.error ? (
         <div className="set-error">{portRelayError || portRelaySnapshot.error}</div>
       ) : null}
@@ -115,28 +117,39 @@ export function PortRelaySettingsDetail({
           <span className="set-card-title">Access</span>
         </div>
         <div className="set-field">
-          <span className="set-field-label">Listen Port</span>
-          <input
-            className="set-field-control"
-            value={portRelayListenPort}
-            inputMode="numeric"
-            onChange={event => {
-              const nextValue = event.target.value.replace(/[^\d]/g, '').slice(0, 5);
-              const nextPort = Number(nextValue);
-              setPortRelayListenPort(nextValue);
-              if (nextValue && (!Number.isInteger(nextPort) || nextPort < 1 || nextPort > 65535)) {
-                setListenPortError('Listen port must be 1-65535.');
-              } else {
-                setListenPortError('');
-              }
-              if (Number.isInteger(nextPort) && nextPort >= 1 && nextPort <= 65535) {
-                persistPortRelaySettings({listenPort: nextPort});
-              }
-            }}
-          />
-          {listenPortError ? (
-            <div className="set-error">{listenPortError}</div>
-          ) : null}
+          <span className="set-field-label">{listenPortManaged ? 'Server Listen Port' : 'Listen Port'}</span>
+          {listenPortManaged ? (
+            <output className="set-field-control set-mono" aria-label="Port relay server listen port">
+              {typeof portRelaySnapshot.listenPort === 'number' && portRelaySnapshot.listenPort > 0
+                ? portRelaySnapshot.listenPort
+                : 'Not configured'}
+            </output>
+          ) : (
+            <>
+              <input
+                className="set-field-control"
+                value={portRelayListenPort}
+                inputMode="numeric"
+                onChange={event => {
+                  const nextValue = event.target.value.replace(/[^\d]/g, '').slice(0, 5);
+                  const nextPort = Number(nextValue);
+                  setPortRelayListenPort(nextValue);
+                  if (nextValue && (!Number.isInteger(nextPort) || nextPort < 1 || nextPort > 65535)) {
+                    setListenPortError('Listen port must be 1-65535.');
+                  } else {
+                    setListenPortError('');
+                  }
+                  if (Number.isInteger(nextPort) && nextPort >= 1 && nextPort <= 65535) {
+                    persistPortRelaySettings({listenPort: nextPort});
+                  }
+                }}
+                aria-label="Port relay server listen port"
+              />
+              {listenPortError ? (
+                <div className="set-error">{listenPortError}</div>
+              ) : null}
+            </>
+          )}
         </div>
         <div className="set-field">
           <span className="set-field-label">Access Code</span>

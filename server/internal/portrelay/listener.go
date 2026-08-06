@@ -1,12 +1,10 @@
 package portrelay
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"html"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,43 +17,6 @@ import (
 )
 
 var relayUpgrader = websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
-
-type relayListener struct {
-	port int
-	srv  *http.Server
-	ln   net.Listener
-}
-
-func newRelayListener(port int, handler http.Handler) (*relayListener, error) {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("start relay listener on %s: %w", addr, err)
-	}
-	srv := &http.Server{
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-	listener := &relayListener{port: port, srv: srv, ln: ln}
-	go func() {
-		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-			relayLogger().Warn("listener stopped port=%d err=%v", port, err)
-		}
-	}()
-	return listener, nil
-}
-
-func (l *relayListener) Close() error {
-	if l == nil || l.srv == nil {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	return l.srv.Shutdown(ctx)
-}
 
 func (c *Controller) handleDataPlane(w http.ResponseWriter, r *http.Request) {
 	if relaySensitiveRequest(r) {
@@ -629,6 +590,9 @@ func filterRequestHeaders(headers http.Header) map[string][]string {
 	for name, values := range headers {
 		canonical := http.CanonicalHeaderKey(name)
 		if isHopByHopHeader(canonical) || isWebSocketDialerHeader(canonical) || isConditionalRequestHeader(canonical) {
+			continue
+		}
+		if strings.EqualFold(canonical, RelayMarkerHeader) {
 			continue
 		}
 		if strings.EqualFold(canonical, "Cookie") {

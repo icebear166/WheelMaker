@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/gorilla/websocket"
+	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"net"
@@ -3605,7 +3606,8 @@ func TestRelayStatusReturnsDisabledSnapshot(t *testing.T) {
 }
 
 func TestRelayEnableForwardsInternalOpenToHub(t *testing.T) {
-	s := New(Config{})
+	listenPort := reserveTCPPort(t)
+	s := New(Config{RelayPortProvider: func() (int, error) { return listenPort, nil }})
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	hub := dialReportedHub(t, "http://"+ts+"/ws", "hub-relay")
@@ -3615,7 +3617,6 @@ func TestRelayEnableForwardsInternalOpenToHub(t *testing.T) {
 	defer client.Close()
 	connectRegistryClient(t, client)
 
-	listenPort := reserveTCPPort(t)
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
@@ -3856,6 +3857,27 @@ func TestReleasePublishUpdatedIsForwardedWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestRelayMarkerDispatchesBeforeRegistryRoutes(t *testing.T) {
+	server := New(Config{RelayPortProvider: func() (int, error) { return 28810, nil }})
+	req := httptest.NewRequest(http.MethodGet, "http://relay.example.com/__wheelmaker/relay/status", nil)
+	req.Header.Set(portrelay.RelayMarkerHeader, portrelay.RelayMarkerValue)
+	resp := httptest.NewRecorder()
+	server.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("marked status code=%d, want 200", resp.Code)
+	}
+}
+
+func TestUnmarkedRegistryRequestDoesNotEnterRelayDataPlane(t *testing.T) {
+	server := New(Config{RelayPortProvider: func() (int, error) { return 28810, nil }})
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:9630/__wheelmaker/relay/status", nil)
+	resp := httptest.NewRecorder()
+	server.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("unmarked status code=%d, want 404", resp.Code)
+	}
+}
+
 func httptestNewRegistryServer(t *testing.T, handler http.Handler) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -3883,4 +3905,52 @@ func reserveTCPPort(t *testing.T) int {
 		t.Fatalf("reserved addr=%v is not tcp", ln.Addr())
 	}
 	return addr.Port
+}
+
+func TestGatewayRelayPortProviderReadsConfiguredPort(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gateway", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(): %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"schema":1,"relay":{"listenPort":28810},"log":{"level":"INFO"}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(): %v", err)
+	}
+	provider := newGatewayRelayPortProvider(path)
+	port, err := provider()
+	if err != nil || port != 28810 {
+		t.Fatalf("provider()=(%d,%v), want (28810,nil)", port, err)
+	}
+}
+
+func TestGatewayRelayPortProviderTreatsMissingOrZeroAsUnconfigured(t *testing.T) {
+	missing, err := newGatewayRelayPortProvider(filepath.Join(t.TempDir(), "missing.json"))()
+	if missing != 0 || !errors.Is(err, portrelay.ErrRelayPortClientManaged) {
+		t.Fatalf("missing provider()=(%d,%v), want client-managed mode", missing, err)
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"schema":1,"relay":{"listenPort":0},"log":{"level":"INFO"}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(): %v", err)
+	}
+	zero, err := newGatewayRelayPortProvider(path)()
+	if err != nil || zero != 0 {
+		t.Fatalf("zero provider()=(%d,%v), want (0,nil)", zero, err)
+	}
+}
+
+func TestGatewayRelayPortProviderRejectsInvalidConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"schema":1,"relay":{"listenPort":80},"log":{"level":"INFO"}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(): %v", err)
+	}
+	if _, err := newGatewayRelayPortProvider(path)(); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("provider() error=%v, want reserved-port validation error", err)
+	}
+}
+
+func TestMissingGatewayConfigUsesClientManagedRelayMode(t *testing.T) {
+	server := New(Config{GatewayConfigPath: filepath.Join(t.TempDir(), "missing-gateway.json")})
+	snapshot := server.relay.Status()
+	if snapshot.ListenPortManaged || snapshot.Error != "" || snapshot.Enabled {
+		t.Fatalf("missing Gateway snapshot=%+v, want disabled client-managed mode", snapshot)
+	}
 }

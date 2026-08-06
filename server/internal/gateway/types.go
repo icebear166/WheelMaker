@@ -24,9 +24,14 @@ const (
 type SiteKind string
 
 type GlobalConfig struct {
-	Schema int        `json:"schema"`
-	ACME   ACMEConfig `json:"acme"`
-	Log    LogConfig  `json:"log"`
+	Schema int         `json:"schema"`
+	ACME   ACMEConfig  `json:"acme"`
+	Log    LogConfig   `json:"log"`
+	Relay  RelayConfig `json:"relay,omitempty"`
+}
+
+type RelayConfig struct {
+	ListenPort int `json:"listenPort,omitempty"`
 }
 
 type ACMEConfig struct {
@@ -132,9 +137,24 @@ func ValidateGlobal(cfg GlobalConfig) error {
 	}
 	switch strings.ToUpper(cfg.Log.Level) {
 	case "DEBUG", "INFO", "WARN", "ERROR":
-		return nil
+		return validateRelayPort(cfg.Relay.ListenPort)
 	default:
 		return fmt.Errorf("unsupported log level %q", cfg.Log.Level)
+	}
+}
+
+func validateRelayPort(port int) error {
+	if port == 0 {
+		return nil
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("relay listen port must be between 1 and 65535, got %d", port)
+	}
+	switch port {
+	case 80, 443, 2019, 9630, 9680:
+		return fmt.Errorf("relay listen port %d is reserved", port)
+	default:
+		return nil
 	}
 }
 
