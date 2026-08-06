@@ -706,6 +706,8 @@ import type {
   RegistryTerminalChangedEvent,
   RegistryTerminalOutputEvent,
   RegistryDeviceSession,
+  RegistryGitCommitDiff,
+  RegistryWorkingTreeFileDiff,
 } from '../registry/registryTypes';
 
 const loadSettingsBundle = () => import(/* webpackChunkName: "settings" */ '../settings/SettingsBundle');
@@ -8396,13 +8398,29 @@ export function App() {
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(false);
     const tabId = previewTabId({type: 'git-diff', source});
+    const snapshot = gitBrowserStore.snapshot()[targetProjectId] ?? gitBrowserStore.project(targetProjectId);
+    const commitFiles = source.kind === 'commit'
+      ? snapshot.commitFilesBySha[source.sha] ?? []
+      : [];
+    const files: GitDiffFileMeta[] = source.kind === 'commit' && commitFiles.length > 0
+      ? commitFiles.map(item => ({
+          path: item.path,
+          status: item.status,
+          additions: item.additions,
+          deletions: item.deletions,
+        }))
+      : [{path: file.path, status: file.status, additions: file.additions, deletions: file.deletions}];
+    const title = source.kind === 'commit'
+      ? snapshot.commits.find(commit => commit.sha === source.sha)?.title || source.sha.slice(0, 8)
+      : file.path.split('/').pop() || file.path;
     setPreviewWorkbench(current => {
       const opened = openPreviewTab(current, {
         type: 'git-diff',
         projectId: targetProjectId,
-        title: file.path.split('/').pop() || file.path,
+        title,
         source,
-        file,
+        files,
+        activeFilePath: source.path,
       });
       return updatePreviewTab(opened, targetProjectId, tabId, tab =>
         tab.type === 'git-diff' && tab.error
@@ -8500,31 +8518,64 @@ export function App() {
       setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
       try {
         const result = tab.source.kind === 'commit'
-          ? await service.readProjectGitFileDiff(tab.projectId, tab.source.sha, tab.source.path)
+          ? await service.readProjectGitCommitDiff(tab.projectId, tab.source.sha)
           : await service.readProjectWorkingTreeFileDiff(
             tab.projectId,
             tab.source.path,
             tab.source.scope,
           );
-        setPreviewWorkbench(current =>
-          updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
-            currentTab.type === 'git-diff'
-              ? {
-                ...currentTab,
-                file: {
-                  ...currentTab.file,
-                  diff: result.diff,
-                  expanded: true,
-                  isBinary: result.isBinary,
-                  truncated: result.truncated,
-                },
-                loadedWorktreeRev: projectGitSnapshot.worktreeRev,
-                loading: false,
-                error: '',
-              }
-              : currentTab,
-          ),
-        );
+        if (tab.source.kind === 'commit') {
+          const commitResult = result as RegistryGitCommitDiff;
+          const diffByPath = new Map(
+            splitUnifiedDiffFileBlocks(commitResult.diff).map(block => [block.path, block.diff]),
+          );
+          setPreviewWorkbench(current =>
+            updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
+              currentTab.type === 'git-diff'
+                ? {
+                  ...currentTab,
+                  files: currentTab.files.map(file => {
+                    const fileDiff = diffByPath.get(file.path) ?? '';
+                    return {
+                      ...file,
+                      diff: fileDiff,
+                      expanded: file.expanded,
+                      isBinary: fileDiff.includes('Binary files'),
+                      truncated: false,
+                    };
+                  }),
+                  loading: false,
+                  error: '',
+                }
+                : currentTab,
+            ),
+          );
+        } else {
+          const worktreeResult = result as RegistryWorkingTreeFileDiff;
+          setPreviewWorkbench(current =>
+            updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
+              currentTab.type === 'git-diff'
+                ? {
+                  ...currentTab,
+                  files: currentTab.files.map(file =>
+                    file.path === worktreeResult.path
+                      ? {
+                        ...file,
+                        diff: worktreeResult.diff,
+                        expanded: true,
+                        isBinary: worktreeResult.isBinary,
+                        truncated: worktreeResult.truncated,
+                      }
+                      : file,
+                  ),
+                  loadedWorktreeRev: projectGitSnapshot.worktreeRev,
+                  loading: false,
+                  error: '',
+                }
+                : currentTab,
+            ),
+          );
+        }
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         setPreviewWorkbench(current =>
@@ -8670,6 +8721,21 @@ export function App() {
     previewGitSnapshot.worktreeRev,
     previewWorkbench,
   ]);
+
+  useEffect(() => {
+    const activeTab = activePreviewTab(previewWorkbench);
+    if (activeTab?.type !== 'git-diff' || activeTab.source.kind !== 'commit' || activeTab.loading) {
+      return;
+    }
+    const container = chatFilePeekScrollRef.current;
+    if (!container) {
+      return;
+    }
+    const section = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-preview-diff-path]'),
+    ).find(node => node.dataset.previewDiffPath === activeTab.activeFilePath);
+    section?.scrollIntoView({block: 'start'});
+  }, [previewWorkbench]);
 
   const resolvePromptAttachmentThumbnail = useCallback((
     block: RegistrySessionContentBlock,
@@ -17155,6 +17221,25 @@ export function App() {
       ),
     );
   }, []);
+  const toggleGitDiffPreviewFile = useCallback((path: string) => {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'git-diff') {
+      return;
+    }
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, tab.projectId, tab.id, item =>
+        item.type === 'git-diff'
+          ? {
+              ...item,
+              activeFilePath: path,
+              files: item.files.map(file =>
+                file.path === path ? {...file, expanded: !file.expanded} : file,
+              ),
+            }
+          : item,
+      ),
+    );
+  }, []);
 
   const selectedChatHasOpenPromptTurn = selectedPromptTurnStatusIndex.hasOpenPrompt;
   const selectedChatCompactionRunning = useMemo(() => {
@@ -20566,12 +20651,14 @@ export function App() {
     if (tab.type === 'git-diff') {
       return (
         <UnifiedDiffPreview
-          files={[tab.file]}
-          activeFilePath={tab.file.path}
+          files={tab.files}
+          activeFilePath={tab.activeFilePath}
           loading={tab.loading}
           error={tab.error}
-          overviewLabel={`${tab.source.kind === 'commit' ? tab.source.sha.slice(0, 7) : tab.source.scope} · ${tab.file.path}`}
-          onToggleFile={() => undefined}
+          overviewLabel={tab.source.kind === 'commit'
+            ? `${tab.source.sha.slice(0, 7)} · ${tab.files.length} files`
+            : `${tab.source.scope} · ${tab.activeFilePath}`}
+          onToggleFile={toggleGitDiffPreviewFile}
           themeMode={themeMode}
           codeTheme={codeTheme}
           codeFont={codeFont}

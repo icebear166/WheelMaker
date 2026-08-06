@@ -22,7 +22,10 @@ describe('Git browser workspace integration', () => {
 
   test('loads commit and worktree diffs with explicit project ids', () => {
     const main = read('web/src/app/WorkspaceApp.tsx');
-    expect(main).toContain('service.readProjectGitFileDiff(tab.projectId, tab.source.sha, tab.source.path)');
+    expect(main).toContain('service.readProjectGitCommitDiff(tab.projectId, tab.source.sha)');
+    expect(main).toContain('splitUnifiedDiffFileBlocks(commitResult.diff)');
+    expect(main).toContain('const toggleGitDiffPreviewFile = useCallback((path: string) => {');
+    expect(main).toContain('data-preview-diff-path');
     expect(main).toContain('service.readProjectWorkingTreeFileDiff(');
     expect(main).toContain('loadedWorktreeRev: projectGitSnapshot.worktreeRev');
     expect(main).toContain("const gitDiffNeedsLoad = activeTab.source.kind === 'commit'");
