@@ -21,6 +21,7 @@ import {
   type FilePreviewTab,
   type PortRelayPreviewTab,
   type PromptDiffPreviewTab,
+  updatePreviewTab,
   updatePreviewTabAfterLoad,
 } from '../web/src/preview/previewWorkbenchState';
 
@@ -428,7 +429,7 @@ describe('preview workbench state', () => {
     expect(previewTabId({
       type: 'git-diff',
       source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
-    })).toBe('git-diff:commit:abc:src/a.ts');
+    })).toBe('git-diff:commit:abc');
     expect(previewTabId({
       type: 'git-diff',
       source: {kind: 'worktree', scope: 'staged', path: 'src/a.ts'},
@@ -633,15 +634,16 @@ describe('preview workbench state', () => {
       projectId: 'p1',
       title: 'a.ts',
       source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
-      file: {path: 'src/a.ts', status: 'M', additions: 2, deletions: 1},
+      files: [{path: 'src/a.ts', status: 'M', additions: 2, deletions: 1}],
+      activeFilePath: 'src/a.ts',
     });
     const loaded = updatePreviewTabAfterLoad(
       state,
       'p1',
-      'git-diff:commit:abc:src/a.ts',
+      'git-diff:commit:abc',
       0,
       tab => tab.type === 'git-diff'
-        ? {...tab, file: {...tab.file, diff: '@@ -1 +1 @@\n+needle'}}
+        ? {...tab, files: tab.files.map(file => ({...file, diff: '@@ -1 +1 @@\n+needle'}))}
         : tab,
     );
     const tab = activePreviewTab(loaded)!;
@@ -659,15 +661,16 @@ describe('preview workbench state', () => {
       projectId: 'p1',
       title: 'a.ts',
       source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
-      file: {path: 'src/a.ts', status: 'M', additions: 2, deletions: 1},
+      files: [{path: 'src/a.ts', status: 'M', additions: 2, deletions: 1}],
+      activeFilePath: 'src/a.ts',
     });
     const loaded = updatePreviewTabAfterLoad(
       state,
       'p1',
-      'git-diff:commit:abc:src/a.ts',
+      'git-diff:commit:abc',
       0,
       tab => tab.type === 'git-diff'
-        ? {...tab, file: {...tab.file, diff: 'diff --git a/src/a.ts b/src/a.ts'}}
+        ? {...tab, files: tab.files.map(file => ({...file, diff: 'diff --git a/src/a.ts b/src/a.ts'}))}
         : tab,
     );
     const snapshot = previewWorkbenchSnapshotFromState({...loaded, drawerMode: 'git'});
@@ -678,8 +681,47 @@ describe('preview workbench state', () => {
     expect(activePreviewTab(restored)).toMatchObject({
       type: 'git-diff',
       source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
-      file: {path: 'src/a.ts', diff: ''},
+      files: [{path: 'src/a.ts', diff: ''}],
+      activeFilePath: 'src/a.ts',
     });
+  });
+
+  test('re-opening a loaded commit tab keeps fetched diffs and moves the active file', () => {
+    const opened = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'git-diff',
+      projectId: 'p1',
+      title: 'Ship Git',
+      source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
+      files: [
+        {path: 'src/a.ts', status: 'M', additions: 2, deletions: 1},
+        {path: 'src/b.ts', status: 'A', additions: 5, deletions: 0},
+      ],
+      activeFilePath: 'src/a.ts',
+    });
+    const loaded = updatePreviewTab(opened, 'p1', 'git-diff:commit:abc', tab =>
+      tab.type === 'git-diff'
+        ? {...tab, files: tab.files.map(file => ({...file, diff: `diff-for-${file.path}`}))}
+        : tab,
+    );
+    const reopened = openPreviewTab(loaded, {
+      type: 'git-diff',
+      projectId: 'p1',
+      title: 'Ship Git',
+      source: {kind: 'commit', sha: 'abc', path: 'src/b.ts'},
+      files: [
+        {path: 'src/a.ts', status: 'M', additions: 2, deletions: 1},
+        {path: 'src/b.ts', status: 'A', additions: 5, deletions: 0},
+      ],
+      activeFilePath: 'src/b.ts',
+    });
+    const tab = activePreviewTab(reopened)!;
+
+    expect(tab.id).toBe('git-diff:commit:abc');
+    expect(tab.type === 'git-diff' ? tab.activeFilePath : '').toBe('src/b.ts');
+    expect(tab.type === 'git-diff' ? tab.files.map(file => file.diff) : []).toEqual([
+      'diff-for-src/a.ts',
+      'diff-for-src/b.ts',
+    ]);
   });
 
   test('migrates the legacy treeOpen snapshot to the files drawer', () => {

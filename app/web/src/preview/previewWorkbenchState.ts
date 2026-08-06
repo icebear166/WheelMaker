@@ -59,7 +59,8 @@ export type GitDiffPreviewFile = GitDiffFileMeta & {
 export type GitDiffPreviewTab = PreviewWorkbenchTabBase & {
   type: 'git-diff';
   source: GitDiffSource;
-  file: GitDiffPreviewFile;
+  files: GitDiffPreviewFile[];
+  activeFilePath: string;
   loadedWorktreeRev: string;
 };
 
@@ -115,7 +116,8 @@ export type PreviewWorkbenchOpenInput =
       projectId: string;
       title: string;
       source: GitDiffSource;
-      file: GitDiffFileMeta;
+      files: GitDiffFileMeta[];
+      activeFilePath?: string;
       loadedWorktreeRev?: string;
     }
   | {
@@ -182,7 +184,8 @@ export type PreviewWorkbenchSnapshotGitDiffTab = {
   projectId: string;
   title: string;
   source: GitDiffSource;
-  file: GitDiffFileMeta & {expanded: boolean};
+  files: Array<GitDiffFileMeta & {expanded: boolean}>;
+  activeFilePath?: string;
   loadedWorktreeRev: string;
 };
 
@@ -280,7 +283,7 @@ export function resolvePreviewDesktopFilePath(tab: PreviewWorkbenchTab): string 
     return resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath);
   }
   if (tab.type === 'git-diff') {
-    return tab.file.path || tab.source.path;
+    return tab.activeFilePath || tab.source.path;
   }
   return '';
 }
@@ -294,7 +297,7 @@ export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
   }
   if (input.type === 'git-diff') {
     return input.source.kind === 'commit'
-      ? `git-diff:commit:${input.source.sha}:${input.source.path}`
+      ? `git-diff:commit:${input.source.sha}`
       : `git-diff:worktree:${input.source.scope}:${input.source.path}`;
   }
   if (input.type === 'attachment') {
@@ -330,8 +333,8 @@ export function previewWorkbenchTabTooltip(tab: PreviewWorkbenchTab): string {
   }
   if (tab.type === 'git-diff') {
     return tab.source.kind === 'commit'
-      ? [tab.file.path, tab.source.sha].filter(Boolean).join(' - ')
-      : [tab.file.path, 'Working Tree', tab.source.scope].filter(Boolean).join(' - ');
+      ? [tab.title, tab.source.sha, fileCountLabel(tab.files.length)].filter(Boolean).join(' - ')
+      : [tab.activeFilePath, 'Working Tree', tab.source.scope].filter(Boolean).join(' - ');
   }
   if (tab.type === 'attachment') {
     return [tab.title, tab.mimeType, tab.meta, tab.attachmentKey].filter(Boolean).join(' - ');
@@ -356,7 +359,10 @@ export function previewWorkbenchHeaderTitle(tab: PreviewWorkbenchTab | null): st
     const context = tab.source.kind === 'commit'
       ? tab.source.sha.slice(0, 8)
       : 'Working Tree';
-    return `Git diff · ${context} · ${tab.file.path}`;
+    const target = tab.source.kind === 'commit'
+      ? fileCountLabel(tab.files.length)
+      : tab.activeFilePath;
+    return `Git diff · ${context} · ${target}`;
   }
   if (tab.type === 'attachment') {
     return ['Attachment', tab.title, tab.mimeType].filter(Boolean).join(' · ');
@@ -390,10 +396,12 @@ export function buildPreviewSearchMatches(
     );
   }
   if (tab.type === 'git-diff') {
-    return tab.file.diff
-      .split('\n')
-      .map((text, index) => ({kind: 'diff' as const, path: tab.file.path, line: index + 1, text}))
-      .filter(match => match.text.toLocaleLowerCase().includes(normalizedQuery));
+    return tab.files.flatMap(file =>
+      file.diff
+        .split('\n')
+        .map((text, index) => ({kind: 'diff' as const, path: file.path, line: index + 1, text}))
+        .filter(match => match.text.toLocaleLowerCase().includes(normalizedQuery)),
+    );
   }
   return [];
 }
@@ -411,7 +419,9 @@ export function previewSearchDocumentKey(tab: PreviewWorkbenchTab | null): strin
       .join('\u0001');
   }
   if (tab.type === 'git-diff') {
-    return `${tab.file.path}\0${tab.file.diff}`;
+    return tab.files
+      .map(file => `${file.path}\0${file.diff}`)
+      .join('\u0001');
   }
   return '';
 }
@@ -481,13 +491,14 @@ function previewSnapshotTab(tab: PreviewWorkbenchTab): PreviewWorkbenchSnapshotT
       projectId: tab.projectId,
       title: tab.title,
       source: tab.source,
-      file: {
-        path: tab.file.path,
-        status: tab.file.status,
-        additions: tab.file.additions,
-        deletions: tab.file.deletions,
-        expanded: tab.file.expanded,
-      },
+      files: tab.files.map(file => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        expanded: file.expanded,
+      })),
+      activeFilePath: tab.activeFilePath,
       loadedWorktreeRev: '',
     };
   }
@@ -576,12 +587,13 @@ function previewSnapshotInput(tab: PreviewWorkbenchSnapshotTab): PreviewWorkbenc
       projectId: tab.projectId,
       title: tab.title,
       source: tab.source,
-      file: {
-        path: tab.file.path,
-        status: tab.file.status,
-        additions: tab.file.additions,
-        deletions: tab.file.deletions,
-      },
+      files: tab.files.map(file => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+      })),
+      activeFilePath: tab.activeFilePath,
       loadedWorktreeRev: '',
     };
   }
@@ -771,13 +783,14 @@ function createTab(input: PreviewWorkbenchOpenInput): PreviewWorkbenchTab {
       ...base,
       type: 'git-diff',
       source: input.source,
-      file: {
-        ...input.file,
+      files: input.files.map(file => ({
+        ...file,
         diff: '',
         expanded: true,
         isBinary: false,
         truncated: false,
-      },
+      })),
+      activeFilePath: resolvePromptDiffActiveFilePath(input.files, input.activeFilePath ?? input.source.path),
       loadedWorktreeRev: input.loadedWorktreeRev ?? '',
     };
   }
@@ -826,7 +839,16 @@ function mergeTab(existing: PreviewWorkbenchTab, input: PreviewWorkbenchOpenInpu
       ...existing,
       title: input.title,
       source: input.source,
-      file: {...existing.file, ...input.file},
+      files: input.files.map(file => {
+        const existingFile = existing.files.find(item => item.path === file.path);
+        return existingFile
+          ? {...existingFile, ...file, diff: existingFile.diff, expanded: existingFile.expanded, isBinary: existingFile.isBinary, truncated: existingFile.truncated}
+          : {...file, diff: '', expanded: true, isBinary: false, truncated: false};
+      }),
+      activeFilePath: resolvePromptDiffActiveFilePath(
+        input.files,
+        input.activeFilePath !== undefined ? input.activeFilePath : existing.activeFilePath,
+      ),
       loadedWorktreeRev: input.loadedWorktreeRev ?? existing.loadedWorktreeRev,
     };
   }
