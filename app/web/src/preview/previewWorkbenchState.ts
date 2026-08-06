@@ -189,6 +189,11 @@ export type PreviewWorkbenchSnapshotGitDiffTab = {
   loadedWorktreeRev: string;
 };
 
+type LegacyPreviewWorkbenchSnapshotGitDiffTab = Omit<PreviewWorkbenchSnapshotGitDiffTab, 'files'> & {
+  files?: Array<GitDiffFileMeta & {expanded: boolean}>;
+  file?: GitDiffFileMeta & {expanded: boolean};
+};
+
 export type PreviewWorkbenchSnapshotAttachmentTab = {
   type: 'attachment';
   projectId: string;
@@ -582,18 +587,24 @@ function previewSnapshotInput(tab: PreviewWorkbenchSnapshotTab): PreviewWorkbenc
     };
   }
   if (tab.type === 'git-diff') {
+    const legacyTab = tab as LegacyPreviewWorkbenchSnapshotGitDiffTab;
+    const files = Array.isArray(legacyTab.files)
+      ? legacyTab.files
+      : legacyTab.file
+        ? [legacyTab.file]
+        : [];
     return {
       type: 'git-diff',
       projectId: tab.projectId,
       title: tab.title,
       source: tab.source,
-      files: tab.files.map(file => ({
+      files: files.map(file => ({
         path: file.path,
         status: file.status,
         additions: file.additions,
         deletions: file.deletions,
       })),
-      activeFilePath: tab.activeFilePath,
+      activeFilePath: tab.activeFilePath ?? files[0]?.path ?? tab.source.path,
       loadedWorktreeRev: '',
     };
   }
@@ -627,6 +638,19 @@ function restorePreviewSnapshotTab(tab: PreviewWorkbenchSnapshotTab): PreviewWor
   return validPreviewInput(input) ? createTab(input) : null;
 }
 
+function migrateRestoredPreviewTabId(tabId: string, tabs: PreviewWorkbenchTab[]): string {
+  if (tabs.some(tab => tab.id === tabId)) {
+    return tabId;
+  }
+  const legacyCommitPrefix = 'git-diff:commit:';
+  const matchingCommitTab = tabs.find(tab =>
+    tab.type === 'git-diff'
+    && tab.source.kind === 'commit'
+    && tabId.startsWith(`${legacyCommitPrefix}${tab.source.sha}:`),
+  );
+  return matchingCommitTab?.id ?? tabId;
+}
+
 export function previewWorkbenchStateFromSnapshot(
   snapshot: PreviewWorkbenchSnapshot | null | undefined,
 ): PreviewWorkbenchState {
@@ -648,13 +672,19 @@ export function previewWorkbenchStateFromSnapshot(
   }
   const activeTabIdByProjectId = Object.fromEntries(
     Object.entries(snapshot.activeTabIdByProjectId ?? {})
+      .map(([projectId, tabId]) => [
+        projectId,
+        migrateRestoredPreviewTabId(tabId, tabsByProjectId[projectId] ?? []),
+      ])
       .filter(([projectId, tabId]) => availableIdsByProject[projectId]?.has(tabId)),
   );
   const renderedTabIdsByProjectId = Object.fromEntries(
     Object.entries(snapshot.renderedTabIdsByProjectId ?? {})
       .map(([projectId, ids]) => [
         projectId,
-        ids.filter(id => availableIdsByProject[projectId]?.has(id)),
+        ids
+          .map(id => migrateRestoredPreviewTabId(id, tabsByProjectId[projectId] ?? []))
+          .filter(id => availableIdsByProject[projectId]?.has(id)),
       ])
       .filter(([projectId, ids]) => !!projectId && ids.length > 0),
   );

@@ -686,6 +686,38 @@ describe('preview workbench state', () => {
     });
   });
 
+  test('migrates a legacy single-file git diff snapshot and keeps it active', () => {
+    const restored = previewWorkbenchStateFromSnapshot({
+      version: 1,
+      activeProjectId: 'p1',
+      tabsByProjectId: {
+        p1: [{
+          type: 'git-diff',
+          projectId: 'p1',
+          title: 'a.ts',
+          source: {kind: 'commit', sha: 'abc', path: 'src/a.ts'},
+          file: {
+            path: 'src/a.ts',
+            status: 'M',
+            additions: 2,
+            deletions: 1,
+            expanded: true,
+          },
+          loadedWorktreeRev: '',
+        }],
+      },
+      activeTabIdByProjectId: {p1: 'git-diff:commit:abc:src/a.ts'},
+      renderedTabIdsByProjectId: {p1: ['git-diff:commit:abc:src/a.ts']},
+    } as unknown as Parameters<typeof previewWorkbenchStateFromSnapshot>[0]);
+
+    expect(activePreviewTab(restored)).toMatchObject({
+      type: 'git-diff',
+      id: 'git-diff:commit:abc',
+      files: [{path: 'src/a.ts', expanded: true, diff: ''}],
+      activeFilePath: 'src/a.ts',
+    });
+  });
+
   test('re-opening a loaded commit tab keeps fetched diffs and moves the active file', () => {
     const opened = openPreviewTab(createPreviewWorkbenchState('p1'), {
       type: 'git-diff',
