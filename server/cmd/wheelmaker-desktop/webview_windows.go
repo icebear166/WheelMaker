@@ -47,14 +47,16 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 	hwnd := uintptr(w.Window())
 	if hwnd != 0 {
 		if opts.CustomTitleBar {
-			applyCustomTitleBarFrame(hwnd)
 			cleanupWindowWorkAreaConstraint, err := installDesktopWindowWorkAreaConstraintWithOps(hwnd, win32DesktopWindowSubclassOps{})
 			if err != nil {
 				return err
 			}
 			defer cleanupWindowWorkAreaConstraint()
+			applyCustomTitleBarFrame(hwnd)
 		}
-		applyDesktopWindowTheme(hwnd, opts.ThemeColor)
+		if !opts.CustomTitleBar {
+			applyDesktopWindowTheme(hwnd, opts.ThemeColor)
+		}
 		if opts.CustomTitleBar {
 			suppressDesktopWindowBorder(hwnd)
 		}

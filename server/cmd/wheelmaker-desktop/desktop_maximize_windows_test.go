@@ -23,6 +23,8 @@ type fakeDesktopWindowSubclassOps struct {
 	originalProc            uintptr
 	replacementProc         uintptr
 	restoredProc            uintptr
+	window                  desktopWindowRect
+	windowOK                bool
 	callResult              uintptr
 	callCount               int
 	constraintAfterOriginal bool
@@ -31,6 +33,10 @@ type fakeDesktopWindowSubclassOps struct {
 func (f *fakeDesktopWindowSubclassOps) monitorInfo(hwnd uintptr) (desktopMonitorInfo, bool) {
 	f.constraintAfterOriginal = f.callCount > 0
 	return f.fakeDesktopMonitorOps.monitorInfo(hwnd)
+}
+
+func (f *fakeDesktopWindowSubclassOps) windowRect(uintptr) (desktopWindowRect, bool) {
+	return f.window, f.windowOK
 }
 
 func (f *fakeDesktopWindowSubclassOps) replaceWindowProc(_ uintptr, replacement uintptr) (uintptr, bool) {
@@ -187,6 +193,61 @@ func TestDesktopWindowWorkAreaHookConstrainsAfterOriginalWindowProc(t *testing.T
 	}
 	if want := (desktopWindowPoint{x: 1920, y: 1040}); info.maxSize != want {
 		t.Fatalf("maxSize=%+v, want %+v", info.maxSize, want)
+	}
+}
+
+func TestDesktopWindowCustomFrameUsesEntireWindowAsClientArea(t *testing.T) {
+	const wmNCCalcSizeTestMessage = 0x0083
+	ops := &fakeDesktopWindowSubclassOps{
+		originalProc: 99,
+		callResult:   73,
+	}
+	cleanup, err := installDesktopWindowWorkAreaConstraintWithOps(44, ops)
+	if err != nil {
+		t.Fatalf("installDesktopWindowWorkAreaConstraintWithOps: %v", err)
+	}
+	defer cleanup()
+
+	result := desktopWindowWorkAreaProcWithInfo(44, wmNCCalcSizeTestMessage, 1, 0, nil)
+
+	if result != 0 {
+		t.Fatalf("WM_NCCALCSIZE result=%d, want 0 for a borderless client area", result)
+	}
+}
+
+func TestDesktopWindowCustomFrameHitTestsResizeBorders(t *testing.T) {
+	const wmNCHitTestTestMessage = 0x0084
+	ops := &fakeDesktopWindowSubclassOps{
+		originalProc: 99,
+		window:       desktopWindowRect{left: 0, top: 0, right: 1000, bottom: 800},
+		windowOK:     true,
+		callResult:   1,
+	}
+	cleanup, err := installDesktopWindowWorkAreaConstraintWithOps(45, ops)
+	if err != nil {
+		t.Fatalf("installDesktopWindowWorkAreaConstraintWithOps: %v", err)
+	}
+	defer cleanup()
+
+	tests := []struct {
+		name string
+		x    uint16
+		y    uint16
+		want uintptr
+	}{
+		{name: "left", x: 0, y: 400, want: 10},
+		{name: "top-left", x: 0, y: 0, want: 13},
+		{name: "bottom-right", x: 999, y: 799, want: 17},
+		{name: "client", x: 500, y: 400, want: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			lparam := uintptr(test.x) | uintptr(uint32(test.y)<<16)
+			result := desktopWindowWorkAreaProcWithInfo(45, wmNCHitTestTestMessage, 0, lparam, nil)
+			if result != test.want {
+				t.Fatalf("WM_NCHITTEST at (%d,%d)=%d, want %d", test.x, test.y, result, test.want)
+			}
+		})
 	}
 }
 

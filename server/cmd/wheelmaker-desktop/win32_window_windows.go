@@ -33,9 +33,20 @@ const (
 
 	wmClose         = 0x0010
 	wmGetMinMaxInfo = 0x0024
+	wmNCCalcSize    = 0x0083
 	wmNCLButtonDown = 0x00a1
+	wmNCHitTest     = 0x0084
 	wmNCDestroy     = 0x0082
+	htClient        = 1
 	htCaption       = 2
+	htLeft          = 10
+	htRight         = 11
+	htTop           = 12
+	htTopLeft       = 13
+	htTopRight      = 14
+	htBottom        = 15
+	htBottomLeft    = 16
+	htBottomRight   = 17
 
 	dwmwaUseImmersiveDarkMode        = 20
 	dwmwaBorderColor                 = 34
@@ -56,6 +67,7 @@ var (
 	procGetMonitorInfoW               = user32.NewProc("GetMonitorInfoW")
 	procCallWindowProcW               = user32.NewProc("CallWindowProcW")
 	procDefWindowProcW                = user32.NewProc("DefWindowProcW")
+	procGetSystemMetrics              = user32.NewProc("GetSystemMetrics")
 	procReleaseCapture                = user32.NewProc("ReleaseCapture")
 	procSendMessageW                  = user32.NewProc("SendMessageW")
 	procPostMessageW                  = user32.NewProc("PostMessageW")
@@ -65,6 +77,12 @@ var (
 	procIsWindow                      = user32.NewProc("IsWindow")
 	procDwmSetWindowAttribute         = dwmapi.NewProc("DwmSetWindowAttribute")
 	desktopWindowWorkAreaProcCallback = windows.NewCallback(desktopWindowWorkAreaProc)
+)
+
+const (
+	smCXSizeFrame    = 32
+	smCYSizeFrame    = 33
+	smCXPaddedBorder = 92
 )
 
 const (
@@ -89,6 +107,10 @@ type win32MonitorInfo struct {
 }
 
 type win32DesktopWindowSubclassOps struct{}
+
+func (win32DesktopWindowSubclassOps) windowRect(hwnd uintptr) (desktopWindowRect, bool) {
+	return getWindowRect(hwnd)
+}
 
 func (win32DesktopWindowSubclassOps) monitorInfo(hwnd uintptr) (desktopMonitorInfo, bool) {
 	monitor, _, _ := procMonitorFromWindow.Call(hwnd, monitorDefaultToNearest)
@@ -154,6 +176,18 @@ func getWindowRect(hwnd uintptr) (desktopWindowRect, bool) {
 	var rect desktopWindowRect
 	result, _, _ := procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&rect)))
 	return rect, result != 0
+}
+
+func getDesktopWindowResizeBorder() desktopWindowPoint {
+	return desktopWindowPoint{
+		x: getSystemMetric(smCXSizeFrame) + getSystemMetric(smCXPaddedBorder),
+		y: getSystemMetric(smCYSizeFrame) + getSystemMetric(smCXPaddedBorder),
+	}
+}
+
+func getSystemMetric(index int32) int32 {
+	result, _, _ := procGetSystemMetrics.Call(uintptr(index))
+	return int32(result)
 }
 
 func releaseCapture() {

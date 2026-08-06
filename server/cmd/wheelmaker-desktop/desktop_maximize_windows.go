@@ -32,6 +32,7 @@ type desktopMonitorOps interface {
 
 type desktopWindowSubclassOps interface {
 	desktopMonitorOps
+	windowRect(hwnd uintptr) (desktopWindowRect, bool)
 	replaceWindowProc(hwnd, replacement uintptr) (uintptr, bool)
 	restoreWindowProc(hwnd, original uintptr)
 	callWindowProc(original, hwnd, msg, wparam, lparam uintptr) uintptr
@@ -101,6 +102,14 @@ func desktopWindowWorkAreaProcWithInfo(hwnd, msg, wparam, lparam uintptr, info *
 		return defaultDesktopWindowProc(hwnd, msg, wparam, lparam)
 	}
 	subclass := value.(desktopWindowSubclass)
+	if msg == wmNCCalcSize && wparam != 0 {
+		return 0
+	}
+	if msg == wmNCHitTest {
+		if result := desktopWindowFrameHitTest(hwnd, lparam, subclass.ops); result != htClient {
+			return result
+		}
+	}
 	result := subclass.ops.callWindowProc(subclass.originalProc, hwnd, msg, wparam, lparam)
 	if info != nil {
 		constrainDesktopMaximizeToWorkArea(hwnd, info, subclass.ops)
@@ -109,6 +118,43 @@ func desktopWindowWorkAreaProcWithInfo(hwnd, msg, wparam, lparam uintptr, info *
 		desktopWindowSubclasses.Delete(hwnd)
 	}
 	return result
+}
+
+func desktopWindowFrameHitTest(hwnd, lparam uintptr, ops desktopWindowSubclassOps) uintptr {
+	if isWindowMaximized(hwnd) {
+		return htClient
+	}
+	window, ok := ops.windowRect(hwnd)
+	if !ok {
+		return htClient
+	}
+	x := int32(int16(uint16(lparam)))
+	y := int32(int16(uint16(lparam >> 16)))
+	border := getDesktopWindowResizeBorder()
+	left := x < window.left+border.x
+	right := x >= window.right-border.x
+	top := y < window.top+border.y
+	bottom := y >= window.bottom-border.y
+	switch {
+	case left && top:
+		return htTopLeft
+	case right && top:
+		return htTopRight
+	case left && bottom:
+		return htBottomLeft
+	case right && bottom:
+		return htBottomRight
+	case left:
+		return htLeft
+	case right:
+		return htRight
+	case top:
+		return htTop
+	case bottom:
+		return htBottom
+	default:
+		return htClient
+	}
 }
 
 type desktopWindowOps interface {

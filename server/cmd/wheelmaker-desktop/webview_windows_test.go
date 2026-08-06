@@ -56,13 +56,15 @@ func TestDesktopWebViewInstallsWorkAreaConstraintForCustomTitleBar(t *testing.T)
 	themeIndex := strings.Index(sourceText, "applyDesktopWindowTheme(hwnd, opts.ThemeColor)")
 	suppressBorderIndex := strings.Index(sourceText, "suppressDesktopWindowBorder(hwnd)")
 	bridgeIndex := strings.Index(sourceText, "bindDesktopWindowBridge(w, hwnd, opts.Runtime)")
-	if frameIndex < 0 || installIndex < frameIndex || cleanupIndex < installIndex || themeIndex < cleanupIndex ||
-		suppressBorderIndex < themeIndex || bridgeIndex < suppressBorderIndex {
+	themeGuardIndex := strings.Index(sourceText, "if !opts.CustomTitleBar {")
+	if frameIndex < 0 || installIndex < 0 || installIndex > frameIndex || cleanupIndex < installIndex ||
+		suppressBorderIndex < frameIndex || bridgeIndex < suppressBorderIndex || themeGuardIndex < 0 || themeIndex < themeGuardIndex {
 		t.Fatalf(
-			"custom frame setup order is incomplete: frame=%d install=%d cleanup=%d theme=%d suppress=%d bridge=%d",
+			"custom frame setup order/theme guard is incomplete: frame=%d install=%d cleanup=%d themeGuard=%d theme=%d suppress=%d bridge=%d",
 			frameIndex,
 			installIndex,
 			cleanupIndex,
+			themeGuardIndex,
 			themeIndex,
 			suppressBorderIndex,
 			bridgeIndex,
