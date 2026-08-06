@@ -91,6 +91,7 @@ const (
 	RegistryMethodProjectGitLog                 = "project.git.log"
 	RegistryMethodProjectGitCommitFiles         = "project.git.commit.files"
 	RegistryMethodProjectGitCommitFileDiff      = "project.git.commit.fileDiff"
+	RegistryMethodProjectGitCommitDiff          = "project.git.commit.diff"
 	RegistryMethodProjectGitDiff                = "project.git.diff"
 	RegistryMethodProjectGitDiffFileDiff        = "project.git.diff.fileDiff"
 	RegistryMethodProjectGitStatus              = "project.git.status"
@@ -226,6 +227,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodProjectGitLog:                 registryProjectMethod(RegistryMethodProjectGitLog, RegistryRouteProjectForward),
 	RegistryMethodProjectGitCommitFiles:         registryProjectMethod(RegistryMethodProjectGitCommitFiles, RegistryRouteProjectForward),
 	RegistryMethodProjectGitCommitFileDiff:      registryProjectMethod(RegistryMethodProjectGitCommitFileDiff, RegistryRouteProjectForward),
+	RegistryMethodProjectGitCommitDiff:          registryProjectMethod(RegistryMethodProjectGitCommitDiff, RegistryRouteProjectForward),
 	RegistryMethodProjectGitDiff:                registryProjectMethod(RegistryMethodProjectGitDiff, RegistryRouteProjectForward),
 	RegistryMethodProjectGitDiffFileDiff:        registryProjectMethod(RegistryMethodProjectGitDiffFileDiff, RegistryRouteProjectForward),
 	RegistryMethodProjectGitStatus:              registryProjectMethod(RegistryMethodProjectGitStatus, RegistryRouteProjectForward),

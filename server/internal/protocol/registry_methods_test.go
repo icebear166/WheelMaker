@@ -447,6 +447,7 @@ func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 		"project.git.log",
 		"project.git.commit.files",
 		"project.git.commit.fileDiff",
+		"project.git.commit.diff",
 		"project.git.diff",
 		"project.git.diff.fileDiff",
 		"project.git.status",

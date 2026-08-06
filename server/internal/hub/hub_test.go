@@ -4615,6 +4615,7 @@ func TestReporterGitRevisionOptionRejected(t *testing.T) {
 		{name: "refs", method: "project.git.log", payload: map[string]any{"refs": []string{"HEAD", "--help"}}},
 		{name: "sha files", method: "project.git.commit.files", payload: map[string]any{"sha": "-cprotocol.file.allow=always"}},
 		{name: "sha diff", method: "project.git.commit.fileDiff", payload: map[string]any{"sha": "--help", "path": "tracked.txt"}},
+		{name: "commit diff", method: "project.git.commit.diff", payload: map[string]any{"sha": "--help"}},
 		{name: "base", method: "project.git.diff", payload: map[string]any{"base": "--help", "head": "HEAD"}},
 		{name: "head", method: "project.git.diff.fileDiff", payload: map[string]any{"base": "HEAD", "head": "--help", "path": "tracked.txt"}},
 	} {
@@ -4856,6 +4857,19 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 	diffText, _ := diffResp.Payload["diff"].(string)
 	if !strings.Contains(diffText, "+gamma") {
 		t.Fatalf("unexpected working tree diff: %q", diffText)
+	}
+
+	mustWriteJSON(t, app, testEnvelope{
+		RequestID: 9,
+		Type:      "request",
+		Method:    "project.git.commit.diff",
+		ProjectID: rp.ProjectID("hub-hash", "proj1"),
+		Payload:   map[string]any{"sha": "HEAD", "contextLines": 2},
+	})
+	commitDiffResp := mustReadResponseEnvelope(t, app, 9)
+	commitDiffText, _ := commitDiffResp.Payload["diff"].(string)
+	if !strings.Contains(commitDiffText, "diff --git") || !strings.Contains(commitDiffText, "hello.txt") {
+		t.Fatalf("unexpected commit diff: %q", commitDiffText)
 	}
 }
 

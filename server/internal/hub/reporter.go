@@ -799,6 +799,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyGitCommitFiles(conn, in)
 	case rp.RegistryMethodProjectGitCommitFileDiff:
 		r.replyGitCommitFileDiff(conn, in)
+	case rp.RegistryMethodProjectGitCommitDiff:
+		r.replyGitCommitDiff(conn, in)
 	case rp.RegistryMethodProjectGitDiff:
 		r.replyGitDiff(conn, in)
 	case rp.RegistryMethodProjectGitDiffFileDiff:
@@ -2748,6 +2750,50 @@ func (r *Reporter) replyGitCommitFileDiff(conn *websocket.Conn, req envelope) {
 			"isBinary":  isBinary,
 			"diff":      diff,
 			"truncated": false,
+		}),
+	})
+}
+
+func (r *Reporter) replyGitCommitDiff(conn *websocket.Conn, req envelope) {
+	type payload struct {
+		SHA          string `json:"sha"`
+		ContextLines int    `json:"contextLines,omitempty"`
+	}
+	var p payload
+	if err := decodePayload(req.Payload, &p); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.commit.diff payload")
+		return
+	}
+	sha, err := validateGitRevision(p.SHA)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.commit.diff revision")
+		return
+	}
+	p.SHA = sha
+	root, err := r.projectRoot(req.ProjectID)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
+		return
+	}
+	contextLines := p.ContextLines
+	if contextLines < 0 || contextLines > 20 {
+		contextLines = 3
+	}
+	revisionArgs, _ := gitRevisionArgs(p.SHA)
+	args := append([]string{"show", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}, revisionArgs...)
+	diff, err := runGit(root, args...)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		ProjectID: req.ProjectID,
+		Payload: rp.MustRaw(map[string]any{
+			"sha":  p.SHA,
+			"diff": diff,
 		}),
 	})
 }
