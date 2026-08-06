@@ -308,12 +308,17 @@ App 打开 Git tab 时先调用该方法；只有 `gitRev` 或 `worktreeRev` 相
 - `project.git.log`
 - `project.git.commit.files`
 - `project.git.commit.fileDiff`
+- `project.git.commit.diff`
 - `project.git.diff`
 - `project.git.diff.fileDiff`
 - `project.git.status`
 - `project.git.workingTree.fileDiff`
 
 Git 列表按 `project.git.rev` 返回的 `gitRev` / `worktreeRev` 触发刷新，不使用 `knownHash`。
+
+`project.git.commit.diff` 一次返回整个提交的 `git show --no-color --unified=N <sha>` 原始输出（payload `{sha, contextLines?}`，响应 `{sha, diff}`），不带路径过滤；逐文件拆分由 App 完成。它是路由表纯增量注册，不变更 protocol version。
+
+> 决策来源：[`docs/scope/2026-08-06-git-commit-diff-page/spec-git-commit-diff-page.md`](../../scope/2026-08-06-git-commit-diff-page/spec-git-commit-diff-page.md)
 
 ## 7. HubState
 

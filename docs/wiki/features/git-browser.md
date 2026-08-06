@@ -16,7 +16,7 @@ Preview 的 Files 与 Git 悬浮按钮共享侧抽屉位置并互斥展开。Git
 
 文件行（工作区与提交文件共用）与文件树共享行视觉：seti 文件图标、不显示 status 字母列；布局优先保证文件名完整显示，父目录路径先收缩省略，增删统计固定。
 
-提交文件和工作区文件在 Preview 中打开专用 `git-diff` 标签。来源描述符区分 commit 的 `{sha, path}` 与 worktree 的 `{path, scope}`；同一 Project、来源和文件复用同一标签。标签参与现有 Preview 持久化，但只持久化来源和 UI 状态，正文在 Project 可用后按需读取。
+提交文件在 Preview 中打开整提交单页 tab：tab 以提交为粒度（`git-diff:commit:<sha>`），一页展示该提交全部文件的 diff，点击抽屉中的文件只是打开/激活该提交的 tab 并滚动定位到对应文件区块，不再按文件新开 tab。工作区文件仍按单文件 tab 打开。来源描述符区分 commit 的 `{sha, path}` 与 worktree 的 `{path, scope}`；标签参与现有 Preview 持久化，但只持久化来源和 UI 状态，正文在 Project 可用后按需读取。
 
 Git Diff 与 Prompt Done Diff 共用统一展示能力，包括增删行、语法高亮、空结果、二进制和截断状态。`gitdiff-parser` 继续按需加载，不进入 Chat 启动模块。
 
