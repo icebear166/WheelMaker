@@ -90,6 +90,7 @@ import type {
   RegistryTerminalListResponse,
   RegistryTerminalResizeRequest,
   RegistryTerminalResizeResponse,
+  RegistryGatewayUpdateResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
 } from './registryTypes';
@@ -99,6 +100,21 @@ export type WorkspaceSession = {
   hubs: RegistryHub[];
   selectedProjectId: string;
 };
+
+export function hubStateRefreshBatches(
+  connectionMode: RegistryHub['connectionMode'],
+  sections: RegistryHubStateSectionName[],
+): RegistryHubStateSectionName[][] {
+  const normalized = [...new Set(sections)];
+  if (
+    connectionMode === 'update_only'
+    && normalized.length > 1
+    && normalized.includes('gatewayUpdate')
+  ) {
+    return normalized.map(section => [section]);
+  }
+  return [normalized];
+}
 
 export type RegistryWorkspaceServiceOptions = {
   createRepository?: () => RegistryRepository;
@@ -149,10 +165,35 @@ export class RegistryWorkspaceService {
     this.clientName = options.clientName ?? 'wheelmaker-web';
     this.hubStore = new HubStore({
       get: hubId => this.getHubState(hubId, ['tokenStats', 'agentPackages']),
-      refresh: (hubId, sections, force) => {
-        if (!this.repository) throw new Error('session is not ready');
-        return this.repository.refreshHubState(hubId, sections, {force});
-      },
+      refresh: (hubId, sections, force) => this.requestHubStateRefresh(hubId, sections, force),
+    });
+  }
+
+  private requestHubStateRefresh(
+    hubId: string,
+    sections: RegistryHubStateSectionName[],
+    force: boolean,
+  ): Promise<RegistryHubStateRefreshResponse> {
+    const repository = this.repository;
+    if (!repository) {
+      return Promise.reject(new Error('session is not ready'));
+    }
+    const connectionMode = this.session?.hubs.find(hub => hub.hubId === hubId)?.connectionMode;
+    const batches = hubStateRefreshBatches(connectionMode, sections);
+    if (batches.length === 1) {
+      return repository.refreshHubState(hubId, batches[0], {force});
+    }
+    return Promise.allSettled(
+      batches.map(batch => repository.refreshHubState(hubId, batch, {force})),
+    ).then(results => {
+      const successful = results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+      if (successful.length === 0) {
+        const rejected = results.find(result => result.status === 'rejected');
+        throw rejected && rejected.status === 'rejected'
+          ? rejected.reason
+          : new Error('Hub state refresh failed');
+      }
+      return mergeHubStateRefreshResponses(successful, successful.length === results.length);
     });
   }
 
@@ -1089,6 +1130,20 @@ export class RegistryWorkspaceService {
     return this.repository.requestWheelMakerRestart(hubId);
   }
 
+  async queryGatewayUpdate(hubId: string): Promise<RegistryGatewayUpdateResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.queryGatewayUpdate(hubId);
+  }
+
+  async requestGatewayUpdate(hubId: string): Promise<RegistryGatewayUpdateResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.requestGatewayUpdate(hubId);
+  }
+
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
     if (!this.repository) throw new Error('session is not ready');
     return this.repository.startReleasePublish(hubId, input);
@@ -1269,6 +1324,34 @@ export class RegistryWorkspaceService {
       this.closeListeners.delete(listener);
     };
   }
+}
+
+function mergeHubStateRefreshResponses(
+  responses: RegistryHubStateRefreshResponse[],
+  allBatchesSucceeded: boolean,
+): RegistryHubStateRefreshResponse {
+  let state: RegistryHubState = {
+    ...responses[0].state,
+    sections: {...responses[0].state.sections},
+  };
+  for (const response of responses.slice(1)) {
+    if (state.hubId !== response.state.hubId || state.instanceId !== response.state.instanceId) {
+      state = {
+        ...response.state,
+        sections: {...response.state.sections},
+      };
+      continue;
+    }
+    state = {
+      ...state,
+      sections: {...state.sections, ...response.state.sections},
+    };
+  }
+  return {
+    accepted: allBatchesSucceeded && responses.every(response => response.accepted),
+    updates: responses.flatMap(response => response.updates),
+    state,
+  };
 }
 
 

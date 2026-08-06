@@ -122,6 +122,7 @@ func TestReleaseCommandStartsVersionPublishAfterRequestReturns(t *testing.T) {
 		"baseUrl":    "https://release.wheelmaker.top",
 		"desktop":    true,
 		"android":    true,
+		"gateway":    true,
 	}))
 	if commandErr != nil {
 		t.Fatalf("Handle() error=%v", commandErr)
@@ -135,7 +136,7 @@ func TestReleaseCommandStartsVersionPublishAfterRequestReturns(t *testing.T) {
 		if call.WorkingDir != source {
 			t.Fatalf("workingDir=%q, want %q", call.WorkingDir, source)
 		}
-		if !reflect.DeepEqual(call.Args, []string{"scripts/release.mjs", "--publish", "--with-desktop", "--with-android"}) {
+		if !reflect.DeepEqual(call.Args, []string{"scripts/release.mjs", "--publish", "--with-desktop", "--with-android", "--with-gateway"}) {
 			t.Fatalf("args=%#v", call.Args)
 		}
 	case <-time.After(time.Second):

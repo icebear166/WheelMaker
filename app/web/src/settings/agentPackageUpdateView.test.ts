@@ -1,12 +1,85 @@
 // @ts-nocheck
 import {
   androidApkStatusIcon,
+  deriveGatewayHubStatus,
   deriveNpmUpdatableTargets,
+  gatewayUpdateJobActive,
   hubStatusLabel,
+  parseWheelMakerStable,
   projectIndexStatusIcon,
+  shouldShowGatewayUpdateAction,
   updateStatusDotVariant,
   wheelMakerHubStatusIcon,
 } from './agentPackageUpdateView';
+
+const gatewayStableFixture = {
+  schema: 2,
+  version: 'v1.4',
+  publishedAt: '2026-08-06T00:00:00.000Z',
+  sourceSha: '0123456789abcdef0123456789abcdef01234567',
+  gateway: {
+    version: 'v1.3',
+    sourceSha: '89abcdef0123456789abcdef0123456789abcdef',
+    manifestPath: '/gateway/current/gateway-manifest.json',
+    manifestSha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  },
+};
+
+test('parseWheelMakerStable preserves a valid Gateway virtual pointer', () => {
+  const stable = parseWheelMakerStable(gatewayStableFixture);
+  expect(stable.gateway).toEqual(gatewayStableFixture.gateway);
+});
+
+test('parseWheelMakerStable rejects an invalid Gateway virtual pointer', () => {
+  expect(() => parseWheelMakerStable({
+    ...gatewayStableFixture,
+    gateway: {...gatewayStableFixture.gateway, manifestPath: '/releases/v1.3/gateway-manifest.json'},
+  })).toThrow('Gateway stable metadata');
+});
+
+test('deriveGatewayHubStatus compares the installed identity with the stable pointer', () => {
+  const installed = {
+    schemaVersion: 1,
+    version: 'v1.3',
+    sourceSha: gatewayStableFixture.gateway.sourceSha,
+    manifestSha256: gatewayStableFixture.gateway.manifestSha256,
+    installedAt: gatewayStableFixture.publishedAt,
+  };
+  expect(deriveGatewayHubStatus(installed, gatewayStableFixture.gateway)).toBe('up_to_date');
+  expect(deriveGatewayHubStatus(installed, {
+    ...gatewayStableFixture.gateway,
+    version: 'v1.4',
+    sourceSha: 'fedcba9876543210fedcba9876543210fedcba98',
+    manifestSha256: 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210',
+  })).toBe('update_available');
+});
+
+test('Gateway update action is hidden when the Hub has no installed Gateway', () => {
+  expect(deriveGatewayHubStatus(undefined, gatewayStableFixture.gateway)).toBe('not_installed');
+  expect(shouldShowGatewayUpdateAction({
+    data: {ok: true, status: 'not_installed', hubId: 'hub-a', canRequestUpdate: false},
+    loading: false,
+    pending: false,
+  })).toBe(false);
+});
+
+test('Gateway update job activity makes its action visible and pending', () => {
+  const data = {
+    ok: true,
+    status: 'update_pending',
+    hubId: 'hub-a',
+    canRequestUpdate: false,
+    job: {
+      schema: 1,
+      jobId: 'job-1',
+      state: 'downloading',
+      startedAt: gatewayStableFixture.publishedAt,
+      updatedAt: gatewayStableFixture.publishedAt,
+    },
+  };
+  expect(gatewayUpdateJobActive(data.job)).toBe(true);
+  expect(shouldShowGatewayUpdateAction({data, loading: false, pending: true})).toBe(true);
+});
 
 test('wheelMakerHubStatusIcon treats loading and job-active as checking', () => {
   expect(wheelMakerHubStatusIcon('up_to_date', true, false)).toBe('checking');

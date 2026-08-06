@@ -113,6 +113,7 @@ export type RegistryHubStateUpdateStatus = 'idle' | 'queued' | 'updating';
 export type RegistryHubStateSectionName =
   | 'agentPackages'
   | 'wheelmakerUpdate'
+  | 'gatewayUpdate'
   | 'skills'
   | 'flickerBridge'
   | 'tokenStats'
@@ -845,6 +846,13 @@ export interface RegistryWheelMakerStableRelease {
   sourceSha: string;
 }
 
+export interface RegistryWheelMakerGatewayPointer {
+  version: string;
+  sourceSha: string;
+  manifestPath: '/gateway/current/gateway-manifest.json';
+  manifestSha256: string;
+}
+
 export type RegistryWheelMakerUpdateJobState =
   | 'queued'
   | 'downloading'
@@ -884,6 +892,50 @@ export interface RegistryWheelMakerUpdateResponse {
   hubId: string;
   installed?: RegistryWheelMakerInstalledRelease;
   job?: RegistryWheelMakerUpdateJob;
+  canRequestUpdate: boolean;
+  errorCode?: string;
+}
+
+export type RegistryGatewayUpdateStatus =
+  | 'installed'
+  | 'update_pending'
+  | 'not_installed'
+  | 'checking_failed';
+
+export interface RegistryGatewayInstalledRelease {
+  schemaVersion: number;
+  version: string;
+  sourceSha: string;
+  manifestSha256: string;
+  installedAt: string;
+}
+
+export type RegistryGatewayUpdateJobState =
+  | 'queued'
+  | 'downloading'
+  | 'verifying'
+  | 'applying'
+  | 'restarting'
+  | 'succeeded'
+  | 'failed';
+
+export interface RegistryGatewayUpdateJob {
+  schema: number;
+  jobId: string;
+  state: RegistryGatewayUpdateJobState | string;
+  startedAt: string;
+  updatedAt: string;
+  errorCode?: string;
+}
+
+export interface RegistryGatewayUpdateResponse {
+  ok: boolean;
+  accepted?: boolean;
+  jobId?: string;
+  status: RegistryGatewayUpdateStatus | string;
+  hubId: string;
+  installed?: RegistryGatewayInstalledRelease;
+  job?: RegistryGatewayUpdateJob;
   canRequestUpdate: boolean;
   errorCode?: string;
 }

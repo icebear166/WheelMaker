@@ -655,7 +655,7 @@ func updateOnlyHubRequestAllowed(in envelope) bool {
 		if err := json.Unmarshal(payload["sections"], &sections); err != nil {
 			return false
 		}
-		return len(sections) == 1 && sections[0] == "wheelmakerUpdate"
+		return len(sections) == 1 && (sections[0] == "wheelmakerUpdate" || sections[0] == "gatewayUpdate")
 	case rp.RegistryMethodHubStateAction:
 		if len(payload) < 2 || len(payload) > 3 {
 			return false
@@ -679,7 +679,7 @@ func updateOnlyHubRequestAllowed(in envelope) bool {
 				return false
 			}
 		}
-		return section == "wheelmakerUpdate" && action == "requestUpdate"
+		return (section == "wheelmakerUpdate" || section == "gatewayUpdate") && action == "requestUpdate"
 	default:
 		return false
 	}

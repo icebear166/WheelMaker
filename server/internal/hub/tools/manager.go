@@ -11,18 +11,19 @@ import (
 type ProjectInfo = rp.ProjectInfo
 
 type ManagerConfig struct {
-	HubID                 string
-	Projects              []ProjectInfo
-	StateDir              string
-	GlobalLockPath        string
-	HomeDir               string
-	OnNPMOperationDone    func()
-	OnNPMMetadataChanged  func()
-	OnUpdateOperationDone func()
-	OnSkillsOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
-	OnReleaseJobUpdated   func(ReleasePublishJob)
-	ReleaseCommand        *ReleaseCommand
-	ReleaseNotifier       ReleaseNotifier
+	HubID                  string
+	Projects               []ProjectInfo
+	StateDir               string
+	GlobalLockPath         string
+	HomeDir                string
+	OnNPMOperationDone     func()
+	OnNPMMetadataChanged   func()
+	OnUpdateOperationDone  func()
+	OnGatewayOperationDone func()
+	OnSkillsOperationDone  func(scope, projectName string, operation SkillsOperationSnapshot)
+	OnReleaseJobUpdated    func(ReleasePublishJob)
+	ReleaseCommand         *ReleaseCommand
+	ReleaseNotifier        ReleaseNotifier
 }
 
 func (m *Manager) ApplyRelease(ctx context.Context, kind, _ string) (ReleaseTargetStatus, *CommandError) {
@@ -63,6 +64,7 @@ type Manager struct {
 
 	npmCommand       *NPMCommand
 	updateCommand    *UpdateCommand
+	gatewayCommand   *GatewayUpdateCommand
 	skillsCommand    *SkillsCommand
 	releaseCommand   *ReleaseCommand
 	debugWebReceiver *debugWebTransferReceiver
@@ -82,13 +84,16 @@ func NewManager(config ManagerConfig) *Manager {
 	npmCommand.setMetadataChangedHandler(config.OnNPMMetadataChanged)
 	updateCommand := NewUpdateCommand(config.StateDir)
 	updateCommand.setOperationDoneHandler(config.OnUpdateOperationDone)
+	gatewayCommand := NewGatewayUpdateCommand(config.StateDir)
+	gatewayCommand.setOperationDoneHandler(config.OnGatewayOperationDone)
 	if config.ReleaseCommand != nil {
 		config.ReleaseCommand.SetJobUpdatedHandler(config.OnReleaseJobUpdated)
 	}
 	return &Manager{
-		cfg:           config,
-		npmCommand:    npmCommand,
-		updateCommand: updateCommand,
+		cfg:            config,
+		npmCommand:     npmCommand,
+		updateCommand:  updateCommand,
+		gatewayCommand: gatewayCommand,
 		skillsCommand: NewSkillsCommand(skillsCommandConfig{
 			HubID:           config.HubID,
 			Projects:        config.Projects,
@@ -137,6 +142,13 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 			m.updateCommand.setOperationDoneHandler(m.cfg.OnUpdateOperationDone)
 		}
 		out, err := m.updateCommand.Handle(ctx, payload)
+		return out, updateErr(err)
+	case "cmd.gatewayUpdate":
+		if m.gatewayCommand == nil {
+			m.gatewayCommand = NewGatewayUpdateCommand(m.cfg.StateDir)
+			m.gatewayCommand.setOperationDoneHandler(m.cfg.OnGatewayOperationDone)
+		}
+		out, err := m.gatewayCommand.Handle(ctx, payload)
 		return out, updateErr(err)
 	case "cmd.skills":
 		if m.skillsCommand == nil {

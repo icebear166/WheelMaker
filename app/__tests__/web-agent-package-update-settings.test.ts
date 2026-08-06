@@ -280,7 +280,7 @@ describe('agent package update settings UI source structure', () => {
     expect(menuEffect).not.toContain('refreshProjectFileIndexesRef');
     expect(menuEffect).not.toContain('refreshProjectHubSnapshot');
 
-    expect(refreshTriggers).toContain("this.refresh(hubId, ['wheelmakerUpdate'], false)");
+    expect(refreshTriggers).toContain("this.refresh(hubId, ['wheelmakerUpdate', 'gatewayUpdate'], false)");
     expect(refreshTriggers).toContain("['flickerBridge', 'agentPackages', 'skills', 'fileIndex']");
   });
 

@@ -1347,7 +1347,7 @@
   height: 40px;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto 52px 16px;
+  grid-template-columns: 24px minmax(0, 1fr) auto 78px 16px;
   align-items: center;
   gap: 4px;
   padding: 4px;
@@ -2209,6 +2209,10 @@ button.chat-hub-skill-name {
   position: relative;
   z-index: 1;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
   color: var(--text-tertiary);
   font-size: 10px;
   font-weight: 600;
@@ -2225,9 +2229,9 @@ button.chat-hub-skill-name {
   position: relative;
   z-index: 1;
   justify-self: end;
-  width: 52px;
+  width: 78px;
   display: grid;
-  grid-template-columns: repeat(2, 24px);
+  grid-template-columns: repeat(3, 24px);
   gap: 2px;
 }
 

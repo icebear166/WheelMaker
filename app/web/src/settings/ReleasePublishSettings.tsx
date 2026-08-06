@@ -12,6 +12,7 @@ type Settings = {
   autoPull: boolean;
   desktop: boolean;
   android: boolean;
+  gateway: boolean;
   jobId: string;
   jobHubId: string;
 };
@@ -23,6 +24,7 @@ const empty: Settings = {
   autoPull: false,
   desktop: false,
   android: false,
+  gateway: false,
   jobId: '',
   jobHubId: '',
 };
@@ -172,7 +174,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
     setError('');
     try {
       const input = kind === 'version'
-        ? {kind, sourcePath: settings.sourcePath, baseUrl: WHEELMAKER_RELEASE_BASE_URL, desktop: settings.desktop, android: settings.android, targetHubId: settings.serverHubId || undefined, autoPull: Boolean(settings.serverHubId && settings.autoPull)}
+        ? {kind, sourcePath: settings.sourcePath, baseUrl: WHEELMAKER_RELEASE_BASE_URL, desktop: settings.desktop, android: settings.android, gateway: settings.gateway, targetHubId: settings.serverHubId || undefined, autoPull: Boolean(settings.serverHubId && settings.autoPull)}
         : {kind, sourcePath: settings.sourcePath, webHubId: settings.serverHubId};
       const result = await start(settings.publisherHubId, input);
       if (!result.ok || !result.job) throw new Error(result.error || result.status || 'publish task was rejected');
@@ -197,6 +199,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
       webHubId: settings.serverHubId,
       desktop: settings.desktop,
       android: settings.android,
+      gateway: settings.gateway,
       autoPull: settings.autoPull,
     });
   };
@@ -314,6 +317,14 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
                 onChange={event => update({android: event.target.checked})}
               />
               Include Android
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.gateway}
+                onChange={event => update({gateway: event.target.checked})}
+              />
+              Include Gateway
             </label>
           </div>
           <div className="release-publish-actions">

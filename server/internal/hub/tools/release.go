@@ -69,6 +69,7 @@ type releaseCommandPayload struct {
 	BaseURL     string `json:"baseUrl,omitempty"`
 	Desktop     bool   `json:"desktop,omitempty"`
 	Android     bool   `json:"android,omitempty"`
+	Gateway     bool   `json:"gateway,omitempty"`
 	TargetHubID string `json:"targetHubId,omitempty"`
 	WebHubID    string `json:"webHubId,omitempty"`
 	AutoPull    bool   `json:"autoPull,omitempty"`
@@ -311,6 +312,9 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 		}
 		if payload.Android {
 			args = append(args, "--with-android")
+		}
+		if payload.Gateway {
+			args = append(args, "--with-gateway")
 		}
 	}
 	err := c.runner.Run(context.Background(), sourcePath, args, func(text string) { c.appendLog(jobID, text) })

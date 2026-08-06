@@ -13,6 +13,12 @@ Release Server 站点。Gateway 不合并进 Hub 或 Release Server，也不把 
   两个业务服务位于同一机器且希望共用 Gateway 时，必须由同一用户部署。
 - 只有 `node deploy.mjs gateway` 管理 Gateway 生命周期。该命令幂等安装或升级 stable
   指向的版本，注册开机服务并确保进程健康；不再有 `gateway-update`。
+- Hub 菜单的 Gateway 更新是独立的 `gatewayUpdate` HubState section。Hub 读取
+  `gateway/state/release.json` 上报本机版本，Web 用公共 `stable.gateway` 虚拟指针比较
+  `sourceSha` 与 `manifestSha256`；只有本机已安装 Gateway 时才显示版本和按钮。按钮仍
+  调用 `node deploy.mjs gateway`，Gateway 更新期间不停止或重启 WheelMaker。更新任务
+  状态写入 `gateway/update/status.json`；超过 2 小时没有状态推进会被标记为 stalled，
+  允许再次请求。
 - Workspace 完整部署、`deploy.mjs update` 和 Release Server 部署只写各自站点声明，
   不下载、安装、启停、重载或验证 Gateway。
 - `~/.wheelmaker/gateway/start.*` 与 `stop.*` 只控制当前运行状态，不改变开机自启设置。

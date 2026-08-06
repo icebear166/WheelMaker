@@ -268,6 +268,47 @@ test('ignores a stale storage response after the publishing target changes', asy
   tree!.unmount();
 });
 
+test('publishes Gateway as an independent version artifact option', async () => {
+  const values = new Map<string, string>();
+  values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({
+    publisherHubId: 'publisher',
+    sourcePath: '/src/WheelMaker',
+  }));
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)},
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  } as unknown as Window;
+  const start = jest.fn(async () => ({ok: true, status: 'running', job: {id: 'job-1', status: 'running'}}));
+  let tree: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<ReleasePublishSettings
+      hubIds={['publisher']}
+      start={start}
+      query={async () => ({ok: true, status: 'running'})}
+      queryStorage={async () => ({ok: true, status: 'success', storage: {totalBytes: 0, reclaimableBytes: 0, orphanCount: 0}})}
+      pruneStorage={async () => ({ok: true, status: 'success'})}
+    />);
+  });
+  const gatewayLabel = tree!.root.findAllByType('label').find(label =>
+    label.children.some(child => typeof child === 'string' && child.includes('Include Gateway')));
+  expect(gatewayLabel).toBeDefined();
+  const gatewayInput = gatewayLabel!.findByType('input');
+  expect(gatewayInput.props.checked).toBe(false);
+  await act(async () => {
+    gatewayInput.props.onChange({target: {checked: true}});
+    await Promise.resolve();
+  });
+  const publishButton = tree!.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.includes('Publish version')))!;
+  await act(async () => { publishButton.props.onClick(); await Promise.resolve(); });
+  const confirmButton = tree!.root.findAllByType('button').find(item =>
+    item.children.some(child => typeof child === 'string' && child.trim() === 'Publish'))!;
+  await act(async () => { confirmButton.props.onClick(); await Promise.resolve(); await Promise.resolve(); });
+  expect(start).toHaveBeenCalledWith('publisher', expect.objectContaining({kind: 'version', gateway: true}));
+  tree!.unmount();
+});
+
 test('prunes the storage target captured when confirmation opens', async () => {
   const {pruneStorage, render} = renderWithStorage();
   const tree = await render();

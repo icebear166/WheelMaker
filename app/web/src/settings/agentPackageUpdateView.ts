@@ -1,11 +1,15 @@
 import type {
   RegistryHub,
+  RegistryGatewayInstalledRelease,
+  RegistryGatewayUpdateJob,
+  RegistryGatewayUpdateResponse,
   RegistryNpmPackage,
   RegistryNpmPackageStatus,
   RegistryProject,
   RegistryWheelMakerPublishStatus,
   RegistryWheelMakerInstalledRelease,
   RegistryWheelMakerStableRelease,
+  RegistryWheelMakerGatewayPointer,
   RegistryWheelMakerUpdateJob,
   RegistryWheelMakerUpdateResponse,
 } from '../registry/registryTypes';
@@ -21,6 +25,14 @@ export const WHEELMAKER_PUBLISH_STATUS_URL =
   wheelMakerReleaseUrl('/publish-status.json');
 
 const ACTIVE_WHEELMAKER_UPDATE_STATES = new Set([
+  'queued',
+  'downloading',
+  'verifying',
+  'applying',
+  'restarting',
+]);
+
+const ACTIVE_GATEWAY_UPDATE_STATES = new Set([
   'queued',
   'downloading',
   'verifying',
@@ -66,10 +78,13 @@ export type WheelMakerDesktopPointer = {
   sha256: string;
 };
 
+export type WheelMakerGatewayPointer = RegistryWheelMakerGatewayPointer;
+
 export type WheelMakerStableMetadata = RegistryWheelMakerStableRelease & {
   schema: 2;
   androidApk?: WheelMakerAndroidApkPointer;
   desktopExe?: WheelMakerDesktopPointer;
+  gateway?: WheelMakerGatewayPointer;
 };
 
 export type WheelMakerPublicMetadata = {
@@ -336,6 +351,13 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
     }
     desktopExe = stable.desktopExe;
   }
+  let gateway: WheelMakerGatewayPointer | undefined;
+  if (stable.gateway !== undefined) {
+    if (!validGatewayPointer(stable.gateway)) {
+      throw new Error('Gateway stable metadata is invalid.');
+    }
+    gateway = stable.gateway;
+  }
   return {
     schema: 2,
     version: stable.version,
@@ -343,7 +365,37 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
     sourceSha: stable.sourceSha,
     ...(androidApk ? {androidApk} : {}),
     ...(desktopExe ? {desktopExe} : {}),
+    ...(gateway ? {gateway} : {}),
   };
+}
+
+export function gatewayUpdateJobActive(
+  job: RegistryGatewayUpdateJob | null | undefined,
+): boolean {
+  return ACTIVE_GATEWAY_UPDATE_STATES.has(job?.state || '');
+}
+
+export function deriveGatewayHubStatus(
+  installed: RegistryGatewayInstalledRelease | undefined,
+  stable: WheelMakerGatewayPointer | null | undefined,
+  job?: RegistryGatewayUpdateJob,
+): string {
+  if (gatewayUpdateJobActive(job)) return 'update_pending';
+  if (!installed) return 'not_installed';
+  if (!stable) return 'checking_failed';
+  const installedMatch = /^v1\.(0|[1-9]\d*)$/.exec(installed.version);
+  const stableMatch = /^v1\.(0|[1-9]\d*)$/.exec(stable.version);
+  if (!installedMatch || !stableMatch || !/^[0-9a-f]{40}$/.test(installed.sourceSha) || !/^[0-9a-f]{64}$/.test(installed.manifestSha256)) {
+    return 'checking_failed';
+  }
+  const installedSequence = Number(installedMatch[1]);
+  const stableSequence = Number(stableMatch[1]);
+  const pointerChanged = installed.sourceSha !== stable.sourceSha || installed.manifestSha256 !== stable.manifestSha256;
+  if (stableSequence > installedSequence || (stableSequence === installedSequence && pointerChanged)) {
+    return 'update_available';
+  }
+  if (stableSequence < installedSequence) return 'local_newer';
+  return 'up_to_date';
 }
 
 export function parseWheelMakerPublishStatus(
@@ -430,6 +482,21 @@ function validAndroidPointer(input: unknown): input is WheelMakerAndroidApkPoint
   return true;
 }
 
+function validGatewayPointer(input: unknown): input is WheelMakerGatewayPointer {
+  const pointer = input as Record<string, unknown>;
+  return Boolean(
+    pointer &&
+    typeof pointer === 'object' &&
+    typeof pointer.version === 'string' &&
+    /^v1\.(0|[1-9]\d*)$/.test(pointer.version) &&
+    typeof pointer.sourceSha === 'string' &&
+    /^[0-9a-f]{40}$/.test(pointer.sourceSha) &&
+    pointer.manifestPath === '/gateway/current/gateway-manifest.json' &&
+    typeof pointer.manifestSha256 === 'string' &&
+    /^[0-9a-f]{64}$/.test(pointer.manifestSha256),
+  );
+}
+
 export function wheelMakerUpdateJobActive(
   job: RegistryWheelMakerUpdateJob | null | undefined,
 ): boolean {
@@ -465,6 +532,20 @@ export function shouldShowWheelMakerUpdateAction(input: {
     return false;
   }
   return input.data.canRequestUpdate === true;
+}
+
+export function shouldShowGatewayUpdateAction(input: {
+  data: RegistryGatewayUpdateResponse | null;
+  loading: boolean;
+  pending: boolean;
+}): boolean {
+  if (input.pending || gatewayUpdateJobActive(input.data?.job)) {
+    return true;
+  }
+  if (input.loading || !input.data || input.data.status === 'not_installed') {
+    return false;
+  }
+  return input.data.canRequestUpdate === true && Boolean(input.data.installed?.version);
 }
 
 export async function fetchWheelMakerReleaseHistory(

@@ -86,7 +86,9 @@ Server host 反代到 loopback，不再读取迁移后的 Home 静态目录。�
 
 Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，或只构建并发布临时 Web。发布 Hub、源码目录、可选 Server Hub 与 auto pull 是浏览器本地设置，正式版本发布与临时 Web 共用同一个 Server Hub 作为目标；发布 Token 只保存在发布 Hub 的受保护配置中，前端不保存或传输它。已接受的发布任务在 Hub 内继续执行，页面关闭不会取消任务，重开后继续从发布 Hub 读取状态和日志。
 
-正式版本发布仍使用现有 `v1.x` 事务，并只保留 Desktop、Android 选项。临时 Web 不经过 Release Server：发布 Hub 构建 ZIP 后经 Registry 在线分块传给页面配置的 Server Hub（即临时 Web 的 Web Hub）。它不改写 `stable.json`、正式发布状态或历史。
+正式版本发布仍使用现有 `v1.x` 事务，页面可分别选择 Desktop、Android 和 Gateway。Gateway 与 Desktop/APK 一样是发布会话中的可选产物：选中时推进 `stable.gateway` 虚拟指针，未选中时沿用旧指针，不改变 Gateway 自己的版本序列。临时 Web 不经过 Release Server：发布 Hub 构建 ZIP 后经 Registry 在线分块传给页面配置的 Server Hub（即临时 Web 的 Web Hub）。它不改写 `stable.json`、正式发布状态或历史。
+
+Hub 菜单会读取目标用户 `~/.wheelmaker/gateway/state/release.json`。只有存在有效 Gateway 安装记录时，Hub 行才在 WheelMaker 版本前显示 Gateway 当前版本，并提供独立的 Gateway 更新按钮；按钮调用 `deploy.mjs gateway`，只更新/重启 Gateway，不停止 Hub。稳定指针缺失或不可校验时保留已安装版本显示，但不提供更新动作。
 
 Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZIP。每个分块最多 `4 MiB`，发送方逐块等待目标确认。Web Hub 必须在线；它在 `~/.wheelmaker/staging/debug-web-<jobId>/` 接收完整 ZIP，并复用更新租约防止与正式部署并发，校验声明的文件大小和 SHA-256 后才原子替换 `~/.wheelmaker/web`。离线、断线、顺序错误或摘要不符都会使任务失败且保留原 Web；Target Hub 保留 `~/.wheelmaker/release-jobs/<jobId>/debug-web.zip` 供之后显式重试。Target Hub 持久化任务状态与日志，因此页面关闭不影响构建或传输，页面重新打开后仍从 Target Hub 查询结果。
 
@@ -168,7 +170,8 @@ Registry 主协议硬切不能切断 Web 主动更新旧 Hub 的唯一通道。H
 
 该兼容完全由 Registry 实现，不增加维护版本、专用 RPC 或 Hub 端握手分支。旧 Hub 仍按原流程报告 Project；Registry 成功应答但丢弃这些报告，所以 Hub 保持在线、App 项目数为零。Registry 在现有 Hub descriptor 中标记 `connectionMode: "update_only"`，App 只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，不承担权限控制。
 
-Registry 只向受限 Hub 放行现有 `hub.state.refresh` 的 `wheelmakerUpdate` section，以及 `hub.state.action` 的 `wheelmakerUpdate/requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。Hub 内部仍复用既有 UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`。受限连接成功不会自动开始更新。
+Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `gatewayUpdate` section，以及对应的 `requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。WheelMaker 仍复用 UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`；Gateway 使用自己的更新状态并调用 `node deploy.mjs gateway`，不会触碰 Hub 生命周期。受限连接成功不会自动开始任一更新。
+由于该兼容子集要求一次只刷新一个 section，Web 对 `update_only` Hub 将 WheelMaker 与 Gateway 刷新拆成两个请求；老 Hub 不支持 Gateway 时，Gateway 请求失败不会阻断 WheelMaker 更新。
 
 请求被接受后，Hub 在 `applying` 阶段断开属于预期行为；新 Hub 重启并以当前主协议重新握手后恢复完整业务模式。若更新失败但旧 Hub 重新启动，它会再次进入 `update_only`，允许用户查询失败状态并重试。从该能力发布起，Registry 长期保持上述更新 HubState wire 子集兼容，使后续主协议升级继续沿用同一受限路径。
 

@@ -38,6 +38,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onUpdateHubConfig: jest.fn().mockResolvedValue(undefined),
     onRequestWheelMakerUpdate: jest.fn(),
     onRequestWheelMakerRestart: jest.fn(),
+    onRequestGatewayUpdate: jest.fn(),
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
     onRequestSkillInstall: jest.fn(),
@@ -125,6 +126,14 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       updateVisible: true,
       restartVisible: true,
       updateAvailable: true,
+    },
+    gateway: {
+      loading: false,
+      pending: false,
+      pendingAction: null,
+      currentVersion: '-',
+      updateVisible: false,
+      updateAvailable: false,
     },
     npm: {
       loading: false,
@@ -318,6 +327,38 @@ test('hub row uses independent update and restart actions with three icon-count 
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'mcp');
   act(() => skills.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
+});
+
+test('hub row shows an installed Gateway before WheelMaker with an independent update action', async () => {
+  const {props, callbacks} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        gateway: {
+          loading: false,
+          pending: false,
+          pendingAction: null,
+          currentVersion: 'v1.3',
+          updateVisible: true,
+          updateAvailable: true,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const version = row.findByProps({className: 'chat-hub-version-readout'});
+  expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
+    ['Gateway ', 'v1.3'],
+    ['v1.2'],
+  ]);
+  const gatewayUpdate = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'});
+  expect(gatewayUpdate.props['aria-label']).toBe('Update Gateway v1.3');
+  act(() => gatewayUpdate.props.onClick());
+  expect(callbacks.onRequestGatewayUpdate).toHaveBeenCalledWith('hub-a');
 });
 
 test('MCP opens a local inline zero-state without dispatching an operation', async () => {
