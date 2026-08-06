@@ -132,8 +132,7 @@
 }
 
 .git-offline-pill,
-.git-head-pill,
-.git-ref-pill {
+.git-head-pill {
   display: inline-flex;
   align-items: center;
   min-height: 18px;
@@ -180,15 +179,19 @@
 
 .git-file-row {
   width: 100%;
-  min-height: 30px;
+  min-height: 28px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   border: 0;
   padding: 3px 10px;
   background: transparent;
   color: var(--text-primary);
   text-align: left;
+}
+
+.git-file-row .node-icon {
+  flex: 0 0 auto;
 }
 
 .git-file-row:hover {
@@ -199,7 +202,7 @@
   min-width: 0;
   flex: 1;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
 }
@@ -321,35 +324,31 @@
 }
 
 .git-commit-head {
-  display: flex;
-  align-items: stretch;
   min-width: 0;
 }
 
-.git-commit-head .git-commit-trigger {
-  flex: 1;
-  min-width: 0;
+.git-commit-head:hover {
+  background: var(--hover);
 }
 
 .git-commit-copy {
   flex: 0 0 auto;
-  align-self: flex-end;
-  width: 22px;
-  height: 22px;
-  margin: 0 8px 6px 0;
-  display: grid;
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
   place-items: center;
   border: 0;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-secondary);
-  opacity: 0.72;
+  opacity: 0.7;
+  padding: 0;
 }
 
 .git-commit-copy:hover {
   opacity: 1;
   color: var(--accent-primary);
-  background: var(--hover);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .git-commit-trigger {
@@ -357,14 +356,10 @@
   min-width: 0;
   display: block;
   border: 0;
-  padding: 7px 10px 7px 2px;
+  padding: 7px 10px 0 2px;
   background: transparent;
   color: var(--text-primary);
   text-align: left;
-}
-
-.git-commit-trigger:hover {
-  background: var(--hover);
 }
 
 .git-commit-title {
@@ -379,7 +374,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 3px;
+  padding: 1px 10px 7px 2px;
   color: var(--text-secondary);
   font-size: 10px;
 }
@@ -393,7 +388,6 @@
   color: var(--text-secondary);
 }
 
-.git-ref-context,
 .git-commit-file-summary {
   display: flex;
   flex-wrap: wrap;
@@ -401,7 +395,6 @@
   gap: 5px;
   margin-top: 5px;
 }
-
 .git-commit-files {
   margin-top: 5px;
   border-top: 1px solid var(--border-subtle);

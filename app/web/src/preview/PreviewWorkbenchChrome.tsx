@@ -220,20 +220,22 @@ export function PreviewWorkbenchChrome({
     };
   }, [tabListOpen]);
 
-  const tabsAccessory = tabsOverflowing ? (
+  const tabsAccessory = (
     <div ref={overflowRef} className="preview-workbench-tabs-overflow">
-      <button
-        type="button"
-        className={`preview-workbench-tabs-overflow-button${tabListOpen ? ' active' : ''}`}
-        aria-label="Show all open tabs"
-        aria-haspopup="menu"
-        aria-expanded={tabListOpen}
-        data-tooltip="Show all open tabs"
-        onClick={() => setTabListOpen(open => !open)}
-      >
-        <Icon name="listCollapse" />
-      </button>
-      {tabListOpen ? (
+      {tabsOverflowing ? (
+        <button
+          type="button"
+          className={`preview-workbench-tabs-overflow-button${tabListOpen ? ' active' : ''}`}
+          aria-label="Show all open tabs"
+          aria-haspopup="menu"
+          aria-expanded={tabListOpen}
+          data-tooltip="Show all open tabs"
+          onClick={() => setTabListOpen(open => !open)}
+        >
+          <Icon name="listCollapse" />
+        </button>
+      ) : null}
+      {tabsOverflowing && tabListOpen ? (
         <div className="preview-workbench-tabs-overflow-list" role="menu" aria-label="Open tabs">
           {tabs.map(tab => {
             const active = activeTab?.id === tab.id;
@@ -269,7 +271,7 @@ export function PreviewWorkbenchChrome({
         </div>
       ) : null}
     </div>
-  ) : null;
+  );
 
   return (
     <WorkbenchChrome

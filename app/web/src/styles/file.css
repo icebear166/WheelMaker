@@ -133,6 +133,11 @@
   overflow-y: hidden;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-panel);
+  scrollbar-width: none;
+}
+
+.chat-file-workbench-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .chat-file-workbench-tab {
@@ -304,6 +309,7 @@
 .preview-workbench-tabs-overflow-button {
   width: 26px;
   height: 26px;
+  margin: 0 4px;
   display: grid;
   place-items: center;
   border: 0;
@@ -327,8 +333,8 @@
   top: calc(100% + 5px);
   right: 0;
   z-index: 22;
-  min-width: 220px;
-  max-width: 320px;
+  min-width: 280px;
+  max-width: min(420px, calc(100vw - 32px));
   max-height: min(420px, calc(100dvh - 96px));
   overflow-y: auto;
   display: grid;

@@ -59,6 +59,7 @@ async function render(
     onLoadMore: jest.fn(),
     onRetry: jest.fn(),
     onCopyCommitSha: jest.fn(),
+    resolveFileIcon: jest.fn(() => ({glyph: 'f', color: '#abc'})),
   };
   let view!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -77,7 +78,7 @@ test('selects refs, expands commit details, opens files, and loads more', async 
   expect(root.findByProps({'aria-label': 'Git branches'})).toBeTruthy();
   expect(text).toContain('Ada');
   expect(text).toContain('ada@example.com');
-  expect(text).toContain('Current HEAD');
+  expect(text).not.toContain('Current HEAD');
   expect(text).toContain('abc');
 
   await act(async () => {
@@ -175,6 +176,15 @@ test('copies the full sha from the commit header and keeps file rows free of sta
   expect(root.findAll(node => node.props['data-tooltip'] === 'ada@example.com').length).toBeGreaterThan(0);
   expect(root.findAll(node => typeof node.props['data-tooltip'] === 'string'
     && (node.props['data-tooltip'] as string).includes('2026')).length).toBeGreaterThan(0);
+
+  const summary = root.find(node => node.props.className === 'git-commit-summary');
+  expect(summary.findAllByProps({'aria-label': 'Copy full SHA abc'})).toHaveLength(1);
+  const childOrder = summary.children.map(child =>
+    String((child as TestRenderer.ReactTestInstance).props.className
+      ?? (child as TestRenderer.ReactTestInstance).props['aria-label']
+      ?? ''));
+  expect(childOrder.indexOf('git-short-sha'))
+    .toBeLessThan(childOrder.findIndex(item => item.startsWith('Copy full SHA')));
 
   await act(async () => {
     root.findByProps({'aria-label': 'Copy full SHA abc'}).props.onClick();

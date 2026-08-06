@@ -15,6 +15,7 @@ export type GitHistoryPanelProps = {
   onLoadMore: () => void;
   onRetry: () => void;
   onCopyCommitSha: (sha: string) => void;
+  resolveFileIcon: (name: string) => {glyph: string; color: string};
 };
 
 const WORKTREE_SCOPES: Array<{scope: GitWorkingTreeScope; label: string}> = [
@@ -60,13 +61,16 @@ function fileStats(files: RegistryGitCommitFile[]) {
 function GitFileRow({
   file,
   ariaLabel,
+  resolveFileIcon,
   onClick,
 }: {
   file: GitDiffFileMeta;
   ariaLabel: string;
+  resolveFileIcon: GitHistoryPanelProps['resolveFileIcon'];
   onClick: () => void;
 }) {
   const {name, parent} = splitPath(file.path);
+  const fileIcon = resolveFileIcon(name || file.path);
   return (
     <button
       type="button"
@@ -75,6 +79,9 @@ function GitFileRow({
       data-tooltip={file.path}
       onClick={onClick}
     >
+      <span className="node-icon seti-icon" style={{color: fileIcon.color}}>
+        <span className="seti-glyph">{fileIcon.glyph}</span>
+      </span>
       <span className="git-file-path">
         <span className="git-file-name">{name || file.path}</span>
         {parent ? <span className="git-file-parent">{parent}</span> : null}
@@ -92,11 +99,13 @@ function WorktreeGroup({
   label,
   files,
   onFileOpen,
+  resolveFileIcon,
 }: {
   scope: GitWorkingTreeScope;
   label: string;
   files: GitWorkingTreeFile[];
   onFileOpen: GitHistoryPanelProps['onFileOpen'];
+  resolveFileIcon: GitHistoryPanelProps['resolveFileIcon'];
 }) {
   if (files.length === 0) return null;
   return (
@@ -117,6 +126,7 @@ function WorktreeGroup({
             key={`${scope}:${file.path}`}
             file={meta}
             ariaLabel={`Open ${file.path} ${scope} diff`}
+            resolveFileIcon={resolveFileIcon}
             onClick={() => onFileOpen(
               {kind: 'worktree', scope, path: file.path},
               meta,
@@ -137,6 +147,7 @@ export function GitHistoryPanel({
   onLoadMore,
   onRetry,
   onCopyCommitSha,
+  resolveFileIcon,
 }: GitHistoryPanelProps) {
   const [branchMenuOpen, setBranchMenuOpen] = React.useState(false);
   const branchMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -253,6 +264,7 @@ export function GitHistoryPanel({
               {...item}
               files={snapshot.worktree[item.scope]}
               onFileOpen={onFileOpen}
+              resolveFileIcon={resolveFileIcon}
             />
           ))
         )}
@@ -292,28 +304,24 @@ export function GitHistoryPanel({
                       onClick={() => onToggleCommit(commit.sha)}
                     >
                       <span className="git-commit-title">{commit.title || '(untitled commit)'}</span>
-                      <span className="git-commit-summary">
-                        <span data-tooltip={commit.email || undefined}>{commit.author || commit.email || 'Unknown author'}</span>
-                        <span className="git-short-sha">{commit.sha.slice(0, 8)}</span>
-                        {time.relative ? <span data-tooltip={time.absolute || undefined}>{time.relative}</span> : null}
-                      </span>
                     </button>
-                    <button
-                      type="button"
-                      className="git-commit-copy"
-                      aria-label={`Copy full SHA ${commit.sha}`}
-                      data-tooltip="Copy full SHA"
-                      onClick={() => onCopyCommitSha(commit.sha)}
-                    >
-                      <Icon name="copy" />
-                    </button>
+                    <div className="git-commit-summary">
+                      <span data-tooltip={commit.email || undefined}>{commit.author || commit.email || 'Unknown author'}</span>
+                      <span className="git-short-sha">{commit.sha.slice(0, 8)}</span>
+                      <button
+                        type="button"
+                        className="git-commit-copy"
+                        aria-label={`Copy full SHA ${commit.sha}`}
+                        data-tooltip="Copy full SHA"
+                        onClick={() => onCopyCommitSha(commit.sha)}
+                      >
+                        <Icon name="copy" />
+                      </button>
+                      {time.relative ? <span data-tooltip={time.absolute || undefined}>{time.relative}</span> : null}
+                    </div>
                   </div>
                   {expanded ? (
                     <div className="git-commit-details">
-                      <div className="git-ref-context">
-                        {commit.sha === snapshot.headSha ? <span className="git-head-pill">Current HEAD</span> : null}
-                        {snapshot.selectedRefs.map(ref => <span key={ref} className="git-ref-pill">Filter · {ref}</span>)}
-                      </div>
                       {snapshot.commitFilesLoadingSha === commit.sha ? (
                         <div className="git-history-state">Loading changed files...</div>
                       ) : snapshot.commitFilesError ? (
@@ -331,6 +339,7 @@ export function GitHistoryPanel({
                                 key={file.path}
                                 file={file}
                                 ariaLabel={`Open ${file.path} diff`}
+                                resolveFileIcon={resolveFileIcon}
                                 onClick={() => onFileOpen(
                                   {kind: 'commit', sha: commit.sha, path: file.path},
                                   file,
