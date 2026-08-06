@@ -9,7 +9,7 @@ import {
   gatewayWrapperFiles,
   linuxGatewayRuntimeFiles,
   windowsGatewayRuntimePlan,
-} from './gateway-runtime.mjs';
+} from './deploy-core.mjs';
 
 const PATHS = gatewayRuntimePaths({
   gatewayHome: '/home/alice/.wheelmaker/gateway',

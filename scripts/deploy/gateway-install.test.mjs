@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { createTarZst } from '../release/tar.mjs';
-import { installGatewayFromStable, validateGatewayManifest } from './gateway-install.mjs';
+import { installGatewayFromStable, validateGatewayManifest } from './deploy-core.mjs';
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');

@@ -1382,12 +1382,6 @@ test('successful internal update writes release schema v2 without registration c
     join(fixture.home, 'desktop', 'update.exe'),
     'legacy-updater',
   );
-  await acquireUpdateLease(join(fixture.home, 'staging'), {
-    jobId: 'web-job',
-    now: fixture.installedAt,
-    owner: 'web',
-  });
-
   await runCore(['update'], fixture.deps);
 
   assert.deepEqual(
@@ -1419,9 +1413,9 @@ test('successful internal update writes release schema v2 without registration c
   const status = JSON.parse(
     await readFile(join(fixture.home, 'staging', 'status.json'), 'utf8'),
   );
-  assert.equal(status.jobId, 'web-job');
+  assert.equal(status.jobId, 'timer-job');
   assert.equal(status.state, 'succeeded');
-  assert.equal(await exists(join(fixture.home, 'staging', 'web-job')), false);
+  assert.equal(await exists(join(fixture.home, 'staging', 'timer-job')), false);
 });
 
 test('Linux legacy migration ignores missing units but propagates real systemctl failures', async (t) => {

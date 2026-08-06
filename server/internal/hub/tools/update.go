@@ -3,7 +3,6 @@ package tools
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,14 +27,6 @@ const (
 	updateStagingDirectoryName = "staging"
 	updateLeaseFileName        = "lock.json"
 	updateStatusFileName       = "status.json"
-	// staleUpdateLeaseThreshold mirrors STALE_LEASE_MS in scripts/deploy/deploy-core.mjs:
-	// an active job whose lease heartbeat is older than this is treated as stalled.
-	staleUpdateLeaseThreshold = 2 * time.Hour
-	// queuedUpdateRetriggerGrace is how long a queued job may sit without the
-	// updater adopting it before a new request force-retriggers the updater.
-	// A started updater advances to downloading within seconds, so an aged
-	// queued lease means the trigger was lost and retriggering is safe.
-	queuedUpdateRetriggerGrace = 2 * time.Minute
 )
 
 type installedRelease struct {
@@ -139,7 +130,6 @@ type updateTrigger interface {
 type UpdateCommand struct {
 	baseDir         string
 	trigger         updateTrigger
-	now             func() time.Time
 	completionMu    sync.Mutex
 	onOperationDone func()
 	watchedJobs     map[string]struct{}
@@ -156,7 +146,6 @@ func newUpdateCommandWithDependencies(baseDir string, trigger updateTrigger) *Up
 	return &UpdateCommand{
 		baseDir:     filepath.Clean(baseDir),
 		trigger:     trigger,
-		now:         func() time.Time { return time.Now().UTC() },
 		watchedJobs: make(map[string]struct{}),
 	}
 }
@@ -239,77 +228,21 @@ func updateQueryFailure(hubID string, errorCode string) updateCommandResponse {
 }
 
 func (c *UpdateCommand) request(ctx context.Context, hubID string) (updateCommandResponse, *updateCommandError) {
-	stagingDir := filepath.Join(c.baseDir, updateStagingDirectoryName)
-	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
-		return updateCommandResponse{}, internalUpdateError("failed to create update staging directory")
-	}
-	leasePath := filepath.Join(stagingDir, updateLeaseFileName)
-	now := c.now().UTC().Format(time.RFC3339Nano)
-	jobID, err := newUpdateJobID()
-	if err != nil {
-		return updateCommandResponse{}, internalUpdateError("failed to allocate update job")
-	}
-	lease := updateLease{
-		Schema:      1,
-		JobID:       jobID,
-		Owner:       "web",
-		State:       "queued",
-		StartedAt:   now,
-		HeartbeatAt: now,
-	}
-	created, existing, err := createUpdateLease(leasePath, lease)
-	if err != nil {
-		return updateCommandResponse{}, internalUpdateError("failed to create update lease")
-	}
-	if !created && c.updateLeaseStale(existing) {
-		c.failUpdateJob(existing.JobID, "updater_stalled")
-		created, existing, err = createUpdateLease(leasePath, lease)
-		if err != nil {
-			return updateCommandResponse{}, internalUpdateError("failed to create update lease")
-		}
-	}
-	if !created {
-		if existing.State == "queued" && c.updateLeaseHeartbeatAge(existing) > queuedUpdateRetriggerGrace {
-			if err := c.trigger.Trigger(ctx); err != nil {
-				c.failUpdateJob(existing.JobID, "updater_trigger_failed")
-				return updateCommandResponse{}, internalUpdateError("failed to trigger updater runtime")
-			}
-		}
-		job := c.readJobStatus()
-		if job == nil || job.JobID != existing.JobID {
-			job = &updateJobStatus{
-				Schema:    1,
-				JobID:     existing.JobID,
-				State:     existing.State,
-				StartedAt: existing.StartedAt,
-				UpdatedAt: existing.HeartbeatAt,
-			}
-		}
-		c.watchCompletion(existing.JobID)
-		return queuedUpdateResponse(hubID, existing.JobID, job), nil
-	}
-
-	job := &updateJobStatus{
-		Schema:    1,
-		JobID:     jobID,
-		State:     "queued",
-		StartedAt: now,
-		UpdatedAt: now,
-	}
-	if err := c.writeJobStatus(*job); err != nil {
-		_ = os.Remove(leasePath)
-		return updateCommandResponse{}, internalUpdateError("failed to write update status")
+	if job, active := c.readJobState(); active && job != nil {
+		c.watchCompletion(job.JobID)
+		return queuedUpdateResponse(hubID, job.JobID, job), nil
 	}
 	if err := c.trigger.Trigger(ctx); err != nil {
-		job.State = "failed"
-		job.ErrorCode = "updater_trigger_failed"
-		job.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
-		_ = c.writeJobStatus(*job)
-		_ = os.Remove(leasePath)
 		return updateCommandResponse{}, internalUpdateError("failed to trigger updater runtime")
 	}
-	c.watchCompletion(jobID)
-	return queuedUpdateResponse(hubID, jobID, job), nil
+	// The updater owns lease creation. It may have written the initial state
+	// before the trigger returns, so expose it when it is already observable;
+	// otherwise the caller can discover it through the next query/monitor tick.
+	if job, active := c.readJobState(); active && job != nil {
+		c.watchCompletion(job.JobID)
+		return queuedUpdateResponse(hubID, job.JobID, job), nil
+	}
+	return pendingUpdateResponse(hubID), nil
 }
 
 func (c *UpdateCommand) watchCompletion(jobID string) {
@@ -418,6 +351,16 @@ func queuedUpdateResponse(hubID string, jobID string, job *updateJobStatus) upda
 	}
 }
 
+func pendingUpdateResponse(hubID string) updateCommandResponse {
+	return updateCommandResponse{
+		OK:         true,
+		Accepted:   true,
+		Status:     "update_pending",
+		HubID:      hubID,
+		CanRequest: false,
+	}
+}
+
 func internalUpdateError(message string) *updateCommandError {
 	return &updateCommandError{Code: rp.CodeInternal, Message: message}
 }
@@ -466,13 +409,6 @@ func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
 	if err := json.Unmarshal(raw, &lease); err != nil || lease.Schema != 1 || lease.JobID == "" {
 		return job, false
 	}
-	if c.updateLeaseStale(lease) {
-		c.failUpdateJob(lease.JobID, "updater_stalled")
-		if reaped := c.readJobStatus(); reaped != nil {
-			return reaped, false
-		}
-		return job, false
-	}
 	if job == nil || job.JobID != lease.JobID {
 		job = &updateJobStatus{
 			Schema:    1,
@@ -483,136 +419,6 @@ func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
 		}
 	}
 	return job, activeUpdateState(job.State)
-}
-
-// updateLeaseHeartbeatAge returns how long ago the lease last heartbeated. A
-// missing or unparseable heartbeat counts as beyond the stale threshold so the
-// job can always recover.
-func (c *UpdateCommand) updateLeaseHeartbeatAge(lease updateLease) time.Duration {
-	heartbeat := lease.HeartbeatAt
-	if heartbeat == "" {
-		heartbeat = lease.StartedAt
-	}
-	at, err := time.Parse(time.RFC3339Nano, heartbeat)
-	if err != nil {
-		return staleUpdateLeaseThreshold + time.Nanosecond
-	}
-	return c.now().Sub(at)
-}
-
-// updateLeaseStale reports whether the lease heartbeat is older than the shared
-// 2h threshold (deploy-core.mjs STALE_LEASE_MS).
-func (c *UpdateCommand) updateLeaseStale(lease updateLease) bool {
-	return c.updateLeaseHeartbeatAge(lease) > staleUpdateLeaseThreshold
-}
-
-// failUpdateJob marks the job failed and removes its lease so a new update can
-// be requested. Terminal statuses are left untouched.
-func (c *UpdateCommand) failUpdateJob(jobID string, errorCode string) {
-	if status := c.readJobStatus(); status != nil && status.JobID == jobID && activeUpdateState(status.State) {
-		status.State = "failed"
-		status.ErrorCode = errorCode
-		status.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
-		_ = c.writeJobStatus(*status)
-	}
-	_ = os.Remove(filepath.Join(c.baseDir, updateStagingDirectoryName, updateLeaseFileName))
-}
-
-func (c *UpdateCommand) writeJobStatus(status updateJobStatus) error {
-	raw, err := json.MarshalIndent(status, "", "  ")
-	if err != nil {
-		return err
-	}
-	raw = append(raw, '\n')
-	path := filepath.Join(c.baseDir, updateStagingDirectoryName, updateStatusFileName)
-	return replaceUpdateFile(path, raw, 0o600)
-}
-
-func createUpdateLease(path string, lease updateLease) (bool, updateLease, error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		raw, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return false, updateLease{}, readErr
-		}
-		var existing updateLease
-		if jsonErr := json.Unmarshal(raw, &existing); jsonErr != nil || existing.Schema != 1 || existing.JobID == "" {
-			return false, updateLease{}, errors.New("invalid existing update lease")
-		}
-		return false, existing, nil
-	}
-	if err != nil {
-		return false, updateLease{}, err
-	}
-	raw, err := json.MarshalIndent(lease, "", "  ")
-	if err == nil {
-		raw = append(raw, '\n')
-		_, err = file.Write(raw)
-	}
-	if syncErr := file.Sync(); err == nil {
-		err = syncErr
-	}
-	if closeErr := file.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		_ = os.Remove(path)
-		return false, updateLease{}, err
-	}
-	return true, lease, nil
-}
-
-func replaceUpdateFile(path string, raw []byte, mode os.FileMode) (retErr error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".update-*.tmp")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer func() {
-		_ = temporary.Close()
-		if retErr != nil {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	if err := temporary.Chmod(mode); err != nil {
-		return err
-	}
-	if _, err := temporary.Write(raw); err != nil {
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(temporaryPath, path); err == nil {
-		return nil
-	}
-	backupPath := path + ".previous"
-	_ = os.Remove(backupPath)
-	if err := os.Rename(path, backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		_ = os.Rename(backupPath, path)
-		return err
-	}
-	_ = os.Remove(backupPath)
-	return nil
-}
-
-func newUpdateJobID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	raw[6] = (raw[6] & 0x0f) | 0x40
-	raw[8] = (raw[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:16]), nil
 }
 
 func releaseSequence(version string) (int, error) {

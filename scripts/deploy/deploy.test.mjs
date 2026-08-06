@@ -343,6 +343,18 @@ test('published deploy core is self-contained and has no local module imports', 
   const source = await readFile(resolve(repoRoot, 'scripts', 'deploy', 'deploy-core.mjs'), 'utf8');
   assert.doesNotMatch(source, /^\s*import\s+[^;]+from\s+['"]\.\//m);
   assert.doesNotMatch(source, /^\s*import\s*\(\s*['"]\.\//m);
+  for (const helper of [
+    'gatewayJsonBytes',
+    'gatewayConfigAtomicWrite',
+    'gatewayRuntimeAtomicWrite',
+    'gatewayInstallAtomicWrite',
+    'gatewayInstallJsonBytes',
+    'gatewayInstallResolveReleasePath',
+    'gatewayInstallRunProcess',
+    'gatewayInstallSha256Bytes',
+  ]) {
+    assert.doesNotMatch(source, new RegExp(`\\b${helper}\\b`));
+  }
 });
 
 test('published deploy launcher is self-contained and has no local module imports', async () => {

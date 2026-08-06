@@ -9,7 +9,7 @@ import {
   gatewayConfigPaths,
   parsePublicURLDeploymentOptions,
   validateGatewaySite,
-} from './gateway-config.mjs';
+} from './deploy-core.mjs';
 
 test('Gateway config validates loopback workspace site and writes only workspace file', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-config-'));

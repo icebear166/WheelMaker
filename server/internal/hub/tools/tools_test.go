@@ -2443,77 +2443,95 @@ func TestUpdateQueryRejectsInvalidInstalledRelease(t *testing.T) {
 	}
 }
 
-func TestUpdateRequestCreatesOneQueuedJob(t *testing.T) {
+func TestUpdateRequestTriggersCoreWithoutCreatingJobState(t *testing.T) {
 	baseDir := t.TempDir()
 	trigger := &fakeUpdateTrigger{}
 	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-	cmd.now = func() time.Time {
-		return time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
-	}
-
-	first := handleUpdateForTest(t, cmd, map[string]any{
+	response := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "request",
 		"hubId":  "hub-a",
 	})
-	second := handleUpdateForTest(t, cmd, map[string]any{
+	if !response.OK || !response.Accepted || response.Status != "update_pending" {
+		t.Fatalf("response=%+v, want accepted pending response", response)
+	}
+	if response.JobID != "" || response.Job != nil {
+		t.Fatalf("response=%+v, update.go must not allocate a job", response)
+	}
+	if trigger.Calls() != 1 {
+		t.Fatalf("trigger calls=%d, want 1", trigger.Calls())
+	}
+	if _, err := os.Stat(filepath.Join(baseDir, "staging")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("request created update state: %v", err)
+	}
+}
+
+func TestUpdateRequestSharesStateCreatedByCore(t *testing.T) {
+	baseDir := t.TempDir()
+	trigger := &fakeUpdateTrigger{onTrigger: func() {
+		writeUpdateLeaseForTest(t, baseDir, updateLease{
+			Schema:      1,
+			JobID:       "core-job",
+			Owner:       "timer",
+			State:       "queued",
+			StartedAt:   "2026-08-06T09:00:00Z",
+			HeartbeatAt: "2026-08-06T09:00:00Z",
+		})
+		writeUpdateStatusForTest(t, baseDir, updateJobStatus{
+			Schema:    1,
+			JobID:     "core-job",
+			State:     "queued",
+			StartedAt: "2026-08-06T09:00:00Z",
+			UpdatedAt: "2026-08-06T09:00:00Z",
+		})
+	}}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+
+	response := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "request",
 		"hubId":  "hub-a",
 	})
-	if first.JobID == "" || first.JobID != second.JobID || trigger.Calls() != 1 {
-		t.Fatalf("first=%+v second=%+v calls=%d", first, second, trigger.Calls())
-	}
-	if !first.Accepted || first.Job == nil || first.Job.State != "queued" {
-		t.Fatalf("first=%+v, want accepted queued job", first)
-	}
-
-	lockRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
-	if err != nil {
-		t.Fatalf("read lock: %v", err)
-	}
-	var lock updateLease
-	if err := json.Unmarshal(lockRaw, &lock); err != nil {
-		t.Fatalf("parse lock: %v", err)
-	}
-	if lock.JobID != first.JobID || lock.Owner != "web" || lock.State != "queued" {
-		t.Fatalf("lock=%+v", lock)
-	}
-	statusRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "status.json"))
-	if err != nil {
-		t.Fatalf("read status: %v", err)
-	}
-	var status updateJobStatus
-	if err := json.Unmarshal(statusRaw, &status); err != nil {
-		t.Fatalf("parse status: %v", err)
-	}
-	if status.JobID != first.JobID || status.State != "queued" {
-		t.Fatalf("status=%+v", status)
+	if response.JobID != "core-job" || response.Job == nil || response.Job.State != "queued" {
+		t.Fatalf("response=%+v, want state created by core", response)
 	}
 }
 
 func TestUpdateCommandNotifiesOnceWhenExternalUpdaterReachesTerminalState(t *testing.T) {
 	baseDir := t.TempDir()
 	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "core-job",
+		Owner:       "timer",
+		State:       "downloading",
+		StartedAt:   "2026-08-06T09:00:00Z",
+		HeartbeatAt: "2026-08-06T09:00:01Z",
+	})
+	writeUpdateStatusForTest(t, baseDir, updateJobStatus{
+		Schema:    1,
+		JobID:     "core-job",
+		State:     "downloading",
+		StartedAt: "2026-08-06T09:00:00Z",
+		UpdatedAt: "2026-08-06T09:00:01Z",
+	})
 	done := make(chan struct{}, 2)
 	cmd.setOperationDoneHandler(func() {
 		done <- struct{}{}
 	})
 	response := handleUpdateForTest(t, cmd, map[string]any{
-		"action": "request",
+		"action": "query",
 		"hubId":  "hub-a",
 	})
-	if response.JobID == "" {
-		t.Fatal("request did not create a job")
+	if response.Job == nil || response.Job.JobID != "core-job" {
+		t.Fatalf("query response=%+v", response)
 	}
-	if err := cmd.writeJobStatus(updateJobStatus{
+	writeUpdateStatusForTest(t, baseDir, updateJobStatus{
 		Schema:    1,
-		JobID:     response.JobID,
+		JobID:     "core-job",
 		State:     "failed",
 		StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		UpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
 		ErrorCode: "download_failed",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	select {
 	case <-done:
@@ -2539,27 +2557,38 @@ func TestUpdateQueryReportsActiveJobWithoutRetriggering(t *testing.T) {
 	})
 	trigger := &fakeUpdateTrigger{}
 	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-
-	requested := handleUpdateForTest(t, cmd, map[string]any{
-		"action": "request",
-		"hubId":  "hub-a",
+	writeUpdateLeaseForTest(t, baseDir, updateLease{
+		Schema:      1,
+		JobID:       "core-job",
+		Owner:       "timer",
+		State:       "queued",
+		StartedAt:   "2026-08-06T09:00:00Z",
+		HeartbeatAt: "2026-08-06T09:00:00Z",
 	})
+	writeUpdateStatusForTest(t, baseDir, updateJobStatus{
+		Schema:    1,
+		JobID:     "core-job",
+		State:     "queued",
+		StartedAt: "2026-08-06T09:00:00Z",
+		UpdatedAt: "2026-08-06T09:00:00Z",
+	})
+
 	queried := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "query",
 		"hubId":  "hub-a",
 	})
-	if queried.Job == nil || queried.Job.JobID != requested.JobID || queried.Job.State != "queued" {
-		t.Fatalf("requested=%+v queried=%+v", requested, queried)
+	if queried.Job == nil || queried.Job.JobID != "core-job" || queried.Job.State != "queued" {
+		t.Fatalf("queried=%+v", queried)
 	}
 	if queried.CanRequest {
 		t.Fatalf("canRequestUpdate=true while job is active")
 	}
-	if trigger.Calls() != 1 {
-		t.Fatalf("trigger calls=%d, want 1", trigger.Calls())
+	if trigger.Calls() != 0 {
+		t.Fatalf("trigger calls=%d, want 0 for query", trigger.Calls())
 	}
 }
 
-func TestUpdateQueryReapsStaleActiveJob(t *testing.T) {
+func TestUpdateQueryDoesNotMutateStaleJob(t *testing.T) {
 	baseDir := t.TempDir()
 	writeInstalledReleaseForTest(t, baseDir, installedRelease{
 		SchemaVersion: 2,
@@ -2572,133 +2601,43 @@ func TestUpdateQueryReapsStaleActiveJob(t *testing.T) {
 	writeUpdateLeaseForTest(t, baseDir, updateLease{
 		Schema:      1,
 		JobID:       "stale-job",
-		Owner:       "web",
+		Owner:       "timer",
 		State:       "downloading",
 		StartedAt:   "2026-08-03T07:00:00Z",
 		HeartbeatAt: "2026-08-03T08:00:00Z",
 	})
 	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
-	cmd.now = func() time.Time {
-		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	}
-	if err := cmd.writeJobStatus(updateJobStatus{
+	writeUpdateStatusForTest(t, baseDir, updateJobStatus{
 		Schema:    1,
 		JobID:     "stale-job",
 		State:     "downloading",
 		StartedAt: "2026-08-03T07:00:00Z",
 		UpdatedAt: "2026-08-03T08:00:00Z",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	got := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "query",
 		"hubId":  "hub-a",
 	})
-	if got.Job == nil || got.Job.State != "failed" || got.Job.ErrorCode != "updater_stalled" {
-		t.Fatalf("job=%+v, want failed updater_stalled", got.Job)
+	if got.Job == nil || got.Job.State != "downloading" {
+		t.Fatalf("job=%+v, want read-only stale state", got.Job)
 	}
-	if got.Status != "installed" || !got.CanRequest {
-		t.Fatalf("response=%+v, want requestable installed Hub", got)
+	if got.Status != "update_pending" || got.CanRequest {
+		t.Fatalf("response=%+v, want active update", got)
 	}
-	if _, err := os.Stat(filepath.Join(baseDir, "staging", "lock.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("stale lock.json was not removed: %v", err)
-	}
-}
-
-func TestUpdateRequestReplacesStaleJobAndRetriggers(t *testing.T) {
-	baseDir := t.TempDir()
-	writeUpdateLeaseForTest(t, baseDir, updateLease{
-		Schema:      1,
-		JobID:       "stale-job",
-		Owner:       "web",
-		State:       "downloading",
-		StartedAt:   "2026-08-03T07:00:00Z",
-		HeartbeatAt: "2026-08-03T08:00:00Z",
-	})
-	trigger := &fakeUpdateTrigger{}
-	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-	cmd.now = func() time.Time {
-		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	}
-	if err := cmd.writeJobStatus(updateJobStatus{
-		Schema:    1,
-		JobID:     "stale-job",
-		State:     "downloading",
-		StartedAt: "2026-08-03T07:00:00Z",
-		UpdatedAt: "2026-08-03T08:00:00Z",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	got := handleUpdateForTest(t, cmd, map[string]any{
-		"action": "request",
-		"hubId":  "hub-a",
-	})
-	if got.JobID == "" || got.JobID == "stale-job" || !got.Accepted || got.Job == nil || got.Job.State != "queued" {
-		t.Fatalf("response=%+v, want fresh accepted queued job", got)
-	}
-	if trigger.Calls() != 1 {
-		t.Fatalf("trigger calls=%d, want 1", trigger.Calls())
-	}
-	lockRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
+	lock, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
 	if err != nil {
-		t.Fatalf("read lock: %v", err)
+		t.Fatalf("read stale lock: %v", err)
 	}
-	var lock updateLease
-	if err := json.Unmarshal(lockRaw, &lock); err != nil {
-		t.Fatalf("parse lock: %v", err)
+	if !strings.Contains(string(lock), `"jobId":"stale-job"`) {
+		t.Fatalf("stale lock was changed: %s", lock)
 	}
-	if lock.JobID != got.JobID {
-		t.Fatalf("lock=%+v, want fresh job %s", lock, got.JobID)
-	}
-}
-
-func TestUpdateRequestRetriggersQueuedJobAfterGrace(t *testing.T) {
-	baseDir := t.TempDir()
-	writeUpdateLeaseForTest(t, baseDir, updateLease{
-		Schema:      1,
-		JobID:       "queued-job",
-		Owner:       "web",
-		State:       "queued",
-		StartedAt:   "2026-08-03T11:50:00Z",
-		HeartbeatAt: "2026-08-03T11:57:00Z",
-	})
-	trigger := &fakeUpdateTrigger{}
-	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-	cmd.now = func() time.Time {
-		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	}
-	if err := cmd.writeJobStatus(updateJobStatus{
-		Schema:    1,
-		JobID:     "queued-job",
-		State:     "queued",
-		StartedAt: "2026-08-03T11:50:00Z",
-		UpdatedAt: "2026-08-03T11:57:00Z",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	got := handleUpdateForTest(t, cmd, map[string]any{
-		"action": "request",
-		"hubId":  "hub-a",
-	})
-	if got.JobID != "queued-job" || !got.Accepted {
-		t.Fatalf("response=%+v, want existing queued job", got)
-	}
-	if trigger.Calls() != 1 {
-		t.Fatalf("trigger calls=%d, want 1 (retrigger after grace)", trigger.Calls())
-	}
-	lockRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
+	status, err := os.ReadFile(filepath.Join(baseDir, "staging", "status.json"))
 	if err != nil {
-		t.Fatalf("read lock: %v", err)
+		t.Fatalf("read stale status: %v", err)
 	}
-	var lock updateLease
-	if err := json.Unmarshal(lockRaw, &lock); err != nil {
-		t.Fatalf("parse lock: %v", err)
-	}
-	if lock.JobID != "queued-job" {
-		t.Fatalf("lock=%+v, want adopted job kept", lock)
+	if !strings.Contains(string(status), `"state":"downloading"`) {
+		t.Fatalf("stale status was changed: %s", status)
 	}
 }
 
@@ -2707,16 +2646,20 @@ func TestUpdateRequestDoesNotRetriggerFreshQueuedJob(t *testing.T) {
 	writeUpdateLeaseForTest(t, baseDir, updateLease{
 		Schema:      1,
 		JobID:       "queued-job",
-		Owner:       "web",
+		Owner:       "timer",
 		State:       "queued",
 		StartedAt:   "2026-08-03T11:59:00Z",
 		HeartbeatAt: "2026-08-03T11:59:30Z",
 	})
 	trigger := &fakeUpdateTrigger{}
 	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-	cmd.now = func() time.Time {
-		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	}
+	writeUpdateStatusForTest(t, baseDir, updateJobStatus{
+		Schema:    1,
+		JobID:     "queued-job",
+		State:     "queued",
+		StartedAt: "2026-08-03T11:59:00Z",
+		UpdatedAt: "2026-08-03T11:59:30Z",
+	})
 
 	got := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "request",
@@ -2735,25 +2678,20 @@ func TestUpdateRequestLeavesActiveJobUntouched(t *testing.T) {
 	writeUpdateLeaseForTest(t, baseDir, updateLease{
 		Schema:      1,
 		JobID:       "active-job",
-		Owner:       "web",
+		Owner:       "timer",
 		State:       "downloading",
 		StartedAt:   "2026-08-03T11:50:00Z",
 		HeartbeatAt: "2026-08-03T11:57:00Z",
 	})
 	trigger := &fakeUpdateTrigger{}
 	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-	cmd.now = func() time.Time {
-		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	}
-	if err := cmd.writeJobStatus(updateJobStatus{
+	writeUpdateStatusForTest(t, baseDir, updateJobStatus{
 		Schema:    1,
 		JobID:     "active-job",
 		State:     "downloading",
 		StartedAt: "2026-08-03T11:50:00Z",
 		UpdatedAt: "2026-08-03T11:57:00Z",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	got := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "request",
@@ -2764,47 +2702,6 @@ func TestUpdateRequestLeavesActiveJobUntouched(t *testing.T) {
 	}
 	if trigger.Calls() != 0 {
 		t.Fatalf("trigger calls=%d, want 0 for active job", trigger.Calls())
-	}
-}
-
-func TestUpdateRequestFailsQueuedJobWhenRetriggerFails(t *testing.T) {
-	baseDir := t.TempDir()
-	writeUpdateLeaseForTest(t, baseDir, updateLease{
-		Schema:      1,
-		JobID:       "queued-job",
-		Owner:       "web",
-		State:       "queued",
-		StartedAt:   "2026-08-03T11:50:00Z",
-		HeartbeatAt: "2026-08-03T11:57:00Z",
-	})
-	trigger := &fakeUpdateTrigger{err: errors.New("scheduled task missing")}
-	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
-	cmd.now = func() time.Time {
-		return time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
-	}
-	if err := cmd.writeJobStatus(updateJobStatus{
-		Schema:    1,
-		JobID:     "queued-job",
-		State:     "queued",
-		StartedAt: "2026-08-03T11:50:00Z",
-		UpdatedAt: "2026-08-03T11:57:00Z",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	_, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "request",
-		"hubId":  "hub-a",
-	}))
-	if cmdErr == nil {
-		t.Fatal("request succeeded despite retrigger failure")
-	}
-	status := cmd.readJobStatus()
-	if status == nil || status.State != "failed" || status.ErrorCode != "updater_trigger_failed" {
-		t.Fatalf("status=%+v, want failed updater_trigger_failed", status)
-	}
-	if _, err := os.Stat(filepath.Join(baseDir, "staging", "lock.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("lock.json was not removed after retrigger failure: %v", err)
 	}
 }
 
@@ -2873,17 +2770,38 @@ func writeUpdateLeaseForTest(t *testing.T, baseDir string, lease updateLease) {
 	}
 }
 
+func writeUpdateStatusForTest(t *testing.T, baseDir string, status updateJobStatus) {
+	t.Helper()
+	raw, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("marshal update status: %v", err)
+	}
+	stagingDir := filepath.Join(baseDir, "staging")
+	if err := os.MkdirAll(stagingDir, 0o755); err != nil {
+		t.Fatalf("create staging dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(stagingDir, "status.json"), append(raw, '\n'), 0o600); err != nil {
+		t.Fatalf("write update status: %v", err)
+	}
+}
+
 type fakeUpdateTrigger struct {
-	mu    sync.Mutex
-	calls int
-	err   error
+	mu        sync.Mutex
+	calls     int
+	err       error
+	onTrigger func()
 }
 
 func (f *fakeUpdateTrigger) Trigger(context.Context) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.calls++
-	return f.err
+	onTrigger := f.onTrigger
+	err := f.err
+	f.mu.Unlock()
+	if onTrigger != nil {
+		onTrigger()
+	}
+	return err
 }
 
 func (f *fakeUpdateTrigger) Calls() int {

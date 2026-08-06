@@ -20,6 +20,7 @@ import { homedir } from 'node:os';
 import { isIP } from 'node:net';
 import { createInterface } from 'node:readline/promises';
 
+// Shared update state, validation, and atomic filesystem primitives.
 const BLOCK_SIZE = 512;
 const DEFAULT_MAX_ENTRIES = 20_000;
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024 * 1024;
@@ -226,6 +227,7 @@ export async function finishUpdate(stateDirectory, status) {
   return record;
 }
 
+// Secure release archive extraction and artifact verification.
 class StreamReader {
   constructor(stream) {
     this.iterator = stream[Symbol.asyncIterator]();
@@ -358,6 +360,7 @@ function inputStream(input) {
   throw new Error('tar.zst input must be bytes or a file path');
 }
 
+// Runtime requirements and release staging.
 const REQUIRED_NODE_MAJOR = 22;
 const REQUIRED_NODE_MINOR = 15;
 
@@ -578,6 +581,7 @@ export async function stageVerifiedRelease({
   };
 }
 
+// Platform runtime plans, service files, and user-facing wrappers.
 function psQuote(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
@@ -879,6 +883,7 @@ async function runProcess(
   });
 }
 
+// Legacy runtime migration remains isolated from the current runtime adapter.
 export function windowsLegacyMigrationScript(paths) {
   return `$ErrorActionPreference = 'Stop'
 $runtimeNames = @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')
@@ -1211,6 +1216,7 @@ async function executeLegacyMigration(deps) {
   await removeRetiredLifecycleWrappers(paths.home);
 }
 
+// Desktop self-update flow.
 async function detectDesktopRunning(platform, runner) {
   if (platform !== 'win32') {
     throw new Error('WheelMaker Desktop update is supported on Windows only');
@@ -1341,6 +1347,7 @@ async function executeDesktopUpdate(deps) {
   }
 }
 
+// Current runtime adapter and deployment transaction helpers.
 function windowsStopScript(paths) {
   return `$ErrorActionPreference = 'Stop'
 Stop-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
@@ -1632,6 +1639,7 @@ function resolveRuntime(deps) {
   return runtimeFactory({ paths, platform, runner: deps.runner });
 }
 
+// Deployment configuration, package application, and command dispatch.
 function windowsConfigSecurityScript(path) {
   return `$ErrorActionPreference = 'Stop'
 $acl = New-Object System.Security.AccessControl.FileSecurity
@@ -2164,17 +2172,13 @@ export async function runCore(args, deps = {}) {
   throw new Error('deployment application is not implemented yet');
 }
 
-// Gateway configuration, runtime and installation are embedded in the published core.
+// Embedded Gateway subsystem: configuration, runtime registration, and install.
 export const GATEWAY_SCHEMA = 1;
 export const WORKSPACE_SITE_KIND = 'workspace';
 export const RELEASE_SERVER_SITE_KIND = 'release-server';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const LOG_LEVELS = new Set(['DEBUG', 'INFO', 'WARN', 'ERROR']);
-
-function gatewayJsonBytes(value) {
-  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
-}
 
 async function readGatewayJsonIfPresent(path) {
   try {
@@ -2348,22 +2352,11 @@ export async function readGatewayConfiguration(home) {
   return {paths, global, workspace, releaseServer};
 }
 
-async function gatewayConfigAtomicWrite(path, bytes, mode = 0o600) {
-  await mkdir(join(path, '..'), {recursive: true});
-  const temporary = join(join(path, '..'), `.${path.split(/[\\/]/).pop()}.${randomUUID()}.tmp`);
-  await writeFile(temporary, bytes, {mode});
-  try {
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, {force: true});
-  }
-}
-
 export async function writeWorkspaceSite(home, site) {
   const validated = validateGatewaySite(site, {kind: WORKSPACE_SITE_KIND});
   const paths = gatewayConfigPaths(home);
   await mkdir(paths.sites, {recursive: true});
-  await gatewayConfigAtomicWrite(paths.workspace, gatewayJsonBytes(validated), 0o600);
+  await atomicWrite(paths.workspace, jsonBytes(validated), 0o600);
   return validated;
 }
 
@@ -2457,6 +2450,7 @@ export async function gatewayConfigExists(home) {
   }
 }
 
+// Gateway service/runtime registration.
 const SERVICE_NAME = 'wheelmaker-gateway';
 const WINDOWS_TASK_NAME = 'WheelMakerGateway';
 const DARWIN_LABEL = 'com.wheelmaker.gateway';
@@ -2607,17 +2601,6 @@ export function gatewayWrapperFiles(paths, platform = process.platform) {
   throw new Error(`unsupported Gateway runtime platform: ${platform}`);
 }
 
-async function gatewayRuntimeAtomicWrite(path, body, mode = 0o600) {
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = join(dirname(path), `.${randomUUID()}.${process.pid}.tmp`);
-  await writeFile(temporary, body, { mode });
-  try {
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
-  }
-}
-
 function windowsActionScript(action) {
   if (action === 'start') {
     return `Start-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction Stop`;
@@ -2644,7 +2627,7 @@ export function createGatewayRuntimeAdapter({
     const wrappers = gatewayWrapperFiles(paths, platform);
     for (const [name, body] of Object.entries(wrappers)) {
       const wrapperPath = join(paths.home, name);
-      await gatewayRuntimeAtomicWrite(wrapperPath, body, 0o755);
+      await atomicWrite(wrapperPath, Buffer.from(body, 'utf8'), 0o755);
       if (platform !== 'win32') await chmod(wrapperPath, 0o755);
     }
     if (platform === 'win32') {
@@ -2662,7 +2645,7 @@ export function createGatewayRuntimeAdapter({
       const directory = join(environment.XDG_CONFIG_HOME ?? join(paths.userHome, '.config'), 'systemd', 'user');
       const files = linuxGatewayRuntimeFiles(paths);
       for (const [name, body] of Object.entries(files)) {
-        await gatewayRuntimeAtomicWrite(join(directory, name), body, 0o644);
+        await atomicWrite(join(directory, name), Buffer.from(body, 'utf8'), 0o644);
       }
       const runtimeUser = environment.USER ?? environment.USERNAME;
       if (runtimeUser) {
@@ -2678,7 +2661,7 @@ export function createGatewayRuntimeAdapter({
       const directory = join(paths.userHome, 'Library', 'LaunchAgents');
       const files = darwinGatewayRuntimeFiles(paths);
       for (const [name, body] of Object.entries(files)) {
-        await gatewayRuntimeAtomicWrite(join(directory, name), body, 0o644);
+        await atomicWrite(join(directory, name), Buffer.from(body, 'utf8'), 0o644);
       }
       const domain = `gui/${paths.uid}`;
       await run('launchctl', ['bootout', `${domain}/${paths.plistLabel ?? DARWIN_LABEL}`], { allowFailure: true });
@@ -2779,6 +2762,7 @@ export function createGatewayRuntimeAdapter({
   };
 }
 
+// Gateway release artifact validation and installation.
 const GATEWAY_TARGETS = new Set([
   'windows-amd64',
   'linux-amd64',
@@ -2789,55 +2773,6 @@ const GATEWAY_ARCHIVE_PATTERN = /^wheelmaker-gateway-v1\.(0|[1-9]\d*)-(windows-a
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const SOURCE_SHA_PATTERN = /^[0-9a-f]{40}$/;
 const VERSION_PATTERN = /^v1\.(0|[1-9]\d*)$/;
-
-function gatewayInstallRunProcess(command, args, {cwd, allowFailure = false} = {}) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {cwd, shell: false, stdio: ['ignore', 'pipe', 'pipe']});
-    const stdout = [];
-    const stderr = [];
-    child.stdout.on('data', chunk => stdout.push(chunk));
-    child.stderr.on('data', chunk => stderr.push(chunk));
-    child.once('error', rejectPromise);
-    child.once('exit', code => {
-      const result = {
-        code,
-        stdout: Buffer.concat(stdout).toString('utf8'),
-        stderr: Buffer.concat(stderr).toString('utf8'),
-      };
-      if (code !== 0 && !allowFailure) {
-        rejectPromise(new Error(`${command} ${args.join(' ')} failed (${code}): ${result.stderr.trim()}`));
-      } else {
-        resolvePromise(result);
-      }
-    });
-  });
-}
-
-function gatewayInstallSha256Bytes(bytes) {
-  return createHash('sha256').update(bytes).digest('hex');
-}
-
-function gatewayInstallJsonBytes(value) {
-  return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
-}
-
-function gatewayInstallResolveReleasePath(baseUrl, path, label) {
-  let base;
-  try {
-    base = new URL(baseUrl);
-  } catch {
-    throw new Error('trusted release base URL is invalid');
-  }
-  if (base.protocol !== 'https:' || base.username || base.password || base.pathname !== '/' || base.search || base.hash || baseUrl !== base.origin) {
-    throw new Error('trusted release base URL is invalid');
-  }
-  if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('?') || path.includes('#')) {
-    throw new Error(`${label} path is invalid`);
-  }
-  const resolved = new URL(path, `${base.origin}/`);
-  if (resolved.origin !== base.origin) throw new Error(`${label} path must stay on the trusted release origin`);
-  return resolved.href;
-}
 
 function validatePointer(pointer) {
   if (!pointer) return null;
@@ -2883,20 +2818,9 @@ export function validateGatewayManifest(manifest, pointer) {
   return normalized;
 }
 
-async function gatewayInstallAtomicWrite(path, bytes, mode = 0o600) {
-  await mkdir(resolve(path, '..'), {recursive: true});
-  const temporary = join(resolve(path, '..'), `.${path.split(/[\\/]/).pop()}.${randomUUID()}.tmp`);
-  await writeFile(temporary, bytes, {mode});
-  try {
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, {force: true});
-  }
-}
-
 async function copyFileAtomic(source, destination) {
   const bytes = await readFile(source);
-  await gatewayInstallAtomicWrite(destination, bytes, 0o755);
+  await atomicWrite(destination, bytes, 0o755);
 }
 
 async function fileExists(path) {
@@ -2966,7 +2890,7 @@ export async function installGatewayFromStable({
 
   const home = gatewayHome({home: configuredHome, userHome});
   const paths = gatewayInstallPaths(home, platformKey);
-  const commandRunner = runner ?? gatewayInstallRunProcess;
+  const commandRunner = runner ?? runProcess;
   await mkdir(paths.bin, {recursive: true});
   await mkdir(paths.downloads, {recursive: true});
   await mkdir(join(paths.home, 'state'), {recursive: true});
@@ -2977,9 +2901,9 @@ export async function installGatewayFromStable({
     runner: commandRunner,
   });
 
-  const manifestURL = gatewayInstallResolveReleasePath(releaseBaseUrl, pointer.manifestPath, 'Gateway manifest');
+  const manifestURL = resolveReleasePath(releaseBaseUrl, pointer.manifestPath, 'Gateway manifest');
   const manifestBytes = await fetchBytes(manifestURL, {label: 'Gateway manifest'});
-  if (gatewayInstallSha256Bytes(manifestBytes) !== pointer.manifestSha256) throw new Error('Gateway manifest SHA-256 verification failed');
+  if (sha256Bytes(manifestBytes) !== pointer.manifestSha256) throw new Error('Gateway manifest SHA-256 verification failed');
   let manifest;
   try {
     manifest = JSON.parse(Buffer.from(manifestBytes).toString('utf8'));
@@ -3022,10 +2946,10 @@ export async function installGatewayFromStable({
   }
 
   reportStatus?.(`Downloading Gateway ${pointer.version} (${platformKey})`);
-  const archiveURL = gatewayInstallResolveReleasePath(releaseBaseUrl, artifact.path, 'Gateway artifact');
+  const archiveURL = resolveReleasePath(releaseBaseUrl, artifact.path, 'Gateway artifact');
   const archiveBytes = await fetchBytes(archiveURL, {label: `Gateway ${platformKey}`});
   if (archiveBytes.length !== artifact.size) throw new Error('Gateway archive size verification failed');
-  if (gatewayInstallSha256Bytes(archiveBytes) !== artifact.sha256) throw new Error('Gateway archive SHA-256 verification failed');
+  if (sha256Bytes(archiveBytes) !== artifact.sha256) throw new Error('Gateway archive SHA-256 verification failed');
 
   const job = `${process.pid}-${randomUUID()}`;
   const downloadPath = join(paths.downloads, `${artifact.name}.${job}`);
@@ -3048,7 +2972,7 @@ export async function installGatewayFromStable({
     try {
       await copyFileAtomic(stagedBinary, paths.binary);
       await chmod(paths.binary, 0o755);
-      await gatewayInstallAtomicWrite(statePath, gatewayInstallJsonBytes({schema: 1, version: pointer.version, sourceSha: pointer.sourceSha, manifestSha256: pointer.manifestSha256, installedAt: now()}), 0o600);
+      await atomicWrite(statePath, jsonBytes({schema: 1, version: pointer.version, sourceSha: pointer.sourceSha, manifestSha256: pointer.manifestSha256, installedAt: now()}), 0o600);
       try {
         await runtime.install();
         await runtime.health();

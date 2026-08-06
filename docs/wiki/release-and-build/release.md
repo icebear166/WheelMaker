@@ -170,7 +170,7 @@ Registry 主协议硬切不能切断 Web 主动更新旧 Hub 的唯一通道。H
 
 该兼容完全由 Registry 实现，不增加维护版本、专用 RPC 或 Hub 端握手分支。旧 Hub 仍按原流程报告 Project；Registry 成功应答但丢弃这些报告，所以 Hub 保持在线、App 项目数为零。Registry 在现有 Hub descriptor 中标记 `connectionMode: "update_only"`，App 只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，不承担权限控制。
 
-Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `gatewayUpdate` section，以及对应的 `requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。WheelMaker 仍复用 UpdateCommand、更新租约、`staging/status.json` 和 `node deploy.mjs update`；Gateway 使用自己的更新状态并调用 `node deploy.mjs gateway`，不会触碰 Hub 生命周期。受限连接成功不会自动开始任一更新。
+Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `gatewayUpdate` section，以及对应的 `requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。WheelMaker 仍复用 UpdateCommand 和 `node deploy.mjs update`；UpdateCommand 只触发目标机 updater 并监控 core 写入的更新状态，Gateway 使用自己的更新状态并调用 `node deploy.mjs gateway`，不会触碰 Hub 生命周期。受限连接成功不会自动开始任一更新。
 由于该兼容子集要求一次只刷新一个 section，Web 对 `update_only` Hub 将 WheelMaker 与 Gateway 刷新拆成两个请求；老 Hub 不支持 Gateway 时，Gateway 请求失败不会阻断 WheelMaker 更新。
 
 请求被接受后，Hub 在 `applying` 阶段断开属于预期行为；新 Hub 重启并以当前主协议重新握手后恢复完整业务模式。若更新失败但旧 Hub 重新启动，它会再次进入 `update_only`，允许用户查询失败状态并重试。从该能力发布起，Registry 长期保持上述更新 HubState wire 子集兼容，使后续主协议升级继续沿用同一受限路径。
@@ -200,9 +200,9 @@ Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `ga
 → 清理 staging/<jobId>
 ```
 
-状态写入 `~/.wheelmaker/staging/status.json`，更新租约写入 `lock.json`。主要状态包括 `queued`、`downloading`、`verifying`、`applying`、`restarting`、`succeeded` 和 `failed`。
+状态写入 `~/.wheelmaker/staging/status.json`，更新租约写入 `lock.json`。主要状态包括 `queued`、`downloading`、`verifying`、`applying`、`restarting`、`succeeded` 和 `failed`。`deploy-core.mjs` 是这些状态的唯一写入者：它在 `node deploy.mjs update` 内创建、心跳、完成或失败并清理租约。
 
-陈旧恢复：租约心跳超过 2 小时（`deploy-core.mjs` 的 `STALE_LEASE_MS`）视为卡死。更新器自身再次运行时可抢占陈旧租约；Hub 的 UpdateCommand 在查询或收到新更新请求时发现陈旧活跃 job，会写入 `failed`（`errorCode: updater_stalled`）并删除 `lock.json`，使 `canRequestUpdate` 恢复、新请求重新触发更新器。此外租约停在 `queued` 超过 2 分钟视为触发丢失，新更新请求会以同一 jobId 强制重触发更新器；重触发失败则写入 `failed`（`errorCode: updater_trigger_failed`）并清锁。手工恢复等价于删除 `staging/lock.json` 与 `status.json`。
+Hub 的 `UpdateCommand` 不创建、修改或回收 `lock.json`/`status.json`。`cmd.update` 的 request 只触发已安装的 OS updater，若 core 已来得及写入状态则返回 job，否则返回不带 job 的 `update_pending`；query 和文件监控只读 core 状态。陈旧恢复也由 core 的 `STALE_LEASE_MS` 处理，避免 Go 与 MJS 各自维护一套状态机。对外更新入口仍只有 `node deploy.mjs update`，没有额外 CLI 入口。
 
 目标机替换 `bin/` 和 `web/`，但不会清空或覆盖现有 `WheelMakerDesktop.exe`。Windows 平台包不再包含独立 Desktop updater；升级部署保留旧机器已有的 `desktop/update.exe`，全新安装不创建它。Desktop 主程序仍通过独立命令更新，不随每次 Hub/Web 部署更新。
 
