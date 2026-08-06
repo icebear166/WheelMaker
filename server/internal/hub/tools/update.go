@@ -109,20 +109,6 @@ func (e *updateCommandError) Error() string {
 	return e.Code + ": " + e.Message
 }
 
-func (e *updateCommandError) commandCode() string {
-	if e == nil {
-		return ""
-	}
-	return e.Code
-}
-
-func (e *updateCommandError) commandMessage() string {
-	if e == nil {
-		return ""
-	}
-	return e.Message
-}
-
 type updateTrigger interface {
 	Trigger(context.Context) error
 }

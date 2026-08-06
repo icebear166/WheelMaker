@@ -39,19 +39,6 @@ func newFileSessionTurnStore(root string) *fileSessionTurnStore {
 	return &fileSessionTurnStore{root: root}
 }
 
-func ReadSessionTurnFiles(ctx context.Context, root, projectName, sessionID string, afterTurnIndex, latestTurnIndex int64) ([]string, error) {
-	store := newFileSessionTurnStore(root)
-	turns, err := store.ReadTurns(ctx, projectName, sessionID, afterTurnIndex, latestTurnIndex)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]string, 0, len(turns))
-	for _, turn := range turns {
-		out = append(out, turn.Content)
-	}
-	return out, nil
-}
-
 func WriteSessionTurnFiles(ctx context.Context, root, projectName, sessionID string, startTurnIndex int64, contents []string) (int64, error) {
 	return newFileSessionTurnStore(root).WriteTurns(ctx, projectName, sessionID, startTurnIndex, contents)
 }

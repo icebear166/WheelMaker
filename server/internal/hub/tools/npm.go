@@ -405,20 +405,6 @@ func (e *npmCommandError) Error() string {
 	return e.Code + ": " + e.Message
 }
 
-func (e *npmCommandError) commandCode() string {
-	if e == nil {
-		return ""
-	}
-	return e.Code
-}
-
-func (e *npmCommandError) commandMessage() string {
-	if e == nil {
-		return ""
-	}
-	return e.Message
-}
-
 type npmPackagePolicy struct {
 	PackageName string
 	DisplayName string

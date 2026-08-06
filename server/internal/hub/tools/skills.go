@@ -278,20 +278,6 @@ func (e *skillsCommandError) Error() string {
 	return e.Code + ": " + e.Message
 }
 
-func (e *skillsCommandError) commandCode() string {
-	if e == nil {
-		return ""
-	}
-	return e.Code
-}
-
-func (e *skillsCommandError) commandMessage() string {
-	if e == nil {
-		return ""
-	}
-	return e.Message
-}
-
 func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *skillsCommandError) {
 	var payload skillsCommandPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
@@ -32,33 +31,6 @@ func cloneSessionGoal(goal *acp.SessionGoal) *acp.SessionGoal {
 		cloned.TokenBudget = &budget
 	}
 	return &cloned
-}
-
-func parseGoalCommand(blocks []acp.ContentBlock) (raw string, objective string, matched bool, err error) {
-	if len(blocks) != 1 || blocks[0].Type != acp.ContentBlockTypeText {
-		return "", "", false, nil
-	}
-	raw = blocks[0].Text
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "/goal" {
-		return raw, "", true, fmt.Errorf("goal objective is required")
-	}
-	if !strings.HasPrefix(trimmed, "/goal") {
-		return "", "", false, nil
-	}
-	remainder := strings.TrimPrefix(trimmed, "/goal")
-	first, _ := utf8.DecodeRuneInString(remainder)
-	if first == utf8.RuneError || !unicode.IsSpace(first) {
-		return "", "", false, nil
-	}
-	objective = strings.TrimSpace(remainder)
-	if objective == "" {
-		return raw, "", true, fmt.Errorf("goal objective is required")
-	}
-	if utf8.RuneCountInString(objective) > 4000 {
-		return raw, "", true, fmt.Errorf("goal objective must be at most 4000 characters")
-	}
-	return raw, objective, true, nil
 }
 
 func validateGoalObjective(objective string) (string, error) {

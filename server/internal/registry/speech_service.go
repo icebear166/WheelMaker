@@ -612,13 +612,3 @@ func writeSpeechError(peer *peerConn, requestID int64, method, code, message str
 		}),
 	})
 }
-
-type unavailableSpeechProvider struct{}
-
-func newUnavailableSpeechProvider() speechprovider.Provider {
-	return unavailableSpeechProvider{}
-}
-
-func (unavailableSpeechProvider) Start(context.Context, string, speechprovider.AudioConfig, speechprovider.Events) (speechprovider.Stream, error) {
-	return nil, errors.New("speech provider unavailable")
-}

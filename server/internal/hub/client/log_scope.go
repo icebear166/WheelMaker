@@ -27,10 +27,6 @@ func (l scopedLogger) format(message string) string {
 	return l.tag() + " " + message
 }
 
-func (l scopedLogger) Debug(format string, args ...any) {
-	logger.Debug(l.format(format), args...)
-}
-
 func (l scopedLogger) Verbose(format string, args ...any) {
 	logger.Verbose(l.format(format), args...)
 }

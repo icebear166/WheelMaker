@@ -31,10 +31,6 @@ func (l scopedLogger) format(format string) string {
 	return l.tag() + " " + format
 }
 
-func (l scopedLogger) Debug(format string, args ...any) {
-	logger.Debug(l.format(format), args...)
-}
-
 func (l scopedLogger) Verbose(format string, args ...any) {
 	logger.Verbose(l.format(format), args...)
 }
@@ -49,8 +45,4 @@ func (l scopedLogger) Info(format string, args ...any) {
 
 func (l scopedLogger) Warn(format string, args ...any) {
 	logger.Warn(l.format(format), args...)
-}
-
-func (l scopedLogger) Error(format string, args ...any) {
-	logger.Error(l.format(format), args...)
 }

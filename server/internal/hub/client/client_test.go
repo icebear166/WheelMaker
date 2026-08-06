@@ -510,16 +510,6 @@ func (s *recordingSessionViewSink) RecordPermissionResponse(context.Context, str
 	return 2, nil
 }
 
-func recordedSystemContents(events []SessionViewEvent) []string {
-	out := make([]string, 0, len(events))
-	for _, event := range events {
-		if event.Type == SessionViewEventTypeSystem {
-			out = append(out, event.Content)
-		}
-	}
-	return out
-}
-
 type permissionCaptureSink struct {
 	requests  chan acp.SessionTurnPermissionRequest
 	responses chan acp.SessionTurnPermissionResponse

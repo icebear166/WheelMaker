@@ -94,24 +94,6 @@ func ValidateJSON(configJSON []byte) error {
 	return nil
 }
 
-func Run(ctx context.Context, configJSON []byte) error {
-	if err := ValidateJSON(configJSON); err != nil {
-		return err
-	}
-	var cfg caddy.Config
-	if err := json.Unmarshal(configJSON, &cfg); err != nil {
-		return fmt.Errorf("decode generated Caddy config: %w", err)
-	}
-	if err := caddy.Run(&cfg); err != nil {
-		return fmt.Errorf("start embedded Caddy: %w", err)
-	}
-	<-ctx.Done()
-	if err := caddy.Stop(); err != nil {
-		return fmt.Errorf("stop embedded Caddy: %w", err)
-	}
-	return nil
-}
-
 // RunManaged starts Caddy with a valid generated configuration and watches the
 // semantic Gateway files. A valid change is compiled, written atomically, and
 // hot-loaded; an invalid change is ignored so the last valid configuration

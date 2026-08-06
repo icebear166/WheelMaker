@@ -1502,16 +1502,6 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	}
 }
 
-// handlePrompt sends text to the active (or lazily initialized) session and streams the reply.
-// promptMu is held for the full duration, serializing with switchAgent.
-func (s *Session) handlePrompt(text string) {
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return
-	}
-	_ = s.handlePromptBlocks([]acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: text}})
-}
-
 // handlePromptBlocks sends content blocks to the active (or lazily initialized) session.
 // promptMu is held for the full duration, serializing with switchAgent.
 func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {

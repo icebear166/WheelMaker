@@ -331,21 +331,6 @@ func cacheHeadersHandler(value string) map[string]any {
 	}
 }
 
-func corsHeadersHandler() map[string]any {
-	return map[string]any{
-		"handler": "headers",
-		"response": map[string]any{
-			"set": map[string]any{
-				"X-Content-Type-Options":       []string{"nosniff"},
-				"Referrer-Policy":              []string{"no-referrer"},
-				"Access-Control-Allow-Origin":  []string{"*"},
-				"Access-Control-Allow-Methods": []string{"GET, HEAD, OPTIONS"},
-				"Access-Control-Allow-Headers": []string{"Content-Type, Authorization"},
-			},
-		},
-	}
-}
-
 func securityHeadersHandler() map[string]any {
 	return map[string]any{
 		"handler": "headers",

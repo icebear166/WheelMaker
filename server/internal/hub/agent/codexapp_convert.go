@@ -1211,16 +1211,6 @@ func codexappResourceLinkText(block protocol.ContentBlock) string {
 	return strings.Join(parts, " ")
 }
 
-func codexappInputText(input []appServerUserInput) string {
-	var parts []string
-	for _, item := range input {
-		if item.Text != "" {
-			parts = append(parts, item.Text)
-		}
-	}
-	return strings.Join(parts, "\n")
-}
-
 func codexappThreadIDFromParams(raw json.RawMessage) string {
 	var p struct {
 		ThreadID string `json:"threadId"`

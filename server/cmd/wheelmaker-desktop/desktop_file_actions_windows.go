@@ -70,10 +70,6 @@ func resolveDesktopProjectFilePath(projectRoot, relativePath string) (cleanRoot,
 	return cleanRoot, target, nil
 }
 
-func openProjectFileInVSCode(projectRoot, relativePath string) error {
-	return newDefaultDesktopFileActionEnvironment().openProjectFileInVSCode(projectRoot, relativePath)
-}
-
 func resolveDesktopAbsoluteFilePath(absolutePath string) (string, error) {
 	return resolveDesktopAbsoluteFilePathWithStat(absolutePath, os.Stat)
 }
@@ -97,10 +93,6 @@ func resolveDesktopAbsoluteFilePathWithStat(
 		return "", fmt.Errorf("file is not a regular file")
 	}
 	return target, nil
-}
-
-func openFileInVSCode(absolutePath string) error {
-	return newDefaultDesktopFileActionEnvironment().openFileInVSCode(absolutePath)
 }
 
 func (environment desktopFileActionEnvironment) openFileInVSCode(absolutePath string) error {
@@ -174,14 +166,6 @@ func (environment desktopFileActionEnvironment) isRegularFile(path string) bool 
 	}
 	info, err := environment.stat(path)
 	return err == nil && info.Mode().IsRegular()
-}
-
-func showProjectFileInFolder(projectRoot, relativePath string) error {
-	return newDefaultDesktopFileActionEnvironment().showProjectFileInFolder(projectRoot, relativePath)
-}
-
-func showFileInFolder(absolutePath string) error {
-	return newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)
 }
 
 func (environment desktopFileActionEnvironment) showFileInFolder(absolutePath string) error {

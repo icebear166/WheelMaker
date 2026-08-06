@@ -2071,7 +2071,7 @@ func (c *Client) wireSession(sess *Session) {
 	sess.store = c.store
 }
 
-// clientListSessions returns a merged list of in-memory and persisted sessions,
+// ListSessions returns a merged list of in-memory and persisted sessions,
 // sorted by last active time (most recent first). Duplicates are deduplicated
 // favoring in-memory sessions.
 func (c *Client) ListSessions(ctx context.Context) ([]SessionRecord, error) {
@@ -2547,10 +2547,6 @@ func (c *Client) sessionIsRunning(sessionID string) bool {
 		return true
 	}
 	return c.sessionRecorder != nil && c.sessionRecorder.HasUnfinishedPrompt(sessionID)
-}
-
-func (c *Client) clientListSessions() ([]SessionRecord, error) {
-	return c.ListSessions(context.Background())
 }
 
 // persistLoop evicts stale suspended sessions and reconnects active Goals.

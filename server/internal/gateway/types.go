@@ -87,10 +87,6 @@ func ResolvePaths(home string) Paths {
 	}
 }
 
-func DefaultHome(userHome string) string {
-	return filepath.Join(userHome, ".wheelmaker", "gateway")
-}
-
 func LoadGlobal(reader io.Reader) (GlobalConfig, error) {
 	var cfg GlobalConfig
 	decoder := json.NewDecoder(reader)

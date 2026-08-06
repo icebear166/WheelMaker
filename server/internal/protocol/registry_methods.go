@@ -30,7 +30,6 @@ const (
 	RegistryRouteProjectCache           RegistryRouteKind = "project_cache"
 	RegistryRouteProjectForward         RegistryRouteKind = "project_forward"
 	RegistryRouteSessionForward         RegistryRouteKind = "session_forward"
-	RegistryRouteHubCommand             RegistryRouteKind = "hub_command"
 	RegistryRouteRelayControl           RegistryRouteKind = "relay_control"
 	RegistryRouteRelayHub               RegistryRouteKind = "relay_hub"
 	RegistryRouteSpeech                 RegistryRouteKind = "speech"
@@ -310,12 +309,6 @@ func registryHubReportMethod(method string) RegistryMethodDescriptor {
 	return desc
 }
 
-func registryHubCommandMethod(method string) RegistryMethodDescriptor {
-	desc := registryMethod(method, RegistryRouteHubCommand, []RegistryRole{RegistryRoleClient})
-	desc.RequiresHubID = true
-	return desc
-}
-
 func registryHubStateMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubState, []RegistryRole{RegistryRoleClient})
 	desc.RequiresHubID = true
@@ -394,20 +387,12 @@ func RegistrySessionForwardMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteSessionForward)
 }
 
-func RegistryHubCommandMethod(method string) bool {
-	return RegistryMethodHasRoute(method, RegistryRouteHubCommand)
-}
-
 func RegistryHubStateMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteHubState)
 }
 
 func RegistryRelayControlMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteRelayControl)
-}
-
-func RegistryRelayHubMethod(method string) bool {
-	return RegistryMethodHasRoute(method, RegistryRouteRelayHub)
 }
 
 func RegistrySpeechMethod(method string) bool {

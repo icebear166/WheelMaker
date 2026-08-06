@@ -1741,33 +1741,6 @@ func (r *Reporter) runHubEventSink(conn *websocket.Conn, sink *hubEventSink) {
 	}
 }
 
-func (r *Reporter) replyFSIndexStatus(conn *websocket.Conn, req envelope) {
-	resp := r.ensureFileIndexManager().status(r.projectFileIndexProjects())
-	resp.HubID = r.cfg.HubID
-	_ = r.writeJSON(conn, "->", envelope{
-		RequestID: req.RequestID,
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    req.Method,
-		Payload:   rp.MustRaw(resp),
-	})
-}
-
-func (r *Reporter) replyFSIndexRebuild(conn *websocket.Conn, req envelope) {
-	project, err := r.projectFileIndexProject(req.ProjectID)
-	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
-		return
-	}
-	resp := r.ensureFileIndexManager().startRebuild(context.Background(), project)
-	_ = r.writeJSON(conn, "->", envelope{
-		RequestID: req.RequestID,
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    req.Method,
-		ProjectID: req.ProjectID,
-		Payload:   rp.MustRaw(resp),
-	})
-}
-
 func (r *Reporter) replyFSIndexSearch(conn *websocket.Conn, req envelope) {
 	var payload projectFileIndexSearchRequest
 	if err := decodePayload(req.Payload, &payload); err != nil {
@@ -1855,44 +1828,6 @@ func (r *Reporter) replyFSList(conn *websocket.Conn, req envelope) {
 			"notModified": false,
 			"entries":     outEntries,
 		}),
-	})
-}
-
-func (r *Reporter) replyCmdNPM(conn *websocket.Conn, req envelope) {
-	r.replyToolCommand(conn, req)
-}
-
-func (r *Reporter) replyCmdUpdate(conn *websocket.Conn, req envelope) {
-	r.replyToolCommand(conn, req)
-}
-
-func (r *Reporter) replyCmdSkills(conn *websocket.Conn, req envelope) {
-	r.replyToolCommand(conn, req)
-}
-
-func (r *Reporter) replyCmdToken(conn *websocket.Conn, req envelope) {
-	r.replyToolCommand(conn, req)
-}
-
-func (r *Reporter) replyToolCommand(conn *websocket.Conn, req envelope) {
-	mu := r.toolMutexFor(req.Method)
-	mu.Lock()
-	defer mu.Unlock()
-
-	handler := r.ensureToolHandler()
-	if req.Method == hubToolMethodSkills {
-		handler.SetProjects(r.projectsSnapshot())
-	}
-	payload, cmdErr := handler.Handle(context.Background(), req.Method, req.Payload)
-	if cmdErr != nil {
-		_ = r.writeError(conn, req.RequestID, cmdErr.Code, cmdErr.Message)
-		return
-	}
-	_ = r.writeJSON(conn, "->", envelope{
-		RequestID: req.RequestID,
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    req.Method,
-		Payload:   rp.MustRaw(payload),
 	})
 }
 

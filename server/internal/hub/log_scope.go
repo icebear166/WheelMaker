@@ -32,10 +32,6 @@ func (l scopedLogger) scopedFormat(format string) string {
 	return l.scopedTag() + " " + format
 }
 
-func (l scopedLogger) Debug(format string, args ...any) {
-	logger.Debug(l.scopedFormat(format), args...)
-}
-
 func (l scopedLogger) Verbose(format string, args ...any) {
 	logger.Verbose(l.scopedFormat(format), args...)
 }

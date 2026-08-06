@@ -261,29 +261,3 @@ type SessionTurnPermissionResponse struct {
 	OptionName       string `json:"optionName"`
 	RespondedAt      string `json:"respondedAt"`
 }
-
-func NormalizeSessionTurnMethod(method string) string {
-	return strings.TrimSpace(method)
-}
-
-func IsSessionTurnPromptMethod(method string) bool {
-	switch NormalizeSessionTurnMethod(method) {
-	case SessionTurnMethodPromptRequest, SessionTurnMethodPromptDone:
-		return true
-	default:
-		return false
-	}
-}
-
-func IsSessionTurnTextResultMethod(method string) bool {
-	switch NormalizeSessionTurnMethod(method) {
-	case SessionTurnMethodAgentMessage, SessionTurnMethodAgentThought:
-		return true
-	default:
-		return false
-	}
-}
-
-func IsSessionTurnToolResultMethod(method string) bool {
-	return NormalizeSessionTurnMethod(method) == SessionTurnMethodToolCall
-}

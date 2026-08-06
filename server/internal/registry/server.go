@@ -1506,15 +1506,6 @@ func (s *Server) executeProjectRequest(ctx context.Context, scopeHubID string, i
 	}
 }
 
-func (s *Server) lookupProject(projectID string) (rp.ProjectListItem, bool) {
-	for _, item := range s.snapshotProjects("") {
-		if item.ProjectID == projectID {
-			return item, true
-		}
-	}
-	return rp.ProjectListItem{}, false
-}
-
 func (s *Server) snapshotProjects(scopeHubID string) []rp.ProjectListItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

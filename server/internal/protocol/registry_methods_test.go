@@ -409,10 +409,10 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if !RegistryMethodAllowed(string(RegistryRoleClient), RegistryMethodSessionArtifactRead) {
 		t.Fatalf("%s should allow client callers", RegistryMethodSessionArtifactRead)
 	}
-	if RegistryHubCommandMethod("cmd.skills") {
+	if _, ok := RegistryMethod("cmd.skills"); ok {
 		t.Fatal("cmd.skills should not be a public hub command method")
 	}
-	if RegistryHubCommandMethod("fs.index.status") {
+	if _, ok := RegistryMethod("fs.index.status"); ok {
 		t.Fatal("fs.index.status should not be a public hub command method")
 	}
 	gitRev, ok := RegistryMethod(RegistryMethodProjectGitRev)

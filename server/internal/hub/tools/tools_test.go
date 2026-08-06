@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,12 +15,6 @@ import (
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
 
 func TestManagerRoutesToolCommands(t *testing.T) {
 	manager := NewManager(ManagerConfig{HubID: "hub-a", StateDir: t.TempDir()})

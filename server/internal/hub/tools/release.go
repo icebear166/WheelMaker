@@ -123,10 +123,6 @@ type ReleaseCommand struct {
 	onJobUpdated func(ReleasePublishJob)
 }
 
-func NewReleaseCommand(stateDir string) *ReleaseCommand {
-	return newReleaseCommandWithDependencies(stateDir, execReleaseRunner{}, nil)
-}
-
 func newReleaseCommandWithDependencies(stateDir string, runner releaseRunner, notifier ReleaseNotifier) *ReleaseCommand {
 	if runner == nil {
 		runner = execReleaseRunner{}

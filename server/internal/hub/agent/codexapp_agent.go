@@ -264,14 +264,6 @@ func codexappStoreThreadMapping(sessionMapPath func() (string, error), acpSessio
 	_ = os.WriteFile(path, raw, 0o600)
 }
 
-func newOwnedCodexappConn(provider *codexAppProvider, cwd string, projectName string) (*codexappConn, error) {
-	runtime, err := newCodexappRuntime(provider, cwd, projectName)
-	if err != nil {
-		return nil, err
-	}
-	return newCodexappConnWithRuntimeAndProfile(runtime, cwd, projectName, provider.connectionProfile()), nil
-}
-
 func newCodexappRuntime(provider *codexAppProvider, cwd string, projectName string) (*codexappRuntime, error) {
 	exe, args, env, err := provider.Launch()
 	if err != nil {
@@ -2633,16 +2625,6 @@ func (c *codexappConn) handlePermissionsApprovalRequest(ctx context.Context, par
 	default:
 		return appServerPermissionsApprovalResponse{Permissions: json.RawMessage(`{}`), Scope: "turn"}, nil
 	}
-}
-
-func (c *codexappConn) emitTextUpdate(sessionID string, updateType string, text string) {
-	c.emitSessionUpdate(protocol.SessionUpdateParams{
-		SessionID: c.outboundSessionID(sessionID),
-		Update: protocol.SessionUpdate{
-			SessionUpdate: updateType,
-			Content:       mustRaw(protocol.ContentBlock{Type: protocol.ContentBlockTypeText, Text: text}),
-		},
-	})
 }
 
 func (c *codexappConn) emitTurnTextUpdate(sessionID string, turnID string, updateType string, text string) {
