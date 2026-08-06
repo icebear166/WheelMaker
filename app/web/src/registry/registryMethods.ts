@@ -30,6 +30,7 @@ export const RegistryMethods = {
   ProjectGitLog: 'project.git.log',
   ProjectGitCommitFiles: 'project.git.commit.files',
   ProjectGitCommitFileDiff: 'project.git.commit.fileDiff',
+  ProjectGitCommitDiff: 'project.git.commit.diff',
   ProjectGitDiff: 'project.git.diff',
   ProjectGitDiffFileDiff: 'project.git.diff.fileDiff',
   ProjectGitStatus: 'project.git.status',

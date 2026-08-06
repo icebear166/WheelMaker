@@ -25,6 +25,7 @@ import type {
   RegistryGitCommit,
   RegistryGitCommitFile,
   RegistryGitFileDiff,
+  RegistryGitCommitDiff,
   RegistryGitRev,
   RegistryGitStatus,
   RegistryHub,
@@ -1563,6 +1564,24 @@ export class RegistryRepository {
       isBinary: payload.isBinary ?? false,
       diff: payload.diff ?? '',
       truncated: payload.truncated ?? false,
+    };
+  }
+
+  async gitCommitDiff(
+    projectId: string,
+    sha: string,
+    contextLines = 3,
+  ): Promise<RegistryGitCommitDiff> {
+    const resp = await this.client.request({
+      method: RegistryMethods.ProjectGitCommitDiff,
+      projectId,
+      payload: { sha, contextLines },
+      timeoutMs: 30000,
+    });
+    const payload = (resp.payload ?? {}) as RegistryGitCommitDiff;
+    return {
+      sha: payload.sha ?? sha,
+      diff: payload.diff ?? '',
     };
   }
 

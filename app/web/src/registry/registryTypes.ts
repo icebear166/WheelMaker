@@ -1263,6 +1263,11 @@ export interface RegistryGitFileDiff {
   truncated: boolean;
 }
 
+export interface RegistryGitCommitDiff {
+  sha: string;
+  diff: string;
+}
+
 export interface RegistryGitStatusEntry {
   path: string;
   status: string;

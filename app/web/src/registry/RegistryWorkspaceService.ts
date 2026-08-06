@@ -23,6 +23,7 @@ import type {
   RegistryGitCommit,
   RegistryGitCommitFile,
   RegistryGitFileDiff,
+  RegistryGitCommitDiff,
   RegistryGitRev,
   RegistryGitStatus,
   RegistryHub,
@@ -503,6 +504,16 @@ export class RegistryWorkspaceService {
       return {sha, path, isBinary: false, diff: '', truncated: false};
     }
     return this.repository.gitCommitFileDiff(projectId, sha, path, 3);
+  }
+
+  async readProjectGitCommitDiff(
+    projectId: string,
+    sha: string,
+  ): Promise<RegistryGitCommitDiff> {
+    if (!this.repository || !projectId) {
+      return {sha, diff: ''};
+    }
+    return this.repository.gitCommitDiff(projectId, sha, 3);
   }
 
   async getGitStatus(): Promise<RegistryGitStatus> {
