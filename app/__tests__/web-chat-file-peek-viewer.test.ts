@@ -135,7 +135,7 @@ describe('web chat file peek viewer', () => {
     const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
     const runnerStart = actionsBody.indexOf('const runProjectFileDesktopAction = (');
-    const runnerEnd = actionsBody.indexOf('const indexPending =', runnerStart);
+    const runnerEnd = actionsBody.indexOf('const canExportPreviewHtml =', runnerStart);
     const runnerBody = actionsBody.slice(runnerStart, runnerEnd);
     const disconnectedReturnStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible) {');
     const connectedReturnStart = mainTsx.indexOf('return (\n    <>\n      <ResponsiveShell', disconnectedReturnStart);
@@ -167,7 +167,8 @@ describe('web chat file peek viewer', () => {
     expect(actionsBody).toContain('<span>Show in File Explorer</span>');
     expect(actionsBody).toContain('<span>Copy absolute path</span>');
     expect(actionsBody).not.toContain('<span>Open in File tab</span>');
-    expect(actionsBody).toContain("'Rebuild file index'");
+    expect(actionsBody).toContain("tab.loading ? 'Refreshing...' : 'Refresh'");
+    expect(actionsBody).not.toContain("'Rebuild file index'");
     expect(runnerBody).toContain('closeMenu();');
     expect(runnerBody).toContain("setToastMessage('');");
     expect(runnerBody).toContain('if (!desktopBridge || !desktopTarget) {');
@@ -183,10 +184,10 @@ describe('web chat file peek viewer', () => {
     const vscodeLabelIndex = actionsBody.indexOf('<span>Open with VS Code</span>');
     const folderLabelIndex = actionsBody.indexOf('<span>Show in File Explorer</span>');
     const copyPathLabelIndex = actionsBody.indexOf('<span>Copy absolute path</span>');
-    const rebuildLabelIndex = actionsBody.indexOf("'Rebuild file index'");
+    const refreshLabelIndex = actionsBody.indexOf("tab.loading ? 'Refreshing...' : 'Refresh'");
     expect(vscodeLabelIndex).toBeLessThan(folderLabelIndex);
     expect(folderLabelIndex).toBeLessThan(copyPathLabelIndex);
-    expect(copyPathLabelIndex).toBeLessThan(rebuildLabelIndex);
+    expect(copyPathLabelIndex).toBeLessThan(refreshLabelIndex);
     expect(disconnectedReturnStart).toBeGreaterThanOrEqual(0);
     expect(connectedReturnStart).toBeGreaterThan(disconnectedReturnStart);
     expect(connectedToastStart).toBeGreaterThan(connectedReturnStart);
@@ -615,7 +616,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}');
   });
 
-  test('preview title actions are consolidated into an accessible menu with current-project indexing', () => {
+  test('preview title actions are consolidated into an accessible menu with file refresh', () => {
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
@@ -628,9 +629,10 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('aria-haspopup="menu"');
 
     expect(mainTsx).toContain('const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);');
-    expect(mainTsx).toContain('const handlePreviewProjectIndexRebuild = useCallback(async (projectId: string) => {');
-    expect(mainTsx).toContain("indexPending ? 'Indexing...' : 'Rebuild file index'");
-    expect(mainTsx).toContain("indexedProject?.status === 'scanning'");
+    expect(mainTsx).not.toContain('handlePreviewProjectIndexRebuild');
+    expect(mainTsx).not.toContain("'Rebuild file index'");
+    expect(mainTsx).toContain("tab.loading ? 'Refreshing...' : 'Refresh'");
+    expect(mainTsx).toContain('readChatFilePeek(tab.path, null, tab.projectId)');
     expect(mainTsx).toContain('actionsMenuOpen={previewWorkbenchActionsMenuOpen}');
     expect(mainTsx).toContain('onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}');
     expect(mainTsx).toContain('onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}');

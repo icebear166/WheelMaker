@@ -448,20 +448,6 @@
   cursor: default;
 }
 
-.preview-workbench-action-menu-separator {
-  height: 1px;
-  margin: 3px 4px;
-  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
-}
-
-.preview-workbench-action-menu-error {
-  max-width: 250px;
-  padding: 4px 8px 3px;
-  color: var(--state-danger);
-  font-size: 11px;
-  line-height: 1.35;
-}
-
 .preview-tab-context-menu {
   position: fixed;
   z-index: 140;

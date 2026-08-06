@@ -3107,7 +3107,6 @@ export function App() {
   const clientUpdateController = desktopUpdateController ?? androidUpdateController;
   const [agentPackageActionPendingKey, setAgentPackageActionPendingKey] = useState('');
   const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');
-  const [projectIndexErrorByProjectId, setProjectIndexErrorByProjectId] = useState<Record<string, string>>({});
   const [projectIndexScanPendingByProjectId, setProjectIndexScanPendingByProjectId] = useState<Record<string, boolean>>({});
   const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
   const [skillsPendingKey, setSkillsPendingKey] = useState('');
@@ -13820,7 +13819,6 @@ export function App() {
     if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
       return;
     }
-    setProjectIndexErrorByProjectId(prev => ({...prev, [projectId]: ''}));
     setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: true}));
     let scanRunning = false;
     try {
@@ -13831,7 +13829,6 @@ export function App() {
       scanRunning = result.running === true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setProjectIndexErrorByProjectId(prev => ({...prev, [projectId]: message}));
       setError(message);
     } finally {
       if (!scanRunning) {
@@ -13839,12 +13836,6 @@ export function App() {
       }
     }
   }, [projectIndexScanPendingByProjectId]);
-
-  const handlePreviewProjectIndexRebuild = useCallback(async (projectId: string) => {
-    const project = projects.find(item => item.projectId === projectId);
-    const hubId = project?.hubId || projectId.split(':', 1)[0] || 'local';
-    await handleScanProjectIndex(hubId, projectId);
-  }, [handleScanProjectIndex, projects]);
 
   const handleScanAllProjectIndexes = useCallback(async (hubId: string, projectIndexProjects: RegistryFileIndexStatus[]) => {
     const targets = projectIndexProjects.filter(project => project.projectId);
@@ -20427,13 +20418,6 @@ export function App() {
           setToastMessage(`${failurePrefix}: ${reason}`);
         });
     };
-    const indexedProject = Object.values(projectIndexByHubId)
-      .flatMap(snapshot => snapshot.projects ?? [])
-      .find(project => project.projectId === tab.projectId);
-    const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true
-      || indexedProject?.running === true
-      || indexedProject?.status === 'scanning';
-    const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
     const canExportPreviewHtml =
       tab.type === 'file' &&
       !tab.loading &&
@@ -20499,6 +20483,19 @@ export function App() {
               <Icon name="copy" />
               <span>Copy absolute path</span>
             </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="preview-workbench-action-menu-item"
+              onClick={() => {
+                closeMenu();
+                readChatFilePeek(tab.path, null, tab.projectId).catch(() => undefined);
+              }}
+              disabled={tab.loading}
+            >
+              <Icon name="refreshCw" spin={tab.loading} />
+              <span>{tab.loading ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
           </>
         ) : null}
         {tab.type === 'port-relay' ? (
@@ -20515,18 +20512,6 @@ export function App() {
             <span>Open relay page in browser</span>
           </button>
         ) : null}
-        <div className="preview-workbench-action-menu-separator" role="separator" />
-        <button
-          type="button"
-          role="menuitem"
-          className="preview-workbench-action-menu-item"
-          onClick={() => handlePreviewProjectIndexRebuild(tab.projectId).catch(() => undefined)}
-          disabled={indexPending}
-        >
-          <Icon name="refreshCw" spin={indexPending} />
-          <span>{indexPending ? 'Indexing...' : 'Rebuild file index'}</span>
-        </button>
-        {indexError ? <div className="preview-workbench-action-menu-error" role="alert">{indexError}</div> : null}
       </>
     );
   };
