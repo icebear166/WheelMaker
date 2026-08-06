@@ -57,13 +57,10 @@ func TestBuildClient_DefaultConfigStartsSessionClient(t *testing.T) {
 
 func TestHubPassesRestartRuntimeHandlerToReporter(t *testing.T) {
 	h := newHubWithFactory(
-		&logger.AppConfig{Registry: logger.RegistryConfig{
-			Listen: true,
-			Server: "127.0.0.1",
-			Port:   9630,
-			HubID:  "hub-restart-handler",
-			Token:  "token",
-		}},
+		&logger.AppConfig{
+			Token: "token", HubID: "hub-restart-handler",
+			Registry: logger.RegistryConfig{Listen: true, Port: 9630},
+		},
 		filepath.Join(t.TempDir(), "db", "client.sqlite3"),
 		agent.NewACPFactory(),
 	)
@@ -277,7 +274,7 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            registryAddr,
+		PublicURL:         registryAddr,
 		HubID:             "hub-relay-smoke",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, nil)
@@ -650,7 +647,7 @@ func TestReporterRespondsToHubStateGet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-state-get",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          t.TempDir(),
@@ -713,7 +710,7 @@ func TestReporterRespondsToUsageHistoryGet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-usage-history-get",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          stateDir,
@@ -773,7 +770,7 @@ func TestReporterRejectsInvalidUsageHistoryGet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-usage-history-invalid",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          t.TempDir(),
@@ -819,7 +816,7 @@ func TestReporterRespondsToDeepSeekUsageGet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-deepseek-usage",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          t.TempDir(),
@@ -870,7 +867,7 @@ func TestReporterRespondsToDeepSeekUsageGetErrorWithMessage(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-deepseek-usage-error",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          t.TempDir(),
@@ -917,7 +914,7 @@ func TestReporterRejectsInvalidDeepSeekUsageGet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-deepseek-usage-invalid",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          t.TempDir(),
@@ -966,7 +963,7 @@ func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			reporter := NewReporter(ReporterConfig{
-				Server:            strings.TrimPrefix(ts.URL, "http://"),
+				PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 				HubID:             "hub-state-action",
 				ReconnectInterval: 50 * time.Millisecond,
 				StateDir:          t.TempDir(),
@@ -1013,7 +1010,7 @@ func TestReporterAcceptsRestartAndRepliesBeforeSchedulingRuntime(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-restart",
 		ReconnectInterval: 50 * time.Millisecond,
 		StateDir:          t.TempDir(),
@@ -2562,7 +2559,7 @@ func TestReporterNotifiesReleaseTargetThroughRegistry(t *testing.T) {
 	_ = mustReadEnvelope(t, target)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	reporter := NewReporter(ReporterConfig{Server: ts.URL, HubID: "publisher-hub", StateDir: t.TempDir(), ReconnectInterval: 10 * time.Millisecond}, nil)
+	reporter := NewReporter(ReporterConfig{PublicURL: ts.URL, HubID: "publisher-hub", StateDir: t.TempDir(), ReconnectInterval: 10 * time.Millisecond}, nil)
 	done := make(chan error, 1)
 	go func() { done <- reporter.Run(ctx) }()
 	defer stopReporterForTest(t, cancel, done)
@@ -2632,7 +2629,7 @@ func TestReporterOffersPerMessageDeflate(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	reporter := NewReporter(ReporterConfig{
-		Server: ts.URL, HubID: "compressed-hub", StateDir: t.TempDir(),
+		PublicURL: ts.URL, HubID: "compressed-hub", StateDir: t.TempDir(),
 		ReconnectInterval: 10 * time.Millisecond,
 	}, nil)
 	done := make(chan error, 1)
@@ -2662,7 +2659,7 @@ func TestReporterTransfersDebugWebInAcknowledgedChunks(t *testing.T) {
 	_ = mustReadEnvelope(t, target)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	reporter := NewReporter(ReporterConfig{Server: ts.URL, HubID: "source-hub", StateDir: t.TempDir(), ReconnectInterval: 10 * time.Millisecond}, nil)
+	reporter := NewReporter(ReporterConfig{PublicURL: ts.URL, HubID: "source-hub", StateDir: t.TempDir(), ReconnectInterval: 10 * time.Millisecond}, nil)
 	done := make(chan error, 1)
 	go func() { done <- reporter.Run(ctx) }()
 	defer stopReporterForTest(t, cancel, done)
@@ -2984,7 +2981,7 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := NewReporter(ReporterConfig{
-		Server:            ts,
+		PublicURL:         ts,
 		HubID:             "hub-test",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: root, Online: true}})
@@ -3174,7 +3171,7 @@ func TestReporterRespondsToSessionPermissionRespondRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3241,7 +3238,7 @@ func TestReporterForwardsSessionActionRequests(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			reporter := NewReporter(ReporterConfig{
-				Server:            strings.TrimPrefix(server.URL, "http://"),
+				PublicURL:         strings.TrimPrefix(server.URL, "http://"),
 				HubID:             "hub-session-actions",
 				ReconnectInterval: 50 * time.Millisecond,
 			}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3281,7 +3278,7 @@ func TestReporterRespondsToTerminalRequests(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	reporter := NewReporter(ReporterConfig{
-		Server: strings.TrimPrefix(ts.URL, "http://"), HubID: "hub-terminal", ReconnectInterval: 50 * time.Millisecond,
+		PublicURL: strings.TrimPrefix(ts.URL, "http://"), HubID: "hub-terminal", ReconnectInterval: 50 * time.Millisecond,
 	}, nil)
 	handler := &stubTerminalHandler{requests: make(chan string, 1)}
 	reporter.SetTerminalHandler(handler)
@@ -3344,7 +3341,7 @@ func TestReporterHandlesTerminalInputAndPublishesOutputEvents(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	reporter := NewReporter(ReporterConfig{
-		Server: strings.TrimPrefix(ts.URL, "http://"), HubID: "hub-terminal-events", ReconnectInterval: 50 * time.Millisecond,
+		PublicURL: strings.TrimPrefix(ts.URL, "http://"), HubID: "hub-terminal-events", ReconnectInterval: 50 * time.Millisecond,
 	}, nil)
 	handler := &stubTerminalHandler{inputs: make(chan rp.TerminalInputEvent, 1)}
 	reporter.SetTerminalHandler(handler)
@@ -3466,7 +3463,8 @@ func TestHubSetupRegistrySharesHubConfigStoreWithReporter(t *testing.T) {
 	stateDir := t.TempDir()
 	h := New(&logger.AppConfig{
 		Projects: []logger.ProjectConfig{{Name: "proj1", Path: projectRoot}},
-		Registry: logger.RegistryConfig{Server: "127.0.0.1", Port: 9630, HubID: "hub-usage-keys"},
+		HubID:    "hub-usage-keys",
+		Registry: logger.RegistryConfig{Port: 9630},
 	}, filepath.Join(stateDir, "db", "client.sqlite3"))
 	h.setupRegistrySync()
 	defer h.Close()
@@ -3478,11 +3476,24 @@ func TestHubSetupRegistrySharesHubConfigStoreWithReporter(t *testing.T) {
 	}
 }
 
+func TestHubSetupRegistryUsesLoopbackWhenPublicURLIsOmitted(t *testing.T) {
+	h := New(&logger.AppConfig{Token: "token", HubID: "loopback-hub"}, filepath.Join(t.TempDir(), "state.db"))
+	h.setupRegistrySync()
+	defer h.Close()
+	if h.regSync == nil {
+		t.Fatal("registry reporter was not created")
+	}
+	if h.regSync.cfg.PublicURL != "" || h.regSync.cfg.Port != 9630 {
+		t.Fatalf("reporter config = %+v, want loopback fallback", h.regSync.cfg)
+	}
+}
+
 func TestHubSetupRegistryCreatesTerminalManager(t *testing.T) {
 	projectRoot := t.TempDir()
 	h := New(&logger.AppConfig{
 		Projects: []logger.ProjectConfig{{Name: "proj1", Path: projectRoot}},
-		Registry: logger.RegistryConfig{Server: "127.0.0.1", Port: 9630, HubID: "hub-terminal-setup"},
+		HubID:    "hub-terminal-setup",
+		Registry: logger.RegistryConfig{Port: 9630},
 	}, filepath.Join(t.TempDir(), "state.db"))
 	h.setupRegistrySync()
 	defer h.Close()
@@ -3563,7 +3574,7 @@ func TestReporterVerboseEnvelopeLogsDoNotIncludePayloadOrTiming(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3682,7 +3693,7 @@ func TestReporterForwardsSessionSearchRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session-search",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3803,7 +3814,7 @@ func TestReporterForwardsSessionArchiveRecoveryRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session-archive",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3852,7 +3863,7 @@ func TestReporterRespondsToSessionAttachmentRequests(t *testing.T) {
 	defer cancel()
 
 	reporter := NewReporter(ReporterConfig{
-		Server:            addr,
+		PublicURL:         addr,
 		HubID:             "hub-attachment",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3947,7 +3958,7 @@ func TestReporterForwardsSessionArtifactReadRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-artifact-read",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -3990,7 +4001,7 @@ func TestReporterRejectsPublicCmdRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-cmd-reject",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, nil)
@@ -4096,7 +4107,7 @@ func TestReporterRespondsToSessionSetConfigRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -4211,7 +4222,7 @@ func TestReporterForwardsSessionDeleteRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session-del",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -4329,7 +4340,7 @@ func TestReporterForwardsSessionRenameRequests(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session-rename",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
@@ -4466,7 +4477,7 @@ func TestReporterForwardsSessionPinAndMarkToProjectHandlerAndRequiresProjectID(t
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		PublicURL:         strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-session-pin",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{
@@ -4554,7 +4565,7 @@ func TestReporterRunReturnsOnContextCancel(t *testing.T) {
 	ts := newRegistryServer(t, registry.New(registry.Config{}).Handler())
 	ctx, cancel := context.WithCancel(context.Background())
 	r := NewReporter(ReporterConfig{
-		Server:            ts,
+		PublicURL:         ts,
 		HubID:             "hub-cancel",
 		ReconnectInterval: 30 * time.Millisecond,
 	}, []ProjectInfo{{Name: "server", Path: t.TempDir(), Online: true}})
@@ -4579,7 +4590,7 @@ func TestReporterAuth(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := NewReporter(ReporterConfig{
-		Server:            ts,
+		PublicURL:         ts,
 		Token:             "token-1",
 		HubID:             "hub-auth",
 		ReconnectInterval: 30 * time.Millisecond,
@@ -4620,7 +4631,7 @@ func TestReporterGitRevisionOptionRejected(t *testing.T) {
 
 			ctx, cancel := context.WithCancel(context.Background())
 			reporter := NewReporter(ReporterConfig{
-				Server:            strings.TrimPrefix(server.URL, "http://"),
+				PublicURL:         strings.TrimPrefix(server.URL, "http://"),
 				HubID:             "hub-git-guard",
 				ReconnectInterval: 50 * time.Millisecond,
 			}, []ProjectInfo{{Name: "proj1", Path: root, Online: true}})
@@ -4654,7 +4665,7 @@ func TestReporterUpdateProjectRefreshesRegistrySnapshot(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := NewReporter(ReporterConfig{
-		Server:            ts,
+		PublicURL:         ts,
 		HubID:             "hub-update",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: root, Online: true, ProjectRev: "p1", Git: rp.ProjectGitState{GitRev: "g1", WorktreeRev: "w1"}}})
@@ -4727,7 +4738,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	r := NewReporter(ReporterConfig{
-		Server:            ts,
+		PublicURL:         ts,
 		HubID:             "hub-hash",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, []ProjectInfo{{Name: "proj1", Path: root, Online: true}})
@@ -4859,6 +4870,38 @@ func TestBuildWSURLAbsoluteURL(t *testing.T) {
 	got, err := buildWSURL("http://127.0.0.1:9630", 0)
 	if err != nil || got != "ws://127.0.0.1:9630/ws" {
 		t.Fatalf("buildWSURL() = %q, err=%v", got, err)
+	}
+}
+
+func TestBuildWSURLCanonicalPublicURL(t *testing.T) {
+	tests := []struct {
+		name string
+		base string
+		want string
+	}{
+		{name: "remote https", base: "https://registry.example.com:28800", want: "wss://registry.example.com:28800/ws"},
+		{name: "remote https with legacy ws path", base: "https://registry.example.com:28800/ws", want: "wss://registry.example.com:28800/ws"},
+		{name: "loopback http", base: "http://localhost:9630", want: "ws://localhost:9630/ws"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := buildWSURL(tt.base, 0)
+			if err != nil || got != tt.want {
+				t.Fatalf("buildWSURL(%q) = %q, err=%v; want %q", tt.base, got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildWSURLRejectsNonOriginPath(t *testing.T) {
+	if _, err := buildWSURL("https://registry.example.com/api", 0); err == nil {
+		t.Fatal("buildWSURL() error=nil, want non-origin path rejection")
+	}
+}
+
+func TestBuildWSURLRejectsBareRemoteHost(t *testing.T) {
+	if _, err := buildWSURL("registry.example.com:28800", 0); err == nil {
+		t.Fatal("buildWSURL() error=nil, want canonical origin requirement")
 	}
 }
 

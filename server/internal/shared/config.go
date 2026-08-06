@@ -10,6 +10,8 @@ import (
 // AppConfig is the top-level config.json structure.
 type AppConfig struct {
 	PublicURL string          `json:"publicUrl,omitempty"`
+	Token     string          `json:"token,omitempty"`
+	HubID     string          `json:"hubId,omitempty"`
 	Projects  []ProjectConfig `json:"projects"`
 	Registry  RegistryConfig  `json:"registry,omitempty"`
 	Log       LogConfig       `json:"log,omitempty"`
@@ -17,6 +19,8 @@ type AppConfig struct {
 
 type appConfigInput struct {
 	PublicURL         string          `json:"publicUrl,omitempty"`
+	Token             string          `json:"token,omitempty"`
+	HubID             string          `json:"hubId,omitempty"`
 	Projects          []ProjectConfig `json:"projects"`
 	Registry          RegistryConfig  `json:"registry,omitempty"`
 	Log               LogConfig       `json:"log,omitempty"`
@@ -78,11 +82,8 @@ func (c *FeishuConfig) UnmarshalJSON(data []byte) error {
 
 // RegistryConfig configures registry sync.
 type RegistryConfig struct {
-	Port   int    `json:"port,omitempty"`
-	Listen bool   `json:"listen,omitempty"`
-	Server string `json:"server,omitempty"`
-	Token  string `json:"token,omitempty"`
-	HubID  string `json:"hubId,omitempty"`
+	Port   int  `json:"port,omitempty"`
+	Listen bool `json:"listen,omitempty"`
 }
 
 // LoadConfig reads and parses the config file at path.
@@ -110,6 +111,8 @@ func LoadConfig(path string) (*AppConfig, error) {
 	}
 	return &AppConfig{
 		PublicURL: input.PublicURL,
+		Token:     input.Token,
+		HubID:     input.HubID,
 		Projects:  input.Projects,
 		Registry:  input.Registry,
 		Log:       input.Log,

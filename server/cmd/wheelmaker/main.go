@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -95,6 +96,10 @@ func run() error {
 }
 
 func runRegistryServer(addr, stateDir string) error {
+	loopbackAddr, err := loopbackRegistryAddr(addr)
+	if err != nil {
+		return err
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
@@ -107,18 +112,32 @@ func runRegistryServer(addr, stateDir string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	s := registry.New(registryServerConfig(addr, cfg.Registry.Token, baseDir, home))
+	s := registry.New(registryServerConfig(loopbackAddr, cfg.Token, baseDir, home))
 	return s.Run(ctx)
+}
+
+func loopbackRegistryAddr(addr string) (string, error) {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		return "", fmt.Errorf("registry address must be host:port")
+	}
+	return net.JoinHostPort("127.0.0.1", port), nil
 }
 
 func loadValidatedRuntimeConfig(baseDir string) (*logger.AppConfig, error) {
 	cfgPath := filepath.Join(baseDir, "config.json")
+	if err := logger.MigrateConfig(cfgPath); err != nil {
+		return nil, fmt.Errorf("migrate config.json at %s: %w", cfgPath, err)
+	}
 	cfg, err := logger.LoadConfig(cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load config.json at %s: %w", cfgPath, err)
 	}
-	if err := security.ValidateRegistryToken(cfg.Registry.Token); err != nil {
+	if err := security.ValidateRegistryToken(cfg.Token); err != nil {
 		return nil, fmt.Errorf("invalid config.json at %s: %w", cfgPath, err)
+	}
+	if err := logger.FinalizeConfigMigration(cfgPath); err != nil {
+		return nil, fmt.Errorf("finalize config migration at %s: %w", cfgPath, err)
 	}
 	return cfg, nil
 }
@@ -211,10 +230,7 @@ func runRegistryWorker(stateDir string, localDev bool) error {
 	}
 	defer logger.Close()
 
-	host := cfg.Registry.Server
-	if host == "" {
-		host = "127.0.0.1"
-	}
+	host := "127.0.0.1"
 	port := cfg.Registry.Port
 	if port == 0 {
 		port = 9630
@@ -224,7 +240,7 @@ func runRegistryWorker(stateDir string, localDev bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	registryScopedLogger.Info("worker start addr=%s", addr)
-	s := registry.New(registryServerConfig(addr, cfg.Registry.Token, baseDir, home))
+	s := registry.New(registryServerConfig(addr, cfg.Token, baseDir, home))
 	if err := s.Run(ctx); err != nil {
 		registryScopedLogger.Error("worker run failed err=%v", err)
 		return err
@@ -247,8 +263,8 @@ func registryServerConfig(addr, token, stateDir, userHome string) registry.Confi
 
 func localDevRuntimeConfig(cfg *logger.AppConfig) *logger.AppConfig {
 	local := *cfg
+	local.PublicURL = ""
 	local.Registry.Listen = true
-	local.Registry.Server = "127.0.0.1"
 	local.Registry.Port = 9630
 	return &local
 }

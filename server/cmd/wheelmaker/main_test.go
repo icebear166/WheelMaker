@@ -29,6 +29,19 @@ func TestDefaultRegistryListenAddressIsLoopback(t *testing.T) {
 	}
 }
 
+func TestLoopbackRegistryAddrIgnoresConfiguredHost(t *testing.T) {
+	got, err := loopbackRegistryAddr("0.0.0.0:9630")
+	if err != nil || got != "127.0.0.1:9630" {
+		t.Fatalf("loopbackRegistryAddr() = %q, err=%v", got, err)
+	}
+}
+
+func TestLoopbackRegistryAddrRejectsMissingPort(t *testing.T) {
+	if _, err := loopbackRegistryAddr("0.0.0.0"); err == nil {
+		t.Fatal("loopbackRegistryAddr() error=nil, want host:port validation")
+	}
+}
+
 func TestRunFlickerBridgeSelfTestMode(t *testing.T) {
 	originalArgs := os.Args
 	t.Cleanup(func() { os.Args = originalArgs })
@@ -53,8 +66,8 @@ func TestLoadValidatedRuntimeConfigRejectsUnsafeRegistryToken(t *testing.T) {
 			baseDir := t.TempDir()
 			writeRuntimeConfigForTest(t, baseDir, token)
 			_, err := loadValidatedRuntimeConfig(baseDir)
-			if err == nil || !strings.Contains(err.Error(), "registry.token") {
-				t.Fatalf("loadValidatedRuntimeConfig() error=%v, want registry.token rejection", err)
+			if err == nil || !strings.Contains(err.Error(), "token") {
+				t.Fatalf("loadValidatedRuntimeConfig() error=%v, want token rejection", err)
 			}
 		})
 	}
@@ -67,8 +80,46 @@ func TestLoadValidatedRuntimeConfigAcceptsCustomRegistryToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadValidatedRuntimeConfig(): %v", err)
 	}
-	if cfg.Registry.Token != "user-supplied-random-token" {
-		t.Fatalf("registry.token=%q", cfg.Registry.Token)
+	if cfg.Token != "user-supplied-random-token" {
+		t.Fatalf("token=%q", cfg.Token)
+	}
+}
+
+func TestLoadValidatedRuntimeConfigMigratesBeforeStrictLoad(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "config.json")
+	legacy := `{"projects":[],"registry":{"listen":false,"port":28800,"server":"registry.example.com","token":"user-supplied-random-token","hubId":"legacy-hub"}}`
+	if err := os.WriteFile(configPath, []byte(legacy), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := loadValidatedRuntimeConfig(baseDir)
+	if err != nil {
+		t.Fatalf("loadValidatedRuntimeConfig(): %v", err)
+	}
+	if cfg.PublicURL != "https://registry.example.com:28800" || cfg.Token != "user-supplied-random-token" || cfg.HubID != "legacy-hub" {
+		t.Fatalf("migrated config = %+v", cfg)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read migrated config: %v", err)
+	}
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode migrated config: %v", err)
+	}
+	var registry map[string]json.RawMessage
+	if err := json.Unmarshal(decoded["registry"], &registry); err != nil {
+		t.Fatalf("decode migrated registry: %v", err)
+	}
+	if _, ok := registry["server"]; ok {
+		t.Fatalf("migrated config still contains legacy server: %s", data)
+	}
+	if _, ok := registry["token"]; ok {
+		t.Fatalf("migrated config still contains nested token: %s", data)
+	}
+	if _, err := os.Stat(shared.MigrationBackupPath(configPath)); !os.IsNotExist(err) {
+		t.Fatalf("migration backup still exists after validated load: %v", err)
 	}
 }
 
@@ -95,7 +146,7 @@ func writeRuntimeConfigForTest(t *testing.T, baseDir string, token string) {
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{
 		"projects": []any{},
-		"registry": map[string]any{"token": token},
+		"token":    token,
 	})
 	if err != nil {
 		t.Fatalf("marshal config: %v", err)
@@ -129,7 +180,6 @@ func TestWorkerArgsWithStateDirAddsExplicitDir(t *testing.T) {
 func TestGuardianWorkerSpecsSkipRegistryWorkerWhenRegistryListenDisabled(t *testing.T) {
 	cfg := shared.RegistryConfig{
 		Listen: false,
-		Server: "wss://registry.example/ws",
 		Port:   28800,
 	}
 	specs := guardianWorkerSpecs([]string{"--foo", "bar"}, cfg, false)
@@ -145,7 +195,6 @@ func TestGuardianWorkerSpecsSkipRegistryWorkerWhenRegistryListenDisabled(t *test
 func TestGuardianWorkerSpecsForceLocalRegistryForLocalDev(t *testing.T) {
 	cfg := shared.RegistryConfig{
 		Listen: false,
-		Server: "wss://registry.example/ws",
 		Port:   28800,
 	}
 	specs := guardianWorkerSpecs([]string{"--dir", `C:\Users\me\.wheelmaker`}, cfg, true)
@@ -164,12 +213,9 @@ func TestGuardianWorkerSpecsForceLocalRegistryForLocalDev(t *testing.T) {
 }
 
 func TestLocalDevRuntimeConfigUsesFormalDataWithLoopbackRegistry(t *testing.T) {
-	original := &shared.AppConfig{Registry: shared.RegistryConfig{
+	original := &shared.AppConfig{Token: "formal-token", HubID: "formal-hub", Registry: shared.RegistryConfig{
 		Listen: false,
-		Server: "wss://registry.example/ws",
 		Port:   28800,
-		Token:  "formal-token",
-		HubID:  "formal-hub",
 	}}
 
 	got := localDevRuntimeConfig(original)
@@ -177,13 +223,13 @@ func TestLocalDevRuntimeConfigUsesFormalDataWithLoopbackRegistry(t *testing.T) {
 	if got == original {
 		t.Fatal("localDevRuntimeConfig() mutated the loaded formal config")
 	}
-	if got.Registry.Server != "127.0.0.1" || got.Registry.Port != 9630 || !got.Registry.Listen {
+	if got.PublicURL != "" || got.Registry.Port != 9630 || !got.Registry.Listen {
 		t.Fatalf("localDevRuntimeConfig().Registry=%+v", got.Registry)
 	}
-	if got.Registry.Token != "formal-token" || got.Registry.HubID != "formal-hub" {
-		t.Fatalf("localDevRuntimeConfig() did not preserve formal identity: %+v", got.Registry)
+	if got.Token != "formal-token" || got.HubID != "formal-hub" {
+		t.Fatalf("localDevRuntimeConfig() did not preserve formal identity: %+v", got)
 	}
-	if original.Registry.Server != "wss://registry.example/ws" || original.Registry.Listen {
+	if original.Registry.Listen {
 		t.Fatalf("formal config was mutated: %+v", original.Registry)
 	}
 }

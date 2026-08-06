@@ -84,10 +84,10 @@ func loadGuardianRegistryConfig(stateDir string) (shared.RegistryConfig, error) 
 	if err != nil {
 		return shared.RegistryConfig{}, fmt.Errorf("home dir: %w", err)
 	}
-	cfgPath := filepath.Join(wheelMakerStateDir(home, stateDir), "config.json")
-	cfg, err := shared.LoadConfig(cfgPath)
+	baseDir := wheelMakerStateDir(home, stateDir)
+	cfg, err := loadValidatedRuntimeConfig(baseDir)
 	if err != nil {
-		return shared.RegistryConfig{}, fmt.Errorf("cannot load config.json at %s: %w", cfgPath, err)
+		return shared.RegistryConfig{}, err
 	}
 	return cfg.Registry, nil
 }

@@ -321,7 +321,8 @@ func (h *Hub) Close() error {
 
 func (h *Hub) setupRegistrySync() {
 	cfg := h.cfg.Registry
-	if !cfg.Listen && strings.TrimSpace(cfg.Server) == "" && cfg.Port == 0 {
+	if !cfg.Listen && strings.TrimSpace(h.cfg.PublicURL) == "" && cfg.Port == 0 &&
+		strings.TrimSpace(h.cfg.Token) == "" && strings.TrimSpace(h.cfg.HubID) == "" {
 		return
 	}
 
@@ -329,12 +330,9 @@ func (h *Hub) setupRegistrySync() {
 	if port == 0 {
 		port = 9630
 	}
-	host := strings.TrimSpace(cfg.Server)
-	if host == "" {
-		host = "127.0.0.1"
-	}
+	publicURL := strings.TrimSpace(h.cfg.PublicURL)
 
-	hubID := strings.TrimSpace(cfg.HubID)
+	hubID := strings.TrimSpace(h.cfg.HubID)
 	if hubID == "" {
 		if hn, err := os.Hostname(); err == nil && strings.TrimSpace(hn) != "" {
 			hubID = hn
@@ -349,9 +347,9 @@ func (h *Hub) setupRegistrySync() {
 	}
 
 	rep := NewReporter(ReporterConfig{
-		Server:             host,
+		PublicURL:          publicURL,
 		Port:               port,
-		Token:              cfg.Token,
+		Token:              h.cfg.Token,
 		HubID:              hubID,
 		ReconnectInterval:  2 * time.Second,
 		StateDir:           filepath.Dir(filepath.Dir(h.dbPath)),

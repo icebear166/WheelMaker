@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -124,7 +125,9 @@ type toolCommandHandler interface {
 
 // ReporterConfig controls hub->registry connection behavior.
 type ReporterConfig struct {
-	Server             string
+	// PublicURL is the canonical Registry HTTP(S) origin. An empty value uses
+	// the local loopback Registry listener.
+	PublicURL          string
 	Port               int
 	Token              string
 	HubID              string
@@ -659,7 +662,7 @@ func (r *Reporter) sendDebugWebTransferRequest(ctx context.Context, method strin
 }
 
 func (r *Reporter) runSession(ctx context.Context) error {
-	wsURL, err := buildWSURL(r.cfg.Server, r.cfg.Port)
+	wsURL, err := buildWSURL(r.cfg.PublicURL, r.cfg.Port)
 	if err != nil {
 		return err
 	}
@@ -3605,35 +3608,69 @@ func redactTerminalDebugEnvelope(env envelope) envelope {
 	return env
 }
 
-func buildWSURL(server string, port int) (string, error) {
-	base := strings.TrimSpace(server)
+func buildWSURL(publicURL string, port int) (string, error) {
+	base := strings.TrimSpace(publicURL)
 	if base == "" {
-		base = "127.0.0.1"
-	}
-	if strings.HasPrefix(base, "ws://") || strings.HasPrefix(base, "wss://") ||
-		strings.HasPrefix(base, "http://") || strings.HasPrefix(base, "https://") {
-		u, err := url.Parse(base)
-		if err != nil {
-			return "", fmt.Errorf("invalid registry server %q: %w", base, err)
+		if port == 0 {
+			port = 9630
 		}
-		switch u.Scheme {
+		base = fmt.Sprintf("127.0.0.1:%d", port)
+	}
+	hasScheme := strings.Contains(base, "://")
+	parseValue := base
+	if !hasScheme {
+		parseValue = "//" + base
+	}
+	u, err := url.Parse(parseValue)
+	if err != nil || u.Host == "" || u.User != nil || u.Opaque != "" {
+		return "", errors.New("invalid registry publicUrl origin")
+	}
+	if u.RawQuery != "" || u.Fragment != "" || u.ForceQuery {
+		return "", errors.New("registry publicUrl cannot contain query or fragment")
+	}
+	if u.Path != "" && u.Path != "/" && u.Path != "/ws" {
+		return "", errors.New("registry publicUrl path must be /ws or /")
+	}
+	if u.Hostname() == "" {
+		return "", errors.New("registry publicUrl host is empty")
+	}
+	if !hasScheme && !isLoopbackRegistryHost(u.Hostname()) {
+		return "", errors.New("registry publicUrl must be canonical HTTP(S) origin")
+	}
+	if u.Port() != "" {
+		if parsedPort, parseErr := strconv.Atoi(u.Port()); parseErr != nil || parsedPort < 1 || parsedPort > 65535 {
+			return "", errors.New("registry publicUrl port is invalid")
+		}
+	} else if !hasScheme {
+		if port == 0 {
+			port = 9630
+		}
+		u.Host = net.JoinHostPort(u.Hostname(), strconv.Itoa(port))
+	}
+	if !hasScheme {
+		u.Scheme = "ws"
+	} else {
+		switch strings.ToLower(u.Scheme) {
 		case "http":
 			u.Scheme = "ws"
 		case "https":
 			u.Scheme = "wss"
+		case "ws", "wss":
+		default:
+			return "", errors.New("registry publicUrl scheme is unsupported")
 		}
-		if u.Path == "" || u.Path == "/" {
-			u.Path = "/ws"
-		}
-		return u.String(), nil
 	}
-	host := base
-	if strings.Contains(base, ":") {
-		host = base
-	} else {
-		host = fmt.Sprintf("%s:%d", base, port)
+	u.Path = "/ws"
+	u.RawPath = ""
+	return u.String(), nil
+}
+
+func isLoopbackRegistryHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
 	}
-	return "ws://" + host + "/ws", nil
+	addr := net.ParseIP(strings.Trim(host, "[]"))
+	return addr != nil && addr.IsLoopback()
 }
 
 func runGit(root string, args ...string) (string, error) {

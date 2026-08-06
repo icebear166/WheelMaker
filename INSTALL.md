@@ -48,10 +48,10 @@ sudo loginctl enable-linger "$USER"
 ## 2. 获取公共部署启动器
 
 全新安装不需要克隆或进入源码仓库。以下整行命令可在任意目录执行：它把公共
-`deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，再安装当前 stable。首次交互部署会
-询问 “WheelMaker server public URL:”，并把地址保存到
-`~/.wheelmaker/config.json.publicUrl`。可以输入裸域名（例如
-`wheelmaker.example.com`）或带 `https://` 的地址；裸域名会自动按 HTTPS 保存。
+`deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，再安装当前 stable。全新配置默认使用
+本机 loopback Registry；如需配置公网入口，显式传入 `--public-url`。地址可以是裸域名、
+`https://` 或兼容的 `wss://.../ws` 形式，持久化时统一为 HTTPS origin（loopback 保留
+HTTP）。
 
 Windows PowerShell：
 
@@ -65,7 +65,7 @@ macOS/Linux：
 (d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 --progress-bar 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs")
 ```
 
-非交互完整部署必须显式提供地址，例如
+可选地显式提供地址，例如
 `node ~/.wheelmaker/deploy.mjs --public-url=https://wheelmaker.example.com`。如需内置
 Gateway，使用发布首页的另一条独立命令，或在 launcher 已下载后运行：
 
@@ -83,7 +83,7 @@ node "$HOME/.wheelmaker/deploy.mjs" gateway
 
 首次部署在缺少配置时会从系统加密随机源自动生成独立的 32-byte/256-bit Base64URL Registry Token；不要设置默认值，也不要把 Token 放进仓库或命令行。随机源失败时部署会直接失败。
 
-Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部署完成后，通过受保护的本地方式把 `~/.wheelmaker/config.json` 中的 `registry.token` 配置到 Worker；不要在聊天或普通日志中传递。显式配置的短 Token 会被接受，但抗猜测强度更低，不推荐新部署使用。
+Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部署完成后，通过受保护的本地方式把 `~/.wheelmaker/config.json` 中的顶层 `token` 配置到 Worker；不要在聊天或普通日志中传递。显式配置的短 Token 会被接受，但抗猜测强度更低，不推荐新部署使用。
 
 ## 4. 首次部署
 
@@ -96,7 +96,7 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 - 一行命令下载公共 launcher 并执行一次正常完整部署。
 - 迁移会删除旧 Hub/updater/deploy/monitor 运行时、`~/.wheelmaker/build`、`mobile`、`tmp`、旧 `cache/go-build`、`update-now.signal` 和退役的 restart/status helper，但保留配置、数据库、日志、Desktop 与当前 agent cache。
 - Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
-- 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，保存 `publicUrl`，写 schema v2 `release.json` 与 Workspace 站点声明，并启动 Hub。
+- 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`；显式提供地址时保存 `publicUrl`，否则使用 loopback，写 schema v2 `release.json` 与 Workspace 站点声明，并启动 Hub。
 - 正常部署会在安装目录生成当前平台的日常部署入口：Windows 双击 `~/.wheelmaker/deploy.bat`，macOS/Linux 执行 `~/.wheelmaker/deploy.sh`。两者只调用 `node deploy.mjs`，不执行迁移；Windows 完成后会暂停窗口以便查看结果。
 - 固定的 03:00 updater 和 Web 手动更新都调用 `node ~/.wheelmaker/deploy.mjs update`。该命令只停止/替换/启动现有运行时，不安装或卸载服务/任务，也不需要管理员权限。
 - Windows Desktop 按需单独更新：先关闭 Desktop，再运行 `~/.wheelmaker/update_exe.bat`。若本次 stable 版本没有发布新 EXE，会继续使用 stable 中继承的上一版 Desktop 指针。
@@ -134,11 +134,10 @@ Registry 入口机负责：
   ],
   "registry": {
     "listen": true,
-    "port": 9630,
-    "server": "127.0.0.1",
-    "token": "<shared-token>",
-    "hubId": "hub-a"
+    "port": 9630
   },
+  "token": "<shared-token>",
+  "hubId": "hub-a",
   "log": {
     "level": "warn"
   }
@@ -150,9 +149,9 @@ Registry 入口机负责：
 - `publicUrl` 是客户端访问的完整 HTTP(S) origin，也是生成 Workspace 站点声明的来源；
   部署交互输入裸域名时会自动补全 `https://`。
 - `projects[].path` 改成实际 checkout 路径。
-- `registry.server` 在 Registry 入口机上用 `127.0.0.1`。
-- `registry.token` 使用共享 token。
-- `registry.hubId` 要稳定且唯一。
+- `publicUrl` 缺省时 Hub 自动连接 `127.0.0.1:9630`；Registry listener 始终绑定 localhost。
+- 顶层 `token` 使用共享 token。
+- 顶层 `hubId` 要稳定且唯一。
 
 重启服务：
 
@@ -193,6 +192,9 @@ Worker 机器负责：
 
 ```json
 {
+  "publicUrl": "https://<registry-host>:28800",
+  "token": "<shared-token>",
+  "hubId": "hub-b",
   "projects": [
     {
       "name": "Project-B",
@@ -201,10 +203,7 @@ Worker 机器负责：
   ],
   "registry": {
     "listen": false,
-    "port": 9630,
-    "server": "https://<registry-host>:28800",
-    "token": "<shared-token>",
-    "hubId": "hub-b"
+    "port": 9630
   },
   "log": {
     "level": "warn"
@@ -214,11 +213,11 @@ Worker 机器负责：
 
 要点：
 
-- `registry.server` 写 Registry 入口机的 origin，不要写 `/ws`。
+- `publicUrl` 写 Registry 入口机的 origin，不要写 `/ws`；省略时仅连接本机 loopback。
 - 远程地址必须使用 `https://<registry-host>:28800`；WheelMaker 会把 HTTPS origin 转换成 WSS endpoint。
 - 证书必须能通过系统信任链验证，不提供证书忽略开关。
-- `registry.token` 必须和入口机一致。
-- 每台机器的 `registry.hubId` 必须唯一。
+- 顶层 `token` 必须和入口机一致。
+- 顶层 `hubId` 必须唯一。
 
 ## 7. Gateway 或 Nginx 配置
 
@@ -385,7 +384,7 @@ curl https://<registry-host>:28800/
 
 Worker 无法连上入口机时，优先检查：
 
-- `registry.server`
+- `publicUrl`（省略时确认本机 loopback Registry 是否存在）
 - 共享 token
 - Nginx `/ws` WebSocket 代理
 - 防火墙和对外端口
