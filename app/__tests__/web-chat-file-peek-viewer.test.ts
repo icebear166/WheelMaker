@@ -131,7 +131,7 @@ describe('web chat file peek viewer', () => {
   test('project file actions use canonical ordinary paths and active prompt diff paths', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
-    const actionsStart = mainTsx.indexOf('const renderPreviewWorkbenchActions = () => {');
+    const actionsStart = mainTsx.indexOf('const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {');
     const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
     const runnerStart = actionsBody.indexOf('const runProjectFileDesktopAction = (');
@@ -168,7 +168,7 @@ describe('web chat file peek viewer', () => {
     expect(actionsBody).toContain('<span>Copy absolute path</span>');
     expect(actionsBody).not.toContain('<span>Open in File tab</span>');
     expect(actionsBody).toContain("'Rebuild file index'");
-    expect(runnerBody).toContain('closeActionsMenu();');
+    expect(runnerBody).toContain('closeMenu();');
     expect(runnerBody).toContain("setToastMessage('');");
     expect(runnerBody).toContain('if (!desktopBridge || !desktopTarget) {');
     expect(runnerBody).toContain('Promise.resolve()');
@@ -176,7 +176,7 @@ describe('web chat file peek viewer', () => {
     expect(runnerBody).toContain('.catch(err => {');
     expect(runnerBody).toContain('const reason = err instanceof Error ? err.message : String(err);');
     expect(runnerBody).toContain('setToastMessage(`${failurePrefix}: ${reason}`);');
-    expect(runnerBody.indexOf('closeActionsMenu();')).toBeLessThan(runnerBody.indexOf("setToastMessage('');"));
+    expect(runnerBody.indexOf('closeMenu();')).toBeLessThan(runnerBody.indexOf("setToastMessage('');"));
     expect(runnerBody.indexOf("setToastMessage('');")).toBeLessThan(runnerBody.indexOf('Promise.resolve()'));
     expect(runnerBody.indexOf('.catch(err => {')).toBeLessThan(runnerBody.indexOf('setToastMessage(`${failurePrefix}: ${reason}`);'));
 
@@ -213,7 +213,7 @@ describe('web chat file peek viewer', () => {
   test('exports loaded project Markdown, chat file links, and completed replies as HTML', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
-    const actionsStart = mainTsx.indexOf('const renderPreviewWorkbenchActions = () => {');
+    const actionsStart = mainTsx.indexOf('const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {');
     const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
 

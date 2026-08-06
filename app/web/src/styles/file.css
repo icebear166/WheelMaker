@@ -320,6 +320,21 @@
   line-height: 1.35;
 }
 
+.preview-tab-context-menu {
+  position: fixed;
+  z-index: 140;
+  min-width: 204px;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  display: grid;
+  gap: 1px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  border-radius: 7px;
+  background: var(--surface-panel);
+  box-shadow: 0 14px 34px color-mix(in srgb, #000 32%, transparent);
+}
+
 .preview-workbench-search-bar {
   min-height: 34px;
   display: grid;

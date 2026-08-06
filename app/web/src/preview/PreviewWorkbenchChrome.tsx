@@ -27,6 +27,7 @@ type PreviewWorkbenchChromeProps = {
   onClose: () => void;
   onTabSelect: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
+  onTabContextMenu?: (tabId: string, position: {x: number; y: number}) => void;
   onActionsMenuToggle: () => void;
   onActionsMenuClose: () => void;
   onWorkbenchKeyDown?: React.KeyboardEventHandler<HTMLElement>;
@@ -61,6 +62,7 @@ export function PreviewWorkbenchChrome({
   onClose,
   onTabSelect,
   onTabClose,
+  onTabContextMenu,
   onActionsMenuToggle,
   onActionsMenuClose,
   onWorkbenchKeyDown,
@@ -188,6 +190,10 @@ export function PreviewWorkbenchChrome({
             key={`preview-tab:${tab.projectId}:${tab.id}`}
             className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
             data-tooltip={tooltip}
+            onContextMenu={mode === 'desktop' && onTabContextMenu ? event => {
+              event.preventDefault();
+              onTabContextMenu(tab.id, {x: event.clientX, y: event.clientY});
+            } : undefined}
           >
             <button
               type="button"

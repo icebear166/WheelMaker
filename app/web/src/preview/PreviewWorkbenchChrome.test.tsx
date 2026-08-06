@@ -5,10 +5,25 @@ import React, {act} from 'react';
 import {createRoot, type Root} from 'react-dom/client';
 
 import {PreviewWorkbenchChrome} from './PreviewWorkbenchChrome';
+import type {PreviewWorkbenchTab} from './previewWorkbenchState';
 
 (globalThis as unknown as {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true;
 
-function createProps(overrides: Record<string, unknown> = {}) {
+const fileTab: PreviewWorkbenchTab = {
+  id: 'file:src/a.ts',
+  type: 'file',
+  projectId: 'p1',
+  title: 'a.ts',
+  loading: false,
+  error: '',
+  requestId: 0,
+  path: 'src/a.ts',
+  targetLine: null,
+  content: '',
+  info: null,
+};
+
+function createProps(overrides: Partial<React.ComponentProps<typeof PreviewWorkbenchChrome>> = {}) {
   return {
     mode: 'desktop' as const,
     activeTab: null,
@@ -118,6 +133,36 @@ describe('PreviewWorkbenchChrome drawer', () => {
     render(props);
     escape();
     expect(props.onDrawerModeChange).toHaveBeenCalledWith('closed');
+  });
+
+  test('desktop right-click on a tab reports onTabContextMenu with id and position', () => {
+    const props = createProps({tabs: [fileTab], activeTab: fileTab, onTabContextMenu: jest.fn()});
+    render(props);
+    const tab = document.querySelector('.preview-workbench-tab') as HTMLElement;
+    expect(tab).toBeTruthy();
+
+    const event = new window.MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 40,
+      clientY: 12,
+    });
+    act(() => {
+      tab.dispatchEvent(event);
+    });
+
+    expect(props.onTabContextMenu).toHaveBeenCalledWith('file:src/a.ts', {x: 40, y: 12});
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  test('mobile right-click on a tab does not report onTabContextMenu', () => {
+    const props = createProps({mode: 'mobile', tabs: [fileTab], activeTab: fileTab, onTabContextMenu: jest.fn()});
+    render(props);
+    const tab = document.querySelector('.preview-workbench-tab') as HTMLElement;
+    act(() => {
+      tab.dispatchEvent(new window.MouseEvent('contextmenu', {bubbles: true, cancelable: true}));
+    });
+    expect(props.onTabContextMenu).not.toHaveBeenCalled();
   });
 
   test('desktop portals the panel into drawerPortalTarget with the external class', () => {

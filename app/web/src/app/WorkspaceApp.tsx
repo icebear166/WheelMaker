@@ -628,6 +628,7 @@ import {
   type PromptDiffPreviewTab,
 } from '../preview/previewWorkbenchState';
 import {PreviewWorkbenchChrome} from '../preview/PreviewWorkbenchChrome';
+import {PreviewTabContextMenu} from '../preview/PreviewTabContextMenu';
 import {
   fetchPreviewDirectoryEntries,
   togglePreviewDirectoryExpansion,
@@ -3168,6 +3169,7 @@ export function App() {
   const [terminalPanelHeight, setTerminalPanelHeight] = useState(280);
   const terminalPanelResizeRef = useRef<{pointerId: number; originY: number; startHeight: number} | null>(null);
   const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);
+  const [previewTabMenu, setPreviewTabMenu] = useState<{tabId: string; x: number; y: number} | null>(null);
   const [previewWorkbenchFullscreen, setPreviewWorkbenchFullscreen] = useState(false);
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
@@ -20274,6 +20276,19 @@ export function App() {
     if (!fileTarget?.absolutePath) return;
     writeTextToClipboard(fileTarget.absolutePath).catch(() => undefined);
   };
+  const copyPreviewWorkbenchTabPath = (tab: PreviewWorkbenchTab) => {
+    const projectRoot = projects.find(item => item.projectId === tab.projectId)?.path ?? '';
+    const confirmedPath = resolvePreviewDesktopFilePath(tab);
+    if (!confirmedPath) return;
+    const fileTarget = resolvePreviewFileLink(confirmedPath, projectRoot);
+    if (!fileTarget?.absolutePath) return;
+    writeTextToClipboard(fileTarget.absolutePath).catch(() => undefined);
+  };
+  const openPreviewWorkbenchTabRelayInBrowser = (tab: PreviewWorkbenchTab) => {
+    const url = tab.type === 'port-relay' ? tab.url || portRelayFrameUrl : '';
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
   const refreshActivePortRelayPreview = () => {
     const tab = activePortRelayPreview;
     if (!tab) return;
@@ -20285,12 +20300,7 @@ export function App() {
       ),
     );
   };
-  const renderPreviewWorkbenchActions = () => {
-    const tab = activeWorkbenchTab;
-    if (!tab) {
-      return null;
-    }
-    const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
+  const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {
     const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path ?? '';
     const confirmedPath = resolvePreviewDesktopFilePath(tab);
     const fileTarget = confirmedPath
@@ -20314,7 +20324,7 @@ export function App() {
       action: DesktopProjectFileAction,
       failurePrefix: string,
     ) => {
-      closeActionsMenu();
+      closeMenu();
       setToastMessage('');
       if (!desktopBridge || !desktopTarget) {
         return;
@@ -20371,7 +20381,7 @@ export function App() {
                 role="menuitem"
                 className="preview-workbench-action-menu-item"
                 onClick={() => {
-                  closeActionsMenu();
+                  closeMenu();
                   startMarkdownHtmlExport({
                     content: tab.content,
                     title: tab.title || tab.path.split('/').pop() || 'Markdown document',
@@ -20391,8 +20401,8 @@ export function App() {
               role="menuitem"
               className="preview-workbench-action-menu-item"
               onClick={() => {
-                copyChatFilePreviewPath();
-                closeActionsMenu();
+                copyPreviewWorkbenchTabPath(tab);
+                closeMenu();
               }}
             >
               <Icon name="copy" />
@@ -20406,8 +20416,8 @@ export function App() {
             role="menuitem"
             className="preview-workbench-action-menu-item"
             onClick={() => {
-              openPortRelayPreviewInBrowser();
-              closeActionsMenu();
+              openPreviewWorkbenchTabRelayInBrowser(tab);
+              closeMenu();
             }}
           >
             <Icon name="externalLink" />
@@ -20734,11 +20744,14 @@ export function App() {
       fileDrawer={chatFilePreviewTreeContent}
       fileDrawerSearch={previewFileTreeSearch}
       gitDrawer={previewGitHistoryDrawer}
-      actions={renderPreviewWorkbenchActions()}
+      actions={activeWorkbenchTab
+        ? renderPreviewTabActions(activeWorkbenchTab, () => setPreviewWorkbenchActionsMenuOpen(false))
+        : null}
       actionsMenuOpen={previewWorkbenchActionsMenuOpen}
       onClose={closeChatFilePeekFromChrome}
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
+      onTabContextMenu={(tabId, position) => setPreviewTabMenu({tabId, ...position})}
       onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}
       onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}
       onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}
@@ -20786,6 +20799,18 @@ export function App() {
         style={{right: `${effectiveChatFilePeekWidth}px`}}
       />
     </>
+  ) : null;
+  const previewTabMenuTab = previewTabMenu
+    ? previewWorkbenchTabs.find(tab => tab.id === previewTabMenu.tabId) ?? null
+    : null;
+  const previewTabContextMenuOverlay = isWide && previewTabMenu && previewTabMenuTab ? (
+    <PreviewTabContextMenu
+      x={previewTabMenu.x}
+      y={previewTabMenu.y}
+      onClose={() => setPreviewTabMenu(null)}
+    >
+      {renderPreviewTabActions(previewTabMenuTab, () => setPreviewTabMenu(null))}
+    </PreviewTabContextMenu>
   ) : null;
   const chatPreviewMobileOverlay = !isWide ? (
     <div
@@ -21256,6 +21281,7 @@ export function App() {
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
       />
+      {previewTabContextMenuOverlay}
       {usageHistoryOverlay}
       {deepSeekUsageOverlay}
       <LocalDevModePanel />
