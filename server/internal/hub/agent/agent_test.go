@@ -94,7 +94,7 @@ func TestLogOutboundACPDebugLine(t *testing.T) {
 	}
 }
 
-func TestLogACPStderrLineAsError(t *testing.T) {
+func TestLogACPStderrLineSuppressedAtWarn(t *testing.T) {
 	var buf bytes.Buffer
 	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelWarn}); err != nil {
 		t.Fatalf("setup logger: %v", err)
@@ -105,8 +105,26 @@ func TestLogACPStderrLineAsError(t *testing.T) {
 
 	newACPProcessLogSink("codex").StderrLine("panic: worker crashed")
 	got := buf.String()
-	if !strings.Contains(got, "[acp] ![codex] panic: worker crashed") {
-		t.Fatalf("unexpected stderr log: %q", got)
+	if got != "" {
+		t.Fatalf("ordinary stderr should be suppressed at warn level: %q", got)
+	}
+}
+
+func TestLogACPStderrLineAtDebug(t *testing.T) {
+	debugLog := filepath.Join(t.TempDir(), "hub.debug.log")
+	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelDebug, DebugLogFile: debugLog}); err != nil {
+		t.Fatalf("setup logger: %v", err)
+	}
+
+	newACPProcessLogSink("codex").StderrLine("panic: worker crashed")
+	logger.Close()
+
+	data, err := os.ReadFile(debugLog)
+	if err != nil {
+		t.Fatalf("read debug log: %v", err)
+	}
+	if got := string(data); !strings.Contains(got, "[acp] ![codex] panic: worker crashed") {
+		t.Fatalf("unexpected debug stderr log: %q", got)
 	}
 }
 

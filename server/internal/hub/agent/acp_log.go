@@ -58,7 +58,7 @@ func (s defaultACPProcessLogSink) StderrLine(line string) {
 	if line == "" {
 		return
 	}
-	logger.Error("[acp] ![%s] %s", s.provider, string(redactAndTrimACPPayload([]byte(line))))
+	logger.Debug("[acp] ![%s] %s", s.provider, string(redactAndTrimACPPayload([]byte(line))))
 }
 
 func (s defaultACPProcessLogSink) Errorf(format string, args ...any) {
