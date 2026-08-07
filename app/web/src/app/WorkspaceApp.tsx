@@ -5453,6 +5453,8 @@ export function App() {
   const [promptArtifactErrors, setPromptArtifactErrors] = useState<Record<string, string>>({});
   const [forkingPromptDoneKey, setForkingPromptDoneKey] = useState('');
   const forkingPromptDoneKeyRef = useRef('');
+  const [forkingCurrentSessionKey, setForkingCurrentSessionKey] = useState('');
+  const forkingCurrentSessionKeyRef = useRef('');
   const projectIdListKey = useMemo(
     () => projects.map(item => item.projectId).join('|'),
     [projects],
@@ -17396,7 +17398,8 @@ export function App() {
     if (
       !selected ||
       normalizedTurnIndex <= 0 ||
-      forkingPromptDoneKeyRef.current
+      forkingPromptDoneKeyRef.current ||
+      forkingCurrentSessionKeyRef.current
     ) {
       return;
     }
@@ -17432,9 +17435,61 @@ export function App() {
     }
   };
 
+  const forkCurrentSessionEvent = async (doneTurnIndex: number) => {
+    const selected = selectedChatKeyRef.current;
+    const normalizedTurnIndex = Number.isFinite(doneTurnIndex)
+      ? Math.max(0, Math.trunc(doneTurnIndex))
+      : 0;
+    if (
+      !selected ||
+      normalizedTurnIndex <= 0 ||
+      normalizedTurnIndex !== (selectedChatSession?.lastDoneTurnIndex ?? 0) ||
+      archivedMode ||
+      chatReadOnlyPreview ||
+      selectedChatSession?.sessionActions?.fork?.supported !== true ||
+      selectedChatSession?.sessionActions?.fork?.currentSession !== true ||
+      selectedChatExecutionRunning ||
+      forkingPromptDoneKeyRef.current ||
+      forkingCurrentSessionKeyRef.current
+    ) {
+      return;
+    }
+    const busyKey = encodeChatSessionKey(selected);
+    forkingCurrentSessionKeyRef.current = busyKey;
+    setForkingCurrentSessionKey(busyKey);
+    try {
+      const result = await service.forkProjectSession(selected.projectId, selected.sessionId);
+      const targetSessionId = result.session.sessionId.trim();
+      if (!result.ok || !targetSessionId) {
+        throw new Error('fork did not return a session');
+      }
+      rememberChatSessionSummary(selected.projectId, result.session);
+      await refreshChatProjectSessions(selected.projectId, {force: true});
+      await selectProjectChatSession(selected.projectId, targetSessionId);
+      setToastMessage('Session forked.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setToastMessage(
+        message.includes('registry request timed out') && message.includes(RegistryMethods.SessionFork)
+          ? 'Session branch request timed out; creation may still complete in the background. Check the session list before retrying.'
+          : `Session fork failed: ${message || 'unknown error'}`,
+      );
+    } finally {
+      if (forkingCurrentSessionKeyRef.current === busyKey) {
+        forkingCurrentSessionKeyRef.current = '';
+        setForkingCurrentSessionKey('');
+      }
+    }
+  };
+
   const renderChatMessageTurn = useCallback((message: RegistryChatMessage) => {
     const doneTurnIndex = message.turnIndex ?? 0;
     const forkKey = `${selectedChatEncodedKey}:${doneTurnIndex}`;
+    const currentSessionForkSupported = message.method === 'prompt_done' &&
+      doneTurnIndex > 0 &&
+      doneTurnIndex === (selectedChatSession?.lastDoneTurnIndex ?? 0) &&
+      selectedChatSession?.sessionActions?.fork?.supported === true &&
+      selectedChatSession?.sessionActions?.fork?.currentSession === true;
     const permissionRecord = message.method === 'permission_request'
       ? selectedPermissionState.byRequestTurnIndex.get(doneTurnIndex)
       : undefined;
@@ -17489,7 +17544,11 @@ export function App() {
             selectedChatSession?.sessionActions?.fork?.supported === true &&
             selectedChatSession?.sessionActions?.fork?.historicalTurn === true
           }
-          forkBusy={message.method === 'prompt_done' && forkingPromptDoneKey === forkKey}
+          forkCurrentSessionSupported={currentSessionForkSupported}
+          forkBusy={message.method === 'prompt_done' && (
+            forkingPromptDoneKey === forkKey ||
+            (currentSessionForkSupported && forkingCurrentSessionKey === selectedChatEncodedKey)
+          )}
           optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}
           optionRepliesDisabled={chatSendDisabled}
           confirmationReply={confirmationReply}
@@ -17512,7 +17571,10 @@ export function App() {
           }
           onForkPromptDone={
             message.method === 'prompt_done'
-              ? () => forkPromptDoneEvent(doneTurnIndex).catch(() => undefined)
+              ? mode => (mode === 'current'
+                ? forkCurrentSessionEvent(doneTurnIndex)
+                : forkPromptDoneEvent(doneTurnIndex)
+              ).catch(() => undefined)
               : undefined
           }
           onRetryFailedPrompt={
@@ -17560,6 +17622,7 @@ export function App() {
     exportingMarkdownHtmlKey,
     exportingMarkdownImageTurnIndex,
     findPromptRequestForDone,
+    forkingCurrentSessionKey,
     forkingPromptDoneKey,
     handleSelectChatReply,
     latestSelectableAssistantReply,
@@ -17575,7 +17638,9 @@ export function App() {
     resolvePromptAttachmentThumbnail,
     selectedChatEncodedKey,
     selectedChatSession?.sessionActions?.fork?.supported,
+    selectedChatSession?.sessionActions?.fork?.currentSession,
     selectedChatSession?.sessionActions?.fork?.historicalTurn,
+    selectedChatSession?.lastDoneTurnIndex,
     selectedFullChatMessages,
     selectedPermissionState,
     selectedPromptTurnStatusIndex,

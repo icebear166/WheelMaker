@@ -28,17 +28,34 @@ describe('web session fork state wiring', () => {
     expect(selectIndex).toBeGreaterThan(refreshIndex);
   });
 
-  test('keeps fork actions attached to completed prompt turns instead of the title bar', () => {
+  test('separates historical fork actions from the last current-session fork', () => {
     const projectRoot = path.join(__dirname, '..');
     const source = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
-    expect(source).not.toContain('const forkCurrentSessionEvent = async');
     expect(source).not.toContain('aria-label="Fork current session"');
     expect(source).toContain('forkSupported={');
     expect(source).toContain("sessionActions?.fork?.historicalTurn === true");
+    expect(source).toContain('forkCurrentSessionSupported={');
+    expect(source).toContain("sessionActions?.fork?.currentSession === true");
+    expect(source).toContain('selectedChatSession?.lastDoneTurnIndex');
+    expect(source).toContain('const forkCurrentSessionEvent = async');
+    expect(source).toContain('service.forkProjectSession(selected.projectId, selected.sessionId);');
+    expect(source).toContain("mode === 'current'");
     expect(source).toContain('onForkPromptDone={');
+
+    const currentGateStart = source.indexOf('const currentSessionForkSupported =');
+    const currentGateEnd = source.indexOf('const permissionRecord', currentGateStart);
+    const currentGate = source.slice(currentGateStart, currentGateEnd);
+    expect(currentGate).toContain("message.method === 'prompt_done'");
+    expect(currentGate).toContain('doneTurnIndex === (selectedChatSession?.lastDoneTurnIndex ?? 0)');
+    expect(currentGate).toContain("sessionActions?.fork?.currentSession === true");
+
+    const currentHandlerStart = source.indexOf('const forkCurrentSessionEvent = async');
+    const currentHandlerEnd = source.indexOf('const renderChatMessageTurn', currentHandlerStart);
+    const currentHandler = source.slice(currentHandlerStart, currentHandlerEnd);
+    expect(currentHandler).toContain('normalizedTurnIndex !== (selectedChatSession?.lastDoneTurnIndex ?? 0)');
   });
 });

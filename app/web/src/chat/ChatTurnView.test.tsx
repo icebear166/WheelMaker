@@ -64,6 +64,7 @@ describe('ChatTurnView session fork', () => {
       forkButton.props.onClick();
     });
     expect(onForkPromptDone).toHaveBeenCalledTimes(1);
+    expect(onForkPromptDone).toHaveBeenCalledWith('historical');
 
     const unmapped = await renderTurn(message('prompt_done', {stopReason: 'end_turn'}), {onForkPromptDone});
     expect(unmapped.root.findAllByProps({'aria-label': 'Fork session from here'})).toHaveLength(0);
@@ -79,6 +80,21 @@ describe('ChatTurnView session fork', () => {
       forkPoint: {provider: 'codex', ref: 'turn-1'},
     }));
     expect(readOnly.root.findAllByProps({'aria-label': 'Fork session from here'})).toHaveLength(0);
+  });
+
+  it('shows a current-session fork without requiring a forkPoint when enabled by the caller', async () => {
+    const onForkPromptDone = jest.fn();
+    const tree = await renderTurn(
+      message('prompt_done', {stopReason: 'end_turn'}),
+      {onForkPromptDone, forkCurrentSessionSupported: true},
+    );
+
+    const forkButton = tree.root.findByProps({'aria-label': 'Fork session from here'});
+    await act(async () => {
+      forkButton.props.onClick();
+    });
+
+    expect(onForkPromptDone).toHaveBeenCalledWith('current');
   });
 
   it('renders a non-clickable fork operation row', async () => {

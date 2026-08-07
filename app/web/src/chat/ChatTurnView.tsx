@@ -303,11 +303,12 @@ export type ChatTurnViewProps = {
   exportBusy?: boolean;
   exportHtmlBusy?: boolean;
   forkSupported?: boolean;
+  forkCurrentSessionSupported?: boolean;
   forkBusy?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
   onExportPromptDoneHtml?: () => void;
-  onForkPromptDone?: () => void;
+  onForkPromptDone?: (mode: 'historical' | 'current') => void;
   ttsState?: 'idle' | 'loading' | 'playing';
   readAloudEnabled?: boolean;
   onReadAloud?: () => void;
@@ -471,6 +472,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   exportBusy = false,
   exportHtmlBusy = false,
   forkSupported = false,
+  forkCurrentSessionSupported = false,
   forkBusy = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
@@ -845,12 +847,15 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const forkPoint = rawForkPoint && typeof rawForkPoint === 'object'
       ? rawForkPoint as Record<string, unknown>
       : null;
-    const canFork = typeof forkPoint?.provider === 'string'
+    const canForkHistorical = typeof forkPoint?.provider === 'string'
       && forkPoint.provider.trim() !== ''
       && typeof forkPoint.ref === 'string'
       && forkPoint.ref.trim() !== ''
       && forkSupported
       && typeof onForkPromptDone === 'function';
+    const canForkCurrentSession = forkCurrentSessionSupported
+      && typeof onForkPromptDone === 'function';
+    const canFork = canForkHistorical || canForkCurrentSession;
     return (
       <>
         {diffArtifacts.length > 0 ? (
@@ -929,7 +934,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               <button
                 type="button"
                 className="chat-prompt-action-button"
-                onClick={() => onForkPromptDone?.()}
+                onClick={() => onForkPromptDone?.(canForkHistorical ? 'historical' : 'current')}
                 disabled={forkBusy}
                 aria-busy={forkBusy}
                 data-tooltip="Fork session from here"
