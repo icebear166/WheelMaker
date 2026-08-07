@@ -133,6 +133,17 @@ describe('web responsive shell split', () => {
     expect(disconnectedReturn).toContain('role="alert"');
   });
 
+  test('paints a window edge ring so the frameless shell stays visible on matching backgrounds', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    const ringBlock = cssRuleBlock(stylesCss, 'body::after');
+    expect(ringBlock).toContain('position: fixed;');
+    expect(ringBlock).toContain('inset: 0;');
+    expect(ringBlock).toContain('pointer-events: none;');
+    expect(ringBlock).toContain('box-shadow: inset 0 0 0 1px var(--border-strong);');
+  });
+
   test('styles frameless desktop controls and reserves right toolbar space', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
