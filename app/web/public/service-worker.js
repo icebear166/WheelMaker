@@ -1,6 +1,6 @@
 /* eslint-env serviceworker */
 
-const CACHE_NAME = 'wheelmaker-web-pwa-v7';
+const CACHE_NAME = 'wheelmaker-web-pwa-v8';
 const ICON_ASSETS = ['/icons/icon.svg'];
 function showLocalNotification(payload = {}) {
   const title = payload.title || 'WheelMaker';
