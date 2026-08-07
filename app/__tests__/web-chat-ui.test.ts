@@ -2470,6 +2470,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(mainTsx).toContain('className="chat-title-actions"');
+    expect(mainTsx).not.toContain('aria-label="Fork current session"');
+    expect(mainTsx).not.toContain('className="chat-session-fork-current"');
     expect(mainTsx).toContain('{!mobile ? (\n          <>');
     expect(mainTsx).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
     expect(mainTsx).toContain('data-tooltip={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
@@ -2530,6 +2532,7 @@ describe('web chat integration', () => {
     expect(promptIconBlock).toContain('background: transparent;');
     const promptMenuBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-menu');
     expect(promptMenuBlock).toContain('position: fixed;');
+    expect(promptMenuBlock).toContain('top: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
     expect(promptMenuBlock).toContain('overflow-y: auto;');
     const previewToggleBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle');
     expect(previewToggleBlock).toContain('width: 28px;');
@@ -2540,9 +2543,13 @@ describe('web chat integration', () => {
     const previewToggleHoverBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle:hover');
     expect(previewToggleHoverBlock).toContain('background: var(--hover);');
     expect(previewToggleHoverBlock).toContain('color: var(--text-primary);');
-    const previewToggleOpenBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle.active');
-    expect(previewToggleOpenBlock).toContain('background: var(--accent-soft-bg);');
-    expect(previewToggleOpenBlock).not.toContain('border-color:');
+    const titleBarActiveBlock = cssRuleBlock(
+      stylesCss,
+      '.chat-title-prompt-icon-button.open,\n.chat-search-toggle.active,\n.chat-terminal-toggle.active,\n.chat-drawer-toggle.active,\n.chat-preview-toggle.active',
+    );
+    expect(titleBarActiveBlock).toContain('color: var(--accent-primary);');
+    expect(titleBarActiveBlock).toContain('box-shadow: inset 0 2px 0 var(--accent-primary);');
+    expect(titleBarActiveBlock).not.toContain('background:');
     const terminalToggleBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-terminal-toggle');
     expect(terminalToggleBlock).toContain('width: 28px;');
     expect(terminalToggleBlock).toContain('color: var(--text-tertiary);');

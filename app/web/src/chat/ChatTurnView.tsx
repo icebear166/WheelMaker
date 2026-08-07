@@ -304,7 +304,6 @@ export type ChatTurnViewProps = {
   exportHtmlBusy?: boolean;
   forkSupported?: boolean;
   forkBusy?: boolean;
-  forkDisabled?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
   onExportPromptDoneHtml?: () => void;
@@ -473,7 +472,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   exportHtmlBusy = false,
   forkSupported = false,
   forkBusy = false,
-  forkDisabled = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
   onExportPromptDoneHtml,
@@ -932,7 +930,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 type="button"
                 className="chat-prompt-action-button"
                 onClick={() => onForkPromptDone?.()}
-                disabled={forkBusy || forkDisabled}
+                disabled={forkBusy}
                 aria-busy={forkBusy}
                 data-tooltip="Fork session from here"
                 aria-label="Fork session from here"

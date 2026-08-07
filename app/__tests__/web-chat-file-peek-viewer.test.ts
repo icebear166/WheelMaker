@@ -503,6 +503,9 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.chat-preview-drawer-host');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel.external');
     expect(stylesCss).toContain('.preview-workbench-drawer-tool');
+    const drawerHost = cssRuleBlock(stylesCss, '.chat-preview-drawer-host');
+    expect(drawerHost).toContain('top: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+    expect(drawerHost).toContain('bottom: 0;');
   });
 
   test('preview file tree opens with inline search and renders search results as a tree', () => {

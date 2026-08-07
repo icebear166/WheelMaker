@@ -3994,7 +3994,6 @@ export function App() {
     const left = Math.max(12, Math.min(anchor.left, viewportWidth - menuWidth - 12));
     return {
       left,
-      top: Math.max(12, anchor.bottom + 7),
       width: menuWidth,
     };
   }, [chatTitleProjectMenuOpen, isWide]);
@@ -4011,7 +4010,6 @@ export function App() {
     const left = Math.max(12, Math.min(anchor.left, viewportWidth - menuWidth - 12));
     return {
       left,
-      top: Math.max(12, anchor.bottom + 7),
       width: menuWidth,
     };
   }, [chatTitlePromptMenuAvailable, chatTitlePromptMenuOpen, isWide]);
@@ -5455,8 +5453,6 @@ export function App() {
   const [promptArtifactErrors, setPromptArtifactErrors] = useState<Record<string, string>>({});
   const [forkingPromptDoneKey, setForkingPromptDoneKey] = useState('');
   const forkingPromptDoneKeyRef = useRef('');
-  const [forkingCurrentSessionKey, setForkingCurrentSessionKey] = useState('');
-  const forkingCurrentSessionKeyRef = useRef('');
   const projectIdListKey = useMemo(
     () => projects.map(item => item.projectId).join('|'),
     [projects],
@@ -17400,8 +17396,7 @@ export function App() {
     if (
       !selected ||
       normalizedTurnIndex <= 0 ||
-      forkingPromptDoneKeyRef.current ||
-      forkingCurrentSessionKeyRef.current
+      forkingPromptDoneKeyRef.current
     ) {
       return;
     }
@@ -17433,49 +17428,6 @@ export function App() {
       if (forkingPromptDoneKeyRef.current === busyKey) {
         forkingPromptDoneKeyRef.current = '';
         setForkingPromptDoneKey('');
-      }
-    }
-  };
-
-  const forkCurrentSessionEvent = async () => {
-    const selected = selectedChatKeyRef.current;
-    if (
-      !selected ||
-      archivedMode ||
-      chatReadOnlyPreview ||
-      selectedChatSession?.sessionActions?.fork?.supported !== true ||
-      selectedChatSession?.sessionActions?.fork?.currentSession !== true ||
-      (selectedChatSession?.lastDoneTurnIndex ?? 0) <= 0 ||
-      selectedChatExecutionRunning ||
-      forkingPromptDoneKeyRef.current ||
-      forkingCurrentSessionKeyRef.current
-    ) {
-      return;
-    }
-    const busyKey = encodeChatSessionKey(selected);
-    forkingCurrentSessionKeyRef.current = busyKey;
-    setForkingCurrentSessionKey(busyKey);
-    try {
-      const result = await service.forkProjectSession(selected.projectId, selected.sessionId);
-      const targetSessionId = result.session.sessionId.trim();
-      if (!result.ok || !targetSessionId) {
-        throw new Error('fork did not return a session');
-      }
-      rememberChatSessionSummary(selected.projectId, result.session);
-      await refreshChatProjectSessions(selected.projectId, {force: true});
-      await selectProjectChatSession(selected.projectId, targetSessionId);
-      setToastMessage('Session forked.');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setToastMessage(
-        message.includes('registry request timed out') && message.includes(RegistryMethods.SessionFork)
-          ? 'Session branch request timed out; creation may still complete in the background. Check the session list before retrying.'
-          : `Session fork failed: ${message || 'unknown error'}`,
-      );
-    } finally {
-      if (forkingCurrentSessionKeyRef.current === busyKey) {
-        forkingCurrentSessionKeyRef.current = '';
-        setForkingCurrentSessionKey('');
       }
     }
   };
@@ -17538,7 +17490,6 @@ export function App() {
             selectedChatSession?.sessionActions?.fork?.historicalTurn === true
           }
           forkBusy={message.method === 'prompt_done' && forkingPromptDoneKey === forkKey}
-          forkDisabled={forkingCurrentSessionKey === selectedChatEncodedKey}
           optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}
           optionRepliesDisabled={chatSendDisabled}
           confirmationReply={confirmationReply}
@@ -18178,32 +18129,6 @@ export function App() {
         {mobile ? renderMobileChatBreadcrumbTitle() : renderDesktopChatBreadcrumbTitle()}
       </div>
       <div className="chat-title-actions">
-        {selectedChatSession?.sessionActions?.fork?.supported === true &&
-        selectedChatSession?.sessionActions?.fork?.currentSession === true &&
-        (selectedChatSession?.lastDoneTurnIndex ?? 0) > 0 &&
-        !chatReadOnlyPreview ? (
-          <button
-            type="button"
-            className="chat-session-fork-current"
-            onClick={() => forkCurrentSessionEvent().catch(() => undefined)}
-            data-tooltip={
-              forkingCurrentSessionKey === selectedChatEncodedKey
-                ? 'Forking current session'
-                : 'Fork current session'
-            }
-            aria-label="Fork current session"
-            disabled={
-              selectedChatExecutionRunning ||
-              forkingPromptDoneKey !== '' ||
-              forkingCurrentSessionKey === selectedChatEncodedKey
-            }
-          >
-            <SessionIcon
-              name={forkingCurrentSessionKey === selectedChatEncodedKey ? 'loader' : 'gitBranch'}
-              spin={forkingCurrentSessionKey === selectedChatEncodedKey}
-            />
-          </button>
-        ) : null}
         <button
           type="button"
           className={`chat-search-toggle${chatSearchOpen ? ' active' : ''}`}

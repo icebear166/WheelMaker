@@ -28,18 +28,17 @@ describe('web session fork state wiring', () => {
     expect(selectIndex).toBeGreaterThan(refreshIndex);
   });
 
-  test('exposes current-session fork from the negotiated capability without a turn index', () => {
+  test('keeps fork actions attached to completed prompt turns instead of the title bar', () => {
     const projectRoot = path.join(__dirname, '..');
     const source = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
-    expect(source).toContain("sessionActions?.fork?.currentSession === true");
-    expect(source).toContain('(selectedChatSession?.lastDoneTurnIndex ?? 0) > 0');
-    expect(source).toContain('const forkCurrentSessionEvent = async');
-    expect(source).toContain('(selectedChatSession?.lastDoneTurnIndex ?? 0) <= 0');
-    expect(source).toContain('service.forkProjectSession(selected.projectId, selected.sessionId)');
-    expect(source).toContain('Fork current session');
+    expect(source).not.toContain('const forkCurrentSessionEvent = async');
+    expect(source).not.toContain('aria-label="Fork current session"');
+    expect(source).toContain('forkSupported={');
+    expect(source).toContain("sessionActions?.fork?.historicalTurn === true");
+    expect(source).toContain('onForkPromptDone={');
   });
 });

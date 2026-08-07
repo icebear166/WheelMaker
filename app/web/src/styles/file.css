@@ -616,7 +616,7 @@
 
 .chat-preview-drawer-host {
   position: absolute;
-  top: 0;
+  top: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
   bottom: 0;
   z-index: 30;
   width: 400px;
