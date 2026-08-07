@@ -1102,6 +1102,11 @@ const registryClientName = isAndroidNativeSpeechHost()
   : getDesktopWindowBridge()
     ? 'wheelmaker-desktop'
     : 'wheelmaker-web';
+if (getDesktopWindowBridge()) {
+  // Marker class for the frameless exe host so CSS can scope window-chrome
+  // affordances (edge ring) to the desktop shell.
+  document.documentElement.classList.add('wm-desktop-host');
+}
 const service = new RegistryWorkspaceService({clientName: registryClientName});
 const gitBrowserStore = new GitBrowserStore({
   getRev: projectId => service.getProjectGitRev(projectId),

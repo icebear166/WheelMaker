@@ -40,10 +40,11 @@ body,
   line-height: 1.4;
 }
 
-/* Frameless shell has no OS window border; paint a 1px edge ring so the app
-   boundary stays visible against matching backgrounds (white desktop in light
-   mode). Fixed overlay sits above all surfaces without affecting layout. */
-body::after {
+/* The frameless exe window has no OS border; paint a 1px edge ring so the app
+   boundary stays visible against a matching desktop background. Desktop host
+   in light mode only: browsers provide their own chrome and the dark theme
+   already separates from the desktop. */
+html.wm-desktop-host.theme-light body::after {
   content: '';
   position: fixed;
   inset: 0;
