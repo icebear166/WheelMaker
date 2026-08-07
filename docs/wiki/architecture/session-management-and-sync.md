@@ -4,7 +4,7 @@
 
 > 来源：本页整理自 [`../../references/session-management-and-sync.zh-CN.md`](../../references/session-management-and-sync.zh-CN.md) 的当前稳定部分；完整原文第 8 节是评审阶段设计，不作为 wiki 当前事实。原始路径为 `docs/session-management-and-sync.zh-CN.md`。
 >
-> Queue 决策来源：[`../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
+> Queue 决策来源：[`../../scope/2026-07-31-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue.md)
 
 本文是 session 对话链路的基础协议、存储说明、turn-first 同步、状态和显示重构的主文档。旧的 `session_prompts`、`turns_json`、`promptIndex` 游标和一次性迁移工具都已移除；运行期协议只暴露 session 级全局 `turnIndex`。
 
@@ -88,7 +88,7 @@ type RegistrySessionTurn = {
 
 ### Request Permission Turn
 
-该行为由 [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md) 定义。
+该行为由 [`../../scope/2026-07-21-request-permission.md`](../../scope/2026-07-21-request-permission.md) 定义。
 
 ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 内追加一个 `permission_request` turn。用户实际选择后再追加 `permission_response` turn；两个事件使用不同的连续 turnIndex，存储层不原地覆盖 request，显示层按 `permissionId` 折叠为一条紧凑记录。
 
@@ -113,7 +113,7 @@ ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 
 
 `agent_thought_chunk` 的合并内容仍然实时进入 prompt state，但完整快照的 Registry 发布采用按 session 隔离的限频规则：首个 chunk 立即发布；同一 thinking turn 持续更新时，中间快照发布间隔不短于 60 秒；没有新内容时不重复发布。thinking 被其他 turn 打断、取消或 prompt 完成时，服务端必须先立即发布最新完整快照并标记 `finished=true`，再发布后续 turn。
 
-该规则只减少 `session.message` 实时事件数量，不改变 turn JSON、协议版本、内存合并结果、最终持久化内容或其他 turn 的实时性。来源：[`../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md`](../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md)。
+该规则只减少 `session.message` 实时事件数量，不改变 turn JSON、协议版本、内存合并结果、最终持久化内容或其他 turn 的实时性。来源：[`../../scope/2026-07-19-turn-streaming-and-tool-groups.md`](../../scope/2026-07-19-turn-streaming-and-tool-groups.md)。
 
 ## 3. 序列化
 
@@ -458,7 +458,7 @@ manifest 记录 `gapCount`。WMT2 slot 不能使用 `len=0` 表示 gap，因为�
 
 恢复成功后 app 会退出 Archived mode、刷新目标项目 session list，并打开恢复后的普通 session。
 
-ACP/WMT2 边界与 capability 投影见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
+ACP/WMT2 边界与 capability 投影见 [`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)。
 
 ### 7.6 App/Web 归档入口
 

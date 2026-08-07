@@ -45,4 +45,4 @@ Port Relay 是一级菜单入口与独立页面，不出现在 Settings 内。
 
 设计来源：
 
-- [`spec-unified-app-menu.md`](../../scope/2026-07-30-unified-app-menu/spec-unified-app-menu.md)
+- [`spec-unified-app-menu.md`](../../scope/2026-07-30-unified-app-menu.md)

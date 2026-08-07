@@ -2,7 +2,7 @@
 
 # 视觉语言
 
-> 来源：[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)、[`../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md)、[`../../scope/2026-07-24-topbar-menu-unification/spec-topbar-menu-unification.md`](../../scope/2026-07-24-topbar-menu-unification/spec-topbar-menu-unification.md)
+> 来源：[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)、[`../../scope/2026-07-24-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade.md)、[`../../scope/2026-07-24-topbar-menu-unification.md`](../../scope/2026-07-24-topbar-menu-unification.md)
 
 本页记录跨页面生效的视觉语言约定。具体界面的布局与交互规则由各前端交互页面维护。
 

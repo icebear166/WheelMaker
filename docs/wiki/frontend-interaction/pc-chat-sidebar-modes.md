@@ -12,7 +12,7 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 - **浮动卡片标题栏**统一由 `ChatEdgeSurfaceHeader` 提供，Sessions、Goal、Plan、Limits 都使用 36px 高度、左侧折叠按钮、11px uppercase 标题和右侧操作区。展开态使用向下 chevron，收起态使用向右 chevron；收起只隐藏正文。Plan 可以在收起标题栏中保留一行截断的当前步骤和进度。
 - **Plan 进度表达**：Plan 标题栏在 `n/N` 文本旁显示 3px 分段进度轨，每步一段（完成=绿、进行中=琥珀 1.6s 脉动、待办=低透空槽）；>12 步降级为连续 accent 填充条（宽度 = 完成占比、前沿脉动）；`n/N` 文本常驻。步骤标记使用 Lucide 描边图标，进行中同步脉动。移动端 Plan pill 为毛玻璃材质，保持纯文本进度、不加轨。
 - **Sessions 布局操作**固定在标题栏右侧，顺序是完整会话栏、Pin；完整会话栏使用 `layout-sidebar-left`，打开后切换为 `layout-sidebar-left-off`。浮动态在完整会话栏图标左侧固定显示 **Ctrl+1**，强化该图标与键盘快捷键的对应关系；滑出态与 pin 态不显示这项提示。滑出态把 archive 与 search 放在标题后的左侧操作区，关闭完整栏与 Pin 保持右侧位置；pin 态只保留右侧高亮 Pin。浮动态标题显示 **Recent Sessions**，滑出与 pin 态继续显示 **Sessions**。
-- **会话工具栏可见性**：PC 与移动端的会话工具栏都常态显示，功能集合一致（来源：[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)；2026-07-24 复审后取消 PC 端常态隐藏方案）。
+- **会话工具栏可见性**：PC 与移动端的会话工具栏都常态显示，功能集合一致（来源：[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)；2026-07-24 复审后取消 PC 端常态隐藏方案）。
 
 - **Sessions 搜索展开**：搜索框弹出时向左展开，左边缘与侧栏左边框对齐；搜索展开模式下 Sessions 标题文字与左侧对齐。
 

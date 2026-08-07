@@ -39,7 +39,7 @@ WheelMaker 只使用 ACP v1 规定的两类扩展点：数据放在 `_meta.wm`�
 - `InitializeResult._meta` 顶层元数据必须和 `agentCapabilities._meta` 一样完整保存。Claude 的 `_meta.steering.supported` 属于顶层初始化元数据，不能只保存 `agentCapabilities` 后丢失；旧 `_meta.wm` 能力继续可读。
 - Compact 仍属于 WheelMaker provider-neutral action：支持该 action 的 provider 统一走已协商的 `_wm/session/compact`，不增加 `session/compact` ACP method，也不把 `/compact` 当普通 `session/prompt`。
 
-扩展契约见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)；Claude ACP 对齐决策见 [`../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md)。
+扩展契约见 [`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)；Claude ACP 对齐决策见 [`../../scope/2026-08-06-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment.md)。
 
 ### Claude-compatible Session 控制面
 
@@ -62,7 +62,7 @@ Session summary 的 provider-neutral `sessionActions.fork` 携带 `currentSessio
 
 ### WheelMaker Request Permission
 
-该行为由 [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md) 定义。
+该行为由 [`../../scope/2026-07-21-request-permission.md`](../../scope/2026-07-21-request-permission.md) 定义。
 
 - WheelMaker 对所有 provider 使用同一 permission 路径，不识别 Kimi `AskUserQuestion` 或其他 provider 私有工具名。
 - Client 只从当前 request 投影 title、标准 text content 和 permission options；不关联已有 ToolCall，不保存完整 `ToolCallUpdate`、raw input/output 或富内容。
@@ -97,7 +97,7 @@ Session summary 的 provider-neutral `sessionActions.fork` 携带 `currentSessio
 - Session 恢复以 agent ID 和各自 projects 目录为边界，不允许在 Claude、GLM、Kimi 间跨 provider 导入或恢复。
 - App 可以把平铺 ID 投影为 Claude 主项旁的展开子项，但分组只属于展示层，不进入 ACP 或 Registry wire schema。
 
-来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
+来源：[`../../scope/2026-07-23-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents.md)。
 
 ### Codex Responses provider 约定
 
@@ -105,7 +105,7 @@ Session summary 的 provider-neutral `sessionActions.fork` 携带 `currentSessio
 
 provider 只在 Hub 配置 DeepSeek Key 且本机 Codex CLI 满足最低版本时注册。Key、上游地址和模型 provider 设置属于 Hub 本地启动配置，不进入 ACP wire payload 或 Registry metadata。Session 恢复以 agent ID 和 `<stateDir>/.data/cx-deepseek` 为边界，禁止从原生 `codex` 或任意 `cc-*` provider 导入历史。
 
-来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)。
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)。
 
 ## 完整参考的使用方式
 
@@ -113,10 +113,10 @@ provider 只在 Hub 配置 DeepSeek Key 且本机 Codex CLI 满足最低版本�
 
 来源：
 
-- [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
-- [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md)
-- [`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)
-- [`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)
-- [`../../scope/2026-07-28-flicker-v2-request-parity/spec-flicker-v2-request-parity.md`](../../scope/2026-07-28-flicker-v2-request-parity/spec-flicker-v2-request-parity.md)
-- [`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)
-- [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)
+- [`../../scope/2026-07-20-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider.md)
+- [`../../scope/2026-07-21-request-permission.md`](../../scope/2026-07-21-request-permission.md)
+- [`../../scope/2026-07-23-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents.md)
+- [`../../scope/2026-07-28-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch.md)
+- [`../../scope/2026-07-28-flicker-v2-request-parity.md`](../../scope/2026-07-28-flicker-v2-request-parity.md)
+- [`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)
+- [`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)

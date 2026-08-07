@@ -15,7 +15,7 @@
 **Files:**
 - Read: `CLAUDE.md`
 - Read: `app/CLAUDE.md`
-- Read: `docs/scope/2026-06-24-unified-preview-workbench/spec-unified-preview-workbench.md`
+- Read: `docs/scope/2026-06-24-unified-preview-workbench.md`
 
 - [ ] **Step 1: Start from a clean, updated main**
 

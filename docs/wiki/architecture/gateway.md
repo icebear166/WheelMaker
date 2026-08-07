@@ -136,8 +136,8 @@ deploy-release-server.bat                            # 部署服务并刷新 rel
 证书。Release Server 继续使用 Nginx 时，应把整个公开 host 反代到
 `127.0.0.1:9680`，Nginx worker 不需要读取用户 Home。
 
-> 当前设计：[`docs/scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md`](../../scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md)
+> 当前设计：[`docs/scope/2026-08-06-deployment-and-gateway-simplification.md`](../../scope/2026-08-06-deployment-and-gateway-simplification.md)
 >
-> 固定端口 Port Relay：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md)
+> 固定端口 Port Relay：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port.md)
 >
-> 原始 Gateway 设计（历史）：[`docs/scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway/spec-wheelmaker-gateway.md)
+> 原始 Gateway 设计（历史）：[`docs/scope/2026-08-05-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway.md)

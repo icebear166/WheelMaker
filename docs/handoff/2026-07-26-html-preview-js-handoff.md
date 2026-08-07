@@ -39,7 +39,7 @@
    - **A（推荐）**：签名 URL（HMAC + 短期过期，几分钟）。web 端向 registry 要签名 URL → iframe 加载 → registry 预览端点验签 + 读文件。无状态、不碰 relay 代码。
    - **B**：专用预览 token（registry 发短期 token，query 传，registry 校验）。比 A 多一层状态。
    - 推荐 A。需用户拍板。
-2. **scope 出口**：落 spec（推荐，跨三层 + 安全）还是不落 spec 直接 plan。推荐落 `docs/scope/2026-07-26-html-preview-js/spec-html-preview-js.md`，批准后调 writing-plans。
+2. **scope 出口**：落 spec（推荐，跨三层 + 安全）还是不落 spec 直接 plan。推荐落 `docs/scope/2026-07-26-html-preview-js.md`，批准后调 writing-plans。
 3. **wiki 目标**：建议新建 `docs/wiki/features/html-preview.md`（预览端点架构、CSP/sandbox 安全模型、能力边界）。待用户确认。
 
 ## 关键代码索引

@@ -2,11 +2,11 @@
 
 # File Links
 
-> 来源：[`docs/scope/2026-07-24-external-file-links/spec-external-file-links.md`](../../scope/2026-07-24-external-file-links/spec-external-file-links.md)
+> 来源：[`docs/scope/2026-07-24-external-file-links.md`](../../scope/2026-07-24-external-file-links.md)
 
-> Markdown HTML 导出来源：[`docs/scope/2026-07-24-markdown-html-export/spec-markdown-html-export.md`](../../scope/2026-07-24-markdown-html-export/spec-markdown-html-export.md)
+> Markdown HTML 导出来源：[`docs/scope/2026-07-24-markdown-html-export.md`](../../scope/2026-07-24-markdown-html-export.md)
 
-> 共享文件菜单来源：[`docs/scope/2026-07-28-file-context-menu-actions/spec-file-context-menu-actions.md`](../../scope/2026-07-28-file-context-menu-actions/spec-file-context-menu-actions.md)
+> 共享文件菜单来源：[`docs/scope/2026-07-28-file-context-menu-actions.md`](../../scope/2026-07-28-file-context-menu-actions.md)
 
 ## 本地文件识别
 

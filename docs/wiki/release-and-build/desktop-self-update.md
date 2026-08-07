@@ -45,6 +45,6 @@ node ~/.wheelmaker/deploy.mjs desktop-self-update --parent-pid <PID>
 
 设计来源：
 
-- [`spec-desktop-self-update.md`](../../scope/2026-07-18-desktop-self-update/spec-desktop-self-update.md)
-- [`spec-desktop-script-updater.md`](../../scope/2026-07-27-desktop-script-updater/spec-desktop-script-updater.md)
-- [`spec-unified-app-menu.md`](../../scope/2026-07-30-unified-app-menu/spec-unified-app-menu.md)
+- [`spec-desktop-self-update.md`](../../scope/2026-07-18-desktop-self-update.md)
+- [`spec-desktop-script-updater.md`](../../scope/2026-07-27-desktop-script-updater.md)
+- [`spec-unified-app-menu.md`](../../scope/2026-07-30-unified-app-menu.md)

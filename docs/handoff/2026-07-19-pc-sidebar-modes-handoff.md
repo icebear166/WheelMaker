@@ -12,8 +12,8 @@
 
 ## 关键参考（不要重复内容，直接读）
 
-- spec：`docs/scope/2026-07-19-pc-sidebar-modes/spec-pc-sidebar-modes.md`（v1 决策；v2 修订见下，spec 未回填，以 wiki 为准）
-- plan：`docs/scope/2026-07-19-pc-sidebar-modes/plan-pc-sidebar-modes.md`（10 个 Task，已全执行）
+- spec：`docs/scope/2026-07-19-pc-sidebar-modes.md`（v1 决策；v2 修订见下，spec 未回填，以 wiki 为准）
+- plan：`docs/plans/2026-07-19-pc-sidebar-modes/plan-pc-sidebar-modes.md`（10 个 Task，已全执行）
 - wiki（当前行为的事实来源）：`docs/wiki/frontend-interaction/pc-chat-sidebar-modes.md`
 
 ## 架构要点（代码锚点）

@@ -2,7 +2,7 @@
 
 # Workbench Chrome
 
-> 来源：[`../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md)、[`../../scope/2026-08-06-preview-drawer-toolbar/spec-preview-drawer-toolbar.md`](../../scope/2026-08-06-preview-drawer-toolbar/spec-preview-drawer-toolbar.md)
+> 来源：[`../../scope/2026-07-31-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation.md)、[`../../scope/2026-08-06-preview-drawer-toolbar.md`](../../scope/2026-08-06-preview-drawer-toolbar.md)
 
 Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者共享“标题工具栏 + 标签栏”两层结构、尺寸层级、图标按钮样式和无障碍语义；文件树、搜索、xterm、Terminal 快捷键栏等能力仍由各自功能模块拥有。
 

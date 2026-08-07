@@ -34,4 +34,4 @@ Git 浏览器复用现有 `project.git.*` Registry 方法，不新增 Git 路由
 
 ## 来源
 
-- [只读 Git 浏览器 spec](../../scope/2026-08-03-git-browser/spec-git-browser.md)
+- [只读 Git 浏览器 spec](../../scope/2026-08-03-git-browser.md)

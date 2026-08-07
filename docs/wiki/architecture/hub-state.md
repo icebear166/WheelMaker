@@ -2,7 +2,7 @@
 
 # HubState
 
-> 状态：目标架构已批准，来源为 [`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)。
+> 状态：目标架构已批准，来源为 [`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification.md)。
 
 HubState 是 Hub 运行态的唯一权威，Registry 只负责鉴权和路由，Web 只缓存并派生展示。HubState 只驻内存；Hub 进程重启后重新构建，Registry 断线重连时复用当前内存快照。
 

@@ -4,9 +4,9 @@
 
 > 来源：本页由原路径 `docs/registry-protocol.md` 于 2026-07-17 全文迁入 wiki。
 >
-> Session Queue 决策来源：[`Server-owned Session Queue spec`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
+> Session Queue 决策来源：[`Server-owned Session Queue spec`](../../scope/2026-07-31-server-owned-session-queue.md)
 >
-> HubState 当前契约同步自：[`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)
+> HubState 当前契约同步自：[`Hub State Unification spec`](../../scope/2026-07-31-hub-state-unification.md)
 
 本文定义 WheelMaker Registry 2.7 主协议。App 与 Registry 的 `connect.init.payload.protocolVersion` 必须一致。Hub 主协议相同时获得完整业务能力；2.6 Hub 只可保持 `update_only` 连接，以便通过现有 HubState 更新路径升级；2.6 App 直接拒绝。
 
@@ -105,7 +105,7 @@ HubState 统一使用协议号 2.7，其 Section schema、异步 refresh、Skill
 
 Hub 只有断开并以当前主协议重新握手后才能从 `update_only` 进入 `normal`，不能通过业务消息提升连接模式。
 
-> 决策来源：[`docs/scope/2026-07-31-update-only-hub/spec-update-only-hub.md`](../../scope/2026-07-31-update-only-hub/spec-update-only-hub.md)
+> 决策来源：[`docs/scope/2026-07-31-update-only-hub.md`](../../scope/2026-07-31-update-only-hub.md)
 
 ## 3. 方法域与白名单
 
@@ -299,7 +299,7 @@ App 打开 Git tab 时先调用该方法；只有 `gitRev` 或 `worktreeRev` 相
 
 外部文件方法不接受 `knownHash`，不参与项目文件 cache、目录树、索引、搜索或同步，也不提供目录列举和写入能力。它们不会放宽 `project.fs.info` / `project.fs.read` 现有的项目根目录校验。新 App 连接尚未注册外部文件方法的旧 Hub 时必须返回明确的不支持错误，不得回退到项目文件方法。
 
-> 决策来源：[`docs/scope/2026-07-24-external-file-links/spec-external-file-links.md`](../../scope/2026-07-24-external-file-links/spec-external-file-links.md)
+> 决策来源：[`docs/scope/2026-07-24-external-file-links.md`](../../scope/2026-07-24-external-file-links.md)
 
 ### Git 方法
 
@@ -318,7 +318,7 @@ Git 列表按 `project.git.rev` 返回的 `gitRev` / `worktreeRev` 触发刷新�
 
 `project.git.commit.diff` 一次返回整个提交的 `git show --no-color --unified=N <sha>` 原始输出（payload `{sha, contextLines?}`，响应 `{sha, diff}`），不带路径过滤；逐文件拆分由 App 完成。它是路由表纯增量注册，不变更 protocol version。
 
-> 决策来源：[`docs/scope/2026-08-06-git-commit-diff-page/spec-git-commit-diff-page.md`](../../scope/2026-08-06-git-commit-diff-page/spec-git-commit-diff-page.md)
+> 决策来源：[`docs/scope/2026-08-06-git-commit-diff-page.md`](../../scope/2026-08-06-git-commit-diff-page.md)
 
 ## 7. HubState
 
@@ -696,7 +696,7 @@ Hub `Session` 是 queue 的唯一所有者和调度者；Registry 只沿既有 p
 
 缺失 `markColor` 表示无 Mark。Mark 不改变 `pinned`，Pin/Unpin 也不改变 `markColor`。Registry 2.7 客户端不为旧 Hub 提供本地 Mark fallback。
 
-> 决策来源：[`docs/scope/2026-07-26-session-color-mark/spec-session-color-mark.md`](../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md)
+> 决策来源：[`docs/scope/2026-07-26-session-color-mark.md`](../../scope/2026-07-26-session-color-mark.md)
 
 ### Session 会话分叉
 
@@ -752,7 +752,7 @@ Hub 只在 source summary 明确携带 `currentSession=true` 时接受无 `turnI
 - Codex 的历史 turn fork 继续通过 `_wm/session/fork/resolve` 与 `_wm/session/fork` 传递 provider ref 和 prompt history；统一 method 由 Hub 将其封装到 `session/fork` 的 `_meta.wm.fork`；通过 release gate 的 Claude-compatible provider 才会把无 `turnIndex` 请求映射到 ACP `session/fork`，且不提供历史 turn fork。
 - `forkPoint`、`forkedFrom`、可选 `turnIndex` 与 `session.fork` 属于 Registry 2.7 Session 契约；WMT2 文件版本不变。旧 summary 缺少 fork mode 时保持历史 turn UI 行为。
 
-> 历史 turn fork 决策与实施计划：[`docs/scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md`](../../scope-nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md)。Claude ACP 对齐决策：[`docs/scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md)
+> 历史 turn fork 决策与实施计划：[`docs/plans/nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md`](../../plans/nospec/2026-07-26-codex-session-fork/plan-codex-session-fork.md)。Claude ACP 对齐决策：[`docs/scope/2026-08-06-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment.md)
 
 ## 9. Registry Relay
 
@@ -815,7 +815,7 @@ Registry 先失效旧 slot，不允许旧 tunnel 继续访问 target。Relay 方
 协议和 Registry protocol version 均不变；status 额外用 `listenPortManaged` 标识端口是否由
 Gateway 管理。
 
-> 固定端口 Port Relay 设计来源：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port/spec-port-relay-fixed-gateway-port.md)
+> 固定端口 Port Relay 设计来源：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port.md)
 
 ## 10. Hub 间临时 Web 传输
 
@@ -927,7 +927,7 @@ Debug：
 3. ACP 消息统一使用标准 `content`、`messageId` 和完整 `_meta`；tool rich content 完整进入内部 WMT2 投影，WMT2 仍为 v2。
 4. WheelMaker-specific ACP 扩展继续进入 `_meta.wm` 与 `_wm/*`；Claude-compatible native steering 通过已协商的 ACP method 接入，current-session fork 还受真实 lifecycle release gate 约束，Session action 不依赖 provider name 猜测。
 
-决策来源：[`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
+决策来源：[`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)。
 
 ### 2.6 相比 2.5
 

@@ -35,6 +35,6 @@ Simple 按 Sol、Terra、Luna 固定为三行。每个家族按 IQ 从高到低�
 
 来源：
 
-- [`../../scope/2026-07-22-model-efficiency-card/spec-model-efficiency-card.md`](../../scope/2026-07-22-model-efficiency-card/spec-model-efficiency-card.md)
-- [`../../scope/2026-07-22-monitor-card/spec-monitor-card.md`](../../scope/2026-07-22-monitor-card/spec-monitor-card.md)
-- [`../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md)
+- [`../../scope/2026-07-22-model-efficiency-card.md`](../../scope/2026-07-22-model-efficiency-card.md)
+- [`../../scope/2026-07-22-monitor-card.md`](../../scope/2026-07-22-monitor-card.md)
+- [`../../scope/2026-07-24-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade.md)

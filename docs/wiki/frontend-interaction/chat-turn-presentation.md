@@ -2,9 +2,9 @@
 
 # Chat Turn 展示
 
-> 来源：[`../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md`](../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md)
+> 来源：[`../../scope/2026-07-19-turn-streaming-and-tool-groups.md`](../../scope/2026-07-19-turn-streaming-and-tool-groups.md)
 >
-> 来源：[`../../scope/2026-08-02-codex-turn-work-collapse/spec-codex-turn-work-collapse.md`](../../scope/2026-08-02-codex-turn-work-collapse/spec-codex-turn-work-collapse.md)
+> 来源：[`../../scope/2026-08-02-codex-turn-work-collapse.md`](../../scope/2026-08-02-codex-turn-work-collapse.md)
 
 Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-virtuoso` 的轻量显示项。Thinking 对应单个显示项；同一 prompt 内相邻的 `tool_call` turns 聚合为一个显示项，任意非 tool turn 都会切断工具分组。
 
@@ -37,4 +37,4 @@ Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-
 - 旧历史没有 phase 时，`prompt_done` 前最后一条 assistant message 视为 final answer；此前工作折叠。若最后一条明确为 commentary，则没有 final answer。
 - 展开后复用原有 turn 与 tool group 组件及顺序，只新增顶部折叠栏。展开状态仅属于当前渲染生命周期；重载或切换 session 后默认折叠。
 
-协议与持久化边界见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)。
+协议与持久化边界见 [`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)。

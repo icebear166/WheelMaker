@@ -1,7 +1,7 @@
 # WheelMaker 自建发布服务器设计
 
 日期：2026-08-05
-状态：历史设计；已由 [发布、部署与 Gateway 简化](scope/2026-08-06-deployment-and-gateway-simplification/spec-deployment-and-gateway-simplification.md) 取代，正文仅保留决策历史
+状态：历史设计；已由 [发布、部署与 Gateway 简化](scope/2026-08-06-deployment-and-gateway-simplification.md) 取代，正文仅保留决策历史
 生产验证：待在受控主机验证，`https://release.wheelmaker.top`
 
 ## 目标

@@ -82,7 +82,7 @@ Server host 反代到 loopback，不再读取迁移后的 Home 静态目录。�
 
 首次发布 Token 初始化也使用同一 SSH 用户、Home 中的二进制与配置以及用户级 systemd。未选择 Gateway 发布产物时，发布器省略 `withGateway` 字段，以兼容仍采用严格请求校验的旧 Release Server；该兼容不改变协议版本。
 
-> 决策来源：[`docs/scope/2026-08-05-release-home-deployment/spec-release-home-deployment.md`](../../scope/2026-08-05-release-home-deployment/spec-release-home-deployment.md)
+> 决策来源：[`docs/scope/2026-08-05-release-home-deployment.md`](../../scope/2026-08-05-release-home-deployment.md)
 
 ## Hub 驱动发布与临时 Web
 
@@ -177,7 +177,7 @@ Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `ga
 
 请求被接受后，Hub 在 `applying` 阶段断开属于预期行为；新 Hub 重启并以当前主协议重新握手后恢复完整业务模式。若更新失败但旧 Hub 重新启动，它会再次进入 `update_only`，允许用户查询失败状态并重试。从该能力发布起，Registry 长期保持上述更新 HubState wire 子集兼容，使后续主协议升级继续沿用同一受限路径。
 
-> 决策来源：[`docs/scope/2026-07-31-update-only-hub/spec-update-only-hub.md`](../../scope/2026-07-31-update-only-hub/spec-update-only-hub.md)
+> 决策来源：[`docs/scope/2026-07-31-update-only-hub.md`](../../scope/2026-07-31-update-only-hub.md)
 
 ## 完整安装状态机
 

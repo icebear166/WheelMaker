@@ -238,7 +238,7 @@ Hub-scoped AgentFactory
 
 Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID 选择对应 projects 目录（例如 `<stateDir>/.data/cc-flicker/projects`），因而 provider 切换不会把一个上游的 transcript 交给另一个上游。Registry 仍只负责平铺 agent ID 的路由和广播；App 的 Claude 二级展示不改变运行时所有权。
 
-来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
+来源：[`../../scope/2026-07-23-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents.md)。
 
 ## 9. Codex Responses Provider Isolation
 
@@ -255,7 +255,7 @@ Hub-scoped AgentFactory
   └─ cx-deepseek  ──► <stateDir>/.data/cx-deepseek / dedicated runtime pool
 ```
 
-来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)。
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)。
 
 ## 10. Hub-owned Runtime Configuration
 
@@ -278,7 +278,7 @@ Flicker Bridge mode 是首个使用该存储的配置：
 
 Hub-scoped Flicker Bridge manager 同时区分持久化选择 `mode` 和当前进程 `runningMode`。V1/V2 共用 `127.0.0.1:17999`；Hub 启动时仅在持久化 `enabled=true` 时加载 Bridge，`enabled=false` 保持 stopped。`cc-flicker` 只有在 Bridge 已启用且健康状态为 `running` 时才进入可用 Agent 集合，Off、启动中、停止或失败时动态移除；已经启动的 `cc-flicker` Session 仍遵循不中断策略。原生 `flicker` provider 只依赖 `myflicker` CLI，与 Bridge 开关独立。运行中切换须先健康启动目标模式再提交配置，失败则恢复原模式；所有生命周期操作只管理 Hub 捕获的子进程，不结束非本 manager 所有的 listener。Web 以 Off/V1/V2 作为唯一生命周期控制，不暴露会制造持久化状态与运行状态分歧的独立 Start/Stop toggle。
 
-来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch/spec-flicker-bridge-mode-switch.md)。
+来源：[`../../scope/2026-07-28-flicker-bridge-mode-switch.md`](../../scope/2026-07-28-flicker-bridge-mode-switch.md)。
 
 ## 11. Managed Runtime Restart
 

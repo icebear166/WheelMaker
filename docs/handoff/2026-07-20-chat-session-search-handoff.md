@@ -8,8 +8,8 @@
 
 ## 工件（都是本会话产出，尚未 commit）
 
-- Spec：`docs/scope/2026-07-16-current-session-search/spec-current-session-search.md`
-- Plan：`docs/scope/2026-07-16-current-session-search/plan-current-session-search.md`
+- 历史实施计划：`docs/plans/nospec/2026-07-16-current-session-search/plan-current-session-search.md`（该任务未保留 spec）
+- Plan：`docs/plans/nospec/2026-07-16-current-session-search/plan-current-session-search.md`
 
 两个文件都经过自审。设计的全部决策、验收标准、范围边界在 spec；逐步代码在 plan。**接手时先读这两个文件**，不要重新 scope。
 

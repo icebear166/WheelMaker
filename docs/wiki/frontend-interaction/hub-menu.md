@@ -4,8 +4,8 @@
 
 来源：
 
-- [Hub Menu Unified Layout spec](../../scope/2026-07-30-hub-menu-unified-layout/spec-hub-menu-unified-layout.md)
-- [Hub State Unification spec](../../scope/2026-07-31-hub-state-unification/spec-hub-state-unification.md)
+- [Hub Menu Unified Layout spec](../../scope/2026-07-30-hub-menu-unified-layout.md)
+- [Hub State Unification spec](../../scope/2026-07-31-hub-state-unification.md)
 
 Hub 菜单是唯一的 per-hub 操作中心：所有针对单个 Hub 的配置与维护动作都收口在这里，不再设置平行的 per-hub 设置页。桌面端是锚定在 Chat 头部摘要按钮下的浮窗（`chat-hub-popover`），移动端是带返回栏的全屏宿主（`chat-hub-page`）。宿主形式不同，但内部结构、尺寸和交互保持一致。
 

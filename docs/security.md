@@ -50,7 +50,7 @@ Claude-compatible agent 的 Hub 本地 Key 是独立于 Server Data 的明确例
 
 `hub-config.json` 是受私有文件权限保护的明文配置，不是加密保险箱。Hub 只能把 Key 注入对应 provider 子进程环境；`apiKeys.flicker` 还会注入托管的 V1 bridge 子进程。Key 禁止放入 argv、ACP payload、Session 数据库、错误详情或日志；配置对象和环境诊断必须经过递归脱敏。`<stateDir>/.data/cc-deepseek`、`<stateDir>/.data/cc-glm`、`<stateDir>/.data/cc-kimi`、`<stateDir>/.data/cc-qwen`、`<stateDir>/.data/cc-flicker` 用于隔离 Claude SDK 配置和 Session 历史，不应复制 API Key。备份 `hub-config.json` 等同于备份这些第三方 Key。
 
-来源：[`scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
+来源：[`scope/2026-07-23-claude-compatible-agents.md`](scope/2026-07-23-claude-compatible-agents.md)。
 
 Android direct speech（直连语音）是唯一的明文读取例外。APK 先通过 HTTPS 页面和浏览器 Session Cookie 接入 Registry；只有声明为 `wheelmaker-android` 的已认证 client 才能读取 Volcengine ASR 的 Key、版本和模型，不能读取 DeepSeek 或 TTS Key。这个 client-name gate 可以被自制客户端伪装，本项目在 single-user、所有客户端均受信任的边界内明确接受（accepted）该风险，不能把它当成多租户授权。
 

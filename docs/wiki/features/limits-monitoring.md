@@ -79,11 +79,11 @@ Provider 扫描启动的所有辅助进程都必须使用统一后台命令配�
 
 来源：
 
-- [`../../scope/2026-07-18-agent-usage-rewrite/spec-agent-usage-rewrite.md`](../../scope/2026-07-18-agent-usage-rewrite/spec-agent-usage-rewrite.md)
-- [`../../scope/2026-07-18-mobile-limits-monitor/spec-mobile-limits-monitor.md`](../../scope/2026-07-18-mobile-limits-monitor/spec-mobile-limits-monitor.md)
-- [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
-- [`../../scope/2026-07-22-monitor-card/spec-monitor-card.md`](../../scope/2026-07-22-monitor-card/spec-monitor-card.md)
-- [`../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade/spec-floating-chrome-visual-upgrade.md)
-- [`../../scope/2026-07-28-token-usage-curve/spec-token-usage-curve.md`](../../scope/2026-07-28-token-usage-curve/spec-token-usage-curve.md)
-- [`../../scope/2026-08-01-deepseek-platform-usage/spec-deepseek-platform-usage.md`](../../scope/2026-08-01-deepseek-platform-usage/spec-deepseek-platform-usage.md)
+- [`../../scope/2026-07-18-agent-usage-rewrite.md`](../../scope/2026-07-18-agent-usage-rewrite.md)
+- [`../../scope/2026-07-18-mobile-limits-monitor.md`](../../scope/2026-07-18-mobile-limits-monitor.md)
+- [`../../scope/2026-07-20-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider.md)
+- [`../../scope/2026-07-22-monitor-card.md`](../../scope/2026-07-22-monitor-card.md)
+- [`../../scope/2026-07-24-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade.md)
+- [`../../scope/2026-07-28-token-usage-curve.md`](../../scope/2026-07-28-token-usage-curve.md)
+- [`../../scope/2026-08-01-deepseek-platform-usage.md`](../../scope/2026-08-01-deepseek-platform-usage.md)
 - [`model-efficiency.md`](model-efficiency.md)

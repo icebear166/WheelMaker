@@ -2,9 +2,9 @@
 
 # Composer 输入区
 
-> 来源：[`../../scope/2026-07-25-chat-composer-upgrade/spec-chat-composer-upgrade.md`](../../scope/2026-07-25-chat-composer-upgrade/spec-chat-composer-upgrade.md)
+> 来源：[`../../scope/2026-07-25-chat-composer-upgrade.md`](../../scope/2026-07-25-chat-composer-upgrade.md)
 >
-> Session Queue 来源：[`../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue/spec-server-owned-session-queue.md)
+> Session Queue 来源：[`../../scope/2026-07-31-server-owned-session-queue.md`](../../scope/2026-07-31-server-owned-session-queue.md)
 
 ## 布局
 

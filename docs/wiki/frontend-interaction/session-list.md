@@ -2,7 +2,7 @@
 
 # Session 列表交互
 
-> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md)、[`../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md`](../../scope/2026-07-26-session-color-mark/spec-session-color-mark.md)
+> 来源：[`../../scope/2026-07-22-pin-session.md`](../../scope/2026-07-22-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav.md)、[`../../scope/2026-07-26-session-color-mark.md`](../../scope/2026-07-26-session-color-mark.md)
 
 本页用于持续记录 Session 列表层面的稳定交互。对话内容、Turn 展示和侧边栏容器布局分别由其他前端交互页面维护；图标、动效和配色等视觉语言约定见 [`visual-language.md`](visual-language.md)。
 

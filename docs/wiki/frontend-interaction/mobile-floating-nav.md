@@ -2,7 +2,7 @@
 
 # Mobile Floating Nav
 
-> 来源：[`../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav/spec-mobile-floating-nav.md)、[`../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation/spec-mobile-surface-navigation.md)
+> 来源：[`../../scope/2026-07-26-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav.md)、[`../../scope/2026-07-31-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation.md)
 
 本页记录移动端 floating control 的稳定约定。视觉语言（材质配方、图标体系、动效 token）的总则见 [`visual-language.md`](visual-language.md)；session 列表侧的长按菜单见 [`session-list.md`](session-list.md)。
 

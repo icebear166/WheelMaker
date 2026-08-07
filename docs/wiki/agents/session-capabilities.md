@@ -22,7 +22,7 @@ Goal snapshot 的异步变化使用 `_wm/session/goal` notification，并由 `go
 
 `status` 对所有 session 恒 supported：只返回 WheelMaker 稳定 session id、agent 类型与累计 token 用量（`agentState.Usage`），这些都是 WheelMaker 自身事实，不属于 provider 能力。读取时只取当前 Session 的内存或持久化 snapshot，不创建、初始化或加载 Agent，不调用 provider RPC，因此冷/归档 session 和所有 provider 的表现一致。Provider 限流、套餐与账号数据由 Monitor 负责，不属于 session status。其余 provider-gated 能力（`compact`/`steer`/`fork`/`goal`）不支持时隐藏入口并由服务端拒绝。
 
-详细设计见 [`../../scope/2026-07-30-universal-session-status/spec-universal-session-status.md`](../../scope/2026-07-30-universal-session-status/spec-universal-session-status.md)。
+详细设计见 [`../../scope/2026-07-30-universal-session-status.md`](../../scope/2026-07-30-universal-session-status.md)。
 
 ## 执行与 side-channel
 
@@ -37,7 +37,7 @@ Goal snapshot 的异步变化使用 `_wm/session/goal` notification，并由 `go
 
 支持 Steer 的 Agent 接收正在运行 Turn 的附加用户输入。App 中的新消息默认仍进入本地 prompt queue，只有用户显式点击 Steer 才即时发送。成功输入进入当前 prompt 的内部用户 turn；若目标 Turn 在接受前结束，Session 可原子接管为优先下一 Prompt。
 
-详细产品和竞态语义见 [`../../scope/2026-07-26-session-steer/spec-session-steer.md`](../../scope/2026-07-26-session-steer/spec-session-steer.md)。
+详细产品和竞态语义见 [`../../scope/2026-07-26-session-steer.md`](../../scope/2026-07-26-session-steer.md)。
 
 ## Claude-compatible 能力
 
@@ -55,6 +55,6 @@ Goal 是持久化的 Session 控制面。通用 snapshot 包含 objective、stat
 
 Active Goal 是 Session 懒加载策略的例外：Hub 启动时主动恢复；运行期间的 liveness probe 发现 provider runtime 失活后，会丢弃旧连接、清除已终止的物理 Turn、重新 load Session，并用 provider Goal get 校准 snapshot。Paused 与 terminal Goal 只恢复 snapshot，不启动 Agent。普通 Fork 不继承 Goal。
 
-详细行为见 [`../../scope/2026-07-26-session-goal/spec-session-goal.md`](../../scope/2026-07-26-session-goal/spec-session-goal.md)。
+详细行为见 [`../../scope/2026-07-26-session-goal.md`](../../scope/2026-07-26-session-goal.md)。
 
-ACP 扩展边界见 [`../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27/spec-acp-extension-boundary-v27.md)；Claude ACP 对齐与旧 Codex Session 兼容决策见 [`../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment/spec-claude-acp-alignment.md)。
+ACP 扩展边界见 [`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)；Claude ACP 对齐与旧 Codex Session 兼容决策见 [`../../scope/2026-08-06-claude-acp-alignment.md`](../../scope/2026-08-06-claude-acp-alignment.md)。

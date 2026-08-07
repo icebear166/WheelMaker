@@ -48,4 +48,4 @@ Desktop 把同一 base origin 下的 preview URL 视为允许的子框架导航�
 
 ## 来源
 
-- [HTML 预览 JavaScript 执行 spec](../../scope/2026-07-26-html-preview-js/spec-html-preview-js.md)
+- [HTML 预览 JavaScript 执行 spec](../../scope/2026-07-26-html-preview-js.md)

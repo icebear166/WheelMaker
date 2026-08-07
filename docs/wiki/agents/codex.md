@@ -30,7 +30,7 @@ Codex 原生 Goal status 直接映射为 WheelMaker 通用 status。`thread/goal
 
 `thread/resume` 可能立即继续 active Goal 并发出 Turn 通知，因此 load/reconnect 路径必须先建立 stable Session、runtime thread 和 event sink 的绑定，再调用 resume。App Server 失活时，Hub 先清除旧 runtime 的物理 Turn 状态，再建立新连接；恢复后用 `thread/goal/get` 校准 snapshot。
 
-产品语义与验收见 [`../../scope/2026-07-26-session-goal/spec-session-goal.md`](../../scope/2026-07-26-session-goal/spec-session-goal.md)；通用能力边界见 [`session-capabilities.md`](session-capabilities.md)。
+产品语义与验收见 [`../../scope/2026-07-26-session-goal.md`](../../scope/2026-07-26-session-goal.md)；通用能力边界见 [`session-capabilities.md`](session-capabilities.md)。
 
 ## DeepSeek Responses provider
 
@@ -40,4 +40,4 @@ Codex 原生 Goal status 直接映射为 WheelMaker 通用 status。`thread/goal
 
 模型元数据来自随 WheelMaker 版本发布、经过校验的 DeepSeek 官方 Codex catalog 资产。首版只暴露官方确认支持 Responses/Codex 的 `deepseek-v4-flash`，不根据通用 `/models` 推导 Codex catalog，也不运行远程安装脚本。catalog 保留官方文本输入、function tools、freeform `apply_patch`、text `web_search`、推理档位、上下文窗口和模型指令；图片与文件输入不在能力声明内。Codex CLI 最低版本为 `0.144.0`。
 
-来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode/spec-cx-deepseek-codex-mode.md)。
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)。

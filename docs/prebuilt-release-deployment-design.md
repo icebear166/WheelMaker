@@ -6,7 +6,7 @@
 > 2026-07-17：本文记录的 GitHub 托管实现已被
 > `https://release.wheelmaker.top` 自建发布服务取代，不再是当前操作依据。目标架构见
 > `docs/self-hosted-release-server-design.md`，已确认范围见
-> `docs/scope/2026-07-17-self-hosted-release-server/spec-self-hosted-release-server.md`。
+> `docs/scope/2026-07-17-self-hosted-release-server.md`。
 > 本文其余部分仅保留为迁移决策的历史背景。
 
 ## 目标
