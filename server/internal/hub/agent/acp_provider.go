@@ -600,8 +600,8 @@ func fetchFlickerModelsFromBridge(endpoint string) []claudeModelEntry {
 var flickerTierModels = struct {
 	fable, opus, sonnet, haiku string
 }{
-	fable:  "CLAUDE_OPUS_4_8",
-	opus:   "CLAUDE_OPUS_4_8",
+	fable:  "CLAUDE_OPUS_5",
+	opus:   "CLAUDE_OPUS_5",
 	sonnet: "CLAUDE_4_6",
 	haiku:  "CLAUDE_4_6",
 }
@@ -648,6 +648,7 @@ func applyFlickerModels(profile *claudeCompatibleProfile, models []claudeModelEn
 	}
 	opusModel := firstAvailableFlickerModel(sortedModels,
 		profile.defaultModel,
+		"claude-opus-5",
 		"claude-4.8-opus",
 	)
 	if opusModel == "" {
@@ -861,7 +862,7 @@ func flickerModelVariantRank(vendor, normalizedID string) int {
 
 // flickerModelDisplayName synthesizes an "MF ..."-style label for a model id not
 // present in the exposed catalog, so tier labels never fall back to a bare id.
-// Claude-family ids (CLAUDE_OPUS_4_8) become "MF Claude Opus 4.8".
+// Claude-family ids (CLAUDE_OPUS_5) become "MF Claude Opus 5".
 func flickerModelDisplayName(modelID string) string {
 	name := strings.TrimPrefix(modelID, "CLAUDE-MYFLICKER-")
 	if strings.HasPrefix(strings.ToUpper(name), "CLAUDE_") {

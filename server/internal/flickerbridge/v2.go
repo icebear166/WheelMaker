@@ -56,7 +56,7 @@ type V2ProbeResult struct {
 	Error            string `json:"error,omitempty"`
 }
 
-const v2BundleAnchor = `g0();var Ld1=jA(O1(),1);import rF4 from"fs";`
+const v2BundleAnchor = `DQ();var ks6=F0(bB(),1);import Qe9 from"fs";`
 
 type v2BundleContract struct {
 	Anchor  string
@@ -64,9 +64,9 @@ type v2BundleContract struct {
 }
 
 var v2BundleContracts = map[string]v2BundleContract{
-	"0.3.13": {
+	"0.3.14": {
 		Anchor:  v2BundleAnchor,
-		Exports: "g0();\nexport{xw0 as wanqingPlugin,FB as models,gj as createOpenAI,Ns as createAnthropic,TB4 as login,d9 as setContext,vQ as getContext};",
+		Exports: "DQ();\nexport{lc1 as wanqingPlugin,M5 as models,p4A as createOpenAI,MxA as createAnthropic,yf9 as login,gF as setContext,p6 as getContext};",
 	},
 }
 
@@ -458,9 +458,9 @@ const { pathToFileURL } = require("node:url");
 const { registerHooks } = require("node:module");
 
 const BUNDLE_CONTRACTS = {
-  "0.3.13": {
-    anchor: 'g0();var Ld1=jA(O1(),1);import rF4 from"fs";',
-    exports: 'g0();\nexport{xw0 as wanqingPlugin,FB as models,gj as createOpenAI,Ns as createAnthropic,TB4 as login,d9 as setContext,vQ as getContext};',
+  "0.3.14": {
+    anchor: 'DQ();var ks6=F0(bB(),1);import Qe9 from"fs";',
+    exports: 'DQ();\nexport{lc1 as wanqingPlugin,M5 as models,p4A as createOpenAI,MxA as createAnthropic,yf9 as login,gF as setContext,p6 as getContext};',
   },
 };
 const controllers = new Map();
@@ -3011,7 +3011,7 @@ globalThis.fetch = async (input, init) => {
     hasClaudeIdentity: system.includes("You are Claude Code, Anthropic's official CLI"),
     hasGatewayAuthToken: headers.has("x-takumi-token"),
   }));
-  const model = String(body.model || "claude-4.8-opus");
+  const model = String(body.model || "claude-opus-5");
   const events = [
     ["message_start", {type:"message_start",message:{id:"msg_native_capture",type:"message",role:"assistant",model,content:[],stop_reason:null,stop_sequence:null,usage:{input_tokens:1,output_tokens:0}}}],
     ["content_block_start", {type:"content_block_start",index:0,content_block:{type:"text",text:""}}],
@@ -3062,7 +3062,7 @@ func selfTestLiveNativeReference() error {
 		"--approval-mode",
 		"dontAsk",
 		"--model",
-		"claude-4.8-opus",
+		"claude-opus-5",
 		"--output-format",
 		"json",
 		"Reply with capture-ok and do not use tools.",

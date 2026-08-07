@@ -102,7 +102,17 @@ func TestProbeV2RejectsMissingNodeWithoutLeakingEnvironment(t *testing.T) {
 	}
 }
 
-func TestProbeV2AcceptsMyFlicker0313Bundle(t *testing.T) {
+func TestParseSettingsDefaultsToMyFlickerOpus5(t *testing.T) {
+	settings, err := parseSettings(nil, map[string]string{})
+	if err != nil {
+		t.Fatalf("parseSettings: %v", err)
+	}
+	if settings.DefaultModel != "CLAUDE_OPUS_5" {
+		t.Fatalf("default model = %q, want CLAUDE_OPUS_5", settings.DefaultModel)
+	}
+}
+
+func TestProbeV2RejectsMyFlicker0313Bundle(t *testing.T) {
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
 		t.Skipf("node is unavailable: %v", err)
@@ -129,8 +139,40 @@ func TestProbeV2AcceptsMyFlicker0313Bundle(t *testing.T) {
 	t.Setenv("MYFLICKER_CLI_DIR", packageDir)
 
 	result := ProbeV2()
-	if !result.Available || result.MyFlickerVersion != "0.3.13" {
-		t.Fatalf("ProbeV2() = %+v, want available MyFlicker 0.3.13", result)
+	if result.Available || result.Error != "unsupported @myflicker/cli version" {
+		t.Fatalf("ProbeV2() = %+v, want MyFlicker 0.3.13 rejected", result)
+	}
+}
+
+func TestProbeV2AcceptsMyFlicker0314Bundle(t *testing.T) {
+	nodePath, err := exec.LookPath("node")
+	if err != nil {
+		t.Skipf("node is unavailable: %v", err)
+	}
+	packageDir := filepath.Join(t.TempDir(), "node_modules", "@myflicker", "cli")
+	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "package.json"),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.14"}`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(packageDir, "dist", "cli.mjs"),
+		[]byte(`DQ();var ks6=F0(bB(),1);import Qe9 from"fs";`),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MYFLICKER_NODE", nodePath)
+	t.Setenv("MYFLICKER_CLI_DIR", packageDir)
+
+	result := ProbeV2()
+	if !result.Available || result.MyFlickerVersion != "0.3.14" {
+		t.Fatalf("ProbeV2() = %+v, want available MyFlicker 0.3.14", result)
 	}
 }
 
@@ -166,7 +208,7 @@ func TestProbeV2RejectsMyFlicker0312(t *testing.T) {
 	}
 }
 
-func TestV2WorkerLoadsMyFlicker0313BundleContract(t *testing.T) {
+func TestV2WorkerLoadsMyFlicker0314BundleContract(t *testing.T) {
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
 		t.Skipf("node is unavailable: %v", err)
@@ -177,23 +219,23 @@ func TestV2WorkerLoadsMyFlicker0313BundleContract(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		filepath.Join(packageDir, "package.json"),
-		[]byte(`{"name":"@myflicker/cli","version":"0.3.13","type":"module"}`),
+		[]byte(`{"name":"@myflicker/cli","version":"0.3.14","type":"module"}`),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 	bundle := `
 let appContext = {};
-function g0() {}
-const vQ = () => appContext;
-const d9 = (value) => { appContext = value; };
-async function TB4() {
+function DQ() {}
+const p6 = () => appContext;
+const gF = (value) => { appContext = value; };
+async function yf9() {
   return {login: {}, userInfo: {token: "test-token"}};
 }
-const FB = {};
-function gj() {}
-function Ns() {}
-const xw0 = {
+const M5 = {};
+function p4A() {}
+function MxA() {}
+const lc1 = {
   async initialized() {},
   provider() {
     return {
@@ -230,7 +272,7 @@ const xw0 = {
     };
   }
 };
-g0();var Ld1=jA(O1(),1);import rF4 from"fs";
+DQ();var ks6=F0(bB(),1);import Qe9 from"fs";
 `
 	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(bundle), 0o644); err != nil {
 		t.Fatal(err)
@@ -249,8 +291,8 @@ g0();var Ld1=jA(O1(),1);import rF4 from"fs";
 	if err != nil {
 		t.Fatalf("worker Ready: %v", err)
 	}
-	if ready.MyFlickerVersion != "0.3.13" {
-		t.Fatalf("worker version = %q, want 0.3.13", ready.MyFlickerVersion)
+	if ready.MyFlickerVersion != "0.3.14" {
+		t.Fatalf("worker version = %q, want 0.3.14", ready.MyFlickerVersion)
 	}
 	if len(ready.Catalog) != 2 ||
 		ready.Catalog[0].ID != "claude-opus-5" ||
@@ -560,7 +602,7 @@ func TestV2OutboundProbeBodyHashIsStable(t *testing.T) {
 }
 
 func TestV2HealthReportsLoadedMyFlickerVersion(t *testing.T) {
-	worker := &versionedHealthWorker{version: "0.3.13"}
+	worker := &versionedHealthWorker{version: "0.3.14"}
 	proxy, err := newProxyServer(proxySettings{
 		Host:           "127.0.0.1",
 		Port:           17999,
@@ -581,8 +623,8 @@ func TestV2HealthReportsLoadedMyFlickerVersion(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.MyFlickerVersion != "0.3.13" {
-		t.Fatalf("health version = %q, want loaded worker version 0.3.13", payload.MyFlickerVersion)
+	if payload.MyFlickerVersion != "0.3.14" {
+		t.Fatalf("health version = %q, want loaded worker version 0.3.14", payload.MyFlickerVersion)
 	}
 }
 
@@ -1076,7 +1118,7 @@ func TestParseProxySettingsUsesFlickerAgentBinaryDiscovery(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(packageDir, "dist"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.13"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"@myflicker/cli","version":"0.3.14"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(packageDir, "dist", "cli.mjs"), []byte(v2BundleAnchor), 0o644); err != nil {

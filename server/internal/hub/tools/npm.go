@@ -667,6 +667,16 @@ func npmLatestCacheValid(entry npmLatestCacheEntry, now time.Time) bool {
 	return now.Sub(entry.fetchedAt) < ttl
 }
 
+// invalidateLatestCacheLocked drops cached latest versions so the next scan
+// re-queries the registry. An install resolves the real latest version through
+// npm, which can be newer than the cached one; keeping the stale entry would
+// compare the freshly installed version against it and report a phantom update.
+func (c *NPMCommand) invalidateLatestCacheLocked(packageNames ...string) {
+	for _, packageName := range packageNames {
+		delete(c.latestCache, packageName)
+	}
+}
+
 // runLatestOperation refreshes latest versions and, when the cached decision
 // expired, re-probes the private registry. Both run off the request path so a
 // scan response never waits on the network.
@@ -829,6 +839,9 @@ func (c *NPMCommand) runReinstallOperation(operation *npmOperationSnapshot, pack
 	installResult := c.runner.Run(context.Background(), "npm", npmInstallArgs(packageName, "latest")...)
 	exitCode := installResult.ExitCode
 	c.mu.Lock()
+	if !commandFailed(installResult) {
+		c.invalidateLatestCacheLocked(packageName)
+	}
 	if c.operation != operation {
 		c.mu.Unlock()
 		return
@@ -896,6 +909,11 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 	finishedAt := c.now().Format(time.RFC3339)
 
 	c.mu.Lock()
+	// A finished install resolved the real latest version, so drop the cached one
+	// instead of comparing the freshly installed version against a stale value.
+	if !commandFailed(result) && operation.Action != "uninstall" {
+		c.invalidateLatestCacheLocked(operation.PackageName)
+	}
 	if c.operation != operation {
 		c.mu.Unlock()
 		return
@@ -924,6 +942,7 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 
 func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, packageNames []string, version string) {
 	var failed []string
+	var installed []string
 	var exitCode *int
 	for _, packageName := range packageNames {
 		result := c.runner.Run(context.Background(), "npm", npmInstallArgs(packageName, version)...)
@@ -931,11 +950,14 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 			code := result.ExitCode
 			exitCode = &code
 			failed = append(failed, packageName+": "+formatNPMTaskErrorSummary(result.ExitCode, result.Stdout, result.Stderr, result.Err))
+			continue
 		}
+		installed = append(installed, packageName)
 	}
 	finishedAt := c.now().Format(time.RFC3339)
 
 	c.mu.Lock()
+	c.invalidateLatestCacheLocked(installed...)
 	if c.operation != operation {
 		c.mu.Unlock()
 		return

@@ -126,7 +126,7 @@ func parseSettings(args []string, environ map[string]string) (Settings, error) {
 		CachePath:          lookup("MYFLICKER_BRIDGE_CACHE", defaultCachePath()),
 		LogPath:            *logPath,
 		BridgeAPIKey:       lookup("MYFLICKER_BRIDGE_API_KEY", "00000000000000000000"),
-		DefaultModel:       lookup("MYFLICKER_DEFAULT_MODEL", "CLAUDE_OPUS_4_7"),
+		DefaultModel:       lookup("MYFLICKER_DEFAULT_MODEL", "CLAUDE_OPUS_5"),
 		AuthTimeout:        time.Duration(*authTimeout) * time.Second,
 		AuthPollInterval:   time.Duration(*authPollInterval * float64(time.Second)),
 		UpstreamTimeout:    time.Duration(*upstreamTimeout) * time.Second,

@@ -1063,6 +1063,121 @@ func TestNPMCommandReusesInMemoryLatestCacheWithinTTL(t *testing.T) {
 	}
 }
 
+func TestNPMCommandInstallInvalidatesCachedLatestVersion(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.129.0"}}}`,
+		ExitCode: 0,
+	})
+	cmd, fetcher := newNPMTestCommand(runner)
+	fetcher.setVersion("@openai/codex", "0.130.0")
+	seedNPMPrivateRegistryState(cmd, false)
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("first scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	// npm resolves a newer latest than the cached one, which is what makes the
+	// stale cache report a phantom update after the install.
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.131.0"}}}`,
+		ExitCode: 0,
+	})
+	fetcher.setVersion("@openai/codex", "0.131.0")
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+		"version":     "latest",
+	})); cmdErr != nil {
+		t.Fatalf("install error: %#v", cmdErr)
+	}
+	waitForNPMTestOperationWithoutScan(t, cmd)
+
+	cmd.mu.Lock()
+	_, cached := cmd.latestCache["@openai/codex"]
+	cmd.mu.Unlock()
+	if cached {
+		t.Fatal("install should drop the cached latest version for the installed package")
+	}
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scan after install error: %#v", cmdErr)
+	}
+	pkg := findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@openai/codex")
+	if pkg.Status != "checking_latest" || pkg.CanUpdate {
+		t.Fatalf("pkg=%#v, want checking_latest without an update action right after install", pkg)
+	}
+
+	waitForNPMTestOperation(t, cmd)
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("scan after latest refresh error: %#v", cmdErr)
+	}
+	pkg = findNPMTestPackage(t, resp.(npmCommandResponse).Hub.Packages, "@openai/codex")
+	if pkg.Status != "up_to_date" || pkg.LatestVersion != "0.131.0" || pkg.CanUpdate {
+		t.Fatalf("pkg=%#v, want up_to_date at the freshly installed version", pkg)
+	}
+}
+
+func TestNPMCommandBulkInstallInvalidatesOnlyInstalledPackages(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@openai/codex":{"version":"0.129.0"},"@anthropic-ai/claude-code":{"version":"2.0.0"}}}`,
+		ExitCode: 0,
+	})
+	runner.set("npm", []string{"install", "-g", "@anthropic-ai/claude-code@latest"}, npmCommandResult{
+		Stderr:   "install exploded\n",
+		ExitCode: 1,
+		Err:      errors.New("exit status 1"),
+	})
+	cmd, _ := newNPMTestCommand(runner)
+	seedNPMPrivateRegistryState(cmd, false)
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	})); cmdErr != nil {
+		t.Fatalf("first scan error: %#v", cmdErr)
+	}
+	waitForNPMTestOperation(t, cmd)
+
+	if _, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":       "install_many",
+		"hubId":        "hub-a",
+		"packageNames": []string{"@openai/codex", "@anthropic-ai/claude-code"},
+		"version":      "latest",
+	})); cmdErr != nil {
+		t.Fatalf("bulk install error: %#v", cmdErr)
+	}
+	operation := waitForNPMTestOperationWithoutScan(t, cmd)
+	if operation.Status != "failed" {
+		t.Fatalf("operation=%#v, want failed because one install failed", operation)
+	}
+
+	cmd.mu.Lock()
+	_, installedCached := cmd.latestCache["@openai/codex"]
+	_, failedCached := cmd.latestCache["@anthropic-ai/claude-code"]
+	cmd.mu.Unlock()
+	if installedCached {
+		t.Fatal("successfully installed package should drop its cached latest version")
+	}
+	if !failedCached {
+		t.Fatal("failed install should keep its cached latest version")
+	}
+}
+
 func TestNPMCommandAcceptsRuntimeInstallAndDeprecatedUninstall(t *testing.T) {
 	runner := newFakeNPMRunner()
 	cmd := newNPMCommandWithRunner(runner)
@@ -1428,6 +1543,22 @@ func waitForNPMTestOperation(t *testing.T, cmd *NPMCommand) *npmOperationSnapsho
 			t.Fatalf("scan operation: %#v", cmdErr)
 		}
 		operation := resp.(npmCommandResponse).Operation
+		if operation != nil && !operation.Running {
+			return operation
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("operation did not finish")
+	return nil
+}
+
+// waitForNPMTestOperationWithoutScan waits on the operation snapshot directly, so
+// the wait itself does not trigger scans that would start a follow-up refresh.
+func waitForNPMTestOperationWithoutScan(t *testing.T, cmd *NPMCommand) *npmOperationSnapshot {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		operation := cmd.currentOperationSnapshot()
 		if operation != nil && !operation.Running {
 			return operation
 		}
