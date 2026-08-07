@@ -473,10 +473,14 @@
   background: var(--surface-panel);
   padding: 4px 8px;
   color: var(--text-secondary);
+  animation: preview-workbench-search-in 140ms ease;
 }
 
-.preview-workbench-surface.desktop .preview-workbench-search-bar {
-  padding-left: 52px;
+@keyframes preview-workbench-search-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 
 .preview-workbench-surface.mobile .preview-workbench-search-bar {
@@ -531,10 +535,10 @@
   flex-direction: column;
 }
 
-.preview-workbench-body-tools {
+.preview-workbench-surface.mobile .preview-workbench-body-tools {
   position: absolute;
   top: 8px;
-  left: 10px;
+  right: max(10px, var(--wm-safe-area-right));
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -762,11 +766,6 @@
   color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
-}
-
-.preview-workbench-surface.mobile .preview-workbench-body-tools {
-  left: auto;
-  right: max(10px, var(--wm-safe-area-right));
 }
 
 .preview-workbench-surface.mobile .preview-workbench-drawer-panel {

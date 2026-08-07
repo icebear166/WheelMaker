@@ -146,8 +146,8 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeNull();
   });
 
-  test('tool buttons toggle files and git drawer modes', () => {
-    const props = createProps();
+  test('mobile tool buttons toggle files and git drawer modes', () => {
+    const props = createProps({mode: 'mobile'});
     render(props);
     const filesButton = document.querySelector('[aria-label="Toggle files"]') as HTMLButtonElement;
     const gitButton = document.querySelector('[aria-label="Toggle Git history"]') as HTMLButtonElement;
@@ -159,8 +159,13 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(props.onDrawerModeChange).toHaveBeenLastCalledWith('git');
   });
 
-  test('clicking the active tool button closes the drawer', () => {
-    const props = createProps({drawerMode: 'files'});
+  test('desktop does not render floating tool buttons', () => {
+    render(createProps());
+    expect(document.querySelector('.preview-workbench-body-tools')).toBeNull();
+  });
+
+  test('clicking the active mobile tool button closes the drawer', () => {
+    const props = createProps({mode: 'mobile', drawerMode: 'files'});
     render(props);
     const filesButton = document.querySelector('[aria-label="Toggle files"]') as HTMLButtonElement;
     act(() => filesButton.click());
@@ -183,14 +188,27 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(panel.querySelector('[data-testid="git-drawer"]')).toBeTruthy();
   });
 
-  test('outside pointerdown closes the drawer; pointerdown inside panel or tools does not', () => {
-    const props = createProps({drawerMode: 'files'});
+  test('mobile outside pointerdown closes the drawer; pointerdown inside panel or tools does not', () => {
+    const props = createProps({mode: 'mobile', drawerMode: 'files'});
     render(props);
     const panel = document.querySelector('.preview-workbench-drawer-panel') as HTMLElement;
     const tools = document.querySelector('.preview-workbench-body-tools') as HTMLElement;
 
     pointerDown(panel);
     pointerDown(tools);
+    expect(props.onDrawerModeChange).not.toHaveBeenCalled();
+
+    pointerDown(document.body);
+    expect(props.onDrawerModeChange).toHaveBeenCalledWith('closed');
+  });
+
+  test('desktop outside pointerdown closes the overlay drawer; pointerdown inside panel does not', () => {
+    const props = createProps({drawerMode: 'files'});
+    render(props);
+    const panel = document.querySelector('.preview-workbench-drawer-panel') as HTMLElement;
+    expect(panel).toBeTruthy();
+
+    pointerDown(panel);
     expect(props.onDrawerModeChange).not.toHaveBeenCalled();
 
     pointerDown(document.body);
@@ -251,5 +269,19 @@ describe('PreviewWorkbenchChrome drawer', () => {
     const panel = container!.querySelector('.preview-workbench-drawer-panel');
     expect(panel).toBeTruthy();
     expect((panel as HTMLElement).className).not.toContain('external');
+  });
+
+  test('desktop hides the chrome close button', () => {
+    render(createProps());
+    expect(container!.querySelector('.workbench-chrome-close')).toBeNull();
+    expect(container!.querySelector('.workbench-chrome-toolbar')!.className).toContain('no-close');
+  });
+
+  test('mobile keeps the chrome back button', () => {
+    render(createProps({mode: 'mobile'}));
+    const close = container!.querySelector('.workbench-chrome-close') as HTMLButtonElement;
+    expect(close).toBeTruthy();
+    expect(close.getAttribute('aria-label')).toBe('Back to Chat');
+    expect(container!.querySelector('.workbench-chrome-toolbar')!.className).not.toContain('no-close');
   });
 });

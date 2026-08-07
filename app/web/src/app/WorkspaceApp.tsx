@@ -622,6 +622,7 @@ import {
   type FilePreviewTab,
   type GitDiffFileMeta,
   type GitDiffSource,
+  type PreviewWorkbenchDrawerMode,
   type PreviewWorkbenchTab,
   type PreviewSearchMatch,
   type PromptDiffPreviewFile,
@@ -17870,6 +17871,18 @@ export function App() {
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
   }, [chatPreviewOpen, isWide, setSidebarSettingsOpen]);
+  const togglePreviewDrawerFromTitle = useCallback((mode: Exclude<PreviewWorkbenchDrawerMode, 'closed'>) => {
+    if (!chatPreviewOpen) {
+      setChatPreviewManualCollapsed(false);
+      setChatPreviewManualOpen(true);
+      setPreviewWorkbench(current => ({...current, drawerMode: mode}));
+      return;
+    }
+    setPreviewWorkbench(current => ({
+      ...current,
+      drawerMode: current.drawerMode === mode ? 'closed' : mode,
+    }));
+  }, [chatPreviewOpen]);
   const floatingNavRelayState = resolveFloatingNavRelayState({
     ready: portRelayReady,
     frameUrl: portRelayFrameUrl,
@@ -18208,6 +18221,27 @@ export function App() {
               aria-pressed={terminalOpen}
             >
               <SessionIcon name="terminal" />
+            </button>
+            <button
+              type="button"
+              className={`chat-drawer-toggle${chatPreviewOpen && previewWorkbench.drawerMode === 'files' ? ' active' : ''}`}
+              onClick={() => togglePreviewDrawerFromTitle('files')}
+              data-tooltip="Toggle files"
+              aria-label="Toggle files"
+              aria-pressed={chatPreviewOpen && previewWorkbench.drawerMode === 'files'}
+            >
+              <SessionIcon name="files" />
+            </button>
+            <button
+              type="button"
+              className={`chat-drawer-toggle${chatPreviewOpen && previewWorkbench.drawerMode === 'git' ? ' active' : ''}`}
+              onClick={() => togglePreviewDrawerFromTitle('git')}
+              disabled={!previewGitSnapshot.available}
+              data-tooltip={previewGitSnapshot.available ? 'Toggle Git history' : 'Git is not available for this project'}
+              aria-label="Toggle Git history"
+              aria-pressed={chatPreviewOpen && previewWorkbench.drawerMode === 'git'}
+            >
+              <SessionIcon name="gitBranch" />
             </button>
             <button
               type="button"

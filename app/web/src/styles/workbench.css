@@ -24,6 +24,10 @@
   background: var(--surface-sidebar);
 }
 
+.workbench-chrome-toolbar.no-close {
+  grid-template-columns: minmax(80px, 1fr) auto;
+}
+
 .workbench-chrome-title {
   min-width: 0;
   overflow: hidden;

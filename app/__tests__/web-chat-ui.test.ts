@@ -988,7 +988,7 @@ describe('web chat integration', () => {
     const sectionHeader = cssRuleBlock(stylesCss, '.chat-hub-section-header');
 
     expect(hubRow).toContain('height: 40px;');
-    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 52px 16px;');
+    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 78px 16px;');
     expect(sections).not.toContain('border-left:');
     expect(stylesCss).not.toContain('.chat-hub-sections::before {');
     expect(line).toContain('grid-template-columns: 14px minmax(44px, max-content) minmax(0, 1fr);');
@@ -2475,6 +2475,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('aria-label={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
     expect(mainTsx).toContain('aria-pressed={chatPreviewOpen}');
     expect(mainTsx).toContain('onClick={toggleChatPreviewFromTitle}');
+    expect(mainTsx).toContain("onClick={() => togglePreviewDrawerFromTitle('files')}");
+    expect(mainTsx).toContain("onClick={() => togglePreviewDrawerFromTitle('git')}");
+    expect(mainTsx).toContain('disabled={!previewGitSnapshot.available}');
     expect(mainTsx).toContain('setChatPreviewManualOpen(open => !open)');
     expect(mainTsx).toContain('setChatPreviewManualCollapsed(true)');
 
@@ -2489,6 +2492,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-title-prompt-menu {');
     expect(stylesCss).toContain('.chat-title-prompt-menu-item {');
     expect(stylesCss).toContain('.chat-preview-toggle {');
+    expect(stylesCss).toContain('.chat-drawer-toggle,');
+    expect(stylesCss).toContain('.chat-drawer-toggle.active,');
     const projectButtonBlock = cssRuleBlock(stylesCss, '.chat-title-project-button');
     expect(projectButtonBlock).toContain('border: 0;');
     expect(projectButtonBlock).toContain('background: transparent;');

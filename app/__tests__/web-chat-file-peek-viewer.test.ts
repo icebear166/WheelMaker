@@ -475,23 +475,30 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('surfaceClassName="preview-workbench-surface chat-file-peek-surface"');
   });
 
-  test('files and Git toggles share a floating body rail on desktop and mobile', () => {
+  test('files and Git drawers are toggled from the chat title bar and keep the overlay expansion', () => {
     const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(chromeTsx).toContain('drawerMode: PreviewWorkbenchDrawerMode;');
-    expect(chromeTsx).toContain('preview-workbench-drawer-tool');
     expect(chromeTsx).toContain('drawerPortalTarget');
     expect(chromeTsx).toContain('createPortal(');
+    expect(chromeTsx).toContain("mode === 'mobile' && (fileDrawer || gitDrawer)");
     expect(chromeTsx).toContain('aria-label="Toggle files"');
     expect(chromeTsx).toContain('aria-label="Toggle Git history"');
     expect(chromeTsx).toContain("onDrawerModeChange(drawerMode === 'git' ? 'closed' : 'git')");
+    expect(chromeTsx).toContain("hideClose={mode === 'desktop'}");
+    expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
+    expect(chromeTsx).not.toContain('preview-workbench-main-row');
     expect(mainTsx).toContain('fileDrawer={chatFilePreviewTreeContent}');
     expect(mainTsx).toContain('gitDrawer={previewGitHistoryDrawer}');
-    expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
-    expect(stylesCss).toContain('.preview-workbench-body-tools');
+    expect(mainTsx).toContain("togglePreviewDrawerFromTitle('files')");
+    expect(mainTsx).toContain("togglePreviewDrawerFromTitle('git')");
+    expect(mainTsx).toContain('chat-drawer-toggle');
+    expect(mainTsx).toContain("drawerPortalTarget={mode === 'desktop' ? previewDrawerHost : null}");
+    expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel');
+    expect(stylesCss).toContain('.preview-workbench-surface .preview-workbench-drawer-panel');
     expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-drawer-panel');
     expect(stylesCss).toContain('.chat-preview-drawer-host');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel.external');

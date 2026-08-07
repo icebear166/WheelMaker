@@ -281,6 +281,7 @@ export function PreviewWorkbenchChrome({
       title={activeTitle}
       closeLabel={mode === 'mobile' ? 'Back to Chat' : 'Close preview'}
       onClose={onClose}
+      hideClose={mode === 'desktop'}
       actions={toolbarActions}
       tabsAriaLabel="Open preview tabs"
       tabsClassName="chat-file-workbench-tabs preview-workbench-tabs"
@@ -325,7 +326,7 @@ export function PreviewWorkbenchChrome({
       bodyClassName="preview-workbench-body"
       onKeyDown={onWorkbenchKeyDown}
     >
-      {fileDrawer || gitDrawer ? (
+      {mode === 'mobile' && (fileDrawer || gitDrawer) ? (
         <div ref={drawerToolsRef} className="preview-workbench-body-tools">
           {fileDrawer ? (
             <button

@@ -12,6 +12,7 @@ type WorkbenchChromeProps = {
   titleTooltip?: string;
   closeLabel: string;
   onClose: () => void;
+  hideClose?: boolean;
   actions?: ReactNode;
   tabsAriaLabel: string;
   tabs: ReactNode;
@@ -34,6 +35,7 @@ export function WorkbenchChrome({
   titleTooltip,
   closeLabel,
   onClose,
+  hideClose = false,
   actions,
   tabsAriaLabel,
   tabs,
@@ -49,14 +51,16 @@ export function WorkbenchChrome({
 }: WorkbenchChromeProps) {
   const toolbar = (
     <>
-      <button
-        type="button"
-        className="workbench-chrome-icon-button workbench-chrome-close"
-        aria-label={closeLabel}
-        onClick={onClose}
-      >
-        <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} size={16} />
-      </button>
+      {hideClose ? null : (
+        <button
+          type="button"
+          className="workbench-chrome-icon-button workbench-chrome-close"
+          aria-label={closeLabel}
+          onClick={onClose}
+        >
+          <Icon name={mode === 'mobile' ? 'arrowLeft' : 'x'} size={16} />
+        </button>
+      )}
       <div className="workbench-chrome-title" data-tooltip={titleTooltip || title}>
         {title}
       </div>
@@ -83,11 +87,11 @@ export function WorkbenchChrome({
       onKeyDown={onKeyDown}
     >
       {mode === 'desktop' ? (
-        <DesktopDragRegion className="workbench-chrome-toolbar">
+        <DesktopDragRegion className={`workbench-chrome-toolbar${hideClose ? ' no-close' : ''}`}>
           {toolbar}
         </DesktopDragRegion>
       ) : (
-        <div className="workbench-chrome-toolbar">{toolbar}</div>
+        <div className={`workbench-chrome-toolbar${hideClose ? ' no-close' : ''}`}>{toolbar}</div>
       )}
       {tabsAccessory ? (
         <div className="workbench-chrome-tabs-row">
