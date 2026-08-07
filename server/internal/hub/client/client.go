@@ -1584,6 +1584,9 @@ func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string)
 	if err != nil {
 		return nil, err
 	}
+	if err := sourceSession.ensureInstance(ctx); err != nil {
+		return nil, err
+	}
 	if _, err := sourceSession.ensureInitialized(ctx); err != nil {
 		return nil, err
 	}

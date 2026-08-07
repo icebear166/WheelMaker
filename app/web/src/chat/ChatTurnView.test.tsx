@@ -97,6 +97,24 @@ describe('ChatTurnView session fork', () => {
     expect(onForkPromptDone).toHaveBeenCalledWith('current');
   });
 
+  it('prefers historical fork when both fork modes are available', async () => {
+    const onForkPromptDone = jest.fn();
+    const tree = await renderTurn(
+      message('prompt_done', {
+        stopReason: 'end_turn',
+        forkPoint: {provider: 'codex', ref: 'turn-1'},
+      }),
+      {onForkPromptDone, forkSupported: true, forkCurrentSessionSupported: true},
+    );
+
+    const forkButton = tree.root.findByProps({'aria-label': 'Fork session from here'});
+    await act(async () => {
+      forkButton.props.onClick();
+    });
+
+    expect(onForkPromptDone).toHaveBeenCalledWith('historical');
+  });
+
   it('renders a non-clickable fork operation row', async () => {
     const tree = await renderTurn(message('session_operation', {
       operationId: 'fork-1',

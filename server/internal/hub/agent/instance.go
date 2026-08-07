@@ -546,8 +546,11 @@ func (i *instance) ForkSessionWithCWD(ctx context.Context, sessionID string, cwd
 	}, &out); err != nil {
 		return protocol.SessionForkResult{}, err
 	}
+	historical, _ := protocol.WMSessionForkResultExtensionFromMeta(out.Meta)
 	return protocol.SessionForkResult{
 		SessionID:     out.SessionID,
+		Title:         historical.Title,
+		ForkPoints:    historical.ForkPoints,
 		ConfigOptions: append([]protocol.ConfigOption(nil), out.ConfigOptions...),
 	}, nil
 }

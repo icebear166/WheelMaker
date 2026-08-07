@@ -391,9 +391,17 @@ type WMSessionForkExtension struct {
 	TurnIndex *int64              `json:"turnIndex,omitempty"`
 }
 
+// WMSessionForkResultExtension carries WheelMaker's historical fork metadata
+// without adding non-standard fields to the ACP session/fork response.
+type WMSessionForkResultExtension struct {
+	Title      string                     `json:"title,omitempty"`
+	ForkPoints map[int64]SessionForkPoint `json:"forkPoints,omitempty"`
+}
+
 type wmSessionForkMetaEnvelope struct {
 	WM struct {
-		Fork *WMSessionForkExtension `json:"fork,omitempty"`
+		Fork       *WMSessionForkExtension       `json:"fork,omitempty"`
+		ForkResult *WMSessionForkResultExtension `json:"forkResult,omitempty"`
 	} `json:"wm"`
 }
 
@@ -419,6 +427,30 @@ func WMSessionForkExtensionFromMeta(meta json.RawMessage) (WMSessionForkExtensio
 		return WMSessionForkExtension{}, false
 	}
 	return *envelope.WM.Fork, true
+}
+
+// BuildWMSessionForkResultMeta merges historical fork result data into
+// standard session/fork response metadata.
+func BuildWMSessionForkResultMeta(base json.RawMessage, result WMSessionForkResultExtension) json.RawMessage {
+	addition, err := json.Marshal(map[string]any{"wm": map[string]any{"forkResult": result}})
+	if err != nil {
+		return CloneSessionUpdateMeta(base)
+	}
+	merged, err := MergeSessionUpdateMeta(base, addition)
+	if err != nil {
+		return addition
+	}
+	return merged
+}
+
+// WMSessionForkResultExtensionFromMeta returns WheelMaker's optional
+// historical fork result data from standard session/fork metadata.
+func WMSessionForkResultExtensionFromMeta(meta json.RawMessage) (WMSessionForkResultExtension, bool) {
+	var envelope wmSessionForkMetaEnvelope
+	if json.Unmarshal(meta, &envelope) != nil || envelope.WM.ForkResult == nil {
+		return WMSessionForkResultExtension{}, false
+	}
+	return *envelope.WM.ForkResult, true
 }
 
 type WMSessionArchiveParams struct {

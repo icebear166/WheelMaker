@@ -799,7 +799,8 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		}
 		var forked protocol.SessionForkResult
 		var err error
-		if extension, ok := protocol.WMSessionForkExtensionFromMeta(p.Meta); ok {
+		extension, historical := protocol.WMSessionForkExtensionFromMeta(p.Meta)
+		if historical {
 			forked, err = c.ForkSession(ctx, p.SessionID, extension.Ref, extension.Prompts)
 		} else {
 			forked, err = c.ForkCurrentSession(ctx, p.SessionID)
@@ -807,10 +808,17 @@ func (c *codexappConn) Send(ctx context.Context, method string, params any, resu
 		if err != nil {
 			return err
 		}
-		return assignResult(result, protocol.SessionForkResponse{
+		response := protocol.SessionForkResponse{
 			SessionID:     forked.SessionID,
 			ConfigOptions: append([]protocol.ConfigOption(nil), forked.ConfigOptions...),
-		})
+		}
+		if historical {
+			response.Meta = protocol.BuildWMSessionForkResultMeta(nil, protocol.WMSessionForkResultExtension{
+				Title:      forked.Title,
+				ForkPoints: forked.ForkPoints,
+			})
+		}
+		return assignResult(result, response)
 	case protocol.MethodSetConfigOption:
 		var request protocol.SetSessionConfigOptionRequest
 		if err := remarshal(params, &request); err != nil {

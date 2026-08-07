@@ -135,3 +135,19 @@ func TestWMSessionForkExtensionUsesStablePromptFieldNames(t *testing.T) {
 		t.Fatalf("decoded prompts=%#v", decoded.Prompts)
 	}
 }
+
+func TestWMSessionForkResultExtensionRoundTripsWithoutDiscardingBaseMeta(t *testing.T) {
+	meta := BuildWMSessionForkResultMeta(json.RawMessage(`{"vendor":{"keep":true}}`), WMSessionForkResultExtension{
+		Title: "Forked thread",
+		ForkPoints: map[int64]SessionForkPoint{
+			3: {Provider: "codex", Ref: "target-turn-1"},
+		},
+	})
+	if !bytes.Contains(meta, []byte(`"vendor":{"keep":true}`)) {
+		t.Fatalf("fork result metadata=%s, base metadata was discarded", meta)
+	}
+	decoded, ok := WMSessionForkResultExtensionFromMeta(meta)
+	if !ok || decoded.Title != "Forked thread" || decoded.ForkPoints[3].Ref != "target-turn-1" {
+		t.Fatalf("decoded fork result extension=%#v, ok=%v", decoded, ok)
+	}
+}

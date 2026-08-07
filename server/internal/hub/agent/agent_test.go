@@ -3585,6 +3585,12 @@ func TestInstanceHistoricalForkUsesStandardMethodWithWmExtension(t *testing.T) {
 			SessionCapabilities: &protocol.SessionCapabilities{Fork: &protocol.SessionForkCapability{}},
 		},
 		standardForkSessionID: "child-2",
+		standardForkMeta: protocol.BuildWMSessionForkResultMeta(nil, protocol.WMSessionForkResultExtension{
+			Title: "Forked child",
+			ForkPoints: map[int64]protocol.SessionForkPoint{
+				3: {Provider: "codex", Ref: "child-turn-3"},
+			},
+		}),
 	}
 	inst := NewInstance("codex", fc)
 	if _, err := inst.Initialize(context.Background(), protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
@@ -3604,6 +3610,9 @@ func TestInstanceHistoricalForkUsesStandardMethodWithWmExtension(t *testing.T) {
 	}
 	if result.SessionID != "child-2" || fc.lastMethod != protocol.MethodSessionFork {
 		t.Fatalf("result=%#v method=%q", result, fc.lastMethod)
+	}
+	if result.Title != "Forked child" || result.ForkPoints[3].Ref != "child-turn-3" {
+		t.Fatalf("historical fork result=%#v", result)
 	}
 	params, ok := fc.lastParams.(protocol.SessionForkParams)
 	if !ok {
@@ -4986,6 +4995,10 @@ func TestCodexAppStandardForkCarriesWmHistoricalExtension(t *testing.T) {
 	}
 	if out.SessionID != "thread-target" {
 		t.Fatalf("session/fork result=%#v", out)
+	}
+	forkResult, ok := protocol.WMSessionForkResultExtensionFromMeta(out.Meta)
+	if !ok || forkResult.Title != "Forked thread" || forkResult.ForkPoints[3].Ref != "target-turn-1" {
+		t.Fatalf("session/fork historical metadata=%s decoded=%#v ok=%v", out.Meta, forkResult, ok)
 	}
 }
 
@@ -6490,6 +6503,7 @@ type fakeConn struct {
 	initializeMeta        json.RawMessage
 	nativeSteerOutcome    string
 	standardForkSessionID string
+	standardForkMeta      json.RawMessage
 	lastMethod            string
 	lastParams            any
 	goal                  *protocol.SessionGoal
@@ -6521,6 +6535,7 @@ func (f *fakeConn) Send(_ context.Context, method string, params any, result any
 	case protocol.MethodSessionFork:
 		if out, ok := result.(*protocol.SessionForkResponse); ok {
 			out.SessionID = f.standardForkSessionID
+			out.Meta = protocol.CloneSessionUpdateMeta(f.standardForkMeta)
 		}
 	case protocol.MethodWMSessionGoalGet:
 		if out, ok := result.(*protocol.WMSessionGoalResult); ok {

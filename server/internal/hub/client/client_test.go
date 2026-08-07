@@ -12387,6 +12387,66 @@ func TestHandleSessionForkWithoutTurnIndexUsesCurrentSessionFork(t *testing.T) {
 	}
 }
 
+func TestHandleSessionForkWithoutTurnIndexRestoresColdSourceBeforeCapabilityCheck(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	ctx := context.Background()
+	sourceID := "sess-cold-current-fork-source"
+	targetID := "sess-cold-current-fork-target"
+	if err := c.RecordEvent(ctx, sessionViewCreatedEventWithAgent(sourceID, "Cold source", string(acp.ACPProviderClaude))); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	recordPromptWithProviderForkPointForTest(t, c, sourceID, "first", string(acp.ACPProviderClaude), "source-turn-1")
+	source, err := c.newWiredSession(sourceID, string(acp.ACPProviderClaude))
+	if err != nil {
+		t.Fatalf("newWiredSession: %v", err)
+	}
+	if err := source.persistSession(ctx); err != nil {
+		t.Fatalf("persist cold source: %v", err)
+	}
+
+	sourceRuntime := &testInjectedInstance{
+		name: string(acp.ACPProviderClaude), sessionID: sourceID, alive: true,
+		initResult: acp.InitializeResult{ProtocolVersion: "1", AgentCapabilities: acp.AgentCapabilities{
+			LoadSession: true, SessionCapabilities: &acp.SessionCapabilities{Fork: &acp.SessionForkCapability{}},
+		}},
+	}
+	sourceRuntime.forkCurrentFn = func(_ context.Context, gotSessionID string, cwd string) (acp.SessionForkResult, error) {
+		if gotSessionID != sourceID || cwd == "" {
+			t.Fatalf("current fork input session=%q cwd=%q", gotSessionID, cwd)
+		}
+		return acp.SessionForkResult{SessionID: targetID}, nil
+	}
+	targetProbe := &testInjectedInstance{
+		name: string(acp.ACPProviderClaude), sessionID: targetID, alive: true,
+		initResult: acp.InitializeResult{ProtocolVersion: "1", AgentCapabilities: acp.AgentCapabilities{
+			LoadSession: true,
+		}},
+	}
+	factoryCalls := 0
+	c.InjectAgentFactory(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		factoryCalls++
+		switch factoryCalls {
+		case 1:
+			return sourceRuntime, nil
+		case 2:
+			return targetProbe, nil
+		default:
+			t.Fatalf("unexpected agent factory call %d", factoryCalls)
+			return nil, errors.New("unexpected agent factory call")
+		}
+	})
+
+	resp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionFork, "proj1", json.RawMessage(`{"sessionId":"sess-cold-current-fork-source"}`))
+	if err != nil {
+		t.Fatalf("session.fork cold current: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	if body["ok"] != true || factoryCalls != 2 || sourceRuntime.initCalls != 1 || sourceRuntime.loadCalls != 1 {
+		t.Fatalf("response=%#v factoryCalls=%d source init/load=%d/%d", body, factoryCalls, sourceRuntime.initCalls, sourceRuntime.loadCalls)
+	}
+}
+
 func TestCurrentSessionForkRejectsUnresumableTargetWithoutPublishingChild(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	c.SetSessionHistoryRoot(t.TempDir())
