@@ -359,7 +359,7 @@ export function WheelMakerAppMenu({
           data-tooltip="WheelMaker menu"
           onClick={toggleMenu}
         >
-          <img className="app-product-mark" src="/icons/icon-mark.svg" alt="" aria-hidden="true" />
+          <img className="app-product-mark" src="/icons/icon-mark.svg?v=20260807" alt="" aria-hidden="true" />
           {updateController && updateView.showDot ? (
             <span
               className="desktop-update-dot app-menu-update-dot"

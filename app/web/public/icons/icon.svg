@@ -54,7 +54,7 @@
     </filter>
   </defs>
 
-  <rect width="1254" height="1254" rx="165" fill="#020b2b"/>
+  <rect width="1254" height="1254" rx="165" fill="#0A1E44"/>
 
   <g filter="url(#glowOrange)"><use href="#oShape" fill="#000"/></g>
   <g filter="url(#glowBlue)"><use href="#bShape" fill="#000"/></g>
