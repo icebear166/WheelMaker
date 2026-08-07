@@ -63,6 +63,26 @@ test('Gateway update action is hidden when the Hub has no installed Gateway', ()
   })).toBe(false);
 });
 
+test('Gateway update action is hidden when the installed Gateway is current', () => {
+  expect(shouldShowGatewayUpdateAction({
+    data: {
+      ok: true,
+      status: 'up_to_date',
+      hubId: 'hub-a',
+      installed: {
+        schemaVersion: 1,
+        version: 'v1.3',
+        sourceSha: gatewayStableFixture.gateway.sourceSha,
+        manifestSha256: gatewayStableFixture.gateway.manifestSha256,
+        installedAt: gatewayStableFixture.publishedAt,
+      },
+      canRequestUpdate: true,
+    },
+    loading: false,
+    pending: false,
+  })).toBe(false);
+});
+
 test('Gateway update job activity makes its action visible and pending', () => {
   const data = {
     ok: true,

@@ -1367,7 +1367,7 @@
   height: 40px;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto 78px 16px;
+  grid-template-columns: 24px minmax(0, 1fr) auto 52px 16px;
   align-items: center;
   gap: 4px;
   padding: 4px;
@@ -2241,6 +2241,44 @@ button.chat-hub-skill-name {
   pointer-events: none;
 }
 
+.chat-hub-gateway-status {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: auto;
+}
+
+.chat-hub-gateway-capsule {
+  min-width: 0;
+  max-width: 112px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 64%, transparent);
+  color: var(--text-tertiary);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.chat-hub-gateway-capsule-label {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.chat-hub-gateway-update-action {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 28px;
+  padding: 2px 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-primary);
+}
+
 .chat-hub-version-action .chat-hub-action-label {
   font-variant-numeric: tabular-nums;
 }
@@ -2249,9 +2287,9 @@ button.chat-hub-skill-name {
   position: relative;
   z-index: 1;
   justify-self: end;
-  width: 78px;
+  width: 52px;
   display: grid;
-  grid-template-columns: repeat(3, 24px);
+  grid-template-columns: repeat(2, 24px);
   gap: 2px;
 }
 

@@ -351,14 +351,46 @@ test('hub row shows an installed Gateway before WheelMaker with an independent u
 
   const row = renderer.root.findByProps({className: 'chat-hub-row'});
   const version = row.findByProps({className: 'chat-hub-version-readout'});
+  const gatewayCapsule = version.findByProps({className: 'chat-hub-gateway-capsule'});
+  expect(gatewayCapsule.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.3']);
   expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
-    ['Gateway ', 'v1.3'],
+    ['v1.3'],
     ['v1.2'],
   ]);
-  const gatewayUpdate = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'});
+  const gatewayUpdate = version.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'});
   expect(gatewayUpdate.props['aria-label']).toBe('Update Gateway v1.3');
   act(() => gatewayUpdate.props.onClick());
   expect(callbacks.onRequestGatewayUpdate).toHaveBeenCalledWith('hub-a');
+});
+
+test('hub row keeps a current Gateway in a capsule without an update action', async () => {
+  const {props} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        gateway: {
+          loading: false,
+          pending: false,
+          pendingAction: null,
+          currentVersion: 'v1.3',
+          updateVisible: false,
+          updateAvailable: false,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const version = row.findByProps({className: 'chat-hub-version-readout'});
+  expect(version.findByProps({className: 'chat-hub-gateway-capsule'})).toBeTruthy();
+  expect(version.findAllByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'})).toHaveLength(0);
+  expect(row.findByProps({className: 'chat-hub-row-actions'}).findAllByType('button').map(button => button.props.className)).toEqual([
+    'chat-hub-action chat-hub-version-action chat-hub-version-update-action',
+    'chat-hub-action chat-hub-version-action chat-hub-version-restart-action',
+  ]);
 });
 
 test('MCP opens a local inline zero-state without dispatching an operation', async () => {
