@@ -9594,7 +9594,11 @@ export function App() {
           : 'Completed, click to view';
     return (
       <span className={`session-state-leading ${state}`} data-tooltip={title}>
-        <span className="session-state-dot" />
+        {state === 'running' ? (
+          <SessionIcon name="loader" size={12} spin />
+        ) : (
+          <span className="session-state-dot" />
+        )}
       </span>
     );
   };

@@ -157,7 +157,7 @@ describe('web chat turn rendering', () => {
     expect(chatTurn).toContain("promptStatus === 'responding'");
     expect(chatTurn).toContain("promptStatus === 'confirming'");
     expect(chatTurn).toContain("promptStatus === 'undelivered'");
-    expect(chatTurn).toContain('<ChatIcon name="loader" size={13} spin />');
+    expect(chatTurn).toContain('className="chat-prompt-status-dots"');
     expect(chatTurn).toContain('className="chat-prompt-delivery-line"');
     expect(chatTurn).toContain('onRetryPendingPrompt?: () => void;');
     expect(chatTurn).toContain('onEditPendingPrompt?: () => void;');

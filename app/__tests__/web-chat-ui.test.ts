@@ -988,7 +988,7 @@ describe('web chat integration', () => {
     const sectionHeader = cssRuleBlock(stylesCss, '.chat-hub-section-header');
 
     expect(hubRow).toContain('height: 40px;');
-    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 78px 16px;');
+    expect(hubRow).toContain('grid-template-columns: 24px minmax(0, 1fr) auto 52px 16px;');
     expect(sections).not.toContain('border-left:');
     expect(stylesCss).not.toContain('.chat-hub-sections::before {');
     expect(line).toContain('grid-template-columns: 14px minmax(44px, max-content) minmax(0, 1fr);');
@@ -2063,7 +2063,8 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('renderSessionTrailing(');
     expect(mainTsx).toContain('renderSessionLeadingState(');
     expect(mainTsx).toContain('session-state-leading');
-    expect(stylesCss).toContain('.session-state-leading.running .session-state-dot');
+    expect(mainTsx).toContain('<SessionIcon name="loader" size={12} spin />');
+    expect(stylesCss).toContain('.session-state-leading.running {');
     expect(stylesCss).toContain('.session-state-leading.completed-unviewed .session-state-dot');
     expect(stylesCss).toContain('.session-state-leading.failed-unviewed .session-state-dot');
     expect(stylesCss).toContain('@keyframes session-state-breathe');

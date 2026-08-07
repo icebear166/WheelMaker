@@ -1022,9 +1022,10 @@
   z-index: 1;
 }
 
-.session-state-leading.running .session-state-dot {
-  background: #68a8e8;
-  animation: session-state-breathe 2s ease-in-out infinite;
+.session-state-leading.running {
+  left: -10px;
+  width: 18px;
+  color: #68a8e8;
 }
 
 .session-state-leading.permission-pending {
@@ -1058,12 +1059,6 @@
 .session-state-leading.failed-unviewed .session-state-dot {
   background: var(--state-danger);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-danger) 18%, transparent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-state-leading.running .session-state-dot {
-    animation: none;
-  }
 }
 
 .session-state-dot {
@@ -3214,15 +3209,12 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-prompt-status-responding {
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-  /* Rotation must stay inside the fixed 18px box so it never changes scroll overflow. */
-  contain: paint;
+  width: auto;
+  min-width: 18px;
 }
 
 .chat-prompt-status-confirming {
-  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
-  /* Rotation must stay inside the fixed 18px box so it never changes scroll overflow. */
-  contain: paint;
+  color: color-mix(in srgb, var(--text-secondary) 88%, var(--accent-primary));
 }
 
 .chat-prompt-status-queued {
@@ -3248,6 +3240,40 @@ button.chat-hub-skill-name:disabled {
   border-color: color-mix(in srgb, var(--state-danger) 48%, transparent);
   background: color-mix(in srgb, var(--state-danger) 10%, transparent);
   color: color-mix(in srgb, var(--state-danger) 88%, var(--text-primary));
+}
+
+.chat-prompt-status-dots {
+  display: inline-flex;
+  gap: 1px;
+  font-size: 12px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--text-primary) 76%, var(--accent-primary));
+  contain: paint;
+}
+
+.chat-prompt-status-dots span {
+  display: inline-block;
+  will-change: opacity;
+  animation: chat-prompt-dots-wave 1.2s infinite ease-in-out;
+}
+
+.chat-prompt-status-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-prompt-status-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes chat-prompt-dots-wave {
+  0%,
+  80%,
+  100% {
+    opacity: 0.28;
+  }
+  40% {
+    opacity: 1;
+  }
 }
 
 .chat-prompt-status-done {

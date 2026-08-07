@@ -732,12 +732,16 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
             {promptStatus === 'responding' ? (
               <span className="chat-prompt-status chat-prompt-status-responding" data-tooltip="Responding">
-                <ChatIcon name="loader" size={13} spin />
+                <span className="chat-prompt-status-dots" aria-hidden="true">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </span>
               </span>
             ) : null}
             {promptStatus === 'confirming' ? (
               <span className="chat-prompt-status chat-prompt-status-confirming" data-tooltip="Sending">
-                <ChatIcon name="loader" size={13} spin />
+                <ChatIcon name="refreshCw" size={12} />
               </span>
             ) : null}
             {queueStatus ? (
