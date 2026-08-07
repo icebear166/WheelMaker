@@ -34,6 +34,15 @@ type gatewayInstalledRelease struct {
 	InstalledAt   string `json:"installedAt"`
 }
 
+type gatewayInstalledReleaseFile struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Schema        int    `json:"schema"`
+	Version       string `json:"version"`
+	SourceSHA     string `json:"sourceSha"`
+	ManifestSHA   string `json:"manifestSha256"`
+	InstalledAt   string `json:"installedAt"`
+}
+
 type gatewayUpdateJobStatus struct {
 	Schema    int    `json:"schema"`
 	JobID     string `json:"jobId"`
@@ -223,14 +232,30 @@ func (c *GatewayUpdateCommand) readInstalledRelease() (*gatewayInstalledRelease,
 	if err != nil {
 		return nil, err
 	}
-	var release gatewayInstalledRelease
-	if err := json.Unmarshal(raw, &release); err != nil || release.SchemaVersion != 1 || release.Version == "" || release.InstalledAt == "" || !validHexDigest(release.SourceSHA, 40) || !validHexDigest(release.ManifestSHA, 64) {
+	var file gatewayInstalledReleaseFile
+	if err := json.Unmarshal(raw, &file); err != nil {
 		return nil, errors.New("invalid Gateway release metadata")
 	}
-	if _, err := releaseSequence(release.Version); err != nil {
+	schemaVersion := file.SchemaVersion
+	if file.Schema != 0 {
+		if schemaVersion != 0 && schemaVersion != file.Schema {
+			return nil, errors.New("invalid Gateway release metadata")
+		}
+		schemaVersion = file.Schema
+	}
+	if schemaVersion != 1 || file.Version == "" || file.InstalledAt == "" || !validHexDigest(file.SourceSHA, 40) || !validHexDigest(file.ManifestSHA, 64) {
+		return nil, errors.New("invalid Gateway release metadata")
+	}
+	if _, err := releaseSequence(file.Version); err != nil {
 		return nil, err
 	}
-	return &release, nil
+	return &gatewayInstalledRelease{
+		SchemaVersion: schemaVersion,
+		Version:       file.Version,
+		SourceSHA:     file.SourceSHA,
+		ManifestSHA:   file.ManifestSHA,
+		InstalledAt:   file.InstalledAt,
+	}, nil
 }
 
 func (c *GatewayUpdateCommand) readJobStatus() *gatewayUpdateJobStatus {

@@ -63,6 +63,26 @@ func TestGatewayUpdateCommandQueryReportsInstalledRelease(t *testing.T) {
 	}
 }
 
+func TestGatewayUpdateCommandQueryReportsInstalledReleaseWithGatewaySchema(t *testing.T) {
+	baseDir := t.TempDir()
+	statePath := filepath.Join(baseDir, "gateway", "state", "release.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte(`{"schema":1,"version":"v1.3","sourceSha":"89abcdef0123456789abcdef0123456789abcdef","manifestSha256":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","installedAt":"2026-08-06T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	command := newGatewayUpdateCommandWithDependencies(baseDir, &fakeGatewayUpdateRunner{})
+	response := handleGatewayUpdateForTest(t, command, map[string]any{
+		"action": "query",
+		"hubId":  "hub-a",
+	})
+	if response.Status != "installed" || response.Installed == nil || response.Installed.SchemaVersion != 1 || response.Installed.Version != "v1.3" || !response.CanRequest {
+		t.Fatalf("response=%#v", response)
+	}
+}
+
 func TestGatewayUpdateCommandRequestSharesActiveJob(t *testing.T) {
 	baseDir := t.TempDir()
 	statePath := filepath.Join(baseDir, "gateway", "state", "release.json")
