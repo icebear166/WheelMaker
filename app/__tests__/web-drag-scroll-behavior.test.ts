@@ -277,15 +277,13 @@ describe('web drag scroll behavior', () => {
   test('keeps responding prompt animation from changing chat scroll overflow', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = readWebStyles(projectRoot);
-    const animationStart = styles.indexOf('@keyframes chat-prompt-dots-wave');
-    const animationEnd = styles.indexOf('.chat-prompt-status-done', animationStart);
-    const promptDotsAnimation = styles.slice(animationStart, animationEnd);
 
-    expect(animationStart).toBeGreaterThanOrEqual(0);
-    expect(animationEnd).toBeGreaterThan(animationStart);
-    expect(promptDotsAnimation).not.toContain('transform:');
+    // The responding spinner rotates inside a fixed-size paint-contained box,
+    // so the animation can never alter layout or scroll overflow.
     expect(styles).toMatch(
-      /\.chat-prompt-status-dots \{[\s\S]*contain: paint;[\s\S]*\}/,
+      /\.chat-prompt-status-responding \{[\s\S]*contain: paint;[\s\S]*\}/,
     );
+    expect(styles).not.toContain('.chat-prompt-status-dots');
+    expect(styles).not.toContain('@keyframes chat-prompt-dots-wave');
   });
 });
