@@ -3454,6 +3454,9 @@ func TestInstanceSteerUsesNativeClaudeMethodAndPromptRequiredFallback(t *testing
 	if result.Outcome != "injected" || fc.lastMethod != protocol.MethodSessionSteering {
 		t.Fatalf("native injected result=%#v method=%q", result, fc.lastMethod)
 	}
+	if !result.AcceptedInput {
+		t.Fatalf("native injected result=%#v, want accepted input acknowledgement", result)
+	}
 }
 
 func TestInstanceNativeSteeringRejectsEmptyPrompt(t *testing.T) {
@@ -3474,7 +3477,7 @@ func TestInstanceNativeSteeringRejectsEmptyPrompt(t *testing.T) {
 	}
 }
 
-func TestInstanceCorrelatesNativeSteeringEchoToClientMessageID(t *testing.T) {
+func TestInstanceDoesNotRelabelUserChunkAfterNativeSteeringAcceptance(t *testing.T) {
 	fc := &fakeConn{
 		initializeMeta:     json.RawMessage(`{"steering":{"supported":true}}`),
 		nativeSteerOutcome: protocol.SessionSteeringOutcomeInjected,
@@ -3485,29 +3488,23 @@ func TestInstanceCorrelatesNativeSteeringEchoToClientMessageID(t *testing.T) {
 	}
 	callbacks := &fakeCallbacks{}
 	inst.SetCallbacks(callbacks)
-	if _, err := inst.(SessionSteerer).SteerSession(context.Background(), "s1", "queued-1", []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "change"}}); err != nil {
+	result, err := inst.(SessionSteerer).SteerSession(context.Background(), "s1", "queued-1", []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "change"}})
+	if err != nil {
 		t.Fatalf("native steer: %v", err)
 	}
-	inst.HandleACPResponse(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"unidentified"}}}`))
-	if callbacks.lastMessageID != "" {
-		t.Fatalf("unidentified user chunk consumed native correlation: %#v", callbacks.lastEvent)
+	if !result.AcceptedInput {
+		t.Fatalf("native steer result=%#v, want accepted input acknowledgement", result)
 	}
-	if message, ok := callbacks.lastEvent.Update.(protocol.AgentMessageEvent); !ok || protocol.SessionUpdateMetaSteered(message.Meta) {
-		t.Fatalf("unidentified user chunk was marked steered: %#v", callbacks.lastEvent)
-	}
-	inst.HandleACPResponse(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"change"},"messageId":"provider-message","_meta":{"vendor":{"trace":1}}}}`))
+	inst.HandleACPResponse(context.Background(), protocol.MethodSessionUpdate, json.RawMessage(`{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"later"},"messageId":"provider-message","_meta":{"vendor":{"trace":1}}}}`))
 	if callbacks.lastMessageID != "provider-message" {
-		t.Fatalf("correlated provider messageId=%q, want provider-message", callbacks.lastMessageID)
+		t.Fatalf("provider messageId=%q, want provider-message", callbacks.lastMessageID)
 	}
 	message, ok := callbacks.lastEvent.Update.(protocol.AgentMessageEvent)
-	if !ok || message.ClientMessageID != "queued-1" || !message.Steered {
-		t.Fatalf("correlated event=%#v", callbacks.lastEvent)
-	}
-	if protocol.SessionUpdateMetaSteered(message.Meta) || protocol.SessionUpdateMetaMessageComplete(message.Meta) {
-		t.Fatalf("native correlation fabricated WM lifecycle metadata: %#v", message.Meta)
+	if !ok || message.ClientMessageID != "" || message.Steered {
+		t.Fatalf("later user chunk was relabeled as steering echo: %#v", callbacks.lastEvent)
 	}
 	if !bytes.Contains(message.Meta, []byte(`"trace":1`)) {
-		t.Fatalf("native correlation lost provider metadata: %#v", message.Meta)
+		t.Fatalf("provider metadata was lost: %#v", message.Meta)
 	}
 }
 
@@ -5880,6 +5877,240 @@ func TestSharedConnPool_RoutesBySessionID(t *testing.T) {
 	}
 }
 
+func TestSharedConnPoolRoutesUpdatesDuringSessionLoad(t *testing.T) {
+	raw := &fakeRawConn{}
+	shared := NewSharedConnPool(func() (Conn, error) { return raw, nil })
+	sourceConn, err := shared.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetConn, err := shared.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = sourceConn.Close()
+		_ = targetConn.Close()
+		_ = shared.Close()
+	})
+	sourceUpdates := 0
+	sourceConn.OnACPResponse(func(context.Context, string, json.RawMessage) { sourceUpdates++ })
+	sourceConn.(sessionBinder).BindSessionID("source")
+	raw.send = func(method string, params any, _ any) error {
+		if method == protocol.MethodSessionLoad {
+			load := params.(protocol.SessionLoadParams)
+			payload, _ := json.Marshal(map[string]any{
+				"sessionId": load.SessionID,
+				"update": map[string]any{
+					"sessionUpdate": "agent_message_chunk",
+					"content":       map[string]any{"type": "text", "text": "loading"},
+				},
+			})
+			raw.emitResponse(protocol.MethodSessionUpdate, payload)
+		}
+		return nil
+	}
+
+	target := NewInstance("claude", targetConn)
+	targetCallbacks := &fakeCallbacks{}
+	target.SetCallbacks(targetCallbacks)
+	if _, err := target.SessionLoad(context.Background(), protocol.SessionLoadParams{SessionID: "target", CWD: `C:\workspace`}); err != nil {
+		t.Fatal(err)
+	}
+	if sourceUpdates != 0 || targetCallbacks.updateCount != 1 {
+		t.Fatalf("updates during load source=%d target=%d, want target route", sourceUpdates, targetCallbacks.updateCount)
+	}
+}
+
+func TestSharedConnPoolRoutesUpdatesDuringSessionNew(t *testing.T) {
+	raw := &fakeRawConn{}
+	shared := NewSharedConnPool(func() (Conn, error) { return raw, nil })
+	sourceConn, err := shared.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetConn, err := shared.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = sourceConn.Close()
+		_ = targetConn.Close()
+		_ = shared.Close()
+	})
+	sourceUpdates := 0
+	sourceConn.OnACPResponse(func(context.Context, string, json.RawMessage) { sourceUpdates++ })
+	sourceConn.(sessionBinder).BindSessionID("source")
+	raw.send = func(method string, _ any, result any) error {
+		if method == protocol.MethodSessionNew {
+			result.(*protocol.SessionNewResult).SessionID = "new-target"
+			payload, _ := json.Marshal(map[string]any{
+				"sessionId": "new-target",
+				"update": map[string]any{
+					"sessionUpdate": "agent_message_chunk",
+					"content":       map[string]any{"type": "text", "text": "creating"},
+				},
+			})
+			raw.emitResponse(protocol.MethodSessionUpdate, payload)
+		}
+		return nil
+	}
+
+	target := NewInstance("claude", targetConn)
+	targetCallbacks := &fakeCallbacks{}
+	target.SetCallbacks(targetCallbacks)
+	if _, err := target.SessionNew(context.Background(), protocol.SessionNewParams{CWD: `C:\workspace`}); err != nil {
+		t.Fatal(err)
+	}
+	if sourceUpdates != 0 || targetCallbacks.updateCount != 1 {
+		t.Fatalf("updates during new source=%d target=%d, want target route", sourceUpdates, targetCallbacks.updateCount)
+	}
+}
+
+func TestClaudeACPInstanceCreatorSharesCompatibleProjectRuntime(t *testing.T) {
+	provider := &fakeLaunchProvider{
+		name: "claude",
+		exe:  "claude-agent-acp",
+		args: []string{"--test"},
+		env:  []string{"PROFILE=one"},
+	}
+	starts := 0
+	creator := claudeACPInstanceCreatorWithStarter(provider, func(_ string, _ string, _ string, _ []string, _ []string) (Conn, error) {
+		starts++
+		return &fakeRawConn{}, nil
+	}, nil)
+	ctx := WithProjectName(context.Background(), "project-one")
+	first, err := creator(ctx, `C:\workspace`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := creator(ctx, `C:\workspace`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = first.Close()
+		_ = second.Close()
+	})
+
+	firstRaw := first.(*instance).conn.(*sharedConn).raw
+	secondRaw := second.(*instance).conn.(*sharedConn).raw
+	if starts != 1 || firstRaw != secondRaw {
+		t.Fatalf("starts=%d firstRaw=%p secondRaw=%p, want one shared runtime", starts, firstRaw, secondRaw)
+	}
+}
+
+func TestClaudeACPInstanceCreatorSeparatesIsolationKeys(t *testing.T) {
+	provider := &fakeLaunchProvider{name: "cc-kimi", exe: "claude-agent-acp", env: []string{"PROFILE=kimi"}}
+	starts := 0
+	creator := claudeACPInstanceCreatorWithStarter(provider, func(_ string, _ string, _ string, _ []string, _ []string) (Conn, error) {
+		starts++
+		return &fakeRawConn{}, nil
+	}, nil)
+	instances := []Instance{}
+	open := func(ctx context.Context, cwd string) {
+		inst, err := creator(ctx, cwd)
+		if err != nil {
+			t.Fatal(err)
+		}
+		instances = append(instances, inst)
+	}
+	open(WithProjectName(context.Background(), "project-one"), `C:\workspace`)
+	open(WithProjectName(context.Background(), "project-two"), `C:\workspace`)
+	open(WithProjectName(context.Background(), "project-one"), `C:\other`)
+	open(context.Background(), `C:\workspace`)
+	open(context.Background(), `C:\workspace`)
+	t.Cleanup(func() {
+		for _, inst := range instances {
+			_ = inst.Close()
+		}
+	})
+	if starts != 5 {
+		t.Fatalf("runtime starts=%d, want 5 isolated runtimes", starts)
+	}
+}
+
+func TestClaudeACPLaunchFingerprintIncludesEnvironment(t *testing.T) {
+	base := claudeACPLaunchFingerprint("claude-agent-acp", []string{"--test"}, []string{"A=1", "B=2"})
+	reordered := claudeACPLaunchFingerprint("claude-agent-acp", []string{"--test"}, []string{"B=2", "A=1"})
+	different := claudeACPLaunchFingerprint("claude-agent-acp", []string{"--test"}, []string{"A=1", "B=3"})
+	if base != reordered {
+		t.Fatalf("environment order changed fingerprint: %q != %q", base, reordered)
+	}
+	if base == different {
+		t.Fatal("environment value did not change launch fingerprint")
+	}
+}
+
+func TestClaudeACPPooledRuntimeLoadsProcessLocalForkTarget(t *testing.T) {
+	provider := &fakeLaunchProvider{name: "claude", exe: "claude-agent-acp"}
+	starts := 0
+	creator := claudeACPInstanceCreatorWithStarter(provider, func(_ string, _ string, _ string, _ []string, _ []string) (Conn, error) {
+		starts++
+		raw := &fakeRawConn{}
+		sessions := map[string]bool{}
+		raw.send = func(method string, params any, result any) error {
+			switch method {
+			case protocol.MethodInitialize:
+				out := result.(*protocol.InitializeResult)
+				out.ProtocolVersion = "1"
+				out.AgentCapabilities = protocol.AgentCapabilities{
+					LoadSession:         true,
+					SessionCapabilities: &protocol.SessionCapabilities{Fork: &protocol.SessionForkCapability{}},
+				}
+			case protocol.MethodSessionNew:
+				sessions["source"] = true
+				result.(*protocol.SessionNewResult).SessionID = "source"
+			case protocol.MethodSessionFork:
+				sourceID := params.(protocol.SessionForkParams).SessionID
+				if !sessions[sourceID] {
+					return errors.New("source is not in this process")
+				}
+				sessions["child"] = true
+				result.(*protocol.SessionForkResponse).SessionID = "child"
+			case protocol.MethodSessionLoad:
+				if !sessions[params.(protocol.SessionLoadParams).SessionID] {
+					return errors.New("session is not in this process")
+				}
+			}
+			return nil
+		}
+		return raw, nil
+	}, nil)
+	ctx := WithProjectName(context.Background(), "project-one")
+
+	source, err := creator(ctx, `C:\workspace`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	if _, err := source.Initialize(ctx, protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.SessionNew(ctx, protocol.SessionNewParams{CWD: `C:\workspace`}); err != nil {
+		t.Fatal(err)
+	}
+	forked, err := source.(SessionCurrentForker).ForkCurrentSession(ctx, "source", `C:\workspace`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := creator(ctx, `C:\workspace`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer target.Close()
+	if _, err := target.Initialize(ctx, protocol.InitializeParams{ProtocolVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := target.SessionLoad(ctx, protocol.SessionLoadParams{SessionID: forked.SessionID, CWD: `C:\workspace`}); err != nil {
+		t.Fatalf("load process-local fork target: %v", err)
+	}
+	if starts != 1 {
+		t.Fatalf("runtime starts=%d, want source and target in one process", starts)
+	}
+}
+
 func TestRoutes_LoadPendingPromotesToActive(t *testing.T) {
 	r := newRouteState()
 	tok := r.beginLoad("acp-1", "inst-A", 3)
@@ -6405,13 +6636,31 @@ func waitForTurnDiff(t *testing.T, conn *codexappConn, turnID string, want strin
 type fakeRawConn struct {
 	req  ACPRequestHandler
 	resp ACPResponseHandler
+	send func(method string, params any, result any) error
 }
 
-func (f *fakeRawConn) Send(_ context.Context, _ string, _ any, _ any) error { return nil }
-func (f *fakeRawConn) Notify(_ string, _ any) error                         { return nil }
-func (f *fakeRawConn) OnACPRequest(h ACPRequestHandler)                     { f.req = h }
-func (f *fakeRawConn) OnACPResponse(h ACPResponseHandler)                   { f.resp = h }
-func (f *fakeRawConn) Close() error                                         { return nil }
+type fakeLaunchProvider struct {
+	name string
+	exe  string
+	args []string
+	env  []string
+}
+
+func (p *fakeLaunchProvider) Name() string { return p.name }
+func (p *fakeLaunchProvider) Launch() (string, []string, []string, error) {
+	return p.exe, append([]string(nil), p.args...), append([]string(nil), p.env...), nil
+}
+
+func (f *fakeRawConn) Send(_ context.Context, method string, params any, result any) error {
+	if f.send != nil {
+		return f.send(method, params, result)
+	}
+	return nil
+}
+func (f *fakeRawConn) Notify(_ string, _ any) error       { return nil }
+func (f *fakeRawConn) OnACPRequest(h ACPRequestHandler)   { f.req = h }
+func (f *fakeRawConn) OnACPResponse(h ACPResponseHandler) { f.resp = h }
+func (f *fakeRawConn) Close() error                       { return nil }
 
 func (f *fakeRawConn) emitResponse(method string, params []byte) {
 	if f.resp == nil {

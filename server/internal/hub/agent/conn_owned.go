@@ -16,6 +16,15 @@ type sessionBinder interface {
 	BindSessionID(acpSessionID string)
 }
 
+type sessionLoadBinding interface {
+	Commit() bool
+	Rollback()
+}
+
+type sessionLoadBinder interface {
+	BeginSessionLoad(acpSessionID string) sessionLoadBinding
+}
+
 type ownedTransport interface {
 	SendMessage(v any) error
 	OnMessage(h func(json.RawMessage))

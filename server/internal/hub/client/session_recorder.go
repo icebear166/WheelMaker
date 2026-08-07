@@ -1345,6 +1345,7 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		summary.SessionActions = acp.SessionActionsFromState(acp.SessionCapabilityState{
 			AgentCapabilities: agentState.AgentCapabilities,
 			InitializeMeta:    agentState.InitializeMeta,
+			Commands:          agentState.Commands,
 		})
 	}
 	if summary.SessionFeatures == nil {

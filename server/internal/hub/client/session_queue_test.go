@@ -28,6 +28,7 @@ type queueExecutionInstance struct {
 	promptOutcomes  chan queuePromptOutcome
 	compactOutcomes chan error
 	steerErr        error
+	steerResult     agent.SessionSteerResult
 	steerStarted    chan struct{}
 	steerRelease    chan struct{}
 }
@@ -89,6 +90,7 @@ func (i *queueExecutionInstance) SteerSession(
 ) (agent.SessionSteerResult, error) {
 	i.mu.Lock()
 	err := i.steerErr
+	result := i.steerResult
 	started := i.steerStarted
 	release := i.steerRelease
 	i.mu.Unlock()
@@ -105,12 +107,18 @@ func (i *queueExecutionInstance) SteerSession(
 			return agent.SessionSteerResult{}, ctx.Err()
 		}
 	}
-	return agent.SessionSteerResult{}, err
+	return result, err
 }
 
 func (i *queueExecutionInstance) setSteerError(err error) {
 	i.mu.Lock()
 	i.steerErr = err
+	i.mu.Unlock()
+}
+
+func (i *queueExecutionInstance) setSteerResult(result agent.SessionSteerResult) {
+	i.mu.Lock()
+	i.steerResult = result
 	i.mu.Unlock()
 }
 
@@ -390,6 +398,29 @@ func TestSessionQueueDrainsPromptCompactPromptInOrder(t *testing.T) {
 	want := []string{"prompt:first", "compact:sess-drain", "prompt:second"}
 	if got := instance.executionOrder(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("execution order = %v, want %v", got, want)
+	}
+}
+
+func TestSessionQueueDrainsCommandBackedCompactThroughPrompt(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-command-compact")
+	s.mu.Lock()
+	s.agentState.Commands = []acp.AvailableCommand{{Name: "compact"}}
+	s.mu.Unlock()
+
+	if _, _, err := s.enqueueAndScheduleQueueItem(compactQueueItem("compact-command")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:/compact")
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
+
+	eventuallyQueue(t, func() bool {
+		got := s.queueSnapshot(true)
+		return got.ActiveItem == nil && len(got.WaitingItems) == 0
+	})
+	select {
+	case err := <-instance.compactOutcomes:
+		t.Fatalf("command-backed compact called native compactor: %v", err)
+	default:
 	}
 }
 
@@ -733,6 +764,48 @@ func TestSessionQueueSteerWaitsForMatchingTranscript(t *testing.T) {
 		t.Fatalf("provider-neutral native steer correlation did not remove queue item: %#v", got)
 	}
 	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
+}
+
+func TestSessionQueueNativeSteerAcceptanceRecordsInputAndCompletesItem(t *testing.T) {
+	s, instance := newQueueExecutionSession(t, "sess-native-steer")
+	instance.setSteerResult(agent.SessionSteerResult{
+		Outcome:       acp.SessionSteeringOutcomeInjected,
+		AcceptedInput: true,
+	})
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("active", "first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.enqueueAndScheduleQueueItem(promptQueueItem("steer-native", "change direction")); err != nil {
+		t.Fatal(err)
+	}
+	awaitQueueExecutionStart(t, instance, "prompt:first")
+
+	if err := s.steerQueueItem(context.Background(), "steer-native"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.queueSnapshot(true); len(got.WaitingItems) != 0 {
+		t.Fatalf("accepted native steer remained queued: %#v", got)
+	}
+
+	instance.promptOutcomes <- queuePromptOutcome{result: acp.PromptOutcome{StopReason: acp.StopReasonEndTurn}}
+	eventuallyQueue(t, func() bool {
+		for _, event := range s.viewSink.(*recordingSessionViewSink).events {
+			if event.Type != SessionViewEventTypeACP {
+				continue
+			}
+			var envelope struct {
+				Params acp.SessionUpdateParams `json:"params"`
+			}
+			if json.Unmarshal([]byte(event.Content), &envelope) == nil &&
+				envelope.Params.Update.ClientMessageID == "steer-native" &&
+				envelope.Params.Update.Steered &&
+				len(envelope.Params.Update.ContentBlocks) == 1 &&
+				envelope.Params.Update.ContentBlocks[0].Text == "change direction" {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func TestSessionQueueSteeringItemCanBeCancelledWhileProviderIsPending(t *testing.T) {

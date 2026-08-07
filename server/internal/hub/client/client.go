@@ -216,6 +216,7 @@ func (c *Client) restoreActiveGoals(ctx context.Context) {
 		if !acp.SessionActionsFromState(acp.SessionCapabilityState{
 			AgentCapabilities: state.AgentCapabilities,
 			InitializeMeta:    state.InitializeMeta,
+			Commands:          state.Commands,
 		}).Goal.Supported {
 			continue
 		}
@@ -1623,16 +1624,26 @@ func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string)
 			hubLogger(c.projectName).Warn("cleanup fork target failed source=%s target=%s err=%v", sourceSessionID, targetSessionID, cleanupErr)
 		}
 	}
-	validatedLoad, err := c.validateCurrentForkTarget(ctx, sourceSession, targetSessionID)
+	validatedTarget, err := c.validateCurrentForkTarget(ctx, sourceSession, targetSessionID)
 	if err != nil {
 		cleanupProviderTarget()
 		return nil, fmt.Errorf("validate fork target: %w", err)
 	}
-	if len(validatedLoad.ConfigOptions) > 0 {
-		forkResult.ConfigOptions = append([]acp.ConfigOption(nil), validatedLoad.ConfigOptions...)
+	defer func() {
+		if closeErr := validatedTarget.Close(); closeErr != nil {
+			hubLogger(c.projectName).Warn("close unclaimed fork target runtime failed target=%s err=%v", targetSessionID, closeErr)
+		}
+	}()
+	if len(validatedTarget.loadResult.ConfigOptions) > 0 {
+		forkResult.ConfigOptions = append([]acp.ConfigOption(nil), validatedTarget.loadResult.ConfigOptions...)
 	}
 	localTargetCreated := false
+	localTargetPublished := false
+	var targetSession *Session
 	cleanupTarget := func() {
+		if targetSession != nil && !localTargetPublished {
+			targetSession.closeRuntimeInstance()
+		}
 		if localTargetCreated {
 			_ = c.deleteActiveSession(context.Background(), targetSessionID, false)
 		}
@@ -1655,7 +1666,7 @@ func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string)
 		}
 		return nil, fmt.Errorf("source session not found: %s", sourceSessionID)
 	}
-	targetSession, err := c.newForkTargetSession(sourceSession, targetSessionID, forkResult.Title)
+	targetSession, err = c.newForkTargetSession(sourceSession, targetSessionID, forkResult.Title)
 	if err != nil {
 		cleanupTarget()
 		return nil, err
@@ -1663,6 +1674,7 @@ func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string)
 	if len(forkResult.ConfigOptions) > 0 {
 		targetSession.agentState.ConfigOptions = append([]acp.ConfigOption(nil), forkResult.ConfigOptions...)
 	}
+	validatedTarget.attach(targetSession)
 	localTargetCreated = true
 	if err := targetSession.persistSession(ctx); err != nil {
 		cleanupTarget()
@@ -1703,6 +1715,7 @@ func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string)
 	c.mu.Lock()
 	c.sessions[targetSessionID] = targetSession
 	c.mu.Unlock()
+	localTargetPublished = true
 	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, targetSessionID)
 	if err != nil {
 		cleanupTarget()
@@ -1712,9 +1725,45 @@ func (c *Client) forkCurrentSession(ctx context.Context, sourceSessionID string)
 	return map[string]any{"ok": true, "session": summary}, nil
 }
 
-func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session, targetSessionID string) (acp.SessionLoadResult, error) {
+type validatedCurrentForkTarget struct {
+	instance   agent.Instance
+	initResult acp.InitializeResult
+	loadResult acp.SessionLoadResult
+}
+
+func (target *validatedCurrentForkTarget) Close() error {
+	if target == nil || target.instance == nil {
+		return nil
+	}
+	instance := target.instance
+	target.instance = nil
+	return instance.Close()
+}
+
+func (target *validatedCurrentForkTarget) attach(session *Session) {
+	if target == nil || target.instance == nil || session == nil {
+		return
+	}
+	instance := target.instance
+	target.instance = nil
+	session.mu.Lock()
+	session.instance = instance
+	session.initialized = true
+	session.ready = true
+	session.agentState.AgentCapabilities = target.initResult.AgentCapabilities
+	session.agentState.InitializeMeta = append(json.RawMessage(nil), target.initResult.Meta...)
+	session.agentState.AgentInfo = cloneAgentInfo(target.initResult.AgentInfo)
+	session.agentState.AuthMethods = append([]acp.AuthMethod(nil), target.initResult.AuthMethods...)
+	if len(target.loadResult.ConfigOptions) > 0 {
+		session.agentState.ConfigOptions = normalizeAgentConfigOptions(session.agentType, target.loadResult.ConfigOptions)
+	}
+	session.mu.Unlock()
+	instance.SetCallbacks(session)
+}
+
+func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session, targetSessionID string) (*validatedCurrentForkTarget, error) {
 	if c == nil || source == nil || c.registry == nil {
-		return acp.SessionLoadResult{}, fmt.Errorf("agent factory is required")
+		return nil, fmt.Errorf("agent factory is required")
 	}
 	source.mu.Lock()
 	agentType := source.agentType
@@ -1722,15 +1771,16 @@ func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session,
 	source.mu.Unlock()
 	creator := c.registry.CreatorByName(agentType)
 	if creator == nil {
-		return acp.SessionLoadResult{}, fmt.Errorf("no agent registered for %q", agentType)
+		return nil, fmt.Errorf("no agent registered for %q", agentType)
 	}
 	probe, err := creator(agent.WithProjectName(ctx, c.projectName), cwd)
 	if err != nil {
-		return acp.SessionLoadResult{}, err
+		return nil, err
 	}
+	closeProbe := true
 	defer func() {
-		if closeErr := probe.Close(); closeErr != nil {
-			hubLogger(c.projectName).Warn("close fork target probe failed target=%s err=%v", targetSessionID, closeErr)
+		if closeProbe {
+			_ = probe.Close()
 		}
 	}()
 	probe.SetCallbacks(nil)
@@ -1744,10 +1794,10 @@ func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session,
 		ClientInfo: acpClientInfo,
 	})
 	if err != nil {
-		return acp.SessionLoadResult{}, fmt.Errorf("initialize target probe: %w", err)
+		return nil, fmt.Errorf("initialize target probe: %w", err)
 	}
 	if !initResult.AgentCapabilities.LoadSession {
-		return acp.SessionLoadResult{}, fmt.Errorf("agent %q does not support target session/load", agentType)
+		return nil, fmt.Errorf("agent %q does not support target session/load", agentType)
 	}
 	loaded, err := probe.SessionLoad(ctx, acp.SessionLoadParams{
 		SessionID:  targetSessionID,
@@ -1755,9 +1805,10 @@ func (c *Client) validateCurrentForkTarget(ctx context.Context, source *Session,
 		MCPServers: emptyMCPServers(),
 	})
 	if err != nil {
-		return acp.SessionLoadResult{}, fmt.Errorf("session/load target %s: %w", targetSessionID, err)
+		return nil, fmt.Errorf("session/load target %s: %w", targetSessionID, err)
 	}
-	return loaded, nil
+	closeProbe = false
+	return &validatedCurrentForkTarget{instance: probe, initResult: initResult, loadResult: loaded}, nil
 }
 
 func (c *Client) sessionSupportsCurrentFork(sess *Session) bool {
@@ -1768,6 +1819,7 @@ func (c *Client) sessionSupportsCurrentFork(sess *Session) bool {
 	state := acp.SessionCapabilityState{
 		AgentCapabilities: sess.agentState.AgentCapabilities,
 		InitializeMeta:    sess.agentState.InitializeMeta,
+		Commands:          sess.agentState.Commands,
 	}
 	sess.mu.Unlock()
 	return acp.SessionActionsFromState(state).Fork.CurrentSession
@@ -1781,6 +1833,7 @@ func (c *Client) sessionSupportsHistoricalFork(sess *Session) bool {
 	state := acp.SessionCapabilityState{
 		AgentCapabilities: sess.agentState.AgentCapabilities,
 		InitializeMeta:    sess.agentState.InitializeMeta,
+		Commands:          sess.agentState.Commands,
 	}
 	sess.mu.Unlock()
 	return acp.SessionActionsFromState(state).Fork.HistoricalTurn
@@ -1980,6 +2033,7 @@ func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
 	capabilityState := acp.SessionCapabilityState{
 		AgentCapabilities: sess.agentState.AgentCapabilities,
 		InitializeMeta:    sess.agentState.InitializeMeta,
+		Commands:          sess.agentState.Commands,
 	}
 	sess.mu.Unlock()
 	support := acp.SessionActionsFromState(capabilityState)

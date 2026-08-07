@@ -48,6 +48,7 @@ var (
 type SessionSteerResult struct {
 	ProviderTurnID string
 	Outcome        string
+	AcceptedInput  bool
 }
 
 type SessionSteerer interface {
@@ -89,30 +90,24 @@ func (i *instance) SteerSession(
 			// ACP request.
 			return SessionSteerResult{}, ErrSessionActionInvalid
 		}
-		i.mu.Lock()
-		if i.nativeSteer != nil {
-			i.mu.Unlock()
-			return SessionSteerResult{}, ErrSessionBusy
-		}
-		i.nativeSteer = &nativeSteerCorrelation{sessionID: sessionID, clientMessageID: clientMessageID}
-		i.mu.Unlock()
 		var out protocol.SessionSteeringResponse
 		if err := i.conn.Send(ctx, protocol.MethodSessionSteering, protocol.SessionSteeringParams{
 			SessionID: sessionID,
 			Prompt:    blocks,
 			Meta:      protocol.BuildWMSessionSteeringMeta(protocol.BuildSessionSteeringPromptRequiredMeta(nil), clientMessageID),
 		}, &out); err != nil {
-			i.clearNativeSteerCorrelation(sessionID, clientMessageID)
 			return SessionSteerResult{}, err
 		}
 		switch out.Outcome {
 		case protocol.SessionSteeringOutcomePromptRequired:
-			i.clearNativeSteerCorrelation(sessionID, clientMessageID)
 			return SessionSteerResult{}, ErrSessionSteerInactive
 		case protocol.SessionSteeringOutcomeInjected, protocol.SessionSteeringOutcomeStartedNewTurn:
-			return SessionSteerResult{ProviderTurnID: out.ProviderTurnID, Outcome: out.Outcome}, nil
+			return SessionSteerResult{
+				ProviderTurnID: out.ProviderTurnID,
+				Outcome:        out.Outcome,
+				AcceptedInput:  true,
+			}, nil
 		default:
-			i.clearNativeSteerCorrelation(sessionID, clientMessageID)
 			return SessionSteerResult{}, fmt.Errorf("%w: unknown steering outcome %q", ErrSessionSteerUnavailable, out.Outcome)
 		}
 	}
@@ -166,14 +161,8 @@ type instance struct {
 	acpSessionID    string
 	initResult      protocol.InitializeResult
 	wmExtensions    protocol.WMNegotiatedExtensions
-	nativeSteer     *nativeSteerCorrelation
 	pendingEvents   []protocol.AgentEvent
 	closed          bool
-}
-
-type nativeSteerCorrelation struct {
-	sessionID       string
-	clientMessageID string
 }
 
 var _ Instance = (*instance)(nil)
@@ -243,7 +232,6 @@ func (i *instance) Initialize(ctx context.Context, p protocol.InitializeParams) 
 	i.mu.Lock()
 	i.initResult = out
 	i.wmExtensions = protocol.NegotiateWMExtensions(p.ClientCapabilities.Meta, out.AgentCapabilities.Meta)
-	i.nativeSteer = nil
 	i.mu.Unlock()
 	return out, nil
 }
@@ -277,13 +265,24 @@ func (i *instance) SessionLoad(ctx context.Context, p protocol.SessionLoadParams
 	if strings.TrimSpace(p.SessionID) == "" {
 		return protocol.SessionLoadResult{}, errors.New("acp session id is required")
 	}
+	var binding sessionLoadBinding
+	if binder, ok := i.conn.(sessionLoadBinder); ok {
+		binding = binder.BeginSessionLoad(p.SessionID)
+	}
 
 	var out protocol.SessionLoadResult
 	if err := i.conn.Send(ctx, protocol.MethodSessionLoad, p, &out); err != nil {
+		if binding != nil {
+			binding.Rollback()
+		}
 		return protocol.SessionLoadResult{}, err
 	}
 
-	if binder, ok := i.conn.(sessionBinder); ok {
+	if binding != nil {
+		if !binding.Commit() {
+			return protocol.SessionLoadResult{}, errors.New("acp session load route was superseded")
+		}
+	} else if binder, ok := i.conn.(sessionBinder); ok {
 		binder.BindSessionID(p.SessionID)
 	}
 	i.mu.Lock()
@@ -611,21 +610,6 @@ func (i *instance) HandleACPResponse(_ context.Context, method string, params js
 		if err != nil {
 			return
 		}
-		if message, ok := event.Update.(protocol.AgentMessageEvent); ok && message.Kind == protocol.SessionUpdateUserMessageChunk && strings.TrimSpace(message.MessageID) != "" {
-			i.mu.Lock()
-			correlation := i.nativeSteer
-			if correlation != nil && strings.TrimSpace(correlation.sessionID) == strings.TrimSpace(event.SessionID) {
-				// ACP steering responses do not carry a request-to-message
-				// identifier. A provider messageId is therefore the minimum
-				// evidence that this is the injected user echo; never consume
-				// the pending correlation on an unidentifiable chunk.
-				i.nativeSteer = nil
-				message.ClientMessageID = correlation.clientMessageID
-				message.Steered = true
-				event.Update = message
-			}
-			i.mu.Unlock()
-		}
 		i.mu.RLock()
 		event.MessageLifecycle = i.wmExtensions.MessageLifecycle
 		i.mu.RUnlock()
@@ -655,18 +639,6 @@ func (i *instance) HandleACPResponse(_ context.Context, method string, params js
 				Meta: protocol.CloneSessionUpdateMeta(notification.Meta), ReceivedAt: time.Now().UTC(),
 			},
 		})
-	}
-}
-
-func (i *instance) clearNativeSteerCorrelation(sessionID, clientMessageID string) {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	if i.nativeSteer == nil {
-		return
-	}
-	if strings.TrimSpace(i.nativeSteer.sessionID) == strings.TrimSpace(sessionID) &&
-		strings.TrimSpace(i.nativeSteer.clientMessageID) == strings.TrimSpace(clientMessageID) {
-		i.nativeSteer = nil
 	}
 }
 
@@ -752,7 +724,6 @@ func (i *instance) Close() error {
 	i.closed = true
 	i.pendingEvents = nil
 	i.callbacks = nil
-	i.nativeSteer = nil
 	i.mu.Unlock()
 	i.dispatchMu.Unlock()
 	if i.tools != nil {

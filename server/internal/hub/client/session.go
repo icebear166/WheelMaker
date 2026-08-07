@@ -368,6 +368,24 @@ func (s *Session) ensureInstance(ctx context.Context) error {
 	return nil
 }
 
+func (s *Session) closeRuntimeInstance() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	instance := s.instance
+	s.instance = nil
+	s.initialized = false
+	s.ready = false
+	s.initializing = false
+	s.loading = false
+	s.clearSteerStateLocked()
+	s.mu.Unlock()
+	if instance != nil {
+		_ = instance.Close()
+	}
+}
+
 // emptyMCPServers returns an empty MCP server list for session/new and session/load calls.
 // Replace this helper when MCP config support is added.
 func emptyMCPServers() []acp.MCPServer {
@@ -465,7 +483,6 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	savedSID := s.acpSessionID
 	cwd := s.cwd
 	persistedConfigOptions := normalizeAgentConfigOptions(agentName, s.agentState.ConfigOptions)
-	persistedCommands := append([]acp.AvailableCommand(nil), s.agentState.Commands...)
 	s.mu.Unlock()
 
 	finishLoad := func() {
@@ -506,14 +523,12 @@ func (s *Session) ensureReady(ctx context.Context) error {
 		resolved = append([]acp.ConfigOption(nil), persistedConfigOptions...)
 	}
 	resolved = normalizeAgentConfigOptions(agentName, resolved)
-	resolvedCommands := append([]acp.AvailableCommand(nil), persistedCommands...)
 
 	s.mu.Lock()
 	state := &s.agentState
 	if len(resolved) > 0 {
 		state.ConfigOptions = append([]acp.ConfigOption(nil), resolved...)
 	}
-	state.Commands = append([]acp.AvailableCommand(nil), resolvedCommands...)
 	state.AgentCapabilities = initResult.AgentCapabilities
 	state.InitializeMeta = append(json.RawMessage(nil), initResult.Meta...)
 	state.AgentInfo = cloneAgentInfo(initResult.AgentInfo)
@@ -706,7 +721,19 @@ func (s *Session) runCompactionExecution(ctx context.Context, operationID string
 	s.mu.Lock()
 	inst := s.instance
 	sessionID := s.acpSessionID
+	capabilities := s.agentState.AgentCapabilities
+	commands := append([]acp.AvailableCommand(nil), s.agentState.Commands...)
 	s.mu.Unlock()
+	negotiated := acp.NegotiateWMExtensions(
+		acp.BuildWMClientCapabilitiesMeta(nil),
+		capabilities.Meta,
+	)
+	if command, ok := acp.SessionCompactCommand(commands); ok && !negotiated.SessionActions.Compact {
+		return s.runPromptTurnWithContext(ctx, []acp.ContentBlock{{
+			Type: acp.ContentBlockTypeText,
+			Text: command,
+		}}, operationID)
+	}
 	compactor, ok := inst.(agent.SessionCompactor)
 	if !ok {
 		return sessionExecutionOutcome{status: sessionExecutionFailed, err: agent.ErrSessionActionUnsupported}
@@ -1401,10 +1428,8 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 		state := &s.agentState
 		switch update.SessionUpdate {
 		case acp.SessionUpdateAvailableCommandsUpdate:
-			if len(update.AvailableCommands) > 0 {
-				state.Commands = update.AvailableCommands
-				changed = true
-			}
+			state.Commands = append([]acp.AvailableCommand(nil), update.AvailableCommands...)
+			changed = true
 		case acp.SessionUpdateConfigOptionUpdate:
 			if len(update.ConfigOptions) > 0 {
 				state.ConfigOptions = normalizeAgentConfigOptions(s.agentType, update.ConfigOptions)

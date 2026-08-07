@@ -53,6 +53,28 @@ func TestSessionActionsProjectOnlyNegotiatedAgentCapabilities(t *testing.T) {
 	}
 }
 
+func TestSessionActionsCompactFromAdvertisedCommand(t *testing.T) {
+	tests := []struct {
+		name      string
+		commands  []AvailableCommand
+		supported bool
+	}{
+		{name: "bare compact", commands: []AvailableCommand{{Name: "compact"}}, supported: true},
+		{name: "slash compact", commands: []AvailableCommand{{Name: "/compact"}}, supported: true},
+		{name: "case insensitive", commands: []AvailableCommand{{Name: "/CoMpAcT"}}, supported: true},
+		{name: "unrelated", commands: []AvailableCommand{{Name: "review"}}},
+		{name: "prefix is not compact", commands: []AvailableCommand{{Name: "compact-now"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actions := SessionActionsFromState(SessionCapabilityState{Commands: tt.commands})
+			if actions.Compact.Supported != tt.supported {
+				t.Fatalf("compact support = %t, want %t; actions=%#v", actions.Compact.Supported, tt.supported, actions)
+			}
+		})
+	}
+}
+
 func TestDecodeWMGoalNotificationValidatesEventShape(t *testing.T) {
 	valid := []string{
 		`{"sessionId":"s1","event":"updated","goal":{"sessionId":"s1","objective":"ship","status":"active","tokenBudget":null,"tokensUsed":0,"timeUsedSeconds":0,"createdAt":1,"updatedAt":1},"_meta":{"vendor":{"keep":true}}}`,

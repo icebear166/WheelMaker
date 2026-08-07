@@ -274,6 +274,9 @@ func (f *ACPFactory) CreateInstance(ctx context.Context, provider protocol.ACPPr
 }
 
 func providerInstanceCreator(provider ACPProvider) InstanceCreator {
+	if isClaudeACPProvider(provider) {
+		return claudeACPInstanceCreator(provider)
+	}
 	return func(_ context.Context, cwd string) (Instance, error) {
 		conn, err := NewOwnedProviderConn(provider, cwd)
 		if err != nil {
@@ -284,19 +287,14 @@ func providerInstanceCreator(provider ACPProvider) InstanceCreator {
 }
 
 func ccFlickerInstanceCreator(provider *acpProvider) InstanceCreator {
-	return func(_ context.Context, cwd string) (Instance, error) {
-		conn, err := NewOwnedProviderConn(provider, cwd)
-		if err != nil {
-			return nil, fmt.Errorf("connect %q: %w", provider.Name(), err)
-		}
-		base := NewInstance(provider.Name(), conn)
+	return claudeACPInstanceCreatorWithStarter(provider, startOwnedProviderConn, func(base Instance) Instance {
 		profile := provider.claudeSettings
 		var store *FlickerModelStore
 		if profile != nil {
 			store = profile.flickerStore
 		}
-		return newFlickerEffortInstance(base, store, profile), nil
-	}
+		return newFlickerEffortInstance(base, store, profile)
+	})
 }
 
 func NewOwnedProviderConn(provider ACPProvider, cwd string) (Conn, error) {
@@ -304,7 +302,11 @@ func NewOwnedProviderConn(provider ACPProvider, cwd string) (Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	raw := NewACPProcess(provider.Name(), exe, env, args...)
+	return startOwnedProviderConn(provider.Name(), exe, cwd, args, env)
+}
+
+func startOwnedProviderConn(name, executable, cwd string, args, env []string) (Conn, error) {
+	raw := NewACPProcess(name, executable, env, args...)
 	raw.SetDir(cwd)
 	if err := raw.Start(); err != nil {
 		return nil, err

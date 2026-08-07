@@ -45,14 +45,14 @@ func TestClaudeACPLifecycleE2E(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	provider := NewClaudeProvider()
+	instanceCreator := claudeACPInstanceCreator(provider)
 
 	newInstance := func(label string) (Instance, *claudeACPE2ECallbacks) {
 		t.Helper()
-		conn, err := NewOwnedProviderConn(provider, projectDir)
+		inst, err := instanceCreator(WithProjectName(ctx, "claude-acp-e2e"), projectDir)
 		if err != nil {
 			t.Fatalf("%s: start claude-agent-acp: %v", label, err)
 		}
-		inst := NewInstance(provider.Name(), conn)
 		callbacks := newClaudeACPE2ECallbacks()
 		inst.SetCallbacks(callbacks)
 		return inst, callbacks
@@ -74,37 +74,26 @@ func TestClaudeACPLifecycleE2E(t *testing.T) {
 		return result
 	}
 
-	creator, creatorCallbacks := newInstance("creator")
-	initResult := initialize("creator", creator)
+	source, sourceCallbacks := newInstance("source")
+	initResult := initialize("source", source)
 	requireClaudeACPLifecycleCapabilities(t, initResult)
-	created, err := creator.SessionNew(ctx, protocol.SessionNewParams{CWD: projectDir, MCPServers: []protocol.MCPServer{}})
+	created, err := source.SessionNew(ctx, protocol.SessionNewParams{CWD: projectDir, MCPServers: []protocol.MCPServer{}})
 	if err != nil {
-		_ = creator.Close()
+		_ = source.Close()
 		t.Fatalf("session/new: %v", err)
 	}
 	sourceID := strings.TrimSpace(created.SessionID)
 	if sourceID == "" {
-		_ = creator.Close()
+		_ = source.Close()
 		t.Fatal("session/new returned an empty session ID")
 	}
-	sourceEvents := runClaudeACPE2EPrompt(t, ctx, creator, creatorCallbacks, sourceID,
+	sourceEvents := runClaudeACPE2EPrompt(t, ctx, source, sourceCallbacks, sourceID,
 		"Reply with exactly SOURCE_READY and nothing else.")
 	if !strings.Contains(agentTextForE2E(sourceEvents), "SOURCE_READY") {
-		_ = creator.Close()
+		_ = source.Close()
 		t.Fatalf("source prompt did not produce SOURCE_READY: %q", agentTextForE2E(sourceEvents))
 	}
-	if err := creator.Close(); err != nil {
-		t.Fatalf("close creator: %v", err)
-	}
-
-	source, sourceCallbacks := newInstance("source loader")
-	initialize("source loader", source)
 	defer func() { _ = source.Close() }()
-	if _, err := source.SessionLoad(ctx, protocol.SessionLoadParams{
-		SessionID: sourceID, CWD: projectDir, MCPServers: []protocol.MCPServer{},
-	}); err != nil {
-		t.Fatalf("load source session: %v", err)
-	}
 	drainClaudeACPE2EEvents(sourceCallbacks)
 	defer deleteClaudeACPE2ESession(t, ctx, source, sourceID)
 
@@ -139,6 +128,12 @@ func TestClaudeACPLifecycleE2E(t *testing.T) {
 	}
 
 	runClaudeACPNativeSteeringE2E(t, ctx, target, targetCallbacks, targetID)
+
+	sourceEvents = runClaudeACPE2EPrompt(t, ctx, source, sourceCallbacks, sourceID,
+		"Reply with exactly SOURCE_STILL_READY and nothing else.")
+	if !strings.Contains(agentTextForE2E(sourceEvents), "SOURCE_STILL_READY") {
+		t.Fatalf("source was unusable after child activity: %q", agentTextForE2E(sourceEvents))
+	}
 }
 
 type claudeACPE2ECallbacks struct {
@@ -272,32 +267,19 @@ func runClaudeACPNativeSteeringE2E(
 		steered.Outcome != protocol.SessionSteeringOutcomeStartedNewTurn {
 		t.Fatalf("native steering outcome=%q", steered.Outcome)
 	}
+	if !steered.AcceptedInput {
+		t.Fatalf("native steering result=%#v, want accepted input acknowledgement", steered)
+	}
 
-	correlated := false
 	for {
 		select {
 		case event := <-callbacks.events:
 			events = append(events, event)
-			if message, ok := event.Update.(protocol.AgentMessageEvent); ok &&
-				message.ClientMessageID == clientMessageID && message.Steered {
-				correlated = true
-			}
 		case err := <-promptDone:
 			if err != nil {
 				t.Fatalf("steered prompt: %v", err)
 			}
 			events = append(events, drainClaudeACPE2EEvents(callbacks)...)
-			if !correlated {
-				for _, event := range events {
-					if message, ok := event.Update.(protocol.AgentMessageEvent); ok &&
-						message.ClientMessageID == clientMessageID && message.Steered {
-						correlated = true
-					}
-				}
-			}
-			if !correlated {
-				t.Fatal("native steering echo was not correlated to the client message ID")
-			}
 			if !strings.Contains(agentTextForE2E(events), "STEERED_READY") {
 				t.Fatalf("steered prompt did not produce STEERED_READY: %q", agentTextForE2E(events))
 			}

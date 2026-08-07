@@ -101,11 +101,27 @@ func (s *Session) trySteerQueuePrompt(
 	if !ok {
 		return sessionSteerAttempt{}, agent.ErrSessionActionUnsupported
 	}
-	if _, err := steerer.SteerSession(ctx, sessionID, itemID, cloneSessionContentBlocks(blocks)); err != nil {
+	result, err := steerer.SteerSession(ctx, sessionID, itemID, cloneSessionContentBlocks(blocks))
+	if err != nil {
 		if errors.Is(err, agent.ErrSessionSteerInactive) {
 			return sessionSteerAttempt{outcome: sessionSteerAttemptFallback}, nil
 		}
 		return sessionSteerAttempt{}, err
+	}
+	if result.AcceptedInput {
+		messageLifecycle := true
+		s.SessionUpdate(acp.SessionUpdateParams{
+			SessionID: sessionID,
+			Update: acp.SessionUpdate{
+				SessionUpdate:    acp.SessionUpdateUserMessageChunk,
+				MessageID:        itemID,
+				ClientMessageID:  itemID,
+				ContentBlocks:    cloneSessionContentBlocks(blocks),
+				Steered:          true,
+				MessageLifecycle: &messageLifecycle,
+				Meta:             acp.BuildSessionUpdateMetaLifecycle("", true, true),
+			},
+		})
 	}
 	return sessionSteerAttempt{outcome: sessionSteerAttemptTranscript}, nil
 }

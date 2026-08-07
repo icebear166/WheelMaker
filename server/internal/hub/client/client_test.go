@@ -2198,6 +2198,13 @@ func TestEnsureReady_SessionLoadSuccess_AgentCommandsOverrideCachedCommands(t *t
 			AgentCapabilities: acp.AgentCapabilities{LoadSession: true},
 		},
 		loadResult: acp.SessionLoadResult{ConfigOptions: []acp.ConfigOption{{ID: acp.ConfigOptionIDMode, Category: acp.ConfigOptionCategoryMode, CurrentValue: "code"}}},
+		loadUpdates: []acp.SessionUpdateParams{{
+			SessionID: "acp-1",
+			Update: acp.SessionUpdate{
+				SessionUpdate:     acp.SessionUpdateAvailableCommandsUpdate,
+				AvailableCommands: []acp.AvailableCommand{{Name: "/agent"}},
+			},
+		}},
 	}
 
 	s.registry = agent.DefaultACPFactory().Clone()
@@ -2209,13 +2216,9 @@ func TestEnsureReady_SessionLoadSuccess_AgentCommandsOverrideCachedCommands(t *t
 		t.Fatalf("ensureInstance: %v", err)
 	}
 
-	s.SessionUpdate(acp.SessionUpdateParams{
-		SessionID: "acp-1",
-		Update: acp.SessionUpdate{
-			SessionUpdate:     acp.SessionUpdateAvailableCommandsUpdate,
-			AvailableCommands: []acp.AvailableCommand{{Name: "/agent"}},
-		},
-	})
+	if err := s.ensureReady(context.Background()); err != nil {
+		t.Fatalf("ensureReady: %v", err)
+	}
 
 	s.mu.Lock()
 	state := cloneSessionAgentState(&s.agentState)
@@ -2228,6 +2231,24 @@ func TestEnsureReady_SessionLoadSuccess_AgentCommandsOverrideCachedCommands(t *t
 	}
 	if got := state.Commands[0].Name; got != "/agent" {
 		t.Fatalf("command = %q, want /agent", got)
+	}
+}
+
+func TestAvailableCommandsUpdateCanClearCachedCommands(t *testing.T) {
+	s := mustNewSession(t, "acp-commands-clear", "/tmp", "claude")
+	s.agentState.Commands = []acp.AvailableCommand{{Name: "compact"}}
+	s.SessionUpdate(acp.SessionUpdateParams{
+		SessionID: s.acpSessionID,
+		Update: acp.SessionUpdate{
+			SessionUpdate:     acp.SessionUpdateAvailableCommandsUpdate,
+			AvailableCommands: []acp.AvailableCommand{},
+		},
+	})
+	s.mu.Lock()
+	commands := append([]acp.AvailableCommand(nil), s.agentState.Commands...)
+	s.mu.Unlock()
+	if len(commands) != 0 {
+		t.Fatalf("commands=%#v, want cleared", commands)
 	}
 }
 
@@ -10113,6 +10134,39 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 	}
 }
 
+func TestSessionListProjectsCompactFromPersistedCommand(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 7, 8, 0, 0, 0, time.UTC)
+	agentJSON, err := json.Marshal(SessionAgentState{
+		Commands: []acp.AvailableCommand{{Name: "compact"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:           "sess-command-compact-summary",
+		ProjectName:  "proj1",
+		Status:       SessionPersisted,
+		AgentType:    string(acp.ACPProviderClaude),
+		AgentJSON:    string(agentJSON),
+		Title:        "Claude compact",
+		CreatedAt:    now,
+		LastActiveAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionList, "proj1", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions := responseMapForTest(t, response)["sessions"].([]sessionViewSummary)
+	if len(sessions) != 1 || !sessions[0].SessionActions.Compact.Supported {
+		t.Fatalf("sessions=%#v, want persisted compact command support", sessions)
+	}
+}
+
 func TestHandleSessionRequestSessionStatusUsesPersistedStateWithoutAgent(t *testing.T) {
 	for _, agentType := range []string{
 		string(acp.ACPProviderCodex),
@@ -12269,9 +12323,6 @@ func TestHandleSessionForkWithoutTurnIndexUsesCurrentSessionFork(t *testing.T) {
 		AgentCapabilities: acp.AgentCapabilities{
 			LoadSession:         true,
 			SessionCapabilities: &acp.SessionCapabilities{Fork: &acp.SessionForkCapability{}},
-			Meta: acp.BuildWMAgentCapabilitiesMeta(nil, acp.WMAgentExtensionCapabilities{
-				SessionActions: acp.WMSessionActionCapabilities{CurrentSession: true},
-			}),
 		},
 	}
 	runtime.forkCurrentFn = func(_ context.Context, gotSessionID string, cwd string) (acp.SessionForkResult, error) {
@@ -12321,6 +12372,18 @@ func TestHandleSessionForkWithoutTurnIndexUsesCurrentSessionFork(t *testing.T) {
 	}
 	if len(summary.ConfigOptions) != 1 || summary.ConfigOptions[0].CurrentValue != "validated-model" {
 		t.Fatalf("validated config options=%#v", summary.ConfigOptions)
+	}
+	target := c.sessions[targetID]
+	if target == nil {
+		t.Fatal("fork target runtime session is missing")
+	}
+	target.mu.Lock()
+	targetInstance := target.instance
+	targetInitialized := target.initialized
+	targetReady := target.ready
+	target.mu.Unlock()
+	if targetInstance != probe || probe.callbacks != target || !targetInitialized || !targetReady {
+		t.Fatalf("target runtime instance=%T retained=%t callbacks=%T initialized=%t ready=%t", targetInstance, targetInstance == probe, probe.callbacks, targetInitialized, targetReady)
 	}
 }
 

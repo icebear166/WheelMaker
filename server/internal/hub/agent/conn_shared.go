@@ -15,8 +15,9 @@ import (
 
 // SharedConnPool multiplexes multiple instance conns over one shared raw conn.
 type SharedConnPool struct {
-	mu      sync.RWMutex
-	connect func() (Conn, error)
+	mu        sync.RWMutex
+	unboundMu sync.Mutex
+	connect   func() (Conn, error)
 
 	closed   atomic.Bool
 	routeSeq atomic.Uint64
@@ -107,6 +108,25 @@ func (p *SharedConnPool) Close() error {
 	return nil
 }
 
+// Alive reports whether this pool currently owns a usable raw connection.
+// A dead generation is never replaced in place because existing routes must
+// remain attached to the generation on which their ACP sessions were created.
+func (p *SharedConnPool) Alive() bool {
+	if p == nil || p.closed.Load() {
+		return false
+	}
+	p.mu.RLock()
+	raw := p.sharedRaw
+	p.mu.RUnlock()
+	if raw == nil {
+		return false
+	}
+	if probe, ok := raw.(interface{ Alive() bool }); ok {
+		return probe.Alive()
+	}
+	return true
+}
+
 func (p *SharedConnPool) dispatchInboundRequest(ctx context.Context, requestID int64, method string, params json.RawMessage) (any, error) {
 	target := p.resolveRoute(params)
 	if target == nil {
@@ -131,7 +151,9 @@ func (p *SharedConnPool) resolveRoute(params json.RawMessage) *sharedConn {
 
 	routeKey := ""
 	if sid != "" {
-		if bound := p.routeState.lookupActive(sid); bound != nil {
+		if bound := p.routeState.lookupPending(sid); bound != nil {
+			routeKey = bound.instanceKey
+		} else if bound := p.routeState.lookupActive(sid); bound != nil {
 			routeKey = bound.instanceKey
 		}
 	}
@@ -213,12 +235,86 @@ func (c *sharedConn) BindSessionID(acpSessionID string) {
 	_ = c.pool.routeState.commitLoad(token)
 }
 
+func (c *sharedConn) BeginSessionLoad(acpSessionID string) sessionLoadBinding {
+	if c == nil || c.pool == nil {
+		return nil
+	}
+	sid := strings.TrimSpace(acpSessionID)
+	if sid == "" {
+		return nil
+	}
+	epoch := c.pool.bindSeq.Add(1)
+	token := c.pool.routeState.beginLoad(sid, c.routeKey, epoch)
+	return &sharedSessionLoadBinding{state: c.pool.routeState, token: token}
+}
+
+type sharedSessionLoadBinding struct {
+	state *routeState
+	token string
+	once  sync.Once
+	ok    bool
+}
+
+func (binding *sharedSessionLoadBinding) Commit() bool {
+	if binding == nil || binding.state == nil {
+		return false
+	}
+	binding.once.Do(func() {
+		binding.ok = binding.state.commitLoad(binding.token)
+	})
+	return binding.ok
+}
+
+func (binding *sharedSessionLoadBinding) Rollback() {
+	if binding == nil || binding.state == nil {
+		return
+	}
+	binding.once.Do(func() {
+		binding.state.rollbackLoad(binding.token)
+	})
+}
+
 func (c *sharedConn) Send(ctx context.Context, method string, params any, result any) error {
 	raw, err := c.rawConn()
 	if err != nil {
 		return err
 	}
+	if method == protocol.MethodInitialize || method == protocol.MethodSessionNew {
+		return c.pool.sendWithProvisionalDefault(c.routeKey, func() error {
+			return raw.Send(ctx, method, params, result)
+		})
+	}
 	return raw.Send(ctx, method, params, result)
+}
+
+func (p *SharedConnPool) sendWithProvisionalDefault(routeKey string, send func() error) error {
+	if p == nil || send == nil {
+		return errors.New("agent shared conn: provisional send is unavailable")
+	}
+	p.unboundMu.Lock()
+	defer p.unboundMu.Unlock()
+
+	p.mu.Lock()
+	previous := p.defaultRoute
+	if _, ok := p.routes[routeKey]; ok {
+		p.defaultRoute = routeKey
+	}
+	p.mu.Unlock()
+
+	defer func() {
+		p.mu.Lock()
+		if _, ok := p.routes[previous]; ok {
+			p.defaultRoute = previous
+		} else if _, ok := p.routes[p.defaultRoute]; !ok {
+			p.defaultRoute = ""
+			for key := range p.routes {
+				p.defaultRoute = key
+				break
+			}
+		}
+		p.mu.Unlock()
+	}()
+	return send()
 }
 
 func (c *sharedConn) Notify(method string, params any) error {
@@ -407,6 +503,21 @@ func (r *routeState) lookupActive(acpSessionID string) *activeBinding {
 	}
 	copy := binding
 	return &copy
+}
+
+func (r *routeState) lookupPending(acpSessionID string) *activeBinding {
+	r.mu.RLock()
+	var selected *activeBinding
+	for _, binding := range r.pending {
+		if binding.targetACPSessionID != acpSessionID {
+			continue
+		}
+		if selected == nil || binding.epoch > selected.epoch {
+			selected = &activeBinding{instanceKey: binding.instanceKey, epoch: binding.epoch}
+		}
+	}
+	r.mu.RUnlock()
+	return selected
 }
 
 func (r *routeState) lookupActiveForEpoch(acpSessionID string, epoch uint64) *activeBinding {

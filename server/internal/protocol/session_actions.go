@@ -1,6 +1,9 @@
 package protocol
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // Session action names are provider-neutral capabilities exposed in session summaries.
 const (
@@ -121,20 +124,28 @@ func SessionActionsFromState(state SessionCapabilityState) SessionActionCapabili
 	}
 	standardFork := state.AgentCapabilities.SessionCapabilities != nil && state.AgentCapabilities.SessionCapabilities.Fork != nil
 	nativeSteering := InitializeSteeringSupported(state.InitializeMeta)
-	// A standard fork marker only proves that the request can return a child ID.
-	// WheelMaker also requires the child to survive an independent session/load
-	// before it can publish a product session. Keep current fork behind an
-	// explicit WheelMaker release gate until that lifecycle has passed a live
-	// provider fixture; claude-agent-acp 0.65.0 currently fails that check.
-	currentFork := standardFork && state.AgentCapabilities.LoadSession && actions.Version > 0 && actions.CurrentSession
+	_, commandCompact := SessionCompactCommand(state.Commands)
+	currentFork := standardFork && state.AgentCapabilities.LoadSession
 	historicalFork := actions.Fork || actions.HistoricalTurn
 	return SessionActionCapabilities{
 		Status:  SessionActionCapability{Supported: true},
-		Compact: capability(actions.Compact, false, false),
+		Compact: capability(actions.Compact || commandCompact, false, false),
 		Steer:   capability(actions.Steer || nativeSteering, false, false),
 		Fork:    capability(currentFork || historicalFork, currentFork, historicalFork),
 		Goal:    capability(actions.Goal, false, false),
 	}
+}
+
+// SessionCompactCommand returns the provider command used to compact context.
+// ACP advertises command names both with and without the leading slash.
+func SessionCompactCommand(commands []AvailableCommand) (string, bool) {
+	for _, command := range commands {
+		name := strings.TrimSpace(command.Name)
+		if strings.EqualFold(strings.TrimPrefix(name, "/"), SessionActionCompact) {
+			return "/" + strings.TrimPrefix(name, "/"), true
+		}
+	}
+	return "", false
 }
 
 func InitializeSteeringSupported(meta json.RawMessage) bool {

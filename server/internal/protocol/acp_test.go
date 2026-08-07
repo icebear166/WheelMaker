@@ -308,15 +308,15 @@ func TestAgentCapabilitiesRoundTripPreservesUnknownFields(t *testing.T) {
 	}
 }
 
-func TestSessionActionsRequireVerifiedCurrentForkAndExposeLegacyHistoricalFork(t *testing.T) {
+func TestSessionActionsExposeStandardCurrentForkAndLegacyHistoricalFork(t *testing.T) {
 	var standard AgentCapabilities
 	if err := json.Unmarshal([]byte(`{"sessionCapabilities":{"fork":{}}}`), &standard); err != nil {
 		t.Fatal(err)
 	}
 	standard.LoadSession = true
 	standardActions := SessionActionsFromAgentCapabilities(standard)
-	if standardActions.Fork.Supported || standardActions.Fork.CurrentSession {
-		t.Fatalf("unverified standard fork actions=%#v, want hidden", standardActions.Fork)
+	if !standardActions.Fork.Supported || !standardActions.Fork.CurrentSession || standardActions.Fork.HistoricalTurn {
+		t.Fatalf("standard fork actions=%#v, want current-only", standardActions.Fork)
 	}
 
 	verified := standard
@@ -336,8 +336,8 @@ func TestSessionActionsRequireVerifiedCurrentForkAndExposeLegacyHistoricalFork(t
 		}),
 	}
 	codexActions := SessionActionsFromAgentCapabilities(codex)
-	if !codexActions.Fork.Supported || codexActions.Fork.CurrentSession || !codexActions.Fork.HistoricalTurn {
-		t.Fatalf("codex fork actions=%#v, want historical-only", codexActions.Fork)
+	if !codexActions.Fork.Supported || !codexActions.Fork.CurrentSession || !codexActions.Fork.HistoricalTurn {
+		t.Fatalf("codex fork actions=%#v, want current and historical", codexActions.Fork)
 	}
 
 	legacy := AgentCapabilities{Meta: BuildWMAgentCapabilitiesMeta(nil, WMAgentExtensionCapabilities{
