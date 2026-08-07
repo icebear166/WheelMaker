@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="280 410 970 720" fill="none">
+  <defs>
+    <linearGradient id="blueMark" x1="339" y1="448" x2="940" y2="1098" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#48C1FF"/>
+      <stop offset="0.48" stop-color="#29A8FF"/>
+      <stop offset="1" stop-color="#168FF0"/>
+    </linearGradient>
+    <linearGradient id="whiteMark" x1="848" y1="508" x2="1208" y2="1072" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.64" stop-color="#FAFAFA"/>
+      <stop offset="1" stop-color="#F1F2F6"/>
+    </linearGradient>
+  </defs>
+  <path d="M325 462 456 607l1 240 187-197 382 423H853L637 843 424 1073H326Z" fill="url(#blueMark)"/>
+  <path d="M674 628h197L768 746Z" fill="url(#blueMark)"/>
+  <path d="m1209 462-235 267-79-81-108 120 161 175 131-145v273h130Z" fill="url(#whiteMark)"/>
+</svg>
