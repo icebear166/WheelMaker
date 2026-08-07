@@ -54,7 +54,6 @@
     </filter>
   </defs>
 
-  <rect width="1254" height="1254" fill="#000000"/>
   <rect width="1254" height="1254" rx="165" fill="#020b2b"/>
 
   <g filter="url(#glowOrange)"><use href="#oShape" fill="#000"/></g>
