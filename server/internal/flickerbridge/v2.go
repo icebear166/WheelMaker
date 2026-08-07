@@ -762,7 +762,7 @@ function installInterception() {
         bodyHash:createHash("sha256").update(serializedBody).digest("hex"),
         systemBlocks:Array.isArray(system) ? system.length : system ? 1 : 0,
         toolNames,
-        hasMyFlickerIdentity:serializedSystem.includes("You are myflicker, the best coding agent on the planet."),
+        hasMyFlickerIdentity:serializedSystem.includes("You are MyFlicker, a coding agent that assists users with software engineering tasks."),
         hasClaudeIdentity:serializedSystem.includes("You are Claude Code, Anthropic's official CLI"),
         hasImage:serializedBody.includes('"type":"image"') ||
           serializedBody.includes('"type":"image_url"') ||
@@ -1042,11 +1042,12 @@ func mapV2Tools(tools []anthropicTool, mapping v2ToolNameMapping) []anthropicToo
 	return result
 }
 
-const myFlickerIdentityPrompt = "You are myflicker, the best coding agent on the planet."
+const myFlickerIdentityPrompt = "You are MyFlicker, a coding agent that assists users with software engineering tasks."
 
 var v2ClaudeIdentitySentences = []string{
 	"You are Claude Code, Anthropic's official CLI.",
 	"You are Claude Code, Anthropic's official CLI for Claude.",
+	"You are an interactive agent that helps users with software engineering tasks.",
 }
 
 func rewriteV2SystemText(text string, mapping v2ToolNameMapping) string {
@@ -2780,7 +2781,7 @@ func selfTestPrompt() error {
 Always inspect the workspace before editing. Use ` + "`Read`" + ` before ` + "`Write`" + `.
 
 The user requires all output to remain concise.`
-	want := `You are myflicker, the best coding agent on the planet.
+	want := `You are MyFlicker, a coding agent that assists users with software engineering tasks.
 
 Always inspect the workspace before editing. Use ` + "`read`" + ` before ` + "`write`" + `.
 
@@ -3007,7 +3008,7 @@ globalThis.fetch = async (input, init) => {
     version: headers.get("x-takumi-version") || "",
     bodyKeys: Object.keys(body).sort(),
     toolNames: nativeToolNames(body),
-    hasNativeIdentity: system.includes("You are myflicker, the best coding agent on the planet."),
+    hasNativeIdentity: system.includes("You are MyFlicker, a coding agent that assists users with software engineering tasks."),
     hasClaudeIdentity: system.includes("You are Claude Code, Anthropic's official CLI"),
     hasGatewayAuthToken: headers.has("x-takumi-token"),
   }));

@@ -349,7 +349,7 @@ func TestV2SystemRewriteChangesOnlyExactIdentityAndToolReferences(t *testing.T) 
 	})
 	input := "You are Claude Code, Anthropic's official CLI.\n\nUse `Read` before `Write`.\n\nAnthropic documentation is readable."
 	got := rewriteV2SystemText(input, mapping)
-	want := "You are myflicker, the best coding agent on the planet.\n\nUse `read` before `write`.\n\nAnthropic documentation is readable."
+	want := "You are MyFlicker, a coding agent that assists users with software engineering tasks.\n\nUse `read` before `write`.\n\nAnthropic documentation is readable."
 	if got != want {
 		t.Fatalf("rewriteV2SystemText() = %q, want %q", got, want)
 	}
@@ -357,6 +357,15 @@ func TestV2SystemRewriteChangesOnlyExactIdentityAndToolReferences(t *testing.T) 
 	nearMatch := "You are using Claude Code with Anthropic documentation."
 	if got := rewriteV2SystemText(nearMatch, mapping); got != nearMatch {
 		t.Fatalf("near-match changed: %q", got)
+	}
+}
+
+func TestV2SystemRewriteReplacesInteractiveAgentIdentity(t *testing.T) {
+	input := "You are an interactive agent that helps users with software engineering tasks."
+	want := "You are MyFlicker, a coding agent that assists users with software engineering tasks."
+
+	if got := rewriteV2SystemText(input, buildV2ToolNameMapping(nil)); got != want {
+		t.Fatalf("rewriteV2SystemText() = %q, want %q", got, want)
 	}
 }
 
