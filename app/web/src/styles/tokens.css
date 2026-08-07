@@ -57,6 +57,8 @@
   --wm-safe-area-right: env(safe-area-inset-right, 0px);
   --wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --mobile-floating-control-lane: 60px;
+  /* Title bar height; consumed by fixed overlays mounted outside .workspace. */
+  --chat-menu-header-height: 32px;
 }
 
 .theme-light {
