@@ -13,7 +13,7 @@
 ### Task 1: Establish the synchronized implementation baseline
 
 **Files:**
-- Create: docs/scope-nospec/2026-08-07-myflicker-cli-0314-adaptation/plan-myflicker-cli-0314-adaptation.md
+- Create: docs/plans/nospec/2026-08-07-myflicker-cli-0314-adaptation/plan-myflicker-cli-0314-adaptation.md
 - Preserve: server/internal/hub/tools/npm.go
 - Preserve: server/internal/hub/tools/tools_test.go
 
