@@ -3202,6 +3202,7 @@ export function App() {
   const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);
   const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [previewDrawerHost, setPreviewDrawerHost] = useState<HTMLDivElement | null>(null);
+  const [previewDrawerPinned, setPreviewDrawerPinned] = useState(false);
   const previewFileTreeSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const previewFileTreeSearchGenerationRef = useRef(0);
   const previewFileTreeSearchQueryIdRef = useRef(0);
@@ -3255,6 +3256,13 @@ export function App() {
   const chatPreviewHasContent = previewWorkbenchHasTabs;
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
+  // Closing the drawer always clears its pin so a reopened drawer auto-dismisses again.
+  const updatePreviewDrawerMode = useCallback((mode: PreviewWorkbenchDrawerMode) => {
+    if (mode === 'closed') {
+      setPreviewDrawerPinned(false);
+    }
+    setPreviewWorkbench(current => ({...current, drawerMode: mode}));
+  }, []);
 
   useEffect(() => {
     setPreviewWorkbenchActionsMenuOpen(false);
@@ -9103,7 +9111,7 @@ export function App() {
       if (previewFileTreeSearchQuery) {
         updatePreviewFileTreeSearchQuery('');
       } else {
-        setPreviewWorkbench(current => ({...current, drawerMode: 'closed'}));
+        updatePreviewDrawerMode('closed');
       }
       return;
     }
@@ -17900,14 +17908,11 @@ export function App() {
     if (!chatPreviewOpen) {
       setChatPreviewManualCollapsed(false);
       setChatPreviewManualOpen(true);
-      setPreviewWorkbench(current => ({...current, drawerMode: mode}));
+      updatePreviewDrawerMode(mode);
       return;
     }
-    setPreviewWorkbench(current => ({
-      ...current,
-      drawerMode: current.drawerMode === mode ? 'closed' : mode,
-    }));
-  }, [chatPreviewOpen]);
+    updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === mode ? 'closed' : mode);
+  }, [chatPreviewOpen, updatePreviewDrawerMode]);
   const floatingNavRelayState = resolveFloatingNavRelayState({
     ready: portRelayReady,
     frameUrl: portRelayFrameUrl,
@@ -20173,10 +20178,7 @@ export function App() {
     </div>
   );
   const toggleChatFilePreviewTree = () => {
-    setPreviewWorkbench(current => ({
-      ...current,
-      drawerMode: current.drawerMode === 'files' ? 'closed' : 'files',
-    }));
+    updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === 'files' ? 'closed' : 'files');
   };
   const selectWorkbenchTab = (tabId: string) => {
     setPreviewWorkbench(current => {
@@ -20917,6 +20919,16 @@ export function App() {
       >
         <Icon name="locateFixed" />
       </button>
+      <button
+        type="button"
+        className={`preview-workbench-tree-tool-button${previewDrawerPinned ? ' active' : ''}`}
+        onClick={() => setPreviewDrawerPinned(pinned => !pinned)}
+        data-tooltip={previewDrawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
+        aria-label={previewDrawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
+        aria-pressed={previewDrawerPinned}
+      >
+        <Icon name="pin" filled={previewDrawerPinned} />
+      </button>
     </>
   );
   const previewGitHistoryDrawer = previewGitSnapshot.available ? (
@@ -20930,6 +20942,8 @@ export function App() {
       onRetry={() => { void gitBrowserStore.refresh(previewGitSnapshot.projectId); }}
       onCopyCommitSha={sha => { writeTextToClipboard(sha).catch(() => undefined); }}
       resolveFileIcon={resolveFileIcon}
+      drawerPinned={previewDrawerPinned}
+      onToggleDrawerPin={() => setPreviewDrawerPinned(pinned => !pinned)}
     />
   ) : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
@@ -20938,6 +20952,7 @@ export function App() {
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
       drawerMode={previewWorkbench.drawerMode}
+      drawerPinned={previewDrawerPinned}
       drawerPortalTarget={mode === 'desktop' ? previewDrawerHost : null}
       fileDrawer={chatFilePreviewTreeContent}
       fileDrawerSearch={previewFileTreeSearch}
@@ -20950,7 +20965,7 @@ export function App() {
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
       onTabContextMenu={(tabId, position) => setPreviewTabMenu({tabId, ...position})}
-      onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}
+      onDrawerModeChange={updatePreviewDrawerMode}
       onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}
       onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}
       searchActive={previewSearchOpen}

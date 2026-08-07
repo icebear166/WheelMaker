@@ -222,6 +222,19 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(props.onDrawerModeChange).toHaveBeenCalledWith('closed');
   });
 
+  test('pinned drawer ignores outside pointerdown but Escape still closes it', () => {
+    const props = createProps({drawerMode: 'files', drawerPinned: true});
+    render(props);
+    const panel = document.querySelector('.preview-workbench-drawer-panel') as HTMLElement;
+    expect(panel).toBeTruthy();
+
+    pointerDown(document.body);
+    expect(props.onDrawerModeChange).not.toHaveBeenCalled();
+
+    escape();
+    expect(props.onDrawerModeChange).toHaveBeenCalledWith('closed');
+  });
+
   test('desktop right-click on a tab reports onTabContextMenu with id and position', () => {
     const props = createProps({tabs: [fileTab], activeTab: fileTab, onTabContextMenu: jest.fn()});
     render(props);

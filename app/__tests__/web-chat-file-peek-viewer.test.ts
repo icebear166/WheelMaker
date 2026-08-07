@@ -402,7 +402,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).not.toContain('projectMenuOpen={previewProjectMenuOpen}');
     expect(mainTsx).not.toContain('onProjectSelect={selectPreviewProjectFromMenu}');
     expect(mainTsx).toContain('onTabClose={closeWorkbenchTab}');
-    expect(mainTsx).toContain('onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}');
+    expect(mainTsx).toContain('onDrawerModeChange={updatePreviewDrawerMode}');
     expect(mainTsx).toContain('closePreviewTab(');
 
     expect(stylesCss).toContain('.chat-file-workbench-tabs');
@@ -623,7 +623,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain("window.addEventListener('pointerdown', handlePointerDown, true);");
     expect(chromeTsx).toContain("if (event.key === 'Escape') {");
     expect(mainTsx).not.toContain('onProjectMenuClose');
-    expect(mainTsx).toContain('onDrawerModeChange={mode => setPreviewWorkbench(current => ({...current, drawerMode: mode}))}');
+    expect(mainTsx).toContain('onDrawerModeChange={updatePreviewDrawerMode}');
   });
 
   test('preview title actions are consolidated into an accessible menu with file refresh', () => {

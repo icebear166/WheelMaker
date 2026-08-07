@@ -609,6 +609,11 @@
   color: var(--accent-primary);
 }
 
+.preview-workbench-tree-tool-button.active {
+  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  color: var(--accent-primary);
+}
+
 .preview-workbench-tree-tool-button:disabled {
   opacity: 0.45;
   cursor: default;
@@ -664,7 +669,7 @@
   flex: 0 0 auto;
   min-height: 40px;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 24px;
+  grid-template-columns: 18px minmax(0, 1fr) 24px 24px;
   align-items: center;
   gap: 5px;
   padding: 0 10px;

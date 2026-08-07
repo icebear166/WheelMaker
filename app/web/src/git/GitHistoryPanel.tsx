@@ -16,6 +16,9 @@ export type GitHistoryPanelProps = {
   onRetry: () => void;
   onCopyCommitSha: (sha: string) => void;
   resolveFileIcon: (name: string) => {glyph: string; color: string};
+  /** Drawer pin state; when both are provided a pin button renders next to refresh. */
+  drawerPinned?: boolean;
+  onToggleDrawerPin?: () => void;
 };
 
 const WORKTREE_SCOPES: Array<{scope: GitWorkingTreeScope; label: string}> = [
@@ -148,6 +151,8 @@ export function GitHistoryPanel({
   onRetry,
   onCopyCommitSha,
   resolveFileIcon,
+  drawerPinned = false,
+  onToggleDrawerPin,
 }: GitHistoryPanelProps) {
   const [branchMenuOpen, setBranchMenuOpen] = React.useState(false);
   const branchMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -239,6 +244,18 @@ export function GitHistoryPanel({
         >
           <Icon name="refreshCw" spin={snapshot.historyLoading || snapshot.statusLoading} />
         </button>
+        {onToggleDrawerPin ? (
+          <button
+            type="button"
+            className={`git-toolbar-button icon-only${drawerPinned ? ' active' : ''}`}
+            aria-label={drawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
+            data-tooltip={drawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
+            aria-pressed={drawerPinned}
+            onClick={onToggleDrawerPin}
+          >
+            <Icon name="pin" filled={drawerPinned} />
+          </button>
+        ) : null}
         {!snapshot.online ? <span className="git-offline-pill">Offline</span> : null}
       </div>
 

@@ -17,6 +17,8 @@ type PreviewWorkbenchChromeProps = {
   activeTab: PreviewWorkbenchTab | null;
   tabs: PreviewWorkbenchTab[];
   drawerMode: PreviewWorkbenchDrawerMode;
+  /** Pinned drawers ignore outside pointerdown dismissal (Escape/toggles still close). */
+  drawerPinned?: boolean;
   fileDrawer: React.ReactNode;
   fileDrawerSearch?: React.ReactNode;
   gitDrawer: React.ReactNode;
@@ -52,6 +54,7 @@ export function PreviewWorkbenchChrome({
   activeTab,
   tabs,
   drawerMode,
+  drawerPinned = false,
   fileDrawer,
   fileDrawerSearch,
   gitDrawer,
@@ -148,6 +151,7 @@ export function PreviewWorkbenchChrome({
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target instanceof Node ? event.target : null;
       if (drawerOpen &&
+        !drawerPinned &&
         !containsTarget(drawerToolsRef.current, target) &&
         !containsTarget(drawerPanelRef.current, target)
       ) {
@@ -173,7 +177,7 @@ export function PreviewWorkbenchChrome({
       window.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [actionsMenuOpen, drawerOpen, onActionsMenuClose, onDrawerModeChange]);
+  }, [actionsMenuOpen, drawerOpen, drawerPinned, onActionsMenuClose, onDrawerModeChange]);
 
   React.useEffect(() => {
     const node = tabsBarRef.current;
