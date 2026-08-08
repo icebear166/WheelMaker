@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 
+import {agentTagVariantClass} from '../chat/agentTagVariant';
 import {Icon} from '../common/Icon';
 import type {RegistrySkillSnapshot} from '../registry/registryTypes';
 import {
@@ -43,11 +44,19 @@ function skillSyncPresentation(skill: RegistrySkillSnapshot): {label: string; ti
   }
 }
 
-function skillAgentCapsules(skill: RegistrySkillSnapshot): Array<{key: 'agents' | 'claude'; label: string}> {
+function skillAgentCapsules(skill: RegistrySkillSnapshot): Array<{
+  key: 'agents' | 'claude';
+  label: string;
+  agentType: 'codex' | 'claude';
+}> {
   const locations = skill.locations ?? {};
-  const capsules: Array<{key: 'agents' | 'claude'; label: string}> = [];
-  if (locations.agents) capsules.push({key: 'agents', label: 'Codex'});
-  if (locations.claude) capsules.push({key: 'claude', label: 'Claude'});
+  const capsules: Array<{
+    key: 'agents' | 'claude';
+    label: string;
+    agentType: 'codex' | 'claude';
+  }> = [];
+  if (locations.agents) capsules.push({key: 'agents', label: 'Codex', agentType: 'codex'});
+  if (locations.claude) capsules.push({key: 'claude', label: 'Claude', agentType: 'claude'});
   return capsules;
 }
 
@@ -246,15 +255,10 @@ export function ChatHubSkillScopeDetail({
                   >
                     {skill.name}
                   </button>
-                  {!managed ? (
-                    <span className="chat-hub-skill-external" data-tooltip="External skill">
-                      <Icon name="link" />
-                    </span>
-                  ) : null}
                   {agentCapsules.map(capsule => (
                     <span
                       key={capsule.key}
-                      className={`chat-hub-skill-agent-capsule ${capsule.key === 'agents' ? 'codex' : 'claude'}`}
+                      className={`wide-session-agent-tag ${agentTagVariantClass(capsule.agentType)}`}
                       data-tooltip={`${capsule.label} skill directory`}
                     >
                       {capsule.label}
@@ -263,6 +267,11 @@ export function ChatHubSkillScopeDetail({
                   {syncPresentation ? (
                     <span className="chat-hub-skill-sync" data-tooltip={syncPresentation.title}>
                       {syncPresentation.label}
+                    </span>
+                  ) : null}
+                  {!managed ? (
+                    <span className="chat-hub-skill-external" data-tooltip="External skill">
+                      <Icon name="link" />
                     </span>
                   ) : null}
                 </span>

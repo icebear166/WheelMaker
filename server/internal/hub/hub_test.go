@@ -1307,6 +1307,39 @@ func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
 	}
 }
 
+func TestSkillsStateAggregatesLinkedClaudeSkillDirectory(t *testing.T) {
+	root := t.TempDir()
+	agentsSkillDir := filepath.Join(root, ".agents", "skills", "scope")
+	writeCanonicalSkillFixture(t, agentsSkillDir, "Scope", "shared description")
+	claudeSkillsRoot := filepath.Join(root, ".claude", "skills")
+	if err := os.MkdirAll(claudeSkillsRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	createDirLink(t, agentsSkillDir, filepath.Join(claudeSkillsRoot, "scope"))
+
+	state, err := scanProjectSkillsState(context.Background(), projectSkillsTarget{
+		ProjectID: "hub-a:project",
+		Path:      root,
+		Agents:    []string{"codex", "claude"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Inventory) != 1 {
+		t.Fatalf("inventory = %#v, want one aggregated skill", state.Inventory)
+	}
+	skill := state.Inventory["scope"]
+	if _, ok := skill.Locations["agents"]; !ok {
+		t.Fatalf("locations = %#v, want agents location", skill.Locations)
+	}
+	if _, ok := skill.Locations["claude"]; !ok {
+		t.Fatalf("locations = %#v, want claude location", skill.Locations)
+	}
+	if skill.Sync.Status != skillSyncAligned {
+		t.Fatalf("sync = %#v, want aligned", skill.Sync)
+	}
+}
+
 func TestSkillsStateScansNativeDiscoveryDirectoriesAndAggregatesSharedSources(t *testing.T) {
 	root := t.TempDir()
 	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "shared"), "Shared", "shared description")

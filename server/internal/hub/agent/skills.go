@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -300,26 +299,45 @@ func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {
 	if err != nil || !info.IsDir() {
 		return nil
 	}
+	return walkSkillDirectory(root, root, make(map[string]struct{}), emit)
+}
 
-	visit := func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			if d != nil && d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+func walkSkillDirectory(
+	root string,
+	dir string,
+	ancestors map[string]struct{},
+	emit func(skill SkillDescriptor),
+) error {
+	physicalKey := skillPhysicalPathKey(dir)
+	if _, exists := ancestors[physicalKey]; exists {
+		return nil
+	}
+	ancestors[physicalKey] = struct{}{}
+	defer delete(ancestors, physicalKey)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			continue
 		}
-		if d == nil || d.IsDir() {
-			return nil
+		if info.IsDir() {
+			_ = walkSkillDirectory(root, path, ancestors, emit)
+			continue
 		}
-		if !strings.EqualFold(d.Name(), "SKILL.md") {
-			return nil
+		if !strings.EqualFold(entry.Name(), "SKILL.md") {
+			continue
 		}
 		name := skillNameFromRelativePath(root, path)
 		if name == "" {
 			name = strings.TrimSpace(filepath.Base(filepath.Dir(path)))
 		}
-		abs, err := filepath.Abs(path)
-		if err != nil {
+		abs, absErr := filepath.Abs(path)
+		if absErr != nil {
 			abs = path
 		}
 		emit(SkillDescriptor{
@@ -327,15 +345,6 @@ func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {
 			Path:        abs,
 			Description: readSkillDescription(path),
 		})
-		return nil
-	}
-
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil
-	}
-	for _, entry := range entries {
-		_ = filepath.WalkDir(filepath.Join(root, entry.Name()), visit)
 	}
 	return nil
 }

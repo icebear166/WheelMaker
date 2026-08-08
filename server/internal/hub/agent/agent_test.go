@@ -7039,6 +7039,55 @@ func TestListSkillsForProvidersDeduplicatesPhysicalRootsAndAggregatesSources(t *
 	}
 }
 
+func TestListSkillsForProvidersFollowsLinkedSkillDirectories(t *testing.T) {
+	projectRoot := t.TempDir()
+	agentsSkillDir := filepath.Join(projectRoot, ".agents", "skills", "shared-skill")
+	if err := os.MkdirAll(agentsSkillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll agents skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsSkillDir, "SKILL.md"), []byte("---\nname: shared-skill\n---\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+	claudeSkillsRoot := filepath.Join(projectRoot, ".claude", "skills")
+	if err := os.MkdirAll(claudeSkillsRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll claude skills: %v", err)
+	}
+	claudeSkillDir := filepath.Join(claudeSkillsRoot, "shared-skill")
+	createAgentSkillDirLink(t, agentsSkillDir, claudeSkillDir)
+
+	discovered, err := ListSkillsForProviders(
+		context.Background(),
+		[]string{"codex", "claude"},
+		projectRoot,
+		SkillScanScopeProject,
+	)
+	if err != nil {
+		t.Fatalf("ListSkillsForProviders: %v", err)
+	}
+	if len(discovered) != 2 {
+		t.Fatalf("discovered skills = %#v, want logical entries from agents and claude", discovered)
+	}
+
+	wantPaths := map[string]bool{
+		filepath.Join(agentsSkillDir, "SKILL.md"): false,
+		filepath.Join(claudeSkillDir, "SKILL.md"): false,
+	}
+	for _, item := range discovered {
+		if item.Skill.Name != "shared-skill" {
+			t.Fatalf("skill name = %q, want shared-skill", item.Skill.Name)
+		}
+		if _, ok := wantPaths[item.Skill.Path]; !ok {
+			t.Fatalf("unexpected logical skill path %q", item.Skill.Path)
+		}
+		wantPaths[item.Skill.Path] = true
+	}
+	for path, found := range wantPaths {
+		if !found {
+			t.Fatalf("logical skill path %q was not discovered", path)
+		}
+	}
+}
+
 func createAgentSkillDirLink(t *testing.T, target, link string) {
 	t.Helper()
 	if os.PathSeparator == '\\' {

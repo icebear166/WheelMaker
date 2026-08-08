@@ -166,7 +166,7 @@ test('shows non-blocking directory sync diagnostics on affected skill rows', asy
   expect(renderer.root.findByProps({'aria-label': 'Update scope'})).toBeTruthy();
 });
 
-test('shows Codex and Claude capsules from actual skill directory locations', async () => {
+test('reuses session agent capsules and keeps External after skill status', async () => {
   const {renderer} = await renderScope({
     items: [
       {
@@ -178,26 +178,40 @@ test('shows Codex and Claude capsules from actual skill directory locations', as
       },
       {
         name: 'both',
-        category: 'Managed',
-        categoryKey: 'managed',
-        managed: true,
+        category: 'External',
+        categoryKey: 'external',
+        managed: false,
         locations: {
           agents: {path: 'C:/project/.agents/skills/both/SKILL.md'},
           claude: {path: 'C:/project/.claude/skills/both/SKILL.md'},
         },
+        sync: {status: 'contentMismatch'},
       },
     ],
   });
 
   const codexOnly = renderer.root.findByProps({'data-skill-name': 'codex-only'});
-  expect(codexOnly.findByProps({className: 'chat-hub-skill-agent-capsule codex'}).children).toEqual(['Codex']);
-  expect(codexOnly.findAllByProps({className: 'chat-hub-skill-agent-capsule claude'})).toHaveLength(0);
+  expect(codexOnly.findByProps({className: 'wide-session-agent-tag wide-session-agent-0'}).children)
+    .toEqual(['Codex']);
+  expect(codexOnly.findAllByProps({className: 'wide-session-agent-tag wide-session-agent-2'}))
+    .toHaveLength(0);
 
   const both = renderer.root.findByProps({'data-skill-name': 'both'});
   expect(both.findAll(node => typeof node.props.className === 'string'
-    && node.props.className.startsWith('chat-hub-skill-agent-capsule'))
-    .map(node => node.children)).toEqual([
-    ['Codex'],
-    ['Claude'],
+    && node.props.className.startsWith('wide-session-agent-tag '))
+    .map(node => [node.props.className, node.children])).toEqual([
+    ['wide-session-agent-tag wide-session-agent-0', ['Codex']],
+    ['wide-session-agent-tag wide-session-agent-2', ['Claude']],
+  ]);
+
+  const nameCell = both.findByProps({className: 'chat-hub-skill-name-cell'});
+  expect(nameCell.children.map(child => (
+    typeof child === 'string' ? child : child.props.className
+  ))).toEqual([
+    'chat-hub-skill-name',
+    'wide-session-agent-tag wide-session-agent-0',
+    'wide-session-agent-tag wide-session-agent-2',
+    'chat-hub-skill-sync',
+    'chat-hub-skill-external',
   ]);
 });
