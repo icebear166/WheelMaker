@@ -2224,16 +2224,53 @@ button.chat-hub-skill-name {
   pointer-events: none;
 }
 
-.chat-hub-gateway-update-action {
+.chat-hub-gateway-capsule {
   position: relative;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 28px;
-  padding: 2px 4px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--accent-primary);
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 64%, transparent);
+  color: var(--text-tertiary);
+  font: inherit;
+  line-height: 1;
+  white-space: nowrap;
   pointer-events: auto;
+}
+
+button.chat-hub-gateway-capsule {
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+button.chat-hub-gateway-capsule:hover:not(:disabled),
+button.chat-hub-gateway-capsule:focus-visible {
+  background: color-mix(in srgb, var(--hover) 70%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 90%, transparent);
+}
+
+button.chat-hub-gateway-capsule:disabled {
+  cursor: default;
+}
+
+.chat-hub-gateway-capsule-label {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.chat-hub-gateway-capsule .chat-hub-update-dot {
+  top: -3px;
+  right: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.chat-hub-gateway-capsule {
+    transition: none;
+  }
 }
 
 .chat-hub-version-action .chat-hub-action-label {

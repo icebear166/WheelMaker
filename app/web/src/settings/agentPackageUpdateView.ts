@@ -545,8 +545,7 @@ export function shouldShowGatewayUpdateAction(input: {
   if (input.loading || !input.data || input.data.status === 'not_installed') {
     return false;
   }
-  return input.data.status === 'update_available'
-    && input.data.canRequestUpdate === true
+  return input.data.canRequestUpdate === true
     && Boolean(input.data.installed?.version);
 }
 

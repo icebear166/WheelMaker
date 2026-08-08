@@ -329,7 +329,7 @@ test('hub row uses independent update and restart actions with three icon-count 
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
 });
 
-test('hub row shows only an update action with a dot for an outdated Gateway', async () => {
+test('hub row shows a Gateway capsule with an update dot for an outdated Gateway', async () => {
   const {props, callbacks} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
@@ -354,14 +354,16 @@ test('hub row shows only an update action with a dot for an outdated Gateway', a
   expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
     ['v1.2'],
   ]);
-  const gatewayUpdate = version.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'});
-  expect(gatewayUpdate.props['aria-label']).toBe('Update Gateway v1.3');
-  expect(gatewayUpdate.findByProps({className: 'chat-hub-update-dot'})).toBeTruthy();
-  act(() => gatewayUpdate.props.onClick());
+  const gatewayCapsule = version.findByProps({className: 'chat-hub-gateway-capsule'});
+  expect(gatewayCapsule.type).toBe('button');
+  expect(gatewayCapsule.props['aria-label']).toBe('Update Gateway v1.3');
+  expect(gatewayCapsule.findByProps({className: 'chat-hub-gateway-capsule-label'}).children).toEqual(['Gateway']);
+  expect(gatewayCapsule.findByProps({className: 'chat-hub-update-dot'})).toBeTruthy();
+  act(() => gatewayCapsule.props.onClick());
   expect(callbacks.onRequestGatewayUpdate).toHaveBeenCalledWith('hub-a');
 });
 
-test('hub row hides the Gateway update action when Gateway is current', async () => {
+test('hub row keeps the Gateway capsule without a dot when Gateway is current', async () => {
   const {props} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
@@ -370,7 +372,7 @@ test('hub row hides the Gateway update action when Gateway is current', async ()
           pending: false,
           pendingAction: null,
           currentVersion: 'v1.3',
-          updateVisible: false,
+          updateVisible: true,
           updateAvailable: false,
         },
       }),
@@ -386,7 +388,8 @@ test('hub row hides the Gateway update action when Gateway is current', async ()
   expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
     ['v1.2'],
   ]);
-  expect(version.findAllByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'})).toHaveLength(0);
+  const gatewayCapsule = version.findByProps({className: 'chat-hub-gateway-capsule'});
+  expect(gatewayCapsule.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
   expect(row.findByProps({className: 'chat-hub-row-actions'}).findAllByType('button').map(button => button.props.className)).toEqual([
     'chat-hub-action chat-hub-version-action chat-hub-version-update-action',
     'chat-hub-action chat-hub-version-action chat-hub-version-restart-action',

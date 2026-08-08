@@ -63,7 +63,7 @@ test('Gateway update action is hidden when the Hub has no installed Gateway', ()
   })).toBe(false);
 });
 
-test('Gateway update action is hidden when the installed Gateway is current', () => {
+test('Gateway update action stays visible without a dot when the installed Gateway is current', () => {
   expect(shouldShowGatewayUpdateAction({
     data: {
       ok: true,
@@ -80,7 +80,7 @@ test('Gateway update action is hidden when the installed Gateway is current', ()
     },
     loading: false,
     pending: false,
-  })).toBe(false);
+  })).toBe(true);
 });
 
 test('Gateway update job activity makes its action visible and pending', () => {
