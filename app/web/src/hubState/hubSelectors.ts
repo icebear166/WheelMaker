@@ -14,7 +14,7 @@ export interface RegistrySkillInventoryItem {
   managed?: boolean;
   agents?: string[];
   locations?: Record<string, {path?: string; resolvedPath?: string; fingerprint?: string}>;
-  sync?: {status?: 'aligned' | 'agentsOnly' | 'claudeOnly' | 'contentMismatch' | 'unknown'};
+  sync?: {status?: 'aligned' | 'contentMismatch' | 'unknown'};
 }
 
 export interface RegistrySkillsStateSnapshot {
@@ -67,9 +67,6 @@ export function selectComposerDiagnostic(snapshot: HubStoreSnapshot, projectId: 
     ?.projectLocalInventories?.[projectId] ?? {};
   const statuses = Object.values(inventory).map(item => item.sync?.status);
   if (statuses.includes('contentMismatch')) return 'Some .agents and .claude skill content differs.';
-  if (statuses.includes('agentsOnly') || statuses.includes('claudeOnly')) {
-    return 'Some skills are available in only one agent directory.';
-  }
   return '';
 }
 

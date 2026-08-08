@@ -584,7 +584,7 @@ test('npm detail keeps version next to the name and hugs actions right', async (
   expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-npm-version-new'}))).toHaveLength(1);
   expect(rows.map(row => row.findByProps({className: 'chat-hub-npm-name-cell'}).findByProps({className: 'chat-hub-npm-versions'}))).toHaveLength(3);
   expect(rows[0].findByProps({className: 'chat-hub-npm-agent-tag wide-session-agent-2'}).children).toEqual(['One']);
-  expect(rows[1].findByProps({className: 'chat-hub-npm-agent-tag wide-session-agent-0 missing'}).children).toEqual(['Two']);
+  expect(rows[1].findByProps({className: 'chat-hub-npm-agent-tag wide-session-agent-0'}).children).toEqual(['Two']);
   expect(rows[2].findByProps({className: 'chat-hub-npm-agent-tag'}).children).toEqual(['Three']);
   expect(rows.flatMap(row => row.findAllByProps({className: 'chat-hub-action-slot'}))).toHaveLength(0);
   const firstActions = rows[0].findByProps({className: 'chat-hub-npm-actions'}).findAllByType('button');
@@ -668,7 +668,6 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
   expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
-    includeProjects: false,
   });
   expect(callbacks.onClose).not.toHaveBeenCalled();
 });
@@ -730,7 +729,6 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
           projects: [
             {
               projectName: 'alpha',
-              online: true,
               skills: [
                 {name: 'one', category: '', categoryKey: '', managed: true},
                 {name: 'two', category: '', categoryKey: '', managed: true},
@@ -738,7 +736,6 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
             },
             {
               projectName: 'offline',
-              online: false,
               skills: [{name: 'three', category: '', categoryKey: '', managed: true}],
             },
           ],
@@ -802,7 +799,7 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
   expect(callbacks.onToggleAllProjects).not.toHaveBeenCalled();
 });
 
-test('Project Skills lists only online projects and keeps every action in the selected project', async () => {
+test('Project Skills lists every project and keeps every action in the selected project', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['projectSkills']},
     opsByHubId: {
@@ -816,7 +813,6 @@ test('Project Skills lists only online projects and keeps every action in the se
           projects: [
             {
               projectName: 'alpha',
-              online: true,
               skills: [
                 {name: 'one', category: '', categoryKey: '', managed: true},
                 {name: 'two', category: '', categoryKey: '', managed: true},
@@ -824,12 +820,10 @@ test('Project Skills lists only online projects and keeps every action in the se
             },
             {
               projectName: 'offline',
-              online: false,
               skills: [{name: 'three', category: '', categoryKey: '', managed: true}],
             },
             {
               projectName: 'beta-project',
-              online: true,
               skills: [{name: 'beta-skill', category: '', categoryKey: '', managed: true}],
             },
           ],
@@ -893,7 +887,7 @@ test('Project Skills lists only online projects and keeps every action in the se
   expect(renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'}).props['aria-expanded'])
     .toBe(true);
   expect(renderer.root.findAllByProps({role: 'option'}).map(option => option.props['data-project-name']))
-    .toEqual(['alpha', 'beta-project']);
+    .toEqual(['alpha', 'beta-project', 'offline']);
   act(() => renderer.root.findByProps({'data-project-name': 'beta-project'}).props.onClick());
   const selectedBeta = renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'});
   expect(selectedBeta.props['aria-expanded']).toBe(false);
@@ -924,13 +918,11 @@ test('Project Skills defaults to the active chat project instead of the first pr
             {
               projectId: 'hub-a:alpha',
               projectName: 'alpha',
-              online: true,
               skills: [],
             },
             {
               projectId: 'hub-a:zeta',
               projectName: 'zeta',
-              online: true,
               skills: [],
             },
           ],

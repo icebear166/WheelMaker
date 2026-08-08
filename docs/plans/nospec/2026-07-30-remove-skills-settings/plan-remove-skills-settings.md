@@ -36,7 +36,6 @@ test('removes standalone Skills settings while preserving Hub skill management',
 Keep and tighten the existing assertions that prove:
 
 ```ts
-expect(summaryBlock).not.toContain('includeProjects: true');
 expect(mainTsx).toContain('refreshSkillManagementHubRef.current?.(hubId)');
 expect(mainTsx).toContain('service.installSkills');
 expect(mainTsx).toContain('service.getSkillDetail');

@@ -19,8 +19,6 @@ type skillSyncStatus string
 
 const (
 	skillSyncAligned         skillSyncStatus = "aligned"
-	skillSyncAgentsOnly      skillSyncStatus = "agentsOnly"
-	skillSyncClaudeOnly      skillSyncStatus = "claudeOnly"
 	skillSyncContentMismatch skillSyncStatus = "contentMismatch"
 	skillSyncUnknown         skillSyncStatus = "unknown"
 )
@@ -63,9 +61,7 @@ type projectSkillsState struct {
 }
 
 func scanProjectSkillsState(ctx context.Context, target projectSkillsTarget) (projectSkillsState, error) {
-	inventory, err := scanSkillsInventory(ctx, target.Agents, target.Path, func(path string) (string, bool) {
-		return projectSkillLocation(target.Path, path)
-	})
+	inventory, err := scanSkillsInventory(ctx, target.Agents, target.Path, agent.SkillScanScopeProject)
 	if err != nil {
 		return projectSkillsState{}, err
 	}
@@ -92,61 +88,47 @@ func scanProjectSkillsInventory(ctx context.Context, target projectSkillsTarget)
 }
 
 func scanHubSkillsInventory(ctx context.Context, agents []string) (map[string]skillInventoryItem, error) {
-	return scanSkillsInventory(ctx, agents, "", func(path string) (string, bool) {
-		normalized := strings.ToLower(filepath.ToSlash(path))
-		switch {
-		case strings.Contains(normalized, "/.agents/skills/"):
-			return "agents", true
-		case strings.Contains(normalized, "/.claude/skills/"):
-			return "claude", true
-		default:
-			return "", false
-		}
-	})
+	return scanSkillsInventory(ctx, agents, "", agent.SkillScanScopeUser)
 }
 
 func scanSkillsInventory(
 	ctx context.Context,
 	providers []string,
 	cwd string,
-	locationForPath func(string) (string, bool),
+	scope agent.SkillScanScope,
 ) (map[string]skillInventoryItem, error) {
 	inventory := map[string]skillInventoryItem{}
 	managed := readManagedSkillNames(cwd)
-	for _, provider := range providers {
-		provider = strings.TrimSpace(provider)
-		if provider == "" {
+	descriptors, err := agent.ListSkillsForProviders(ctx, providers, cwd, scope)
+	if err != nil {
+		return nil, err
+	}
+	for _, discovered := range descriptors {
+		name := strings.TrimSpace(discovered.Skill.Name)
+		if name == "" {
 			continue
 		}
-		descriptors, err := agent.ListProviderSkills(ctx, provider, cwd)
-		if err != nil {
-			return nil, err
+		key := strings.ToLower(name)
+		item := inventory[key]
+		if item.Name == "" {
+			item.Name = name
 		}
-		for _, descriptor := range descriptors {
-			locationName, ok := locationForPath(descriptor.Path)
-			if !ok {
+		if item.Description == "" {
+			item.Description = strings.TrimSpace(discovered.Skill.Description)
+		}
+		item.Managed = item.Managed || managed[key]
+		item.Agents = appendUniqueFold(item.Agents, discovered.Provider...)
+		if item.Locations == nil {
+			item.Locations = map[string]skillLocation{}
+		}
+		for _, locationName := range discovered.Locations {
+			locationName = strings.TrimSpace(locationName)
+			if locationName == "" {
 				continue
 			}
-			name := strings.TrimSpace(descriptor.Name)
-			if name == "" {
-				continue
-			}
-			key := strings.ToLower(name)
-			item := inventory[key]
-			if item.Name == "" {
-				item.Name = name
-			}
-			if item.Description == "" {
-				item.Description = strings.TrimSpace(descriptor.Description)
-			}
-			item.Managed = item.Managed || managed[key]
-			item.Agents = appendUniqueFold(item.Agents, provider)
-			if item.Locations == nil {
-				item.Locations = map[string]skillLocation{}
-			}
-			item.Locations[locationName] = inspectSkillLocation(descriptor.Path)
-			inventory[key] = item
+			item.Locations[locationName] = inspectSkillLocation(discovered.Skill.Path)
 		}
+		inventory[key] = item
 	}
 	for key, item := range inventory {
 		sort.Slice(item.Agents, func(i, j int) bool {
@@ -156,31 +138,6 @@ func scanSkillsInventory(
 		inventory[key] = item
 	}
 	return inventory, nil
-}
-
-func projectSkillLocation(projectRoot, skillPath string) (string, bool) {
-	root, err := filepath.Abs(projectRoot)
-	if err != nil {
-		return "", false
-	}
-	path, err := filepath.Abs(skillPath)
-	if err != nil {
-		return "", false
-	}
-	roots := []struct {
-		name string
-		path string
-	}{
-		{name: "agents", path: filepath.Join(root, ".agents", "skills")},
-		{name: "claude", path: filepath.Join(root, ".claude", "skills")},
-	}
-	for _, candidate := range roots {
-		relative, relErr := filepath.Rel(candidate.path, path)
-		if relErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return candidate.name, true
-		}
-	}
-	return "", false
 }
 
 func inspectSkillLocation(path string) skillLocation {
@@ -198,6 +155,15 @@ func inspectSkillLocation(path string) skillLocation {
 }
 
 func deriveSkillSyncStatus(locations map[string]skillLocation) skillSyncStatus {
+	fingerprints := map[string]struct{}{}
+	for _, location := range locations {
+		if location.Fingerprint != "" {
+			fingerprints[location.Fingerprint] = struct{}{}
+		}
+	}
+	if len(fingerprints) > 1 {
+		return skillSyncContentMismatch
+	}
 	agents, hasAgents := locations["agents"]
 	claude, hasClaude := locations["claude"]
 	switch {
@@ -205,10 +171,6 @@ func deriveSkillSyncStatus(locations map[string]skillLocation) skillSyncStatus {
 		return skillSyncAligned
 	case hasAgents && hasClaude:
 		return skillSyncContentMismatch
-	case hasAgents:
-		return skillSyncAgentsOnly
-	case hasClaude:
-		return skillSyncClaudeOnly
 	default:
 		return skillSyncUnknown
 	}

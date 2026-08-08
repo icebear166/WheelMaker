@@ -20,7 +20,7 @@ WheelMaker 当前把 Hub 运行态分散在 HubState、Project Snapshot 的 `age
 - HubState 框架不提供通用周期刷新。`tokenStats` 是业务特例，保留 Usage Service 的启动扫描、10 分钟周期扫描、API Key 变更扫描和手动刷新。
 - Hub 启动时异步初始化全部运行态，但 `tokenStats` 由 Usage Service 自己启动，HubState 启动流程不得重复发起第二次 Token 扫描。
 - Skills 使用一个 Hub 级 `skills` Section，包含 Hub inventory、Project 本地 inventory 和按 Project/Agent 派生的 effective Skills。
-- 监听 `.agents/skills`、`.claude/skills` 和 `skills-lock.json`；750ms debounce 后只扫描受影响的 Hub 或 Project。
+- Skills 只在 Hub 启动、显式 reindex、Project/Agent 拓扑变化和 Skills 操作完成后扫描；不监听文件系统。
 - `.agents` / `.claude` 不同步只做非阻塞黄色提示；Composer 继续按当前 Agent 的实际有效 Skills 工作，不自动复制或覆盖文件。
 - Registry Protocol 保持 `2.6`，在 2.6 内硬切；Hub 与 Web 配套发布，不保留旧字段兼容层。
 - 不增加独立 Skills Management 或 File Index Management 页面；两者继续位于 Hub 菜单。
@@ -40,7 +40,7 @@ Hub
 │     ├─ updater
 │     └─ updateQueue
 ├─ UsageService ──notify──> tokenStats
-├─ Skills watcher ──notify/refresh──> skills
+├─ Skills actions / explicit refresh ──enqueue/refresh──> skills
 ├─ runtime managers ──notify──> corresponding section
 └─ Registry Reporter ──hub.state.updated──> Web HubStore
 
@@ -116,13 +116,12 @@ client refresh
 | Hub 启动运行态初始化结束 | 一次完整 HubState |
 | Registry 重连 | 一次当前完整 HubState |
 | Usage Service 启动、10 分钟周期或配置变更扫描 | `tokenStats` |
-| 外部 Skill 文件变化且 debounce 后完成扫描 | 数据或同步诊断变化时发送完整 `skills` Section |
 | Flicker 自身进入稳定运行态 | 完整 `flickerBridge` Section |
 | Project 加入、移除或路径变化 | 更新后的 `skills`、`fileIndex` Section |
 | 先前异步 Action 最终完成 | 对应完整 Section |
 | Release Job 状态变化 | 独立 `release.publish.updated` |
 
-不因定时器更新其他 Section，不广播每个文件事件、每个日志行或异步任务轮询结果。
+不因定时器更新其他 Section，不监听或轮询外部 Skill 文件，不广播每个文件事件、每个日志行或异步任务轮询结果。
 
 ### Hub 菜单与其他 UI
 
@@ -156,10 +155,10 @@ effectiveSkills[projectId][agent]
 
 Hub Skill 更新时只重扫 Hub inventory，再复用 Project 本地 inventory 重新派生所有 Project 的 effective Skills，并一次性提交整个 `skills` Section。Project Skill 更新时只重扫目标 Project，再组装完整 Section。所有在线 Web 收到同一 revision，因此 Hub 菜单与 Composer 同步切换。
 
-Skill inventory 记录 `.agents`、`.claude` 的位置、`SKILL.md` 指纹、链接目标、managed metadata 和 Agent 可见性，并派生：
+Skill inventory 只在初始化、显式 refresh/reindex、Project/Agent 拓扑变化和 install/uninstall/update 完成后扫描。扫描由当前已注册 Agent 决定；共享目录是 Project/User 的 `.agents/skills` 与 `.claude/skills`，`codebuddy`、`mimo`、`qoder` 的 native 目录只做发现，不做统一管理或链接。物理目录只扫描一次，同名 Skill 聚合所有位置和 Agent 来源。inventory 记录 `.agents`、`.claude` 的位置、`SKILL.md` 指纹、链接目标、managed metadata 和 Agent 可见性，并派生：
 
 ```text
-aligned | agentsOnly | claudeOnly | contentMismatch | unknown
+aligned | contentMismatch | unknown
 ```
 
 Hub 菜单在 Skills 汇总和具体 Skill 行显示黄色诊断；受影响 Project 的 Composer 显示非阻塞说明，并继续展示当前 Agent 实际可用的 Skills。不递归比较 supporting files，不自动修复目录差异。
@@ -185,7 +184,7 @@ Version Release 和 Temporary Debug Web 功能、持久化 Job、日志及目标
 - 通知式快照不会被先前启动的旧扫描覆盖。
 - HubState 不存在 `releasePublish`，Project Snapshot 不存在 `agentProfiles`。
 - Hub 菜单、Skills 子区和 Composer 使用同一个 `skills` revision。
-- Hub/Project Skill 外部变化经 debounce 后自动同步；`.agents` / `.claude` 差异得到非阻塞提示。
+- Hub/Project Skill 状态通过启动、显式 refresh、拓扑变化和写操作完成后的定向扫描同步；`.agents` / `.claude` 差异得到非阻塞提示。
 - Usage Monitor 继续收到启动扫描、10 分钟周期扫描、API Key 更新和手动刷新结果。
 - Skills、File Index、WheelMaker Update、NPM、Flicker 不新增周期刷新或前端轮询。
 - Hub 菜单子区展开、React render、Composer Slash Menu 和 Monitor 打开不会重复触发 Section 更新。
@@ -196,7 +195,7 @@ Version Release 和 Temporary Debug Web 功能、持久化 Job、日志及目标
 - HubStateManager 单元测试覆盖原子提交、旧数据保留、并发合并、单补跑、通知抢占和 revision 判序。
 - Reporter/Registry 协议测试覆盖异步 refresh 响应、完整 Section 通知、instanceId、Release Job 路由及删除 `agentProfiles`。
 - Usage Service 测试保留启动扫描和 10 分钟周期，新增“HubState 启动不重复扫描”验证。
-- Skills 测试覆盖 Hub/Project 定向扫描、effective Skills 派生、watcher debounce、目录变化和同步诊断。
+- Skills 测试覆盖 Hub/Project 定向扫描、effective Skills 派生、写操作完成后的刷新和同步诊断。
 - HubStore 测试覆盖 instance 切换、revision 去重、事件更新和 refresh 复用。
 - Hub 菜单测试按真实 open/expand 边沿断言请求次数；子区、Composer 和 Monitor 测试断言不会隐式 refresh。
 - Release Publishing 测试覆盖独立 Job start/get/updated 和移除原 2 秒轮询。

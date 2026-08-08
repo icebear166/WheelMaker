@@ -1,7 +1,6 @@
 import {
   deriveSkillHubIds,
   isSkillActionPendingForHub,
-  onlineSkillProjects,
   parseSkillSourceInput,
   projectSkillTotal,
   sameSkillScopeTarget,
@@ -16,31 +15,29 @@ describe('skill management view helpers', () => {
     expect(deriveSkillHubIds([{hubId: 'hub-b'}, {hubId: ' '}, {hubId: 'hub-a'}])).toEqual(['hub-a', 'hub-b']);
   });
 
-  test('sorts projects by online state then name', () => {
+  test('sorts all projects by name', () => {
     expect(sortSkillProjects([
-      {projectName: 'zeta', online: false, skills: []},
-      {projectName: 'alpha', online: true, skills: []},
+      {projectName: 'zeta', skills: []},
+      {projectName: 'alpha', skills: []},
     ]).map(project => project.projectName)).toEqual(['alpha', 'zeta']);
   });
 
-  test('keeps all-project counts separate from online project selection', () => {
+  test('counts skills across all projects', () => {
     const projects = [
       {
         projectName: 'offline',
-        online: false,
         skills: [{name: 'one', category: '', categoryKey: '', managed: true}],
       },
       {
         projectName: 'beta',
-        online: true,
         skills: [{name: 'two', category: '', categoryKey: '', managed: true}],
       },
-      {projectName: 'alpha', online: true, skills: []},
+      {projectName: 'alpha', skills: []},
     ];
 
     expect(projectSkillTotal(projects)).toBe(2);
-    expect(onlineSkillProjects(projects).map(project => project.projectName))
-      .toEqual(['alpha', 'beta']);
+    expect(sortSkillProjects(projects).map(project => project.projectName))
+      .toEqual(['alpha', 'beta', 'offline']);
   });
 
   test('builds stable Skill scope and action identities', () => {

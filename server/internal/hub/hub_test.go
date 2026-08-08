@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
@@ -1297,7 +1296,7 @@ func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
 	if state.Inventory["scope"].Sync.Status != skillSyncAligned {
 		t.Fatalf("scope sync = %#v", state.Inventory["scope"].Sync)
 	}
-	if state.Inventory["codex-only"].Sync.Status != skillSyncAgentsOnly {
+	if state.Inventory["codex-only"].Sync.Status != skillSyncUnknown {
 		t.Fatalf("codex-only sync = %#v", state.Inventory["codex-only"].Sync)
 	}
 	if _, ok := state.EffectiveByAgent["codex"]["scope"]; !ok {
@@ -1305,6 +1304,44 @@ func TestSkillsStateBuildsLocationsSyncAndEffectiveSkills(t *testing.T) {
 	}
 	if _, ok := state.EffectiveByAgent["claude"]["scope"]; !ok {
 		t.Fatal("claude effective skills missing scope")
+	}
+}
+
+func TestSkillsStateScansNativeDiscoveryDirectoriesAndAggregatesSharedSources(t *testing.T) {
+	root := t.TempDir()
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "shared"), "Shared", "shared description")
+	writeCanonicalSkillFixture(t, filepath.Join(root, ".codebuddy", "skills", "native"), "Native", "native description")
+
+	state, err := scanProjectSkillsState(context.Background(), projectSkillsTarget{
+		ProjectID: "hub-a:project",
+		Path:      root,
+		Agents:    []string{"codex", "opencode", "codebuddy"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared := state.Inventory["shared"]
+	if !containsFold(shared.Agents, "codex") || !containsFold(shared.Agents, "opencode") {
+		t.Fatalf("shared skill agents = %v, want codex and opencode", shared.Agents)
+	}
+	if _, ok := shared.Locations["agents"]; !ok {
+		t.Fatalf("shared locations = %#v, want agents location", shared.Locations)
+	}
+	native := state.Inventory["native"]
+	if !containsFold(native.Agents, "codebuddy") {
+		t.Fatalf("native skill agents = %v, want codebuddy", native.Agents)
+	}
+	if _, ok := native.Locations["codebuddy"]; !ok {
+		t.Fatalf("native locations = %#v, want codebuddy location", native.Locations)
+	}
+}
+
+func TestReporterDoesNotRetainSkillsWatcher(t *testing.T) {
+	reporterType := reflect.TypeOf(Reporter{})
+	for _, fieldName := range []string{"skillsWatcher", "skillsWatcherMu", "skillsWatcherOnce"} {
+		if _, ok := reporterType.FieldByName(fieldName); ok {
+			t.Fatalf("Reporter still retains Skills Watch field %q", fieldName)
+		}
 	}
 }
 
@@ -1355,201 +1392,6 @@ func TestHubSkillChangeReusesProjectLocalInventory(t *testing.T) {
 	}
 	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p1"]["codex"], "hub-skill", "local-one")
 	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p2"]["claude"], "hub-skill", "local-two")
-}
-
-func TestSkillsWatcherDebouncesEventsPerTarget(t *testing.T) {
-	root := t.TempDir()
-	events := make(chan fsnotify.Event, 8)
-	timer := make(chan time.Time, 1)
-	triggered := make(chan skillsWatchTarget, 8)
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		Events: events,
-		After: func(time.Duration) <-chan time.Time {
-			return timer
-		},
-		OnChange: func(target skillsWatchTarget) {
-			triggered <- target
-		},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	watcher.TrackProject("hub-a:project", "project", root)
-
-	events <- fsnotify.Event{Name: filepath.Join(root, ".agents", "skills", "scope", "SKILL.md"), Op: fsnotify.Write}
-	events <- fsnotify.Event{Name: filepath.Join(root, ".claude", "skills", "scope", "SKILL.md"), Op: fsnotify.Write}
-	timer <- time.Now()
-
-	select {
-	case got := <-triggered:
-		if got.ProjectID != "hub-a:project" {
-			t.Fatalf("target = %#v", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("watcher did not trigger")
-	}
-	select {
-	case extra := <-triggered:
-		t.Fatalf("unexpected duplicate trigger %#v", extra)
-	case <-time.After(25 * time.Millisecond):
-	}
-}
-
-func TestSkillsWatcherTracksProjectAddAndRemove(t *testing.T) {
-	first := t.TempDir()
-	second := t.TempDir()
-	events := make(chan fsnotify.Event, 8)
-	triggered := make(chan skillsWatchTarget, 8)
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		Events: events,
-		After:  func(time.Duration) <-chan time.Time { return time.After(time.Millisecond) },
-		OnChange: func(target skillsWatchTarget) {
-			triggered <- target
-		},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	watcher.TrackProject("hub-a:first", "first", first)
-	watcher.TrackProject("hub-a:second", "second", second)
-	watcher.RemoveProject("hub-a:first")
-
-	events <- fsnotify.Event{Name: filepath.Join(first, ".agents", "skills", "old", "SKILL.md"), Op: fsnotify.Write}
-	events <- fsnotify.Event{Name: filepath.Join(second, "skills-lock.json"), Op: fsnotify.Write}
-	select {
-	case got := <-triggered:
-		if got.ProjectID != "hub-a:second" {
-			t.Fatalf("target = %#v", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("watcher did not trigger added project")
-	}
-}
-
-func TestSkillsWatcherObservesSkillRootCreatedAfterTracking(t *testing.T) {
-	root := t.TempDir()
-	triggered := make(chan skillsWatchTarget, 2)
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		OnChange: func(target skillsWatchTarget) {
-			triggered <- target
-		},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	if err := watcher.Error(); err != nil {
-		t.Fatalf("create native watcher: %v", err)
-	}
-	watcher.TrackProject("hub-a:project", "project", root)
-	writeCanonicalSkillFixture(t, filepath.Join(root, ".agents", "skills", "scope"), "Scope", "description")
-
-	select {
-	case got := <-triggered:
-		if got.ProjectID != "hub-a:project" {
-			t.Fatalf("target = %#v", got)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("watcher did not observe newly created skills root")
-	}
-}
-
-func TestSkillsWatcherReconcileNotifiesHubForLateUserSkillRoot(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	reconcile := make(chan time.Time, 1)
-	triggered := make(chan skillsWatchTarget, 1)
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		Reconcile: reconcile,
-		OnChange: func(target skillsWatchTarget) {
-			triggered <- target
-		},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	if err := watcher.Error(); err != nil {
-		t.Fatalf("create native watcher: %v", err)
-	}
-	watcher.TrackHub(home)
-	writeCanonicalSkillFixture(t, filepath.Join(home, ".agents", "skills", "late-user-skill"), "Late user skill", "description")
-
-	reconcile <- time.Now()
-	select {
-	case target := <-triggered:
-		if target.Scope != "hub" || target.Root != filepath.Clean(home) {
-			t.Fatalf("target=%#v, want hub %q", target, filepath.Clean(home))
-		}
-	case <-time.After(time.Second):
-		t.Fatal("reconcile added late user skill watches without notifying the hub")
-	}
-}
-
-func TestSkillsWatcherSkipsHomeRootToAvoidPrivacyPrompts(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if err := os.MkdirAll(filepath.Join(home, ".claude", "skills"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"Desktop", "Documents", "Downloads"} {
-		if err := os.MkdirAll(filepath.Join(home, name), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		OnChange: func(skillsWatchTarget) {},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	if err := watcher.Error(); err != nil {
-		t.Fatalf("create native watcher: %v", err)
-	}
-	watcher.TrackHub(home)
-
-	watched := watcher.watchedPathsForTest()
-	if _, ok := watched[filepath.Clean(home)]; ok {
-		t.Fatalf("home root must not be watched, watched = %v", watched)
-	}
-	if _, ok := watched[filepath.Join(home, ".claude", "skills")]; !ok {
-		t.Fatalf("hub skills root must stay watched, watched = %v", watched)
-	}
-}
-
-func TestSkillsWatcherSkipsProjectRootWhenRootedAtHome(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if err := os.MkdirAll(filepath.Join(home, ".agents", "skills"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		OnChange: func(skillsWatchTarget) {},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	if err := watcher.Error(); err != nil {
-		t.Fatalf("create native watcher: %v", err)
-	}
-	watcher.TrackProject("hub-a:home", "home", home)
-
-	watched := watcher.watchedPathsForTest()
-	if _, ok := watched[filepath.Clean(home)]; ok {
-		t.Fatalf("project root equal to home must not be watched, watched = %v", watched)
-	}
-	if _, ok := watched[filepath.Join(home, ".agents", "skills")]; !ok {
-		t.Fatalf("project skills root must stay watched, watched = %v", watched)
-	}
-}
-
-func TestSkillsWatcherWatchesOrdinaryProjectRoot(t *testing.T) {
-	home := t.TempDir()
-	root := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	watcher := newSkillsWatcher(skillsWatcherOptions{
-		OnChange: func(skillsWatchTarget) {},
-	})
-	t.Cleanup(func() { _ = watcher.Close() })
-	if err := watcher.Error(); err != nil {
-		t.Fatalf("create native watcher: %v", err)
-	}
-	watcher.TrackProject("hub-a:project", "project", root)
-
-	watched := watcher.watchedPathsForTest()
-	if _, ok := watched[filepath.Clean(root)]; !ok {
-		t.Fatalf("ordinary project root must be watched to observe skills-lock.json, watched = %v", watched)
-	}
 }
 
 func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {

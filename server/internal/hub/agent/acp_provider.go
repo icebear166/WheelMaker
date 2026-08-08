@@ -37,10 +37,7 @@ type ACPProviderPreset struct {
 	MissingPathErrTemplate string
 	InstallHint            string
 	SkillProjectDirs       []string
-	SkillProjectParentDirs []string
 	SkillUserDirs          []string
-	SkillExtraDirsEnv      string
-	SkillPluginDirGlobs    []string
 }
 
 var (
@@ -49,10 +46,7 @@ var (
 		BinaryName:       "codex",
 		InstallHint:      "@openai/codex",
 		SkillProjectDirs: []string{".agents/skills"},
-		SkillUserDirs:    []string{"~/.codex/skills", "~/.agents/skills", "~/.copilot/skills"},
-		SkillPluginDirGlobs: []string{
-			"~/.copilot/installed-plugins/*/*/skills",
-		},
+		SkillUserDirs:    []string{"~/.agents/skills"},
 	}
 	CXDeepSeekProviderPreset = ACPProviderPreset{
 		Name:             string(protocol.ACPProviderCXDeepSeek),
@@ -62,12 +56,11 @@ var (
 		SkillUserDirs:    []string{"~/.agents/skills"},
 	}
 	ClaudeACPProviderPreset = ACPProviderPreset{
-		Name:                   "claude",
-		BinaryName:             "claude-agent-acp",
-		InstallHint:            "@agentclientprotocol/claude-agent-acp",
-		SkillProjectDirs:       []string{".claude/skills"},
-		SkillProjectParentDirs: []string{".claude/skills"},
-		SkillUserDirs:          []string{"~/.claude/skills"},
+		Name:             "claude",
+		BinaryName:       "claude-agent-acp",
+		InstallHint:      "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs: []string{".claude/skills"},
+		SkillUserDirs:    []string{"~/.claude/skills"},
 	}
 	CopilotACPProviderPreset = ACPProviderPreset{
 		Name:                   "copilot",
@@ -75,11 +68,8 @@ var (
 		Args:                   []string{"--acp", "--stdio"},
 		InstallHint:            "@github/copilot",
 		MissingPathErrTemplate: "copilot: binary not found in PATH: %v",
-		SkillProjectDirs:       []string{".github/skills", ".agents/skills", ".claude/skills"},
-		SkillProjectParentDirs: []string{".github/skills"},
-		SkillUserDirs:          []string{"~/.copilot/skills", "~/.agents/skills", "~/.claude/skills"},
-		SkillExtraDirsEnv:      "COPILOT_SKILLS_DIRS",
-		SkillPluginDirGlobs:    []string{"~/.copilot/installed-plugins/*/*/skills"},
+		SkillProjectDirs:       []string{".agents/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills"},
 	}
 	OpenCodeACPProviderPreset = ACPProviderPreset{
 		Name:                   "opencode",
@@ -95,8 +85,8 @@ var (
 		BinaryName:             "mimo",
 		Args:                   []string{"acp"},
 		MissingPathErrTemplate: "mimo: binary not found in PATH: %v",
-		SkillProjectDirs:       []string{".agents/skills"},
-		SkillUserDirs:          []string{"~/.agents/skills"},
+		SkillProjectDirs:       []string{".mimocode/skills"},
+		SkillUserDirs:          []string{"~/.mimocode/skills"},
 	}
 	CodeBuddyACPProviderPreset = ACPProviderPreset{
 		Name:                   "codebuddy",
@@ -104,8 +94,8 @@ var (
 		Args:                   []string{"--acp"},
 		InstallHint:            "@tencent-ai/codebuddy-code",
 		MissingPathErrTemplate: "codebuddy: binary not found in PATH: %v",
-		SkillProjectDirs:       []string{".agents/skills"},
-		SkillUserDirs:          []string{"~/.agents/skills"},
+		SkillProjectDirs:       []string{".codebuddy/skills"},
+		SkillUserDirs:          []string{"~/.codebuddy/skills"},
 	}
 	FlickerACPProviderPreset = ACPProviderPreset{
 		Name:                   "flicker",
@@ -122,8 +112,8 @@ var (
 		Args:                   []string{"acp"},
 		InstallHint:            "@moonshot-ai/kimi-code",
 		MissingPathErrTemplate: "kimi: binary not found in PATH: %v",
-		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
-		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
+		SkillProjectDirs:       []string{".agents/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills"},
 	}
 	QoderACPProviderPreset = ACPProviderPreset{
 		Name:                   "qoder",
@@ -131,53 +121,48 @@ var (
 		Args:                   []string{"--acp"},
 		InstallHint:            "@qodercn-ai/qoderclicn",
 		MissingPathErrTemplate: "qoder: binary not found in PATH: %v",
-		SkillProjectDirs:       []string{".agents/skills", ".qoder/skills"},
-		SkillUserDirs:          []string{"~/.agents/skills", "~/.qoder/skills"},
+		SkillProjectDirs:       []string{".qoder/skills"},
+		SkillUserDirs:          []string{"~/.qoder/skills"},
 	}
 	ClaudeCompatibleDeepSeekProviderPreset = ACPProviderPreset{
-		Name:                   "cc-deepseek",
-		BinaryName:             "claude-agent-acp",
-		Args:                   []string{"--hide-claude-auth"},
-		InstallHint:            "@agentclientprotocol/claude-agent-acp",
-		SkillProjectDirs:       []string{".claude/skills"},
-		SkillProjectParentDirs: []string{".claude/skills"},
-		SkillUserDirs:          []string{"~/.claude/skills"},
+		Name:             "cc-deepseek",
+		BinaryName:       "claude-agent-acp",
+		Args:             []string{"--hide-claude-auth"},
+		InstallHint:      "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs: []string{".claude/skills"},
+		SkillUserDirs:    []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleGLMProviderPreset = ACPProviderPreset{
-		Name:                   "cc-glm",
-		BinaryName:             "claude-agent-acp",
-		Args:                   []string{"--hide-claude-auth"},
-		InstallHint:            "@agentclientprotocol/claude-agent-acp",
-		SkillProjectDirs:       []string{".claude/skills"},
-		SkillProjectParentDirs: []string{".claude/skills"},
-		SkillUserDirs:          []string{"~/.claude/skills"},
+		Name:             "cc-glm",
+		BinaryName:       "claude-agent-acp",
+		Args:             []string{"--hide-claude-auth"},
+		InstallHint:      "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs: []string{".claude/skills"},
+		SkillUserDirs:    []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleKimiProviderPreset = ACPProviderPreset{
-		Name:                   "cc-kimi",
-		BinaryName:             "claude-agent-acp",
-		Args:                   []string{"--hide-claude-auth"},
-		InstallHint:            "@agentclientprotocol/claude-agent-acp",
-		SkillProjectDirs:       []string{".claude/skills"},
-		SkillProjectParentDirs: []string{".claude/skills"},
-		SkillUserDirs:          []string{"~/.claude/skills"},
+		Name:             "cc-kimi",
+		BinaryName:       "claude-agent-acp",
+		Args:             []string{"--hide-claude-auth"},
+		InstallHint:      "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs: []string{".claude/skills"},
+		SkillUserDirs:    []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleQwenProviderPreset = ACPProviderPreset{
-		Name:                   "cc-qwen",
-		BinaryName:             "claude-agent-acp",
-		Args:                   []string{"--hide-claude-auth"},
-		InstallHint:            "@agentclientprotocol/claude-agent-acp",
-		SkillProjectDirs:       []string{".claude/skills"},
-		SkillProjectParentDirs: []string{".claude/skills"},
-		SkillUserDirs:          []string{"~/.claude/skills"},
+		Name:             "cc-qwen",
+		BinaryName:       "claude-agent-acp",
+		Args:             []string{"--hide-claude-auth"},
+		InstallHint:      "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs: []string{".claude/skills"},
+		SkillUserDirs:    []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleFlickerProviderPreset = ACPProviderPreset{
-		Name:                   "cc-flicker",
-		BinaryName:             "claude-agent-acp",
-		Args:                   []string{"--hide-claude-auth"},
-		InstallHint:            "@agentclientprotocol/claude-agent-acp",
-		SkillProjectDirs:       []string{".claude/skills"},
-		SkillProjectParentDirs: []string{".claude/skills"},
-		SkillUserDirs:          []string{"~/.claude/skills"},
+		Name:             "cc-flicker",
+		BinaryName:       "claude-agent-acp",
+		Args:             []string{"--hide-claude-auth"},
+		InstallHint:      "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs: []string{".claude/skills"},
+		SkillUserDirs:    []string{"~/.claude/skills"},
 	}
 )
 

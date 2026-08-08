@@ -17,13 +17,51 @@ type SkillDescriptor struct {
 	Description string `json:"description,omitempty"`
 }
 
+// SkillScanScope limits discovery to project or user roots when a caller does
+// not need the other scope. The all scope preserves the provider API's legacy
+// project-plus-user behavior.
+type SkillScanScope string
+
+const (
+	SkillScanScopeAll     SkillScanScope = "all"
+	SkillScanScopeProject SkillScanScope = "project"
+	SkillScanScopeUser    SkillScanScope = "user"
+)
+
+// ProviderSkillDescriptor describes one skill discovered from one physical
+// root. Providers and locations are aggregated when they share that root.
+type ProviderSkillDescriptor struct {
+	Provider  []string
+	Locations []string
+	Skill     SkillDescriptor
+}
+
 // ListProviderSkills returns discovered skills for a provider name in cwd context.
 func ListProviderSkills(ctx context.Context, providerName, cwd string) ([]SkillDescriptor, error) {
-	preset, ok := providerPresetByName(providerName)
-	if !ok {
-		return nil, nil
+	discovered, err := ListSkillsForProviders(ctx, []string{providerName}, cwd, SkillScanScopeAll)
+	if err != nil {
+		return nil, err
 	}
-	return listSkillsForPreset(ctx, preset, cwd)
+	seen := map[string]SkillDescriptor{}
+	for _, item := range discovered {
+		key := strings.ToLower(strings.TrimSpace(item.Skill.Path))
+		if key != "" {
+			seen[key] = item.Skill
+		}
+	}
+	out := make([]SkillDescriptor, 0, len(seen))
+	for _, skill := range seen {
+		out = append(out, skill)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(out[i].Name))
+		right := strings.ToLower(strings.TrimSpace(out[j].Name))
+		if left == right {
+			return out[i].Path < out[j].Path
+		}
+		return left < right
+	})
+	return out, nil
 }
 
 func providerPresetByName(name string) (ACPProviderPreset, bool) {
@@ -38,6 +76,8 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 		return CopilotACPProviderPreset, true
 	case OpenCodeACPProviderPreset.Name:
 		return OpenCodeACPProviderPreset, true
+	case MimoACPProviderPreset.Name:
+		return MimoACPProviderPreset, true
 	case CodeBuddyACPProviderPreset.Name:
 		return CodeBuddyACPProviderPreset, true
 	case FlickerACPProviderPreset.Name:
@@ -62,14 +102,14 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 }
 
 func listSkillsForPreset(_ context.Context, preset ACPProviderPreset, cwd string) ([]SkillDescriptor, error) {
-	roots := skillScanRoots(preset, cwd)
+	roots := skillScanRootsForPresets([]ACPProviderPreset{preset}, cwd, SkillScanScopeAll)
 	if len(roots) == 0 {
 		return nil, nil
 	}
 
 	seenPaths := map[string]SkillDescriptor{}
 	for _, root := range roots {
-		_ = walkSkillRoot(root, func(skill SkillDescriptor) {
+		_ = walkSkillRoot(root.path, func(skill SkillDescriptor) {
 			key := strings.ToLower(strings.TrimSpace(skill.Path))
 			if key == "" {
 				return
@@ -100,71 +140,136 @@ func listSkillsForPreset(_ context.Context, preset ACPProviderPreset, cwd string
 	return out, nil
 }
 
-func skillScanRoots(preset ACPProviderPreset, cwd string) []string {
-	roots := make([]string, 0, 16)
-	seen := map[string]struct{}{}
-	appendUnique := func(path string) {
-		path = strings.TrimSpace(path)
-		if path == "" {
+func ListSkillsForProviders(
+	ctx context.Context,
+	providerNames []string,
+	cwd string,
+	scope SkillScanScope,
+) ([]ProviderSkillDescriptor, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	presets := make([]ACPProviderPreset, 0, len(providerNames))
+	for _, providerName := range providerNames {
+		preset, ok := providerPresetByName(providerName)
+		if ok {
+			presets = append(presets, preset)
+		}
+	}
+	roots := skillScanRootsForPresets(presets, cwd, scope)
+	if len(roots) == 0 {
+		return nil, nil
+	}
+	out := make([]ProviderSkillDescriptor, 0)
+	for _, root := range roots {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		if err := walkSkillRoot(root.path, func(skill SkillDescriptor) {
+			out = append(out, ProviderSkillDescriptor{
+				Provider:  append([]string(nil), root.providers...),
+				Locations: append([]string(nil), root.locations...),
+				Skill:     skill,
+			})
+		}); err != nil {
+			return nil, err
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		left := strings.ToLower(strings.TrimSpace(out[i].Skill.Name))
+		right := strings.ToLower(strings.TrimSpace(out[j].Skill.Name))
+		if left == right {
+			return strings.ToLower(out[i].Skill.Path) < strings.ToLower(out[j].Skill.Path)
+		}
+		return left < right
+	})
+	return out, nil
+}
+
+type skillScanRoot struct {
+	path      string
+	providers []string
+	locations []string
+}
+
+func skillScanRootsForPresets(presets []ACPProviderPreset, cwd string, scope SkillScanScope) []skillScanRoot {
+	roots := make([]skillScanRoot, 0, len(presets)*2)
+	byKey := make(map[string]int)
+	appendRoot := func(rawPath string, provider string) {
+		rawPath = strings.TrimSpace(rawPath)
+		if rawPath == "" {
 			return
 		}
-		abs, err := filepath.Abs(path)
+		abs, err := filepath.Abs(rawPath)
 		if err != nil {
 			return
 		}
-		key := strings.ToLower(abs)
-		if _, exists := seen[key]; exists {
-			return
+		abs = filepath.Clean(abs)
+		key := skillPhysicalPathKey(abs)
+		index, exists := byKey[key]
+		if !exists {
+			index = len(roots)
+			byKey[key] = index
+			roots = append(roots, skillScanRoot{
+				path: abs,
+			})
 		}
-		seen[key] = struct{}{}
-		roots = append(roots, abs)
+		root := &roots[index]
+		if provider != "" && !containsFold(root.providers, provider) {
+			root.providers = append(root.providers, provider)
+		}
+		if location := skillLocationForRoot(abs); location != "" && !containsFold(root.locations, location) {
+			root.locations = append(root.locations, location)
+		}
 	}
 
-	cwd = strings.TrimSpace(cwd)
-	if cwd != "" {
-		for _, dir := range preset.SkillProjectDirs {
-			appendUnique(filepath.Join(cwd, filepath.FromSlash(strings.TrimSpace(dir))))
-		}
-		if len(preset.SkillProjectParentDirs) > 0 {
-			for _, parent := range parentDirs(cwd) {
-				for _, dir := range preset.SkillProjectParentDirs {
-					appendUnique(filepath.Join(parent, filepath.FromSlash(strings.TrimSpace(dir))))
+	for _, preset := range presets {
+		provider := strings.TrimSpace(preset.Name)
+		if scope == SkillScanScopeAll || scope == SkillScanScopeProject {
+			if strings.TrimSpace(cwd) != "" {
+				for _, dir := range preset.SkillProjectDirs {
+					appendRoot(filepath.Join(cwd, filepath.FromSlash(strings.TrimSpace(dir))), provider)
 				}
 			}
 		}
-	}
-
-	for _, dir := range preset.SkillUserDirs {
-		appendUnique(expandHomePath(dir))
-	}
-	if preset.SkillExtraDirsEnv != "" {
-		for _, extra := range splitSkillPathList(os.Getenv(preset.SkillExtraDirsEnv)) {
-			appendUnique(expandHomePath(extra))
-		}
-	}
-	for _, pattern := range preset.SkillPluginDirGlobs {
-		for _, matched := range expandSkillGlob(pattern) {
-			appendUnique(matched)
+		if scope == SkillScanScopeAll || scope == SkillScanScopeUser {
+			for _, dir := range preset.SkillUserDirs {
+				appendRoot(expandHomePath(dir), provider)
+			}
 		}
 	}
 	return roots
 }
 
-func parentDirs(path string) []string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return nil
+func skillLocationForRoot(path string) string {
+	normalized := strings.TrimRight(strings.ToLower(filepath.ToSlash(filepath.Clean(path))), "/")
+	locations := []struct {
+		suffix string
+		name   string
+	}{
+		{suffix: "/.agents/skills", name: "agents"},
+		{suffix: "/.claude/skills", name: "claude"},
+		{suffix: "/.codebuddy/skills", name: "codebuddy"},
+		{suffix: "/.mimocode/skills", name: "mimo"},
+		{suffix: "/.qoder/skills", name: "qoder"},
 	}
-	out := make([]string, 0, 8)
-	for {
-		next := filepath.Dir(abs)
-		if next == abs {
-			break
+	for _, location := range locations {
+		if strings.HasSuffix(normalized, location.suffix) {
+			return location.name
 		}
-		out = append(out, next)
-		abs = next
 	}
-	return out
+	return ""
+}
+
+func containsFold(values []string, candidate string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(candidate)) {
+			return true
+		}
+	}
+	return false
 }
 
 func expandHomePath(path string) string {
@@ -188,36 +293,6 @@ func expandHomePath(path string) string {
 		return home
 	}
 	return path
-}
-
-func splitSkillPathList(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil
-	}
-	parts := strings.FieldsFunc(raw, func(r rune) bool {
-		return r == ',' || r == rune(os.PathListSeparator)
-	})
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
-
-func expandSkillGlob(pattern string) []string {
-	pattern = expandHomePath(pattern)
-	if pattern == "" {
-		return nil
-	}
-	matches, err := filepath.Glob(filepath.FromSlash(pattern))
-	if err != nil {
-		return nil
-	}
-	return matches
 }
 
 func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {

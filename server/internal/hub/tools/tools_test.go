@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1896,6 +1895,13 @@ func TestSkillsCommandScanReturnsHubAndProjectSkillsWithCategories(t *testing.T)
 	if !projectManaged["diagnose"] || projectManaged["manual-project"] {
 		t.Fatalf("project managed flags=%#v", projectManaged)
 	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal skills scan response: %v", err)
+	}
+	if strings.Contains(string(encoded), `"online"`) {
+		t.Fatalf("Skills response still exposes the removed online field: %s", encoded)
+	}
 }
 
 func TestSkillsCommandListParsesGroupedSourceOutput(t *testing.T) {
@@ -2203,7 +2209,7 @@ func TestSkillsCommandRejectsConcurrentWriteOperations(t *testing.T) {
 	waitForSkillsOperationDone(t, cmd)
 }
 
-func TestSkillsCommandUpdateCanIncludeOnlineProjectsInOneOperation(t *testing.T) {
+func TestSkillsCommandUpdateStaysWithinHubScope(t *testing.T) {
 	baseDir := t.TempDir()
 	projectRoot := filepath.Join(baseDir, "project")
 	globalLock := filepath.Join(baseDir, "global-lock.json")
@@ -2217,36 +2223,68 @@ func TestSkillsCommandUpdateCanIncludeOnlineProjectsInOneOperation(t *testing.T)
 		HubID:          "hub-a",
 		HomeDir:        filepath.Join(baseDir, "home"),
 		GlobalLockPath: globalLock,
-		Projects: []ProjectInfo{
-			{Name: "WheelMaker", Path: projectRoot, Online: true},
-			{Name: "Offline", Path: t.TempDir(), Online: false},
-		},
+		Projects:       []ProjectInfo{{Name: "WheelMaker", Path: projectRoot, Online: true}},
 	})
 
-	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
-		"action":          "update",
-		"hubId":           "hub-a",
-		"scope":           "hub",
-		"includeProjects": true,
+	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "update",
+		"hubId":  "hub-a",
+		"scope":  "hub",
 	}))
 	if cmdErr != nil {
-		t.Fatalf("update all error: %#v", cmdErr)
-	}
-	body := resp.(skillsCommandResponse)
-	if !body.OK || !body.Accepted || body.Operation == nil || !body.Operation.IncludeProjects {
-		t.Fatalf("response=%#v, want accepted includeProjects operation", body)
+		t.Fatalf("hub update error: %#v", cmdErr)
 	}
 	waitForSkillsCall(t, runner, "", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y")
-	waitForSkillsCall(t, runner, projectRoot, "skills", "add", "mattpocock/skills", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "diagnose", "--copy", "-y")
 	operation := waitForSkillsOperationDone(t, cmd)
-	if operation.Status != "succeeded" || !strings.Contains(operation.Message, "Updated skills") {
-		t.Fatalf("operation=%#v, want succeeded update operation", operation)
+	if operation.Status != "succeeded" {
+		t.Fatalf("operation=%#v, want succeeded hub-only update", operation)
+	}
+	if runner.hasCall(projectRoot, "skills", "add", "mattpocock/skills", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "diagnose", "--copy", "-y") {
+		t.Fatalf("hub update must not schedule project update: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandUpdateFiltersRequestedSkills(t *testing.T) {
+	baseDir := t.TempDir()
+	globalLock := filepath.Join(baseDir, "global-lock.json")
+	writeSkillsLockSourcesForTest(t, globalLock, map[string]string{
+		"diagnose": "mattpocock/skills",
+		"tdd":      "mattpocock/skills",
+	})
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID:          "hub-a",
+		HomeDir:        filepath.Join(baseDir, "home"),
+		GlobalLockPath: globalLock,
+	})
+
+	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "update",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+		"skills": []string{"tdd"},
+	}))
+	if cmdErr != nil {
+		t.Fatalf("hub update error: %#v", cmdErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("operation=%#v, want succeeded single-skill update", operation)
+	}
+	if !runner.hasCall("", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y") {
+		t.Fatalf("single-skill update call missing: %#v", runner.calls)
+	}
+	if runner.hasCall("", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "diagnose", "tdd", "-y") {
+		t.Fatalf("single-skill update included an unrequested skill: %#v", runner.calls)
 	}
 }
 
 func TestSkillsCommandDetailReturnsSkillContentAndInstallMetadata(t *testing.T) {
 	baseDir := t.TempDir()
-	skillRoot := filepath.Join(baseDir, "skills", "tdd")
+	homeRoot := filepath.Join(baseDir, "home")
+	t.Setenv("HOME", homeRoot)
+	t.Setenv("USERPROFILE", homeRoot)
+	skillRoot := filepath.Join(homeRoot, ".agents", "skills", "tdd")
 	if err := os.MkdirAll(filepath.Join(skillRoot, "references"), 0o755); err != nil {
 		t.Fatalf("mkdir skill: %v", err)
 	}
@@ -2270,13 +2308,11 @@ func TestSkillsCommandDetailReturnsSkillContentAndInstallMetadata(t *testing.T) 
 		},
 	})
 	runner := newFakeSkillsRunner()
-	runner.set("", "skills", []string{"list", "-g", "--json"}, skillsCommandResult{
-		Stdout:   fmt.Sprintf(`[{"name":"tdd","path":%q,"scope":"global","agents":["Codex"]}]`, skillRoot),
-		ExitCode: 0,
-	})
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
 		HubID:          "hub-a",
 		GlobalLockPath: globalLock,
+		HomeDir:        homeRoot,
+		Projects:       []ProjectInfo{{Name: "WheelMaker", Path: baseDir, Agents: []string{"codex"}}},
 	})
 
 	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
@@ -2300,6 +2336,50 @@ func TestSkillsCommandDetailReturnsSkillContentAndInstallMetadata(t *testing.T) 
 	}
 	if len(body.Detail.SupportingFiles) != 1 || body.Detail.SupportingFiles[0].RelativePath != "references/checklist.md" {
 		t.Fatalf("supporting files=%#v", body.Detail.SupportingFiles)
+	}
+	if runner.hasCall("", "skills", "list", "-g", "--json") {
+		t.Fatalf("detail should read the discovered local file without invoking skills list: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandDetailReadsMimoNativeProjectSkillWithoutCLI(t *testing.T) {
+	projectRoot := t.TempDir()
+	skillRoot := filepath.Join(projectRoot, ".mimocode", "skills", "native-detail")
+	if err := os.MkdirAll(skillRoot, 0o755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillRoot, "SKILL.md"), []byte("---\nname: native-detail\n---\n# Native detail\n"), 0o644); err != nil {
+		t.Fatalf("write skill md: %v", err)
+	}
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a",
+		Projects: []ProjectInfo{{
+			Name:   "WheelMaker",
+			Path:   projectRoot,
+			Agents: []string{"mimo"},
+		}},
+	})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action":      "detail",
+		"hubId":       "hub-a",
+		"scope":       "project",
+		"projectName": "WheelMaker",
+		"skills":      []string{"native-detail"},
+	}))
+	if cmdErr != nil {
+		t.Fatalf("detail error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if !body.OK || body.Detail == nil || !strings.Contains(body.Detail.SkillMarkdown, "Native detail") {
+		t.Fatalf("response=%#v, want native skill detail", body)
+	}
+	if body.Detail.Source != "" || body.Detail.PluginName != "" {
+		t.Fatalf("unavailable install metadata should be omitted: %#v", body.Detail)
+	}
+	if runner.hasCall(projectRoot, "skills", "list", "--json") {
+		t.Fatalf("native detail should not invoke skills list: %#v", runner.calls)
 	}
 }
 

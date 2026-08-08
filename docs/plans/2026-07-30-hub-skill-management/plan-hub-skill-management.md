@@ -105,7 +105,6 @@ export type SkillDetailTarget = SkillScopeTarget & {
 };
 
 export type SkillUpdateTarget = SkillScopeTarget & {
-  includeProjects?: boolean;
   skills?: string[];
 };
 
@@ -412,7 +411,7 @@ act(() => renderer.root.findByProps({'aria-label': 'Add Hub skills'}).props.onCl
 expect(actions.onAdd).toHaveBeenCalledWith(hubTarget);
 
 act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skills'}).props.onClick());
-expect(actions.onUpdate).toHaveBeenCalledWith({...hubTarget, includeProjects: false});
+expect(actions.onUpdate).toHaveBeenCalledWith(hubTarget);
 
 act(() => renderer.root.findByProps({'aria-label': 'Select Hub skills'}).props.onClick());
 const checkbox = renderer.root.findByProps({'aria-label': 'Select baseline-ui'});
@@ -494,7 +493,7 @@ Implement these fixed render rules:
 - only managed Skills are selectable;
 - keep row actions in their grid while selection mode is active, but hide them with CSS visibility;
 - keep toolbar height fixed while swapping normal actions for selected count, Cancel, and Uninstall;
-- call Hub Update all with `{hubId, scope: 'hub', includeProjects: false}`;
+- call Hub Update all with `{hubId, scope: 'hub'}`;
 - call Project Update all with `{hubId, scope: 'project', projectName}`;
 - display `No managed skills` in the disabled text button when no managed Skill exists;
 - display loading or empty copy only when the list has no rows;
@@ -688,17 +687,10 @@ expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');
 expect(mainTsx).toContain('onRequestSkillBatchUninstall={requestSkillBatchUninstall}');
 ```
 
-Extract the Hub rendering block and assert:
-
-```ts
-expect(summaryBlock).toContain("includeProjects: false");
-expect(summaryBlock).not.toContain("includeProjects: true");
-```
-
 Add component assertions that:
 
-- Hub Update all sends `scope: 'hub', includeProjects: false`;
-- Project Update all sends `scope: 'project', projectName: 'alpha'` and no `includeProjects`;
+- Hub Update all sends `scope: 'hub'`;
+- Project Update all sends `scope: 'project', projectName: 'alpha'`;
 - Project install, detail, uninstall, and batch uninstall all carry `projectName: 'alpha'`.
 
 - [ ] **Step 2: Run focused tests and verify failure**
@@ -786,7 +778,7 @@ skills: {
 },
 ```
 
-Pass the generic target callbacks to `ChatHubMenu`. Ensure the Hub menu’s `onRequestSkillUpdate` wrapper forces `includeProjects: false` for Hub-wide calls, while Project calls pass no `includeProjects`.
+Pass the generic target callbacks to `ChatHubMenu`. Hub-wide calls pass the Hub target unchanged; Project calls pass the selected Project target.
 
 - [ ] **Step 5: Keep automatic synchronization and remove manual refresh**
 
@@ -809,7 +801,7 @@ npm test -- --runInBand __tests__/web-skill-management-settings.test.ts __tests_
 npm run tsc:web
 ```
 
-Expected: PASS, including the existing `includeProjects: false` assertion for Hub menu updates.
+Expected: PASS, including the Hub-scope assertion for Hub menu updates.
 
 - [ ] **Step 7: Commit the action wiring**
 
@@ -1239,14 +1231,14 @@ Expected: all App suites and tests PASS.
 Check:
 
 ```powershell
-rg -n "includeProjects|projectSkills|No managed skills|skill-install-marketplace|chat-hub-skill-companion" web/src __tests__
+rg -n "projectSkills|No managed skills|skill-install-marketplace|chat-hub-skill-companion" web/src __tests__
 git diff --check
 git status --short
 ```
 
 Verify:
 
-- Hub Update all always uses `includeProjects: false`;
+- Hub Update all uses Hub scope only;
 - Project actions always include exactly one selected `projectName`;
 - offline Projects are excluded only from the selector, while the outer total still includes their last-known Skills;
 - no manual refresh control exists;

@@ -100,7 +100,7 @@ test('keeps Hub update-all and selection-mode uninstall inside Hub scope', async
   expect(actions.onAdd).toHaveBeenCalledWith(hubTarget);
 
   act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skills'}).props.onClick());
-  expect(actions.onUpdate).toHaveBeenCalledWith({...hubTarget, includeProjects: false});
+  expect(actions.onUpdate).toHaveBeenCalledWith(hubTarget);
 
   act(() => renderer.root.findByProps({'aria-label': 'Select Hub skills'}).props.onClick());
   const checkbox = renderer.root.findByProps({'aria-label': 'Select baseline-ui'});
@@ -161,7 +161,43 @@ test('shows non-blocking directory sync diagnostics on affected skill rows', asy
   });
 
   const diagnostic = renderer.root.findByProps({className: 'chat-hub-skill-sync'});
-  expect(diagnostic.props['data-tooltip']).toBe('.agents and .claude content differs');
+  expect(diagnostic.props['data-tooltip']).toBe('Skill content differs across agent directories');
   expect(diagnostic.children.join('')).toContain('Content differs');
   expect(renderer.root.findByProps({'aria-label': 'Update scope'})).toBeTruthy();
+});
+
+test('shows Codex and Claude capsules from actual skill directory locations', async () => {
+  const {renderer} = await renderScope({
+    items: [
+      {
+        name: 'codex-only',
+        category: 'Managed',
+        categoryKey: 'managed',
+        managed: true,
+        locations: {agents: {path: 'C:/project/.agents/skills/codex-only/SKILL.md'}},
+      },
+      {
+        name: 'both',
+        category: 'Managed',
+        categoryKey: 'managed',
+        managed: true,
+        locations: {
+          agents: {path: 'C:/project/.agents/skills/both/SKILL.md'},
+          claude: {path: 'C:/project/.claude/skills/both/SKILL.md'},
+        },
+      },
+    ],
+  });
+
+  const codexOnly = renderer.root.findByProps({'data-skill-name': 'codex-only'});
+  expect(codexOnly.findByProps({className: 'chat-hub-skill-agent-capsule codex'}).children).toEqual(['Codex']);
+  expect(codexOnly.findAllByProps({className: 'chat-hub-skill-agent-capsule claude'})).toHaveLength(0);
+
+  const both = renderer.root.findByProps({'data-skill-name': 'both'});
+  expect(both.findAll(node => typeof node.props.className === 'string'
+    && node.props.className.startsWith('chat-hub-skill-agent-capsule'))
+    .map(node => node.children)).toEqual([
+    ['Codex'],
+    ['Claude'],
+  ]);
 });

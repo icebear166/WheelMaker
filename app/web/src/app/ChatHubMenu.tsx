@@ -13,8 +13,8 @@ import type {
   RegistrySkillSnapshot,
 } from '../registry/registryTypes';
 import {
-  onlineSkillProjects,
   projectSkillTotal,
+  sortSkillProjects,
   type SkillBatchUninstallTarget,
   type SkillDetailTarget,
   type SkillInstallTarget,
@@ -712,7 +712,7 @@ function ChatHubNpmDetail({
       {ops.npm.packages.map(pkg => {
         const updateAvailable = pkg.action === 'update' && Boolean(pkg.installedVersion) && Boolean(pkg.latestVersion);
         const agentType = pkg.agentTypes[0] ?? '';
-        const capsuleClass = `chat-hub-npm-agent-tag${agentType ? ` ${agentTagVariantClass(agentType)}` : ''}${pkg.installedVersion ? '' : ' missing'}`;
+        const capsuleClass = `chat-hub-npm-agent-tag${agentType ? ` ${agentTagVariantClass(agentType)}` : ''}`;
         return (
           <div key={pkg.packageName} className="chat-hub-npm-row">
             <span className="chat-hub-npm-name-cell">
@@ -809,7 +809,7 @@ function ChatHubProjectSkillsDetail({
   actions: ChatHubSkillActions;
 }): React.JSX.Element {
   const projects = React.useMemo(
-    () => onlineSkillProjects(ops.skills.projects),
+    () => sortSkillProjects(ops.skills.projects),
     [ops.skills.projects],
   );
   const [selectedProjectName, setSelectedProjectName] = React.useState('');
@@ -857,7 +857,7 @@ function ChatHubProjectSkillsDetail({
   if (projects.length === 0 || !selectedProject) {
     return (
       <div className="chat-hub-detail">
-        <div className="chat-hub-detail-empty">No online projects</div>
+        <div className="chat-hub-detail-empty">No projects</div>
       </div>
     );
   }

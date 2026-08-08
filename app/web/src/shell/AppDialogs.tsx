@@ -127,7 +127,6 @@ export type ConfirmTarget =
       hubId: string;
       scope: RegistrySkillScope;
       projectName?: string;
-      includeProjects?: boolean;
       skills?: string[];
     }
   | {
@@ -315,9 +314,7 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     if (target.skills?.length) {
       return `Updates ${target.skills.join(', ')} in ${skillScopeLabel(target)}.`;
     }
-    return target.includeProjects
-      ? 'Updates Hub Skills and online Project Skills on this Hub.'
-      : `Updates installed skills in ${skillScopeLabel(target)}.`;
+    return `Updates installed skills in ${skillScopeLabel(target)}.`;
   }
   return 'Archived sessions leave the chat list.';
 }

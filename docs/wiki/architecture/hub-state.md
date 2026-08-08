@@ -62,7 +62,6 @@ Hub 启动时异步初始化 `agentPackages`、`wheelmakerUpdate`、`skills`、`
 
 - 启动初始化完成或 Registry 重连。
 - Usage Service 扫描状态和结果变化。
-- debounce 后确认的外部 Skill inventory 变化。
 - Flicker 生命周期进入稳定状态。
 - Project 加入、移除或路径变化。
 - 先前异步 Action 最终完成。
@@ -81,13 +80,26 @@ effectiveSkills[projectId][agent]
 
 Hub Skill 更新时只重扫 Hub inventory，再复用 Project 本地 inventory 派生全部 effective Skills。Project Skill 更新时只重扫目标 Project。最终始终原子提交完整 `skills` Section，使 Hub 菜单和 Composer 使用同一 revision。
 
-Hub 监听 `.agents/skills`、`.claude/skills` 和 `skills-lock.json`，按 Hub/Project 做 750ms debounce。inventory 记录位置、`SKILL.md` 指纹、链接目标、managed metadata 和 Agent 可见性，并派生：
+Skills inventory 只在 Hub 初始化、显式 reindex、Project/Agent 拓扑变化、install/uninstall/update 完成和手动 refresh 时按 Hub/Project 定向刷新；Registry 重连只重新发布当前完整 HubState，不重新扫描。系统不监听文件系统、不轮询，也不因外部文件事件主动刷新。inventory 记录位置、`SKILL.md` 指纹、链接目标、managed metadata 和 Agent 可见性，并派生：
 
 ```text
-aligned | agentsOnly | claudeOnly | contentMismatch | unknown
+aligned | contentMismatch | unknown
 ```
 
 目录差异只作为非阻塞诊断，不自动复制或覆盖。Composer 按当前 Project 和 Agent 的 effective Skills 生成提示； supporting files 不参与递归一致性比较。
+
+### Skills 扫描目录与聚合
+
+扫描范围由当前 Hub 实际注册的 ACP agent 决定；未注册或不可用的 agent 不会触发其额外目录扫描。共享 profile 的目录为：
+
+| profile | Project | User |
+| --- | --- | --- |
+| `.agents` | `<project>/.agents/skills` | `~/.agents/skills` |
+| `.claude` | `<project>/.claude/skills` | `~/.claude/skills` |
+
+`codebuddy`、`mimo`、`qoder` 只额外发现各自的 native 目录：`.codebuddy/skills`、`.mimocode/skills`、`.qoder/skills` 及对应 User 目录。这些目录只用于发现和 Composer 的实际可见性，不属于统一安装、卸载、更新或自动链接范围。`flicker` 使用 `.agents`；`cc-*` 使用 `.claude`，不向上扫描父目录。
+
+每个物理目录只扫描一次：扫描前会按规范化绝对路径并解析 Symbolic Link/Junction 做物理去重，同时聚合所有 agent 和目录来源。同名 Skill 跨目录只形成一条 inventory 记录，保留全部 locations；内容不一致仅报告 `contentMismatch`，不选全局 winner，也不自动复制覆盖。统一管理命令仍使用固定 agent 列表，不因发现 profile 或 native 来源而扩展目标。
 
 ## Web 消费
 

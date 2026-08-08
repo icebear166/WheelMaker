@@ -75,13 +75,13 @@ MyFlicker 的 `@myflicker/cli` 仅在 Hub 首次 NPM 扫描时能从 `https://np
 
 Skills detail 只读取当前 Hub 的 HubState `skills.hubInventory`。工具栏提供 Add Skill、选择模式和带文字的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。
 
-`.agents` / `.claude` inventory 存在差异时，Skills 入口显示黄色数量提示，具体 Skill 行显示 `.agents only`、`.claude only` 或 `content differs`。这是非阻塞诊断，不使用全局 Toast，也不自动复制或覆盖目录。
+Skill 行的 `Codex` / `Claude` 胶囊只表示该 Skill 是否实际存在于 `.agents/skills` / `.claude/skills`；它不表示 npm 包是否安装，也不表示兼容性或缺失状态。内容不一致时只显示 `content differs` 非阻塞诊断，不自动复制或覆盖目录。
 
 批量卸载只在显式选择模式中显示复选框。无常驻手动刷新按钮：打开 detail 和完成安装、更新、卸载后自动同步，失败时提供重试。单项 loading 原位替换操作图标，全量或批量 loading 原位替换工具栏按钮；成功使用短暂 Toast，失败使用带重试的常驻 Toast，任何状态变化都不改变列表行高或位置。
 
 ## Project Skills
 
-Project Skills 只存在于 Projects 行，不混入 Hub Skills。展开后顶部是单个全宽 Project 选择器，收起时显示当前 Project 的完整名称和 Skill 数量；打开后显示可滚动的在线 Project 列表，选择即切换并关闭列表，离线 Project 不显示。默认优先选择当前 Chat Project，否则选择第一个在线 Project。下方读取 HubState `skills.effectiveSkills[projectId]`，复用 Hub Skills 的 32px 单行扁平列表和管理动作，不为每个 Project 创建向下展开的分组。Project 范围的 Add Skill、逐项动作、批量卸载和 `Update all` 都只作用于当前选择的 Project。
+Project Skills 只存在于 Projects 行，不混入 Hub Skills。展开后顶部是单个全宽 Project 选择器，收起时显示当前 Project 的完整名称和 Skill 数量；打开后显示当前快照中的全部 Project，选择即切换并关闭列表。默认优先选择当前 Chat Project，否则选择第一个 Project。下方读取 HubState `skills.effectiveSkills[projectId]`，复用 Hub Skills 的 32px 单行扁平列表和管理动作，不为每个 Project 创建向下展开的分组。Project 范围的 Add Skill、逐项动作、批量卸载和 `Update all` 都只作用于当前选择的 Project。
 
 Hub 与 Project 的 Add Skill 均复用完整安装流程：source 输入、候选 Skill 选择/全选和确认。Marketplace 外链只放在安装界面，不占主列表工具栏。
 
@@ -91,7 +91,7 @@ Project Snapshot 不再提供 `agentProfiles`。Hub 菜单和 Composer 使用同
 
 点击 Skill 名称打开现有 Skill detail，包括 source metadata、管理状态、`SKILL.md` 和 supporting files。桌面端的详情与安装使用 Hub 浮窗右侧的大型伴随卡片，不压缩主列表，并且同一时间只显示一个；移动端进入带返回栏的独立页面，支持系统返回键和 Android 返回手势。返回或关闭伴随 surface 不意外关闭 Hub 面板。
 
-Hub 菜单是唯一的 Skills 管理入口：Hub 全局 Skills 位于各 Hub 的 Global 行，Project Skills 位于 Projects 行和当前选择的在线 Project 下。独立 Skills 设置页及其跨 Hub 扫描、离线 Project 平铺、分类分组和 Hub+Project 联合更新能力均已移除；共享命令、安装内容和详情内容仍由 Hub 桌面/移动 companion surface 复用。
+Hub 菜单是唯一的 Skills 管理入口：Hub 全局 Skills 位于各 Hub 的 Global 行，Project Skills 位于 Projects 行和当前选择的 Project 下。独立 Skills 设置页及其跨 Hub 扫描、Project 平铺、分类分组和 Hub+Project 联合更新能力均已移除；共享命令、安装内容和详情内容仍由 Hub 桌面/移动 companion surface 复用。
 
 ## 密度与响应式
 

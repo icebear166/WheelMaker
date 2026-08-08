@@ -36,15 +36,19 @@ interface ChatHubSkillScopeDetailProps {
 
 function skillSyncPresentation(skill: RegistrySkillSnapshot): {label: string; title: string} | null {
   switch (skill.sync?.status) {
-    case 'agentsOnly':
-      return {label: '.agents only', title: 'Available only in .agents'};
-    case 'claudeOnly':
-      return {label: '.claude only', title: 'Available only in .claude'};
     case 'contentMismatch':
-      return {label: 'Content differs', title: '.agents and .claude content differs'};
+      return {label: 'Content differs', title: 'Skill content differs across agent directories'};
     default:
       return null;
   }
+}
+
+function skillAgentCapsules(skill: RegistrySkillSnapshot): Array<{key: 'agents' | 'claude'; label: string}> {
+  const locations = skill.locations ?? {};
+  const capsules: Array<{key: 'agents' | 'claude'; label: string}> = [];
+  if (locations.agents) capsules.push({key: 'agents', label: 'Codex'});
+  if (locations.claude) capsules.push({key: 'claude', label: 'Claude'});
+  return capsules;
 }
 
 function actionPending(
@@ -161,11 +165,7 @@ export function ChatHubSkillScopeDetail({
                 className="chat-hub-skill-update-all"
                 aria-label={`Update all ${scopeLabel} skills`}
                 disabled={managedSkills.length === 0 || hubBusy}
-                onClick={() => actions.onUpdate(
-                  target.scope === 'hub'
-                    ? {...target, includeProjects: false}
-                    : target,
-                )}
+                onClick={() => actions.onUpdate(target)}
               >
                 <Icon name={updateAllPending ? 'loader' : 'refreshCw'} spin={updateAllPending} />
                 <span>
@@ -215,6 +215,7 @@ export function ChatHubSkillScopeDetail({
               action: 'skillUninstall',
             });
             const syncPresentation = skillSyncPresentation(skill);
+            const agentCapsules = skillAgentCapsules(skill);
 
             return (
               <div
@@ -250,6 +251,15 @@ export function ChatHubSkillScopeDetail({
                       <Icon name="link" />
                     </span>
                   ) : null}
+                  {agentCapsules.map(capsule => (
+                    <span
+                      key={capsule.key}
+                      className={`chat-hub-skill-agent-capsule ${capsule.key === 'agents' ? 'codex' : 'claude'}`}
+                      data-tooltip={`${capsule.label} skill directory`}
+                    >
+                      {capsule.label}
+                    </span>
+                  ))}
                   {syncPresentation ? (
                     <span className="chat-hub-skill-sync" data-tooltip={syncPresentation.title}>
                       {syncPresentation.label}

@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
@@ -160,14 +161,13 @@ func (c *SkillsCommand) SetProjects(projects []ProjectInfo) {
 }
 
 type skillsCommandPayload struct {
-	Action          string   `json:"action"`
-	HubID           string   `json:"hubId"`
-	Scope           string   `json:"scope,omitempty"`
-	ProjectName     string   `json:"projectName,omitempty"`
-	Source          string   `json:"source,omitempty"`
-	SkillName       string   `json:"skillName,omitempty"`
-	Skills          []string `json:"skills,omitempty"`
-	IncludeProjects bool     `json:"includeProjects,omitempty"`
+	Action      string   `json:"action"`
+	HubID       string   `json:"hubId"`
+	Scope       string   `json:"scope,omitempty"`
+	ProjectName string   `json:"projectName,omitempty"`
+	Source      string   `json:"source,omitempty"`
+	SkillName   string   `json:"skillName,omitempty"`
+	Skills      []string `json:"skills,omitempty"`
 }
 
 type skillsCommandResponse struct {
@@ -189,19 +189,18 @@ type skillsCommandResponse struct {
 }
 
 type skillsOperationSnapshot struct {
-	Running         bool     `json:"running"`
-	Action          string   `json:"action"`
-	Scope           string   `json:"scope,omitempty"`
-	ProjectName     string   `json:"projectName,omitempty"`
-	Source          string   `json:"source,omitempty"`
-	Skills          []string `json:"skills,omitempty"`
-	IncludeProjects bool     `json:"includeProjects,omitempty"`
-	Status          string   `json:"status"`
-	StartedAt       string   `json:"startedAt"`
-	FinishedAt      string   `json:"finishedAt,omitempty"`
-	ExitCode        *int     `json:"exitCode"`
-	ErrorSummary    string   `json:"errorSummary,omitempty"`
-	Message         string   `json:"message,omitempty"`
+	Running      bool     `json:"running"`
+	Action       string   `json:"action"`
+	Scope        string   `json:"scope,omitempty"`
+	ProjectName  string   `json:"projectName,omitempty"`
+	Source       string   `json:"source,omitempty"`
+	Skills       []string `json:"skills,omitempty"`
+	Status       string   `json:"status"`
+	StartedAt    string   `json:"startedAt"`
+	FinishedAt   string   `json:"finishedAt,omitempty"`
+	ExitCode     *int     `json:"exitCode"`
+	ErrorSummary string   `json:"errorSummary,omitempty"`
+	Message      string   `json:"message,omitempty"`
 }
 
 type SkillsOperationSnapshot = skillsOperationSnapshot
@@ -214,7 +213,6 @@ type skillsScopeSnapshot struct {
 type skillsProjectSnapshot struct {
 	ProjectName string                `json:"projectName"`
 	ProjectID   string                `json:"projectId"`
-	Online      bool                  `json:"online"`
 	Path        string                `json:"path"`
 	Skills      []skillsSkillSnapshot `json:"skills"`
 	Error       string                `json:"error,omitempty"`
@@ -334,42 +332,22 @@ func (c *SkillsCommand) detail(ctx context.Context, payload skillsCommandPayload
 		return skillsCommandResponse{}, cmdErr
 	}
 
-	var skills []skillsSkillSnapshot
-	var scanErr string
-	if target.scope == "hub" {
-		skills, scanErr = c.scanHubSkills(ctx)
-	} else {
-		skills, scanErr = c.scanProjectSkills(ctx, target.project)
+	skill, detailErr := c.discoverSkillForDetail(ctx, target, skillName)
+	if detailErr != nil {
+		return skillsCommandResponse{}, detailErr
 	}
-	if scanErr != "" {
-		return skillsCommandResponse{
-			OK:           false,
-			HubID:        payload.HubID,
-			UpdatedAt:    c.now().Format(time.RFC3339),
-			Scope:        target.scope,
-			ProjectName:  target.projectName,
-			ErrorSummary: scanErr,
-		}, nil
+	detail, detailErr := c.skillDetailFromSnapshot(target, skill)
+	if detailErr != nil {
+		return skillsCommandResponse{}, detailErr
 	}
-
-	for _, skill := range skills {
-		if skill.Name != skillName {
-			continue
-		}
-		detail, detailErr := c.skillDetailFromSnapshot(target, skill)
-		if detailErr != nil {
-			return skillsCommandResponse{}, detailErr
-		}
-		return skillsCommandResponse{
-			OK:          true,
-			HubID:       payload.HubID,
-			UpdatedAt:   c.now().Format(time.RFC3339),
-			Scope:       target.scope,
-			ProjectName: target.projectName,
-			Detail:      detail,
-		}, nil
-	}
-	return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill not found"}
+	return skillsCommandResponse{
+		OK:          true,
+		HubID:       payload.HubID,
+		UpdatedAt:   c.now().Format(time.RFC3339),
+		Scope:       target.scope,
+		ProjectName: target.projectName,
+		Detail:      detail,
+	}, nil
 }
 
 func (c *SkillsCommand) scan(ctx context.Context, hubID string) skillsCommandResponse {
@@ -395,7 +373,6 @@ func (c *SkillsCommand) scan(ctx context.Context, hubID string) skillsCommandRes
 		snapshot := skillsProjectSnapshot{
 			ProjectName: projectName,
 			ProjectID:   rp.ProjectID(hubID, projectName),
-			Online:      project.Online,
 			Path:        strings.TrimSpace(project.Path),
 			Skills:      []skillsSkillSnapshot{},
 		}
@@ -488,23 +465,16 @@ func (c *SkillsCommand) startUninstall(payload skillsCommandPayload) (any, *skil
 }
 
 func (c *SkillsCommand) startUpdate(payload skillsCommandPayload) (any, *skillsCommandError) {
+	if err := validateSkillNames(payload.Skills); err != nil {
+		return nil, err
+	}
 	target, cmdErr := c.resolveTarget(payload)
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
-	runs, err := c.updateRuns(target)
+	runs, err := c.updateRuns(target, payload.Skills)
 	if err != nil {
 		return nil, err
-	}
-	if payload.IncludeProjects {
-		if target.scope != "hub" {
-			return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "includeProjects requires hub scope"}
-		}
-		projectRuns, projectErr := c.projectUpdateRuns()
-		if projectErr != nil {
-			return nil, projectErr
-		}
-		runs = append(runs, projectRuns...)
 	}
 	return c.startOperation(payload, runs)
 }
@@ -542,15 +512,14 @@ func (c *SkillsCommand) acceptOperation(payload skillsCommandPayload) (*skillsOp
 		return nil, &skillsCommandError{Code: rp.CodeConflict, Message: "skills operation already running"}
 	}
 	operation := &skillsOperationSnapshot{
-		Running:         true,
-		Action:          payload.Action,
-		Scope:           payload.Scope,
-		ProjectName:     payload.ProjectName,
-		Source:          payload.Source,
-		Skills:          append([]string(nil), payload.Skills...),
-		IncludeProjects: payload.IncludeProjects,
-		Status:          "running",
-		StartedAt:       c.now().Format(time.RFC3339),
+		Running:     true,
+		Action:      payload.Action,
+		Scope:       payload.Scope,
+		ProjectName: payload.ProjectName,
+		Source:      payload.Source,
+		Skills:      append([]string(nil), payload.Skills...),
+		Status:      "running",
+		StartedAt:   c.now().Format(time.RFC3339),
 	}
 	c.operation = operation
 	return operation, nil
@@ -654,43 +623,23 @@ func skillsRemoveArgs(target skillsCommandTarget, skills []string) []string {
 	return append(args, "-y")
 }
 
-func (c *SkillsCommand) projectUpdateRuns() ([]skillsOperationRun, *skillsCommandError) {
-	var runs []skillsOperationRun
-	for _, project := range c.projectSnapshot() {
-		if !project.Online {
-			continue
-		}
-		dir := strings.TrimSpace(project.Path)
-		if dir == "" {
-			return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "project path is empty"}
-		}
-		abs, err := filepath.Abs(dir)
-		if err != nil {
-			return nil, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
-		}
-		projectName := strings.TrimSpace(project.Name)
-		target := skillsCommandTarget{
-			scope:       "project",
-			projectName: projectName,
-			project:     project,
-			dir:         abs,
-		}
-		projectRuns, cmdErr := c.updateRuns(target)
-		if cmdErr != nil {
-			return nil, cmdErr
-		}
-		runs = append(runs, projectRuns...)
-	}
-	return runs, nil
-}
-
-func (c *SkillsCommand) updateRuns(target skillsCommandTarget) ([]skillsOperationRun, *skillsCommandError) {
+func (c *SkillsCommand) updateRuns(target skillsCommandTarget, requestedSkills []string) ([]skillsOperationRun, *skillsCommandError) {
 	lockPath := c.skillsLockFile(target)
 	groups := readSkillsLockInstallGroups(lockPath)
+	if len(requestedSkills) > 0 {
+		filtered := make([]skillsLockInstallGroup, 0, len(groups))
+		for _, group := range groups {
+			group.Skills = filterRequestedSkills(group.Skills, requestedSkills)
+			if len(group.Skills) > 0 {
+				filtered = append(filtered, group)
+			}
+		}
+		groups = filtered
+	}
 	if len(groups) == 0 {
 		return []skillsOperationRun{{
 			target:             target,
-			args:               fallbackSkillsUpdateArgs(target),
+			args:               fallbackSkillsUpdateArgs(target, requestedSkills),
 			message:            "Updated skills.",
 			prepareInstallDirs: target.scope == "hub",
 		}}, nil
@@ -707,14 +656,27 @@ func (c *SkillsCommand) updateRuns(target skillsCommandTarget) ([]skillsOperatio
 	return runs, nil
 }
 
-func fallbackSkillsUpdateArgs(target skillsCommandTarget) []string {
-	args := []string{"update"}
+func fallbackSkillsUpdateArgs(target skillsCommandTarget, skills []string) []string {
+	args := append([]string{"update"}, skills...)
 	if target.scope == "hub" {
 		args = append(args, "-g")
 	} else {
 		args = append(args, "-p")
 	}
 	return append(args, "-y")
+}
+
+func filterRequestedSkills(skills []string, requested []string) []string {
+	out := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		for _, candidate := range requested {
+			if strings.EqualFold(skill, candidate) {
+				out = append(out, skill)
+				break
+			}
+		}
+	}
+	return out
 }
 
 func (c *SkillsCommand) prepareSkillsInstallDirs(target skillsCommandTarget) error {
@@ -847,6 +809,98 @@ func (c *SkillsCommand) scanProjectSkills(ctx context.Context, project ProjectIn
 		return []skillsSkillSnapshot{}, err.Error()
 	}
 	return skills, ""
+}
+
+func (c *SkillsCommand) discoverSkillForDetail(
+	ctx context.Context,
+	target skillsCommandTarget,
+	skillName string,
+) (skillsSkillSnapshot, *skillsCommandError) {
+	providers, cwd, scope := c.detailDiscoveryTarget(target)
+	discovered, err := agent.ListSkillsForProviders(ctx, providers, cwd, scope)
+	if err != nil {
+		return skillsSkillSnapshot{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	var selected *agent.ProviderSkillDescriptor
+	var visibleAgents []string
+	for index := range discovered {
+		candidate := &discovered[index]
+		if !strings.EqualFold(candidate.Skill.Name, skillName) {
+			continue
+		}
+		visibleAgents = appendUniqueFoldStrings(visibleAgents, candidate.Provider...)
+		if selected == nil || skillDetailLocationPriority(candidate.Locations) < skillDetailLocationPriority(selected.Locations) {
+			selected = candidate
+		}
+	}
+	if selected == nil {
+		return skillsSkillSnapshot{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill not found"}
+	}
+	lockMetadata := readSkillsLockScanMetadata(c.skillsLockFile(target))
+	pluginName := lockMetadata.PluginNames[selected.Skill.Name]
+	categoryKey, category := skillCategory(pluginName)
+	return skillsSkillSnapshot{
+		Name:        selected.Skill.Name,
+		Path:        selected.Skill.Path,
+		Category:    category,
+		CategoryKey: categoryKey,
+		Managed:     lockMetadata.Managed[selected.Skill.Name],
+		Agents:      visibleAgents,
+	}, nil
+}
+
+func (c *SkillsCommand) detailDiscoveryTarget(target skillsCommandTarget) ([]string, string, agent.SkillScanScope) {
+	if target.scope == "project" {
+		return append([]string(nil), target.project.Agents...), target.dir, agent.SkillScanScopeProject
+	}
+	var providers []string
+	for _, project := range c.projectSnapshot() {
+		providers = appendUniqueFoldStrings(providers, project.Agents...)
+	}
+	return providers, "", agent.SkillScanScopeUser
+}
+
+func appendUniqueFoldStrings(values []string, candidates ...string) []string {
+	for _, candidate := range candidates {
+		found := false
+		for _, value := range values {
+			if strings.EqualFold(value, candidate) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			values = append(values, candidate)
+		}
+	}
+	return values
+}
+
+func skillDetailLocationPriority(locations []string) int {
+	priority := 5
+	for _, location := range locations {
+		switch strings.ToLower(location) {
+		case "agents":
+			return 0
+		case "claude":
+			if priority > 1 {
+				priority = 1
+			}
+		case "codebuddy":
+			if priority > 2 {
+				priority = 2
+			}
+		case "mimo":
+			if priority > 3 {
+				priority = 3
+			}
+		case "qoder":
+			if priority > 4 {
+				priority = 4
+			}
+		}
+	}
+	return priority
 }
 
 func (c *SkillsCommand) skillDetailFromSnapshot(target skillsCommandTarget, skill skillsSkillSnapshot) (*skillsSkillDetailSnapshot, *skillsCommandError) {

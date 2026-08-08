@@ -887,7 +887,7 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
         managed?: boolean;
         agents?: string[];
         locations?: Record<string, {path?: string; resolvedPath?: string; fingerprint?: string}>;
-        sync?: {status?: 'aligned' | 'agentsOnly' | 'claudeOnly' | 'contentMismatch' | 'unknown'};
+        sync?: {status?: 'aligned' | 'contentMismatch' | 'unknown'};
       }>) => Object.values(inventory).map(item => ({
         name: item.name,
         path: Object.values(item.locations ?? {})[0]?.path,
@@ -909,7 +909,6 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
           projects: Object.entries(data.projectLocalInventories ?? {}).map(([projectId, inventory]) => ({
             projectId,
             projectName: projectId.includes(':') ? projectId.slice(projectId.indexOf(':') + 1) : projectId,
-            online: true,
             skills: toItems(inventory),
           })),
           operation: data.operation ?? null,
@@ -13750,7 +13749,6 @@ export function App() {
           hubId: target.hubId,
           scope: target.scope,
           projectName: target.projectName,
-          includeProjects: target.includeProjects,
           skills: target.skills,
         })];
       }

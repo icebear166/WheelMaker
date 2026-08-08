@@ -258,7 +258,8 @@ Install flow:
 Update flow:
 
 - Hub `Update All` calls `update` for Hub scope and each online Project scope.
-- Hub `Update All` calls one `update` request with `includeProjects:true`.
+- Hub `Update All` calls `update` with `scope:"hub"` only.
+- Project updates are requested separately with `scope:"project"` and `projectName`.
 - Hub Skills section `Update` calls `update` with `scope:"hub"`.
 - Project section `Update` calls `update` with `scope:"project"` and `projectName`.
 

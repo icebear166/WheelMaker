@@ -59,14 +59,15 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).toContain('setSkillRetryNotice(createSkillRetryNotice(message, target))');
   });
 
-  test('keeps Hub-global updates isolated from Project skills', () => {
-    const summaryStart = mainTsx.indexOf('const renderChatHubSummary = () => {');
-    const summaryEnd = mainTsx.indexOf('const renderHiddenProjectRows =', summaryStart);
-    const summaryBlock = mainTsx.slice(summaryStart, summaryEnd);
+  test('keeps skill updates on the selected scope', () => {
+    const updateStart = mainTsx.indexOf('results = [await service.updateSkills({');
+    const updateEnd = mainTsx.indexOf('})];', updateStart);
+    const updateBlock = mainTsx.slice(updateStart, updateEnd);
 
-    expect(summaryStart).toBeGreaterThanOrEqual(0);
-    expect(summaryEnd).toBeGreaterThan(summaryStart);
-    expect(summaryBlock).not.toContain('includeProjects: true');
+    expect(updateStart).toBeGreaterThanOrEqual(0);
+    expect(updateEnd).toBeGreaterThan(updateStart);
+    expect(updateBlock).toContain('scope: target.scope');
+    expect(updateBlock).toContain('projectName: target.projectName');
   });
 
   test('wires Hub-global and Project skill data to the Hub menu', () => {
@@ -113,6 +114,5 @@ describe('Hub-owned skill management source structure', () => {
   test('keeps Hub skill rows independent from old settings-only task presentation', () => {
     expect(chatHubSkillTsx).not.toContain('agent-package-task');
     expect(chatHubSkillTsx).not.toContain('skillOperationStatusLabel');
-    expect(chatHubSkillTsx).not.toContain('includeProjects: true');
   });
 });

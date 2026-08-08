@@ -7000,6 +7000,45 @@ func TestListSkillsForPreset_LinkedUserRoot(t *testing.T) {
 	}
 }
 
+func TestListSkillsForProvidersDeduplicatesPhysicalRootsAndAggregatesSources(t *testing.T) {
+	projectRoot := t.TempDir()
+	targetRoot := filepath.Join(t.TempDir(), "shared-skills")
+	skillDir := filepath.Join(targetRoot, "shared-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: shared-skill\n---\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".agents"), 0o755); err != nil {
+		t.Fatalf("MkdirAll agents parent: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(projectRoot, ".codebuddy"), 0o755); err != nil {
+		t.Fatalf("MkdirAll codebuddy parent: %v", err)
+	}
+	createAgentSkillDirLink(t, targetRoot, filepath.Join(projectRoot, ".agents", "skills"))
+	createAgentSkillDirLink(t, targetRoot, filepath.Join(projectRoot, ".codebuddy", "skills"))
+
+	discovered, err := ListSkillsForProviders(
+		context.Background(),
+		[]string{"codex", "codebuddy"},
+		projectRoot,
+		SkillScanScopeProject,
+	)
+	if err != nil {
+		t.Fatalf("ListSkillsForProviders: %v", err)
+	}
+	if len(discovered) != 1 {
+		t.Fatalf("discovered skills = %#v, want one physical scan result", discovered)
+	}
+	if !containsFold(discovered[0].Provider, "codex") || !containsFold(discovered[0].Provider, "codebuddy") {
+		t.Fatalf("providers = %v, want codex and codebuddy", discovered[0].Provider)
+	}
+	if !containsFold(discovered[0].Locations, "agents") || !containsFold(discovered[0].Locations, "codebuddy") {
+		t.Fatalf("locations = %v, want agents and codebuddy", discovered[0].Locations)
+	}
+}
+
 func createAgentSkillDirLink(t *testing.T, target, link string) {
 	t.Helper()
 	if os.PathSeparator == '\\' {
@@ -7067,19 +7106,12 @@ func TestKimiProviderPreset(t *testing.T) {
 	if !strings.Contains(preset.MissingPathErrTemplate, "%v") {
 		t.Fatalf("missing-path template must consume the underlying error: %q", preset.MissingPathErrTemplate)
 	}
-	assertContainsDir := func(dirs []string, want string) {
-		t.Helper()
-		for _, dir := range dirs {
-			if strings.EqualFold(strings.TrimSpace(dir), want) {
-				return
-			}
-		}
-		t.Fatalf("dirs %v missing %q", dirs, want)
+	if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".agents/skills"}) {
+		t.Fatalf("project skill dirs = %v, want [.agents/skills]", preset.SkillProjectDirs)
 	}
-	assertContainsDir(preset.SkillProjectDirs, ".agents/skills")
-	assertContainsDir(preset.SkillProjectDirs, ".kimi-code/skills")
-	assertContainsDir(preset.SkillUserDirs, "~/.agents/skills")
-	assertContainsDir(preset.SkillUserDirs, "~/.kimi-code/skills")
+	if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.agents/skills"}) {
+		t.Fatalf("user skill dirs = %v, want [~/.agents/skills]", preset.SkillUserDirs)
+	}
 
 	provider := NewKimiProvider()
 	if provider.Name() != "kimi" {
@@ -7120,19 +7152,12 @@ func TestQoderProviderPreset(t *testing.T) {
 	if !strings.Contains(preset.MissingPathErrTemplate, "%v") {
 		t.Fatalf("missing-path template must consume the underlying error: %q", preset.MissingPathErrTemplate)
 	}
-	assertContainsDir := func(dirs []string, want string) {
-		t.Helper()
-		for _, dir := range dirs {
-			if strings.EqualFold(strings.TrimSpace(dir), want) {
-				return
-			}
-		}
-		t.Fatalf("dirs %v missing %q", dirs, want)
+	if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".qoder/skills"}) {
+		t.Fatalf("project skill dirs = %v, want [.qoder/skills]", preset.SkillProjectDirs)
 	}
-	assertContainsDir(preset.SkillProjectDirs, ".agents/skills")
-	assertContainsDir(preset.SkillProjectDirs, ".qoder/skills")
-	assertContainsDir(preset.SkillUserDirs, "~/.agents/skills")
-	assertContainsDir(preset.SkillUserDirs, "~/.qoder/skills")
+	if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.qoder/skills"}) {
+		t.Fatalf("user skill dirs = %v, want [~/.qoder/skills]", preset.SkillUserDirs)
+	}
 
 	provider := NewQoderProvider()
 	if provider.Name() != "qoder" {
@@ -7156,9 +7181,6 @@ func TestClaudeCompatibleProviderPresetsShareClaudeUserSkills(t *testing.T) {
 			}
 			if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".claude/skills"}) {
 				t.Fatalf("project skill dirs = %v, want [.claude/skills]", preset.SkillProjectDirs)
-			}
-			if !reflect.DeepEqual(preset.SkillProjectParentDirs, []string{".claude/skills"}) {
-				t.Fatalf("parent skill dirs = %v, want [.claude/skills]", preset.SkillProjectParentDirs)
 			}
 			if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.claude/skills"}) {
 				t.Fatalf("user skill dirs = %v, want [~/.claude/skills]", preset.SkillUserDirs)
@@ -7213,6 +7235,32 @@ func TestClaudePreset_UsesClaudeUserSkillsDirOnly(t *testing.T) {
 	}
 	if !hasClaudeDir {
 		t.Fatalf("claude preset user dirs missing ~/.claude/skills: %v", ClaudeACPProviderPreset.SkillUserDirs)
+	}
+}
+
+func TestCanonicalAndNativeSkillPresets(t *testing.T) {
+	tests := []struct {
+		name        string
+		preset      ACPProviderPreset
+		projectDirs []string
+		userDirs    []string
+	}{
+		{name: "codex", preset: CodexProviderPreset, projectDirs: []string{".agents/skills"}, userDirs: []string{"~/.agents/skills"}},
+		{name: "copilot", preset: CopilotACPProviderPreset, projectDirs: []string{".agents/skills"}, userDirs: []string{"~/.agents/skills"}},
+		{name: "kimi", preset: KimiACPProviderPreset, projectDirs: []string{".agents/skills"}, userDirs: []string{"~/.agents/skills"}},
+		{name: "codebuddy", preset: CodeBuddyACPProviderPreset, projectDirs: []string{".codebuddy/skills"}, userDirs: []string{"~/.codebuddy/skills"}},
+		{name: "mimo", preset: MimoACPProviderPreset, projectDirs: []string{".mimocode/skills"}, userDirs: []string{"~/.mimocode/skills"}},
+		{name: "qoder", preset: QoderACPProviderPreset, projectDirs: []string{".qoder/skills"}, userDirs: []string{"~/.qoder/skills"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !reflect.DeepEqual(test.preset.SkillProjectDirs, test.projectDirs) {
+				t.Fatalf("project skill dirs = %v, want %v", test.preset.SkillProjectDirs, test.projectDirs)
+			}
+			if !reflect.DeepEqual(test.preset.SkillUserDirs, test.userDirs) {
+				t.Fatalf("user skill dirs = %v, want %v", test.preset.SkillUserDirs, test.userDirs)
+			}
+		})
 	}
 }
 

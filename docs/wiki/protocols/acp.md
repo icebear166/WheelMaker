@@ -12,6 +12,12 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 内置 ACP provider 为 codex、claude、copilot、opencode、mimo、codebuddy、flicker、kimi、qoder；统一以 `ACPProviderPreset` 声明启动方式，kimi 走官方 Kimi Code CLI 的 `kimi acp` 子进程，登录由用户在 CLI 侧自行完成，WheelMaker 不触发 device-code 授权。kimi CLI 的安装与更新纳入 Hub npm 管理（官方包 `@moonshot-ai/kimi-code`，缺 binary 时提示 `npm install -g`），不再指向原生安装脚本。qoder 走官方 Qoder CN CLI 的 `qoderclicn --acp` 子进程（国内版，数据链路与账号体系独立于国际版），登录同样由用户在 CLI 侧完成（`qoderclicn login` 或 `QODER_PERSONAL_ACCESS_TOKEN` 环境变量），安装与更新一并纳入 Hub npm 管理（官方包 `@qodercn-ai/qoderclicn`）。
 
+### Skills discovery boundary
+
+Skills discovery is gated by the ACP agents registered for the current Hub. An unavailable or unregistered agent does not cause its extra directories to be scanned. The shared profiles are fixed to `<project>/.agents/skills` and `~/.agents/skills` for codex, cx-deepseek, copilot, opencode, kimi, and flicker, and `<project>/.claude/skills` and `~/.claude/skills` for claude and `cc-*`. Claude-compatible providers do not scan parent directories.
+
+`codebuddy`, `mimo`, and `qoder` additionally discover only their native project/user directories: `.codebuddy/skills`, `.mimocode/skills`, and `.qoder/skills`. Native directories are discovery-only: WheelMaker does not create links there and they are excluded from the fixed install/uninstall/update targets. A physical directory is scanned once even when multiple logical roots point to it; agent and location sources are aggregated, and same-name skills across locations are represented by one inventory item. The `Codex` and `Claude` UI capsules reflect only actual files under the corresponding `.agents` and `.claude` locations.
+
 ## 消息与初始化
 
 - ACP 使用双向 JSON-RPC 语义，stdio 传输时每条消息使用 UTF-8 JSON 并以换行分隔。

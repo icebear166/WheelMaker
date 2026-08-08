@@ -17,7 +17,6 @@ export type SkillDetailTarget = SkillScopeTarget & {
 };
 
 export type SkillUpdateTarget = SkillScopeTarget & {
-  includeProjects?: boolean;
   skills?: string[];
 };
 
@@ -138,16 +137,7 @@ function extractSkillNamesFromTokens(tokens: string[]): string[] {
 }
 
 export function sortSkillProjects(projects: RegistrySkillProjectSnapshot[]): RegistrySkillProjectSnapshot[] {
-  return [...projects].sort((left, right) => {
-    if (left.online !== right.online) return left.online ? -1 : 1;
-    return left.projectName.localeCompare(right.projectName);
-  });
-}
-
-export function onlineSkillProjects(
-  projects: RegistrySkillProjectSnapshot[],
-): RegistrySkillProjectSnapshot[] {
-  return sortSkillProjects(projects).filter(project => project.online);
+  return [...projects].sort((left, right) => left.projectName.localeCompare(right.projectName));
 }
 
 export function projectSkillTotal(projects: RegistrySkillProjectSnapshot[]): number {

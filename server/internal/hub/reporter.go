@@ -172,9 +172,6 @@ type Reporter struct {
 	fileIndex               *projectFileIndexManager
 	hubStateManager         *HubStateManager
 	skillsState             *skillsStateCoordinator
-	skillsWatcher           *skillsWatcher
-	skillsWatcherMu         sync.Mutex
-	skillsWatcherOnce       sync.Once
 	usageService            *usage.Service
 	usageHistory            *usage.HistoryStore
 	deepSeekUsage           deepSeekUsageSource
@@ -402,9 +399,6 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 
 	if skillTargetsChanged {
 		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
-	}
-	if pathChanged {
-		r.updateSkillsWatcherProjects()
 	}
 	if skillTargetsChanged || pathChanged {
 		sections := make([]string, 0, 2)
@@ -694,7 +688,6 @@ func (r *Reporter) runSession(ctx context.Context) error {
 		return err
 	}
 	r.startHubStateBootstrap(ctx)
-	r.startSkillsWatcher(ctx)
 	sink := newHubEventSink()
 	r.mu.Lock()
 	r.hubEventSink = sink
@@ -1266,39 +1259,6 @@ func (r *Reporter) refreshSkillsStateTarget(scope, projectName string) {
 		"",
 		"skills.changed",
 	)
-}
-
-func (r *Reporter) startSkillsWatcher(ctx context.Context) {
-	r.skillsWatcherOnce.Do(func() {
-		go func() {
-			watcher := newSkillsWatcher(skillsWatcherOptions{
-				OnChange: func(target skillsWatchTarget) {
-					r.refreshSkillsStateTarget(target.Scope, target.ProjectName)
-				},
-			})
-			if err := watcher.Error(); err != nil {
-				hubLogger("").Warn("start skills watcher failed: %v", err)
-			}
-			if home, err := os.UserHomeDir(); err == nil {
-				watcher.TrackHub(home)
-			}
-			watcher.ReplaceProjects(r.skillsTargets())
-			r.skillsWatcherMu.Lock()
-			r.skillsWatcher = watcher
-			r.skillsWatcherMu.Unlock()
-			<-ctx.Done()
-			_ = watcher.Close()
-		}()
-	})
-}
-
-func (r *Reporter) updateSkillsWatcherProjects() {
-	r.skillsWatcherMu.Lock()
-	watcher := r.skillsWatcher
-	r.skillsWatcherMu.Unlock()
-	if watcher != nil {
-		watcher.ReplaceProjects(r.skillsTargets())
-	}
 }
 
 func (r *Reporter) onReleaseJobUpdated(job tools.ReleasePublishJob) {
@@ -3043,9 +3003,6 @@ func (r *Reporter) replaceProjects(projects []ProjectInfo) {
 	}
 	if skillTargetsChanged {
 		r.ensureSkillsStateCoordinator().SetTargets(r.skillsTargets())
-	}
-	if pathsChanged {
-		r.updateSkillsWatcherProjects()
 	}
 	if skillTargetsChanged || pathsChanged {
 		sections := make([]string, 0, 2)

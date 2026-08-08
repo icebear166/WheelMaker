@@ -952,7 +952,7 @@ export interface RegistrySkillSnapshot {
   managed?: boolean;
   agents?: string[];
   locations?: Record<string, {path?: string; resolvedPath?: string; fingerprint?: string}>;
-  sync?: {status?: 'aligned' | 'agentsOnly' | 'claudeOnly' | 'contentMismatch' | 'unknown'};
+  sync?: {status?: 'aligned' | 'contentMismatch' | 'unknown'};
 }
 
 export interface RegistrySkillSupportingFile {
@@ -990,7 +990,6 @@ export interface RegistrySkillScopeSnapshot {
 export interface RegistrySkillProjectSnapshot {
   projectName: string;
   projectId?: string;
-  online: boolean;
   path?: string;
   skills: RegistrySkillSnapshot[];
   error?: string;
@@ -1010,7 +1009,6 @@ export interface RegistrySkillOperation {
   projectName?: string;
   source?: string;
   skills?: string[];
-  includeProjects?: boolean;
   status: 'running' | 'succeeded' | 'failed' | string;
   startedAt: string;
   finishedAt?: string;
@@ -1050,7 +1048,6 @@ export interface RegistrySkillScopePayload {
   scope: RegistrySkillScope;
   projectName?: string;
   skills?: string[];
-  includeProjects?: boolean;
 }
 
 export interface RegistrySkillDetailPayload {
