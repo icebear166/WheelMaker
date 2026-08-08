@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WheelMaker 后端架构审查报告</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #d9e2ef;
+      --paper: #ffffff;
+      --soft: #f5f8fc;
+      --navy: #102a43;
+      --blue: #1769aa;
+      --cyan: #0f9bb5;
+      --green: #16794d;
+      --amber: #a15c00;
+      --red: #b42318;
+      --shadow: 0 12px 36px rgba(16, 42, 67, .08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #eef3f8;
+      font: 15px/1.72 "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre, .mono {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    }
+    code {
+      padding: 2px 5px;
+      border-radius: 5px;
+      color: #0b4f71;
+      background: #e9f4fa;
+      font-size: .9em;
+    }
+    .hero {
+      color: #f7fbff;
+      background:
+        radial-gradient(circle at 82% 12%, rgba(39, 190, 211, .24), transparent 28%),
+        linear-gradient(135deg, #0d2238 0%, #123a5d 58%, #0d6578 100%);
+      padding: 64px 24px 58px;
+    }
+    .hero-inner, .page { max-width: 1220px; margin: 0 auto; }
+    .eyebrow {
+      color: #8de4ec;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    h1 {
+      max-width: 920px;
+      margin: 12px 0 10px;
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: 1.1;
+      letter-spacing: -.045em;
+    }
+    .hero p { max-width: 850px; color: #d6e7f3; margin: 0; font-size: 17px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 999px;
+      padding: 5px 11px;
+      color: #edfaff;
+      background: rgba(255,255,255,.09);
+      font-size: 12px;
+    }
+    .page { padding: 28px 20px 64px; }
+    .toc {
+      position: sticky;
+      top: 14px;
+      z-index: 2;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      padding: 10px;
+      margin-bottom: 24px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 7px 22px rgba(16,42,67,.06);
+      backdrop-filter: blur(8px);
+    }
+    .toc a {
+      padding: 5px 9px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .toc a:hover { color: var(--navy); background: var(--soft); text-decoration: none; }
+    section {
+      scroll-margin-top: 78px;
+      margin: 28px 0;
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    h2 {
+      margin: 0 0 8px;
+      color: var(--navy);
+      font-size: 26px;
+      line-height: 1.25;
+      letter-spacing: -.025em;
+    }
+    h3 { margin: 24px 0 8px; color: var(--navy); font-size: 18px; }
+    h4 { margin: 0 0 5px; color: var(--navy); }
+    .lead { margin: 0 0 18px; color: var(--muted); font-size: 16px; }
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: linear-gradient(180deg, #fff, #f9fbfe);
+    }
+    .stat { min-height: 118px; }
+    .stat strong {
+      display: block;
+      color: var(--navy);
+      font-size: 34px;
+      line-height: 1.1;
+      letter-spacing: -.04em;
+    }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status.ok { color: var(--green); background: #e5f6ed; }
+    .status.warn { color: var(--amber); background: #fff2d9; }
+    .status.risk { color: var(--red); background: #fde8e7; }
+    .callout {
+      margin: 16px 0;
+      padding: 15px 17px;
+      border-left: 4px solid var(--cyan);
+      border-radius: 8px;
+      background: #eefafd;
+    }
+    .callout.warn { border-color: #e09b26; background: #fff8e9; }
+    .callout strong { color: var(--navy); }
+    ul, ol { padding-left: 22px; }
+    li + li { margin-top: 5px; }
+    .tree {
+      overflow: auto;
+      margin: 14px 0 0;
+      padding: 20px;
+      border: 1px solid #173c5c;
+      border-radius: 12px;
+      color: #d9f3f7;
+      background: #0d253b;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 11px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--navy); background: #f3f7fb; font-size: 12px; letter-spacing: .02em; }
+    tr:last-child td { border-bottom: 0; }
+    .nowrap { white-space: nowrap; }
+    .tag {
+      display: inline-block;
+      padding: 2px 7px;
+      margin: 2px 3px 2px 0;
+      border-radius: 5px;
+      color: #31516d;
+      background: #eaf1f7;
+      font-size: 12px;
+    }
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: stretch;
+      justify-content: center;
+      gap: 8px;
+      margin: 20px 0;
+    }
+    .flow .node {
+      flex: 1 1 130px;
+      min-width: 125px;
+      max-width: 190px;
+      padding: 13px 11px;
+      border: 1px solid #b8d2e5;
+      border-radius: 11px;
+      color: #123a5d;
+      background: #f0f8fd;
+      text-align: center;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .flow .node small { display: block; margin-top: 5px; color: var(--muted); font-weight: 400; font-size: 11px; }
+    .flow .node.domain { color: #175c45; border-color: #acd8c0; background: #eefaf3; }
+    .flow .node.storage { color: #705225; border-color: #ecd19b; background: #fff9eb; }
+    .flow .arrow { align-self: center; color: var(--cyan); font-size: 22px; font-weight: 700; }
+    .lane {
+      padding: 15px;
+      border: 1px dashed #b9c9d8;
+      border-radius: 12px;
+      background: #fbfdff;
+    }
+    .lane + .lane { margin-top: 12px; }
+    .lane-title { margin-bottom: 9px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .architecture-box {
+      padding: 17px;
+      border: 1px solid #c9d9e7;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #f8fbff, #edf6fb);
+    }
+    .architecture-box strong { display: block; margin-bottom: 5px; color: var(--navy); }
+    .risk-high { color: var(--red); font-weight: 700; }
+    .risk-mid { color: var(--amber); font-weight: 700; }
+    .risk-low { color: var(--green); font-weight: 700; }
+    .priority {
+      display: inline-block;
+      min-width: 37px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      color: #fff;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .p0 { background: var(--red); }
+    .p1 { background: var(--amber); }
+    .p2 { background: var(--blue); }
+    .recommendation {
+      position: relative;
+      padding: 18px 18px 18px 58px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fff;
+    }
+    .recommendation .priority {
+      position: absolute;
+      left: 16px;
+      top: 18px;
+    }
+    .recommendation h4 { font-size: 16px; }
+    .recommendation p { margin: 5px 0; }
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .timeline-step {
+      display: grid;
+      grid-template-columns: 105px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+    .timeline-step .when {
+      padding-top: 3px;
+      color: var(--blue);
+      font-weight: 800;
+      text-align: right;
+    }
+    .timeline-step .what {
+      padding: 13px 15px;
+      border-left: 3px solid var(--cyan);
+      border-radius: 0 9px 9px 0;
+      background: #f3f9fc;
+    }
+    .source-list { columns: 2; column-gap: 28px; }
+    .source-list li { break-inside: avoid; margin-bottom: 7px; }
+    .small { color: var(--muted); font-size: 13px; }
+    footer {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 0 20px 44px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    @media (max-width: 850px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      section { padding: 20px; }
+      .toc { position: static; }
+      .timeline-step { grid-template-columns: 1fr; gap: 3px; }
+      .timeline-step .when { text-align: left; }
+      .source-list { columns: 1; }
+      .flow .arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow">WheelMaker · Backend Architecture Review</div>
+      <h1>后台目录、功能结构与架构优化建议</h1>
+      <p>从架构师视角对 <code>server/</code> 做一次只读结构审查：先还原当前事实，再识别职责耦合、数据边界和演进风险，最后给出不改变现有协议的建设路线。</p>
+      <div class="chips">
+        <span class="chip">审查日期：2026-08-08</span>
+        <span class="chip">基线：main</span>
+        <span class="chip">HEAD：711c8a1b</span>
+        <span class="chip">范围：Go backend / server/</span>
+        <span class="chip">性质：架构审查，不含行为改动</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <nav class="toc" aria-label="目录">
+      <a href="#summary">结论</a>
+      <a href="#inventory">目录结构</a>
+      <a href="#functions">功能结构</a>
+      <a href="#assessment">架构判断</a>
+      <a href="#target">目标架构</a>
+      <a href="#recommendations">优化建议</a>
+      <a href="#roadmap">落地路线</a>
+      <a href="#cleanup">清理原则</a>
+      <a href="#evidence">证据与校验</a>
+    </nav>
+
+    <section id="summary">
+      <h2>一、架构结论</h2>
+      <p class="lead">当前后端不是“代码失控”，而是一个功能已经完整、边界意识已经形成，但 Hub 内部逐渐成为多能力聚合点的模块化单体。</p>
+      <div class="grid grid-4">
+        <div class="card stat"><strong>25</strong><span>Go package，包含 4 个命令入口</span></div>
+        <div class="card stat"><strong>280</strong><span>Go 文件，其中 80 个测试文件</span></div>
+        <div class="card stat"><strong class="status ok">PASS</strong><span><code>go test ./... -count=1</code></span></div>
+        <div class="card stat"><strong class="status warn">ACTION</strong><span><code>go vet ./...</code> 存在现有告警</span></div>
+      </div>
+      <div class="callout">
+        <strong>一句话判断：</strong>保留当前进程与部署边界，先把 Hub 的“连接、路由、业务编排、任务、状态、持久化”拆成清晰的包边界；等依赖方向稳定后，再考虑独立进程或服务化。
+      </div>
+      <div class="grid grid-3">
+        <div class="architecture-box">
+          <strong>已经做对的事</strong>
+          Registry/ACP 协议集中在 <code>internal/protocol</code>；Session、AgentInstance、AgentConn、SessionRecorder 已有明确概念；App-only Session 和 Hub-owned runtime 已形成稳定约束。
+        </div>
+        <div class="architecture-box">
+          <strong>现在最值得治理的事</strong>
+          <code>internal/hub/reporter.go</code> 同时承担长连接、请求分发、项目 FS/Git、HubState、工具任务、Usage、Terminal、Relay 和配置运行时，是首要变化放大器。
+        </div>
+        <div class="architecture-box">
+          <strong>暂时不要做的事</strong>
+          不要先升协议版本、删除兼容 schema、整体改名或直接拆微服务。先建立边界、契约测试、可观测指标和恢复不变量。
+        </div>
+      </div>
+    </section>
+
+    <section id="inventory">
+      <h2>二、后台目录结构</h2>
+      <p class="lead">下面是当前 <code>server/</code> 的真实目录骨架。命令入口和 internal package 应视为不同层次：入口负责组合运行时，internal package 负责能力实现。</p>
+      <pre class="tree">server/
+├─ cmd/
+│  ├─ wheelmaker/                 Hub worker、Registry worker、guardian、Flicker Bridge 入口
+│  ├─ wheelmaker-desktop/         Windows WebView2 桌面宿主
+│  ├─ wheelmaker-gateway/         Gateway/Caddy 配置、校验、渲染、serve
+│  └─ wheelmaker-release-server/  Release 上传与发布服务入口
+├─ internal/
+│  ├─ hub/                        Hub 编排、Reporter、HubState、项目 FS/Git、文件索引
+│  │  ├─ agent/                   ACP Provider、AgentInstance、AgentConn、进程
+│  │  │  └─ cxdeepseek/          Codex/DeepSeek 适配
+│  │  ├─ client/                  Project Client、Session、Queue、Recorder、Store
+│  │  ├─ terminal/                PTY、终端生命周期与输出
+│  │  ├─ tools/                   npm、update、skills、release、gateway job
+│  │  └─ usage/                   用量扫描、上游 provider、history
+│  ├─ protocol/                   ACP/Registry wire contract、method descriptor、事件模型
+│  ├─ registry/                   HTTP/WS Registry、认证、路由、转发、广播
+│  ├─ gateway/                    Caddy runtime 与站点路径
+│  ├─ flickerbridge/              Flicker Bridge v1/v2、proxy、API 兼容
+│  ├─ portrelay/                  Relay listener、tunnel、access code、stream
+│  ├─ releaseserver/              Release HTTP API、存储、metadata、maintenance
+│  ├─ security/                   token、session、认证辅助
+│  ├─ serverdata/                 Registry 侧 server data/config
+│  ├─ hubconfig/                  Hub-owned 本地配置
+│  ├─ shared/                     配置、迁移、日志、通用基础设施
+│  │  ├─ agentpath/               CLI/PATH 解析
+│  │  └─ winsvc/                  Windows service/task 辅助
+│  ├─ speech/                     Speech provider
+│  └─ tts/                        Text-to-speech provider
+└─ bin/                           构建/运行产物目录（非业务 package）</pre>
+
+      <h3>目录职责清单</h3>
+      <table>
+        <thead><tr><th>目录</th><th>定位</th><th>主要职责</th><th>架构备注</th></tr></thead>
+        <tbody>
+          <tr><td><code>cmd/wheelmaker</code></td><td>核心运行时入口</td><td>启动 Hub、Registry、guardian，处理本机配置、信号和 Windows service 模式</td><td>组合根；不应继续吸收业务细节</td></tr>
+          <tr><td><code>internal/hub</code></td><td>本地 Hub 编排层</td><td>项目实例、Agent factory、Reporter、HubState、FS/Git、文件索引和运行时重载</td><td>当前最大集成点，建议优先拆分</td></tr>
+          <tr><td><code>internal/hub/client</code></td><td>Project/Session 域</td><td>Session 查找、生命周期、queue、archive、attachment、search、SQLite/WMT2 投影</td><td>业务域和基础设施仍有交叉</td></tr>
+          <tr><td><code>internal/hub/agent</code></td><td>Agent runtime 适配层</td><td>Provider 选择、实例创建、ACP connection、CLI 进程、共享/独占连接</td><td>边界较好，但 Codex/兼容 provider 文件较大</td></tr>
+          <tr><td><code>internal/protocol</code></td><td>跨进程契约层</td><td>ACP wire、Registry envelope、route/role/method descriptor、session event 和 action model</td><td>应保持无业务反向依赖</td></tr>
+          <tr><td><code>internal/registry</code></td><td>控制面服务</td><td>WS/HTTP、peer、认证、Hub/project ownership、request forward、event broadcast、Relay/Speech/TTS</td><td>可继续按 feature handler 拆分</td></tr>
+          <tr><td><code>internal/hub/tools</code></td><td>后台任务能力</td><td>npm、更新、skills、release、gateway update、debug transfer</td><td>建议统一 Job/Operation 生命周期</td></tr>
+          <tr><td><code>internal/gateway</code> / <code>releaseserver</code></td><td>独立部署能力</td><td>Caddy gateway 和 Release Server</td><td>应与 Hub 核心在架构图中单独标识</td></tr>
+          <tr><td><code>internal/flickerbridge</code> / <code>portrelay</code></td><td>可选边缘能力</td><td>代理桥接、固定端口 relay、tunnel 和流控</td><td>高并发/生命周期敏感，需故障隔离</td></tr>
+          <tr><td><code>shared</code> / <code>security</code> / <code>serverdata</code> / <code>hubconfig</code></td><td>横切基础设施</td><td>配置迁移、日志、密钥、服务端数据、Hub 本地配置</td><td>要明确 Registry-owned 与 Hub-owned 的存储边界</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="functions">
+      <h2>三、功能结构与真实调用链</h2>
+      <p class="lead">当前系统可以按“控制面、Hub 本地数据面、Session 业务域、Agent 执行面、基础设施适配面”理解，而不是按目录名平铺理解。</p>
+
+      <div class="lane">
+        <div class="lane-title">外部入口与控制面</div>
+        <div class="flow">
+          <div class="node">App / Browser / Desktop<small>发起 session、project、hub、terminal 请求</small></div>
+          <div class="arrow">→</div>
+          <div class="node">Registry HTTP / WebSocket<small>认证、peer、ownership、forward</small></div>
+          <div class="arrow">→</div>
+          <div class="node">Protocol Contract<small>2.7 envelope、role、route、method</small></div>
+          <div class="arrow">→</div>
+          <div class="node">Hub Reporter<small>长连接、回复、事件上报</small></div>
+        </div>
+      </div>
+
+      <div class="lane">
+        <div class="lane-title">Hub 本地业务数据面</div>
+        <div class="flow">
+          <div class="node domain">Project Client<small>按 project 分区，Session registry</small></div>
+          <div class="arrow">→</div>
+          <div class="node domain">Session<small>prompt、queue、goal、permission、fork</small></div>
+          <div class="arrow">→</div>
+          <div class="node domain">AgentInstance<small>一个 Session 的 ACP runtime facade</small></div>
+          <div class="arrow">→</div>
+          <div class="node domain">AgentConn / Provider<small>shared/owned ACP transport</small></div>
+          <div class="arrow">→</div>
+          <div class="node">CLI / ACP process<small>Codex、Claude-compatible、其他 provider</small></div>
+        </div>
+      </div>
+
+      <div class="lane">
+        <div class="lane-title">事件、状态与存储侧链</div>
+        <div class="flow">
+          <div class="node storage">SessionRecorder<small>唯一 session view outlet</small></div>
+          <div class="arrow">→</div>
+          <div class="node storage">SQLite metadata<small>sessions、projects、preferences</small></div>
+          <div class="arrow">+</div>
+          <div class="node storage">WMT2 / artifact files<small>turn、diff、attachment、archive</small></div>
+          <div class="arrow">→</div>
+          <div class="node">Registry events<small>session.message / session.updated</small></div>
+        </div>
+        <div class="flow">
+          <div class="node">HubState Manager<small>section refresh/action/update</small></div>
+          <div class="arrow">→</div>
+          <div class="node">Tools / File Index / Usage / Bridge<small>后台操作与状态快照</small></div>
+        </div>
+      </div>
+
+      <h3>按功能域拆解</h3>
+      <table>
+        <thead><tr><th>功能域</th><th>入口</th><th>核心实现</th><th>输出/依赖</th></tr></thead>
+        <tbody>
+          <tr><td>连接与路由</td><td><code>connect.*</code>、Registry WS</td><td>peer connection、pending request、role、hub/project ownership</td><td>Hub forward、App response、event broadcast</td></tr>
+          <tr><td>项目查询</td><td><code>project.fs.*</code>、<code>project.git.*</code></td><td>Reporter 内部的 FS/Git handler、file index</td><td>项目目录、内容、grep、git diff/status</td></tr>
+          <tr><td>Session</td><td><code>session.*</code></td><td>Client → Session → queue/goal/attachment/archive</td><td>SessionRecorder、SQLite/WMT2、Registry session events</td></tr>
+          <tr><td>Agent 执行</td><td>Session 内部调用</td><td>ACPFactory → AgentInstance → AgentConn → provider process</td><td>ACP update、permission、usage、prompt outcome</td></tr>
+          <tr><td>Hub 状态</td><td><code>hub.state.get/refresh/action</code></td><td>HubStateManager + section adapters</td><td>agent package、update、gateway、skills、file index、bridge</td></tr>
+          <tr><td>后台任务</td><td>内部 <code>cmd.*</code> 映射、HubState action</td><td><code>internal/hub/tools</code> Manager 及各 operation</td><td>异步状态、进度、完成回调、失败信息</td></tr>
+          <tr><td>终端/Relay</td><td><code>terminal.*</code>、<code>registry.relay.*</code></td><td>PTY manager、portrelay controller、tunnel</td><td>高频输出、连接生命周期、背压/关闭</td></tr>
+          <tr><td>语音/发布/网关</td><td>Registry/独立 command</td><td>speech、tts、releaseserver、gateway</td><td>外部 API、Caddy、release storage</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="assessment">
+      <h2>四、架构判断：优点与风险</h2>
+      <h3>当前值得保留的设计</h3>
+      <div class="grid grid-3">
+        <div class="card"><h4>契约集中</h4><p><code>internal/protocol</code> 集中定义 envelope、role、route、method descriptor 和 session model；Registry 2.7 的兼容边界有测试保护。</p></div>
+        <div class="card"><h4>Session/Agent 分层</h4><p>Session 只通过 <code>agent.Instance</code> 操作 ACP；AgentConn 隐藏 transport policy，provider 适配没有直接暴露给 Registry。</p></div>
+        <div class="card"><h4>事件出口单一</h4><p>SessionRecorder 统一记录和发布 session view，能减少多路写入导致的 transcript 与 UI 投影分叉。</p></div>
+        <div class="card"><h4>运行时边界清楚</h4><p>Hub-owned AgentFactory、lazy AgentInstance、shared/owned connection 和 App-only Session 已形成可演进的运行模型。</p></div>
+        <div class="card"><h4>测试覆盖面广</h4><p>当前有 80 个测试文件，完整 <code>go test ./...</code> 通过，说明行为契约和回归意识较强。</p></div>
+        <div class="card"><h4>协议删除有护栏</h4><p>旧方法、旧路由和 <code>cmd.*</code> 公共暴露有显式测试，不应把“保留的拒绝逻辑”误判为废弃实现。</p></div>
+      </div>
+
+      <h3>主要结构性风险</h3>
+      <table>
+        <thead><tr><th>风险</th><th>证据</th><th>影响</th><th>判断</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Reporter 变成 Hub 内部总线</strong></td>
+            <td><code>reporter.go</code> 约 3,665 行；同时持有 WS、pending request、session handler、tool locks、file index、HubState、usage、terminal、relay、config、bridge。</td>
+            <td>任何新功能都容易修改同一文件；并发、错误和生命周期策略相互耦合。</td>
+            <td class="risk-high">高影响 / 高概率</td>
+          </tr>
+          <tr>
+            <td><strong>Hub 依赖方向没有自动护栏</strong></td>
+            <td><code>internal/hub</code> 直接连接 agent、client、terminal、tools、usage、protocol、security、flickerbridge、portrelay 等多个域。</td>
+            <td>抽取功能时容易反向依赖；模块名称变了，架构耦合仍然存在。</td>
+            <td class="risk-high">高影响 / 高概率</td>
+          </tr>
+          <tr>
+            <td><strong>Session 域与持久化/投影耦合</strong></td>
+            <td><code>Session</code> 同时持有 Agent runtime、Store、view sink、queue、goal、permission；Client 又创建 Recorder、archive、search、attachment。</td>
+            <td>恢复、归档、事件重放、并发写入和 provider 切换的测试成本持续上升。</td>
+            <td class="risk-high">高影响 / 中概率</td>
+          </tr>
+          <tr>
+            <td><strong>多种存储形态缺少统一持久化门面</strong></td>
+            <td>SQLite 保存摘要/偏好；WMT2/文件保存 turn、artifact、attachment；配置和运行状态另有 JSON 文件。<code>route_bindings</code> 仍留在 schema 中作为惰性兼容表。</td>
+            <td>事实来源、写入顺序、修复方式和迁移策略难以一眼确认。</td>
+            <td class="risk-high">高影响 / 中概率</td>
+          </tr>
+          <tr>
+            <td><strong>内部字符串命令存在漂移风险</strong></td>
+            <td><code>cmd.npm</code>、<code>cmd.update</code>、<code>cmd.skills</code>、<code>cmd.release</code> 仍用于 Hub 内部工具，但公共 Registry 侧已删除类似方法。</td>
+            <td>边界误读、拼写漂移、角色校验和工具生命周期难以由编译器保护。</td>
+            <td class="risk-mid">中影响 / 高概率</td>
+          </tr>
+          <tr>
+            <td><strong>可选能力没有完全隔离</strong></td>
+            <td>Flicker Bridge、Gateway update、Skills watcher、Usage、Terminal、Release 都通过 Reporter/Hub 回调互相连接。</td>
+            <td>单一能力启动失败、重载或退出时可能放大到 Hub 主生命周期。</td>
+            <td class="risk-mid">中影响 / 高概率</td>
+          </tr>
+          <tr>
+            <td><strong>并发与背压规则分散</strong></td>
+            <td>Reporter、Registry peer、Session queue、Tool manager、Relay 各自维护 mutex、channel、pending 和关闭逻辑。</td>
+            <td>超时、重连、写入顺序和积压指标不统一，问题定位依赖日志拼接。</td>
+            <td class="risk-high">高影响 / 中概率</td>
+          </tr>
+          <tr>
+            <td><strong>现有 vet 告警未归零</strong></td>
+            <td><code>portrelay</code> 存在包含 <code>sync.Once</code> 的结构体按值复制告警；Windows Desktop 有 <code>unsafe.Pointer</code> 告警。</td>
+            <td>不一定立即表现为业务故障，但会削弱并发/平台边界的可信度。</td>
+            <td class="risk-mid">中影响 / 已发生</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="target">
+      <h2>五、建议的目标架构</h2>
+      <p class="lead">目标不是把项目改成很多服务，而是在同一进程内先建立单向依赖。未来如果确有部署/扩展压力，再把已经稳定的边界提升为进程边界。</p>
+
+      <div class="flow">
+        <div class="node">Transport adapters<small>Registry WS/HTTP、ACP、Terminal</small></div>
+        <div class="arrow">→</div>
+        <div class="node">Request router / policy<small>decode、auth、scope、idempotency</small></div>
+        <div class="arrow">→</div>
+        <div class="node domain">Application services<small>Session、Project、HubState、ToolJob</small></div>
+        <div class="arrow">→</div>
+        <div class="node domain">Domain aggregates<small>Session、Queue、AgentRuntime、Job</small></div>
+        <div class="arrow">→</div>
+        <div class="node storage">Ports<small>Store、TurnStore、AgentFactory、Publisher</small></div>
+        <div class="arrow">→</div>
+        <div class="node storage">Adapters<small>SQLite、WMT2、CLI、Caddy、PTY、HTTP API</small></div>
+      </div>
+
+      <h3>目标 package 分层（渐进式，不要求一次搬完）</h3>
+      <pre class="tree">internal/
+├─ protocol/                         只放外部 wire contract 与版本兼容规则
+├─ transport/
+│  ├─ registry/                      WS/HTTP 连接、envelope 编解码、事件写入
+│  └─ acp/                           ACP wire/connection adapter
+├─ application/
+│  ├─ session/                       session request application service
+│  ├─ project/                       project FS/Git/query application service
+│  ├─ hubstate/                      section refresh/action application service
+│  ├─ tools/                         typed tool command 与 job application service
+│  └─ terminal/                      terminal application service
+├─ domain/
+│  ├─ session/                       Session aggregate、queue、goal、permission
+│  ├─ project/                       project identity 与 ownership
+│  ├─ agent/                         provider-neutral runtime capability
+│  └─ job/                           operation state machine
+├─ ports/                            Store、EventPublisher、AgentFactory、JobRunner 等接口
+├─ adapters/
+│  ├─ persistence/                   SQLite、WMT2、artifact、archive
+│  ├─ agents/                        Codex、Claude-compatible、其他 provider
+│  ├─ registry/                      Registry client/server adapter
+│  ├─ gateway/                       Caddy
+│  └─ terminal/                      PTY、Relay
+└─ runtime/
+   └─ hub/                           组合 root、生命周期、依赖注入、graceful shutdown</pre>
+
+      <h3>依赖规则</h3>
+      <table>
+        <thead><tr><th>规则</th><th>允许</th><th>禁止</th><th>验证方式</th></tr></thead>
+        <tbody>
+          <tr><td>协议独立</td><td><code>protocol</code> 被 transport/application/domain 引用</td><td><code>protocol</code> 反向依赖 Hub、Registry 或数据库</td><td>Go import graph 检查</td></tr>
+          <tr><td>域不感知传输</td><td>Session 通过 port 发布事件、调用 Agent runtime</td><td>Session 直接 import websocket、Registry envelope、HTTP handler</td><td>package boundary test</td></tr>
+          <tr><td>应用层编排</td><td>router 调用 application service</td><td>router 直接操作 SQLite、文件、CLI 或跨域 mutex</td><td>review checklist + import rule</td></tr>
+          <tr><td>适配器向内实现</td><td>SQLite/WMT2/ACP 实现 ports</td><td>domain 依赖具体 SQLite/ACP provider</td><td>接口实现编译检查</td></tr>
+          <tr><td>组合根唯一</td><td><code>cmd</code> / <code>runtime</code> 组装依赖</td><td>业务 package 自己 new 全局单例或读取环境配置</td><td>构造器审查</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="recommendations">
+      <h2>六、建设性架构优化意见</h2>
+      <p class="lead">优先做“边界收敛”和“可验证的重构”，每一步都保持 Registry 2.7 和现有 Session 语义不变。</p>
+
+      <div class="grid grid-2">
+        <div class="recommendation">
+          <span class="priority p0">P0</span>
+          <h4>把 Reporter 变成连接层 + Dispatcher</h4>
+          <p><strong>做法：</strong>保留 Reporter 对外 API，但内部抽出 <code>registryConnection</code>、<code>requestDispatcher</code>、<code>sessionHandler</code>、<code>projectQueryHandler</code>、<code>hubStateHandler</code>、<code>toolJobHandler</code>、<code>terminalHandler</code>。每个 handler 只接收已解码的 request context，不直接操作 WS。</p>
+          <p><strong>验收：</strong>新增一个 Registry method 不再修改一个超大 switch；连接重连、业务 handler、事件发布可以分别测试。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p0">P0</span>
+          <h4>建立统一 RequestContext 与策略入口</h4>
+          <p><strong>做法：</strong>定义包含 requestId、role、hubId、projectId、sessionId、connection epoch 的内部上下文；统一做 decode、scope 校验、权限判断、超时和日志字段注入。</p>
+          <p><strong>验收：</strong>handler 不再重复 trim/parse/role/project/hub 校验；错误能稳定映射到 <code>INVALID_ARGUMENT</code>、<code>FORBIDDEN</code>、<code>UNAVAILABLE</code> 等标准码。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p0">P0</span>
+          <h4>加入 package import architecture check</h4>
+          <p><strong>做法：</strong>用 <code>go list -json ./...</code> 或 Go 小工具检查依赖方向；把 protocol、domain、application、adapter 的规则纳入 CI。</p>
+          <p><strong>验收：</strong>出现“Session import Registry”或“protocol import hub”时 CI 直接失败，而不是等人工 review 发现。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p0">P0</span>
+          <h4>统一错误模型和可观测字段</h4>
+          <p><strong>做法：</strong>引入内部 typed error：code、retryable、safe message、cause、domain；所有跨边界回复和后台 job 都走同一转换器。</p>
+          <p><strong>验收：</strong>日志和 Registry error 都带 requestId、projectId、sessionId、operationId；重试与不可重试错误可被客户端区分。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p1">P1</span>
+          <h4>拆出 SessionState、SessionRuntime、SessionPersistence</h4>
+          <p><strong>做法：</strong>保留 <code>Session</code> 作为兼容 facade，内部逐步分成业务状态、Agent/queue 执行、持久化/投影三个组件；SessionRecorder 变为显式 projector/publisher。</p>
+          <p><strong>验收：</strong>可以用 fake Agent 和 fake Store 单测 queue、恢复、事件顺序；provider adapter 不再参与 Session snapshot schema。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p1">P1</span>
+          <h4>统一持久化边界和事实来源</h4>
+          <p><strong>做法：</strong>明确 <code>SessionSnapshotStore</code>、<code>TurnStore</code>、<code>ArtifactStore</code>、<code>ArchiveStore</code> 的接口与写入顺序，建立 recovery/repair 检查；把 JSON 配置与 Session 数据分开建模。</p>
+          <p><strong>验收：</strong>文档能回答每个字段的唯一事实来源、写失败后的修复动作、重启后的恢复顺序。<code>route_bindings</code> 只能在迁移策略完成后删除。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p1">P1</span>
+          <h4>将内部 cmd.* 改为 typed ToolCommand</h4>
+          <p><strong>做法：</strong>保留现有字符串作为 transport/compat mapping，在 Hub 内部使用 enum-like command、typed payload 和 operation state；工具 Manager 不再依赖大量字符串 switch。</p>
+          <p><strong>验收：</strong>非法 command 在构造阶段失败；每种 job 具备 accepted/running/succeeded/failed/cancelled 状态和 operationId。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p1">P1</span>
+          <h4>收敛 Agent Provider 插件契约</h4>
+          <p><strong>做法：</strong>把 provider descriptor、runtime factory、session adapter、capability matrix、credential source 分开；Codex App Server 转换只在 adapter 目录内。</p>
+          <p><strong>验收：</strong>新增 provider 只实现契约和 capability tests，不修改 Session、Registry 或公共协议；provider-specific 字段不进入通用 Session 数据模型。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p2">P2</span>
+          <h4>把 Registry 变成可组合的控制面内核</h4>
+          <p><strong>做法：</strong>按 peer/connection、routing、project、session、server-data、speech/tts、relay、release 分 feature handler；连接层统一处理写队列、pending、backpressure、idempotency。</p>
+          <p><strong>验收：</strong>每个 feature 有 route descriptor、auth matrix、contract test 和明确的资源上限；terminal/relay 高流量不挤占 priority response。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p2">P2</span>
+          <h4>做可选能力故障隔离</h4>
+          <p><strong>做法：</strong>Flicker Bridge、Usage、Skills watcher、Gateway update、Release 和 Terminal 按 capability service 注册；启动失败只影响对应 section/feature，不能改变 Hub 核心可用性。</p>
+          <p><strong>验收：</strong>每个可选服务有 Start/Stop/Health、资源所有权、超时、关闭顺序和降级快照。</p>
+        </div>
+        <div class="recommendation">
+          <span class="priority p2">P2</span>
+          <h4>补齐并发、恢复和平台质量门禁</h4>
+          <p><strong>做法：</strong>为 queue、Recorder、Registry writer、Relay 做 race/背压/断线测试；修复 <code>go vet</code> 中的值复制锁和 unsafe pointer 告警。</p>
+          <p><strong>验收：</strong>CI 至少执行 test、race（适用 package）、vet；监控 pending 数、队列深度、Recorder lag、Agent restart、connection epoch 和 backlog drop。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="roadmap">
+      <h2>七、建议落地路线</h2>
+      <p class="lead">以“小步可回滚、协议不变、每步可验证”为原则，建议按下面顺序推进。</p>
+      <div class="timeline">
+        <div class="timeline-step">
+          <div class="when">阶段 0<br>基线</div>
+          <div class="what"><strong>建立规则和指标。</strong> 固化当前 package graph、关键 Registry contract、Session recovery invariant；新增 architecture check；单独处理 portrelay 值复制和 Desktop unsafe warning。产物是可比较的重构前基线。</div>
+        </div>
+        <div class="timeline-step">
+          <div class="when">阶段 1<br>Reporter</div>
+          <div class="what"><strong>只做内部抽取。</strong> 先抽 request context/policy，再按 session、project query、hub state、tool job、terminal 拆 handler；Reporter 继续负责连接和兼容 API。每次抽取都跑 package tests 与 protocol contract tests。</div>
+        </div>
+        <div class="timeline-step">
+          <div class="when">阶段 2<br>Session</div>
+          <div class="what"><strong>稳定持久化端口。</strong> 将 SQLite、WMT2、artifact、archive 的实现移到 adapter；SessionRecorder 明确为 event projector；建立重启、重复事件、写失败和修复测试。</div>
+        </div>
+        <div class="timeline-step">
+          <div class="when">阶段 3<br>Agent/Jobs</div>
+          <div class="what"><strong>插件化 provider 与后台任务。</strong> typed ToolCommand、统一 Job state machine、provider capability matrix 和 Codex adapter isolation；新增 provider 不得触碰 Session/Registry 核心。</div>
+        </div>
+        <div class="timeline-step">
+          <div class="when">阶段 4<br>Registry</div>
+          <div class="what"><strong>优化控制面可靠性。</strong> 拆 Registry feature handlers，统一 priority/terminal 写队列、pending limit、request idempotency、backpressure 和安全策略。只有指标证明需要时，才评估独立进程。</div>
+        </div>
+      </div>
+
+      <h3>建议的完成标准</h3>
+      <div class="grid grid-3">
+        <div class="card"><h4>依赖</h4><p>域层不依赖 Registry/WS/SQLite；协议层无业务反向依赖；新增功能能在 application/adapter 中落位。</p></div>
+        <div class="card"><h4>行为</h4><p>Registry 2.7 wire shape 不变；Session queue、Recorder 事件顺序、Agent recovery 和 App-only ownership 不变。</p></div>
+        <div class="card"><h4>运维</h4><p>能观测连接重连、pending、queue、Recorder、Agent、job、backpressure 和可选服务 health。</p></div>
+      </div>
+    </section>
+
+    <section id="cleanup">
+      <h2>八、废弃代码清理的架构原则</h2>
+      <p class="lead">“没有当前调用方”不等于“可以直接删除”。后台有协议兼容、schema 迁移、恢复数据和平台入口，清理应按证据分级。</p>
+      <table>
+        <thead><tr><th>对象</th><th>当前判断</th><th>建议动作</th></tr></thead>
+        <tbody>
+          <tr><td><code>route_bindings</code> schema</td><td>生产代码不查询，但 SQLite schema 仍保留惰性兼容表</td><td>先做用户数据/版本迁移验证，再通过明确 migration 删除；不能仅凭 grep 直接删表。</td></tr>
+          <tr><td><code>LegacyRegistryMethodChatSend</code></td><td>更像“显式拒绝旧协议”的兼容护栏，不是普通死代码</td><td>保留 descriptor/拒绝测试，等协议升级策略明确后再整体移除。</td></tr>
+          <tr><td>内部 <code>cmd.*</code></td><td>公共 Registry 方法已删除，但 Hub tools 仍在使用</td><td>不要当作废弃代码删除；先换成 typed ToolCommand，再保留字符串映射层。</td></tr>
+          <tr><td>Flicker Bridge v1/v2</td><td>有入口参数、生命周期和 provider 依赖，属于活跃兼容能力</td><td>先用运行 telemetry 确认零使用，再做 feature flag 下线和数据清理。</td></tr>
+          <tr><td>Desktop/Gateway/Release command</td><td>不是 Hub 核心，但分别是有效运行时/部署入口</td><td>从“后台核心”架构图中分层展示，不要因为不被 Hub import 就误判为废弃。</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <strong>删除前的三项证据：</strong>源码和测试无引用；协议/客户端/wiki 无调用；配置、数据库、归档和升级路径无历史数据依赖。三项都满足后，仍应先加迁移或 feature flag，再删除实现。
+      </div>
+    </section>
+
+    <section id="evidence">
+      <h2>九、审查证据与校验结果</h2>
+      <p class="lead">报告基于当前工作树只读扫描和仓库既有架构文档；行号以本报告生成时的 <code>HEAD 711c8a1b</code> 为准，后续代码变更后需重新定位。</p>
+      <h3>关键代码证据</h3>
+      <ul class="source-list">
+        <li><code>server/internal/hub/reporter.go:144-192</code>：Reporter 字段同时覆盖连接、项目、Session、工具锁、HubState、Usage、Terminal、Relay、配置和 Bridge。</li>
+        <li><code>server/internal/hub/reporter.go</code>：约 3,665 行，包含连接生命周期、请求回复、FS/Git、HubState、工具和事件发布。</li>
+        <li><code>server/internal/hub/hub.go:25-42</code>：Hub 持有 Client、Reporter、AgentFactory、Terminal、Flicker Bridge、HubConfig 等组合依赖。</li>
+        <li><code>server/internal/hub/client/client.go:50-84</code>：Client 同时管理 Session registry、Store、Recorder、archive、search、attachment。</li>
+        <li><code>server/internal/hub/client/session.go:52-98</code>：Session 同时持有 ACP runtime、Store/view sink、prompt、queue、goal、permission 状态。</li>
+        <li><code>server/internal/hub/client/session_recorder.go:35-40,124-157</code>：SessionViewSink 与 Recorder 的统一事件出口和投影状态。</li>
+        <li><code>server/internal/hub/client/sqlite_store.go:19-52,88-104</code>：SQLite schema、Store port 和 route_bindings 惰性 schema。</li>
+        <li><code>server/internal/hub/agent/instance.go:21-36</code>：Session 可见的 provider-neutral AgentInstance 接口。</li>
+        <li><code>server/internal/registry/server.go:51-99</code>：Registry Config、peerConn、优先/终端写队列和连接 writer。</li>
+        <li><code>server/internal/protocol/registry_methods.go:19-45,171-178</code>：Registry route kind 与 method descriptor 中央注册。</li>
+        <li><code>server/internal/hub/agent/codexapp_agent.go</code>、<code>server/internal/flickerbridge/flicker_bridge.go</code>、<code>server/internal/flickerbridge/v2.go</code>：provider/bridge 复杂度热点。</li>
+      </ul>
+
+      <h3>静态规模摘要</h3>
+      <table>
+        <thead><tr><th>指标</th><th>结果</th><th>解释</th></tr></thead>
+        <tbody>
+          <tr><td>后端文件</td><td>293</td><td>server/ 下全部文件</td></tr>
+          <tr><td>Go 文件</td><td>280</td><td>包含 80 个测试文件、200 个非测试 Go 文件</td></tr>
+          <tr><td>Go package</td><td>25</td><td>包含 cmd 与 internal package</td></tr>
+          <tr><td>Registry method constants</td><td>112</td><td>集中在 protocol registry_methods.go，另有 107 个 descriptor entry</td></tr>
+          <tr><td>测试</td><td><span class="status ok">PASS</span></td><td><code>go test ./... -count=1</code> 全部通过</td></tr>
+          <tr><td>vet</td><td><span class="status warn">ACTION</span></td><td>portrelay 的 sync.Once 值复制告警；Windows Desktop unsafe.Pointer 告警</td></tr>
+        </tbody>
+      </table>
+
+      <h3>参考架构文档</h3>
+      <ul>
+        <li><code>docs/wiki/architecture/server-runtime.md</code>：App-only Session、Hub、Client、Session、SessionRecorder、AgentFactory 的当前职责。</li>
+        <li><code>docs/wiki/architecture/session-management-and-sync.md</code>：Session queue、turn、持久化、同步和 archive 语义。</li>
+        <li><code>docs/wiki/protocols/registry.md</code>：Registry 2.7 route、forward、relay、release、speech/TTS 和错误模型。</li>
+        <li><code>docs/wiki/release-and-build/release.md</code>：Gateway、Release Server 和部署边界。</li>
+      </ul>
+
+      <div class="callout">
+        <strong>最终建议：</strong>下一次后端清理可以把本报告的 P0 作为执行合同：先建架构依赖检查和统一 RequestContext，再拆 Reporter handler；这两步对协议和业务行为风险最低，却能显著降低后续清理的误删与回潮概率。
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    WheelMaker Backend Architecture Review · 2026-08-08 · Generated as a standalone repository report
+  </footer>
+</body>
+</html>
