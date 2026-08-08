@@ -1087,27 +1087,21 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
         </button>
         <span className="chat-hub-row-name">{hubId}</span>
         <span className="chat-hub-version-readout">
-          {ops.gateway.currentVersion !== '-' ? (
-            <span className="chat-hub-gateway-status">
-              <span className="chat-hub-gateway-capsule" title={`Gateway ${ops.gateway.currentVersion}`}>
-                <span className="chat-hub-gateway-capsule-label">Gateway</span>
-                <span className="chat-hub-action-label">{ops.gateway.currentVersion}</span>
-              </span>
-              {ops.gateway.updateVisible ? (
-                <button
-                  type="button"
-                  className="chat-hub-action chat-hub-version-action chat-hub-gateway-update-action"
-                  aria-label={`Update Gateway ${ops.gateway.currentVersion}`}
-                  disabled={ops.gateway.pending}
-                  onClick={() => onRequestGatewayUpdate(hubId)}
-                >
-                  <Icon
-                    name={ops.gateway.pendingAction === 'update' ? 'loader' : 'refreshCw'}
-                    spin={ops.gateway.pendingAction === 'update'}
-                  />
-                </button>
-              ) : null}
-            </span>
+          {ops.gateway.updateVisible ? (
+            <button
+              type="button"
+              className="chat-hub-action chat-hub-version-action chat-hub-gateway-update-action"
+              title={`Update Gateway ${ops.gateway.currentVersion}`}
+              aria-label={`Update Gateway ${ops.gateway.currentVersion}`}
+              disabled={ops.gateway.pending}
+              onClick={() => onRequestGatewayUpdate(hubId)}
+            >
+              <Icon
+                name={ops.gateway.pendingAction === 'update' ? 'loader' : 'refreshCw'}
+                spin={ops.gateway.pendingAction === 'update'}
+              />
+              {ops.gateway.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
+            </button>
           ) : null}
           <span className="chat-hub-action-label">{ops.wheelMaker.currentVersion}</span>
         </span>

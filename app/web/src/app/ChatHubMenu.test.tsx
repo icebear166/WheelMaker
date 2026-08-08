@@ -329,7 +329,7 @@ test('hub row uses independent update and restart actions with three icon-count 
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
 });
 
-test('hub row shows an installed Gateway before WheelMaker with an independent update action', async () => {
+test('hub row shows only an update action with a dot for an outdated Gateway', async () => {
   const {props, callbacks} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
@@ -351,19 +351,17 @@ test('hub row shows an installed Gateway before WheelMaker with an independent u
 
   const row = renderer.root.findByProps({className: 'chat-hub-row'});
   const version = row.findByProps({className: 'chat-hub-version-readout'});
-  const gatewayCapsule = version.findByProps({className: 'chat-hub-gateway-capsule'});
-  expect(gatewayCapsule.findByProps({className: 'chat-hub-action-label'}).children).toEqual(['v1.3']);
   expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
-    ['v1.3'],
     ['v1.2'],
   ]);
   const gatewayUpdate = version.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'});
   expect(gatewayUpdate.props['aria-label']).toBe('Update Gateway v1.3');
+  expect(gatewayUpdate.findByProps({className: 'chat-hub-update-dot'})).toBeTruthy();
   act(() => gatewayUpdate.props.onClick());
   expect(callbacks.onRequestGatewayUpdate).toHaveBeenCalledWith('hub-a');
 });
 
-test('hub row keeps a current Gateway in a capsule without an update action', async () => {
+test('hub row hides the Gateway update action when Gateway is current', async () => {
   const {props} = createHarness({
     opsByHubId: {
       'hub-a': opsView({
@@ -385,7 +383,9 @@ test('hub row keeps a current Gateway in a capsule without an update action', as
 
   const row = renderer.root.findByProps({className: 'chat-hub-row'});
   const version = row.findByProps({className: 'chat-hub-version-readout'});
-  expect(version.findByProps({className: 'chat-hub-gateway-capsule'})).toBeTruthy();
+  expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
+    ['v1.2'],
+  ]);
   expect(version.findAllByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-gateway-update-action'})).toHaveLength(0);
   expect(row.findByProps({className: 'chat-hub-row-actions'}).findAllByType('button').map(button => button.props.className)).toEqual([
     'chat-hub-action chat-hub-version-action chat-hub-version-update-action',
