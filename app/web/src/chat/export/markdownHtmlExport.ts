@@ -38,6 +38,27 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
   font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
   font-size: .92em;
 }
+/* Chat file links carry an inline svg icon; svg defaults to display:block,
+   so without these rules the icon forces a line break in exported output. */
+.wheelmaker-markdown-export .chat-file-link {
+  font-weight: 500;
+  text-decoration: none;
+}
+.wheelmaker-markdown-export .chat-file-link-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-right: 0.3em;
+  vertical-align: -0.125em;
+}
+.wheelmaker-markdown-export .chat-file-link-line {
+  margin-left: 2px;
+  font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+  font-size: .92em;
+  opacity: .86;
+}
 .wheelmaker-markdown-export .wm-shiki-code { white-space: normal; }
 .wheelmaker-markdown-export .code-wrap { margin: 10px 0 12px; }
 .wheelmaker-markdown-export table {

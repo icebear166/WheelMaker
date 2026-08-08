@@ -4665,6 +4665,15 @@ button.chat-hub-skill-name:disabled {
   font-weight: 500;
 }
 
+/* A file name written as `code` inside a file link keeps the mono face
+   but drops the inline-code chip so the link reads as one unit. */
+.chat-main-message .chat-file-link code:not(.wm-shiki-code) {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+}
+
 .chat-main-message .chat-file-link-icon {
   display: inline-flex;
   align-items: center;
