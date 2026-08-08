@@ -675,7 +675,10 @@
   right: 0;
   min-width: 12px;
   height: 12px;
-  padding: 0 3px;
+  /* Buttons resolve font-family from the UA control font (Arial on Windows),
+     whose digits ink ~0.8px above the em-box center; 1px top padding optically
+     centers the count inside the pill. */
+  padding: 1px 3px 0;
   border-radius: 999px;
   background: var(--accent-primary);
   color: #fff;
