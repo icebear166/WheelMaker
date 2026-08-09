@@ -511,9 +511,7 @@
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  transition: top var(--motion-standard) var(--ease-standard),
-    transform var(--motion-standard) var(--ease-standard),
-    filter var(--motion-standard) var(--ease-standard);
+  transition: transform var(--motion-standard) var(--ease-standard);
 }
 
 .floating-control-stack[data-side='right'] {
@@ -527,11 +525,9 @@
 }
 
 .floating-control-stack[data-drag-state='dragging'] {
-  transform: scale(1.06);
   filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.28));
-  transition: top 0ms linear,
-    transform var(--motion-fast) var(--ease-standard),
-    filter var(--motion-standard) var(--ease-standard);
+  transition: transform var(--motion-fast) var(--ease-standard);
+  will-change: transform;
 }
 
 .floating-nav-button {

@@ -108,6 +108,38 @@ describe('P0 motion contracts', () => {
 });
 
 describe('P1 motion contracts', () => {
+  it('keeps Hub companion exits spatial and avoids moving the parent by left', () => {
+    const chatCss = read('chat.css');
+    const chatHubMenu = read('../app/ChatHubMenu.tsx');
+
+    expect(chatHubMenu).toContain('skillSurfaceExiting');
+    expect(chatCss).toContain('.chat-hub-skill-companion.desktop.sl-menu-exit');
+    expect(chatCss).toContain('transform: translateX(6px) scale(0.98);');
+    expect(chatCss).not.toContain('transition: left 180ms var(--ease-out);');
+  });
+
+  it('reveals Recent Sessions content without a max-height layout transition', () => {
+    const chatCss = read('chat.css');
+    const panel = read('../chat/ChatSessionPanel.tsx');
+    const recentSessions = read('../chat/ChatRecentSessionsSurface.tsx');
+
+    expect(chatCss).not.toContain('transition: max-height var(--motion-standard) var(--ease-standard);');
+    expect(chatCss).toContain('.chat-recent-sessions-surface.desktop.collapsed .chat-recent-sessions-surface-list');
+    expect(panel).toContain('keepChildrenMounted');
+    expect(recentSessions).toContain('keepChildrenMounted={true}');
+  });
+
+  it('uses a transform offset while dragging the mobile floating control stack', () => {
+    const shellCss = read('shell.css');
+    const workspaceApp = read('../app/WorkspaceApp.tsx');
+
+    expect(shellCss).not.toContain('transition: top var(--motion-standard) var(--ease-standard),');
+    expect(workspaceApp).toMatch(
+      /top: `\$\{floatingDragState \? floatingDragState\.startTop : effectiveFloatingControlTop\}px`/,
+    );
+    expect(workspaceApp).toContain('floatingDragState.currentTop - floatingDragState.startTop');
+  });
+
   it('derives a shorter sheet release duration from faster releases', () => {
     expect(resolveSheetReleaseDuration(0)).toBe(180);
     expect(resolveSheetReleaseDuration(0.4)).toBe(140);

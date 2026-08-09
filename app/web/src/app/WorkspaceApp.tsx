@@ -3155,6 +3155,12 @@ export function App() {
     }
     return null;
   }, [skillDetailTarget, skillInstallTarget]);
+  const [chatHubSkillSurfaceVisible, setChatHubSkillSurfaceVisible, chatHubSkillSurfaceExiting] =
+    useMenuExitState<ChatHubSkillSurface>();
+  useEffect(() => {
+    setChatHubSkillSurfaceVisible(chatHubSkillSurface);
+  }, [chatHubSkillSurface, setChatHubSkillSurfaceVisible]);
+  const chatHubSkillSurfaceForMenu = chatHubSkillSurface ?? chatHubSkillSurfaceVisible;
   const chatHubSkillSurfaceOpen = chatHubSkillSurface !== null;
   const closeChatHubSkillSurface = useCallback(() => {
     setSkillInstallTarget(null);
@@ -4082,16 +4088,15 @@ export function App() {
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
     const menuWidth = Math.min(340, Math.max(0, viewportWidth - 24));
     const companionWidth = Math.min(520, Math.max(380, viewportWidth * 0.4));
-    const stackWidth = menuWidth + (chatHubSkillSurfaceOpen ? companionWidth + 8 : 0);
-    const left = Math.max(12, Math.min(
-      anchor.right - menuWidth,
-      viewportWidth - stackWidth - 12,
-    ));
+    const stackWidth = menuWidth + (chatHubSkillSurfaceForMenu ? companionWidth + 8 : 0);
+    const baseLeft = Math.max(12, Math.min(anchor.right - menuWidth, viewportWidth - menuWidth - 12));
+    const shiftedLeft = Math.max(12, Math.min(anchor.right - menuWidth, viewportWidth - stackWidth - 12));
     return {
-      left,
+      left: baseLeft,
       top: Math.max(12, anchor.bottom + 6),
-    };
-  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, isWide]);
+      '--chat-hub-stack-shift': `${shiftedLeft - baseLeft}px`,
+    } as React.CSSProperties;
+  }, [chatHubMenuOpen, chatHubSkillSurfaceForMenu, isWide]);
 
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
@@ -6892,7 +6897,8 @@ export function App() {
         onRetrySkills={hubId => {
           service.hubStore.refresh(hubId, ['skills'], true).catch(() => undefined);
         }}
-        skillSurface={chatHubSkillSurface}
+        skillSurface={chatHubSkillSurfaceForMenu}
+        skillSurfaceExiting={chatHubSkillSurfaceExiting}
         skillInstall={{
           sourceInput: skillSourceInput,
           onSourceInputChange: setSkillSourceInput,
@@ -7116,10 +7122,13 @@ export function App() {
     () =>
       !isWide
         ? ({
-            top: `${effectiveFloatingControlTop}px`,
+            top: `${floatingDragState ? floatingDragState.startTop : effectiveFloatingControlTop}px`,
+            transform: floatingDragState
+              ? `translateY(${floatingDragState.currentTop - floatingDragState.startTop}px) scale(1.06)`
+              : undefined,
           } as React.CSSProperties)
         : undefined,
-    [effectiveFloatingControlTop, isWide],
+    [effectiveFloatingControlTop, floatingDragState, isWide],
   );
   const floatingDragVisualState =
     floatingDragState !== null

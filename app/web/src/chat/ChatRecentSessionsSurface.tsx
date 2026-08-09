@@ -28,6 +28,7 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
       ariaLabel="Recent sessions"
       sessionListDensity={DESKTOP_SESSION_LIST_DENSITY}
       collapsed={collapsed}
+      keepChildrenMounted={true}
       onToggleCollapsed={onToggleCollapsed}
       header={header}
     >

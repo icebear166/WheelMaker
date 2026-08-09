@@ -87,6 +87,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     updateAllAvailableCount: 0,
     updateAllPending: false,
     skillSurface: null,
+    skillSurfaceExiting: false,
     skillInstall: {
       sourceInput: '',
       onSourceInputChange: jest.fn(),

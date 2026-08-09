@@ -240,6 +240,7 @@ export interface ChatHubMenuProps {
   onRequestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
   onRetrySkills: (hubId: string) => void;
   skillSurface: ChatHubSkillSurface | null;
+  skillSurfaceExiting: boolean;
   skillInstall: ChatHubSkillCompanionProps['install'];
   skillDetail: ChatHubSkillCompanionProps['detail'];
   onCloseSkillSurface: () => void;
@@ -1325,6 +1326,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
     updateAllPending,
     onUpdateAllHubs,
     skillSurface,
+    skillSurfaceExiting,
     skillInstall,
     skillDetail,
     onCloseSkillSurface,
@@ -1423,7 +1425,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
               {panel}
             </div>
             {skillSurface ? (
-              <aside className="chat-hub-skill-companion desktop">
+              <aside className={`chat-hub-skill-companion desktop${skillSurfaceExiting ? ' sl-menu-exit' : ''}`}>
                 <React.Suspense fallback={null}>
                   <ChatHubSkillCompanion
                     surface={skillSurface}

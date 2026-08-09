@@ -12,6 +12,7 @@ export type ChatSessionPanelProps = {
   ariaLabel?: string;
   sessionListDensity?: string;
   collapsed?: boolean;
+  keepChildrenMounted?: boolean;
   onToggleCollapsed?: () => void;
   onPointerEnter?: PointerEventHandler<HTMLElement>;
   onPointerLeave?: PointerEventHandler<HTMLElement>;
@@ -29,6 +30,7 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
   ariaLabel,
   sessionListDensity,
   collapsed = false,
+  keepChildrenMounted = false,
   onToggleCollapsed,
   onPointerEnter,
   onPointerLeave,
@@ -61,7 +63,7 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
             toolbar={header}
           />
         </div>
-        {collapsed ? null : (
+        {collapsed && !keepChildrenMounted ? null : (
           <div ref={scrollRef} className="chat-session-panel-scroll" onScroll={onScroll} {...scrollProps}>{children}</div>
         )}
       </div>
