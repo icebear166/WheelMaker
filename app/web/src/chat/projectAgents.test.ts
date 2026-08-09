@@ -34,3 +34,10 @@ describe('cx.deepseek agent presentation', () => {
     expect(isCodexAppAgentType('claude')).toBe(false);
   });
 });
+
+describe('agent capsule labels', () => {
+  it('normalizes capsule labels to lowercase', () => {
+    expect(agentDisplayLabel('Codex')).toBe('codex');
+    expect(agentDisplayLabel('Claude')).toBe('claude');
+  });
+});

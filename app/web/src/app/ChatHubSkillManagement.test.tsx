@@ -192,7 +192,7 @@ test('reuses session agent capsules and keeps External after skill status', asyn
 
   const codexOnly = renderer.root.findByProps({'data-skill-name': 'codex-only'});
   expect(codexOnly.findByProps({className: 'wide-session-agent-tag wide-session-agent-0'}).children)
-    .toEqual(['Codex']);
+    .toEqual(['codex']);
   expect(codexOnly.findAllByProps({className: 'wide-session-agent-tag wide-session-agent-2'}))
     .toHaveLength(0);
 
@@ -200,18 +200,17 @@ test('reuses session agent capsules and keeps External after skill status', asyn
   expect(both.findAll(node => typeof node.props.className === 'string'
     && node.props.className.startsWith('wide-session-agent-tag '))
     .map(node => [node.props.className, node.children])).toEqual([
-    ['wide-session-agent-tag wide-session-agent-0', ['Codex']],
-    ['wide-session-agent-tag wide-session-agent-2', ['Claude']],
+    ['wide-session-agent-tag wide-session-agent-0', ['codex']],
+    ['wide-session-agent-tag wide-session-agent-2', ['claude']],
   ]);
 
   const nameCell = both.findByProps({className: 'chat-hub-skill-name-cell'});
-  expect(nameCell.children.map(child => (
-    typeof child === 'string' ? child : child.props.className
-  ))).toEqual([
-    'chat-hub-skill-name',
-    'wide-session-agent-tag wide-session-agent-0',
-    'wide-session-agent-tag wide-session-agent-2',
-    'chat-hub-skill-sync',
-    'chat-hub-skill-external',
-  ]);
+  const nameCellClasses = nameCell.findAll(node => typeof node.props.className === 'string')
+    .map(node => node.props.className);
+  expect(nameCellClasses.indexOf('wide-session-agent-tag wide-session-agent-0'))
+    .toBeLessThan(nameCellClasses.indexOf('wide-session-agent-tag wide-session-agent-2'));
+  expect(nameCellClasses.indexOf('wide-session-agent-tag wide-session-agent-2'))
+    .toBeLessThan(nameCellClasses.indexOf('chat-hub-skill-sync'));
+  expect(nameCellClasses.indexOf('chat-hub-skill-sync'))
+    .toBeLessThan(nameCellClasses.indexOf('chat-hub-skill-external'));
 });

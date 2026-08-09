@@ -46,8 +46,6 @@ export type SessionListViewProps = {
   onRetryMobileSessions: () => void;
   // helpers (WorkspaceApp closures, injected)
   resolveTitle: (session: AnySession) => string;
-  agentLabel: (agentType: string) => string;
-  sessionAgentClass: (agentType: string) => string;
   projectHubClass: (hubId: string) => string;
   hubAccentStyle: (hubId: string) => React.CSSProperties;
   formatAge: (iso: string) => string;
@@ -111,8 +109,7 @@ export function SessionListView(props: SessionListViewProps) {
         key={`${projectId}:${recent ? 'recent' : mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
         title={title}
         rowTitleAttr={title}
-        agentLabel={agent ? props.agentLabel(agent) : undefined}
-        agentClassName={agent ? props.sessionAgentClass(agent) : undefined}
+        agentType={agent || undefined}
         timeLabel={props.formatAge(session.updatedAt ?? '')}
         timeTitle={session.updatedAt ?? ''}
         selected={props.selectedChatEncodedKey === props.runtimeKey(projectId, session.sessionId)}
@@ -195,8 +192,7 @@ export function SessionListView(props: SessionListViewProps) {
                 failed={draft.status === 'failed'}
                 errorMessage={draft.errorMessage}
                 createdAtTitle={draft.createdAt}
-                agentLabel={draft.agentType ? props.agentLabel(draft.agentType) : undefined}
-                agentClassName={draft.agentType ? props.sessionAgentClass(draft.agentType) : undefined}
+                agentType={draft.agentType}
                 statusClassName={draft.status}
                 selected={props.selectedChatEncodedKey === props.runtimeKey(projectId, draft.draftId)}
                 onClick={() => props.onSelectDraft(projectId, draft.draftId)}

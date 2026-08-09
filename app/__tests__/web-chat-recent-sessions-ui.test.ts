@@ -55,7 +55,7 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, kind)");
     expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
     expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
-    expect(sessionRowTsx).toContain('wide-session-agent-tag');
+    expect(sessionRowTsx).toContain('<AgentTag agentType={agentType} />');
     expect(sessionlistCss).toContain('.recent-project-divider');
     expect(sessionlistCss).toContain('.recent-project-divider-create');
     const dividerBlock = sessionlistCss.match(/\.recent-project-divider \{[\s\S]*?\n\}/)?.[0] ?? '';

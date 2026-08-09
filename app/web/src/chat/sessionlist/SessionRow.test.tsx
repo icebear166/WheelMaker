@@ -18,8 +18,7 @@ async function renderRow(extra?: Partial<React.ComponentProps<typeof SessionRow>
     tree = create(
       <SessionRow
         title="Fix login bug"
-        agentLabel="cc · kimi"
-        agentClassName="wide-session-agent variant-1"
+        agentType="cc-kimi"
         timeLabel="3m"
         timeTitle="2026-07-24"
         selected={false}

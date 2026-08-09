@@ -1918,7 +1918,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
     expect(mainTsx).toContain("tagVariantClass('wide-project-hub', section.projectHubId || 'local')");
-    expect(mainTsx).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
+    expect(mainTsx).toContain('<AgentTag agentType={sessionAgent} />');
 
     expect(stylesCss).toContain('.chat-session-header.mobile {');
     expect(stylesCss).not.toContain('.mobile-chat-drawer-header');
@@ -2125,7 +2125,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="wide-project-action-title"');
     expect(mainTsx).toContain("actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
     expect(listViewTsx).toContain("const agent = (session.agentType || '').trim();");
-    expect(mainTsx).toContain("tagVariantClass('wide-session-agent', agentType)");
+    expect(mainTsx).toContain('<AgentTag agentType={sessionAgent} />');
     expect(mainTsx).toContain('const [projectSessionActionMenu, setProjectSessionActionMenu, projectSessionActionMenuExiting] = useMenuExitState<ProjectSessionActionMenuState>();');
     expect(mainTsx).toContain('popover?: WideProjectActionPopoverPlacement | null;');
     expect(mainTsx).toContain('const PROJECT_SESSION_LONG_PRESS_MS = 450;');
@@ -3040,12 +3040,13 @@ describe('workspace session actions', () => {
 });
 
 describe('provider-aware session labels', () => {
-  test('uses the shared display label helper for session badges while preserving request normalization', () => {
+  test('uses the shared agent tag for session badges while preserving request normalization', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain("from '../chat/projectAgents'");
-    expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(mainTsx).toContain("from '../chat/AgentTag'");
+    expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(2);
     expect(mainTsx).not.toContain('normalizeAgentTypeName(draft.agentType)');
     expect(mainTsx).not.toContain('normalizeAgentTypeName(sessionAgent)');
     expect(mainTsx).toContain('{agentDisplayLabel(sheetMenu.agentType)}');

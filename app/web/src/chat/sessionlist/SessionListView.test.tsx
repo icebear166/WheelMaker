@@ -29,8 +29,6 @@ function makeProps(overrides?: Partial<SessionListViewProps>): SessionListViewPr
     mobileSessionErrors: {},
     onRetryMobileSessions: jest.fn(),
     resolveTitle: s => (s as {title?: string}).title ?? (s as {sessionId: string}).sessionId,
-    agentLabel: () => 'cc · kimi',
-    sessionAgentClass: () => 'wide-session-agent variant-1',
     projectHubClass: () => 'wide-project-hub variant-0',
     hubAccentStyle: () => ({'--hub-accent': '#58a6ff'} as React.CSSProperties),
     formatAge: () => '3m',

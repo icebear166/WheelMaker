@@ -13,24 +13,31 @@ export type AgentChoiceNode = {agentType: string; label: string};
 
 export function agentDisplayLabel(agentType?: string | null): string {
   const normalized = normalizeAgentTypeName(agentType);
+  let label = normalized;
   switch (normalized.toLowerCase()) {
     case 'claude':
-      return 'claude';
+      label = 'claude';
+      break;
     case 'cx-deepseek':
-      return 'cx.deepseek';
+      label = 'cx.deepseek';
+      break;
     case 'cc-deepseek':
-      return 'cc · deepseek';
+      label = 'cc · deepseek';
+      break;
     case 'cc-glm':
-      return 'cc · glm';
+      label = 'cc · glm';
+      break;
     case 'cc-kimi':
-      return 'cc · kimi';
+      label = 'cc · kimi';
+      break;
     case 'cc-qwen':
-      return 'cc · qwen';
+      label = 'cc · qwen';
+      break;
     case 'cc-flicker':
-      return 'cc · flicker';
-    default:
-      return normalized;
+      label = 'cc · flicker';
+      break;
   }
+  return label.toLowerCase();
 }
 
 /**

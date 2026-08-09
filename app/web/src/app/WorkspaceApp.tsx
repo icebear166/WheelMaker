@@ -180,6 +180,7 @@ import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavig
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
+import {AgentTag} from '../chat/AgentTag';
 import {Icon} from '../common/Icon';
 import {RetryToast} from '../common/RetryToast';
 import {createSkillRetryNotice, type SkillRetryNotice} from './skillRetryNotice';
@@ -14923,7 +14924,6 @@ export function App() {
     mobile: boolean,
   ) => {
     const sessionAgent = (row.session.agentType || '').trim();
-    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     const title = resolveSessionDisplayTitle(row.session) || row.session.sessionId;
     const selected =
       selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, row.session.sessionId);
@@ -14946,11 +14946,7 @@ export function App() {
           <span className="wide-session-title session-search-title">
             {renderSessionSearchHighlightedTitle(title, row)}
           </span>
-          {displaySessionAgent ? (
-            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
-              {displaySessionAgent}
-            </span>
-          ) : null}
+          <AgentTag agentType={sessionAgent} />
           <span className="wide-session-time" data-tooltip={row.session.updatedAt || ''}>
             {formatCompactRelativeAge(row.session.updatedAt)}
           </span>
@@ -15142,7 +15138,6 @@ export function App() {
                 {section.rows.map(row => {
                   const session = row.session;
                   const sessionAgent = (session.agentType || '').trim();
-                  const displaySessionAgent = agentDisplayLabel(sessionAgent);
                   const selected =
                     selectedArchivedKey?.projectId === section.project.projectId &&
                     selectedArchivedKey.sessionId === session.sessionId;
@@ -15170,11 +15165,7 @@ export function App() {
                         <span className="wide-session-title">
                           {resolveSessionDisplayTitle(session) || session.sessionId}
                         </span>
-                        {displaySessionAgent ? (
-                          <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
-                            {displaySessionAgent}
-                          </span>
-                        ) : null}
+                        <AgentTag agentType={sessionAgent} />
                         <span className="wide-session-time" data-tooltip={session.archivedAt || session.updatedAt || ''}>
                           {formatCompactRelativeAge(session.archivedAt || session.updatedAt)}
                         </span>
@@ -16472,8 +16463,6 @@ export function App() {
     mobileSessionErrors: mobileProjectSessionErrors,
     onRetryMobileSessions: () => refreshMobileChatProjectSessions().catch(() => undefined),
     resolveTitle: (session: {sessionId: string; title?: string}) => resolveSessionDisplayTitle(session as RegistrySessionSummary),
-    agentLabel: agentDisplayLabel,
-    sessionAgentClass: (agentType: string) => tagVariantClass('wide-session-agent', agentType),
     projectHubClass: (hubId: string) => tagVariantClass('wide-project-hub', hubId),
     hubAccentStyle,
     formatAge: formatCompactRelativeAge,

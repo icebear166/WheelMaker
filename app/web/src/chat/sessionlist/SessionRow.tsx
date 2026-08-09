@@ -1,5 +1,6 @@
 import React, {type ReactNode} from 'react';
 import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
+import {AgentTag} from '../AgentTag';
 import {SessionIcon} from './SessionIcon';
 import {sessionMarkColorClass} from './sessionMark';
 
@@ -13,9 +14,7 @@ export type SessionRowGestureHandlers = {
 
 export type SessionRowProps = {
   title: string;
-  agentLabel?: string;
-  /** Full class string for the agent pill (base + variant), e.g. from tagVariantClass. */
-  agentClassName?: string;
+  agentType?: string;
   timeLabel?: string;
   timeTitle?: string;
   selected: boolean;
@@ -35,8 +34,7 @@ export type SessionRowProps = {
 /** Presentational session row; keeps the legacy class hooks so the pre-upgrade CSS still applies. */
 export function SessionRow({
   title,
-  agentLabel,
-  agentClassName,
+  agentType,
   timeLabel,
   timeTitle,
   selected,
@@ -70,9 +68,7 @@ export function SessionRow({
         ) : (
           <span className="wide-session-title">{title}</span>
         )}
-        {agentLabel ? (
-          <span className={`wide-session-agent-tag ${agentClassName ?? ''}`}>{agentLabel}</span>
-        ) : null}
+        <AgentTag agentType={agentType} />
         {!pinned ? (
           <span className="wide-session-time compact-age" data-tooltip={timeTitle ?? ''}>{timeLabel}</span>
         ) : null}
@@ -112,8 +108,7 @@ export type DraftSessionRowProps = {
   failed: boolean;
   errorMessage?: string;
   createdAtTitle?: string;
-  agentLabel?: string;
-  agentClassName?: string;
+  agentType?: string;
   selected: boolean;
   /** Extra status class appended to the row button (legacy `draft.status` hook). */
   statusClassName?: string;
@@ -127,8 +122,7 @@ export function DraftSessionRow({
   failed,
   errorMessage,
   createdAtTitle,
-  agentLabel,
-  agentClassName,
+  agentType,
   selected,
   statusClassName,
   onClick,
@@ -143,9 +137,7 @@ export function DraftSessionRow({
         onClick={onClick}
       >
         <span className="wide-session-title">{title}</span>
-        {agentLabel ? (
-          <span className={`wide-session-agent-tag ${agentClassName ?? ''}`}>{agentLabel}</span>
-        ) : null}
+        <AgentTag agentType={agentType} />
         <span className="wide-session-time" data-tooltip={failed ? errorMessage : createdAtTitle ?? ''}>
           {statusLabel}
         </span>

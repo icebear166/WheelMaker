@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useState} from 'react';
 
-import {agentTagVariantClass} from '../chat/agentTagVariant';
+import {AgentTag} from '../chat/AgentTag';
 import {Icon} from '../common/Icon';
 import type {RegistrySkillSnapshot} from '../registry/registryTypes';
 import {
@@ -46,17 +46,15 @@ function skillSyncPresentation(skill: RegistrySkillSnapshot): {label: string; ti
 
 function skillAgentCapsules(skill: RegistrySkillSnapshot): Array<{
   key: 'agents' | 'claude';
-  label: string;
   agentType: 'codex' | 'claude';
 }> {
   const locations = skill.locations ?? {};
   const capsules: Array<{
     key: 'agents' | 'claude';
-    label: string;
     agentType: 'codex' | 'claude';
   }> = [];
-  if (locations.agents) capsules.push({key: 'agents', label: 'Codex', agentType: 'codex'});
-  if (locations.claude) capsules.push({key: 'claude', label: 'Claude', agentType: 'claude'});
+  if (locations.agents) capsules.push({key: 'agents', agentType: 'codex'});
+  if (locations.claude) capsules.push({key: 'claude', agentType: 'claude'});
   return capsules;
 }
 
@@ -256,13 +254,11 @@ export function ChatHubSkillScopeDetail({
                     {skill.name}
                   </button>
                   {agentCapsules.map(capsule => (
-                    <span
+                    <AgentTag
                       key={capsule.key}
-                      className={`wide-session-agent-tag ${agentTagVariantClass(capsule.agentType)}`}
-                      data-tooltip={`${capsule.label} skill directory`}
-                    >
-                      {capsule.label}
-                    </span>
+                      agentType={capsule.agentType}
+                      tooltip={`${capsule.agentType} skill directory`}
+                    />
                   ))}
                   {syncPresentation ? (
                     <span className="chat-hub-skill-sync" data-tooltip={syncPresentation.title}>
