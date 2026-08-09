@@ -289,6 +289,17 @@
   }
 }
 
+@keyframes usage-overlay-out {
+  to { opacity: 0; }
+}
+
+@keyframes usage-dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+}
+
 .usage-mobile-overlay {
   position: fixed;
   inset: 0;
@@ -425,11 +436,25 @@
   animation: usage-dialog-in var(--motion-standard) var(--ease-out) both;
 }
 
+.usage-mobile-overlay.usage-overlay-exit,
+.usage-history-overlay.usage-overlay-exit {
+  animation: usage-overlay-out var(--motion-fast) var(--ease-out) forwards;
+}
+
+.usage-mobile-dialog.usage-dialog-exit,
+.usage-history-dialog.usage-dialog-exit {
+  animation: usage-dialog-out var(--motion-fast) var(--ease-out) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .usage-mobile-overlay,
   .usage-mobile-dialog,
   .usage-history-overlay,
-  .usage-history-dialog {
+  .usage-history-dialog,
+  .usage-mobile-overlay.usage-overlay-exit,
+  .usage-mobile-dialog.usage-dialog-exit,
+  .usage-history-overlay.usage-overlay-exit,
+  .usage-history-dialog.usage-dialog-exit {
     animation: none;
   }
 }

@@ -13,6 +13,7 @@ type Props = {
   onRefreshEfficiency: () => void;
   onClose: () => void;
   onOpenHistory?: UsageOpenHistory;
+  exiting?: boolean;
 };
 
 export function MobileUsageDialog({
@@ -22,6 +23,7 @@ export function MobileUsageDialog({
   onRefreshEfficiency,
   onClose,
   onOpenHistory,
+  exiting = false,
 }: Props) {
   const [activeTab, setActiveTab] = React.useState<'limits' | 'iq'>('limits');
   const showingLimits = activeTab === 'limits';
@@ -34,14 +36,14 @@ export function MobileUsageDialog({
 
   return (
     <div
-      className="usage-mobile-overlay"
+      className={`usage-mobile-overlay${exiting ? ' usage-overlay-exit' : ''}`}
       data-mobile-usage-overlay={true}
       role="dialog"
       aria-label="Monitor"
       onPointerDown={onClose}
     >
       <section
-        className="usage-mobile-dialog"
+        className={`usage-mobile-dialog${exiting ? ' usage-dialog-exit' : ''}`}
         data-mobile-usage-card={true}
         onPointerDown={event => event.stopPropagation()}
       >

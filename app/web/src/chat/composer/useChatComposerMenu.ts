@@ -12,9 +12,10 @@ export type ChatComposerMenuSetter = (
 
 /**
  * Single source of truth for composer popups: at most one menu is open.
- * Setting null (or {id:'none'}) plays the CSS exit animation first
- * (`.sl-menu-exit` via the returned `exiting` flag) and only clears state
- * after MENU_EXIT_MS; setting a menu cancels any in-flight exit.
+ * Setting null (or {id:'none'}) plays the CSS exit animation first for
+ * pointer-opened menus (`.sl-menu-exit` via the returned `exiting` flag).
+ * Keyboard-driven slash and file-mention menus close immediately so typing
+ * and navigation never wait on motion.
  */
 export function useChatComposerMenu() {
   const [menu, setMenuRaw] = useState<ChatComposerMenuState>(CHAT_COMPOSER_MENU_NONE);
@@ -45,6 +46,10 @@ export function useChatComposerMenu() {
         return;
       }
       if (menuRef.current.id === 'none') {
+        return;
+      }
+      if (menuRef.current.id === 'slash' || menuRef.current.id === 'file-mention') {
+        setMenuRaw(CHAT_COMPOSER_MENU_NONE);
         return;
       }
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {

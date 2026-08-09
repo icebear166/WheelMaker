@@ -78,8 +78,8 @@ export function useMenuExitState<T extends object>() {
  * flips to false after MENU_EXIT_MS; setting true cancels any in-flight exit.
  * A functional toggle during the exit window reopens instead of double-closing.
  */
-export function useMenuExitFlag() {
-  const [open, setOpenRaw] = useState(false);
+export function useMenuExitFlag(initialOpen = false) {
+  const [open, setOpenRaw] = useState(initialOpen);
   const openRef = useRef(open);
   openRef.current = open;
   const [exiting, setExiting] = useState(false);

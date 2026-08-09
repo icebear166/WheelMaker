@@ -19,6 +19,7 @@ export type MobileSettingsScreenProps = {
   backAriaLabel: string;
   children: ReactNode;
   onBack: () => void;
+  className?: string;
 };
 
 export type SettingsScreenProps = MobileSettingsScreenProps & {

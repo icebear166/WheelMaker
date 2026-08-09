@@ -29,6 +29,7 @@ interface DeepSeekUsageDialogProps {
   onMonthChange: (year: number, month: number) => void;
   onSaveToken: (token: string) => Promise<void>;
   onClearToken: () => Promise<void>;
+  exiting?: boolean;
 }
 
 export function DeepSeekUsageDialog({
@@ -39,6 +40,7 @@ export function DeepSeekUsageDialog({
   onMonthChange,
   onSaveToken,
   onClearToken,
+  exiting = false,
 }: DeepSeekUsageDialogProps) {
   const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const closeRef = React.useRef(onClose);
@@ -69,14 +71,14 @@ export function DeepSeekUsageDialog({
 
   return (
     <div
-      className="usage-history-overlay"
+      className={`usage-history-overlay${exiting ? ' usage-overlay-exit' : ''}`}
       data-deepseek-usage-overlay={true}
       onPointerDown={event => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <section
-        className="usage-history-dialog deepseek-usage-dialog"
+        className={`usage-history-dialog deepseek-usage-dialog${exiting ? ' usage-dialog-exit' : ''}`}
         role="dialog"
         aria-modal={true}
         aria-labelledby="deepseek-usage-dialog-title"

@@ -2960,6 +2960,11 @@ export function App() {
   const hubColors = workspaceUiState.shared.hubColors;
   const drawerOpen = workspaceUiState.mobile.drawerOpen;
   const sidebarSettingsOpen = workspaceUiState.shared.settingsOpen;
+  const [settingsScreenMounted, setSettingsScreenMounted, settingsScreenExiting] =
+    useMenuExitFlag(sidebarSettingsOpen);
+  useEffect(() => {
+    setSettingsScreenMounted(sidebarSettingsOpen);
+  }, [setSettingsScreenMounted, sidebarSettingsOpen]);
   useEffect(() => {
     if (sidebarSettingsOpen) {
       setSessionPanelShortcutUnpinned(false);
@@ -3183,6 +3188,10 @@ export function App() {
   // auto-open the pane on launch; in-session opens reset this to expand again.
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(true);
   const [mobileUsageOpen, setMobileUsageOpen] = useState(false);
+  const [mobileUsageMounted, setMobileUsageMounted, mobileUsageExiting] = useMenuExitFlag(mobileUsageOpen);
+  useEffect(() => {
+    setMobileUsageMounted(mobileUsageOpen);
+  }, [mobileUsageOpen, setMobileUsageMounted]);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalFullscreen, setTerminalFullscreen] = useState(false);
   const [terminalSync, setTerminalSync] = useState<TerminalSyncState>(() => createTerminalSyncState());
@@ -3468,9 +3477,11 @@ export function App() {
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
   const visibleUsageSnapshot = usageSnapshot;
   const usageHistoryRequestSeqRef = useRef(0);
-  const [usageHistoryDialogView, setUsageHistoryDialogView] = useState<UsageHistoryDialogView | null>(null);
+  const [usageHistoryDialogView, setUsageHistoryDialogView, usageHistoryDialogExiting] =
+    useMenuExitState<UsageHistoryDialogView>();
   const deepSeekUsageRequestSeqRef = useRef(0);
-  const [deepSeekUsageDialogView, setDeepSeekUsageDialogView] = useState<DeepSeekUsageDialogView | null>(null);
+  const [deepSeekUsageDialogView, setDeepSeekUsageDialogView, deepSeekUsageDialogExiting] =
+    useMenuExitState<DeepSeekUsageDialogView>();
   const modelEfficiencyStore = useMemo(
     () => new ModelEfficiencyStore(() => service.getCodexRadarEfficiency()),
     [],
@@ -19999,10 +20010,13 @@ export function App() {
   const mobileSettingsActions = settingsDetailView
     ? renderSettingsDetailActions(settingsDetailView)
     : <span className="mobile-settings-action-spacer" aria-hidden="true" />;
+  const settingsScreenVisible = sidebarSettingsOpen || settingsScreenMounted;
+  const settingsMotionClass = settingsDetailView ? ' settings-detail-screen' : '';
+  const settingsExitClass = settingsScreenExiting ? ' settings-screen-exiting' : '';
 
-  const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (
+  const desktopSettingsScreen = isWide && settingsScreenVisible ? (
     <SettingsScreen
-      className="desktop-settings-screen"
+      className={`desktop-settings-screen${settingsMotionClass}${settingsExitClass}`}
       title={mobileSettingsTitle}
       actions={mobileSettingsActions}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Close settings'}
@@ -20013,8 +20027,9 @@ export function App() {
     </SettingsScreen>
   ) : null;
 
-  const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (
+  const mobileSettingsScreen = !isWide && settingsScreenVisible ? (
     <MobileSettingsScreen
+      className={`${settingsMotionClass}${settingsExitClass}`.trim() || undefined}
       title={mobileSettingsTitle}
       actions={mobileSettingsActions}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Back to drawer'}
@@ -21096,6 +21111,7 @@ export function App() {
       triggerElement={usageHistoryDialogView.target.triggerElement}
       onClose={closeUsageHistory}
       onRetry={() => { void loadUsageHistoryDialog(usageHistoryDialogView.target); }}
+      exiting={usageHistoryDialogExiting}
     />
   ) : null;
   const deepSeekUsageOverlay = deepSeekUsageDialogView ? (
@@ -21107,9 +21123,10 @@ export function App() {
       onMonthChange={changeDeepSeekMonth}
       onSaveToken={saveDeepSeekToken}
       onClearToken={clearDeepSeekToken}
+      exiting={deepSeekUsageDialogExiting}
     />
   ) : null;
-  const mobileUsageOverlay = !isWide && mobileUsageOpen ? (
+  const mobileUsageOverlay = !isWide && (mobileUsageOpen || mobileUsageMounted) ? (
     <MobileUsageDialog
       snapshot={visibleUsageSnapshot}
       efficiencySnapshot={modelEfficiencySnapshot}
@@ -21117,6 +21134,7 @@ export function App() {
       onRefreshEfficiency={() => void modelEfficiencyStore.refresh()}
       onClose={() => setMobileUsageOpen(false)}
       onOpenHistory={handleUsageRowActivate}
+      exiting={mobileUsageExiting}
     />
   ) : null;
   const terminalMobileOverlay = !isWide ? (

@@ -28,6 +28,7 @@ interface UsageHistoryDialogProps {
   triggerElement?: HTMLElement | null;
   onClose: () => void;
   onRetry: () => void;
+  exiting?: boolean;
 }
 
 export function UsageHistoryDialog({
@@ -35,6 +36,7 @@ export function UsageHistoryDialog({
   triggerElement,
   onClose,
   onRetry,
+  exiting = false,
 }: UsageHistoryDialogProps) {
   const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const closeRef = React.useRef(onClose);
@@ -63,14 +65,14 @@ export function UsageHistoryDialog({
 
   return (
     <div
-      className="usage-history-overlay"
+      className={`usage-history-overlay${exiting ? ' usage-overlay-exit' : ''}`}
       data-usage-history-overlay={true}
       onPointerDown={event => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <section
-        className="usage-history-dialog"
+        className={`usage-history-dialog${exiting ? ' usage-dialog-exit' : ''}`}
         role="dialog"
         aria-modal={true}
         aria-labelledby="usage-history-dialog-title"

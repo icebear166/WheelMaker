@@ -15,6 +15,49 @@ function read(relativePath: string): string {
 }
 
 describe('P0 motion contracts', () => {
+  it('keeps keyboard composer menus immediate and gives the send action press feedback', () => {
+    const chatCss = read('chat.css');
+
+    expect(chatCss).toMatch(
+      /\.chat-slash-menu,\s*\.chat-file-mention-menu\s*\{\s*transform-origin: bottom center;\s*\}/,
+    );
+    expect(chatCss).not.toMatch(
+      /\.chat-slash-menu,\s*\.chat-file-mention-menu,\s*\.chat-core-config-menu/,
+    );
+    expect(chatCss).toContain(
+      'transition:\n    transform var(--motion-fast) var(--ease-standard),\n    background var(--motion-fast) var(--ease-standard),\n    border-color var(--motion-fast) var(--ease-standard),\n    color var(--motion-fast) var(--ease-standard);',
+    );
+    expect(chatCss).toContain('.chat-send-button:active:not(:disabled) {');
+  });
+
+  it('uses a fast ease-out for attachment removal', () => {
+    const chatCss = read('chat.css');
+
+    expect(chatCss).toContain('opacity var(--motion-fast) var(--ease-out)');
+    expect(chatCss).not.toContain('opacity var(--motion-fast) ease-in');
+    expect(chatCss).not.toContain('transform var(--motion-fast) ease-in');
+  });
+
+  it('animates Settings once at the screen level and gives Usage surfaces paired exits', () => {
+    const settingsCss = read('settings.css');
+    const usageCss = read('usage.css');
+    const workspaceApp = read('../app/WorkspaceApp.tsx');
+
+    expect(settingsCss).not.toMatch(
+      /\.mobile-settings-screen,\s*\.settings-detail-page\s*\{\s*animation:/,
+    );
+    expect(settingsCss).toContain('.mobile-settings-screen.settings-detail-screen');
+    expect(settingsCss).toContain('.settings-detail-page {\n  animation: none;');
+    expect(workspaceApp).toContain('settings-screen-exiting');
+    expect(usageCss).toContain('@keyframes usage-overlay-out');
+    expect(usageCss).toContain('@keyframes usage-dialog-out');
+    expect(usageCss).toContain('.usage-overlay-exit');
+    expect(usageCss).toContain('.usage-dialog-exit');
+    expect(workspaceApp).toContain('usageHistoryDialogExiting');
+    expect(workspaceApp).toContain('deepSeekUsageDialogExiting');
+    expect(workspaceApp).toContain('mobileUsageExiting');
+  });
+
   it('uses one tokenized exit duration for shared menu surfaces', () => {
     const sessionListCss = read('sessionlist.css');
     const chatCss = read('chat.css');

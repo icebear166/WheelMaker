@@ -65,15 +65,37 @@ describe('useChatComposerMenu', () => {
     expect(handle.exiting).toBe(false); // switch is immediate, no exit for the previous menu
   });
 
-  it('delays close until the exit animation finishes', async () => {
+  it('closes keyboard-driven menus immediately', async () => {
     const handle = await renderProbe();
+
     await act(async () => {
       handle.setMenu({id: 'slash'});
     });
     await act(async () => {
       handle.setMenu(null);
     });
-    expect(handle.menu).toEqual({id: 'slash'}); // still mounted during exit
+    expect(handle.menu).toEqual({id: 'none'});
+    expect(handle.exiting).toBe(false);
+
+    await act(async () => {
+      handle.setMenu({id: 'file-mention'});
+    });
+    await act(async () => {
+      handle.setMenu(null);
+    });
+    expect(handle.menu).toEqual({id: 'none'});
+    expect(handle.exiting).toBe(false);
+  });
+
+  it('delays close until the exit animation finishes', async () => {
+    const handle = await renderProbe();
+    await act(async () => {
+      handle.setMenu({id: 'context-usage'});
+    });
+    await act(async () => {
+      handle.setMenu(null);
+    });
+    expect(handle.menu).toEqual({id: 'context-usage'}); // still mounted during exit
     expect(handle.exiting).toBe(true);
 
     await act(async () => {

@@ -21,19 +21,19 @@ type ProbeHandle = {
   setOpen: (next: boolean | ((current: boolean) => boolean)) => void;
 };
 
-function Probe({handle}: {handle: ProbeHandle}) {
-  const [open, setOpen, exiting] = useMenuExitFlag();
+function Probe({handle, initialOpen = false}: {handle: ProbeHandle; initialOpen?: boolean}) {
+  const [open, setOpen, exiting] = useMenuExitFlag(initialOpen);
   handle.open = open;
   handle.exiting = exiting;
   handle.setOpen = setOpen;
   return null;
 }
 
-async function renderProbe(): Promise<ProbeHandle> {
+async function renderProbe(initialOpen = false): Promise<ProbeHandle> {
   const handle: ProbeHandle = {open: false, exiting: false, setOpen: () => undefined};
   let tree: ReactTestRenderer | undefined;
   await act(async () => {
-    tree = create(<Probe handle={handle} />);
+    tree = create(<Probe handle={handle} initialOpen={initialOpen} />);
   });
   expect(tree).toBeDefined();
   return handle;
@@ -69,6 +69,13 @@ describe('useMenuExitFlag', () => {
       jest.advanceTimersByTime(MENU_EXIT_MS);
     });
     expect(handle.open).toBe(false);
+    expect(handle.exiting).toBe(false);
+  });
+
+  it('can start open for a controlled surface already visible at mount', async () => {
+    const handle = await renderProbe(true);
+
+    expect(handle.open).toBe(true);
     expect(handle.exiting).toBe(false);
   });
 

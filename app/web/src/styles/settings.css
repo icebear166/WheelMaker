@@ -1426,9 +1426,20 @@ textarea,
   white-space: pre;
 }
 
-.mobile-settings-screen,
-.settings-detail-page {
+.mobile-settings-screen {
   animation: settingsPageEnter var(--motion-standard) var(--ease-out) both;
+}
+
+.settings-detail-page {
+  animation: none;
+}
+
+.mobile-settings-screen.settings-detail-screen {
+  animation: settingsDetailEnter var(--motion-standard) var(--ease-out) both;
+}
+
+.mobile-settings-screen.settings-screen-exiting {
+  animation: settingsPageExit var(--motion-fast) var(--ease-out) forwards;
 }
 
 @keyframes settingsPageEnter {
@@ -1440,9 +1451,29 @@ textarea,
   }
 }
 
+@keyframes settingsDetailEnter {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes settingsPageExit {
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mobile-settings-screen,
-  .settings-detail-page {
+  .settings-detail-page,
+  .mobile-settings-screen.settings-detail-screen,
+  .mobile-settings-screen.settings-screen-exiting {
     animation: none;
   }
 }

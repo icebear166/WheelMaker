@@ -5156,7 +5156,10 @@ li.chat-reply-target::marker {
 }
 
 .chat-slash-menu,
-.chat-file-mention-menu,
+.chat-file-mention-menu {
+  transform-origin: bottom center;
+}
+
 .chat-core-config-menu,
 .chat-config-value-menu,
 .chat-attachment-action-tray {
@@ -5165,8 +5168,6 @@ li.chat-reply-target::marker {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-slash-menu,
-  .chat-file-mention-menu,
   .chat-core-config-menu,
   .chat-config-value-menu,
   .chat-attachment-action-tray {
@@ -6263,8 +6264,8 @@ li.chat-reply-target::marker {
   opacity: 0;
   transform: translateY(2px);
   transition:
-    opacity var(--motion-fast) ease-in,
-    transform var(--motion-fast) ease-in;
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -7652,6 +7653,15 @@ li.chat-reply-target::marker {
   background: color-mix(in srgb, var(--accent-primary) 17%, var(--surface-panel));
   color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
   box-shadow: none;
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.chat-send-button:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .chat-send-button:hover:not(:disabled) {
