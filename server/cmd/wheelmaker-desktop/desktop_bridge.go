@@ -36,7 +36,7 @@ const (
 
 func desktopRuntimeInitScript() string {
 	bootstrapDocumentURL := strconv.Quote(desktopBootstrapDocumentURL())
-	return `(() => {
+	return desktopLaunchOverlayScript() + `(() => {
   if (window !== window.top) return;
   const invoke = name => (...args) => {
     const fn = window[name];

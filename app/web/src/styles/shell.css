@@ -1577,9 +1577,11 @@
   user-select: none;
 }
 
-/* Brand launch screen. Always the same deep navy as the Android native
-   splash (APP_BACKGROUND_COLOR rgb(11,18,32)) so the native -> web cross-fade
-   is seamless; the workspace theme only appears once connected. */
+/* Brand launch layer. Always the same deep navy as the Android native splash
+   (APP_BACKGROUND_COLOR rgb(11,18,32)) so the native/exe overlay cross-fade is
+   seamless; the workspace theme only appears once connected. The layer stays
+   mounted across every pre-session state (status, token form, manual connect
+   retry) so the sweep never stops mid-flow. */
 .app-launch-screen {
   flex: 1 1 auto;
   min-height: 0;
@@ -1589,11 +1591,18 @@
   background: #0b1220;
 }
 
-.app-launch-body {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.app-launch-screen.exiting {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  animation: wm-launch-exit 260ms ease-in forwards;
+}
+
+@keyframes wm-launch-exit {
+  to {
+    opacity: 0;
+  }
 }
 
 .app-launch-mark {
@@ -1620,78 +1629,94 @@
   pointer-events: none;
 }
 
-.app-launch-status {
+/* Status text and the token form hang below the centered mark; the mark never
+   moves when content appears or disappears. */
+.app-launch-content {
   position: absolute;
-  top: calc(100% + 30px);
+  top: calc(50% + 58px);
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.app-launch-status {
   white-space: nowrap;
   color: rgba(235, 240, 250, 0.66);
   font-size: 13px;
   letter-spacing: 0.01em;
 }
 
-/* Intro: the code-glyph pieces fly in from their own directions and snap
-   together with a slight overshoot; SVG user units (viewBox 927 wide shown
-   at 96px, so ~170 units ≈ 18px on screen). */
-.app-launch-intro .app-launch-piece-left {
-  animation: wm-launch-in-left 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 0ms backwards;
+.app-launch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(300px, calc(100vw - 64px));
 }
 
-.app-launch-intro .app-launch-piece-right {
-  animation: wm-launch-in-right 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 90ms backwards;
+.app-launch-input {
+  min-height: 36px;
+  border: 1px solid rgba(235, 240, 250, 0.22);
+  border-radius: var(--radius-control, 8px);
+  background: rgba(235, 240, 250, 0.06);
+  color: #f3f6fb;
+  padding: 8px 12px;
+  font: inherit;
+  outline: none;
+  transition: border-color var(--motion-fast) var(--ease-standard);
 }
 
-.app-launch-intro .app-launch-piece-slash {
-  animation: wm-launch-in-slash 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 170ms backwards;
+.app-launch-input::placeholder {
+  color: rgba(235, 240, 250, 0.4);
 }
 
-.app-launch-intro .app-launch-glow {
-  animation: wm-launch-glow-settle 900ms ease-out 550ms backwards;
+.app-launch-input:hover:not(:disabled) {
+  border-color: rgba(235, 240, 250, 0.38);
 }
 
-@keyframes wm-launch-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(-170px);
-  }
+.app-launch-input:focus {
+  border-color: #2ea4fa;
 }
 
-@keyframes wm-launch-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(170px);
-  }
+.app-launch-input:disabled {
+  opacity: 0.55;
 }
 
-@keyframes wm-launch-in-slash {
-  from {
-    opacity: 0;
-    transform: translate(-95px, 88px);
-  }
+.app-launch-button {
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--radius-control, 8px);
+  background: var(--accent-primary);
+  color: #fff;
+  padding: 8px 16px;
+  font: inherit;
+  cursor: pointer;
+  transition: filter var(--motion-fast) var(--ease-standard);
 }
 
-@keyframes wm-launch-glow-settle {
-  from {
-    opacity: 0;
-  }
-  45% {
-    opacity: 1;
-  }
-  to {
-    opacity: 0.6;
-  }
+.app-launch-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.app-launch-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.app-launch-error {
+  max-width: 320px;
+  color: #ff9d94;
+  font-size: 12px;
+  text-align: center;
 }
 
 /* Idle loop: a soft highlight band parallel to the white slash sweeps the
    assembled mark left to right, then rests before the next pass. */
 .app-launch-shine {
   transform: translateX(-940px);
-  animation: wm-launch-shine-sweep 2.1s cubic-bezier(0.4, 0, 0.2, 1) 300ms infinite;
-}
-
-.app-launch-intro .app-launch-shine {
-  animation-delay: 780ms;
+  animation: wm-launch-shine-sweep 2.1s cubic-bezier(0.4, 0, 0.2, 1) 250ms infinite;
 }
 
 @keyframes wm-launch-shine-sweep {
@@ -1707,16 +1732,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-launch-intro .app-launch-piece-left,
-  .app-launch-intro .app-launch-piece-right,
-  .app-launch-intro .app-launch-piece-slash,
-  .app-launch-intro .app-launch-glow,
   .app-launch-shine {
     animation: none;
+    transform: translateX(-940px);
   }
 
-  .app-launch-shine {
-    transform: translateX(-940px);
+  .app-launch-screen.exiting {
+    animation-duration: 0ms;
   }
 }
 

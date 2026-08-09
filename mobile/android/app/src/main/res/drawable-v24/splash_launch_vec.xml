@@ -1,0 +1,72 @@
+<!-- Launch mark vector for the animated splash (API 24+ gradients).
+     Geometry mirrors app/web/public/icons/icon-mark.svg; the root group
+     rebases the SVG viewBox origin (160,292) to (0,0). The shine band is a
+     slash-parallel quad clipped to the mark and swept by translateX. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp"
+    android:height="62dp"
+    android:viewportWidth="927"
+    android:viewportHeight="600">
+    <group android:translateX="-160" android:translateY="-292">
+        <group android:name="pieceLeft">
+            <path android:pathData="M427 822 L362 822 L197.3 633.2 Q170 593 196.9 550.3 L383 334 Q400 316 429 316 L554 316 Q570 316 564 344 L355 593 L461 714 L370 822 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient android:type="linear"
+                        android:startX="557" android:startY="319" android:endX="197" android:endY="714">
+                        <item android:offset="0" android:color="#FF1380F1"/>
+                        <item android:offset="0.15" android:color="#FF1C94F8"/>
+                        <item android:offset="0.33" android:color="#FF1EB0FA"/>
+                        <item android:offset="0.5" android:color="#FF23CFFB"/>
+                        <item android:offset="0.65" android:color="#FF2DEAFC"/>
+                        <item android:offset="0.85" android:color="#FF32F0FD"/>
+                        <item android:offset="1" android:color="#FF36F2FD"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+        <group android:name="pieceRight">
+            <path android:pathData="M820 362 L885 362 L1049.7 550.8 Q1077 591 1050.1 633.7 L864 850 Q847 868 818 868 L693 868 Q677 868 683 840 L892 591 L786 470 L877 362 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient android:type="linear"
+                        android:startX="690" android:startY="865" android:endX="1000" android:endY="470">
+                        <item android:offset="0" android:color="#FFFB6402"/>
+                        <item android:offset="0.15" android:color="#FFFC7802"/>
+                        <item android:offset="0.33" android:color="#FFFD9C02"/>
+                        <item android:offset="0.5" android:color="#FFFDA801"/>
+                        <item android:offset="0.65" android:color="#FFFDC001"/>
+                        <item android:offset="0.85" android:color="#FFFDC801"/>
+                        <item android:offset="1" android:color="#FFFED608"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+        <group android:name="pieceSlash">
+            <path android:pathData="M809 316 L923 316 L688 580 L436 868 L326 868 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient android:type="linear"
+                        android:startX="850" android:startY="320" android:endX="380" android:endY="860">
+                        <item android:offset="0" android:color="#FFF3FAFE"/>
+                        <item android:offset="0.38" android:color="#FFDBF0FC"/>
+                        <item android:offset="1" android:color="#FFF0F9FE"/>
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+        <group android:name="shineClip">
+            <clip-path android:pathData="M427 822 L362 822 L197.3 633.2 Q170 593 196.9 550.3 L383 334 Q400 316 429 316 L554 316 Q570 316 564 344 L355 593 L461 714 L370 822 Z M820 362 L885 362 L1049.7 550.8 Q1077 591 1050.1 633.7 L864 850 Q847 868 818 868 L693 868 Q677 868 683 840 L892 591 L786 470 L877 362 Z M809 316 L923 316 L688 580 L436 868 L326 868 Z"/>
+            <group android:name="shineBand">
+                <path android:pathData="M952.2 137.9 L1101.6 299.5 L293.8 1046.1 L144.4 884.5 Z">
+                    <aapt:attr name="android:fillColor">
+                        <gradient android:type="linear"
+                            android:startX="548.3" android:startY="511.2" android:endX="697.7" android:endY="672.8">
+                            <item android:offset="0" android:color="#00FFFFFF"/>
+                            <item android:offset="0.5" android:color="#D9FFFFFF"/>
+                            <item android:offset="1" android:color="#00FFFFFF"/>
+                        </gradient>
+                    </aapt:attr>
+                </path>
+            </group>
+        </group>
+    </group>
+</vector>

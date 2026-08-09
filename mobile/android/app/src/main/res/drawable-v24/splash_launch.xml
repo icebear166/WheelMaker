@@ -1,0 +1,15 @@
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash_launch_vec">
+    <target
+        android:name="pieceLeft"
+        android:animation="@animator/splash_piece_left"/>
+    <target
+        android:name="pieceRight"
+        android:animation="@animator/splash_piece_right"/>
+    <target
+        android:name="pieceSlash"
+        android:animation="@animator/splash_piece_slash"/>
+    <target
+        android:name="shineBand"
+        android:animation="@animator/splash_shine"/>
+</animated-vector>

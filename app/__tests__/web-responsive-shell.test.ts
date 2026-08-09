@@ -126,9 +126,8 @@ describe('web responsive shell split', () => {
     expect(disconnectedReturn).toContain('<DesktopWindowControls />');
     expect(disconnectedReturn).not.toContain('<DesktopTitleBar title="WheelMaker" />');
     expect(disconnectedReturn).toMatch(
-      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<div className="connect" aria-busy=\{autoConnecting\}>/,
+      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<AppLaunchScreen status=\{launchView\.status\}>/,
     );
-    expect(disconnectedReturn).toContain('aria-busy={autoConnecting}');
     expect(disconnectedReturn).toContain('disabled={autoConnecting}');
     expect(disconnectedReturn).toContain('role="alert"');
   });

@@ -1,31 +1,35 @@
 import React from 'react';
 import type {RegistryAuthState} from '../registry/RegistryAuthController';
 
-export type AppLaunchSurface = 'launch' | 'connect-retry' | 'login';
+// The launch layer never swaps pages before the workspace opens: the sweeping
+// logo stays mounted while the token form or the manual Connect fallback open
+// underneath it, so the animation reads as one continuous sequence.
+export type AppLaunchContent = 'status' | 'login' | 'connect-retry';
 
-// While the registry session is being checked (or an existing session is
-// auto-connecting) the user should watch the brand launch screen, never the
-// login form; the form is reserved for the genuinely unauthenticated case.
-// A failed auto-connect falls back to a manual Connect button.
-export function resolveAppLaunchSurface(
+export type AppLaunchView = {
+  content: AppLaunchContent;
+  status: string;
+  formDisabled: boolean;
+};
+
+export function resolveAppLaunchView(
   authState: RegistryAuthState,
   hasConnectError: boolean,
-): AppLaunchSurface {
+): AppLaunchView {
   switch (authState) {
     case 'checking':
+      return {content: 'status', status: 'Checking login…', formDisabled: false};
     case 'logging-in':
-      return 'launch';
+      // The form stays in place (disabled) with the status below it instead of
+      // swapping back to a bare status screen.
+      return {content: 'login', status: 'Connecting…', formDisabled: true};
     case 'authenticated':
-      return hasConnectError ? 'connect-retry' : 'launch';
+      return hasConnectError
+        ? {content: 'connect-retry', status: '', formDisabled: false}
+        : {content: 'status', status: 'Connecting…', formDisabled: false};
     default:
-      return 'login';
+      return {content: 'login', status: '', formDisabled: false};
   }
-}
-
-export function appLaunchStatus(authState: RegistryAuthState): string {
-  if (authState === 'checking') return 'Checking login…';
-  if (authState === 'logging-in') return 'Logging in…';
-  return 'Connecting…';
 }
 
 // Logo geometry mirrored from public/icons/icon-mark.svg (viewBox 160 292 927
@@ -80,15 +84,9 @@ function AppLaunchLogo() {
           <path d={LOGO_PATH_SLASH} fill="#ffffff" />
         </mask>
       </defs>
-      <g className="app-launch-piece app-launch-piece-left">
-        <path d={LOGO_PATH_BLUE} fill="url(#wm-launch-gBlue)" />
-      </g>
-      <g className="app-launch-piece app-launch-piece-right">
-        <path d={LOGO_PATH_ORANGE} fill="url(#wm-launch-gOrange)" />
-      </g>
-      <g className="app-launch-piece app-launch-piece-slash">
-        <path d={LOGO_PATH_SLASH} fill="url(#wm-launch-gWhite)" />
-      </g>
+      <path d={LOGO_PATH_BLUE} fill="url(#wm-launch-gBlue)" />
+      <path d={LOGO_PATH_ORANGE} fill="url(#wm-launch-gOrange)" />
+      <path d={LOGO_PATH_SLASH} fill="url(#wm-launch-gWhite)" />
       <g mask="url(#wm-launch-mask)">
         <g className="app-launch-shine">
           <rect
@@ -107,26 +105,27 @@ function AppLaunchLogo() {
 
 export type AppLaunchScreenProps = {
   status: string;
-  /** Whether the logo pieces fly in and assemble before the shine loop.
-     The native Android splash cross-fades into the screen, so the overlap
-     reads as the static logo gathering itself together. */
-  showIntro: boolean;
+  /** The token form or the manual Connect fallback, rendered below the logo. */
+  children?: React.ReactNode;
+  /** Fades the whole layer out over the already-visible workspace. */
+  exiting?: boolean;
 };
 
-export function AppLaunchScreen({status, showIntro}: AppLaunchScreenProps) {
+export function AppLaunchScreen({status, children, exiting = false}: AppLaunchScreenProps) {
   return (
     <div
-      className={`app-launch-screen${showIntro ? ' app-launch-intro' : ''}`}
+      className={`app-launch-screen${exiting ? ' exiting' : ''}`}
       role="status"
       aria-live="polite"
-      aria-busy="true"
+      aria-busy={!exiting}
     >
-      <div className="app-launch-body">
-        <div className="app-launch-mark">
-          <div className="app-launch-glow" aria-hidden="true" />
-          <AppLaunchLogo />
-        </div>
-        <div className="app-launch-status">{status}</div>
+      <div className="app-launch-mark">
+        <div className="app-launch-glow" aria-hidden="true" />
+        <AppLaunchLogo />
+      </div>
+      <div className="app-launch-content">
+        {children}
+        {status ? <div className="app-launch-status">{status}</div> : null}
       </div>
     </div>
   );

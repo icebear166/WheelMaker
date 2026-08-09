@@ -216,6 +216,19 @@ func TestDesktopBootstrapInitScriptRecognizesEmbeddedDocument(t *testing.T) {
 	}
 }
 
+func TestDesktopInitScriptInjectsLaunchOverlayOnAppPages(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	if !strings.Contains(script, "wm-launch-overlay") {
+		t.Fatal("desktop init script does not inject the launch overlay")
+	}
+	if !strings.Contains(script, "location.protocol !== 'https:'") {
+		t.Fatal("launch overlay must stay inert outside https app pages")
+	}
+	if !strings.Contains(script, "#root") {
+		t.Fatal("launch overlay must dismiss when the app mounts content")
+	}
+}
+
 func TestDesktopSavedServerLaunchesWithoutPreflightProbe(t *testing.T) {
 	launcher := &recordingLauncher{}
 	prober := &recordingDesktopProber{err: errors.New("probe should not run")}

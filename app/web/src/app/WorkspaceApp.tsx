@@ -94,7 +94,7 @@ import {
   type ConfirmTarget,
   type RenameSessionTarget,
 } from '../shell/AppDialogs';
-import {AppLaunchScreen, appLaunchStatus, resolveAppLaunchSurface} from '../shell/AppLaunchScreen';
+import {AppLaunchScreen, resolveAppLaunchView} from '../shell/AppLaunchScreen';
 import { installDesktopZoomGuard } from '../shell/desktopZoomGuard';
 import { installPageRefreshGuard } from '../shell/pageRefreshGuard';
 import { ResponsiveShell } from '../shell/ResponsiveShell';
@@ -3493,6 +3493,21 @@ export function App() {
   const [loadingProject, setLoadingProject] = useState(false);
   const [refreshingProject, setRefreshingProject] = useState(false);
   const [hasPendingProjectUpdates, setHasPendingProjectUpdates] = useState(false);
+
+  // The launch layer covers every pre-session state; when the workspace
+  // connects it fades out over the already-rendered workspace instead of
+  // unmounting abruptly. Silent reconnects never bring the layer back.
+  const launchLayerVisible = !connected && !(reconnecting && (projects.length > 0 || !!projectId));
+  const [launchLayerPhase, setLaunchLayerPhase] = useState<'visible' | 'exiting' | 'hidden'>('visible');
+  useEffect(() => {
+    if (launchLayerVisible) {
+      setLaunchLayerPhase('visible');
+      return;
+    }
+    setLaunchLayerPhase(prev => (prev === 'visible' ? 'exiting' : prev));
+    const timer = window.setTimeout(() => setLaunchLayerPhase('hidden'), 280);
+    return () => window.clearTimeout(timer);
+  }, [launchLayerVisible]);
 
   const [chatFilePreviewDirEntriesByProject, setChatFilePreviewDirEntriesByProject] =
     useState<Record<string, DirEntries>>({});
@@ -19663,7 +19678,7 @@ export function App() {
     reconnecting && hasCachedWorkspace;
 
   if (!connected && !keepWorkspaceVisible) {
-    const launchSurface = resolveAppLaunchSurface(registryAuth.state, !!error);
+    const launchView = resolveAppLaunchView(registryAuth.state, !!error);
     return (
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
@@ -19673,42 +19688,61 @@ export function App() {
             <DesktopWindowControls />
           </div>
         ) : null}
-        {launchSurface === 'launch' ? (
-          <AppLaunchScreen status={appLaunchStatus(registryAuth.state)} showIntro />
-        ) : (
-          <div className="connect" aria-busy={autoConnecting}>
-            <h3>WheelMaker Registry</h3>
-            {launchSurface === 'connect-retry' ? (
-              <button className="button" disabled={autoConnecting} onClick={() => connect().catch(() => undefined)}>
+        <AppLaunchScreen status={launchView.status}>
+          {launchView.content === 'login' ? (
+            <form
+              className="app-launch-form"
+              onSubmit={event => {
+                event.preventDefault();
+                if (!launchView.formDisabled && loginToken.trim()) {
+                  handleRegistryLogin().catch(() => undefined);
+                }
+              }}
+            >
+              <input
+                className="app-launch-input"
+                type="password"
+                autoComplete="current-password"
+                autoFocus
+                value={loginToken}
+                onChange={event => setLoginToken(event.target.value)}
+                placeholder="Registry token"
+                disabled={launchView.formDisabled}
+              />
+              <button
+                className="app-launch-button"
+                type="submit"
+                disabled={launchView.formDisabled || !loginToken.trim()}
+              >
+                Log in
+              </button>
+              {registryAuth.state === 'error' ? (
+                <button
+                  className="app-launch-button"
+                  type="button"
+                  onClick={() => void registryAuthController.check()}
+                >
+                  Retry
+                </button>
+              ) : null}
+              {registryAuth.error ? (
+                <div className="app-launch-error" role="alert">{registryAuth.error}</div>
+              ) : null}
+            </form>
+          ) : null}
+          {launchView.content === 'connect-retry' ? (
+            <div className="app-launch-form">
+              <button
+                className="app-launch-button"
+                disabled={autoConnecting}
+                onClick={() => connect().catch(() => undefined)}
+              >
                 {autoConnecting ? 'Connecting...' : 'Connect'}
               </button>
-            ) : null}
-            {launchSurface === 'login' ? (
-              <>
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="current-password"
-                  value={loginToken}
-                  onChange={event => setLoginToken(event.target.value)}
-                  placeholder="Registry token"
-                />
-                <button
-                  className="button"
-                  disabled={!loginToken.trim()}
-                  onClick={() => handleRegistryLogin().catch(() => undefined)}
-                >
-                  Log in
-                </button>
-                {registryAuth.state === 'error' ? (
-                  <button className="button" onClick={() => void registryAuthController.check()}>Retry</button>
-                ) : null}
-                {registryAuth.error ? <div className="error" role="alert">{registryAuth.error}</div> : null}
-              </>
-            ) : null}
-            {error ? <div className="error" role="alert">{error}</div> : null}
-          </div>
-        )}
+              {error ? <div className="app-launch-error" role="alert">{error}</div> : null}
+            </div>
+          ) : null}
+        </AppLaunchScreen>
       </div>
     );
   }
@@ -21556,6 +21590,7 @@ export function App() {
       {appGoalEditDialog}
       {appConfirmDialog}
       {appSessionStatusDialog}
+      {launchLayerPhase === 'exiting' ? <AppLaunchScreen status="" exiting /> : null}
     </>
   );
 }

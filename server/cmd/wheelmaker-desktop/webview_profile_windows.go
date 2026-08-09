@@ -23,6 +23,7 @@ var (
 	desktopShellExecuteW    = desktopShell32.NewProc("ShellExecuteW")
 	desktopCoreWebView2_13  = edge.NewGUID("{f75f09a8-667e-4983-88d6-c8773f315e84}")
 	desktopWebView2Profile2 = edge.NewGUID("{fa740d4b-5eae-4344-a8ad-74be31925397}")
+	desktopController2GUID  = edge.NewGUID("{c979903c-d4ca-4228-92eb-47ee3fa96eab}")
 )
 
 type desktopIUnknownVtbl struct {
@@ -39,6 +40,21 @@ type desktopControllerVtbl struct {
 
 type desktopControllerCOM struct {
 	Vtbl *desktopControllerVtbl
+}
+
+// ICoreWebView2Controller2 extends the controller vtable with the background
+// color accessors; only query this layout from a pointer obtained by
+// QueryInterface for ICoreWebView2Controller2.
+type desktopController2Vtbl struct {
+	desktopIUnknownVtbl
+	BeforeGetCoreWebView2     [22]edge.ComProc
+	GetCoreWebView2           edge.ComProc
+	GetDefaultBackgroundColor edge.ComProc
+	PutDefaultBackgroundColor edge.ComProc
+}
+
+type desktopController2COM struct {
+	Vtbl *desktopController2Vtbl
 }
 
 type desktopCoreWebView2Vtbl struct {
@@ -207,6 +223,9 @@ func installDesktopWebViewPolicyAdapter(w webview2.WebView, runtime *desktopRunt
 	); desktopHRESULTFailed(hr) || core == nil {
 		return nil, fmt.Errorf("get CoreWebView2 failed: HRESULT 0x%08x", uint32(hr))
 	}
+	// Match the webview's pre-content background to the launch layer so the
+	// window never flashes white between window open and the app document.
+	desktopApplyLaunchBackground(rawController)
 
 	adapter := &desktopWebViewPolicyAdapter{
 		webview:     w,
@@ -235,6 +254,28 @@ func installDesktopWebViewPolicyAdapter(w webview2.WebView, runtime *desktopRunt
 	}
 	runtime.AttachSurface(adapter)
 	return adapter, nil
+}
+
+// desktopApplyLaunchBackground paints the WebView2 default background with
+// the launch layer navy, so the pre-document window matches the overlay.
+// Best effort: older WebView2 runtimes without ICoreWebView2Controller2 keep
+// the stock background.
+func desktopApplyLaunchBackground(controller *desktopControllerCOM) {
+	var controller2 *desktopController2COM
+	if hr, _, _ := controller.Vtbl.QueryInterface.Call(
+		uintptr(unsafe.Pointer(controller)),
+		uintptr(unsafe.Pointer(desktopController2GUID)),
+		uintptr(unsafe.Pointer(&controller2)),
+	); desktopHRESULTFailed(hr) || controller2 == nil {
+		return
+	}
+	defer desktopReleaseCOM(controller2)
+	// COREWEBVIEW2_COLOR {A,R,G,B} as a little-endian uint32: #0b1220 opaque.
+	color := uint32(0xff) | uint32(0x0b)<<8 | uint32(0x12)<<16 | uint32(0x20)<<24
+	_, _, _ = controller2.Vtbl.PutDefaultBackgroundColor.Call(
+		uintptr(unsafe.Pointer(controller2)),
+		uintptr(color),
+	)
 }
 
 func desktopChromiumFromWebView(w webview2.WebView) (*edge.Chromium, error) {

@@ -1,10 +1,6 @@
 package com.wheelmaker.android
 
 import android.annotation.SuppressLint
-import android.animation.Animator
-import android.animation.AnimatorSet
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
@@ -13,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.graphics.Color
+import android.graphics.drawable.AnimatedVectorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,12 +17,10 @@ import android.os.Environment
 import android.os.SystemClock
 import android.os.ext.SdkExtensions
 import android.provider.MediaStore
-import android.provider.Settings
 import android.view.Gravity
 import android.view.ViewGroup
 import android.view.MotionEvent
 import android.view.KeyEvent
-import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.URLUtil
@@ -35,9 +30,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AlphaAnimation
-import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.Toast
@@ -79,8 +72,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var systemBackCallback: OnBackInvokedCallback? = null
     private var splashOverlay: FrameLayout? = null
-    private var splashIntroAnimator: Animator? = null
-    private var splashBreathAnimator: Animator? = null
+    private var splashShownAtElapsed = 0L
     private val splashWatchdog = Runnable { dismissSplashOverlay() }
     // Version-agnostic readiness fallback: the bridge signal only exists in
     // web bundles new enough to send app.launchReady, so also poll for any
@@ -152,54 +144,19 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
     private fun createSplashOverlay(): FrameLayout {
         val overlay = FrameLayout(this)
         overlay.setBackgroundColor(APP_BACKGROUND_COLOR)
-        val iconSize = (120 * resources.displayMetrics.density).toInt()
-        val iconParams = FrameLayout.LayoutParams(iconSize, iconSize)
+        val density = resources.displayMetrics.density
+        val iconParams = FrameLayout.LayoutParams(
+            (SPLASH_LOGO_WIDTH_DP * density).toInt(),
+            (SPLASH_LOGO_HEIGHT_DP * density).toInt()
+        )
         iconParams.gravity = Gravity.CENTER
         val icon = ImageView(this)
-        icon.setImageResource(R.drawable.ic_launcher_foreground)
+        icon.setImageResource(R.drawable.splash_launch)
         icon.layoutParams = iconParams
         overlay.addView(icon)
-        startSplashIconAnimation(icon)
+        (icon.drawable as? AnimatedVectorDrawable)?.start()
+        splashShownAtElapsed = SystemClock.elapsedRealtime()
         return overlay
-    }
-
-    // The assembled logo fades/scales in once, then breathes slowly until the
-    // web app takes over with its own animated launch screen.
-    private fun startSplashIconAnimation(icon: ImageView) {
-        val animationsDisabled = Settings.Global.getFloat(
-            contentResolver,
-            Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f
-        ) == 0f
-        if (animationsDisabled) return
-        icon.alpha = 0f
-        icon.scaleX = 0.92f
-        icon.scaleY = 0.92f
-        splashIntroAnimator = AnimatorSet().apply {
-            playTogether(
-                ObjectAnimator.ofFloat(icon, View.ALPHA, 0f, 1f),
-                ObjectAnimator.ofFloat(icon, View.SCALE_X, 0.92f, 1f),
-                ObjectAnimator.ofFloat(icon, View.SCALE_Y, 0.92f, 1f)
-            )
-            duration = SPLASH_INTRO_DURATION_MS
-            interpolator = DecelerateInterpolator()
-            start()
-        }
-        val breatheX = ObjectAnimator.ofFloat(icon, View.SCALE_X, 1f, 1.045f).apply {
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-        }
-        val breatheY = ObjectAnimator.ofFloat(icon, View.SCALE_Y, 1f, 1.045f).apply {
-            repeatCount = ValueAnimator.INFINITE
-            repeatMode = ValueAnimator.REVERSE
-        }
-        splashBreathAnimator = AnimatorSet().apply {
-            playTogether(breatheX, breatheY)
-            duration = SPLASH_BREATH_DURATION_MS
-            interpolator = AccelerateDecelerateInterpolator()
-            startDelay = SPLASH_INTRO_DURATION_MS + 80
-            start()
-        }
     }
 
     override fun onLaunchReady() {
@@ -210,11 +167,14 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
         rootView.removeCallbacks(splashWatchdog)
         rootView.removeCallbacks(splashContentProbe)
         val overlay = splashOverlay ?: return
+        // Never cut the assemble intro short: a fast app load simply holds the
+        // sweeping splash a beat longer.
+        val remaining = SPLASH_MIN_VISIBLE_MS - (SystemClock.elapsedRealtime() - splashShownAtElapsed)
+        if (remaining > 0) {
+            rootView.postDelayed({ dismissSplashOverlay() }, remaining)
+            return
+        }
         splashOverlay = null
-        splashIntroAnimator?.cancel()
-        splashIntroAnimator = null
-        splashBreathAnimator?.cancel()
-        splashBreathAnimator = null
         val fadeOut = AlphaAnimation(1f, 0f)
         fadeOut.duration = 300
         fadeOut.setAnimationListener(object : android.view.animation.Animation.AnimationListener {
@@ -250,8 +210,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
         unregisterSystemBackCallback()
         rootView.removeCallbacks(splashWatchdog)
         rootView.removeCallbacks(splashContentProbe)
-        splashIntroAnimator?.cancel()
-        splashBreathAnimator?.cancel()
+        splashOverlay = null
         if (::androidSpeechRuntime.isInitialized) {
             androidSpeechRuntime.stopForAppBackground()
         }
@@ -878,8 +837,9 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
             })()
         """.trimIndent()
         private val APP_BACKGROUND_COLOR = Color.rgb(11, 18, 32)
-        private const val SPLASH_INTRO_DURATION_MS = 350L
-        private const val SPLASH_BREATH_DURATION_MS = 1400L
+        private const val SPLASH_LOGO_WIDTH_DP = 96
+        private const val SPLASH_LOGO_HEIGHT_DP = 62
+        private const val SPLASH_MIN_VISIBLE_MS = 780L
         private const val SPLASH_WATCHDOG_DELAY_MS = 12_000L
         private const val SPLASH_CONTENT_PROBE_INTERVAL_MS = 250L
         private const val SPLASH_CONTENT_PROBE_SCRIPT = "(function(){try{var r=document.getElementById('root');return !!(r&&r.childElementCount>0);}catch(e){return false;}})()"
