@@ -1386,7 +1386,7 @@
   border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-bottom: 0;
   box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
-  animation: mobile-sheet-slide-up 260ms cubic-bezier(0.2, 0.85, 0.3, 1);
+  animation: mobile-sheet-slide-up var(--motion-emphasized) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1639,7 +1639,7 @@
   inset: 0;
   z-index: 1000;
   pointer-events: none;
-  animation: wm-launch-exit 260ms ease-in forwards;
+  animation: wm-launch-exit var(--motion-emphasized) var(--ease-out) forwards;
 }
 
 @keyframes wm-launch-exit {
@@ -1804,6 +1804,7 @@
   backdrop-filter: blur(12px) saturate(1.1);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
   padding: 4px;
+  transform-origin: var(--popover-origin, top center);
   animation: sl-menu-in 140ms var(--ease-out);
 }
 

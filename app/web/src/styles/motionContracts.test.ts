@@ -174,6 +174,42 @@ describe('P1 motion contracts', () => {
 });
 
 describe('P2 motion contracts', () => {
+  it('anchors generic topbar surfaces and keeps hover-only movement off touch', () => {
+    const shellCss = read('shell.css');
+    const chatCss = read('chat.css');
+    const settingsCss = read('settings.css');
+
+    expect(shellCss).toContain('transform-origin: var(--popover-origin, top center);');
+    expect(chatCss).toContain('.chat-hub-color-palette.topbar-menu-surface');
+    expect(chatCss).toContain('--popover-origin: top right;');
+    expect(settingsCss).toContain('@media (hover: hover) and (pointer: fine)');
+    expect(settingsCss).toContain('.settings-detail-row:hover .settings-row-chevron');
+  });
+
+  it('uses the tokenized ease-out curve for web and native launch exits', () => {
+    const shellCss = read('shell.css');
+    const launchOverlay = read('../../../../server/cmd/wheelmaker-desktop/launch_overlay.js');
+
+    expect(shellCss).toContain(
+      'animation: wm-launch-exit var(--motion-emphasized) var(--ease-out) forwards;',
+    );
+    expect(launchOverlay).toContain(
+      "transition:opacity ' + FADE_MS + 'ms cubic-bezier(0.16,1,0.3,1);",
+    );
+  });
+
+  it('maps common hover and sheet timings to shared motion tokens', () => {
+    const chatCss = read('chat.css');
+    const shellCss = read('shell.css');
+    const settingsCss = read('settings.css');
+    const usageCss = read('usage.css');
+
+    expect(chatCss).toContain('transition: background-color var(--motion-fast) var(--ease-standard);');
+    expect(shellCss).toContain('animation: mobile-sheet-slide-up var(--motion-emphasized) var(--ease-out);');
+    expect(settingsCss).toContain('transition: background var(--motion-fast) var(--ease-standard);');
+    expect(usageCss).toContain('transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);');
+  });
+
   it('uses the valid reduced-motion query and avoids scale-zero indicators', () => {
     const tooltipCss = read('tooltip.css');
     const chatCss = read('chat.css');

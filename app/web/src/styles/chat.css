@@ -485,7 +485,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background-color 80ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard);
 }
 
 .item:hover {
@@ -1481,6 +1481,10 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+
+.chat-hub-color-palette.topbar-menu-surface {
+  --popover-origin: top right;
 }
 
 .chat-hub-color-grid {
@@ -3002,7 +3006,7 @@ button.chat-hub-skill-name:disabled {
   display: flex;
   flex-direction: column;
   background: var(--surface-panel);
-  animation: mobile-sheet-slide-up 260ms cubic-bezier(0.2, 0.85, 0.3, 1);
+  animation: mobile-sheet-slide-up var(--motion-emphasized) var(--ease-out);
 }
 
 @keyframes mobile-sheet-slide-down {

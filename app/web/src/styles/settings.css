@@ -326,7 +326,7 @@ textarea,
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background var(--motion-fast) var(--ease-standard);
 }
 
 .settings-detail-row:hover {
@@ -346,7 +346,10 @@ textarea,
   padding: 10px 12px;
   display: grid;
   gap: 7px;
-  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
 .settings-metadata-card:hover {
@@ -1304,7 +1307,7 @@ textarea,
   font: inherit;
   font-size: 12px;
   text-align: left;
-  transition: background 120ms ease;
+  transition: background var(--motion-fast) var(--ease-standard);
 }
 
 .settings-row > span:first-child,
@@ -1322,7 +1325,10 @@ textarea,
   color: color-mix(in srgb, var(--text-secondary) 70%, var(--text-primary));
   text-align: center;
   opacity: 0.85;
-  transition: color 140ms ease, opacity 140ms ease, transform 160ms ease;
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    opacity var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
 .settings-row:last-child {
@@ -1340,7 +1346,6 @@ textarea,
 }
 
 .settings-detail-row:hover .settings-row-chevron {
-  transform: translateX(2px);
   color: var(--accent-primary);
 }
 
@@ -2113,8 +2118,13 @@ textarea,
 }
 
 .settings-detail-row:hover .settings-row-chevron {
-  transform: translateX(2px);
   color: var(--accent-primary);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-detail-row:hover .settings-row-chevron {
+    transform: translateX(2px);
+  }
 }
 
 .settings-danger-row .settings-row-icon,

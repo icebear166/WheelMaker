@@ -14,7 +14,7 @@
   var startedAt = Date.now();
   var runAt = 0;
 
-  var CSS = '#wm-launch-overlay{position:fixed;inset:0;z-index:2147483000;background:#0b1220;display:flex;align-items:center;justify-content:center;transition:opacity ' + FADE_MS + 'ms ease-in;}' +
+  var CSS = '#wm-launch-overlay{position:fixed;inset:0;z-index:2147483000;background:#0b1220;display:flex;align-items:center;justify-content:center;transition:opacity ' + FADE_MS + 'ms cubic-bezier(0.16,1,0.3,1);}' +
     '#wm-launch-overlay.out{opacity:0;pointer-events:none;}' +
     '#wm-launch-overlay .wmlo-mark{position:relative;display:flex;align-items:center;justify-content:center;}' +
     '#wm-launch-overlay .wmlo-logo{position:relative;display:block;}' +
