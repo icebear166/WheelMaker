@@ -465,16 +465,16 @@
             <h3>Windows Desktop</h3>
             <span id="desktop-version" class="client-version"></span>
           </div>
-          <p class="client-copy">Download the EXE directly, or close Desktop and update an existing installation.</p>
+          <p class="client-copy">Download the EXE directly, or install/update the standard WheelMaker and Desktop setup with shortcuts.</p>
           <div class="client-actions">
             <a id="desktop-download" class="client-action primary" href="" download>Download EXE</a>
-            <button class="client-action secondary" type="button" data-copy="cmd-desktop-update">Copy update command</button>
+            <button class="client-action secondary" type="button" data-copy="cmd-desktop-install">Copy standard install / update command</button>
           </div>
         </article>
       </div>
 
       <p id="clients-status" role="status" aria-live="polite" hidden></p>
-      <code id="cmd-desktop-update" hidden>$ErrorActionPreference='Stop'; $m=Join-Path $HOME '.wheelmaker\deploy.mjs'; if (!(Test-Path -LiteralPath $m)) { throw 'WheelMaker is not installed' }; &amp; node $m desktop-update</code>
+      <code id="cmd-desktop-install" hidden>$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; if (!(Test-Path -LiteralPath $m)) { Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m }; &amp; node $m; &amp; node $m desktop-update; $e=Join-Path $d 'desktop\WheelMakerDesktop.exe'; $w=New-Object -ComObject WScript.Shell; $desktopLink=Join-Path ([Environment]::GetFolderPath('Desktop')) 'WheelMaker.lnk'; $programs=Join-Path ([Environment]::GetFolderPath('Programs')) 'WheelMaker'; New-Item -ItemType Directory -Force -Path $programs | Out-Null; $links=@($desktopLink,(Join-Path $programs 'WheelMaker.lnk')); foreach ($link in $links) { $s=$w.CreateShortcut($link); $s.TargetPath=$e; $s.WorkingDirectory=Split-Path -Parent $e; $s.IconLocation="$e,0"; $s.Save() }</code>
     </section>
 
     <span id="copy-status" role="status" aria-live="polite" hidden></span>

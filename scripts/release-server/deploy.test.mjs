@@ -220,13 +220,24 @@ test('release homepage shows an empty state before any client is published', asy
   assert.match(page.elements['clients-status'].textContent, /not been published/i);
 });
 
-test('release homepage declares direct downloads and Desktop update command', async () => {
+test('release homepage declares direct downloads and Desktop install/update command', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
 
   assert.match(html, /id="android-download"[^>]*>Download APK</);
   assert.match(html, /id="desktop-download"[^>]*>Download EXE</);
-  assert.match(html, /data-copy="cmd-desktop-update"/);
+  assert.match(html, /data-copy="cmd-desktop-install"/);
+  assert.match(html, /Copy standard install \/ update command/);
+  assert.match(html, /id="cmd-desktop-install"[^>]*>/);
+  assert.match(html, /Test-Path\s+-LiteralPath\s+\$m/);
+  assert.match(html, /Join-Path\s+\$d\s+'deploy\.mjs'/);
+  assert.match(html, /Invoke-WebRequest[^<]*deploy\.mjs/);
+  assert.match(html, /&amp; node \$m; &amp; node \$m desktop-update/);
   assert.match(html, /deploy\.mjs[^<]*desktop-update/);
+  assert.match(html, /WScript\.Shell/);
+  assert.match(html, /GetFolderPath\('Desktop'\)/);
+  assert.match(html, /GetFolderPath\('Programs'\)/);
+  assert.match(html, /WheelMaker\.lnk/);
+  assert.doesNotMatch(html, /data-copy="cmd-desktop-update"/);
   assert.match(html, /src="\/release-home\.js"/);
 });
 
