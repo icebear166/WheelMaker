@@ -354,7 +354,8 @@ test('hub row shows a Gateway capsule with an update dot for an outdated Gateway
   expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
     ['v1.2'],
   ]);
-  const gatewayCapsule = version.findByProps({className: 'chat-hub-gateway-capsule'});
+  const nameGroup = row.findByProps({className: 'chat-hub-row-name-group'});
+  const gatewayCapsule = nameGroup.findByProps({className: 'chat-hub-gateway-capsule'});
   expect(gatewayCapsule.type).toBe('button');
   expect(gatewayCapsule.props['aria-label']).toBe('Update Gateway v1.3');
   expect(gatewayCapsule.findByProps({className: 'chat-hub-gateway-capsule-label'}).children).toEqual(['Gateway']);
@@ -388,7 +389,8 @@ test('hub row keeps the Gateway capsule without a dot when Gateway is current', 
   expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
     ['v1.2'],
   ]);
-  const gatewayCapsule = version.findByProps({className: 'chat-hub-gateway-capsule'});
+  const gatewayCapsule = row.findByProps({className: 'chat-hub-row-name-group'})
+    .findByProps({className: 'chat-hub-gateway-capsule'});
   expect(gatewayCapsule.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
   expect(row.findByProps({className: 'chat-hub-row-actions'}).findAllByType('button').map(button => button.props.className)).toEqual([
     'chat-hub-action chat-hub-version-action chat-hub-version-update-action',

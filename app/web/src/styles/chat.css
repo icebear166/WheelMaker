@@ -2224,8 +2224,19 @@ button.chat-hub-skill-name {
   pointer-events: none;
 }
 
+.chat-hub-row-name-group {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+}
+
 .chat-hub-gateway-capsule {
   position: relative;
+  flex: 0 0 auto;
   min-width: 0;
   display: inline-flex;
   align-items: center;

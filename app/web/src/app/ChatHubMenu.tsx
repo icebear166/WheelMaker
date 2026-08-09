@@ -1085,8 +1085,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
         >
           <span className="chat-hub-color-dot" aria-hidden="true" />
         </button>
-        <span className="chat-hub-row-name">{hubId}</span>
-        <span className="chat-hub-version-readout">
+        <span className="chat-hub-row-name-group">
+          <span className="chat-hub-row-name">{hubId}</span>
           {ops.gateway.currentVersion !== '-' ? (
             ops.gateway.updateVisible ? (
               <button
@@ -1111,6 +1111,8 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               </span>
             )
           ) : null}
+        </span>
+        <span className="chat-hub-version-readout">
           <span className="chat-hub-action-label">{ops.wheelMaker.currentVersion}</span>
         </span>
         <span className="chat-hub-row-actions">
