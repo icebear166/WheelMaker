@@ -2124,8 +2124,8 @@
 }
 
 @keyframes chat-hub-dot-in {
-  from { transform: scale(0); }
-  to { transform: scale(1); }
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -7030,7 +7030,7 @@ li.chat-reply-target::marker {
   border-radius: 8px;
   background: var(--surface-panel);
   overflow: hidden;
-  transition: border-color 200ms ease;
+  transition: border-color var(--motion-standard) var(--ease-standard);
 }
 
 .thinking-block.streaming {
@@ -7054,7 +7054,7 @@ li.chat-reply-target::marker {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  transition: background-color 100ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard);
 }
 
 .thinking-block.streaming .thinking-header {
@@ -7116,7 +7116,7 @@ li.chat-reply-target::marker {
   flex: 0 0 auto;
   font-size: 12px;
   color: var(--text-secondary);
-  transition: transform 180ms ease, color 100ms ease;
+  transition: transform var(--motion-standard) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
 }
 
 .thinking-block.done .thinking-header:hover .thinking-chevron {

@@ -97,3 +97,27 @@ describe('P1 motion contracts', () => {
     );
   });
 });
+
+describe('P2 motion contracts', () => {
+  it('uses the valid reduced-motion query and avoids scale-zero indicators', () => {
+    const tooltipCss = read('tooltip.css');
+    const chatCss = read('chat.css');
+
+    expect(tooltipCss).not.toContain('@media (prefers-reduced-motion) {');
+    expect(tooltipCss).toContain('@media (prefers-reduced-motion: reduce) {');
+    expect(chatCss).not.toContain('from { transform: scale(0); }');
+    expect(chatCss).toContain('from { opacity: 0; transform: scale(0.97); }');
+  });
+
+  it('keeps one Settings detail entry animation and tokenizes Thinking controls', () => {
+    const settingsCss = read('settings.css');
+    const chatCss = read('chat.css');
+
+    expect(settingsCss).not.toContain('@keyframes settings-detail-enter');
+    expect((settingsCss.match(/animation: settingsPageEnter/g) ?? []).length).toBe(1);
+    expect(chatCss).toContain('transition: border-color var(--motion-standard) var(--ease-standard);');
+    expect(chatCss).toContain(
+      'transition: transform var(--motion-standard) var(--ease-standard), color var(--motion-fast) var(--ease-standard);',
+    );
+  });
+});

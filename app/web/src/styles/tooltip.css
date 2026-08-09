@@ -30,7 +30,7 @@
   transform: none;
 }
 
-@media (prefers-reduced-motion) {
+@media (prefers-reduced-motion: reduce) {
   .sl-tooltip {
     transition: none;
     transform: none;
