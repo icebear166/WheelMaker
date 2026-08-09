@@ -1028,14 +1028,6 @@ type ThinkingBlockProps = {
 
 function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [contentHeight, setContentHeight] = useState(0);
-
-  useEffect(() => {
-    if (contentRef.current) {
-      setContentHeight(contentRef.current.scrollHeight);
-    }
-  }, [content, expanded]);
 
   // Auto-collapse when streaming finishes
   const wasStreamingRef = useRef(isStreaming);
@@ -1085,10 +1077,9 @@ function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
         )}
       </button>
       <div
-        className="thinking-body"
-        style={{ maxHeight: expanded ? contentHeight + 16 : 0 }}
+        className={`thinking-body${expanded ? ' expanded' : ''}`}
       >
-        <div className="thinking-content" ref={contentRef}>
+        <div className="thinking-content">
           {content}
         </div>
       </div>

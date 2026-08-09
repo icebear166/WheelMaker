@@ -7124,9 +7124,16 @@ li.chat-reply-target::marker {
 }
 
 .thinking-body {
-  max-height: 0;
+  display: none;
   overflow: hidden;
-  transition: max-height 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.thinking-body.expanded {
+  display: block;
+}
+
+.thinking-body.expanded .thinking-content {
+  animation: thinking-content-in var(--motion-standard) var(--ease-out) both;
 }
 
 .thinking-content {
@@ -7136,6 +7143,23 @@ li.chat-reply-target::marker {
   color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+@keyframes thinking-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-body.expanded .thinking-content {
+    animation: none;
+  }
 }
 
 @keyframes thinkPulse {

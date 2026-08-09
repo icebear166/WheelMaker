@@ -8,6 +8,8 @@ const {resolve} = require('path') as {
   resolve(...paths: string[]): string;
 };
 
+import {resolveSheetReleaseDuration} from '../chat/sessionlist/sheetDragDismiss';
+
 function read(relativePath: string): string {
   return readFileSync(resolve(__dirname, relativePath), 'utf8');
 }
@@ -58,6 +60,40 @@ describe('P0 motion contracts', () => {
     );
     expect(usageCss).toMatch(
       /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.usage-mobile-overlay,[\s\S]*\.usage-history-overlay/,
+    );
+  });
+});
+
+describe('P1 motion contracts', () => {
+  it('derives a shorter sheet release duration from faster releases', () => {
+    expect(resolveSheetReleaseDuration(0)).toBe(180);
+    expect(resolveSheetReleaseDuration(0.4)).toBe(140);
+    expect(resolveSheetReleaseDuration(0.8)).toBe(100);
+  });
+
+  it('keeps Thinking expansion out of max-height transitions', () => {
+    const chatCss = read('chat.css');
+    const workspaceApp = read('../app/WorkspaceApp.tsx');
+
+    expect(chatCss).not.toContain('transition: max-height 220ms cubic-bezier(0.4, 0, 0.2, 1);');
+    expect(chatCss).toContain('.thinking-body.expanded .thinking-content');
+    expect(chatCss).toContain(
+      'animation: thinking-content-in var(--motion-standard) var(--ease-out) both;',
+    );
+    expect(workspaceApp).not.toContain('style={{ maxHeight: expanded ? contentHeight + 16 : 0 }}');
+  });
+
+  it('tokenizes Preview Workbench entry motion and disables it for reduced motion', () => {
+    const fileCss = read('file.css');
+
+    expect(fileCss).toContain(
+      'animation: preview-workbench-search-in var(--motion-fast) var(--ease-out);',
+    );
+    expect(fileCss).toContain(
+      'animation: preview-workbench-drawer-in var(--motion-standard) var(--ease-out);',
+    );
+    expect(fileCss).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.preview-workbench-search-bar,[\s\S]*\.preview-workbench-drawer-panel\.external/,
     );
   });
 });

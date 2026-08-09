@@ -66,7 +66,7 @@ export function SessionMenu({
 }: SessionMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const {dragOffset, dragging, handleProps} = useSheetDragToDismiss(onClose);
+  const {dragOffset, dragging, releaseDurationMs, handleProps} = useSheetDragToDismiss(onClose);
   useEffect(() => {
     previouslyFocusedRef.current = typeof document !== 'undefined' && typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
       ? document.activeElement
@@ -100,9 +100,10 @@ export function SessionMenu({
       role="menu"
       aria-label="Session actions"
       style={sheet
-        ? dragOffset > 0
-          ? {transform: `translateY(${dragOffset}px)`}
-          : undefined
+        ? {
+            '--sl-sheet-release-duration': `${releaseDurationMs}ms`,
+            ...(dragOffset > 0 ? {transform: `translateY(${dragOffset}px)`} : {}),
+          } as React.CSSProperties
         : popoverStyle}
       onKeyDown={event => {
         if (event.key === 'Escape') {

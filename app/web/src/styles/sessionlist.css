@@ -890,7 +890,7 @@
   /* Drag-to-dismiss: the sheet springs back unless released past the
      threshold; while dragging it tracks the finger exactly. */
   .project-session-action-menu.sl-sheet {
-    transition: transform 160ms var(--ease-out);
+    transition: transform var(--sl-sheet-release-duration, 160ms) var(--ease-out);
   }
   .project-session-action-menu.sl-sheet.dragging {
     transition: none;

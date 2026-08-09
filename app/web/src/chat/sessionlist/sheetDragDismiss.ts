@@ -6,6 +6,8 @@ export interface SheetDragDismiss {
   dragOffset: number;
   /** True while a drag gesture is in progress (kill transitions then). */
   dragging: boolean;
+  /** Duration used by the return transition after a non-dismissed release. */
+  releaseDurationMs: number;
   /** Pointer handlers for the sheet's drag handle region (grip/header). */
   handleProps: {
     onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -13,6 +15,11 @@ export interface SheetDragDismiss {
     onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;
     onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void;
   };
+}
+
+export function resolveSheetReleaseDuration(velocityPxPerMs: number): number {
+  const normalized = Math.min(1, Math.max(0, Math.abs(velocityPxPerMs) / 0.8));
+  return Math.round(180 - normalized * 80);
 }
 
 /**
@@ -29,6 +36,7 @@ export function useSheetDragToDismiss(
   const velocityThreshold = options?.velocity ?? 0.5;
   const [dragOffset, setDragOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [releaseDurationMs, setReleaseDurationMs] = useState(160);
   const dragRef = useRef<{startY: number; startTime: number; pointerId: number} | null>(null);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
@@ -40,6 +48,7 @@ export function useSheetDragToDismiss(
       startTime: Date.now(),
       pointerId: event.pointerId,
     };
+    setReleaseDurationMs(160);
     setDragging(true);
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -62,11 +71,16 @@ export function useSheetDragToDismiss(
       return;
     }
     dragRef.current = null;
-    setDragging(false);
-    setDragOffset(0);
     const distance = Math.max(0, event.clientY - drag.startY);
     const elapsed = Math.max(1, Date.now() - drag.startTime);
-    if (distance > threshold || distance / elapsed > velocityThreshold) {
+    const velocity = distance / elapsed;
+    const dismissed = distance > threshold || velocity > velocityThreshold;
+    if (!dismissed) {
+      setReleaseDurationMs(resolveSheetReleaseDuration(velocity));
+    }
+    setDragging(false);
+    setDragOffset(0);
+    if (dismissed) {
       onDismiss();
     }
   }, [onDismiss, threshold, velocityThreshold]);
@@ -74,6 +88,7 @@ export function useSheetDragToDismiss(
   return {
     dragOffset,
     dragging,
+    releaseDurationMs,
     handleProps: {onPointerDown, onPointerMove, onPointerUp: endDrag, onPointerCancel: endDrag},
   };
 }

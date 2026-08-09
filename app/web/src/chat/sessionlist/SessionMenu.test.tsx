@@ -163,7 +163,9 @@ describe('SessionMenu', () => {
     });
     const menu = tree.root.findByProps({role: 'menu'});
     expect(menu.props.className).toContain('sl-sheet');
-    expect(menu.props.style).toBeUndefined();
+    expect(menu.props.style).toMatchObject({'--sl-sheet-release-duration': '160ms'});
+    expect(menu.props.style).not.toHaveProperty('top');
+    expect(menu.props.style).not.toHaveProperty('left');
     expect(menu.findAllByProps({className: 'mobile-project-sheet-grip'})).toHaveLength(1);
   });
 

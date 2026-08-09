@@ -473,7 +473,7 @@
   background: var(--surface-panel);
   padding: 4px 8px;
   color: var(--text-secondary);
-  animation: preview-workbench-search-in 140ms ease;
+  animation: preview-workbench-search-in var(--motion-fast) var(--ease-out);
 }
 
 @keyframes preview-workbench-search-in {
@@ -651,7 +651,14 @@
   pointer-events: auto;
   border-right: 1px solid var(--border-subtle);
   box-shadow: -20px 0 44px color-mix(in srgb, #000 30%, transparent);
-  animation: preview-workbench-drawer-in 160ms ease;
+  animation: preview-workbench-drawer-in var(--motion-standard) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-workbench-search-bar,
+  .preview-workbench-drawer-panel.external {
+    animation: none;
+  }
 }
 
 @keyframes preview-workbench-drawer-in {
