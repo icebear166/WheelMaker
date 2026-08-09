@@ -8,6 +8,10 @@ interface DeepSeekLoginHost {
     fun showLogin(onResult: (token: String?) -> Unit)
 }
 
+interface LaunchSplashHost {
+    fun onLaunchReady()
+}
+
 class BridgeReply(
     private val requestId: String,
     private val send: (JSONObject) -> Unit,
@@ -31,7 +35,8 @@ class WheelMakerBridge(
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore,
     private val trustedNativeActionGrantStore: TrustedNativeActionGrantStore,
-    private val deepSeekLoginHost: DeepSeekLoginHost
+    private val deepSeekLoginHost: DeepSeekLoginHost,
+    private val launchSplashHost: LaunchSplashHost
 ) {
 	fun dispatch(capability: TrustedNativeCapability, payload: JSONObject, reply: BridgeReply? = null): String? {
 		val action = capability.action
@@ -42,6 +47,7 @@ class WheelMakerBridge(
         "userAction.reserve" -> reserveUserAction(payload)
         "deepseek.login" -> deepSeekLogin(reply)
         "device.getName" -> JSONObject.quote(Build.MODEL.trim().ifBlank { "Android" }.take(80))
+        "app.launchReady" -> notifyLaunchReady()
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
         "diagnostics.setLogLevel" -> setDiagnosticLogLevel(payload.optString("logLevel"))
         "speech.credentialState" -> androidSpeechRuntime.credentialState()
@@ -86,6 +92,11 @@ class WheelMakerBridge(
             reply.success(JSONObject().put("token", token ?: JSONObject.NULL))
         }
         return null
+    }
+
+    private fun notifyLaunchReady(): String {
+        launchSplashHost.onLaunchReady()
+        return "{}"
     }
 
     private fun startSpeech(payload: JSONObject): String {

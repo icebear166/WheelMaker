@@ -142,6 +142,16 @@ export async function requestAndroidNativeJson(
   return typeof result === 'string' ? result : JSON.stringify(result ?? {});
 }
 
+/** Tells the Android host the first meaningful frame has painted, so it can
+   fade out the native splash. No-op outside the Android WebView host. */
+export function notifyAndroidLaunchReady(): void {
+  try {
+    getAndroidNativeMessageClient()?.request('app.launchReady').catch(() => undefined);
+  } catch {
+    // Not an Android host.
+  }
+}
+
 function objectPayload(rawJson: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(rawJson) as unknown;

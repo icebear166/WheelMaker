@@ -94,6 +94,7 @@ import {
   type ConfirmTarget,
   type RenameSessionTarget,
 } from '../shell/AppDialogs';
+import {AppLaunchScreen, appLaunchStatus, resolveAppLaunchSurface} from '../shell/AppLaunchScreen';
 import { installDesktopZoomGuard } from '../shell/desktopZoomGuard';
 import { installPageRefreshGuard } from '../shell/pageRefreshGuard';
 import { ResponsiveShell } from '../shell/ResponsiveShell';
@@ -557,6 +558,10 @@ import {
   type AndroidNativeSpeechEvent,
   type AndroidNativeSpeechRuntime,
 } from '../platform/android/androidNativeSpeechRuntime';
+import {
+  getAndroidNativeMessageClient,
+  notifyAndroidLaunchReady,
+} from '../platform/android/androidNativeMessageBridge';
 import {
   isVoiceGenerationActive as isVoiceGenerationActiveSnapshot,
   isVoiceInputActive as isVoiceInputSnapshotActive,
@@ -2749,6 +2754,22 @@ export function App() {
     void registryAuthController.check();
     return unsubscribe;
   }, [registryAuthController]);
+  // The Android host keeps its native splash up until the web app has painted
+  // its first meaningful frame; double rAF approximates "after first paint".
+  const launchReadyNotifiedRef = useRef(false);
+  useEffect(() => {
+    if (launchReadyNotifiedRef.current) return;
+    launchReadyNotifiedRef.current = true;
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) notifyAndroidLaunchReady();
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle');
   const ttsActiveTurnIndexRef = useRef<number | null>(null);
   const codeFontFamily = useMemo(
@@ -19643,6 +19664,10 @@ export function App() {
     reconnecting && hasCachedWorkspace;
 
   if (!connected && !keepWorkspaceVisible) {
+    const launchSurface = resolveAppLaunchSurface(registryAuth.state, !!error);
+    // The native Android splash already shows the assembled logo, so the web
+    // launch screen only replays the piece fly-in intro outside that host.
+    const isAndroidNativeHost = getAndroidNativeMessageClient() != null;
     return (
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
@@ -19652,39 +19677,45 @@ export function App() {
             <DesktopWindowControls />
           </div>
         ) : null}
-        <div className="connect" aria-busy={autoConnecting}>
-          <h3>WheelMaker Registry</h3>
-          {registryAuth.state === 'checking' ? <div>Checking login...</div> : null}
-          {registryAuth.state === 'authenticated' ? (
-            <button className="button" disabled={autoConnecting} onClick={() => connect().catch(() => undefined)}>
-              {autoConnecting ? 'Connecting...' : 'Connect'}
-            </button>
-          ) : null}
-          {registryAuth.state === 'unauthenticated' || registryAuth.state === 'logging-in' || registryAuth.state === 'error' ? (
-            <>
-              <input
-                className="input"
-                type="password"
-                autoComplete="current-password"
-                value={loginToken}
-                onChange={event => setLoginToken(event.target.value)}
-                placeholder="Registry token"
-              />
-              <button
-                className="button"
-                disabled={registryAuth.state === 'logging-in' || !loginToken.trim()}
-                onClick={() => handleRegistryLogin().catch(() => undefined)}
-              >
-                {registryAuth.state === 'logging-in' ? 'Logging in...' : 'Log in'}
+        {launchSurface === 'launch' ? (
+          <AppLaunchScreen
+            status={appLaunchStatus(registryAuth.state)}
+            showIntro={!isAndroidNativeHost}
+          />
+        ) : (
+          <div className="connect" aria-busy={autoConnecting}>
+            <h3>WheelMaker Registry</h3>
+            {launchSurface === 'connect-retry' ? (
+              <button className="button" disabled={autoConnecting} onClick={() => connect().catch(() => undefined)}>
+                {autoConnecting ? 'Connecting...' : 'Connect'}
               </button>
-              {registryAuth.state === 'error' ? (
-                <button className="button" onClick={() => void registryAuthController.check()}>Retry</button>
-              ) : null}
-              {registryAuth.error ? <div className="error" role="alert">{registryAuth.error}</div> : null}
-            </>
-          ) : null}
-          {error ? <div className="error" role="alert">{error}</div> : null}
-        </div>
+            ) : null}
+            {launchSurface === 'login' ? (
+              <>
+                <input
+                  className="input"
+                  type="password"
+                  autoComplete="current-password"
+                  value={loginToken}
+                  onChange={event => setLoginToken(event.target.value)}
+                  placeholder="Registry token"
+                />
+                <button
+                  className="button"
+                  disabled={!loginToken.trim()}
+                  onClick={() => handleRegistryLogin().catch(() => undefined)}
+                >
+                  Log in
+                </button>
+                {registryAuth.state === 'error' ? (
+                  <button className="button" onClick={() => void registryAuthController.check()}>Retry</button>
+                ) : null}
+                {registryAuth.error ? <div className="error" role="alert">{registryAuth.error}</div> : null}
+              </>
+            ) : null}
+            {error ? <div className="error" role="alert">{error}</div> : null}
+          </div>
+        )}
       </div>
     );
   }

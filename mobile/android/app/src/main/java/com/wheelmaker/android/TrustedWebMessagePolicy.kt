@@ -87,6 +87,7 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
             "userAction.reserve",
             "deepseek.login",
             "device.getName",
+            "app.launchReady",
             "diagnostics.drain",
             "diagnostics.setLogLevel",
             "speech.credentialState",

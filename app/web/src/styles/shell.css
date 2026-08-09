@@ -1577,6 +1577,149 @@
   user-select: none;
 }
 
+/* Brand launch screen. Always the same deep navy as the Android native
+   splash (APP_BACKGROUND_COLOR rgb(11,18,32)) so the native -> web cross-fade
+   is seamless; the workspace theme only appears once connected. */
+.app-launch-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1220;
+}
+
+.app-launch-body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-launch-mark {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-launch-logo {
+  position: relative;
+  display: block;
+}
+
+.app-launch-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(46, 164, 250, 0.26), rgba(46, 164, 250, 0) 65%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.app-launch-status {
+  position: absolute;
+  top: calc(100% + 30px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: rgba(235, 240, 250, 0.66);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+/* Intro: the code-glyph pieces fly in from their own directions and snap
+   together with a slight overshoot; SVG user units (viewBox 927 wide shown
+   at 96px, so ~170 units ≈ 18px on screen). */
+.app-launch-intro .app-launch-piece-left {
+  animation: wm-launch-in-left 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 0ms backwards;
+}
+
+.app-launch-intro .app-launch-piece-right {
+  animation: wm-launch-in-right 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 90ms backwards;
+}
+
+.app-launch-intro .app-launch-piece-slash {
+  animation: wm-launch-in-slash 520ms cubic-bezier(0.34, 1.4, 0.64, 1) 170ms backwards;
+}
+
+.app-launch-intro .app-launch-glow {
+  animation: wm-launch-glow-settle 900ms ease-out 550ms backwards;
+}
+
+@keyframes wm-launch-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-170px);
+  }
+}
+
+@keyframes wm-launch-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(170px);
+  }
+}
+
+@keyframes wm-launch-in-slash {
+  from {
+    opacity: 0;
+    transform: translate(-95px, 88px);
+  }
+}
+
+@keyframes wm-launch-glow-settle {
+  from {
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
+
+/* Idle loop: a soft highlight band parallel to the white slash sweeps the
+   assembled mark left to right, then rests before the next pass. */
+.app-launch-shine {
+  transform: translateX(-940px);
+  animation: wm-launch-shine-sweep 2.1s cubic-bezier(0.4, 0, 0.2, 1) 300ms infinite;
+}
+
+.app-launch-intro .app-launch-shine {
+  animation-delay: 780ms;
+}
+
+@keyframes wm-launch-shine-sweep {
+  0% {
+    transform: translateX(-940px);
+  }
+  55% {
+    transform: translateX(940px);
+  }
+  100% {
+    transform: translateX(940px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-launch-intro .app-launch-piece-left,
+  .app-launch-intro .app-launch-piece-right,
+  .app-launch-intro .app-launch-piece-slash,
+  .app-launch-intro .app-launch-glow,
+  .app-launch-shine {
+    animation: none;
+  }
+
+  .app-launch-shine {
+    transform: translateX(-940px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .drawer,
   .drawer-overlay {
