@@ -107,8 +107,9 @@ function AppLaunchLogo() {
 
 export type AppLaunchScreenProps = {
   status: string;
-  /** The Android host already shows the assembled logo on its native splash,
-     so there the pieces skip the fly-in intro and only the shine sweep runs. */
+  /** Whether the logo pieces fly in and assemble before the shine loop.
+     The native Android splash cross-fades into the screen, so the overlap
+     reads as the static logo gathering itself together. */
   showIntro: boolean;
 };
 

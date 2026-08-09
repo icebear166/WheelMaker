@@ -82,6 +82,21 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
     private var splashIntroAnimator: Animator? = null
     private var splashBreathAnimator: Animator? = null
     private val splashWatchdog = Runnable { dismissSplashOverlay() }
+    // Version-agnostic readiness fallback: the bridge signal only exists in
+    // web bundles new enough to send app.launchReady, so also poll for any
+    // rendered app content and release the splash as soon as it appears.
+    private val splashContentProbe = object : Runnable {
+        override fun run() {
+            if (splashOverlay == null) return
+            webView.evaluateJavascript(SPLASH_CONTENT_PROBE_SCRIPT) { rendered ->
+                if (rendered == "true") {
+                    dismissSplashOverlay()
+                } else if (splashOverlay != null) {
+                    rootView.postDelayed(this, SPLASH_CONTENT_PROBE_INTERVAL_MS)
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -193,6 +208,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
 
     private fun dismissSplashOverlay() {
         rootView.removeCallbacks(splashWatchdog)
+        rootView.removeCallbacks(splashContentProbe)
         val overlay = splashOverlay ?: return
         splashOverlay = null
         splashIntroAnimator?.cancel()
@@ -233,6 +249,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
     override fun onDestroy() {
         unregisterSystemBackCallback()
         rootView.removeCallbacks(splashWatchdog)
+        rootView.removeCallbacks(splashContentProbe)
         splashIntroAnimator?.cancel()
         splashBreathAnimator?.cancel()
         if (::androidSpeechRuntime.isInitialized) {
@@ -359,6 +376,10 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                if (url != null && isTrustedBusinessUiRequest(configuredBaseUrl, url)) {
+                    rootView.removeCallbacks(splashContentProbe)
+                    rootView.postDelayed(splashContentProbe, SPLASH_CONTENT_PROBE_INTERVAL_MS)
+                }
             }
         }
         target.webChromeClient = object : WebChromeClient() {
@@ -860,6 +881,8 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
         private const val SPLASH_INTRO_DURATION_MS = 350L
         private const val SPLASH_BREATH_DURATION_MS = 1400L
         private const val SPLASH_WATCHDOG_DELAY_MS = 12_000L
+        private const val SPLASH_CONTENT_PROBE_INTERVAL_MS = 250L
+        private const val SPLASH_CONTENT_PROBE_SCRIPT = "(function(){try{var r=document.getElementById('root');return !!(r&&r.childElementCount>0);}catch(e){return false;}})()"
     }
 }
 

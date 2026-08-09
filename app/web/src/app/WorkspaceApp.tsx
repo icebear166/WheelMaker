@@ -559,7 +559,6 @@ import {
   type AndroidNativeSpeechRuntime,
 } from '../platform/android/androidNativeSpeechRuntime';
 import {
-  getAndroidNativeMessageClient,
   notifyAndroidLaunchReady,
 } from '../platform/android/androidNativeMessageBridge';
 import {
@@ -19665,9 +19664,6 @@ export function App() {
 
   if (!connected && !keepWorkspaceVisible) {
     const launchSurface = resolveAppLaunchSurface(registryAuth.state, !!error);
-    // The native Android splash already shows the assembled logo, so the web
-    // launch screen only replays the piece fly-in intro outside that host.
-    const isAndroidNativeHost = getAndroidNativeMessageClient() != null;
     return (
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
@@ -19678,10 +19674,7 @@ export function App() {
           </div>
         ) : null}
         {launchSurface === 'launch' ? (
-          <AppLaunchScreen
-            status={appLaunchStatus(registryAuth.state)}
-            showIntro={!isAndroidNativeHost}
-          />
+          <AppLaunchScreen status={appLaunchStatus(registryAuth.state)} showIntro />
         ) : (
           <div className="connect" aria-busy={autoConnecting}>
             <h3>WheelMaker Registry</h3>
