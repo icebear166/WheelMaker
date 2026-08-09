@@ -15463,6 +15463,11 @@ export function App() {
               left: `${projectSessionActionMenu.popover.left}px`,
               width: `${projectSessionActionMenu.popover.width}px`,
               maxHeight: `${projectSessionActionMenu.popover.maxHeight}px`,
+              ...({
+                '--sl-popover-origin': projectSessionActionMenu.popover.placement === 'above'
+                  ? 'bottom center'
+                  : 'top center',
+              } as React.CSSProperties),
               ...(projectSessionActionMenu.popover.placement === 'above'
                 ? {'--sl-popover-shift': 'translateY(-100%)'} as React.CSSProperties
                 : {}),
@@ -16380,6 +16385,11 @@ export function App() {
               left: `${actionMenu.popover.left}px`,
               width: `${actionMenu.popover.width}px`,
               maxHeight: `${actionMenu.popover.maxHeight}px`,
+              ...({
+                '--sl-popover-origin': actionMenu.popover.placement === 'above'
+                  ? 'bottom center'
+                  : 'top center',
+              } as React.CSSProperties),
               ...(actionMenu.popover.placement === 'above'
                 ? {'--sl-popover-shift': 'translateY(-100%)'} as React.CSSProperties
                 : {}),

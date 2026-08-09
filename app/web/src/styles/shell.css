@@ -44,6 +44,7 @@
   font-size: 12px;
   line-height: 1.35;
   pointer-events: none;
+  animation: app-toast-in var(--motion-standard) var(--ease-out) both;
 }
 
 .app-retry-toast {
@@ -66,6 +67,25 @@
   box-shadow: 0 12px 28px color-mix(in srgb, #000 22%, transparent);
   font-size: 12px;
   line-height: 1.35;
+  animation: app-toast-in var(--motion-standard) var(--ease-out) both;
+}
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast,
+  .app-retry-toast {
+    animation: none;
+  }
 }
 
 .app-retry-toast-message {
@@ -1049,6 +1069,23 @@
   padding: 18px;
   background: rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(8px);
+  animation: app-backdrop-in var(--motion-standard) var(--ease-out) both;
+}
+
+@keyframes app-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes app-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .app-confirm-dialog {
@@ -1061,6 +1098,7 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-raised));
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  animation: app-dialog-in var(--motion-standard) var(--ease-out) both;
 }
 
 .app-session-status-dialog {
@@ -1073,6 +1111,15 @@
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-panel) 97%, var(--surface-raised));
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  animation: app-dialog-in var(--motion-standard) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-confirm-backdrop,
+  .app-confirm-dialog,
+  .app-session-status-dialog {
+    animation: none;
+  }
 }
 
 .app-session-status-header,

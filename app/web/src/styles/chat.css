@@ -2999,15 +2999,15 @@ button.chat-hub-skill-name:disabled {
 }
 
 /* Exit mirrors entry: the page slides back down instead of fading. Keep at
-   MENU_EXIT_MS (100ms) so the portal unmounts after the animation. */
+   MENU_EXIT_MS (120ms) so the portal unmounts after the animation. */
 .chat-hub-page.sl-menu-exit {
-  animation: mobile-sheet-slide-down 100ms ease-in forwards;
+  animation: mobile-sheet-slide-down var(--motion-fast) var(--ease-out) forwards;
 }
 
 /* Bottom sheets share the slide-down exit; the generic sl-menu-out
    fade+scale does not match their slide-up entry. */
 .mobile-project-sheet.sl-menu-exit {
-  animation: mobile-sheet-slide-down 100ms ease-in forwards;
+  animation: mobile-sheet-slide-down var(--motion-fast) var(--ease-out) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

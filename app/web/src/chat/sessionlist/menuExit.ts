@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 
-export const MENU_EXIT_MS = 100;
+export const MENU_EXIT_MS = 120;
 
 /**
  * Wraps a "close menu" setter so the menu first renders with an `exiting`

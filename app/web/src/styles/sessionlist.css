@@ -354,7 +354,7 @@
   animation: sl-menu-in 140ms var(--ease-out);
 }
 .sl-menu-exit {
-  animation: sl-menu-out 100ms ease-in forwards;
+  animation: sl-menu-out var(--motion-fast) var(--ease-out) forwards;
   pointer-events: none;
 }
 
@@ -386,6 +386,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   max-width: calc(100vw - 16px);
+  transform-origin: var(--sl-popover-origin, top center);
   /* Static counterpart of the keyframe shift: keeps an above-anchored menu in
      place once the enter animation ends. */
   transform: var(--sl-popover-shift, translateY(0));
@@ -843,7 +844,7 @@
   to { opacity: 0; }
 }
 .sl-sheet-overlay.sl-menu-exit {
-  animation: sl-sheet-overlay-out 100ms ease-in forwards;
+  animation: sl-sheet-overlay-out var(--motion-fast) var(--ease-out) forwards;
 }
 @media (max-width: 900px) {
   .sl-sheet-overlay {
@@ -920,8 +921,8 @@
     padding: 4px 0;
   }
   .project-session-action-menu.sl-sheet.sl-menu-exit {
-    /* Must fit MENU_EXIT_MS (100ms) or the portal unmounts mid-animation. */
-    animation: sl-sheet-out 100ms ease-in forwards;
+    /* Must fit MENU_EXIT_MS (120ms) or the portal unmounts mid-animation. */
+    animation: sl-sheet-out var(--motion-fast) var(--ease-out) forwards;
   }
   .project-session-action-menu.sl-sheet .project-session-menu-btn {
     min-height: 44px;
@@ -987,7 +988,7 @@
     min-height: 44px;
   }
   .session-archive-menu.sl-menu-exit {
-    animation: sl-sheet-out 100ms ease-in forwards;
+    animation: sl-sheet-out var(--motion-fast) var(--ease-out) forwards;
   }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) {

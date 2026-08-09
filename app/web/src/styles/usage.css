@@ -272,6 +272,23 @@
 }
 .usage-account-message, .usage-detail-empty, .usage-feature-empty { padding: 9px; color: var(--text-secondary); font-size: 11px; }
 .usage-detail-hub-state { display: flex; justify-content: space-between; gap: 8px; padding: 5px 7px; border-radius: 5px; background: color-mix(in srgb, var(--state-danger) 7%, transparent); color: var(--text-secondary); font-size: 10px; }
+
+@keyframes usage-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes usage-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .usage-mobile-overlay {
   position: fixed;
   inset: 0;
@@ -285,6 +302,7 @@
   background: color-mix(in srgb, #080a0f 68%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  animation: usage-overlay-in var(--motion-standard) var(--ease-out) both;
 }
 
 .usage-mobile-dialog {
@@ -305,6 +323,7 @@
   background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
   box-shadow: 0 24px 72px rgb(0 0 0 / 42%);
   color: var(--text-primary);
+  animation: usage-dialog-in var(--motion-standard) var(--ease-out) both;
 }
 
 .usage-mobile-header {
@@ -387,6 +406,7 @@
     calc(16px + env(safe-area-inset-bottom))
     calc(16px + env(safe-area-inset-left));
   background: rgb(8 10 15 / 68%);
+  animation: usage-overlay-in var(--motion-standard) var(--ease-out) both;
 }
 
 .usage-history-dialog {
@@ -402,6 +422,16 @@
   background: var(--surface-overlay);
   box-shadow: var(--shadow-overlay);
   color: var(--text-primary);
+  animation: usage-dialog-in var(--motion-standard) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .usage-mobile-overlay,
+  .usage-mobile-dialog,
+  .usage-history-overlay,
+  .usage-history-dialog {
+    animation: none;
+  }
 }
 
 .usage-history-header {
