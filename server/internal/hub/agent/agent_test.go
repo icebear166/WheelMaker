@@ -36,6 +36,25 @@ func TestFormatACPLogLine_MinimalShape(t *testing.T) {
 	}
 }
 
+func TestACPScannerAcceptsObservedCodexThreadReadFrame(t *testing.T) {
+	const observedFrameBytes = 9_574_014
+	frame := append(bytes.Repeat([]byte{'x'}, observedFrameBytes), '\n')
+	scanner := newACPScanner(bytes.NewReader(frame))
+
+	if !scanner.Scan() {
+		t.Fatalf("Scan() = false, err=%v", scanner.Err())
+	}
+	if got := len(scanner.Bytes()); got != observedFrameBytes {
+		t.Fatalf("frame bytes = %d, want %d", got, observedFrameBytes)
+	}
+	if scanner.Scan() {
+		t.Fatal("Scan() returned an unexpected second frame")
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scanner err = %v", err)
+	}
+}
+
 func TestCodexAppStopReasonPreservesFailedPromptStatus(t *testing.T) {
 	if got := codexappStopReason("failed"); got != protocol.SessionTurnStopReasonFailed {
 		t.Fatalf("codexappStopReason(failed) = %q, want %q", got, protocol.SessionTurnStopReasonFailed)

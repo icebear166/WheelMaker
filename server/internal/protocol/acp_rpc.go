@@ -23,7 +23,7 @@ const (
 // ACPRPCMaxScannerBuf is the scanner buffer size for newline-delimited JSON-RPC.
 // Some providers can emit very large single-line JSON payloads (for example
 // large tool outputs). Keep this comfortably above the default scanner limit.
-const ACPRPCMaxScannerBuf = 8 << 20 // 8 MiB
+const ACPRPCMaxScannerBuf = 32 << 20 // 32 MiB
 
 // Request is a JSON-RPC 2.0 request message.
 type ACPRPCRequest struct {
