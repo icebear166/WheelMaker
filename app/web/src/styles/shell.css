@@ -1655,6 +1655,13 @@
   justify-content: center;
 }
 
+/* The desktop connect titlebar eats 32px at the top; compensate so the mark
+   sits at the true window center, matching the exe overlay, the Android
+   splash, and the exit overlay exactly. */
+.has-connect-titlebar .app-launch-mark {
+  transform: translateY(-16px);
+}
+
 .app-launch-logo {
   position: relative;
   display: block;
@@ -1672,11 +1679,11 @@
   pointer-events: none;
 }
 
-/* Status text and the token form hang below the centered mark; the mark never
-   moves when content appears or disappears. */
+/* Status text and the token form hang from the mark itself, so the whole
+   composition follows the logo wherever it is centered. */
 .app-launch-content {
   position: absolute;
-  top: calc(50% + 58px);
+  top: calc(100% + 26px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;

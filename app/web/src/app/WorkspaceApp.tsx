@@ -19708,10 +19708,11 @@ export function App() {
 
   if (!connected && !keepWorkspaceVisible) {
     const launchView = resolveAppLaunchView(registryAuth.state, !!error);
+    const hasDesktopTitlebar = !!getDesktopWindowBridge();
     return (
-      <div className={`page theme-${themeMode}`}>
+      <div className={`page theme-${themeMode}${hasDesktopTitlebar ? ' has-connect-titlebar' : ''}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
-        {getDesktopWindowBridge() ? (
+        {hasDesktopTitlebar ? (
           <div className="connect-titlebar">
             <span>WheelMaker</span>
             <DesktopWindowControls />

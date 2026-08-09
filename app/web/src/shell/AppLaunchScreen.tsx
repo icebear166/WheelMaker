@@ -122,10 +122,10 @@ export function AppLaunchScreen({status, children, exiting = false}: AppLaunchSc
       <div className="app-launch-mark">
         <div className="app-launch-glow" aria-hidden="true" />
         <AppLaunchLogo />
-      </div>
-      <div className="app-launch-content">
-        {children}
-        {status ? <div className="app-launch-status">{status}</div> : null}
+        <div className="app-launch-content">
+          {children}
+          {status ? <div className="app-launch-status">{status}</div> : null}
+        </div>
       </div>
     </div>
   );

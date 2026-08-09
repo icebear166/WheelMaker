@@ -126,7 +126,7 @@ describe('web responsive shell split', () => {
     expect(disconnectedReturn).toContain('<DesktopWindowControls />');
     expect(disconnectedReturn).not.toContain('<DesktopTitleBar title="WheelMaker" />');
     expect(disconnectedReturn).toMatch(
-      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<AppLaunchScreen status=\{launchView\.status\}>/,
+      /className=\{`page theme-\$\{themeMode\}\$\{hasDesktopTitlebar \? ' has-connect-titlebar' : ''\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<AppLaunchScreen status=\{launchView\.status\}>/,
     );
     expect(disconnectedReturn).toContain('disabled={autoConnecting}');
     expect(disconnectedReturn).toContain('role="alert"');
