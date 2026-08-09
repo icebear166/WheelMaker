@@ -3487,17 +3487,25 @@ export function App() {
 
   // The launch layer covers every pre-session state; when the workspace
   // connects it fades out over the already-rendered workspace instead of
-  // unmounting abruptly. Silent reconnects never bring the layer back.
+  // unmounting abruptly. launchJustExited is derived during render so the
+  // exit overlay is present in the very same commit as the workspace swap -
+  // an effect-driven flag would let the workspace paint uncovered for one
+  // frame and read as a flash. Silent reconnects never bring the layer back.
   const launchLayerVisible = !connected && !(reconnecting && (projects.length > 0 || !!projectId));
-  const [launchLayerPhase, setLaunchLayerPhase] = useState<'visible' | 'exiting' | 'hidden'>('visible');
+  const prevLaunchLayerVisibleRef = useRef(launchLayerVisible);
+  const launchJustExited = prevLaunchLayerVisibleRef.current && !launchLayerVisible;
+  const [launchExitDone, setLaunchExitDone] = useState(false);
   useEffect(() => {
+    const justExited = prevLaunchLayerVisibleRef.current && !launchLayerVisible;
+    prevLaunchLayerVisibleRef.current = launchLayerVisible;
     if (launchLayerVisible) {
-      setLaunchLayerPhase('visible');
+      setLaunchExitDone(false);
       return;
     }
-    setLaunchLayerPhase(prev => (prev === 'visible' ? 'exiting' : prev));
-    const timer = window.setTimeout(() => setLaunchLayerPhase('hidden'), 280);
-    return () => window.clearTimeout(timer);
+    if (justExited) {
+      const timer = window.setTimeout(() => setLaunchExitDone(true), 300);
+      return () => window.clearTimeout(timer);
+    }
   }, [launchLayerVisible]);
 
   const [chatFilePreviewDirEntriesByProject, setChatFilePreviewDirEntriesByProject] =
@@ -21591,7 +21599,7 @@ export function App() {
       {appGoalEditDialog}
       {appConfirmDialog}
       {appSessionStatusDialog}
-      {launchLayerPhase === 'exiting' ? <AppLaunchScreen status="" exiting /> : null}
+      {launchJustExited && !launchExitDone ? <AppLaunchScreen status="" exiting /> : null}
     </>
   );
 }
