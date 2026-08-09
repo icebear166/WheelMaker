@@ -43,7 +43,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent-primary) 64%, transparent);
   opacity: 0;
-  transition: opacity 120ms ease;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 .chat-file-peek-resize-handle:hover::after,
@@ -207,7 +207,7 @@
   border-radius: 5px;
   padding: 0;
   opacity: 0;
-  transition: opacity 100ms ease;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 .chat-file-workbench-tab:hover .chat-file-workbench-tab-close,
@@ -461,6 +461,20 @@
   border-radius: 7px;
   background: var(--surface-panel);
   box-shadow: 0 14px 34px color-mix(in srgb, #000 32%, transparent);
+  transform-origin: top left;
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
+}
+
+.preview-tab-context-menu.sl-menu-exit {
+  /* Must fit MENU_EXIT_MS (120ms) or the portal unmounts mid-animation. */
+  animation: sl-menu-out var(--motion-fast) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-tab-context-menu {
+    animation: none;
+  }
 }
 
 .preview-workbench-search-bar {
@@ -643,6 +657,7 @@
   width: min(360px, calc(100% - 56px));
   border-right: 1px solid var(--border-subtle);
   box-shadow: 18px 0 48px color-mix(in srgb, #000 30%, transparent);
+  animation: preview-workbench-drawer-in var(--motion-standard) var(--ease-out);
 }
 
 .preview-workbench-drawer-panel.external {
@@ -654,10 +669,30 @@
   animation: preview-workbench-drawer-in var(--motion-standard) var(--ease-out);
 }
 
+.preview-workbench-drawer-panel.exiting {
+  /* Must fit MENU_EXIT_MS (120ms); the chrome unmounts after the exit. */
+  animation: preview-workbench-drawer-out var(--motion-fast) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .preview-workbench-search-bar,
   .preview-workbench-drawer-panel.external {
     animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-workbench-surface .preview-workbench-drawer-panel,
+  .preview-workbench-drawer-panel.exiting {
+    animation: none;
+  }
+}
+
+@keyframes preview-workbench-drawer-out {
+  to {
+    opacity: 0;
+    transform: translateX(-10px);
   }
 }
 
@@ -923,6 +958,20 @@
   background: var(--surface-panel);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
   padding: 4px;
+  transform-origin: top left;
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
+}
+
+.preview-selection-context-menu.sl-menu-exit {
+  /* Must fit MENU_EXIT_MS (120ms) or the portal unmounts mid-animation. */
+  animation: sl-menu-out var(--motion-fast) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-selection-context-menu {
+    animation: none;
+  }
 }
 
 .preview-selection-context-menu button {

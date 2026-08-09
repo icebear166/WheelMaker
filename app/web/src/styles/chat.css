@@ -707,7 +707,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 
 .session-search-icon-btn:hover {
@@ -1326,7 +1326,7 @@
   backdrop-filter: blur(12px) saturate(1.1);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
   transform-origin: top left;
-  animation: sl-menu-in 140ms var(--ease-out);
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
 }
 
 @keyframes chat-hub-companion-out {
@@ -1448,7 +1448,7 @@
   color: var(--text-tertiary);
   font-size: 14px;
   pointer-events: none;
-  transition: transform 150ms var(--ease-out);
+  transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .chat-hub-tree.expanded .chat-hub-expand-chevron {
@@ -1680,7 +1680,7 @@
   color: var(--text-secondary);
   font-size: 10px;
   background: transparent;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
 }
 
 .chat-hub-project-row:not(.hidden) .chat-hub-project-check {
@@ -1744,7 +1744,7 @@
 .chat-hub-sections,
 .chat-hub-section-body,
 .chat-hub-detail {
-  animation: chat-hub-region-in 150ms var(--ease-out);
+  animation: chat-hub-region-in var(--motion-fast) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1756,7 +1756,7 @@
   .chat-hub-project-skill-trigger > .sl-icon,
   .chat-hub-popover-stack {
     animation: none;
-    transition: none;
+    transition-property: background, background-color, border-color, color, box-shadow, outline-color, opacity;
   }
 }
 
@@ -1839,7 +1839,7 @@
 .chat-hub-section-chevron {
   flex: 0 0 auto;
   color: var(--text-tertiary);
-  transition: transform 150ms var(--ease-out);
+  transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .chat-hub-section-header.expanded .chat-hub-section-chevron {
@@ -2136,7 +2136,7 @@
   background: var(--accent-primary);
   box-shadow: 0 0 0 1px var(--surface-panel);
   pointer-events: none;
-  animation: chat-hub-dot-in 140ms var(--ease-out);
+  animation: chat-hub-dot-in var(--motion-fast) var(--ease-out);
 }
 
 @keyframes chat-hub-dot-in {
@@ -2185,7 +2185,7 @@
 .chat-hub-skill-update-all,
 .chat-hub-skill-row-actions button,
 button.chat-hub-skill-name {
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2204,7 +2204,7 @@ button.chat-hub-skill-name {
   .chat-hub-skill-update-all,
   .chat-hub-skill-row-actions button,
   button.chat-hub-skill-name {
-    transition: none;
+    transition-property: background, background-color, border-color, color, box-shadow, outline-color, opacity;
   }
 }
 
@@ -2271,7 +2271,7 @@ button.chat-hub-skill-name {
 button.chat-hub-gateway-capsule {
   appearance: none;
   cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
 }
 
 button.chat-hub-gateway-capsule:hover:not(:disabled),
@@ -2732,7 +2732,7 @@ button.chat-hub-skill-name:disabled {
 
 .chat-hub-project-skill-trigger > .sl-icon {
   color: var(--text-tertiary);
-  transition: transform 150ms var(--ease-out);
+  transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .chat-hub-project-skill-trigger[aria-expanded="true"] > .sl-icon {
@@ -3189,7 +3189,7 @@ button.chat-hub-skill-name:disabled {
   border-radius: 8px;
   outline: 1px solid color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
   outline-offset: 2px;
-  transition: outline-color 160ms ease;
+  transition: outline-color var(--motion-fast) var(--ease-standard);
 }
 
 .chat-prompt-group + .chat-prompt-group {
@@ -3445,7 +3445,7 @@ button.chat-hub-skill-name:disabled {
 .chat-tool-group-chevron {
   color: var(--text-tertiary);
   opacity: 0.72;
-  transition: transform 140ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-tool-group-open .chat-tool-group-chevron {
@@ -3556,7 +3556,7 @@ button.chat-hub-skill-name:disabled {
   flex: 0 0 auto;
   color: var(--text-tertiary);
   opacity: 0.64;
-  transition: transform 140ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-work-group-header:hover .chat-work-group-chevron,
@@ -3635,7 +3635,7 @@ button.chat-hub-skill-name:disabled {
 .chat-thought-chevron {
   color: var(--text-tertiary);
   flex-shrink: 0;
-  transition: transform 140ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-thought-header .chat-thought-chevron {
@@ -4193,7 +4193,7 @@ button.chat-hub-skill-name:disabled {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, transform 120ms ease;
+  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-edge-surface-toggle:hover {
@@ -4461,7 +4461,7 @@ button.chat-hub-skill-name:disabled {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  animation: sl-list-in 140ms var(--ease-out);
+  animation: sl-list-in var(--motion-standard) var(--ease-out);
 }
 
 .chat-plan-surface.desktop .chat-plan-surface-list {
@@ -5189,10 +5189,14 @@ li.chat-reply-target::marker {
 }
 
 .chat-core-config-menu,
-.chat-config-value-menu,
+.chat-config-value-menu {
+  transform-origin: bottom right;
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
+}
+
 .chat-attachment-action-tray {
-  transform-origin: bottom center;
-  animation: sl-menu-in 140ms var(--ease-out);
+  transform-origin: bottom left;
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5263,7 +5267,7 @@ li.chat-reply-target::marker {
   font-size: 12px;
   font-weight: 600;
   pointer-events: none;
-  animation: sl-menu-in 140ms var(--ease-out);
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5638,7 +5642,7 @@ li.chat-reply-target::marker {
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  transition: background 120ms ease;
+  transition: background var(--motion-fast) var(--ease-standard);
 }
 
 .chat-slash-switch.checked {
@@ -5652,7 +5656,7 @@ li.chat-reply-target::marker {
   background: var(--surface-panel);
   box-shadow: 0 1px 3px color-mix(in srgb, #000 32%, transparent);
   transform: translateX(0);
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-slash-switch.checked .chat-slash-switch-knob {
@@ -5740,7 +5744,7 @@ li.chat-reply-target::marker {
   touch-action: none;
   overflow: visible;
   box-shadow: 0 6px 14px color-mix(in srgb, var(--state-info) 16%, transparent);
-  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+  transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
 }
 
 .voice-input-button:hover:not(:disabled) {
@@ -5836,7 +5840,7 @@ li.chat-reply-target::marker {
   gap: 9px;
   padding: 0 10px;
   overflow: hidden;
-  animation: sl-menu-in 140ms var(--ease-out);
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5960,7 +5964,7 @@ li.chat-reply-target::marker {
   gap: 8px;
   min-height: 30px;
   min-width: 0;
-  animation: sl-menu-in 140ms var(--ease-out);
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6001,9 +6005,10 @@ li.chat-reply-target::marker {
   place-items: center;
   line-height: 1;
   transition:
-    background 120ms ease,
-    color 120ms ease,
-    box-shadow 120ms ease;
+    background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 
 .chat-composer-stop-slot {
@@ -6117,16 +6122,26 @@ li.chat-reply-target::marker {
     transform var(--motion-fast) var(--ease-standard);
 }
 
-.chat-stop-pill:hover:not(:disabled) .chat-stop-bike,
 .chat-stop-pill.armed .chat-stop-bike {
   opacity: 0;
   transform: scale(0.8);
 }
 
-.chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph,
 .chat-stop-pill.armed .chat-stop-pill-stop-glyph {
   opacity: 1;
   transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chat-stop-pill:hover:not(:disabled) .chat-stop-bike {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+
+  .chat-stop-pill:hover:not(:disabled) .chat-stop-pill-stop-glyph {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .chat-stop-pill-a11y-label {
@@ -6171,14 +6186,6 @@ li.chat-reply-target::marker {
   .chat-stop-bike-wind {
     opacity: 0;
   }
-}
-
-.chat-attach-button {
-  color: color-mix(in srgb, var(--state-info) 78%, var(--text-primary));
-}
-
-.chat-image-attach-button {
-  color: color-mix(in srgb, var(--state-warning) 78%, var(--text-primary));
 }
 
 .chat-attachment-action-tray {
@@ -6242,6 +6249,10 @@ li.chat-reply-target::marker {
   color: var(--text-primary);
   box-shadow: none;
   outline: none;
+}
+
+.chat-tool-button:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 .chat-tool-button:disabled {
@@ -6596,8 +6607,8 @@ li.chat-reply-target::marker {
   transform: translateY(4px) scale(0.98);
   transform-origin: right bottom;
   transition:
-    opacity 120ms ease,
-    transform 120ms ease;
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
   backdrop-filter: blur(16px) saturate(1.06);
   -webkit-backdrop-filter: blur(16px) saturate(1.06);
 }
@@ -7329,7 +7340,7 @@ li.chat-reply-target::marker {
 .chat-title-project-menu,
 .chat-title-prompt-menu,
 .chat-hub-popover {
-  transform-origin: top center;
+  transform-origin: top left;
 }
 
 .chat-plan-surface.desktop,
@@ -7376,7 +7387,7 @@ li.chat-reply-target::marker {
 .chat-edge-surface-content {
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  transition: --chat-edge-hidden-alpha 180ms var(--ease-out);
+  transition: --chat-edge-hidden-alpha var(--motion-standard) var(--ease-out);
 }
 
 .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,
@@ -8080,7 +8091,7 @@ li.chat-reply-target::marker {
   border-radius: 7px;
   background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   color: color-mix(in srgb, var(--accent-primary) 78%, var(--text-primary));
-  transition: background 120ms ease;
+  transition: background var(--motion-fast) var(--ease-standard);
 }
 
 .session-archive-menu-item:hover .session-archive-menu-item-icon {
@@ -8127,6 +8138,20 @@ li.chat-reply-target::marker {
   border-radius: var(--radius-control);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-overlay);
+  transform-origin: top left;
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
+}
+
+.chat-file-link-context-menu.sl-menu-exit {
+  /* Must fit MENU_EXIT_MS (120ms) or the portal unmounts mid-animation. */
+  animation: sl-menu-out var(--motion-fast) var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-file-link-context-menu {
+    animation: none;
+  }
 }
 
 .chat-file-link-context-menu button {

@@ -1540,6 +1540,17 @@ function clampFloatingTop(top: number, minTop: number, maxTop: number): number {
   return Math.min(maxTop, Math.max(minTop, top));
 }
 
+function applyFloatingDragFriction(top: number, minTop: number, maxTop: number): number {
+  const OVERSHOOT_DAMPING = 0.35;
+  if (top < minTop) {
+    return minTop - (minTop - top) * OVERSHOOT_DAMPING;
+  }
+  if (top > maxTop) {
+    return maxTop + (top - maxTop) * OVERSHOOT_DAMPING;
+  }
+  return top;
+}
+
 function isFloatingControlSide(value: unknown): value is PersistedFloatingControlSide {
   return value === 'left' || value === 'right';
 }
@@ -3213,7 +3224,7 @@ export function App() {
   const [terminalPanelHeight, setTerminalPanelHeight] = useState(280);
   const terminalPanelResizeRef = useRef<{pointerId: number; originY: number; startHeight: number} | null>(null);
   const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);
-  const [previewTabMenu, setPreviewTabMenu] = useState<{tabId: string; x: number; y: number} | null>(null);
+  const [previewTabMenu, setPreviewTabMenu, previewTabMenuExiting] = useMenuExitState<{tabId: string; x: number; y: number}>();
   const [previewWorkbenchFullscreen, setPreviewWorkbenchFullscreen] = useState(false);
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
@@ -3246,8 +3257,8 @@ export function App() {
   const quickFileSearchGenerationRef = useRef(0);
   const quickFileQueryIdRef = useRef(0);
   const quickFileQuerySessionIdRef = useRef(`quick-file-${Date.now()}`);
-  const [previewSelectionMenu, setPreviewSelectionMenu] = useState<PreviewSelectionMenuState | null>(null);
-  const [chatFileLinkMenu, setChatFileLinkMenu] = useState<ChatFileLinkMenuState | null>(null);
+  const [previewSelectionMenu, setPreviewSelectionMenu, previewSelectionMenuExiting] = useMenuExitState<PreviewSelectionMenuState>();
+  const [chatFileLinkMenu, setChatFileLinkMenu, chatFileLinkMenuExiting] = useMenuExitState<ChatFileLinkMenuState>();
   const previewSelectionMenuRef = useRef<HTMLDivElement | null>(null);
   const previewContextSelectionRef = useRef<PreviewSelectionSnapshot | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -7124,8 +7135,9 @@ export function App() {
         ? ({
             top: `${floatingDragState ? floatingDragState.startTop : effectiveFloatingControlTop}px`,
             transform: floatingDragState
-              ? `translateY(${floatingDragState.currentTop - floatingDragState.startTop}px) scale(1.06)`
+              ? `translateY(${floatingDragState.currentTop - floatingDragState.startTop}px)`
               : undefined,
+            scale: floatingDragState ? '1.06' : undefined,
           } as React.CSSProperties)
         : undefined,
     [effectiveFloatingControlTop, floatingDragState, isWide],
@@ -7183,7 +7195,7 @@ export function App() {
       }
       setFloatingDragState({
         ...current,
-        currentTop: clampFloatingTop(
+        currentTop: applyFloatingDragFriction(
           current.startTop + deltaY,
           floatingBounds.minTop,
           floatingBounds.maxTop,
@@ -21100,6 +21112,7 @@ export function App() {
       x={previewTabMenu.x}
       y={previewTabMenu.y}
       onClose={() => setPreviewTabMenu(null)}
+      exiting={previewTabMenuExiting}
     >
       {renderPreviewTabActions(previewTabMenuTab, () => setPreviewTabMenu(null))}
     </PreviewTabContextMenu>
@@ -21263,7 +21276,7 @@ export function App() {
   const previewSelectionContextMenu = previewSelectionMenu ? (
     <div
       ref={previewSelectionMenuRef}
-      className="preview-selection-context-menu"
+      className={`preview-selection-context-menu${previewSelectionMenuExiting ? ' sl-menu-exit' : ''}`}
       style={{left: previewSelectionMenu.x, top: previewSelectionMenu.y}}
       role="menu"
     >
@@ -21284,6 +21297,7 @@ export function App() {
       x={chatFileLinkMenu.x}
       y={chatFileLinkMenu.y}
       link={chatFileLinkMenu.link}
+      exiting={chatFileLinkMenuExiting}
       canOpenInVSCode={canInvokeDesktopFileAction(
         chatFileLinkDesktopBridge,
         'vscode',

@@ -5,10 +5,11 @@ type PreviewTabContextMenuProps = {
   x: number;
   y: number;
   onClose: () => void;
+  exiting?: boolean;
   children: React.ReactNode;
 };
 
-export function PreviewTabContextMenu({x, y, onClose, children}: PreviewTabContextMenuProps) {
+export function PreviewTabContextMenu({x, y, onClose, exiting = false, children}: PreviewTabContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {

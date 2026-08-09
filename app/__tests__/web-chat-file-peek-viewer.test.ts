@@ -679,11 +679,11 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain("event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)");
     expect(mainTsx).toContain('className="quick-file-search-overlay"');
 
-    expect(mainTsx).toContain('const [previewSelectionMenu, setPreviewSelectionMenu] = useState<PreviewSelectionMenuState | null>(null);');
+    expect(mainTsx).toContain('const [previewSelectionMenu, setPreviewSelectionMenu, previewSelectionMenuExiting] = useMenuExitState<PreviewSelectionMenuState>();');
     expect(mainTsx).toContain('const handlePreviewSelectionContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {');
     expect(mainTsx).toContain("activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff'");
     expect(mainTsx).toContain('navigator.clipboard.writeText(previewSelectionMenu.text)');
-    expect(mainTsx).toContain('className="preview-selection-context-menu"');
+    expect(mainTsx).toContain('className={`preview-selection-context-menu${previewSelectionMenuExiting ? \' sl-menu-exit\' : \'\'}`}');
 
     expect(stylesCss).toContain('.preview-workbench-search-bar');
     expect(stylesCss).toContain('.quick-file-search-overlay');
@@ -878,7 +878,7 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain("import {ChatFileLinkContextMenu");
     expect(mainTsx).toContain(
-      'const [chatFileLinkMenu, setChatFileLinkMenu] = useState<ChatFileLinkMenuState | null>(null);',
+      'const [chatFileLinkMenu, setChatFileLinkMenu, chatFileLinkMenuExiting] = useMenuExitState<ChatFileLinkMenuState>();',
     );
     expect(mainTsx).toContain('onContextMenu={event => {');
     expect(mainTsx).toContain('if (!targetFile) return;');

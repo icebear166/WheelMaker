@@ -75,14 +75,15 @@ export function useSheetDragToDismiss(
     const elapsed = Math.max(1, Date.now() - drag.startTime);
     const velocity = distance / elapsed;
     const dismissed = distance > threshold || velocity > velocityThreshold;
-    if (!dismissed) {
-      setReleaseDurationMs(resolveSheetReleaseDuration(velocity));
-    }
     setDragging(false);
-    setDragOffset(0);
     if (dismissed) {
+      // Dismissed by drag: keep dragOffset so the exit animation starts from
+      // the gesture position instead of teleporting back to 0.
       onDismiss();
+      return;
     }
+    setReleaseDurationMs(resolveSheetReleaseDuration(velocity));
+    setDragOffset(0);
   }, [onDismiss, threshold, velocityThreshold]);
 
   return {

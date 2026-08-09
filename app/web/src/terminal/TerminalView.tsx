@@ -2,6 +2,7 @@ import React, {forwardRef, useEffect, useImperativeHandle, useRef, useState} fro
 import {Terminal, type ITheme} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
 import {Icon} from '../common/Icon';
+import {useMenuExitState} from '../chat/sessionlist/menuExit';
 
 export type TerminalThemeMode = 'dark' | 'light';
 
@@ -93,7 +94,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   },
   ref,
 ) {
-  const [copyMenu, setCopyMenu] = useState<{left: number; top: number; text: string} | null>(null);
+  const [copyMenu, setCopyMenu, copyMenuExiting] = useMenuExitState<{left: number; top: number; text: string}>();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -377,7 +378,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       {copyMenu ? (
         <div
           ref={copyMenuRef}
-          className="terminal-copy-context-menu"
+          className={`terminal-copy-context-menu${copyMenuExiting ? ' sl-menu-exit' : ''}`}
           role="menu"
           style={{left: copyMenu.left, top: copyMenu.top}}
         >

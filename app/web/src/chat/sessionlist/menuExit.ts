@@ -26,7 +26,7 @@ export function useMenuExit<T extends object>(setMenu: (value: T | null) => void
       if (!current) {
         return;
       }
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         setMenu(null);
         return;
       }

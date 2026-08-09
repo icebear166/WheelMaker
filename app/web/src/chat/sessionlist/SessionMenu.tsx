@@ -96,7 +96,7 @@ export function SessionMenu({
   return (
     <div
       ref={menuRef}
-      className={`project-session-action-menu sl-session-list-popover${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}${dragging ? ' dragging' : ''}`}
+      className={`project-session-action-menu sl-session-list-popover${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}${exiting && dragOffset > 0 ? ' from-drag' : ''}${dragging ? ' dragging' : ''}`}
       role="menu"
       aria-label="Session actions"
       style={sheet

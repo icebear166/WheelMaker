@@ -152,9 +152,12 @@ export function GlobalTooltip(): React.JSX.Element | null {
         placement: 'top',
         strategy: 'fixed',
         middleware: [offset(6), flip(), shift({padding: 8})],
-      }).then(({x, y}) => {
+      }).then(({x, y, placement}) => {
         node.style.left = `${x}px`;
         node.style.top = `${y}px`;
+        const side = placement.split('-')[0];
+        node.style.transformOrigin = side === 'top' ? 'bottom center' : 'top center';
+        node.dataset.placement = side === 'top' ? 'top' : 'bottom';
       });
     };
     update();

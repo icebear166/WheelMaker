@@ -351,7 +351,7 @@
 .project-session-action-menu,
 .wide-project-action-popover,
 .session-archive-menu {
-  animation: sl-menu-in 140ms var(--ease-out);
+  animation: sl-menu-in var(--motion-fast) var(--ease-out);
 }
 .sl-menu-exit {
   animation: sl-menu-out var(--motion-fast) var(--ease-out) forwards;
@@ -840,6 +840,9 @@
 @keyframes sl-sheet-out {
   to { opacity: 0; transform: translateY(16px); }
 }
+@keyframes sl-sheet-out-drag {
+  to { opacity: 0; transform: translateY(100%); }
+}
 @keyframes sl-sheet-overlay-out {
   to { opacity: 0; }
 }
@@ -853,7 +856,7 @@
     inset: 0;
     z-index: 70;
     background: rgba(0, 0, 0, 0.42);
-    animation: sl-sheet-overlay-in 180ms var(--ease-out);
+    animation: sl-sheet-overlay-in var(--motion-standard) var(--ease-out);
   }
   @keyframes sl-sheet-overlay-in {
     from { opacity: 0; }
@@ -878,7 +881,7 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
-    animation: sl-sheet-in 180ms var(--ease-out);
+    animation: sl-sheet-in var(--motion-standard) var(--ease-out);
   }
   .project-session-action-menu.sl-sheet .session-menu-header {
     display: grid;
@@ -923,6 +926,11 @@
   .project-session-action-menu.sl-sheet.sl-menu-exit {
     /* Must fit MENU_EXIT_MS (120ms) or the portal unmounts mid-animation. */
     animation: sl-sheet-out var(--motion-fast) var(--ease-out) forwards;
+  }
+  .project-session-action-menu.sl-sheet.sl-menu-exit.from-drag {
+    /* Drag dismiss: continue from the gesture offset (implicit `from`) to
+       fully off-screen instead of replaying the 16px tap-close exit. */
+    animation-name: sl-sheet-out-drag;
   }
   .project-session-action-menu.sl-sheet .project-session-menu-btn {
     min-height: 44px;
@@ -978,7 +986,7 @@
     -webkit-backdrop-filter: none;
     box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
     transform-origin: bottom center;
-    animation: sl-sheet-in 180ms var(--ease-out);
+    animation: sl-sheet-in var(--motion-standard) var(--ease-out);
   }
   .session-archive-menu-grip {
     display: block;

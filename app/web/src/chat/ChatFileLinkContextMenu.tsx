@@ -26,6 +26,7 @@ export type ChatFileLinkContextMenuProps = {
   htmlActionLabel: ChatFileLinkHtmlActionLabel | null;
   onAction: (action: ChatFileLinkMenuAction) => void;
   onClose: () => void;
+  exiting?: boolean;
 };
 
 type MenuEntry = {
@@ -52,6 +53,7 @@ export function ChatFileLinkContextMenu({
   htmlActionLabel,
   onAction,
   onClose,
+  exiting = false,
 }: ChatFileLinkContextMenuProps) {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -125,7 +127,7 @@ export function ChatFileLinkContextMenu({
   return (
     <div
       ref={menuRef}
-      className="chat-file-link-context-menu"
+      className={`chat-file-link-context-menu${exiting ? ' sl-menu-exit' : ''}`}
       style={{left: x, top: y}}
       role="menu"
       onKeyDown={event => handleMenuKeyDown(event, menuRef.current)}

@@ -9,6 +9,7 @@ import {
 } from './previewWorkbenchState';
 import {Icon, type IconName} from '../common/Icon';
 import {WorkbenchChrome} from '../shell/workbench/WorkbenchChrome';
+import {MENU_EXIT_MS} from '../chat/sessionlist/menuExit';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
 
@@ -86,18 +87,41 @@ export function PreviewWorkbenchChrome({
   const [tabListOpen, setTabListOpen] = React.useState(false);
   const activeTitle = previewWorkbenchHeaderTitle(activeTab);
   const drawerOpen = drawerMode !== 'closed';
-  const drawerContent = drawerMode === 'files'
+  // Keep the last open mode mounted briefly after close so the panel can play
+  // its exit animation; reopening within the window cancels the exit.
+  const [exitMode, setExitMode] = React.useState<PreviewWorkbenchDrawerMode | null>(null);
+  const prevDrawerModeRef = React.useRef(drawerMode);
+  React.useEffect(() => {
+    const prev = prevDrawerModeRef.current;
+    prevDrawerModeRef.current = drawerMode;
+    if (drawerMode !== 'closed') {
+      setExitMode(null);
+      return undefined;
+    }
+    if (prev === 'closed') {
+      return undefined;
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return undefined;
+    }
+    setExitMode(prev);
+    const timer = window.setTimeout(() => setExitMode(null), MENU_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [drawerMode]);
+  const renderedMode = drawerOpen ? drawerMode : exitMode;
+  const drawerContent = renderedMode === 'files'
     ? fileDrawer
-    : drawerMode === 'git'
+    : renderedMode === 'git'
       ? gitDrawer
       : null;
+  const drawerExiting = !drawerOpen && exitMode !== null;
   const useDrawerPortal = mode === 'desktop' && !!drawerPortalTarget;
-  const drawerPanel = drawerOpen && drawerContent ? (
+  const drawerPanel = renderedMode && drawerContent ? (
     <div
       ref={drawerPanelRef}
-      className={`preview-workbench-drawer-panel${useDrawerPortal ? ' external' : ''}`}
+      className={`preview-workbench-drawer-panel${useDrawerPortal ? ' external' : ''}${drawerExiting ? ' exiting' : ''}`}
     >
-      {drawerMode === 'files' && fileDrawerSearch ? (
+      {renderedMode === 'files' && fileDrawerSearch ? (
         <div className="preview-workbench-drawer-search">{fileDrawerSearch}</div>
       ) : null}
       <div className="preview-workbench-drawer-content">{drawerContent}</div>
