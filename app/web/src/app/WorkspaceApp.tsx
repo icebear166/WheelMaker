@@ -21756,6 +21756,7 @@ export function App() {
       canDownload={chatFileLinkMenu.fileAvailable && !!chatFileLinkMenu.downloadSource}
       canShare={
         chatFileLinkMenu.fileAvailable &&
+        !!chatFileLinkMenu.link &&
         chatFileLinkMenu.link.relativePath !== null &&
         !!shareKindForPath(chatFileLinkMenu.link.path)
       }
