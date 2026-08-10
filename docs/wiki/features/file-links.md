@@ -1,4 +1,4 @@
-> 摘要：本页维护聊天文件入口的路径解析、项目外预览、共享右键菜单、Desktop 文件动作与文件剪贴板，以及 Markdown HTML 导出边界。
+> 摘要：本页维护文件入口的路径解析、项目外预览、右键与长按共享菜单、跨设备流式下载、Desktop 文件动作与文件剪贴板，以及 Markdown HTML 导出边界。
 
 # File Links
 
@@ -7,6 +7,8 @@
 > Markdown HTML 导出来源：[`docs/scope/2026-07-24-markdown-html-export.md`](../../scope/2026-07-24-markdown-html-export.md)
 
 > 共享文件菜单来源：[`docs/scope/2026-07-28-file-context-menu-actions.md`](../../scope/2026-07-28-file-context-menu-actions.md)
+
+> 文件下载来源：[`docs/scope/2026-08-09-file-downloads.md`](../../scope/2026-08-09-file-downloads.md)
 
 ## 本地文件识别
 
@@ -29,25 +31,42 @@
 
 ## 文件链接菜单
 
-右键点击已识别的聊天文件链接或 Changed Files 中的单个文件行会打开共享文件菜单。Changed file 左键继续打开 diff，`Changed N files` 汇总按钮不接管右键菜单。
+鼠标右键点击或触屏长按已识别的文件目标会打开同一套共享文件菜单。入口包括聊天文件链接、已发送附件、Changed Files 中未删除的单个文件行、普通 file preview/tab，以及 Preview 文件树和搜索结果。Changed file 左键继续打开 diff，`Changed N files` 汇总按钮不接管文件菜单。
 
-菜单第一项固定为 `Preview file`，用于打开普通 file preview tab。文件已删除或读取失败时，预览 tab 使用现有错误状态说明原因。项目内文件显示 `Copy relative path` 和 `Copy absolute path`；项目外文件只显示 `Copy absolute path`。复制结果只包含路径，不包含链接中的行号。
+菜单第一项固定为 `Preview file`，用于打开普通 file preview tab；有效的当前普通文件或可解析的已发送附件随后显示 `Download`。文件已删除或读取失败时，预览 tab 使用现有错误状态说明原因。项目内文件显示 `Copy relative path` 和 `Copy absolute path`；项目外文件只显示 `Copy absolute path`。复制结果只包含路径，不包含链接中的行号。
 
 Desktop 菜单按打开、文件复制、路径复制分为三组，不显示分组标题：
 
 1. `Preview file`
-2. `Open with VS Code`
-3. `Show in File Explorer`
-4. `Copy file`
-5. `Copy file as HTML`（仅项目内 Markdown）
-6. `Copy relative path`（仅项目内文件）
-7. `Copy absolute path`
+2. `Download`
+3. `Open with VS Code`
+4. `Show in File Explorer`
+5. `Copy file`
+6. `Copy file as HTML`（仅项目内 Markdown）
+7. `Copy relative path`（仅项目内文件）
+8. `Copy absolute path`
 
 两个文件复制动作和路径复制动作之间使用轻量分隔线；不可用动作隐藏后不保留多余分隔线。浏览器与 Android 不显示 `Copy file`，项目内 Markdown 使用 `Export as HTML`。
 
-点击空白处、按 Escape、选择动作、滚动或调整窗口尺寸会关闭菜单。普通网页链接、Relay 链接和无法识别的 URI 不受文件菜单接管。现有 preview 文件菜单及其动作继续保留。
+点击空白处、按 Escape、选择动作、滚动或调整窗口尺寸会关闭菜单。长按在超过移动阈值、抬起或取消时不触发；完成长按后吞掉随后的合成 click，避免同时打开 preview。普通网页链接、Relay 链接和无法识别的 URI 不受文件菜单接管。现有 preview 文件菜单及其动作继续保留。
 
-菜单使用现有线性图标体系和主题 token。浅色主题使用较低浓度阴影并保持清晰边界；深浅主题中的图标、分隔线、hover 和 focus-visible 状态都必须清晰。移动端不新增长按菜单。
+菜单使用现有线性图标体系和主题 token。浅色主题使用较低浓度阴影并保持清晰边界；深浅主题中的图标、分隔线、hover 和 focus-visible 状态都必须清晰。
+
+## 文件下载
+
+下载目标始终是当前操作设备，不是文件所在的 Hub 主机。Web UI 只提交三种受管理来源：项目内当前普通文件、Hub 主机上的项目外绝对路径普通文件，以及能由 `sessionId` 配合 `attachmentId` 或受控 `file://` URI 解析的已发送 Session 附件。目录、已删除 Changed file、无法解析的附件、仅存在当前设备草稿中的附件、diff/历史快照、Relay 链接和任意 HTTP(S) URL 不进入下载链路。
+
+已认证 WebSocket 客户端通过 `file.download.prepare` 向 Registry 申请任务。请求包含当前 Web session 的 CSRF token、项目 ID 和一个源描述；Registry 先让项目所属 Hub 验证来源，再创建短时、高熵、只对应一个来源和一个下载任务的 capability URL。URL 只包含 Registry base path 与随机 token，不包含 Hub 地址或主机文件路径。下载 GET 还必须携带创建任务时的同一有效 Web session；token 本身不是匿名凭证，首次有效 GET 原子消费任务，后续 GET 不能再次读取内容。
+
+Registry 通过下载专用的 Hub `open`、顺序 `read` 和 `close` 方法传输内容。Hub 打开只读文件句柄，固定源文件名、大小、MIME 和文件身份；每次只读取一个有界分块，并在读取期间验证文件身份、大小和修改时间未变化。Registry 解码单个传输分块后立即写入同一个 HTTP 响应，不把完整文件读入 Hub、Registry 或 Web UI 内存，也不复用会整文件读取的 preview/read 方法。完成、客户端取消、Hub 断线、读取错误或源变化都会关闭句柄并使任务失效。
+
+响应使用准确的 `Content-Length`、安全编码的 `Content-Disposition: attachment`、受控 MIME、`Cache-Control: no-store` 和 `Accept-Ranges: none`。不支持 Range、断点续传、失败自动重试或跨重启恢复；失败后由用户重新执行 `Download`。文件名采用源 basename 或附件原始名称，缺失或不安全时使用稳定 fallback；保存位置、重名处理、进度和取消由平台原生下载界面负责。
+
+- 浏览器通过同源 capability URL 交给浏览器下载管理器。
+- WheelMaker Desktop 通过同一 URL 交给 WebView2 原生下载界面，不新增读取 Hub 文件的 Desktop bridge。
+- Android Web UI 先在用户动作中保留一次 `file.download` grant，再将 prepare 返回的 URL 交给受信任 native bridge。Native 端重新验证 HTTPS scheme、Registry 精确 origin、base path 和 `/download/<token>` 结构，只复制该同源 URL 的当前 Web session cookie，然后交给系统 `DownloadManager` 与 Downloads 目录。
+
+这些方法是 Registry 2.7 的增量能力，不修改 protocol version，也不改变现有 preview、附件读取或 Desktop `Copy file`。新客户端连接不支持下载方法的旧 Hub 时显示明确的不可用错误，不回退到整文件读取或 Base64 聚合。
 
 ## Desktop 文件动作
 

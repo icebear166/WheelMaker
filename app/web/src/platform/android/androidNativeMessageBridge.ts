@@ -21,7 +21,7 @@ export type AndroidNativeMessageClient = {
 };
 
 export type AndroidNativeRpcFacade = {
-  reserveUserAction(action: 'image.share' | 'html.share' | 'speech.start'): Promise<string>;
+  reserveUserAction(action: 'image.share' | 'html.share' | 'speech.start' | 'file.download'): Promise<string>;
   deepSeekLogin(): Promise<string>;
   drainWebDiagnostics(): Promise<string>;
   setDiagnosticLogLevel(logLevel: string): Promise<string>;
@@ -44,6 +44,7 @@ export type AndroidNativeRpcFacade = {
   appendMarkdownHtmlShare(transferId: string, index: number, data: string): Promise<string>;
   commitMarkdownHtmlShare(transferId: string): Promise<string>;
   cancelMarkdownHtmlShare(transferId: string): Promise<string>;
+  startFileDownload(url: string, fileName: string, mimeType: string, size: number, userActionToken: string): Promise<string>;
   clearPortRelaySiteData(relayUrl: string): Promise<string>;
 };
 
@@ -230,6 +231,8 @@ export function getAndroidNativeRpcFacade(
       request('html.share.chunk', {transferId, index, data}),
     commitMarkdownHtmlShare: transferId => request('html.share.commit', {transferId}),
     cancelMarkdownHtmlShare: transferId => request('html.share.cancel', {transferId}),
+    startFileDownload: (url, fileName, mimeType, size, userActionToken) =>
+      request('file.download.start', {url, fileName, mimeType, size, userActionToken}),
     clearPortRelaySiteData: relayUrl => request('relay.clearSiteData', {relayUrl}),
   };
 }

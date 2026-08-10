@@ -19,6 +19,8 @@ import type {
   RegistryFileIndexRebuildResponse,
   RegistryFileIndexSearchResponse,
   RegistryFileIndexStatusResponse,
+  RegistryFileDownloadPrepareResponse,
+  RegistryFileDownloadSource,
   RegistryFsInfo,
   RegistryFsListResponse,
   RegistryFsReadResponse,
@@ -1430,6 +1432,43 @@ export class RegistryRepository {
       (resp.payload ?? {}) as RegistryFsReadResponse,
       path,
     );
+  }
+
+  async prepareFileDownload(
+    projectId: string,
+    csrfToken: string,
+    source: RegistryFileDownloadSource,
+  ): Promise<RegistryFileDownloadPrepareResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.FileDownloadPrepare,
+      projectId,
+      payload: {csrfToken, source},
+      timeoutMs: 20000,
+    });
+    const body = response.payload && typeof response.payload === 'object'
+      ? response.payload as Partial<RegistryFileDownloadPrepareResponse>
+      : {};
+    if (
+      body.ok !== true
+      || typeof body.downloadPath !== 'string'
+      || !body.downloadPath
+      || typeof body.fileName !== 'string'
+      || !body.fileName
+      || typeof body.mimeType !== 'string'
+      || !body.mimeType
+      || typeof body.size !== 'number'
+      || !Number.isSafeInteger(body.size)
+      || body.size < 0
+    ) {
+      throw new Error('Registry returned invalid file download metadata.');
+    }
+    return {
+      ok: true,
+      downloadPath: body.downloadPath,
+      fileName: body.fileName,
+      mimeType: body.mimeType,
+      size: body.size,
+    };
   }
 
   private normalizeFileReadResponse(

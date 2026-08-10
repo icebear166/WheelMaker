@@ -207,6 +207,36 @@ func TestRegistryDefaultProtocolVersionIs27(t *testing.T) {
 	}
 }
 
+func TestFileDownloadMethodsAreAdditiveWithoutVersionChange(t *testing.T) {
+	prepare, ok := RegistryMethod("file.download.prepare")
+	if !ok {
+		t.Fatal("file.download.prepare is not registered")
+	}
+	if prepare.Route != RegistryRouteKind("file_download") || !prepare.RequiresProjectID {
+		t.Fatalf("prepare descriptor=%+v", prepare)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleClient), prepare.Method) || RegistryMethodAllowed(string(RegistryRoleHub), prepare.Method) {
+		t.Fatalf("unexpected prepare roles=%v", prepare.Roles)
+	}
+
+	for _, method := range []string{"file.download.open", "file.download.read", "file.download.close"} {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("%s is not registered", method)
+		}
+		if desc.Route != RegistryRouteProjectForward || !desc.RequiresProjectID || len(desc.Roles) != 0 {
+			t.Fatalf("%s descriptor=%+v", method, desc)
+		}
+		if RegistryMethodAllowed(string(RegistryRoleClient), method) || RegistryMethodAllowed(string(RegistryRoleHub), method) {
+			t.Fatalf("%s must remain internal", method)
+		}
+	}
+
+	if DefaultProtocolVersion != "2.7" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
+	}
+}
+
 func TestSessionPermissionRespondIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 	descriptor, ok := RegistryMethod(RegistryMethodSessionPermissionRespond)
 	if !ok {

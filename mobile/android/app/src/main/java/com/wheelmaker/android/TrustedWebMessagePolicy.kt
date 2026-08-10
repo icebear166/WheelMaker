@@ -109,6 +109,7 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
             "html.share.chunk",
             "html.share.commit",
             "html.share.cancel",
+            "file.download.start",
             "relay.clearSiteData"
         )
         val SENSITIVE_ACTIONS = setOf(

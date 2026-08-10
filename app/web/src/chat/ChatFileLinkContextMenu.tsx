@@ -5,6 +5,7 @@ import {ChatIcon, type ChatIconName} from './ChatIcon';
 
 export type ChatFileLinkMenuAction =
   | 'preview'
+  | 'download'
   | 'vscode'
   | 'folder'
   | 'copy-file'
@@ -19,10 +20,11 @@ export type ChatFileLinkHtmlActionLabel =
 export type ChatFileLinkContextMenuProps = {
   x: number;
   y: number;
-  link: PreviewFileLink;
+  link: PreviewFileLink | null;
   canOpenInVSCode: boolean;
   canShowInFolder: boolean;
   canCopyFile: boolean;
+  canDownload: boolean;
   htmlActionLabel: ChatFileLinkHtmlActionLabel | null;
   onAction: (action: ChatFileLinkMenuAction) => void;
   onClose: () => void;
@@ -50,6 +52,7 @@ export function ChatFileLinkContextMenu({
   canOpenInVSCode,
   canShowInFolder,
   canCopyFile,
+  canDownload,
   htmlActionLabel,
   onAction,
   onClose,
@@ -101,6 +104,9 @@ export function ChatFileLinkContextMenu({
   const actionGroups: MenuEntry[][] = [
     menuGroup(
       {action: 'preview', icon: 'eye', label: 'Preview file'},
+      canDownload
+        ? {action: 'download', icon: 'arrowDown', label: 'Download'}
+        : null,
       canOpenInVSCode
         ? {action: 'vscode', icon: 'code', label: 'Open with VS Code'}
         : null,
@@ -117,10 +123,12 @@ export function ChatFileLinkContextMenu({
         : null,
     ),
     menuGroup(
-      link.relativePath !== null
+      link?.relativePath !== null && link
         ? {action: 'copy-relative', icon: 'fileSymlink', label: 'Copy relative path'}
         : null,
-      {action: 'copy-absolute', icon: 'clipboard', label: 'Copy absolute path'},
+      link
+        ? {action: 'copy-absolute', icon: 'clipboard', label: 'Copy absolute path'}
+        : null,
     ),
   ].filter(group => group.length > 0);
 

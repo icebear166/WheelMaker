@@ -214,6 +214,36 @@ describe('preview file regressions', () => {
     expect(renderer.root.findByProps({role: 'status'}).children.join('')).toContain('No files');
   });
 
+  test('reports a file context action without applying it to directories', async () => {
+    const onFileContextMenu = jest.fn();
+    let renderer!: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        React.createElement(FileExplorerTree as React.ComponentType<any>, {
+          showSectionTitle: false,
+          dirEntries: {'.': [
+            {name: 'src', path: 'src', kind: 'dir'},
+            {name: 'report.txt', path: 'report.txt', kind: 'file'},
+          ]},
+          loadingDirs: {},
+          selectedFile: '',
+          isExpanded: () => false,
+          toggleDirectory: () => undefined,
+          resolveFileIcon: () => ({glyph: '', color: ''}),
+          onFileSelect: () => undefined,
+          onFileContextMenu,
+        }),
+      );
+    });
+    const file = renderer.root.find(node => node.props.className === 'item file');
+    await ReactTestRenderer.act(() => file.props.onContextMenu({
+      preventDefault: jest.fn(), clientX: 11, clientY: 13,
+    }));
+    expect(onFileContextMenu).toHaveBeenCalledWith('report.txt', {x: 11, y: 13});
+    const directory = renderer.root.find(node => node.props.className === 'item dir');
+    expect(directory.props.onContextMenu).toBeUndefined();
+  });
+
   test('finds a Markdown block whose source range contains the requested line', () => {
     const {findPreviewLineTarget} = optionalRequire<PreviewLineNavigationModule>(
       '../web/src/preview/previewLineNavigation',

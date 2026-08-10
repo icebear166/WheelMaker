@@ -64,6 +64,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
     private lateinit var androidImageShareRuntime: AndroidImageShareRuntime
     private lateinit var androidHtmlShareRuntime: AndroidHtmlShareRuntime
+    private lateinit var androidFileDownloadRuntime: AndroidFileDownloadRuntime
     private lateinit var androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime
     private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
     private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
@@ -113,6 +114,12 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
         androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
         androidImageShareRuntime = AndroidImageShareRuntime(this)
         androidHtmlShareRuntime = AndroidHtmlShareRuntime(this)
+        androidFileDownloadRuntime = AndroidFileDownloadRuntime(
+            configuredBaseUrl = { configuredBaseUrl },
+            cookieProvider = { url -> CookieManager.getInstance().getCookie(url) },
+            userAgentProvider = { webView.settings.userAgentString.orEmpty() },
+            enqueue = ::enqueueManagedFileDownload
+        )
         androidPortRelaySiteDataRuntime = AndroidPortRelaySiteDataRuntime(webView)
         wheelMakerBridge = WheelMakerBridge(
             androidSpeechRuntime,
@@ -120,6 +127,7 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
             androidApkUpdateRuntime,
             androidImageShareRuntime,
             androidHtmlShareRuntime,
+            androidFileDownloadRuntime,
             androidPortRelaySiteDataRuntime,
             androidWebDiagnostics,
             androidDiagnosticLogLevelStore,
@@ -798,6 +806,25 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
         val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         manager.enqueue(request)
         Toast.makeText(this, "Download started.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun enqueueManagedFileDownload(download: AndroidFileDownloadRequest): Long {
+        val request = DownloadManager.Request(Uri.parse(download.url))
+            .setMimeType(download.mimeType)
+            .setTitle(download.fileName)
+            .setDescription("WheelMaker")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, download.fileName)
+        if (download.cookie.isNotBlank()) {
+            request.addRequestHeader("Cookie", download.cookie)
+        }
+        if (download.userAgent.isNotBlank()) {
+            request.addRequestHeader("User-Agent", download.userAgent)
+        }
+        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        return manager.enqueue(request).also {
+            Toast.makeText(this, "Download started.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     companion object {

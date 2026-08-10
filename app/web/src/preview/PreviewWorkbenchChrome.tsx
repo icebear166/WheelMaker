@@ -10,6 +10,7 @@ import {
 import {Icon, type IconName} from '../common/Icon';
 import {WorkbenchChrome} from '../shell/workbench/WorkbenchChrome';
 import {MENU_EXIT_MS} from '../chat/sessionlist/menuExit';
+import {useContextMenuTargetGesture} from '../common/useContextMenuGesture';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
 
@@ -78,6 +79,9 @@ export function PreviewWorkbenchChrome({
   onMobileFullscreenChange,
   children,
 }: PreviewWorkbenchChromeProps) {
+  const bindTabContextMenu = useContextMenuTargetGesture<string>((tabId, position) => {
+    onTabContextMenu?.(tabId, position);
+  });
   const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);
   const drawerPanelRef = React.useRef<HTMLDivElement | null>(null);
   const actionsMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -323,10 +327,7 @@ export function PreviewWorkbenchChrome({
             key={`preview-tab:${tab.projectId}:${tab.id}`}
             className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
             data-tooltip={tooltip}
-            onContextMenu={mode === 'desktop' && onTabContextMenu ? event => {
-              event.preventDefault();
-              onTabContextMenu(tab.id, {x: event.clientX, y: event.clientY});
-            } : undefined}
+            {...(onTabContextMenu ? bindTabContextMenu(tab.id) : {})}
           >
             <button
               type="button"

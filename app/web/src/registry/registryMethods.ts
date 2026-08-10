@@ -25,6 +25,7 @@ export const RegistryMethods = {
   ProjectFSSearch: 'project.fs.search',
   ProjectFSGrep: 'project.fs.grep',
   ProjectFSIndexSearch: 'project.fs.index.search',
+  FileDownloadPrepare: 'file.download.prepare',
   ProjectGitRev: 'project.git.rev',
   ProjectGitRefs: 'project.git.refs',
   ProjectGitLog: 'project.git.log',

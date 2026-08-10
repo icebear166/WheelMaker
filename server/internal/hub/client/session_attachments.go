@@ -326,6 +326,25 @@ type resolvedSessionAttachment struct {
 	sidecar  attachmentSidecar
 }
 
+// ResolveSessionAttachmentDownload resolves a persisted attachment without
+// loading its contents into memory.
+func (c *Client) ResolveSessionAttachmentDownload(
+	ctx context.Context,
+	sessionID string,
+	attachmentID string,
+	uri string,
+) (path, fileName, mimeType string, err error) {
+	resolved, err := c.resolveSessionAttachment(ctx, sessionID, attachmentID, uri)
+	if err != nil {
+		return "", "", "", err
+	}
+	fileName = resolved.sidecar.Name
+	if fileName == "" {
+		fileName = filepath.Base(resolved.sidecar.FileName)
+	}
+	return resolved.filePath, fileName, resolved.sidecar.MimeType, nil
+}
+
 func (c *Client) resolveSessionAttachment(ctx context.Context, sessionID, attachmentID, uri string) (resolvedSessionAttachment, error) {
 	if err := ctx.Err(); err != nil {
 		return resolvedSessionAttachment{}, err

@@ -183,6 +183,7 @@ import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
 import {AgentTag} from '../chat/AgentTag';
 import {Icon} from '../common/Icon';
+import {useContextMenuTargetGesture} from '../common/useContextMenuGesture';
 import {RetryToast} from '../common/RetryToast';
 import {createSkillRetryNotice, type SkillRetryNotice} from './skillRetryNotice';
 import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
@@ -596,6 +597,11 @@ import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/spee
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree } from '../file/FileExplorerTree';
 import {
+  fileDownloadSourceForLink,
+  sessionAttachmentDownloadSource,
+  startManagedFileDownload,
+} from '../file/fileDownload';
+import {
   buildFileSearchResultTree,
   flattenFileSearchResultTree,
   type FileSearchResultTreeNode,
@@ -714,6 +720,7 @@ import type {
   RegistryDeviceSession,
   RegistryGitCommitDiff,
   RegistryWorkingTreeFileDiff,
+  RegistryFileDownloadSource,
 } from '../registry/registryTypes';
 
 const loadSettingsBundle = () => import(/* webpackChunkName: "settings" */ '../settings/SettingsBundle');
@@ -1005,9 +1012,16 @@ type ChatFileLinkMenuState = {
   y: number;
   projectId: string;
   projectRoot: string;
-  link: PreviewFileLink;
+  link: PreviewFileLink | null;
   fileAvailable: boolean;
+  downloadSource: RegistryFileDownloadSource | null;
+  attachment: {
+    block: RegistrySessionContentBlock;
+    message: RegistryChatMessage;
+  } | null;
 };
+
+type ManagedFileMenuTarget = Omit<ChatFileLinkMenuState, 'x' | 'y'>;
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -16682,6 +16696,19 @@ export function App() {
     projectRoot = currentProject?.path ?? '',
   ): PreviewFileLink | null =>
     resolvePreviewFileLink(href, projectRoot);
+  const openManagedFileContextMenu = useCallback((
+    target: ManagedFileMenuTarget,
+    position: {x: number; y: number},
+  ) => {
+    setChatFileLinkMenu({
+      ...target,
+      x: Math.min(position.x, Math.max(8, window.innerWidth - 228)),
+      y: Math.min(position.y, Math.max(8, window.innerHeight - 280)),
+    });
+  }, [setChatFileLinkMenu]);
+  const bindManagedFileContextMenu = useContextMenuTargetGesture<ManagedFileMenuTarget>(
+    openManagedFileContextMenu,
+  );
   const chatMarkdownUrlTransform = useCallback((value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return '';
@@ -16764,10 +16791,19 @@ export function App() {
         const textLine = parseTrailingLineNumber(linkText);
         const jumpLine = targetFile?.line ?? textLine;
         const fallbackHref = linkHref || '#';
+        const fileMenuTarget: ManagedFileMenuTarget | null = targetFile ? {
+          projectId: linkProjectId,
+          projectRoot: linkProjectRoot,
+          link: targetFile,
+          fileAvailable: true,
+          downloadSource: fileDownloadSourceForLink(targetFile),
+          attachment: null,
+        } : null;
 
         return (
           <a
             {...rest}
+            {...(fileMenuTarget ? bindManagedFileContextMenu(fileMenuTarget) : {})}
             className={[
               rest.className,
               isFileLink ? 'chat-file-link' : '',
@@ -16799,18 +16835,6 @@ export function App() {
               event.preventDefault();
               openChatFilePeek(targetFile.path, jumpLine ?? null, linkProjectId);
             }}
-            onContextMenu={event => {
-              if (!targetFile) return;
-              event.preventDefault();
-              setChatFileLinkMenu({
-                x: Math.min(event.clientX, Math.max(8, window.innerWidth - 228)),
-                y: Math.min(event.clientY, Math.max(8, window.innerHeight - 280)),
-                projectId: linkProjectId,
-                projectRoot: linkProjectRoot,
-                link: targetFile,
-                fileAvailable: true,
-              });
-            }}
           >
             <>
               {isFileLink ? (
@@ -16827,6 +16851,7 @@ export function App() {
     }),
     [
       currentProject?.path,
+      bindManagedFileContextMenu,
       openChatFilePeek,
       openChatPortRelayLink,
       projects,
@@ -17125,7 +17150,7 @@ export function App() {
     _artifact: RegistrySessionPromptArtifact,
     _message: RegistryChatMessage,
     file: RegistrySessionPromptArtifactFile,
-    event: React.MouseEvent<HTMLButtonElement>,
+    position: {x: number; y: number},
   ) => {
     const targetProjectId =
       selectedArchivedKey?.projectId ||
@@ -17138,16 +17163,52 @@ export function App() {
     if (!targetProjectId || !targetProject || !targetFile) {
       return;
     }
-    event.preventDefault();
-    setChatFileLinkMenu({
-      x: Math.min(event.clientX, Math.max(8, window.innerWidth - 228)),
-      y: Math.min(event.clientY, Math.max(8, window.innerHeight - 280)),
+    openManagedFileContextMenu({
       projectId: targetProjectId,
       projectRoot: targetProject.path,
       link: targetFile,
       fileAvailable: file.status.toUpperCase() !== 'D',
-    });
+      downloadSource: file.status.toUpperCase() !== 'D'
+        ? fileDownloadSourceForLink(targetFile)
+        : null,
+      attachment: null,
+    }, position);
   }, [
+    openManagedFileContextMenu,
+    projectId,
+    projects,
+    selectedArchivedKey?.projectId,
+    selectedChatKey?.projectId,
+  ]);
+
+  const openPromptAttachmentContextMenu = useCallback((
+    block: RegistrySessionContentBlock,
+    message: RegistryChatMessage,
+    position: {x: number; y: number},
+  ) => {
+    const targetProjectId =
+      selectedArchivedKey?.projectId ||
+      selectedChatKey?.projectId ||
+      projectId;
+    const targetProject = projects.find(project => project.projectId === targetProjectId);
+    const source = sessionAttachmentDownloadSource({
+      sessionId: message.sessionId || '',
+      attachmentId: attachmentIdFromBlock(block) || undefined,
+      uri: block.uri,
+    });
+    if (!targetProjectId || !targetProject || !source) {
+      return;
+    }
+    openManagedFileContextMenu({
+      projectId: targetProjectId,
+      projectRoot: targetProject.path,
+      link: null,
+      fileAvailable: true,
+      downloadSource: source,
+      attachment: {block, message},
+    }, position);
+  }, [
+    openManagedFileContextMenu,
     projectId,
     projects,
     selectedArchivedKey?.projectId,
@@ -17666,6 +17727,7 @@ export function App() {
               : undefined
           }
           onOpenPromptAttachment={openChatAttachmentPreview}
+          onOpenPromptAttachmentContextMenu={openPromptAttachmentContextMenu}
           resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
           onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
           onOpenPromptArtifact={
@@ -17705,6 +17767,7 @@ export function App() {
     latestSelectableOptionReplyMessageKey,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
+    openPromptAttachmentContextMenu,
     openPromptArtifactFileContextMenu,
     openPromptArtifactDiff,
     openingPromptArtifactKey,
@@ -17746,6 +17809,7 @@ export function App() {
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
+          onOpenPromptAttachmentContextMenu={openPromptAttachmentContextMenu}
           resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
           onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
           onOpenPromptArtifact={message.method === 'prompt_done' ? openPromptArtifactDiff : undefined}
@@ -17765,6 +17829,7 @@ export function App() {
     chatMarkdownUrlTransform,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
+    openPromptAttachmentContextMenu,
     openPromptArtifactFileContextMenu,
     openPromptArtifactDiff,
     openingPromptArtifactKey,
@@ -17870,6 +17935,7 @@ export function App() {
               markdownComponents={chatMarkdownComponents}
               markdownUrlTransform={chatMarkdownUrlTransform}
               onOpenPromptAttachment={openChatAttachmentPreview}
+              onOpenPromptAttachmentContextMenu={openPromptAttachmentContextMenu}
               resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
               onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
             />
@@ -17892,6 +17958,7 @@ export function App() {
               markdownComponents={chatMarkdownComponents}
               markdownUrlTransform={chatMarkdownUrlTransform}
               onOpenPromptAttachment={openChatAttachmentPreview}
+              onOpenPromptAttachmentContextMenu={openPromptAttachmentContextMenu}
               resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
               onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
               onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
@@ -17916,6 +17983,7 @@ export function App() {
     editPendingChatPrompt,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
+    openPromptAttachmentContextMenu,
     prioritizeQueuedPrompt,
     queuedPromptTurnIndex,
     queuedPromptCanSteer,
@@ -20171,6 +20239,24 @@ export function App() {
         : [...current, path],
     );
   };
+  const managedProjectFileMenuTarget = (
+    targetProjectId: string,
+    path: string,
+  ): ManagedFileMenuTarget | null => {
+    const targetProject = projects.find(project => project.projectId === targetProjectId);
+    const link = targetProject ? resolvePreviewFileLink(path, targetProject.path) : null;
+    if (!targetProject || !link) {
+      return null;
+    }
+    return {
+      projectId: targetProjectId,
+      projectRoot: targetProject.path,
+      link,
+      fileAvailable: true,
+      downloadSource: fileDownloadSourceForLink(link),
+      attachment: null,
+    };
+  };
   const renderPreviewFileTreeSearchResults = (
     nodes: FileSearchResultTreeNode[],
     depth = 0,
@@ -20206,11 +20292,16 @@ export function App() {
       const fileIcon = resolveFileIcon(node.name);
       const resultIndex = previewFileTreeSearchVisibleResults.findIndex(item => item.path === node.path);
       const selected = node.path === previewFileTreeSearchActivePath;
+      const fileMenuTarget = managedProjectFileMenuTarget(
+        previewWorkbench.activeProjectId,
+        node.path,
+      );
       return (
         <button
           key={`preview-file-search-file:${node.path}`}
           type="button"
           className={`preview-workbench-file-search-node file${selected ? ' selected' : ''}`}
+          {...(fileMenuTarget ? bindManagedFileContextMenu(fileMenuTarget) : {})}
           onMouseEnter={() => {
             if (resultIndex >= 0) {
               setPreviewFileTreeSearchActiveIndex(resultIndex);
@@ -20263,6 +20354,15 @@ export function App() {
           onRetryRoot={retryPreviewRootDirectory}
           onFileSelect={path => {
             openChatFilePeek(path, null, previewWorkbench.activeProjectId);
+          }}
+          onFileContextMenu={(path, position) => {
+            const target = managedProjectFileMenuTarget(
+              previewWorkbench.activeProjectId,
+              path,
+            );
+            if (target) {
+              openManagedFileContextMenu(target, position);
+            }
           }}
         />
       )}
@@ -20479,26 +20579,62 @@ export function App() {
     navigator.clipboard.writeText(previewSelectionMenu.text).catch(() => undefined);
     setPreviewSelectionMenu(null);
   };
+  const downloadManagedFile = (
+    targetProjectId: string,
+    source: RegistryFileDownloadSource,
+  ) => {
+    const csrfToken = registryAuth.status?.csrfToken || '';
+    if (!csrfToken) {
+      setError('File download is unavailable.');
+      return;
+    }
+    startManagedFileDownload({
+      projectId: targetProjectId,
+      csrfToken,
+      source,
+      prepare: (projectId, targetCSRFToken, targetSource) =>
+        service.prepareFileDownload(projectId, targetCSRFToken, targetSource),
+    }).catch(error => {
+      setError(`Failed to download file: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  };
   const handleChatFileLinkMenuAction = (action: ChatFileLinkMenuAction) => {
     if (!chatFileLinkMenu) return;
-    const target = {
-      absolutePath: chatFileLinkMenu.link.absolutePath,
-      projectRoot: chatFileLinkMenu.projectRoot,
-      relativePath: chatFileLinkMenu.link.relativePath,
-    };
-    const relativePath = chatFileLinkMenu.link.relativePath;
-    const absolutePath = chatFileLinkMenu.link.absolutePath;
+    const menuState = chatFileLinkMenu;
+    const link = menuState.link;
+    const target = link ? {
+      absolutePath: link.absolutePath,
+      projectRoot: menuState.projectRoot,
+      relativePath: link.relativePath,
+    } : null;
+    const relativePath = link?.relativePath ?? null;
+    const absolutePath = link?.absolutePath ?? '';
     const menuProjectId = chatFileLinkMenu.projectId;
-    const menuFilePath = chatFileLinkMenu.link.path;
-    const menuLine = chatFileLinkMenu.link.line;
+    const menuFilePath = link?.path ?? '';
+    const menuLine = link?.line ?? null;
     setChatFileLinkMenu(null);
 
     if (action === 'preview') {
-      openChatFilePeek(menuFilePath, menuLine, menuProjectId);
+      if (menuState.attachment) {
+        openChatAttachmentPreview(
+          menuState.attachment.block,
+          menuState.attachment.message,
+        );
+      } else if (link) {
+        openChatFilePeek(menuFilePath, menuLine, menuProjectId);
+      }
+      return;
+    }
+    if (action === 'download') {
+      if (!menuState.fileAvailable || !menuState.downloadSource) {
+        setError('File download is unavailable.');
+        return;
+      }
+      downloadManagedFile(menuProjectId, menuState.downloadSource);
       return;
     }
     if (action === 'copy-relative') {
-      if (relativePath === null) return;
+      if (!link || relativePath === null) return;
       writeTextToClipboard(relativePath)
         .then(() => setToastMessage('Copied relative path.'))
         .catch(err => {
@@ -20508,6 +20644,7 @@ export function App() {
       return;
     }
     if (action === 'copy-absolute') {
+      if (!link) return;
       writeTextToClipboard(absolutePath)
         .then(() => setToastMessage('Copied absolute path.'))
         .catch(err => {
@@ -20518,7 +20655,7 @@ export function App() {
     }
     if (action === 'copy-file') {
       const desktopBridge = getDesktopWindowBridge();
-      if (!desktopBridge || !absolutePath) return;
+      if (!link || !desktopBridge || !absolutePath) return;
       copyDesktopFile(desktopBridge, absolutePath)
         .then(() => setToastMessage('Copied file.'))
         .catch(err => {
@@ -20528,7 +20665,7 @@ export function App() {
       return;
     }
     if (action === 'export-html') {
-      if (relativePath === null || !isMarkdownPath(menuFilePath)) return;
+      if (!link || relativePath === null || !isMarkdownPath(menuFilePath)) return;
       service.readProjectFile(relativePath, menuProjectId)
         .then(file => {
           if (file.isBinary) {
@@ -20550,7 +20687,7 @@ export function App() {
     }
 
     const desktopBridge = getDesktopWindowBridge();
-    if (!desktopBridge) return;
+    if (!link || !desktopBridge || !target) return;
     const failurePrefix = action === 'vscode'
       ? 'Failed to open file in VS Code'
       : 'Failed to show file in File Explorer';
@@ -20613,6 +20750,14 @@ export function App() {
     const canShowProjectFileInFolder = desktopTarget
       ? canInvokeDesktopFileAction(desktopBridge, 'folder', desktopTarget)
       : false;
+    const attachmentDownloadPayload = tab.type === 'attachment'
+      ? attachmentPreviewReadPayloadFromKey(tab)
+      : null;
+    const downloadSource: RegistryFileDownloadSource | null = fileTarget
+      ? fileDownloadSourceForLink(fileTarget)
+      : attachmentDownloadPayload
+        ? {kind: 'session-attachment', ...attachmentDownloadPayload}
+        : null;
     const runProjectFileDesktopAction = (
       action: DesktopProjectFileAction,
       failurePrefix: string,
@@ -20637,6 +20782,20 @@ export function App() {
       isMarkdownPath(tab.path);
     return (
       <>
+        {downloadSource ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="preview-workbench-action-menu-item"
+            onClick={() => {
+              closeMenu();
+              downloadManagedFile(tab.projectId, downloadSource);
+            }}
+          >
+            <Icon name="cloudDownload" />
+            <span>Download</span>
+          </button>
+        ) : null}
         {canOpenProjectFileInVSCode ? (
           <button
             type="button"
@@ -21107,7 +21266,7 @@ export function App() {
   const previewTabMenuTab = previewTabMenu
     ? previewWorkbenchTabs.find(tab => tab.id === previewTabMenu.tabId) ?? null
     : null;
-  const previewTabContextMenuOverlay = isWide && previewTabMenu && previewTabMenuTab ? (
+  const previewTabContextMenuOverlay = previewTabMenu && previewTabMenuTab ? (
     <PreviewTabContextMenu
       x={previewTabMenu.x}
       y={previewTabMenu.y}
@@ -21251,11 +21410,16 @@ export function App() {
             quickFileResults.map((result, index) => {
               const selected = index === quickFileActiveIndex;
               const name = result.name || chatFileMentionName(result.path);
+              const fileMenuTarget = managedProjectFileMenuTarget(
+                quickFileProjectId,
+                result.path,
+              );
               return (
                 <button
                   key={`quick-file:${result.path}`}
                   type="button"
                   className={`quick-file-search-option${selected ? ' selected' : ''}`}
+                  {...(fileMenuTarget ? bindManagedFileContextMenu(fileMenuTarget) : {})}
                   role="option"
                   aria-selected={selected}
                   onMouseEnter={() => setQuickFileActiveIndex(index)}
@@ -21287,37 +21451,44 @@ export function App() {
     </div>
   ) : null;
   const chatFileLinkDesktopBridge = getDesktopWindowBridge();
-  const chatFileLinkDesktopTarget = chatFileLinkMenu ? {
+  const chatFileLinkDesktopTarget = chatFileLinkMenu?.link ? {
     absolutePath: chatFileLinkMenu.link.absolutePath,
     projectRoot: chatFileLinkMenu.projectRoot,
     relativePath: chatFileLinkMenu.link.relativePath,
   } : null;
-  const chatFileLinkContextMenu = chatFileLinkMenu && chatFileLinkDesktopTarget ? (
+  const chatFileLinkContextMenu = chatFileLinkMenu ? (
     <ChatFileLinkContextMenu
       x={chatFileLinkMenu.x}
       y={chatFileLinkMenu.y}
       link={chatFileLinkMenu.link}
       exiting={chatFileLinkMenuExiting}
-      canOpenInVSCode={canInvokeDesktopFileAction(
-        chatFileLinkDesktopBridge,
-        'vscode',
-        chatFileLinkDesktopTarget,
-      )}
-      canShowInFolder={canInvokeDesktopFileAction(
-        chatFileLinkDesktopBridge,
-        'folder',
-        chatFileLinkDesktopTarget,
-      )}
+      canOpenInVSCode={chatFileLinkDesktopTarget
+        ? canInvokeDesktopFileAction(
+            chatFileLinkDesktopBridge,
+            'vscode',
+            chatFileLinkDesktopTarget,
+          )
+        : false}
+      canShowInFolder={chatFileLinkDesktopTarget
+        ? canInvokeDesktopFileAction(
+            chatFileLinkDesktopBridge,
+            'folder',
+            chatFileLinkDesktopTarget,
+          )
+        : false}
       canCopyFile={
         chatFileLinkMenu.fileAvailable &&
+        !!chatFileLinkMenu.link &&
         canCopyDesktopFile(
           chatFileLinkDesktopBridge,
-          chatFileLinkMenu.link.absolutePath,
+          chatFileLinkMenu.link?.absolutePath ?? '',
         )
       }
+      canDownload={chatFileLinkMenu.fileAvailable && !!chatFileLinkMenu.downloadSource}
       htmlActionLabel={
         chatFileLinkMenu.fileAvailable &&
-        chatFileLinkMenu.link.relativePath !== null &&
+        chatFileLinkMenu.link?.relativePath !== null &&
+        !!chatFileLinkMenu.link &&
         isMarkdownPath(chatFileLinkMenu.link.path)
           ? chatFileLinkDesktopBridge
             ? 'Copy file as HTML'

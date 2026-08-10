@@ -33,6 +33,7 @@ import {msgText} from './chatMessageText';
 import {splitChatSearchHighlightSegments} from './search/chatSearchState';
 import {createChatSearchHighlightPlugin} from './search/chatSearchHighlightPlugin';
 import {permissionRequestView, type ChatPermissionRecord} from './permission/chatPermissionState';
+import {useContextMenuGesture, useContextMenuTargetGesture} from '../common/useContextMenuGesture';
 
 function renderChatTextWithHighlight(text: string, query: string | undefined) {
   if (!query) {
@@ -323,6 +324,11 @@ export type ChatTurnViewProps = {
   queueItemStatus?: RegistrySessionQueueItemStatus;
   queueActions?: ChatQueueActions;
   onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
+  onOpenPromptAttachmentContextMenu?: (
+    block: RegistrySessionContentBlock,
+    message: RegistryChatMessage,
+    position: {x: number; y: number},
+  ) => void;
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
   onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
@@ -330,7 +336,7 @@ export type ChatTurnViewProps = {
     artifact: RegistrySessionPromptArtifact,
     message: RegistryChatMessage,
     file: RegistrySessionPromptArtifactFile,
-    event: React.MouseEvent<HTMLButtonElement>,
+    position: {x: number; y: number},
   ) => void;
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
@@ -348,6 +354,11 @@ type PromptAttachmentChipProps = {
   index: number;
   message: RegistryChatMessage;
   onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
+  onOpenPromptAttachmentContextMenu?: (
+    block: RegistrySessionContentBlock,
+    message: RegistryChatMessage,
+    position: {x: number; y: number},
+  ) => void;
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
   onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
 };
@@ -357,13 +368,18 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
   index,
   message,
   onOpenPromptAttachment,
+  onOpenPromptAttachmentContextMenu,
   resolvePromptAttachmentThumbnail,
   onLoadPromptAttachmentThumbnail,
 }: PromptAttachmentChipProps) {
+  const contextMenuGesture = useContextMenuGesture(position => {
+    onOpenPromptAttachmentContextMenu?.(block, message, position);
+  });
   const imageAttachment = isPromptImageAttachmentContentBlock(block);
   const label = chatPromptAttachmentLabel(block, index);
   const meta = chatPromptAttachmentMeta(block);
   const thumbnailSrc = resolvePromptAttachmentThumbnail?.(block, message) ?? '';
+  const hasPersistedAttachment = typeof block.uri === 'string' && block.uri.trim() !== '';
 
   React.useEffect(() => {
     if (imageAttachment && !thumbnailSrc) {
@@ -375,6 +391,7 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
     <button
       type="button"
       className={`chat-prompt-attachment-chip ${isPromptImageAttachmentContentBlock(block) ? 'image' : 'file'}`}
+      {...(onOpenPromptAttachmentContextMenu && hasPersistedAttachment ? contextMenuGesture : {})}
       onClick={() => onOpenPromptAttachment?.(block, message)}
     >
       {imageAttachment && thumbnailSrc ? (
@@ -492,6 +509,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   queueItemStatus,
   queueActions,
   onOpenPromptAttachment,
+  onOpenPromptAttachmentContextMenu,
   resolvePromptAttachmentThumbnail,
   onLoadPromptAttachmentThumbnail,
   onOpenPromptArtifact,
@@ -500,6 +518,18 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   promptArtifactErrors = {},
   highlightQuery,
 }: ChatTurnViewProps) {
+  const bindPromptArtifactFileContextMenu = useContextMenuTargetGesture<{
+    artifact: RegistrySessionPromptArtifact;
+    message: RegistryChatMessage;
+    file: RegistrySessionPromptArtifactFile;
+  }>((target, position) => {
+    onOpenPromptArtifactFileContextMenu?.(
+      target.artifact,
+      target.message,
+      target.file,
+      position,
+    );
+  });
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
   const markdownCapabilities = useMarkdownCapabilityPlugins(text);
@@ -811,6 +841,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 index={index}
                 message={message}
                 onOpenPromptAttachment={onOpenPromptAttachment}
+                onOpenPromptAttachmentContextMenu={onOpenPromptAttachmentContextMenu}
                 resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
                 onLoadPromptAttachmentThumbnail={onLoadPromptAttachmentThumbnail}
               />
@@ -885,9 +916,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                           type="button"
                           className="chat-prompt-artifact-file"
                           onClick={() => onOpenPromptArtifact?.(artifact, message, file.path)}
-                          onContextMenu={event =>
-                            onOpenPromptArtifactFileContextMenu?.(artifact, message, file, event)
-                          }
+                          {...(onOpenPromptArtifactFileContextMenu
+                            ? bindPromptArtifactFileContextMenu({artifact, message, file})
+                            : {})}
                         >
                           <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
                             {file.status}

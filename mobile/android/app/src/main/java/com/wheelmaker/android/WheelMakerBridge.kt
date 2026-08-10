@@ -31,6 +31,7 @@ class WheelMakerBridge(
     private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
     private val androidImageShareRuntime: AndroidImageShareRuntime,
     private val androidHtmlShareRuntime: AndroidHtmlShareRuntime,
+    private val androidFileDownloadRuntime: AndroidFileDownloadRuntime,
     private val androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore,
@@ -75,6 +76,7 @@ class WheelMakerBridge(
         "html.share.chunk" -> androidHtmlShareRuntime.append(payload.toString())
         "html.share.commit" -> androidHtmlShareRuntime.commit(payload.toString())
         "html.share.cancel" -> androidHtmlShareRuntime.cancel(payload.toString())
+        "file.download.start" -> startFileDownload(payload)
         "relay.clearSiteData" -> androidPortRelaySiteDataRuntime.clear(payload.optString("relayUrl"))
 			else -> throw IllegalArgumentException("unsupported native action")
 		}
@@ -130,6 +132,26 @@ class WheelMakerBridge(
         }
         payload.remove("userActionToken")
         return androidHtmlShareRuntime.begin(payload.toString())
+    }
+
+    private fun startFileDownload(payload: JSONObject): String {
+        if (!trustedNativeActionGrantStore.consume(
+                payload.optString("userActionToken"),
+                "file.download"
+            )) {
+            throw SecurityException("invalid native user-action grant")
+        }
+        payload.remove("userActionToken")
+        val downloadId = androidFileDownloadRuntime.start(
+            url = payload.optString("url"),
+            fileName = payload.optString("fileName"),
+            mimeType = payload.optString("mimeType"),
+            size = payload.optLong("size", -1L)
+        )
+        return JSONObject()
+            .put("ok", true)
+            .put("downloadId", downloadId)
+            .toString()
     }
 
     private fun setDiagnosticLogLevel(logLevel: String): String {

@@ -314,6 +314,28 @@ func TestDesktopNavigationPolicy(t *testing.T) {
 	}
 }
 
+func TestDesktopDownloadNavigationUsesTrustedRegistryPolicy(t *testing.T) {
+	policy, err := newDesktopWebViewPolicy("https://example.com/wheelmaker/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := "abcdefghijklmnopqrstuvwxyzABCDEFGH123456789"
+	if got := policy.DecideNavigation("https://example.com/wheelmaker/download/"+token, true, false); got != desktopNavigationAllow {
+		t.Fatalf("trusted download navigation=%v, want allow", got)
+	}
+	for _, rawURL := range []string{
+		"http://example.com/wheelmaker/download/" + token,
+		"javascript:location.href='https://example.com/wheelmaker/download/" + token + "'",
+	} {
+		if got := policy.DecideNavigation(rawURL, true, false); got != desktopNavigationBlock {
+			t.Fatalf("untrusted download navigation %q=%v, want block", rawURL, got)
+		}
+	}
+	if got := policy.DecideNavigation("https://evil.example/wheelmaker/download/"+token, true, false); got != desktopNavigationOpenExternal {
+		t.Fatalf("cross-origin download navigation=%v, want external", got)
+	}
+}
+
 func TestDesktopBridgeNavigationEpoch(t *testing.T) {
 	state, err := newDesktopWebViewSecurityState("https://example.com/wheelmaker/", desktopTrustedRemotePage)
 	if err != nil {

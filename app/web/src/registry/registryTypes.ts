@@ -1193,6 +1193,24 @@ export interface RegistryFsReadResponse {
   returned?: number;
 }
 
+export type RegistryFileDownloadSource =
+  | {kind: 'project-file'; path: string}
+  | {kind: 'external-file'; path: string}
+  | {
+      kind: 'session-attachment';
+      sessionId: string;
+      attachmentId?: string;
+      uri?: string;
+    };
+
+export interface RegistryFileDownloadPrepareResponse {
+  ok: boolean;
+  downloadPath: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface RegistryFileIndexStatus {
   projectId: string;
   name: string;

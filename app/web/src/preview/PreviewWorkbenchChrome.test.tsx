@@ -255,14 +255,16 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  test('mobile right-click on a tab does not report onTabContextMenu', () => {
+  test('mobile uses the shared tab context menu callback', () => {
     const props = createProps({mode: 'mobile', tabs: [fileTab], activeTab: fileTab, onTabContextMenu: jest.fn()});
     render(props);
     const tab = document.querySelector('.preview-workbench-tab') as HTMLElement;
-    act(() => {
-      tab.dispatchEvent(new window.MouseEvent('contextmenu', {bubbles: true, cancelable: true}));
+    const event = new window.MouseEvent('contextmenu', {
+      bubbles: true, cancelable: true, clientX: 7, clientY: 9,
     });
-    expect(props.onTabContextMenu).not.toHaveBeenCalled();
+    act(() => tab.dispatchEvent(event));
+    expect(props.onTabContextMenu).toHaveBeenCalledWith('file:src/a.ts', {x: 7, y: 9});
+    expect(event.defaultPrevented).toBe(true);
   });
 
   test('desktop portals the panel into drawerPortalTarget with the external class', () => {

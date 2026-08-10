@@ -170,6 +170,7 @@ type Reporter struct {
 	skillsStateInitMu       sync.Mutex
 	relayClient             *portrelay.HubClient
 	fileIndex               *projectFileIndexManager
+	fileDownloads           *fileDownloadManager
 	hubStateManager         *HubStateManager
 	skillsState             *skillsStateCoordinator
 	usageService            *usage.Service
@@ -241,6 +242,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		pending:               make(map[int64]chan envelope),
 		relayClient:           portrelay.NewHubClient(),
 		fileIndex:             newProjectFileIndexManager(stateDir),
+		fileDownloads:         newFileDownloadManager(),
 		hubStateBootstrapDone: make(chan struct{}),
 	}
 	r.hubConfig = cfg.HubConfig
@@ -672,6 +674,7 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	r.conn = conn
 	r.mu.Unlock()
 	defer r.clearConn(conn)
+	defer r.fileDownloads.closeAll()
 	registryLogger("").Info("connected to %s", wsURL)
 	stop := make(chan struct{})
 	go func() {
@@ -782,6 +785,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyFSGrep(conn, in)
 	case rp.RegistryMethodProjectFSIndexSearch:
 		r.replyFSIndexSearch(conn, in)
+	case rp.RegistryMethodFileDownloadOpen, rp.RegistryMethodFileDownloadRead, rp.RegistryMethodFileDownloadClose:
+		r.replyFileDownload(conn, in)
 	case rp.RegistryMethodProjectGitRev:
 		r.replyGitRev(conn, in)
 	case rp.RegistryMethodProjectGitRefs:

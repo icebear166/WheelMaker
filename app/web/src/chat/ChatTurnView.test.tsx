@@ -206,8 +206,43 @@ describe('ChatTurnView Changed Files interactions', () => {
       expect.objectContaining({artifactId: 'artifact-1'}),
       value,
       expect.objectContaining({path: 'src/main.ts', status: 'M'}),
-      contextEvent,
+      {x: 32, y: 48},
     );
+    expect(contextEvent.preventDefault).toHaveBeenCalledTimes(1);
     expect(summary.props.onContextMenu).toBeUndefined();
+  });
+});
+
+describe('ChatTurnView attachment interactions', () => {
+  it('opens the shared context menu for a persisted attachment', async () => {
+    const onOpenPromptAttachmentContextMenu = jest.fn();
+    const value = message('user_message_chunk', {
+      contentBlocks: [{
+        type: 'resource_link',
+        uri: 'file:///attachments/sha256-abc/report.pdf',
+        name: 'report.pdf',
+        mimeType: 'application/pdf',
+      }],
+    });
+    const tree = await renderTurn(value, {onOpenPromptAttachmentContextMenu});
+    const chip = tree.root.findByProps({className: 'chat-prompt-attachment-chip file'});
+    const event = {clientX: 15, clientY: 21, preventDefault: jest.fn()};
+
+    await act(async () => chip.props.onContextMenu(event));
+
+    expect(onOpenPromptAttachmentContextMenu).toHaveBeenCalledWith(
+      expect.objectContaining({name: 'report.pdf'}),
+      value,
+      {x: 15, y: 21},
+    );
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not install attachment context handlers without an eligible callback', async () => {
+    const tree = await renderTurn(message('user_message_chunk', {
+      contentBlocks: [{type: 'resource_link', uri: 'file:///draft.txt', name: 'draft.txt'}],
+    }));
+    expect(tree.root.findByProps({className: 'chat-prompt-attachment-chip file'}).props.onContextMenu)
+      .toBeUndefined();
   });
 });

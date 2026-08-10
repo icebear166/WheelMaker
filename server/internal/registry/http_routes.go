@@ -50,6 +50,20 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		s.relay.ServeHTTP(w, r)
 		return
 	}
+	if basePath, token, ok := registryFileDownloadRoute(r.URL.Path); ok {
+		if r.URL.RawQuery != "" || r.URL.RawPath != "" {
+			http.NotFound(w, r)
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), registryBasePathContextKey{}, basePath))
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleFileDownloadHTTP(w, r, token)
+		return
+	}
 	if basePath, ok := registryHTMLPreviewBasePath(r.URL.Path); ok {
 		if r.URL.RawQuery != "" {
 			http.NotFound(w, r)

@@ -880,15 +880,16 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain(
       'const [chatFileLinkMenu, setChatFileLinkMenu, chatFileLinkMenuExiting] = useMenuExitState<ChatFileLinkMenuState>();',
     );
-    expect(mainTsx).toContain('onContextMenu={event => {');
-    expect(mainTsx).toContain('if (!targetFile) return;');
-    expect(mainTsx).toContain('setChatFileLinkMenu({');
+    expect(mainTsx).toContain('useContextMenuTargetGesture<ManagedFileMenuTarget>');
+    expect(mainTsx).toContain('bindManagedFileContextMenu(fileMenuTarget)');
+    expect(mainTsx).toContain('openManagedFileContextMenu({');
     expect(mainTsx).toContain('<ChatFileLinkContextMenu');
     expect(mainTsx).toContain('canInvokeDesktopFileAction(');
     expect(mainTsx).toContain('invokeDesktopFileAction(');
     expect(mainTsx).toContain('const openPromptArtifactFileContextMenu = useCallback');
     expect(mainTsx).toContain('onOpenPromptArtifactFileContextMenu={');
     expect(mainTsx).toContain("action === 'preview'");
+    expect(mainTsx).toContain("action === 'download'");
     expect(mainTsx).toContain('openChatFilePeek(menuFilePath, menuLine, menuProjectId);');
     expect(mainTsx).toContain("action === 'copy-file'");
     expect(mainTsx).toContain('canCopyDesktopFile(');

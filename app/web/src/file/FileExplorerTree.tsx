@@ -1,5 +1,6 @@
 import React from 'react';
 import {Icon} from '../common/Icon';
+import {useContextMenuTargetGesture} from '../common/useContextMenuGesture';
 import type { RegistryFsEntry } from '../registry/registryTypes';
 
 type FileResolvedIcon = {
@@ -16,6 +17,7 @@ type FileExplorerTreeProps = {
   toggleDirectory: (path: string) => void;
   resolveFileIcon: (name: string) => FileResolvedIcon;
   onFileSelect: (path: string) => void;
+  onFileContextMenu?: (path: string, position: {x: number; y: number}) => void;
   depthIndent?: number;
   rootState?: 'ready' | 'loading' | 'error' | 'empty';
   rootError?: string;
@@ -31,11 +33,15 @@ export function FileExplorerTree({
   toggleDirectory,
   resolveFileIcon,
   onFileSelect,
+  onFileContextMenu,
   depthIndent = 14,
   rootState = 'ready',
   rootError = '',
   onRetryRoot,
 }: FileExplorerTreeProps) {
+  const bindFileContextMenu = useContextMenuTargetGesture<string>((path, position) => {
+    onFileContextMenu?.(path, position);
+  });
   const renderFileTree = (path: string, depth: number): React.ReactNode => {
     const entries = dirEntries[path] ?? [];
     return entries.map(entry => {
@@ -76,6 +82,7 @@ export function FileExplorerTree({
         <div
           key={entry.path}
           className={`item file${selectedFile === entry.path ? ' selected' : ''}`}
+          {...(onFileContextMenu ? bindFileContextMenu(entry.path) : {})}
           onClick={() => {
             onFileSelect(entry.path);
           }}

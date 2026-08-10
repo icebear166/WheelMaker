@@ -121,4 +121,30 @@ describe('Android native web message bridge', () => {
       'image.share.cancel',
     ]);
   });
+
+  test('exposes the file download handoff through the RPC facade', async () => {
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'file.download.start': () => ({ok: true}),
+    });
+    const facade = getAndroidNativeRpcFacade({WheelMakerAndroidNative: target});
+
+    await facade?.startFileDownload(
+      'https://registry.example/download/token',
+      'report.txt',
+      'text/plain',
+      42,
+      'grant-1',
+    );
+
+    expect(requests).toEqual([expect.objectContaining({
+      action: 'file.download.start',
+      payload: {
+        url: 'https://registry.example/download/token',
+        fileName: 'report.txt',
+        mimeType: 'text/plain',
+        size: 42,
+        userActionToken: 'grant-1',
+      },
+    })]);
+  });
 });

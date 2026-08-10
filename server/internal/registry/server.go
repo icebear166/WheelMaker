@@ -264,6 +264,7 @@ type Server struct {
 	relay                      *portrelay.Controller
 	relayInitErr               error
 	webSessions                *webSessionStore
+	fileDownloads              *fileDownloadCapabilityStore
 	loginLimiter               *loginLimiter
 	ipLocation                 IPLocationResolver
 	serverData                 ServerDataStore
@@ -275,22 +276,24 @@ type Server struct {
 }
 
 type connectionState struct {
-	id              string
-	role            string
-	hubID           string
-	scopeHubID      string
-	relayHost       string
-	relaySecure     bool
-	initialized     bool
-	connectionEpoch int64
-	peer            *peerConn
-	browserSession  bool
-	browserDeviceID string
-	clientName      string
-	protocolVersion string
-	connectionMode  rp.RegistryConnectionMode
-	seenRequestIDs  *requestIDWindow
-	lastProjectSeq  map[string]int64
+	id               string
+	role             string
+	hubID            string
+	scopeHubID       string
+	relayHost        string
+	relaySecure      bool
+	initialized      bool
+	connectionEpoch  int64
+	peer             *peerConn
+	browserSession   bool
+	browserDeviceID  string
+	browserBasePath  string
+	browserCSRFToken string
+	clientName       string
+	protocolVersion  string
+	connectionMode   rp.RegistryConnectionMode
+	seenRequestIDs   *requestIDWindow
+	lastProjectSeq   map[string]int64
 }
 
 type requestDispatcher struct {
@@ -403,9 +406,10 @@ func New(cfg Config) *Server {
 			cfg.Token,
 			webSessionStatePath(cfg.StateDir),
 		),
-		loginLimiter: newLoginLimiter(time.Now),
-		ipLocation:   cfg.IPLocationResolver,
-		serverData:   cfg.ServerData,
+		fileDownloads: newFileDownloadCapabilityStore(fileDownloadCapabilityStoreOptions{}),
+		loginLimiter:  newLoginLimiter(time.Now),
+		ipLocation:    cfg.IPLocationResolver,
+		serverData:    cfg.ServerData,
 	}
 	codexRadarFetcher := newCodexRadarEfficiencyFetcher()
 	s.codexRadarEfficiencyLoader = codexRadarFetcher.load
@@ -468,6 +472,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	browserSession := false
 	browserDeviceID := ""
+	browserBasePath := ""
+	browserCSRFToken := ""
 	if origin != "" {
 		if !security.RequestOriginMatchesHost(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
@@ -480,6 +486,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 		browserSession = true
 		browserDeviceID = session.DeviceID
+		browserBasePath = session.BasePath
+		browserCSRFToken = session.CSRFToken
 	}
 	upgrader := websocket.Upgrader{
 		CheckOrigin:       func(_ *http.Request) bool { return true },
@@ -494,14 +502,16 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	connID := fmt.Sprintf("conn-%d", s.nextConnID.Add(1))
 	state := &connectionState{
-		id:              connID,
-		peer:            newPeerConn(ws, connID),
-		relayHost:       relayControlHost(r),
-		relaySecure:     relayControlSecure(r),
-		seenRequestIDs:  newRequestIDWindow(maxSeenRequestIDs),
-		lastProjectSeq:  map[string]int64{},
-		browserSession:  browserSession,
-		browserDeviceID: browserDeviceID,
+		id:               connID,
+		peer:             newPeerConn(ws, connID),
+		relayHost:        relayControlHost(r),
+		relaySecure:      relayControlSecure(r),
+		seenRequestIDs:   newRequestIDWindow(maxSeenRequestIDs),
+		lastProjectSeq:   map[string]int64{},
+		browserSession:   browserSession,
+		browserDeviceID:  browserDeviceID,
+		browserBasePath:  browserBasePath,
+		browserCSRFToken: browserCSRFToken,
 	}
 	registryLogger("").Info("ws connected id=%s remote=%s", state.id, r.RemoteAddr)
 	defer registryLogger("").Info("ws disconnected id=%s role=%s hub=%s remote=%s", state.id, state.role, state.hubID, r.RemoteAddr)
@@ -697,6 +707,7 @@ func updateOnlyHubRequestAllowed(in envelope) bool {
 
 func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
+		rp.RegistryMethodHasRoute(method, rp.RegistryRouteFileDownload) ||
 		rp.RegistryServerDataMethod(method) ||
 		rp.RegistryTTSMethod(method) ||
 		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubReleaseNotify) ||
@@ -736,6 +747,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleDeviceSessionRequest(state.peer, state, in)
 	case rp.RegistryServerDataMethod(in.Method):
 		s.handleServerDataRequest(state.peer, state, in)
+	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteFileDownload):
+		s.handleFileDownloadPrepare(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
 	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteHubReleaseNotify):

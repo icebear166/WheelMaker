@@ -11072,6 +11072,39 @@ func newAttachmentTestClientWithMock(t *testing.T, mock *mockSession) *Client {
 	return c
 }
 
+func TestSessionAttachmentDownloadResolverReturnsPersistedFileMetadata(t *testing.T) {
+	c := newAttachmentTestClient(t, "session-download")
+	block := uploadSessionAttachmentForTest(
+		t,
+		c,
+		"session-download",
+		"original report.txt",
+		"text/plain",
+		[]byte("attachment bytes"),
+	)
+	attachmentID := blockAttachmentIDForTest(t, block)
+
+	path, fileName, mimeType, err := c.ResolveSessionAttachmentDownload(
+		context.Background(),
+		"session-download",
+		attachmentID,
+		block.URI,
+	)
+	if err != nil {
+		t.Fatalf("ResolveSessionAttachmentDownload: %v", err)
+	}
+	if fileName != "original report.txt" || mimeType != "text/plain" {
+		t.Fatalf("fileName=%q mimeType=%q", fileName, mimeType)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != "attachment bytes" {
+		t.Fatalf("resolved bytes=%q err=%v", raw, err)
+	}
+	if _, _, _, err := c.ResolveSessionAttachmentDownload(context.Background(), "wrong-session", attachmentID, block.URI); err == nil {
+		t.Fatal("mismatched session should be rejected")
+	}
+}
+
 func uploadSessionAttachmentForTest(t *testing.T, c *Client, sessionID, name, mimeType string, data []byte) acp.ContentBlock {
 	t.Helper()
 	uploadID := startSessionAttachmentForTest(t, c, sessionID, name, mimeType, len(data))

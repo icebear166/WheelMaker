@@ -33,6 +33,7 @@ const internalProps: ChatFileLinkContextMenuProps = {
   canOpenInVSCode: true,
   canShowInFolder: true,
   canCopyFile: true,
+  canDownload: true,
   htmlActionLabel: null,
   onAction: jest.fn(),
   onClose: jest.fn(),
@@ -49,6 +50,7 @@ describe('chat file link context menu', () => {
 
     expect(labels(renderer)).toEqual([
       'Preview file',
+      'Download',
       'Open with VS Code',
       'Show in File Explorer',
       'Copy file',
@@ -57,6 +59,7 @@ describe('chat file link context menu', () => {
     ]);
     expect(icons(renderer)).toEqual([
       'eye',
+      'arrowDown',
       'code',
       'folderOpen',
       'copy',
@@ -82,6 +85,7 @@ describe('chat file link context menu', () => {
 
     expect(labels(renderer)).toEqual([
       'Preview file',
+      'Download',
       'Open with VS Code',
       'Show in File Explorer',
       'Copy file',
@@ -89,7 +93,7 @@ describe('chat file link context menu', () => {
       'Copy relative path',
       'Copy absolute path',
     ]);
-    expect(icons(renderer)[4]).toBe('fileCode');
+    expect(icons(renderer)[5]).toBe('fileCode');
     expect(separatorCount(renderer)).toBe(2);
 
     act(() => renderer.unmount());
@@ -112,11 +116,12 @@ describe('chat file link context menu', () => {
 
     expect(labels(renderer)).toEqual([
       'Preview file',
+      'Download',
       'Export as HTML',
       'Copy relative path',
       'Copy absolute path',
     ]);
-    expect(icons(renderer)).toEqual(['eye', 'fileCode', 'fileSymlink', 'clipboard']);
+    expect(icons(renderer)).toEqual(['eye', 'arrowDown', 'fileCode', 'fileSymlink', 'clipboard']);
     expect(separatorCount(renderer)).toBe(2);
     act(() => renderer.unmount());
   });
@@ -140,7 +145,7 @@ describe('chat file link context menu', () => {
       );
     });
 
-    expect(labels(renderer)).toEqual(['Preview file', 'Copy absolute path']);
+    expect(labels(renderer)).toEqual(['Preview file', 'Download', 'Copy absolute path']);
     expect(separatorCount(renderer)).toBe(1);
     act(() => renderer.unmount());
   });
@@ -164,6 +169,7 @@ describe('chat file link context menu', () => {
     }
     expect(onAction.mock.calls.map(call => call[0])).toEqual([
       'preview',
+      'download',
       'vscode',
       'folder',
       'copy-file',
@@ -172,6 +178,26 @@ describe('chat file link context menu', () => {
       'copy-absolute',
     ]);
 
+    act(() => renderer.unmount());
+  });
+
+  test('shows only preview and download for a persisted attachment', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <ChatFileLinkContextMenu
+          {...internalProps}
+          link={null}
+          canOpenInVSCode={false}
+          canShowInFolder={false}
+          canCopyFile={false}
+          htmlActionLabel={null}
+        />,
+      );
+    });
+
+    expect(labels(renderer)).toEqual(['Preview file', 'Download']);
+    expect(separatorCount(renderer)).toBe(0);
     act(() => renderer.unmount());
   });
 

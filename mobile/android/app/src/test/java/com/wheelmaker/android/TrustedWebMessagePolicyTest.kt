@@ -68,7 +68,8 @@ class TrustedWebMessagePolicyTest {
             "html.share.begin",
             "html.share.chunk",
             "html.share.commit",
-            "html.share.cancel"
+            "html.share.cancel",
+            "file.download.start"
         )) {
             assertTrue(authorizeBusiness(
                 TrustedWebMessageRequest("deferred-$action", action),

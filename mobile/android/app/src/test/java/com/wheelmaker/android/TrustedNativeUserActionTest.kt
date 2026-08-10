@@ -72,6 +72,9 @@ class TrustedNativeUserActionTest {
         assertTrue(grants.consume(third, "image.share"))
         val htmlShare = grants.issue("html.share")
         assertTrue(grants.consume(htmlShare, "html.share"))
+        val fileDownload = grants.issue("file.download")
+        assertTrue(grants.consume(fileDownload, "file.download"))
+        assertFalse(grants.consume(fileDownload, "file.download"))
         assertTrue(runCatching { grants.issue("apk.install") }.isFailure)
     }
 }

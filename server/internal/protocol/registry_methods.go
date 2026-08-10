@@ -29,6 +29,7 @@ const (
 	RegistryRouteHubSessionEvent        RegistryRouteKind = "hub_session_event"
 	RegistryRouteProjectCache           RegistryRouteKind = "project_cache"
 	RegistryRouteProjectForward         RegistryRouteKind = "project_forward"
+	RegistryRouteFileDownload           RegistryRouteKind = "file_download"
 	RegistryRouteSessionForward         RegistryRouteKind = "session_forward"
 	RegistryRouteRelayControl           RegistryRouteKind = "relay_control"
 	RegistryRouteRelayHub               RegistryRouteKind = "relay_hub"
@@ -85,6 +86,10 @@ const (
 	RegistryMethodProjectFSSearch               = "project.fs.search"
 	RegistryMethodProjectFSGrep                 = "project.fs.grep"
 	RegistryMethodProjectFSIndexSearch          = "project.fs.index.search"
+	RegistryMethodFileDownloadPrepare           = "file.download.prepare"
+	RegistryMethodFileDownloadOpen              = "file.download.open"
+	RegistryMethodFileDownloadRead              = "file.download.read"
+	RegistryMethodFileDownloadClose             = "file.download.close"
 	RegistryMethodProjectGitRev                 = "project.git.rev"
 	RegistryMethodProjectGitRefs                = "project.git.refs"
 	RegistryMethodProjectGitLog                 = "project.git.log"
@@ -221,6 +226,10 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodProjectFSSearch:               registryProjectMethod(RegistryMethodProjectFSSearch, RegistryRouteProjectForward),
 	RegistryMethodProjectFSGrep:                 registryProjectMethod(RegistryMethodProjectFSGrep, RegistryRouteProjectForward),
 	RegistryMethodProjectFSIndexSearch:          registryProjectMethod(RegistryMethodProjectFSIndexSearch, RegistryRouteProjectForward),
+	RegistryMethodFileDownloadPrepare:           registryProjectMethod(RegistryMethodFileDownloadPrepare, RegistryRouteFileDownload),
+	RegistryMethodFileDownloadOpen:              registryInternalProjectMethod(RegistryMethodFileDownloadOpen),
+	RegistryMethodFileDownloadRead:              registryInternalProjectMethod(RegistryMethodFileDownloadRead),
+	RegistryMethodFileDownloadClose:             registryInternalProjectMethod(RegistryMethodFileDownloadClose),
 	RegistryMethodProjectGitRev:                 registryProjectMethod(RegistryMethodProjectGitRev, RegistryRouteProjectForward),
 	RegistryMethodProjectGitRefs:                registryProjectMethod(RegistryMethodProjectGitRefs, RegistryRouteProjectForward),
 	RegistryMethodProjectGitLog:                 registryProjectMethod(RegistryMethodProjectGitLog, RegistryRouteProjectForward),
@@ -299,6 +308,12 @@ func registryMethod(method string, route RegistryRouteKind, roles []RegistryRole
 
 func registryProjectMethod(method string, route RegistryRouteKind) RegistryMethodDescriptor {
 	desc := registryMethod(method, route, []RegistryRole{RegistryRoleClient})
+	desc.RequiresProjectID = true
+	return desc
+}
+
+func registryInternalProjectMethod(method string) RegistryMethodDescriptor {
+	desc := registryMethod(method, RegistryRouteProjectForward, nil)
 	desc.RequiresProjectID = true
 	return desc
 }

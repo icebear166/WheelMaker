@@ -18,6 +18,8 @@ import type {
   RegistryFileIndexRebuildResponse,
   RegistryFileIndexSearchResponse,
   RegistryFileIndexStatusResponse,
+  RegistryFileDownloadPrepareResponse,
+  RegistryFileDownloadSource,
   RegistryFsInfo,
   RegistryFsEntry,
   RegistryGitCommit,
@@ -416,6 +418,17 @@ export class RegistryWorkspaceService {
     } catch (error) {
       return translateExternalFileError(error);
     }
+  }
+
+  async prepareFileDownload(
+    projectId: string,
+    csrfToken: string,
+    source: RegistryFileDownloadSource,
+  ): Promise<RegistryFileDownloadPrepareResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.prepareFileDownload(projectId, csrfToken, source);
   }
 
   async getFileIndexStatus(hubId: string): Promise<RegistryFileIndexStatusResponse> {
