@@ -78,6 +78,19 @@ describe('chat search highlight rehype plugin', () => {
     expect(tree.children?.[1].children?.[0].children).toEqual([{type: 'text', value: 'deploy --prod'}]);
   });
 
+  test('marks the active result separately when requested', () => {
+    const tree: TestNode = {
+      type: 'root',
+      children: [
+        {type: 'element', tagName: 'p', children: [{type: 'text', value: 'Deploy now'}]},
+      ],
+    };
+    createChatSearchHighlightPlugin('deploy', {active: true})()(tree);
+    expect(tree.children?.[0].children?.[0].properties).toEqual({
+      className: ['chat-search-match', 'chat-search-match-active'],
+    });
+  });
+
   test('leaves trees without matches untouched and ignores empty queries', () => {
     const tree: TestNode = {
       type: 'root',

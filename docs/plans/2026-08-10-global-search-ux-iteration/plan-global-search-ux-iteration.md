@@ -210,29 +210,29 @@
 
 **Acceptance:** Chat and Preview search bars are independent raised surfaces above their scroll content, remain visible while content scrolls, align to their content column, use clear active/focus/no-result styling, and animate only when appropriate with reduced-motion coverage. Current and Preview match highlights distinguish all matches from the active match.
 
-- [ ] **Step 1: Add failing style/source assertions**
+- [x] **Step 1: Add failing style/source assertions**
 
   Assert the chat main search-open class, HUD layer/position classes, Preview HUD layer classes, active/no-result match classes, explicit motion properties, and reduced-motion selectors. Assert that the search bars no longer rely on normal-flow placement as their visibility mechanism.
 
-- [ ] **Step 2: Run the focused tests and verify the expected RED**
+- [x] **Step 2: Run the focused tests and verify the expected RED**
 
   Run: `npm test -- --runInBand __tests__/web-chat-session-search-ui.test.ts __tests__/web-chat-file-peek-viewer.test.ts`
 
   Expected: new HUD and active-match assertions fail against the current 34px normal-flow bars.
 
-- [ ] **Step 3: Implement the HUD layout**
+- [x] **Step 3: Implement the HUD layout**
 
   Add a `chat-search-open` modifier to the chat main surface. Position the chat HUD within `.chat-main` at a dedicated layer above the scroll container, reserve only the necessary top reading space, and reuse the existing fixed-800/edge-surface geometry variables. Keep the Sessions edge surfaces below the HUD. Give Preview search its own surface-level layer inside the Preview workbench body, above file/code content and below drawer/action layers.
 
-- [ ] **Step 4: Implement the visual hierarchy and motion**
+- [x] **Step 4: Implement the visual hierarchy and motion**
 
   Use existing surface/border/shadow/focus tokens with a deliberate blue accent edge and a restrained warm active-match mark that remains legible on code backgrounds. Use named `opacity`/`transform` transitions or CSS animations only for occasional HUD appearance/state feedback; do not animate the frequent keyboard action itself. Use the existing motion tokens and a strong ease-out already present in the project, and add reduced-motion rules that remove translation while keeping state/color feedback. Avoid `transition: all`, layout-property animation, and unbounded z-index escalation.
 
-- [ ] **Step 5: Implement all-vs-active match styling**
+- [x] **Step 5: Implement all-vs-active match styling**
 
   Apply a low-contrast class to non-active chat/Preview matches and a stronger class to the active match. Keep existing highlight plugins and line-navigation algorithms; only adjust class names/props necessary to express active state and preserve Markdown/code fallback behavior.
 
-- [ ] **Step 6: Run focused tests, typecheck, and inspect diff**
+- [x] **Step 6: Run focused tests, typecheck, and inspect diff**
 
   Run:
 
@@ -242,7 +242,7 @@
 
   Expected: style/source assertions, Markdown highlight coverage, and TypeScript all pass; `git diff --check` reports no whitespace errors.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint**
 
   Checkpoint the HUD implementation, styles, and focused tests.
 

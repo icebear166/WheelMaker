@@ -15,7 +15,7 @@ type HastNode = HastTextNode | HastElementNode | {type: string; children?: HastN
 
 const SKIPPED_TAGS = new Set(['code', 'pre', 'script', 'style']);
 
-function highlightChildren(node: HastNode, query: string): void {
+function highlightChildren(node: HastNode, query: string, active: boolean): void {
   const holder = node as {children?: HastNode[]};
   if (!Array.isArray(holder.children)) {
     return;
@@ -29,7 +29,9 @@ function highlightChildren(node: HastNode, query: string): void {
           nextChildren.push({
             type: 'element',
             tagName: 'mark',
-            properties: {className: ['chat-search-match']},
+            properties: {
+              className: ['chat-search-match', ...(active ? ['chat-search-match-active'] : [])],
+            },
             children: [{type: 'text', value: segment.text}],
           } as HastElementNode);
         } else {
@@ -39,19 +41,20 @@ function highlightChildren(node: HastNode, query: string): void {
       continue;
     }
     if (child.type === 'element' && !SKIPPED_TAGS.has((child as HastElementNode).tagName)) {
-      highlightChildren(child, query);
+      highlightChildren(child, query, active);
     }
     nextChildren.push(child);
   }
   holder.children = nextChildren;
 }
 
-export function createChatSearchHighlightPlugin(query: string) {
+export function createChatSearchHighlightPlugin(query: string, options?: {active?: boolean}) {
   const normalizedQuery = query.trim();
+  const active = options?.active === true;
   return function chatSearchHighlightPlugin() {
     return (tree: HastNode) => {
       if (normalizedQuery) {
-        highlightChildren(tree, normalizedQuery);
+        highlightChildren(tree, normalizedQuery, active);
       }
     };
   };

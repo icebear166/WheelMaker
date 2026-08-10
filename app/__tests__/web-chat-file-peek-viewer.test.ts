@@ -668,6 +668,9 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? \'\', event.shiftKey ? -1 : 1)');
     expect(mainTsx).not.toContain("const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {\n    if (event.key.toLowerCase() === 'f'");
     expect(mainTsx).toContain('className="preview-workbench-search-bar"');
+    expect(mainTsx).toContain('className="preview-workbench-search-hud"');
+    expect(mainTsx).toContain('chat-search-hud');
+    expect(mainTsx).toContain('chat-search-open');
     expect(mainTsx).toContain('previewSearchUnavailableMessage');
 
     expect(mainTsx).toContain('const [quickFileOpen, setQuickFileOpen] = useState(false);');
@@ -687,6 +690,12 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('className="preview-selection-context-menu"');
 
     expect(stylesCss).toContain('.preview-workbench-search-bar');
+    expect(stylesCss).toContain('.preview-workbench-search-hud');
+    expect(stylesCss).toContain('.chat-search-hud');
+    expect(stylesCss).toContain('.chat-main.chat-search-open .chat-block');
+    expect(stylesCss).toContain('.chat-search-match-active');
+    expect(stylesCss).toContain('.preview-search-match-active');
+    expect(stylesCss).toContain('@media (prefers-reduced-motion: reduce)');
     expect(stylesCss).toContain('.quick-file-search-overlay');
     expect(stylesCss).toContain('.preview-selection-context-menu');
   });

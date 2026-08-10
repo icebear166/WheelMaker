@@ -1511,3 +1511,74 @@
     animation: none;
   }
 }
+
+/* Preview search HUD sits above the scroll surface without displacing code. */
+.preview-workbench-search-hud {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  left: 10px;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.preview-workbench-search-hud .preview-workbench-search-bar {
+  pointer-events: auto;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 36%, var(--border-subtle));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-workspace-content));
+  box-shadow: 0 10px 26px color-mix(in srgb, #000 24%, transparent);
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard);
+}
+
+.preview-workbench-body:has(.preview-workbench-search-hud) .chat-file-peek-scroll {
+  padding-top: 54px;
+}
+
+.preview-workbench-search-hud:focus-within .preview-workbench-search-bar {
+  border-color: color-mix(in srgb, var(--accent-primary) 72%, var(--border-subtle));
+  box-shadow:
+    0 10px 26px color-mix(in srgb, #000 24%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--accent-primary) 22%, transparent);
+}
+
+.preview-workbench-search-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
+.preview-workbench-search-status.no-results {
+  color: var(--state-warning);
+}
+
+.preview-search-match {
+  background: color-mix(in srgb, #ffd166 28%, transparent);
+}
+
+.preview-workbench-surface .chat-file-peek-scroll [data-line-number].preview-search-match {
+  background: color-mix(in srgb, #ffd166 24%, transparent);
+}
+
+.preview-search-match-active {
+  background: color-mix(in srgb, #ffd166 76%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #ffd166 54%, transparent);
+}
+
+.preview-workbench-surface .chat-file-peek-scroll [data-line-number].preview-search-match-active {
+  background: color-mix(in srgb, #ffd166 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #ffd166 54%, transparent);
+}
+
+.preview-workbench-surface.mobile .preview-workbench-search-hud {
+  right: max(52px, calc(10px + var(--wm-safe-area-right)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-workbench-search-hud .preview-workbench-search-bar,
+  .preview-workbench-search-input {
+    transition: none;
+  }
+}

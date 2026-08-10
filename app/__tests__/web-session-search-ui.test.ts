@@ -17,6 +17,8 @@ describe('web session search UI wiring', () => {
     expect(main).toContain('handleSessionSearchInputKeyDown');
     expect(main).toContain('navigateSessionSearchResult');
     expect(main).toContain('formatSessionSearchResultMeta(row.result)');
+    expect(main).toContain('chat-turn-search-highlight-active');
+    expect(main).toContain('highlightActive={turnIsChatSearchActive}');
     expect(main).toContain("${active ? ' active' : ''}");
     expect(main).toContain('aria-current={active ? \'true\' : undefined}');
     expect(controls).toContain('onKeyDown={handleSessionSearchInputKeyDown}');

@@ -3573,6 +3573,10 @@ export function App() {
   const [chatFilePeekDraftWidth, setChatFilePeekDraftWidth] = useState<number | null>(null);
   const [chatFilePeekResizing, setChatFilePeekResizing] = useState(false);
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
+  const previewSearchHighlightedLines = useMemo(
+    () => new Set(previewSearchMatches.map(match => match.line)),
+    [previewSearchMatches],
+  );
   const chatPeekAnchorRef = useRef<number | null>(null);
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -5812,8 +5816,8 @@ export function App() {
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
   const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || desktopGitSnapshot.available || showMonitor);
   const chatMainClassName = isWide
-    ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
-    : 'chat-main';
+    ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}${chatSearchOpen ? ' chat-search-open' : ''}`
+    : `chat-main${chatSearchOpen ? ' chat-search-open' : ''}`;
   const desktopChatFixedPreview = isWide && chatPreviewOpen;
   const closeSidebarTransientMenus = useCallback((keepOpen: 'hub' | 'project' | 'prompt' | null = null) => {
     setProjectMenuOpen(false);
@@ -17845,6 +17849,7 @@ export function App() {
         className={[
           'chat-view-content',
           searchHighlighted ? 'chat-turn-search-highlight' : '',
+          turnIsChatSearchActive ? 'chat-turn-search-highlight-active' : '',
         ].filter(Boolean).join(' ')}
       >
         <ChatTurnView
@@ -17922,7 +17927,10 @@ export function App() {
           }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
-          highlightQuery={turnIsChatSearchActive ? chatSearchQuery : undefined}
+          highlightQuery={chatSearchOpen && chatSearchMatchedTurnIndexSet.has(message.turnIndex ?? 0)
+            ? chatSearchQuery
+            : undefined}
+          highlightActive={turnIsChatSearchActive}
         />
       </div>
     );
@@ -19815,6 +19823,45 @@ export function App() {
   };
 
   useEffect(() => {
+    const container = chatFilePeekScrollRef.current;
+    if (
+      !container ||
+      !previewSearchOpen ||
+      !previewSearchQuery ||
+      activeWorkbenchTab?.type !== 'file'
+    ) {
+      return;
+    }
+    const applyPreviewSearchLineClasses = () => {
+      const activeLine = previewSearchMatches[previewSearchActiveIndex]?.line ?? null;
+      container.querySelectorAll<HTMLElement>('[data-line-number]').forEach(line => {
+        const lineNumber = Number(line.dataset.lineNumber);
+        line.classList.toggle('preview-search-match', previewSearchHighlightedLines.has(lineNumber));
+        line.classList.toggle('preview-search-match-active', lineNumber === activeLine);
+      });
+    };
+    applyPreviewSearchLineClasses();
+    const observer = typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(applyPreviewSearchLineClasses);
+    observer?.observe(container, {childList: true, subtree: true});
+    return () => {
+      observer?.disconnect();
+      container.querySelectorAll<HTMLElement>('[data-line-number]').forEach(line => {
+        line.classList.remove('preview-search-match', 'preview-search-match-active');
+      });
+    };
+  }, [
+    activeWorkbenchTab?.id,
+    activeWorkbenchTab?.type,
+    previewSearchActiveIndex,
+    previewSearchHighlightedLines,
+    previewSearchMatches,
+    previewSearchOpen,
+    previewSearchQuery,
+  ]);
+
+  useEffect(() => {
     setPreviewSearchActiveIndex(current =>
       Math.min(current, Math.max(0, previewSearchMatches.length - 1)),
     );
@@ -21100,6 +21147,9 @@ export function App() {
     );
   };
   const renderPreviewWorkbenchTabBody = (tab: PreviewWorkbenchTab, mode: 'desktop' | 'mobile', active: boolean) => {
+    const fileHighlightedLines = active && tab.type === 'file' && previewSearchOpen
+      ? new Set([...chatPeekSelectedLines, ...previewSearchHighlightedLines])
+      : chatPeekSelectedLines;
     if (tab.type === 'file') {
       return (
         <ChatFilePeekViewer
@@ -21115,7 +21165,7 @@ export function App() {
           codeTabSize={codeTabSize}
           wrapLines={wrapLines}
           showLineNumbers={showLineNumbers}
-          highlightedLines={active ? chatPeekSelectedLines : EMPTY_HIGHLIGHTED_LINES}
+          highlightedLines={active ? fileHighlightedLines : EMPTY_HIGHLIGHTED_LINES}
           onLineClick={active ? handlePeekLineClick : undefined}
           onClose={closeChatFilePeekFromChrome}
           onCopyPath={copyChatFilePreviewPath}
@@ -21239,46 +21289,52 @@ export function App() {
         : 'No results'
       : 'Search current preview';
   const previewSearchBar = previewSearchOpen ? (
-    <div className="preview-workbench-search-bar">
-      <Icon name="search" />
-      <input
-        ref={previewSearchInputRef}
-        className="preview-workbench-search-input"
-        value={previewSearchQuery}
-        onChange={event => setPreviewSearchQuery(event.target.value)}
-        onKeyDown={handlePreviewSearchInputKeyDown}
-        placeholder="Search"
-        aria-label="Search current preview"
-      />
-      <span className="preview-workbench-search-status">{previewSearchStatus}</span>
-      <button
-        type="button"
-        className="chat-preview-icon-button"
-        onClick={() => navigatePreviewSearchMatch(-1)}
-        disabled={previewSearchMatches.length === 0}
-        data-tooltip="Previous match"
-        aria-label="Previous match"
-      >
-        <Icon name="chevronUp" />
-      </button>
-      <button
-        type="button"
-        className="chat-preview-icon-button"
-        onClick={() => navigatePreviewSearchMatch(1)}
-        disabled={previewSearchMatches.length === 0}
-        data-tooltip="Next match"
-        aria-label="Next match"
-      >
-        <Icon name="chevronDown" />
-      </button>
-      <button
-        type="button"
-        className="chat-preview-icon-button"
-        onClick={closePreviewSearch}
-        aria-label="Close search"
-      >
-        <Icon name="x" />
-      </button>
+    <div className="preview-workbench-search-hud">
+      <div className="preview-workbench-search-bar">
+        <Icon name="search" />
+        <input
+          ref={previewSearchInputRef}
+          className="preview-workbench-search-input"
+          value={previewSearchQuery}
+          onChange={event => setPreviewSearchQuery(event.target.value)}
+          onKeyDown={handlePreviewSearchInputKeyDown}
+          placeholder="Search"
+          aria-label="Search current preview"
+        />
+        <span
+          className={`preview-workbench-search-status${previewSearchQuery && previewSearchMatches.length === 0 ? ' no-results' : ''}`}
+        >
+          {previewSearchStatus}
+        </span>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={() => navigatePreviewSearchMatch(-1)}
+          disabled={previewSearchMatches.length === 0}
+          data-tooltip="Previous match"
+          aria-label="Previous match"
+        >
+          <Icon name="chevronUp" />
+        </button>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={() => navigatePreviewSearchMatch(1)}
+          disabled={previewSearchMatches.length === 0}
+          data-tooltip="Next match"
+          aria-label="Next match"
+        >
+          <Icon name="chevronDown" />
+        </button>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={closePreviewSearch}
+          aria-label="Close search"
+        >
+          <Icon name="x" />
+        </button>
+      </div>
     </div>
   ) : null;
   const chatSearchStatus = chatSearchQuery
@@ -21287,7 +21343,7 @@ export function App() {
       : 'No results'
     : 'Search current session';
   const chatSearchBar = chatSearchOpen ? (
-    <div className="chat-search-bar">
+    <div className="chat-search-bar chat-search-hud">
       <Icon name="search" />
       <input
         ref={chatSearchInputRef}
@@ -21298,7 +21354,9 @@ export function App() {
         placeholder="Search"
         aria-label="Search current session"
       />
-      <span className="chat-search-status">{chatSearchStatus}</span>
+      <span className={`chat-search-status${chatSearchQuery && chatSearchMatches.length === 0 ? ' no-results' : ''}`}>
+        {chatSearchStatus}
+      </span>
       <button
         type="button"
         className="chat-search-icon-button"
