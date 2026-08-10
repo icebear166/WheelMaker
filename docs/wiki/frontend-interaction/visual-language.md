@@ -2,7 +2,7 @@
 
 # 视觉语言
 
-> 来源：[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)、[`../../scope/2026-07-24-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade.md)、[`../../scope/2026-07-24-topbar-menu-unification.md`](../../scope/2026-07-24-topbar-menu-unification.md)
+> 来源：[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)、[`../../scope/2026-07-24-floating-chrome-visual-upgrade.md`](../../scope/2026-07-24-floating-chrome-visual-upgrade.md)、[`../../scope/2026-07-24-topbar-menu-unification.md`](../../scope/2026-07-24-topbar-menu-unification.md)、[`../../scope/2026-08-10-global-search-ux-iteration.md`](../../scope/2026-08-10-global-search-ux-iteration.md)
 
 本页记录跨页面生效的视觉语言约定。具体界面的布局与交互规则由各前端交互页面维护。
 
@@ -44,6 +44,12 @@
 - 时长与曲线统一走 tokens（`--motion-*` / `--ease-*`），禁止组件内自定义零散时长。
 - 所有动画提供 `prefers-reduced-motion` 降级。
 - 不做布局级 FLIP 动效。
+
+## 搜索 HUD 与命中表达
+
+- Chat 与 Preview 搜索使用独立的 Search HUD：实心 raised surface、细边框、明确 focus ring 和独立层级；HUD 不放入代码、Markdown 或文件内容的滚动层，避免格式内容遮挡搜索入口。
+- 搜索结果使用两级强调：所有命中使用克制的暖色标记，当前命中使用更高对比度和清晰边界；搜索框常驻显示当前命中/总数或明确的无结果、不可用和加载状态。
+- Search HUD 的出现和关闭只承担状态反馈与空间归属提示，使用现有 motion token 的短促 opacity/transform 动效；键盘快捷键本身不做延迟动画，`prefers-reduced-motion` 下移除位移并保留状态/颜色反馈。
 
 ## 色彩收敛
 

@@ -57,5 +57,6 @@ pin 态与浮动态共用同一公式。Goal/Plan/Limits 在 pin 态是聊天主
 ## 搜索入口与 Archived 视图
 
 - 搜索入口按区域归属：chat 标题栏搜索按钮打开当前会话搜索，Sessions 标题栏搜索按钮打开跨会话搜索，Preview chrome 搜索按钮打开文件内搜索；会话搜索条只覆盖 800px 对话列上方，不提供多目标切换器。
-- Windows 上 Ctrl+F 为全局唯一入口：在聊天区居中弹出模态搜索选择器，列「当前会话 / 所有会话 / 文件预览」三个目标，↑/↓ 或 Tab/Shift+Tab 循环切换，Enter 进入对应搜索栏（目标未展开则自动展开，preview 无内容时目标禁用），Esc 关闭；各窗口不再单独监听 Ctrl+F。非 Windows 平台不拦截 Ctrl/Cmd+F，走系统或浏览器原生查找。
+- **键盘搜索路由**：Windows/Linux 使用 `Ctrl`、macOS 使用 `Cmd`。`Ctrl/Cmd+F` 在聊天区域打开当前会话搜索；当焦点位于可搜索 Preview 时打开当前 Preview 搜索；Preview 不支持文本搜索时回退到当前会话。`Ctrl/Cmd+Shift+F` 从任意工作区焦点直接打开 Sessions 侧栏搜索，不弹出目标选择器。
+- 全局 Sessions 搜索覆盖所有可见 Project 的活跃会话，不包含 Archived；结果继续在 Sessions 侧栏中按 Project 分组展示。输入停止短暂 debounce 后自动查询，Enter / Shift+Enter 用于结果导航，Esc 取消并关闭。
 - Archived 列表视图在会话面板内完整可见，不被右侧悬浮列等任何层遮挡；归档会话行保持一条一行，标题与操作不折行、不错位。

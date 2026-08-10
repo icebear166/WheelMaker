@@ -2,7 +2,7 @@
 
 # Workbench Chrome
 
-> 来源：[`../../scope/2026-07-31-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation.md)、[`../../scope/2026-08-06-preview-drawer-toolbar.md`](../../scope/2026-08-06-preview-drawer-toolbar.md)
+> 来源：[`../../scope/2026-07-31-mobile-surface-navigation.md`](../../scope/2026-07-31-mobile-surface-navigation.md)、[`../../scope/2026-08-06-preview-drawer-toolbar.md`](../../scope/2026-08-06-preview-drawer-toolbar.md)、[`../../scope/2026-08-10-global-search-ux-iteration.md`](../../scope/2026-08-10-global-search-ux-iteration.md)
 
 Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者共享“标题工具栏 + 标签栏”两层结构、尺寸层级、图标按钮样式和无障碍语义；文件树、搜索、xterm、Terminal 快捷键栏等能力仍由各自功能模块拥有。
 
@@ -11,6 +11,7 @@ Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者
 - 第一层标题工具栏由 leading action、当前内容标题和页面级 actions 组成。
 - 第二层只承载可切换、可关闭的标签。标签关闭必须使用原生 button，不在 tab button 内嵌套模拟按钮。
 - 移动端 leading action 是直接返回 Chat 的返回按钮；PC Terminal 使用收起桌面 Terminal 面板的关闭按钮。移动端 Floating Nav 与返回按钮并存，分别承担全局切换和一步返回。
+- Preview 的搜索按钮属于 Preview chrome；Preview 获得焦点时，`Ctrl/Cmd+F` 直接打开当前 Preview 搜索，当前内容不支持文本搜索时回退到当前会话搜索。Preview 搜索 HUD 位于内容滚动层之上，但不覆盖工具栏、标签和 drawer 工具；搜索条保持自己的焦点、结果计数、上一项/下一项和关闭操作。
 
 ## Preview 标签行
 
