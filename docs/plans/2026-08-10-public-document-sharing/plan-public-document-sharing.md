@@ -28,11 +28,11 @@
 
 **Acceptance:** The strict main config accepts optional `share.publicUrl` without changing the protocol version; Go and TypeScript expose `share.create`, `share.list`, and `share.delete` as client-only methods with matching payload/response shapes; deployment config rewrites preserve the nested share object.
 
-- [ ] **Step 1: Write failing tests** for loading the nested share config, method descriptor route/role, TypeScript method names and share payload shape, and deployment preservation of an existing `share` object.
-- [ ] **Step 2: Run focused tests** and verify they fail because the field and methods do not exist.
-- [ ] **Step 3: Implement the minimum shared field, `RegistryRouteShare`, method descriptors, TypeScript constants/types, and preservation assertion.** Keep protocol version unchanged and keep `share` optional.
-- [ ] **Step 4: Run focused Go, Jest, and Node tests** and verify they pass.
-- [ ] **Step 5: Checkpoint** only the task files with `git-workflow-preferences checkpoint`.
+- [x] **Step 1: Write failing tests** for loading the nested share config, method descriptor route/role, TypeScript method names and share payload shape, and deployment preservation of an existing `share` object.
+- [x] **Step 2: Run focused tests** and verify they fail because the field and methods do not exist.
+- [x] **Step 3: Implement the minimum shared field, `RegistryRouteShare`, method descriptors, TypeScript constants/types, and preservation assertion.** Keep protocol version unchanged and keep `share` optional.
+- [x] **Step 4: Run focused Go, Jest, and Node tests** and verify they pass.
+- [x] **Step 5: Checkpoint** only the task files with `git-workflow-preferences checkpoint`.
 
 ### Task 2: Implement Registry Share storage, lifecycle, and WebSocket handlers
 

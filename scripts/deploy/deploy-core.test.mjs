@@ -896,6 +896,22 @@ test('normal deploy preserves canonical top-level identity placement', async (t)
   assert.equal('hubId' in config.registry, false);
 });
 
+test('normal deploy preserves nested share configuration', async (t) => {
+  const fixture = await installFixture(t);
+  const configPath = join(fixture.home, 'config.json');
+  await mkdir(fixture.home, { recursive: true });
+  await writeFile(configPath, JSON.stringify({
+    projects: [],
+    publicUrl: 'https://workspace.example.com',
+    share: { publicUrl: 'https://share.example.com' },
+  }));
+
+  await runCore([], fixture.deps);
+
+  const config = JSON.parse(await readFile(configPath, 'utf8'));
+  assert.deepEqual(config.share, { publicUrl: 'https://share.example.com' });
+});
+
 test('normal deploy keeps legacy server text when no public URL is supplied', async (t) => {
   const fixture = await installFixture(t);
   const configPath = join(fixture.home, 'config.json');

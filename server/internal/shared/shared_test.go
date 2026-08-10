@@ -74,6 +74,17 @@ func TestLoadConfig_AllowsWorkspacePublicURL(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowsSharePublicURL(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"share":{"publicUrl":"https://share.example.com"}}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.Share.PublicURL != "https://share.example.com" {
+		t.Fatalf("share.publicUrl = %q, want %q", cfg.Share.PublicURL, "https://share.example.com")
+	}
+}
+
 func TestLoadConfig_RejectsRemovedMonitor(t *testing.T) {
 	path := writeTempConfig(t, `{
 		"monitor": {"server": "127.0.0.1", "port": 9631},

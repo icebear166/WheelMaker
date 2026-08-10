@@ -457,6 +457,28 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	}
 }
 
+func TestRegistryShareMethodsAreClientOnly(t *testing.T) {
+	for _, method := range []string{
+		RegistryMethodShareCreate,
+		RegistryMethodShareList,
+		RegistryMethodShareDelete,
+	} {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("RegistryMethod(%q) missing", method)
+		}
+		if desc.Route != RegistryRouteShare {
+			t.Fatalf("%s route=%q, want %q", method, desc.Route, RegistryRouteShare)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("%s should allow client callers", method)
+		}
+		if RegistryMethodAllowed(string(RegistryRoleHub), method) {
+			t.Fatalf("%s should reject hub callers", method)
+		}
+	}
+}
+
 func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 	targets := []string{
 		"connect.close",

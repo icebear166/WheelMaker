@@ -43,6 +43,7 @@ const (
 	RegistryRouteTerminalHubRequest     RegistryRouteKind = "terminal_hub_request"
 	RegistryRouteTerminalClientEvent    RegistryRouteKind = "terminal_client_event"
 	RegistryRouteTerminalHubEvent       RegistryRouteKind = "terminal_hub_event"
+	RegistryRouteShare                  RegistryRouteKind = "share"
 )
 
 const (
@@ -78,6 +79,9 @@ const (
 	RegistryMethodHubReportProject              = "hub.report.project"
 	RegistryMethodRegistryProjectList           = "registry.project.list"
 	RegistryMethodRegistryProjectReport         = "registry.project.report"
+	RegistryMethodShareCreate                   = "share.create"
+	RegistryMethodShareList                     = "share.list"
+	RegistryMethodShareDelete                   = "share.delete"
 	RegistryMethodProjectFSList                 = "project.fs.list"
 	RegistryMethodProjectFSInfo                 = "project.fs.info"
 	RegistryMethodProjectFSRead                 = "project.fs.read"
@@ -217,6 +221,9 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
 	RegistryMethodRegistryProjectList:   registryMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodRegistryProjectReport: registryClientEventMethod(RegistryMethodRegistryProjectReport),
+	RegistryMethodShareCreate:           registryMethod(RegistryMethodShareCreate, RegistryRouteShare, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodShareList:             registryMethod(RegistryMethodShareList, RegistryRouteShare, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodShareDelete:           registryMethod(RegistryMethodShareDelete, RegistryRouteShare, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodProjectFSList:                 registryProjectMethod(RegistryMethodProjectFSList, RegistryRouteProjectForward),
 	RegistryMethodProjectFSInfo:                 registryProjectMethod(RegistryMethodProjectFSInfo, RegistryRouteProjectForward),

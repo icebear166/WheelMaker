@@ -108,6 +108,58 @@ export interface RegistryEnvelope<TPayload = unknown> {
   payload?: TPayload;
 }
 
+export type RegistryShareExpiry = '1h' | '1d' | '7d' | '30d' | 'permanent';
+export type RegistryShareSourceKind = 'markdown' | 'html';
+
+export interface RegistryShareCreatePayload {
+  projectId: string;
+  path: string;
+  kind: RegistryShareSourceKind;
+  title: string;
+  expiry: RegistryShareExpiry;
+  encoding: 'gzip+base64';
+  content: string;
+}
+
+export interface RegistryShareRecord {
+  token: string;
+  title: string;
+  projectId: string;
+  path: string;
+  kind: RegistryShareSourceKind;
+  createdAt: string;
+  expiresAt?: string | null;
+  sizeBytes: number;
+  url?: string;
+}
+
+export interface RegistryShareCreateResponse {
+  token: string;
+  url?: string;
+  createdAt: string;
+  expiresAt?: string | null;
+}
+
+export interface RegistryShareListPayload {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface RegistryShareListResponse {
+  enabled: boolean;
+  publicUrl?: string;
+  items: RegistryShareRecord[];
+  nextCursor?: string;
+}
+
+export interface RegistryShareDeletePayload {
+  token: string;
+}
+
+export interface RegistryShareDeleteResponse {
+  ok: boolean;
+}
+
 export type RegistryHubStateAvailability = 'empty' | 'ready';
 export type RegistryHubStateUpdateStatus = 'idle' | 'queued' | 'updating';
 export type RegistryHubStateSectionName =

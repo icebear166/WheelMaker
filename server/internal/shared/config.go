@@ -13,6 +13,7 @@ type AppConfig struct {
 	Token     string          `json:"token,omitempty"`
 	HubID     string          `json:"hubId,omitempty"`
 	Projects  []ProjectConfig `json:"projects"`
+	Share     ShareConfig     `json:"share,omitempty"`
 	Registry  RegistryConfig  `json:"registry,omitempty"`
 	Log       LogConfig       `json:"log,omitempty"`
 }
@@ -22,9 +23,15 @@ type appConfigInput struct {
 	Token             string          `json:"token,omitempty"`
 	HubID             string          `json:"hubId,omitempty"`
 	Projects          []ProjectConfig `json:"projects"`
+	Share             ShareConfig     `json:"share,omitempty"`
 	Registry          RegistryConfig  `json:"registry,omitempty"`
 	Log               LogConfig       `json:"log,omitempty"`
 	DeprecatedAPIKeys json.RawMessage `json:"api_keys,omitempty"`
+}
+
+// ShareConfig configures the optional anonymous public document origin.
+type ShareConfig struct {
+	PublicURL string `json:"publicUrl,omitempty"`
 }
 
 type rawAppConfig struct {
@@ -114,6 +121,7 @@ func LoadConfig(path string) (*AppConfig, error) {
 		Token:     input.Token,
 		HubID:     input.HubID,
 		Projects:  input.Projects,
+		Share:     input.Share,
 		Registry:  input.Registry,
 		Log:       input.Log,
 	}, nil
