@@ -2476,6 +2476,7 @@ export async function gatewayConfigExists(home) {
 
 // Gateway service/runtime registration.
 const SERVICE_NAME = 'wheelmaker-gateway';
+const GATEWAY_ADMIN_ORIGIN = 'http://127.0.0.1:2019';
 const WINDOWS_TASK_NAME = 'WheelMakerGateway';
 const DARWIN_LABEL = 'com.wheelmaker.gateway';
 
@@ -2737,7 +2738,10 @@ export function createGatewayRuntimeAdapter({
       : configBytes;
     const response = await fetchImpl('http://127.0.0.1:2019/load', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: GATEWAY_ADMIN_ORIGIN,
+      },
       body: Buffer.from(body).toString('utf8'),
     });
     if (!response.ok) {
@@ -2752,6 +2756,7 @@ export function createGatewayRuntimeAdapter({
     }
     const response = await fetchImpl('http://127.0.0.1:2019/config/', {
       method: 'GET',
+      headers: { Origin: GATEWAY_ADMIN_ORIGIN },
     });
     if (!response.ok) {
       const detail = typeof response.text === 'function' ? await response.text() : '';

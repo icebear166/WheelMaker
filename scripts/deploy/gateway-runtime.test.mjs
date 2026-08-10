@@ -18,6 +18,7 @@ const PATHS = gatewayRuntimePaths({
   userHome: '/home/alice',
   uid: 501,
 });
+const GATEWAY_ADMIN_ORIGIN = 'http://127.0.0.1:2019';
 
 test('Gateway service paths use the fixed host home and binary', () => {
   assert.equal(PATHS.home, '/home/alice/.wheelmaker/gateway');
@@ -149,6 +150,10 @@ test('Gateway reload posts the generated semantic result to the local Caddy admi
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, 'http://127.0.0.1:2019/load');
   assert.equal(requests[0].options.method, 'POST');
+  assert.deepEqual(requests[0].options.headers, {
+    'Content-Type': 'application/json',
+    Origin: GATEWAY_ADMIN_ORIGIN,
+  });
   assert.equal(requests[0].options.body, '{"apps":{}}');
 });
 
@@ -166,6 +171,9 @@ test('Gateway health checks the local Caddy admin endpoint', async () => {
 
   await adapter.health();
   assert.deepEqual(requests, [
-    { url: 'http://127.0.0.1:2019/config/', options: { method: 'GET' } },
+    {
+      url: 'http://127.0.0.1:2019/config/',
+      options: { method: 'GET', headers: { Origin: GATEWAY_ADMIN_ORIGIN } },
+    },
   ]);
 });
