@@ -41,13 +41,16 @@ Gateway 产物发布与目标机入口配置是两条独立控制流。目标机
 `deploy.mjs gateway`，start/stop 包装器只控制 Gateway 运行状态。Hub 共享业务配置位于
 部署用户的 `~/.wheelmaker/config.json`，其中的 `publicUrl`、`registry.share.publicUrl`、
 `registry.relayPort` 和 `log.level` 同时供本机 Gateway 使用；Gateway 专属配置位于
-`~/.wheelmaker/gateway/config.json`，只承载 ACME、各路由 TLS 和 Release 运行参数。
+`~/.wheelmaker/gateway/config.json`，使用 schema 2 `wm_sites` 承载 ACME、三站点共享 TLS、
+Registry/Share 的 `sync_hub` 模式和 Release 运行参数。
 
 业务服务不再接受 Gateway selector。完整部署的 `--public-url` 写入 Hub 主配置，Gateway
 在本机 `registry.listen:true` 时复用该 `publicUrl` 生成 Registry route。Release Server
 的 `publicUrl` 来自 release channel，部署时只更新 `~/.wheelmaker/gateway/config.json`
-的 `release` 对象，保留 TLS 和其他 Gateway 专属字段，不生成 `sites/*.json`。Gateway
+的 `wm_sites.release` 对象，保留 `wm_sites.tls` 和其他 Gateway 专属字段，不生成
+`sites/*.json`。Gateway
 同时读取两份配置并热加载；Hub 与 Registry 不监听主配置，按既有启动/重启边界生效。
+Gateway schema 1 不迁移或自动覆盖，旧文件会使部署与启动明确失败并保持原内容不变。
 
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
 
@@ -57,7 +60,7 @@ Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不�
 
 ```text
 ~/.wheelmaker/release-server/
-  # no service config.json; runtime config is Gateway config.release
+  # no service config.json; runtime config is Gateway config.wm_sites.release
   versions/<source-sha>/wheelmaker-release-server
   current -> versions/<source-sha>
   data/public/
@@ -71,8 +74,8 @@ Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不�
 `www-data`、ACL 或入口服务权限。
 
 每次部署都在 SSH 用户 Home 原子更新
-`~/.wheelmaker/gateway/config.json` 的 `release.publicUrl`，并由 Release Server 进程读取
-完整 `release` 对象。Gateway 未安装时配置仍可保留，部署不会安装、启动、停止、重载或
+`~/.wheelmaker/gateway/config.json` 的 `wm_sites.release.publicUrl`，并由 Release Server
+进程读取完整 `wm_sites.release` 对象。Gateway 未安装时配置仍可保留，部署不会安装、启动、停止、重载或
 验证 Caddy。继续使用 Nginx 时也只需全站反代 loopback，worker 无需读取 Home。旧的
 `~/.wheelmaker/release-server/config.json` 只用于一次性迁移。
 

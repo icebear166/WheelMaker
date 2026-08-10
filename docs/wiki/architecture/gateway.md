@@ -16,7 +16,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 - Hub 完整部署、`deploy.mjs update` 和 Hub 运行时只管理 Hub 自己的配置、Web、状态和
   服务，不读取或写入 Gateway 目录，也不暴露 Gateway 更新的 HubState/API/UI 入口。
 - Gateway 只通过自己的 `deploy.mjs gateway` 入口安装、升级和管理生命周期。Release
-  Server 部署是明确的例外：它只更新 Gateway `config.json` 的 `release` 对象，并由
+  Server 部署是明确的例外：它只更新 Gateway `config.json` 的 `wm_sites.release` 对象，并由
   Release Server 进程读取该对象；它不读取或写入 Hub 配置。
 - `~/.wheelmaker/gateway/start.*` 与 `stop.*` 只控制当前运行状态，不改变开机自启设置。
 - Gateway 与全部部署器都不修改 Nginx、DNS、防火墙、云安全组或用户证书。
@@ -35,7 +35,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 │  └─ data/                            # Release Server 公开文件与 staging
 ├─ shares/public/                      # Hub 生成的公开分享文件
 └─ gateway/
-   ├─ config.json                      # Gateway 专属配置：ACME/TLS/Release
+   ├─ config.json                      # Gateway schema 2：ACME/wm_sites/共享 TLS/Release
    ├─ generated/caddy.json             # 聚合后的运行时配置
    ├─ data/                            # Caddy ACME 状态
    └─ state/release.json               # Gateway 自己的安装状态
@@ -43,7 +43,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 
 Gateway 读取自己的 `config.json`，并读取 `--home`（通常为
 `~/.wheelmaker/gateway`）父目录下的 Hub `config.json`。部署 Gateway 时如果专属配置
-文件不存在，会一次性生成 ACME、各路由 TLS 和完整 Release 配置；Registry/Share 的
+文件不存在，会一次性生成 ACME、共享 TLS 和完整 `wm_sites` 配置；Registry/Share 的
 公网 URL、Relay 端口和日志级别不在此文件重复保存。Gateway 从父目录推导 Registry
 Web、Release data 和 Share public 根目录：
 
@@ -70,28 +70,35 @@ Hub 主配置的共享部分形状如下：
 }
 ```
 
-Gateway 专属配置形状如下；Registry 与 Share section 只承载 TLS 边缘参数：
+Gateway 专属配置使用 schema 2。`wm_sites.registry` 与 `wm_sites.share` 固定使用
+`urlMode: "sync_hub"`，`wm_sites.release` 保存 Release Server 运行参数，三个站点共用
+`wm_sites.tls`：
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "acme": {"email": ""},
-  "registry": {"tls": {"certificateFile": "", "keyFile": ""}},
-  "release": {
-    "publicUrl": "",
-    "listen": "127.0.0.1:9680",
-    "dataRoot": "~/.wheelmaker/release-server/data",
-    "tokenSha256": "",
-    "tls": {"certificateFile": "", "keyFile": ""}
-  },
-  "share": {"tls": {"certificateFile": "", "keyFile": ""}}
+  "wm_sites": {
+    "tls": {"certificateFile": "", "keyFile": ""},
+    "registry": {"urlMode": "sync_hub"},
+    "release": {
+      "publicUrl": "",
+      "listen": "127.0.0.1:9680",
+      "dataRoot": "~/.wheelmaker/release-server/data",
+      "tokenSha256": ""
+    },
+    "share": {"urlMode": "sync_hub"}
+  }
 }
 ```
 
-Release Server 的运行配置是 Gateway `config.json.release`，不再有
+`registry` 和 `share` 的 `urlMode` 缺失时默认采用 `sync_hub`，其他值无效。Gateway
+schema 1 不做迁移、兼容解析或自动覆盖；部署器与运行时拒绝旧文件并保持原内容不变。
+
+Release Server 的运行配置是 Gateway `config.json.wm_sites.release`，不再有
 `~/.wheelmaker/release-server/config.json` 或 `gateway/sites/*.json`。Release Server
-部署器从 channel URL 更新完整配置中的 `release.publicUrl`，保留 `listen`、`dataRoot`、
-`tokenSha256`、TLS 和其他 Gateway 专属字段；旧的 Release Server `config.json` 只用于
+部署器从 channel URL 更新完整配置中的 `wm_sites.release.publicUrl`，保留 `listen`、
+`dataRoot`、`tokenSha256`、共享 TLS 和其他 Gateway 专属字段；旧的 Release Server `config.json` 只用于
 一次性迁移。Hub 的 `config.json` 仍由部署器或运维者维护，Gateway 读取其中的共享字段，
 但不写入 Hub 配置。
 
@@ -104,12 +111,13 @@ Release Server 的运行配置是 Gateway `config.json.release`，不再有
   唯一 Share origin。清空它只停用 Share；Registry 在 `share.create/list` 请求边界重新
   读取该字段。
 - Release Server 的地址来自 `scripts/release/channel.json`，Release Server 部署只更新
-  Gateway `config.json` 的 `release.publicUrl`，不生成站点文件，也不改 Hub 配置。
+  Gateway `config.json` 的 `wm_sites.release.publicUrl`，不生成站点文件，也不改 Hub 配置。
 - Gateway 同时轮询 Hub `config.json` 与自身 `config.json` 并热加载合法变化；无效的
   Registry/Share 派生字段只禁用受影响 route，Release route 保留上一份有效专属配置。
   Hub 和 Registry 不监听配置文件，主配置变化按现有启动/重启边界生效。
-- Gateway 只接受 HTTP(S) origin；`https://` 且未指定用户证书时使用 Caddy 自动证书，
-  显式证书和私钥必须同时存在。HTTP 不启用 TLS，也不生成 HTTPS 跳转。
+- Gateway 只接受 HTTP(S) origin；`https://` 且共享 TLS 为空时使用 Caddy 自动证书，
+  显式证书和私钥必须同时存在，并由部署者保证证书覆盖所有 HTTPS 站点 hostname。
+  HTTP 不启用 TLS，也不生成 HTTPS 跳转。
 - 聚合时按大小写不敏感的 hostname 检查唯一性。任意两个非空 URL 使用相同 hostname
   都会使新配置被拒绝，上一份有效配置继续运行。
 
@@ -164,7 +172,7 @@ node deploy.mjs                                      # 只部署 Hub/Web
 node deploy.mjs --public-url=https://host.example   # 非交互完整 Hub 部署
 node deploy.mjs update                               # 只更新 Hub/Web
 node deploy.mjs gateway                              # 独立安装/升级/启动 Gateway
-deploy-release-server.bat                            # 部署 Release，并更新 Gateway release section
+deploy-release-server.bat                            # 部署 Release，并更新 Gateway wm_sites.release
 ~/.wheelmaker/gateway/start.sh|stop.sh               # 只控制 Gateway 当前运行状态
 ```
 

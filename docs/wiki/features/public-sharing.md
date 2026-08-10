@@ -51,7 +51,8 @@ history, statistics, IP/User-Agent data, or quota model.
 
 Registry reads `~/.wheelmaker/config.json.registry.share.publicUrl` at each
 `share.create/list` request boundary and uses it to generate the public link. Gateway reads the
-same Hub field together with its own Share TLS settings; it does not create a separate site file.
+same Hub field because `wm_sites.share.urlMode` is `sync_hub`; Share 与 Registry、Release
+共用 Gateway schema 2 的 `wm_sites.tls`，不再有 Share 专属 TLS，也不创建单独站点文件。
 Exact
 `GET`/`HEAD /s/<43-character-token>` requests are served directly from
 `shares/public`, with forced HTML/inline/no-store/robots/referrer/nosniff headers.

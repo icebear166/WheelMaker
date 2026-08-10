@@ -83,6 +83,10 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
   its own config for Caddy hot loading; Hub and Registry do not watch the file and use existing
   startup/restart boundaries. Registry Share requests reread `registry.share.publicUrl` at the
   `share.create/list` boundary, which is not a general Registry hot reload.
+- Gateway 自身配置使用 schema 2 `wm_sites`：Registry 与 Share 固定通过
+  `urlMode: "sync_hub"` 读取上述 Hub 地址，Release 运行参数位于 `wm_sites.release`，
+  三类站点共用 `wm_sites.tls`。Gateway schema 1 不迁移，读取失败时保持原文件和上一份
+  有效 Caddy 配置不变；这与 Hub 主配置既有的 Go 迁移流程相互独立。
 - The listener always binds loopback. Gateway/Nginx is responsible for exposing `/` and `/ws` through `publicUrl`.
 - Go owns legacy config migration. MJS preserves legacy fields on existing installations; it only writes the canonical top-level shape for new installations or an explicitly supplied public URL.
 

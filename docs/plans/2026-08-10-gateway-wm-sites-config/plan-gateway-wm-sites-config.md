@@ -24,21 +24,21 @@
 
 **Acceptance:** The four approved pages describe schema 2 `wm_sites`, shared TLS, `sync_hub`, nested Release configuration, strict schema 1 rejection, and unchanged runtime ownership without retaining the retired Gateway shape.
 
-- [ ] **Step 1: Update Gateway architecture**
+- [x] **Step 1: Update Gateway architecture**
 
 Replace the schema 1 example and per-site TLS descriptions with the exact schema 2 canonical JSON. Document `wm_sites.registry/share.urlMode`, shared TLS behavior, Release nesting, and the no-migration failure boundary.
 
-- [ ] **Step 2: Update runtime, Share, and Release ownership text**
+- [x] **Step 2: Update runtime, Share, and Release ownership text**
 
 Change only the confirmed pages: keep Hub URL ownership and Registry request-boundary rereads unchanged, but point Gateway/Release reads and writes to `wm_sites.release` and TLS to `wm_sites.tls`.
 
-- [ ] **Step 3: Check the approved pages for retired paths**
+- [x] **Step 3: Check the approved pages for retired paths**
 
 Run: `rg -n "schema.?1|config\.json\.release|release\.publicUrl|各路由 TLS|Registry 与 Share section|registry\.tls|share\.tls|release\.tls" docs/wiki/architecture/gateway.md docs/wiki/architecture/server-runtime.md docs/wiki/features/public-sharing.md docs/wiki/release-and-build/release.md`
 
 Expected: Any match is explicitly historical or replaced before continuing; current-behavior text uses schema 2 nested paths.
 
-- [ ] **Step 4: Validate and checkpoint the Wiki unit**
+- [x] **Step 4: Validate and checkpoint the Wiki unit**
 
 Run: `git diff --check`
 
