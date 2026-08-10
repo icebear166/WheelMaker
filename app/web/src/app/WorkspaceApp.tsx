@@ -310,6 +310,13 @@ import {
   type MarkdownHtmlExportSurfaceRequest,
   type MarkdownHtmlImageResolution,
 } from '../chat/export/MarkdownHtmlExportDocument';
+import {ShareManager, type ShareManagerSource} from '../shares/ShareManager';
+import {
+  createHtmlShareSnapshot,
+  createMarkdownShareSnapshot,
+  shareKindForPath,
+  type ShareSnapshot,
+} from '../shares/shareSnapshot';
 import {
   MARKDOWN_EXPORT_CONTENT_CLASS_NAME,
   MARKDOWN_EXPORT_CONTENT_STYLE,
@@ -2096,6 +2103,14 @@ type MarkdownHtmlExportRequest = MarkdownHtmlExportSurfaceRequest & {
   userActionToken?: string;
 };
 
+type MarkdownShareCaptureRequest = MarkdownHtmlExportSurfaceRequest;
+
+type MarkdownShareCapturePending = {
+  source: ShareManagerSource;
+  resolve: (snapshot: ShareSnapshot) => void;
+  reject: (error: Error) => void;
+};
+
 type StartMarkdownHtmlExportInput = {
   content: string;
   title: string;
@@ -3100,13 +3115,17 @@ export function App() {
   const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);
   const [releasePublishingOpen, setReleasePublishingOpen] = useState(false);
   const [portRelayScreenOpen, setPortRelayScreenOpen] = useState(false);
+  const [sharesScreenOpen, setSharesScreenOpen] = useState(false);
+  const [shareSource, setShareSource] = useState<ShareManagerSource | null>(null);
   const mobileSettingsHistoryKeyRef = useRef<string | null>(null);
   const mobileReleasePublishingHistoryRef = useRef(false);
   const mobilePortRelayHistoryRef = useRef(false);
+  const mobileSharesHistoryRef = useRef(false);
   const sidebarSettingsOpenRef = useRef(sidebarSettingsOpen);
   const settingsDetailViewRef = useRef<SettingsDetailView>(settingsDetailView);
   const releasePublishingOpenRef = useRef(releasePublishingOpen);
   const portRelayScreenOpenRef = useRef(portRelayScreenOpen);
+  const sharesScreenOpenRef = useRef(sharesScreenOpen);
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
   const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
@@ -3731,11 +3750,14 @@ export function App() {
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
   const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
   const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest] = useState<MarkdownHtmlExportRequest | null>(null);
+  const [markdownShareCaptureRequest, setMarkdownShareCaptureRequest] = useState<MarkdownShareCaptureRequest | null>(null);
   const [promptMarkdownHtmlExportDraft, setPromptMarkdownHtmlExportDraft] = useState<PromptMarkdownHtmlExportDraft | null>(null);
   const [exportingMarkdownHtmlKey, setExportingMarkdownHtmlKey] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const markdownImageExportIdRef = useRef(0);
   const markdownHtmlExportIdRef = useRef(0);
+  const markdownShareCaptureIdRef = useRef(0);
+  const markdownShareCapturePendingRef = useRef<MarkdownShareCapturePending | null>(null);
   const chatComposerTextRef = useRef('');
   const chatComposerTextCursorRef = useRef(0);
   const chatComposerTokensRef = useRef<ChatComposerToken[]>([]);
@@ -6131,6 +6153,9 @@ export function App() {
     portRelayScreenOpenRef.current = portRelayScreenOpen;
   }, [portRelayScreenOpen]);
   useEffect(() => {
+    sharesScreenOpenRef.current = sharesScreenOpen;
+  }, [sharesScreenOpen]);
+  useEffect(() => {
     const activeProjectId = projectId || projectIdRef.current;
     if (!connected || !activeProjectId) {
       return;
@@ -7012,7 +7037,7 @@ export function App() {
   };
   const floatingNavCurrent = resolveFloatingNavCurrent({
     relayFrameOpen: mobilePortRelayFrameOpen,
-    settingsOpen: sidebarSettingsOpen || releasePublishingOpen || portRelayScreenOpen,
+    settingsOpen: sidebarSettingsOpen || releasePublishingOpen || portRelayScreenOpen || sharesScreenOpen,
     usageOpen: mobileUsageOpen,
     terminalOpen,
     previewOpen: chatPreviewOpen && !mobilePortRelayFrameOpen,
@@ -7483,6 +7508,9 @@ export function App() {
     setReleasePublishingOpen(false);
     mobilePortRelayHistoryRef.current = false;
     setPortRelayScreenOpen(false);
+    mobileSharesHistoryRef.current = false;
+    setSharesScreenOpen(false);
+    setShareSource(null);
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
   }, [setSidebarSettingsOpen]);
@@ -7491,6 +7519,9 @@ export function App() {
     setDrawerOpen(false);
     mobilePortRelayHistoryRef.current = false;
     setPortRelayScreenOpen(false);
+    mobileSharesHistoryRef.current = false;
+    setSharesScreenOpen(false);
+    setShareSource(null);
     setReleasePublishingOpen(true);
     if (!isWide && !mobileReleasePublishingHistoryRef.current) {
       window.history.pushState(
@@ -7514,6 +7545,9 @@ export function App() {
     setDrawerOpen(false);
     mobileReleasePublishingHistoryRef.current = false;
     setReleasePublishingOpen(false);
+    mobileSharesHistoryRef.current = false;
+    setSharesScreenOpen(false);
+    setShareSource(null);
     setPortRelayError('');
     setPortRelayScreenOpen(true);
     if (!isWide && !mobilePortRelayHistoryRef.current) {
@@ -7532,6 +7566,33 @@ export function App() {
     }
     mobilePortRelayHistoryRef.current = false;
     setPortRelayScreenOpen(false);
+  }, [isWide]);
+  const openShares = useCallback((nextSource: ShareManagerSource | null = null) => {
+    closeSettingsPanel();
+    setDrawerOpen(false);
+    mobileReleasePublishingHistoryRef.current = false;
+    setReleasePublishingOpen(false);
+    mobilePortRelayHistoryRef.current = false;
+    setPortRelayScreenOpen(false);
+    setShareSource(nextSource);
+    setSharesScreenOpen(true);
+    if (!isWide && !mobileSharesHistoryRef.current) {
+      window.history.pushState(
+        createStandalonePageHistoryState('shares'),
+        '',
+        window.location.href,
+      );
+      mobileSharesHistoryRef.current = true;
+    }
+  }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  const closeShares = useCallback(() => {
+    if (!isWide && mobileSharesHistoryRef.current) {
+      window.history.back();
+      return;
+    }
+    mobileSharesHistoryRef.current = false;
+    setSharesScreenOpen(false);
+    setShareSource(null);
   }, [isWide]);
   const openSettingsChild = useCallback((detail: SettingsDetail) => {
     setSidebarSettingsOpen(true);
@@ -7620,6 +7681,21 @@ export function App() {
     window.addEventListener('popstate', handlePortRelayScreenPopState);
     return () => window.removeEventListener('popstate', handlePortRelayScreenPopState);
   }, []);
+  useEffect(() => {
+    const handleSharesPopState = (event: PopStateEvent) => {
+      if (
+        !sharesScreenOpenRef.current
+        || isStandalonePageHistoryState(event.state, 'shares')
+      ) {
+        return;
+      }
+      mobileSharesHistoryRef.current = false;
+      setSharesScreenOpen(false);
+      setShareSource(null);
+    };
+    window.addEventListener('popstate', handleSharesPopState);
+    return () => window.removeEventListener('popstate', handleSharesPopState);
+  }, []);
   const handleMobileSettingsBackButton = useCallback(() => {
     if (!isWide && sidebarSettingsOpen && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
@@ -7701,6 +7777,10 @@ export function App() {
       closePortRelayScreen();
       return true;
     }
+    if (!isWide && sharesScreenOpenRef.current) {
+      closeShares();
+      return true;
+    }
     if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return true;
@@ -7715,7 +7795,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closePortRelayScreen, closeReleasePublishing, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closePortRelayScreen, closeReleasePublishing, closeShares, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -16184,6 +16264,7 @@ export function App() {
       setThemeMode={setThemeMode}
       onOpenSettings={handleDesktopSettingsSelect}
       onOpenPortRelay={openPortRelayScreen}
+      onOpenShares={() => openShares(null)}
       onOpenReleasePublishing={openReleasePublishing}
       updateController={clientUpdateController}
       triggerClassName={mobile
@@ -17129,6 +17210,125 @@ export function App() {
     setExportingMarkdownHtmlKey('');
     setError(`Failed to export HTML: ${message}`);
   }, []);
+
+  const completeMarkdownShareCapture = useCallback((
+    result: {html: string; unresolvedImageUrls: string[]},
+  ) => {
+    const pending = markdownShareCapturePendingRef.current;
+    if (!pending) return;
+    markdownShareCapturePendingRef.current = null;
+    setMarkdownShareCaptureRequest(null);
+    pending.resolve(createMarkdownShareSnapshot({
+      title: pending.source.title,
+      html: result.html,
+      warnings: result.unresolvedImageUrls.map(source => ({
+        source,
+        message: `Image remains linked: ${source}`,
+      })),
+    }));
+  }, []);
+
+  const failMarkdownShareCapture = useCallback((message: string) => {
+    const pending = markdownShareCapturePendingRef.current;
+    if (!pending) return;
+    markdownShareCapturePendingRef.current = null;
+    setMarkdownShareCaptureRequest(null);
+    pending.reject(new Error(message));
+  }, []);
+
+  const captureShareSource = useCallback(async (source: ShareManagerSource): Promise<ShareSnapshot> => {
+    if (source.kind === 'html') {
+      const file = source.content !== undefined
+        ? {content: source.content, isBinary: false}
+        : await service.readProjectFile(source.path, source.projectId);
+      if (file.isBinary) {
+        throw new Error('HTML file content is unavailable.');
+      }
+      return createHtmlShareSnapshot({title: source.title, source: file.content});
+    }
+
+    const file = source.content !== undefined
+      ? {content: source.content, isBinary: false}
+      : await service.readProjectFile(source.path, source.projectId);
+    if (file.isBinary) {
+      throw new Error('Markdown file content is unavailable.');
+    }
+
+    const imageResolver = async (imageSource: string): Promise<MarkdownHtmlImageResolution> => {
+      if (/^data:image\//i.test(imageSource)) {
+        return {src: imageSource};
+      }
+      const projectImagePath = resolveProjectMarkdownImagePath(source.path, imageSource);
+      if (projectImagePath !== null) {
+        try {
+          const image = await service.readProjectFile(projectImagePath, source.projectId);
+          const mimeType = image.mimeType || '';
+          if (
+            !image.isBinary ||
+            image.encoding !== 'base64' ||
+            !image.content ||
+            !mimeType.toLowerCase().startsWith('image/')
+          ) {
+            return {
+              src: '',
+              fatal: true,
+              warning: `Unable to embed project image: ${imageSource}`,
+            };
+          }
+          return {src: `data:${mimeType};base64,${image.content}`};
+        } catch (error) {
+          return {
+            src: '',
+            fatal: true,
+            warning: `Unable to embed project image: ${imageSource} (${error instanceof Error ? error.message : String(error)})`,
+          };
+        }
+      }
+      if (/^https?:\/\//i.test(imageSource)) {
+        try {
+          const response = await fetch(imageSource);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const blob = await response.blob();
+          const mimeType = (blob.type || response.headers.get('content-type') || '')
+            .split(';', 1)[0]
+            .trim();
+          if (!mimeType.toLowerCase().startsWith('image/')) {
+            throw new Error('response is not an image');
+          }
+          return {
+            src: `data:${mimeType};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}`,
+          };
+        } catch (error) {
+          return {
+            src: imageSource,
+            warning: `Remote image remains linked: ${imageSource} (${error instanceof Error ? error.message : String(error)})`,
+          };
+        }
+      }
+      return {src: imageSource, warning: `Image remains linked: ${imageSource}`};
+    };
+
+    return new Promise<ShareSnapshot>((resolve, reject) => {
+      const previous = markdownShareCapturePendingRef.current;
+      if (previous) {
+        previous.reject(new Error('Another share capture is already in progress.'));
+      }
+      markdownShareCapturePendingRef.current = {source, resolve, reject};
+      markdownShareCaptureIdRef.current += 1;
+      setMarkdownShareCaptureRequest({
+        id: markdownShareCaptureIdRef.current,
+        content: file.content,
+        title: source.title,
+        imageResolver,
+        themeMode,
+        codeTheme,
+        codeFont,
+        codeFontSize,
+        codeLineHeight,
+        codeTabSize,
+      });
+    });
+  }, [codeFont, codeFontSize, codeLineHeight, codeTabSize, codeTheme, service, themeMode]);
 
   const promptMarkdownHtmlExportNameError = promptMarkdownHtmlExportDraft
     ? validateMarkdownHtmlFileStem(promptMarkdownHtmlExportDraft.fileNameStem)
@@ -20172,6 +20372,36 @@ export function App() {
       {renderPortRelayScreenContent()}
     </MobileSettingsScreen>
   ) : null;
+  const renderShareManager = () => (
+    <ShareManager
+      service={service}
+      initialSource={shareSource}
+      captureSnapshot={captureShareSource}
+      onBack={closeShares}
+    />
+  );
+  const desktopSharesScreen = isWide && sharesScreenOpen ? (
+    <SettingsScreen
+      className="desktop-settings-screen share-manager-screen"
+      title="Public shares"
+      actions={null}
+      backAriaLabel="Close public shares"
+      onBack={closeShares}
+      onBackdropClick={closeShares}
+    >
+      {renderShareManager()}
+    </SettingsScreen>
+  ) : null;
+  const mobileSharesScreen = !isWide && sharesScreenOpen ? (
+    <MobileSettingsScreen
+      title="Public shares"
+      actions={null}
+      backAriaLabel="Back to chat"
+      onBack={closeShares}
+    >
+      {renderShareManager()}
+    </MobileSettingsScreen>
+  ) : null;
   const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
     <iframe
       title="Port Relay site data cleanup"
@@ -20664,6 +20894,18 @@ export function App() {
         });
       return;
     }
+    if (action === 'share') {
+      if (relativePath === null) return;
+      const kind = shareKindForPath(relativePath);
+      if (!kind) return;
+      openShares({
+        projectId: menuProjectId,
+        path: relativePath,
+        kind,
+        title: relativePath.split('/').pop() || relativePath,
+      });
+      return;
+    }
     if (action === 'export-html') {
       if (!link || relativePath === null || !isMarkdownPath(menuFilePath)) return;
       service.readProjectFile(relativePath, menuProjectId)
@@ -20780,6 +21022,13 @@ export function App() {
       !tab.error &&
       !tab.info?.isBinary &&
       isMarkdownPath(tab.path);
+    const previewShareKind = tab.type === 'file' ? shareKindForPath(tab.path) : undefined;
+    const canCreatePreviewShare =
+      tab.type === 'file' &&
+      !tab.loading &&
+      !tab.error &&
+      !tab.info?.isBinary &&
+      !!previewShareKind;
     return (
       <>
         {downloadSource ? (
@@ -20820,6 +21069,26 @@ export function App() {
         ) : null}
         {tab.type === 'file' ? (
           <>
+            {canCreatePreviewShare ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="preview-workbench-action-menu-item"
+                onClick={() => {
+                  closeMenu();
+                  openShares({
+                    projectId: tab.projectId,
+                    path: tab.path,
+                    kind: previewShareKind!,
+                    title: tab.title || tab.path.split('/').pop() || 'Document',
+                    content: tab.content,
+                  });
+                }}
+              >
+                <Icon name="share" />
+                <span>Create public share</span>
+              </button>
+            ) : null}
             {canExportPreviewHtml ? (
               <button
                 type="button"
@@ -21485,6 +21754,11 @@ export function App() {
         )
       }
       canDownload={chatFileLinkMenu.fileAvailable && !!chatFileLinkMenu.downloadSource}
+      canShare={
+        chatFileLinkMenu.fileAvailable &&
+        chatFileLinkMenu.link.relativePath !== null &&
+        !!shareKindForPath(chatFileLinkMenu.link.path)
+      }
       htmlActionLabel={
         chatFileLinkMenu.fileAvailable &&
         chatFileLinkMenu.link?.relativePath !== null &&
@@ -21740,14 +22014,14 @@ export function App() {
         desktopTopBar={desktopTopBar}
         desktopWindowControls={desktopWindowControls}
         desktopWindowControlsVisible={desktopWindowControlsVisible}
-        desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopPortRelayScreen ?? desktopSettingsScreen}
+        desktopSettingsScreen={desktopSharesScreen ?? desktopReleasePublishingScreen ?? desktopPortRelayScreen ?? desktopSettingsScreen}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
         desktopSidebarWidth={desktopLayoutSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
-        mobileSettingsScreen={mobileReleasePublishingScreen ?? mobilePortRelayScreen ?? mobileSettingsScreen}
+        mobileSettingsScreen={mobileSharesScreen ?? mobileReleasePublishingScreen ?? mobilePortRelayScreen ?? mobileSettingsScreen}
         mobileOverlay={(
           <>
             {mobileUsageOverlay}
@@ -21780,6 +22054,14 @@ export function App() {
           request={markdownHtmlExportRequest}
           onComplete={completeMarkdownHtmlExport}
           onError={failMarkdownHtmlExport}
+        />
+      ) : null}
+      {markdownShareCaptureRequest ? (
+        <MarkdownHtmlExportSurface
+          key={markdownShareCaptureRequest.id}
+          request={markdownShareCaptureRequest}
+          onComplete={completeMarkdownShareCapture}
+          onError={failMarkdownShareCapture}
         />
       ) : null}
       {markdownImageExportRequest ? (

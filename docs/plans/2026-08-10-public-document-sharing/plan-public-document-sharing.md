@@ -56,7 +56,7 @@
 - [x] **Step 4: Write failing protocol/handler tests** for authenticated `share.create/list/delete`, invalid payload/config, cursor limit bounds, no-share behavior, and method routing through the existing dispatcher.
 - [x] **Step 5: Implement Registry route dispatch and handlers**, including current main-config/share URL validation and hostname conflict checks against declared Gateway sites; expose repository/service methods with typed responses.
 - [x] **Step 6: Run focused Go tests**, then run existing Registry/server tests to verify no route or message-size regression.
-- [ ] **Step 7: Checkpoint** only Registry, shared command wiring, and repository/service files.
+- [x] **Step 7: Checkpoint** only Registry, shared command wiring, and repository/service files.
 
 ### Task 3: Add Gateway-derived Share site and anonymous static route
 
@@ -79,7 +79,7 @@
 - [x] **Step 4: Implement Caddy route compilation** for `^/s/[A-Za-z0-9_-]{43}$`, `shares/public` file serving, forced `text/html`, `inline`, `no-store`, robots/referrer/nosniff headers, and generic non-matching 404 behavior without CSP or proxy fallback.
 - [x] **Step 5: Extend runtime fingerprints and bundle loading** to watch the sibling main config, reload valid Share changes, and remove Share on invalid/empty config while retaining valid Workspace/Release routes.
 - [x] **Step 6: Run focused Gateway tests plus existing gateway/cmd tests** and validate generated Caddy JSON through the existing validator.
-- [ ] **Step 7: Update the confirmed Gateway wiki page** with the stable Share derivation and route boundary.
+- [x] **Step 7: Update the confirmed Gateway wiki page** with the stable Share derivation and route boundary.
 - [ ] **Step 8: Checkpoint** only Gateway, command, tests, and its wiki update.
 
 ### Task 4: Build App snapshot, compression, and Registry client integration
@@ -95,12 +95,12 @@
 
 **Acceptance:** Markdown snapshots reuse the existing standalone export DOM and readiness checks; HTML snapshots preserve raw source; relative HTML dependencies are reported without rewriting; gzip/base64 is feature-detected and preflighted against both size limits; typed service methods create/list/delete shares and surface Registry errors.
 
-- [ ] **Step 1: Write failing snapshot/compression tests** for Markdown standalone output, HTML source identity, relative dependency warnings, UTF-8 byte sizing, gzip/base64 round-trip, unsupported `CompressionStream`, and envelope preflight rejection.
-- [ ] **Step 2: Run focused Jest tests** and verify they fail because the share snapshot/compression helpers do not exist.
-- [ ] **Step 3: Extract or reuse the existing Markdown export surface** so a caller can await the exact final HTML without triggering a file download; add HTML dependency inspection and a source snapshot helper.
-- [ ] **Step 4: Implement browser gzip/base64 helpers** with a bounded preflight and clear update-required error; add typed Registry repository/service methods using the existing request path.
-- [ ] **Step 5: Run focused Jest tests and existing Markdown export tests**; verify no change to download/Android/Desktop export behavior.
-- [ ] **Step 6: Checkpoint** only snapshot/compression, repository/service, and tests.
+- [x] **Step 1: Write failing snapshot/compression tests** for Markdown standalone output, HTML source identity, relative dependency warnings, UTF-8 byte sizing, gzip/base64 round-trip, unsupported `CompressionStream`, and envelope preflight rejection.
+- [x] **Step 2: Run focused Jest tests** and verify they fail because the share snapshot/compression helpers do not exist.
+- [x] **Step 3: Extract or reuse the existing Markdown export surface** so a caller can await the exact final HTML without triggering a file download; add HTML dependency inspection and a source snapshot helper.
+- [x] **Step 4: Implement browser gzip/base64 helpers** with a bounded preflight and clear update-required error; add typed Registry repository/service methods using the existing request path.
+- [x] **Step 5: Run focused Jest tests and existing Markdown export tests**; verify no change to download/Android/Desktop export behavior.
+- [x] **Step 6: Checkpoint** only snapshot/compression, repository/service, and tests.
 
 ### Task 5: Add Share creation entry points and management screen
 
@@ -118,13 +118,13 @@
 
 **Acceptance:** App Menu opens a top-level Shares screen; the screen lists current records with default 50/max 100 cursor pagination, copies links, supports stop sharing, remains usable when Share is disabled, and creates a new share from supported project preview/context-menu sources with default one-day expiry, busy/error states, dependency warnings, and success feedback.
 
-- [ ] **Step 1: Write failing component tests** for the App Menu row, supported-file-only Share action, default expiry, warning continuation, create success/error, list pagination, disabled-config management, copy, stop, and idempotent removal.
-- [ ] **Step 2: Run focused Jest tests** and verify they fail because the manager, menu callback, and entry actions are absent.
-- [ ] **Step 3: Implement `ShareManager`** using the existing standalone screen shell and App service; keep records/tokens out of URL history and use existing clipboard/toast conventions.
-- [ ] **Step 4: Thread `openShares` through `WheelMakerAppMenu` and `WorkspaceApp`**, including desktop/mobile history/back behavior and mutual exclusion with Settings, Release publishing, Port Relay, and preview.
-- [ ] **Step 5: Add Share actions** to project Markdown/HTML preview tabs and project file context menus; read source through the existing project-file service, invoke the snapshot/compression pipeline, and never expose unsupported external/session sources.
-- [ ] **Step 6: Add scoped styling** matching existing standalone settings/release surfaces, then run focused UI tests and existing menu/preview tests.
-- [ ] **Step 7: Checkpoint** only Share UI, menu/preview integration, styles, and tests.
+- [x] **Step 1: Write failing component tests** for the App Menu row, supported-file-only Share action, default expiry, warning continuation, create success/error, list pagination, disabled-config management, copy, stop, and idempotent removal.
+- [x] **Step 2: Run focused Jest tests** and verify they fail because the manager, menu callback, and entry actions are absent.
+- [x] **Step 3: Implement `ShareManager`** using the existing standalone screen shell and App service; keep records/tokens out of URL history and use existing clipboard/toast conventions.
+- [x] **Step 4: Thread `openShares` through `WheelMakerAppMenu` and `WorkspaceApp`**, including desktop/mobile history/back behavior and mutual exclusion with Settings, Release publishing, Port Relay, and preview.
+- [x] **Step 5: Add Share actions** to project Markdown/HTML preview tabs and project file context menus; read source through the existing project-file service, invoke the snapshot/compression pipeline, and never expose unsupported external/session sources.
+- [x] **Step 6: Add scoped styling** matching existing standalone settings/release surfaces, then run focused UI tests and existing menu/preview tests.
+- [x] **Step 7: Checkpoint** only Share UI, menu/preview integration, styles, and tests.
 
 ### Task 6: Publish wiki feature knowledge and complete verification
 

@@ -11,6 +11,7 @@ export type ChatFileLinkMenuAction =
   | 'copy-file'
   | 'copy-relative'
   | 'copy-absolute'
+  | 'share'
   | 'export-html';
 
 export type ChatFileLinkHtmlActionLabel =
@@ -25,6 +26,7 @@ export type ChatFileLinkContextMenuProps = {
   canShowInFolder: boolean;
   canCopyFile: boolean;
   canDownload: boolean;
+  canShare?: boolean;
   htmlActionLabel: ChatFileLinkHtmlActionLabel | null;
   onAction: (action: ChatFileLinkMenuAction) => void;
   onClose: () => void;
@@ -53,6 +55,7 @@ export function ChatFileLinkContextMenu({
   canShowInFolder,
   canCopyFile,
   canDownload,
+  canShare = false,
   htmlActionLabel,
   onAction,
   onClose,
@@ -120,6 +123,9 @@ export function ChatFileLinkContextMenu({
         : null,
       htmlActionLabel
         ? {action: 'export-html', icon: 'fileCode', label: htmlActionLabel}
+        : null,
+      canShare
+        ? {action: 'share', icon: 'share', label: 'Create public share'}
         : null,
     ),
     menuGroup(

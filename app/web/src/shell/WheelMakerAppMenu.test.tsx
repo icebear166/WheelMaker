@@ -21,13 +21,15 @@ const baseProps = {
   setThemeMode: jest.fn(),
   onOpenSettings: jest.fn(),
   onOpenPortRelay: jest.fn(),
+  onOpenShares: jest.fn(),
   onOpenReleasePublishing: jest.fn(),
 };
 
-test('browser menu exposes Settings, the current Theme, Port Relay, and standalone Release Publishing', async () => {
+test('browser menu exposes Settings, the current Theme, Port Relay, Public shares, and standalone Release Publishing', async () => {
   (global as typeof globalThis & {window?: unknown}).window = {};
   const setThemeMode = jest.fn();
   const onOpenPortRelay = jest.fn();
+  const onOpenShares = jest.fn();
   const onOpenReleasePublishing = jest.fn();
   let renderer: ReactTestRenderer.ReactTestRenderer;
 
@@ -37,6 +39,7 @@ test('browser menu exposes Settings, the current Theme, Port Relay, and standalo
         {...baseProps}
         setThemeMode={setThemeMode}
         onOpenPortRelay={onOpenPortRelay}
+        onOpenShares={onOpenShares}
         onOpenReleasePublishing={onOpenReleasePublishing}
       />,
     );
@@ -45,7 +48,7 @@ test('browser menu exposes Settings, the current Theme, Port Relay, and standalo
     renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
   });
 
-  expect(actionNames(renderer!.root)).toEqual(['settings', 'theme', 'port-relay', 'release-publish']);
+  expect(actionNames(renderer!.root)).toEqual(['settings', 'theme', 'port-relay', 'shares', 'release-publish']);
   let theme = renderer!.root.findByProps({'data-app-menu-action': 'theme'});
   expect(theme.props['data-app-menu-meta']).toBe('Dark');
   expect(theme.findByProps({'data-icon-name': 'moon'})).toBeDefined();
@@ -61,6 +64,7 @@ test('browser menu exposes Settings, the current Theme, Port Relay, and standalo
         themeMode="light"
         setThemeMode={setThemeMode}
         onOpenPortRelay={onOpenPortRelay}
+        onOpenShares={onOpenShares}
         onOpenReleasePublishing={onOpenReleasePublishing}
       />,
     );
@@ -78,6 +82,12 @@ test('browser menu exposes Settings, the current Theme, Port Relay, and standalo
     renderer!.root.findByProps({'data-app-menu-action': 'port-relay'}).props.onClick();
   });
   expect(onOpenPortRelay).toHaveBeenCalledTimes(1);
+
+  await ReactTestRenderer.act(async () => {
+    renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
+    renderer!.root.findByProps({'data-app-menu-action': 'shares'}).props.onClick();
+  });
+  expect(onOpenShares).toHaveBeenCalledTimes(1);
 
   await ReactTestRenderer.act(async () => {
     renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'}).props.onClick();
@@ -121,6 +131,7 @@ test('native update checks on every open and starts only once', async () => {
     'settings',
     'theme',
     'port-relay',
+    'shares',
     'update',
     'release-publish',
   ]);
@@ -185,6 +196,7 @@ test('Desktop keeps Dev Mode below Release Publishing', async () => {
     'settings',
     'theme',
     'port-relay',
+    'shares',
     'update',
     'release-publish',
     'local-dev',

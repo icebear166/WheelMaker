@@ -1,4 +1,4 @@
-export type StandalonePageKind = 'release-publish' | 'port-relay';
+export type StandalonePageKind = 'release-publish' | 'port-relay' | 'shares';
 
 export type StandalonePageHistoryState = {
   wheelMakerStandalonePage: StandalonePageKind;
@@ -7,6 +7,7 @@ export type StandalonePageHistoryState = {
 const STANDALONE_PAGE_KINDS: readonly StandalonePageKind[] = [
   'release-publish',
   'port-relay',
+  'shares',
 ];
 
 export function createStandalonePageHistoryState(

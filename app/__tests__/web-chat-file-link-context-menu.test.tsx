@@ -159,6 +159,7 @@ describe('chat file link context menu', () => {
           {...internalProps}
           link={{...internalProps.link, path: 'README.md', relativePath: 'README.md'}}
           htmlActionLabel="Copy file as HTML"
+          canShare
           onAction={onAction}
         />,
       );
@@ -174,6 +175,7 @@ describe('chat file link context menu', () => {
       'folder',
       'copy-file',
       'export-html',
+      'share',
       'copy-relative',
       'copy-absolute',
     ]);
@@ -198,6 +200,21 @@ describe('chat file link context menu', () => {
 
     expect(labels(renderer)).toEqual(['Preview file', 'Download']);
     expect(separatorCount(renderer)).toBe(0);
+    act(() => renderer.unmount());
+  });
+
+  test('offers public sharing for supported project HTML files', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <ChatFileLinkContextMenu
+          {...internalProps}
+          link={{...internalProps.link, path: 'docs/page.html', relativePath: 'docs/page.html'}}
+          canShare
+        />,
+      );
+    });
+    expect(labels(renderer)).toContain('Create public share');
     act(() => renderer.unmount());
   });
 

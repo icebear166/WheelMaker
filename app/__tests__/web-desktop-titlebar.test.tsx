@@ -81,6 +81,7 @@ describe('desktop title bar', () => {
       'settings',
       'theme',
       'port-relay',
+      'shares',
       'update',
       'release-publish',
       'local-dev',
@@ -126,7 +127,7 @@ describe('desktop title bar', () => {
     await ReactTestRenderer.act(() => trigger.props.onClick());
     expect(renderer!.root.findByProps({role: 'menu'}).props.className).toContain('sl-menu-exit');
     await ReactTestRenderer.act(() => {
-      jest.advanceTimersByTime(100);
+      jest.advanceTimersByTime(120);
     });
     expect(renderer!.root.findAllByProps({role: 'menu'})).toHaveLength(0);
   });
