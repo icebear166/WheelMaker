@@ -6,6 +6,7 @@ import type {
 
 export const SESSION_SEARCH_FAST_POLL_MS = 300;
 export const SESSION_SEARCH_SLOW_POLL_MS = 800;
+export const SESSION_SEARCH_DEBOUNCE_MS = 300;
 const SESSION_SEARCH_SLOW_AFTER_UNCHANGED_POLLS = 3;
 
 export type SessionSearchPollDelayInput = {
@@ -29,6 +30,17 @@ export type SessionSearchSection = {
   project: RegistryProject;
   rows: SessionSearchSectionRow[];
 };
+
+export function formatSessionSearchResultMeta(
+  result: Pick<RegistrySessionSearchResult, 'source' | 'turnIndex'>,
+): string {
+  if (result.source === 'title') {
+    return 'Title';
+  }
+  return typeof result.turnIndex === 'number' && result.turnIndex > 0
+    ? `Prompt · Turn ${result.turnIndex}`
+    : 'Prompt';
+}
 
 export function resolveSessionSearchPollDelay(input: SessionSearchPollDelayInput): number {
   if (input.changed || input.unchangedPolls < SESSION_SEARCH_SLOW_AFTER_UNCHANGED_POLLS) {

@@ -1,5 +1,7 @@
 import {
+  SESSION_SEARCH_DEBOUNCE_MS,
   buildSessionSearchSections,
+  formatSessionSearchResultMeta,
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
   splitSessionSearchTitleHighlight,
@@ -22,6 +24,13 @@ const projects: RegistryProject[] = [
 ];
 
 describe('session search state helpers', () => {
+  test('formats source and optional turn metadata without inventing snippets', () => {
+    expect(formatSessionSearchResultMeta({source: 'title'})).toBe('Title');
+    expect(formatSessionSearchResultMeta({source: 'prompt', turnIndex: 4})).toBe('Prompt · Turn 4');
+    expect(formatSessionSearchResultMeta({source: 'prompt', turnIndex: 0})).toBe('Prompt');
+    expect(SESSION_SEARCH_DEBOUNCE_MS).toBe(300);
+  });
+
   test('backs off polling after three unchanged query responses', () => {
     expect(resolveSessionSearchPollDelay({changed: true, unchangedPolls: 0})).toBe(300);
     expect(resolveSessionSearchPollDelay({changed: false, unchangedPolls: 2})).toBe(300);

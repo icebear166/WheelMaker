@@ -87,7 +87,7 @@
 
 **Acceptance:** Session result rows can format the existing `title`/`prompt` source and optional Turn number without requiring a snippet or protocol change; the 300ms debounce interval is a named shared constant.
 
-- [ ] **Step 1: Write failing state-helper tests**
+- [x] **Step 1: Write failing state-helper tests**
 
   Add assertions for a helper such as `formatSessionSearchResultMeta`:
 
@@ -98,23 +98,23 @@
   expect(SESSION_SEARCH_DEBOUNCE_MS).toBe(300);
   ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
   Run: `npm test -- --runInBand __tests__/web-session-search-state.test.ts`
 
   Expected: Jest fails because the formatter and named debounce constant are not exported.
 
-- [ ] **Step 3: Implement the minimal helpers**
+- [x] **Step 3: Implement the minimal helpers**
 
   Add the constant and formatter to `sessionSearchState.ts`. The formatter must use only the existing `source` and `turnIndex` fields and must never invent a snippet.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
   Run: `npm test -- --runInBand __tests__/web-session-search-state.test.ts`
 
   Expected: all session state assertions pass.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
   Checkpoint only `sessionSearchState.ts` and its test.
 
