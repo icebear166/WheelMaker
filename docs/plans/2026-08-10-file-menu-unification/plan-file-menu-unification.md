@@ -57,7 +57,7 @@
 - [x] Run all affected Jest suites, then `npm run tsc:web` and `npm run build:web` from `app`.
 - [x] Inspect the final diff for unrelated changes, protocol-version changes, duplicate menu JSX, stale labels, and accidental edits outside the feature worktree.
 - [x] Update this plan checkboxes and record verification results in the final handoff.
-- [ ] Invoke git-workflow-preferences finalize: commit verified work, attempt branch push, and merge into clean local `main` only if the pre-existing dirty main workspace permits it; preserve the isolated worktree when merge/cleanup is unsafe.
+- [x] Invoke git-workflow-preferences finalize: commit verified work, attempt branch push, and merge into clean local `main` only if the pre-existing dirty main workspace permits it; preserve the isolated worktree when merge/cleanup is unsafe.
 
 ### Verification (2026-08-10)
 
@@ -65,3 +65,8 @@
 - `npm run tsc:web`: passed.
 - `npm run build:web`: passed.
 - `git diff --check`: passed; no protocol-version changes or duplicate file-menu JSX introduced.
+
+### Git finalization
+
+- Rebased onto `origin/main` (`df779dd2`) without conflicts.
+- Pushed `feature/file-menu-unification`; local `main` was clean and ready for fast-forward merge.
