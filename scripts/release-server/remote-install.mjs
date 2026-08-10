@@ -43,6 +43,8 @@ linger_changed=0
 asset_backup_dir=""
 index_backup_exists=0
 home_backup_exists=0
+deployment_backup_exists=0
+deployment_zh_backup_exists=0
 assets_changed=0
 
 user_systemctl() {
@@ -120,6 +122,16 @@ rollback() {
       else
         rm -f "$public_root/release-home.js"
       fi
+      if [ "$deployment_backup_exists" -eq 1 ]; then
+        cp -f "$asset_backup_dir/deployment.md" "$public_root/deployment.md"
+      else
+        rm -f "$public_root/deployment.md"
+      fi
+      if [ "$deployment_zh_backup_exists" -eq 1 ]; then
+        cp -f "$asset_backup_dir/deployment.zh-CN.md" "$public_root/deployment.zh-CN.md"
+      else
+        rm -f "$public_root/deployment.zh-CN.md"
+      fi
     fi
     if [ "$linger_changed" -eq 1 ]; then
       disable_linger || true
@@ -134,6 +146,8 @@ rollback() {
   rm -f "$gateway_home/.config-$source_sha.candidate" \
     "$release_home/.index-$source_sha.candidate" \
     "$release_home/.release-home-$source_sha.candidate" \
+    "$release_home/.deployment-$source_sha.candidate" \
+    "$release_home/.deployment-zh-CN-$source_sha.candidate" \
     "$unit_path.candidate" "$unit_path.next" "$gateway_config_path.next" "$current_link.next"
   rm -f "$unit_backup" "$config_backup"
   rm -f "$legacy_config_backup"
@@ -186,6 +200,8 @@ XDG_RUNTIME_DIR="/run/user/$deploy_uid" systemctl --user show-environment >/dev/
 [ -f "$upload_dir/wheelmaker-release-server.service" ] || { echo "uploaded user unit is missing" >&2; exit 1; }
 [ -f "$upload_dir/index.html" ] || { echo "uploaded homepage is missing" >&2; exit 1; }
 [ -f "$upload_dir/release-home.js" ] || { echo "uploaded homepage script is missing" >&2; exit 1; }
+[ -f "$upload_dir/deployment.md" ] || { echo "uploaded English deployment guide is missing" >&2; exit 1; }
+[ -f "$upload_dir/deployment.zh-CN.md" ] || { echo "uploaded Chinese deployment guide is missing" >&2; exit 1; }
 
 if [ -d "$release_home" ]; then release_home_existed=1; fi
 if [ -d "$data_root" ]; then data_root_existed=1; fi
@@ -206,6 +222,8 @@ install -m 0755 "$upload_dir/wheelmaker-release-server" "$stage_binary"
 install -m 0644 "$upload_dir/wheelmaker-release-server.service" "$unit_path.candidate"
 install -m 0644 "$upload_dir/index.html" "$release_home/.index-$source_sha.candidate"
 install -m 0644 "$upload_dir/release-home.js" "$release_home/.release-home-$source_sha.candidate"
+install -m 0644 "$upload_dir/deployment.md" "$release_home/.deployment-$source_sha.candidate"
+install -m 0644 "$upload_dir/deployment.zh-CN.md" "$release_home/.deployment-zh-CN-$source_sha.candidate"
 
 if [ -f "$legacy_config_path" ]; then
   legacy_config_existed=1
@@ -278,9 +296,19 @@ if [ -f "$public_root/release-home.js" ]; then
   cp -p "$public_root/release-home.js" "$asset_backup_dir/release-home.js"
   home_backup_exists=1
 fi
+if [ -f "$public_root/deployment.md" ]; then
+  cp -p "$public_root/deployment.md" "$asset_backup_dir/deployment.md"
+  deployment_backup_exists=1
+fi
+if [ -f "$public_root/deployment.zh-CN.md" ]; then
+  cp -p "$public_root/deployment.zh-CN.md" "$asset_backup_dir/deployment.zh-CN.md"
+  deployment_zh_backup_exists=1
+fi
+assets_changed=1
 install -m 0640 "$release_home/.index-$source_sha.candidate" "$public_root/index.html"
 install -m 0640 "$release_home/.release-home-$source_sha.candidate" "$public_root/release-home.js"
-assets_changed=1
+install -m 0640 "$release_home/.deployment-$source_sha.candidate" "$public_root/deployment.md"
+install -m 0640 "$release_home/.deployment-zh-CN-$source_sha.candidate" "$public_root/deployment.zh-CN.md"
 
 if [ -f "$legacy_config_path" ]; then
   rm -f "$legacy_config_path"
@@ -290,7 +318,8 @@ fi
 rollback_armed=0
 trap - ERR INT TERM
 rm -f "$gateway_config_candidate" "$config_backup" "$unit_path.candidate" "$unit_backup"
-rm -f "$release_home/.index-$source_sha.candidate" "$release_home/.release-home-$source_sha.candidate"
+rm -f "$release_home/.index-$source_sha.candidate" "$release_home/.release-home-$source_sha.candidate" \
+  "$release_home/.deployment-$source_sha.candidate" "$release_home/.deployment-zh-CN-$source_sha.candidate"
 rm -rf -- "$asset_backup_dir"
 rm -f "$legacy_config_backup"
 rm -rf -- "$upload_dir"

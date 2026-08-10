@@ -37,10 +37,12 @@ test('release server deploy derives host and lets SSH choose the login user', as
   assert.equal(state.installs[0].sourceSha, SOURCE_SHA);
   assert.equal(state.installs[0].remoteDirectory, `/tmp/wheelmaker-release-server-${SOURCE_SHA}`);
   assert.equal(state.uploads.length, 1);
-  assert.equal(state.uploads[0].files.length, 4);
+  assert.equal(state.uploads[0].files.length, 6);
   assert.deepEqual(
     state.uploads[0].files.map(path => path.split(/[\\/]/).at(-1)).sort(),
     [
+      'deployment.md',
+      'deployment.zh-CN.md',
       'index.html',
       'release-home.js',
       'wheelmaker-release-server',
@@ -53,6 +55,26 @@ test('release server deploy derives host and lets SSH choose the login user', as
   );
   assert.deepEqual(state.healthChecks ?? [], []);
   assert.equal(state.cleanups.length, 1);
+});
+
+test('release server deploy uploads the public AI deployment guides', async () => {
+  const state = {cleanups: []};
+  await deployReleaseServer(recordingDependencies(state));
+
+  const paths = state.uploads[0].files.map(path => path.replaceAll('\\', '/'));
+  assert.ok(paths.some(path => path.endsWith('/scripts/release-server/public/deployment.md')));
+  assert.ok(paths.some(path => path.endsWith('/scripts/release-server/public/deployment.zh-CN.md')));
+});
+
+test('public AI deployment guides are Gateway-first v2 runbooks without Release instructions', async () => {
+  for (const name of ['deployment.md', 'deployment.zh-CN.md']) {
+    const guide = await readFile(new URL(`./public/${name}`, import.meta.url), 'utf8');
+    assert.match(guide, /wm_sites/);
+    assert.match(guide, /sync_hub/);
+    assert.match(guide, /registry\.share\.publicUrl/);
+    assert.match(guide, /Gateway/);
+    assert.doesNotMatch(guide, /Release Server|发布服务器|release-server\.json/);
+  }
 });
 
 test('release server deploy rejects a dirty tree and always cleans local staging', async () => {
@@ -256,6 +278,13 @@ test('release homepage separates WheelMaker and built-in Gateway deployment', as
   assert.match(commands, /node \$m gateway/);
   assert.match(commands, /node "\$d\/deploy\.mjs" gateway/);
   assert.doesNotMatch(commands, /migrate-uninstall|--gateway(?:=|\s)|gateway-update/);
+});
+
+test('release homepage tells AI to prefer built-in Gateway', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /default entrypoint is the built-in Gateway/i);
+  assert.match(html, /Nginx[^<]*explicitly do not want Gateway/i);
 });
 
 test('release homepage copy feedback restores each button label', async () => {

@@ -20,6 +20,17 @@ test('ordinary installer only checks loopback health', () => {
   assert.doesNotMatch(script, /poll_health "\$public_url\/healthz"/);
 });
 
+test('ordinary installer publishes and rolls back both public AI deployment guides', () => {
+  const script = buildRemoteInstallScript();
+  for (const name of ['deployment.md', 'deployment.zh-CN.md']) {
+    assert.match(script, new RegExp(`\\[ -f "\\$upload_dir/${name}" \\]`));
+    assert.match(script, new RegExp(`\\$public_root/${name}`));
+  }
+  assert.match(script, /\$release_home\/\.deployment-\$source_sha\.candidate/);
+  assert.match(script, /\$release_home\/\.deployment-zh-CN-\$source_sha\.candidate/);
+  assert.match(script, /deployment_zh_backup_exists=/);
+});
+
 test('health retries suppress transient curl errors', () => {
   const script = buildRemoteInstallScript();
   assert.match(script, /curl --fail --silent "\$health_url" >\/dev\/null 2>&1/);
