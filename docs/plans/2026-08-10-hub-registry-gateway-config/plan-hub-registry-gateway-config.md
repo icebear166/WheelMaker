@@ -115,27 +115,27 @@
 
 **Acceptance:** New Hub config writes Share under `registry.share`; Gateway config no longer writes or validates `log`, `relay.listenPort`, `registry.publicUrl`, or `share.publicUrl`; existing canonical Hub values win while old Gateway duplicates are moved when a Hub config exists; Release section updates remain isolated.
 
-- [ ] **Step 1: Write the failing Node tests**
+- [x] **Step 1: Write the failing Node tests**
 
   Update fresh/default Gateway shape assertions, add Hub Share migration and nested-priority assertions, add Gateway duplicate cleanup/migration assertions, and assert Release-only Gateway config remains valid without a Hub file.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
   Run `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-single-config.test.mjs scripts/deploy/deploy-core.test.mjs`.
 
   Expected: existing assertions fail because the deployer still owns duplicate Gateway fields and preserves top-level Hub Share.
 
-- [ ] **Step 3: Implement deployment normalization**
+- [x] **Step 3: Implement deployment normalization**
 
   Update `ensureRuntimeConfig` to canonicalize top-level Share into `registry.share`, update Gateway validation/defaults to retain only TLS in Registry/Share and Release runtime fields, and migrate old Gateway Registry/Share/Relay values into an existing parent Hub config only when that canonical field is absent. Remove duplicate fields from Gateway output while preserving unrelated fields and atomic/security behavior.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
   Run `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-single-config.test.mjs scripts/deploy/deploy-core.test.mjs`.
 
   Expected: all deployment configuration and migration tests pass.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
   Checkpoint only the Node deployment implementation and tests after the focused suite is green.
 

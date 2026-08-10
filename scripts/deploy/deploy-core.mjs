@@ -1685,6 +1685,7 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
       registry: {
         listen: true,
         port: 9630,
+        share: {publicUrl: ''},
       },
       log: { level: 'warn' },
     };
@@ -1697,7 +1698,14 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
       delete config.monitor;
       changed = true;
     }
-    const hasRegistry = Object.hasOwn(config, 'registry');
+    let registryCreatedForShare = false;
+    let hasRegistry = Object.hasOwn(config, 'registry');
+    if (!hasRegistry && Object.hasOwn(config, 'share')) {
+      config.registry = {};
+      hasRegistry = true;
+      registryCreatedForShare = true;
+      changed = true;
+    }
     if (
       hasRegistry &&
       (typeof config.registry !== 'object' ||
@@ -1707,6 +1715,24 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
       throw new Error('config.json registry must be an object');
     }
     const registry = hasRegistry ? config.registry : null;
+    if (Object.hasOwn(config, 'share')) {
+      if (!config.share || typeof config.share !== 'object' || Array.isArray(config.share)) {
+        throw new Error('config.json share must be an object');
+      }
+      if (!Object.hasOwn(registry, 'share')) {
+        registry.share = config.share;
+      }
+      delete config.share;
+      changed = true;
+    }
+    if (registry?.share !== undefined) {
+      if (!registry.share || typeof registry.share !== 'object' || Array.isArray(registry.share)) {
+        throw new Error('config.json registry.share must be an object');
+      }
+      if (registry.share.publicUrl !== undefined && typeof registry.share.publicUrl !== 'string') {
+        throw new Error('config.json registry.share.publicUrl must be a string');
+      }
+    }
     for (const field of ['token', 'hubId']) {
       if (config[field] !== undefined && typeof config[field] !== 'string') {
         throw new Error(`config.json ${field} must be a string`);
@@ -1722,7 +1748,7 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
     const hasUsableNestedToken = typeof nestedToken === 'string' &&
       nestedToken.trim() && nestedToken !== 'wheelmaker-local-token';
     if (!hasUsableTopToken && !hasUsableNestedToken) {
-      const target = Object.hasOwn(config, 'token') || Object.hasOwn(config, 'hubId') || !registry
+      const target = Object.hasOwn(config, 'token') || Object.hasOwn(config, 'hubId') || !registry || registryCreatedForShare
         ? config
         : registry;
       target.token = randomBytes(32).toString('base64url');
@@ -2181,8 +2207,6 @@ export const REGISTRY_CONFIG_KEY = 'registry';
 export const RELEASE_CONFIG_KEY = 'release';
 export const SHARE_CONFIG_KEY = 'share';
 
-const LOG_LEVELS = new Set(['DEBUG', 'INFO', 'WARN', 'ERROR']);
-
 async function readGatewayJsonIfPresent(path) {
   try {
     return JSON.parse(await readFile(path, 'utf8'));
@@ -2283,34 +2307,26 @@ function validateDigest(value) {
 export function validateGatewayGlobal(config = {}, {home} = {}) {
   requireObject(config, 'Gateway config');
   rejectUnknownKeys(config, new Set([
-    'schema', 'acme', 'log', 'relay', REGISTRY_CONFIG_KEY, RELEASE_CONFIG_KEY, SHARE_CONFIG_KEY,
+    'schema', 'acme', REGISTRY_CONFIG_KEY, RELEASE_CONFIG_KEY, SHARE_CONFIG_KEY,
   ]), 'Gateway config');
   if (config.schema !== undefined && config.schema !== GATEWAY_SCHEMA) {
     throw new Error(`unsupported Gateway config schema ${config.schema}`);
   }
   const acme = config.acme ?? {};
-  const log = config.log ?? {};
-  const relay = config.relay ?? {};
   const registry = config[REGISTRY_CONFIG_KEY] ?? {};
   const release = config[RELEASE_CONFIG_KEY] ?? {};
   const share = config[SHARE_CONFIG_KEY] ?? {};
   requireObject(acme, 'Gateway config acme');
-  requireObject(log, 'Gateway config log');
-  requireObject(relay, 'Gateway config relay');
   requireObject(registry, 'Gateway config registry');
   requireObject(release, 'Gateway config release');
   requireObject(share, 'Gateway config share');
   rejectUnknownKeys(acme, new Set(['email']), 'Gateway config acme');
-  rejectUnknownKeys(log, new Set(['level']), 'Gateway config log');
-  rejectUnknownKeys(relay, new Set(['listenPort']), 'Gateway config relay');
-  rejectUnknownKeys(registry, new Set(['publicUrl', 'tls']), 'Gateway config registry');
+  rejectUnknownKeys(registry, new Set(['tls']), 'Gateway config registry');
   rejectUnknownKeys(release, new Set(['publicUrl', 'listen', 'dataRoot', 'tokenSha256', 'tls']), 'Gateway config release');
-  rejectUnknownKeys(share, new Set(['publicUrl', 'tls']), 'Gateway config share');
+  rejectUnknownKeys(share, new Set(['tls']), 'Gateway config share');
   if (acme.email !== undefined && typeof acme.email !== 'string') {
     throw new Error('Gateway config acme.email must be a string');
   }
-  const level = String(log.level ?? 'INFO').toUpperCase();
-  if (!LOG_LEVELS.has(level)) throw new Error(`unsupported Gateway log level ${level}`);
   const normalizedHome = home === undefined ? undefined : gatewayHome({home});
   const defaultDataRoot = normalizedHome
     ? resolve(normalizedHome, '..', 'release-server', 'data')
@@ -2324,10 +2340,7 @@ export function validateGatewayGlobal(config = {}, {home} = {}) {
   return {
     schema: GATEWAY_SCHEMA,
     acme: { email: acme.email ?? '' },
-    log: { level: level.toLowerCase() === 'warning' ? 'warn' : level.toLowerCase() },
-    relay: {listenPort: validateRelayPort(relay.listenPort)},
     registry: {
-      publicUrl: parseOptionalPublicUrl(registry.publicUrl, 'Gateway registry.publicUrl'),
       tls: validateTLS(registry.tls),
     },
     release: {
@@ -2338,7 +2351,6 @@ export function validateGatewayGlobal(config = {}, {home} = {}) {
       tls: validateTLS(release.tls),
     },
     share: {
-      publicUrl: parseOptionalPublicUrl(share.publicUrl, 'Gateway share.publicUrl'),
       tls: validateTLS(share.tls),
     },
   };
@@ -2372,14 +2384,88 @@ export function gatewayConfigPaths(home) {
   };
 }
 
+async function migrateGatewaySharedFields(home, config) {
+  const registry = config.registry;
+  const share = config.share;
+  const relay = config.relay;
+  if (registry !== undefined) requireObject(registry, 'Gateway config registry');
+  if (share !== undefined) requireObject(share, 'Gateway config share');
+  if (relay !== undefined) requireObject(relay, 'Gateway config relay');
+
+  const hubPath = resolve(home, '..', 'config.json');
+  const hub = await readGatewayJsonIfPresent(hubPath);
+  let hubChanged = false;
+  let hubRegistry = null;
+  const ensureHubRegistry = () => {
+    if (hubRegistry !== null) return hubRegistry;
+    if (hub.registry === undefined) {
+      hub.registry = {};
+      hubChanged = true;
+    }
+    requireObject(hub.registry, 'Hub config registry');
+    hubRegistry = hub.registry;
+    return hubRegistry;
+  };
+
+  if (hub !== null) {
+    requireObject(hub, 'Hub config');
+    if (Object.hasOwn(hub, 'share')) {
+      requireObject(hub.share, 'Hub config share');
+      const targetRegistry = ensureHubRegistry();
+      if (!Object.hasOwn(targetRegistry, 'share')) targetRegistry.share = hub.share;
+      delete hub.share;
+      hubChanged = true;
+    }
+    if (hub.registry !== undefined) {
+      requireObject(hub.registry, 'Hub config registry');
+      hubRegistry = hub.registry;
+    }
+    if (hubRegistry?.share !== undefined) {
+      requireObject(hubRegistry.share, 'Hub config registry.share');
+    }
+
+    if (registry?.publicUrl !== undefined && String(registry.publicUrl).trim() && !Object.hasOwn(hub, 'publicUrl')) {
+      hub.publicUrl = parseOptionalPublicUrl(registry.publicUrl, 'Gateway registry.publicUrl');
+      hubChanged = true;
+    }
+    if (share?.publicUrl !== undefined && String(share.publicUrl).trim()) {
+      const targetRegistry = ensureHubRegistry();
+      if (!targetRegistry.share) targetRegistry.share = {};
+      if (!Object.hasOwn(targetRegistry.share, 'publicUrl')) {
+        targetRegistry.share.publicUrl = parseOptionalPublicUrl(share.publicUrl, 'Gateway share.publicUrl');
+        hubChanged = true;
+      }
+    }
+    if (relay?.listenPort !== undefined) {
+      const targetRegistry = ensureHubRegistry();
+      if (!Object.hasOwn(targetRegistry, 'relayPort')) {
+        targetRegistry.relayPort = validateRelayPort(relay.listenPort);
+        hubChanged = true;
+      }
+    }
+    if (hubChanged) await atomicWrite(hubPath, jsonBytes(hub), 0o600);
+  }
+
+  for (const field of ['log', 'relay']) {
+    if (Object.hasOwn(config, field)) {
+      delete config[field];
+    }
+  }
+  if (registry && Object.hasOwn(registry, 'publicUrl')) {
+    delete registry.publicUrl;
+  }
+  if (share && Object.hasOwn(share, 'publicUrl')) {
+    delete share.publicUrl;
+  }
+  return config;
+}
+
 export function defaultGatewayConfiguration(home) {
   const paths = gatewayConfigPaths(home);
   return {
     schema: GATEWAY_SCHEMA,
     acme: {email: ''},
-    log: {level: 'info'},
-    relay: {listenPort: 0},
-    registry: {publicUrl: '', tls: {certificateFile: '', keyFile: ''}},
+    registry: {tls: {certificateFile: '', keyFile: ''}},
     release: {
       publicUrl: '',
       listen: '127.0.0.1:9680',
@@ -2387,15 +2473,19 @@ export function defaultGatewayConfiguration(home) {
       tokenSha256: '',
       tls: {certificateFile: '', keyFile: ''},
     },
-    share: {publicUrl: '', tls: {certificateFile: '', keyFile: ''}},
+    share: {tls: {certificateFile: '', keyFile: ''}},
   };
 }
 
 export async function ensureGatewayConfiguration(home) {
   const paths = gatewayConfigPaths(home);
   const current = await readGatewayJsonIfPresent(paths.config);
-  const normalized = validateGatewayGlobal(current ?? defaultGatewayConfiguration(paths.home), {home: paths.home});
-  if (current === null || JSON.stringify(current) !== JSON.stringify(normalized)) {
+  const original = current === null ? null : JSON.stringify(current);
+  const migrated = current === null
+    ? defaultGatewayConfiguration(paths.home)
+    : await migrateGatewaySharedFields(paths.home, current);
+  const normalized = validateGatewayGlobal(migrated, {home: paths.home});
+  if (current === null || original !== JSON.stringify(normalized)) {
     await atomicWrite(paths.config, jsonBytes(normalized), 0o600);
   }
   return normalized;

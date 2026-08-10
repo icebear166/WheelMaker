@@ -825,6 +825,7 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   assert.equal('server' in config.registry, false);
   assert.equal('token' in config.registry, false);
   assert.equal('hubId' in config.registry, false);
+  assert.deepEqual(config.registry.share, {publicUrl: ''});
 });
 
 test('fresh Windows deploy does not create a Desktop updater binary', async (t) => {
@@ -892,7 +893,7 @@ test('normal deploy preserves canonical top-level identity placement', async (t)
   assert.equal('hubId' in config.registry, false);
 });
 
-test('normal deploy preserves nested share configuration', async (t) => {
+test('normal deploy moves legacy top-level share configuration into registry', async (t) => {
   const fixture = await installFixture(t);
   const configPath = join(fixture.home, 'config.json');
   await mkdir(fixture.home, { recursive: true });
@@ -905,7 +906,25 @@ test('normal deploy preserves nested share configuration', async (t) => {
   await runCore([], fixture.deps);
 
   const config = JSON.parse(await readFile(configPath, 'utf8'));
-  assert.deepEqual(config.share, { publicUrl: 'https://share.example.com' });
+  assert.equal('share' in config, false);
+  assert.deepEqual(config.registry.share, { publicUrl: 'https://share.example.com' });
+});
+
+test('normal deploy prefers canonical nested share over legacy top-level share', async (t) => {
+  const fixture = await installFixture(t);
+  const configPath = join(fixture.home, 'config.json');
+  await mkdir(fixture.home, { recursive: true });
+  await writeFile(configPath, JSON.stringify({
+    projects: [],
+    registry: {share: {publicUrl: 'https://canonical-share.example.com'}},
+    share: {publicUrl: 'https://legacy-share.example.com'},
+  }));
+
+  await runCore([], fixture.deps);
+
+  const config = JSON.parse(await readFile(configPath, 'utf8'));
+  assert.equal('share' in config, false);
+  assert.deepEqual(config.registry.share, {publicUrl: 'https://canonical-share.example.com'});
 });
 
 test('normal deploy keeps legacy server text when no public URL is supplied', async (t) => {
