@@ -29,7 +29,7 @@ type PreviewWorkbenchChromeProps = {
   actions?: React.ReactNode;
   actionsMenuOpen: boolean;
   onClose: () => void;
-  onTabSelect: (tabId: string) => void;
+  onTabSelect: (projectId: string, tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onTabContextMenu?: (tabId: string, position: {x: number; y: number}) => void;
   onActionsMenuToggle: () => void;
@@ -282,7 +282,7 @@ export function PreviewWorkbenchChrome({
                   className="preview-workbench-tabs-overflow-open"
                   data-tooltip={previewWorkbenchTabTooltip(tab)}
                   onClick={() => {
-                    onTabSelect(tab.id);
+                    onTabSelect(tab.projectId, tab.id);
                     setTabListOpen(false);
                   }}
                 >
@@ -334,7 +334,7 @@ export function PreviewWorkbenchChrome({
               role="tab"
               aria-selected={active}
               className="chat-file-workbench-tab-open"
-              onClick={() => onTabSelect(tab.id)}
+              onClick={() => onTabSelect(tab.projectId, tab.id)}
             >
               <Icon name={previewWorkbenchTabIcon(tab.type)} className="preview-workbench-tab-icon" />
               <span className="preview-workbench-tab-label">{tab.title}</span>

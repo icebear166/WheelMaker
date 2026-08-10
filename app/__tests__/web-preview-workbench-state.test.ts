@@ -857,6 +857,60 @@ describe('preview workbench state', () => {
     });
   });
 
+  test('restores the first valid tab when the persisted active tab is missing', () => {
+    const state = openPreviewTab(
+      openPreviewTab(createPreviewWorkbenchState('p1'), {
+        type: 'file',
+        projectId: 'p1',
+        path: 'WorldPartitionConvert.cpp',
+        targetLine: null,
+        title: 'WorldPartitionConvert.cpp',
+      }),
+      {
+        type: 'file',
+        projectId: 'p1',
+        path: 'DeferredShadingRenderer.cpp',
+        targetLine: null,
+        title: 'DeferredShadingRenderer.cpp',
+      },
+    );
+    const snapshot = previewWorkbenchSnapshotFromState(state);
+    delete snapshot.activeTabIdByProjectId.p1;
+
+    const restored = previewWorkbenchStateFromSnapshot(snapshot);
+
+    expect(restored.activeTabIdByProjectId.p1).toBe('file:WorldPartitionConvert.cpp');
+    expect(activePreviewTab(restored)?.id).toBe('file:WorldPartitionConvert.cpp');
+  });
+
+  test('restores tabs under their own project identity instead of a stale snapshot bucket', () => {
+    const restored = previewWorkbenchStateFromSnapshot({
+      version: 1,
+      activeProjectId: 'wheelmaker',
+      tabsByProjectId: {
+        wheelmaker: [{
+          type: 'file',
+          projectId: 'unreal',
+          path: 'WorldPartitionConvert.cpp',
+          targetLine: null,
+          title: 'WorldPartitionConvert.cpp',
+        }],
+      },
+      activeTabIdByProjectId: {
+        wheelmaker: 'file:WorldPartitionConvert.cpp',
+      },
+      renderedTabIdsByProjectId: {},
+      drawerMode: 'closed',
+    });
+
+    expect(restored.tabsByProjectId.wheelmaker).toBeUndefined();
+    expect(restored.tabsByProjectId.unreal?.map(tab => tab.id)).toEqual([
+      'file:WorldPartitionConvert.cpp',
+    ]);
+    expect(restored.activeProjectId).toBe('unreal');
+    expect(activePreviewTab(restored)?.projectId).toBe('unreal');
+  });
+
   test('serializes and restores the active prompt diff file', () => {
     const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
       type: 'prompt-diff',

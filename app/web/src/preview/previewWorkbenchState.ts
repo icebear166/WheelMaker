@@ -658,36 +658,41 @@ export function previewWorkbenchStateFromSnapshot(
     return createPreviewWorkbenchState();
   }
   const tabsByProjectId: Record<string, PreviewWorkbenchTab[]> = {};
-  for (const [projectId, tabs] of Object.entries(snapshot.tabsByProjectId ?? {})) {
-    const restoredTabs = tabs
-      .map(restorePreviewSnapshotTab)
-      .filter((tab): tab is PreviewWorkbenchTab => !!tab);
-    if (projectId && restoredTabs.length > 0) {
-      tabsByProjectId[projectId] = restoredTabs;
+  for (const tabs of Object.values(snapshot.tabsByProjectId ?? {})) {
+    for (const snapshotTab of tabs) {
+      const restoredTab = restorePreviewSnapshotTab(snapshotTab);
+      if (!restoredTab) {
+        continue;
+      }
+      const projectTabs = tabsByProjectId[restoredTab.projectId] ?? [];
+      if (!projectTabs.some(tab => tab.id === restoredTab.id)) {
+        tabsByProjectId[restoredTab.projectId] = [...projectTabs, restoredTab];
+      }
     }
   }
   const availableIdsByProject: Record<string, Set<string>> = {};
   for (const [projectId, tabs] of Object.entries(tabsByProjectId)) {
     availableIdsByProject[projectId] = new Set(tabs.map(tab => tab.id));
   }
-  const activeTabIdByProjectId = Object.fromEntries(
-    Object.entries(snapshot.activeTabIdByProjectId ?? {})
-      .map(([projectId, tabId]) => [
-        projectId,
-        migrateRestoredPreviewTabId(tabId, tabsByProjectId[projectId] ?? []),
-      ])
-      .filter(([projectId, tabId]) => availableIdsByProject[projectId]?.has(tabId)),
-  );
-  const renderedTabIdsByProjectId = Object.fromEntries(
-    Object.entries(snapshot.renderedTabIdsByProjectId ?? {})
-      .map(([projectId, ids]) => [
-        projectId,
-        ids
-          .map(id => migrateRestoredPreviewTabId(id, tabsByProjectId[projectId] ?? []))
-          .filter(id => availableIdsByProject[projectId]?.has(id)),
-      ])
-      .filter(([projectId, ids]) => !!projectId && ids.length > 0),
-  );
+  const activeTabIdByProjectId: Record<string, string> = {};
+  const renderedTabIdsByProjectId: Record<string, string[]> = {};
+  for (const [projectId, tabs] of Object.entries(tabsByProjectId)) {
+    const persistedActiveTabId = snapshot.activeTabIdByProjectId?.[projectId];
+    const restoredActiveTabId = persistedActiveTabId
+      ? migrateRestoredPreviewTabId(persistedActiveTabId, tabs)
+      : '';
+    const activeTabId = availableIdsByProject[projectId].has(restoredActiveTabId)
+      ? restoredActiveTabId
+      : tabs[0].id;
+    activeTabIdByProjectId[projectId] = activeTabId;
+
+    const renderedTabIds = (snapshot.renderedTabIdsByProjectId?.[projectId] ?? [])
+      .map(id => migrateRestoredPreviewTabId(id, tabs))
+      .filter((id, index, ids) => availableIdsByProject[projectId].has(id) && ids.indexOf(id) === index);
+    renderedTabIdsByProjectId[projectId] = renderedTabIds.includes(activeTabId)
+      ? renderedTabIds
+      : [...renderedTabIds, activeTabId];
+  }
   const projectIds = Object.keys(tabsByProjectId);
   const activeProjectId =
     snapshot.activeProjectId && projectIds.includes(snapshot.activeProjectId)

@@ -428,7 +428,9 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(mainTsx).toContain('const chatPreviewProjectId = selectedChatKey?.projectId || projectId || projectIdRef.current;');
-    expect(mainTsx).toContain('selectPreviewProject(current, chatPreviewProjectId)');
+    expect(mainTsx).toContain('useLayoutEffect(() => {\n    if (!chatPreviewProjectId || previewWorkbench.activeProjectId === chatPreviewProjectId)');
+    expect(mainTsx).toContain('selectWorkbenchTab = (projectId: string, tabId: string) =>');
+    expect(mainTsx).toContain('selectPreviewTab(current, projectId, tabId)');
     expect(mainTsx).not.toContain('const [previewProjectMenuOpen, setPreviewProjectMenuOpen]');
     expect(mainTsx).not.toContain('const selectPreviewProjectFromMenu =');
     expect(mainTsx).not.toContain('ensurePreviewProjectVisible(');
@@ -721,7 +723,8 @@ describe('web chat file peek viewer', () => {
     expect(previewOpenGateIndex).toBeGreaterThan(pShortcutIndex);
     expect(handlerBody).toContain("if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {");
     expect(handlerBody).toContain("cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1)");
-    expect(handlerBody).toContain('activeTabIdByProjectId: {');
+    expect(handlerBody).toContain('const projectId = activeWorkbenchTab?.projectId ?? chatPreviewProjectId;');
+    expect(handlerBody).toContain('selectPreviewTab(current, projectId, nextTabId)');
     expect(handlerBody).not.toContain("event.key.toLowerCase() === 'f'");
     expect(handlerBody).not.toContain('openChatSearch();');
     expect(handlerBody).not.toContain('setPreviewSearchOpen(true);');

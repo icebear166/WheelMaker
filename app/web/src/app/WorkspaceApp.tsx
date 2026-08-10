@@ -5601,7 +5601,7 @@ export function App() {
   ]);
   const hiddenProjectItems = visibility.hiddenProjects;
   const hiddenProjectIdSet = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!chatPreviewProjectId || previewWorkbench.activeProjectId === chatPreviewProjectId) {
       return;
     }
@@ -19805,20 +19805,8 @@ export function App() {
         event.preventDefault();
         const nextTabId = cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1);
         if (nextTabId) {
-          setPreviewWorkbench(current => {
-            const projectId = current.activeProjectId;
-            const tab = (current.tabsByProjectId[projectId] ?? []).find(item => item.id === nextTabId);
-            if (!tab) {
-              return current;
-            }
-            return {
-              ...current,
-              activeTabIdByProjectId: {
-                ...current.activeTabIdByProjectId,
-                [projectId]: nextTabId,
-              },
-            };
-          });
+          const projectId = activeWorkbenchTab?.projectId ?? chatPreviewProjectId;
+          setPreviewWorkbench(current => selectPreviewTab(current, projectId, nextTabId));
         }
         return;
       }
@@ -19827,7 +19815,9 @@ export function App() {
     return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);
   }, [
     activeWorkbenchTab?.id,
+    activeWorkbenchTab?.projectId,
     chatPreviewOpen,
+    chatPreviewProjectId,
     openQuickFileSearch,
     previewWorkbenchTabs,
     quickFileOpen,
@@ -20501,11 +20491,8 @@ export function App() {
   const toggleChatFilePreviewTree = () => {
     updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === 'files' ? 'closed' : 'files');
   };
-  const selectWorkbenchTab = (tabId: string) => {
-    setPreviewWorkbench(current => {
-      const projectId = current.activeProjectId;
-      return selectPreviewTab(current, projectId, tabId);
-    });
+  const selectWorkbenchTab = (projectId: string, tabId: string) => {
+    setPreviewWorkbench(current => selectPreviewTab(current, projectId, tabId));
   };
   const closeWorkbenchTab = (tabId: string) => {
     const projectId = previewWorkbench.activeProjectId;
@@ -20591,7 +20578,7 @@ export function App() {
       event.preventDefault();
       const nextTabId = cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1);
       if (nextTabId) {
-        selectWorkbenchTab(nextTabId);
+        selectWorkbenchTab(activeWorkbenchTab?.projectId ?? chatPreviewProjectId, nextTabId);
       }
       return;
     }

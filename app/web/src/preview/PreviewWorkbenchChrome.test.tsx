@@ -133,7 +133,7 @@ describe('PreviewWorkbenchChrome drawer', () => {
 
     const openButtons = document.querySelectorAll('.preview-workbench-tabs-overflow-open');
     act(() => (openButtons[1] as HTMLButtonElement).click());
-    expect(props.onTabSelect).toHaveBeenCalledWith('file:src/b.ts');
+    expect(props.onTabSelect).toHaveBeenCalledWith('p1', 'file:src/b.ts');
     expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeNull();
 
     act(() => (document.querySelector('[aria-label="Show all open tabs"]') as HTMLButtonElement).click());
@@ -144,6 +144,16 @@ describe('PreviewWorkbenchChrome drawer', () => {
 
     escape();
     expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeNull();
+  });
+
+  test('tab selection carries its project identity when no tab is active', () => {
+    const props = createProps({tabs: [fileTab, secondTab], activeTab: null});
+    render(props);
+
+    const tabButtons = document.querySelectorAll('[role="tab"]');
+    act(() => (tabButtons[1] as HTMLButtonElement).click());
+
+    expect(props.onTabSelect).toHaveBeenCalledWith('p1', 'file:src/b.ts');
   });
 
   test('mobile tool buttons toggle files and git drawer modes', () => {
