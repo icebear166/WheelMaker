@@ -134,25 +134,25 @@ Invoke `git-workflow-preferences` in checkpoint mode for the deploy implementati
 
 **Acceptance:** Release Server strictly reads and atomically updates schema 2 `wm_sites.release`, preserves sibling `wm_sites` values and shared TLS, creates schema 2 when converting a legacy standalone Release Server config, and refuses an existing schema 1 Gateway file unchanged.
 
-- [ ] **Step 1: Write nested Release read/write tests**
+- [x] **Step 1: Write nested Release read/write tests**
 
 Use a complete schema 2 fixture and assert LoadConfig, public URL updates, token hash updates, and data-root updates operate on `wm_sites.release` while preserving `wm_sites.tls`, Registry/Share modes, ACME, and unrelated valid fields.
 
-- [ ] **Step 2: Write strict old-Gateway rejection tests**
+- [x] **Step 2: Write strict old-Gateway rejection tests**
 
 Pass an existing schema 1 Gateway file through Release configuration/update and legacy-conversion entry points; assert a schema error and byte-for-byte unchanged contents. Keep standalone Release config schema 1 tests for the separate legacy source format.
 
-- [ ] **Step 3: Run Release Server tests and verify RED**
+- [x] **Step 3: Run Release Server tests and verify RED**
 
 Run from `server/`: `go test ./internal/releaseserver ./cmd/wheelmaker-release-server`
 
 Expected: FAIL because the integration still searches for and writes a top-level `release` object.
 
-- [ ] **Step 4: Implement nested Release helpers**
+- [x] **Step 4: Implement nested Release helpers**
 
 Parse the Gateway schema independently from the standalone Release config schema; locate `wm_sites.release`; validate schema 2 before writes; preserve the complete outer document and sibling `wm_sites` fields during atomic updates; remove Release TLS from the nested runtime record; emit canonical schema 2 `wm_sites` when the legacy standalone config conversion creates a new Gateway file.
 
-- [ ] **Step 5: Format and verify GREEN**
+- [x] **Step 5: Format and verify GREEN**
 
 Run from `server/`: `gofmt -w internal/releaseserver/config.go internal/releaseserver/config_test.go cmd/wheelmaker-release-server/main_test.go`
 
@@ -160,7 +160,7 @@ Run from `server/`: `go test ./internal/releaseserver ./cmd/wheelmaker-release-s
 
 Expected: PASS with nested read/write and schema 1 no-write behavior covered.
 
-- [ ] **Step 6: Checkpoint the Release Server unit**
+- [x] **Step 6: Checkpoint the Release Server unit**
 
 Invoke `git-workflow-preferences` in checkpoint mode for the listed Release Server files after focused tests pass. Record commit hash and subject.
 

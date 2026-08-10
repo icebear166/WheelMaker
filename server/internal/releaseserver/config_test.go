@@ -43,7 +43,7 @@ func TestWriteAndLoadConfigRoundTrip(t *testing.T) {
 func TestLoadConfigReadsReleaseFromGatewayConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "gateway.json")
 	dataRoot := filepath.Join(t.TempDir(), "release-data")
-	raw := fmt.Sprintf(`{"schema":1,"acme":{"email":""},"log":{"level":"info"},"relay":{"listenPort":0},"registry":{"publicUrl":""},"release":{"publicUrl":"https://release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""},"share":{"publicUrl":""}}`, dataRoot)
+	raw := fmt.Sprintf(`{"schema":2,"acme":{"email":""},"wm_sites":{"tls":{"certificateFile":"","keyFile":""},"registry":{"urlMode":"sync_hub"},"release":{"publicUrl":"https://release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""},"share":{"urlMode":"sync_hub"}}}`, dataRoot)
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestGatewayReleaseUpdatesPreserveOtherSections(t *testing.T) {
 	path := filepath.Join(dir, "gateway.json")
 	dataRoot := filepath.Join(dir, "release-data")
 	newDataRoot := filepath.Join(dir, "new-release-data")
-	raw := fmt.Sprintf(`{"schema":1,"acme":{"email":"ops@example.com"},"log":{"level":"debug"},"relay":{"listenPort":28810},"registry":{"publicUrl":"https://registry.example.com","tls":{"certificateFile":"/etc/registry.crt","keyFile":"/etc/registry.key"}},"release":{"publicUrl":"https://old-release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":"","tls":{"certificateFile":"/etc/release.crt","keyFile":"/etc/release.key"}},"share":{"publicUrl":"https://share.example.com","tls":{"certificateFile":"/etc/share.crt","keyFile":"/etc/share.key"}}}`, dataRoot)
+	raw := fmt.Sprintf(`{"schema":2,"acme":{"email":"ops@example.com"},"wm_sites":{"tls":{"certificateFile":"/etc/wm-sites.crt","keyFile":"/etc/wm-sites.key"},"registry":{"urlMode":"sync_hub"},"release":{"publicUrl":"https://old-release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""},"share":{"urlMode":"sync_hub"}}}`, dataRoot)
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -86,20 +86,27 @@ func TestGatewayReleaseUpdatesPreserveOtherSections(t *testing.T) {
 	if err := json.Unmarshal(data, &after); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"schema", "acme", "log", "relay", "registry", "share"} {
+	for _, key := range []string{"schema", "acme"} {
 		if !reflect.DeepEqual(after[key], before[key]) {
 			t.Fatalf("Gateway section %q changed: before=%#v after=%#v", key, before[key], after[key])
 		}
 	}
-	release, ok := after["release"].(map[string]any)
+	beforeSites := before["wm_sites"].(map[string]any)
+	afterSites := after["wm_sites"].(map[string]any)
+	for _, key := range []string{"tls", "registry", "share"} {
+		if !reflect.DeepEqual(afterSites[key], beforeSites[key]) {
+			t.Fatalf("Gateway wm_sites section %q changed: before=%#v after=%#v", key, beforeSites[key], afterSites[key])
+		}
+	}
+	release, ok := afterSites["release"].(map[string]any)
 	if !ok {
-		t.Fatalf("release section = %#v", after["release"])
+		t.Fatalf("wm_sites.release section = %#v", afterSites["release"])
 	}
 	if release["publicUrl"] != "https://new-release.example.com" || release["dataRoot"] != newDataRoot || release["tokenSha256"] != digest {
 		t.Fatalf("updated release section = %#v", release)
 	}
-	if !reflect.DeepEqual(release["tls"], before["release"].(map[string]any)["tls"]) {
-		t.Fatalf("release TLS changed: %#v", release["tls"])
+	if _, ok := release["tls"]; ok {
+		t.Fatalf("wm_sites.release retained per-site TLS: %#v", release)
 	}
 }
 
@@ -135,10 +142,73 @@ func TestMigrateLegacyConfigCreatesFullGatewayConfig(t *testing.T) {
 	if err := json.Unmarshal(data, &document); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"schema", "acme", "log", "relay", "registry", "release", "share"} {
+	for _, key := range []string{"schema", "acme", "wm_sites"} {
 		if _, ok := document[key]; !ok {
 			t.Fatalf("migrated Gateway config missing %q", key)
 		}
+	}
+	var schema int
+	if err := json.Unmarshal(document["schema"], &schema); err != nil || schema != 2 {
+		t.Fatalf("migrated Gateway schema = %d, err=%v", schema, err)
+	}
+	var wmSites map[string]json.RawMessage
+	if err := json.Unmarshal(document["wm_sites"], &wmSites); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"tls", "registry", "release", "share"} {
+		if _, ok := wmSites[key]; !ok {
+			t.Fatalf("migrated Gateway wm_sites missing %q", key)
+		}
+	}
+}
+
+func TestGatewaySchemaOneIsRejectedWithoutWriting(t *testing.T) {
+	dir := t.TempDir()
+	gatewayPath := filepath.Join(dir, "gateway.json")
+	legacyPath := filepath.Join(dir, "release-server.json")
+	dataRoot := filepath.Join(dir, "data")
+	legacy := Config{
+		Schema:    1,
+		Listen:    "127.0.0.1:9680",
+		PublicURL: "https://release.example.com",
+		DataRoot:  dataRoot,
+	}
+	if err := WriteConfig(legacyPath, legacy); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte(fmt.Sprintf(`{"schema":1,"acme":{"email":""},"registry":{"tls":{}},"release":{"publicUrl":"https://old.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""},"share":{"tls":{}}}`, dataRoot))
+
+	operations := map[string]func() error{
+		"load": func() error {
+			_, err := LoadConfig(gatewayPath)
+			return err
+		},
+		"configure token": func() error {
+			return ConfigureTokenHash(gatewayPath, strings.Repeat("a", 64))
+		},
+		"configure URL": func() error {
+			return ConfigurePublicURLWithDataRoot(gatewayPath, "https://new.example.com", dataRoot)
+		},
+		"migrate standalone config": func() error {
+			return MigrateLegacyConfig(legacyPath, gatewayPath, dataRoot)
+		},
+	}
+	for name, operation := range operations {
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(gatewayPath, original, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := operation(); err == nil || !strings.Contains(err.Error(), "schema 1") {
+				t.Fatalf("operation error = %v, want schema 1 rejection", err)
+			}
+			got, err := os.ReadFile(gatewayPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, original) {
+				t.Fatalf("schema 1 Gateway config changed\n got: %s\nwant: %s", got, original)
+			}
+		})
 	}
 }
 

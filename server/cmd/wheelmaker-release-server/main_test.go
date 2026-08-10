@@ -87,6 +87,33 @@ func TestRunValidateConfig(t *testing.T) {
 	}
 }
 
+func TestRunValidateGatewayConfigUsesNestedRelease(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gateway.json")
+	dataRoot := filepath.Join(t.TempDir(), "release-data")
+	valid := fmt.Sprintf(`{"schema":2,"acme":{"email":""},"wm_sites":{"tls":{"certificateFile":"","keyFile":""},"registry":{"urlMode":"sync_hub"},"release":{"publicUrl":"https://release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""},"share":{"urlMode":"sync_hub"}}}`, dataRoot)
+	if err := os.WriteFile(path, []byte(valid), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"validate-config", "--config", path}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("valid Gateway config: run() error = %v", err)
+	}
+
+	oldGateway := []byte(fmt.Sprintf(`{"schema":1,"release":{"publicUrl":"https://release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""}}`, dataRoot))
+	if err := os.WriteFile(path, oldGateway, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"validate-config", "--config", path}, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "schema 1") {
+		t.Fatalf("schema 1 Gateway config: run() error = %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, oldGateway) {
+		t.Fatalf("schema 1 Gateway config changed: %s", got)
+	}
+}
+
 func TestRunRejectsUnknownCommandAndRawTokenFlag(t *testing.T) {
 	for name, args := range map[string][]string{
 		"unknown command":  {"rotate-token"},

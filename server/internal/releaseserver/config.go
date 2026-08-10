@@ -14,6 +14,7 @@ import (
 )
 
 const configSchema = 1
+const gatewayConfigSchema = 2
 const releaseServerListenAddress = "127.0.0.1:9680"
 
 type Config struct {
@@ -30,11 +31,10 @@ type gatewayTLSConfig struct {
 }
 
 type gatewayReleaseConfig struct {
-	PublicURL   string           `json:"publicUrl"`
-	Listen      string           `json:"listen"`
-	DataRoot    string           `json:"dataRoot"`
-	TokenSHA256 string           `json:"tokenSha256"`
-	TLS         gatewayTLSConfig `json:"tls"`
+	PublicURL   string `json:"publicUrl"`
+	Listen      string `json:"listen"`
+	DataRoot    string `json:"dataRoot"`
+	TokenSHA256 string `json:"tokenSha256"`
 }
 
 func (c Config) Validate() error {
@@ -86,7 +86,7 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, fmt.Errorf("open release server config: %w", err)
 	}
 	var cfg Config
-	if hasGatewayReleaseSection(raw) {
+	if looksLikeGatewayConfig(raw) {
 		cfg, err = decodeGatewayRelease(raw)
 	} else {
 		cfg, err = decodeLegacyConfig(raw)
@@ -130,7 +130,11 @@ func hasGatewayReleaseSection(data []byte) bool {
 	if err := json.Unmarshal(data, &document); err != nil {
 		return false
 	}
-	_, ok := document["release"]
+	var wmSites map[string]json.RawMessage
+	if err := json.Unmarshal(document["wm_sites"], &wmSites); err != nil {
+		return false
+	}
+	_, ok := wmSites["release"]
 	return ok
 }
 
@@ -139,7 +143,7 @@ func looksLikeGatewayConfig(data []byte) bool {
 	if err := json.Unmarshal(data, &document); err != nil {
 		return false
 	}
-	for _, key := range []string{"acme", "log", "relay", "registry", "share"} {
+	for _, key := range []string{"wm_sites", "acme", "log", "relay", "registry", "release", "share"} {
 		if _, ok := document[key]; ok {
 			return true
 		}
@@ -152,15 +156,15 @@ func ensureGatewayReleaseSection(path, dataRoot string) error {
 	if err != nil {
 		return err
 	}
-	if hasGatewayReleaseSection(data) {
+	document, wmSites, err := decodeGatewayDocument(data)
+	if err != nil {
+		return err
+	}
+	if _, ok := wmSites["release"]; ok {
 		return nil
 	}
 	if dataRoot == "" {
 		dataRoot = filepath.Join(filepath.Dir(filepath.Dir(path)), "release-server", "data")
-	}
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal(data, &document); err != nil {
-		return fmt.Errorf("decode Gateway config: %w", err)
 	}
 	releaseRaw, err := json.Marshal(gatewayReleaseConfig{
 		Listen:   releaseServerListenAddress,
@@ -169,7 +173,12 @@ func ensureGatewayReleaseSection(path, dataRoot string) error {
 	if err != nil {
 		return fmt.Errorf("encode Gateway release config: %w", err)
 	}
-	document["release"] = releaseRaw
+	wmSites["release"] = releaseRaw
+	wmSitesRaw, err := json.Marshal(wmSites)
+	if err != nil {
+		return fmt.Errorf("encode Gateway wm_sites config: %w", err)
+	}
+	document["wm_sites"] = wmSitesRaw
 	encoded, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode Gateway config: %w", err)
@@ -186,28 +195,63 @@ func decodeGatewayRelease(data []byte) (Config, error) {
 }
 
 func decodeGatewayReleaseForUpdate(data []byte) (Config, error) {
+	_, wmSites, err := decodeGatewayDocument(data)
+	if err != nil {
+		return Config{}, err
+	}
+	releaseRaw, ok := wmSites["release"]
+	if !ok {
+		return Config{}, errors.New("decode Gateway config: wm_sites.release section is required")
+	}
+	return decodeGatewayReleaseRaw(releaseRaw)
+}
+
+func decodeGatewayDocument(data []byte) (map[string]json.RawMessage, map[string]json.RawMessage, error) {
 	var document map[string]json.RawMessage
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&document); err != nil {
-		return Config{}, fmt.Errorf("decode Gateway config: %w", err)
+		return nil, nil, fmt.Errorf("decode Gateway config: %w", err)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
-			return Config{}, errors.New("decode Gateway config: multiple JSON values")
+			return nil, nil, errors.New("decode Gateway config: multiple JSON values")
 		}
-		return Config{}, fmt.Errorf("decode Gateway config: %w", err)
+		return nil, nil, fmt.Errorf("decode Gateway config: %w", err)
 	}
-	releaseRaw, ok := document["release"]
+	var schema int
+	schemaRaw, ok := document["schema"]
 	if !ok {
-		return Config{}, errors.New("decode Gateway config: release section is required")
+		return nil, nil, errors.New("decode Gateway config: schema is required")
 	}
+	if err := json.Unmarshal(schemaRaw, &schema); err != nil {
+		return nil, nil, fmt.Errorf("decode Gateway config schema: %w", err)
+	}
+	if schema != gatewayConfigSchema {
+		return nil, nil, fmt.Errorf("unsupported Gateway config schema %d", schema)
+	}
+	wmSitesRaw, ok := document["wm_sites"]
+	if !ok {
+		return nil, nil, errors.New("decode Gateway config: wm_sites section is required")
+	}
+	var wmSites map[string]json.RawMessage
+	if err := json.Unmarshal(wmSitesRaw, &wmSites); err != nil {
+		return nil, nil, fmt.Errorf("decode Gateway wm_sites config: %w", err)
+	}
+	if wmSites == nil {
+		return nil, nil, errors.New("decode Gateway config: wm_sites must be an object")
+	}
+	return document, wmSites, nil
+}
+
+func decodeGatewayReleaseRaw(releaseRaw json.RawMessage) (Config, error) {
 	releaseDecoder := json.NewDecoder(bytes.NewReader(releaseRaw))
 	releaseDecoder.DisallowUnknownFields()
 	var release gatewayReleaseConfig
 	if err := releaseDecoder.Decode(&release); err != nil {
 		return Config{}, fmt.Errorf("decode Gateway release config: %w", err)
 	}
+	var trailing any
 	if err := releaseDecoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
 			return Config{}, errors.New("decode Gateway release config: multiple JSON values")
@@ -273,30 +317,26 @@ func writeGatewayReleaseConfig(path string, cfg Config) (retErr error) {
 	if err != nil {
 		return fmt.Errorf("read Gateway config: %w", err)
 	}
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal(data, &document); err != nil {
-		return fmt.Errorf("decode Gateway config: %w", err)
-	}
-	var existing gatewayReleaseConfig
-	if raw, ok := document["release"]; ok {
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&existing); err != nil {
-			return fmt.Errorf("decode Gateway release config: %w", err)
-		}
+	document, wmSites, err := decodeGatewayDocument(data)
+	if err != nil {
+		return err
 	}
 	release := gatewayReleaseConfig{
 		PublicURL:   cfg.PublicURL,
 		Listen:      cfg.Listen,
 		DataRoot:    cfg.DataRoot,
 		TokenSHA256: cfg.TokenSHA256,
-		TLS:         existing.TLS,
 	}
 	releaseRaw, err := json.Marshal(release)
 	if err != nil {
 		return fmt.Errorf("encode Gateway release config: %w", err)
 	}
-	document["release"] = releaseRaw
+	wmSites["release"] = releaseRaw
+	wmSitesRaw, err := json.Marshal(wmSites)
+	if err != nil {
+		return fmt.Errorf("encode Gateway wm_sites config: %w", err)
+	}
+	document["wm_sites"] = wmSitesRaw
 	encoded, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode Gateway config: %w", err)
@@ -344,7 +384,7 @@ func ConfigureTokenHash(path string, digest string) error {
 	if err != nil {
 		return err
 	}
-	if hasGatewayReleaseSection(data) || looksLikeGatewayConfig(data) {
+	if looksLikeGatewayConfig(data) {
 		if !hasGatewayReleaseSection(data) {
 			if err := ensureGatewayReleaseSection(path, ""); err != nil {
 				return err
@@ -382,7 +422,7 @@ func ConfigurePublicURLWithDataRoot(path string, value, dataRoot string) error {
 	if err != nil {
 		return err
 	}
-	if hasGatewayReleaseSection(raw) || looksLikeGatewayConfig(raw) {
+	if looksLikeGatewayConfig(raw) {
 		if !hasGatewayReleaseSection(raw) {
 			if err := ensureGatewayReleaseSection(path, dataRoot); err != nil {
 				return err
@@ -439,23 +479,18 @@ func MigrateLegacyConfig(legacyPath, gatewayPath, dataRoot string) error {
 		return fmt.Errorf("stat Gateway config: %w", err)
 	}
 	document := map[string]any{
-		"schema": 1,
+		"schema": 2,
 		"acme":   map[string]string{"email": ""},
-		"log":    map[string]string{"level": "info"},
-		"relay":  map[string]int{"listenPort": 0},
-		"registry": map[string]any{
-			"publicUrl": "",
-			"tls":       map[string]string{"certificateFile": "", "keyFile": ""},
-		},
-		"release": gatewayReleaseConfig{
-			PublicURL:   legacy.PublicURL,
-			Listen:      legacy.Listen,
-			DataRoot:    legacy.DataRoot,
-			TokenSHA256: legacy.TokenSHA256,
-		},
-		"share": map[string]any{
-			"publicUrl": "",
-			"tls":       map[string]string{"certificateFile": "", "keyFile": ""},
+		"wm_sites": map[string]any{
+			"tls":      gatewayTLSConfig{},
+			"registry": map[string]string{"urlMode": "sync_hub"},
+			"release": gatewayReleaseConfig{
+				PublicURL:   legacy.PublicURL,
+				Listen:      legacy.Listen,
+				DataRoot:    legacy.DataRoot,
+				TokenSHA256: legacy.TokenSHA256,
+			},
+			"share": map[string]string{"urlMode": "sync_hub"},
 		},
 	}
 	encoded, err := json.MarshalIndent(document, "", "  ")
