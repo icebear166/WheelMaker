@@ -216,6 +216,12 @@ func shareRoutes(site SiteConfig) []any {
 				fileServerHandler(site.StaticRoot()),
 			},
 		},
+		map[string]any{
+			"handle": []any{map[string]any{
+				"handler":     "static_response",
+				"status_code": 404,
+			}},
+		},
 	}
 }
 
@@ -370,7 +376,7 @@ func shareHeadersHandler() map[string]any {
 				"Content-Type":           []string{"text/html; charset=utf-8"},
 				"Content-Disposition":    []string{"inline"},
 				"Cache-Control":          []string{"no-store"},
-				"X-Robots-Tag":           []string{"noindex, nofollow"},
+				"X-Robots-Tag":           []string{"noindex, nofollow, noarchive"},
 				"Referrer-Policy":        []string{"no-referrer"},
 				"X-Content-Type-Options": []string{"nosniff"},
 			},

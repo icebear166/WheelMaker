@@ -57,7 +57,7 @@ func TestShareStoreCreatePublishesMetadataAndContent(t *testing.T) {
 	if err := json.Unmarshal(metadata, &record); err != nil {
 		t.Fatalf("decode metadata: %v", err)
 	}
-	if record.Token != result.Record.Token || record.SizeBytes != int64(len(content)) {
+	if record.Schema != shareRecordSchemaVersion || record.Token != result.Record.Token || record.SizeBytes != int64(len(content)) {
 		t.Fatalf("metadata = %+v", record)
 	}
 }
@@ -148,7 +148,7 @@ func TestShareStoreNextExpiryReturnsNearestDeadline(t *testing.T) {
 			t.Fatalf("test token %q is invalid", token)
 		}
 		writeTestShareRecord(t, filepath.Join(store.recordsDir, token+".json"), shareRecord{
-			Token: token, Title: "share", ProjectID: "hub:p", Path: "docs/a.html", Kind: "html",
+			Schema: shareRecordSchemaVersion, Token: token, Title: "share", ProjectID: "hub:p", Path: "docs/a.html", Kind: "html",
 			CreatedAt: now, ExpiresAt: expiresAt, SizeBytes: 1,
 		})
 	}
@@ -202,7 +202,7 @@ func TestShareStoreRepairRemovesExpiredAndOrphanedFiles(t *testing.T) {
 	expired := strings.Repeat("a", 43)
 	orphan := strings.Repeat("b", 43)
 	writeTestShareRecord(t, filepath.Join(root, "shares", "records", expired+".json"), shareRecord{
-		Token: expired, Title: "old", ProjectID: "hub:p", Path: "old.md", Kind: "markdown",
+		Schema: shareRecordSchemaVersion, Token: expired, Title: "old", ProjectID: "hub:p", Path: "old.md", Kind: "markdown",
 		CreatedAt: now.Add(-2 * time.Hour), ExpiresAt: timePtr(now.Add(-time.Hour)), SizeBytes: 3,
 	})
 	if err := os.WriteFile(filepath.Join(root, "shares", "public", "s", expired), []byte("old"), 0o600); err != nil {

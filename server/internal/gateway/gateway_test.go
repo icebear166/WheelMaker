@@ -140,8 +140,8 @@ func TestCompileConfigIncludesExactShareStaticRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
-	if !ok || len(routes) != 1 {
-		t.Fatalf("share routes = %#v, want one exact route", routes)
+	if !ok || len(routes) != 2 {
+		t.Fatalf("share routes = %#v, want exact route plus generic 404", routes)
 	}
 	route := routes[0]
 	if got := deepString(route, "match", "0", "path_regexp", "pattern"); got != `^/s/[A-Za-z0-9_-]{43}$` {
@@ -153,7 +153,13 @@ func TestCompileConfigIncludesExactShareStaticRoute(t *testing.T) {
 	if got := deepString(route, "handle", "1", "root"); got != site.WebRoot {
 		t.Fatalf("share root = %q", got)
 	}
-	for _, want := range []string{"text/html; charset=utf-8", "inline", "no-store", "noindex, nofollow", "no-referrer", "nosniff"} {
+	if got := deepString(routes[1], "handle", "0", "handler"); got != "static_response" {
+		t.Fatalf("share fallback handler = %q", got)
+	}
+	if got := deepValue(routes[1], "handle", "0", "status_code"); got != float64(404) {
+		t.Fatalf("share fallback status = %#v", got)
+	}
+	for _, want := range []string{"text/html; charset=utf-8", "inline", "no-store", "noindex, nofollow, noarchive", "no-referrer", "nosniff"} {
 		if !strings.Contains(string(compiled), want) {
 			t.Errorf("share route missing %q", want)
 		}

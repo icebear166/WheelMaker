@@ -44,8 +44,18 @@ Release Server 站点。Gateway 不合并进 Hub 或 Release Server，也不把 
    └─ data/                            # Caddy ACME 状态
 ```
 
+Workspace 状态目录的主配置可额外声明 `share.publicUrl`。Gateway 从现有
+`--home`（通常为 `~/.wheelmaker/gateway`）的父目录推导它与公开文件根目录，运行时
+不读取或生成 `sites/share.json`：
+
+```text
+~/.wheelmaker/config.json             # share.publicUrl 的事实源
+~/.wheelmaker/shares/public/          # Gateway 直接提供的 /s/<token> 根目录
+```
+
 业务服务自己的 `config.json.publicUrl` 是站点公开 origin 的事实源。Gateway 的
-`config.json` 不存站点域名。Workspace 与 Release Server 部署器分别从业务配置原子
+`config.json` 不存 Workspace/Release 站点域名；Share origin 由主配置的
+`share.publicUrl` 提供。Workspace 与 Release Server 部署器分别从业务配置原子
 生成自己的语义站点 JSON，不编辑另一个组件的文件，也不直接编辑生成后的 Caddy JSON。
 
 站点文件使用受限的 `kind` 合同，不接受原始 Caddyfile、任意 Caddy JSON 或非 loopback
@@ -71,6 +81,11 @@ upstream。是否生成站点配置和是否采用内置 Gateway 是两件独立
 - `release-server`：Gateway 把整个 host 代理到 `http://127.0.0.1:9680`。Release
   Server 自己提供首页、部署脚本、元数据、发布产物、健康检查和 API；站点声明没有
   `publicRoot`。
+- `share`：Gateway 从 `share.publicUrl` 在内存中派生站点，直接提供
+  `shares/public` 下精确匹配 `GET`/`HEAD /s/<43-character-token>` 的 HTML 文件。
+  该路由不做 SPA fallback、Registry 查询、反向代理或 CSP，并固定 HTML、inline、
+  no-store、robots、referrer 和 nosniff 响应头。主配置缺失、非法或 hostname 冲突时只
+  移除 Share 站点；修复后由 Gateway 热加载恢复。
 - 聚合时按大小写不敏感的 hostname 检查唯一性。任意两个站点声明相同 hostname 都会
   使新配置被拒绝，上一份有效配置继续运行。
 - `https://` 且未指定用户证书时使用 Caddy 自动证书管理；显式证书和私钥必须同时存在；

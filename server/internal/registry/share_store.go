@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	shareTokenBytes     = 32
-	shareTokenLength    = 43
-	maxShareHTMLBytes   = 16 * 1024 * 1024
-	defaultShareLimit   = 50
-	maxShareLimit       = 100
-	shareTokenAttempts  = 16
-	shareTempFilePrefix = ".share-"
+	shareRecordSchemaVersion = 1
+	shareTokenBytes          = 32
+	shareTokenLength         = 43
+	maxShareHTMLBytes        = 16 * 1024 * 1024
+	defaultShareLimit        = 50
+	maxShareLimit            = 100
+	shareTokenAttempts       = 16
+	shareTempFilePrefix      = ".share-"
 )
 
 var (
@@ -66,6 +67,7 @@ type shareCreateInput struct {
 }
 
 type shareRecord struct {
+	Schema    int        `json:"schema"`
 	Token     string     `json:"token"`
 	Title     string     `json:"title"`
 	ProjectID string     `json:"projectId"`
@@ -157,6 +159,7 @@ func (s *shareStore) create(input shareCreateInput) (shareCreateResult, error) {
 			continue
 		}
 		record := shareRecord{
+			Schema:    shareRecordSchemaVersion,
 			Token:     token,
 			Title:     input.Title,
 			ProjectID: input.ProjectID,
@@ -428,7 +431,8 @@ func (s *shareStore) readRecordFile(path string) (shareRecord, error) {
 }
 
 func (s *shareStore) recordIsValid(record shareRecord) bool {
-	return validShareToken(record.Token) &&
+	return record.Schema == shareRecordSchemaVersion &&
+		validShareToken(record.Token) &&
 		(record.Kind == "markdown" || record.Kind == "html") &&
 		validShareSourcePath(record.Path, record.Kind) &&
 		!record.CreatedAt.IsZero() &&
