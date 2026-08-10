@@ -11,21 +11,25 @@ test('Gateway deployment reads one config file for Gateway-owned route settings'
   t.after(() => rm(root, {recursive: true, force: true}));
   const paths = gatewayConfigPaths(root);
   await writeFile(paths.config, JSON.stringify({
-    schema: 1,
+    schema: 2,
     acme: {email: ''},
-    registry: {tls: {certificateFile: '', keyFile: ''}},
-    release: {
-      publicUrl: '',
-      listen: '127.0.0.1:9680',
-      dataRoot: join(root, 'release-server', 'data'),
-      tokenSha256: '',
+    wm_sites: {
+      tls: {certificateFile: '', keyFile: ''},
+      registry: {urlMode: 'sync_hub'},
+      release: {
+        publicUrl: '',
+        listen: '127.0.0.1:9680',
+        dataRoot: join(root, 'release-server', 'data'),
+        tokenSha256: '',
+      },
+      share: {urlMode: 'sync_hub'},
     },
-    share: {tls: {certificateFile: '', keyFile: ''}},
   }));
 
   const result = await readGatewayConfiguration(root);
-  assert.deepEqual(result.registry, {tls: {certificateFile: '', keyFile: ''}});
+  assert.deepEqual(result.wmSites.tls, {certificateFile: '', keyFile: ''});
+  assert.deepEqual(result.registry, {urlMode: 'sync_hub'});
   assert.equal(result.release.listen, '127.0.0.1:9680');
-  assert.deepEqual(result.share, {tls: {certificateFile: '', keyFile: ''}});
+  assert.deepEqual(result.share, {urlMode: 'sync_hub'});
   assert.equal(await readFile(paths.config, 'utf8').then(Boolean), true);
 });

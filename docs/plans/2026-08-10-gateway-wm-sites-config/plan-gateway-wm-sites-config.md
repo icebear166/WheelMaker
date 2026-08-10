@@ -97,31 +97,31 @@ Invoke `git-workflow-preferences` in checkpoint mode for the listed Gateway file
 
 **Acceptance:** New Gateway files use canonical schema 2 `wm_sites`; schema 2 inputs are normalized without losing unrelated values; schema 1 files fail before any write; deploy readers expose nested Release configuration.
 
-- [ ] **Step 1: Write deploy schema 2 tests**
+- [x] **Step 1: Write deploy schema 2 tests**
 
 Assert the default file contains `schema: 2`, top-level `acme` and `wm_sites`, shared TLS, both `sync_hub` defaults, and complete nested Release fields. Assert old top-level Registry/Release/Share and per-site TLS are unknown fields.
 
-- [ ] **Step 2: Write no-migration and atomic-failure tests**
+- [x] **Step 2: Write no-migration and atomic-failure tests**
 
 Create a schema 1 file with recognizable bytes, call `ensureGatewayConfiguration`, assert an unsupported-schema error, then reread the file and assert byte-for-byte equality. Add a schema 2 missing-`urlMode` case that normalizes both modes to `sync_hub`.
 
-- [ ] **Step 3: Run deploy tests and verify RED**
+- [x] **Step 3: Run deploy tests and verify RED**
 
 Run: `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-single-config.test.mjs scripts/deploy/deploy-core.test.mjs`
 
 Expected: FAIL because deployment still emits schema 1 top-level sections and migrates old Gateway fields.
 
-- [ ] **Step 4: Implement schema 2 validation, defaults, and reads**
+- [x] **Step 4: Implement schema 2 validation, defaults, and reads**
 
 Replace the three top-level site constants with `wm_sites`; validate shared TLS and only `sync_hub`; nest Release validation/output; remove the schema 1 Gateway migration path from `ensureGatewayConfiguration`; keep normalization writes only after a schema 2 input validates successfully; return nested site values from `readGatewayConfiguration`.
 
-- [ ] **Step 5: Verify GREEN and focused deploy regression**
+- [x] **Step 5: Verify GREEN and focused deploy regression**
 
 Run: `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-single-config.test.mjs scripts/deploy/deploy-core.test.mjs scripts/deploy/gateway-runtime.test.mjs scripts/deploy/gateway-install.test.mjs`
 
 Expected: PASS with schema 1 bytes preserved on rejection and all Gateway deployment behavior green.
 
-- [ ] **Step 6: Checkpoint the deploy unit**
+- [x] **Step 6: Checkpoint the deploy unit**
 
 Invoke `git-workflow-preferences` in checkpoint mode for the deploy implementation and tests after verification passes. Record commit hash and subject.
 

@@ -2202,10 +2202,8 @@ export async function runCore(args, deps = {}) {
 }
 
 // Embedded Gateway subsystem: configuration, runtime registration, and install.
-export const GATEWAY_SCHEMA = 1;
-export const REGISTRY_CONFIG_KEY = 'registry';
-export const RELEASE_CONFIG_KEY = 'release';
-export const SHARE_CONFIG_KEY = 'share';
+export const GATEWAY_SCHEMA = 2;
+export const WM_SITES_CONFIG_KEY = 'wm_sites';
 
 async function readGatewayJsonIfPresent(path) {
   try {
@@ -2285,73 +2283,71 @@ function parseOptionalPublicUrl(value, label = 'publicUrl') {
   }
 }
 
-function validateRelayPort(value) {
-  const port = value ?? 0;
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error('Gateway relay.listenPort must be between 0 and 65535');
-  }
-  if ([80, 443, 2019, 9630, 9680].includes(port)) {
-    throw new Error(`Gateway relay.listenPort ${port} is reserved`);
-  }
-  return port;
-}
-
 function validateDigest(value) {
   if (value === undefined || value === '') return '';
   if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
-    throw new Error('Gateway release.tokenSha256 must be a 64-character lowercase SHA-256 digest');
+    throw new Error('Gateway wm_sites.release.tokenSha256 must be a 64-character lowercase SHA-256 digest');
   }
   return value;
 }
 
+function validateHubSyncedSite(site, label) {
+  requireObject(site, label);
+  rejectUnknownKeys(site, new Set(['urlMode']), label);
+  const urlMode = site.urlMode ?? 'sync_hub';
+  if (urlMode !== 'sync_hub') {
+    throw new Error(`${label}.urlMode must be sync_hub`);
+  }
+  return {urlMode};
+}
+
 export function validateGatewayGlobal(config = {}, {home} = {}) {
   requireObject(config, 'Gateway config');
-  rejectUnknownKeys(config, new Set([
-    'schema', 'acme', REGISTRY_CONFIG_KEY, RELEASE_CONFIG_KEY, SHARE_CONFIG_KEY,
-  ]), 'Gateway config');
   if (config.schema !== undefined && config.schema !== GATEWAY_SCHEMA) {
     throw new Error(`unsupported Gateway config schema ${config.schema}`);
   }
+  rejectUnknownKeys(config, new Set(['schema', 'acme', WM_SITES_CONFIG_KEY]), 'Gateway config');
   const acme = config.acme ?? {};
-  const registry = config[REGISTRY_CONFIG_KEY] ?? {};
-  const release = config[RELEASE_CONFIG_KEY] ?? {};
-  const share = config[SHARE_CONFIG_KEY] ?? {};
+  const wmSites = config[WM_SITES_CONFIG_KEY] ?? {};
   requireObject(acme, 'Gateway config acme');
-  requireObject(registry, 'Gateway config registry');
-  requireObject(release, 'Gateway config release');
-  requireObject(share, 'Gateway config share');
+  requireObject(wmSites, 'Gateway config wm_sites');
   rejectUnknownKeys(acme, new Set(['email']), 'Gateway config acme');
-  rejectUnknownKeys(registry, new Set(['tls']), 'Gateway config registry');
-  rejectUnknownKeys(release, new Set(['publicUrl', 'listen', 'dataRoot', 'tokenSha256', 'tls']), 'Gateway config release');
-  rejectUnknownKeys(share, new Set(['tls']), 'Gateway config share');
+  rejectUnknownKeys(wmSites, new Set(['tls', 'registry', 'release', 'share']), 'Gateway config wm_sites');
   if (acme.email !== undefined && typeof acme.email !== 'string') {
     throw new Error('Gateway config acme.email must be a string');
   }
+  const registry = wmSites.registry ?? {};
+  const release = wmSites.release ?? {};
+  const share = wmSites.share ?? {};
+  requireObject(release, 'Gateway config wm_sites.release');
+  rejectUnknownKeys(
+    release,
+    new Set(['publicUrl', 'listen', 'dataRoot', 'tokenSha256']),
+    'Gateway config wm_sites.release',
+  );
   const normalizedHome = home === undefined ? undefined : gatewayHome({home});
   const defaultDataRoot = normalizedHome
     ? resolve(normalizedHome, '..', 'release-server', 'data')
     : '';
   const listen = release.listen ?? '127.0.0.1:9680';
-  if (listen !== '127.0.0.1:9680') throw new Error('Gateway release.listen must be 127.0.0.1:9680');
+  if (listen !== '127.0.0.1:9680') throw new Error('Gateway wm_sites.release.listen must be 127.0.0.1:9680');
   const dataRoot = release.dataRoot ?? defaultDataRoot;
   if (typeof dataRoot !== 'string' || (dataRoot && !isAbsolute(dataRoot))) {
-    throw new Error('Gateway release.dataRoot must be an absolute path');
+    throw new Error('Gateway wm_sites.release.dataRoot must be an absolute path');
   }
   return {
     schema: GATEWAY_SCHEMA,
     acme: { email: acme.email ?? '' },
-    registry: {
-      tls: validateTLS(registry.tls),
-    },
-    release: {
-      publicUrl: parseOptionalPublicUrl(release.publicUrl, 'Gateway release.publicUrl'),
-      listen,
-      dataRoot,
-      tokenSha256: validateDigest(release.tokenSha256),
-      tls: validateTLS(release.tls),
-    },
-    share: {
-      tls: validateTLS(share.tls),
+    wm_sites: {
+      tls: validateTLS(wmSites.tls),
+      registry: validateHubSyncedSite(registry, 'Gateway config wm_sites.registry'),
+      release: {
+        publicUrl: parseOptionalPublicUrl(release.publicUrl, 'Gateway wm_sites.release.publicUrl'),
+        listen,
+        dataRoot,
+        tokenSha256: validateDigest(release.tokenSha256),
+      },
+      share: validateHubSyncedSite(share, 'Gateway config wm_sites.share'),
     },
   };
 }
@@ -2384,96 +2380,22 @@ export function gatewayConfigPaths(home) {
   };
 }
 
-async function migrateGatewaySharedFields(home, config) {
-  const registry = config.registry;
-  const share = config.share;
-  const relay = config.relay;
-  if (registry !== undefined) requireObject(registry, 'Gateway config registry');
-  if (share !== undefined) requireObject(share, 'Gateway config share');
-  if (relay !== undefined) requireObject(relay, 'Gateway config relay');
-
-  const hubPath = resolve(home, '..', 'config.json');
-  const hub = await readGatewayJsonIfPresent(hubPath);
-  let hubChanged = false;
-  let hubRegistry = null;
-  const ensureHubRegistry = () => {
-    if (hubRegistry !== null) return hubRegistry;
-    if (hub.registry === undefined) {
-      hub.registry = {};
-      hubChanged = true;
-    }
-    requireObject(hub.registry, 'Hub config registry');
-    hubRegistry = hub.registry;
-    return hubRegistry;
-  };
-
-  if (hub !== null) {
-    requireObject(hub, 'Hub config');
-    if (Object.hasOwn(hub, 'share')) {
-      requireObject(hub.share, 'Hub config share');
-      const targetRegistry = ensureHubRegistry();
-      if (!Object.hasOwn(targetRegistry, 'share')) targetRegistry.share = hub.share;
-      delete hub.share;
-      hubChanged = true;
-    }
-    if (hub.registry !== undefined) {
-      requireObject(hub.registry, 'Hub config registry');
-      hubRegistry = hub.registry;
-    }
-    if (hubRegistry?.share !== undefined) {
-      requireObject(hubRegistry.share, 'Hub config registry.share');
-    }
-
-    if (registry?.publicUrl !== undefined && String(registry.publicUrl).trim() && !Object.hasOwn(hub, 'publicUrl')) {
-      hub.publicUrl = parseOptionalPublicUrl(registry.publicUrl, 'Gateway registry.publicUrl');
-      hubChanged = true;
-    }
-    if (share?.publicUrl !== undefined && String(share.publicUrl).trim()) {
-      const targetRegistry = ensureHubRegistry();
-      if (!targetRegistry.share) targetRegistry.share = {};
-      if (!Object.hasOwn(targetRegistry.share, 'publicUrl')) {
-        targetRegistry.share.publicUrl = parseOptionalPublicUrl(share.publicUrl, 'Gateway share.publicUrl');
-        hubChanged = true;
-      }
-    }
-    if (relay?.listenPort !== undefined) {
-      const targetRegistry = ensureHubRegistry();
-      if (!Object.hasOwn(targetRegistry, 'relayPort')) {
-        targetRegistry.relayPort = validateRelayPort(relay.listenPort);
-        hubChanged = true;
-      }
-    }
-    if (hubChanged) await atomicWrite(hubPath, jsonBytes(hub), 0o600);
-  }
-
-  for (const field of ['log', 'relay']) {
-    if (Object.hasOwn(config, field)) {
-      delete config[field];
-    }
-  }
-  if (registry && Object.hasOwn(registry, 'publicUrl')) {
-    delete registry.publicUrl;
-  }
-  if (share && Object.hasOwn(share, 'publicUrl')) {
-    delete share.publicUrl;
-  }
-  return config;
-}
-
 export function defaultGatewayConfiguration(home) {
   const paths = gatewayConfigPaths(home);
   return {
     schema: GATEWAY_SCHEMA,
     acme: {email: ''},
-    registry: {tls: {certificateFile: '', keyFile: ''}},
-    release: {
-      publicUrl: '',
-      listen: '127.0.0.1:9680',
-      dataRoot: paths.releaseDataRoot,
-      tokenSha256: '',
+    wm_sites: {
       tls: {certificateFile: '', keyFile: ''},
+      registry: {urlMode: 'sync_hub'},
+      release: {
+        publicUrl: '',
+        listen: '127.0.0.1:9680',
+        dataRoot: paths.releaseDataRoot,
+        tokenSha256: '',
+      },
+      share: {urlMode: 'sync_hub'},
     },
-    share: {tls: {certificateFile: '', keyFile: ''}},
   };
 }
 
@@ -2481,10 +2403,8 @@ export async function ensureGatewayConfiguration(home) {
   const paths = gatewayConfigPaths(home);
   const current = await readGatewayJsonIfPresent(paths.config);
   const original = current === null ? null : JSON.stringify(current);
-  const migrated = current === null
-    ? defaultGatewayConfiguration(paths.home)
-    : await migrateGatewaySharedFields(paths.home, current);
-  const normalized = validateGatewayGlobal(migrated, {home: paths.home});
+  const candidate = current === null ? defaultGatewayConfiguration(paths.home) : current;
+  const normalized = validateGatewayGlobal(candidate, {home: paths.home});
   if (current === null || original !== JSON.stringify(normalized)) {
     await atomicWrite(paths.config, jsonBytes(normalized), 0o600);
   }
@@ -2500,9 +2420,10 @@ export async function readGatewayConfiguration(home) {
   return {
     paths,
     global,
-    registry: global?.registry ?? null,
-    release: global?.release ?? null,
-    share: global?.share ?? null,
+    wmSites: global?.wm_sites ?? null,
+    registry: global?.wm_sites.registry ?? null,
+    release: global?.wm_sites.release ?? null,
+    share: global?.wm_sites.share ?? null,
   };
 }
 

@@ -13,19 +13,21 @@ import {
   validateGatewayGlobal,
 } from './deploy-core.mjs';
 
-test('Gateway global config owns TLS and Release sections', () => {
+test('Gateway global config owns shared TLS and fixed wm_sites sections', () => {
   const config = {
-    schema: 1,
+    schema: 2,
     acme: {email: ''},
-    registry: {tls: {certificateFile: '', keyFile: ''}},
-    release: {
-      publicUrl: '',
-      listen: '127.0.0.1:9680',
-      dataRoot: '/home/alice/.wheelmaker/release-server/data',
-      tokenSha256: '',
+    wm_sites: {
       tls: {certificateFile: '', keyFile: ''},
+      registry: {urlMode: 'sync_hub'},
+      release: {
+        publicUrl: '',
+        listen: '127.0.0.1:9680',
+        dataRoot: '/home/alice/.wheelmaker/release-server/data',
+        tokenSha256: '',
+      },
+      share: {urlMode: 'sync_hub'},
     },
-    share: {tls: {certificateFile: '', keyFile: ''}},
   };
   assert.deepEqual(validateGatewayGlobal(config), config);
 });
@@ -33,17 +35,19 @@ test('Gateway global config owns TLS and Release sections', () => {
 test('Gateway default config contains blank URLs and complete release runtime fields', () => {
   const home = '/home/alice/.wheelmaker/gateway';
   assert.deepEqual(defaultGatewayConfiguration(home), {
-    schema: 1,
+    schema: 2,
     acme: {email: ''},
-    registry: {tls: {certificateFile: '', keyFile: ''}},
-    release: {
-      publicUrl: '',
-      listen: '127.0.0.1:9680',
-      dataRoot: resolve(home, '..', 'release-server', 'data'),
-      tokenSha256: '',
+    wm_sites: {
       tls: {certificateFile: '', keyFile: ''},
+      registry: {urlMode: 'sync_hub'},
+      release: {
+        publicUrl: '',
+        listen: '127.0.0.1:9680',
+        dataRoot: resolve(home, '..', 'release-server', 'data'),
+        tokenSha256: '',
+      },
+      share: {urlMode: 'sync_hub'},
     },
-    share: {tls: {certificateFile: '', keyFile: ''}},
   });
 });
 
@@ -53,81 +57,53 @@ test('Gateway deployment materializes the full config once and preserves existin
   const paths = gatewayConfigPaths(root);
 
   const first = await ensureGatewayConfiguration(root);
-  assert.deepEqual(first.registry, {tls: {certificateFile: '', keyFile: ''}});
-  assert.equal(first.release.publicUrl, '');
-  assert.deepEqual(first.share, {tls: {certificateFile: '', keyFile: ''}});
+  assert.deepEqual(first.wm_sites.registry, {urlMode: 'sync_hub'});
+  assert.equal(first.wm_sites.release.publicUrl, '');
+  assert.deepEqual(first.wm_sites.share, {urlMode: 'sync_hub'});
   assert.deepEqual(JSON.parse(await readFile(paths.config, 'utf8')), first);
 
-  await writeFile(paths.config, JSON.stringify({...first, release: {...first.release, publicUrl: 'https://release.example.com'}}));
-  const second = await ensureGatewayConfiguration(root);
-  assert.equal(second.release.publicUrl, 'https://release.example.com');
-  assert.equal(second.release.dataRoot, first.release.dataRoot);
-});
-
-test('Gateway duplicate fields migrate into an existing Hub config without overriding canonical values', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-migration-'));
-  t.after(() => rm(root, {recursive: true, force: true}));
-  const stateRoot = join(root, 'state');
-  const home = join(stateRoot, 'gateway');
-  const paths = gatewayConfigPaths(home);
-  await mkdir(stateRoot, {recursive: true});
-  await writeFile(join(stateRoot, 'config.json'), JSON.stringify({
-    projects: [],
-    publicUrl: 'https://canonical.example.com',
-    log: {level: 'warn'},
-    registry: {
-      listen: true,
-      relayPort: 28811,
-      share: {publicUrl: 'https://canonical-share.example.com'},
+  await writeFile(paths.config, JSON.stringify({
+    ...first,
+    wm_sites: {
+      ...first.wm_sites,
+      release: {...first.wm_sites.release, publicUrl: 'https://release.example.com'},
     },
   }));
-  await mkdir(paths.home, {recursive: true});
-  await writeFile(paths.config, JSON.stringify({
-    schema: 1,
-    acme: {email: ''},
-    log: {level: 'debug'},
-    relay: {listenPort: 28810},
-    registry: {publicUrl: 'https://legacy.example.com', tls: {certificateFile: '', keyFile: ''}},
-    release: {publicUrl: '', listen: '127.0.0.1:9680', dataRoot: paths.releaseDataRoot, tokenSha256: '', tls: {certificateFile: '', keyFile: ''}},
-    share: {publicUrl: 'https://legacy-share.example.com', tls: {certificateFile: '', keyFile: ''}},
-  }));
-
-  const normalized = await ensureGatewayConfiguration(home);
-  assert.deepEqual(normalized.registry, {tls: {certificateFile: '', keyFile: ''}});
-  assert.deepEqual(normalized.share, {tls: {certificateFile: '', keyFile: ''}});
-  assert.equal('log' in normalized, false);
-  assert.equal('relay' in normalized, false);
-  assert.equal('publicUrl' in normalized.registry, false);
-  assert.equal('publicUrl' in normalized.share, false);
-
-  const hub = JSON.parse(await readFile(join(stateRoot, 'config.json'), 'utf8'));
-  assert.equal(hub.publicUrl, 'https://canonical.example.com');
-  assert.equal(hub.registry.relayPort, 28811);
-  assert.equal(hub.registry.share.publicUrl, 'https://canonical-share.example.com');
+  const second = await ensureGatewayConfiguration(root);
+  assert.equal(second.wm_sites.release.publicUrl, 'https://release.example.com');
+  assert.equal(second.wm_sites.release.dataRoot, first.wm_sites.release.dataRoot);
 });
 
-test('Gateway duplicate fields populate missing Hub shared values during migration', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-migration-'));
+test('Gateway schema 1 is rejected without modifying its bytes', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-no-migration-'));
   t.after(() => rm(root, {recursive: true, force: true}));
-  const stateRoot = join(root, 'state');
-  const home = join(stateRoot, 'gateway');
-  const paths = gatewayConfigPaths(home);
-  await mkdir(stateRoot, {recursive: true});
-  await writeFile(join(stateRoot, 'config.json'), JSON.stringify({projects: [], registry: {listen: true}}));
-  await mkdir(paths.home, {recursive: true});
+  const paths = gatewayConfigPaths(root);
+  const original = '{\n  "schema": 1,\n  "release": {"publicUrl": "https://legacy.example.com"}\n}\n';
+  await writeFile(paths.config, original);
+
+  await assert.rejects(() => ensureGatewayConfiguration(root), /schema 1/);
+  assert.equal(await readFile(paths.config, 'utf8'), original);
+});
+
+test('Gateway schema 2 defaults missing Registry and Share urlMode', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-url-mode-'));
+  t.after(() => rm(root, {recursive: true, force: true}));
+  const paths = gatewayConfigPaths(root);
   await writeFile(paths.config, JSON.stringify({
-    schema: 1,
-    registry: {publicUrl: 'https://legacy.example.com', tls: {certificateFile: '', keyFile: ''}},
-    release: {publicUrl: '', dataRoot: paths.releaseDataRoot, tokenSha256: '', tls: {certificateFile: '', keyFile: ''}},
-    relay: {listenPort: 28810},
-    share: {publicUrl: 'https://legacy-share.example.com', tls: {certificateFile: '', keyFile: ''}},
+    schema: 2,
+    acme: {email: ''},
+    wm_sites: {
+      tls: {certificateFile: '', keyFile: ''},
+      registry: {},
+      release: {dataRoot: paths.releaseDataRoot},
+      share: {},
+    },
   }));
 
-  await ensureGatewayConfiguration(home);
-  const hub = JSON.parse(await readFile(join(stateRoot, 'config.json'), 'utf8'));
-  assert.equal(hub.publicUrl, 'https://legacy.example.com');
-  assert.equal(hub.registry.relayPort, 28810);
-  assert.equal(hub.registry.share.publicUrl, 'https://legacy-share.example.com');
+  const normalized = await ensureGatewayConfiguration(root);
+  assert.equal(normalized.wm_sites.registry.urlMode, 'sync_hub');
+  assert.equal(normalized.wm_sites.share.urlMode, 'sync_hub');
+  assert.deepEqual(JSON.parse(await readFile(paths.config, 'utf8')), normalized);
 });
 
 test('Gateway configuration reads only config.json and ignores legacy site files', async t => {
@@ -142,7 +118,8 @@ test('Gateway configuration reads only config.json and ignores legacy site files
 
   const result = await readGatewayConfiguration(root);
   assert.deepEqual(result.global, config);
-  assert.deepEqual(result.registry, {tls: {certificateFile: '', keyFile: ''}});
+  assert.deepEqual(result.wmSites, config.wm_sites);
+  assert.deepEqual(result.registry, {urlMode: 'sync_hub'});
   await access(legacySitePath);
 });
 
@@ -173,11 +150,15 @@ test('deployment options accept one normalized business public URL', () => {
   );
 });
 
-test('Gateway rejects shared duplicate fields and invalid release runtime fields', () => {
+test('Gateway rejects old sections, per-site TLS, and invalid wm_sites values', () => {
+  assert.throws(() => validateGatewayGlobal({schema: 1}), /schema 1/);
   assert.throws(() => validateGatewayGlobal({log: {level: 'debug'}}), /unsupported field/);
   assert.throws(() => validateGatewayGlobal({relay: {listenPort: 28810}}), /unsupported field/);
   assert.throws(() => validateGatewayGlobal({registry: {publicUrl: 'https://registry.example.com'}}), /unsupported field/);
+  assert.throws(() => validateGatewayGlobal({release: {publicUrl: 'https://release.example.com'}}), /unsupported field/);
   assert.throws(() => validateGatewayGlobal({share: {publicUrl: 'https://share.example.com'}}), /unsupported field/);
-  assert.throws(() => validateGatewayGlobal({release: {dataRoot: 'relative'}}), /absolute/);
-  assert.throws(() => validateGatewayGlobal({release: {tokenSha256: 'A'.repeat(64)}}), /lowercase/);
+  assert.throws(() => validateGatewayGlobal({wm_sites: {registry: {tls: {}}}}), /unsupported field/);
+  assert.throws(() => validateGatewayGlobal({wm_sites: {registry: {urlMode: 'manual'}}}), /urlMode/);
+  assert.throws(() => validateGatewayGlobal({wm_sites: {release: {dataRoot: 'relative'}}}), /absolute/);
+  assert.throws(() => validateGatewayGlobal({wm_sites: {release: {tokenSha256: 'A'.repeat(64)}}}), /lowercase/);
 });
