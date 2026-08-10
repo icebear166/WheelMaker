@@ -4,6 +4,12 @@ import {
   ChatFileLinkContextMenu,
   type ChatFileLinkContextMenuProps,
 } from '../web/src/chat/ChatFileLinkContextMenu';
+import {
+  buildContextMenuModel,
+  type ContextMenuOptions,
+} from '../web/src/file/fileMenuModel';
+
+type FileMenuOptions = Extract<ContextMenuOptions, {surface: 'file'}>;
 
 function labels(renderer: TestRenderer.ReactTestRenderer): string[] {
   return renderer.root
@@ -21,20 +27,33 @@ function separatorCount(renderer: TestRenderer.ReactTestRenderer): number {
   return renderer.root.findAll(node => node.props.role === 'separator').length;
 }
 
+function fileModel(
+  target: Partial<FileMenuOptions['target']> = {},
+  platform: FileMenuOptions['platform'] = 'desktop',
+  capabilities: FileMenuOptions['capabilities'] = {
+    canOpenInVSCode: true,
+    canShowInExplorer: true,
+    canCopyFile: true,
+  },
+) {
+  return buildContextMenuModel({
+    surface: 'file',
+    platform,
+    target: {
+      kind: 'project-file',
+      path: 'src/main.ts',
+      available: true,
+      downloadAvailable: true,
+      ...target,
+    },
+    capabilities,
+  });
+}
+
 const internalProps: ChatFileLinkContextMenuProps = {
   x: 24,
   y: 36,
-  link: {
-    path: 'src/main.ts',
-    absolutePath: 'D:/repo/src/main.ts',
-    relativePath: 'src/main.ts',
-    line: 4,
-  },
-  canOpenInVSCode: true,
-  canShowInFolder: true,
-  canCopyFile: true,
-  canDownload: true,
-  htmlActionLabel: null,
+  model: fileModel(),
   onAction: jest.fn(),
   onClose: jest.fn(),
 };
@@ -49,19 +68,19 @@ describe('chat file link context menu', () => {
     });
 
     expect(labels(renderer)).toEqual([
-      'Preview file',
+      'Preview',
+      'Open in VS Code',
+      'Show in Explorer',
       'Download',
-      'Open with VS Code',
-      'Show in File Explorer',
       'Copy file',
       'Copy relative path',
       'Copy absolute path',
     ]);
     expect(icons(renderer)).toEqual([
       'eye',
-      'arrowDown',
       'code',
       'folderOpen',
+      'arrowDown',
       'copy',
       'fileSymlink',
       'clipboard',
@@ -71,57 +90,58 @@ describe('chat file link context menu', () => {
     act(() => renderer.unmount());
   });
 
-  test('uses the Desktop HTML label and file icon for project Markdown', () => {
+  test('uses the unified labels for a project Markdown file', () => {
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
       renderer = TestRenderer.create(
         <ChatFileLinkContextMenu
           {...internalProps}
-          link={{...internalProps.link, path: 'README.md', relativePath: 'README.md'}}
-          htmlActionLabel="Copy file as HTML"
+          model={fileModel({path: 'README.md'})}
         />,
       );
     });
 
     expect(labels(renderer)).toEqual([
-      'Preview file',
+      'Preview',
+      'Open in VS Code',
+      'Show in Explorer',
       'Download',
-      'Open with VS Code',
-      'Show in File Explorer',
       'Copy file',
-      'Copy file as HTML',
+      'Share MD/HTML',
+      'Export as HTML',
       'Copy relative path',
       'Copy absolute path',
     ]);
-    expect(icons(renderer)[5]).toBe('fileCode');
+    expect(icons(renderer)[5]).toBe('share');
     expect(separatorCount(renderer)).toBe(2);
 
     act(() => renderer.unmount());
   });
 
-  test('uses the browser HTML label without native file actions', () => {
+  test('uses browser actions without native file capabilities', () => {
     let renderer!: TestRenderer.ReactTestRenderer;
     act(() => {
       renderer = TestRenderer.create(
         <ChatFileLinkContextMenu
           {...internalProps}
-          link={{...internalProps.link, path: 'README.md', relativePath: 'README.md'}}
-          canOpenInVSCode={false}
-          canShowInFolder={false}
-          canCopyFile={false}
-          htmlActionLabel="Export as HTML"
+          model={fileModel({path: 'README.md'}, 'browser', {
+            canOpenInVSCode: false,
+            canShowInExplorer: false,
+            canCopyFile: false,
+          })}
         />,
       );
     });
 
     expect(labels(renderer)).toEqual([
-      'Preview file',
+      'Preview',
       'Download',
+      'Share MD/HTML',
       'Export as HTML',
       'Copy relative path',
       'Copy absolute path',
     ]);
-    expect(icons(renderer)).toEqual(['eye', 'arrowDown', 'fileCode', 'fileSymlink', 'clipboard']);
+    expect(icons(renderer)).toEqual(['eye', 'arrowDown', 'share', 'fileCode', 'fileSymlink', 'clipboard']);
     expect(separatorCount(renderer)).toBe(2);
     act(() => renderer.unmount());
   });
@@ -132,21 +152,20 @@ describe('chat file link context menu', () => {
       renderer = TestRenderer.create(
         <ChatFileLinkContextMenu
           {...internalProps}
-          link={{
+          model={fileModel({
+            kind: 'external-file',
             path: 'D:/outside/report.txt',
-            absolutePath: 'D:/outside/report.txt',
-            relativePath: null,
-            line: null,
-          }}
-          canOpenInVSCode={false}
-          canShowInFolder={false}
-          canCopyFile={false}
+          }, 'browser', {
+            canOpenInVSCode: false,
+            canShowInExplorer: false,
+            canCopyFile: false,
+          })}
         />,
       );
     });
 
-    expect(labels(renderer)).toEqual(['Preview file', 'Download', 'Copy absolute path']);
-    expect(separatorCount(renderer)).toBe(1);
+    expect(labels(renderer)).toEqual(['Preview', 'Download', 'Copy absolute path']);
+    expect(separatorCount(renderer)).toBe(2);
     act(() => renderer.unmount());
   });
 
@@ -157,9 +176,7 @@ describe('chat file link context menu', () => {
       renderer = TestRenderer.create(
         <ChatFileLinkContextMenu
           {...internalProps}
-          link={{...internalProps.link, path: 'README.md', relativePath: 'README.md'}}
-          htmlActionLabel="Copy file as HTML"
-          canShare
+          model={fileModel({path: 'README.md'})}
           onAction={onAction}
         />,
       );
@@ -170,12 +187,12 @@ describe('chat file link context menu', () => {
     }
     expect(onAction.mock.calls.map(call => call[0])).toEqual([
       'preview',
-      'download',
       'vscode',
       'folder',
+      'download',
       'copy-file',
-      'export-html',
       'share',
+      'export-html',
       'copy-relative',
       'copy-absolute',
     ]);
@@ -189,17 +206,20 @@ describe('chat file link context menu', () => {
       renderer = TestRenderer.create(
         <ChatFileLinkContextMenu
           {...internalProps}
-          link={null}
-          canOpenInVSCode={false}
-          canShowInFolder={false}
-          canCopyFile={false}
-          htmlActionLabel={null}
+          model={fileModel({
+            kind: 'attachment',
+            path: undefined,
+          }, 'browser', {
+            canOpenInVSCode: false,
+            canShowInExplorer: false,
+            canCopyFile: false,
+          })}
         />,
       );
     });
 
-    expect(labels(renderer)).toEqual(['Preview file', 'Download']);
-    expect(separatorCount(renderer)).toBe(0);
+    expect(labels(renderer)).toEqual(['Preview', 'Download']);
+    expect(separatorCount(renderer)).toBe(1);
     act(() => renderer.unmount());
   });
 
@@ -209,12 +229,11 @@ describe('chat file link context menu', () => {
       renderer = TestRenderer.create(
         <ChatFileLinkContextMenu
           {...internalProps}
-          link={{...internalProps.link, path: 'docs/page.html', relativePath: 'docs/page.html'}}
-          canShare
+          model={fileModel({path: 'docs/page.html'})}
         />,
       );
     });
-    expect(labels(renderer)).toContain('Create public share');
+    expect(labels(renderer)).toContain('Share MD/HTML');
     act(() => renderer.unmount());
   });
 

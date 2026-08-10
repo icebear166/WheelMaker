@@ -34,11 +34,11 @@
 - Update `app/web/src/app/WorkspaceApp.tsx` to normalize all existing file-menu sources into the model and route the unified action dispatcher.
 - Update `app/__tests__/web-chat-file-link-context-menu.test.tsx` and related source-contract assertions for the new labels and groups.
 
-- [ ] Update/add renderer integration tests first for the model-driven menu, including `Share MD/HTML` and the unified `Export as HTML` label on Desktop and browser paths.
-- [ ] Run the focused file-menu tests and confirm the new assertions fail before production refactoring.
-- [ ] Replace caller-side `can*`/HTML-label JSX decisions with model options for chat links, attachments, Changed Files, Preview file tree/search, and Quick Open while preserving each left-click handler.
-- [ ] Keep the existing preview/download/copy/share/export/Desktop bridge effects behind the same action IDs and ensure deleted, external, attachment, and unavailable files hide invalid actions.
-- [ ] Run focused file-menu, download, bridge, keyboard-navigation, and relevant chat tests; checkpoint with `git diff --check` and an explicit task-scoped commit.
+- [x] Update/add renderer integration tests first for the model-driven menu, including `Share MD/HTML` and the unified `Export as HTML` label on Desktop and browser paths.
+- [x] Run the focused file-menu tests and confirm the new assertions fail before production refactoring.
+- [x] Replace caller-side `can*`/HTML-label JSX decisions with model options for chat links, attachments, Changed Files, Preview file tree/search, and Quick Open while preserving each left-click handler.
+- [x] Keep the existing preview/download/copy/share/export/Desktop bridge effects behind the same action IDs and ensure deleted, external, attachment, and unavailable files hide invalid actions.
+- [x] Run focused file-menu, download, bridge, keyboard-navigation, and relevant chat tests; checkpoint with `git diff --check` and an explicit task-scoped commit.
 
 ## Task 3: Use the same model for Preview Tab menus and align desktop/mobile entry points
 

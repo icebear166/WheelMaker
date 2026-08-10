@@ -84,7 +84,7 @@ import {
   type DesktopProjectFileAction,
 } from '../platform/desktop/desktopRuntime';
 import {checkDesktopUpdate} from '../platform/desktop/desktopUpdate';
-import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
+import {getNativeRuntimeBridge, isNativeShellHost, isNativeWebViewHost} from '../platform/native/nativeRuntime';
 import {
   AppConfirmDialog,
   AppGoalEditDialog,
@@ -606,6 +606,11 @@ import {
   startManagedFileDownload,
 } from '../file/fileDownload';
 import {
+  buildContextMenuModel,
+  type FileMenuFileTarget,
+  type FileMenuPlatform,
+} from '../file/fileMenuModel';
+import {
   buildFileSearchResultTree,
   flattenFileSearchResultTree,
   type FileSearchResultTreeNode,
@@ -994,6 +999,7 @@ type ChatFileLinkMenuState = {
   y: number;
   projectId: string;
   projectRoot: string;
+  targetKind: FileMenuFileTarget['kind'];
   link: PreviewFileLink | null;
   fileAvailable: boolean;
   downloadSource: RegistryFileDownloadSource | null;
@@ -1924,6 +1930,11 @@ function getFileExtension(path: string): string {
 function isMarkdownPath(path: string): boolean {
   const ext = getFileExtension(path);
   return ext === 'md' || ext === 'markdown';
+}
+
+function resolveFileMenuPlatform(desktopBridge: unknown): FileMenuPlatform {
+  if (desktopBridge) return 'desktop';
+  return isNativeWebViewHost() ? 'android' : 'browser';
 }
 
 function inferImageMimeType(path: string): string {
@@ -16784,6 +16795,7 @@ export function App() {
         const fileMenuTarget: ManagedFileMenuTarget | null = targetFile ? {
           projectId: linkProjectId,
           projectRoot: linkProjectRoot,
+          targetKind: 'project-file',
           link: targetFile,
           fileAvailable: true,
           downloadSource: fileDownloadSourceForLink(targetFile),
@@ -17275,6 +17287,7 @@ export function App() {
     openManagedFileContextMenu({
       projectId: targetProjectId,
       projectRoot: targetProject.path,
+      targetKind: 'changed-file',
       link: targetFile,
       fileAvailable: file.status.toUpperCase() !== 'D',
       downloadSource: file.status.toUpperCase() !== 'D'
@@ -17311,6 +17324,7 @@ export function App() {
     openManagedFileContextMenu({
       projectId: targetProjectId,
       projectRoot: targetProject.path,
+      targetKind: 'attachment',
       link: null,
       fileAvailable: true,
       downloadSource: source,
@@ -20390,6 +20404,7 @@ export function App() {
     return {
       projectId: targetProjectId,
       projectRoot: targetProject.path,
+      targetKind: 'project-file',
       link,
       fileAvailable: true,
       downloadSource: fileDownloadSourceForLink(link),
@@ -20837,6 +20852,9 @@ export function App() {
       return;
     }
 
+    if (action !== 'vscode' && action !== 'folder') {
+      return;
+    }
     const desktopBridge = getDesktopWindowBridge();
     if (!link || !desktopBridge || !target) return;
     const failurePrefix = action === 'vscode'
@@ -21634,51 +21652,49 @@ export function App() {
     projectRoot: chatFileLinkMenu.projectRoot,
     relativePath: chatFileLinkMenu.link.relativePath,
   } : null;
-  const chatFileLinkContextMenu = chatFileLinkMenu ? (
+  const chatFileLinkMenuPath = chatFileLinkMenu?.link
+    ? chatFileLinkMenu.targetKind === 'external-file'
+      ? chatFileLinkMenu.link.absolutePath || chatFileLinkMenu.link.path
+      : chatFileLinkMenu.link.relativePath ?? chatFileLinkMenu.link.path
+    : undefined;
+  const chatFileLinkContextMenuModel = chatFileLinkMenu
+    ? buildContextMenuModel({
+        surface: 'file',
+        platform: resolveFileMenuPlatform(chatFileLinkDesktopBridge),
+        target: {
+          kind: chatFileLinkMenu.targetKind,
+          path: chatFileLinkMenuPath,
+          available: chatFileLinkMenu.fileAvailable,
+          downloadAvailable: !!chatFileLinkMenu.downloadSource,
+        },
+        capabilities: {
+          canOpenInVSCode: chatFileLinkDesktopTarget
+            ? canInvokeDesktopFileAction(
+                chatFileLinkDesktopBridge,
+                'vscode',
+                chatFileLinkDesktopTarget,
+              )
+            : false,
+          canShowInExplorer: chatFileLinkDesktopTarget
+            ? canInvokeDesktopFileAction(
+                chatFileLinkDesktopBridge,
+                'folder',
+                chatFileLinkDesktopTarget,
+              )
+            : false,
+          canCopyFile: !!chatFileLinkMenu.link && canCopyDesktopFile(
+            chatFileLinkDesktopBridge,
+            chatFileLinkMenu.link.absolutePath,
+          ),
+        },
+      })
+    : null;
+  const chatFileLinkContextMenu = chatFileLinkMenu && chatFileLinkContextMenuModel ? (
     <ChatFileLinkContextMenu
       x={chatFileLinkMenu.x}
       y={chatFileLinkMenu.y}
-      link={chatFileLinkMenu.link}
+      model={chatFileLinkContextMenuModel}
       exiting={chatFileLinkMenuExiting}
-      canOpenInVSCode={chatFileLinkDesktopTarget
-        ? canInvokeDesktopFileAction(
-            chatFileLinkDesktopBridge,
-            'vscode',
-            chatFileLinkDesktopTarget,
-          )
-        : false}
-      canShowInFolder={chatFileLinkDesktopTarget
-        ? canInvokeDesktopFileAction(
-            chatFileLinkDesktopBridge,
-            'folder',
-            chatFileLinkDesktopTarget,
-          )
-        : false}
-      canCopyFile={
-        chatFileLinkMenu.fileAvailable &&
-        !!chatFileLinkMenu.link &&
-        canCopyDesktopFile(
-          chatFileLinkDesktopBridge,
-          chatFileLinkMenu.link?.absolutePath ?? '',
-        )
-      }
-      canDownload={chatFileLinkMenu.fileAvailable && !!chatFileLinkMenu.downloadSource}
-      canShare={
-        chatFileLinkMenu.fileAvailable &&
-        !!chatFileLinkMenu.link &&
-        chatFileLinkMenu.link.relativePath !== null &&
-        !!shareKindForPath(chatFileLinkMenu.link.path)
-      }
-      htmlActionLabel={
-        chatFileLinkMenu.fileAvailable &&
-        chatFileLinkMenu.link?.relativePath !== null &&
-        !!chatFileLinkMenu.link &&
-        isMarkdownPath(chatFileLinkMenu.link.path)
-          ? chatFileLinkDesktopBridge
-            ? 'Copy file as HTML'
-            : 'Export as HTML'
-          : null
-      }
       onAction={handleChatFileLinkMenuAction}
       onClose={() => setChatFileLinkMenu(null)}
     />

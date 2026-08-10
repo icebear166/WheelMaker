@@ -9,10 +9,10 @@ function read(relativePath: string): string {
 
 describe('menu keyboard navigation', () => {
   test('gives the new context and session menus roving focus controls', () => {
-    const fileMenu = read('chat/ChatFileLinkContextMenu.tsx');
+    const fileMenu = read('common/ContextMenu.tsx');
     const sessionMenu = read('chat/sessionlist/SessionMenu.tsx');
 
-    expect(fileMenu).toContain("from '../common/menuKeyboardNavigation'");
+    expect(fileMenu).toContain("from './menuKeyboardNavigation'");
     expect(fileMenu).toContain('focusFirstMenuItem(menuRef.current);');
     expect(fileMenu).toContain('handleMenuKeyDown(event, menuRef.current)');
     expect(fileMenu).toContain('previouslyFocusedRef.current?.focus();');
