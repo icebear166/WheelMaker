@@ -109,6 +109,29 @@ describe('file menu model', () => {
     expect(model.groups.map(group => group.id)).toEqual(['open', 'transfer-share-export', 'path']);
   });
 
+  test('keeps desktop file-copy available for an external file', () => {
+    const model = buildContextMenuModel({
+      ...option({
+        kind: 'external-file',
+        path: 'D:/outside/report.txt',
+      }),
+      capabilities: {
+        canOpenInVSCode: true,
+        canShowInExplorer: true,
+        canCopyFile: true,
+      },
+    });
+
+    expect(actions(model)).toEqual([
+      'preview',
+      'vscode',
+      'folder',
+      'download',
+      'copy-file',
+      'copy-absolute',
+    ]);
+  });
+
   test('keeps an attachment preview/download menu without path actions', () => {
     const model = buildContextMenuModel({
       ...option({
@@ -199,6 +222,39 @@ describe('file menu model', () => {
     expect(actions(diff)).toEqual([]);
     expect(actions(relay)).toEqual(['open-relay']);
     expect(labels(relay)).toEqual(['Open relay page in browser']);
+  });
+
+  test('limits an external Preview file tab to native/file-transfer actions and absolute path', () => {
+    const model = buildContextMenuModel({
+      surface: 'preview-tab',
+      platform: 'browser',
+      target: {
+        kind: 'preview-external-file',
+        path: 'D:/outside/report.txt',
+        available: true,
+        downloadAvailable: true,
+      },
+    });
+
+    expect(actions(model)).toEqual(['download', 'copy-absolute']);
+    expect(labels(model)).not.toContain('Share MD/HTML');
+    expect(labels(model)).not.toContain('Copy relative path');
+  });
+
+  test('keeps desktop file-copy available for an external Preview file tab', () => {
+    const model = buildContextMenuModel({
+      surface: 'preview-tab',
+      platform: 'desktop',
+      target: {
+        kind: 'preview-external-file',
+        path: 'D:/outside/report.txt',
+        available: true,
+        downloadAvailable: true,
+      },
+      capabilities: {canCopyFile: true},
+    });
+
+    expect(actions(model)).toEqual(['download', 'copy-file', 'copy-absolute']);
   });
 
   test('returns a separate Copy action for text selection', () => {

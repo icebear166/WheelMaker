@@ -57,7 +57,7 @@ export type FileMenuFileTarget = {
 };
 
 export type PreviewTabMenuTarget = {
-  kind: 'preview-file' | 'preview-attachment' | 'prompt-diff' | 'git-diff' | 'history' | 'relay';
+  kind: 'preview-file' | 'preview-external-file' | 'preview-attachment' | 'prompt-diff' | 'git-diff' | 'history' | 'relay';
   path?: string;
   available?: boolean;
   downloadAvailable?: boolean;
@@ -86,6 +86,14 @@ export type ContextMenuOptions =
 
 function isProjectPathTarget(kind: FileMenuFileTarget['kind'] | PreviewTabMenuTarget['kind']): boolean {
   return kind === 'project-file' || kind === 'changed-file' || kind === 'preview-file';
+}
+
+function canCopyFileTarget(kind: FileMenuFileTarget['kind'] | PreviewTabMenuTarget['kind']): boolean {
+  return kind === 'project-file'
+    || kind === 'external-file'
+    || kind === 'changed-file'
+    || kind === 'preview-file'
+    || kind === 'preview-external-file';
 }
 
 function isMarkdownPath(path: string | undefined): boolean {
@@ -129,7 +137,7 @@ function buildFileModel(
   addItem(itemsByGroup['transfer-share-export'], available && target.downloadAvailable
     ? {action: 'download', icon: 'arrowDown', label: 'Download'}
     : null);
-  addItem(itemsByGroup['transfer-share-export'], canUseDesktop && capabilities.canCopyFile && projectPath
+  addItem(itemsByGroup['transfer-share-export'], canUseDesktop && capabilities.canCopyFile && canCopyFileTarget(target.kind)
     ? {action: 'copy-file', icon: 'copy', label: 'Copy file'}
     : null);
   const shareable = projectPath && available && !!target.path && !!shareKindForPath(target.path);
@@ -166,6 +174,7 @@ function buildPreviewTabModel(
   const available = target.available !== false;
   const hasPath = !!target.path;
   const projectFile = target.kind === 'preview-file';
+  const fileTarget = projectFile || target.kind === 'preview-external-file';
   const canUseDesktop = platform === 'desktop' && hasPath && available;
 
   addItem(open, canUseDesktop && capabilities.canOpenInVSCode
@@ -178,7 +187,7 @@ function buildPreviewTabModel(
   addItem(transfer, available && target.downloadAvailable
     ? {action: 'download', icon: 'arrowDown', label: 'Download'}
     : null);
-  addItem(transfer, canUseDesktop && capabilities.canCopyFile && projectFile
+  addItem(transfer, canUseDesktop && capabilities.canCopyFile && fileTarget
     ? {action: 'copy-file', icon: 'copy', label: 'Copy file'}
     : null);
   const shareable = projectFile && available && !!target.path && !!shareKindForPath(target.path);

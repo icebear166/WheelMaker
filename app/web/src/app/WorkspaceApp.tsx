@@ -184,6 +184,7 @@ import {ChatIcon} from '../chat/ChatIcon';
 import {AgentTag} from '../chat/AgentTag';
 import {Icon} from '../common/Icon';
 import {useContextMenuTargetGesture} from '../common/useContextMenuGesture';
+import {ContextMenu, ContextMenuItems} from '../common/ContextMenu';
 import {RetryToast} from '../common/RetryToast';
 import {createSkillRetryNotice, type SkillRetryNotice} from './skillRetryNotice';
 import {ChatMenuKeyHints} from '../chat/composer/ChatMenuKeyHints';
@@ -3277,7 +3278,6 @@ export function App() {
   const quickFileQuerySessionIdRef = useRef(`quick-file-${Date.now()}`);
   const [previewSelectionMenu, setPreviewSelectionMenu, previewSelectionMenuExiting] = useMenuExitState<PreviewSelectionMenuState>();
   const [chatFileLinkMenu, setChatFileLinkMenu, chatFileLinkMenuExiting] = useMenuExitState<ChatFileLinkMenuState>();
-  const previewSelectionMenuRef = useRef<HTMLDivElement | null>(null);
   const previewContextSelectionRef = useRef<PreviewSelectionSnapshot | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -16795,7 +16795,7 @@ export function App() {
         const fileMenuTarget: ManagedFileMenuTarget | null = targetFile ? {
           projectId: linkProjectId,
           projectRoot: linkProjectRoot,
-          targetKind: 'project-file',
+          targetKind: targetFile.relativePath === null ? 'external-file' : 'project-file',
           link: targetFile,
           fileAvailable: true,
           downloadSource: fileDownloadSourceForLink(targetFile),
@@ -17287,7 +17287,7 @@ export function App() {
     openManagedFileContextMenu({
       projectId: targetProjectId,
       projectRoot: targetProject.path,
-      targetKind: 'changed-file',
+      targetKind: targetFile.relativePath === null ? 'external-file' : 'changed-file',
       link: targetFile,
       fileAvailable: file.status.toUpperCase() !== 'D',
       downloadSource: file.status.toUpperCase() !== 'D'
@@ -19881,30 +19881,6 @@ export function App() {
     return () => window.removeEventListener('keydown', handleSearchTargetPickerKeyDown, true);
   }, [confirmSearchTarget, searchTargetAvailability, searchTargetPickerOpen, searchTargetPickerTarget]);
 
-  useEffect(() => {
-    if (!previewSelectionMenu) {
-      return undefined;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (previewSelectionMenuRef.current?.contains(target)) {
-        return;
-      }
-      setPreviewSelectionMenu(null);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPreviewSelectionMenu(null);
-      }
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [previewSelectionMenu]);
-
   const hasCachedWorkspace = projects.length > 0 || !!projectId;
   const keepWorkspaceVisible =
     reconnecting && hasCachedWorkspace;
@@ -20404,7 +20380,7 @@ export function App() {
     return {
       projectId: targetProjectId,
       projectRoot: targetProject.path,
-      targetKind: 'project-file',
+      targetKind: link.relativePath === null ? 'external-file' : 'project-file',
       link,
       fileAvailable: true,
       downloadSource: fileDownloadSourceForLink(link),
@@ -20899,7 +20875,7 @@ export function App() {
       ),
     );
   };
-  const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {
+  const getPreviewTabMenuContext = (tab: PreviewWorkbenchTab) => {
     const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path ?? '';
     const confirmedPath = resolvePreviewDesktopFilePath(tab);
     const fileTarget = confirmedPath
@@ -20927,158 +20903,162 @@ export function App() {
       : attachmentDownloadPayload
         ? {kind: 'session-attachment', ...attachmentDownloadPayload}
         : null;
-    const runProjectFileDesktopAction = (
-      action: DesktopProjectFileAction,
-      failurePrefix: string,
-    ) => {
+    const previewTabTarget = tab.type === 'file'
+      ? {
+          kind: fileTarget && fileTarget.relativePath === null
+            ? 'preview-external-file' as const
+            : 'preview-file' as const,
+          path: fileTarget?.relativePath ?? fileTarget?.absolutePath ?? fileTarget?.path,
+          available: !tab.loading && !tab.error && !!fileTarget,
+          downloadAvailable: !!downloadSource,
+          refreshAvailable: true,
+          refreshDisabled: tab.loading,
+        }
+      : tab.type === 'attachment'
+        ? {
+            kind: 'preview-attachment' as const,
+            available: !tab.loading && !tab.error,
+            downloadAvailable: !!downloadSource,
+          }
+        : tab.type === 'port-relay'
+          ? {kind: 'relay' as const}
+          : tab.type === 'prompt-diff'
+            ? {kind: 'prompt-diff' as const}
+            : {kind: 'git-diff' as const};
+    return {
+      projectRoot,
+      fileTarget,
+      desktopTarget,
+      desktopBridge,
+      downloadSource,
+      model: buildContextMenuModel({
+        surface: 'preview-tab',
+        platform: resolveFileMenuPlatform(desktopBridge),
+        target: previewTabTarget,
+        capabilities: {
+          canOpenInVSCode: canOpenProjectFileInVSCode,
+          canShowInExplorer: canShowProjectFileInFolder,
+          canCopyFile: fileTarget
+            ? canCopyDesktopFile(desktopBridge, fileTarget.absolutePath)
+            : false,
+        },
+      }),
+    };
+  };
+  const handlePreviewTabMenuAction = (
+    tab: PreviewWorkbenchTab,
+    action: ChatFileLinkMenuAction,
+    closeMenu: () => void,
+  ) => {
+    const context = getPreviewTabMenuContext(tab);
+    const {
+      fileTarget,
+      desktopTarget,
+      desktopBridge,
+      downloadSource,
+    } = context;
+    if (action === 'download') {
+      closeMenu();
+      if (downloadSource) downloadManagedFile(tab.projectId, downloadSource);
+      return;
+    }
+    if (action === 'vscode' || action === 'folder') {
       closeMenu();
       setToastMessage('');
-      if (!desktopBridge || !desktopTarget) {
-        return;
-      }
+      if (!desktopBridge || !desktopTarget) return;
+      const failurePrefix = action === 'vscode'
+        ? 'Failed to open file in VS Code'
+        : 'Failed to show file in File Explorer';
       Promise.resolve()
         .then(() => invokeDesktopFileAction(desktopBridge, action, desktopTarget))
         .catch(err => {
           const reason = err instanceof Error ? err.message : String(err);
           setToastMessage(`${failurePrefix}: ${reason}`);
         });
-    };
-    const canExportPreviewHtml =
-      tab.type === 'file' &&
-      !tab.loading &&
-      !tab.error &&
-      !tab.info?.isBinary &&
-      isMarkdownPath(tab.path);
-    const previewShareKind = tab.type === 'file' ? shareKindForPath(tab.path) : undefined;
-    const canCreatePreviewShare =
-      tab.type === 'file' &&
-      !tab.loading &&
-      !tab.error &&
-      !tab.info?.isBinary &&
-      !!previewShareKind;
+      return;
+    }
+    if (action === 'copy-file') {
+      closeMenu();
+      if (!desktopBridge || !fileTarget?.absolutePath) return;
+      copyDesktopFile(desktopBridge, fileTarget.absolutePath)
+        .then(() => setToastMessage('Copied file.'))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`Failed to copy file: ${reason}`);
+        });
+      return;
+    }
+    if (action === 'copy-relative') {
+      closeMenu();
+      const relativePath = fileTarget?.relativePath;
+      if (relativePath === null || relativePath === undefined) return;
+      writeTextToClipboard(relativePath)
+        .then(() => setToastMessage('Copied relative path.'))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`Failed to copy relative path: ${reason}`);
+        });
+      return;
+    }
+    if (action === 'copy-absolute') {
+      copyPreviewWorkbenchTabPath(tab);
+      closeMenu();
+      return;
+    }
+    if (action === 'share') {
+      closeMenu();
+      if (tab.type !== 'file' || fileTarget?.relativePath === null || !fileTarget?.relativePath) return;
+      const kind = shareKindForPath(fileTarget.relativePath);
+      if (!kind) return;
+      openShares({
+        projectId: tab.projectId,
+        path: fileTarget.relativePath,
+        kind,
+        title: tab.title || tab.path.split('/').pop() || 'Document',
+        content: tab.content,
+      });
+      return;
+    }
+    if (action === 'export-html') {
+      closeMenu();
+      if (
+        tab.type !== 'file' ||
+        fileTarget?.relativePath === null ||
+        !fileTarget?.relativePath ||
+        tab.info?.isBinary ||
+        !isMarkdownPath(fileTarget.relativePath)
+      ) return;
+      startMarkdownHtmlExport({
+        content: tab.content,
+        title: tab.title || tab.path.split('/').pop() || 'Markdown document',
+        fileName: buildMarkdownHtmlFileName(fileTarget.relativePath),
+        projectId: tab.projectId,
+        sourcePath: fileTarget.relativePath,
+        key: `file:${tab.projectId}:${fileTarget.relativePath}`,
+      }).catch(() => undefined);
+      return;
+    }
+    if (action === 'refresh') {
+      closeMenu();
+      if (tab.type === 'file') {
+        readChatFilePeek(tab.path, null, tab.projectId).catch(() => undefined);
+      }
+      return;
+    }
+    if (action === 'open-relay') {
+      if (tab.type === 'port-relay') openPreviewWorkbenchTabRelayInBrowser(tab);
+      closeMenu();
+    }
+  };
+  const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {
+    const {model} = getPreviewTabMenuContext(tab);
     return (
-      <>
-        {downloadSource ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="preview-workbench-action-menu-item"
-            onClick={() => {
-              closeMenu();
-              downloadManagedFile(tab.projectId, downloadSource);
-            }}
-          >
-            <Icon name="cloudDownload" />
-            <span>Download</span>
-          </button>
-        ) : null}
-        {canOpenProjectFileInVSCode ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="preview-workbench-action-menu-item"
-            onClick={() => runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')}
-          >
-            <Icon name="code" />
-            <span>Open with VS Code</span>
-          </button>
-        ) : null}
-        {canShowProjectFileInFolder ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="preview-workbench-action-menu-item"
-            onClick={() => runProjectFileDesktopAction('folder', 'Failed to show file in File Explorer')}
-          >
-            <Icon name="folderOpen" />
-            <span>Show in File Explorer</span>
-          </button>
-        ) : null}
-        {tab.type === 'file' ? (
-          <>
-            {canCreatePreviewShare ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="preview-workbench-action-menu-item"
-                onClick={() => {
-                  closeMenu();
-                  openShares({
-                    projectId: tab.projectId,
-                    path: tab.path,
-                    kind: previewShareKind!,
-                    title: tab.title || tab.path.split('/').pop() || 'Document',
-                    content: tab.content,
-                  });
-                }}
-              >
-                <Icon name="share" />
-                <span>Create public share</span>
-              </button>
-            ) : null}
-            {canExportPreviewHtml ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="preview-workbench-action-menu-item"
-                onClick={() => {
-                  closeMenu();
-                  startMarkdownHtmlExport({
-                    content: tab.content,
-                    title: tab.title || tab.path.split('/').pop() || 'Markdown document',
-                    fileName: buildMarkdownHtmlFileName(tab.path),
-                    projectId: tab.projectId,
-                    sourcePath: tab.path,
-                    key: `file:${tab.projectId}:${tab.path}`,
-                  }).catch(() => undefined);
-                }}
-              >
-                <Icon name="share" />
-                <span>Export as HTML</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              role="menuitem"
-              className="preview-workbench-action-menu-item"
-              onClick={() => {
-                copyPreviewWorkbenchTabPath(tab);
-                closeMenu();
-              }}
-            >
-              <Icon name="copy" />
-              <span>Copy absolute path</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="preview-workbench-action-menu-item"
-              onClick={() => {
-                closeMenu();
-                readChatFilePeek(tab.path, null, tab.projectId).catch(() => undefined);
-              }}
-              disabled={tab.loading}
-            >
-              <Icon name="refreshCw" spin={tab.loading} />
-              <span>{tab.loading ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
-          </>
-        ) : null}
-        {tab.type === 'port-relay' ? (
-          <button
-            type="button"
-            role="menuitem"
-            className="preview-workbench-action-menu-item"
-            onClick={() => {
-              openPreviewWorkbenchTabRelayInBrowser(tab);
-              closeMenu();
-            }}
-          >
-            <Icon name="externalLink" />
-            <span>Open relay page in browser</span>
-          </button>
-        ) : null}
-      </>
+      <ContextMenuItems
+        model={model}
+        onAction={action => handlePreviewTabMenuAction(tab, action, closeMenu)}
+        itemClassName="preview-workbench-action-menu-item"
+        separatorClassName="preview-workbench-action-menu-separator"
+      />
     );
   };
   const renderPreviewWorkbenchTabBody = (tab: PreviewWorkbenchTab, mode: 'desktop' | 'mobile', active: boolean) => {
@@ -21462,15 +21442,22 @@ export function App() {
   const previewTabMenuTab = previewTabMenu
     ? previewWorkbenchTabs.find(tab => tab.id === previewTabMenu.tabId) ?? null
     : null;
-  const previewTabContextMenuOverlay = previewTabMenu && previewTabMenuTab ? (
+  const previewTabContextMenuModel = previewTabMenuTab
+    ? getPreviewTabMenuContext(previewTabMenuTab).model
+    : null;
+  const previewTabContextMenuOverlay = previewTabMenu && previewTabMenuTab && previewTabContextMenuModel ? (
     <PreviewTabContextMenu
       x={previewTabMenu.x}
       y={previewTabMenu.y}
+      model={previewTabContextMenuModel}
+      onAction={action => handlePreviewTabMenuAction(
+        previewTabMenuTab,
+        action,
+        () => setPreviewTabMenu(null),
+      )}
       onClose={() => setPreviewTabMenu(null)}
       exiting={previewTabMenuExiting}
-    >
-      {renderPreviewTabActions(previewTabMenuTab, () => setPreviewTabMenu(null))}
-    </PreviewTabContextMenu>
+    />
   ) : null;
   const chatPreviewMobileOverlay = !isWide ? (
     <div
@@ -21633,18 +21620,26 @@ export function App() {
       </div>
     </div>
   ) : null;
-  const previewSelectionContextMenu = previewSelectionMenu ? (
-    <div
-      ref={previewSelectionMenuRef}
-      className={`preview-selection-context-menu${previewSelectionMenuExiting ? ' sl-menu-exit' : ''}`}
-      style={{left: previewSelectionMenu.x, top: previewSelectionMenu.y}}
-      role="menu"
-    >
-      <button type="button" role="menuitem" onClick={copyPreviewSelection}>
-        <Icon name="copy" />
-        <span>Copy</span>
-      </button>
-    </div>
+  const previewSelectionContextMenuModel = previewSelectionMenu
+    ? buildContextMenuModel({
+        surface: 'selection',
+        platform: resolveFileMenuPlatform(getDesktopWindowBridge()),
+        target: {kind: 'selection'},
+      })
+    : null;
+  const previewSelectionContextMenu = previewSelectionMenu && previewSelectionContextMenuModel ? (
+    <ContextMenu
+      x={previewSelectionMenu.x}
+      y={previewSelectionMenu.y}
+      model={previewSelectionContextMenuModel}
+      onAction={action => {
+        if (action === 'copy-selection') copyPreviewSelection();
+      }}
+      onClose={() => setPreviewSelectionMenu(null)}
+      className="preview-selection-context-menu"
+      exiting={previewSelectionMenuExiting}
+      ariaLabel="Selection actions"
+    />
   ) : null;
   const chatFileLinkDesktopBridge = getDesktopWindowBridge();
   const chatFileLinkDesktopTarget = chatFileLinkMenu?.link ? {

@@ -448,6 +448,13 @@
   cursor: default;
 }
 
+.preview-workbench-action-menu-separator,
+.preview-tab-context-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
+}
+
 .preview-tab-context-menu {
   position: fixed;
   z-index: 140;

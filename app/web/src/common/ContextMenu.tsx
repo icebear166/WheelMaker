@@ -71,11 +71,36 @@ export function ContextMenu<Action extends string = FileMenuAction>({
       aria-label={ariaLabel}
       onKeyDown={event => handleMenuKeyDown(event, menuRef.current)}
     >
+      <ContextMenuItems
+        model={model}
+        onAction={onAction}
+        itemClassName={itemClassName}
+        separatorClassName={separatorClassName || `${className}-separator`}
+      />
+    </div>
+  );
+}
+
+type ContextMenuItemsProps<Action extends string = FileMenuAction> = {
+  model: ContextMenuModel<Action>;
+  onAction: (action: Action) => void;
+  itemClassName?: string;
+  separatorClassName?: string;
+};
+
+export function ContextMenuItems<Action extends string = FileMenuAction>({
+  model,
+  onAction,
+  itemClassName,
+  separatorClassName,
+}: ContextMenuItemsProps<Action>) {
+  return (
+    <>
       {model.groups.map((group, groupIndex) => (
         <React.Fragment key={group.id}>
           {groupIndex > 0 ? (
             <div
-              className={separatorClassName || `${className}-separator`}
+              className={separatorClassName}
               role="separator"
             />
           ) : null}
@@ -96,6 +121,6 @@ export function ContextMenu<Action extends string = FileMenuAction>({
           ))}
         </React.Fragment>
       ))}
-    </div>
+    </>
   );
 }

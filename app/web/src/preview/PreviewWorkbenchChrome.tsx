@@ -148,7 +148,7 @@ export function PreviewWorkbenchChrome({
           <Icon name="search" />
         </button>
       ) : null}
-      {actions ? (
+      {mode === 'mobile' && actions ? (
         <div ref={actionsMenuRef} className="preview-workbench-actions">
           <button
             type="button"

@@ -46,11 +46,11 @@
 - Update `app/web/src/app/WorkspaceApp.tsx`, `app/web/src/preview/PreviewTabContextMenu.tsx`, and `app/web/src/preview/PreviewWorkbenchChrome.tsx`.
 - Update `app/web/src/preview/PreviewWorkbenchChrome.test.tsx` and `app/__tests__/web-chat-file-peek-viewer.test.ts`.
 
-- [ ] Add failing tests for the Preview Tab action boundary: ordinary Markdown/HTML file tabs, attachment tabs, Prompt/Git diff or history tabs, Relay tabs, and the fixed grouped order.
-- [ ] Add failing Chrome tests asserting Desktop has no top-right Preview actions button, Desktop Tab right-click still opens the menu, and Mobile retains the ellipsis plus long-press/right-click path.
-- [ ] Refactor Preview Tab actions to build/render the same model and dispatch the existing effects; exclude normal Download, Copy file, Share MD/HTML, and HTML export from diff/history tabs while retaining Refresh and Relay-only actions where applicable.
-- [ ] Make the desktop Chrome omit the actions button and the mobile Chrome keep it targeted at the active tab; keep the existing long-press gesture and make both mobile routes produce the same model/action set.
-- [ ] Run focused Preview tests and checkpoint with `git diff --check` and an explicit task-scoped commit.
+- [x] Add failing tests for the Preview Tab action boundary: ordinary Markdown/HTML file tabs, attachment tabs, Prompt/Git diff or history tabs, Relay tabs, and the fixed grouped order.
+- [x] Add failing Chrome tests asserting Desktop has no top-right Preview actions button, Desktop Tab right-click still opens the menu, and Mobile retains the ellipsis plus long-press/right-click path.
+- [x] Refactor Preview Tab actions to build/render the same model and dispatch the existing effects; exclude normal Download, Copy file, Share MD/HTML, and HTML export from diff/history tabs while retaining Refresh and Relay-only actions where applicable.
+- [x] Make the desktop Chrome omit the actions button and the mobile Chrome keep it targeted at the active tab; keep the existing long-press gesture and make both mobile routes produce the same model/action set.
+- [x] Run focused Preview tests and checkpoint with `git diff --check` and an explicit task-scoped commit.
 
 ## Task 4: Full verification and handoff
 

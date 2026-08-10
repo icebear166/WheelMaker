@@ -267,6 +267,59 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  test('desktop removes the top-right Preview actions button', () => {
+    render(createProps({
+      activeTab: fileTab,
+      actions: <button type="button" role="menuitem">Download</button>,
+    }));
+
+    expect(document.querySelector('[aria-label="Preview actions"]')).toBeNull();
+  });
+
+  test('mobile keeps the ellipsis menu for the active tab', () => {
+    const props = createProps({
+      mode: 'mobile',
+      activeTab: fileTab,
+      actions: <button type="button" role="menuitem">Download</button>,
+      actionsMenuOpen: true,
+    });
+    render(props);
+
+    const trigger = document.querySelector('[aria-label="Preview actions"]') as HTMLButtonElement;
+    expect(trigger).toBeTruthy();
+    act(() => trigger.click());
+    expect(document.querySelector('.preview-workbench-actions-menu [role="menuitem"]')?.textContent)
+      .toBe('Download');
+  });
+
+  test('mobile long press keeps the tab context-menu entry point', () => {
+    jest.useFakeTimers();
+    try {
+      const props = createProps({
+        mode: 'mobile',
+        tabs: [fileTab],
+        activeTab: fileTab,
+        onTabContextMenu: jest.fn(),
+      });
+      render(props);
+      const tab = document.querySelector('.preview-workbench-tab') as HTMLElement;
+      const event = new MouseEvent('pointerdown', {bubbles: true, cancelable: true});
+      Object.defineProperties(event, {
+        pointerType: {configurable: true, value: 'touch'},
+        pointerId: {configurable: true, value: 9},
+        clientX: {configurable: true, value: 13},
+        clientY: {configurable: true, value: 17},
+        button: {configurable: true, value: 0},
+      });
+      act(() => tab.dispatchEvent(event));
+      act(() => jest.advanceTimersByTime(450));
+
+      expect(props.onTabContextMenu).toHaveBeenCalledWith('file:src/a.ts', {x: 13, y: 17});
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('desktop portals the panel into drawerPortalTarget with the external class', () => {
     const host = document.createElement('div');
     host.className = 'chat-preview-drawer-host';

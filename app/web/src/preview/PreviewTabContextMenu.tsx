@@ -1,52 +1,36 @@
-import React, {useEffect, useRef} from 'react';
-import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
+import React from 'react';
+import {ContextMenu} from '../common/ContextMenu';
+import type {ContextMenuModel, FileMenuAction} from '../file/fileMenuModel';
 
 type PreviewTabContextMenuProps = {
   x: number;
   y: number;
+  model: ContextMenuModel;
+  onAction: (action: FileMenuAction) => void;
   onClose: () => void;
   exiting?: boolean;
-  children: React.ReactNode;
 };
 
-export function PreviewTabContextMenu({x, y, onClose, exiting = false, children}: PreviewTabContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    focusFirstMenuItem(menuRef.current);
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    const handleClose = () => onClose();
-    window.addEventListener('pointerdown', handlePointerDown, true);
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('scroll', handleClose, true);
-    window.addEventListener('resize', handleClose);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown, true);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('scroll', handleClose, true);
-      window.removeEventListener('resize', handleClose);
-    };
-  }, [onClose]);
-
+export function PreviewTabContextMenu({
+  x,
+  y,
+  model,
+  onAction,
+  onClose,
+  exiting = false,
+}: PreviewTabContextMenuProps) {
   return (
-    <div
-      ref={menuRef}
+    <ContextMenu
+      x={x}
+      y={y}
+      model={model}
+      onAction={onAction}
+      onClose={onClose}
       className="preview-tab-context-menu"
-      style={{left: x, top: y}}
-      role="menu"
-      aria-label="Preview tab actions"
-      onKeyDown={event => handleMenuKeyDown(event, menuRef.current)}
-    >
-      {children}
-    </div>
+      itemClassName="preview-workbench-action-menu-item"
+      separatorClassName="preview-tab-context-menu-separator"
+      ariaLabel="Preview tab actions"
+      exiting={exiting}
+    />
   );
 }

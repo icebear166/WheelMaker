@@ -131,12 +131,12 @@ describe('web chat file peek viewer', () => {
   test('project file actions use canonical ordinary paths and active prompt diff paths', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
-    const actionsStart = mainTsx.indexOf('const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {');
-    const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
+    const actionsStart = mainTsx.indexOf('const getPreviewTabMenuContext = (tab: PreviewWorkbenchTab) => {');
+    const actionsEnd = mainTsx.indexOf('const handlePreviewTabMenuAction =', actionsStart);
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
-    const runnerStart = actionsBody.indexOf('const runProjectFileDesktopAction = (');
-    const runnerEnd = actionsBody.indexOf('const canExportPreviewHtml =', runnerStart);
-    const runnerBody = actionsBody.slice(runnerStart, runnerEnd);
+    const runnerStart = mainTsx.indexOf('const handlePreviewTabMenuAction =', actionsStart);
+    const runnerEnd = mainTsx.indexOf('const renderPreviewTabActions =', runnerStart);
+    const runnerBody = mainTsx.slice(runnerStart, runnerEnd);
     const disconnectedReturnStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible) {');
     const connectedReturnStart = mainTsx.indexOf('return (\n    <>\n      <ResponsiveShell', disconnectedReturnStart);
     const connectedToastStart = mainTsx.indexOf('{toastMessage ? (', connectedReturnStart);
@@ -156,22 +156,22 @@ describe('web chat file peek viewer', () => {
     expect(actionsBody).not.toContain("const relativePath = tab.type === 'file'");
     expect(actionsBody).toContain('const desktopBridge = getDesktopWindowBridge();');
     expect(actionsBody).toContain('canInvokeDesktopFileAction(');
-    expect(actionsBody).toContain('{canOpenProjectFileInVSCode ? (');
-    expect(actionsBody).toContain('{canShowProjectFileInFolder ? (');
-    expect(actionsBody).toContain("runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')");
-    expect(actionsBody).toContain("runProjectFileDesktopAction('folder', 'Failed to show file in File Explorer')");
+    expect(actionsBody).toContain('fileTarget && fileTarget.relativePath === null');
+    expect(actionsBody).toContain("? 'preview-external-file' as const");
+    expect(actionsBody).toContain(": 'preview-file' as const");
+    expect(actionsBody).toContain("kind: 'git-diff' as const");
+    expect(actionsBody).toContain('canCopyDesktopFile(');
     expect(actionsBody).not.toContain('canOpenPromptDiffInVSCode');
     expect(actionsBody).not.toContain('canShowPromptDiffInFolder');
     expect(actionsBody).not.toContain('runPromptDiffDesktopFileAction');
-    expect(actionsBody).toContain('<span>Open with VS Code</span>');
-    expect(actionsBody).toContain('<span>Show in File Explorer</span>');
-    expect(actionsBody).toContain('<span>Copy absolute path</span>');
+    expect(actionsBody).not.toContain('<span>Open with VS Code</span>');
+    expect(actionsBody).not.toContain('<span>Show in File Explorer</span>');
+    expect(actionsBody).not.toContain('<span>Copy absolute path</span>');
     expect(actionsBody).not.toContain('<span>Open in File tab</span>');
-    expect(actionsBody).toContain("tab.loading ? 'Refreshing...' : 'Refresh'");
     expect(actionsBody).not.toContain("'Rebuild file index'");
     expect(runnerBody).toContain('closeMenu();');
     expect(runnerBody).toContain("setToastMessage('');");
-    expect(runnerBody).toContain('if (!desktopBridge || !desktopTarget) {');
+    expect(runnerBody).toContain('if (!desktopBridge || !desktopTarget) return;');
     expect(runnerBody).toContain('Promise.resolve()');
     expect(runnerBody).toContain('.then(() => invokeDesktopFileAction(desktopBridge, action, desktopTarget))');
     expect(runnerBody).toContain('.catch(err => {');
@@ -181,13 +181,9 @@ describe('web chat file peek viewer', () => {
     expect(runnerBody.indexOf("setToastMessage('');")).toBeLessThan(runnerBody.indexOf('Promise.resolve()'));
     expect(runnerBody.indexOf('.catch(err => {')).toBeLessThan(runnerBody.indexOf('setToastMessage(`${failurePrefix}: ${reason}`);'));
 
-    const vscodeLabelIndex = actionsBody.indexOf('<span>Open with VS Code</span>');
-    const folderLabelIndex = actionsBody.indexOf('<span>Show in File Explorer</span>');
-    const copyPathLabelIndex = actionsBody.indexOf('<span>Copy absolute path</span>');
-    const refreshLabelIndex = actionsBody.indexOf("tab.loading ? 'Refreshing...' : 'Refresh'");
-    expect(vscodeLabelIndex).toBeLessThan(folderLabelIndex);
-    expect(folderLabelIndex).toBeLessThan(copyPathLabelIndex);
-    expect(copyPathLabelIndex).toBeLessThan(refreshLabelIndex);
+    expect(mainTsx).toContain("action === 'copy-relative'");
+    expect(mainTsx).toContain("action === 'copy-file'");
+    expect(mainTsx).toContain("action === 'export-html'");
     expect(disconnectedReturnStart).toBeGreaterThanOrEqual(0);
     expect(connectedReturnStart).toBeGreaterThan(disconnectedReturnStart);
     expect(connectedToastStart).toBeGreaterThan(connectedReturnStart);
@@ -213,6 +209,7 @@ describe('web chat file peek viewer', () => {
 
   test('exports loaded project Markdown, chat file links, and completed replies as HTML', () => {
     const mainTsx = readSourceText(mainPath);
+    const modelTs = readSourceText(path.join(projectRoot, 'web', 'src', 'file', 'fileMenuModel.ts'));
     const stylesCss = readWebStyles(projectRoot);
     const actionsStart = mainTsx.indexOf('const renderPreviewTabActions = (tab: PreviewWorkbenchTab, closeMenu: () => void) => {');
     const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
@@ -238,10 +235,9 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain("'HTML file copied to clipboard.'");
     expect(mainTsx).toContain("'HTML file shared.'");
     expect(mainTsx).toContain("'HTML file downloaded.'");
-    expect(actionsBody).toContain('const canExportPreviewHtml =');
-    expect(actionsBody).toContain('<span>Export as HTML</span>');
-    expect(mainTsx).toContain('htmlActionLabel={');
-    expect(mainTsx).toContain('isMarkdownPath(chatFileLinkMenu.link.path)');
+    expect(mainTsx).toContain("action === 'export-html'");
+    expect(modelTs).toContain("label: 'Export as HTML'");
+    expect(modelTs).toContain("label: 'Share MD/HTML'");
     expect(stylesCss).toContain('.markdown-html-export-host {');
     expect(stylesCss).toContain('.markdown-html-export-surface {');
     const hostRule = cssRuleBlock(stylesCss, '.markdown-html-export-host');
@@ -641,12 +637,14 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);');
     expect(mainTsx).not.toContain('handlePreviewProjectIndexRebuild');
     expect(mainTsx).not.toContain("'Rebuild file index'");
-    expect(mainTsx).toContain("tab.loading ? 'Refreshing...' : 'Refresh'");
+    expect(mainTsx).toContain('refreshDisabled: tab.loading');
+    expect(mainTsx).toContain("action === 'refresh'");
     expect(mainTsx).toContain('readChatFilePeek(tab.path, null, tab.projectId)');
     expect(mainTsx).toContain('actionsMenuOpen={previewWorkbenchActionsMenuOpen}');
     expect(mainTsx).toContain('onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}');
     expect(mainTsx).toContain('onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}');
     expect(mainTsx).not.toContain('schedule' + 'ProjectIndexPoll');
+    expect(chromeTsx).toContain('mode === \'mobile\' && actions');
 
     expect(stylesCss).toContain('.preview-workbench-actions-menu');
     expect(stylesCss).toContain('.preview-workbench-action-menu-item');
@@ -683,7 +681,8 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const handlePreviewSelectionContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {');
     expect(mainTsx).toContain("activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff'");
     expect(mainTsx).toContain('navigator.clipboard.writeText(previewSelectionMenu.text)');
-    expect(mainTsx).toContain('className={`preview-selection-context-menu${previewSelectionMenuExiting ? \' sl-menu-exit\' : \'\'}`}');
+    expect(mainTsx).toContain('const previewSelectionContextMenuModel = previewSelectionMenu');
+    expect(mainTsx).toContain('className="preview-selection-context-menu"');
 
     expect(stylesCss).toContain('.preview-workbench-search-bar');
     expect(stylesCss).toContain('.quick-file-search-overlay');
@@ -700,7 +699,6 @@ describe('web chat file peek viewer', () => {
       'if (!previewSearchOpen || previewSearchMatches.length === 0) {',
       'if (!quickFileOpen) {',
       'const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {',
-      'if (!previewSelectionMenu) {',
     ].forEach(pattern => {
       const hookIndex = mainTsx.indexOf(pattern);
       expect(hookIndex).toBeGreaterThanOrEqual(0);
@@ -875,6 +873,9 @@ describe('web chat file peek viewer', () => {
     const menuTsx = readSourceText(
       path.join(projectRoot, 'web', 'src', 'chat', 'ChatFileLinkContextMenu.tsx'),
     );
+    const modelTs = readSourceText(
+      path.join(projectRoot, 'web', 'src', 'file', 'fileMenuModel.ts'),
+    );
 
     expect(mainTsx).toContain("import {ChatFileLinkContextMenu");
     expect(mainTsx).toContain(
@@ -895,9 +896,10 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('canCopyDesktopFile(');
     expect(mainTsx).toContain('copyDesktopFile(');
     expect(mainTsx).toContain("setToastMessage('Copied file.')");
-    expect(mainTsx).toContain('htmlActionLabel={');
-    expect(mainTsx).toContain("'Copy file as HTML'");
-    expect(mainTsx).toContain("'Export as HTML'");
+    expect(mainTsx).toContain('chatFileLinkContextMenuModel');
+    expect(mainTsx).not.toContain("'Copy file as HTML'");
+    expect(modelTs).toContain("label: 'Export as HTML'");
+    expect(modelTs).toContain("label: 'Share MD/HTML'");
     expect(mainTsx).toContain('absolutePath: chatFileLinkMenu.link.absolutePath');
     expect(mainTsx).toContain('relativePath: chatFileLinkMenu.link.relativePath');
     expect(mainTsx).toContain("setToastMessage('Copied relative path.')");
@@ -909,8 +911,8 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.chat-file-link-context-menu-separator');
     expect(stylesCss).toContain('color: var(--text-secondary);');
     expect(stylesCss).toContain('outline: 2px solid var(--focus-ring-color);');
-    expect(menuTsx).toContain("{action: 'preview', icon: 'eye', label: 'Preview file'}");
-    expect(menuTsx).toContain("{action: 'copy-file', icon: 'copy', label: 'Copy file'}");
+    expect(menuTsx).toContain("from '../common/ContextMenu'");
+    expect(menuTsx).toContain('model: ContextMenuModel');
     expect(menuTsx).not.toContain('onLongPress');
   });
 
