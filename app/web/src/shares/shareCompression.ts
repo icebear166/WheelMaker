@@ -27,10 +27,11 @@ export async function compressShareContent(html: string): Promise<ShareCompresse
   let compressed: Uint8Array;
   try {
     const stream = new CompressionStreamConstructor('gzip');
+    const compressedPromise = new Response(stream.readable).arrayBuffer();
     const writer = stream.writable.getWriter();
     await writer.write(new TextEncoder().encode(html));
     await writer.close();
-    compressed = new Uint8Array(await new Response(stream.readable).arrayBuffer());
+    compressed = new Uint8Array(await compressedPromise);
   } catch (error) {
     throw new Error(`Unable to gzip share HTML: ${error instanceof Error ? error.message : String(error)}`);
   }

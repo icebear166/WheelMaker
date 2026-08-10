@@ -17,6 +17,24 @@ describe('share compression', () => {
     expect(result.content).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
   });
 
+  test('consumes compression output while writes are backpressured', async () => {
+    let state = 0x12345678;
+    let html = '';
+    for (let index = 0; index < 64 * 1024; index += 1) {
+      state ^= state << 13;
+      state ^= state >>> 17;
+      state ^= state << 5;
+      html += String.fromCharCode(33 + ((state >>> 0) % 94));
+    }
+    const result = await Promise.race([
+      compressShareContent(html),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('compression did not drain output')), 500);
+      }),
+    ]);
+    expect(result.compressedBytes).toBeGreaterThan(0);
+  });
+
   test('rejects browsers without CompressionStream', async () => {
     const original = (globalThis as typeof globalThis & {CompressionStream?: unknown}).CompressionStream;
     Object.defineProperty(globalThis, 'CompressionStream', {value: undefined, configurable: true});
