@@ -27,7 +27,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 
 ```text
 ~/.wheelmaker/
-├─ config.json                         # Hub 自己的配置，含 Hub publicUrl/share 设置
+├─ config.json                         # Hub 共享业务配置，含 publicUrl/Registry/Share/Relay/log
 ├─ web/                                # Registry Web 根目录
 ├─ release-server/
 │  ├─ versions/<source-sha>/           # Release Server 版本
@@ -35,34 +35,48 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 │  └─ data/                            # Release Server 公开文件与 staging
 ├─ shares/public/                      # Hub 生成的公开分享文件
 └─ gateway/
-   ├─ config.json                      # Gateway 唯一配置：registry/release/share
+   ├─ config.json                      # Gateway 专属配置：ACME/TLS/Release
    ├─ generated/caddy.json             # 聚合后的运行时配置
    ├─ data/                            # Caddy ACME 状态
    └─ state/release.json               # Gateway 自己的安装状态
 ```
 
-Gateway 只读取自己的 `config.json`。部署 Gateway 时如果文件不存在，会一次性生成完整
-配置；三个 section 的 `publicUrl` 默认都为空，空值表示该路由不生成，之后直接填入
-地址即可。Gateway 从 `--home`（通常为 `~/.wheelmaker/gateway`）的父目录推导 Registry
+Gateway 读取自己的 `config.json`，并读取 `--home`（通常为
+`~/.wheelmaker/gateway`）父目录下的 Hub `config.json`。部署 Gateway 时如果专属配置
+文件不存在，会一次性生成 ACME、各路由 TLS 和完整 Release 配置；Registry/Share 的
+公网 URL、Relay 端口和日志级别不在此文件重复保存。Gateway 从父目录推导 Registry
 Web、Release data 和 Share public 根目录：
 
 ```text
-~/.wheelmaker/gateway/config.json     # Gateway 唯一事实源
+~/.wheelmaker/config.json             # Hub 共享业务配置事实源
+~/.wheelmaker/gateway/config.json     # Gateway 专属配置事实源
 ~/.wheelmaker/web/                    # registry 路由的静态根目录
 ~/.wheelmaker/release-server/data/    # release 路由的服务数据
 ~/.wheelmaker/shares/public/          # share 路由的静态根目录
 ```
 
-配置形状如下；Gateway 的全局 `acme`、`log`、`relay` 以及三个完整 section 都由同一份
-文件承载：
+Hub 主配置的共享部分形状如下：
+
+```json
+{
+  "publicUrl": "https://workspace.example.com",
+  "log": {"level": "warn"},
+  "registry": {
+    "listen": true,
+    "port": 9630,
+    "relayPort": 28810,
+    "share": {"publicUrl": "https://share.example.com"}
+  }
+}
+```
+
+Gateway 专属配置形状如下；Registry 与 Share section 只承载 TLS 边缘参数：
 
 ```json
 {
   "schema": 1,
   "acme": {"email": ""},
-  "log": {"level": "info"},
-  "relay": {"listenPort": 0},
-  "registry": {"publicUrl": "", "tls": {"certificateFile": "", "keyFile": ""}},
+  "registry": {"tls": {"certificateFile": "", "keyFile": ""}},
   "release": {
     "publicUrl": "",
     "listen": "127.0.0.1:9680",
@@ -70,27 +84,30 @@ Web、Release data 和 Share public 根目录：
     "tokenSha256": "",
     "tls": {"certificateFile": "", "keyFile": ""}
   },
-  "share": {"publicUrl": "", "tls": {"certificateFile": "", "keyFile": ""}}
+  "share": {"tls": {"certificateFile": "", "keyFile": ""}}
 }
 ```
 
 Release Server 的运行配置是 Gateway `config.json.release`，不再有
 `~/.wheelmaker/release-server/config.json` 或 `gateway/sites/*.json`。Release Server
 部署器从 channel URL 更新完整配置中的 `release.publicUrl`，保留 `listen`、`dataRoot`、
-`tokenSha256`、TLS 和其他 section；旧的 Release Server `config.json` 只用于一次性迁移。
-Hub 自己的 `config.json` 仍由 Hub 管理，Gateway 不读取它；Hub 的 Share 运行逻辑也只
-读取 Hub 自己的配置。需要公开 Share 时，运维者在 Gateway `share.publicUrl` 中填入同一
-origin，两个组件之间不通过读取对方文件同步。
+`tokenSha256`、TLS 和其他 Gateway 专属字段；旧的 Release Server `config.json` 只用于
+一次性迁移。Hub 的 `config.json` 仍由部署器或运维者维护，Gateway 读取其中的共享字段，
+但不写入 Hub 配置。
 
 ## 公开地址与路由
 
-- `registry.publicUrl`、`release.publicUrl` 和 `share.publicUrl` 都是 Gateway 路由地址；
-  留空就是显式 disabled，不会生成对应 host route。填入合法 URL 后，Gateway 轮询
-  `config.json` 并热加载。
-- Hub 的 `~/.wheelmaker/config.json.publicUrl` 只用于 Hub 自己连接 Registry，Gateway
-  不读取；Hub 部署的 `--public-url` 不会改变 Gateway 配置。
+- 顶层 `publicUrl` 是 Hub Reporter 连接 Registry 的 origin；本机 `registry.listen:true`
+  时，它也是 Gateway Registry route 的 origin。远程 Worker 的 `publicUrl` 仅用于连接
+  远程 Registry，不生成本机 Registry route。
+- `registry.share.publicUrl` 是 Registry 生成 Share 链接和 Gateway 生成 Share route 的
+  唯一 Share origin。清空它只停用 Share；Registry 在 `share.create/list` 请求边界重新
+  读取该字段。
 - Release Server 的地址来自 `scripts/release/channel.json`，Release Server 部署只更新
   Gateway `config.json` 的 `release.publicUrl`，不生成站点文件，也不改 Hub 配置。
+- Gateway 同时轮询 Hub `config.json` 与自身 `config.json` 并热加载合法变化；无效的
+  Registry/Share 派生字段只禁用受影响 route，Release route 保留上一份有效专属配置。
+  Hub 和 Registry 不监听配置文件，主配置变化按现有启动/重启边界生效。
 - Gateway 只接受 HTTP(S) origin；`https://` 且未指定用户证书时使用 Caddy 自动证书，
   显式证书和私钥必须同时存在。HTTP 不启用 TLS，也不生成 HTTPS 跳转。
 - 聚合时按大小写不敏感的 hostname 检查唯一性。任意两个非空 URL 使用相同 hostname
@@ -111,20 +128,20 @@ origin，两个组件之间不通过读取对方文件同步。
 
 ## 固定端口 Port Relay
 
-Gateway 的 `config.json` 可声明：
+Hub 主配置的 `registry` section 可声明：
 
 ```json
 {
-  "relay": {
-    "listenPort": 28810
+  "registry": {
+    "relayPort": 28810
   }
 }
 ```
 
-`relay.listenPort` 是宿主机唯一的 Relay 公网端口。字段缺失或为 `0` 时不生成 Relay
+`registry.relayPort` 是宿主机唯一的 Relay 公网端口。字段缺失或为 `0` 时不生成 Relay
 listener；配置端口必须避开 Gateway 的 `80/443`、Registry 的 `9630`、Release Server
-的 `9680` 和 Caddy admin 的 `2019`。Relay listener 依附 Registry route；没有有效
-Registry `publicUrl` 时不生成该 listener，但不影响其他 route。
+的 `9680` 和 Caddy admin 的 `2019`。Relay listener 依附本机 Registry route；
+`registry.listen:false` 或没有有效顶层 `publicUrl` 时不生成该 listener，但不影响其他 route。
 
 Gateway 在固定端口按 Registry `publicUrl` 的 scheme 监听 HTTP 或 HTTPS，把所有 URI
 （包括普通页面、绝对资源路径、query 和 WebSocket）反向代理到 Registry
@@ -132,10 +149,10 @@ Gateway 在固定端口按 Registry `publicUrl` 的 scheme 监听 HTTP 或 HTTPS
 `X-WheelMaker-Relay: 1`；Registry 以该标记选择 Relay 数据面，Relay access code 仍是
 实际认证机制。
 
-Gateway 与 Registry 各自管理配置。Gateway 的 `relay.listenPort` 只决定边缘 listener；
-Registry worker 只读取 Hub 自己的 `config.json.registry.relayPort`。两者都为 `0` 时使用
-client-managed standalone 模式；若要由 Gateway 提供固定 Relay，运维者需要在两边分别填入
-相同端口，任何一边变化都不会自动修改另一边。
+Gateway 与 Registry 共同读取 Hub `config.json.registry.relayPort`，两者都由这一字段
+决定固定 Relay 端口；为 `0` 时使用 client-managed standalone 模式。Gateway 只负责边缘
+listener，Registry 只负责本机 Relay 控制，配置变更由 Gateway 热加载、由 Registry 在
+重启后读取。
 
 Gateway 配置的有效变更按 hot-load 流程应用；无效配置或新端口绑定失败时保留上一份有效
 Caddy 配置。公网 DNS、防火墙、NAT、安全组和证书申请前置条件仍由部署者负责。

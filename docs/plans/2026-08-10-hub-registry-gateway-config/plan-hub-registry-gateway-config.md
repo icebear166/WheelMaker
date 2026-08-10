@@ -24,17 +24,17 @@
 
 **Acceptance:** The four confirmed pages describe `~/.wheelmaker/config.json` as the shared source, `registry.share.publicUrl` as the Share origin, Gateway-only dual-file hot loading, Hub/Registry startup boundaries, and Gateway-owned Release settings. No unconfirmed behavior or protocol change is added.
 
-- [ ] **Step 1: Update the confirmed pages**
+- [x] **Step 1: Update the confirmed pages**
 
   Rewrite only the existing configuration ownership, route derivation, Share boundary, Relay boundary, and Release deployment statements that conflict with the approved spec. Preserve each page's first-line summary and existing unrelated knowledge.
 
-- [ ] **Step 2: Verify Wiki structure**
+- [x] **Step 2: Verify Wiki structure**
 
   Run `rg -n '^> 摘要：|registry\.share\.publicUrl|双配置|hot-load|热加载|Release-only' docs/wiki/architecture/gateway.md docs/wiki/architecture/server-runtime.md docs/wiki/features/public-sharing.md docs/wiki/release-and-build/release.md`.
 
   Expected: every modified page still begins with its summary and contains the relevant canonical ownership/lifecycle statements.
 
-- [ ] **Step 3: Git checkpoint**
+- [x] **Step 3: Git checkpoint**
 
   After the Wiki diff passes review, checkpoint only the four Wiki pages.
 

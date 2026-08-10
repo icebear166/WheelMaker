@@ -38,14 +38,16 @@
 Gateway 产物发布与目标机入口配置是两条独立控制流。目标机的普通完整部署与日常
 `deploy.mjs update` 都只管理 Hub 自己的配置、Web 和运行状态，不读取或写入 Gateway；
 也不再通过 HubState 暴露 Gateway 更新按钮。唯一安装/升级入口是独立的幂等
-`deploy.mjs gateway`，start/stop 包装器只控制 Gateway 运行状态。Gateway 的唯一配置是
-部署用户的 `~/.wheelmaker/gateway/config.json`，其中完整承载 `registry`、`release`、
-`share` 三个 section；三个 `publicUrl` 为空表示对应路由禁用。
+`deploy.mjs gateway`，start/stop 包装器只控制 Gateway 运行状态。Hub 共享业务配置位于
+部署用户的 `~/.wheelmaker/config.json`，其中的 `publicUrl`、`registry.share.publicUrl`、
+`registry.relayPort` 和 `log.level` 同时供本机 Gateway 使用；Gateway 专属配置位于
+`~/.wheelmaker/gateway/config.json`，只承载 ACME、各路由 TLS 和 Release 运行参数。
 
-业务服务不再接受 Gateway selector。Hub 的 `config.json.publicUrl` 只属于 Hub 自己；完整
-部署的 `--public-url` 不写 Gateway。Release Server 的 `publicUrl` 来自 release channel，
-部署时只更新 `~/.wheelmaker/gateway/config.json` 的 `release` 对象，保留其他 section，
-不生成 `sites/*.json`，也不读写 Hub 配置。Gateway 运行时只读取这一个配置文件并热加载。
+业务服务不再接受 Gateway selector。完整部署的 `--public-url` 写入 Hub 主配置，Gateway
+在本机 `registry.listen:true` 时复用该 `publicUrl` 生成 Registry route。Release Server
+的 `publicUrl` 来自 release channel，部署时只更新 `~/.wheelmaker/gateway/config.json`
+的 `release` 对象，保留 TLS 和其他 Gateway 专属字段，不生成 `sites/*.json`。Gateway
+同时读取两份配置并热加载；Hub 与 Registry 不监听主配置，按既有启动/重启边界生效。
 
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
 

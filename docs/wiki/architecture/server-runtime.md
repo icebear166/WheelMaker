@@ -56,8 +56,8 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 11. Provider 可用性依赖 Hub 本地运行时配置时，AgentFactory 必须是 Hub-scoped 实例；项目上报与 Session 创建必须使用同一个 Factory，不能从进程级全局 Factory 重新推导。
 12. Hub 配置或 Agent CLI 变化时，Hub 原子替换共享 AgentFactory 内的 provider 注册表，不替换 Client/Session 持有的 Factory 指针。已启动的 AgentInstance 保持运行并继续使用创建时的进程环境；新建、恢复或重新连接的 Session 使用刷新后的 provider 与 Key。
 13. Hub 的 Restart 是托管 runtime 级别的重启，不是旧 guardian 重新拉起单个 worker。Hub 先返回 action 响应，再通过 `deploy.mjs runtime restart` 请求 systemd、launchd 或 Windows Task 重新创建 guardian；因此新 worker 使用服务管理器当前提供的环境变量。当前 guardian 同时管理 Registry worker 时，两者一并重启。
-14. `config.json` 的身份字段统一位于顶层 `token`、`hubId`。`registry` 只保留本机 listener 的 `listen`、`port`；`registry.server` 是历史字段，不再由运行时读取。Hub Reporter 使用可选的顶层 `publicUrl` 生成 `wss://.../ws`，省略时自动连接 `ws://127.0.0.1:<registry.port>/ws`；入口 Registry listener 始终绑定 loopback。
-15. 既有配置由 Go 共享配置层在 Hub、Registry worker 和 guardian 启动前自动迁移。迁移使用配置锁、原子写回和私有 pre-migration 副本，禁止交互；回环历史 `server` 可直接删除并采用 loopback，非回环历史地址在缺少 `publicUrl` 时自动迁移到 `publicUrl`，已有 `publicUrl` 始终优先。
+14. `config.json` 的身份字段统一位于顶层 `token`、`hubId`。`registry` 保留本机 listener 的 `listen`、`port`、固定 `relayPort` 和 `share.publicUrl`；`registry.server` 是历史字段，不再由运行时读取。Hub Reporter 使用可选的顶层 `publicUrl` 生成 `wss://.../ws`，省略时自动连接 `ws://127.0.0.1:<registry.port>/ws`；入口 Registry listener 始终绑定 loopback。Hub、Registry 和本机 Gateway 共享 `log.level`。
+15. 既有配置由 Go 共享配置层在 Hub、Registry worker 和 guardian 启动前自动迁移。迁移使用配置锁、原子写回和私有 pre-migration 副本，禁止交互；回环历史 `server` 可直接删除并采用 loopback，非回环历史地址在缺少 `publicUrl` 时自动迁移到 `publicUrl`，已有 `publicUrl` 始终优先；旧顶层 `share` 移到 `registry.share`，新位置优先。
 
 ## 3. Responsibilities
 
@@ -72,9 +72,17 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 ### Runtime configuration
 
 - `publicUrl` is the optional public HTTPS origin for the Hub's Registry connection. A missing
-  value is the explicit local-only mode and resolves to the loopback Registry port. Gateway
-  `registry.publicUrl` is a separate Gateway-owned route setting and is not read from this file.
+  value is the explicit local-only mode and resolves to the loopback Registry port. When
+  `registry.listen` is true, the local Gateway reads the same value as its Registry route origin;
+  a remote Worker does not create a local Gateway route.
 - `registry.listen` controls whether this process starts the local Registry listener; `registry.port` is its port and the loopback fallback port.
+- `registry.relayPort` is the fixed Relay port shared by the local Registry and Gateway; `0`
+  selects client-managed standalone mode. `registry.share.publicUrl` is the canonical Share
+  origin used by Registry link generation and the Gateway Share route.
+- `log.level` is shared by Hub, Registry, and local Gateway. Gateway watches both this file and
+  its own config for Caddy hot loading; Hub and Registry do not watch the file and use existing
+  startup/restart boundaries. Registry Share requests reread `registry.share.publicUrl` at the
+  `share.create/list` boundary, which is not a general Registry hot reload.
 - The listener always binds loopback. Gateway/Nginx is responsible for exposing `/` and `/ws` through `publicUrl`.
 - Go owns legacy config migration. MJS preserves legacy fields on existing installations; it only writes the canonical top-level shape for new installations or an explicitly supplied public URL.
 
