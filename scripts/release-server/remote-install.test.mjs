@@ -38,11 +38,14 @@ test('remote installer does not depend on upload transport executable bits', () 
   assert.doesNotMatch(script, /\[ -x "\$upload_dir\/wheelmaker-release-server" \]/);
 });
 
-test('installer provisions the release section in Gateway config instead of a site file', () => {
+test('installer provisions schema 2 wm_sites.release in Gateway config instead of a site file', () => {
   const script = buildRemoteInstallScript();
   assert.match(script, /gateway_home="\$deploy_home\/\.wheelmaker\/gateway"/);
   assert.match(script, /gateway_config_path="\$gateway_home\/config\.json"/);
-  assert.match(script, /"release":\{"publicUrl"/);
+  assert.match(script, /"schema":2/);
+  assert.match(script, /"wm_sites":\{"tls":\{"certificateFile":"","keyFile":""\},"registry":\{"urlMode":"sync_hub"\},"release":\{"publicUrl"/);
+  assert.match(script, /"share":\{"urlMode":"sync_hub"\}/);
+  assert.doesNotMatch(script, /"schema":1/);
   assert.match(script, /configure-public-url --config "\$gateway_config_candidate" --public-url "\$public_url"/);
   assert.match(script, /validate-config --config "\$gateway_config_candidate"/);
   assert.doesNotMatch(script, /release-server\/config\.json|gateway\/sites\/release-server\.json/);
@@ -59,7 +62,7 @@ test('ordinary cutover rolls back only user-owned state', () => {
   assert.doesNotMatch(script, /ACL|acl_backup|root_command systemctl/);
 });
 
-test('remote installer owns only its user service and release section', () => {
+test('remote installer owns only its user service and wm_sites.release', () => {
   const script = buildRemoteInstallScript();
   assert.match(script, /versions_home="\$release_home\/versions"/);
   assert.match(script, /unit_home="\$deploy_home\/\.config\/systemd\/user"/);

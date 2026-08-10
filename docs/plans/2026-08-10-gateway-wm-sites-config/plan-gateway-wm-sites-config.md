@@ -167,23 +167,39 @@ Invoke `git-workflow-preferences` in checkpoint mode for the listed Release Serv
 ### Task 5: Complete integration verification and task records
 
 **Files:**
+- Modify: `scripts/release-server/remote-install.mjs`
+- Modify: `scripts/release-server/remote-install.test.mjs`
 - Modify: `docs/plans/2026-08-10-gateway-wm-sites-config/plan-gateway-wm-sites-config.md`
 
 **Acceptance:** Every spec criterion and plan checkbox is satisfied, all Go and deployment tests pass, formatting is clean, and no old Gateway shape remains in current source or the four approved Wiki pages.
 
-- [ ] **Step 1: Run the complete Go suite**
+- [x] **Step 1: Cover the Release remote installer's fresh Gateway config**
+
+Update the remote-installer regression to require canonical Gateway schema 2 with `wm_sites.tls`, `wm_sites.registry.urlMode`, `wm_sites.release`, and `wm_sites.share.urlMode`. Run `node --test scripts/release-server/remote-install.test.mjs` before implementation.
+
+Expected: FAIL because the installer still emits Gateway schema 1.
+
+Replace only the installer's fresh-config template with the canonical schema 2 structure, leaving existing schema 1 files to the Release Server validator's rejection path. Run the focused test again.
+
+Expected: PASS.
+
+- [ ] **Step 2: Run the complete Go suite**
 
 Run from `server/`: `go test ./...`
 
 Expected: PASS for every package.
 
-- [ ] **Step 2: Run every deployment test**
+- [ ] **Step 3: Run every deployment and Release script test**
 
 Run from the repository root in PowerShell: `$deployTests = @(Get-ChildItem -LiteralPath 'scripts/deploy' -Filter '*.test.mjs' -File | Select-Object -ExpandProperty FullName); node --test $deployTests`
 
 Expected: PASS with zero failed tests.
 
-- [ ] **Step 3: Run formatting, retired-shape, placeholder, and diff checks**
+Run the same command pattern for `scripts/release-server` and `scripts/release`.
+
+Expected: PASS with zero failed tests.
+
+- [ ] **Step 4: Run formatting, retired-shape, placeholder, and diff checks**
 
 Run: `gofmt -l server/internal/gateway server/internal/releaseserver server/cmd/wheelmaker-gateway server/cmd/wheelmaker-release-server`
 
@@ -201,10 +217,10 @@ Run: `git diff --check`
 
 Expected: PASS.
 
-- [ ] **Step 4: Review the approved scope and Wiki targets**
+- [ ] **Step 5: Review the approved scope and Wiki targets**
 
 Confirm every acceptance item in `docs/scope/2026-08-10-gateway-wm-sites-config.md` maps to passing tests or an inspected diff, and confirm only the four approved Wiki files were changed under `docs/wiki`.
 
-- [ ] **Step 5: Final checkpoint and Git finalization**
+- [ ] **Step 6: Final checkpoint and Git finalization**
 
 Mark all completed plan steps, invoke `git-workflow-preferences` checkpoint for the verification record, then invoke finalize with the actual result. Follow configured push, local `main` merge, main push, and successful branch/worktree cleanup behavior.

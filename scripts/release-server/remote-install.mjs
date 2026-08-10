@@ -217,7 +217,7 @@ if [ -f "$gateway_config_path" ]; then
 elif [ -f "$legacy_config_path" ]; then
   "$stage_binary" migrate-config --legacy-config "$legacy_config_path" --gateway-config "$gateway_config_candidate" --data-root "$data_root"
 else
-  printf '{"schema":1,"acme":{"email":""},"log":{"level":"info"},"relay":{"listenPort":0},"registry":{"publicUrl":"","tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":"","listen":"127.0.0.1:9680","dataRoot":"%s","tokenSha256":"","tls":{"certificateFile":"","keyFile":""}},"share":{"publicUrl":"","tls":{"certificateFile":"","keyFile":""}}}\n' "$data_root" > "$gateway_config_candidate"
+  printf '{"schema":2,"acme":{"email":""},"wm_sites":{"tls":{"certificateFile":"","keyFile":""},"registry":{"urlMode":"sync_hub"},"release":{"publicUrl":"","listen":"127.0.0.1:9680","dataRoot":"%s","tokenSha256":""},"share":{"urlMode":"sync_hub"}}}\n' "$data_root" > "$gateway_config_candidate"
 fi
 chmod 0600 "$gateway_config_candidate"
 "$stage_binary" configure-public-url --config "$gateway_config_candidate" --public-url "$public_url" --data-root "$data_root"
