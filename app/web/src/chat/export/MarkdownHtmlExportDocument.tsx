@@ -21,8 +21,10 @@ import {waitForMarkdownExportReady} from './chatMarkdownImageExport';
 import {
   MARKDOWN_EXPORT_CONTENT_CLASS_NAME,
   MARKDOWN_EXPORT_CONTENT_STYLE,
-  buildStandaloneMarkdownHtmlDocument,
 } from './markdownHtmlExport';
+import {serializeMarkdownHtmlExportSurface} from './markdownHtmlExportSurface';
+
+export {serializeMarkdownHtmlExportSurface} from './markdownHtmlExportSurface';
 
 type ThemeMode = 'dark' | 'light';
 
@@ -241,20 +243,8 @@ export function MarkdownHtmlExportSurface({
         if (fatalWarning) {
           throw new Error(fatalWarning.message);
         }
-        const documentNode = surface.querySelector('.markdown-html-export-document');
-        if (!documentNode) {
-          throw new Error('HTML export surface is unavailable.');
-        }
-        const body = documentNode.cloneNode(true) as HTMLElement;
-        body.removeAttribute('data-markdown-export-pending');
-        for (const pendingNode of Array.from(body.querySelectorAll('[data-markdown-export-pending]'))) {
-          pendingNode.removeAttribute('data-markdown-export-pending');
-        }
         onComplete({
-          html: buildStandaloneMarkdownHtmlDocument({
-            title: request.title,
-            bodyHtml: body.innerHTML,
-          }),
+          html: serializeMarkdownHtmlExportSurface(surface, request.title),
           unresolvedImageUrls: Array.from(imageWarningsRef.current.keys()),
         });
       } catch (error) {

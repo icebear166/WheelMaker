@@ -1,5 +1,6 @@
 import {RegistryClient} from './RegistryClient';
 import {RegistryMethods, RegistryProtocolVersion} from './registryMethods';
+import {preflightShareEnvelope} from '../shares/shareCompression';
 import {
   normalizeServerSettings,
   type ServerSettings,
@@ -1190,6 +1191,7 @@ export class RegistryRepository {
   }
 
   async createShare(payload: RegistryShareCreatePayload): Promise<RegistryShareCreateResponse> {
+    preflightShareEnvelope(payload);
     const response = await this.client.request({
       method: RegistryMethods.ShareCreate,
       payload,
