@@ -273,6 +273,8 @@ type Server struct {
 
 	speech *speechService
 	tts    *ttsService
+
+	shareStore *shareStore
 }
 
 type connectionState struct {
@@ -415,6 +417,9 @@ func New(cfg Config) *Server {
 	s.codexRadarEfficiencyLoader = codexRadarFetcher.load
 	s.speech = newSpeechService(speechprovider.NewVolcengineProvider(), s.resolveVolcengineASRSecret)
 	s.tts = newTTSService(ttsprovider.NewClient(), s.resolveMiMoTTSSecret)
+	if strings.TrimSpace(cfg.StateDir) != "" {
+		s.shareStore = newShareStore(shareStoreConfig{stateDir: cfg.StateDir})
+	}
 	relayPortProvider := cfg.RelayPortProvider
 	if relayPortProvider == nil && cfg.GatewayConfigPath != "" {
 		relayPortProvider = newGatewayRelayPortProvider(cfg.GatewayConfigPath)
@@ -450,6 +455,11 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	if err := s.webSessions.Load(); err != nil {
 		return fmt.Errorf("registry sessions: %w", err)
+	}
+	if s.shareStore != nil {
+		if err := s.shareStore.start(ctx); err != nil {
+			return fmt.Errorf("registry shares: %w", err)
+		}
 	}
 	registryLogger("").Info("listening on %s", s.cfg.Addr)
 	srv := newRegistryHTTPServer(s.cfg.Addr, s.Handler())
@@ -714,6 +724,7 @@ func shouldHandleRegistryRequestAsync(method string) bool {
 		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubDebugWebTransfer) ||
 		rp.RegistryHubStateMethod(method) ||
 		rp.RegistryMethodHasRoute(method, rp.RegistryRouteReleasePublish) ||
+		rp.RegistryMethodHasRoute(method, rp.RegistryRouteShare) ||
 		isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
@@ -727,6 +738,9 @@ func registryRequestQueueKey(method string) string {
 	}
 	if rp.RegistryServerDataMethod(method) {
 		return "server.data"
+	}
+	if rp.RegistryMethodHasRoute(method, rp.RegistryRouteShare) {
+		return "share"
 	}
 	return ""
 }
@@ -755,6 +769,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleHubReleaseNotify(state.peer, state, in)
 	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteHubDebugWebTransfer):
 		s.handleHubDebugWebTransfer(state.peer, state, in)
+	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteShare):
+		s.handleShareRequest(state, in)
 	case rp.RegistryRelayControlMethod(in.Method):
 		s.handleRelayRequest(state.peer, state, in)
 	case rp.RegistryHubStateMethod(in.Method) ||

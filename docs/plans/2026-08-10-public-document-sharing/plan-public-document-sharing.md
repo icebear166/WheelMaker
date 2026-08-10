@@ -50,12 +50,12 @@
 
 **Acceptance:** Authenticated clients can create, list, and idempotently delete records; content is bounded/decompressed and atomically published under `shares`; startup and nearest-deadline cleanup remove expired/corrupt/orphan data; public reads never enter Registry HTTP; current config/domain is re-read for create/list.
 
-- [ ] **Step 1: Write failing storage tests** for token format/collision retry, duration parsing/default, gzip+base64 bounded decode, UTF-8 and 16 MiB rejection, metadata-first/public-last publication, delete ordering, startup repair, permanent records, cursor ordering, and nearest-deadline cleanup with an injected clock.
-- [ ] **Step 2: Run the focused Registry tests** and verify the new tests fail for missing storage/handler behavior.
-- [ ] **Step 3: Implement `share_store`** with fixed `records`/`public/s` roots derived from `Config.StateDir`, secure token generation, per-record JSON, atomic temp renames, fail-closed repair, bounded decompression, and a timer loop that is started by `Server.Run`.
-- [ ] **Step 4: Write failing protocol/handler tests** for authenticated `share.create/list/delete`, invalid payload/config, cursor limit bounds, no-share behavior, and method routing through the existing dispatcher.
-- [ ] **Step 5: Implement Registry route dispatch and handlers**, including current main-config/share URL validation and hostname conflict checks against declared Gateway sites; expose repository/service methods with typed responses.
-- [ ] **Step 6: Run focused Go tests**, then run existing Registry/server tests to verify no route or message-size regression.
+- [x] **Step 1: Write failing storage tests** for token format/collision retry, duration parsing/default, gzip+base64 bounded decode, UTF-8 and 16 MiB rejection, metadata-first/public-last publication, delete ordering, startup repair, permanent records, cursor ordering, and nearest-deadline cleanup with an injected clock.
+- [x] **Step 2: Run the focused Registry tests** and verify the new tests fail for missing storage/handler behavior.
+- [x] **Step 3: Implement `share_store`** with fixed `records`/`public/s` roots derived from `Config.StateDir`, secure token generation, per-record JSON, atomic temp renames, fail-closed repair, bounded decompression, and a timer loop that is started by `Server.Run`.
+- [x] **Step 4: Write failing protocol/handler tests** for authenticated `share.create/list/delete`, invalid payload/config, cursor limit bounds, no-share behavior, and method routing through the existing dispatcher.
+- [x] **Step 5: Implement Registry route dispatch and handlers**, including current main-config/share URL validation and hostname conflict checks against declared Gateway sites; expose repository/service methods with typed responses.
+- [x] **Step 6: Run focused Go tests**, then run existing Registry/server tests to verify no route or message-size regression.
 - [ ] **Step 7: Checkpoint** only Registry, shared command wiring, and repository/service files.
 
 ### Task 3: Add Gateway-derived Share site and anonymous static route

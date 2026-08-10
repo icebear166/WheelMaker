@@ -96,6 +96,11 @@ import type {
   RegistryGatewayUpdateResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
+  RegistryShareCreatePayload,
+  RegistryShareCreateResponse,
+  RegistryShareDeleteResponse,
+  RegistryShareListPayload,
+  RegistryShareListResponse,
 } from './registryTypes';
 
 export type WorkspaceSession = {
@@ -318,6 +323,27 @@ export class RegistryWorkspaceService {
       hash: result.hash,
       notModified: result.notModified,
     };
+  }
+
+  async createShare(payload: RegistryShareCreatePayload): Promise<RegistryShareCreateResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.createShare(payload);
+  }
+
+  async listShares(payload: RegistryShareListPayload = {}): Promise<RegistryShareListResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.listShares(payload);
+  }
+
+  async deleteShare(token: string): Promise<RegistryShareDeleteResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.deleteShare(token);
   }
 
   async getFileInfo(path: string, options?: Pick<RegistryFileRequestOptions, 'signal'>): Promise<RegistryFsInfo> {

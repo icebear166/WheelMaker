@@ -126,6 +126,12 @@ import type {
   RegistryGatewayUpdateResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
+  RegistryShareCreatePayload,
+  RegistryShareCreateResponse,
+  RegistryShareDeleteResponse,
+  RegistryShareListPayload,
+  RegistryShareListResponse,
+  RegistryShareRecord,
 } from './registryTypes';
 
 export type RegistryFileRequestOptions = {
@@ -1181,6 +1187,72 @@ export class RegistryRepository {
 
   async listProjects(): Promise<RegistryProject[]> {
     return (await this.listProjectSnapshot()).projects;
+  }
+
+  async createShare(payload: RegistryShareCreatePayload): Promise<RegistryShareCreateResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.ShareCreate,
+      payload,
+      timeoutMs: 30000,
+    });
+    const body = response.payload && typeof response.payload === 'object'
+      ? response.payload as Record<string, unknown>
+      : {};
+    if (typeof body.token !== 'string' || !body.token) {
+      throw new Error('invalid share.create response');
+    }
+    return {
+      token: body.token,
+      url: typeof body.url === 'string' ? body.url : undefined,
+      createdAt: typeof body.createdAt === 'string' ? body.createdAt : '',
+      expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : body.expiresAt === null ? null : undefined,
+    };
+  }
+
+  async listShares(payload: RegistryShareListPayload = {}): Promise<RegistryShareListResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.ShareList,
+      payload,
+    });
+    const body = response.payload && typeof response.payload === 'object'
+      ? response.payload as Record<string, unknown>
+      : {};
+    const items = Array.isArray(body.items)
+      ? body.items.flatMap(item => {
+        if (!item || typeof item !== 'object') return [];
+        const input = item as Record<string, unknown>;
+        if (typeof input.token !== 'string' || !input.token) return [];
+        const record: RegistryShareRecord = {
+          token: input.token,
+          title: typeof input.title === 'string' ? input.title : '',
+          projectId: typeof input.projectId === 'string' ? input.projectId : '',
+          path: typeof input.path === 'string' ? input.path : '',
+          kind: input.kind === 'html' ? 'html' : 'markdown',
+          createdAt: typeof input.createdAt === 'string' ? input.createdAt : '',
+          expiresAt: typeof input.expiresAt === 'string' ? input.expiresAt : input.expiresAt === null ? null : undefined,
+          sizeBytes: typeof input.sizeBytes === 'number' && Number.isFinite(input.sizeBytes) ? input.sizeBytes : 0,
+          url: typeof input.url === 'string' ? input.url : undefined,
+        };
+        return [record];
+      })
+      : [];
+    return {
+      enabled: body.enabled === true,
+      publicUrl: typeof body.publicUrl === 'string' ? body.publicUrl : undefined,
+      items,
+      nextCursor: typeof body.nextCursor === 'string' && body.nextCursor ? body.nextCursor : undefined,
+    };
+  }
+
+  async deleteShare(token: string): Promise<RegistryShareDeleteResponse> {
+    const response = await this.client.request({
+      method: RegistryMethods.ShareDelete,
+      payload: {token},
+    });
+    const body = response.payload && typeof response.payload === 'object'
+      ? response.payload as Record<string, unknown>
+      : {};
+    return {ok: body.ok === true};
   }
 
   async listDeviceSessions(): Promise<RegistryDeviceSession[]> {
