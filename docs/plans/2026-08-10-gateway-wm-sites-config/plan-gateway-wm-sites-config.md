@@ -223,6 +223,6 @@ Expected: PASS.
 
 Confirm every acceptance item in `docs/scope/2026-08-10-gateway-wm-sites-config.md` maps to passing tests or an inspected diff, and confirm only the four approved Wiki files were changed under `docs/wiki`.
 
-- [ ] **Step 6: Final checkpoint and Git finalization**
+- [x] **Step 6: Final checkpoint and Git finalization**
 
 Mark all completed plan steps, invoke `git-workflow-preferences` checkpoint for the verification record, then invoke finalize with the actual result. Follow configured push, local `main` merge, main push, and successful branch/worktree cleanup behavior.
