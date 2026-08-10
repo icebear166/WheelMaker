@@ -3,6 +3,28 @@ import path from 'path';
 
 import {readWebStyles} from '../testHelpers/webStyles';
 describe('web session search UI wiring', () => {
+  test('runs live debounced search with keyboard navigation and active result metadata', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const controlsStart = main.indexOf('const renderChatHeaderSearchControls = () =>');
+    const controlsEnd = main.indexOf('const renderChatArchiveControls = () =>', controlsStart);
+    expect(controlsStart).toBeGreaterThanOrEqual(0);
+    expect(controlsEnd).toBeGreaterThan(controlsStart);
+    const controls = main.slice(controlsStart, controlsEnd);
+
+    expect(main).toContain('SESSION_SEARCH_DEBOUNCE_MS');
+    expect(main).toContain('sessionSearchDebounceTimerRef');
+    expect(main).toContain('handleSessionSearchInputKeyDown');
+    expect(main).toContain('navigateSessionSearchResult');
+    expect(main).toContain('formatSessionSearchResultMeta(row.result)');
+    expect(main).toContain("${active ? ' active' : ''}");
+    expect(main).toContain('aria-current={active ? \'true\' : undefined}');
+    expect(controls).toContain('onKeyDown={handleSessionSearchInputKeyDown}');
+    expect(controls).not.toContain('onSubmit=');
+    expect(controls).not.toContain('type="submit"');
+    expect(controls).not.toContain('name="check"');
+  });
+
   test('keeps search protocol wiring with prompt turn navigation', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
@@ -124,8 +146,7 @@ describe('web session search UI wiring', () => {
     expect(main).not.toContain('Prompt · turn');
     expect(main).not.toContain('matched prompt text');
     expect(main).not.toContain(') : row.result.source === \'prompt\' ? (');
-    expect(main).not.toContain('session-search-result-meta');
-    expect(main).not.toContain("row.result.source !== 'title'");
+    expect(main).toContain('session-search-result-meta');
     expect(main).toContain('data-tooltip={title}');
 
     const hubButtonBlock = (styles.match(/\.chat-hub-summary-button \{[\s\S]*?\n\}/g) ?? [])

@@ -231,7 +231,9 @@ import {
   type ChatRealtimeFlushScheduler,
 } from '../chat/turns/chatRealtimeFlush';
 import {
+  SESSION_SEARCH_DEBOUNCE_MS,
   buildSessionSearchSections,
+  formatSessionSearchResultMeta,
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
   splitSessionSearchTitleHighlight,
@@ -3669,6 +3671,7 @@ export function App() {
     chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
   }, []);
   const sessionSearchUnchangedPollsRef = useRef(0);
+  const sessionSearchDebounceTimerRef = useRef<number | null>(null);
   const sessionSearchPollTimerRef = useRef<number | null>(null);
   const sessionSearchIdCounterRef = useRef(0);
   const [sessionSearchTargetTurn, setSessionSearchTargetTurn] = useState<{
@@ -5650,6 +5653,19 @@ export function App() {
     }),
     [projectSessionsByProjectId, searchResultsByProjectId, visibleProjectItems],
   );
+  const sessionSearchRows = useMemo(
+    () => sessionSearchSections.flatMap(section => section.rows.map(row => ({
+      projectId: section.project.projectId,
+      row,
+    }))),
+    [sessionSearchSections],
+  );
+  const [sessionSearchActiveResultIndex, setSessionSearchActiveResultIndex] = useState(0);
+  useEffect(() => {
+    setSessionSearchActiveResultIndex(current =>
+      Math.min(current, Math.max(0, sessionSearchRows.length - 1)),
+    );
+  }, [sessionSearchRows.length]);
   const archivedSessionSections = useMemo(
     () => buildArchivedSessionSections({
       projects: sortedProjectItems,
@@ -5971,6 +5987,7 @@ export function App() {
     activeSessionSearchIdRef.current = '';
     setActiveSessionSearchId('');
     setSessionSearchQuery('');
+    setSessionSearchActiveResultIndex(0);
     setSearchResultsByProjectId({});
     setSessionSearchDoneByProjectId({});
     setSessionSearchErrorsByProjectId({});
@@ -6005,6 +6022,7 @@ export function App() {
     activeSessionSearchIdRef.current = searchId;
     setActiveSessionSearchId(searchId);
     setSessionSearchQuery(query);
+    setSessionSearchActiveResultIndex(0);
     setSearchResultsByProjectId({});
     setSessionSearchErrorsByProjectId({});
     setSessionSearchDoneByProjectId(
@@ -6036,6 +6054,43 @@ export function App() {
       querySessionSearch(searchId).catch(() => undefined);
     }
   }, [cancelSessionSearch, exitSessionSearch, querySessionSearch, sessionSearchInput, visibleProjectItems]);
+
+  useEffect(() => {
+    if (sessionSearchDebounceTimerRef.current !== null) {
+      window.clearTimeout(sessionSearchDebounceTimerRef.current);
+      sessionSearchDebounceTimerRef.current = null;
+    }
+    if (!sessionSearchOpen) {
+      return;
+    }
+    const previousSearchId = activeSessionSearchIdRef.current;
+    if (previousSearchId) {
+      clearSessionSearchState();
+      cancelSessionSearch(previousSearchId, visibleProjectItems).catch(() => undefined);
+    } else if (!sessionSearchInput.trim()) {
+      clearSessionSearchState();
+    }
+    if (!sessionSearchInput.trim()) {
+      return;
+    }
+    sessionSearchDebounceTimerRef.current = window.setTimeout(() => {
+      sessionSearchDebounceTimerRef.current = null;
+      startSessionSearch().catch(() => undefined);
+    }, SESSION_SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (sessionSearchDebounceTimerRef.current !== null) {
+        window.clearTimeout(sessionSearchDebounceTimerRef.current);
+        sessionSearchDebounceTimerRef.current = null;
+      }
+    };
+  }, [
+    cancelSessionSearch,
+    clearSessionSearchState,
+    sessionSearchInput,
+    sessionSearchOpen,
+    startSessionSearch,
+    visibleProjectItems,
+  ]);
 
   useEffect(() => {
     if (!activeSessionSearchId) {
@@ -14526,6 +14581,39 @@ export function App() {
     }, 2000);
   };
 
+  const navigateSessionSearchResult = (delta: 1 | -1) => {
+    if (sessionSearchRows.length === 0) {
+      return;
+    }
+    const nextIndex =
+      (sessionSearchActiveResultIndex + delta + sessionSearchRows.length) % sessionSearchRows.length;
+    setSessionSearchActiveResultIndex(nextIndex);
+    const target = sessionSearchRows[nextIndex];
+    if (!target) {
+      return;
+    }
+    handleSessionSearchResultClick(target.projectId, target.row, {
+      closeMobileDrawer: !isWide,
+    }).catch(() => undefined);
+  };
+
+  const handleSessionSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (sessionSearchActive) {
+        exitSessionSearch().catch(() => undefined);
+      } else {
+        setSessionSearchOpen(false);
+        setSessionSearchInput('');
+      }
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      navigateSessionSearchResult(event.shiftKey ? -1 : 1);
+    }
+  };
+
   const jumpToChatPromptTurn = useCallback((turnIndex: number) => {
     if (!selectedChatEncodedKey || turnIndex <= 0) {
       return;
@@ -14595,12 +14683,8 @@ export function App() {
     }
     return (
       <div className="chat-header-search-wrap">
-        <form
+        <div
           className={`chat-header-search-control open${hasActiveSearch ? ' active' : ''}`}
-          onSubmit={event => {
-            event.preventDefault();
-            startSessionSearch().catch(() => undefined);
-          }}
         >
           <SessionIcon name="search" className="session-search-leading-icon" />
           <input
@@ -14608,16 +14692,10 @@ export function App() {
             className="session-search-input"
             value={sessionSearchInput}
             onChange={event => setSessionSearchInput(event.target.value)}
+            onKeyDown={handleSessionSearchInputKeyDown}
             placeholder="Search sessions"
             aria-label="Search sessions"
           />
-          <button
-            type="submit"
-            className="session-search-icon-btn"
-            aria-label="Start search"
-          >
-            <SessionIcon name="check" />
-          </button>
           <button
             type="button"
             className="session-search-icon-btn"
@@ -14633,7 +14711,7 @@ export function App() {
           >
             <SessionIcon name="x" />
           </button>
-        </form>
+        </div>
         {renderSessionSearchStatusLine()}
       </div>
     );
@@ -14972,6 +15050,7 @@ export function App() {
     targetProjectId: string,
     row: SessionSearchSectionRow,
     mobile: boolean,
+    active: boolean,
   ) => {
     const sessionAgent = (row.session.agentType || '').trim();
     const title = resolveSessionDisplayTitle(row.session) || row.session.sessionId;
@@ -14985,8 +15064,9 @@ export function App() {
         {renderSessionLeadingState(row.session, targetProjectId)}
         <button
           type="button"
-          className={`wide-session-row session-search-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
-          data-tooltip={title}
+        className={`wide-session-row session-search-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}${active ? ' active' : ''}`}
+        aria-current={active ? 'true' : undefined}
+        data-tooltip={title}
           onClick={() => {
             handleSessionSearchResultClick(targetProjectId, row, {
               closeMobileDrawer: mobile,
@@ -14995,6 +15075,9 @@ export function App() {
         >
           <span className="wide-session-title session-search-title">
             {renderSessionSearchHighlightedTitle(title, row)}
+          </span>
+          <span className="session-search-result-meta">
+            {formatSessionSearchResultMeta(row.result)}
           </span>
           <AgentTag agentType={sessionAgent} />
           <span className="wide-session-time" data-tooltip={row.session.updatedAt || ''}>
@@ -15047,7 +15130,11 @@ export function App() {
                 </div>
               </div>
               <div className={`wide-project-session-list session-search-result-list${mobile ? ' mobile-project-session-list' : ''}`}>
-                {section.rows.map(row => renderSessionSearchRow(section.project.projectId, row, mobile))}
+                {section.rows.map(row => {
+                  const active = sessionSearchRows[sessionSearchActiveResultIndex]?.projectId === section.project.projectId &&
+                    sessionSearchRows[sessionSearchActiveResultIndex]?.row.session.sessionId === row.session.sessionId;
+                  return renderSessionSearchRow(section.project.projectId, row, mobile, active);
+                })}
               </div>
             </div>
           );

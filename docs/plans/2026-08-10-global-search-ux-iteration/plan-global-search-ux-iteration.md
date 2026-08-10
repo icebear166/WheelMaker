@@ -168,25 +168,25 @@
 
 **Acceptance:** Opening Sessions search focuses the input; non-empty input starts a debounced per-Project search; changing or clearing the query cancels the prior search; the check/submit confirmation is removed; Enter/Shift+Enter navigates the flattened result rows; result rows show source/Turn metadata and an active row state.
 
-- [ ] **Step 1: Update UI/state tests before implementation**
+- [x] **Step 1: Update UI/state tests before implementation**
 
   Add source assertions for `SESSION_SEARCH_DEBOUNCE_MS`, a timer tied to `sessionSearchInput`, cancellation before a new `startSessionSearch`, no check submit button, `handleSessionSearchInputKeyDown`, flattened result navigation, `formatSessionSearchResultMeta`, and active result row markup. Assert the current `startSessionSearch` form-submit-only path is no longer the sole trigger.
 
-- [ ] **Step 2: Run the affected tests and verify the expected RED**
+- [x] **Step 2: Run the affected tests and verify the expected RED**
 
   Run: `npm test -- --runInBand __tests__/web-session-search-ui.test.ts __tests__/web-session-search-state.test.ts`
 
   Expected: new live-search and result-metadata assertions fail against the submit-driven UI.
 
-- [ ] **Step 3: Implement debounced query ownership**
+- [x] **Step 3: Implement debounced query ownership**
 
   Add a session-search debounce timer ref/effect using `SESSION_SEARCH_DEBOUNCE_MS`. When the input changes, clear the previous timer; after the delay, call the existing `startSessionSearch`; when the input is empty, clear results and cancel the active server search. Preserve per-Project progress/error isolation and the existing polling backoff.
 
-- [ ] **Step 4: Implement keyboard navigation and row metadata**
+- [x] **Step 4: Implement keyboard navigation and row metadata**
 
   Add a memoized flattened list of the current `sessionSearchSections`, an active result index, and a key handler: Escape exits, Enter moves forward, Shift+Enter moves backward. Clicking a row sets the active index before invoking the existing session/Turn navigation. Render `formatSessionSearchResultMeta` beside the title/time and expose the active row with a class and accessible selected/current state.
 
-- [ ] **Step 5: Remove explicit submit-only UI and run focused tests**
+- [x] **Step 5: Remove explicit submit-only UI and run focused tests**
 
   Replace the Sessions search `<form>`/check button with a search region whose input handles Escape/Enter; retain the close button and status line. Run:
 
@@ -194,7 +194,7 @@
 
   Expected: live search wiring, result metadata, async service behavior, loading status, errors, and cancellation all pass.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   Checkpoint the Sessions search implementation and its focused tests.
 
