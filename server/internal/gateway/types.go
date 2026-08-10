@@ -29,8 +29,8 @@ type SiteKind string
 type GlobalConfig struct {
 	Schema   int            `json:"schema"`
 	ACME     ACMEConfig     `json:"acme"`
-	Log      LogConfig      `json:"log"`
-	Relay    RelayConfig    `json:"relay"`
+	Log      LogConfig      `json:"-"`
+	Relay    RelayConfig    `json:"-"`
 	Registry RegistryConfig `json:"registry"`
 	Release  ReleaseConfig  `json:"release"`
 	Share    ShareConfig    `json:"share"`
@@ -54,7 +54,7 @@ type TLSConfig struct {
 }
 
 type RegistryConfig struct {
-	PublicURL string    `json:"publicUrl"`
+	PublicURL string    `json:"-"`
 	TLS       TLSConfig `json:"tls"`
 }
 
@@ -67,7 +67,7 @@ type ReleaseConfig struct {
 }
 
 type ShareConfig struct {
-	PublicURL string    `json:"publicUrl"`
+	PublicURL string    `json:"-"`
 	TLS       TLSConfig `json:"tls"`
 }
 
@@ -83,6 +83,7 @@ type SiteConfig struct {
 type Paths struct {
 	Home            string
 	ConfigFile      string
+	HubConfigFile   string
 	RegistryWebRoot string
 	ReleaseDataRoot string
 	SharePublicRoot string
@@ -100,6 +101,7 @@ func ResolvePaths(home string) Paths {
 	return Paths{
 		Home:            home,
 		ConfigFile:      filepath.Join(home, "config.json"),
+		HubConfigFile:   filepath.Join(stateRoot, "config.json"),
 		RegistryWebRoot: filepath.Join(stateRoot, "web"),
 		ReleaseDataRoot: filepath.Join(stateRoot, "release-server", "data"),
 		SharePublicRoot: filepath.Join(stateRoot, "shares", "public"),

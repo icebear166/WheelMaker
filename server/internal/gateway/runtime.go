@@ -15,6 +15,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
+	shared "github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type ConfigBundle struct {
@@ -31,6 +32,15 @@ func LoadBundle(home string) (ConfigBundle, error) {
 	global, err := loadGlobalFile(paths.ConfigFile)
 	if err != nil {
 		return ConfigBundle{}, err
+	}
+	hub, err := loadHubConfig(paths.HubConfigFile)
+	if err != nil {
+		log.Printf("shared Hub config rejected; disabling Hub-derived Gateway routes: %v", err)
+	} else {
+		global = mergeHubConfig(global, hub)
+	}
+	if err := ValidateGlobal(global); err != nil {
+		return ConfigBundle{}, fmt.Errorf("merged Gateway config: %w", err)
 	}
 	sites := sitesFromGlobal(global, paths)
 	compiled, err := CompileConfigAt(global, sites, paths.DataDir)
@@ -57,6 +67,67 @@ func loadGlobalFile(path string) (GlobalConfig, error) {
 	}
 	global = applyGlobalDefaults(global, filepath.Dir(path))
 	return global, nil
+}
+
+func loadHubConfig(path string) (*shared.AppConfig, error) {
+	_, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read Hub config %s: %w", path, err)
+	}
+	config, err := shared.LoadConfig(path)
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func mergeHubConfig(global GlobalConfig, hub *shared.AppConfig) GlobalConfig {
+	if hub == nil {
+		return global
+	}
+
+	global.Registry.PublicURL = ""
+	global.Share.PublicURL = ""
+	if hub.Registry.Listen && strings.TrimSpace(hub.PublicURL) != "" {
+		publicURL := strings.TrimSpace(hub.PublicURL)
+		if err := validateOptionalPublicURL(publicURL, "Hub publicUrl"); err != nil {
+			log.Printf("Hub publicUrl rejected; disabling Gateway Registry route: %v", err)
+		} else {
+			global.Registry.PublicURL = publicURL
+		}
+	}
+
+	shareURL := strings.TrimSpace(hub.Registry.Share.PublicURL)
+	if shareURL != "" {
+		if err := validateOptionalPublicURL(shareURL, "Hub registry.share.publicUrl"); err != nil {
+			log.Printf("Hub Share publicUrl rejected; disabling Gateway Share route: %v", err)
+		} else {
+			global.Share.PublicURL = shareURL
+		}
+	}
+
+	if err := validateRelayPort(hub.Registry.RelayPort); err != nil {
+		log.Printf("Hub Relay port rejected; disabling Gateway Relay listener: %v", err)
+		global.Relay.ListenPort = 0
+	} else {
+		global.Relay.ListenPort = hub.Registry.RelayPort
+	}
+
+	level := strings.TrimSpace(hub.Log.Level)
+	if level == "" {
+		level = DefaultLogLevel
+	}
+	switch strings.ToUpper(level) {
+	case "DEBUG", "INFO", "WARN", "ERROR":
+		global.Log.Level = level
+	default:
+		log.Printf("Hub log level rejected; using Gateway default %q", DefaultLogLevel)
+		global.Log.Level = DefaultLogLevel
+	}
+	return global
 }
 
 func applyGlobalDefaults(global GlobalConfig, home string) GlobalConfig {
@@ -121,7 +192,7 @@ func ValidateJSON(configJSON []byte) error {
 }
 
 // RunManaged starts Caddy with a valid generated configuration and watches the
-// Gateway config file. A valid change is compiled, written atomically, and
+// Gateway and parent Hub config files. A valid change is compiled, written atomically, and
 // hot-loaded; an invalid change is ignored so the last valid configuration
 // keeps serving. The polling interval intentionally avoids a filesystem
 // watcher dependency on Windows, Linux, and macOS.
@@ -172,7 +243,7 @@ func RunManaged(ctx context.Context, home string, configJSON []byte) error {
 
 func semanticFingerprint(paths Paths) string {
 	parts := make([]string, 0, 1)
-	for _, path := range []string{paths.ConfigFile} {
+	for _, path := range []string{paths.ConfigFile, paths.HubConfigFile} {
 		info, err := os.Stat(path)
 		if err != nil {
 			parts = append(parts, path+":missing")

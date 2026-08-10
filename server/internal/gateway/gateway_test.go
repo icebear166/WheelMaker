@@ -18,6 +18,9 @@ func TestResolvePathsUsesFixedGatewayHomeLayout(t *testing.T) {
 	if paths.ConfigFile != `C:\Users\alice\.wheelmaker\gateway\config.json` {
 		t.Fatalf("ConfigFile = %q", paths.ConfigFile)
 	}
+	if paths.HubConfigFile != `C:\Users\alice\.wheelmaker\config.json` {
+		t.Fatalf("HubConfigFile = %q", paths.HubConfigFile)
+	}
 	if paths.RegistryWebRoot != `C:\Users\alice\.wheelmaker\web` {
 		t.Fatalf("RegistryWebRoot = %q", paths.RegistryWebRoot)
 	}
@@ -166,7 +169,7 @@ func TestCompileConfigIncludesExactShareStaticRoute(t *testing.T) {
 	}
 }
 
-func TestLoadBundleIgnoresSiblingAppAndSiteFiles(t *testing.T) {
+func TestLoadBundleReadsHubConfigAndIgnoresLegacySiteFiles(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "gateway")
 	paths := ResolvePaths(home)
@@ -174,27 +177,27 @@ func TestLoadBundleIgnoresSiblingAppAndSiteFiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(legacySitePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":1,"log":{"level":"INFO"},"registry":{"publicUrl":""},"release":{"publicUrl":""},"share":{"publicUrl":""}}`), 0o600); err != nil {
+	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":1,"registry":{"tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":""},"share":{"tls":{"certificateFile":"","keyFile":""}}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	workspace := `{"schema":1,"kind":"workspace","publicUrl":"https://workspace.example.com","webRoot":"` + filepath.ToSlash(filepath.Join(root, "web")) + `","upstream":"http://127.0.0.1:9630","tls":{"certificateFile":"","keyFile":""}}`
 	if err := os.WriteFile(legacySitePath, []byte(workspace), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	siblingAppConfig := filepath.Join(filepath.Dir(home), "config.json")
-	if err := os.WriteFile(siblingAppConfig, []byte(`{"share":{"publicUrl":"https://share.example.com"}}`), 0o600); err != nil {
+	hubConfig := filepath.Join(filepath.Dir(home), "config.json")
+	if err := os.WriteFile(hubConfig, []byte(`{"publicUrl":"https://registry.example.com","registry":{"listen":true,"share":{"publicUrl":"https://share.example.com"}}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bundle, err := LoadBundle(home)
 	if err != nil {
 		t.Fatalf("LoadBundle() error = %v", err)
 	}
-	if len(bundle.Sites) != 0 {
-		t.Fatalf("LoadBundle() read external site/app config: %+v", bundle.Sites)
+	if len(bundle.Sites) != 2 || bundle.Sites[0].Kind != SiteRegistry || bundle.Sites[1].Kind != SiteShare {
+		t.Fatalf("LoadBundle() sites = %+v, want Hub registry/share sites", bundle.Sites)
 	}
 }
 
-func TestSemanticFingerprintIgnoresSiblingAppConfig(t *testing.T) {
+func TestSemanticFingerprintTracksHubConfig(t *testing.T) {
 	paths := ResolvePaths(filepath.Join(t.TempDir(), "gateway"))
 	siblingAppConfig := filepath.Join(filepath.Dir(paths.Home), "config.json")
 	if err := os.MkdirAll(filepath.Dir(siblingAppConfig), 0o755); err != nil {
@@ -208,8 +211,8 @@ func TestSemanticFingerprintIgnoresSiblingAppConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := semanticFingerprint(paths)
-	if first != second {
-		t.Fatalf("semanticFingerprint changed for sibling app config: %q -> %q", first, second)
+	if first == second {
+		t.Fatalf("semanticFingerprint did not change for Hub config: %q", first)
 	}
 }
 
@@ -349,13 +352,16 @@ func TestCompileConfigStripsExternalPortFromHostMatchers(t *testing.T) {
 	}
 }
 
-func TestLoadGlobalReadsFixedRelayPort(t *testing.T) {
-	global, err := LoadGlobal(strings.NewReader(`{"schema":1,"relay":{"listenPort":28810},"log":{"level":"INFO"}}`))
-	if err != nil {
-		t.Fatalf("LoadGlobal(): %v", err)
-	}
-	if global.Relay.ListenPort != 28810 {
-		t.Fatalf("Relay.ListenPort=%d, want 28810", global.Relay.ListenPort)
+func TestLoadGlobalRejectsSharedRuntimeFields(t *testing.T) {
+	for _, input := range []string{
+		`{"schema":1,"log":{"level":"INFO"}}`,
+		`{"schema":1,"relay":{"listenPort":28810}}`,
+		`{"schema":1,"registry":{"publicUrl":"https://registry.example.com"}}`,
+		`{"schema":1,"share":{"publicUrl":"https://share.example.com"}}`,
+	} {
+		if _, err := LoadGlobal(strings.NewReader(input)); err == nil {
+			t.Fatalf("LoadGlobal(%s) accepted Gateway duplicate field", input)
+		}
 	}
 }
 

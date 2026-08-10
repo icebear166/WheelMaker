@@ -81,27 +81,27 @@
 
 **Acceptance:** Gateway config owns only its ACME/TLS/Release fields; `LoadBundle` reads the parent Hub config, enables Registry only for `registry.listen:true` plus Hub `publicUrl`, derives Share and Relay from Hub `registry.share.publicUrl` and `registry.relayPort`, preserves Release-only operation, and fingerprints both config files.
 
-- [ ] **Step 1: Write the failing Gateway tests**
+- [x] **Step 1: Write the failing Gateway tests**
 
   Replace single-file route fixtures with a parent Hub config plus Gateway TLS/Release config. Add assertions for `registry.listen` gating, Hub-derived Share/Relay/log values, release-only operation without Hub config, invalid shared URL isolation, rejection of duplicate Gateway URL/Relay/log fields, and fingerprint changes when the parent Hub config changes.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
   Run `go test ./internal/gateway`.
 
   Expected: tests fail because Gateway currently reads route URLs, Relay, and log level from its own file and fingerprints only that file.
 
-- [ ] **Step 3: Implement the merged Gateway runtime view**
+- [x] **Step 3: Implement the merged Gateway runtime view**
 
   Add the parent Hub config path to `Paths`, make duplicate shared fields non-serializable and unknown to the Gateway file decoder, load the Hub config through the shared config package without writing it, merge valid shared values into the Gateway runtime view, gate the local Registry route on `registry.listen`, and keep Release routes available when Hub-derived fields are absent or invalid. Include both config paths in `semanticFingerprint` and retain the last valid Caddy config on rejected changes.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
   Run `gofmt -w server/internal/gateway/types.go server/internal/gateway/runtime.go server/internal/gateway/gateway_test.go server/internal/gateway/single_config_test.go` and `go test ./internal/gateway`.
 
   Expected: all Gateway route, validation, release-only, and dual-file fingerprint tests pass.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
   Checkpoint only the Gateway implementation and tests after the package is green.
 
