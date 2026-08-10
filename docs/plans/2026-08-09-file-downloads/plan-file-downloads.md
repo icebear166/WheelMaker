@@ -424,8 +424,8 @@ Expected: only task-owned files changed, no whitespace errors, all completed ste
 
 Result: PASS. `git diff --check` and `gofmt -l` are clean; normalized worktree-only line endings create no staged content; status contains only approved implementation, tests, spec, plan, and Wiki files.
 
-- [ ] **Step 7: Git finalize**
+- [x] **Step 7: Git finalize**
 
 Invoke `git-workflow-preferences` in `finalize` mode with the real result. On complete verification: refresh/rebase, commit task-owned files, push `feat/file-downloads`, merge into a clean local `main`, push `main`, then remove the clean worktree and task branches as configured. If any verification fails, do not commit and report the preserved worktree/evidence.
 
-Finalize: pending.
+Finalize: complete — refreshed against remote `main` through GitHub SSH-over-443, committed and pushed `feat/file-downloads`, fast-forwarded clean local `main`, and prepared the final plan-state commit before pushing `main` and removing the task worktree and branches.
