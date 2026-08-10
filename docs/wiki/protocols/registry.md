@@ -121,12 +121,13 @@ Hub 只有断开并以当前主协议重新握手后才能从 `update_only` 进�
 | `server.*` | Registry adapter | 服务端配置快照、更新与 Android ASR 凭据门禁 |
 | `tts.*` | Registry TTS | 服务端文本转语音 |
 | `debug.*` | Debug | 调试日志上传 |
+| `share.*` | Registry | 已认证客户端创建、列出、停止公共 HTML 快照 |
 
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub`（`normal`） | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
 | `hub`（`update_only`） | `hub.ping`；业务上报由 Registry 确认后丢弃 |
-| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`release.publish.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
+| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`hub.config.*`、`release.publish.*`、`share.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`release.publish.updated`、`session.message`、`session.updated`、`connect.close`。
 
@@ -319,6 +320,28 @@ Git 列表按 `project.git.rev` 返回的 `gitRev` / `worktreeRev` 触发刷新�
 `project.git.commit.diff` 一次返回整个提交的 `git show --no-color --unified=N <sha>` 原始输出（payload `{sha, contextLines?}`，响应 `{sha, diff}`），不带路径过滤；逐文件拆分由 App 完成。它是路由表纯增量注册，不变更 protocol version。
 
 > 决策来源：[`docs/scope/2026-08-06-git-commit-diff-page.md`](../../scope/2026-08-06-git-commit-diff-page.md)
+
+## 6A. Public Share methods
+
+`share.*` is a client-only Registry route. Requests remain authenticated over the
+existing Registry WebSocket; anonymous recipients never connect to Registry. The
+route does not change the Registry protocol version.
+
+### `share.create`
+
+Payload fields are `{projectId, path, kind, title, expiry, encoding, content}`. `kind`
+is `markdown` or `html`, `expiry` is `1h`, `1d`, `7d`, `30d`, or `permanent`, and
+`encoding` is `gzip+base64`. The complete decoded UTF-8 HTML is capped at 16 MiB and
+the request must fit the existing complete-message limit. The response returns a new
+43-character bearer token, the current configured Share URL when enabled, and its
+creation/expiry timestamps.
+
+### `share.list` and `share.delete`
+
+`share.list` accepts an opaque cursor and optional limit (default 50, maximum 100),
+returns active records newest first, and reports whether the current Share origin is
+enabled. `share.delete` accepts a token and is idempotent. Registry owns expiry repair
+and cleanup on disk; no access statistics or tombstones are recorded.
 
 ## 7. HubState
 

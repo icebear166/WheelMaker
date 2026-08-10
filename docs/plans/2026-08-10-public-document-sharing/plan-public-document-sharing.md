@@ -80,7 +80,7 @@
 - [x] **Step 5: Extend runtime fingerprints and bundle loading** to watch the sibling main config, reload valid Share changes, and remove Share on invalid/empty config while retaining valid Workspace/Release routes.
 - [x] **Step 6: Run focused Gateway tests plus existing gateway/cmd tests** and validate generated Caddy JSON through the existing validator.
 - [x] **Step 7: Update the confirmed Gateway wiki page** with the stable Share derivation and route boundary.
-- [ ] **Step 8: Checkpoint** only Gateway, command, tests, and its wiki update.
+- [x] **Step 8: Checkpoint** only Gateway, command, tests, and its wiki update.
 
 ### Task 4: Build App snapshot, compression, and Registry client integration
 
@@ -136,8 +136,18 @@
 
 **Acceptance:** The wiki records only stable, implemented public-sharing behavior and links the approved spec; the plan has every task checked with actual verification evidence; all required test/build commands pass or a concrete environment blocker is reported.
 
-- [ ] **Step 1: Write the feature wiki page** with the required first-line summary, behavior/lifecycle/security sections, and approved spec link; update the features directory index.
-- [ ] **Step 2: Run final verification**: `go test ./...`; `npm test -- --runInBand`; `npm run tsc:web`; `npm run build:web`; and focused deployment/gateway Node tests.
-- [ ] **Step 3: Inspect status and diff** for task-only files, protocol version stability, no generated `dist` edits, no placeholders, and no accidental stats/database artifacts.
-- [ ] **Step 4: Checkpoint** the wiki/plan only after final verification passes.
+- [x] **Step 1: Write the feature wiki page** with the required first-line summary, behavior/lifecycle/security sections, and approved spec link; update the features directory index.
+- [x] **Step 2: Run final verification**: `go test ./...`; `npm test -- --runInBand`; `npm run tsc:web`; `npm run build:web`; and focused deployment/gateway Node tests.
+- [x] **Step 3: Inspect status and diff** for task-only files, protocol version stability, no generated `dist` edits, no placeholders, and no accidental stats/database artifacts.
+- [x] **Step 4: Checkpoint** the wiki/plan only after final verification passes.
 - [ ] **Step 5: Finalize** with `git-workflow-preferences finalize complete`, following the configured commit/push/merge/cleanup rules.
+
+#### Verification notes
+
+- `go test ./...` passed.
+- Focused share/gateway Jest suites passed (25 tests), `npm run tsc:web` passed, and
+  `npm run build:web` passed.
+- `node --test scripts/deploy/*.test.mjs` passed (93 tests).
+- The repository-wide `npm test -- --runInBand` command was run. It retains the
+  pre-existing 14 stale source-contract suites (23 assertions on the clean `main`
+  worktree); the share-focused suites pass and no new feature failure was observed.

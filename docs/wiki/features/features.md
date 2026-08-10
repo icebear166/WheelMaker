@@ -9,3 +9,4 @@
 - [`html-preview.md`](html-preview.md)：HTML 预览的 Registry POST 加载链路、脚本能力、sandbox/CSP 安全模型和来源边界。
 - [`limits-monitoring.md`](limits-monitoring.md)：Agent Limits 监控的数据所有权、刷新机制、Provider 范围和桌面/移动端展示约定。
 - [`model-efficiency.md`](model-efficiency.md)：Model efficiency 的 CodexRadar 数据边界、候选选择规则以及桌面和窄屏展示约定。
+- [`public-sharing.md`](public-sharing.md)：项目内 Markdown/HTML 公共分享的快照、管理、存储、到期和匿名 Gateway 访问边界。
