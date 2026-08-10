@@ -173,4 +173,4 @@
 
 - [x] Compare the final diff with the approved spec and confirm no Hub/Registry watcher, Hub Config API, protocol version, or secret ownership change was introduced.
 - [x] Check `git status -sb`, `git diff --check`, and the final test output.
-- [ ] Run `git-workflow-preferences` finalize with the actual result, then report branch/worktree, commits, push/merge/cleanup, verification, and remaining risk.
+- [x] Run `git-workflow-preferences` finalize with the actual result, then report branch/worktree, commits, push/merge/cleanup, verification, and remaining risk.
