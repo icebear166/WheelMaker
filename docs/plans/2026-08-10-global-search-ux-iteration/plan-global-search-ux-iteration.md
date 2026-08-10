@@ -24,7 +24,7 @@
 
 **Acceptance:** A pure resolver returns `current`, `preview`, or `sessions` for Ctrl/Cmd shortcuts, uses Preview only when the event is inside a searchable Preview surface, falls back to current chat when Preview search is unavailable, ignores unrelated/Alt shortcuts, and preserves the existing session-panel expansion decision.
 
-- [ ] **Step 1: Write the failing routing tests**
+- [x] **Step 1: Write the failing routing tests**
 
   Add tests with concrete event/context inputs:
 
@@ -53,29 +53,29 @@
 
   Also assert `resolveSessionSearchExpansion` returns `open-slideout` only when neither pinned nor slide-out Sessions is visible.
 
-- [ ] **Step 2: Run the focused test and verify the expected RED**
+- [x] **Step 2: Run the focused test and verify the expected RED**
 
   Run: `npm test -- --runInBand __tests__/web-chat-search-routing.test.ts`
 
   Expected: Jest fails because `searchRouting.ts` and the requested resolver exports do not exist yet.
 
-- [ ] **Step 3: Implement the minimal pure routing module**
+- [x] **Step 3: Implement the minimal pure routing module**
 
   Export `WorkspaceSearchTarget`, `resolveWorkspaceSearchShortcutTarget`, `SessionSearchExpansion`, and `resolveSessionSearchExpansion`. Normalize the key to lowercase, require Ctrl or Meta, let Shift select the global target, reject Alt, and use the Preview context only for the unshifted shortcut.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
   Run: `npm test -- --runInBand __tests__/web-chat-search-routing.test.ts`
 
   Expected: all routing and session-panel expansion assertions pass.
 
-- [ ] **Step 5: Run the existing pure search regressions**
+- [x] **Step 5: Run the existing pure search regressions**
 
   Run: `npm test -- --runInBand __tests__/web-chat-search-state.test.ts __tests__/web-chat-search-controller.test.ts`
 
   Expected: existing current-session search behavior remains green.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   After verification, checkpoint the new routing test/module and the approved spec/plan documents. Do not stage unrelated files.
 
