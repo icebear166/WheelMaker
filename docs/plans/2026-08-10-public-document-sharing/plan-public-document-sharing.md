@@ -145,7 +145,7 @@
 #### Verification notes
 
 - `go test ./...` passed.
-- Focused share/gateway Jest suites passed (25 tests), `npm run tsc:web` passed, and
+- Focused share/gateway/frontend integration Jest suites passed (44 tests), `npm run tsc:web` passed, and
   `npm run build:web` passed.
 - `node --test scripts/deploy/*.test.mjs` passed (93 tests).
 - The repository-wide `npm test -- --runInBand` command was run. It retains the
