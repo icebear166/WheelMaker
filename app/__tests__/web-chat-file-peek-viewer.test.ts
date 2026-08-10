@@ -666,7 +666,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {');
     expect(mainTsx).toContain("event.key === 'Tab' && (event.ctrlKey || event.metaKey)");
     expect(mainTsx).toContain('cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? \'\', event.shiftKey ? -1 : 1)');
-    expect(mainTsx).toContain("event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)");
+    expect(mainTsx).not.toContain("const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {\n    if (event.key.toLowerCase() === 'f'");
     expect(mainTsx).toContain('className="preview-workbench-search-bar"');
     expect(mainTsx).toContain('previewSearchUnavailableMessage');
 
@@ -708,7 +708,7 @@ describe('web chat file peek viewer', () => {
     });
   });
 
-  test('global shortcuts keep preview keys gated and leave Ctrl+F to the Windows search picker', () => {
+  test('global preview shortcuts keep preview keys gated while workspace search owns Ctrl+F', () => {
     const mainTsx = readSourceText(mainPath);
     const handlerStart = mainTsx.indexOf('const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {');
     expect(handlerStart).toBeGreaterThanOrEqual(0);
@@ -730,25 +730,27 @@ describe('web chat file peek viewer', () => {
     expect(handlerBody).not.toContain('setPreviewSearchOpen(true);');
     expect(mainTsx).toContain("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);");
     expect(mainTsx).toContain("window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);");
-    expect(
-      (mainTsx.match(/event\.key\.toLowerCase\(\) === 'f' && \(event\.ctrlKey \|\| event\.metaKey\)/g) ?? []).length,
-    ).toBe(1);
+    expect(mainTsx).toContain('resolveWorkspaceSearchShortcutTarget(event, {');
   });
 
-  test('windows Ctrl+F opens a modal search target picker', () => {
+  test('workspace shortcuts route directly to current chat, Preview, or Sessions', () => {
     const mainTsx = readSourceText(mainPath);
-    expect(mainTsx).toContain('if (!isWindowsPlatform) {');
-    expect(mainTsx).toContain('const handleGlobalSearchTargetKeyDown = (event: KeyboardEvent) => {');
-    expect(mainTsx).toContain("event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)");
-    expect(mainTsx).toContain('firstEnabledChatSearchTarget(searchTargetAvailability)');
-    expect(mainTsx).toContain('setSearchTargetPickerOpen(true);');
-    expect(mainTsx).toContain('resolveChatSearchTargetPickerKey(event)');
-    expect(mainTsx).toContain('confirmSearchTarget(searchTargetPickerTarget);');
-    expect(mainTsx).toContain('cycleChatSearchTarget(current, action.delta, searchTargetAvailability)');
-    expect(mainTsx).toContain('seedSearchQuery(searchTargetPickerTarget, action.text);');
-    expect(mainTsx).toContain('CHAT_SEARCH_TARGET_ORDER.map(target => {');
-    expect(mainTsx).toContain('className="chat-search-target-backdrop"');
-    expect(mainTsx).toContain('className="chat-search-target-dialog"');
+    expect(mainTsx).toContain("from '../chat/search/searchRouting'");
+    expect(mainTsx).toContain('resolveWorkspaceSearchShortcutTarget');
+    expect(mainTsx).toContain('const handleGlobalSearchKeyDown = (event: KeyboardEvent) => {');
+    expect(mainTsx).toContain('event.target instanceof Element &&');
+    expect(mainTsx).toContain("event.target.closest('.preview-workbench-surface')");
+    expect(mainTsx).toContain('previewSearchUnavailableMessage');
+    expect(mainTsx).toContain('resolveWorkspaceSearchShortcutTarget(event, {');
+    expect(mainTsx).toContain("case 'current':");
+    expect(mainTsx).toContain("case 'preview':");
+    expect(mainTsx).toContain("case 'sessions':");
+    expect(mainTsx).toContain('openPreviewSearch();');
+    expect(mainTsx).toContain('openSessionSearch();');
+    expect(mainTsx).not.toContain('setSearchTargetPickerOpen');
+    expect(mainTsx).not.toContain('confirmSearchTarget');
+    expect(mainTsx).not.toContain('seedSearchQuery');
+    expect(mainTsx).not.toContain('chat-search-target-backdrop');
   });
 
   test('preview selection context menu preserves text selection through right click', () => {

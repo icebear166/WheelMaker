@@ -240,15 +240,9 @@ import {
 } from '../chat/session/sessionSearchState';
 import {useChatSearchController} from '../chat/search/useChatSearchController';
 import {
-  CHAT_SEARCH_TARGET_META,
-  CHAT_SEARCH_TARGET_ORDER,
-  cycleChatSearchTarget,
-  firstEnabledChatSearchTarget,
-  resolveChatSearchTargetAvailability,
-  resolveChatSearchTargetPickerKey,
   resolveSessionSearchExpansion,
-  type ChatSearchTarget,
-} from '../chat/search/searchTargetPicker';
+  resolveWorkspaceSearchShortcutTarget,
+} from '../chat/search/searchRouting';
 import {
   mergeChatSession,
   mergeChatSessionList,
@@ -3951,13 +3945,6 @@ export function App() {
     archivedMode,
     scrollToMatch: scrollToChatSearchMatch,
   });
-  const [searchTargetPickerOpen, setSearchTargetPickerOpen] = useState(false);
-  const [searchTargetPickerTarget, setSearchTargetPickerTarget] = useState<ChatSearchTarget>('current');
-  const searchTargetAvailability = useMemo(
-    () => resolveChatSearchTargetAvailability({previewAvailable: chatPreviewHasContent}),
-    [chatPreviewHasContent],
-  );
-
   const selectedChatSession = useMemo(
     () => {
       if (!selectedChatKey) {
@@ -4187,45 +4174,21 @@ export function App() {
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
   }), [archivedPreview?.messages, archivedPreview?.session, archivedPermissionState, chatLayoutMetrics]);
 
-  const confirmSearchTarget = (target: ChatSearchTarget) => {
-    setSearchTargetPickerOpen(false);
-    if (target === 'current') {
-      openChatSearch();
-      return;
-    }
+  const openSessionSearch = () => {
     closeChatSearch();
-    if (target === 'sessions') {
-      if (
-        resolveSessionSearchExpansion({
-          sessionPanelPinned: desktopChatSessionPinned,
-          slideOutOpen: sessionNavSlideOut.open,
-        }) === 'open-slideout'
-      ) {
-        dispatchSessionNavSlideOut({ type: 'open' });
-      }
-      setSessionSearchOpen(true);
-      window.requestAnimationFrame(() => {
-        sessionSearchInputRef.current?.focus();
-        sessionSearchInputRef.current?.select();
-      });
-      return;
+    if (
+      resolveSessionSearchExpansion({
+        sessionPanelPinned: desktopChatSessionPinned,
+        slideOutOpen: sessionNavSlideOut.open,
+      }) === 'open-slideout'
+    ) {
+      dispatchSessionNavSlideOut({ type: 'open' });
     }
-    // target === 'preview'
-    if (!chatPreviewOpen) {
-      toggleChatPreviewFromTitle();
-    }
-    window.requestAnimationFrame(() => openPreviewSearch());
-  };
-  const seedSearchQuery = (target: ChatSearchTarget, text: string) => {
-    if (target === 'current') {
-      setChatSearchQuery(text);
-      return;
-    }
-    if (target === 'sessions') {
-      setSessionSearchInput(text);
-      return;
-    }
-    setPreviewSearchQuery(text);
+    setSessionSearchOpen(true);
+    window.requestAnimationFrame(() => {
+      sessionSearchInputRef.current?.focus();
+      sessionSearchInputRef.current?.select();
+    });
   };
 
 
@@ -18818,7 +18781,6 @@ export function App() {
             style={chatMainStyle}
           >
             {chatSearchBar}
-            {chatSearchTargetPickerOverlay}
             <div
               ref={chatScrollRef}
               className="scroll-panel chat-block"
@@ -19755,6 +19717,16 @@ export function App() {
     });
   };
 
+  const openPreviewSearch = () => {
+    setPreviewSearchOpen(true);
+    setPreviewSearchActiveIndex(0);
+    setPreviewSelectionMenu(null);
+    window.requestAnimationFrame(() => {
+      previewSearchInputRef.current?.focus();
+      previewSearchInputRef.current?.select();
+    });
+  };
+
   useEffect(() => {
     setPreviewSearchActiveIndex(current =>
       Math.min(current, Math.max(0, previewSearchMatches.length - 1)),
@@ -19831,52 +19803,46 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!isWindowsPlatform) {
+    if (!isWide) {
       return;
     }
-    const handleGlobalSearchTargetKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
+    const handleGlobalSearchKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || quickFileOpen) {
         return;
       }
-      if (quickFileOpen) {
-        return;
-      }
-      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        setSearchTargetPickerTarget(firstEnabledChatSearchTarget(searchTargetAvailability));
-        setSearchTargetPickerOpen(true);
-      }
-    };
-    window.addEventListener('keydown', handleGlobalSearchTargetKeyDown, true);
-    return () => window.removeEventListener('keydown', handleGlobalSearchTargetKeyDown, true);
-  }, [isWindowsPlatform, quickFileOpen, searchTargetAvailability]);
-
-  useEffect(() => {
-    if (!searchTargetPickerOpen) {
-      return;
-    }
-    const handleSearchTargetPickerKeyDown = (event: KeyboardEvent) => {
-      const action = resolveChatSearchTargetPickerKey(event);
-      if (!action) {
+      const previewFocused = event.target instanceof Element &&
+        event.target.closest('.preview-workbench-surface') !== null;
+      const target = resolveWorkspaceSearchShortcutTarget(event, {
+        previewFocused,
+        previewSearchable: !!activeWorkbenchTab && !previewSearchUnavailableMessage,
+      });
+      if (!target) {
         return;
       }
       event.preventDefault();
-      if (action.type === 'close') {
-        setSearchTargetPickerOpen(false);
-        return;
-      }
-      if (action.type === 'cycle') {
-        setSearchTargetPickerTarget(current => cycleChatSearchTarget(current, action.delta, searchTargetAvailability));
-        return;
-      }
-      confirmSearchTarget(searchTargetPickerTarget);
-      if (action.type === 'type-text') {
-        seedSearchQuery(searchTargetPickerTarget, action.text);
+      switch (target) {
+        case 'current':
+          openChatSearch();
+          return;
+        case 'preview':
+          openPreviewSearch();
+          return;
+        case 'sessions':
+          openSessionSearch();
+          return;
       }
     };
-    window.addEventListener('keydown', handleSearchTargetPickerKeyDown, true);
-    return () => window.removeEventListener('keydown', handleSearchTargetPickerKeyDown, true);
-  }, [confirmSearchTarget, searchTargetAvailability, searchTargetPickerOpen, searchTargetPickerTarget]);
+    window.addEventListener('keydown', handleGlobalSearchKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalSearchKeyDown, true);
+  }, [
+    activeWorkbenchTab,
+    isWide,
+    openChatSearch,
+    openPreviewSearch,
+    openSessionSearch,
+    previewSearchUnavailableMessage,
+    quickFileOpen,
+  ]);
 
   const hasCachedWorkspace = projects.length > 0 || !!projectId;
   const keepWorkspaceVisible =
@@ -20527,15 +20493,6 @@ export function App() {
   };
   const navigatePreviewSearchMatch = (delta: 1 | -1) => {
     activatePreviewSearchMatch(previewSearchActiveIndex + delta);
-  };
-  const openPreviewSearch = () => {
-    setPreviewSearchOpen(true);
-    setPreviewSearchActiveIndex(0);
-    setPreviewSelectionMenu(null);
-    window.requestAnimationFrame(() => {
-      previewSearchInputRef.current?.focus();
-      previewSearchInputRef.current?.select();
-    });
   };
   const closePreviewSearch = () => {
     previewSearchJumpCancelRef.current?.();
@@ -21235,38 +21192,6 @@ export function App() {
       >
         <Icon name="x" />
       </button>
-    </div>
-  ) : null;
-  const chatSearchTargetPickerOverlay = searchTargetPickerOpen ? (
-    <div className="chat-search-target-backdrop" role="presentation" onClick={() => setSearchTargetPickerOpen(false)}>
-      <div
-        className="chat-search-target-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Choose search target"
-        onClick={event => event.stopPropagation()}
-      >
-        <div className="chat-search-target-title">Search</div>
-        {CHAT_SEARCH_TARGET_ORDER.map(target => {
-          const meta = CHAT_SEARCH_TARGET_META[target];
-          const enabled = searchTargetAvailability[target];
-          const selected = searchTargetPickerTarget === target;
-          return (
-            <button
-              key={target}
-              type="button"
-              className={`chat-search-target-option${selected ? ' selected' : ''}`}
-              disabled={!enabled}
-              onClick={() => confirmSearchTarget(target)}
-            >
-              <ChatIcon name={meta.icon} />
-              <span className="chat-search-target-label">{meta.label}</span>
-              <span className="chat-search-target-hint">{meta.hint}</span>
-            </button>
-          );
-        })}
-        <div className="chat-search-target-footer">Arrows / Tab to switch · Enter to open · Type to search · Esc to close</div>
-      </div>
     </div>
   ) : null;
   const chatSearchStatus = chatSearchQuery

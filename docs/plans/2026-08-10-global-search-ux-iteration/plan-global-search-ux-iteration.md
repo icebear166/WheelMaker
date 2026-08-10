@@ -129,33 +129,33 @@
 
 **Acceptance:** The global target-picker state/effect/overlay is gone. A single workspace-level shortcut route opens current chat, searchable Preview, or Sessions directly; an unsupported Preview falls back to current chat. Existing Preview `P` and tab shortcuts remain unchanged.
 
-- [ ] **Step 1: Update source-wiring tests before implementation**
+- [x] **Step 1: Update source-wiring tests before implementation**
 
   Replace picker expectations with assertions that `WorkspaceApp.tsx` imports `resolveWorkspaceSearchShortcutTarget`, routes the two F shortcuts, checks `.preview-workbench-surface`, calls `openPreviewSearch` only for a searchable Preview, and calls the Sessions-opening helper for Shift+F. Assert the old `chat-search-target-backdrop`, `setSearchTargetPickerOpen`, `confirmSearchTarget`, and `seedSearchQuery` wiring is absent. Add a source assertion that Preview fallback calls `openChatSearch`.
 
-- [ ] **Step 2: Run the affected tests and verify the expected RED**
+- [x] **Step 2: Run the affected tests and verify the expected RED**
 
   Run: `npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-chat-ui.test.ts`
 
   Expected: the new direct-routing assertions fail against the existing picker implementation; unrelated existing assertions remain readable in the failure output.
 
-- [ ] **Step 3: Implement direct workspace routing**
+- [x] **Step 3: Implement direct workspace routing**
 
   Remove the target-picker state, availability memo, confirm/seed functions, picker keyboard effect, and overlay JSX. Extract a stable Sessions-opening action that expands the slide-out when needed and focuses `sessionSearchInputRef`. Replace the Windows-only F listener with a platform-aware capture listener using the pure resolver. Detect Preview focus from the event target's `.preview-workbench-surface` ancestor and pass `!!activeWorkbenchTab && !previewSearchUnavailableMessage` as searchability. Keep `Ctrl/Cmd+Shift+F` global regardless of Preview focus.
 
-- [ ] **Step 4: Run the affected tests and verify GREEN**
+- [x] **Step 4: Run the affected tests and verify GREEN**
 
   Run: `npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-chat-ui.test.ts __tests__/web-chat-search-routing.test.ts`
 
   Expected: direct shortcut assertions pass, old picker assertions are removed, and Preview P/Tab routing regressions remain green.
 
-- [ ] **Step 5: Run Web TypeScript validation**
+- [x] **Step 5: Run Web TypeScript validation**
 
   Run: `npm run tsc:web`
 
   Expected: no TypeScript errors from removed picker symbols or new shortcut routing.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   Checkpoint `WorkspaceApp.tsx` and the explicitly updated/deleted shortcut tests/modules after the focused tests and typecheck pass.
 
