@@ -122,6 +122,22 @@ func canonicalizeConfig(root map[string]json.RawMessage) (bool, error) {
 		registry = make(map[string]json.RawMessage)
 	}
 
+	legacyShare, legacyShareObject, err := readOptionalObject(root, "share")
+	if err != nil {
+		return false, err
+	}
+	_, canonicalShareObject, err := readOptionalObject(registry, "share")
+	if err != nil {
+		return false, fmt.Errorf("registry.share: %w", err)
+	}
+	if _, legacyShareKey := root["share"]; legacyShareKey {
+		if !canonicalShareObject && legacyShareObject {
+			registry["share"] = json.RawMessage(mustJSON(legacyShare))
+		}
+		delete(root, "share")
+		changed = true
+	}
+
 	listen, _, err := readOptionalBool(registry, "listen")
 	if err != nil {
 		return false, err

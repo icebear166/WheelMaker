@@ -47,27 +47,27 @@
 
 **Acceptance:** Strict runtime loading exposes `cfg.Registry.Share.PublicURL`; old top-level `share` is accepted only by migration, nested `registry.share` wins conflicts, and migration remains atomic/idempotent.
 
-- [ ] **Step 1: Write the failing shared-config tests**
+- [x] **Step 1: Write the failing shared-config tests**
 
   Add assertions for nested `registry.share`, strict rejection of an unmigrated top-level `share`, migration of a top-level Share object, and preservation of an already canonical nested Share value when both locations exist.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
   Run `go test ./internal/shared -run 'TestLoadConfig|TestMigrateConfig'`.
 
   Expected: the new nested-field and migration-priority assertions fail because the current model still owns top-level `share` and does not move it.
 
-- [ ] **Step 3: Implement the canonical model and migration**
+- [x] **Step 3: Implement the canonical model and migration**
 
   Put `Share ShareConfig` under `RegistryConfig`, remove top-level Share from the strict runtime input, and extend `canonicalizeConfig` to move legacy top-level Share into `registry.share` while deleting the legacy key. Treat an existing nested `registry.share` value as canonical and keep the existing lock, backup, atomic write, and rollback behavior.
 
-- [ ] **Step 4: Run the focused tests and verify GREEN**
+- [x] **Step 4: Run the focused tests and verify GREEN**
 
   Run `gofmt -w server/internal/shared/config.go server/internal/shared/config_migration.go server/internal/shared/shared_test.go` and `go test ./internal/shared -run 'TestLoadConfig|TestMigrateConfig'`.
 
   Expected: all shared config tests pass.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
   Checkpoint only the shared config implementation and tests after the focused package is green.
 

@@ -75,13 +75,32 @@ func TestLoadConfig_AllowsWorkspacePublicURL(t *testing.T) {
 }
 
 func TestLoadConfig_AllowsSharePublicURL(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"share":{"publicUrl":"https://share.example.com"}}`)
+	path := writeTempConfig(t, `{"projects":[],"registry":{"share":{"publicUrl":"https://share.example.com"}}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.Share.PublicURL != "https://share.example.com" {
-		t.Fatalf("share.publicUrl = %q, want %q", cfg.Share.PublicURL, "https://share.example.com")
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("json.Marshal(AppConfig) error = %v", err)
+	}
+	var decoded struct {
+		Registry struct {
+			Share ShareConfig `json:"share"`
+		} `json:"registry"`
+	}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("decode AppConfig = %v", err)
+	}
+	if decoded.Registry.Share.PublicURL != "https://share.example.com" {
+		t.Fatalf("registry.share.publicUrl = %q, want %q", decoded.Registry.Share.PublicURL, "https://share.example.com")
+	}
+}
+
+func TestLoadConfig_RejectsLegacyTopLevelShareWithoutMigration(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"share":{"publicUrl":"https://legacy-share.example.com"}}`)
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), `unknown field "share"`) {
+		t.Fatalf("LoadConfig() error = %v, want unmigrated top-level share rejection", err)
 	}
 }
 
@@ -334,6 +353,62 @@ func TestMigrateConfigCanonicalizesLegacyLayouts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMigrateConfigMovesTopLevelShareIntoRegistry(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"share":{"publicUrl":"https://share.example.com"}}`)
+	if err := MigrateConfig(path); err != nil {
+		t.Fatalf("MigrateConfig() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migrated config: %v", err)
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("decode migrated config: %v", err)
+	}
+	if _, ok := root["share"]; ok {
+		t.Fatalf("migrated config retained top-level share: %s", data)
+	}
+	var registry struct {
+		Share ShareConfig `json:"share"`
+	}
+	if err := json.Unmarshal(root["registry"], &registry); err != nil {
+		t.Fatalf("decode migrated registry: %v", err)
+	}
+	if registry.Share.PublicURL != "https://share.example.com" {
+		t.Fatalf("registry.share.publicUrl = %q, want %q", registry.Share.PublicURL, "https://share.example.com")
+	}
+}
+
+func TestMigrateConfigNestedShareWinsTopLevelShare(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"share":{"publicUrl":"https://legacy-share.example.com"},"registry":{"share":{"publicUrl":"https://canonical-share.example.com"}}}`)
+	if err := MigrateConfig(path); err != nil {
+		t.Fatalf("MigrateConfig() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read migrated config: %v", err)
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("decode migrated config: %v", err)
+	}
+	if _, ok := root["share"]; ok {
+		t.Fatalf("migrated config retained top-level share: %s", data)
+	}
+	var registry struct {
+		Share ShareConfig `json:"share"`
+	}
+	if err := json.Unmarshal(root["registry"], &registry); err != nil {
+		t.Fatalf("decode migrated registry: %v", err)
+	}
+	if registry.Share.PublicURL != "https://canonical-share.example.com" {
+		t.Fatalf("registry.share.publicUrl = %q, want canonical value", registry.Share.PublicURL)
 	}
 }
 

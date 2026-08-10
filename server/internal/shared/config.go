@@ -13,7 +13,6 @@ type AppConfig struct {
 	Token     string          `json:"token,omitempty"`
 	HubID     string          `json:"hubId,omitempty"`
 	Projects  []ProjectConfig `json:"projects"`
-	Share     ShareConfig     `json:"share,omitempty"`
 	Registry  RegistryConfig  `json:"registry,omitempty"`
 	Log       LogConfig       `json:"log,omitempty"`
 }
@@ -23,7 +22,6 @@ type appConfigInput struct {
 	Token             string          `json:"token,omitempty"`
 	HubID             string          `json:"hubId,omitempty"`
 	Projects          []ProjectConfig `json:"projects"`
-	Share             ShareConfig     `json:"share,omitempty"`
 	Registry          RegistryConfig  `json:"registry,omitempty"`
 	Log               LogConfig       `json:"log,omitempty"`
 	DeprecatedAPIKeys json.RawMessage `json:"api_keys,omitempty"`
@@ -89,9 +87,10 @@ func (c *FeishuConfig) UnmarshalJSON(data []byte) error {
 
 // RegistryConfig configures registry sync.
 type RegistryConfig struct {
-	Port      int  `json:"port,omitempty"`
-	Listen    bool `json:"listen,omitempty"`
-	RelayPort int  `json:"relayPort,omitempty"`
+	Port      int         `json:"port,omitempty"`
+	Listen    bool        `json:"listen,omitempty"`
+	RelayPort int         `json:"relayPort,omitempty"`
+	Share     ShareConfig `json:"share,omitempty"`
 }
 
 // LoadConfig reads and parses the config file at path.
@@ -122,7 +121,6 @@ func LoadConfig(path string) (*AppConfig, error) {
 		Token:     input.Token,
 		HubID:     input.HubID,
 		Projects:  input.Projects,
-		Share:     input.Share,
 		Registry:  input.Registry,
 		Log:       input.Log,
 	}, nil
