@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,11 +14,12 @@ import (
 )
 
 const (
-	GlobalSchemaVersion     = 1
+	GlobalSchemaVersion     = 2
 	SiteSchemaVersion       = 1
 	DefaultLogLevel         = "INFO"
 	DefaultRegistryUpstream = "http://127.0.0.1:9630"
 	DefaultReleaseListen    = "127.0.0.1:9680"
+	URLModeSyncHub          = "sync_hub"
 
 	SiteRegistry SiteKind = "registry"
 	SiteRelease  SiteKind = "release"
@@ -27,13 +29,11 @@ const (
 type SiteKind string
 
 type GlobalConfig struct {
-	Schema   int            `json:"schema"`
-	ACME     ACMEConfig     `json:"acme"`
-	Log      LogConfig      `json:"-"`
-	Relay    RelayConfig    `json:"-"`
-	Registry RegistryConfig `json:"registry"`
-	Release  ReleaseConfig  `json:"release"`
-	Share    ShareConfig    `json:"share"`
+	Schema  int           `json:"schema"`
+	ACME    ACMEConfig    `json:"acme"`
+	Log     LogConfig     `json:"-"`
+	Relay   RelayConfig   `json:"-"`
+	WMSites WMSitesConfig `json:"wm_sites"`
 }
 
 type RelayConfig struct {
@@ -53,22 +53,23 @@ type TLSConfig struct {
 	KeyFile         string `json:"keyFile"`
 }
 
-type RegistryConfig struct {
-	PublicURL string    `json:"-"`
-	TLS       TLSConfig `json:"tls"`
+type WMSitesConfig struct {
+	TLS      TLSConfig           `json:"tls"`
+	Registry HubSyncedSiteConfig `json:"registry"`
+	Release  ReleaseConfig       `json:"release"`
+	Share    HubSyncedSiteConfig `json:"share"`
+}
+
+type HubSyncedSiteConfig struct {
+	URLMode   string `json:"urlMode"`
+	PublicURL string `json:"-"`
 }
 
 type ReleaseConfig struct {
-	PublicURL   string    `json:"publicUrl"`
-	Listen      string    `json:"listen"`
-	DataRoot    string    `json:"dataRoot"`
-	TokenSHA256 string    `json:"tokenSha256"`
-	TLS         TLSConfig `json:"tls"`
-}
-
-type ShareConfig struct {
-	PublicURL string    `json:"-"`
-	TLS       TLSConfig `json:"tls"`
+	PublicURL   string `json:"publicUrl"`
+	Listen      string `json:"listen"`
+	DataRoot    string `json:"dataRoot"`
+	TokenSHA256 string `json:"tokenSha256"`
 }
 
 type SiteConfig struct {
@@ -115,8 +116,20 @@ func ResolvePaths(home string) Paths {
 }
 
 func LoadGlobal(reader io.Reader) (GlobalConfig, error) {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return GlobalConfig{}, fmt.Errorf("read global config: %w", err)
+	}
+	var header struct {
+		Schema int `json:"schema"`
+	}
+	headerDecoder := json.NewDecoder(bytes.NewReader(data))
+	if err := headerDecoder.Decode(&header); err == nil && header.Schema != 0 && header.Schema != GlobalSchemaVersion {
+		return GlobalConfig{}, fmt.Errorf("unsupported global config schema %d", header.Schema)
+	}
+
 	var cfg GlobalConfig
-	decoder := json.NewDecoder(reader)
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&cfg); err != nil {
 		return GlobalConfig{}, fmt.Errorf("decode global config: %w", err)
@@ -134,8 +147,20 @@ func LoadGlobal(reader io.Reader) (GlobalConfig, error) {
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = DefaultLogLevel
 	}
-	if cfg.Release.Listen == "" {
-		cfg.Release.Listen = DefaultReleaseListen
+	if cfg.WMSites.Registry.URLMode == "" {
+		cfg.WMSites.Registry.URLMode = URLModeSyncHub
+	}
+	if cfg.WMSites.Share.URLMode == "" {
+		cfg.WMSites.Share.URLMode = URLModeSyncHub
+	}
+	if err := validateURLMode(cfg.WMSites.Registry.URLMode, "wm_sites.registry"); err != nil {
+		return GlobalConfig{}, err
+	}
+	if err := validateURLMode(cfg.WMSites.Share.URLMode, "wm_sites.share"); err != nil {
+		return GlobalConfig{}, err
+	}
+	if cfg.WMSites.Release.Listen == "" {
+		cfg.WMSites.Release.Listen = DefaultReleaseListen
 	}
 	return cfg, nil
 }
@@ -169,32 +194,39 @@ func ValidateGlobal(cfg GlobalConfig) error {
 	if err := validateRelayPort(cfg.Relay.ListenPort); err != nil {
 		return err
 	}
-	if err := validateOptionalPublicURL(cfg.Registry.PublicURL, "registry publicUrl"); err != nil {
+	if err := validateURLMode(cfg.WMSites.Registry.URLMode, "wm_sites.registry"); err != nil {
 		return err
 	}
-	if err := validateOptionalPublicURL(cfg.Release.PublicURL, "release publicUrl"); err != nil {
+	if err := validateURLMode(cfg.WMSites.Share.URLMode, "wm_sites.share"); err != nil {
 		return err
 	}
-	if err := validateOptionalPublicURL(cfg.Share.PublicURL, "share publicUrl"); err != nil {
+	if err := validateOptionalPublicURL(cfg.WMSites.Registry.PublicURL, "registry publicUrl"); err != nil {
 		return err
 	}
-	if cfg.Release.Listen != "" && cfg.Release.Listen != DefaultReleaseListen {
+	if err := validateOptionalPublicURL(cfg.WMSites.Release.PublicURL, "release publicUrl"); err != nil {
+		return err
+	}
+	if err := validateOptionalPublicURL(cfg.WMSites.Share.PublicURL, "share publicUrl"); err != nil {
+		return err
+	}
+	if cfg.WMSites.Release.Listen != "" && cfg.WMSites.Release.Listen != DefaultReleaseListen {
 		return fmt.Errorf("release listen must be %s", DefaultReleaseListen)
 	}
-	if cfg.Release.DataRoot != "" && !filepath.IsAbs(cfg.Release.DataRoot) {
+	if cfg.WMSites.Release.DataRoot != "" && !filepath.IsAbs(cfg.WMSites.Release.DataRoot) {
 		return fmt.Errorf("release dataRoot must be absolute")
 	}
-	if cfg.Release.TokenSHA256 != "" && !validSHA256Digest(cfg.Release.TokenSHA256) {
+	if cfg.WMSites.Release.TokenSHA256 != "" && !validSHA256Digest(cfg.WMSites.Release.TokenSHA256) {
 		return fmt.Errorf("release tokenSha256 must be a 64-character lowercase SHA-256 digest")
 	}
-	for label, tls := range map[string]TLSConfig{
-		"registry": cfg.Registry.TLS,
-		"release":  cfg.Release.TLS,
-		"share":    cfg.Share.TLS,
-	} {
-		if err := validateTLSConfig(tls, label); err != nil {
-			return err
-		}
+	if err := validateTLSConfig(cfg.WMSites.TLS, "wm_sites"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateURLMode(mode, label string) error {
+	if mode != "" && mode != URLModeSyncHub {
+		return fmt.Errorf("%s urlMode must be %q", label, URLModeSyncHub)
 	}
 	return nil
 }
@@ -368,15 +400,20 @@ func DefaultGlobalConfig(home string) GlobalConfig {
 		ACME:   ACMEConfig{Email: ""},
 		Log:    LogConfig{Level: DefaultLogLevel},
 		Relay:  RelayConfig{ListenPort: 0},
-		Registry: RegistryConfig{
-			PublicURL: "",
+		WMSites: WMSitesConfig{
+			TLS: TLSConfig{},
+			Registry: HubSyncedSiteConfig{
+				URLMode: URLModeSyncHub,
+			},
+			Release: ReleaseConfig{
+				PublicURL:   "",
+				Listen:      DefaultReleaseListen,
+				DataRoot:    paths.ReleaseDataRoot,
+				TokenSHA256: "",
+			},
+			Share: HubSyncedSiteConfig{
+				URLMode: URLModeSyncHub,
+			},
 		},
-		Release: ReleaseConfig{
-			PublicURL:   "",
-			Listen:      DefaultReleaseListen,
-			DataRoot:    paths.ReleaseDataRoot,
-			TokenSHA256: "",
-		},
-		Share: ShareConfig{PublicURL: ""},
 	}
 }

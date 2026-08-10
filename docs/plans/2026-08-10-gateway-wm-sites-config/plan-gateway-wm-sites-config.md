@@ -57,25 +57,25 @@ Expected: PASS with no whitespace errors. Invoke `git-workflow-preferences` in c
 
 **Acceptance:** Gateway accepts schema 2 `wm_sites`, defaults missing Registry/Share `urlMode` to `sync_hub`, rejects schema 1 and unsupported modes, derives Hub URLs as before, and gives every generated site the same validated TLS configuration.
 
-- [ ] **Step 1: Write Gateway schema and defaulting tests**
+- [x] **Step 1: Write Gateway schema and defaulting tests**
 
 Add tests that load the exact schema 2 JSON, assert canonical `wm_sites` serialization, assert missing `urlMode` becomes `sync_hub`, and assert schema 1, old top-level site sections, per-site TLS, and another `urlMode` are rejected.
 
-- [ ] **Step 2: Write runtime and compiler shared-TLS tests**
+- [x] **Step 2: Write runtime and compiler shared-TLS tests**
 
 Build Registry, Release, and Share routes from Hub plus Gateway inputs and assert their runtime `TLSConfig` values equal `wm_sites.tls`. For a shared explicit certificate, assert generated Caddy JSON loads the certificate pair once while matching all HTTPS site hostnames.
 
-- [ ] **Step 3: Run the focused tests and verify RED**
+- [x] **Step 3: Run the focused tests and verify RED**
 
 Run from `server/`: `go test ./internal/gateway ./cmd/wheelmaker-gateway`
 
 Expected: FAIL because schema 2, `wm_sites`, `sync_hub`, and shared TLS are not implemented; failures must come from the new behavior assertions rather than malformed test fixtures.
 
-- [ ] **Step 4: Implement the minimal Gateway model and runtime changes**
+- [x] **Step 4: Implement the minimal Gateway model and runtime changes**
 
 Set `GlobalSchemaVersion` to 2; introduce `WMSitesConfig` and a Hub-synced site config carrying `urlMode` plus runtime-only `PublicURL`; move `ReleaseConfig` beneath `wm_sites`; default and validate only `sync_hub`; assign `wm_sites.tls` to every generated site; deduplicate a shared explicit certificate in the Caddy TLS app.
 
-- [ ] **Step 5: Format and verify GREEN**
+- [x] **Step 5: Format and verify GREEN**
 
 Run from `server/`: `gofmt -w internal/gateway/types.go internal/gateway/runtime.go internal/gateway/compiler.go internal/gateway/gateway_test.go internal/gateway/single_config_test.go internal/gateway/relay_integration_test.go cmd/wheelmaker-gateway/main_test.go`
 
@@ -83,7 +83,7 @@ Run from `server/`: `go test ./internal/gateway ./cmd/wheelmaker-gateway`
 
 Expected: PASS with schema 2 and shared-TLS behavior covered.
 
-- [ ] **Step 6: Checkpoint the Gateway unit**
+- [x] **Step 6: Checkpoint the Gateway unit**
 
 Invoke `git-workflow-preferences` in checkpoint mode for the listed Gateway files after the focused tests pass. Record commit hash and subject.
 

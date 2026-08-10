@@ -52,7 +52,7 @@ func TestRunValidateReadsGatewayConfig(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(paths.configFile), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	config := `{"schema":1,"acme":{"email":"ops@example.com"},"registry":{"tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":"http://release.example.com","listen":"127.0.0.1:9680","dataRoot":"` + filepath.ToSlash(filepath.Join(t.TempDir(), "release-data")) + `","tokenSha256":""},"share":{"tls":{"certificateFile":"","keyFile":""}}}`
+	config := `{"schema":2,"acme":{"email":"ops@example.com"},"wm_sites":{"tls":{"certificateFile":"","keyFile":""},"registry":{"urlMode":"sync_hub"},"release":{"publicUrl":"http://release.example.com","listen":"127.0.0.1:9680","dataRoot":"` + filepath.ToSlash(filepath.Join(t.TempDir(), "release-data")) + `","tokenSha256":""},"share":{"urlMode":"sync_hub"}}}`
 	if err := os.WriteFile(paths.configFile, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}

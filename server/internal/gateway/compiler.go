@@ -145,11 +145,17 @@ func tlsConnectionPolicies(sites []SiteConfig) []any {
 func compileTLSApp(global GlobalConfig, sites []SiteConfig) map[string]any {
 	policies := make([]any, 0)
 	loadFiles := make([]any, 0)
+	seenLoadFiles := make(map[string]struct{})
 	for _, site := range sites {
 		if !site.HTTPS() {
 			continue
 		}
 		if site.TLS.CertificateFile != "" {
+			key := site.TLS.CertificateFile + "\x00" + site.TLS.KeyFile
+			if _, exists := seenLoadFiles[key]; exists {
+				continue
+			}
+			seenLoadFiles[key] = struct{}{}
 			loadFiles = append(loadFiles, map[string]any{
 				"certificate": []string{site.TLS.CertificateFile},
 				"key":         site.TLS.KeyFile,

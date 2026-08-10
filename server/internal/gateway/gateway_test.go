@@ -177,7 +177,7 @@ func TestLoadBundleReadsHubConfigAndIgnoresLegacySiteFiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(legacySitePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":1,"registry":{"tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":""},"share":{"tls":{"certificateFile":"","keyFile":""}}}`), 0o600); err != nil {
+	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":2,"wm_sites":{"tls":{"certificateFile":"","keyFile":""},"registry":{"urlMode":"sync_hub"},"release":{"publicUrl":""},"share":{"urlMode":"sync_hub"}}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	workspace := `{"schema":1,"kind":"workspace","publicUrl":"https://workspace.example.com","webRoot":"` + filepath.ToSlash(filepath.Join(root, "web")) + `","upstream":"http://127.0.0.1:9630","tls":{"certificateFile":"","keyFile":""}}`
@@ -354,14 +354,49 @@ func TestCompileConfigStripsExternalPortFromHostMatchers(t *testing.T) {
 
 func TestLoadGlobalRejectsSharedRuntimeFields(t *testing.T) {
 	for _, input := range []string{
-		`{"schema":1,"log":{"level":"INFO"}}`,
-		`{"schema":1,"relay":{"listenPort":28810}}`,
-		`{"schema":1,"registry":{"publicUrl":"https://registry.example.com"}}`,
-		`{"schema":1,"share":{"publicUrl":"https://share.example.com"}}`,
+		`{"schema":2,"log":{"level":"INFO"}}`,
+		`{"schema":2,"relay":{"listenPort":28810}}`,
+		`{"schema":2,"registry":{"publicUrl":"https://registry.example.com"}}`,
+		`{"schema":2,"release":{"publicUrl":"https://release.example.com"}}`,
+		`{"schema":2,"share":{"publicUrl":"https://share.example.com"}}`,
 	} {
 		if _, err := LoadGlobal(strings.NewReader(input)); err == nil {
 			t.Fatalf("LoadGlobal(%s) accepted Gateway duplicate field", input)
 		}
+	}
+}
+
+func TestLoadGlobalRejectsSchemaOne(t *testing.T) {
+	input := `{"schema":1,"registry":{"tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":""},"share":{"tls":{"certificateFile":"","keyFile":""}}}`
+	if _, err := LoadGlobal(strings.NewReader(input)); err == nil || !strings.Contains(err.Error(), "schema 1") {
+		t.Fatalf("LoadGlobal(schema 1) error = %v, want unsupported schema", err)
+	}
+}
+
+func TestLoadGlobalDefaultsSyncHubURLModes(t *testing.T) {
+	global, err := LoadGlobal(strings.NewReader(`{"schema":2,"wm_sites":{"tls":{},"registry":{},"release":{},"share":{}}}`))
+	if err != nil {
+		t.Fatalf("LoadGlobal() error = %v", err)
+	}
+	raw, err := json.Marshal(global)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	for _, site := range []string{"registry", "share"} {
+		if got := deepString(document, "wm_sites", site, "urlMode"); got != "sync_hub" {
+			t.Errorf("wm_sites.%s.urlMode = %q, want sync_hub", site, got)
+		}
+	}
+}
+
+func TestLoadGlobalRejectsUnsupportedURLMode(t *testing.T) {
+	input := `{"schema":2,"wm_sites":{"tls":{},"registry":{"urlMode":"manual"},"release":{},"share":{"urlMode":"sync_hub"}}}`
+	if _, err := LoadGlobal(strings.NewReader(input)); err == nil || !strings.Contains(err.Error(), "urlMode") {
+		t.Fatalf("LoadGlobal(manual urlMode) error = %v, want rejection", err)
 	}
 }
 
@@ -536,7 +571,7 @@ func TestCompileConfigIsDeterministic(t *testing.T) {
 }
 
 func TestLoadGlobalMissingUsesDefaults(t *testing.T) {
-	global, err := LoadGlobal(strings.NewReader(`{"schema":1,"acme":{"email":"ops@example.com"}}`))
+	global, err := LoadGlobal(strings.NewReader(`{"schema":2,"acme":{"email":"ops@example.com"},"wm_sites":{"registry":{},"release":{},"share":{}}}`))
 	if err != nil {
 		t.Fatalf("LoadGlobal() error = %v", err)
 	}
@@ -546,7 +581,7 @@ func TestLoadGlobalMissingUsesDefaults(t *testing.T) {
 }
 
 func TestLoadConfigRejectsTrailingJSON(t *testing.T) {
-	if _, err := LoadGlobal(strings.NewReader(`{"schema":1} {"schema":1}`)); err == nil {
+	if _, err := LoadGlobal(strings.NewReader(`{"schema":2} {"schema":2}`)); err == nil {
 		t.Fatal("LoadGlobal accepted trailing JSON")
 	}
 	if _, err := LoadSite(strings.NewReader(`{"schema":1} {"schema":1}`)); err == nil {

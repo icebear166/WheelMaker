@@ -89,14 +89,14 @@ func mergeHubConfig(global GlobalConfig, hub *shared.AppConfig) GlobalConfig {
 		return global
 	}
 
-	global.Registry.PublicURL = ""
-	global.Share.PublicURL = ""
+	global.WMSites.Registry.PublicURL = ""
+	global.WMSites.Share.PublicURL = ""
 	if hub.Registry.Listen && strings.TrimSpace(hub.PublicURL) != "" {
 		publicURL := strings.TrimSpace(hub.PublicURL)
 		if err := validateOptionalPublicURL(publicURL, "Hub publicUrl"); err != nil {
 			log.Printf("Hub publicUrl rejected; disabling Gateway Registry route: %v", err)
 		} else {
-			global.Registry.PublicURL = publicURL
+			global.WMSites.Registry.PublicURL = publicURL
 		}
 	}
 
@@ -105,7 +105,7 @@ func mergeHubConfig(global GlobalConfig, hub *shared.AppConfig) GlobalConfig {
 		if err := validateOptionalPublicURL(shareURL, "Hub registry.share.publicUrl"); err != nil {
 			log.Printf("Hub Share publicUrl rejected; disabling Gateway Share route: %v", err)
 		} else {
-			global.Share.PublicURL = shareURL
+			global.WMSites.Share.PublicURL = shareURL
 		}
 	}
 
@@ -138,43 +138,49 @@ func applyGlobalDefaults(global GlobalConfig, home string) GlobalConfig {
 	if global.Log.Level == "" {
 		global.Log.Level = defaults.Log.Level
 	}
-	if global.Release.Listen == "" {
-		global.Release.Listen = defaults.Release.Listen
+	if global.WMSites.Registry.URLMode == "" {
+		global.WMSites.Registry.URLMode = defaults.WMSites.Registry.URLMode
 	}
-	if global.Release.DataRoot == "" {
-		global.Release.DataRoot = defaults.Release.DataRoot
+	if global.WMSites.Share.URLMode == "" {
+		global.WMSites.Share.URLMode = defaults.WMSites.Share.URLMode
+	}
+	if global.WMSites.Release.Listen == "" {
+		global.WMSites.Release.Listen = defaults.WMSites.Release.Listen
+	}
+	if global.WMSites.Release.DataRoot == "" {
+		global.WMSites.Release.DataRoot = defaults.WMSites.Release.DataRoot
 	}
 	return global
 }
 
 func sitesFromGlobal(global GlobalConfig, paths Paths) []SiteConfig {
 	sites := make([]SiteConfig, 0, 3)
-	if strings.TrimSpace(global.Registry.PublicURL) != "" {
+	if strings.TrimSpace(global.WMSites.Registry.PublicURL) != "" {
 		sites = append(sites, SiteConfig{
 			Schema:    SiteSchemaVersion,
 			Kind:      SiteRegistry,
-			PublicURL: global.Registry.PublicURL,
+			PublicURL: global.WMSites.Registry.PublicURL,
 			WebRoot:   paths.RegistryWebRoot,
 			Upstream:  DefaultRegistryUpstream,
-			TLS:       global.Registry.TLS,
+			TLS:       global.WMSites.TLS,
 		})
 	}
-	if strings.TrimSpace(global.Release.PublicURL) != "" {
+	if strings.TrimSpace(global.WMSites.Release.PublicURL) != "" {
 		sites = append(sites, SiteConfig{
 			Schema:    SiteSchemaVersion,
 			Kind:      SiteRelease,
-			PublicURL: global.Release.PublicURL,
-			Upstream:  "http://" + global.Release.Listen,
-			TLS:       global.Release.TLS,
+			PublicURL: global.WMSites.Release.PublicURL,
+			Upstream:  "http://" + global.WMSites.Release.Listen,
+			TLS:       global.WMSites.TLS,
 		})
 	}
-	if strings.TrimSpace(global.Share.PublicURL) != "" {
+	if strings.TrimSpace(global.WMSites.Share.PublicURL) != "" {
 		sites = append(sites, SiteConfig{
 			Schema:    SiteSchemaVersion,
 			Kind:      SiteShare,
-			PublicURL: global.Share.PublicURL,
+			PublicURL: global.WMSites.Share.PublicURL,
 			WebRoot:   paths.SharePublicRoot,
-			TLS:       global.Share.TLS,
+			TLS:       global.WMSites.TLS,
 		})
 	}
 	return sites
