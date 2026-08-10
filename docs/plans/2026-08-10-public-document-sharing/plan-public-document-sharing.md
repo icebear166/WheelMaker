@@ -140,7 +140,7 @@
 - [x] **Step 2: Run final verification**: `go test ./...`; `npm test -- --runInBand`; `npm run tsc:web`; `npm run build:web`; and focused deployment/gateway Node tests.
 - [x] **Step 3: Inspect status and diff** for task-only files, protocol version stability, no generated `dist` edits, no placeholders, and no accidental stats/database artifacts.
 - [x] **Step 4: Checkpoint** the wiki/plan only after final verification passes.
-- [ ] **Step 5: Finalize** with `git-workflow-preferences finalize complete`, following the configured commit/push/merge/cleanup rules.
+- [x] **Step 5: Finalize** with `git-workflow-preferences finalize complete`, following the configured commit/push/merge/cleanup rules.
 
 #### Verification notes
 
