@@ -30,7 +30,6 @@
 .share-manager h2 { font-size: 20px; }
 .share-manager h3 { font-size: 14px; }
 .share-manager-intro p,
-.share-manager-source,
 .share-manager-muted,
 .share-manager-origin,
 .share-manager-record-main span { color: var(--text-secondary); font-size: 12px; }
@@ -42,7 +41,6 @@
   font-size: 11px;
 }
 .share-manager-status.enabled { color: var(--accent-primary); border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle)); }
-.share-manager-create,
 .share-manager-list {
   display: flex;
   flex-direction: column;
@@ -52,9 +50,6 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-canvas));
 }
-.share-manager-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
-.share-manager-field select { min-width: 150px; padding: 6px 9px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-raised); color: var(--text-primary); }
-.share-manager-primary-button,
 .share-manager-subtle-button,
 .share-manager-load-more,
 .share-manager-back-button,
@@ -67,7 +62,6 @@
   cursor: pointer;
   font-size: 12px;
 }
-.share-manager-primary-button { border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-subtle)); background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-raised)); }
 .share-manager-danger-button { color: var(--status-danger, #d66); }
 .share-manager-records { display: flex; flex-direction: column; gap: 8px; }
 .share-manager-record { align-items: flex-start; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent); }
@@ -80,6 +74,96 @@
 .share-manager-error { padding: 9px 11px; border-radius: 8px; background: color-mix(in srgb, #c44 14%, transparent); color: #e58b8b; font-size: 12px; }
 .share-manager-notice { padding: 9px 11px; border-radius: 8px; background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--text-primary); font-size: 12px; overflow-wrap: anywhere; }
 .share-manager-back-button { align-self: flex-start; }
+
+.share-create-dialog {
+  width: min(520px, calc(100vw - 28px));
+}
+
+.share-create-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.share-create-server {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.share-create-server > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.share-create-server-url,
+.share-create-success > span {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.share-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin-top: 12px;
+}
+
+.share-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.share-create-name-input {
+  margin-top: 0;
+}
+
+.share-create-field select {
+  height: 34px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  padding: 0 9px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.share-create-success {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, var(--border-subtle));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  font-size: 12px;
+}
+
+.share-create-success > span {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.share-create-dialog .share-manager-notice {
+  margin-top: 9px;
+}
 
 @media (max-width: 720px) {
   .share-manager { padding: 14px 12px 28px; }

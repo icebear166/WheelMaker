@@ -20,10 +20,18 @@ logging in.
 
 ## Management
 
-The App Menu opens the top-level **Public shares** screen. Preview file actions and
-project-file context menus offer **Create public share** only for supported project
-files. The screen uses a 50-item default cursor page (100 maximum), shows active
-records newest first, copies an enabled link, and stops a share by removing it.
+The App Menu opens the top-level **Public shares** management screen. Preview file
+actions and project-file context menus offer **Create public share** only for
+supported project files and open a compact create dialog instead of navigating to
+the management screen. The dialog shows the configured Share origin and whether it
+is enabled, pre-fills an editable share name from the current file, and keeps the
+expiry selector visible. After creation it displays the returned link, attempts to
+copy it automatically, and keeps an explicit copy action available. Clipboard
+failure does not hide or invalidate the created link.
+
+The management screen uses a 50-item default cursor page (100 maximum), shows
+active records newest first, copies an enabled link, and stops a share by removing
+it.
 
 New links default to one day and may use one hour, one day, seven days, 30 days, or
 permanent expiry. Relative HTML dependencies are warned about before creation; the

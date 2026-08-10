@@ -7550,14 +7550,13 @@ export function App() {
     mobilePortRelayHistoryRef.current = false;
     setPortRelayScreenOpen(false);
   }, [isWide]);
-  const openShares = useCallback((nextSource: ShareManagerSource | null = null) => {
+  const openShares = useCallback(() => {
     closeSettingsPanel();
     setDrawerOpen(false);
     mobileReleasePublishingHistoryRef.current = false;
     setReleasePublishingOpen(false);
     mobilePortRelayHistoryRef.current = false;
     setPortRelayScreenOpen(false);
-    setShareSource(nextSource);
     setSharesScreenOpen(true);
     if (!isWide && !mobileSharesHistoryRef.current) {
       window.history.pushState(
@@ -7568,6 +7567,11 @@ export function App() {
       mobileSharesHistoryRef.current = true;
     }
   }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  const openShareCreate = useCallback((nextSource: ShareManagerSource) => {
+    closeSettingsPanel();
+    setDrawerOpen(false);
+    setShareSource(nextSource);
+  }, [closeSettingsPanel, setDrawerOpen]);
   const closeShares = useCallback(() => {
     if (!isWide && mobileSharesHistoryRef.current) {
       window.history.back();
@@ -7575,7 +7579,6 @@ export function App() {
     }
     mobileSharesHistoryRef.current = false;
     setSharesScreenOpen(false);
-    setShareSource(null);
   }, [isWide]);
   const openSettingsChild = useCallback((detail: SettingsDetail) => {
     setSidebarSettingsOpen(true);
@@ -7730,6 +7733,10 @@ export function App() {
     closeChatPortRelayPreview();
   }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
+    if (shareSource) {
+      setShareSource(null);
+      return true;
+    }
     if (!isWide && mobileUsageOpen) {
       setMobileUsageOpen(false);
       return true;
@@ -7778,7 +7785,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closePortRelayScreen, closeReleasePublishing, closeShares, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatHubMenuOpen, chatHubSkillSurfaceOpen, chatPreviewOpen, closeChatHubSkillSurface, closeChatPreview, closePortRelayScreen, closeReleasePublishing, closeShares, isWide, mobileUsageOpen, setSidebarSettingsOpen, shareSource, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -16184,7 +16191,7 @@ export function App() {
       setThemeMode={setThemeMode}
       onOpenSettings={handleDesktopSettingsSelect}
       onOpenPortRelay={openPortRelayScreen}
-      onOpenShares={() => openShares(null)}
+      onOpenShares={openShares}
       onOpenReleasePublishing={openReleasePublishing}
       updateController={clientUpdateController}
       triggerClassName={mobile
@@ -20264,7 +20271,7 @@ export function App() {
   const renderShareManager = () => (
     <ShareManager
       service={service}
-      initialSource={shareSource}
+      initialSource={null}
       captureSnapshot={captureShareSource}
       onBack={closeShares}
     />
@@ -20785,7 +20792,7 @@ export function App() {
       if (relativePath === null) return;
       const kind = shareKindForPath(relativePath);
       if (!kind) return;
-      openShares({
+      openShareCreate({
         projectId: menuProjectId,
         path: relativePath,
         kind,
@@ -20997,7 +21004,7 @@ export function App() {
       if (tab.type !== 'file' || fileTarget?.relativePath === null || !fileTarget?.relativePath) return;
       const kind = shareKindForPath(fileTarget.relativePath);
       if (!kind) return;
-      openShares({
+      openShareCreate({
         projectId: tab.projectId,
         path: fileTarget.relativePath,
         kind,
@@ -21949,6 +21956,14 @@ export function App() {
       {mobileRelayTargetSheetNode}
       {chatTitlePromptMenu}
       {portRelayClearSiteDataFrame}
+      {shareSource ? (
+        <ShareManager
+          service={service}
+          initialSource={shareSource}
+          captureSnapshot={captureShareSource}
+          onBack={() => setShareSource(null)}
+        />
+      ) : null}
       {markdownHtmlExportRequest ? (
         <MarkdownHtmlExportSurface
           key={markdownHtmlExportRequest.id}

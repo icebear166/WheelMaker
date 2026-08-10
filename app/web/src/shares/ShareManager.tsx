@@ -48,8 +48,10 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [source, setSource] = useState<ShareManagerSource | null>(initialSource);
+  const [titleDraft, setTitleDraft] = useState(initialSource?.title ?? '');
   const [expiry, setExpiry] = useState<RegistryShareExpiry>('1d');
   const [pendingSnapshot, setPendingSnapshot] = useState<ShareSnapshot | null>(null);
+  const [createdUrl, setCreatedUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [busyToken, setBusyToken] = useState('');
   const [error, setError] = useState('');
@@ -73,7 +75,9 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
 
   useEffect(() => {
     setSource(initialSource ?? null);
+    setTitleDraft(initialSource?.title ?? '');
     setPendingSnapshot(null);
+    setCreatedUrl('');
     setError('');
     setNotice('');
   }, [initialSource]);
@@ -81,6 +85,18 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
   useEffect(() => {
     void loadRecords();
   }, [loadRecords]);
+
+  useEffect(() => {
+    if (!source) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) {
+        event.preventDefault();
+        onBack();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [busy, onBack, source]);
 
   const submitSnapshot = useCallback(async (snapshot: ShareSnapshot, currentSource: ShareManagerSource) => {
     setBusy(true);
@@ -91,26 +107,36 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
         projectId: currentSource.projectId,
         path: currentSource.path,
         kind: currentSource.kind,
-        title: currentSource.title,
+        title: titleDraft.trim(),
         expiry,
         encoding: 'gzip+base64',
         content: compressed.content,
       };
       preflightShareEnvelope(payload);
       const result = await service.createShare(payload);
-      setNotice(result.url ? `Share created: ${result.url}` : 'Share created.');
-      setSource(null);
+      const nextUrl = result.url ?? '';
+      setCreatedUrl(nextUrl);
       setPendingSnapshot(null);
-      await loadRecords();
+      if (!nextUrl) {
+        setNotice('Share created.');
+        return;
+      }
+      try {
+        await writeTextToClipboard(nextUrl);
+        setNotice('Share link copied.');
+      } catch (copyError) {
+        const reason = copyError instanceof Error ? copyError.message : String(copyError);
+        setError(`Share created, but automatic copy failed: ${reason}`);
+      }
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : String(createError));
     } finally {
       setBusy(false);
     }
-  }, [expiry, loadRecords, service]);
+  }, [expiry, service, titleDraft]);
 
   const beginCreate = async () => {
-    if (!source || busy) return;
+    if (!source || busy || loading || !enabled || !titleDraft.trim()) return;
     setError('');
     setNotice('');
     try {
@@ -122,6 +148,18 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
       await submitSnapshot(snapshot, source);
     } catch (captureError) {
       setError(captureError instanceof Error ? captureError.message : String(captureError));
+    }
+  };
+
+  const copyCreatedLink = async () => {
+    if (!createdUrl) return;
+    setError('');
+    try {
+      await writeTextToClipboard(createdUrl);
+      setNotice('Share link copied.');
+    } catch (copyError) {
+      const reason = copyError instanceof Error ? copyError.message : String(copyError);
+      setError(`Failed to copy share link: ${reason}`);
     }
   };
 
@@ -153,6 +191,128 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     }
   };
 
+  if (source) {
+    const createDisabled = busy || loading || !enabled || !titleDraft.trim();
+    return (
+      <div
+        className="app-confirm-backdrop share-create-backdrop"
+        role="presentation"
+        onPointerDown={() => {
+          if (!busy) onBack();
+        }}
+      >
+        <section
+          className="app-confirm-dialog share-create-dialog"
+          role="dialog"
+          aria-modal={true}
+          aria-labelledby="share-create-dialog-title"
+          onPointerDown={event => event.stopPropagation()}
+        >
+          <div className="app-confirm-icon">
+            <Icon name="share" size={17} />
+          </div>
+          <div className="app-confirm-content share-create-content">
+            <div id="share-create-dialog-title" className="app-confirm-title">Create public share</div>
+            <div className="app-confirm-name">{source.path}</div>
+
+            <div className="share-create-server">
+              <div>
+                <span>Share server</span>
+                {publicUrl ? <span className="share-create-server-url">{publicUrl}</span> : null}
+              </div>
+              <span
+                className={`share-manager-status${enabled ? ' enabled' : ''}`}
+                data-share-enabled={enabled ? 'true' : 'false'}
+              >
+                {loading ? 'Checking…' : enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+
+            {createdUrl ? (
+              <div className="share-create-success">
+                <strong>Share ready</strong>
+                <span data-share-created-link={createdUrl}>{createdUrl}</span>
+              </div>
+            ) : (
+              <div className="share-create-fields">
+                <label className="share-create-field">
+                  <span>Name</span>
+                  <input
+                    className="app-rename-input share-create-name-input"
+                    type="text"
+                    aria-label="Share name"
+                    value={titleDraft}
+                    maxLength={512}
+                    autoFocus
+                    disabled={busy}
+                    onChange={event => {
+                      setTitleDraft(event.target.value);
+                      setError('');
+                    }}
+                  />
+                </label>
+                <label className="share-create-field">
+                  <span>Expires</span>
+                  <select
+                    aria-label="Share expiry"
+                    value={expiry}
+                    onChange={event => setExpiry(event.target.value as RegistryShareExpiry)}
+                    disabled={busy}
+                  >
+                    {EXPIRY_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                {pendingSnapshot?.warnings.length ? (
+                  <div className="share-manager-warning" role="alert">
+                    <strong>Some dependencies may not load from this public origin.</strong>
+                    <ul>
+                      {pendingSnapshot.warnings.map(warning => (
+                        <li key={`${warning.source}:${warning.message}`}>{warning.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {!loading && !enabled ? (
+                  <p className="share-manager-muted">Set a Share public URL in Config to create new links.</p>
+                ) : null}
+              </div>
+            )}
+
+            {error ? <div className="app-confirm-error" role="alert">{error}</div> : null}
+            {notice ? <div className="share-manager-notice" role="status">{notice}</div> : null}
+            {listError ? <div className="app-confirm-error" role="alert">{listError}</div> : null}
+          </div>
+          <div className="app-confirm-actions">
+            <button type="button" className="app-confirm-btn secondary" onClick={onBack} disabled={busy}>
+              {createdUrl ? 'Done' : 'Cancel'}
+            </button>
+            {createdUrl ? (
+              <button
+                type="button"
+                className="app-confirm-btn primary"
+                aria-label="Copy share link"
+                onClick={() => void copyCreatedLink()}
+              >
+                <Icon name="copy" /> Copy link
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="app-confirm-btn primary"
+                onClick={() => void beginCreate()}
+                disabled={createDisabled}
+              >
+                {busy ? 'Creating…' : pendingSnapshot?.warnings.length ? 'Continue anyway' : 'Create public share'}
+              </button>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="share-manager" data-share-manager="true">
       <section className="share-manager-intro">
@@ -164,45 +324,6 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
           {enabled ? 'Enabled' : 'Disabled'}
         </span>
       </section>
-
-      {source ? (
-        <section className="share-manager-create" data-share-create="true">
-          <div className="share-manager-section-heading">
-            <div>
-              <h3>Create a public share</h3>
-              <p className="share-manager-source">{source.path}</p>
-            </div>
-            <button type="button" className="share-manager-subtle-button" onClick={() => {
-              setSource(null);
-              setPendingSnapshot(null);
-            }} disabled={busy}>
-              Cancel
-            </button>
-          </div>
-          <label className="share-manager-field">
-            <span>Expires</span>
-            <select value={expiry} onChange={event => setExpiry(event.target.value as RegistryShareExpiry)} disabled={busy}>
-              {EXPIRY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </label>
-          {pendingSnapshot?.warnings.length ? (
-            <div className="share-manager-warning" role="alert">
-              <strong>Some dependencies may not load from this public origin.</strong>
-              <ul>
-                {pendingSnapshot.warnings.map(warning => <li key={`${warning.source}:${warning.message}`}>{warning.message}</li>)}
-              </ul>
-              <button type="button" className="share-manager-primary-button" onClick={() => void beginCreate()} disabled={busy}>
-                {busy ? 'Creating…' : 'Continue anyway'}
-              </button>
-            </div>
-          ) : (
-            <button type="button" className="share-manager-primary-button" onClick={() => void beginCreate()} disabled={busy || !enabled}>
-              {busy ? 'Creating…' : 'Create public share'}
-            </button>
-          )}
-          {!enabled ? <p className="share-manager-muted">Set a Share public URL in Config to create new links.</p> : null}
-        </section>
-      ) : null}
 
       {error ? <div className="share-manager-error" role="alert">{error}</div> : null}
       {notice ? <div className="share-manager-notice" role="status">{notice}</div> : null}
