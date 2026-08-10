@@ -20,26 +20,32 @@ Release Server 独立于产品版本部署。它以 SSH 登录用户运行，只
 ~/.config/systemd/user/wheelmaker-release-server.service
 
 ~/.wheelmaker/gateway/config.json       # 共享 Gateway 配置
-                                         # 只更新其中的 release 对象
+                                         # 只更新 wm_sites.release
 ```
 
-Release Server 的运行配置是 `~/.wheelmaker/gateway/config.json` 中的 `release`：
+Release Server 的运行配置是 `~/.wheelmaker/gateway/config.json` 中的 `wm_sites.release`：
 
 ```json
 {
-  "release": {
-    "publicUrl": "https://release.example.com",
-    "listen": "127.0.0.1:9680",
-    "dataRoot": "/home/alice/.wheelmaker/release-server/data",
-    "tokenSha256": "",
-    "tls": {"certificateFile": "", "keyFile": ""}
+  "schema": 2,
+  "acme": {"email": ""},
+  "wm_sites": {
+    "tls": {"certificateFile": "", "keyFile": ""},
+    "registry": {"urlMode": "sync_hub"},
+    "release": {
+      "publicUrl": "https://release.example.com",
+      "listen": "127.0.0.1:9680",
+      "dataRoot": "/home/alice/.wheelmaker/release-server/data",
+      "tokenSha256": ""
+    },
+    "share": {"urlMode": "sync_hub"}
   }
 }
 ```
 
-Gateway 部署在缺少配置时生成完整顶层配置，所有 `publicUrl` 默认为空。Release Server
-部署从 `scripts/release/channel.json` 取得公网地址，只更新 `config.json.release.publicUrl`，
-保留 Release 其余字段以及 `registry`/`share` section。Release Server 进程读取同一份
+Gateway 部署在缺少配置时生成完整 schema 2 配置，Release `publicUrl` 默认为空。Release Server
+部署从 `scripts/release/channel.json` 取得公网地址，只更新 `config.json.wm_sites.release.publicUrl`，
+保留 Release 其余字段、共享 TLS 以及 `registry`/`share` section。Release Server 进程读取同一份
 Gateway 配置。旧的 `~/.wheelmaker/release-server/config.json` 只迁移一次，新的 Gateway
 配置提交成功后才删除；不会创建或读取 `gateway/sites/*.json`。
 
@@ -55,7 +61,7 @@ deploy-release-server.bat
 与 SSH 主机，交叉编译 Linux/amd64 二进制，上传短期 staging 目录，再执行远端事务。
 实际登录用户由 SSH alias 和 `User` 配置决定；脚本不内置 `root@...`。
 
-远端事务安装版本、更新 Gateway 配置中的 `release` 对象、启动用户服务、检查 loopback
+远端事务安装版本、更新 Gateway 配置中的 `wm_sites.release`、启动用户服务、检查 loopback
 健康并删除上传目录。提交前失败时保留原安装版本和原 Gateway 配置。
 
 ## 反向代理合同
@@ -93,7 +99,7 @@ node ~/.wheelmaker/deploy.mjs gateway
 
 ## TLS 与外部端口
 
-Gateway 把 `https://` `release.publicUrl` 解释为自动证书管理。DNS 和所需公网端口必须
+Gateway 把 `https://` `wm_sites.release.publicUrl` 解释为自动证书管理。DNS 和所需公网端口必须
 已经指向本机；`publicUrl` 中显式配置的外部端口会保留在 HTTP 到 HTTPS 跳转中。Release
 Server 部署不管理这些前置条件。
 
@@ -103,7 +109,7 @@ Server 部署不管理这些前置条件。
 SHA-256 摘要发送给远端 `configure-token` 命令。它是发布器的密钥文件，不是服务运行
 配置；原始 Token 不进入 URL、公开文件、Gateway 配置或站点声明。
 
-正式发布最后才让 `stable.json` 可见，然后通过 `release.publicUrl` 下载并验证新 stable、
+正式发布最后才让 `stable.json` 可见，然后通过 `wm_sites.release.publicUrl` 下载并验证新 stable、
 部署脚本、manifest 和 Range 产物。公网验证失败时，服务会恢复旧 stable 和全部派生
 公开文件，再向发布端返回失败。
 

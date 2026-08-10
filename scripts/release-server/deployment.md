@@ -24,28 +24,34 @@ reverse proxy the complete public origin to that loopback listener.
 ~/.config/systemd/user/wheelmaker-release-server.service
 
 ~/.wheelmaker/gateway/config.json       # shared Gateway config
-                                         # only the release object is updated
+                                         # only wm_sites.release is updated
 ```
 
-The Release Server runtime configuration is `release` inside
+The Release Server runtime configuration is `wm_sites.release` inside
 `~/.wheelmaker/gateway/config.json`:
 
 ```json
 {
-  "release": {
-    "publicUrl": "https://release.example.com",
-    "listen": "127.0.0.1:9680",
-    "dataRoot": "/home/alice/.wheelmaker/release-server/data",
-    "tokenSha256": "",
-    "tls": {"certificateFile": "", "keyFile": ""}
+  "schema": 2,
+  "acme": {"email": ""},
+  "wm_sites": {
+    "tls": {"certificateFile": "", "keyFile": ""},
+    "registry": {"urlMode": "sync_hub"},
+    "release": {
+      "publicUrl": "https://release.example.com",
+      "listen": "127.0.0.1:9680",
+      "dataRoot": "/home/alice/.wheelmaker/release-server/data",
+      "tokenSha256": ""
+    },
+    "share": {"urlMode": "sync_hub"}
   }
 }
 ```
 
-The Gateway deployment creates the complete top-level configuration with blank
-`publicUrl` values. The Release Server deployment gets the public URL from
-`scripts/release/channel.json`, updates only `config.json.release.publicUrl`,
-and preserves the other Release fields and all `registry`/`share` sections.
+The Gateway deployment creates the complete schema 2 configuration with blank
+Release `publicUrl`. The Release Server deployment gets the public URL from
+`scripts/release/channel.json`, updates only `config.json.wm_sites.release.publicUrl`,
+and preserves the other Release fields, shared TLS, and the `registry`/`share` sections.
 The Release Server process reads this same Gateway config. A legacy
 `~/.wheelmaker/release-server/config.json`, when present, is migrated once and
 removed only after the new Gateway config is committed. No
@@ -65,7 +71,7 @@ uploads a short-lived staging directory, and invokes the remote transaction.
 SSH aliases and `User` settings determine the actual login name; no `root@...`
 target is embedded in the script.
 
-The remote transaction installs the version, upgrades the Release object in the
+The remote transaction installs the version, upgrades `wm_sites.release` in the
 Gateway config, starts the user service, checks loopback health, and removes
 the upload. A failure before commit retains the previous installed version and
 the previous Gateway config.
@@ -106,7 +112,7 @@ and ensures it is running. Hub deployment never invokes this lifecycle command.
 
 ## TLS and external ports
 
-Gateway interprets an `https://` `release.publicUrl` as automatic certificate
+Gateway interprets an `https://` `wm_sites.release.publicUrl` as automatic certificate
 management. DNS and the required public ports must already route to the host.
 An explicit external port in `publicUrl` is retained in HTTP-to-HTTPS
 redirects. Release Server deployment does not manage those prerequisites.
@@ -121,7 +127,7 @@ file, Gateway config, or site declaration.
 
 During a publish, `stable.json` is made visible last. The server then downloads
 the new public metadata, deployment scripts, manifests, and ranged assets
-through `release.publicUrl`. If that public verification fails, it restores the
+through `wm_sites.release.publicUrl`. If that public verification fails, it restores the
 previous stable pointer and all derived public files before returning the
 failure.
 

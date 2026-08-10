@@ -169,6 +169,8 @@ Invoke `git-workflow-preferences` in checkpoint mode for the listed Release Serv
 **Files:**
 - Modify: `scripts/release-server/remote-install.mjs`
 - Modify: `scripts/release-server/remote-install.test.mjs`
+- Modify: `scripts/release-server/deployment.md`
+- Modify: `scripts/release-server/deployment.zh-CN.md`
 - Modify: `docs/plans/2026-08-10-gateway-wm-sites-config/plan-gateway-wm-sites-config.md`
 
 **Acceptance:** Every spec criterion and plan checkbox is satisfied, all Go and deployment tests pass, formatting is clean, and no old Gateway shape remains in current source or the four approved Wiki pages.
@@ -183,13 +185,13 @@ Replace only the installer's fresh-config template with the canonical schema 2 s
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the complete Go suite**
+- [x] **Step 2: Run the complete Go suite**
 
 Run from `server/`: `go test ./...`
 
 Expected: PASS for every package.
 
-- [ ] **Step 3: Run every deployment and Release script test**
+- [x] **Step 3: Run every deployment and Release script test**
 
 Run from the repository root in PowerShell: `$deployTests = @(Get-ChildItem -LiteralPath 'scripts/deploy' -Filter '*.test.mjs' -File | Select-Object -ExpandProperty FullName); node --test $deployTests`
 
@@ -199,13 +201,13 @@ Run the same command pattern for `scripts/release-server` and `scripts/release`.
 
 Expected: PASS with zero failed tests.
 
-- [ ] **Step 4: Run formatting, retired-shape, placeholder, and diff checks**
+- [x] **Step 4: Run formatting, retired-shape, placeholder, and diff checks**
 
-Run: `gofmt -l server/internal/gateway server/internal/releaseserver server/cmd/wheelmaker-gateway server/cmd/wheelmaker-release-server`
+Run: `$changedGo = @(git diff --name-only origin/main...HEAD -- '*.go'); if ($changedGo.Count -gt 0) { gofmt -l $changedGo }`
 
 Expected: no output for changed Go files.
 
-Run: `rg -n "config\.json\.release|Gateway.*release section|\"schema\": 1|registry\.tls|share\.tls|release\.tls" server/internal/gateway server/internal/releaseserver server/cmd/wheelmaker-gateway server/cmd/wheelmaker-release-server scripts/deploy docs/wiki/architecture/gateway.md docs/wiki/architecture/server-runtime.md docs/wiki/features/public-sharing.md docs/wiki/release-and-build/release.md`
+Run: `rg -n "config\.json\.release|Gateway.*release section|\"schema\": 1|registry\.tls|share\.tls|release\.tls" server/internal/gateway server/internal/releaseserver server/cmd/wheelmaker-gateway server/cmd/wheelmaker-release-server scripts/deploy scripts/release-server docs/wiki/architecture/gateway.md docs/wiki/architecture/server-runtime.md docs/wiki/features/public-sharing.md docs/wiki/release-and-build/release.md`
 
 Expected: matches are limited to explicit schema 1 rejection tests, standalone Release config schema 1, or historical context; current Gateway fixtures and behavior use schema 2.
 
@@ -217,7 +219,7 @@ Run: `git diff --check`
 
 Expected: PASS.
 
-- [ ] **Step 5: Review the approved scope and Wiki targets**
+- [x] **Step 5: Review the approved scope and Wiki targets**
 
 Confirm every acceptance item in `docs/scope/2026-08-10-gateway-wm-sites-config.md` maps to passing tests or an inspected diff, and confirm only the four approved Wiki files were changed under `docs/wiki`.
 
