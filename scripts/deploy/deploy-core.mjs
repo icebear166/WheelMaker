@@ -2890,6 +2890,22 @@ async function waitForGatewayStopped(runtime, {attempts = 20, intervalMs = 250} 
   throw new Error('Gateway service did not stop before binary replacement');
 }
 
+async function waitForGatewayHealthy(runtime, {attempts = 40, intervalMs = 250} = {}) {
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await runtime.health();
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < attempts) {
+        await new Promise(resolvePromise => setTimeout(resolvePromise, intervalMs));
+      }
+    }
+  }
+  throw lastError ?? new Error('Gateway health check failed');
+}
+
 function gatewayBinaryName(platformKey) {
   return platformKey === 'windows-amd64' ? 'wheelmaker-gateway.exe' : 'wheelmaker-gateway';
 }
@@ -2917,6 +2933,7 @@ export async function installGatewayFromStable({
   uid,
   runner,
   gatewayRuntime,
+  gatewayHealthCheck,
   validateBinary: validateBinaryOverride,
   now = () => new Date().toISOString(),
   reportStatus,
@@ -2976,7 +2993,7 @@ export async function installGatewayFromStable({
     }
     try {
       await runtime.start();
-      await runtime.health();
+      await waitForGatewayHealthy(runtime, gatewayHealthCheck);
       return {skipped: true, reason: 'started-existing', home, paths, pointer, manifest};
     } catch (error) {
       reportStatus?.(`Existing Gateway service could not start; reinstalling service: ${error.message}`);
@@ -3013,7 +3030,7 @@ export async function installGatewayFromStable({
       await atomicWrite(statePath, jsonBytes({schema: 1, version: pointer.version, sourceSha: pointer.sourceSha, manifestSha256: pointer.manifestSha256, installedAt: now()}), 0o600);
       try {
         await runtime.install();
-        await runtime.health();
+        await waitForGatewayHealthy(runtime, gatewayHealthCheck);
       } catch (error) {
         reportStatus?.(`Gateway ${pointer.version} was installed but failed to start; fix prerequisites and rerun gateway`);
         await runtime.stop().catch(() => {});

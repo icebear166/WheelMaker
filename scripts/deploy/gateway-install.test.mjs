@@ -12,29 +12,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-test('Gateway manifest requires fixed four-platform current paths', () => {
-  const pointer = {
-    version: 'v1.4',
-    sourceSha: 'a'.repeat(40),
-    manifestPath: '/gateway/current/gateway-manifest.json',
-    manifestSha256: 'b'.repeat(64),
-  };
-  const artifacts = {};
-  for (const target of ['windows-amd64', 'linux-amd64', 'darwin-amd64', 'darwin-arm64']) {
-    artifacts[target] = {
-      path: `/gateway/current/wheelmaker-gateway-v1.4-${target}.tar.zst`,
-      size: 1,
-      sha256: 'c'.repeat(64),
-    };
-  }
-  assert.deepEqual(
-    Object.keys(validateGatewayManifest({schema: 1, version: 'v1.4', sourceSha: 'a'.repeat(40), path: pointer.manifestPath, artifacts}, pointer)),
-    ['windows-amd64', 'linux-amd64', 'darwin-amd64', 'darwin-arm64'],
-  );
-  artifacts['linux-amd64'].path = '/gateway/current/../../secret';
-  assert.throws(() => validateGatewayManifest({schema: 1, version: 'v1.4', sourceSha: 'a'.repeat(40), path: pointer.manifestPath, artifacts}, pointer), /path/);
-});
-test('Gateway install keeps the version and service files when health fails', async (t) => {
+async function createGatewayInstallFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-gateway-install-'));
   t.after(() => rm(root, {recursive: true, force: true}));
   const source = join(root, 'source');
@@ -70,6 +48,49 @@ test('Gateway install keeps the version and service files when health fails', as
   };
   const manifestBytes = Buffer.from(JSON.stringify(manifest));
   pointer.manifestSha256 = sha256(manifestBytes);
+  return {archiveBytes, manifestBytes, pointer, root};
+}
+
+function installFixture(fixture, runtime) {
+  return installGatewayFromStable({
+    stable: {gateway: fixture.pointer},
+    releaseBaseUrl: 'https://release.example.com',
+    gatewayHome: join(fixture.root, 'gateway'),
+    platformKey: 'linux-amd64',
+    platform: 'linux',
+    fetchBytes: async (url) => url.endsWith('gateway-manifest.json')
+      ? fixture.manifestBytes
+      : fixture.archiveBytes,
+    gatewayRuntime: runtime,
+    gatewayHealthCheck: {attempts: 2, intervalMs: 0},
+    validateBinary: async () => {},
+  });
+}
+
+test('Gateway manifest requires fixed four-platform current paths', () => {
+  const pointer = {
+    version: 'v1.4',
+    sourceSha: 'a'.repeat(40),
+    manifestPath: '/gateway/current/gateway-manifest.json',
+    manifestSha256: 'b'.repeat(64),
+  };
+  const artifacts = {};
+  for (const target of ['windows-amd64', 'linux-amd64', 'darwin-amd64', 'darwin-arm64']) {
+    artifacts[target] = {
+      path: `/gateway/current/wheelmaker-gateway-v1.4-${target}.tar.zst`,
+      size: 1,
+      sha256: 'c'.repeat(64),
+    };
+  }
+  assert.deepEqual(
+    Object.keys(validateGatewayManifest({schema: 1, version: 'v1.4', sourceSha: 'a'.repeat(40), path: pointer.manifestPath, artifacts}, pointer)),
+    ['windows-amd64', 'linux-amd64', 'darwin-amd64', 'darwin-arm64'],
+  );
+  artifacts['linux-amd64'].path = '/gateway/current/../../secret';
+  assert.throws(() => validateGatewayManifest({schema: 1, version: 'v1.4', sourceSha: 'a'.repeat(40), path: pointer.manifestPath, artifacts}, pointer), /path/);
+});
+test('Gateway install keeps the version and service files when health fails', async (t) => {
+  const fixture = await createGatewayInstallFixture(t);
   const calls = [];
   const runtime = {
     async stop() { calls.push('stop'); },
@@ -77,17 +98,26 @@ test('Gateway install keeps the version and service files when health fails', as
     async health() { calls.push('health'); throw new Error('health failed'); },
     async uninstall() { calls.push('uninstall'); },
   };
-  await assert.rejects(() => installGatewayFromStable({
-    stable: {gateway: pointer},
-    releaseBaseUrl: 'https://release.example.com',
-    gatewayHome: join(root, 'gateway'),
-    platformKey: 'linux-amd64',
-    platform: 'linux',
-    fetchBytes: async (url) => url.endsWith('gateway-manifest.json') ? manifestBytes : archiveBytes,
-    gatewayRuntime: runtime,
-    validateBinary: async () => {},
-  }), /Gateway installation failed after install/);
-  assert.deepEqual(calls, ['stop', 'install', 'health', 'stop']);
-  await access(join(root, 'gateway', 'bin', 'wheelmaker-gateway'));
-  await access(join(root, 'gateway', 'state', 'release.json'));
+  await assert.rejects(() => installFixture(fixture, runtime), /Gateway installation failed after install/);
+  assert.deepEqual(calls, ['stop', 'install', 'health', 'health', 'stop']);
+  await access(join(fixture.root, 'gateway', 'bin', 'wheelmaker-gateway'));
+  await access(join(fixture.root, 'gateway', 'state', 'release.json'));
+});
+
+test('Gateway install waits through a transient startup health failure', async (t) => {
+  const fixture = await createGatewayInstallFixture(t);
+  const calls = [];
+  let healthAttempts = 0;
+  const runtime = {
+    async stop() { calls.push('stop'); },
+    async install() { calls.push('install'); },
+    async health() {
+      calls.push('health');
+      healthAttempts += 1;
+      if (healthAttempts === 1) throw new Error('connect ECONNREFUSED 127.0.0.1:2019');
+    },
+  };
+
+  await assert.doesNotReject(() => installFixture(fixture, runtime));
+  assert.deepEqual(calls, ['stop', 'install', 'health', 'health']);
 });
