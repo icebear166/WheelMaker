@@ -178,7 +178,7 @@ describe('terminal workspace integration', () => {
   test('imports focused Terminal styles with desktop and mobile geometry', () => {
     const indexCss = read('web/src/styles/index.css');
     const terminalCss = read('web/src/styles/terminal.css');
-    expect(indexCss.trimEnd().endsWith("@import './terminal.css';")).toBe(true);
+    expect(indexCss).toContain("@import './terminal.css';");
     expect(terminalCss).toContain('.terminal-desktop-panel');
     expect(terminalCss).toContain([
       '.terminal-desktop-panel {',

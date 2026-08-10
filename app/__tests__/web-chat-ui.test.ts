@@ -529,11 +529,11 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('renderChatSessionHeader(false)');
     expect(mainTsx).not.toContain('chatSidebarTitleSearchOpen');
     expect(mainTsx).not.toContain('className="desktop-activity-bar"');
-    expect(mainTsx).toContain('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (');
-    expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (');
+    expect(mainTsx).toContain('const desktopSettingsScreen = isWide && settingsScreenVisible ? (');
+    expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && settingsScreenVisible ? (');
     expect(mainTsx).toContain('<SettingsScreen');
     expect(mainTsx).toContain('<MobileSettingsScreen');
-    expect(mainTsx).toContain('className="desktop-settings-screen"');
+    expect(mainTsx).toContain('className={`desktop-settings-screen');
     expect(mainTsx).not.toContain('settingsShortcutBar');
     expect(mainTsx).not.toContain('shortcutBar=');
     expect(mainTsx).toContain('onBackdropClick={handleMobileSettingsBackButton}');
@@ -2216,7 +2216,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
     expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
     expect(mainTsx).toContain('<DesktopWindowControls />');
-    expect(mainTsx).toContain('desktopSettingsScreen={desktopReleasePublishingScreen ?? desktopPortRelayScreen ?? desktopSettingsScreen}');
+    expect(mainTsx).toContain('desktopSettingsScreen={desktopSharesScreen ?? desktopReleasePublishingScreen ?? desktopPortRelayScreen ?? desktopSettingsScreen}');
     expect(mainTsx).toContain('const renderWheelMakerAppMenu = (mobile: boolean) => (');
     expect(mainTsx).toContain("'chat-menu-icon-button chat-menu-settings-button chat-menu-product-button'");
     expect(mainTsx).toContain('onOpenSettings={handleDesktopSettingsSelect}');
