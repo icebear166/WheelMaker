@@ -127,7 +127,7 @@ func TestClaudeACPLifecycleE2E(t *testing.T) {
 		t.Fatalf("fork target prompt did not produce CHILD_READY: %q", agentTextForE2E(targetEvents))
 	}
 
-	runClaudeACPNativeSteeringE2E(t, ctx, target, targetCallbacks, targetID)
+	runClaudeACPNativeSteeringBeforeFirstMessageE2E(t, ctx, target, targetCallbacks, targetID)
 
 	sourceEvents = runClaudeACPE2EPrompt(t, ctx, source, sourceCallbacks, sourceID,
 		"Reply with exactly SOURCE_STILL_READY and nothing else.")
@@ -218,7 +218,7 @@ func runClaudeACPE2EPrompt(
 	}
 }
 
-func runClaudeACPNativeSteeringE2E(
+func runClaudeACPNativeSteeringBeforeFirstMessageE2E(
 	t *testing.T,
 	ctx context.Context,
 	inst Instance,
@@ -233,21 +233,24 @@ func runClaudeACPNativeSteeringE2E(
 			SessionID: sessionID,
 			Prompt: []protocol.ContentBlock{{
 				Type: protocol.ContentBlockTypeText,
-				Text: "Without using tools, write a very long numbered list from 1 through 5000, one item per line.",
+				Text: "Without using tools, think carefully about how to construct a very long numbered list from 1 through 5000, then write it one item per line.",
 			}},
 		})
 		promptDone <- err
 	}()
 
 	var events []protocol.AgentEvent
-	for !containsAgentMessageForE2E(events) {
+	for !containsAgentThoughtForE2E(events) {
 		select {
 		case event := <-callbacks.events:
 			events = append(events, event)
+			if containsAgentMessageForE2E(events) {
+				t.Fatalf("long prompt emitted an agent message before the pre-output steering window")
+			}
 		case err := <-promptDone:
 			t.Fatalf("long prompt completed before steering (err=%v)", err)
 		case <-ctx.Done():
-			t.Fatalf("wait for active Claude prompt: %v", ctx.Err())
+			t.Fatalf("wait for pre-output Claude thought: %v", ctx.Err())
 		}
 	}
 
@@ -318,6 +321,16 @@ func containsAgentMessageForE2E(events []protocol.AgentEvent) bool {
 	for _, event := range events {
 		if message, ok := event.Update.(protocol.AgentMessageEvent); ok &&
 			message.Kind == protocol.SessionUpdateAgentMessageChunk && strings.TrimSpace(message.Content.Text) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func containsAgentThoughtForE2E(events []protocol.AgentEvent) bool {
+	for _, event := range events {
+		if message, ok := event.Update.(protocol.AgentMessageEvent); ok &&
+			message.Kind == protocol.SessionUpdateAgentThoughtChunk && strings.TrimSpace(message.Content.Text) != "" {
 			return true
 		}
 	}
