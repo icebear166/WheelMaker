@@ -21,11 +21,11 @@
 - Add `app/web/src/common/ContextMenu.tsx` for the shared positioned shell and model renderer.
 - Update `app/web/src/styles/chat.css` and `app/web/src/styles/file.css` only as needed to give the shared shell one stable visual contract.
 
-- [ ] Write failing model tests covering project/external/attachment/changed targets, desktop/browser/Android capability gates, Markdown/HTML share and export conditions, diff/history exclusion, fixed action order, group IDs, short labels, icons, and empty-group filtering.
-- [ ] Run the focused model test and confirm it fails for the missing builder.
-- [ ] Implement the normalized `ContextMenuOptions` types, `ContextMenuModel`/`MenuGroup` types, the grouped builder, and the shared focus/keyboard/outside-click/scroll/resize/exit shell.
-- [ ] Run the model and shared-shell tests; fix only the implementation needed for the specified behavior.
-- [ ] Checkpoint the task with `git diff --check` and an explicit task-scoped commit.
+- [x] Write failing model tests covering project/external/attachment/changed targets, desktop/browser/Android capability gates, Markdown/HTML share and export conditions, diff/history exclusion, fixed action order, group IDs, short labels, icons, and empty-group filtering.
+- [x] Run the focused model test and confirm it fails for the missing builder.
+- [x] Implement the normalized `ContextMenuOptions` types, `ContextMenuModel`/`MenuGroup` types, the grouped builder, and the shared focus/keyboard/outside-click/scroll/resize/exit shell.
+- [x] Run the model and shared-shell tests; fix only the implementation needed for the specified behavior.
+- [x] Checkpoint the task with `git diff --check` and an explicit task-scoped commit.
 
 ## Task 2: Move chat, attachment, Changed Files, tree, and Quick Open menus to the model
 
