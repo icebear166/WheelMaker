@@ -692,7 +692,7 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-search-bar');
     expect(stylesCss).toContain('.preview-workbench-search-hud');
     expect(stylesCss).toContain('.chat-search-hud');
-    expect(stylesCss).toContain('.chat-main.chat-search-open .chat-block');
+    expect(stylesCss).toContain(".chat-main[data-chat-search-open='true'] .chat-block");
     expect(stylesCss).toContain('.chat-search-match-active');
     expect(stylesCss).toContain('.preview-search-match-active');
     expect(stylesCss).toContain('@media (prefers-reduced-motion: reduce)');

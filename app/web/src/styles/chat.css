@@ -8218,7 +8218,7 @@ li.chat-reply-target::marker {
 }
 
 /* Search HUD: keep the control above the reading surface while content scrolls. */
-.chat-main.chat-search-open .chat-search-hud {
+.chat-main[data-chat-search-open='true'] .chat-search-hud {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -8236,18 +8236,18 @@ li.chat-reply-target::marker {
     background-color var(--motion-fast) var(--ease-standard);
 }
 
-.chat-main.chat-search-open .chat-block {
+.chat-main[data-chat-search-open='true'] .chat-block {
   padding-top: calc(20px + 46px);
 }
 
-.chat-main.chat-view-width-fixed-800.chat-search-open .chat-search-hud {
+.chat-main.chat-view-width-fixed-800[data-chat-search-open='true'] .chat-search-hud {
   right: auto;
   left: 50%;
   width: min(800px, calc(100% - 16px));
   transform: translateX(-50%);
 }
 
-.chat-main.chat-view-width-fixed-800-edge-surfaces.chat-search-open .chat-search-hud {
+.chat-main.chat-view-width-fixed-800-edge-surfaces[data-chat-search-open='true'] .chat-search-hud {
   left: max(
     0px,
     min(
@@ -8320,7 +8320,7 @@ li.chat-reply-target::marker {
 }
 
 @media (max-width: 900px) {
-  .chat-main.chat-search-open .chat-block {
+  .chat-main[data-chat-search-open='true'] .chat-block {
     padding-top: calc(14px + 46px);
   }
 }

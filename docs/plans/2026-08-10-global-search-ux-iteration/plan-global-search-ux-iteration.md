@@ -255,15 +255,15 @@
 
 **Acceptance:** The three existing pages describe the shipped direct shortcuts, active-session global scope, Preview focus fallback, Sessions sidebar result behavior, and Search HUD visual/motion rules without including temporary task steps or unconfirmed details.
 
-- [ ] **Step 1: Read the three target pages in full and locate the existing search/Chrome/visual sections**
+- [x] **Step 1: Read the three target pages in full and locate the existing search/Chrome/visual sections**
 
   Preserve each page's first-line summary and existing unrelated rules. Update the Search entry section in `pc-chat-sidebar-modes.md`, Preview search behavior in `workbench-chrome.md`, and the stable HUD/highlight/motion rules in `visual-language.md`.
 
-- [ ] **Step 2: Write only confirmed stable knowledge**
+- [x] **Step 2: Write only confirmed stable knowledge**
 
   Record Ctrl/Cmd+F context routing, Ctrl/Cmd+Shift+F Sessions search, active-session/all-visible-Project scope excluding Archived, retained Preview toolbar search, unsupported-Preview fallback, sidebar result metadata, HUD layer requirements, active/all-match emphasis, and reduced-motion behavior. Do not copy plan checklists or implementation line numbers.
 
-- [ ] **Step 3: Run wiki structure checks and Git checkpoint**
+- [x] **Step 3: Run wiki structure checks and Git checkpoint**
 
   Run a first-line summary check for all three pages and `git diff --check`. Checkpoint only the three wiki files after verifying the diff contains no task checklist or speculative protocol change.
 
@@ -278,15 +278,15 @@
 
   Run: `npm test -- --runInBand`
 
-  Expected: all tests pass with no unexpected errors.
+  Result: the feature branch and clean `main` produce the same baseline result: 14 existing suites fail / 26 existing assertions fail, while the five search-focused suites pass (71/71). Leave this gate open until the unrelated baseline failures are resolved.
 
-- [ ] **Step 2: Run Web TypeScript and production build**
+- [x] **Step 2: Run Web TypeScript and production build**
 
   Run: `npm run tsc:web`
 
   Run: `npm run build:web`
 
-  Expected: both commands exit 0.
+  Result: both commands exit 0.
 
 - [ ] **Step 3: Perform manual interaction checks**
 
