@@ -162,7 +162,6 @@ type Reporter struct {
 	// command type stays serialized with itself.
 	npmToolMu               sync.Mutex
 	updateToolMu            sync.Mutex
-	gatewayUpdateToolMu     sync.Mutex
 	skillsToolMu            sync.Mutex
 	releaseToolMu           sync.Mutex
 	miscToolMu              sync.Mutex
@@ -192,7 +191,6 @@ type Reporter struct {
 var bootstrapHubStateSections = []string{
 	hubStateSectionAgentPackages,
 	hubStateSectionWheelmakerUpdate,
-	hubStateSectionGatewayUpdate,
 	hubStateSectionSkills,
 	hubStateSectionFileIndex,
 	hubStateSectionFlickerBridge,
@@ -262,16 +260,15 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		r.flickerBridge = newFlickerBridgeManager(stateDir, flickerAPIKey, r.hubConfig)
 	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
-		HubID:                  cfg.HubID,
-		Projects:               cp,
-		StateDir:               stateDir,
-		OnNPMOperationDone:     r.onNPMOperationDone,
-		OnNPMMetadataChanged:   r.onNPMMetadataChanged,
-		OnUpdateOperationDone:  r.onUpdateOperationDone,
-		OnGatewayOperationDone: r.onGatewayOperationDone,
-		OnSkillsOperationDone:  r.onSkillsOperationDone,
-		OnReleaseJobUpdated:    r.onReleaseJobUpdated,
-		ReleaseNotifier:        r,
+		HubID:                 cfg.HubID,
+		Projects:              cp,
+		StateDir:              stateDir,
+		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnNPMMetadataChanged:  r.onNPMMetadataChanged,
+		OnUpdateOperationDone: r.onUpdateOperationDone,
+		OnSkillsOperationDone: r.onSkillsOperationDone,
+		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
+		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = r.newHubStateManager()
 	r.fileIndex.setOperationDoneHandler(r.onFileIndexOperationDone)
@@ -1089,9 +1086,6 @@ func validateHubStateAction(section string, action string) error {
 			"requestUpdate": {},
 			"restart":       {},
 		},
-		hubStateSectionGatewayUpdate: {
-			"requestUpdate": {},
-		},
 		hubStateSectionSkills: {
 			"listSource": {},
 			"install":    {},
@@ -1214,13 +1208,6 @@ func (r *Reporter) onNPMMetadataChanged() {
 func (r *Reporter) onUpdateOperationDone() {
 	_, _ = r.ensureHubStateManager().enqueueRefresh(
 		[]string{hubStateSectionWheelmakerUpdate},
-		true,
-	)
-}
-
-func (r *Reporter) onGatewayOperationDone() {
-	_, _ = r.ensureHubStateManager().enqueueRefresh(
-		[]string{hubStateSectionGatewayUpdate},
 		true,
 	)
 }
@@ -1805,8 +1792,6 @@ func (r *Reporter) toolMutexFor(method string) *sync.Mutex {
 		return &r.npmToolMu
 	case hubToolMethodUpdate:
 		return &r.updateToolMu
-	case hubToolMethodGatewayUpdate:
-		return &r.gatewayUpdateToolMu
 	case hubToolMethodSkills:
 		return &r.skillsToolMu
 	case hubToolMethodRelease:
@@ -1826,16 +1811,15 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		return r.toolHandler
 	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
-		HubID:                  r.cfg.HubID,
-		Projects:               r.projectsSnapshot(),
-		StateDir:               r.cfg.StateDir,
-		OnNPMOperationDone:     r.onNPMOperationDone,
-		OnNPMMetadataChanged:   r.onNPMMetadataChanged,
-		OnUpdateOperationDone:  r.onUpdateOperationDone,
-		OnGatewayOperationDone: r.onGatewayOperationDone,
-		OnSkillsOperationDone:  r.onSkillsOperationDone,
-		OnReleaseJobUpdated:    r.onReleaseJobUpdated,
-		ReleaseNotifier:        r,
+		HubID:                 r.cfg.HubID,
+		Projects:              r.projectsSnapshot(),
+		StateDir:              r.cfg.StateDir,
+		OnNPMOperationDone:    r.onNPMOperationDone,
+		OnNPMMetadataChanged:  r.onNPMMetadataChanged,
+		OnUpdateOperationDone: r.onUpdateOperationDone,
+		OnSkillsOperationDone: r.onSkillsOperationDone,
+		OnReleaseJobUpdated:   r.onReleaseJobUpdated,
+		ReleaseNotifier:       r,
 	})
 	return r.toolHandler
 }

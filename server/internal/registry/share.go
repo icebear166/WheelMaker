@@ -24,10 +24,6 @@ type shareConfigFile struct {
 	} `json:"share"`
 }
 
-type shareSiteFile struct {
-	PublicURL string `json:"publicUrl"`
-}
-
 type shareCreatePayload struct {
 	ProjectID string `json:"projectId"`
 	Path      string `json:"path"`
@@ -112,34 +108,8 @@ func normalizeSharePublicURL(raw string) (string, error) {
 }
 
 func (s *Server) shareURLConflicts(publicURL string) bool {
-	if publicURL == "" {
-		return false
-	}
-	parsed, err := url.Parse(publicURL)
-	if err != nil || parsed.Hostname() == "" {
-		return true
-	}
-	wantHost := strings.ToLower(parsed.Hostname())
-	sitesDir := ""
-	if s.cfg.GatewayConfigPath != "" {
-		sitesDir = filepath.Join(filepath.Dir(s.cfg.GatewayConfigPath), "sites")
-	} else if s.cfg.StateDir != "" {
-		sitesDir = filepath.Join(s.cfg.StateDir, "gateway", "sites")
-	}
-	for _, name := range []string{"workspace.json", "release-server.json"} {
-		data, err := os.ReadFile(filepath.Join(sitesDir, name))
-		if err != nil {
-			continue
-		}
-		var site shareSiteFile
-		if err := json.Unmarshal(data, &site); err != nil {
-			continue
-		}
-		candidate, err := url.Parse(site.PublicURL)
-		if err == nil && strings.EqualFold(candidate.Hostname(), wantHost) {
-			return true
-		}
-	}
+	// Registry does not read Gateway configuration. Host conflicts are
+	// rejected by Gateway when it compiles its own config.
 	return false
 }
 

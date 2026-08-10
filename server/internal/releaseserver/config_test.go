@@ -2,9 +2,11 @@ package releaseserver
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -35,6 +37,108 @@ func TestWriteAndLoadConfigRoundTrip(t *testing.T) {
 	}
 	if len(raw) == 0 || raw[len(raw)-1] != '\n' {
 		t.Fatalf("config must end with one newline: %q", raw)
+	}
+}
+
+func TestLoadConfigReadsReleaseFromGatewayConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "gateway.json")
+	dataRoot := filepath.Join(t.TempDir(), "release-data")
+	raw := fmt.Sprintf(`{"schema":1,"acme":{"email":""},"log":{"level":"info"},"relay":{"listenPort":0},"registry":{"publicUrl":""},"release":{"publicUrl":"https://release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":""},"share":{"publicUrl":""}}`, dataRoot)
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.PublicURL != "https://release.example.com" || cfg.DataRoot != dataRoot {
+		t.Fatalf("release config = %+v", cfg)
+	}
+}
+
+func TestGatewayReleaseUpdatesPreserveOtherSections(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "gateway.json")
+	dataRoot := filepath.Join(dir, "release-data")
+	newDataRoot := filepath.Join(dir, "new-release-data")
+	raw := fmt.Sprintf(`{"schema":1,"acme":{"email":"ops@example.com"},"log":{"level":"debug"},"relay":{"listenPort":28810},"registry":{"publicUrl":"https://registry.example.com","tls":{"certificateFile":"/etc/registry.crt","keyFile":"/etc/registry.key"}},"release":{"publicUrl":"https://old-release.example.com","listen":"127.0.0.1:9680","dataRoot":%q,"tokenSha256":"","tls":{"certificateFile":"/etc/release.crt","keyFile":"/etc/release.key"}},"share":{"publicUrl":"https://share.example.com","tls":{"certificateFile":"/etc/share.crt","keyFile":"/etc/share.key"}}}`, dataRoot)
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var before map[string]any
+	if err := json.Unmarshal([]byte(raw), &before); err != nil {
+		t.Fatal(err)
+	}
+
+	digest := strings.Repeat("a", 64)
+	if err := ConfigureTokenHash(path, digest); err != nil {
+		t.Fatalf("ConfigureTokenHash() error = %v", err)
+	}
+	if err := ConfigurePublicURLWithDataRoot(path, "https://new-release.example.com/", newDataRoot); err != nil {
+		t.Fatalf("ConfigurePublicURLWithDataRoot() error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var after map[string]any
+	if err := json.Unmarshal(data, &after); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"schema", "acme", "log", "relay", "registry", "share"} {
+		if !reflect.DeepEqual(after[key], before[key]) {
+			t.Fatalf("Gateway section %q changed: before=%#v after=%#v", key, before[key], after[key])
+		}
+	}
+	release, ok := after["release"].(map[string]any)
+	if !ok {
+		t.Fatalf("release section = %#v", after["release"])
+	}
+	if release["publicUrl"] != "https://new-release.example.com" || release["dataRoot"] != newDataRoot || release["tokenSha256"] != digest {
+		t.Fatalf("updated release section = %#v", release)
+	}
+	if !reflect.DeepEqual(release["tls"], before["release"].(map[string]any)["tls"]) {
+		t.Fatalf("release TLS changed: %#v", release["tls"])
+	}
+}
+
+func TestMigrateLegacyConfigCreatesFullGatewayConfig(t *testing.T) {
+	dir := t.TempDir()
+	legacyPath := filepath.Join(dir, "release-server.json")
+	gatewayPath := filepath.Join(dir, "gateway", "config.json")
+	dataRoot := filepath.Join(dir, "data")
+	legacy := Config{
+		Schema:      1,
+		Listen:      "127.0.0.1:9680",
+		PublicURL:   "https://release.example.com",
+		DataRoot:    dataRoot,
+		TokenSHA256: strings.Repeat("b", 64),
+	}
+	if err := WriteConfig(legacyPath, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(gatewayPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateLegacyConfig(legacyPath, gatewayPath, dataRoot); err != nil {
+		t.Fatalf("MigrateLegacyConfig() error = %v", err)
+	}
+	if _, err := LoadConfig(gatewayPath); err != nil {
+		t.Fatalf("LoadConfig(migrated Gateway config) error = %v", err)
+	}
+	data, err := os.ReadFile(gatewayPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"schema", "acme", "log", "relay", "registry", "release", "share"} {
+		if _, ok := document[key]; !ok {
+			t.Fatalf("migrated Gateway config missing %q", key)
+		}
 	}
 }
 

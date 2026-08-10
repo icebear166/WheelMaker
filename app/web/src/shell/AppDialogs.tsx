@@ -91,12 +91,6 @@ export type ConfirmTarget =
       latestVersion: string;
     }
   | {
-      kind: 'gatewayUpdate';
-      hubId: string;
-      currentVersion: string;
-      latestVersion: string;
-    }
-  | {
       kind: 'wheelMakerUpdateAll';
       hubIds: string[];
     }
@@ -215,7 +209,6 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdate') {
     return target.action === 'restart' ? 'Restart WheelMaker?' : 'Update WheelMaker?';
   }
-  if (target.kind === 'gatewayUpdate') return 'Update Gateway?';
   if (target.kind === 'wheelMakerUpdateAll') return 'Update all hubs?';
   if (target.kind === 'skillInstall') return 'Install skills?';
   if (target.kind === 'skillUninstall') return 'Uninstall skill?';
@@ -240,7 +233,6 @@ function resolveConfirmName(target: ConfirmTarget): string {
     return `${target.hubId} - ${npmPackageUpdateSummary(target.packages.length)}`;
   }
   if (target.kind === 'wheelMakerUpdate') return `Hub: ${target.hubId}`;
-  if (target.kind === 'gatewayUpdate') return `Hub: ${target.hubId}`;
   if (target.kind === 'wheelMakerUpdateAll') return `${target.hubIds.length} hubs`;
   if (target.kind === 'skillInstall') return skillScopeLabel(target);
   if (target.kind === 'skillUninstall') return target.skillName;
@@ -295,9 +287,6 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     }
     return `Current: ${target.currentVersion || '-'}. Latest: ${target.latestVersion || '-'}. The current-user updater will download and verify the stable release, deploy it, and restart Hub.`;
   }
-  if (target.kind === 'gatewayUpdate') {
-    return `Current: ${target.currentVersion || '-'}. Latest: ${target.latestVersion || '-'}. Gateway will be downloaded and verified through deploy.mjs without stopping or restarting WheelMaker.`;
-  }
   if (target.kind === 'wheelMakerUpdateAll') {
     return `This requests the verified stable release on ${target.hubIds.length} hubs. Each current-user updater deploys and restarts its Hub independently.`;
   }
@@ -335,7 +324,6 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   }
   if (target.kind === 'npmPackageHubUpdate') return 'refreshCw';
   if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'refreshCw';
-  if (target.kind === 'gatewayUpdate') return 'refreshCw';
   if (target.kind === 'wheelMakerUpdateAll') return 'refreshCw';
   if (target.kind === 'skillInstall') return 'cloudDownload';
   if (target.kind === 'skillUninstall') return 'trash';
@@ -357,7 +345,6 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'npmPackage') return agentPackageActionLabel(target.action);
   if (target.kind === 'npmPackageHubUpdate') return 'Update';
   if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'Restart' : 'Update';
-  if (target.kind === 'gatewayUpdate') return 'Update';
   if (target.kind === 'wheelMakerUpdateAll') return 'Update';
   if (target.kind === 'skillInstall') return 'Install';
   if (target.kind === 'skillUninstall') return 'Uninstall';

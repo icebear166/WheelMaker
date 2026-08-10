@@ -1,4 +1,5 @@
-// Command wheelmaker-gateway embeds Caddy and serves the configured WheelMaker sites.
+// Command wheelmaker-gateway embeds Caddy and serves the configured Registry,
+// Release, and Share routes.
 package main
 
 import (
@@ -118,19 +119,17 @@ func run(args []string, stdout, stderr io.Writer) error {
 func printPaths(home string, stdout io.Writer) error {
 	paths := gateway.ResolvePaths(home)
 	return json.NewEncoder(stdout).Encode(map[string]string{
-		"home":                  paths.Home,
-		"configFile":            paths.ConfigFile,
-		"appConfigFile":         paths.AppConfigFile,
-		"sitesDir":              paths.SitesDir,
-		"workspaceSiteFile":     paths.WorkspaceSiteFile,
-		"releaseServerSiteFile": paths.ReleaseServerSiteFile,
-		"sharePublicRoot":       paths.SharePublicRoot,
-		"generatedConfig":       paths.GeneratedConfig,
-		"stateRelease":          paths.StateRelease,
-		"dataDir":               paths.DataDir,
-		"logsDir":               paths.LogsDir,
-		"downloadsDir":          paths.DownloadsDir,
-		"rollbackDir":           paths.RollbackDir,
+		"home":            paths.Home,
+		"configFile":      paths.ConfigFile,
+		"registryWebRoot": paths.RegistryWebRoot,
+		"releaseDataRoot": paths.ReleaseDataRoot,
+		"sharePublicRoot": paths.SharePublicRoot,
+		"generatedConfig": paths.GeneratedConfig,
+		"stateRelease":    paths.StateRelease,
+		"dataDir":         paths.DataDir,
+		"logsDir":         paths.LogsDir,
+		"downloadsDir":    paths.DownloadsDir,
+		"rollbackDir":     paths.RollbackDir,
 	})
 }
 
@@ -166,10 +165,7 @@ func ensureGlobalConfig(path string) error {
 		return fmt.Errorf("create Gateway config %s: %w", path, err)
 	}
 	defer file.Close()
-	config := gateway.GlobalConfig{
-		Schema: gateway.GlobalSchemaVersion,
-		Log:    gateway.LogConfig{Level: gateway.DefaultLogLevel},
-	}
+	config := gateway.DefaultGlobalConfig(filepath.Dir(path))
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode default Gateway config: %w", err)

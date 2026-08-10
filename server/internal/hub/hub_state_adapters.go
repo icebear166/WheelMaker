@@ -10,11 +10,10 @@ import (
 )
 
 const (
-	hubToolMethodNPM           = "cmd.npm"
-	hubToolMethodUpdate        = "cmd.update"
-	hubToolMethodGatewayUpdate = "cmd.gatewayUpdate"
-	hubToolMethodSkills        = "cmd.skills"
-	hubToolMethodRelease       = "cmd.release"
+	hubToolMethodNPM     = "cmd.npm"
+	hubToolMethodUpdate  = "cmd.update"
+	hubToolMethodSkills  = "cmd.skills"
+	hubToolMethodRelease = "cmd.release"
 )
 
 func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
@@ -26,10 +25,6 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 		hubStateSectionWheelmakerUpdate: {
 			Refresh: r.refreshHubStateWheelmakerUpdate,
 			Action:  r.actionHubStateWheelmakerUpdate,
-		},
-		hubStateSectionGatewayUpdate: {
-			Refresh: r.refreshHubStateGatewayUpdate,
-			Action:  r.actionHubStateGatewayUpdate,
 		},
 		hubStateSectionSkills: {
 			Refresh: r.refreshHubStateSkills,
@@ -145,24 +140,6 @@ func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action st
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionWheelmakerUpdate, action)
 	}
-}
-
-func (r *Reporter) refreshHubStateGatewayUpdate(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, hubToolMethodGatewayUpdate, map[string]any{
-		"action": "query",
-		"hubId":  input.HubID,
-	})
-}
-
-func (r *Reporter) actionHubStateGatewayUpdate(ctx context.Context, action string, params map[string]any) (any, error) {
-	if action != "requestUpdate" {
-		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionGatewayUpdate, action)
-	}
-	result, err := r.runHubStateTool(ctx, hubToolMethodGatewayUpdate, hubStateToolPayload(r.cfg.HubID, "request", params))
-	if err == nil {
-		r.refreshHubStateSectionAfterAction(hubStateSectionGatewayUpdate)
-	}
-	return result, err
 }
 
 func (r *Reporter) refreshHubStateSkills(ctx context.Context, _ hubStateRefreshInput) (any, error) {

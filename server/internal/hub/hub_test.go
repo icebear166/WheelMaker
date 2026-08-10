@@ -1185,7 +1185,6 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		},
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
 		{section: hubStateSectionWheelmakerUpdate, action: "restart"},
-		{section: hubStateSectionGatewayUpdate, action: "requestUpdate"},
 		{section: hubStateSectionSkills, action: "listSource"},
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},
@@ -2679,7 +2678,6 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 	}{
 		{section: hubStateSectionAgentPackages, method: hubToolMethodNPM, action: "scan"},
 		{section: hubStateSectionWheelmakerUpdate, method: hubToolMethodUpdate, action: "query"},
-		{section: hubStateSectionGatewayUpdate, method: hubToolMethodGatewayUpdate, action: "query"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.section, func(t *testing.T) {

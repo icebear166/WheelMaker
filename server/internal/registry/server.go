@@ -54,7 +54,7 @@ type Config struct {
 	Token              string
 	ProtocolVersion    string
 	ServerVersion      string
-	GatewayConfigPath  string
+	RelayPort          int
 	RelayPortProvider  portrelay.RelayPortProvider
 	LogDir             string
 	StateDir           string
@@ -421,11 +421,14 @@ func New(cfg Config) *Server {
 		s.shareStore = newShareStore(shareStoreConfig{stateDir: cfg.StateDir})
 	}
 	relayPortProvider := cfg.RelayPortProvider
-	if relayPortProvider == nil && cfg.GatewayConfigPath != "" {
-		relayPortProvider = newGatewayRelayPortProvider(cfg.GatewayConfigPath)
-	}
 	if relayPortProvider == nil {
-		relayPortProvider = func() (int, error) { return 0, nil }
+		configuredRelayPort := cfg.RelayPort
+		relayPortProvider = func() (int, error) {
+			if configuredRelayPort == 0 {
+				return 0, portrelay.ErrRelayPortClientManaged
+			}
+			return configuredRelayPort, nil
+		}
 	}
 	relay, relayErr := portrelay.NewController(portrelay.ControllerConfig{
 		RegistryAddr:      cfg.Addr,
@@ -685,7 +688,7 @@ func updateOnlyHubRequestAllowed(in envelope) bool {
 		if err := json.Unmarshal(payload["sections"], &sections); err != nil {
 			return false
 		}
-		return len(sections) == 1 && (sections[0] == "wheelmakerUpdate" || sections[0] == "gatewayUpdate")
+		return len(sections) == 1 && sections[0] == "wheelmakerUpdate"
 	case rp.RegistryMethodHubStateAction:
 		if len(payload) < 2 || len(payload) > 3 {
 			return false
@@ -709,7 +712,7 @@ func updateOnlyHubRequestAllowed(in envelope) bool {
 				return false
 			}
 		}
-		return (section == "wheelmakerUpdate" || section == "gatewayUpdate") && action == "requestUpdate"
+		return section == "wheelmakerUpdate" && action == "requestUpdate"
 	default:
 		return false
 	}

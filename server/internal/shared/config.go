@@ -89,8 +89,9 @@ func (c *FeishuConfig) UnmarshalJSON(data []byte) error {
 
 // RegistryConfig configures registry sync.
 type RegistryConfig struct {
-	Port   int  `json:"port,omitempty"`
-	Listen bool `json:"listen,omitempty"`
+	Port      int  `json:"port,omitempty"`
+	Listen    bool `json:"listen,omitempty"`
+	RelayPort int  `json:"relayPort,omitempty"`
 }
 
 // LoadConfig reads and parses the config file at path.

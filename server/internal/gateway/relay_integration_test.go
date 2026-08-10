@@ -68,7 +68,7 @@ func TestGatewayFixedRelayIntegration(t *testing.T) {
 	}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "http://workspace.example.com",
 		WebRoot:   filepath.Join(t.TempDir(), "web"),
 		Upstream:  upstream.URL,

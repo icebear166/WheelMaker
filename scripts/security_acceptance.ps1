@@ -209,14 +209,20 @@ if (-not $remoteInstall.Contains('"listen":"127.0.0.1:9680"')) {
 if (-not $remoteInstall.Contains('$deploy_home/.wheelmaker/release-server')) {
     throw 'release deployment is not rooted in the SSH login Home'
 }
-if (-not $remoteInstall.Contains('$deploy_home/.wheelmaker/gateway/sites')) {
-    throw 'release deployment does not own the Gateway site Home'
+if (-not $remoteInstall.Contains('gateway_config_path="$gateway_home/config.json"')) {
+    throw 'release deployment does not use the Gateway config'
+}
+if (-not $remoteInstall.Contains('configure-public-url --config "$gateway_config_candidate"')) {
+    throw 'release deployment does not update the Gateway release section'
 }
 if (-not $remoteInstall.Contains('systemctl --user')) {
     throw 'release deployment does not use a user service'
 }
-if (-not $remoteInstall.Contains('release-server.json')) {
-    throw 'release deployment does not write the semantic Gateway site'
+if ($remoteInstall.Contains('gateway/sites') -or $remoteInstall.Contains('release-server.json')) {
+    throw 'release deployment still writes the retired Gateway site file'
+}
+if (-not $publisherConfig.Contains('$HOME/.wheelmaker/gateway/config.json') -or $publisherConfig.Contains('$HOME/.wheelmaker/release-server/config.json')) {
+    throw 'publisher token provisioning does not target the Gateway release section'
 }
 $retiredRootTarget = 'root@release.' + 'wheelmaker.top'
 $retiredGatewayHome = '/etc/' + 'wheelmaker-gateway/home'

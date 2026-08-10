@@ -32,7 +32,7 @@ export class HubRefreshTriggers {
     for (const hubId of new Set(hubIds)) {
       if (this.refreshedMenuHubs.has(hubId)) continue;
       this.refreshedMenuHubs.add(hubId);
-      requests.push(this.refresh(hubId, ['wheelmakerUpdate', 'gatewayUpdate'], false));
+      requests.push(this.refresh(hubId, ['wheelmakerUpdate'], false));
     }
     for (const hubId of new Set(expandedHubIds)) {
       if (this.expanded.has(hubId)) continue;

@@ -14,11 +14,13 @@ case "$deploy_home" in
   *) echo "login Home is not absolute" >&2; exit 1 ;;
 esac
 release_home="$deploy_home/.wheelmaker/release-server"
+gateway_home="$deploy_home/.wheelmaker/gateway"
+legacy_config_path="$release_home/config.json"
 versions_home="$release_home/versions"
 data_root="$release_home/data"
 public_root="$data_root/public"
 staging_root="$data_root/staging"
-config_path="$release_home/config.json"
+gateway_config_path="$gateway_home/config.json"
 current_link="$release_home/current"
 unit_home="$deploy_home/.config/systemd/user"
 unit_path="$unit_home/$user_unit"
@@ -31,6 +33,9 @@ unit_existed=0
 unit_backup=""
 config_existed=0
 config_backup=""
+legacy_config_existed=0
+legacy_config_backup=""
+legacy_config_removed=0
 user_active=inactive
 user_enabled=disabled
 linger_before=no
@@ -39,11 +44,6 @@ asset_backup_dir=""
 index_backup_exists=0
 home_backup_exists=0
 assets_changed=0
-gateway_site_path=""
-gateway_site_backup=""
-gateway_site_tmp=""
-gateway_site_existed=0
-gateway_site_changed=0
 
 user_systemctl() {
   XDG_RUNTIME_DIR="/run/user/$deploy_uid" systemctl --user "$@"
@@ -91,9 +91,16 @@ rollback() {
       rm -f "$current_link"
     fi
     if [ "$config_existed" -eq 1 ] && [ -f "$config_backup" ]; then
-      cp -f "$config_backup" "$config_path"
+      cp -f "$config_backup" "$gateway_config_path"
     else
-      rm -f "$config_path"
+      rm -f "$gateway_config_path"
+    fi
+    if [ "$legacy_config_removed" -eq 1 ]; then
+      if [ "$legacy_config_existed" -eq 1 ] && [ -f "$legacy_config_backup" ]; then
+        cp -f "$legacy_config_backup" "$legacy_config_path"
+      else
+        rm -f "$legacy_config_path"
+      fi
     fi
     if [ "$unit_existed" -eq 1 ] && [ -f "$unit_backup" ]; then
       cp -f "$unit_backup" "$unit_path"
@@ -114,13 +121,6 @@ rollback() {
         rm -f "$public_root/release-home.js"
       fi
     fi
-    if [ "$gateway_site_changed" -eq 1 ]; then
-      if [ "$gateway_site_existed" -eq 1 ] && [ -f "$gateway_site_backup" ]; then
-        cp -f "$gateway_site_backup" "$gateway_site_path"
-      else
-        rm -f "$gateway_site_path"
-      fi
-    fi
     if [ "$linger_changed" -eq 1 ]; then
       disable_linger || true
     fi
@@ -131,14 +131,13 @@ rollback() {
       rm -rf -- "$release_home"
     fi
   fi
-  rm -f "$release_home/.config-$source_sha.candidate" \
+  rm -f "$gateway_home/.config-$source_sha.candidate" \
     "$release_home/.index-$source_sha.candidate" \
     "$release_home/.release-home-$source_sha.candidate" \
-    "$unit_path.candidate" "$unit_path.next" "$config_path.next" "$current_link.next"
+    "$unit_path.candidate" "$unit_path.next" "$gateway_config_path.next" "$current_link.next"
   rm -f "$unit_backup" "$config_backup"
+  rm -f "$legacy_config_backup"
   rm -rf -- "$asset_backup_dir"
-  rm -f "$gateway_site_backup"
-  rm -f "$gateway_site_tmp"
   rm -rf -- "$upload_dir"
   exit "$status"
 }
@@ -198,34 +197,41 @@ user_enabled="$(user_systemctl is-enabled "$user_unit" 2>/dev/null || true)"
 linger_before="$(loginctl show-user "$deploy_user" -p Linger --value 2>/dev/null || true)"
 [ "$linger_before" = yes ] || linger_before=no
 
-install -d -m 0700 "$release_home" "$versions_home" "$data_root" "$public_root" "$staging_root" "$unit_home"
+install -d -m 0700 "$release_home" "$gateway_home" "$versions_home" "$data_root" "$public_root" "$staging_root" "$unit_home"
 version_dir="$versions_home/$source_sha"
 install -d -m 0700 "$version_dir"
 stage_binary="$version_dir/wheelmaker-release-server"
-config_candidate="$release_home/.config-$source_sha.candidate"
+gateway_config_candidate="$gateway_home/.config-$source_sha.candidate"
 install -m 0755 "$upload_dir/wheelmaker-release-server" "$stage_binary"
 install -m 0644 "$upload_dir/wheelmaker-release-server.service" "$unit_path.candidate"
 install -m 0644 "$upload_dir/index.html" "$release_home/.index-$source_sha.candidate"
 install -m 0644 "$upload_dir/release-home.js" "$release_home/.release-home-$source_sha.candidate"
 
-if [ -f "$config_path" ]; then
-  cp -f "$config_path" "$config_candidate"
-else
-  printf '{"schema":1,"listen":"127.0.0.1:9680","dataRoot":"%s","tokenSha256":""}\n' "$data_root" > "$config_candidate"
+if [ -f "$legacy_config_path" ]; then
+  legacy_config_existed=1
+  legacy_config_backup="$release_home/.legacy-config-$source_sha.backup"
+  cp -f "$legacy_config_path" "$legacy_config_backup"
 fi
-chmod 0600 "$config_candidate"
-"$stage_binary" configure-public-url --config "$config_candidate" --public-url "$public_url"
-"$stage_binary" validate-config --config "$config_candidate"
+if [ -f "$gateway_config_path" ]; then
+  cp -f "$gateway_config_path" "$gateway_config_candidate"
+elif [ -f "$legacy_config_path" ]; then
+  "$stage_binary" migrate-config --legacy-config "$legacy_config_path" --gateway-config "$gateway_config_candidate" --data-root "$data_root"
+else
+  printf '{"schema":1,"acme":{"email":""},"log":{"level":"info"},"relay":{"listenPort":0},"registry":{"publicUrl":"","tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":"","listen":"127.0.0.1:9680","dataRoot":"%s","tokenSha256":"","tls":{"certificateFile":"","keyFile":""}},"share":{"publicUrl":"","tls":{"certificateFile":"","keyFile":""}}}\n' "$data_root" > "$gateway_config_candidate"
+fi
+chmod 0600 "$gateway_config_candidate"
+"$stage_binary" configure-public-url --config "$gateway_config_candidate" --public-url "$public_url" --data-root "$data_root"
+"$stage_binary" validate-config --config "$gateway_config_candidate"
 
 if [ -f "$unit_path" ]; then
   unit_existed=1
   unit_backup="$release_home/.service-$source_sha.backup"
   cp -f "$unit_path" "$unit_backup"
 fi
-if [ -f "$config_path" ]; then
+if [ -f "$gateway_config_path" ]; then
   config_existed=1
   config_backup="$release_home/.config-$source_sha.backup"
-  cp -f "$config_path" "$config_backup"
+  cp -f "$gateway_config_path" "$config_backup"
 fi
 rollback_armed=1
 
@@ -234,8 +240,8 @@ if [ "$linger_before" != yes ]; then
   linger_changed=1
 fi
 
-install -m 0600 "$config_candidate" "$config_path.next"
-mv -Tf "$config_path.next" "$config_path"
+install -m 0600 "$gateway_config_candidate" "$gateway_config_path.next"
+mv -Tf "$gateway_config_path.next" "$gateway_config_path"
 install -m 0644 "$unit_path.candidate" "$unit_path.next"
 mv -Tf "$unit_path.next" "$unit_path"
 ln -sfn "versions/$source_sha" "$current_link.next"
@@ -276,32 +282,17 @@ install -m 0640 "$release_home/.index-$source_sha.candidate" "$public_root/index
 install -m 0640 "$release_home/.release-home-$source_sha.candidate" "$public_root/release-home.js"
 assets_changed=1
 
-json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-gateway_sites="$deploy_home/.wheelmaker/gateway/sites"
-gateway_site_path="$gateway_sites/release-server.json"
-install -d -m 0700 "$gateway_sites"
-if [ -f "$gateway_site_path" ]; then
-  gateway_site_existed=1
-  gateway_site_backup="$gateway_sites/.release-server-$source_sha.backup"
-  cp -f "$gateway_site_path" "$gateway_site_backup"
+if [ -f "$legacy_config_path" ]; then
+  rm -f "$legacy_config_path"
+  legacy_config_removed=1
 fi
-public_url_json="$(json_escape "$public_url")"
-gateway_site_tmp="$gateway_sites/.release-server-$source_sha.tmp"
-printf '{"schema":1,"kind":"release-server","publicUrl":"%s","upstream":"http://127.0.0.1:9680","tls":{"certificateFile":"","keyFile":""}}\n' \
-  "$public_url_json" > "$gateway_site_tmp"
-chmod 0600 "$gateway_site_tmp"
-mv -Tf "$gateway_site_tmp" "$gateway_site_path"
-gateway_site_changed=1
 
 rollback_armed=0
 trap - ERR INT TERM
-rm -f "$config_candidate" "$config_backup" "$unit_path.candidate" "$unit_backup"
+rm -f "$gateway_config_candidate" "$config_backup" "$unit_path.candidate" "$unit_backup"
 rm -f "$release_home/.index-$source_sha.candidate" "$release_home/.release-home-$source_sha.candidate"
 rm -rf -- "$asset_backup_dir"
-rm -f "$gateway_site_backup"
+rm -f "$legacy_config_backup"
 rm -rf -- "$upload_dir"
 `;
 }

@@ -1746,13 +1746,6 @@ async function ensureRuntimeConfig(home, deps, platform, {publicUrl} = {}) {
   return config;
 }
 
-async function readWorkspacePublicUrl(home) {
-  const config = await readJsonIfPresent(join(home, 'config.json'));
-  if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
-  if (!config.publicUrl) return null;
-  return parsePublicUrl(config.publicUrl).href.replace(/\/$/, '');
-}
-
 async function restorePreMigrationConfig(home, secureConfigFile) {
   const configPath = join(home, 'config.json');
   const backupPath = `${configPath}.pre-migration`;
@@ -1967,25 +1960,10 @@ async function executeDeployment(internalUpdate, deps, runtime) {
         deps.platformKey ?? currentPlatformKey(platform, deps.arch ?? process.arch),
     });
     if (phase !== 'verifying') await setState('verifying');
-    const runtimeConfig = internalUpdate
-      ? null
-      : await ensureRuntimeConfig(home, deps, platform, {
-          publicUrl: deps.deploymentOptions?.publicUrl,
-        });
-
-    // Site declarations are derived business configuration. They are always
-    // refreshed when a public URL is known, without managing Gateway itself.
-    const workspacePublicUrl = runtimeConfig?.publicUrl ?? await readWorkspacePublicUrl(home);
-    if (workspacePublicUrl) {
-      await configureWorkspaceSite({
-        home: deps.gatewayHome ?? gatewayHome({userHome: deps.userHome ?? homedir()}),
-        publicUrl: workspacePublicUrl,
-        upstream: 'http://127.0.0.1:9630',
-        webRoot: join(home, 'web'),
+    if (!internalUpdate) {
+      await ensureRuntimeConfig(home, deps, platform, {
+        publicUrl: deps.deploymentOptions?.publicUrl,
       });
-      deps.reportStatus?.('Workspace Gateway configuration written');
-    } else if (internalUpdate) {
-      deps.reportStatus?.('Workspace public URL is not configured; skipping Gateway configuration');
     }
 
     await setState('applying');
@@ -2199,10 +2177,10 @@ export async function runCore(args, deps = {}) {
 
 // Embedded Gateway subsystem: configuration, runtime registration, and install.
 export const GATEWAY_SCHEMA = 1;
-export const WORKSPACE_SITE_KIND = 'workspace';
-export const RELEASE_SERVER_SITE_KIND = 'release-server';
+export const REGISTRY_CONFIG_KEY = 'registry';
+export const RELEASE_CONFIG_KEY = 'release';
+export const SHARE_CONFIG_KEY = 'share';
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const LOG_LEVELS = new Set(['DEBUG', 'INFO', 'WARN', 'ERROR']);
 
 async function readGatewayJsonIfPresent(path) {
@@ -2256,32 +2234,10 @@ function parsePublicUrl(value) {
   return url;
 }
 
-function parseUpstream(value) {
-  if (typeof value !== 'string' || !value.trim()) throw new Error('upstream is required');
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('upstream must be a loopback http URL');
-  }
-  if (url.protocol !== 'http:' || url.username || url.password || url.search || url.hash ||
-      (url.pathname !== '' && url.pathname !== '/')) {
-    throw new Error('upstream must be a loopback http URL');
-  }
-  const hostname = url.hostname.toLowerCase();
-  let loopback = LOOPBACK_HOSTS.has(hostname);
-  if (!loopback) {
-    // URL.hostname keeps IPv6 brackets in some Node versions; normalize both forms.
-    const candidate = hostname.replace(/^\[|\]$/g, '');
-    loopback = candidate === '::1' || (isIP(candidate) === 4 && candidate.startsWith('127.'));
-  }
-  if (!loopback) throw new Error('upstream must use a loopback address');
-  return url;
-}
-
 function validateTLS(tls) {
-  requireObject(tls ?? {}, 'tls');
-  rejectUnknownKeys(tls ?? {}, new Set(['certificateFile', 'keyFile']), 'tls');
+  tls = tls ?? {};
+  requireObject(tls, 'tls');
+  rejectUnknownKeys(tls, new Set(['certificateFile', 'keyFile']), 'tls');
   const certificateFile = tls.certificateFile ?? '';
   const keyFile = tls.keyFile ?? '';
   if (typeof certificateFile !== 'string' || typeof keyFile !== 'string') {
@@ -2296,55 +2252,95 @@ function validateTLS(tls) {
   return { certificateFile, keyFile };
 }
 
-export function validateGatewayGlobal(config = {}) {
+function parseOptionalPublicUrl(value, label = 'publicUrl') {
+  if (value === undefined || value === null || String(value).trim() === '') return '';
+  try {
+    return parsePublicUrl(value).href.replace(/\/$/, '');
+  } catch (error) {
+    throw new Error(`${label}: ${error.message}`, {cause: error});
+  }
+}
+
+function validateRelayPort(value) {
+  const port = value ?? 0;
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error('Gateway relay.listenPort must be between 0 and 65535');
+  }
+  if ([80, 443, 2019, 9630, 9680].includes(port)) {
+    throw new Error(`Gateway relay.listenPort ${port} is reserved`);
+  }
+  return port;
+}
+
+function validateDigest(value) {
+  if (value === undefined || value === '') return '';
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
+    throw new Error('Gateway release.tokenSha256 must be a 64-character lowercase SHA-256 digest');
+  }
+  return value;
+}
+
+export function validateGatewayGlobal(config = {}, {home} = {}) {
   requireObject(config, 'Gateway config');
-  rejectUnknownKeys(config, new Set(['schema', 'acme', 'log']), 'Gateway config');
+  rejectUnknownKeys(config, new Set([
+    'schema', 'acme', 'log', 'relay', REGISTRY_CONFIG_KEY, RELEASE_CONFIG_KEY, SHARE_CONFIG_KEY,
+  ]), 'Gateway config');
   if (config.schema !== undefined && config.schema !== GATEWAY_SCHEMA) {
     throw new Error(`unsupported Gateway config schema ${config.schema}`);
   }
   const acme = config.acme ?? {};
   const log = config.log ?? {};
+  const relay = config.relay ?? {};
+  const registry = config[REGISTRY_CONFIG_KEY] ?? {};
+  const release = config[RELEASE_CONFIG_KEY] ?? {};
+  const share = config[SHARE_CONFIG_KEY] ?? {};
   requireObject(acme, 'Gateway config acme');
   requireObject(log, 'Gateway config log');
+  requireObject(relay, 'Gateway config relay');
+  requireObject(registry, 'Gateway config registry');
+  requireObject(release, 'Gateway config release');
+  requireObject(share, 'Gateway config share');
   rejectUnknownKeys(acme, new Set(['email']), 'Gateway config acme');
   rejectUnknownKeys(log, new Set(['level']), 'Gateway config log');
+  rejectUnknownKeys(relay, new Set(['listenPort']), 'Gateway config relay');
+  rejectUnknownKeys(registry, new Set(['publicUrl', 'tls']), 'Gateway config registry');
+  rejectUnknownKeys(release, new Set(['publicUrl', 'listen', 'dataRoot', 'tokenSha256', 'tls']), 'Gateway config release');
+  rejectUnknownKeys(share, new Set(['publicUrl', 'tls']), 'Gateway config share');
   if (acme.email !== undefined && typeof acme.email !== 'string') {
     throw new Error('Gateway config acme.email must be a string');
   }
   const level = String(log.level ?? 'INFO').toUpperCase();
   if (!LOG_LEVELS.has(level)) throw new Error(`unsupported Gateway log level ${level}`);
+  const normalizedHome = home === undefined ? undefined : gatewayHome({home});
+  const defaultDataRoot = normalizedHome
+    ? resolve(normalizedHome, '..', 'release-server', 'data')
+    : '';
+  const listen = release.listen ?? '127.0.0.1:9680';
+  if (listen !== '127.0.0.1:9680') throw new Error('Gateway release.listen must be 127.0.0.1:9680');
+  const dataRoot = release.dataRoot ?? defaultDataRoot;
+  if (typeof dataRoot !== 'string' || (dataRoot && !isAbsolute(dataRoot))) {
+    throw new Error('Gateway release.dataRoot must be an absolute path');
+  }
   return {
     schema: GATEWAY_SCHEMA,
     acme: { email: acme.email ?? '' },
     log: { level: level.toLowerCase() === 'warning' ? 'warn' : level.toLowerCase() },
-  };
-}
-
-export function validateGatewaySite(site, {kind} = {}) {
-  requireObject(site, 'Gateway site');
-  rejectUnknownKeys(site, new Set(['schema', 'kind', 'publicUrl', 'webRoot', 'upstream', 'tls']), 'Gateway site');
-  if (site.schema !== GATEWAY_SCHEMA) throw new Error(`unsupported Gateway site schema ${site.schema}`);
-  const siteKind = kind ?? site.kind;
-  if (![WORKSPACE_SITE_KIND, RELEASE_SERVER_SITE_KIND].includes(siteKind)) {
-    throw new Error(`unsupported Gateway site kind ${siteKind}`);
-  }
-  if (site.kind !== siteKind) throw new Error(`Gateway site kind must be ${siteKind}`);
-  const publicUrl = parsePublicUrl(site.publicUrl);
-  const upstream = parseUpstream(site.upstream);
-  if (siteKind === WORKSPACE_SITE_KIND && (typeof site.webRoot !== 'string' || !isAbsolute(site.webRoot))) {
-    throw new Error('static root must be an absolute path');
-  }
-  if (siteKind === RELEASE_SERVER_SITE_KIND && site.webRoot !== undefined) {
-    throw new Error('release-server site cannot set webRoot');
-  }
-  const tls = validateTLS(site.tls);
-  return {
-    schema: GATEWAY_SCHEMA,
-    kind: siteKind,
-    publicUrl: publicUrl.href.replace(/\/$/, ''),
-    ...(siteKind === WORKSPACE_SITE_KIND ? { webRoot: resolve(site.webRoot) } : {}),
-    upstream: upstream.href.replace(/\/$/, ''),
-    tls,
+    relay: {listenPort: validateRelayPort(relay.listenPort)},
+    registry: {
+      publicUrl: parseOptionalPublicUrl(registry.publicUrl, 'Gateway registry.publicUrl'),
+      tls: validateTLS(registry.tls),
+    },
+    release: {
+      publicUrl: parseOptionalPublicUrl(release.publicUrl, 'Gateway release.publicUrl'),
+      listen,
+      dataRoot,
+      tokenSha256: validateDigest(release.tokenSha256),
+      tls: validateTLS(release.tls),
+    },
+    share: {
+      publicUrl: parseOptionalPublicUrl(share.publicUrl, 'Gateway share.publicUrl'),
+      tls: validateTLS(share.tls),
+    },
   };
 }
 
@@ -2364,9 +2360,9 @@ export function gatewayConfigPaths(home) {
   return {
     home: root,
     config: join(root, 'config.json'),
-    sites: join(root, 'sites'),
-    workspace: join(root, 'sites', 'workspace.json'),
-    releaseServer: join(root, 'sites', 'release-server.json'),
+    registryWebRoot: resolve(root, '..', 'web'),
+    releaseDataRoot: resolve(root, '..', 'release-server', 'data'),
+    sharePublicRoot: resolve(root, '..', 'shares', 'public'),
     generated: join(root, 'generated', 'caddy.json'),
     state: join(root, 'state', 'release.json'),
     data: join(root, 'data'),
@@ -2376,42 +2372,48 @@ export function gatewayConfigPaths(home) {
   };
 }
 
+export function defaultGatewayConfiguration(home) {
+  const paths = gatewayConfigPaths(home);
+  return {
+    schema: GATEWAY_SCHEMA,
+    acme: {email: ''},
+    log: {level: 'info'},
+    relay: {listenPort: 0},
+    registry: {publicUrl: '', tls: {certificateFile: '', keyFile: ''}},
+    release: {
+      publicUrl: '',
+      listen: '127.0.0.1:9680',
+      dataRoot: paths.releaseDataRoot,
+      tokenSha256: '',
+      tls: {certificateFile: '', keyFile: ''},
+    },
+    share: {publicUrl: '', tls: {certificateFile: '', keyFile: ''}},
+  };
+}
+
+export async function ensureGatewayConfiguration(home) {
+  const paths = gatewayConfigPaths(home);
+  const current = await readGatewayJsonIfPresent(paths.config);
+  const normalized = validateGatewayGlobal(current ?? defaultGatewayConfiguration(paths.home), {home: paths.home});
+  if (current === null || JSON.stringify(current) !== JSON.stringify(normalized)) {
+    await atomicWrite(paths.config, jsonBytes(normalized), 0o600);
+  }
+  return normalized;
+}
+
 export async function readGatewayConfiguration(home) {
   const paths = gatewayConfigPaths(home);
-  const [global, workspace, releaseServer] = await Promise.all([
-    readGatewayJsonIfPresent(paths.config),
-    readGatewayJsonIfPresent(paths.workspace),
-    readGatewayJsonIfPresent(paths.releaseServer),
-  ]);
-  if (global !== null) validateGatewayGlobal(global);
-  if (workspace !== null) validateGatewaySite(workspace, {kind: WORKSPACE_SITE_KIND});
-  if (releaseServer !== null) validateGatewaySite(releaseServer, {kind: RELEASE_SERVER_SITE_KIND});
-  return {paths, global, workspace, releaseServer};
-}
-
-export async function writeWorkspaceSite(home, site) {
-  const validated = validateGatewaySite(site, {kind: WORKSPACE_SITE_KIND});
-  const paths = gatewayConfigPaths(home);
-  await mkdir(paths.sites, {recursive: true});
-  await atomicWrite(paths.workspace, jsonBytes(validated), 0o600);
-  return validated;
-}
-
-export function workspaceSiteCandidate({
-  publicUrl,
-  webRoot,
-  upstream = 'http://127.0.0.1:9630',
-  certificateFile = '',
-  keyFile = '',
-} = {}) {
-  return validateGatewaySite({
-    schema: GATEWAY_SCHEMA,
-    kind: WORKSPACE_SITE_KIND,
-    publicUrl,
-    webRoot,
-    upstream,
-    tls: {certificateFile, keyFile},
-  }, {kind: WORKSPACE_SITE_KIND});
+  const globalValue = await readGatewayJsonIfPresent(paths.config);
+  const global = globalValue === null
+    ? null
+    : validateGatewayGlobal(globalValue, {home: paths.home});
+  return {
+    paths,
+    global,
+    registry: global?.registry ?? null,
+    release: global?.release ?? null,
+    share: global?.share ?? null,
+  };
 }
 
 function defaultAsk() {
@@ -2460,22 +2462,6 @@ export function parsePublicURLDeploymentOptions(args) {
     options.publicUrl = parsePublicUrl(options.publicUrl).href.replace(/\/$/, '');
   }
   return options;
-}
-
-export async function configureWorkspaceSite({
-  home,
-  publicUrl,
-  webRoot,
-  upstream = 'http://127.0.0.1:9630',
-} = {}) {
-  const paths = gatewayConfigPaths(home);
-  const existingValue = await readGatewayJsonIfPresent(paths.workspace);
-  const existing = existingValue === null
-    ? null
-    : validateGatewaySite(existingValue, {kind: WORKSPACE_SITE_KIND});
-  const candidate = workspaceSiteCandidate({publicUrl, webRoot, upstream});
-  await writeWorkspaceSite(home, candidate);
-  return {existing, paths, site: candidate, written: true};
 }
 
 export async function gatewayConfigExists(home) {
@@ -2949,6 +2935,7 @@ export async function installGatewayFromStable({
   await mkdir(paths.bin, {recursive: true});
   await mkdir(paths.downloads, {recursive: true});
   await mkdir(join(paths.home, 'state'), {recursive: true});
+  await ensureGatewayConfiguration(home);
 
   const runtime = gatewayRuntime ?? createGatewayRuntimeAdapter({
     paths: gatewayRuntimePaths({gatewayHome: home, gatewayBinary: paths.binary, nodePath, userHome, uid}),

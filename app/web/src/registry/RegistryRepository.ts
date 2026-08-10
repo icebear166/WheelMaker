@@ -124,7 +124,6 @@ import type {
   RegistryTerminalListResponse,
   RegistryTerminalResizeRequest,
   RegistryTerminalResizeResponse,
-  RegistryGatewayUpdateResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
   RegistryShareCreatePayload,
@@ -2658,28 +2657,6 @@ export class RegistryRepository {
   async requestWheelMakerRestart(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
     const response = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'restart');
     return hubStateActionResult<RegistryWheelMakerUpdateResponse>(response) ?? {
-      ok: false,
-      status: 'checking_failed',
-      hubId,
-      canRequestUpdate: false,
-      errorCode: 'missing_hub_state_response',
-    };
-  }
-
-  async queryGatewayUpdate(hubId: string): Promise<RegistryGatewayUpdateResponse> {
-    const response = await this.refreshHubState(hubId, ['gatewayUpdate']);
-    return hubStateSectionData<RegistryGatewayUpdateResponse>(response.state, 'gatewayUpdate') ?? {
-      ok: false,
-      status: 'checking_failed',
-      hubId,
-      canRequestUpdate: false,
-      errorCode: 'missing_hub_state_response',
-    };
-  }
-
-  async requestGatewayUpdate(hubId: string): Promise<RegistryGatewayUpdateResponse> {
-    const response = await this.runHubStateAction(hubId, 'gatewayUpdate', 'requestUpdate');
-    return hubStateActionResult<RegistryGatewayUpdateResponse>(response) ?? {
       ok: false,
       status: 'checking_failed',
       hubId,

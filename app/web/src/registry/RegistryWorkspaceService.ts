@@ -93,7 +93,6 @@ import type {
   RegistryTerminalListResponse,
   RegistryTerminalResizeRequest,
   RegistryTerminalResizeResponse,
-  RegistryGatewayUpdateResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
   RegistryShareCreatePayload,
@@ -110,17 +109,10 @@ export type WorkspaceSession = {
 };
 
 export function hubStateRefreshBatches(
-  connectionMode: RegistryHub['connectionMode'],
+  _connectionMode: RegistryHub['connectionMode'],
   sections: RegistryHubStateSectionName[],
 ): RegistryHubStateSectionName[][] {
   const normalized = [...new Set(sections)];
-  if (
-    connectionMode === 'update_only'
-    && normalized.length > 1
-    && normalized.includes('gatewayUpdate')
-  ) {
-    return normalized.map(section => [section]);
-  }
   return [normalized];
 }
 
@@ -1178,20 +1170,6 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.requestWheelMakerRestart(hubId);
-  }
-
-  async queryGatewayUpdate(hubId: string): Promise<RegistryGatewayUpdateResponse> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.queryGatewayUpdate(hubId);
-  }
-
-  async requestGatewayUpdate(hubId: string): Promise<RegistryGatewayUpdateResponse> {
-    if (!this.repository) {
-      throw new Error('session is not ready');
-    }
-    return this.repository.requestGatewayUpdate(hubId);
   }
 
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {

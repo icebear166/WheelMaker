@@ -98,7 +98,7 @@ export async function resolvePublisherToken({actions}, deps) {
     '$HOME/.wheelmaker/release-server/current/wheelmaker-release-server',
     'configure-token',
     '--config',
-    '$HOME/.wheelmaker/release-server/config.json',
+    '$HOME/.wheelmaker/gateway/config.json',
     '--sha256',
     tokenHash,
   ]);

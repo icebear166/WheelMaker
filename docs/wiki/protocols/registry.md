@@ -817,13 +817,14 @@ Registry 下发给 Hub 的内部方法：
 ### Gateway 固定端口数据面
 
 Relay 的公网入口由宿主机 Gateway/Caddy 或手工 Nginx 提供，不再由 Registry 在
-`listenPort` 上创建独立 TCP listener。Gateway 存在时，固定端口事实源是与 Gateway 共用的
-`~/.wheelmaker/gateway/config.json` 中的 `relay.listenPort`；缺失该文件时，Registry
-进入 client-managed standalone 模式，允许客户端在 enable payload 中提供 Nginx 端口。
+`listenPort` 上创建独立 TCP listener。Gateway 的固定边缘端口事实源是 Gateway 自己的
+`~/.wheelmaker/gateway/config.json` 中的 `relay.listenPort`；Registry worker 不读取该文件，
+而只读取 Hub 自己的 `config.json.registry.relayPort`。任一配置为 `0` 时，Registry 进入
+client-managed standalone 模式，允许客户端在 enable payload 中提供 Nginx 端口。
 Gateway 模式下 App 的 LocalStorage 不能覆盖服务端端口；standalone 模式下 LocalStorage
 只作为客户端端口输入的持久化值，Nginx 必须手工保持一致。
 
-当存在 Workspace site 时，Gateway 在固定端口按 Workspace `publicUrl` 的 scheme 监听
+当存在 Registry route 时，Gateway 在固定端口按 Registry `publicUrl` 的 scheme 监听
 HTTP 或 HTTPS，把所有 URI 和 WebSocket 连接反代到 Registry loopback `9630`，并覆盖写入
 `X-WheelMaker-Relay: 1`。Registry `handleHTTP` 在普通 `/ws` 和 HTML preview 路由之前
 检查该标记，将请求交给现有 `portrelay.Controller.ServeHTTP`；Controller 继续负责

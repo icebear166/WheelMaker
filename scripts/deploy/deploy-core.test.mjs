@@ -276,7 +276,7 @@ test('internal update restarts existing runtime without mutating registration', 
   assert.deepEqual(events, ['stop', 'applyUpdate', 'start']);
 });
 
-test('full deployment stores its public URL and writes Gateway config without installing Gateway', async (t) => {
+test('full deployment stores its public URL without writing Gateway config', async (t) => {
   const fixture = await installFixture(t);
   const userHome = join(dirname(fixture.home), 'login-home');
   fixture.deps.userHome = userHome;
@@ -285,10 +285,10 @@ test('full deployment stores its public URL and writes Gateway config without in
   await runCore(['--public-url=https://workspace.example.com'], fixture.deps);
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.equal(config.publicUrl, 'https://workspace.example.com');
-  const sitePath = join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json');
-  const site = JSON.parse(await readFile(sitePath, 'utf8'));
-  assert.equal(site.publicUrl, 'https://workspace.example.com');
-  assert.equal(site.webRoot, join(fixture.home, 'web'));
+  await assert.rejects(
+    () => access(join(userHome, '.wheelmaker', 'gateway')),
+    {code: 'ENOENT'},
+  );
 });
 
 test('public URL input accepts websocket origin syntax and persists HTTPS origin', async (t) => {
@@ -371,7 +371,7 @@ test('full deployment reuses the configured public URL without asking', async (t
   assert.equal(config.publicUrl, 'https://workspace.example.com');
 });
 
-test('update regenerates Workspace site from config without managing Gateway', async (t) => {
+test('update does not write Gateway config', async (t) => {
   const fixture = await installFixture(t);
   const userHome = join(dirname(fixture.home), 'update-home');
   fixture.deps.userHome = userHome;
@@ -383,15 +383,13 @@ test('update regenerates Workspace site from config without managing Gateway', a
 
   await runCore(['update'], fixture.deps);
 
-  const site = JSON.parse(await readFile(
-    join(userHome, '.wheelmaker', 'gateway', 'sites', 'workspace.json'),
-    'utf8',
-  ));
-  assert.equal(site.publicUrl, 'https://workspace.example.com:8443');
-  assert.equal(site.webRoot, join(fixture.home, 'web'));
+  await assert.rejects(
+    () => access(join(userHome, '.wheelmaker', 'gateway')),
+    {code: 'ENOENT'},
+  );
 });
 
-test('legacy update warns and skips site generation when public URL is absent', async (t) => {
+test('legacy update does not write Gateway config when public URL is absent', async (t) => {
   const fixture = await installFixture(t);
   const userHome = join(dirname(fixture.home), 'legacy-update-home');
   fixture.deps.userHome = userHome;
@@ -400,7 +398,6 @@ test('legacy update warns and skips site generation when public URL is absent', 
 
   await runCore(['update'], fixture.deps);
 
-  assert.equal(fixture.messages.some(message => /public URL.*skipping/i.test(message)), true);
   await assert.rejects(
     () => access(join(userHome, '.wheelmaker', 'gateway')),
     {code: 'ENOENT'},
@@ -814,7 +811,6 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   assert.deepEqual(fixture.messages, [
     'Downloading release v1.23',
     'Verifying release v1.23',
-    'Workspace Gateway configuration written',
     'Applying Hub and Web',
     'Configuring runtime',
     'Starting Hub',

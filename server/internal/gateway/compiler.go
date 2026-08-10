@@ -69,11 +69,11 @@ func CompileConfigAt(global GlobalConfig, sites []SiteConfig, storageRoot string
 func compileHTTPApp(global GlobalConfig, sites []SiteConfig) map[string]any {
 	httpsRoutes := make([]any, 0, len(sites))
 	httpRoutes := make([]any, 0, len(sites))
-	workspace := (*SiteConfig)(nil)
+	registry := (*SiteConfig)(nil)
 	for _, site := range sites {
-		if site.Kind == SiteWorkspace && workspace == nil {
+		if site.Kind == SiteRegistry && registry == nil {
 			copy := site
-			workspace = &copy
+			registry = &copy
 		}
 		httpsRoute := hostRoute(site, siteRoutes(site))
 		if site.HTTPS() {
@@ -103,21 +103,21 @@ func compileHTTPApp(global GlobalConfig, sites []SiteConfig) map[string]any {
 		}
 		servers["https"] = httpsServer
 	}
-	if global.Relay.ListenPort > 0 && workspace != nil {
+	if global.Relay.ListenPort > 0 && registry != nil {
 		relayServer := map[string]any{
 			"listen": []string{fmt.Sprintf(":%d", global.Relay.ListenPort)},
-			"routes": []any{hostRoute(*workspace, []any{
+			"routes": []any{hostRoute(*registry, []any{
 				map[string]any{
 					"handle": []any{
 						relayDeleteMarkerHandler(),
 						relaySetHeadersHandler(),
-						relayReverseProxyHandler(workspace.UpstreamAddress()),
+						relayReverseProxyHandler(registry.UpstreamAddress()),
 					},
 				},
 			})},
 		}
-		if workspace.HTTPS() {
-			relayServer["tls_connection_policies"] = tlsConnectionPolicies([]SiteConfig{*workspace})
+		if registry.HTTPS() {
+			relayServer["tls_connection_policies"] = tlsConnectionPolicies([]SiteConfig{*registry})
 		} else {
 			relayServer["automatic_https"] = map[string]any{
 				"disable": true,
@@ -195,13 +195,13 @@ func hostRoute(site SiteConfig, routes []any) map[string]any {
 }
 
 func siteRoutes(site SiteConfig) []any {
-	if site.Kind == SiteReleaseServer {
+	if site.Kind == SiteRelease {
 		return releaseServerRoutes(site)
 	}
 	if site.Kind == SiteShare {
 		return shareRoutes(site)
 	}
-	return workspaceRoutes(site)
+	return registryRoutes(site)
 }
 
 func shareRoutes(site SiteConfig) []any {
@@ -225,7 +225,7 @@ func shareRoutes(site SiteConfig) []any {
 	}
 }
 
-func workspaceRoutes(site SiteConfig) []any {
+func registryRoutes(site SiteConfig) []any {
 	root := site.StaticRoot()
 	return []any{
 		map[string]any{

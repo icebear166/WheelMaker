@@ -88,7 +88,7 @@ test('Release Server template is a hardened user unit rooted in Home', async () 
   const unit = await readFile(new URL('./wheelmaker-release-server.service', import.meta.url), 'utf8');
 
   assert.match(unit, /^WorkingDirectory=%h\/\.wheelmaker\/release-server\/data$/m);
-  assert.match(unit, /^ExecStart=%h\/\.wheelmaker\/release-server\/current\/wheelmaker-release-server serve --config %h\/\.wheelmaker\/release-server\/config\.json$/m);
+  assert.match(unit, /^ExecStart=%h\/\.wheelmaker\/release-server\/current\/wheelmaker-release-server serve --config %h\/\.wheelmaker\/gateway\/config\.json$/m);
   assert.match(unit, /^WantedBy=default\.target$/m);
   assert.match(unit, /^ProtectHome=read-only$/m);
   assert.doesNotMatch(unit, /^User=|^Group=|\/opt\/|\/etc\/wheelmaker-release-server|\/srv\/wheelmaker-release|www-data/m);

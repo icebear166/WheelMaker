@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,10 +32,7 @@ func LoadBundle(home string) (ConfigBundle, error) {
 	if err != nil {
 		return ConfigBundle{}, err
 	}
-	sites, err := loadSiteFiles(paths)
-	if err != nil {
-		return ConfigBundle{}, err
-	}
+	sites := sitesFromGlobal(global, paths)
 	compiled, err := CompileConfigAt(global, sites, paths.DataDir)
 	if err != nil {
 		return ConfigBundle{}, err
@@ -47,7 +43,7 @@ func LoadBundle(home string) (ConfigBundle, error) {
 func loadGlobalFile(path string) (GlobalConfig, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: DefaultLogLevel}}, nil
+		return DefaultGlobalConfig(filepath.Dir(path)), nil
 	}
 	if err != nil {
 		return GlobalConfig{}, fmt.Errorf("read global config %s: %w", path, err)
@@ -59,90 +55,58 @@ func loadGlobalFile(path string) (GlobalConfig, error) {
 	if err := ValidateGlobal(global); err != nil {
 		return GlobalConfig{}, fmt.Errorf("global config %s: %w", path, err)
 	}
+	global = applyGlobalDefaults(global, filepath.Dir(path))
 	return global, nil
 }
 
-func loadSiteFiles(paths Paths) ([]SiteConfig, error) {
+func applyGlobalDefaults(global GlobalConfig, home string) GlobalConfig {
+	defaults := DefaultGlobalConfig(home)
+	if global.Schema == 0 {
+		global.Schema = defaults.Schema
+	}
+	if global.Log.Level == "" {
+		global.Log.Level = defaults.Log.Level
+	}
+	if global.Release.Listen == "" {
+		global.Release.Listen = defaults.Release.Listen
+	}
+	if global.Release.DataRoot == "" {
+		global.Release.DataRoot = defaults.Release.DataRoot
+	}
+	return global
+}
+
+func sitesFromGlobal(global GlobalConfig, paths Paths) []SiteConfig {
 	sites := make([]SiteConfig, 0, 3)
-	for _, path := range []string{paths.WorkspaceSiteFile, paths.ReleaseServerSiteFile} {
-		data, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("read site config %s: %w", path, err)
-		}
-		site, err := LoadSite(bytes.NewReader(data))
-		if err != nil {
-			return nil, fmt.Errorf("site config %s: %w", path, err)
-		}
-		if err := ValidateSite(site); err != nil {
-			return nil, fmt.Errorf("site config %s: %w", path, err)
-		}
-		if site.Kind == SiteShare {
-			return nil, fmt.Errorf("site config %s: share sites are derived from the main config", path)
-		}
-		sites = append(sites, site)
+	if strings.TrimSpace(global.Registry.PublicURL) != "" {
+		sites = append(sites, SiteConfig{
+			Schema:    SiteSchemaVersion,
+			Kind:      SiteRegistry,
+			PublicURL: global.Registry.PublicURL,
+			WebRoot:   paths.RegistryWebRoot,
+			Upstream:  DefaultRegistryUpstream,
+			TLS:       global.Registry.TLS,
+		})
 	}
-	if share, ok := loadShareSite(paths, sites); ok {
-		sites = append(sites, share)
+	if strings.TrimSpace(global.Release.PublicURL) != "" {
+		sites = append(sites, SiteConfig{
+			Schema:    SiteSchemaVersion,
+			Kind:      SiteRelease,
+			PublicURL: global.Release.PublicURL,
+			Upstream:  "http://" + global.Release.Listen,
+			TLS:       global.Release.TLS,
+		})
 	}
-	return sites, nil
-}
-
-type appShareConfig struct {
-	Share struct {
-		PublicURL string `json:"publicUrl"`
-	} `json:"share"`
-}
-
-func loadShareSite(paths Paths, existing []SiteConfig) (SiteConfig, bool) {
-	data, err := os.ReadFile(paths.AppConfigFile)
-	if err != nil {
-		return SiteConfig{}, false
+	if strings.TrimSpace(global.Share.PublicURL) != "" {
+		sites = append(sites, SiteConfig{
+			Schema:    SiteSchemaVersion,
+			Kind:      SiteShare,
+			PublicURL: global.Share.PublicURL,
+			WebRoot:   paths.SharePublicRoot,
+			TLS:       global.Share.TLS,
+		})
 	}
-	var config appShareConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return SiteConfig{}, false
-	}
-	publicURL, err := normalizeShareSiteURL(config.Share.PublicURL)
-	if err != nil || publicURL == "" {
-		return SiteConfig{}, false
-	}
-	shareSite := SiteConfig{
-		Schema:    SiteSchemaVersion,
-		Kind:      SiteShare,
-		PublicURL: publicURL,
-		WebRoot:   paths.SharePublicRoot,
-	}
-	for _, site := range existing {
-		if strings.EqualFold(site.Host(), shareSite.Host()) {
-			return SiteConfig{}, false
-		}
-	}
-	if err := ValidateSite(shareSite); err != nil {
-		return SiteConfig{}, false
-	}
-	return shareSite, true
-}
-
-func normalizeShareSiteURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", nil
-	}
-	if strings.ContainsAny(raw, "\r\n\t?#") {
-		return "", fmt.Errorf("share publicUrl contains invalid characters")
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-	scheme := strings.ToLower(parsed.Scheme)
-	if (scheme != "http" && scheme != "https") || parsed.Opaque != "" || parsed.User != nil || parsed.Hostname() == "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.ForceQuery || (parsed.Path != "" && parsed.Path != "/") || parsed.RawPath != "" {
-		return "", fmt.Errorf("share publicUrl must contain only scheme, host, optional port, and / path")
-	}
-	return strings.TrimSuffix(scheme+"://"+parsed.Host, "/"), nil
+	return sites
 }
 
 func ValidateJSON(configJSON []byte) error {
@@ -157,7 +121,7 @@ func ValidateJSON(configJSON []byte) error {
 }
 
 // RunManaged starts Caddy with a valid generated configuration and watches the
-// semantic Gateway files. A valid change is compiled, written atomically, and
+// Gateway config file. A valid change is compiled, written atomically, and
 // hot-loaded; an invalid change is ignored so the last valid configuration
 // keeps serving. The polling interval intentionally avoids a filesystem
 // watcher dependency on Windows, Linux, and macOS.
@@ -207,8 +171,8 @@ func RunManaged(ctx context.Context, home string, configJSON []byte) error {
 }
 
 func semanticFingerprint(paths Paths) string {
-	parts := make([]string, 0, 4)
-	for _, path := range []string{paths.ConfigFile, paths.WorkspaceSiteFile, paths.ReleaseServerSiteFile, paths.AppConfigFile} {
+	parts := make([]string, 0, 1)
+	for _, path := range []string{paths.ConfigFile} {
 		info, err := os.Stat(path)
 		if err != nil {
 			parts = append(parts, path+":missing")

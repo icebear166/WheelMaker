@@ -35,24 +35,25 @@ func TestRunPathsPrintsStableLayout(t *testing.T) {
 	if paths["generatedConfig"] != filepath.Join(home, "generated", "caddy.json") {
 		t.Fatalf("generatedConfig = %q", paths["generatedConfig"])
 	}
-	if paths["appConfigFile"] != filepath.Join(filepath.Dir(home), "config.json") {
-		t.Fatalf("appConfigFile = %q", paths["appConfigFile"])
+	if paths["registryWebRoot"] != filepath.Join(filepath.Dir(home), "web") {
+		t.Fatalf("registryWebRoot = %q", paths["registryWebRoot"])
+	}
+	if paths["releaseDataRoot"] != filepath.Join(filepath.Dir(home), "release-server", "data") {
+		t.Fatalf("releaseDataRoot = %q", paths["releaseDataRoot"])
 	}
 	if paths["sharePublicRoot"] != filepath.Join(filepath.Dir(home), "shares", "public") {
 		t.Fatalf("sharePublicRoot = %q", paths["sharePublicRoot"])
 	}
 }
 
-func TestRunValidateReadsGlobalAndSiteFiles(t *testing.T) {
+func TestRunValidateReadsSingleGatewayConfig(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "gateway")
 	paths := gatewayPathsForTest(home)
-	if err := os.MkdirAll(paths.sitesDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(paths.configFile), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(paths.configFile, []byte(`{"schema":1,"acme":{"email":"ops@example.com"},"log":{"level":"info"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(paths.sitesDir, "workspace.json"), []byte(`{"schema":1,"kind":"workspace","publicUrl":"http://workspace.example.com","webRoot":"`+filepath.ToSlash(filepath.Join(t.TempDir(), "web"))+`","upstream":"http://127.0.0.1:9630","tls":{"certificateFile":"","keyFile":""}}`), 0o600); err != nil {
+	config := `{"schema":1,"acme":{"email":"ops@example.com"},"log":{"level":"info"},"relay":{"listenPort":0},"registry":{"publicUrl":"http://registry.example.com"},"release":{"publicUrl":"http://release.example.com","listen":"127.0.0.1:9680","dataRoot":"` + filepath.ToSlash(filepath.Join(t.TempDir(), "release-data")) + `","tokenSha256":""},"share":{"publicUrl":"http://share.example.com"}}`
+	if err := os.WriteFile(paths.configFile, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,12 +74,10 @@ func TestRunRejectsUnknownCommand(t *testing.T) {
 
 type testGatewayPaths struct {
 	configFile string
-	sitesDir   string
 }
 
 func gatewayPathsForTest(home string) testGatewayPaths {
 	return testGatewayPaths{
 		configFile: filepath.Join(home, "config.json"),
-		sitesDir:   filepath.Join(home, "sites"),
 	}
 }

@@ -2,16 +2,12 @@ import type {RegistryClient} from './RegistryClient';
 import {RegistryRepository} from './RegistryRepository';
 import {hubStateRefreshBatches} from './RegistryWorkspaceService';
 
-test('keeps normal Hub refreshes combined', () => {
-  expect(hubStateRefreshBatches('normal', ['wheelmakerUpdate', 'gatewayUpdate'])).toEqual([
-    ['wheelmakerUpdate', 'gatewayUpdate'],
-  ]);
-});
-
-test('splits Gateway refreshes for update-only Hubs', () => {
-  expect(hubStateRefreshBatches('update_only', ['wheelmakerUpdate', 'gatewayUpdate'])).toEqual([
+test('deduplicates Hub refresh sections without Gateway coupling', () => {
+  expect(hubStateRefreshBatches('normal', ['wheelmakerUpdate', 'wheelmakerUpdate'])).toEqual([
     ['wheelmakerUpdate'],
-    ['gatewayUpdate'],
+  ]);
+  expect(hubStateRefreshBatches('update_only', ['wheelmakerUpdate', 'skills'])).toEqual([
+    ['wheelmakerUpdate', 'skills'],
   ]);
 });
 

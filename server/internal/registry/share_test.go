@@ -91,20 +91,20 @@ func TestShareRequestsCreateListDeleteAndInvalidPayload(t *testing.T) {
 	}
 }
 
-func TestShareConfigHostnameConflictDisablesOnlySharing(t *testing.T) {
+func TestShareConfigIgnoresGatewayConfig(t *testing.T) {
 	stateDir := t.TempDir()
 	writeShareConfigTest(t, stateDir, `{"projects":[],"share":{"publicUrl":"https://same.example.test"}}`)
-	sitesDir := filepath.Join(stateDir, "gateway", "sites")
-	if err := os.MkdirAll(sitesDir, 0o700); err != nil {
+	gatewayDir := filepath.Join(stateDir, "gateway")
+	if err := os.MkdirAll(gatewayDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sitesDir, "workspace.json"), []byte(`{"publicUrl":"https://SAME.example.test","kind":"workspace"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(gatewayDir, "config.json"), []byte(`{"share":{"publicUrl":"https://SAME.example.test"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s := New(Config{Token: "share-token", StateDir: stateDir})
 	state := s.currentShareConfig()
-	if state.enabled {
-		t.Fatalf("conflicting share config = %+v", state)
+	if !state.enabled || state.publicURL != "https://same.example.test" {
+		t.Fatalf("share config = %+v", state)
 	}
 }
 

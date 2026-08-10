@@ -49,13 +49,14 @@ history, statistics, IP/User-Agent data, or quota model.
 
 ## Anonymous access boundary
 
-Gateway derives the Share site from `config.json.share.publicUrl` and the existing
-Gateway `--home`; it does not create `gateway/sites/share.json`. Exact
+Gateway derives the Share route from `gateway/config.json.share.publicUrl` and the
+existing Gateway `--home`; it does not read the Hub `config.json` or create a
+separate site file. Exact
 `GET`/`HEAD /s/<43-character-token>` requests are served directly from
 `shares/public`, with forced HTML/inline/no-store/robots/referrer/nosniff headers.
 There is no index, fallback, Registry lookup, authentication, or CSP added by the
-Share route. Invalid or conflicting Share configuration disables only this site;
-Workspace and Release sites continue serving, and valid configuration hot-loads in
+Share route. Invalid or conflicting Share configuration disables only this route;
+Registry and Release routes continue serving, and valid configuration hot-loads in
 the running Gateway.
 
 See the [approved public document sharing spec](../../scope/2026-08-10-public-document-sharing.md)

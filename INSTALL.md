@@ -73,9 +73,11 @@ Gateway，使用发布首页的另一条独立命令，或在 launcher 已下载
 node "$HOME/.wheelmaker/deploy.mjs" gateway
 ```
 
-该命令幂等安装/升级并启动 Gateway。普通完整部署与 `update` 只生成
-`~/.wheelmaker/gateway/sites/workspace.json`，不会管理 Gateway 生命周期；使用 Nginx
-时可以忽略该文件。
+该命令幂等安装/升级并启动 Gateway，并在 Gateway 自己的
+`~/.wheelmaker/gateway/config.json` 中生成完整的 `registry`、`release`、`share` 配置。
+三个 section 的 `publicUrl` 默认为空，表示对应路由禁用；后续直接填入地址即可。普通完整
+部署与 `update` 不读取或写入 Gateway 配置，也不会管理 Gateway 生命周期；使用 Nginx
+时无需部署 Gateway。
 
 启动器从 `https://release.wheelmaker.top` 匿名下载 schema 2 `stable.json`，把其中的根相对路径限制在同一个 Origin，并按固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。自建通道从 `v1.1` 重新开始，不迁移或比较旧 GitHub 通道的 stable、历史和版本号。
 
@@ -222,8 +224,10 @@ Worker 机器负责：
 ## 7. Gateway 或 Nginx 配置
 
 只在 Registry 入口机配置公网入口。执行 `node ~/.wheelmaker/deploy.mjs gateway` 时，
-Gateway 会读取部署器已生成的 `workspace.json`；配置为 HTTPS 时由内嵌 Caddy 自动管理
-证书。DNS、公网端口和防火墙仍由运维者准备。
+Gateway 只读取自己的 `~/.wheelmaker/gateway/config.json`；部署器会先生成完整的
+`registry`、`release`、`share` section。把需要公开的 `publicUrl` 填入对应 section，
+留空则禁用该路由；配置为 HTTPS 时由内嵌 Caddy 自动管理证书。DNS、公网端口和防火墙
+仍由运维者准备。Hub 的 `~/.wheelmaker/config.json` 不被 Gateway 读取。
 
 如果继续使用 Nginx，则按以下合同配置。
 
@@ -408,11 +412,11 @@ Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/a
 
 发布服务单独通过无参数的 `deploy-release-server.bat` 部署。运行前需要 Windows 上可用的
 `go`、`ssh`、`scp`、干净的源码 commit 和
-`~/.ssh/wheelmaker-release-server_ed25519`。SSH 配置决定登录用户；同一台机器上
-Workspace 与 Release Server 要共用 Gateway 时必须使用同一个用户。Home 部署不依赖
-`/srv`、`www-data` 或 ACL；它保留旧 Token，把 release channel origin 写入
-`config.json.publicUrl`，启动用户服务、检查 loopback，并始终原子写入代理整个 host 的
-`~/.wheelmaker/gateway/sites/release-server.json`，但不安装或启动 Gateway。Release
+`~/.ssh/wheelmaker-release-server_ed25519`。SSH 配置决定登录用户；同一台机器上 Release
+Server 如果使用 Gateway，必须使用 Gateway 部署用户。Home 部署不依赖 `/srv`、`www-data`
+或 ACL；它保留旧 Token，把 release channel origin 写入
+`~/.wheelmaker/gateway/config.json` 的 `release` section（`release.publicUrl`），保留其他 section，启动用户
+服务、检查 loopback，但不安装或启动 Gateway，也不修改 Hub 配置。Release
 Server 自己提供全部公开文件，现有 Nginx 只需把整个域名反代到
 `127.0.0.1:9680`。产品发布以 HTTPS 流式上传；所有文件通过大小和 SHA-256 校验后，
 `stable.json` 最后原子替换，再经公网验证。验证失败会回滚旧公开版本；资产永久保留，

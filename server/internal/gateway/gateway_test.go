@@ -18,22 +18,19 @@ func TestResolvePathsUsesFixedGatewayHomeLayout(t *testing.T) {
 	if paths.ConfigFile != `C:\Users\alice\.wheelmaker\gateway\config.json` {
 		t.Fatalf("ConfigFile = %q", paths.ConfigFile)
 	}
-	if paths.WorkspaceSiteFile != `C:\Users\alice\.wheelmaker\gateway\sites\workspace.json` {
-		t.Fatalf("WorkspaceSiteFile = %q", paths.WorkspaceSiteFile)
+	if paths.RegistryWebRoot != `C:\Users\alice\.wheelmaker\web` {
+		t.Fatalf("RegistryWebRoot = %q", paths.RegistryWebRoot)
 	}
-	if paths.ReleaseServerSiteFile != `C:\Users\alice\.wheelmaker\gateway\sites\release-server.json` {
-		t.Fatalf("ReleaseServerSiteFile = %q", paths.ReleaseServerSiteFile)
+	if paths.ReleaseDataRoot != `C:\Users\alice\.wheelmaker\release-server\data` {
+		t.Fatalf("ReleaseDataRoot = %q", paths.ReleaseDataRoot)
 	}
 	if paths.GeneratedConfig != `C:\Users\alice\.wheelmaker\gateway\generated\caddy.json` {
 		t.Fatalf("GeneratedConfig = %q", paths.GeneratedConfig)
 	}
 }
 
-func TestResolvePathsDerivesSiblingAppConfigAndShareRoot(t *testing.T) {
+func TestResolvePathsDerivesRuntimeRoots(t *testing.T) {
 	paths := ResolvePaths(`C:\Users\alice\.wheelmaker\gateway`)
-	if paths.AppConfigFile != `C:\Users\alice\.wheelmaker\config.json` {
-		t.Fatalf("AppConfigFile = %q", paths.AppConfigFile)
-	}
 	if paths.SharePublicRoot != `C:\Users\alice\.wheelmaker\shares\public` {
 		t.Fatalf("SharePublicRoot = %q", paths.SharePublicRoot)
 	}
@@ -42,7 +39,7 @@ func TestResolvePathsDerivesSiblingAppConfigAndShareRoot(t *testing.T) {
 func TestValidateSiteRequiresHTTPSCertificatePair(t *testing.T) {
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "https://workspace.example.com",
 		WebRoot:   "C:\\Users\\alice\\.wheelmaker\\web",
 		Upstream:  "http://127.0.0.1:9630",
@@ -59,7 +56,7 @@ func TestValidateSiteAcceptsHTTPSAutomaticCertificate(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "web")
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "https://workspace.example.com",
 		WebRoot:   root,
 		Upstream:  "http://127.0.0.1:9630",
@@ -74,7 +71,7 @@ func TestValidateSiteRejectsUnsupportedUpstream(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "web")
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "http://workspace.example.com",
 		WebRoot:   root,
 		Upstream:  "https://127.0.0.1:9630",
@@ -91,7 +88,7 @@ func TestCompileConfigIncludesWorkspaceRoutesAndAutomaticTLS(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, ACME: ACMEConfig{Email: "ops@example.com"}, Log: LogConfig{Level: "INFO"}}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "https://workspace.example.com",
 		WebRoot:   root,
 		Upstream:  "http://127.0.0.1:9630",
@@ -169,70 +166,50 @@ func TestCompileConfigIncludesExactShareStaticRoute(t *testing.T) {
 	}
 }
 
-func TestLoadBundleAddsShareFromSiblingAppConfigAndFailsClosed(t *testing.T) {
+func TestLoadBundleIgnoresSiblingAppAndSiteFiles(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "gateway")
 	paths := ResolvePaths(home)
-	if err := os.MkdirAll(paths.SitesDir, 0o755); err != nil {
+	legacySitePath := filepath.Join(home, "sites", "workspace.json")
+	if err := os.MkdirAll(filepath.Dir(legacySitePath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":1,"log":{"level":"INFO"}}`), 0o600); err != nil {
+	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":1,"log":{"level":"INFO"},"registry":{"publicUrl":""},"release":{"publicUrl":""},"share":{"publicUrl":""}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	workspace := `{"schema":1,"kind":"workspace","publicUrl":"https://workspace.example.com","webRoot":"` + filepath.ToSlash(filepath.Join(root, "web")) + `","upstream":"http://127.0.0.1:9630","tls":{"certificateFile":"","keyFile":""}}`
-	if err := os.WriteFile(paths.WorkspaceSiteFile, []byte(workspace), 0o600); err != nil {
+	if err := os.WriteFile(legacySitePath, []byte(workspace), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	writeAppShareConfig := func(content string) {
-		t.Helper()
-		if err := os.WriteFile(paths.AppConfigFile, []byte(content), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	siblingAppConfig := filepath.Join(filepath.Dir(home), "config.json")
+	if err := os.WriteFile(siblingAppConfig, []byte(`{"share":{"publicUrl":"https://share.example.com"}}`), 0o600); err != nil {
+		t.Fatal(err)
 	}
-
-	writeAppShareConfig(`{"share":{"publicUrl":"https://share.example.com"}}`)
 	bundle, err := LoadBundle(home)
 	if err != nil {
-		t.Fatalf("LoadBundle(valid share) error = %v", err)
+		t.Fatalf("LoadBundle() error = %v", err)
 	}
-	if len(bundle.Sites) != 2 || bundle.Sites[1].Kind != SiteShare {
-		t.Fatalf("sites with valid share = %+v", bundle.Sites)
-	}
-
-	writeAppShareConfig(`{"share":{"publicUrl":"https://workspace.example.com"}}`)
-	bundle, err = LoadBundle(home)
-	if err != nil {
-		t.Fatalf("LoadBundle(conflicting share) error = %v", err)
-	}
-	if len(bundle.Sites) != 1 || bundle.Sites[0].Kind != SiteWorkspace {
-		t.Fatalf("sites with conflicting share = %+v", bundle.Sites)
-	}
-
-	writeAppShareConfig(`{"share":{"publicUrl":"https://share.example.com/path"}}`)
-	bundle, err = LoadBundle(home)
-	if err != nil {
-		t.Fatalf("LoadBundle(invalid share) error = %v", err)
-	}
-	if len(bundle.Sites) != 1 {
-		t.Fatalf("sites with invalid share = %+v", bundle.Sites)
+	if len(bundle.Sites) != 0 {
+		t.Fatalf("LoadBundle() read external site/app config: %+v", bundle.Sites)
 	}
 }
 
-func TestSemanticFingerprintIncludesSiblingAppConfig(t *testing.T) {
+func TestSemanticFingerprintIgnoresSiblingAppConfig(t *testing.T) {
 	paths := ResolvePaths(filepath.Join(t.TempDir(), "gateway"))
-	if err := os.MkdirAll(filepath.Dir(paths.AppConfigFile), 0o755); err != nil {
+	siblingAppConfig := filepath.Join(filepath.Dir(paths.Home), "config.json")
+	if err := os.MkdirAll(filepath.Dir(siblingAppConfig), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(paths.AppConfigFile, []byte(`{}`), 0o600); err != nil {
+	if err := os.WriteFile(siblingAppConfig, []byte(`{}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	first := semanticFingerprint(paths)
-	if err := os.WriteFile(paths.AppConfigFile, []byte(`{"share":{"publicUrl":"https://share.example.com"}}`), 0o600); err != nil {
+	if err := os.WriteFile(siblingAppConfig, []byte(`{"share":{"publicUrl":"https://share.example.com"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	second := semanticFingerprint(paths)
-	if first == second {
-		t.Fatalf("semanticFingerprint did not change for sibling app config: %q", first)
+	if first != second {
+		t.Fatalf("semanticFingerprint changed for sibling app config: %q -> %q", first, second)
 	}
 }
 
@@ -240,7 +217,7 @@ func TestCompileConfigAddsCompressionAndCacheHeadersToWorkspaceAssets(t *testing
 	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "https://workspace.example.com",
 		WebRoot:   filepath.Join(t.TempDir(), "web"),
 		Upstream:  "http://127.0.0.1:9630",
@@ -305,7 +282,7 @@ func TestCompileConfigAddsCompressionToReleaseServerResponses(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteReleaseServer,
+		Kind:      SiteRelease,
 		PublicURL: "https://release.example.com",
 		Upstream:  "http://127.0.0.1:9680",
 	}
@@ -331,7 +308,7 @@ func TestCompileConfigProducesCaddyValidHTTPSDocument(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, ACME: ACMEConfig{Email: "ops@example.com"}, Log: LogConfig{Level: "INFO"}}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteReleaseServer,
+		Kind:      SiteRelease,
 		PublicURL: "https://release.example.com",
 		Upstream:  "http://127.0.0.1:9680",
 	}
@@ -351,7 +328,7 @@ func TestCompileConfigStripsExternalPortFromHostMatchers(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "https://workspace.example.com:8443",
 		WebRoot:   filepath.Join(t.TempDir(), "web"),
 		Upstream:  "http://127.0.0.1:9630",
@@ -403,7 +380,7 @@ func TestCompileConfigAddsFixedHTTPRelayServer(t *testing.T) {
 	}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "http://workspace.example.com",
 		WebRoot:   filepath.Join(t.TempDir(), "web"),
 		Upstream:  "http://127.0.0.1:9630",
@@ -459,7 +436,7 @@ func TestCompileConfigAddsFixedHTTPSRelayServerWithTLSPolicy(t *testing.T) {
 	}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteWorkspace,
+		Kind:      SiteRegistry,
 		PublicURL: "https://workspace.example.com",
 		WebRoot:   filepath.Join(t.TempDir(), "web"),
 		Upstream:  "http://127.0.0.1:9630",
@@ -499,7 +476,7 @@ func TestCompileConfigDoesNotAddRelayWithoutWorkspaceSite(t *testing.T) {
 	}
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
-		Kind:      SiteReleaseServer,
+		Kind:      SiteRelease,
 		PublicURL: "https://release.example.com",
 		Upstream:  "http://127.0.0.1:9680",
 	}
@@ -523,8 +500,8 @@ func TestCompileConfigDoesNotAddRelayWithoutWorkspaceSite(t *testing.T) {
 func TestCompileConfigRejectsDuplicateHostnames(t *testing.T) {
 	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
 	sites := []SiteConfig{
-		{Schema: SiteSchemaVersion, Kind: SiteWorkspace, PublicURL: "https://SAME.example.com", WebRoot: filepath.Join(t.TempDir(), "web"), Upstream: "http://127.0.0.1:9630"},
-		{Schema: SiteSchemaVersion, Kind: SiteReleaseServer, PublicURL: "https://same.example.com", Upstream: "http://127.0.0.1:9680"},
+		{Schema: SiteSchemaVersion, Kind: SiteRegistry, PublicURL: "https://SAME.example.com", WebRoot: filepath.Join(t.TempDir(), "web"), Upstream: "http://127.0.0.1:9630"},
+		{Schema: SiteSchemaVersion, Kind: SiteRelease, PublicURL: "https://same.example.com", Upstream: "http://127.0.0.1:9680"},
 	}
 	if _, err := CompileConfig(global, sites); err == nil || !strings.Contains(err.Error(), "duplicate hostname") {
 		t.Fatalf("CompileConfig() error = %v", err)
@@ -535,8 +512,8 @@ func TestCompileConfigIsDeterministic(t *testing.T) {
 	webRoot := filepath.Join(t.TempDir(), "web")
 	global := GlobalConfig{Schema: GlobalSchemaVersion, ACME: ACMEConfig{Email: "ops@example.com"}, Log: LogConfig{Level: "INFO"}}
 	sites := []SiteConfig{
-		{Schema: SiteSchemaVersion, Kind: SiteReleaseServer, PublicURL: "https://release.example.com", Upstream: "http://127.0.0.1:9680"},
-		{Schema: SiteSchemaVersion, Kind: SiteWorkspace, PublicURL: "https://workspace.example.com", WebRoot: webRoot, Upstream: "http://127.0.0.1:9630"},
+		{Schema: SiteSchemaVersion, Kind: SiteRelease, PublicURL: "https://release.example.com", Upstream: "http://127.0.0.1:9680"},
+		{Schema: SiteSchemaVersion, Kind: SiteRegistry, PublicURL: "https://workspace.example.com", WebRoot: webRoot, Upstream: "http://127.0.0.1:9630"},
 	}
 
 	first, err := CompileConfig(global, sites)

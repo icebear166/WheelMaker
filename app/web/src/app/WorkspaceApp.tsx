@@ -485,7 +485,6 @@ import {
   agentPackageWriteOperationRunning,
   deriveNpmPackageUpdateTargets,
   deriveNpmUpdatableTargets,
-  deriveGatewayHubStatus,
   deriveOperationalHubIds,
   deriveRegistryHubIds,
   deriveWheelMakerHubStatus,
@@ -494,11 +493,9 @@ import {
   packageStatusLabel,
   resolveWheelMakerRestartPending,
   shouldShowWheelMakerUpdateAction,
-  shouldShowGatewayUpdateAction,
   WHEELMAKER_RESTART_RECONNECT_TIMEOUT_MS,
   wheelMakerUpdateErrorLabel,
   wheelMakerUpdateJobActive,
-  gatewayUpdateJobActive,
   wheelMakerUpdateStatusLabel,
   wheelMakerVersionCopy,
   type NpmPackageUpdateTarget,
@@ -713,7 +710,6 @@ import type {
   RegistrySkillScope,
   RegistrySkillSourceCandidate,
   RegistryWheelMakerUpdateResponse,
-  RegistryGatewayUpdateResponse,
   RegistrySpeechTranscriptEvent,
   RegistryFileIndexSearchResult,
   RegistryFileIndexStatus,
@@ -818,20 +814,10 @@ type WheelMakerUpdateHubView = {
   error: string;
   data: RegistryWheelMakerUpdateResponse | null;
 };
-type GatewayUpdateHubView = {
-  hubId: string;
-  loading: boolean;
-  error: string;
-  data: RegistryGatewayUpdateResponse | null;
-};
 type WheelMakerMaintenancePending = {
   hubId: string;
   action: 'update' | 'restart';
   previousInstanceId: string;
-  startedAtMs: number;
-};
-type GatewayMaintenancePending = {
-  hubId: string;
   startedAtMs: number;
 };
 type AgentPackageHubView = {
@@ -851,14 +837,12 @@ type SkillHubView = {
 
 function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
   wheelmaker: Record<string, WheelMakerUpdateHubView>;
-  gateway: Record<string, GatewayUpdateHubView>;
   packages: Record<string, AgentPackageHubView>;
   indexes: Record<string, RegistryFileIndexStatusResponse>;
   skills: Record<string, SkillHubView>;
   flicker: Record<string, RegistryFlickerBridgeStatus>;
 } {
   const wheelmaker: Record<string, WheelMakerUpdateHubView> = {};
-  const gateway: Record<string, GatewayUpdateHubView> = {};
   const packages: Record<string, AgentPackageHubView> = {};
   const indexes: Record<string, RegistryFileIndexStatusResponse> = {};
   const skills: Record<string, SkillHubView> = {};
@@ -871,15 +855,6 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
         loading: wheelSection.updateStatus !== 'idle',
         error: wheelSection.lastError ?? '',
         data: wheelSection.data as RegistryWheelMakerUpdateResponse,
-      };
-    }
-    const gatewaySection = hub.sections.gatewayUpdate;
-    if (gatewaySection?.data) {
-      gateway[hubId] = {
-        hubId,
-        loading: gatewaySection.updateStatus !== 'idle',
-        error: gatewaySection.lastError ?? '',
-        data: gatewaySection.data as RegistryGatewayUpdateResponse,
       };
     }
     const packageSection = hub.sections.agentPackages;
@@ -939,7 +914,7 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
       flicker[hubId] = normalizeFlickerBridgeStatus(flickerSection.data);
     }
   }
-  return {wheelmaker, gateway, packages, indexes, skills, flicker};
+  return {wheelmaker, packages, indexes, skills, flicker};
 }
 type SkillDetailCacheEntry = {
   loading: boolean;
@@ -3130,7 +3105,6 @@ export function App() {
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
   const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
   const [wheelMakerMaintenancePending, setWheelMakerMaintenancePending] = useState<WheelMakerMaintenancePending | null>(null);
-  const [gatewayMaintenancePending, setGatewayMaintenancePending] = useState<GatewayMaintenancePending | null>(null);
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
   const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
   const latestAndroidReleaseRef = useRef<AndroidApkLatestRelease | null>(null);
@@ -3484,7 +3458,6 @@ export function App() {
     [hubStoreSnapshot],
   );
   const wheelMakerUpdateHubs = hubOperationalViews.wheelmaker;
-  const gatewayUpdateHubs = hubOperationalViews.gateway;
   const agentPackageHubs = hubOperationalViews.packages;
   const projectIndexByHubId = hubOperationalViews.indexes;
   const skillHubs = hubOperationalViews.skills;
@@ -6936,7 +6909,6 @@ export function App() {
         opsByHubId={chatHubOpsByHubId}
         onRequestWheelMakerUpdate={handleChatHubWheelMakerUpdate}
         onRequestWheelMakerRestart={handleChatHubWheelMakerRestart}
-        onRequestGatewayUpdate={handleChatHubGatewayUpdate}
         onRequestNpmUpdate={handleChatHubNpmUpdate}
         onPackageAction={handleChatHubPackageAction}
         onRequestSkillInstall={requestSkillInstall}
@@ -13482,7 +13454,6 @@ export function App() {
     const hubIds = new Set<string>([
       ...deriveRegistryHubIds(registryHubs),
       ...Object.keys(wheelMakerUpdateHubs),
-      ...Object.keys(gatewayUpdateHubs),
       ...Object.keys(agentPackageHubs),
       ...Object.keys(projectIndexByHubId),
       ...Object.keys(skillHubs),
@@ -13496,11 +13467,10 @@ export function App() {
       hubId,
       connectionMode: registryHubById.get(hubId)?.connectionMode,
       wheelMaker: wheelMakerUpdateHubs[hubId] ?? null,
-      gateway: gatewayUpdateHubs[hubId] ?? null,
       agentPackage: agentPackageHubs[hubId] ?? null,
       projectIndex: projectIndexByHubId[hubId] ?? null,
     }));
-  }, [agentPackageHubs, gatewayUpdateHubs, projectIndexByHubId, registryHubs, skillHubs, wheelMakerUpdateHubs]);
+  }, [agentPackageHubs, projectIndexByHubId, registryHubs, skillHubs, wheelMakerUpdateHubs]);
 
   const agentPackageHubCards = useMemo(() => {
     return Object.values(agentPackageHubs).sort((left, right) => {
@@ -13544,20 +13514,6 @@ export function App() {
         canRequestUpdate: wheelMakerData.canRequestUpdate === true &&
           (status === 'update_available' || status === 'up_to_date' || status === 'local_newer'),
       } : null;
-      const gatewayData = card.gateway?.data ?? null;
-      const gatewayStatus = deriveGatewayHubStatus(
-        gatewayData?.installed,
-        stableRelease?.gateway ?? null,
-        gatewayData?.job,
-      );
-      const gatewayJobActive = gatewayUpdateJobActive(gatewayData?.job);
-      const gatewayPending = gatewayMaintenancePending?.hubId === card.hubId || gatewayJobActive;
-      const gatewayViewData = gatewayData ? {
-        ...gatewayData,
-        status: gatewayStatus,
-        canRequestUpdate: gatewayData.canRequestUpdate === true && Boolean(gatewayData.installed?.version) &&
-          (gatewayStatus === 'update_available' || gatewayStatus === 'up_to_date' || gatewayStatus === 'local_newer'),
-      } : null;
       const npmUpdatable = deriveNpmUpdatableTargets(card.agentPackage?.hub?.packages ?? []);
       const hubPackages = card.agentPackage?.hub?.packages ?? [];
       const indexTargets = chatHubProjectIndexTargets(card.hubId);
@@ -13572,11 +13528,6 @@ export function App() {
         loading: card.wheelMaker?.loading === true,
         pending: pending || wheelMakerUpdateAllPending || jobActive,
       });
-      const gatewayUpdateVisible = shouldShowGatewayUpdateAction({
-        data: gatewayViewData,
-        loading: card.gateway?.loading === true,
-        pending: gatewayPending,
-      });
       const restartVisible = card.connectionMode !== 'update_only'
         && card.wheelMaker?.loading !== true
         && Boolean(wheelMakerData?.installed?.version);
@@ -13589,14 +13540,6 @@ export function App() {
           updateVisible,
           restartVisible,
           updateAvailable: status === 'update_available',
-        },
-        gateway: {
-          loading: card.gateway?.loading === true,
-          pending: gatewayPending,
-          pendingAction: gatewayPending ? 'update' : null,
-          currentVersion: gatewayData?.installed?.version || '-',
-          updateVisible: gatewayUpdateVisible,
-          updateAvailable: gatewayStatus === 'update_available',
         },
         npm: {
           loading: card.agentPackage?.loading === true,
@@ -13644,7 +13587,6 @@ export function App() {
     agentPackageActionPendingKey,
     agentPackageHubUpdatePendingId,
     chatHubProjectIndexTargets,
-    gatewayMaintenancePending,
     projectIndexScanAllPendingByHubId,
     projectIndexScanPendingByProjectId,
     skillHubs,
@@ -14018,16 +13960,6 @@ export function App() {
     requestWheelMakerAction('restart', hubId, data);
   }, [requestWheelMakerAction]);
 
-  const requestGatewayUpdate = useCallback((hubId: string, data: RegistryGatewayUpdateResponse | null) => {
-    setConfirmError('');
-    setConfirmTarget({
-      kind: 'gatewayUpdate',
-      hubId,
-      currentVersion: data?.installed?.version || '',
-      latestVersion: wheelMakerPublicMetadata?.stable.gateway?.version || '',
-    });
-  }, [wheelMakerPublicMetadata?.stable.gateway?.version]);
-
   const requestWheelMakerUpdateAll = useCallback((hubIds: string[]) => {
     const uniqueHubIds = Array.from(new Set(hubIds.filter(Boolean))).sort();
     if (uniqueHubIds.length === 0) {
@@ -14123,10 +14055,6 @@ export function App() {
   const handleChatHubWheelMakerRestart = useCallback((hubId: string) => {
     requestWheelMakerRestart(hubId, wheelMakerUpdateHubs[hubId]?.data ?? null);
   }, [requestWheelMakerRestart, wheelMakerUpdateHubs]);
-
-  const handleChatHubGatewayUpdate = useCallback((hubId: string) => {
-    requestGatewayUpdate(hubId, gatewayUpdateHubs[hubId]?.data ?? null);
-  }, [gatewayUpdateHubs, requestGatewayUpdate]);
 
   const handleChatHubNpmUpdate = useCallback((hubId: string) => {
     const card = updateHubCards.find(item => item.hubId === hubId);
@@ -14240,25 +14168,6 @@ export function App() {
       setError(message);
     } finally {
       setWheelMakerUpdateAllPending(false);
-    }
-  }, []);
-
-  const handleGatewayUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'gatewayUpdate'}>) => {
-    setConfirmError('');
-    setGatewayMaintenancePending({hubId: target.hubId, startedAtMs: Date.now()});
-    try {
-      const result = await service.requestGatewayUpdate(target.hubId);
-      if (!result.ok) {
-        throw new Error(result.errorCode ? `Gateway update error: ${result.errorCode}` : 'Gateway update request failed.');
-      }
-      setConfirmTarget(null);
-      setConfirmError('');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setConfirmError(message);
-      setError(message);
-    } finally {
-      setGatewayMaintenancePending(null);
     }
   }, []);
 
@@ -21783,7 +21692,6 @@ export function App() {
   const npmPackageTarget = confirmTarget?.kind === 'npmPackage' ? confirmTarget : null;
   const npmPackageHubUpdateTarget = confirmTarget?.kind === 'npmPackageHubUpdate' ? confirmTarget : null;
   const wheelMakerUpdateTarget = confirmTarget?.kind === 'wheelMakerUpdate' ? confirmTarget : null;
-  const gatewayUpdateTarget = confirmTarget?.kind === 'gatewayUpdate' ? confirmTarget : null;
   const wheelMakerUpdateAllTarget = confirmTarget?.kind === 'wheelMakerUpdateAll' ? confirmTarget : null;
   const skillInstallConfirmTarget = confirmTarget?.kind === 'skillInstall' ? confirmTarget : null;
   const skillUninstallConfirmTarget = confirmTarget?.kind === 'skillUninstall' ? confirmTarget : null;
@@ -21823,8 +21731,6 @@ export function App() {
               ? agentPackageHubUpdatePendingId === npmPackageHubUpdateTarget.hubId
               : wheelMakerUpdateTarget
                 ? wheelMakerMaintenancePending?.hubId === wheelMakerUpdateTarget.hubId
-                : gatewayUpdateTarget
-                  ? gatewayMaintenancePending?.hubId === gatewayUpdateTarget.hubId
                 : wheelMakerUpdateAllTarget
                   ? wheelMakerUpdateAllPending
                   : skillConfirmTarget
@@ -21892,10 +21798,6 @@ export function App() {
     }
     if (confirmTarget.kind === 'wheelMakerUpdate') {
       handleWheelMakerUpdateConfirmedAction(confirmTarget).catch(() => undefined);
-      return;
-    }
-    if (confirmTarget.kind === 'gatewayUpdate') {
-      handleGatewayUpdateConfirmedAction(confirmTarget).catch(() => undefined);
       return;
     }
     if (confirmTarget.kind === 'wheelMakerUpdateAll') {

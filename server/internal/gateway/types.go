@@ -13,22 +13,27 @@ import (
 )
 
 const (
-	GlobalSchemaVersion = 1
-	SiteSchemaVersion   = 1
-	DefaultLogLevel     = "INFO"
+	GlobalSchemaVersion     = 1
+	SiteSchemaVersion       = 1
+	DefaultLogLevel         = "INFO"
+	DefaultRegistryUpstream = "http://127.0.0.1:9630"
+	DefaultReleaseListen    = "127.0.0.1:9680"
 
-	SiteWorkspace     SiteKind = "workspace"
-	SiteReleaseServer SiteKind = "release-server"
-	SiteShare         SiteKind = "share"
+	SiteRegistry SiteKind = "registry"
+	SiteRelease  SiteKind = "release"
+	SiteShare    SiteKind = "share"
 )
 
 type SiteKind string
 
 type GlobalConfig struct {
-	Schema int         `json:"schema"`
-	ACME   ACMEConfig  `json:"acme"`
-	Log    LogConfig   `json:"log"`
-	Relay  RelayConfig `json:"relay,omitempty"`
+	Schema   int            `json:"schema"`
+	ACME     ACMEConfig     `json:"acme"`
+	Log      LogConfig      `json:"log"`
+	Relay    RelayConfig    `json:"relay"`
+	Registry RegistryConfig `json:"registry"`
+	Release  ReleaseConfig  `json:"release"`
+	Share    ShareConfig    `json:"share"`
 }
 
 type RelayConfig struct {
@@ -48,6 +53,24 @@ type TLSConfig struct {
 	KeyFile         string `json:"keyFile"`
 }
 
+type RegistryConfig struct {
+	PublicURL string    `json:"publicUrl"`
+	TLS       TLSConfig `json:"tls"`
+}
+
+type ReleaseConfig struct {
+	PublicURL   string    `json:"publicUrl"`
+	Listen      string    `json:"listen"`
+	DataRoot    string    `json:"dataRoot"`
+	TokenSHA256 string    `json:"tokenSha256"`
+	TLS         TLSConfig `json:"tls"`
+}
+
+type ShareConfig struct {
+	PublicURL string    `json:"publicUrl"`
+	TLS       TLSConfig `json:"tls"`
+}
+
 type SiteConfig struct {
 	Schema    int       `json:"schema"`
 	Kind      SiteKind  `json:"kind"`
@@ -58,38 +81,34 @@ type SiteConfig struct {
 }
 
 type Paths struct {
-	Home                  string
-	ConfigFile            string
-	AppConfigFile         string
-	SitesDir              string
-	WorkspaceSiteFile     string
-	ReleaseServerSiteFile string
-	SharePublicRoot       string
-	GeneratedConfig       string
-	StateRelease          string
-	DataDir               string
-	LogsDir               string
-	DownloadsDir          string
-	RollbackDir           string
+	Home            string
+	ConfigFile      string
+	RegistryWebRoot string
+	ReleaseDataRoot string
+	SharePublicRoot string
+	GeneratedConfig string
+	StateRelease    string
+	DataDir         string
+	LogsDir         string
+	DownloadsDir    string
+	RollbackDir     string
 }
 
 func ResolvePaths(home string) Paths {
 	home = filepath.Clean(home)
 	stateRoot := filepath.Dir(home)
 	return Paths{
-		Home:                  home,
-		ConfigFile:            filepath.Join(home, "config.json"),
-		AppConfigFile:         filepath.Join(stateRoot, "config.json"),
-		SitesDir:              filepath.Join(home, "sites"),
-		WorkspaceSiteFile:     filepath.Join(home, "sites", "workspace.json"),
-		ReleaseServerSiteFile: filepath.Join(home, "sites", "release-server.json"),
-		SharePublicRoot:       filepath.Join(stateRoot, "shares", "public"),
-		GeneratedConfig:       filepath.Join(home, "generated", "caddy.json"),
-		StateRelease:          filepath.Join(home, "state", "release.json"),
-		DataDir:               filepath.Join(home, "data"),
-		LogsDir:               filepath.Join(home, "logs"),
-		DownloadsDir:          filepath.Join(home, "downloads"),
-		RollbackDir:           filepath.Join(home, "rollback"),
+		Home:            home,
+		ConfigFile:      filepath.Join(home, "config.json"),
+		RegistryWebRoot: filepath.Join(stateRoot, "web"),
+		ReleaseDataRoot: filepath.Join(stateRoot, "release-server", "data"),
+		SharePublicRoot: filepath.Join(stateRoot, "shares", "public"),
+		GeneratedConfig: filepath.Join(home, "generated", "caddy.json"),
+		StateRelease:    filepath.Join(home, "state", "release.json"),
+		DataDir:         filepath.Join(home, "data"),
+		LogsDir:         filepath.Join(home, "logs"),
+		DownloadsDir:    filepath.Join(home, "downloads"),
+		RollbackDir:     filepath.Join(home, "rollback"),
 	}
 }
 
@@ -112,6 +131,9 @@ func LoadGlobal(reader io.Reader) (GlobalConfig, error) {
 	}
 	if cfg.Log.Level == "" {
 		cfg.Log.Level = DefaultLogLevel
+	}
+	if cfg.Release.Listen == "" {
+		cfg.Release.Listen = DefaultReleaseListen
 	}
 	return cfg, nil
 }
@@ -139,10 +161,79 @@ func ValidateGlobal(cfg GlobalConfig) error {
 	}
 	switch strings.ToUpper(cfg.Log.Level) {
 	case "DEBUG", "INFO", "WARN", "ERROR":
-		return validateRelayPort(cfg.Relay.ListenPort)
 	default:
 		return fmt.Errorf("unsupported log level %q", cfg.Log.Level)
 	}
+	if err := validateRelayPort(cfg.Relay.ListenPort); err != nil {
+		return err
+	}
+	if err := validateOptionalPublicURL(cfg.Registry.PublicURL, "registry publicUrl"); err != nil {
+		return err
+	}
+	if err := validateOptionalPublicURL(cfg.Release.PublicURL, "release publicUrl"); err != nil {
+		return err
+	}
+	if err := validateOptionalPublicURL(cfg.Share.PublicURL, "share publicUrl"); err != nil {
+		return err
+	}
+	if cfg.Release.Listen != "" && cfg.Release.Listen != DefaultReleaseListen {
+		return fmt.Errorf("release listen must be %s", DefaultReleaseListen)
+	}
+	if cfg.Release.DataRoot != "" && !filepath.IsAbs(cfg.Release.DataRoot) {
+		return fmt.Errorf("release dataRoot must be absolute")
+	}
+	if cfg.Release.TokenSHA256 != "" && !validSHA256Digest(cfg.Release.TokenSHA256) {
+		return fmt.Errorf("release tokenSha256 must be a 64-character lowercase SHA-256 digest")
+	}
+	for label, tls := range map[string]TLSConfig{
+		"registry": cfg.Registry.TLS,
+		"release":  cfg.Release.TLS,
+		"share":    cfg.Share.TLS,
+	} {
+		if err := validateTLSConfig(tls, label); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateOptionalPublicURL(raw, label string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("%s scheme must be http or https", label)
+	}
+	if parsed.User != nil || parsed.Hostname() == "" || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+		return fmt.Errorf("%s must contain only scheme, host, optional port, and / path", label)
+	}
+	return nil
+}
+
+func validateTLSConfig(tls TLSConfig, label string) error {
+	if (tls.CertificateFile == "") != (tls.KeyFile == "") {
+		return fmt.Errorf("%s certificate and key must be provided as a pair", label)
+	}
+	if tls.CertificateFile != "" && (!filepath.IsAbs(tls.CertificateFile) || !filepath.IsAbs(tls.KeyFile)) {
+		return fmt.Errorf("%s certificate and key paths must be absolute", label)
+	}
+	return nil
+}
+
+func validSHA256Digest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, char := range value {
+		if !(char >= '0' && char <= '9') && !(char >= 'a' && char <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validateRelayPort(port int) error {
@@ -164,7 +255,7 @@ func ValidateSite(site SiteConfig) error {
 	if site.Schema != SiteSchemaVersion {
 		return fmt.Errorf("unsupported site schema %d", site.Schema)
 	}
-	if site.Kind != SiteWorkspace && site.Kind != SiteReleaseServer && site.Kind != SiteShare {
+	if site.Kind != SiteRegistry && site.Kind != SiteRelease && site.Kind != SiteShare {
 		return fmt.Errorf("unsupported site kind %q", site.Kind)
 	}
 	parsed, err := url.Parse(site.PublicURL)
@@ -178,19 +269,19 @@ func ValidateSite(site SiteConfig) error {
 		return fmt.Errorf("publicUrl must contain only scheme, host, optional port, and / path")
 	}
 	switch site.Kind {
-	case SiteWorkspace:
+	case SiteRegistry:
 		if err := validateSiteUpstream(site.Upstream); err != nil {
 			return err
 		}
 		if site.WebRoot == "" || !filepath.IsAbs(site.WebRoot) {
 			return fmt.Errorf("static root must be an absolute path")
 		}
-	case SiteReleaseServer:
+	case SiteRelease:
 		if err := validateSiteUpstream(site.Upstream); err != nil {
 			return err
 		}
 		if site.WebRoot != "" {
-			return fmt.Errorf("release-server site cannot set webRoot")
+			return fmt.Errorf("release site cannot set webRoot")
 		}
 	case SiteShare:
 		if site.Upstream != "" {
@@ -260,10 +351,30 @@ func EnsureHome(home string) error {
 		return fmt.Errorf("gateway home must be an absolute path")
 	}
 	paths := ResolvePaths(home)
-	for _, dir := range []string{paths.Home, paths.SitesDir, filepath.Dir(paths.GeneratedConfig), filepath.Dir(paths.StateRelease), paths.DataDir, paths.LogsDir, paths.DownloadsDir, paths.RollbackDir, paths.SharePublicRoot} {
+	for _, dir := range []string{paths.Home, filepath.Dir(paths.GeneratedConfig), filepath.Dir(paths.StateRelease), paths.DataDir, paths.LogsDir, paths.DownloadsDir, paths.RollbackDir, paths.SharePublicRoot} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create gateway directory %s: %w", dir, err)
 		}
 	}
 	return nil
+}
+
+func DefaultGlobalConfig(home string) GlobalConfig {
+	paths := ResolvePaths(home)
+	return GlobalConfig{
+		Schema: GlobalSchemaVersion,
+		ACME:   ACMEConfig{Email: ""},
+		Log:    LogConfig{Level: DefaultLogLevel},
+		Relay:  RelayConfig{ListenPort: 0},
+		Registry: RegistryConfig{
+			PublicURL: "",
+		},
+		Release: ReleaseConfig{
+			PublicURL:   "",
+			Listen:      DefaultReleaseListen,
+			DataRoot:    paths.ReleaseDataRoot,
+			TokenSHA256: "",
+		},
+		Share: ShareConfig{PublicURL: ""},
+	}
 }

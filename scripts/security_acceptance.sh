@@ -131,9 +131,16 @@ remote_install="$repo_root/scripts/release-server/remote-install.mjs"
 publisher_config="$repo_root/scripts/release/publisher-config.mjs"
 grep -F '"listen":"127.0.0.1:9680"' "$remote_install" >/dev/null || fail 'release service application listener is not loopback-only'
 grep -F '$deploy_home/.wheelmaker/release-server' "$remote_install" >/dev/null || fail 'release deployment is not rooted in the SSH login Home'
-grep -F '$deploy_home/.wheelmaker/gateway/sites' "$remote_install" >/dev/null || fail 'release deployment does not own the Gateway site Home'
+grep -F 'gateway_config_path="$gateway_home/config.json"' "$remote_install" >/dev/null || fail 'release deployment does not use the Gateway config'
+grep -F 'configure-public-url --config "$gateway_config_candidate"' "$remote_install" >/dev/null || fail 'release deployment does not update the Gateway release section'
 grep -F 'systemctl --user' "$remote_install" >/dev/null || fail 'release deployment does not use a user service'
-grep -F 'release-server.json' "$remote_install" >/dev/null || fail 'release deployment does not write the semantic Gateway site'
+if grep -F 'gateway/sites' "$remote_install" >/dev/null || grep -F 'release-server.json' "$remote_install" >/dev/null; then
+  fail 'release deployment still writes the retired Gateway site file'
+fi
+grep -F '$HOME/.wheelmaker/gateway/config.json' "$publisher_config" >/dev/null || fail 'publisher token provisioning does not target the Gateway release section'
+if grep -F '$HOME/.wheelmaker/release-server/config.json' "$publisher_config" >/dev/null; then
+  fail 'publisher token provisioning still targets the retired release config'
+fi
 retired_root_target='root@release.'"wheelmaker.top"
 retired_gateway_home='/etc/'"wheelmaker-gateway/home"
 retired_gateway_data='/srv/wheelmaker-release/'"gateway"

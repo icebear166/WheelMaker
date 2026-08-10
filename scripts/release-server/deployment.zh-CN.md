@@ -6,29 +6,42 @@ Release Server 独立于产品版本部署。它以 SSH 登录用户运行，只
 
 ## 边界与路径
 
-- 远端用户由 SSH 配置决定。同一台机器同时部署 Workspace 和 Release Server，且
-  希望共用一个 Gateway Home 时，必须使用同一登录用户。
+- 远端用户由 SSH 配置决定。Hub 与 Release Server 只有在使用同一登录用户时才能共用
+  一个 Gateway；两个服务不读取对方的配置。
 - 部署只使用该用户的 Home，不依赖 `/srv`、`www-data`、ACL 工具或旧服务权限。
-- 部署器管理 Release Server 的 user-level systemd unit，但不安装、停止、重载或
-  配置 Nginx、Caddy、DNS、证书、防火墙。
+- 部署器管理 Release Server 的 user-level systemd unit 和自己的运行数据，但不安装、
+  停止、重载或配置 Nginx、Caddy、DNS、证书、防火墙。
 
 ```text
-~/.wheelmaker/release-server/config.json
 ~/.wheelmaker/release-server/versions/<source-sha>/wheelmaker-release-server
 ~/.wheelmaker/release-server/current
 ~/.wheelmaker/release-server/data/public
 ~/.wheelmaker/release-server/data/staging
 ~/.config/systemd/user/wheelmaker-release-server.service
 
-~/.wheelmaker/gateway/sites/release-server.json
+~/.wheelmaker/gateway/config.json       # 共享 Gateway 配置
+                                         # 只更新其中的 release 对象
 ```
 
-`config.json` 保存 `publicUrl`、`listen`、`dataRoot` 和发布 Token 摘要。公开地址来自
-`scripts/release/channel.json`。每次部署保留 Token 与数据路径，更新 `publicUrl`，并
-重新生成 Gateway 站点声明。该声明固定代理 `http://127.0.0.1:9680`，不再包含静态
-`publicRoot`。
+Release Server 的运行配置是 `~/.wheelmaker/gateway/config.json` 中的 `release`：
 
-生成站点声明不表示已安装 Gateway；继续使用 Nginx 时可以忽略该文件。
+```json
+{
+  "release": {
+    "publicUrl": "https://release.example.com",
+    "listen": "127.0.0.1:9680",
+    "dataRoot": "/home/alice/.wheelmaker/release-server/data",
+    "tokenSha256": "",
+    "tls": {"certificateFile": "", "keyFile": ""}
+  }
+}
+```
+
+Gateway 部署在缺少配置时生成完整顶层配置，所有 `publicUrl` 默认为空。Release Server
+部署从 `scripts/release/channel.json` 取得公网地址，只更新 `config.json.release.publicUrl`，
+保留 Release 其余字段以及 `registry`/`share` section。Release Server 进程读取同一份
+Gateway 配置。旧的 `~/.wheelmaker/release-server/config.json` 只迁移一次，新的 Gateway
+配置提交成功后才删除；不会创建或读取 `gateway/sites/*.json`。
 
 ## 部署命令
 
@@ -42,8 +55,8 @@ deploy-release-server.bat
 与 SSH 主机，交叉编译 Linux/amd64 二进制，上传短期 staging 目录，再执行远端事务。
 实际登录用户由 SSH alias 和 `User` 配置决定；脚本不内置 `root@...`。
 
-远端事务安装版本、升级配置、启动用户服务、检查 loopback 健康、写入站点声明并删除
-上传目录。提交前失败时保留原安装版本。
+远端事务安装版本、更新 Gateway 配置中的 `release` 对象、启动用户服务、检查 loopback
+健康并删除上传目录。提交前失败时保留原安装版本和原 Gateway 配置。
 
 ## 反向代理合同
 
@@ -75,24 +88,24 @@ API 鉴权保持不变。
 node ~/.wheelmaker/deploy.mjs gateway
 ```
 
-该命令幂等安装或升级 Gateway、注册开机服务并确保其运行。Workspace 与 Release
-Server 的业务部署不会调用这条生命周期命令。
+该命令独立安装或升级 Gateway、注册开机服务并确保其运行；Hub 部署不会调用这条生命
+周期命令。
 
 ## TLS 与外部端口
 
-Gateway 把 `https://` `publicUrl` 解释为自动证书管理。DNS 和所需公网端口必须已经
-指向本机；`publicUrl` 中显式配置的外部端口会保留在 HTTP 到 HTTPS 跳转中。Release
+Gateway 把 `https://` `release.publicUrl` 解释为自动证书管理。DNS 和所需公网端口必须
+已经指向本机；`publicUrl` 中显式配置的外部端口会保留在 HTTP 到 HTTPS 跳转中。Release
 Server 部署不管理这些前置条件。
 
 ## 发布 Token 与发布恢复
 
 第一次本地 public 发布在本机创建 `~/.wheelmaker/release-server.json`，只把 Token 的
-SHA-256 摘要发送给远端 `configure-token` 命令。原始 Token 不进入 URL、公开文件或
-站点声明。
+SHA-256 摘要发送给远端 `configure-token` 命令。它是发布器的密钥文件，不是服务运行
+配置；原始 Token 不进入 URL、公开文件、Gateway 配置或站点声明。
 
-正式发布最后才让 `stable.json` 可见，然后通过 `config.json.publicUrl` 下载并验证
-新 stable、部署脚本、manifest 和 Range 产物。公网验证失败时，服务会恢复旧 stable
-和全部派生公开文件，再向发布端返回失败。
+正式发布最后才让 `stable.json` 可见，然后通过 `release.publicUrl` 下载并验证新 stable、
+部署脚本、manifest 和 Range 产物。公网验证失败时，服务会恢复旧 stable 和全部派生
+公开文件，再向发布端返回失败。
 
-旧 `/srv` 或系统级服务不属于普通部署范围。需要先由运维者一次性迁移数据、停用旧
-服务，再复用 `9680` 端口。
+旧 `/srv` 或系统级服务不属于普通部署范围。需要先由运维者一次性迁移数据、停用旧服务，
+再复用 `9680` 端口。

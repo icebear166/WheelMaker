@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=%h/.wheelmaker/release-server/data
-ExecStart=%h/.wheelmaker/release-server/current/wheelmaker-release-server serve --config %h/.wheelmaker/release-server/config.json
+ExecStart=%h/.wheelmaker/release-server/current/wheelmaker-release-server serve --config %h/.wheelmaker/gateway/config.json
 Restart=on-failure
 RestartSec=3s
 UMask=0027

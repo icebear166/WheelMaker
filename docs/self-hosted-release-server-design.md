@@ -156,7 +156,7 @@ DELETE /api/publish/{session}
 ## 发布服务部署
 
 发布服务有独立于产品 `v1.x` 的部署流程。源码仓库根目录提供
-`deploy-release-server.bat`；SSH 配置选择登录用户，不再内置 root 目标。Workspace
+`deploy-release-server.bat`；SSH 配置选择登录用户，不再内置 root 目标。Hub/Registry
 和 Release Server 共机时必须使用同一个登录用户，该用户需要免交互 sudo 以管理
 `/srv/wheelmaker-release`、旧 systemd 服务、ACL 和 login linger。
 
@@ -171,22 +171,11 @@ DELETE /api/publish/{session}
   → 在 Windows 窗口中显示结果并 pause
 ```
 
-部署参数只有一个统一选择器：
-
-```text
-deploy-release-server.bat --gateway=none
-  → 部署/迁移 Release Server，不写 Gateway 文件
-
-deploy-release-server.bat --gateway=caddy
-  → 执行相同事务，并写入
-    ~/.wheelmaker/gateway/sites/release-server.json
-```
-
-省略参数等同于 `caddy`；需要保持旧入口不变时显式使用 `--gateway=none`。该选项只影响是否写入 Release Server 语义站点，不管理
-Caddy/Nginx 的安装、启动、停止、重载、校验或渲染。Caddy 尚未安装时，旧 Nginx
-仍可继续使用原有端口、证书、公开根目录和 loopback upstream；`--gateway=caddy`
-仍然可以先生成 dormant site 文件。停用旧 Nginx 仍使用独立的
-`scripts/disable-nginx.sh` 或 `.ps1`，不属于 Release Server 部署。
+部署不再接受 Gateway selector。Release Server 部署始终把 channel URL 写入
+`~/.wheelmaker/gateway/config.json` 的 `release.publicUrl`，并保留完整的
+`registry`、`release`、`share` 配置；它不管理 Caddy/Nginx 的安装、启动、停止、重载、
+校验或渲染，也不创建 `gateway/sites/*.json`。Caddy 尚未安装时，旧 Nginx 仍可继续
+反代 `127.0.0.1:9680`；停用旧 Nginx 仍使用独立的 `scripts/disable-nginx.sh` 或 `.ps1`。
 
 旧 systemd Release Server 的迁移在远端事务内自动完成：先暂存并运行
 `validate-config`，复制现有 `tokenSha256`，记录 system/user service、linger、
@@ -200,11 +189,10 @@ unit、文件和服务用户仍保留但 disabled。
 后续本地发布直接复用该文件，不再连接 SSH；Action 只读取同一个 Secret。服务端只有一个 `tokenSha256`，不实现 Token 列表、轮换、撤销或管理 API。`release-server.json` 必须限制为当前用户可读，不能复制到服务器或源码仓库。基础地址仍只来自源码 channel 配置。远端固定配置与 unit 路径为：
 
 ```text
-~/.wheelmaker/release-server/config.json
+~/.wheelmaker/gateway/config.json       # release object is the service config
 ~/.wheelmaker/release-server/versions/<source-sha>/wheelmaker-release-server
 ~/.wheelmaker/release-server/current
 ~/.config/systemd/user/wheelmaker-release-server.service
-~/.wheelmaker/gateway/sites/release-server.json  # 仅 --gateway=caddy
 /srv/wheelmaker-release                         # 稳定数据根目录
 ```
 
@@ -220,7 +208,7 @@ Web 从 `/stable.json`、`/publish-status.json` 和 `/releases.json` 读取全�
 
 ## 运维与安全边界
 
-- Gateway 负责 TLS、公开静态下载、Range、访问日志和 `/api/` 反向代理；`https://` 站点由内嵌 Caddy 自动签发与续期证书，不再依赖 Certbot。Release Server 部署只生成自己的 semantic site 文件，不调用 Caddy 校验、渲染或 admin API。
+- Gateway 负责 TLS、公开静态下载、Range、访问日志和 `/api/` 反向代理；`https://` 站点由内嵌 Caddy 自动签发与续期证书，不再依赖 Certbot。Release Server 部署只更新 Gateway `config.json.release`，不调用 Caddy 校验、渲染或 admin API。
 - Go 服务监听 `127.0.0.1:9680`，systemd journal 记录结构化服务日志；日志禁止记录 Authorization、完整请求体和本地 Token。
 - `/srv/wheelmaker-release/public` 保留 `www-data` 组和 setgid；部署器为 SSH 登录用户授予数据读写权，保持未迁移的 Nginx 公开读取路径。
 - 上传限制文件数量、单文件大小、总大小和会话时长；失败上传只留在不可公开的 staging，随后自动清理。

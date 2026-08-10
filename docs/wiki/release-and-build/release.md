@@ -27,7 +27,7 @@
 
 正式发布在认证、创建会话和构建前读取当前 `stable.json`。如果干净源码工作树的当前 Git HEAD 与 `stable.sourceSha` 相同，发布器直接返回 `unchanged`，不构建、不打包且不占用新版本号；本地只构建模式不受此规则影响。版本冲突后的重试也会重新检查该 SHA，避免并发操作为同一源码提交生成两个正式版本。
 
-本地发布从 `~/.wheelmaker/release-server.json` 读取发布 Token。GitHub Action 从仓库 Secret `WHEELMAKER_RELEASE_TOKEN` 读取同一个 Token。匿名客户端可以读取 `stable.json`、发布历史、部署脚本和版本资产，但不能上传。
+本地发布从 `~/.wheelmaker/release-server.json` 读取发布 Token。该文件是发布器本地密钥，不是 Release Server 运行配置。GitHub Action 从仓库 Secret `WHEELMAKER_RELEASE_TOKEN` 读取同一个 Token。匿名客户端可以读取 `stable.json`、发布历史、部署脚本和版本资产，但不能上传。
 
 如果提交时版本已存在，发布器重新读取 `stable.json`、分配下一个 `v1.x` 并重试，最多三次。
 
@@ -36,17 +36,16 @@
 现有发布选项中另增 Gateway，行为与 Android APK 选项一致。勾选时使用本次 WheelMaker 版本构建四个 Gateway 平台产物，使用同一发布会话上传，以大小和 SHA-256 校验并与主版本一起提交。Gateway 不进入 `releases/v1.x/`，而是使用固定 `/gateway/` 命名空间，保留当前和上一版清单/产物。`stable.json` 携带 Gateway 当前指针；未勾选时继承上一个指针。Gateway 构建、上传或提交失败会使整次发布失败并保留旧 stable。
 
 Gateway 产物发布与目标机入口配置是两条独立控制流。目标机的普通完整部署与日常
-`deploy.mjs update` 都不下载、安装或启动 Gateway；唯一安装/升级入口是幂等的
-`deploy.mjs gateway`，start/stop 包装器只控制运行状态。Gateway 的站点配置位于部署
-用户的 `~/.wheelmaker/gateway/sites`，各个部署器只维护自己的站点文件。
+`deploy.mjs update` 都只管理 Hub 自己的配置、Web 和运行状态，不读取或写入 Gateway；
+也不再通过 HubState 暴露 Gateway 更新按钮。唯一安装/升级入口是独立的幂等
+`deploy.mjs gateway`，start/stop 包装器只控制 Gateway 运行状态。Gateway 的唯一配置是
+部署用户的 `~/.wheelmaker/gateway/config.json`，其中完整承载 `registry`、`release`、
+`share` 三个 section；三个 `publicUrl` 为空表示对应路由禁用。
 
-业务服务不再接受 Gateway selector。Workspace 的 `config.json.publicUrl` 由已有配置或
-完整部署显式提供的 `--public-url` 获得；输入可以是裸域名、HTTP(S)/WS(S) 方案和末尾
-`/ws`，部署器会统一保存为规范化 HTTPS origin（loopback 例外保留 HTTP）；publicUrl
-省略时 Hub 自动使用本机 loopback Registry。Release Server 的 `publicUrl` 来自 release
-channel。Workspace 完整部署与 update 始终派生 `workspace.json`，Release Server 部署
-始终派生 `release-server.json`。写站点 JSON 不安装、验证、render、reload 或控制
-Nginx/Caddy；同一用户部署时两者自然聚合到同一 Gateway Home。
+业务服务不再接受 Gateway selector。Hub 的 `config.json.publicUrl` 只属于 Hub 自己；完整
+部署的 `--public-url` 不写 Gateway。Release Server 的 `publicUrl` 来自 release channel，
+部署时只更新 `~/.wheelmaker/gateway/config.json` 的 `release` 对象，保留其他 section，
+不生成 `sites/*.json`，也不读写 Hub 配置。Gateway 运行时只读取这一个配置文件并热加载。
 
 发布服务器另有两个需要发布 Token 的维护端点：`GET /api/storage` 返回 `public/releases/` 的总占用与可清理占用；`POST /api/prune` 只保留 `stable.json` 引用的版本（stable 版本及其 Desktop/Android 指针版本），删除其余 `v1.x` 版本目录，并先把 `releases.json` 截断到只剩被保留版本的条目（历史列表因此不会出现死链）；`stable.json` 不变。发布页面通过发布 Hub 查询占用并触发清理，发布 Hub 复用本地发布 Token 调用这两个端点。
 
@@ -56,7 +55,7 @@ Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不�
 
 ```text
 ~/.wheelmaker/release-server/
-  config.json
+  # no service config.json; runtime config is Gateway config.release
   versions/<source-sha>/wheelmaker-release-server
   current -> versions/<source-sha>
   data/public/
@@ -69,11 +68,11 @@ Release Server 由实际 SSH 登录用户运行，不硬编码 `root@`，也不�
 重启和 loopback 健康检查；普通部署不探测或迁移旧 systemd 服务，不依赖 `/srv`、
 `www-data`、ACL 或入口服务权限。
 
-每次部署都在 SSH 用户 Home 原子写入
-`~/.wheelmaker/gateway/sites/release-server.json`。该站点没有 `publicRoot`，而是把整个
-host 代理到 `http://127.0.0.1:9680`；Release Server 进程自己提供首页、部署脚本、
-元数据和发布产物。机器未安装 Gateway 时文件保持休眠，部署不会安装、启动、停止、
-重载或验证 Caddy。继续使用 Nginx 时也只需全站反代 loopback，worker 无需读取 Home。
+每次部署都在 SSH 用户 Home 原子更新
+`~/.wheelmaker/gateway/config.json` 的 `release.publicUrl`，并由 Release Server 进程读取
+完整 `release` 对象。Gateway 未安装时配置仍可保留，部署不会安装、启动、停止、重载或
+验证 Caddy。继续使用 Nginx 时也只需全站反代 loopback，worker 无需读取 Home。旧的
+`~/.wheelmaker/release-server/config.json` 只用于一次性迁移。
 
 仍在运行旧系统级 `wheelmaker-release-server.service` 的机器，必须先由运维者直接 SSH
 完成一次性数据迁移并停用占用 `9680` 的旧服务。旧 Nginx 配置应改为把整个 Release
@@ -90,7 +89,8 @@ Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，
 
 正式版本发布仍使用现有 `v1.x` 事务，页面可分别选择 Desktop、Android 和 Gateway。Gateway 与 Desktop/APK 一样是发布会话中的可选产物：选中时推进 `stable.gateway` 虚拟指针，未选中时沿用旧指针，不改变 Gateway 自己的版本序列。临时 Web 不经过 Release Server：发布 Hub 构建 ZIP 后经 Registry 在线分块传给页面配置的 Server Hub（即临时 Web 的 Web Hub）。它不改写 `stable.json`、正式发布状态或历史。
 
-Hub 菜单会读取目标用户 `~/.wheelmaker/gateway/state/release.json`。只有存在有效 Gateway 安装记录时，Hub 行才在 WheelMaker 版本前显示 Gateway 当前版本，并提供独立的 Gateway 更新按钮；按钮调用 `deploy.mjs gateway`，只更新/重启 Gateway，不停止 Hub。稳定指针缺失或不可校验时保留已安装版本显示，但不提供更新动作。
+Hub 菜单不读取 Gateway 安装状态，也不提供 Gateway 更新按钮。Gateway 版本、配置和
+生命周期由 Gateway 自己的 `deploy.mjs gateway` 入口负责。
 
 Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZIP。每个分块最多 `4 MiB`，发送方逐块等待目标确认。Web Hub 必须在线；它在 `~/.wheelmaker/staging/debug-web-<jobId>/` 接收完整 ZIP，并复用更新租约防止与正式部署并发，校验声明的文件大小和 SHA-256 后才原子替换 `~/.wheelmaker/web`。离线、断线、顺序错误或摘要不符都会使任务失败且保留原 Web；Target Hub 保留 `~/.wheelmaker/release-jobs/<jobId>/debug-web.zip` 供之后显式重试。Target Hub 持久化任务状态与日志，因此页面关闭不影响构建或传输，页面重新打开后仍从 Target Hub 查询结果。
 
@@ -172,8 +172,10 @@ Registry 主协议硬切不能切断 Web 主动更新旧 Hub 的唯一通道。H
 
 该兼容完全由 Registry 实现，不增加维护版本、专用 RPC 或 Hub 端握手分支。旧 Hub 仍按原流程报告 Project；Registry 成功应答但丢弃这些报告，所以 Hub 保持在线、App 项目数为零。Registry 在现有 Hub descriptor 中标记 `connectionMode: "update_only"`，App 只在 Hub 展开内容中显示“Protocol 不匹配，仅可更新”，不承担权限控制。
 
-Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` 或 `gatewayUpdate` section，以及对应的 `requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。WheelMaker 仍复用 UpdateCommand 和 `node deploy.mjs update`；UpdateCommand 只触发目标机 updater 并监控 core 写入的更新状态，Gateway 使用自己的更新状态并调用 `node deploy.mjs gateway`，不会触碰 Hub 生命周期。受限连接成功不会自动开始任一更新。
-由于该兼容子集要求一次只刷新一个 section，Web 对 `update_only` Hub 将 WheelMaker 与 Gateway 刷新拆成两个请求；老 Hub 不支持 Gateway 时，Gateway 请求失败不会阻断 WheelMaker 更新。
+Registry 向受限 Hub 放行 `hub.state.refresh` 的 `wheelmakerUpdate` section 以及对应的
+`requestUpdate` action；其他 HubState payload 和全部业务请求由 Registry 拒绝。WheelMaker
+仍复用 UpdateCommand 和 `node deploy.mjs update`；Gateway 不属于 Hub 的更新面，受限连接
+也不会读取或更新 Gateway。
 
 请求被接受后，Hub 在 `applying` 阶段断开属于预期行为；新 Hub 重启并以当前主协议重新握手后恢复完整业务模式。若更新失败但旧 Hub 重新启动，它会再次进入 `update_only`，允许用户查询失败状态并重试。从该能力发布起，Registry 长期保持上述更新 HubState wire 子集兼容，使后续主协议升级继续沿用同一受限路径。
 

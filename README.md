@@ -53,7 +53,7 @@ sudo loginctl enable-linger "$USER"
 
 For a new installation, open [release.wheelmaker.top](https://release.wheelmaker.top/) and copy the **Deploy WheelMaker** command for your platform. It can run from any directory, downloads the launcher to `~/.wheelmaker`, and installs the current stable release. New installations use the local loopback Registry by default; pass `--public-url` when a public Registry origin is needed. Bare hostnames, `https://`, and compatible `wss://.../ws` input are accepted and persisted as a canonical HTTPS origin (loopback remains HTTP). Downloads are anonymous, and no WheelMaker source checkout or Git client is required.
 
-The homepage also provides an independent **Deploy built-in Gateway** command. It runs `node deploy.mjs gateway`, which idempotently installs or upgrades the embedded-Caddy entrypoint and ensures its service is running. Normal WheelMaker deploys and updates only generate `gateway/sites/workspace.json`; they never install, stop, or restart Gateway. Nginx remains supported and can ignore that generated file.
+The homepage also provides an independent **Deploy built-in Gateway** command. It runs `node deploy.mjs gateway`, which idempotently installs or upgrades the embedded-Caddy entrypoint, materializes the complete `~/.wheelmaker/gateway/config.json`, and ensures its service is running. The config owns `registry`, `release`, and `share`; an empty `publicUrl` disables that route. Normal WheelMaker deploys and updates do not read or write Gateway config and never install, stop, or restart Gateway. Nginx remains supported.
 
 Every normal deploy replaces Hub and Web together. The resulting layout is:
 
@@ -67,8 +67,15 @@ Every normal deploy replaces Hub and Web together. The resulting layout is:
   deploy-core.mjs
   deploy.bat or deploy.sh    # normal deployment wrapper for the current platform
   release.json               # installed release schema v2
-  config.json                # preserved across deploys; includes publicUrl
-  gateway/sites/workspace.json # generated reverse-proxy site declaration
+  config.json                # preserved across deploys; Hub's own config
+```
+
+The independent Gateway keeps its own state under `~/.wheelmaker/gateway/`:
+
+```text
+  config.json                # complete registry/release/share Gateway config
+  generated/caddy.json       # generated Caddy runtime config
+  state/release.json         # Gateway artifact state
 ```
 
 Normal deployment registers only current-user runtimes and does not require administrator privileges:
@@ -636,7 +643,7 @@ Release downloads from `https://release.wheelmaker.top` are anonymous; uploads u
 
 The self-hosted channel starts fresh at `v1.1`; it does not import or compare the retired GitHub stable/history. Public stable and manifests use schema 2 root-relative paths resolved against the single release origin. Each version directory includes `deploy.mjs` and `deploy-core.mjs` beside the platform archives—not inside them. The release server verifies every streamed upload, writes `stable.json` last, and then verifies metadata, scripts, manifests, and ranged assets through its configured public URL. Public verification failure restores the previous visible release. Published assets are retained indefinitely; insufficient disk space fails the session without changing stable. Web release history comes from `releases.json`, while each Hub reports only its own installed `release.json` state.
 
-The release service has an independent deployment entrypoint, `deploy-release-server.bat`. It requires Windows `go`, `ssh`, and `scp`, the private key `~/.ssh/wheelmaker-release-server_ed25519`, and a clean source commit. SSH configuration chooses the login user; that same user must deploy Workspace and Release Server when they share a machine. The Home-based transaction preserves the publishing Token, stores the release channel origin as `config.json.publicUrl`, starts the user service, checks loopback health, and always writes the proxy-only `~/.wheelmaker/gateway/sites/release-server.json`; it does not install or start Gateway. Release Server itself serves all public files, so an existing Nginx only needs to proxy the complete host to `127.0.0.1:9680` and requires no access to user Home files. Gateway lifecycle remains explicit and separate, and published product assets are never deleted.
+The release service has an independent deployment entrypoint, `deploy-release-server.bat`. It requires Windows `go`, `ssh`, and `scp`, the private key `~/.ssh/wheelmaker-release-server_ed25519`, and a clean source commit. SSH configuration chooses the login user; if Release Server shares the Gateway, that user must be the Gateway deployment user. The Home-based transaction preserves the publishing Token, updates only the `release` section (including `release.publicUrl`) in `~/.wheelmaker/gateway/config.json`, starts the user service, and checks loopback health; it does not install or start Gateway or modify Hub config. Release Server itself serves all public files, so an existing Nginx only needs to proxy the complete host to `127.0.0.1:9680` and requires no access to user Home files. Gateway lifecycle remains explicit and separate, and published product assets are never deleted.
 
 ## License
 

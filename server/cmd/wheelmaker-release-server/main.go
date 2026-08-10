@@ -25,7 +25,7 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("command is required: serve, validate-config, configure-token, or configure-public-url")
+		return errors.New("command is required: serve, validate-config, configure-token, configure-public-url, or migrate-config")
 	}
 	switch args[0] {
 	case "serve":
@@ -68,13 +68,27 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		flags.SetOutput(stderr)
 		configPath := flags.String("config", "", "release server config path")
 		publicURL := flags.String("public-url", "", "release server public URL")
+		dataRoot := flags.String("data-root", "", "release server data root when initializing Gateway config")
 		if err := flags.Parse(args[1:]); err != nil {
 			return err
 		}
 		if *configPath == "" || *publicURL == "" || flags.NArg() != 0 {
 			return errors.New("configure-public-url requires exactly --config and --public-url")
 		}
-		return releaseserver.ConfigurePublicURL(*configPath, *publicURL)
+		return releaseserver.ConfigurePublicURLWithDataRoot(*configPath, *publicURL, *dataRoot)
+	case "migrate-config":
+		flags := flag.NewFlagSet("migrate-config", flag.ContinueOnError)
+		flags.SetOutput(stderr)
+		legacyPath := flags.String("legacy-config", "", "legacy release server config path")
+		gatewayPath := flags.String("gateway-config", "", "Gateway config path")
+		dataRoot := flags.String("data-root", "", "release server data root")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *legacyPath == "" || *gatewayPath == "" || flags.NArg() != 0 {
+			return errors.New("migrate-config requires exactly --legacy-config and --gateway-config")
+		}
+		return releaseserver.MigrateLegacyConfig(*legacyPath, *gatewayPath, *dataRoot)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

@@ -1,8 +1,5 @@
 import type {
   RegistryHub,
-  RegistryGatewayInstalledRelease,
-  RegistryGatewayUpdateJob,
-  RegistryGatewayUpdateResponse,
   RegistryNpmPackage,
   RegistryNpmPackageStatus,
   RegistryProject,
@@ -25,14 +22,6 @@ export const WHEELMAKER_PUBLISH_STATUS_URL =
   wheelMakerReleaseUrl('/publish-status.json');
 
 const ACTIVE_WHEELMAKER_UPDATE_STATES = new Set([
-  'queued',
-  'downloading',
-  'verifying',
-  'applying',
-  'restarting',
-]);
-
-const ACTIVE_GATEWAY_UPDATE_STATES = new Set([
   'queued',
   'downloading',
   'verifying',
@@ -369,35 +358,6 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
   };
 }
 
-export function gatewayUpdateJobActive(
-  job: RegistryGatewayUpdateJob | null | undefined,
-): boolean {
-  return ACTIVE_GATEWAY_UPDATE_STATES.has(job?.state || '');
-}
-
-export function deriveGatewayHubStatus(
-  installed: RegistryGatewayInstalledRelease | undefined,
-  stable: WheelMakerGatewayPointer | null | undefined,
-  job?: RegistryGatewayUpdateJob,
-): string {
-  if (gatewayUpdateJobActive(job)) return 'update_pending';
-  if (!installed) return 'not_installed';
-  if (!stable) return 'checking_failed';
-  const installedMatch = /^v1\.(0|[1-9]\d*)$/.exec(installed.version);
-  const stableMatch = /^v1\.(0|[1-9]\d*)$/.exec(stable.version);
-  if (!installedMatch || !stableMatch || !/^[0-9a-f]{40}$/.test(installed.sourceSha) || !/^[0-9a-f]{64}$/.test(installed.manifestSha256)) {
-    return 'checking_failed';
-  }
-  const installedSequence = Number(installedMatch[1]);
-  const stableSequence = Number(stableMatch[1]);
-  const pointerChanged = installed.sourceSha !== stable.sourceSha || installed.manifestSha256 !== stable.manifestSha256;
-  if (stableSequence > installedSequence || (stableSequence === installedSequence && pointerChanged)) {
-    return 'update_available';
-  }
-  if (stableSequence < installedSequence) return 'local_newer';
-  return 'up_to_date';
-}
-
 export function parseWheelMakerPublishStatus(
   input: unknown,
 ): RegistryWheelMakerPublishStatus {
@@ -532,21 +492,6 @@ export function shouldShowWheelMakerUpdateAction(input: {
     return false;
   }
   return input.data.canRequestUpdate === true;
-}
-
-export function shouldShowGatewayUpdateAction(input: {
-  data: RegistryGatewayUpdateResponse | null;
-  loading: boolean;
-  pending: boolean;
-}): boolean {
-  if (input.pending || gatewayUpdateJobActive(input.data?.job)) {
-    return true;
-  }
-  if (input.loading || !input.data || input.data.status === 'not_installed') {
-    return false;
-  }
-  return input.data.canRequestUpdate === true
-    && Boolean(input.data.installed?.version);
 }
 
 export async function fetchWheelMakerReleaseHistory(

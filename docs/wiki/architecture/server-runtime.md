@@ -71,7 +71,9 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 
 ### Runtime configuration
 
-- `publicUrl` is the optional public HTTPS origin for the Registry connection and, when `registry.listen` is true, the Workspace site origin. A missing value is the explicit local-only mode and resolves to the loopback Registry port.
+- `publicUrl` is the optional public HTTPS origin for the Hub's Registry connection. A missing
+  value is the explicit local-only mode and resolves to the loopback Registry port. Gateway
+  `registry.publicUrl` is a separate Gateway-owned route setting and is not read from this file.
 - `registry.listen` controls whether this process starts the local Registry listener; `registry.port` is its port and the loopback fallback port.
 - The listener always binds loopback. Gateway/Nginx is responsible for exposing `/` and `/ws` through `publicUrl`.
 - Go owns legacy config migration. MJS preserves legacy fields on existing installations; it only writes the canonical top-level shape for new installations or an explicitly supplied public URL.

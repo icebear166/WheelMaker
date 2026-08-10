@@ -61,7 +61,7 @@ test('first local publish creates one token and sends only its hash', async () =
     true,
   );
   assert.equal(
-    configure.includes('$HOME/.wheelmaker/release-server/config.json'),
+    configure.includes('$HOME/.wheelmaker/gateway/config.json'),
     true,
   );
   assert.deepEqual(restart.slice(-4), [

@@ -538,22 +538,6 @@ func TestUpdateOnlyHubRequestAllowedRequiresExactUpdatePayload(t *testing.T) {
 			want: true,
 		},
 		{
-			name:    "refresh Gateway update",
-			method:  rp.RegistryMethodHubStateRefresh,
-			payload: map[string]any{"sections": []string{"gatewayUpdate"}},
-			want:    true,
-		},
-		{
-			name:   "request Gateway update",
-			method: rp.RegistryMethodHubStateAction,
-			payload: map[string]any{
-				"section": "gatewayUpdate",
-				"action":  "requestUpdate",
-				"params":  map[string]any{},
-			},
-			want: true,
-		},
-		{
 			name:    "get is not update query",
 			method:  rp.RegistryMethodHubStateGet,
 			payload: map[string]any{"sections": []string{"wheelmakerUpdate"}},
@@ -3907,50 +3891,10 @@ func reserveTCPPort(t *testing.T) int {
 	return addr.Port
 }
 
-func TestGatewayRelayPortProviderReadsConfiguredPort(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gateway", "config.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("MkdirAll(): %v", err)
-	}
-	if err := os.WriteFile(path, []byte(`{"schema":1,"relay":{"listenPort":28810},"log":{"level":"INFO"}}`), 0o600); err != nil {
-		t.Fatalf("WriteFile(): %v", err)
-	}
-	provider := newGatewayRelayPortProvider(path)
-	port, err := provider()
-	if err != nil || port != 28810 {
-		t.Fatalf("provider()=(%d,%v), want (28810,nil)", port, err)
-	}
-}
-
-func TestGatewayRelayPortProviderTreatsMissingOrZeroAsUnconfigured(t *testing.T) {
-	missing, err := newGatewayRelayPortProvider(filepath.Join(t.TempDir(), "missing.json"))()
-	if missing != 0 || !errors.Is(err, portrelay.ErrRelayPortClientManaged) {
-		t.Fatalf("missing provider()=(%d,%v), want client-managed mode", missing, err)
-	}
-	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"schema":1,"relay":{"listenPort":0},"log":{"level":"INFO"}}`), 0o600); err != nil {
-		t.Fatalf("WriteFile(): %v", err)
-	}
-	zero, err := newGatewayRelayPortProvider(path)()
-	if err != nil || zero != 0 {
-		t.Fatalf("zero provider()=(%d,%v), want (0,nil)", zero, err)
-	}
-}
-
-func TestGatewayRelayPortProviderRejectsInvalidConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(path, []byte(`{"schema":1,"relay":{"listenPort":80},"log":{"level":"INFO"}}`), 0o600); err != nil {
-		t.Fatalf("WriteFile(): %v", err)
-	}
-	if _, err := newGatewayRelayPortProvider(path)(); err == nil || !strings.Contains(err.Error(), "reserved") {
-		t.Fatalf("provider() error=%v, want reserved-port validation error", err)
-	}
-}
-
-func TestMissingGatewayConfigUsesClientManagedRelayMode(t *testing.T) {
-	server := New(Config{GatewayConfigPath: filepath.Join(t.TempDir(), "missing-gateway.json")})
+func TestRegistryDoesNotReadGatewayConfig(t *testing.T) {
+	server := New(Config{RelayPort: 0})
 	snapshot := server.relay.Status()
 	if snapshot.ListenPortManaged || snapshot.Error != "" || snapshot.Enabled {
-		t.Fatalf("missing Gateway snapshot=%+v, want disabled client-managed mode", snapshot)
+		t.Fatalf("registry snapshot=%+v, want disabled client-managed mode", snapshot)
 	}
 }
