@@ -120,9 +120,11 @@ func printPaths(home string, stdout io.Writer) error {
 	return json.NewEncoder(stdout).Encode(map[string]string{
 		"home":                  paths.Home,
 		"configFile":            paths.ConfigFile,
+		"appConfigFile":         paths.AppConfigFile,
 		"sitesDir":              paths.SitesDir,
 		"workspaceSiteFile":     paths.WorkspaceSiteFile,
 		"releaseServerSiteFile": paths.ReleaseServerSiteFile,
+		"sharePublicRoot":       paths.SharePublicRoot,
 		"generatedConfig":       paths.GeneratedConfig,
 		"stateRelease":          paths.StateRelease,
 		"dataDir":               paths.DataDir,

@@ -29,6 +29,16 @@ func TestResolvePathsUsesFixedGatewayHomeLayout(t *testing.T) {
 	}
 }
 
+func TestResolvePathsDerivesSiblingAppConfigAndShareRoot(t *testing.T) {
+	paths := ResolvePaths(`C:\Users\alice\.wheelmaker\gateway`)
+	if paths.AppConfigFile != `C:\Users\alice\.wheelmaker\config.json` {
+		t.Fatalf("AppConfigFile = %q", paths.AppConfigFile)
+	}
+	if paths.SharePublicRoot != `C:\Users\alice\.wheelmaker\shares\public` {
+		t.Fatalf("SharePublicRoot = %q", paths.SharePublicRoot)
+	}
+}
+
 func TestValidateSiteRequiresHTTPSCertificatePair(t *testing.T) {
 	site := SiteConfig{
 		Schema:    SiteSchemaVersion,
@@ -107,6 +117,116 @@ func TestCompileConfigIncludesWorkspaceRoutesAndAutomaticTLS(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("compiled config does not contain %q", want)
 		}
+	}
+}
+
+func TestCompileConfigIncludesExactShareStaticRoute(t *testing.T) {
+	global := GlobalConfig{Schema: GlobalSchemaVersion, Log: LogConfig{Level: "INFO"}}
+	site := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteShare,
+		PublicURL: "https://share.example.com",
+		WebRoot:   filepath.Join(t.TempDir(), "shares", "public"),
+	}
+	compiled, err := CompileConfig(global, []SiteConfig{site})
+	if err != nil {
+		t.Fatalf("CompileConfig() error = %v", err)
+	}
+	if err := ValidateJSON(compiled); err != nil {
+		t.Fatalf("ValidateJSON() error = %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(compiled, &document); err != nil {
+		t.Fatal(err)
+	}
+	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
+	if !ok || len(routes) != 1 {
+		t.Fatalf("share routes = %#v, want one exact route", routes)
+	}
+	route := routes[0]
+	if got := deepString(route, "match", "0", "path_regexp", "pattern"); got != `^/s/[A-Za-z0-9_-]{43}$` {
+		t.Fatalf("share matcher = %q", got)
+	}
+	if got := deepString(route, "match", "0", "method", "0"); got != "GET" {
+		t.Fatalf("share method matcher = %q", got)
+	}
+	if got := deepString(route, "handle", "1", "root"); got != site.WebRoot {
+		t.Fatalf("share root = %q", got)
+	}
+	for _, want := range []string{"text/html; charset=utf-8", "inline", "no-store", "noindex, nofollow", "no-referrer", "nosniff"} {
+		if !strings.Contains(string(compiled), want) {
+			t.Errorf("share route missing %q", want)
+		}
+	}
+	if strings.Contains(string(compiled), "content_security_policy") || strings.Contains(string(compiled), "reverse_proxy") {
+		t.Fatal("share route must not install CSP or reverse proxy")
+	}
+}
+
+func TestLoadBundleAddsShareFromSiblingAppConfigAndFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "gateway")
+	paths := ResolvePaths(home)
+	if err := os.MkdirAll(paths.SitesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.ConfigFile, []byte(`{"schema":1,"log":{"level":"INFO"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	workspace := `{"schema":1,"kind":"workspace","publicUrl":"https://workspace.example.com","webRoot":"` + filepath.ToSlash(filepath.Join(root, "web")) + `","upstream":"http://127.0.0.1:9630","tls":{"certificateFile":"","keyFile":""}}`
+	if err := os.WriteFile(paths.WorkspaceSiteFile, []byte(workspace), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeAppShareConfig := func(content string) {
+		t.Helper()
+		if err := os.WriteFile(paths.AppConfigFile, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	writeAppShareConfig(`{"share":{"publicUrl":"https://share.example.com"}}`)
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatalf("LoadBundle(valid share) error = %v", err)
+	}
+	if len(bundle.Sites) != 2 || bundle.Sites[1].Kind != SiteShare {
+		t.Fatalf("sites with valid share = %+v", bundle.Sites)
+	}
+
+	writeAppShareConfig(`{"share":{"publicUrl":"https://workspace.example.com"}}`)
+	bundle, err = LoadBundle(home)
+	if err != nil {
+		t.Fatalf("LoadBundle(conflicting share) error = %v", err)
+	}
+	if len(bundle.Sites) != 1 || bundle.Sites[0].Kind != SiteWorkspace {
+		t.Fatalf("sites with conflicting share = %+v", bundle.Sites)
+	}
+
+	writeAppShareConfig(`{"share":{"publicUrl":"https://share.example.com/path"}}`)
+	bundle, err = LoadBundle(home)
+	if err != nil {
+		t.Fatalf("LoadBundle(invalid share) error = %v", err)
+	}
+	if len(bundle.Sites) != 1 {
+		t.Fatalf("sites with invalid share = %+v", bundle.Sites)
+	}
+}
+
+func TestSemanticFingerprintIncludesSiblingAppConfig(t *testing.T) {
+	paths := ResolvePaths(filepath.Join(t.TempDir(), "gateway"))
+	if err := os.MkdirAll(filepath.Dir(paths.AppConfigFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.AppConfigFile, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first := semanticFingerprint(paths)
+	if err := os.WriteFile(paths.AppConfigFile, []byte(`{"share":{"publicUrl":"https://share.example.com"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	second := semanticFingerprint(paths)
+	if first == second {
+		t.Fatalf("semanticFingerprint did not change for sibling app config: %q", first)
 	}
 }
 

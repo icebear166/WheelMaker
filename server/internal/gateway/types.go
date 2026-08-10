@@ -19,6 +19,7 @@ const (
 
 	SiteWorkspace     SiteKind = "workspace"
 	SiteReleaseServer SiteKind = "release-server"
+	SiteShare         SiteKind = "share"
 )
 
 type SiteKind string
@@ -59,9 +60,11 @@ type SiteConfig struct {
 type Paths struct {
 	Home                  string
 	ConfigFile            string
+	AppConfigFile         string
 	SitesDir              string
 	WorkspaceSiteFile     string
 	ReleaseServerSiteFile string
+	SharePublicRoot       string
 	GeneratedConfig       string
 	StateRelease          string
 	DataDir               string
@@ -72,12 +75,15 @@ type Paths struct {
 
 func ResolvePaths(home string) Paths {
 	home = filepath.Clean(home)
+	stateRoot := filepath.Dir(home)
 	return Paths{
 		Home:                  home,
 		ConfigFile:            filepath.Join(home, "config.json"),
+		AppConfigFile:         filepath.Join(stateRoot, "config.json"),
 		SitesDir:              filepath.Join(home, "sites"),
 		WorkspaceSiteFile:     filepath.Join(home, "sites", "workspace.json"),
 		ReleaseServerSiteFile: filepath.Join(home, "sites", "release-server.json"),
+		SharePublicRoot:       filepath.Join(stateRoot, "shares", "public"),
 		GeneratedConfig:       filepath.Join(home, "generated", "caddy.json"),
 		StateRelease:          filepath.Join(home, "state", "release.json"),
 		DataDir:               filepath.Join(home, "data"),
@@ -158,7 +164,7 @@ func ValidateSite(site SiteConfig) error {
 	if site.Schema != SiteSchemaVersion {
 		return fmt.Errorf("unsupported site schema %d", site.Schema)
 	}
-	if site.Kind != SiteWorkspace && site.Kind != SiteReleaseServer {
+	if site.Kind != SiteWorkspace && site.Kind != SiteReleaseServer && site.Kind != SiteShare {
 		return fmt.Errorf("unsupported site kind %q", site.Kind)
 	}
 	parsed, err := url.Parse(site.PublicURL)
@@ -171,21 +177,28 @@ func ValidateSite(site SiteConfig) error {
 	if parsed.User != nil || parsed.Hostname() == "" || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
 		return fmt.Errorf("publicUrl must contain only scheme, host, optional port, and / path")
 	}
-	if site.Upstream == "" {
-		return fmt.Errorf("upstream is required")
-	}
-	upstream, err := url.Parse(site.Upstream)
-	if err != nil || upstream.Scheme != "http" || upstream.User != nil || upstream.Hostname() == "" || (upstream.Path != "" && upstream.Path != "/") || upstream.RawQuery != "" || upstream.Fragment != "" {
-		return fmt.Errorf("upstream must be a loopback http URL")
-	}
-	if !isLoopbackHost(upstream.Hostname()) {
-		return fmt.Errorf("upstream must use a loopback address")
-	}
-	if site.Kind == SiteWorkspace && (site.WebRoot == "" || !filepath.IsAbs(site.WebRoot)) {
-		return fmt.Errorf("static root must be an absolute path")
-	}
-	if site.Kind == SiteReleaseServer && site.WebRoot != "" {
-		return fmt.Errorf("release-server site cannot set webRoot")
+	switch site.Kind {
+	case SiteWorkspace:
+		if err := validateSiteUpstream(site.Upstream); err != nil {
+			return err
+		}
+		if site.WebRoot == "" || !filepath.IsAbs(site.WebRoot) {
+			return fmt.Errorf("static root must be an absolute path")
+		}
+	case SiteReleaseServer:
+		if err := validateSiteUpstream(site.Upstream); err != nil {
+			return err
+		}
+		if site.WebRoot != "" {
+			return fmt.Errorf("release-server site cannot set webRoot")
+		}
+	case SiteShare:
+		if site.Upstream != "" {
+			return fmt.Errorf("share site cannot set upstream")
+		}
+		if site.WebRoot == "" || !filepath.IsAbs(site.WebRoot) {
+			return fmt.Errorf("share static root must be an absolute path")
+		}
 	}
 	if (site.TLS.CertificateFile == "") != (site.TLS.KeyFile == "") {
 		return fmt.Errorf("certificate and key must be provided as a pair")
@@ -194,6 +207,20 @@ func ValidateSite(site SiteConfig) error {
 		if !filepath.IsAbs(site.TLS.CertificateFile) || !filepath.IsAbs(site.TLS.KeyFile) {
 			return fmt.Errorf("certificate and key paths must be absolute")
 		}
+	}
+	return nil
+}
+
+func validateSiteUpstream(raw string) error {
+	if raw == "" {
+		return fmt.Errorf("upstream is required")
+	}
+	upstream, err := url.Parse(raw)
+	if err != nil || upstream.Scheme != "http" || upstream.User != nil || upstream.Hostname() == "" || (upstream.Path != "" && upstream.Path != "/") || upstream.RawQuery != "" || upstream.Fragment != "" {
+		return fmt.Errorf("upstream must be a loopback http URL")
+	}
+	if !isLoopbackHost(upstream.Hostname()) {
+		return fmt.Errorf("upstream must use a loopback address")
 	}
 	return nil
 }
@@ -233,7 +260,7 @@ func EnsureHome(home string) error {
 		return fmt.Errorf("gateway home must be an absolute path")
 	}
 	paths := ResolvePaths(home)
-	for _, dir := range []string{paths.Home, paths.SitesDir, filepath.Dir(paths.GeneratedConfig), filepath.Dir(paths.StateRelease), paths.DataDir, paths.LogsDir, paths.DownloadsDir, paths.RollbackDir} {
+	for _, dir := range []string{paths.Home, paths.SitesDir, filepath.Dir(paths.GeneratedConfig), filepath.Dir(paths.StateRelease), paths.DataDir, paths.LogsDir, paths.DownloadsDir, paths.RollbackDir, paths.SharePublicRoot} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create gateway directory %s: %w", dir, err)
 		}

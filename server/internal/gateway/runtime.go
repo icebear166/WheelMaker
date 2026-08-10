@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -62,7 +63,7 @@ func loadGlobalFile(path string) (GlobalConfig, error) {
 }
 
 func loadSiteFiles(paths Paths) ([]SiteConfig, error) {
-	sites := make([]SiteConfig, 0, 2)
+	sites := make([]SiteConfig, 0, 3)
 	for _, path := range []string{paths.WorkspaceSiteFile, paths.ReleaseServerSiteFile} {
 		data, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
@@ -78,9 +79,70 @@ func loadSiteFiles(paths Paths) ([]SiteConfig, error) {
 		if err := ValidateSite(site); err != nil {
 			return nil, fmt.Errorf("site config %s: %w", path, err)
 		}
+		if site.Kind == SiteShare {
+			return nil, fmt.Errorf("site config %s: share sites are derived from the main config", path)
+		}
 		sites = append(sites, site)
 	}
+	if share, ok := loadShareSite(paths, sites); ok {
+		sites = append(sites, share)
+	}
 	return sites, nil
+}
+
+type appShareConfig struct {
+	Share struct {
+		PublicURL string `json:"publicUrl"`
+	} `json:"share"`
+}
+
+func loadShareSite(paths Paths, existing []SiteConfig) (SiteConfig, bool) {
+	data, err := os.ReadFile(paths.AppConfigFile)
+	if err != nil {
+		return SiteConfig{}, false
+	}
+	var config appShareConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return SiteConfig{}, false
+	}
+	publicURL, err := normalizeShareSiteURL(config.Share.PublicURL)
+	if err != nil || publicURL == "" {
+		return SiteConfig{}, false
+	}
+	shareSite := SiteConfig{
+		Schema:    SiteSchemaVersion,
+		Kind:      SiteShare,
+		PublicURL: publicURL,
+		WebRoot:   paths.SharePublicRoot,
+	}
+	for _, site := range existing {
+		if strings.EqualFold(site.Host(), shareSite.Host()) {
+			return SiteConfig{}, false
+		}
+	}
+	if err := ValidateSite(shareSite); err != nil {
+		return SiteConfig{}, false
+	}
+	return shareSite, true
+}
+
+func normalizeShareSiteURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(raw, "\r\n\t?#") {
+		return "", fmt.Errorf("share publicUrl contains invalid characters")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if (scheme != "http" && scheme != "https") || parsed.Opaque != "" || parsed.User != nil || parsed.Hostname() == "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.ForceQuery || (parsed.Path != "" && parsed.Path != "/") || parsed.RawPath != "" {
+		return "", fmt.Errorf("share publicUrl must contain only scheme, host, optional port, and / path")
+	}
+	return strings.TrimSuffix(scheme+"://"+parsed.Host, "/"), nil
 }
 
 func ValidateJSON(configJSON []byte) error {
@@ -145,8 +207,8 @@ func RunManaged(ctx context.Context, home string, configJSON []byte) error {
 }
 
 func semanticFingerprint(paths Paths) string {
-	parts := make([]string, 0, 3)
-	for _, path := range []string{paths.ConfigFile, paths.WorkspaceSiteFile, paths.ReleaseServerSiteFile} {
+	parts := make([]string, 0, 4)
+	for _, path := range []string{paths.ConfigFile, paths.WorkspaceSiteFile, paths.ReleaseServerSiteFile, paths.AppConfigFile} {
 		info, err := os.Stat(path)
 		if err != nil {
 			parts = append(parts, path+":missing")

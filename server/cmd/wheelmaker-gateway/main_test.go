@@ -35,6 +35,12 @@ func TestRunPathsPrintsStableLayout(t *testing.T) {
 	if paths["generatedConfig"] != filepath.Join(home, "generated", "caddy.json") {
 		t.Fatalf("generatedConfig = %q", paths["generatedConfig"])
 	}
+	if paths["appConfigFile"] != filepath.Join(filepath.Dir(home), "config.json") {
+		t.Fatalf("appConfigFile = %q", paths["appConfigFile"])
+	}
+	if paths["sharePublicRoot"] != filepath.Join(filepath.Dir(home), "shares", "public") {
+		t.Fatalf("sharePublicRoot = %q", paths["sharePublicRoot"])
+	}
 }
 
 func TestRunValidateReadsGlobalAndSiteFiles(t *testing.T) {

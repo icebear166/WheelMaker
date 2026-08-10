@@ -11,6 +11,7 @@ const (
 	immutableCacheControl = "public, max-age=31536000, immutable"
 	noCacheControl        = "no-cache"
 	immutableAssetRegexp  = `^/.+\.[0-9a-fA-F]{8,}\.(js|css|woff2?|ttf|eot|svg|ico|png|jpe?g|gif|webp|avif|wasm)$`
+	shareTokenRegexp      = `^/s/[A-Za-z0-9_-]{43}$`
 )
 
 func CompileConfig(global GlobalConfig, sites []SiteConfig) ([]byte, error) {
@@ -197,7 +198,25 @@ func siteRoutes(site SiteConfig) []any {
 	if site.Kind == SiteReleaseServer {
 		return releaseServerRoutes(site)
 	}
+	if site.Kind == SiteShare {
+		return shareRoutes(site)
+	}
 	return workspaceRoutes(site)
+}
+
+func shareRoutes(site SiteConfig) []any {
+	return []any{
+		map[string]any{
+			"match": []any{map[string]any{
+				"method":      []string{"GET", "HEAD"},
+				"path_regexp": map[string]any{"name": "share-token", "pattern": shareTokenRegexp},
+			}},
+			"handle": []any{
+				shareHeadersHandler(),
+				fileServerHandler(site.StaticRoot()),
+			},
+		},
+	}
 }
 
 func workspaceRoutes(site SiteConfig) []any {
@@ -338,6 +357,22 @@ func securityHeadersHandler() map[string]any {
 			"set": map[string]any{
 				"X-Content-Type-Options": []string{"nosniff"},
 				"Referrer-Policy":        []string{"no-referrer"},
+			},
+		},
+	}
+}
+
+func shareHeadersHandler() map[string]any {
+	return map[string]any{
+		"handler": "headers",
+		"response": map[string]any{
+			"set": map[string]any{
+				"Content-Type":           []string{"text/html; charset=utf-8"},
+				"Content-Disposition":    []string{"inline"},
+				"Cache-Control":          []string{"no-store"},
+				"X-Robots-Tag":           []string{"noindex, nofollow"},
+				"Referrer-Policy":        []string{"no-referrer"},
+				"X-Content-Type-Options": []string{"nosniff"},
 			},
 		},
 	}

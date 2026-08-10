@@ -73,12 +73,12 @@
 
 **Acceptance:** `ResolvePaths(--home)` derives the sibling `config.json` and `shares/public`; Gateway compiles an in-memory Share site without `sites/share.json`; valid config hot-loads it, empty/invalid/conflicting Share config removes only Share, and exact GET/HEAD token paths return the required HTML/security headers with generic 404 elsewhere.
 
-- [ ] **Step 1: Write failing Gateway tests** for derived paths, valid/empty/invalid share config, hostname collision isolation, watcher fingerprint changes, exact token matcher, static root, forced MIME/headers, no fallback, and other-site preservation.
-- [ ] **Step 2: Run focused Gateway/cmd tests** and verify failures identify missing Share derivation and route compilation.
-- [ ] **Step 3: Implement path derivation and an internal Share `SiteConfig` variant** (not loadable from `sites/*.json`), including validation and fail-closed omission when the main config is absent or invalid.
-- [ ] **Step 4: Implement Caddy route compilation** for `^/s/[A-Za-z0-9_-]{43}$`, `shares/public` file serving, forced `text/html`, `inline`, `no-store`, robots/referrer/nosniff headers, and generic non-matching 404 behavior without CSP or proxy fallback.
-- [ ] **Step 5: Extend runtime fingerprints and bundle loading** to watch the sibling main config, reload valid Share changes, and remove Share on invalid/empty config while retaining valid Workspace/Release routes.
-- [ ] **Step 6: Run focused Gateway tests plus existing gateway/cmd tests** and validate generated Caddy JSON through the existing validator.
+- [x] **Step 1: Write failing Gateway tests** for derived paths, valid/empty/invalid share config, hostname collision isolation, watcher fingerprint changes, exact token matcher, static root, forced MIME/headers, no fallback, and other-site preservation.
+- [x] **Step 2: Run focused Gateway/cmd tests** and verify failures identify missing Share derivation and route compilation.
+- [x] **Step 3: Implement path derivation and an internal Share `SiteConfig` variant** (not loadable from `sites/*.json`), including validation and fail-closed omission when the main config is absent or invalid.
+- [x] **Step 4: Implement Caddy route compilation** for `^/s/[A-Za-z0-9_-]{43}$`, `shares/public` file serving, forced `text/html`, `inline`, `no-store`, robots/referrer/nosniff headers, and generic non-matching 404 behavior without CSP or proxy fallback.
+- [x] **Step 5: Extend runtime fingerprints and bundle loading** to watch the sibling main config, reload valid Share changes, and remove Share on invalid/empty config while retaining valid Workspace/Release routes.
+- [x] **Step 6: Run focused Gateway tests plus existing gateway/cmd tests** and validate generated Caddy JSON through the existing validator.
 - [ ] **Step 7: Update the confirmed Gateway wiki page** with the stable Share derivation and route boundary.
 - [ ] **Step 8: Checkpoint** only Gateway, command, tests, and its wiki update.
 
