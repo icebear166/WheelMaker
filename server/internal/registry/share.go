@@ -19,9 +19,11 @@ type shareRuntimeConfig struct {
 }
 
 type shareConfigFile struct {
-	Share struct {
-		PublicURL string `json:"publicUrl"`
-	} `json:"share"`
+	Registry struct {
+		Share struct {
+			PublicURL string `json:"publicUrl"`
+		} `json:"share"`
+	} `json:"registry"`
 }
 
 type shareCreatePayload struct {
@@ -81,7 +83,7 @@ func (s *Server) currentShareConfig() shareRuntimeConfig {
 	if err := json.Unmarshal(data, &file); err != nil {
 		return shareRuntimeConfig{}
 	}
-	publicURL, err := normalizeSharePublicURL(file.Share.PublicURL)
+	publicURL, err := normalizeSharePublicURL(file.Registry.Share.PublicURL)
 	if err != nil || s.shareURLConflicts(publicURL) {
 		return shareRuntimeConfig{}
 	}

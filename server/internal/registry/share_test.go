@@ -14,7 +14,7 @@ import (
 
 func TestShareConfigIsReadAtCreateAndListBoundary(t *testing.T) {
 	stateDir := t.TempDir()
-	writeShareConfigTest(t, stateDir, `{"projects":[],"share":{"publicUrl":"https://share.example.test"}}`)
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"https://share.example.test"}}}`)
 	s := New(Config{Token: "share-token", StateDir: stateDir})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -39,7 +39,7 @@ func TestShareConfigIsReadAtCreateAndListBoundary(t *testing.T) {
 		t.Fatalf("create response = %+v", createResponse)
 	}
 
-	writeShareConfigTest(t, stateDir, `{"projects":[],"share":{"publicUrl":""}}`)
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":""}}}`)
 	mustWriteJSON(t, ws, testEnvelope{RequestID: 3, Type: "request", Method: rp.RegistryMethodShareList, Payload: map[string]any{}})
 	listed := mustReadEnvelope(t, ws)
 	if listed.Type != rp.RegistryEnvelopeTypeResponse {
@@ -62,7 +62,7 @@ func TestShareConfigIsReadAtCreateAndListBoundary(t *testing.T) {
 
 func TestShareRequestsCreateListDeleteAndInvalidPayload(t *testing.T) {
 	stateDir := t.TempDir()
-	writeShareConfigTest(t, stateDir, `{"projects":[],"share":{"publicUrl":"http://share.example.test:8080"}}`)
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"http://share.example.test:8080"}}}`)
 	s := New(Config{Token: "share-token", StateDir: stateDir})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -93,7 +93,7 @@ func TestShareRequestsCreateListDeleteAndInvalidPayload(t *testing.T) {
 
 func TestShareConfigIgnoresGatewayConfig(t *testing.T) {
 	stateDir := t.TempDir()
-	writeShareConfigTest(t, stateDir, `{"projects":[],"share":{"publicUrl":"https://same.example.test"}}`)
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"https://same.example.test"}}}`)
 	gatewayDir := filepath.Join(stateDir, "gateway")
 	if err := os.MkdirAll(gatewayDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -105,6 +105,16 @@ func TestShareConfigIgnoresGatewayConfig(t *testing.T) {
 	state := s.currentShareConfig()
 	if !state.enabled || state.publicURL != "https://same.example.test" {
 		t.Fatalf("share config = %+v", state)
+	}
+}
+
+func TestShareConfigIgnoresLegacyTopLevelShare(t *testing.T) {
+	stateDir := t.TempDir()
+	writeShareConfigTest(t, stateDir, `{"projects":[],"share":{"publicUrl":"https://legacy-share.example.test"}}`)
+	s := New(Config{Token: "share-token", StateDir: stateDir})
+	state := s.currentShareConfig()
+	if state.enabled || state.publicURL != "" {
+		t.Fatalf("legacy top-level Share config = %+v, want disabled", state)
 	}
 }
 

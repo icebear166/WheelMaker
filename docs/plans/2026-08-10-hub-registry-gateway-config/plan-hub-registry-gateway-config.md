@@ -147,25 +147,25 @@
 
 **Acceptance:** `share.create` and `share.list` reread only `registry.share.publicUrl` at each request boundary; Gateway config and legacy top-level Share never affect Registry responses; no Registry config watcher is introduced.
 
-- [ ] **Step 1: Write the failing Registry tests**
+- [x] **Step 1: Write the failing Registry tests**
 
   Change request-boundary fixtures to nested `registry.share`, add a legacy top-level-only negative case, and keep the Gateway duplicate negative case.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
   Run `go test ./internal/registry -run 'TestShare'`.
 
   Expected: nested Share tests fail because the current reader only decodes top-level `share`.
 
-- [ ] **Step 3: Implement the nested reader**
+- [x] **Step 3: Implement the nested reader**
 
   Decode only the `registry.share.publicUrl` path in the request-boundary config reader and preserve existing URL normalization, fail-closed behavior, and Gateway independence.
 
-- [ ] **Step 4: Run focused and full verification**
+- [x] **Step 4: Run focused and full verification**
 
   Run `gofmt` on changed Go files, `go test ./internal/registry -run 'TestShare'`, `go test ./...`, and the focused Node deployment tests. Expected: all pass with no protocol-version or wire-payload changes.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
   Checkpoint the Registry implementation and tests after full verification is green.
 

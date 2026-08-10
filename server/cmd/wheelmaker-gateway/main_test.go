@@ -46,13 +46,13 @@ func TestRunPathsPrintsStableLayout(t *testing.T) {
 	}
 }
 
-func TestRunValidateReadsSingleGatewayConfig(t *testing.T) {
+func TestRunValidateReadsGatewayConfig(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "gateway")
 	paths := gatewayPathsForTest(home)
 	if err := os.MkdirAll(filepath.Dir(paths.configFile), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	config := `{"schema":1,"acme":{"email":"ops@example.com"},"log":{"level":"info"},"relay":{"listenPort":0},"registry":{"publicUrl":"http://registry.example.com"},"release":{"publicUrl":"http://release.example.com","listen":"127.0.0.1:9680","dataRoot":"` + filepath.ToSlash(filepath.Join(t.TempDir(), "release-data")) + `","tokenSha256":""},"share":{"publicUrl":"http://share.example.com"}}`
+	config := `{"schema":1,"acme":{"email":"ops@example.com"},"registry":{"tls":{"certificateFile":"","keyFile":""}},"release":{"publicUrl":"http://release.example.com","listen":"127.0.0.1:9680","dataRoot":"` + filepath.ToSlash(filepath.Join(t.TempDir(), "release-data")) + `","tokenSha256":""},"share":{"tls":{"certificateFile":"","keyFile":""}}}`
 	if err := os.WriteFile(paths.configFile, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
