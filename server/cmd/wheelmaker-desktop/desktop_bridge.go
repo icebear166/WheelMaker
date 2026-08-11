@@ -35,8 +35,14 @@ const (
 	desktopRunLocalDevBinding              = "__wheelMakerDesktopRunLocalDev"
 )
 
-func desktopRuntimeInitScript() string {
+func desktopRuntimeInitScript(localhostURLs ...string) string {
 	bootstrapDocumentURL := strconv.Quote(desktopBootstrapDocumentURL())
+	trustedLocalhostURL := ""
+	if len(localhostURLs) > 0 {
+		if policy, err := newDesktopLocalhostWebViewPolicy(localhostURLs[0]); err == nil {
+			trustedLocalhostURL = policy.baseURL.String()
+		}
+	}
 	return `(() => {
   if (window !== window.top) return;
   const invoke = name => (...args) => {
@@ -55,11 +61,11 @@ func desktopRuntimeInitScript() string {
       startDrag: invoke('` + desktopStartDragBinding + `'),
       minimize: invoke('` + desktopMinimizeBinding + `'),
       toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
-      close: invoke('` + desktopCloseBinding + `'),
+		close: invoke('` + desktopCloseBinding + `'),
     });
     return;
   }
-  if (location.protocol === 'https:') {
+  const installTrustedDesktopBridge = () => {
     window.WheelMakerDesktop = Object.freeze({
       enabled: true,
 		getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),
@@ -82,8 +88,23 @@ func desktopRuntimeInitScript() string {
 		requestDesktopUpdate: invoke('` + desktopRequestUpdateBinding + `'),
 		deepSeekLogin: invoke('` + desktopDeepSeekLoginBinding + `'),
     });
+	};
+  if (location.protocol === 'https:') {
+	installTrustedDesktopBridge();
 	return;
 	}
+  const trustedLocalhostURL = ` + strconv.Quote(trustedLocalhostURL) + `;
+  if (trustedLocalhostURL !== '') {
+	const trustedLocalhostBase = new URL(trustedLocalhostURL);
+	if (location.protocol === 'http:' &&
+		location.origin === trustedLocalhostBase.origin &&
+		location.search === '' && location.hash === '' &&
+		(location.pathname === trustedLocalhostBase.pathname ||
+			location.pathname.startsWith(trustedLocalhostBase.pathname))) {
+		installTrustedDesktopBridge();
+		return;
+	}
+  }
   if (location.protocol === 'http:' && location.hostname === '127.0.0.1' && location.port === '4173') {
 		window.WheelMakerDesktop = Object.freeze({
 			enabled: true,

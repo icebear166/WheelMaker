@@ -69,7 +69,7 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime); err != nil {
 			return err
 		}
-		w.Init(desktopRuntimeInitScript())
+		w.Init(desktopRuntimeInitScript(opts.Runtime.TrustedLocalhostURL()))
 	}
 	if target.HTML != "" {
 		w.SetHtml(target.HTML)

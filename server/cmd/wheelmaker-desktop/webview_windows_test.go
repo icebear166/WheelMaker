@@ -60,6 +60,47 @@ func TestDesktopBootstrapBindsLocalhostSelection(t *testing.T) {
 	}
 }
 
+func TestDesktopRuntimeInitScriptAuthorizesExactLocalhostPage(t *testing.T) {
+	baseURL := fixedDesktopLocalhostTestURL()
+	script := desktopRuntimeInitScript(baseURL)
+	for _, want := range []string{
+		baseURL,
+		"const trustedLocalhostBase = new URL(trustedLocalhostURL)",
+		"location.origin === trustedLocalhostBase.origin",
+		"location.pathname === trustedLocalhostBase.pathname",
+		"location.pathname.startsWith(trustedLocalhostBase.pathname)",
+		"installTrustedDesktopBridge();",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("Desktop runtime Localhost predicate missing %q", want)
+		}
+	}
+	if strings.Contains(desktopRuntimeInitScript(), baseURL) {
+		t.Fatal("Desktop runtime script leaked a Localhost Base Path without an authorized target")
+	}
+
+	webviewSource, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(webviewSource), "desktopRuntimeInitScript(opts.Runtime.TrustedLocalhostURL())") {
+		t.Fatal("Windows WebView initialization does not pass the authorized Localhost URL")
+	}
+	adapterSource, err := os.ReadFile("webview_profile_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"a.runtime.TrustedLocalhostURL()",
+		"desktopRuntimeInitScript(localhostURL)",
+		"a.runtime.NavigationFailureMessage()",
+	} {
+		if !strings.Contains(string(adapterSource), want) {
+			t.Errorf("Windows navigation adapter missing %q", want)
+		}
+	}
+}
+
 func TestDesktopWebViewInstallsWorkAreaConstraintForCustomTitleBar(t *testing.T) {
 	source, err := os.ReadFile("webview_windows.go")
 	if err != nil {

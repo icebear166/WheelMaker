@@ -394,7 +394,7 @@ func (a *desktopWebViewPolicyAdapter) navigationCompleted(args *desktopNavigatio
 	if epoch == 0 || success == 0 {
 		a.runtime.security.RejectTopLevelNavigation(epoch)
 		if epoch != 0 {
-			a.runtime.HandleNavigationFailure("The secure server navigation failed. Retry or change the address.")
+			a.runtime.HandleNavigationFailure(a.runtime.NavigationFailureMessage())
 		}
 		return
 	}
@@ -417,7 +417,17 @@ func (a *desktopWebViewPolicyAdapter) source() (string, error) {
 }
 
 func (a *desktopWebViewPolicyAdapter) Navigate(baseURL string) {
-	a.webview.Dispatch(func() { a.webview.Navigate(baseURL) })
+	localhostURL := a.runtime.TrustedLocalhostURL()
+	localInitScript := ""
+	if localhostURL != "" {
+		localInitScript = desktopRuntimeInitScript(localhostURL)
+	}
+	a.webview.Dispatch(func() {
+		if localInitScript != "" {
+			a.webview.Init(localInitScript)
+		}
+		a.webview.Navigate(baseURL)
+	})
 }
 
 func (a *desktopWebViewPolicyAdapter) ShowBootstrapHTML(html string) {

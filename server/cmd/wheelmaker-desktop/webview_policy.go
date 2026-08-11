@@ -67,7 +67,9 @@ type desktopWebViewPolicy struct {
 func newDesktopLocalhostWebViewPolicy(baseURL string) (*desktopWebViewPolicy, error) {
 	parsed, err := url.Parse(baseURL)
 	if err != nil || parsed.Scheme != "http" || parsed.Host != "127.0.0.1:9633" || parsed.User != nil ||
-		parsed.RawQuery != "" || parsed.Fragment != "" || !validDesktopLocalhostBasePath(parsed.Path) {
+		parsed.RawPath != "" || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		strings.Contains(parsed.Path, "\\") || cleanURLPath(parsed.Path) != parsed.Path ||
+		!validDesktopLocalhostBasePath(parsed.Path) {
 		return nil, errors.New("invalid Desktop Localhost URL")
 	}
 	return &desktopWebViewPolicy{baseURL: parsed, localhost: true}, nil
@@ -176,12 +178,16 @@ func (p *desktopWebViewPolicy) contains(rawURL string) bool {
 			(cleanURLPath(parsed.Path) == "/" || strings.HasPrefix(cleanURLPath(parsed.Path), "/"))
 	}
 	if p.localhost {
-		if parsed.Scheme != "http" || parsed.Host != p.baseURL.Host || parsed.RawQuery != "" || parsed.Fragment != "" {
+		if parsed.Scheme != "http" || parsed.Host != p.baseURL.Host || parsed.RawPath != "" ||
+			parsed.RawQuery != "" || parsed.Fragment != "" || strings.Contains(parsed.Path, "\\") {
 			return false
 		}
 		basePath := cleanURLPath(p.baseURL.Path)
 		targetPath := cleanURLPath(parsed.Path)
-		return targetPath == strings.TrimSuffix(basePath, "/") || strings.HasPrefix(targetPath, basePath)
+		if targetPath != parsed.Path {
+			return false
+		}
+		return targetPath == basePath || strings.HasPrefix(targetPath, basePath)
 	}
 	if parsed.Scheme != "https" {
 		return false

@@ -223,6 +223,24 @@ func (r *desktopRuntime) HandleNavigationFailure(message string) {
 	}
 }
 
+func (r *desktopRuntime) TrustedLocalhostURL() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.config.ConnectionMode != desktopConnectionLocalhost || r.security.Mode() != desktopTrustedLocalhostPage {
+		return ""
+	}
+	return r.localhostURL
+}
+
+func (r *desktopRuntime) NavigationFailureMessage() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.config.ConnectionMode == desktopConnectionLocalhost {
+		return "The Localhost navigation failed. Retry or change the connection."
+	}
+	return "The secure server navigation failed. Retry or change the address."
+}
+
 func (r *desktopRuntime) RequestServerChange(ctx context.Context) error {
 	result := r.Reset(ctx)
 	if !result.OK {

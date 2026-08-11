@@ -240,29 +240,29 @@ Invoke `git-workflow` in `checkpoint` mode for the Task 5 files that changed. Re
 
 **Acceptance:** Localhost has its own trusted page mode and exact fixed-origin/secret-prefix policy. Only a committed top-level navigation in the current epoch receives the normal production Desktop bridge. Wrong paths/origins, iframes, stale/rejected navigation, Bootstrap, Local Dev, dangerous schemes, and arbitrary local pages cannot inherit it. Navigation failures return to the correct Bootstrap failure state without weakening HTTPS remote policy.
 
-- [ ] **Step 1: Write failing Localhost policy/epoch tests**
+- [x] **Step 1: Write failing Localhost policy/epoch tests**
 
 Add table cases for exact Localhost root/child/preview/download URLs; wrong port/host/scheme; prefix confusion; path cleaning/encoding; query/fragment rules; main frame versus iframe; committed versus stale/rejected epochs; external window handling; Bootstrap and Local Dev action separation; and certificate-error behavior for Gateway. Assert Localhost receives the same production actions as trusted remote, excluding Local Dev operations.
 
-- [ ] **Step 2: Run policy tests to establish RED**
+- [x] **Step 2: Run policy tests to establish RED**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktop(LocalhostPolicy|LocalhostPage|BridgeNavigationEpoch|NavigationPolicy)'`
 
 Expected: FAIL because Localhost is not a distinct page mode.
 
-- [ ] **Step 3: Implement exact Localhost WebView policy**
+- [x] **Step 3: Implement exact Localhost WebView policy**
 
 Add a Localhost policy constructor from the edge URL, require `http://127.0.0.1:9633` and the exact normalized secret Base Path, and keep navigation/bridge decisions tied to the security state's current mode and committed epoch. Do not broaden the existing HTTPS policy or `4173` Local Dev policy.
 
-- [ ] **Step 4: Write failing runtime-script/Windows adapter tests**
+- [x] **Step 4: Write failing runtime-script/Windows adapter tests**
 
 Assert the initialization script exposes the normal `WheelMakerDesktop` object on exact Localhost pages, remains inert on arbitrary HTTP origins/paths, and does not leak Bootstrap or Local Dev bindings. Assert the adapter reports Localhost navigation failure text and keeps site-data cleanup scoped to explicit connection changes.
 
-- [ ] **Step 5: Implement bridge injection and adapter behavior**
+- [x] **Step 5: Implement bridge injection and adapter behavior**
 
 Generate the Localhost script predicate from the authorized fixed URL/Base Path rather than accepting generic loopback HTTP. Reuse the production remote bridge action list for the Localhost mode. Keep all native binding functions guarded by `AuthorizeCurrent` and avoid writing Base Path or credentials into logs/diagnostics.
 
-- [ ] **Step 6: Run Desktop policy/runtime regressions and checkpoint**
+- [x] **Step 6: Run Desktop policy/runtime regressions and checkpoint**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop`
 

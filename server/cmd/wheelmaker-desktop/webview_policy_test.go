@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -109,6 +110,141 @@ func TestTrustedPageAllowsDeepSeekLoginBridge(t *testing.T) {
 	}
 	if policy.AllowsBridge(desktopBootstrapPage, desktopBootstrapDocumentURL(), true, desktopBridgeDeepSeekLogin) {
 		t.Fatal("deepseek login bridge must not be allowed on the bootstrap page")
+	}
+}
+
+func TestDesktopLocalhostPolicyAcceptsOnlyExactBasePath(t *testing.T) {
+	baseURL := fixedDesktopLocalhostTestURL()
+	basePath := "/wm-local-" + strings.Repeat("A", 43) + "/"
+	policy, err := newDesktopLocalhostWebViewPolicy(baseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, rawURL := range []string{
+		baseURL,
+		baseURL + "projects/1",
+		baseURL + "ws/preview/session/index.html",
+		baseURL + "ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789",
+	} {
+		if !policy.contains(rawURL) {
+			t.Errorf("Localhost policy rejected trusted URL %q", rawURL)
+		}
+	}
+
+	for _, rawURL := range []string{
+		desktopLocalhostOrigin + "/",
+		desktopLocalhostOrigin + strings.TrimSuffix(basePath, "/"),
+		desktopLocalhostOrigin + "/wm-local-" + strings.Repeat("B", 43) + "/",
+		desktopLocalhostOrigin + strings.TrimSuffix(basePath, "/") + "-evil/",
+		"http://localhost:9633" + basePath,
+		"http://127.0.0.1:9634" + basePath,
+		"https://127.0.0.1:9633" + basePath,
+		baseURL + "?source=untrusted",
+		baseURL + "#untrusted",
+		"http://user@127.0.0.1:9633" + basePath,
+		baseURL + "%2e%2e/admin/",
+		baseURL + "projects%2f..%2fadmin/",
+		baseURL + "projects/../admin/",
+		"javascript:alert(1)",
+		"data:text/html,evil",
+		"file:///tmp/evil",
+	} {
+		if policy.contains(rawURL) {
+			t.Errorf("Localhost policy accepted untrusted URL %q", rawURL)
+		}
+	}
+
+	if got := policy.DecideNavigation(baseURL, true, false); got != desktopNavigationAllow {
+		t.Fatalf("trusted Localhost navigation=%v, want allow", got)
+	}
+	if got := policy.DecideNavigation("https://docs.example.net/help", true, false); got != desktopNavigationOpenExternal {
+		t.Fatalf("external HTTPS navigation=%v, want external", got)
+	}
+	if got := policy.DecideNavigation("https://docs.example.net/help", false, false); got != desktopNavigationBlock {
+		t.Fatalf("external HTTPS iframe navigation=%v, want block", got)
+	}
+	if got := policy.DecideNavigation(baseURL, true, true); got != desktopNavigationBlock {
+		t.Fatalf("certificate-error navigation=%v, want block", got)
+	}
+}
+
+func TestDesktopLocalhostPageRequiresCommittedTopLevelNavigation(t *testing.T) {
+	baseURL := fixedDesktopLocalhostTestURL()
+	state, err := newDesktopWebViewSecurityState(baseURL, desktopTrustedLocalhostPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	productionActions := []desktopBridgeAction{
+		desktopBridgeGetDeviceName,
+		desktopBridgeRequestServerChange,
+		desktopBridgeOpenProjectFileInVSCode,
+		desktopBridgeCopyFileToClipboard,
+		desktopBridgeBeginHTMLFileClipboard,
+		desktopBridgeGetUpdateInfo,
+		desktopBridgeRequestUpdate,
+		desktopBridgeDeepSeekLogin,
+	}
+
+	epoch := state.BeginTopLevelNavigation(baseURL + "projects")
+	for _, action := range productionActions {
+		if state.Authorize(epoch, true, action) || state.AuthorizeCurrent(action) {
+			t.Fatalf("uncommitted Localhost navigation authorized action %v", action)
+		}
+	}
+	state.CommitTopLevelNavigation(epoch, baseURL+"projects")
+	for _, action := range productionActions {
+		if !state.Authorize(epoch, true, action) || !state.AuthorizeCurrent(action) {
+			t.Fatalf("committed Localhost navigation denied production action %v", action)
+		}
+		if state.Authorize(epoch, false, action) {
+			t.Fatalf("Localhost iframe authorized action %v", action)
+		}
+	}
+	for _, action := range []desktopBridgeAction{
+		desktopBridgeGetState,
+		desktopBridgeSaveBaseURL,
+		desktopBridgeSelectLocalhost,
+		desktopBridgeGetLocalDevState,
+		desktopBridgeSaveLocalDevSource,
+		desktopBridgeRunLocalDevOperation,
+	} {
+		if state.Authorize(epoch, true, action) {
+			t.Fatalf("Localhost page authorized non-production action %v", action)
+		}
+	}
+
+	next := state.BeginTopLevelNavigation(baseURL + "next")
+	if state.Authorize(epoch, true, desktopBridgeClose) || state.Authorize(next, true, desktopBridgeClose) {
+		t.Fatal("stale or uncommitted Localhost navigation retained bridge authorization")
+	}
+	state.RejectTopLevelNavigation(next)
+	if state.Authorize(next, true, desktopBridgeClose) {
+		t.Fatal("rejected Localhost navigation retained bridge authorization")
+	}
+
+	wrong := state.BeginTopLevelNavigation(desktopLocalhostOrigin + "/")
+	state.CommitTopLevelNavigation(wrong, desktopLocalhostOrigin+"/")
+	if state.Authorize(wrong, true, desktopBridgeClose) {
+		t.Fatal("wrong Localhost path received bridge authorization")
+	}
+}
+
+func TestDesktopLocalhostNavigationFailureMessage(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState(fixedDesktopLocalhostTestURL(), desktopTrustedLocalhostPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntimeWithOptions(
+		&memoryDesktopConfigStore{},
+		&recordingDesktopProber{},
+		desktopConfig{ConnectionMode: desktopConnectionLocalhost},
+		desktopBootstrapState{ConnectionMode: desktopConnectionLocalhost},
+		state,
+		desktopRuntimeOptions{LocalhostURL: fixedDesktopLocalhostTestURL()},
+	)
+	if got := runtime.NavigationFailureMessage(); got != "The Localhost navigation failed. Retry or change the connection." {
+		t.Fatalf("NavigationFailureMessage()=%q", got)
 	}
 }
 
