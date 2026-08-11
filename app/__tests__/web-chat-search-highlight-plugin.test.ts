@@ -1,4 +1,10 @@
+/** @jest-environment jsdom */
+
 import {createChatSearchHighlightPlugin} from '../web/src/chat/search/chatSearchHighlightPlugin';
+import {
+  applyChatSearchCodeHighlights,
+  applyChatSearchActiveMatch,
+} from '../web/src/chat/search/chatSearchDomHighlighter';
 
 type TestNode = {
   type: string;
@@ -102,5 +108,29 @@ describe('chat search highlight rehype plugin', () => {
     expect(tree.children?.[0].children).toEqual([{type: 'text', value: 'nothing here'}]);
     runPlugin(tree, '   ');
     expect(tree.children?.[0].children).toEqual([{type: 'text', value: 'nothing here'}]);
+  });
+
+  test('highlights matches in visible inline and fenced code DOM', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<p>Deploy once</p><code>deploy inline</code><pre><code>deploy block</code></pre>';
+
+    applyChatSearchCodeHighlights(root, 'deploy');
+
+    expect(root.querySelectorAll('mark.chat-search-match')).toHaveLength(2);
+    expect(root.querySelector('code')?.textContent).toBe('deploy inline');
+    expect(root.querySelector('pre code')?.textContent).toBe('deploy block');
+  });
+
+  test('activates only the selected visible occurrence', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<code>deploy inline</code><pre><code>deploy block</code></pre>';
+
+    applyChatSearchCodeHighlights(root, 'deploy');
+    applyChatSearchActiveMatch(root, 1);
+
+    const marks = [...root.querySelectorAll('mark.chat-search-match')];
+    expect(marks).toHaveLength(2);
+    expect(marks[0].classList.contains('chat-search-match-active')).toBe(false);
+    expect(marks[1].classList.contains('chat-search-match-active')).toBe(true);
   });
 });

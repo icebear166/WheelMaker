@@ -38,7 +38,6 @@ import {useContextMenuGesture, useContextMenuTargetGesture} from '../common/useC
 function renderChatTextWithHighlight(
   text: string,
   query: string | undefined,
-  active = false,
 ) {
   if (!query) {
     return text;
@@ -47,7 +46,7 @@ function renderChatTextWithHighlight(
     segment.match ? (
       <mark
         key={index}
-        className={`chat-search-match${active ? ' chat-search-match-active' : ''}`}
+        className="chat-search-match"
       >
         {segment.text}
       </mark>
@@ -276,13 +275,12 @@ function groupPromptAttachmentBlocks(msgs: RegistryChatMessage[]): RegistrySessi
 function renderPromptInlineParts(
   parts: ChatPromptInlinePart[],
   highlightQuery: string | undefined,
-  highlightActive: boolean,
 ): React.ReactNode {
   return parts.map((part, index) => {
     if (part.type === 'text') {
       return (
         <React.Fragment key={`text:${index}`}>
-          {renderChatTextWithHighlight(part.text, highlightQuery, highlightActive)}
+          {renderChatTextWithHighlight(part.text, highlightQuery)}
         </React.Fragment>
       );
     }
@@ -349,7 +347,6 @@ export type ChatTurnViewProps = {
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
   highlightQuery?: string;
-  highlightActive?: boolean;
 };
 
 export type ChatQueueActions = {
@@ -526,7 +523,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   openingPromptArtifactKey = '',
   promptArtifactErrors = {},
   highlightQuery,
-  highlightActive = false,
 }: ChatTurnViewProps) {
   const bindPromptArtifactFileContextMenu = useContextMenuTargetGesture<{
     artifact: RegistrySessionPromptArtifact;
@@ -545,9 +541,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   const markdownCapabilities = useMarkdownCapabilityPlugins(text);
   const highlightRehypePlugins = React.useMemo(
     () => highlightQuery
-      ? [...markdownCapabilities.rehypePlugins, createChatSearchHighlightPlugin(highlightQuery, {active: highlightActive})]
+      ? [...markdownCapabilities.rehypePlugins, createChatSearchHighlightPlugin(highlightQuery)]
       : markdownCapabilities.rehypePlugins,
-    [highlightActive, markdownCapabilities.rehypePlugins, highlightQuery],
+    [markdownCapabilities.rehypePlugins, highlightQuery],
   );
   const interactiveMarkdownComponents = React.useMemo<Components>(() => {
     if (!onSelectOptionReply && !onSelectConfirmationReply) {
@@ -760,8 +756,8 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             {text ? (
               <div className="chat-prompt-user">
                 {inlineParts.length > 0
-                  ? renderPromptInlineParts(inlineParts, highlightQuery, highlightActive)
-                  : renderChatTextWithHighlight(text, highlightQuery, highlightActive)}
+                  ? renderPromptInlineParts(inlineParts, highlightQuery)
+                  : renderChatTextWithHighlight(text, highlightQuery)}
               </div>
             ) : null}
             {steered ? (

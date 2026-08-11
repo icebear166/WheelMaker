@@ -3,6 +3,7 @@ import {useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent} f
 import type {RegistryChatMessage} from '../../registry/registryTypes';
 import {
   buildChatSearchMatches,
+  resolveChatSearchNavigationDelta,
   type ChatSearchMatch,
 } from './chatSearchState';
 
@@ -41,9 +42,10 @@ export function useChatSearchController(input: {
     () => new Set(matches.map(match => match.turnIndex)),
     [matches],
   );
-  const activeTurnIndex = open && matches.length > 0
-    ? matches[activeIndex]?.turnIndex ?? null
+  const activeMatch = open && matches.length > 0
+    ? matches[activeIndex] ?? null
     : null;
+  const activeTurnIndex = activeMatch?.turnIndex ?? null;
 
   const activate = useCallback((index: number) => {
     if (matches.length === 0) {
@@ -79,11 +81,12 @@ export function useChatSearchController(input: {
       closeSearch();
       return;
     }
-    if (event.key === 'Enter') {
+    const delta = resolveChatSearchNavigationDelta(event);
+    if (delta !== null && matches.length > 0) {
       event.preventDefault();
-      navigate(event.shiftKey ? -1 : 1);
+      navigate(delta);
     }
-  }, [closeSearch, navigate]);
+  }, [closeSearch, matches.length, navigate]);
 
   useEffect(() => {
     setOpen(false);
@@ -113,6 +116,7 @@ export function useChatSearchController(input: {
     activeIndex,
     matches,
     matchedTurnIndexes,
+    activeMatch,
     activeTurnIndex,
     inputRef,
     openSearch,

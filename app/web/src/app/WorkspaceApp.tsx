@@ -240,7 +240,13 @@ import {
   type SessionSearchResultsByProjectId,
   type SessionSearchSectionRow,
 } from '../chat/session/sessionSearchState';
+import {chatSearchMessageKey} from '../chat/search/chatSearchState';
 import {useChatSearchController} from '../chat/search/useChatSearchController';
+import {
+  applyChatSearchActiveMatch,
+  applyChatSearchCodeHighlights,
+  clearChatSearchGeneratedMarks,
+} from '../chat/search/chatSearchDomHighlighter';
 import {
   resolveSessionSearchExpansion,
   resolveWorkspaceSearchShortcutTarget,
@@ -3936,7 +3942,7 @@ export function App() {
     setQuery: setChatSearchQuery,
     activeIndex: chatSearchActiveIndex,
     matches: chatSearchMatches,
-    matchedTurnIndexes: chatSearchMatchedTurnIndexSet,
+    activeMatch: chatSearchActiveMatch,
     activeTurnIndex: chatSearchActiveTurnIndex,
     inputRef: chatSearchInputRef,
     openSearch: openChatSearch,
@@ -3952,6 +3958,78 @@ export function App() {
     archivedMode,
     scrollToMatch: scrollToChatSearchMatch,
   });
+  const chatSearchMatchIdsByMessageKey = useMemo(
+    () => {
+      const result = new Map<string, string[]>();
+      for (const match of chatSearchMatches) {
+        const matchId = `${match.messageKey}:${match.occurrenceIndex}`;
+        const ids = result.get(match.messageKey) ?? [];
+        ids.push(matchId);
+        result.set(match.messageKey, ids);
+      }
+      return result;
+    },
+    [chatSearchMatches],
+  );
+  useEffect(() => {
+    const scrollRoot = chatScrollRef.current;
+    if (!scrollRoot || !chatSearchOpen || !chatSearchQuery.trim()) {
+      return;
+    }
+
+    let lastScrolledMatchToken = '';
+    const refreshVisibleChatSearchHighlights = () => {
+      const roots = Array.from(
+        scrollRoot.querySelectorAll<HTMLElement>('[data-chat-search-match-root="true"]'),
+      );
+      for (const root of roots) {
+        applyChatSearchCodeHighlights(root, chatSearchQuery);
+        let matchIds: string[] = [];
+        try {
+          const parsed = JSON.parse(root.dataset.chatSearchMatchIds ?? '[]');
+          if (Array.isArray(parsed)) {
+            matchIds = parsed.filter((value): value is string => typeof value === 'string');
+          }
+        } catch {
+          matchIds = [];
+        }
+        const activeMatchId = chatSearchActiveMatch
+          ? `${chatSearchActiveMatch.messageKey}:${chatSearchActiveMatch.occurrenceIndex}`
+          : '';
+        const occurrenceIndex = activeMatchId ? matchIds.indexOf(activeMatchId) : -1;
+        applyChatSearchActiveMatch(root, occurrenceIndex);
+        if (occurrenceIndex < 0 || !activeMatchId) {
+          continue;
+        }
+        const activeMark = root.querySelectorAll<HTMLElement>('mark.chat-search-match')[occurrenceIndex];
+        const matchToken = activeMatchId;
+        if (
+          activeMark &&
+          typeof activeMark.scrollIntoView === 'function' &&
+          matchToken !== lastScrolledMatchToken
+        ) {
+          lastScrolledMatchToken = matchToken;
+          activeMark.scrollIntoView({block: 'center', behavior: 'smooth'});
+        }
+      }
+    };
+
+    refreshVisibleChatSearchHighlights();
+    const observer = typeof MutationObserver === 'undefined'
+      ? null
+      : new MutationObserver(refreshVisibleChatSearchHighlights);
+    observer?.observe(scrollRoot, {childList: true, subtree: true});
+    return () => {
+      observer?.disconnect();
+      const roots = Array.from(
+        scrollRoot.querySelectorAll<HTMLElement>('[data-chat-message-key]'),
+      );
+      for (const root of roots) {
+        clearChatSearchGeneratedMarks(root);
+        applyChatSearchActiveMatch(root, -1);
+      }
+    };
+  }, [chatSearchActiveMatch, chatSearchMatches, chatSearchOpen, chatSearchQuery]);
   const selectedChatSession = useMemo(
     () => {
       if (!selectedChatKey) {
@@ -17803,7 +17881,11 @@ export function App() {
     }
   };
 
-  const renderChatMessageTurn = useCallback((message: RegistryChatMessage) => {
+  const renderChatMessageTurn = useCallback((
+    message: RegistryChatMessage,
+    searchSourceMessages: RegistryChatMessage[],
+    searchSourceIndexes: number[],
+  ) => {
     const doneTurnIndex = message.turnIndex ?? 0;
     const forkKey = `${selectedChatEncodedKey}:${doneTurnIndex}`;
     const currentSessionForkSupported = message.method === 'prompt_done' &&
@@ -17836,16 +17918,32 @@ export function App() {
     if (!permissionRecord && !shouldRenderChatTurn(message, promptStatus)) {
       return null;
     }
+    const searchMatchIds = searchSourceIndexes.flatMap(sourceIndex => {
+      const sourceMessage = searchSourceMessages[sourceIndex];
+      if (!sourceMessage) {
+        return [];
+      }
+      return chatSearchMatchIdsByMessageKey.get(chatSearchMessageKey(sourceMessage, sourceIndex)) ?? [];
+    });
+    const activeSearchMatchId = chatSearchActiveMatch
+      ? `${chatSearchActiveMatch.messageKey}:${chatSearchActiveMatch.occurrenceIndex}`
+      : '';
+    const chatSearchMatchRoot = chatSearchOpen && searchMatchIds.length > 0;
     const searchHighlighted =
       (sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
         sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
-      (chatSearchOpen && chatSearchMatchedTurnIndexSet.has(message.turnIndex ?? 0));
+      chatSearchMatchRoot;
     const turnIsChatSearchActive =
-      chatSearchOpen && chatSearchActiveTurnIndex === (message.turnIndex ?? 0);
+      chatSearchOpen && (
+        chatSearchActiveTurnIndex === (message.turnIndex ?? 0) ||
+        searchMatchIds.includes(activeSearchMatchId)
+      );
     return (
       <div
         key={`${selectedChatEncodedKey}:${message.turnIndex}:${message.method}`}
         data-chat-message-key={chatMessageDomKey(message)}
+        data-chat-search-match-root={chatSearchMatchRoot ? 'true' : undefined}
+        data-chat-search-match-ids={chatSearchMatchRoot ? JSON.stringify(searchMatchIds) : undefined}
         className={[
           'chat-view-content',
           searchHighlighted ? 'chat-turn-search-highlight' : '',
@@ -17927,20 +18025,20 @@ export function App() {
           }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
-          highlightQuery={chatSearchOpen && chatSearchMatchedTurnIndexSet.has(message.turnIndex ?? 0)
+          highlightQuery={chatSearchMatchRoot
             ? chatSearchQuery
             : undefined}
-          highlightActive={turnIsChatSearchActive}
         />
       </div>
     );
   }, [
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
+    chatSearchActiveMatch,
     chatSearchActiveTurnIndex,
-    chatSearchMatchedTurnIndexSet,
     chatSearchOpen,
     chatSearchQuery,
+    chatSearchMatchIdsByMessageKey,
     chatSendDisabled,
     copyPromptDoneMarkdownEvent,
     exportPromptDoneMarkdownImageEvent,
@@ -17974,7 +18072,11 @@ export function App() {
     sessionSearchTargetTurn,
     ttsState,
   ]);
-  const renderArchivedChatMessageTurn = useCallback((message: RegistryChatMessage) => {
+  const renderArchivedChatMessageTurn = useCallback((
+    message: RegistryChatMessage,
+    searchSourceMessages: RegistryChatMessage[],
+    searchSourceIndexes: number[],
+  ) => {
     const turnIndex = message.turnIndex ?? 0;
     const permissionRecord = message.method === 'permission_request'
       ? archivedPermissionState.byRequestTurnIndex.get(turnIndex)
@@ -17985,10 +18087,36 @@ export function App() {
     const runtimeKey = selectedArchivedKey
       ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
       : 'archived-session';
+    const searchMatchIds = searchSourceIndexes.flatMap(sourceIndex => {
+      const sourceMessage = searchSourceMessages[sourceIndex];
+      if (!sourceMessage) {
+        return [];
+      }
+      return chatSearchMatchIdsByMessageKey.get(chatSearchMessageKey(sourceMessage, sourceIndex)) ?? [];
+    });
+    const chatSearchMatchRoot = chatSearchOpen && searchMatchIds.length > 0;
+    const turnIsChatSearchActive =
+      chatSearchOpen && (
+        chatSearchActiveTurnIndex === turnIndex ||
+        searchMatchIds.includes(
+          chatSearchActiveMatch
+            ? `${chatSearchActiveMatch.messageKey}:${chatSearchActiveMatch.occurrenceIndex}`
+            : '',
+        )
+      );
+    const searchHighlighted =
+      chatSearchMatchRoot;
     return (
       <div
         key={`${runtimeKey}:${message.turnIndex}:${message.method}`}
-        className="chat-view-content"
+        data-chat-message-key={chatMessageDomKey(message)}
+        data-chat-search-match-root={chatSearchMatchRoot ? 'true' : undefined}
+        data-chat-search-match-ids={chatSearchMatchRoot ? JSON.stringify(searchMatchIds) : undefined}
+        className={[
+          'chat-view-content',
+          searchHighlighted ? 'chat-turn-search-highlight' : '',
+          turnIsChatSearchActive ? 'chat-turn-search-highlight-active' : '',
+        ].filter(Boolean).join(' ')}
       >
         <ChatTurnView
           message={message}
@@ -18008,6 +18136,7 @@ export function App() {
           }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
+          highlightQuery={chatSearchMatchRoot ? chatSearchQuery : undefined}
         />
       </div>
     );
@@ -18015,6 +18144,11 @@ export function App() {
     archivedPermissionState,
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
+    chatSearchActiveMatch,
+    chatSearchActiveTurnIndex,
+    chatSearchMatchIdsByMessageKey,
+    chatSearchOpen,
+    chatSearchQuery,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     openPromptAttachmentContextMenu,
@@ -18156,9 +18290,11 @@ export function App() {
         );
       }
       if (sourceMessage && chatReadOnlyPreview) {
-        return renderArchivedChatMessageTurn(sourceMessage);
+        return renderArchivedChatMessageTurn(sourceMessage, sourceMessages, displayItem.sourceIndexes);
       }
-      return sourceMessage ? renderChatMessageTurn(sourceMessage) : null;
+      return sourceMessage
+        ? renderChatMessageTurn(sourceMessage, sourceMessages, displayItem.sourceIndexes)
+        : null;
     };
     return renderDisplayItem(rootDisplayItem);
   }, [
