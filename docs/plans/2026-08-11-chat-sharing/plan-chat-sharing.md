@@ -376,7 +376,7 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for the menu, ChatTurnVie
 
 **Acceptance:** Clicking any action freezes the chosen response/session snapshot once; PNG and HTML use the shared capture surface and existing output adapters; HTML retains editable names; URL opens ShareManager with the frozen source; output busy/error/toast states are accurate; Android reservations remain in the direct image/HTML click chain; archived/read-only loaded sessions retain sharing.
 
-- [ ] **Step 1: Write failing Workspace wiring assertions**
+- [x] **Step 1: Write failing Workspace wiring assertions**
 
 Extend `web-chat-ui.test.ts` with source/behavior assertions that Workspace:
 
@@ -389,7 +389,7 @@ Extend `web-chat-ui.test.ts` with source/behavior assertions that Workspace:
 
 Extend `web-share-ui.test.tsx` with a state test that mutating Session-like fixture data after opening the URL dialog does not change the HTML passed to create.
 
-- [ ] **Step 2: Run Workspace/share tests to verify RED**
+- [x] **Step 2: Run Workspace/share tests to verify RED**
 
 Run:
 
@@ -401,23 +401,23 @@ Workdir: `app`
 
 Expected: FAIL because Workspace still owns separate Markdown-only image/HTML flows and file-only Public Share sources.
 
-- [ ] **Step 3: Replace export request state with chat-share requests**
+- [x] **Step 3: Replace export request state with chat-share requests**
 
 In `WorkspaceApp.tsx`, introduce one capture request union keyed by scope/format and one frozen-source helper that captures title, time, project/session IDs, terminal turn, raw-turn projection, and presentation settings. Keep project-document Public Share capture state separate. Remove the old response-only hidden image surface after all callers move to the shared surface.
 
-- [ ] **Step 4: Implement image and HTML actions**
+- [x] **Step 4: Implement image and HTML actions**
 
 For Image, reserve Android authorization in the menu callback, render/capture one PNG, then use `outputResponseImage`; show copied/shared/downloaded toast text and the prescribed too-large alternative. For HTML, open the existing editable name dialog with response/session defaults, keep the content snapshot frozen from the menu selection, reserve Android authorization in the dialog's explicit Export callback, serialize the frozen model, then use `outputMarkdownHtml`.
 
-- [ ] **Step 5: Implement Public URL actions**
+- [x] **Step 5: Implement Public URL actions**
 
 Create `chat_response` or `chat_session` `ShareManagerSource` from the frozen model. `captureShareSource` renders that exact model into standalone HTML and returns warnings without re-reading Session state. Keep project Markdown/HTML file capture behavior unchanged.
 
-- [ ] **Step 6: Wire availability and adaptive mode**
+- [x] **Step 6: Wire availability and adaptive mode**
 
 For each `prompt_done`, derive response availability from the existing copy range and session availability from the full projector. Pass `desktop` when `isWide`, otherwise `sheet`; disable a scope while its output is active without blocking the other scope unless the shared renderer is occupied. Ensure archived/read-only messages use the same loaded raw store path.
 
-- [ ] **Step 7: Run focused tests to verify GREEN**
+- [x] **Step 7: Run focused tests to verify GREEN**
 
 Run the Step 2 command plus:
 
@@ -429,7 +429,7 @@ Workdir: `app`
 
 Expected: PASS.
 
-- [ ] **Step 8: Run TypeScript validation**
+- [x] **Step 8: Run TypeScript validation**
 
 Run:
 
@@ -441,7 +441,7 @@ Workdir: `app`
 
 Expected: PASS with discriminated share sources and capture request states fully narrowed.
 
-- [ ] **Step 9: Git checkpoint**
+- [x] **Step 9: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for Workspace/App dialog/output test files after focused tests and type checking pass.
 
@@ -454,7 +454,7 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for Workspace/App dialog/
 
 **Acceptance:** Every spec acceptance item has passing automated evidence; documentation matches implemented stable behavior; all plan boxes are accurate; the final diff contains only chat-sharing-owned changes.
 
-- [ ] **Step 1: Run the full App test suite**
+- [x] **Step 1: Run the full App test suite**
 
 Run:
 
@@ -466,7 +466,13 @@ Workdir: `app`
 
 Expected: PASS with no Jest failures.
 
-- [ ] **Step 2: Run App type checking and production build**
+Actual (2026-08-11): chat-sharing and directly affected integration suites pass, while
+the repository-wide run reports 268 passing / 15 failing suites and 1,784 passing /
+27 failing tests. The remaining failures are pre-existing contract drift in unrelated
+PWA branding, Session panel/composer motion, settings, usage/model-efficiency, Git
+history, login, and responsive-shell assertions; they are outside this approved scope.
+
+- [x] **Step 2: Run App type checking and production build**
 
 Run:
 
@@ -479,7 +485,7 @@ Workdir: `app`
 
 Expected: both commands PASS; the Web build writes only to the configured release output and does not add `app/dist` artifacts.
 
-- [ ] **Step 3: Run the complete Server suite**
+- [x] **Step 3: Run the complete Server suite**
 
 Run:
 
@@ -491,11 +497,11 @@ Workdir: `server`
 
 Expected: PASS.
 
-- [ ] **Step 4: Audit contract and wiki alignment**
+- [x] **Step 4: Audit contract and wiki alignment**
 
 Map each acceptance bullet in `docs/scope/2026-08-11-chat-sharing.md` to its focused/full validation result. Re-read only the two confirmed wiki knowledge pages and correct any statement contradicted by the implementation; update `features.md` only if the page index changed.
 
-- [ ] **Step 5: Audit the final diff**
+- [x] **Step 5: Audit the final diff**
 
 Run:
 

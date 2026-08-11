@@ -229,9 +229,10 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const startMarkdownHtmlExport = async');
     expect(mainTsx).toContain('image.encoding !== \'base64\'');
     expect(mainTsx).toContain('data:${mimeType};base64,${image.content}');
-    expect(mainTsx).toContain('exportPromptDoneMarkdownHtmlEvent(doneTurnIndex)');
+    expect(mainTsx).toContain('handleChatShareActionEvent(doneTurnIndex, action)');
     expect(mainTsx).toContain('<AppHtmlExportNameDialog');
     expect(mainTsx).toContain('<MarkdownHtmlExportSurface');
+    expect(mainTsx).toContain('<ChatShareCaptureSurface');
     expect(mainTsx).toContain("'HTML file copied to clipboard.'");
     expect(mainTsx).toContain("'HTML file shared.'");
     expect(mainTsx).toContain("'HTML file downloaded.'");

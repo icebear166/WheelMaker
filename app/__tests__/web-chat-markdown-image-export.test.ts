@@ -59,14 +59,13 @@ describe('web chat markdown image export', () => {
 
   test('uses the shared standalone markdown presentation', () => {
     const source = fs.readFileSync(
-      path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      path.join(__dirname, '..', 'web', 'src', 'chat', 'share', 'ChatShareCaptureSurface.tsx'),
       'utf8',
     );
 
-    expect(source).toContain('<style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>');
-    expect(source).toContain(
-      'className={`markdown-image-export-surface markdown-preview ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}',
-    );
+    expect(source).toContain('<style>{MARKDOWN_EXPORT_CONTENT_STYLE + CHAT_SHARE_DOCUMENT_STYLE}</style>');
+    expect(source).toContain('<ChatShareDocument');
+    expect(source).toContain('className="chat-share-capture-surface"');
   });
 
   test('waits for pending markdown images before capture', async () => {
