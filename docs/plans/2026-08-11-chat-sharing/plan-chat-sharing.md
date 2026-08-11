@@ -62,7 +62,7 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for only the three wiki f
 
 **Acceptance:** Registry accepts valid legacy project-document, chat-response, and chat-session creates; writes new records as schema 2; lists source context; rejects invalid/mixed source fields; and continues repairing, listing, expiring, serving, and deleting schema 1 project records.
 
-- [ ] **Step 1: Write failing store tests for schema 2 sources**
+- [x] **Step 1: Write failing store tests for schema 2 sources**
 
 Extend `share_store_test.go` with table-driven tests that call `store.create` for:
 
@@ -73,7 +73,7 @@ shareCreateInput{SourceType: "chat_session", ProjectID: "hub:p", SessionID: "ses
 
 Assert saved records use schema 2, preserve Session/turn fields, omit path/kind for chat, and survive `list`. Add invalid cases for missing Session ID, non-positive response turn, chat path/kind, project fields missing, and mixed source fields. Add a manually written schema 1 project record and assert `repair` preserves it and `list` projects it as `project_document`.
 
-- [ ] **Step 2: Run the store tests to verify RED**
+- [x] **Step 2: Run the store tests to verify RED**
 
 Run:
 
@@ -83,7 +83,7 @@ go test ./internal/registry -run 'TestShareStore(Schema2Sources|RejectsInvalidSo
 
 Expected: FAIL because source discriminators, schema 2 fields, and legacy projection do not exist.
 
-- [ ] **Step 3: Implement schema 2 storage and validation**
+- [x] **Step 3: Implement schema 2 storage and validation**
 
 In `share_store.go`, define source constants, keep an explicit legacy schema 1 constant, set the current writer schema to 2, add `SourceType`, `SessionID`, and `TurnIndex` to create inputs/records, and centralize validation so:
 
@@ -95,17 +95,17 @@ In `share_store.go`, define source constants, keep an explicit legacy schema 1 c
 
 Keep token allocation, HTML decoding, atomic publication, expiry, cursor ordering, repair, and deletion unchanged.
 
-- [ ] **Step 4: Run the store tests to verify GREEN**
+- [x] **Step 4: Run the store tests to verify GREEN**
 
 Run the Step 2 command.
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing WebSocket contract tests**
+- [x] **Step 5: Write failing WebSocket contract tests**
 
 Extend `share_test.go` so a `chat_response` create without path/kind succeeds, `share.list` returns `sourceType`, `sessionId`, and `turnIndex`, a `chat_session` create succeeds without `turnIndex`, the old project payload still succeeds without `sourceType`, and strict decoding/validation rejects incompatible field combinations.
 
-- [ ] **Step 6: Run the WebSocket tests to verify RED**
+- [x] **Step 6: Run the WebSocket tests to verify RED**
 
 Run:
 
@@ -115,11 +115,11 @@ go test ./internal/registry -run 'TestShareRequests(ChatSources|LegacyProjectSou
 
 Expected: FAIL because the request/response structs do not expose the new source fields.
 
-- [ ] **Step 7: Implement additive create/list fields**
+- [x] **Step 7: Implement additive create/list fields**
 
 Extend the flat structs and mapping in `share.go`; do not add methods or touch protocol version constants. Ensure list emits `sourceType: project_document` even for schema 1 records, while path/kind or Session/turn fields appear only for the applicable source.
 
-- [ ] **Step 8: Run Registry regressions**
+- [x] **Step 8: Run Registry regressions**
 
 Run:
 
@@ -130,7 +130,7 @@ go test ./internal/protocol -run 'TestRegistryShareMethodsAreClientOnly' -count=
 
 Expected: PASS with existing storage/config/delete tests unchanged and no Registry method/version changes.
 
-- [ ] **Step 9: Git checkpoint**
+- [x] **Step 9: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for the four Registry files after the focused tests pass.
 

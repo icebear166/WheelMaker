@@ -21,14 +21,18 @@ import (
 )
 
 const (
-	shareRecordSchemaVersion = 1
-	shareTokenBytes          = 32
-	shareTokenLength         = 43
-	maxShareHTMLBytes        = 16 * 1024 * 1024
-	defaultShareLimit        = 50
-	maxShareLimit            = 100
-	shareTokenAttempts       = 16
-	shareTempFilePrefix      = ".share-"
+	legacyShareRecordSchemaVersion = 1
+	shareRecordSchemaVersion       = 2
+	shareSourceProjectDocument     = "project_document"
+	shareSourceChatResponse        = "chat_response"
+	shareSourceChatSession         = "chat_session"
+	shareTokenBytes                = 32
+	shareTokenLength               = 43
+	maxShareHTMLBytes              = 16 * 1024 * 1024
+	defaultShareLimit              = 50
+	maxShareLimit                  = 100
+	shareTokenAttempts             = 16
+	shareTempFilePrefix            = ".share-"
 )
 
 var (
@@ -57,25 +61,31 @@ type shareStore struct {
 }
 
 type shareCreateInput struct {
-	ProjectID string
-	Path      string
-	Kind      string
-	Title     string
-	Expiry    string
-	Encoding  string
-	Content   string
+	SourceType string
+	ProjectID  string
+	Path       string
+	Kind       string
+	SessionID  string
+	TurnIndex  int
+	Title      string
+	Expiry     string
+	Encoding   string
+	Content    string
 }
 
 type shareRecord struct {
-	Schema    int        `json:"schema"`
-	Token     string     `json:"token"`
-	Title     string     `json:"title"`
-	ProjectID string     `json:"projectId"`
-	Path      string     `json:"path"`
-	Kind      string     `json:"kind"`
-	CreatedAt time.Time  `json:"createdAt"`
-	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	SizeBytes int64      `json:"sizeBytes"`
+	Schema     int        `json:"schema"`
+	Token      string     `json:"token"`
+	Title      string     `json:"title"`
+	SourceType string     `json:"sourceType,omitempty"`
+	ProjectID  string     `json:"projectId"`
+	Path       string     `json:"path,omitempty"`
+	Kind       string     `json:"kind,omitempty"`
+	SessionID  string     `json:"sessionId,omitempty"`
+	TurnIndex  int        `json:"turnIndex,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	SizeBytes  int64      `json:"sizeBytes"`
 }
 
 type shareCreateResult struct {
@@ -129,7 +139,8 @@ func (s *shareStore) ensure() error {
 
 func (s *shareStore) create(input shareCreateInput) (shareCreateResult, error) {
 	var result shareCreateResult
-	if err := validateShareInput(input); err != nil {
+	sourceType, err := validateShareInput(input)
+	if err != nil {
 		return result, err
 	}
 	content, err := decodeShareContent(input.Encoding, input.Content)
@@ -159,15 +170,18 @@ func (s *shareStore) create(input shareCreateInput) (shareCreateResult, error) {
 			continue
 		}
 		record := shareRecord{
-			Schema:    shareRecordSchemaVersion,
-			Token:     token,
-			Title:     input.Title,
-			ProjectID: input.ProjectID,
-			Path:      input.Path,
-			Kind:      input.Kind,
-			CreatedAt: createdAt,
-			ExpiresAt: expiresAt,
-			SizeBytes: int64(len(content)),
+			Schema:     shareRecordSchemaVersion,
+			Token:      token,
+			Title:      input.Title,
+			SourceType: sourceType,
+			ProjectID:  input.ProjectID,
+			Path:       input.Path,
+			Kind:       input.Kind,
+			SessionID:  input.SessionID,
+			TurnIndex:  input.TurnIndex,
+			CreatedAt:  createdAt,
+			ExpiresAt:  expiresAt,
+			SizeBytes:  int64(len(content)),
 		}
 		publicTemp, err := writeShareTemp(s.publicDir, content)
 		if err != nil {
@@ -242,7 +256,7 @@ func (s *shareStore) list(cursor string, limit int) (shareListPage, error) {
 		if wantCursor != nil && !shareAfter(record, *wantCursor) {
 			continue
 		}
-		records = append(records, record)
+		records = append(records, normalizeShareRecordSource(record))
 	}
 	sort.Slice(records, func(i, j int) bool { return shareBefore(records[i], records[j]) })
 	page := shareListPage{}
@@ -431,36 +445,68 @@ func (s *shareStore) readRecordFile(path string) (shareRecord, error) {
 }
 
 func (s *shareStore) recordIsValid(record shareRecord) bool {
-	return record.Schema == shareRecordSchemaVersion &&
-		validShareToken(record.Token) &&
-		(record.Kind == "markdown" || record.Kind == "html") &&
-		validShareSourcePath(record.Path, record.Kind) &&
-		!record.CreatedAt.IsZero() &&
-		record.SizeBytes >= 0 && record.SizeBytes <= maxShareHTMLBytes &&
-		(record.ExpiresAt == nil || !record.ExpiresAt.IsZero())
+	if !validShareToken(record.Token) || strings.TrimSpace(record.ProjectID) == "" || strings.TrimSpace(record.Title) == "" || len(record.Title) > 512 || record.CreatedAt.IsZero() || record.SizeBytes < 0 || record.SizeBytes > maxShareHTMLBytes || (record.ExpiresAt != nil && record.ExpiresAt.IsZero()) {
+		return false
+	}
+	switch record.Schema {
+	case legacyShareRecordSchemaVersion:
+		return record.SourceType == "" && validProjectDocumentSource(record.Path, record.Kind, record.SessionID, record.TurnIndex)
+	case shareRecordSchemaVersion:
+		return validShareSource(record.SourceType, record.Path, record.Kind, record.SessionID, record.TurnIndex)
+	default:
+		return false
+	}
 }
 
 func (s *shareStore) recordIsActive(record shareRecord, now time.Time) bool {
 	return s.recordIsValid(record) && (record.ExpiresAt == nil || now.Before(*record.ExpiresAt))
 }
 
-func validateShareInput(input shareCreateInput) error {
+func validateShareInput(input shareCreateInput) (string, error) {
 	if strings.TrimSpace(input.ProjectID) == "" {
-		return errors.New("projectId is required")
+		return "", errors.New("projectId is required")
 	}
-	if !validShareSourcePath(input.Path, input.Kind) {
-		return errors.New("path or kind is invalid")
+	sourceType := strings.TrimSpace(input.SourceType)
+	if sourceType == "" {
+		sourceType = shareSourceProjectDocument
+	}
+	if !validShareSource(sourceType, input.Path, input.Kind, input.SessionID, input.TurnIndex) {
+		return "", errors.New("share source fields are invalid")
 	}
 	if strings.TrimSpace(input.Title) == "" {
-		return errors.New("title is required")
+		return "", errors.New("title is required")
 	}
 	if len(input.Title) > 512 {
-		return errors.New("title is too long")
+		return "", errors.New("title is too long")
 	}
 	if input.Encoding != "gzip+base64" {
-		return errors.New("encoding must be gzip+base64")
+		return "", errors.New("encoding must be gzip+base64")
 	}
-	return nil
+	return sourceType, nil
+}
+
+func validShareSource(sourceType, path, kind, sessionID string, turnIndex int) bool {
+	switch sourceType {
+	case shareSourceProjectDocument:
+		return validProjectDocumentSource(path, kind, sessionID, turnIndex)
+	case shareSourceChatResponse:
+		return path == "" && kind == "" && strings.TrimSpace(sessionID) != "" && turnIndex > 0
+	case shareSourceChatSession:
+		return path == "" && kind == "" && strings.TrimSpace(sessionID) != "" && turnIndex == 0
+	default:
+		return false
+	}
+}
+
+func validProjectDocumentSource(path, kind, sessionID string, turnIndex int) bool {
+	return sessionID == "" && turnIndex == 0 && validShareSourcePath(path, kind)
+}
+
+func normalizeShareRecordSource(record shareRecord) shareRecord {
+	if record.Schema == legacyShareRecordSchemaVersion && record.SourceType == "" {
+		record.SourceType = shareSourceProjectDocument
+	}
+	return record
 }
 
 func validShareSourcePath(rawPath, kind string) bool {

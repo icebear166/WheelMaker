@@ -91,6 +91,152 @@ func TestShareRequestsCreateListDeleteAndInvalidPayload(t *testing.T) {
 	}
 }
 
+func TestShareRequestsChatSources(t *testing.T) {
+	stateDir := t.TempDir()
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"https://share.example.test"}}}`)
+	s := New(Config{Token: "share-token", StateDir: stateDir})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	ws := dialWS(t, ts.URL+"/ws")
+	defer ws.Close()
+	initShareClient(t, ws, "share-token")
+
+	requests := []map[string]any{
+		{
+			"sourceType": "chat_response", "projectId": "hub:p", "sessionId": "sess-1", "turnIndex": 9,
+			"title": "Answer", "expiry": "1d", "encoding": "gzip+base64", "content": gzipBase64ForTest(t, "<p>answer</p>"),
+		},
+		{
+			"sourceType": "chat_session", "projectId": "hub:p", "sessionId": "sess-1",
+			"title": "Session", "expiry": "1d", "encoding": "gzip+base64", "content": gzipBase64ForTest(t, "<p>session</p>"),
+		},
+	}
+	for index, payload := range requests {
+		mustWriteJSON(t, ws, testEnvelope{RequestID: int64(2 + index), Type: "request", Method: rp.RegistryMethodShareCreate, Payload: payload})
+		created := mustReadEnvelope(t, ws)
+		if created.Type != rp.RegistryEnvelopeTypeResponse {
+			t.Fatalf("create %d response = %+v", index, created)
+		}
+	}
+
+	mustWriteJSON(t, ws, testEnvelope{RequestID: 4, Type: "request", Method: rp.RegistryMethodShareList, Payload: map[string]any{}})
+	listed := mustReadEnvelope(t, ws)
+	if listed.Type != rp.RegistryEnvelopeTypeResponse {
+		t.Fatalf("list response = %+v", listed)
+	}
+	var response struct {
+		Items []struct {
+			SourceType string `json:"sourceType"`
+			ProjectID  string `json:"projectId"`
+			Path       string `json:"path"`
+			Kind       string `json:"kind"`
+			SessionID  string `json:"sessionId"`
+			TurnIndex  int    `json:"turnIndex"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(mustJSON(t, listed.Payload), &response); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(response.Items) != 2 {
+		t.Fatalf("list items = %+v", response.Items)
+	}
+	bySource := make(map[string]struct {
+		ProjectID string
+		Path      string
+		Kind      string
+		SessionID string
+		TurnIndex int
+	}, len(response.Items))
+	for _, item := range response.Items {
+		bySource[item.SourceType] = struct {
+			ProjectID string
+			Path      string
+			Kind      string
+			SessionID string
+			TurnIndex int
+		}{item.ProjectID, item.Path, item.Kind, item.SessionID, item.TurnIndex}
+	}
+	if got := bySource["chat_response"]; got.ProjectID != "hub:p" || got.SessionID != "sess-1" || got.TurnIndex != 9 || got.Path != "" || got.Kind != "" {
+		t.Fatalf("chat_response item = %+v", got)
+	}
+	if got := bySource["chat_session"]; got.ProjectID != "hub:p" || got.SessionID != "sess-1" || got.TurnIndex != 0 || got.Path != "" || got.Kind != "" {
+		t.Fatalf("chat_session item = %+v", got)
+	}
+}
+
+func TestShareRequestsLegacyProjectSource(t *testing.T) {
+	stateDir := t.TempDir()
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"https://share.example.test"}}}`)
+	s := New(Config{Token: "share-token", StateDir: stateDir})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	ws := dialWS(t, ts.URL+"/ws")
+	defer ws.Close()
+	initShareClient(t, ws, "share-token")
+
+	mustWriteJSON(t, ws, testEnvelope{RequestID: 2, Type: "request", Method: rp.RegistryMethodShareCreate, Payload: map[string]any{
+		"projectId": "hub:p", "path": "docs/readme.md", "kind": "markdown", "title": "Readme",
+		"expiry": "1d", "encoding": "gzip+base64", "content": gzipBase64ForTest(t, "<p>readme</p>"),
+	}})
+	created := mustReadEnvelope(t, ws)
+	if created.Type != rp.RegistryEnvelopeTypeResponse {
+		t.Fatalf("create response = %+v", created)
+	}
+	mustWriteJSON(t, ws, testEnvelope{RequestID: 3, Type: "request", Method: rp.RegistryMethodShareList, Payload: map[string]any{}})
+	listed := mustReadEnvelope(t, ws)
+	var response struct {
+		Items []struct {
+			SourceType string `json:"sourceType"`
+			Path       string `json:"path"`
+			Kind       string `json:"kind"`
+			SessionID  string `json:"sessionId"`
+			TurnIndex  int    `json:"turnIndex"`
+		} `json:"items"`
+	}
+	if listed.Type != rp.RegistryEnvelopeTypeResponse {
+		t.Fatalf("list response = %+v", listed)
+	}
+	if err := json.Unmarshal(mustJSON(t, listed.Payload), &response); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].SourceType != "project_document" || response.Items[0].Path != "docs/readme.md" || response.Items[0].Kind != "markdown" || response.Items[0].SessionID != "" || response.Items[0].TurnIndex != 0 {
+		t.Fatalf("legacy project list = %+v", response.Items)
+	}
+}
+
+func TestShareRequestsRejectInvalidSourceFields(t *testing.T) {
+	stateDir := t.TempDir()
+	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"https://share.example.test"}}}`)
+	s := New(Config{Token: "share-token", StateDir: stateDir})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	ws := dialWS(t, ts.URL+"/ws")
+	defer ws.Close()
+	initShareClient(t, ws, "share-token")
+
+	payloads := []map[string]any{
+		{
+			"sourceType": "chat_response", "projectId": "hub:p", "sessionId": "sess-1", "turnIndex": 3, "path": "chat.md",
+			"title": "Answer", "expiry": "1d", "encoding": "gzip+base64", "content": gzipBase64ForTest(t, "bad"),
+		},
+		{
+			"sourceType": "chat_session", "projectId": "hub:p", "sessionId": "sess-1", "turnIndex": 3,
+			"title": "Session", "expiry": "1d", "encoding": "gzip+base64", "content": gzipBase64ForTest(t, "bad"),
+		},
+		{
+			"sourceType": "project_document", "projectId": "hub:p", "path": "docs/a.md", "kind": "markdown", "sessionId": "sess-1",
+			"title": "Doc", "expiry": "1d", "encoding": "gzip+base64", "content": gzipBase64ForTest(t, "bad"),
+		},
+	}
+	for index, payload := range payloads {
+		mustWriteJSON(t, ws, testEnvelope{RequestID: int64(2 + index), Type: "request", Method: rp.RegistryMethodShareCreate, Payload: payload})
+		response := mustReadEnvelope(t, ws)
+		if response.Type != rp.RegistryEnvelopeTypeError || response.Payload["code"] != codeInvalidArgument {
+			t.Fatalf("invalid source %d response = %+v", index, response)
+		}
+	}
+}
+
 func TestShareConfigIgnoresGatewayConfig(t *testing.T) {
 	stateDir := t.TempDir()
 	writeShareConfigTest(t, stateDir, `{"projects":[],"registry":{"share":{"publicUrl":"https://same.example.test"}}}`)
