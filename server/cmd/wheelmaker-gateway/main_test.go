@@ -138,6 +138,32 @@ func TestRunRenderPromotesOnlyValidCustomCaddyBundle(t *testing.T) {
 	}
 }
 
+func TestRunServeRejectsInvalidImportedSourceWithoutPromoting(t *testing.T) {
+	home := commandGatewayHome(t, map[string]string{
+		"entry.caddy":      "import nested/bad.caddy\n",
+		"nested/bad.caddy": "bad.example.com {\n\trespond ok\n",
+	})
+	generated := filepath.Join(home, "generated", "caddy.json")
+	if err := os.MkdirAll(filepath.Dir(generated), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(generated, []byte("previous"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	err := run([]string{"serve", "--home", home}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "bad.caddy:2") {
+		t.Fatalf("run(serve) error = %v, want imported source line", err)
+	}
+	retained, readErr := os.ReadFile(generated)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(retained) != "previous" {
+		t.Fatalf("invalid cold start changed generated config: %q", retained)
+	}
+}
+
 func TestRunRejectsUnknownCommand(t *testing.T) {
 	if err := run([]string{"unknown"}, io.Discard, io.Discard); err == nil {
 		t.Fatal("run(unknown) returned nil")

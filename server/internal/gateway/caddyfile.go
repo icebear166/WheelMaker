@@ -35,6 +35,11 @@ func compileCaddyfileCandidate(global GlobalConfig, sites []SiteConfig, storageR
 	if err != nil {
 		return adaptedCandidate{}, err
 	}
+	staticImports, err := validateStaticImports(entrypoints, customRoot)
+	if err != nil {
+		return adaptedCandidate{}, err
+	}
+	dependencies = mergeSortedPaths(dependencies, staticImports)
 
 	var source bytes.Buffer
 	renderManagedGlobalOptions(&source, global, storageRoot)
@@ -81,6 +86,107 @@ func compileCaddyfileCandidate(global GlobalConfig, sites []SiteConfig, storageR
 		Warnings:     warnings,
 		Dependencies: dependencies,
 	}, nil
+}
+
+func validateStaticImports(entrypoints []string, customRoot string) ([]string, error) {
+	visited := make(map[string]struct{})
+	dependencies := make(map[string]struct{})
+	var inspect func(string) error
+	inspect = func(path string) error {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return err
+		}
+		absolute = filepath.Clean(absolute)
+		if _, ok := visited[absolute]; ok {
+			return nil
+		}
+		visited[absolute] = struct{}{}
+		dependencies[absolute] = struct{}{}
+		contents, err := os.ReadFile(absolute)
+		if err != nil {
+			return fmt.Errorf("read custom Caddy source %s: %w", absolute, err)
+		}
+		tokens, err := caddyfile.Tokenize(contents, absolute)
+		if err != nil {
+			return fmt.Errorf("tokenize custom Caddy source %s: %w", absolute, err)
+		}
+		for index, token := range tokens {
+			if token.Text != "import" || (index > 0 && tokens[index-1].Line == token.Line) {
+				continue
+			}
+			if index+1 >= len(tokens) || tokens[index+1].Line != token.Line {
+				continue
+			}
+			patternToken := tokens[index+1]
+			// Snippet arguments are resolved by Caddy during expansion. Their
+			// resulting non-empty sources are checked from parsed source tokens.
+			if strings.Contains(patternToken.Text, "{args") {
+				continue
+			}
+			pattern := filepath.FromSlash(patternToken.Text)
+			if !filepath.IsAbs(pattern) {
+				pattern = filepath.Join(filepath.Dir(absolute), pattern)
+			}
+			pattern, err = filepath.Abs(pattern)
+			if err != nil {
+				return sourceTokenError(patternToken, "resolve import pattern %q: %v", patternToken.Text, err)
+			}
+			if !pathLexicallyWithinRoot(pattern, customRoot) {
+				return sourceTokenError(patternToken, "import pattern %q resolves outside custom sites root %q", patternToken.Text, customRoot)
+			}
+			matches, err := filepath.Glob(pattern)
+			if err != nil {
+				return sourceTokenError(patternToken, "invalid import pattern %q: %v", patternToken.Text, err)
+			}
+			for _, match := range matches {
+				inside, err := pathWithinRoot(match, customRoot)
+				if err != nil {
+					return sourceTokenError(patternToken, "resolve imported Caddy source %q: %v", match, err)
+				}
+				if !inside {
+					return sourceTokenError(patternToken, "imported Caddy source %q resolves outside custom sites root %q", match, customRoot)
+				}
+				info, err := os.Stat(match)
+				if err != nil {
+					return sourceTokenError(patternToken, "inspect imported Caddy source %q: %v", match, err)
+				}
+				if !info.IsDir() {
+					if err := inspect(match); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	}
+	for _, entrypoint := range entrypoints {
+		if err := inspect(entrypoint); err != nil {
+			return nil, err
+		}
+	}
+	result := make([]string, 0, len(dependencies))
+	for path := range dependencies {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func pathLexicallyWithinRoot(path, root string) bool {
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(absoluteRoot, absolutePath)
+	if err != nil {
+		return false
+	}
+	return relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
 }
 
 func customFormattingWarnings(dependencies []string) ([]caddyconfig.Warning, error) {

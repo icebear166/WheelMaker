@@ -312,6 +312,14 @@ func TestCustomCaddyRejectsManagedBoundariesAndInvalidSources(t *testing.T) {
 			want: []string{"outside.caddy", "outside", "sites"},
 		},
 		{
+			name: "escaping empty import",
+			files: map[string]string{
+				"escape-empty.caddy":     "import ../outside-empty.caddy\n",
+				"../outside-empty.caddy": "",
+			},
+			want: []string{"escape-empty.caddy", "outside-empty.caddy", "sites"},
+		},
+		{
 			name:  "direct syntax error",
 			files: map[string]string{"direct.caddy": "direct.example.com {\n\trespond ok\n"},
 			want:  []string{"direct.caddy", "expecting"},

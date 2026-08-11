@@ -316,7 +316,7 @@ Run: `git diff --check -- README.md INSTALL.md scripts/deploy/deploy-core.mjs sc
 
 Expected: PASS.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 After verification passes, invoke `git-workflow` in `checkpoint` mode for the Task 5 files that changed. Record commit hash + subject.
 
@@ -328,7 +328,7 @@ After verification passes, invoke `git-workflow` in `checkpoint` mode for the Ta
 
 **Acceptance:** Every spec requirement maps to passing evidence, plan checkboxes reflect actual work, no task-external changes are included, and configured commit/push/merge/cleanup behavior completes or is reported accurately.
 
-- [ ] **Step 1: Run focused Gateway verification**
+- [x] **Step 1: Run focused Gateway verification**
 
 Run: `go test ./internal/gateway ./cmd/wheelmaker-gateway`
 
@@ -336,13 +336,13 @@ Run: `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the server-wide regression suite**
+- [x] **Step 2: Run the server-wide regression suite**
 
 Run from `server/`: `go test ./...`
 
 Expected: PASS.
 
-- [ ] **Step 3: Verify source, docs, schema, and protocol boundaries**
+- [x] **Step 3: Verify source, docs, schema, and protocol boundaries**
 
 Run: `git diff --check`
 
@@ -350,11 +350,11 @@ Run: `rg -n 'GlobalSchemaVersion|GATEWAY_SCHEMA|ProtocolVersion' server scripts 
 
 Expected: no whitespace errors; Gateway remains schema 2; Registry protocol version is unchanged; documentation matches the implemented paths/commands.
 
-- [ ] **Step 4: Review spec acceptance evidence and finish plan checkboxes**
+- [x] **Step 4: Review spec acceptance evidence and finish plan checkboxes**
 
 Record the exact passing commands and inspect `git status -sb`, `git diff --stat`, and task-owned diffs. Confirm no pre-existing/user changes were present at prepare and no unrelated files entered the task.
 
-- [ ] **Step 5: Final wiki accuracy pass**
+- [x] **Step 5: Final wiki accuracy pass**
 
 If implementation introduced additional stable facts within the already approved `docs/wiki/architecture/gateway.md` target, update only that page and rerun its formatting check; otherwise record that the first wiki sync remains accurate.
 
