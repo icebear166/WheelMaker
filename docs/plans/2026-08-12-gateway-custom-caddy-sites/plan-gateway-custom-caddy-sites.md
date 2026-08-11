@@ -358,6 +358,6 @@ Record the exact passing commands and inspect `git status -sb`, `git diff --stat
 
 If implementation introduced additional stable facts within the already approved `docs/wiki/architecture/gateway.md` target, update only that page and rerun its formatting check; otherwise record that the first wiki sync remains accurate.
 
-- [ ] **Step 6: Invoke `git-workflow` finalize**
+- [x] **Step 6: Invoke `git-workflow` finalize**
 
 Pass the truthful result (`complete`, `verification_failed`, `blocked`, or `awaiting_review`) and all verification evidence. Follow configured behavior for final commit, refresh/rebase, feature-branch push, clean-main merge/push, and cleanup; report every commit SHA/subject and each skipped action with its reason.
