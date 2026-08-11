@@ -144,7 +144,7 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for the four Registry fil
 
 **Acceptance:** One pure projector produces frozen response/session models from raw turns, matches current response-copy semantics, excludes streaming/control content, preserves terminal failure labels, silently skips gaps/orphans, and reduces every user attachment to a name-only label.
 
-- [ ] **Step 1: Write failing projector tests**
+- [x] **Step 1: Write failing projector tests**
 
 Create `web-chat-share-snapshot.test.ts` with real `RegistryChatMessage` fixtures and assertions for:
 
@@ -156,7 +156,7 @@ Create `web-chat-share-snapshot.test.ts` with real `RegistryChatMessage` fixture
 - returning only `report.pdf`, `Image attachment`, and `File attachment` labels for resource/image blocks, with no `data` or `uri` field in the snapshot;
 - copying title, ISO timestamp, source IDs, scope, theme/code presentation values, and response terminal turn into a detached immutable value.
 
-- [ ] **Step 2: Run projector tests to verify RED**
+- [x] **Step 2: Run projector tests to verify RED**
 
 Run:
 
@@ -168,15 +168,15 @@ Workdir: `app`
 
 Expected: FAIL because the projector module and APIs do not exist.
 
-- [ ] **Step 3: Extract shared response-range helpers**
+- [x] **Step 3: Extract shared response-range helpers**
 
 Expose the existing parameter text extraction/range grouping needed by both copy and share without changing `buildPromptDoneCopyRange` output. Update its existing tests first if the extracted API changes imports, then keep all original assertions green.
 
-- [ ] **Step 4: Implement the minimal projector**
+- [x] **Step 4: Implement the minimal projector**
 
 Define discriminated snapshot/entry/status/attachment types and the two builders. Sort cloned input, track only valid prompt-start-to-terminal ranges, use the current response Markdown builder for Assistant content, normalize only the three public terminal states, and copy all presentation values at construction time. Do not retain raw message/block references.
 
-- [ ] **Step 5: Run projector and copy tests to verify GREEN**
+- [x] **Step 5: Run projector and copy tests to verify GREEN**
 
 Run:
 
@@ -188,7 +188,7 @@ Workdir: `app`
 
 Expected: PASS.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for the projector and copy-range files after the focused tests pass.
 

@@ -18,7 +18,7 @@ export type ChatCopyRangeResult =
         | 'empty_agent_response';
     };
 
-function textFromParam(param: Record<string, unknown>): string {
+export function chatMessageParamText(param: Record<string, unknown>): string {
   if (typeof param.text === 'string') {
     return param.text;
   }
@@ -40,11 +40,32 @@ function textFromParam(param: Record<string, unknown>): string {
   return '';
 }
 
+export function orderChatMessagesByTurnIndex(
+  turns: RegistryChatMessage[],
+): RegistryChatMessage[] {
+  return [...turns].sort(
+    (left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0),
+  );
+}
+
+export function buildAgentMessageMarkdown(
+  turns: RegistryChatMessage[],
+): string {
+  return buildPromptAgentMarkdown(
+    turns
+      .filter(message => message.method === 'agent_message_chunk')
+      .map(message => ({
+        kind: 'message',
+        text: chatMessageParamText(message.param),
+      })),
+  );
+}
+
 export function buildPromptDoneCopyRange(
   turns: RegistryChatMessage[],
   doneTurnIndex: number,
 ): ChatCopyRangeResult {
-  const ordered = [...turns].sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0));
+  const ordered = orderChatMessagesByTurnIndex(turns);
   const doneIndex = ordered.findIndex(
     message =>
       message.method === 'prompt_done' &&
@@ -71,15 +92,7 @@ export function buildPromptDoneCopyRange(
     return { ok: false, reason: 'gap' };
   }
 
-  const markdown = buildPromptAgentMarkdown(
-    ordered
-      .slice(requestIndex + 1, doneIndex)
-      .filter(message => message.method === 'agent_message_chunk')
-      .map(message => ({
-        kind: 'message',
-        text: textFromParam(message.param),
-      })),
-  );
+  const markdown = buildAgentMessageMarkdown(ordered.slice(requestIndex + 1, doneIndex));
   if (!markdown) {
     return { ok: false, reason: 'empty_agent_response' };
   }
