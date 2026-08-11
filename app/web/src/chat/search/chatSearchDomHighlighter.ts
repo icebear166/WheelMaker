@@ -17,6 +17,7 @@ export function clearChatSearchGeneratedMarks(root: HTMLElement): void {
   for (const mark of Array.from(root.querySelectorAll<HTMLElement>(GENERATED_MARK_SELECTOR))) {
     unwrapGeneratedMark(mark);
   }
+  root.normalize();
 }
 
 export function applyChatSearchCodeHighlights(root: HTMLElement, query: string): void {

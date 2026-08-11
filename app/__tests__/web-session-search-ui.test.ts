@@ -49,6 +49,16 @@ describe('web session search UI wiring', () => {
     expect(styles).toContain('.chat-turn-search-highlight');
   });
 
+  test('keeps the outer search frame on the active turn only', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+
+    expect(main).toMatch(
+      /const searchHighlighted =\s*\(sessionSearchTargetTurn\?\.runtimeKey === selectedChatEncodedKey\s*&&\s*sessionSearchTargetTurn\.turnIndex === \(message\.turnIndex \?\? 0\)\)\s*\|\|\s*turnIsChatSearchActive;/,
+    );
+    expect(main).toMatch(/const searchHighlighted =\s*turnIsChatSearchActive;/);
+  });
+
   test('loads the matched prompt turn before applying search-result navigation', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');

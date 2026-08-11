@@ -17929,15 +17929,15 @@ export function App() {
       ? `${chatSearchActiveMatch.messageKey}:${chatSearchActiveMatch.occurrenceIndex}`
       : '';
     const chatSearchMatchRoot = chatSearchOpen && searchMatchIds.length > 0;
-    const searchHighlighted =
-      (sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
-        sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
-      chatSearchMatchRoot;
     const turnIsChatSearchActive =
       chatSearchOpen && (
         chatSearchActiveTurnIndex === (message.turnIndex ?? 0) ||
         searchMatchIds.includes(activeSearchMatchId)
       );
+    const searchHighlighted =
+      (sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+        sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
+      turnIsChatSearchActive;
     return (
       <div
         key={`${selectedChatEncodedKey}:${message.turnIndex}:${message.method}`}
@@ -18105,7 +18105,7 @@ export function App() {
         )
       );
     const searchHighlighted =
-      chatSearchMatchRoot;
+      turnIsChatSearchActive;
     return (
       <div
         key={`${runtimeKey}:${message.turnIndex}:${message.method}`}

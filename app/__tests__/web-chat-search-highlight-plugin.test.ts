@@ -4,6 +4,7 @@ import {createChatSearchHighlightPlugin} from '../web/src/chat/search/chatSearch
 import {
   applyChatSearchCodeHighlights,
   applyChatSearchActiveMatch,
+  clearChatSearchGeneratedMarks,
 } from '../web/src/chat/search/chatSearchDomHighlighter';
 
 type TestNode = {
@@ -132,5 +133,19 @@ describe('chat search highlight rehype plugin', () => {
     expect(marks).toHaveLength(2);
     expect(marks[0].classList.contains('chat-search-match-active')).toBe(false);
     expect(marks[1].classList.contains('chat-search-match-active')).toBe(true);
+  });
+
+  test('keeps inline code matches when the query grows', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<code>deploy</code>';
+
+    for (const query of ['de', 'dep', 'depl']) {
+      clearChatSearchGeneratedMarks(root);
+      applyChatSearchCodeHighlights(root, query);
+
+      const marks = root.querySelectorAll('mark.chat-search-match');
+      expect(marks).toHaveLength(1);
+      expect(marks[0].textContent).toBe(query);
+    }
   });
 });
