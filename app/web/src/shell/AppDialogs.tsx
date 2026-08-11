@@ -557,7 +557,7 @@ export function AppHtmlExportNameDialog({
           <div id="app-html-export-name-title" className="app-confirm-title">
             Name HTML file
           </div>
-          <div className="app-confirm-copy">Choose a name for this exported response.</div>
+          <div className="app-confirm-copy">Choose a name for this exported chat document.</div>
           <div className="app-html-export-name-field">
             <input
               className="app-rename-input app-html-export-name-input"

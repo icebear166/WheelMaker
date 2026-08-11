@@ -1,6 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
+import {gunzipSync} from 'node:zlib';
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
@@ -149,8 +150,30 @@ test('ShareManager pauses on dependency warnings and can continue', async () => 
   expect(service.createShare).toHaveBeenCalledTimes(1);
 });
 
+test('ShareManager stays busy while a frozen chat document is being rendered', async () => {
+  let resolveCapture;
+  const captureSnapshot = jest.fn(() => new Promise(resolve => {
+    resolveCapture = resolve;
+  }));
+  const {renderer} = await renderManager({captureSnapshot});
+
+  await ReactTestRenderer.act(async () => {
+    findButton(renderer, 'Create public share').props.onClick();
+    await flush();
+  });
+
+  expect(findButtonContaining(renderer, 'Creating…').props.disabled).toBe(true);
+  expect(findButton(renderer, 'Cancel').props.disabled).toBe(true);
+
+  await ReactTestRenderer.act(async () => {
+    resolveCapture({kind: 'html', title: 'Page', html: '<p>Page</p>', warnings: []});
+    await flush();
+    await flush();
+  });
+});
+
 test('ShareManager creates a frozen current-response source without project path fields', async () => {
-  const sessionFixture = {title: 'Design review'};
+  const sessionFixture = {title: 'Design review', answer: 'Frozen answer'};
   const frozenSnapshot = Object.freeze({
     scope: 'response',
     projectId: 'hub:p',
@@ -159,7 +182,13 @@ test('ShareManager creates a frozen current-response source without project path
     title: sessionFixture.title,
     capturedAt: '2026-08-11T08:30:00Z',
     presentation: Object.freeze({themeMode: 'dark', codeTheme: 'tokyo-night', codeFont: 'jetbrains-mono', codeFontSize: 13, codeLineHeight: 1.6, codeTabSize: 2}),
-    entries: Object.freeze([]),
+    entries: Object.freeze([Object.freeze({
+      role: 'assistant',
+      markdown: sessionFixture.answer,
+      attachments: Object.freeze([]),
+      startTurnIndex: 2,
+      endTurnIndex: 9,
+    })]),
   });
   const source = Object.freeze({
     sourceType: 'chat_response',
@@ -170,10 +199,16 @@ test('ShareManager creates a frozen current-response source without project path
     title: 'Design review',
     snapshot: frozenSnapshot,
   });
-  const captureSnapshot = jest.fn(async () => ({kind: 'html', title: 'Design review', html: '<p>Frozen answer</p>', warnings: []}));
+  const captureSnapshot = jest.fn(async current => ({
+    kind: 'html',
+    title: current.title,
+    html: `<p>${current.snapshot.entries[0].markdown}</p>`,
+    warnings: [],
+  }));
   const {renderer, service} = await renderManager({source, initialSource: source, captureSnapshot});
 
   sessionFixture.title = 'Changed later';
+  sessionFixture.answer = 'Changed later answer';
   expect(findText(renderer, 'Current response · Design review')).toBeDefined();
   await ReactTestRenderer.act(async () => {
     findButton(renderer, 'Create public share').props.onClick();
@@ -189,6 +224,9 @@ test('ShareManager creates a frozen current-response source without project path
     turnIndex: 9,
   }));
   const payload = service.createShare.mock.calls[0][0];
+  const sharedHtml = gunzipSync(Buffer.from(payload.content, 'base64')).toString('utf8');
+  expect(sharedHtml).toContain('Frozen answer');
+  expect(sharedHtml).not.toContain('Changed later answer');
   expect(payload).not.toHaveProperty('path');
   expect(payload).not.toHaveProperty('kind');
 });
@@ -250,7 +288,7 @@ test('file share actions open the create dialog without opening the management s
     'utf8',
   );
   expect(workspaceSource).toContain('const openShareCreate = useCallback');
-  expect(workspaceSource.match(/openShareCreate\(\{/g)).toHaveLength(2);
+  expect(workspaceSource.match(/openShareCreate\(\{/g)).toHaveLength(3);
   expect(workspaceSource).not.toContain('openShares({');
   expect(workspaceSource).toContain('{shareSource ? (');
 });

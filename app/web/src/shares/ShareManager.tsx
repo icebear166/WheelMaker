@@ -208,6 +208,7 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
 
   const beginCreate = async () => {
     if (!source || busy || loading || !enabled || !titleDraft.trim()) return;
+    setBusy(true);
     setError('');
     setNotice('');
     try {
@@ -219,6 +220,8 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
       await submitSnapshot(snapshot, source);
     } catch (captureError) {
       setError(captureError instanceof Error ? captureError.message : String(captureError));
+    } finally {
+      setBusy(false);
     }
   };
 

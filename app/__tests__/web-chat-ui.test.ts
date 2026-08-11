@@ -415,49 +415,40 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('gitStatusSummary');
     expect(mainTsx).not.toContain('chat-thought-label');
     expect(mainTsx).toContain("import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';");
-    expect(mainTsx).toContain('resolveMarkdownImageExportWidth,');
-    expect(mainTsx).toContain('type MarkdownImageExportMode,');
+    expect(mainTsx).toContain('buildResponseChatShareSnapshot,');
+    expect(mainTsx).toContain('buildSessionChatShareSnapshot,');
+    expect(mainTsx).toContain('ChatShareCaptureSurface,');
     expect(mainTsx).toContain('outputResponseImage,');
     expect(mainTsx).toContain('reserveResponseImageShare,');
     expect(mainTsx).toContain("} from '../chat/export/responseImageOutput';");
-    expect(mainTsx).toContain('exportMode: MarkdownImageExportMode;');
-    expect(mainTsx).toContain('const markdownImageExportWidth = resolveMarkdownImageExportWidth(exportMode);');
-    expect(mainTsx).toContain("style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}");
-    expect(mainTsx).toContain('data-export-mode={exportMode}');
+    expect(mainTsx).toContain('const buildFrozenChatShareSnapshot = useCallback');
+    expect(mainTsx).toContain('buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context)');
+    expect(mainTsx).toContain('buildSessionChatShareSnapshot(selectedFullChatMessages, context)');
     expect(mainTsx).toContain('const [toastMessage, setToastMessage] = useState(\'\');');
-    expect(mainTsx).toContain("if (result.status === 'copied') {");
-    expect(mainTsx).toContain("setToastMessage('Response image copied to clipboard.');");
+    expect(mainTsx).toContain("if (output.status === 'copied') {");
+    expect(mainTsx).toContain("setToastMessage('Image copied to clipboard.');");
     expect(mainTsx).toContain('className="app-toast"');
     expect(mainTsx).toContain('const copyRange = message.method === \'prompt_done\'');
     expect(chatTurnTsx).toContain('className="chat-prompt-actions"');
     expect(chatTurnTsx).toContain('className="chat-prompt-action-button"');
     expect(chatTurnTsx).toContain('aria-label="Copy response markdown"');
     expect(chatTurnTsx).toContain('<ChatIcon name="copy" size={13} />');
-    expect(chatTurnTsx).toContain('aria-label="Export response markdown image"');
-    expect(chatTurnTsx).toContain('<ChatIcon name="camera" size={13} />');
-    expect(chatTurnTsx).toContain('onExportPromptDoneImage');
-    expect(chatTurnTsx).toContain('onExportPromptDoneHtml');
-    expect(chatTurnTsx).toContain('exportHtmlBusy');
-    expect(chatTurnTsx).toContain('data-tooltip="Export response HTML"');
-    expect(chatTurnTsx).toContain('aria-label="Export response markdown as HTML"');
-    expect(chatTurnTsx).toContain('<ChatIcon name="fileCode" size={13} />');
-    expect(mainTsx).toContain('exportPromptDoneMarkdownImageEvent(doneTurnIndex)');
-    expect(mainTsx).toContain('exportPromptDoneMarkdownHtmlEvent(doneTurnIndex)');
-    expect(mainTsx).toContain('exportingMarkdownImageTurnIndex');
-    expect(mainTsx).toContain('exportingMarkdownHtmlKey');
-    expect(chatTurnTsx).toContain('disabled={copyDisabled || exportBusy}');
-    expect(chatTurnTsx).toContain('aria-busy={exportBusy}');
+    expect(chatTurnTsx).toContain('<ChatShareMenu');
+    expect(chatTurnTsx).toContain('onSelect={action => onSharePromptDone(message.turnIndex, action)}');
+    expect(mainTsx).toContain('handleChatShareActionEvent(doneTurnIndex, action)');
+    expect(mainTsx).toContain("sourceType: action.scope === 'response' ? 'chat_response' : 'chat_session'");
+    expect(mainTsx).toContain('await reserveResponseImageShare();');
+    expect(mainTsx).toContain('await reserveMarkdownHtmlShare();');
+    expect(mainTsx).toContain('<ChatShareCaptureSurface');
+    expect(mainTsx).not.toContain('<MarkdownImageExportSurface');
     expect(mainTsx).toContain('outputResponseImage({');
-    expect(mainTsx).toContain('setError(`Failed to share response image: ${message}`);');
+    expect(mainTsx).toContain('outputMarkdownHtml({');
+    expect(mainTsx).toContain('createChatShareSnapshot({');
     expect(mainTsx).toContain('img: ({ src, alt, ...rest }) => (');
     expect(mainTsx).toContain('crossOrigin="anonymous"');
     expect(stylesCss).toContain('.chat-prompt-actions {');
     expect(stylesCss).toContain('.chat-prompt-action-button {');
-    expect(stylesCss).toContain('.markdown-image-export-host {');
-    expect(cssRuleBlock(stylesCss, '.markdown-image-export-host')).toContain('width: var(--markdown-image-export-width, 760px);');
-    expect(cssRuleBlock(stylesCss, '.markdown-image-export-host')).not.toContain('max-width: calc(100vw - 32px);');
-    expect(mainTsx).toContain('<style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>');
-    expect(mainTsx).toContain('markdown-preview ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}');
+    expect(stylesCss).toContain('.chat-share-capture-host {');
     const exportTableBlock = cssRuleBlocksContainingSelector(
       markdownExportTs,
       '.wheelmaker-markdown-export table',
@@ -3028,14 +3019,36 @@ describe('web chat integration', () => {
   });
 });
 
+describe('chat share orchestration', () => {
+  test('freezes response or full-session models and routes all formats through shared outputs', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('const buildFrozenChatShareSnapshot = useCallback');
+    expect(mainTsx).toContain('buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context)');
+    expect(mainTsx).toContain('buildSessionChatShareSnapshot(selectedFullChatMessages, context)');
+    expect(mainTsx).toContain("const selectedFullChatMessages = archivedMode");
+    expect(mainTsx).toContain("sourceType: action.scope === 'response' ? 'chat_response' : 'chat_session'");
+    expect(mainTsx).toContain("mode: 'image'");
+    expect(mainTsx).toContain("mode: 'html'");
+    expect(mainTsx).toContain('outputResponseImage({');
+    expect(mainTsx).toContain('outputMarkdownHtml({');
+    expect(mainTsx).toContain('createChatShareSnapshot({');
+    expect(mainTsx).toContain('<ChatShareCaptureSurface');
+    expect(mainTsx).not.toContain('<MarkdownImageExportSurface');
+    expect(mainTsx).toContain('if (chatShareReservationPendingRef.current) return;');
+    expect(mainTsx).toContain('chatShareReservationPendingRef.current = true;');
+  });
+});
+
 describe('Android deferred native action ordering', () => {
   test('reserves image sharing before render state and reuses cached speech credential before forcing reconnect', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    const imageHandlerIndex = mainTsx.indexOf('const exportPromptDoneMarkdownImage = async');
+    const imageHandlerIndex = mainTsx.indexOf('const handleChatShareAction = async');
     const imageReserveIndex = mainTsx.indexOf('await reserveResponseImageShare()', imageHandlerIndex);
-    const imageRenderStateIndex = mainTsx.indexOf('setMarkdownImageExportRequest({', imageHandlerIndex);
+    const imageRenderStateIndex = mainTsx.indexOf('setChatShareCaptureTask({', imageHandlerIndex);
     expect(imageReserveIndex).toBeGreaterThan(imageHandlerIndex);
     expect(imageReserveIndex).toBeLessThan(imageRenderStateIndex);
 
