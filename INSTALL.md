@@ -73,11 +73,11 @@ Gateway，使用发布首页的另一条独立命令，或在 launcher 已下载
 node "$HOME/.wheelmaker/deploy.mjs" gateway
 ```
 
-该命令幂等安装/升级并启动 Gateway，并在 Gateway 自己的
-`~/.wheelmaker/gateway/config.json` 中生成完整的 `registry`、`release`、`share` 配置。
-三个 section 的 `publicUrl` 默认为空，表示对应路由禁用；后续直接填入地址即可。普通完整
-部署与 `update` 不读取或写入 Gateway 配置，也不会管理 Gateway 生命周期；使用 Nginx
-时无需部署 Gateway。
+该命令幂等安装/升级并启动 Gateway，在 `~/.wheelmaker/gateway/config.json` 中生成
+schema 2 的 ACME、共享 TLS 和 `wm_sites` 设置，并创建/保留用户维护的 `gateway/sites`。
+Registry/Share 地址同步自 Hub 配置；Release 的 `wm_sites.release.publicUrl` 默认为空，
+表示路由禁用。普通完整部署与 `update` 不读取或写入 Gateway 配置，也不会管理 Gateway
+生命周期；使用 Nginx 时无需部署 Gateway。
 
 启动器从 `https://release.wheelmaker.top` 匿名下载 schema 2 `stable.json`，把其中的根相对路径限制在同一个 Origin，并按固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。自建通道从 `v1.1` 重新开始，不迁移或比较旧 GitHub 通道的 stable、历史和版本号。
 
@@ -223,13 +223,86 @@ Worker 机器负责：
 
 ## 7. Gateway 或 Nginx 配置
 
-只在 Registry 入口机配置公网入口。执行 `node ~/.wheelmaker/deploy.mjs gateway` 时，
-Gateway 只读取自己的 `~/.wheelmaker/gateway/config.json`；部署器会先生成完整的
-`registry`、`release`、`share` section。把需要公开的 `publicUrl` 填入对应 section，
-留空则禁用该路由；配置为 HTTPS 时由内嵌 Caddy 自动管理证书。DNS、公网端口和防火墙
-仍由运维者准备。Hub 的 `~/.wheelmaker/config.json` 不被 Gateway 读取。
+只在 Registry 入口机配置公网入口。Gateway 和 Nginx 不能在同一 IP 上同时监听 `80/443`；
+二级域名不同也不能避免端口冲突。选择 Gateway 后，应由它作为宿主机唯一公网入口，内嵌
+Caddy 会按 SNI/Host 把多个域名复用到同一组 `80/443` listener。选择 Nginx 时则不部署
+Gateway，继续使用本节后面的 Nginx 合同。
 
-如果继续使用 Nginx，则按以下合同配置。
+执行 `node ~/.wheelmaker/deploy.mjs gateway` 会安装/升级 Gateway、创建并保留：
+
+```text
+~/.wheelmaker/gateway/
+├─ config.json              # schema 2：ACME、共享 WheelMaker TLS、Release 设置
+├─ sites/*.caddy            # 运维者维护的标准站点级 Caddyfile
+└─ generated/caddy.json     # 最近一次已接受的生成物；禁止手工编辑
+```
+
+Gateway 同时读取父目录的 Hub `~/.wheelmaker/config.json`：顶层 `publicUrl`、
+`registry.share.publicUrl`、`registry.relayPort` 和日志级别分别驱动 Registry、Share、Relay
+和 Gateway 日志；Gateway schema 2 不重复保存这些共享字段。`wm_sites.release.publicUrl`
+留空时禁用 Release 路由。WheelMaker HTTPS 站点在共享证书路径为空时由 Caddy 自动管理
+证书。DNS、公网端口、防火墙和云安全组仍由运维者准备。
+
+### Gateway 自定义域名
+
+例如把另一个二级域名代理到本机应用：
+
+```caddyfile
+# ~/.wheelmaker/gateway/sites/app.caddy
+app.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+可使用当前 Gateway 内嵌标准模块提供的完整站点级 Caddyfile 能力：matcher、
+`handle`/`route`、支持 WebSocket 的 `reverse_proxy`、`file_server`、rewrite、redirect、
+header、站点 TLS、命名 snippet 和 `import`。没有显式写 `http://` 的公开域名默认使用
+Caddy 自动 HTTPS；也可在站点块内使用标准 `tls` 配置。
+
+以下进程级边界由 Gateway 固定，不允许用户片段覆盖：
+
+- 全局 options block、原始 Caddy JSON、未编译进 Gateway 的第三方模块；
+- admin `127.0.0.1:2019`、storage、默认日志和 WheelMaker 路由；
+- 与 WheelMaker 托管站点重复的 hostname（忽略大小写、scheme 和显式端口差异）；
+- `:80`/`:443` 无 hostname catch-all，以及 `2019`、`9630`、`9680`、当前 Relay 端口 listener。
+
+这些保留端口仍可作为 `reverse_proxy` 上游。片段和 import 必须位于 `gateway/sites` 内，
+并以 Gateway 服务账号权限读取；它们属于可信运维配置，部署器不会创建示例、覆盖或删除。
+
+Linux/macOS 可离线检查路径和完整候选：
+
+```bash
+GW_HOME="$HOME/.wheelmaker/gateway"
+"$GW_HOME/bin/wheelmaker-gateway" paths --home "$GW_HOME"
+"$GW_HOME/bin/wheelmaker-gateway" validate --home "$GW_HOME"
+```
+
+Windows：
+
+```powershell
+$gwHome = "$HOME\.wheelmaker\gateway"
+& "$gwHome\bin\wheelmaker-gateway.exe" paths --home $gwHome
+& "$gwHome\bin\wheelmaker-gateway.exe" validate --home $gwHome
+```
+
+`validate` 会显示 Caddy adapter warning，并对直接文件或 import 文件给出错误路径和行号。
+`render` 可显式刷新生成物，但运行服务本身会监视 Hub/Gateway 配置和整个自定义站点树。
+合法候选先由 Caddy hot-load，随后才原子提升 `generated/caddy.json`；语法、模块、hostname、
+listener、证书、绑定或 reload 失败时继续使用上一份活动配置和生成物，修复文件后自动重试。
+
+### 从 Nginx 人工迁移到 Gateway
+
+Gateway 部署器不会读取、翻译、停止、禁用或修改 Nginx。已有 Nginx 占用 `80/443` 时，
+首次安装 Gateway 可能因健康检查无法绑定而报告失败，但二进制、配置和站点目录会保留。
+完成以下人工切换：
+
+1. 把每个需要保留的 Nginx `server` 人工改写为 `gateway/sites/*.caddy`。
+2. 在 Nginx 仍服务时运行上面的 Gateway `validate`，修复全部 warning/error。
+3. 明确停止并按需要禁用 Nginx 自启；确认 `80/443` 已释放。
+4. 运行 `~/.wheelmaker/gateway/start.sh`，Windows 运行 `gateway\start.bat`。
+5. 使用正常证书校验逐个验证 WheelMaker 和自定义域名；失败时先停止 Gateway，再人工恢复 Nginx。
+
+如果继续使用 Nginx，则按以下合同配置；Gateway 与 Nginx 是二选一的公网边缘模式。
 
 写配置前先确认：
 
@@ -415,7 +488,7 @@ Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/a
 `~/.ssh/wheelmaker-release-server_ed25519`。SSH 配置决定登录用户；同一台机器上 Release
 Server 如果使用 Gateway，必须使用 Gateway 部署用户。Home 部署不依赖 `/srv`、`www-data`
 或 ACL；它保留旧 Token，把 release channel origin 写入
-`~/.wheelmaker/gateway/config.json` 的 `release` section（`release.publicUrl`），保留其他 section，启动用户
+`~/.wheelmaker/gateway/config.json` 的 `wm_sites.release` 对象（含 `publicUrl`），保留其他对象，启动用户
 服务、检查 loopback，但不安装或启动 Gateway，也不修改 Hub 配置。Release
 Server 自己提供全部公开文件，现有 Nginx 只需把整个域名反代到
 `127.0.0.1:9680`。产品发布以 HTTPS 流式上传；所有文件通过大小和 SHA-256 校验后，

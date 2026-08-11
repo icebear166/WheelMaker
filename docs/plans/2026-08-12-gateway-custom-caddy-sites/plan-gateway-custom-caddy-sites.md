@@ -272,7 +272,7 @@ Run: `go test ./internal/gateway ./cmd/wheelmaker-gateway`
 
 Expected: PASS.
 
-- [ ] **Step 9: Git checkpoint**
+- [x] **Step 9: Git checkpoint**
 
 After verification passes, invoke `git-workflow` in `checkpoint` mode for the Task 4 files. Record commit hash + subject.
 
@@ -286,17 +286,17 @@ After verification passes, invoke `git-workflow` in `checkpoint` mode for the Ta
 
 **Acceptance:** Operators have a copyable custom-site example and a safe validate/stop-Nginx/start-Gateway sequence; tests prove deployment preserves custom files and never gains Nginx lifecycle behavior.
 
-- [ ] **Step 1: Add explicit deployment preservation assertions**
+- [x] **Step 1: Add explicit deployment preservation assertions**
 
 Extend Node tests to seed nested Caddy fragments before both configuration ensure and install, then assert exact bytes afterward. Assert Gateway install runner calls do not contain `nginx`, `disable-nginx`, or reads of Nginx config paths.
 
-- [ ] **Step 2: Run deployment tests before documentation changes**
+- [x] **Step 2: Run deployment tests before documentation changes**
 
 Run: `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-install.test.mjs scripts/deploy/gateway-runtime.test.mjs`
 
 Expected: PASS for existing behavior and RED only for newly added sites-directory preservation assertions until Task 2/5 wiring is complete.
 
-- [ ] **Step 3: Write operator documentation matching executable behavior**
+- [x] **Step 3: Write operator documentation matching executable behavior**
 
 Add a minimal example such as:
 
@@ -308,7 +308,7 @@ app.example.com {
 
 Document the standard embedded-module boundary, managed global exclusions, automatic/custom site TLS, `paths`, offline `validate`, atomic reload/error behavior, generated JSON ownership, and the explicit migration sequence. Keep the existing standalone Nginx mode documented for operators who choose not to deploy Gateway; do not claim Gateway auto-converts or stops it.
 
-- [ ] **Step 4: Run deployment and documentation checks**
+- [x] **Step 4: Run deployment and documentation checks**
 
 Run: `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-single-config.test.mjs scripts/deploy/gateway-install.test.mjs scripts/deploy/gateway-runtime.test.mjs`
 

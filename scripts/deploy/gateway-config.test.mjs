@@ -71,8 +71,9 @@ test('Gateway deployment materializes the full config once and preserves existin
       release: {...first.wm_sites.release, publicUrl: 'https://release.example.com'},
     },
   }));
-  const customSite = join(paths.customSitesRoot, 'existing.caddy');
+  const customSite = join(paths.customSitesRoot, 'nested', 'existing.caddy');
   const customSiteBytes = 'existing.example.com { reverse_proxy 127.0.0.1:3000 }\n';
+  await mkdir(dirname(customSite), {recursive: true});
   await writeFile(customSite, customSiteBytes);
   const second = await ensureGatewayConfiguration(root);
   assert.equal(second.wm_sites.release.publicUrl, 'https://release.example.com');

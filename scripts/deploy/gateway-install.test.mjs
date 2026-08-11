@@ -106,6 +106,10 @@ test('Gateway install keeps the version and service files when health fails', as
 
 test('Gateway install waits through a transient startup health failure', async (t) => {
   const fixture = await createGatewayInstallFixture(t);
+  const customSite = join(fixture.root, 'gateway', 'sites', 'nested', 'existing.caddy');
+  const customSiteBytes = Buffer.from('existing.example.com { reverse_proxy 127.0.0.1:3000 }\n');
+  await mkdir(join(fixture.root, 'gateway', 'sites', 'nested'), {recursive: true});
+  await writeFile(customSite, customSiteBytes);
   const calls = [];
   let healthAttempts = 0;
   const runtime = {
@@ -120,4 +124,6 @@ test('Gateway install waits through a transient startup health failure', async (
 
   await assert.doesNotReject(() => installFixture(fixture, runtime));
   assert.deepEqual(calls, ['stop', 'install', 'health', 'health']);
+  assert.deepEqual(await readFile(customSite), customSiteBytes);
+  assert.doesNotMatch(calls.join(' ').toLowerCase(), /nginx|disable-nginx|\/etc\/nginx|nginx\.conf/);
 });
