@@ -286,11 +286,11 @@ Invoke `git-workflow` in `checkpoint` mode for the Task 6 files that changed. Re
 
 **Acceptance:** Standard Web release output includes the Localhost document; Desktop remains a standalone EXE and reads installed Web assets at runtime; old `9632`, insecure TLS bypass, non-loopback Registry exposure, Hub/Registry/Android production changes, deployment mode changes, and protocol changes remain absent. All accepted behavior has reproducible passing evidence and plan checkboxes reflect actual completion.
 
-- [ ] **Step 1: Update source gates for the intentional local edge**
+- [x] **Step 1: Update source gates for the intentional local edge**
 
 Replace the obsolete blanket “no Desktop asset server” assertion with precise invariants: `9633` is loopback-only, Web assets are not embedded in the EXE, `9632` and retired source-selection/fallback symbols remain forbidden, Gateway URLs remain HTTPS-only, and Desktop source contains no Hub config read. Keep credential-value leakage checks.
 
-- [ ] **Step 2: Verify focused Desktop and Web behavior**
+- [x] **Step 2: Verify focused Desktop and Web behavior**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop`
 
@@ -300,7 +300,7 @@ Run from `app/`: `npm run tsc:web`
 
 Expected: PASS.
 
-- [ ] **Step 3: Verify release output and Windows build**
+- [x] **Step 3: Verify release output and Windows build**
 
 Run: `node --test scripts/release/build.test.mjs scripts/release/android.test.mjs scripts/release/entry.test.mjs`
 
@@ -308,7 +308,7 @@ Run from `server/`: `$env:GOOS='windows'; $env:GOARCH='amd64'; $env:CGO_ENABLED=
 
 Build Web to a temporary target and assert `index.html` plus `local-index.html` are present while `WheelMakerDesktop.exe` contains no bundled Workspace output.
 
-- [ ] **Step 4: Run broad regression suites**
+- [x] **Step 4: Run broad regression suites**
 
 Run from `server/`: `go test ./...`
 
@@ -318,7 +318,7 @@ Run: `node --test scripts/deploy/deploy-core.test.mjs scripts/deploy/deploy.test
 
 Expected: PASS; deployment behavior is unchanged.
 
-- [ ] **Step 5: Run security and ownership gates**
+- [x] **Step 5: Run security and ownership gates**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test_security_acceptance_ps1.ps1`
 
@@ -328,14 +328,34 @@ Run: `git diff --check`
 
 Run source/diff checks proving no production changes under `scripts/deploy/`, `server/internal/hub/`, `server/internal/registry/`, or Android runtime; no `ProtocolVersion` change; no `:9632`/`InsecureSkipVerify`; and no new LAN listener.
 
-- [ ] **Step 6: Perform a Windows smoke test**
+- [x] **Step 6: Perform a Windows smoke test**
 
 With installed Web assets and a local Registry on `127.0.0.1:9630`, launch Desktop twice in Localhost mode. Verify fixed origin, Token login, session reuse, Web storage continuity, authenticated WebSocket, preview/download, port-conflict error, Retry, and Change Connection cleanup. Record any environment-limited checks separately from automated evidence.
 
-- [ ] **Step 7: Review every spec acceptance criterion and finish plan checkboxes**
+- [x] **Step 7: Review every spec acceptance criterion and finish plan checkboxes**
 
 Inspect `git status -sb`, `git diff --stat`, task-owned diffs, generated-output exclusions, and the approved spec. Update only the already approved Gateway wiki target if the implementation introduced a stable fact missing from Task 1.
 
-- [ ] **Step 8: Invoke `git-workflow` finalize**
+- [x] **Step 8: Invoke `git-workflow` finalize**
 
 Pass the truthful result (`complete`, `verification_failed`, `blocked`, or `awaiting_review`) and all verification evidence. Follow configured refresh/rebase, final commit, feature-branch push, clean-main merge/push, and cleanup behavior. Report every commit SHA/subject and every skipped action with its reason.
+
+#### Task 7 verification record
+
+- Desktop package, TypeScript, release/Android/entry tests, deploy tests, focused security source checks,
+  production Web build, Windows amd64 Desktop test/build, and the second full Go run all passed.
+- The production build emitted `index.html` and `local-index.html` with the same hashed JS/CSS entry
+  bundles; binary inspection found no Workspace bundle in `WheelMakerDesktop.exe`.
+- Protected-path and source gates found no production changes under deploy, Hub, Registry, Android
+  runtime, or Registry protocol sources, and no `:9632`, `InsecureSkipVerify`, or non-loopback `9633`.
+- The first full Go run had one timing failure in an unrelated Hub release-job test; its isolated rerun
+  and the full Go run inside `security_acceptance.ps1` passed.
+- Full Jest and `security_acceptance.ps1` stop on two pre-existing main-branch expectation drifts:
+  `icon.svg` has `viewBox="0 0 1254 1254"` while `web-setup.test.js` expects 1536, and
+  `web-chat-ui.test.ts` expects an obsolete floating-control drag animation. Neither source area is
+  changed by this implementation; Localhost-specific Web tests pass.
+- Interactive Windows smoke was environment-limited: the machine had neither installed
+  `~/.wheelmaker/web/local-index.html` nor a Registry listener on `127.0.0.1:9630`. The real Registry
+  handler integration tests cover Token login, native Session persistence across edge restart,
+  authenticated WebSocket, preview/download, logout, fixed-origin contract, port conflict, Retry, and
+  connection cleanup; no unsupported user installation or background service was created for testing.

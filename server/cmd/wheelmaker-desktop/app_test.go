@@ -611,7 +611,7 @@ func TestDesktopConfigMissingFileLoadsEmpty(t *testing.T) {
 	}
 }
 
-func TestDesktopNoAssetServerSource(t *testing.T) {
+func TestDesktopProductionSourceKeepsLocalhostEdgeNarrow(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)
@@ -627,13 +627,32 @@ func TestDesktopNoAssetServerSource(t *testing.T) {
 		}
 		source.Write(body)
 	}
+	productionSource := source.String()
+	for _, want := range []string{
+		`desktopLocalhostListenAddress = "127.0.0.1:9633"`,
+		`desktopLocalhostRegistryURL   = "http://127.0.0.1:9630"`,
+		`net.Listen("tcp4", e.options.ListenAddress)`,
+		`wheelMakerHome := filepath.Join(home, ".wheelmaker")`,
+		`WebRoot:       filepath.Join(wheelMakerHome, "web")`,
+		`desktopLocalhostIndexFile     = "local-index.html"`,
+	} {
+		if !strings.Contains(productionSource, want) {
+			t.Errorf("Desktop production source is missing Localhost invariant %q", want)
+		}
+	}
 	for _, forbidden := range []string{
-		"ListenAndServe",
 		":9632",
+		"InsecureSkipVerify",
 		"webSourcePreference",
 		"RemoteWebURL",
+		"embed.FS",
+		"LoadHubConfig",
+		"hub.json",
+		`net.Listen("tcp",`,
+		`net.Listen("tcp6",`,
+		`0.0.0.0:9633`,
 	} {
-		if strings.Contains(source.String(), forbidden) {
+		if strings.Contains(productionSource, forbidden) {
 			t.Errorf("desktop production source still contains %q", forbidden)
 		}
 	}
