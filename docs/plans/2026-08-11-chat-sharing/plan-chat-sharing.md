@@ -23,19 +23,19 @@
 
 **Acceptance:** The feature wiki defines the six-action menu, frozen response/session content rules, shared PNG/HTML/URL renderer, platform delivery, image limits, and failure behavior; the Public Share wiki defines all three source types, schema compatibility, management labels, and unchanged anonymous/storage boundaries; the features index links the new page.
 
-- [ ] **Step 1: Write the chat-sharing wiki page**
+- [x] **Step 1: Write the chat-sharing wiki page**
 
 Create `chat-sharing.md` with a first-line summary and sections for entry points, normalized content, shared rendering/output, platform delivery, and failure boundaries. Record the approved spec as the source without copying execution checklists.
 
-- [ ] **Step 2: Update the Public Share wiki**
+- [x] **Step 2: Update the Public Share wiki**
 
 Change the first-line summary and body from project-document-only wording to `project_document | chat_response | chat_session`, record schema 2 plus schema 1 compatibility, and keep the existing token, 16 MiB, expiry, Gateway, and anonymous access rules intact.
 
-- [ ] **Step 3: Update the feature index**
+- [x] **Step 3: Update the feature index**
 
 Add `chat-sharing.md` to `features.md` and update the `public-sharing.md` description so both pages are discoverable without overlapping ownership.
 
-- [ ] **Step 4: Validate wiki structure and scope**
+- [x] **Step 4: Validate wiki structure and scope**
 
 Run:
 
@@ -48,7 +48,7 @@ git diff --check
 
 Expected: all three files start with summaries; the index link and stable compatibility/security terms are present; `git diff --check` passes.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for only the three wiki files. Record the commit hash and subject, or the explicit reason no commit was created.
 
