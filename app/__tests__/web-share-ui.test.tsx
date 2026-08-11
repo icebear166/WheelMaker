@@ -31,6 +31,12 @@ function findButton(renderer, label) {
   return renderer.root.findAll(node => node.type === 'button' && node.children.join('') === label)[0];
 }
 
+function findButtonContaining(renderer, label) {
+  return renderer.root.findAll(node => node.type === 'button' && node.children.some(child => (
+    typeof child === 'string' && child.includes(label)
+  )))[0];
+}
+
 function findText(renderer, label) {
   return renderer.root.findAll(node => node.children?.join?.('') === label)[0];
 }
@@ -141,6 +147,75 @@ test('ShareManager pauses on dependency warnings and can continue', async () => 
     await flush();
   });
   expect(service.createShare).toHaveBeenCalledTimes(1);
+});
+
+test('ShareManager creates a frozen current-response source without project path fields', async () => {
+  const sessionFixture = {title: 'Design review'};
+  const frozenSnapshot = Object.freeze({
+    scope: 'response',
+    projectId: 'hub:p',
+    sessionId: 'sess-1',
+    terminalTurnIndex: 9,
+    title: sessionFixture.title,
+    capturedAt: '2026-08-11T08:30:00Z',
+    presentation: Object.freeze({themeMode: 'dark', codeTheme: 'tokyo-night', codeFont: 'jetbrains-mono', codeFontSize: 13, codeLineHeight: 1.6, codeTabSize: 2}),
+    entries: Object.freeze([]),
+  });
+  const source = Object.freeze({
+    sourceType: 'chat_response',
+    projectId: 'hub:p',
+    sessionId: 'sess-1',
+    turnIndex: 9,
+    sessionTitle: sessionFixture.title,
+    title: 'Design review',
+    snapshot: frozenSnapshot,
+  });
+  const captureSnapshot = jest.fn(async () => ({kind: 'html', title: 'Design review', html: '<p>Frozen answer</p>', warnings: []}));
+  const {renderer, service} = await renderManager({source, initialSource: source, captureSnapshot});
+
+  sessionFixture.title = 'Changed later';
+  expect(findText(renderer, 'Current response · Design review')).toBeDefined();
+  await ReactTestRenderer.act(async () => {
+    findButton(renderer, 'Create public share').props.onClick();
+    await flush();
+    await flush();
+  });
+
+  expect(captureSnapshot).toHaveBeenCalledWith(source);
+  expect(service.createShare).toHaveBeenCalledWith(expect.objectContaining({
+    sourceType: 'chat_response',
+    projectId: 'hub:p',
+    sessionId: 'sess-1',
+    turnIndex: 9,
+  }));
+  const payload = service.createShare.mock.calls[0][0];
+  expect(payload).not.toHaveProperty('path');
+  expect(payload).not.toHaveProperty('kind');
+});
+
+test('ShareManager labels and manages full-session records', async () => {
+  const token = 'c'.repeat(43);
+  const url = `https://share.example.test/s/${token}`;
+  const service = serviceFixture({
+    listShares: jest.fn(async () => ({enabled: true, items: [{
+      token,
+      title: 'Team sync',
+      sourceType: 'chat_session',
+      projectId: 'hub:p',
+      sessionId: 'sess-2',
+      createdAt: '2026-08-10T12:00:00Z',
+      expiresAt: null,
+      sizeBytes: 3,
+      url,
+    }], nextCursor: undefined})),
+  });
+  const {renderer} = await renderManager({service, initialSource: null});
+
+  expect(findText(renderer, 'Full session · Team sync · permanent')).toBeDefined();
+  await ReactTestRenderer.act(async () => findButtonContaining(renderer, 'Copy link').props.onClick());
+  expect(writeTextToClipboardMock).toHaveBeenCalledWith(url);
+  await ReactTestRenderer.act(async () => findButton(renderer, 'Stop sharing').props.onClick());
+  expect(service.deleteShare).toHaveBeenCalledWith(token);
 });
 
 test('ShareManager keeps management usable while sharing is disabled and stops records', async () => {

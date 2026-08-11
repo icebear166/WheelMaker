@@ -110,28 +110,73 @@ export interface RegistryEnvelope<TPayload = unknown> {
 
 export type RegistryShareExpiry = '1h' | '1d' | '7d' | '30d' | 'permanent';
 export type RegistryShareSourceKind = 'markdown' | 'html';
+export type RegistryShareSourceType = 'project_document' | 'chat_response' | 'chat_session';
 
-export interface RegistryShareCreatePayload {
+type RegistryShareCreateBase = {
   projectId: string;
-  path: string;
-  kind: RegistryShareSourceKind;
   title: string;
   expiry: RegistryShareExpiry;
   encoding: 'gzip+base64';
   content: string;
-}
+};
 
-export interface RegistryShareRecord {
+export type RegistryShareCreatePayload = RegistryShareCreateBase & (
+  | {
+      sourceType?: 'project_document';
+      path: string;
+      kind: RegistryShareSourceKind;
+      sessionId?: never;
+      turnIndex?: never;
+    }
+  | {
+      sourceType: 'chat_response';
+      sessionId: string;
+      turnIndex: number;
+      path?: never;
+      kind?: never;
+    }
+  | {
+      sourceType: 'chat_session';
+      sessionId: string;
+      turnIndex?: never;
+      path?: never;
+      kind?: never;
+    }
+);
+
+type RegistryShareRecordBase = {
   token: string;
   title: string;
   projectId: string;
-  path: string;
-  kind: RegistryShareSourceKind;
   createdAt: string;
   expiresAt?: string | null;
   sizeBytes: number;
   url?: string;
-}
+};
+
+export type RegistryShareRecord = RegistryShareRecordBase & (
+  | {
+      sourceType: 'project_document';
+      path: string;
+      kind: RegistryShareSourceKind;
+      sessionId?: never;
+      turnIndex?: never;
+    }
+  | {
+      sourceType: 'chat_response';
+      sessionId: string;
+      turnIndex: number;
+      path?: never;
+      kind?: never;
+    }
+  | {
+      sourceType: 'chat_session';
+      sessionId: string;
+      turnIndex?: never;
+      path?: never;
+      kind?: never;
+    }
+);
 
 export interface RegistryShareCreateResponse {
   token: string;

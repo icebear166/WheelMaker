@@ -1,4 +1,5 @@
 import {
+  createChatShareSnapshot,
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
   inspectShareHtmlDependencies,
@@ -37,6 +38,21 @@ describe('share snapshots', () => {
     expect(snapshot.html).toContain('src="./app.js"');
     expect(snapshot.html).toContain('src="assets/logo.png"');
     expect(snapshot.html).not.toContain('data:');
+  });
+
+  test('keeps rendered chat documents as standalone HTML snapshots', () => {
+    const snapshot = createChatShareSnapshot({
+      title: 'Session',
+      html: '<!doctype html><html><body><main>User</main></body></html>',
+      warnings: [{source: 'image.png', message: 'Image unavailable'}],
+    });
+
+    expect(snapshot).toEqual({
+      kind: 'html',
+      title: 'Session',
+      html: '<!doctype html><html><body><main>User</main></body></html>',
+      warnings: [{source: 'image.png', message: 'Image unavailable'}],
+    });
   });
 
   test('reports relative CSS url dependencies', () => {

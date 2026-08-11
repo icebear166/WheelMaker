@@ -313,7 +313,11 @@ import {
   type MarkdownHtmlExportSurfaceRequest,
   type MarkdownHtmlImageResolution,
 } from '../chat/export/MarkdownHtmlExportDocument';
-import {ShareManager, type ShareManagerSource} from '../shares/ShareManager';
+import {
+  isShareManagerProjectSource,
+  ShareManager,
+  type ShareManagerSource,
+} from '../shares/ShareManager';
 import {
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
@@ -17298,6 +17302,9 @@ export function App() {
   }, []);
 
   const captureShareSource = useCallback(async (source: ShareManagerSource): Promise<ShareSnapshot> => {
+    if (!isShareManagerProjectSource(source)) {
+      throw new Error('Chat share capture is not ready.');
+    }
     if (source.kind === 'html') {
       const file = source.content !== undefined
         ? {content: source.content, isBinary: false}

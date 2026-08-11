@@ -270,15 +270,15 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for only the renderer/exp
 
 **Acceptance:** TypeScript models and repository parsing represent all three source types; ShareManager accepts frozen chat sources, emits the exact additive payload, keeps project capture behavior, describes scope/session in the dialog and list, and retains disabled-server, warning, pagination, copy, and stop behavior.
 
-- [ ] **Step 1: Write failing wire and repository assertions**
+- [x] **Step 1: Write failing wire and repository assertions**
 
 Extend `web-registry-share-contract.test.ts` with valid typed payload fixtures for all source variants and mocked list envelopes. Assert missing `sourceType` parses as `project_document`, chat records retain Session/turn context without fake paths/kinds, and malformed source combinations are dropped rather than coerced to project Markdown.
 
-- [ ] **Step 2: Write failing ShareManager chat-source tests**
+- [x] **Step 2: Write failing ShareManager chat-source tests**
 
 Extend `web-share-ui.test.tsx` with a frozen `chat_response` source and assert the dialog shows `Current response · <session title>`, `captureSnapshot` receives the same frozen source after later fixture mutation, and `createShare` receives `sourceType`, `projectId`, `sessionId`, `turnIndex` without `path`/`kind`. Add a `chat_session` management record and assert its row says `Full session · <session title>` while copy/stop still use the token/url.
 
-- [ ] **Step 3: Run Web share tests to verify RED**
+- [x] **Step 3: Run Web share tests to verify RED**
 
 Run:
 
@@ -290,21 +290,21 @@ Workdir: `app`
 
 Expected: FAIL because Web source unions, parsing, payload mapping, and labels are project-file-only.
 
-- [ ] **Step 4: Implement source unions and strict parsing**
+- [x] **Step 4: Implement source unions and strict parsing**
 
 Define `RegistryShareSourceType` and discriminated create/record types. Keep project payload compatibility with omitted `sourceType`; require explicit source type for chat. Update repository parsing to validate applicable fields and ignore invalid records instead of fabricating path/kind values.
 
-- [ ] **Step 5: Implement ShareManager source mapping**
+- [x] **Step 5: Implement ShareManager source mapping**
 
 Make `ShareManagerSource` a project/chat union. Project sources continue resolving file snapshots through `captureSnapshot`; chat sources carry the frozen chat model and resolve through the same callback only when the user confirms. Map source metadata into create payloads, replace `source.path` UI assumptions with a source description helper, and show source-aware list metadata.
 
-- [ ] **Step 6: Run Web share tests to verify GREEN**
+- [x] **Step 6: Run Web share tests to verify GREEN**
 
 Run the Step 3 command.
 
 Expected: PASS with all existing file-share modal, warning, pagination, disabled-server, clipboard, and stop tests unchanged.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for the Web share contract/manager files after focused tests pass.
 
