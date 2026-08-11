@@ -33,6 +33,23 @@ type MarkdownElementPngOptions = MarkdownExportReadyOptions & {
   pixelRatio?: number;
 };
 
+export type MarkdownImageCaptureResolution =
+  | {ok: true; pixelRatio: number}
+  | {ok: false; reason: 'too_large'};
+
+export const MARKDOWN_IMAGE_MAX_DIMENSION = 16_384;
+export const MARKDOWN_IMAGE_MAX_PIXELS = 16_000_000;
+export const MARKDOWN_IMAGE_TOO_LARGE_MESSAGE = 'This content is too large for a single image. Use an HTML file or Public URL instead.';
+
+export class MarkdownImageTooLargeError extends Error {
+  readonly reason = 'too_large';
+
+  constructor() {
+    super(MARKDOWN_IMAGE_TOO_LARGE_MESSAGE);
+    this.name = 'MarkdownImageTooLargeError';
+  }
+}
+
 export type MarkdownImageExportMode = 'desktop' | 'mobile';
 
 const MARKDOWN_IMAGE_EXPORT_WIDTH_BY_MODE: Record<MarkdownImageExportMode, number> = {
@@ -42,6 +59,39 @@ const MARKDOWN_IMAGE_EXPORT_WIDTH_BY_MODE: Record<MarkdownImageExportMode, numbe
 
 export function resolveMarkdownImageExportWidth(mode: MarkdownImageExportMode): number {
   return MARKDOWN_IMAGE_EXPORT_WIDTH_BY_MODE[mode];
+}
+
+export function resolveMarkdownImageCapture({
+  width,
+  height,
+  preferredPixelRatio,
+}: {
+  width: number;
+  height: number;
+  preferredPixelRatio: number;
+}): MarkdownImageCaptureResolution {
+  const layoutWidth = Math.max(0, Math.ceil(Number.isFinite(width) ? width : 0));
+  const layoutHeight = Math.max(0, Math.ceil(Number.isFinite(height) ? height : 0));
+  if (layoutWidth <= 0 || layoutHeight <= 0) {
+    return {ok: false, reason: 'too_large'};
+  }
+  const preferred = Math.min(Math.max(
+    Number.isFinite(preferredPixelRatio) ? preferredPixelRatio : 1,
+    1,
+  ), 2);
+  const candidates = preferred > 1 ? [preferred, 1] : [1];
+  for (const pixelRatio of candidates) {
+    const outputWidth = Math.ceil(layoutWidth * pixelRatio);
+    const outputHeight = Math.ceil(layoutHeight * pixelRatio);
+    if (
+      outputWidth <= MARKDOWN_IMAGE_MAX_DIMENSION &&
+      outputHeight <= MARKDOWN_IMAGE_MAX_DIMENSION &&
+      outputWidth * outputHeight <= MARKDOWN_IMAGE_MAX_PIXELS
+    ) {
+      return {ok: true, pixelRatio};
+    }
+  }
+  return {ok: false, reason: 'too_large'};
 }
 
 export function buildPromptMarkdownImageFileName(
@@ -179,13 +229,22 @@ export async function renderMarkdownElementToPngBlob(
   options: MarkdownElementPngOptions = {},
 ): Promise<Blob> {
   await waitForMarkdownExportReady(element, options);
+  const bounds = element.getBoundingClientRect?.();
+  const width = Math.max(element.scrollWidth, element.offsetWidth, bounds?.width ?? 0);
+  const height = Math.max(element.scrollHeight, element.offsetHeight, bounds?.height ?? 0);
+  const preferredPixelRatio = options.pixelRatio ?? (
+    typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  );
+  const capture = resolveMarkdownImageCapture({width, height, preferredPixelRatio});
+  if (!capture.ok) {
+    throw new MarkdownImageTooLargeError();
+  }
   const { toBlob } = await import('html-to-image');
-  const pixelRatio = options.pixelRatio ?? Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
   const blob = await toBlob(element, {
     backgroundColor: options.backgroundColor || '#ffffff',
     cacheBust: true,
     includeQueryParams: true,
-    pixelRatio,
+    pixelRatio: capture.pixelRatio,
   });
   if (!blob) {
     throw new Error('Image renderer returned an empty file.');

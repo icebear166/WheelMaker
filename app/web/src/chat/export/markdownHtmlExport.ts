@@ -240,10 +240,18 @@ export function resolveProjectMarkdownImagePath(
 export function buildStandaloneMarkdownHtmlDocument({
   title,
   bodyHtml,
+  additionalStyles = '',
+  bodyClassName = '',
 }: {
   title: string;
   bodyHtml: string;
+  additionalStyles?: string;
+  bodyClassName?: string;
 }): string {
+  const bodyClasses = bodyClassName
+    .split(/\s+/)
+    .filter(value => /^[A-Za-z_][A-Za-z0-9_-]*$/.test(value));
+  const mainClassName = [MARKDOWN_EXPORT_CONTENT_CLASS_NAME, ...bodyClasses].join(' ');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -251,10 +259,10 @@ export function buildStandaloneMarkdownHtmlDocument({
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${escapeHtml(title)}</title>
-<style>${MARKDOWN_HTML_EXPORT_PAGE_STYLE}${MARKDOWN_EXPORT_CONTENT_STYLE}</style>
+<style>${MARKDOWN_HTML_EXPORT_PAGE_STYLE}${MARKDOWN_EXPORT_CONTENT_STYLE}${additionalStyles}</style>
 </head>
 <body>
-<main class="${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}">${bodyHtml}</main>
+<main class="${escapeHtml(mainClassName)}">${bodyHtml}</main>
 </body>
 </html>`;
 }

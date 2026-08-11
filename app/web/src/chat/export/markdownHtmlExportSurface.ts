@@ -1,6 +1,15 @@
 import {buildStandaloneMarkdownHtmlDocument} from './markdownHtmlExport';
 
-export function serializeMarkdownHtmlExportSurface(surface: Element, title: string): string {
+export type MarkdownHtmlExportSerializationOptions = {
+  additionalStyles?: string;
+  bodyClassName?: string;
+};
+
+export function serializeMarkdownHtmlExportSurface(
+  surface: Element,
+  title: string,
+  options: MarkdownHtmlExportSerializationOptions = {},
+): string {
   const documentNode = surface.querySelector('.markdown-html-export-document');
   if (!documentNode) {
     throw new Error('HTML export surface is unavailable.');
@@ -13,5 +22,7 @@ export function serializeMarkdownHtmlExportSurface(surface: Element, title: stri
   return buildStandaloneMarkdownHtmlDocument({
     title,
     bodyHtml: body.innerHTML,
+    additionalStyles: options.additionalStyles,
+    bodyClassName: options.bodyClassName,
   });
 }

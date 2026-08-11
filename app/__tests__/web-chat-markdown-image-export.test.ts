@@ -3,10 +3,18 @@ import path from 'node:path';
 
 import {
   buildPromptMarkdownImageFileName,
+  renderMarkdownElementToPngBlob,
+  resolveMarkdownImageCapture,
   resolveMarkdownImageExportWidth,
   waitForMarkdownExportReady,
   waitForMarkdownExportImages,
 } from '../web/src/chat/export/chatMarkdownImageExport';
+
+const mockToBlob = jest.fn();
+
+jest.mock('html-to-image', () => ({
+  toBlob: (...args: unknown[]) => mockToBlob(...args),
+}));
 
 describe('web chat markdown image export', () => {
   test('builds a stable png filename for prompt-done exports', () => {
@@ -18,6 +26,35 @@ describe('web chat markdown image export', () => {
   test('uses stable desktop and mobile image export widths', () => {
     expect(resolveMarkdownImageExportWidth('desktop')).toBe(800);
     expect(resolveMarkdownImageExportWidth('mobile')).toBe(560);
+  });
+
+  test('selects the highest safe capture ratio within single-image limits', () => {
+    expect(resolveMarkdownImageCapture({width: 800, height: 4_000, preferredPixelRatio: 2})).toEqual({ok: true, pixelRatio: 2});
+    expect(resolveMarkdownImageCapture({width: 800, height: 8_000, preferredPixelRatio: 2})).toEqual({ok: true, pixelRatio: 1});
+    expect(resolveMarkdownImageCapture({width: 800, height: 20_000, preferredPixelRatio: 2})).toEqual({ok: false, reason: 'too_large'});
+  });
+
+  test('rejects an oversized image before invoking html-to-image', async () => {
+    mockToBlob.mockClear();
+    const element = {
+      innerHTML: '<div>oversized</div>',
+      querySelectorAll: jest.fn(() => []),
+      scrollWidth: 800,
+      scrollHeight: 20_000,
+      offsetWidth: 800,
+      offsetHeight: 20_000,
+      getBoundingClientRect: () => ({width: 800, height: 20_000}),
+    } as unknown as HTMLElement;
+
+    await expect(renderMarkdownElementToPngBlob(element, {
+      pixelRatio: 2,
+      domQuietMs: 1,
+      domTimeoutMs: 20,
+      rendererTimeoutMs: 20,
+      imageTimeoutMs: 20,
+      fontTimeoutMs: 20,
+    })).rejects.toThrow('Use an HTML file or Public URL instead.');
+    expect(mockToBlob).not.toHaveBeenCalled();
   });
 
   test('uses the shared standalone markdown presentation', () => {

@@ -207,11 +207,11 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for the projector and cop
 
 **Acceptance:** The same role-aware DOM produces session PNG and standalone HTML/Public Share content; response rendering remains visually compatible; serialized output contains title/time/roles/status/attachment labels but no app chrome or pending markers; PNG preflight selects the highest safe `1..2x` ratio or returns a deterministic too-large failure before capture.
 
-- [ ] **Step 1: Write failing document renderer tests**
+- [x] **Step 1: Write failing document renderer tests**
 
 Create `web-chat-share-document.test.tsx` that renders response and session snapshot fixtures. Assert response uses the existing standalone Markdown body, session renders one header plus ordered User/Assistant sections, terminal status badges and attachment labels, and no raw attachment payload. Serialize the surface and assert the standalone HTML includes the exact same semantic text/classes, conversation CSS, escaped title, and no `data-markdown-export-pending` attributes.
 
-- [ ] **Step 2: Write failing image preflight tests**
+- [x] **Step 2: Write failing image preflight tests**
 
 Extend `web-chat-markdown-image-export.test.ts` for a pure `resolveMarkdownImageCapture` helper:
 
@@ -223,7 +223,7 @@ expect(resolveMarkdownImageCapture({width: 800, height: 20_000, preferredPixelRa
 
 Also assert `renderMarkdownElementToPngBlob` rejects with the user-facing HTML/URL alternative before calling `html-to-image` when no safe ratio exists.
 
-- [ ] **Step 3: Run renderer/preflight tests to verify RED**
+- [x] **Step 3: Run renderer/preflight tests to verify RED**
 
 Run:
 
@@ -235,25 +235,25 @@ Workdir: `app`
 
 Expected: FAIL because the document renderer, serializer support, and size preflight are missing.
 
-- [ ] **Step 4: Implement shared document rendering**
+- [x] **Step 4: Implement shared document rendering**
 
 Build `ChatShareDocument` around the existing Markdown renderer primitives and image resolver contract. Keep Markdown sanitization in the existing React pipeline; render roles, metadata, statuses, and attachment names as React nodes. Add conversation-specific standalone styles to the existing export page builder via an explicit optional style/body-class input rather than unescaped HTML concatenation.
 
-- [ ] **Step 5: Implement the capture surface**
+- [x] **Step 5: Implement the capture surface**
 
 `ChatShareCaptureSurface` accepts one frozen snapshot, render mode (`image | html`), width mode, and callbacks. It waits for Markdown capabilities/images, returns either a single Blob or standalone HTML plus dependency warnings, and never invokes platform output itself. Response and session formats both traverse this component.
 
-- [ ] **Step 6: Implement deterministic PNG preflight**
+- [x] **Step 6: Implement deterministic PNG preflight**
 
 Add constants `16_384` max dimension and `16_000_000` max pixels. Measure the laid-out element, test candidate ratios from the clamped preferred ratio down to `1`, pass the selected ratio to `html-to-image`, and throw a typed/user-facing too-large error without truncating or capturing when all candidates fail.
 
-- [ ] **Step 7: Run renderer/preflight tests to verify GREEN**
+- [x] **Step 7: Run renderer/preflight tests to verify GREEN**
 
 Run the Step 3 command.
 
 Expected: PASS, including all existing Markdown HTML/image readiness tests.
 
-- [ ] **Step 8: Git checkpoint**
+- [x] **Step 8: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for only the renderer/export files after focused tests pass.
 

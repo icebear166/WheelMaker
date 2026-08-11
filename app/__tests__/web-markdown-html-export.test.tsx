@@ -65,6 +65,18 @@ describe('markdown HTML export', () => {
     expect(html).not.toContain('<script');
   });
 
+  test('adds trusted document styles and a validated body class explicitly', () => {
+    const html = buildStandaloneMarkdownHtmlDocument({
+      title: 'Conversation',
+      bodyHtml: '<section>Chat</section>',
+      additionalStyles: '.wheelmaker-chat-share { display: block; }',
+      bodyClassName: 'wheelmaker-chat-share',
+    });
+
+    expect(html).toContain('.wheelmaker-chat-share { display: block; }');
+    expect(html).toContain('class="wheelmaker-markdown-export wheelmaker-chat-share"');
+  });
+
   test('embeds the framed markdown presentation used by image exports', () => {
     const html = buildStandaloneMarkdownHtmlDocument({
       title: 'Code sample',
