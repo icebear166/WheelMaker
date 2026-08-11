@@ -21,11 +21,11 @@
 
 **Acceptance:** The Gateway wiki describes `sites/*.caddy` ownership, supported standard site-level capabilities, managed global exclusions, conflict rules, one-bundle validation/hot-load behavior, generated artifact semantics, and manual Nginx migration without adding unconfirmed behavior.
 
-- [ ] **Step 1: Re-read the approved spec and current Gateway wiki**
+- [x] **Step 1: Re-read the approved spec and current Gateway wiki**
 
 Confirm the stable facts that belong in long-lived architecture documentation and retain the page's existing summary and section organization.
 
-- [ ] **Step 2: Update the wiki before production implementation**
+- [x] **Step 2: Update the wiki before production implementation**
 
 Document the source layout and flow:
 
@@ -36,13 +36,13 @@ sites/*.caddy + imports ---------------+-> Caddyfile adapter -> boundary/Caddy v
 
 State explicitly that global options/raw JSON/non-embedded modules are rejected, unique custom hostnames may share 80/443, invalid runtime candidates retain the last accepted bundle, and Nginx migration remains manual.
 
-- [ ] **Step 3: Verify wiki scope and formatting**
+- [x] **Step 3: Verify wiki scope and formatting**
 
 Run: `git diff --check -- docs/wiki/architecture/gateway.md`
 
 Expected: exit 0; only the confirmed Gateway architecture target changes.
 
-- [ ] **Step 4: Git checkpoint**
+- [x] **Step 4: Git checkpoint**
 
 After verification passes, invoke `git-workflow` in `checkpoint` mode for `docs/wiki/architecture/gateway.md`. Record commit hash + subject.
 

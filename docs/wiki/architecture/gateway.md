@@ -36,6 +36,7 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 ├─ shares/public/                      # Hub 生成的公开分享文件
 └─ gateway/
    ├─ config.json                      # Gateway schema 2：ACME/wm_sites/共享 TLS/Release
+   ├─ sites/*.caddy                    # 用户维护的标准站点级 Caddyfile
    ├─ generated/caddy.json             # 聚合后的运行时配置
    ├─ data/                            # Caddy ACME 状态
    └─ state/release.json               # Gateway 自己的安装状态
@@ -95,6 +96,11 @@ Gateway 专属配置使用 schema 2。`wm_sites.registry` 与 `wm_sites.share` �
 `registry` 和 `share` 的 `urlMode` 缺失时默认采用 `sync_hub`，其他值无效。Gateway
 schema 1 不做迁移、兼容解析或自动覆盖；部署器与运行时拒绝旧文件并保持原内容不变。
 
+`gateway/sites/` 不属于 Gateway schema，也不由 Hub 或 Release Server 拥有。Gateway
+安装和升级只确保目录存在，不创建示例站点，不规范化、覆盖或删除用户文件。用户站点、
+Gateway schema 2 配置和 Hub 配置一起参与完整候选的编译与校验；
+`generated/caddy.json` 仍是可重建产物，不能作为人工配置入口。
+
 Release Server 的运行配置是 Gateway `config.json.wm_sites.release`，不再有
 `~/.wheelmaker/release-server/config.json` 或 `gateway/sites/*.json`。Release Server
 部署器从 channel URL 更新完整配置中的 `wm_sites.release.publicUrl`，保留 `listen`、
@@ -133,6 +139,38 @@ Release Server 的运行配置是 Gateway `config.json.wm_sites.release`，不�
 
 自动 TLS 依赖 DNS 指向本机且所需公网端口可达。失败时不会降级为 HTTP 或不受信任的
 自签名证书。
+
+## 用户 Caddy 站点
+
+Gateway 是宿主机唯一的公网 Caddy 入口。除 Registry、Release、Share 和 Relay 外，
+本机受信任运维者可以在 `~/.wheelmaker/gateway/sites/*.caddy` 中声明其他域名。用户文件
+支持当前 `wheelmaker-gateway` 内嵌标准模块提供的站点级 Caddyfile 能力，包括 matcher、
+`handle`/`route`、反向代理与 WebSocket、静态文件、rewrite、redirect、header、站点 TLS、
+命名 snippet 和 `import`。未编译进 Gateway 的第三方模块不可用。
+
+进程级配置仍完全由 Gateway 管理：用户文件不能提供全局 options block 或原始 Caddy
+JSON，也不能改变 admin loopback、storage、日志和 WheelMaker listener。唯一 hostname
+的用户站点可与托管站点正常共享 `80/443`；以下配置会在加载前被拒绝：
+
+- 与托管站点使用相同 hostname，不因大小写、scheme 或显式端口不同而放行；
+- 在托管 `80/443` 或 Relay listener 上使用无 hostname 的 catch-all；
+- 把 `2019`、`9630`、`9680` 或当前 Relay 端口作为自定义站点 listener。
+
+这些端口仍可作为 `reverse_proxy` 的 loopback upstream；限制针对 listener，不限制业务
+代理目标。自定义 Caddyfile 以 Gateway 服务账号权限读取文件和连接上游，不通过
+App/API/UI 修改，其安全审查和备份由本机运维者负责。
+
+Gateway 为托管路由生成受控 Caddyfile source，按确定性顺序装配用户入口及 import
+依赖，再交给内嵌 Caddyfile adapter 生成统一 JSON。adapter warning 会进入命令输出或
+日志；语法、模块、hostname、listener 或 Caddy 校验错误会拒绝整个候选。`validate`、
+`render`、冷启动和运行期 reload 使用同一条装配与校验链，避免命令接受范围和服务实际
+行为分叉。
+
+运行期按一个配置单元原子更新 WheelMaker 与用户站点。候选成功 hot-load 后才提升
+`generated/caddy.json`；失败时活动配置和上一份已接受生成物均保持不变，文件修复后由
+watcher 自动重试。首次启动存在错误则不绑定公网端口，并返回带来源文件和行号的诊断。
+新增、修改、重命名或删除入口、import 文件和 import glob 成员都会进入输入指纹并触发
+重编译。
 
 ## 固定端口 Port Relay
 
@@ -181,6 +219,12 @@ deploy-release-server.bat                            # 部署 Release，并更�
 自启，不删除软件包、配置或证书。Release Server 继续使用 Nginx 时，应把整个公开 host
 反代到 `127.0.0.1:9680`，Nginx worker 不需要读取用户 Home。
 
+迁移自定义站点时，由运维者把现有 Nginx 站点人工改写为 `.caddy`，先运行 Gateway
+离线 `validate`，再显式停止 Nginx并启动 Gateway。Gateway 部署器不读取或翻译 Nginx
+配置，也不自动停止、禁用或修改 Nginx。
+
 > 固定端口 Port Relay：[`docs/scope/2026-08-06-port-relay-fixed-gateway-port.md`](../../scope/2026-08-06-port-relay-fixed-gateway-port.md)
 >
 > 原始 Gateway 设计（历史）：[`docs/scope/2026-08-05-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway.md)
+>
+> 用户 Caddy 站点：[`docs/scope/2026-08-12-gateway-custom-caddy-sites.md`](../../scope/2026-08-12-gateway-custom-caddy-sites.md)
