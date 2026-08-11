@@ -1,4 +1,4 @@
-> 摘要：本页维护 Chat Composer 输入区的稳定规则：布局、Session Queue、运行中附件、stop、Enter、触发菜单与弹层约定。
+> 摘要：本页维护 Chat Composer 输入区的稳定规则：布局、Session Queue、附件与 chip 呈现、stop、Enter、触发菜单与弹层约定。
 
 # Composer 输入区
 
@@ -19,6 +19,16 @@
 - Queue UI 展示 queued、running、cancelling、steering 与 failed 状态，并按服务端 snapshot 能力提供 cancel、prioritize、steer 或 retry。Active compact 的 `cancelSupported:false` 必须禁用取消。
 - Active item 失败后 queue 暂停并保留后续 waiting items；用户 retry 原 item，或 cancel failed item 后恢复后续调度。
 - Waiting/failed item 被取消时不即时删除已上传附件；Session archive/delete 的既有目录清理统一回收。
+
+## 附件 chip 呈现
+
+> 来源：2026-08-11 scope 对话契约（不落 spec）。
+
+- 待发送附件与已发送 prompt 附件统一为扁平横排 chip：左侧 32×32 缩略图（图片）或文件图标，右侧两行文本，整体高度约 40–44px；不再使用竖向缩略图卡片。
+- 待发送 chip 第一行为文件名（单行省略）；第二行为状态行：queued/uploading 显示进度 %，completed 显示大小，failed 以红色单行省略显示错误文本，完整错误经 `data-tooltip` 悬停可见——上传错误必须常态可读，不允许只藏在 tooltip 里。
+- 上传进度以 chip 底部 2px 细条表达；remove 按钮常驻 chip 右端，failed 时旁边提供 retry 图标按钮（重新入队）。
+- chip 宽度随内容自适应（约 160–260px），一行排列多个并自动换行，窄屏跟随同一形态。
+- 已发送 prompt chip 沿用同一几何：32×32 图、name + mime|size meta 两行；点击打开、上下文菜单与缩略图懒加载行为不变。
 
 ## Stop 状态 pill
 

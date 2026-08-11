@@ -19309,6 +19309,15 @@ export function App() {
                   {chatAttachments.map(attachment => {
                     const previewSrc = chatAttachmentPreviewSrc(attachment);
                     const pending = isChatAttachmentUploadPending(attachment);
+                    const failed = attachment.status === 'failed';
+                    const statusText = failed
+                      ? (attachment.error || 'Upload failed')
+                      : attachment.status === 'completed'
+                        ? formatChatAttachmentSize(attachment.size)
+                        : attachment.status === 'queued'
+                          ? 'Ready'
+                          : `${attachment.progress}%`;
+                    const statusTooltip = failed ? attachment.error || 'Upload failed' : undefined;
                     return (
                       <div key={attachment.id} className={`chat-attachment-preview ${attachment.status}${chatAttachmentRemovingId === attachment.id ? ' removing' : ''}`}>
                         {previewSrc ? (
@@ -19319,53 +19328,49 @@ export function App() {
                           />
                         ) : (
                           <div className="chat-attachment-thumb file" aria-hidden="true">
-                            <ChatIcon name="file" size={26} />
+                            <ChatIcon name="file" size={16} />
                           </div>
                         )}
                         <div className="chat-attachment-meta">
                           <div className="chat-attachment-name">{attachment.name}</div>
-                          <div className="chat-attachment-status">
-                            {attachment.status === 'failed'
-                              ? (attachment.error || 'Upload failed')
-                              : attachment.status === 'completed'
-                                ? formatChatAttachmentSize(attachment.size)
-                                : attachment.status === 'queued'
-                                  ? 'Ready'
-                                  : `${attachment.progress}%`}
+                          <div className="chat-attachment-status" data-tooltip={statusTooltip}>
+                            {statusText}
                           </div>
-                          {pending ? (
-                            <div className="chat-attachment-progress" aria-hidden="true">
-                              <span style={{width: `${Math.max(4, attachment.progress)}%`}} />
-                            </div>
-                          ) : null}
                         </div>
-                        {attachment.status === 'failed' ? (
+                        <div className="chat-attachment-actions">
+                          {failed ? (
+                            <button
+                              type="button"
+                              className="chat-attachment-retry"
+                              onClick={() => retryChatAttachment(attachment.id)}
+                              data-tooltip="Queue retry"
+                              aria-label="Queue retry"
+                            >
+                              <ChatIcon name="refreshCw" />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            className="chat-attachment-retry"
-                            onClick={() => retryChatAttachment(attachment.id)}
-                            data-tooltip="Queue retry"
-                            aria-label="Queue retry"
+                            className="chat-attachment-remove"
+                            onClick={() => {
+                              setChatAttachmentRemovingId(attachment.id);
+                              window.setTimeout(() => {
+                                removeChatAttachment(attachment.id);
+                                setChatAttachmentRemovingId('');
+                              }, 140);
+                            }}
+                            disabled={pending}
+                            data-tooltip={pending ? 'Uploading' : 'Remove attachment'}
+                            aria-label={pending ? 'Uploading' : 'Remove attachment'}
                           >
-                            <ChatIcon name="refreshCw" />
+                            <ChatIcon name="x" />
                           </button>
+                        </div>
+                        {pending ? (
+                          <div className="chat-attachment-progress" aria-hidden="true">
+                            <span style={{width: `${Math.max(4, attachment.progress)}%`}} />
+                          </div>
                         ) : null}
-                        <button
-                          type="button"
-                          className="chat-attachment-remove"
-                          onClick={() => {
-                            setChatAttachmentRemovingId(attachment.id);
-                            window.setTimeout(() => {
-                              removeChatAttachment(attachment.id);
-                              setChatAttachmentRemovingId('');
-                            }, 140);
-                          }}
-                          disabled={pending}
-                          data-tooltip={pending ? 'Uploading' : 'Remove attachment'}
-                          aria-label={pending ? 'Uploading' : 'Remove attachment'}
-                        >
-                          <ChatIcon name="x" />
-                        </button>
                       </div>
                     );
                   })}

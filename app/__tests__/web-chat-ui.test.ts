@@ -776,6 +776,70 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-permission-button');
   });
 
+  test('composer attachments render as flat two-line chips with visible upload errors', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    const mapStart = mainTsx.indexOf('chatAttachments.map(attachment => {');
+    expect(mapStart).toBeGreaterThanOrEqual(0);
+    const inputRowStart = mainTsx.indexOf('chat-composer-input-row', mapStart);
+    expect(inputRowStart).toBeGreaterThan(mapStart);
+    const block = mainTsx.slice(mapStart, inputRowStart);
+
+    expect(block).toContain('className="chat-attachment-actions"');
+    expect(block.indexOf('className="chat-attachment-meta"')).toBeLessThan(block.indexOf('className="chat-attachment-actions"'));
+    expect(block.indexOf('className="chat-attachment-actions"')).toBeLessThan(block.indexOf('className="chat-attachment-progress"'));
+    expect(block).toContain('data-tooltip={statusTooltip}');
+    expect(block).toContain('attachment.error || \'Upload failed\'');
+    expect(block).toContain('className="chat-attachment-retry"');
+    expect(block).toContain('retryChatAttachment(attachment.id)');
+    expect(block).toContain('setChatAttachmentRemovingId(attachment.id)');
+
+    const chipRule = cssRuleBlock(stylesCss, '.chat-attachment-preview');
+    expect(chipRule).toContain('align-items: center;');
+    expect(chipRule).toContain('height: 44px;');
+    expect(chipRule).not.toContain('flex-direction: column;');
+    expect(chipRule).not.toContain('width: 88px;');
+
+    const thumbRule = cssRuleBlock(stylesCss, '.chat-attachment-thumb');
+    expect(thumbRule).toContain('width: 32px;');
+    expect(thumbRule).toContain('height: 32px;');
+
+    const nameRule = cssRuleBlock(stylesCss, '.chat-attachment-name');
+    expect(nameRule).toContain('white-space: nowrap;');
+    expect(nameRule).toContain('text-overflow: ellipsis;');
+
+    const failedStatusRule = cssRuleBlock(stylesCss, '.chat-attachment-preview.failed .chat-attachment-status');
+    expect(failedStatusRule).toContain('var(--state-danger)');
+
+    const progressRule = cssRuleBlock(stylesCss, '.chat-attachment-progress');
+    expect(progressRule).toContain('position: absolute;');
+    expect(progressRule).toContain('height: 2px;');
+    expect(progressRule).toContain('bottom: 2px;');
+
+    expect(cssRuleBlock(stylesCss, '.chat-attachment-actions')).not.toBe('');
+    expect(cssRuleBlockContainingSelector(stylesCss, '.chat-attachment-remove')).not.toContain('position: absolute;');
+    expect(cssRuleBlockContainingSelector(stylesCss, '.chat-attachment-retry')).not.toContain('position: absolute;');
+  });
+
+  test('prompt attachment chips use the flat 32px two-line geometry', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    const chipRule = cssRuleBlock(stylesCss, '.chat-prompt-attachment-chip');
+    expect(chipRule).toContain('grid-template-columns: 32px minmax(0, 1fr);');
+    expect(chipRule).toContain('min-height: 40px;');
+
+    const thumbRule = cssRuleBlock(stylesCss, '.chat-prompt-attachment-thumb');
+    expect(thumbRule).toContain('width: 32px;');
+    expect(thumbRule).toContain('height: 32px;');
+
+    const iconRule = cssRuleBlock(stylesCss, '.chat-prompt-attachment-icon');
+    expect(iconRule).toContain('width: 32px;');
+    expect(iconRule).toContain('height: 32px;');
+  });
+
   test('chat breadcrumb title uses the selected session project', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
