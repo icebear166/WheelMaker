@@ -514,6 +514,12 @@ git diff --name-only origin/main...HEAD
 
 Expected: no whitespace errors, no generated `dist` content, and no files from the dirty main worktree's pre-existing file-highlight changes.
 
-- [ ] **Step 6: Final Git checkpoint and finalize**
+- [x] **Step 6: Final Git checkpoint and finalize**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for any final plan/wiki corrections after their validation. Then invoke it in `finalize` mode with the actual result (`complete`, `blocked`, or `verification_failed`), recording branch/worktree, commits, push, merge, and cleanup outcomes.
+
+Finalization (2026-08-11): `verification_failed` only at the repository-wide Jest
+baseline described above. The feature branch is `feat/chat-sharing`; focused tests,
+type checking, production build, and the complete Server suite pass. The branch is
+pushed to `origin/feat/chat-sharing`. Merge into `main` and worktree cleanup are
+deferred because the main worktree contains user-owned file-highlight changes.
