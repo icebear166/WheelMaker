@@ -52,8 +52,7 @@
 }
 .share-manager-subtle-button,
 .share-manager-load-more,
-.share-manager-back-button,
-.share-manager-record-actions button {
+.share-manager-back-button {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   padding: 7px 11px;
@@ -62,13 +61,35 @@
   cursor: pointer;
   font-size: 12px;
 }
-.share-manager-danger-button { color: var(--status-danger, #d66); }
 .share-manager-records { display: flex; flex-direction: column; gap: 8px; }
 .share-manager-record { align-items: flex-start; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent); }
 .share-manager-record-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .share-manager-record-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.share-manager-record-actions { flex: 0 0 auto; }
-.share-manager-record-actions button { display: inline-flex; align-items: center; gap: 5px; }
+.share-manager-record-actions { flex: 0 0 auto; gap: 6px; }
+.share-link-icon-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  text-decoration: none;
+}
+.share-manager-record-actions .share-link-icon-action {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.share-manager-record-actions .share-manager-danger-button {
+  color: var(--state-danger);
+}
+.share-manager-record-actions .share-link-icon-action:disabled {
+  opacity: .45;
+  cursor: default;
+}
 .share-manager-warning { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid color-mix(in srgb, #d99b32 50%, var(--border-subtle)); border-radius: 8px; color: var(--text-secondary); font-size: 12px; }
 .share-manager-warning ul { margin: 0; padding-left: 20px; }
 .share-manager-error { padding: 9px 11px; border-radius: 8px; background: color-mix(in srgb, #c44 14%, transparent); color: #e58b8b; font-size: 12px; }
@@ -168,6 +189,5 @@
 @media (max-width: 720px) {
   .share-manager { padding: 14px 12px 28px; }
   .share-manager-record { flex-direction: column; }
-  .share-manager-record-actions { width: 100%; }
-  .share-manager-record-actions button { flex: 1; justify-content: center; }
+  .share-manager-record-actions { align-self: flex-end; }
 }

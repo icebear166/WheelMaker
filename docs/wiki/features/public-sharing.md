@@ -49,14 +49,18 @@ create dialog instead of navigating to the management screen. The dialog shows t
 configured Share origin and whether it is enabled, identifies the frozen source,
 pre-fills an editable share name, and keeps the expiry selector visible. After
 creation it displays the returned link, attempts to copy it automatically, and keeps
-an explicit copy action available. Clipboard failure does not hide or invalidate the
-created link.
+explicit open-in-new-tab and copy actions available. Clipboard failure does not hide
+or invalidate the created link.
 
 The management screen uses a 50-item default cursor page (100 maximum), shows active
 records newest first, labels project documents, chat responses, and full sessions by
-their applicable source context, copies an enabled link, and stops a share by
-removing it. Management remains token-owned: deleting, archiving, renaming, or
-continuing a source Session does not update or revoke an existing share.
+their applicable source context, and exposes compact Open, Copy, and Delete icon
+actions. Open launches a new browser tab; Open and Copy are disabled when a record
+has no valid public URL. Delete remains available, uses a red trash action, and asks
+for confirmation that the public URL will immediately stop working while its source
+document or Session remains untouched. Management remains token-owned: deleting,
+archiving, renaming, or continuing a source Session does not update or revoke an
+existing share.
 
 New links default to one day and may use one hour, one day, seven days, 30 days, or
 permanent expiry. Relative HTML dependencies are warned about before creation; the

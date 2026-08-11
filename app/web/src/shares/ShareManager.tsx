@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {Icon} from '../common/Icon';
 import {writeTextToClipboard} from '../platform/clipboard';
+import {AppConfirmDialog} from '../shell/AppDialogs';
 import type {
   RegistryShareCreatePayload,
   RegistryShareCreateResponse,
@@ -104,6 +105,8 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
   const [createdUrl, setCreatedUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [busyToken, setBusyToken] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<RegistryShareRecord | null>(null);
+  const [deleteError, setDeleteError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -128,6 +131,8 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     setTitleDraft(initialSource?.title ?? '');
     setPendingSnapshot(null);
     setCreatedUrl('');
+    setDeleteTarget(null);
+    setDeleteError('');
     setError('');
     setNotice('');
   }, [initialSource]);
@@ -250,16 +255,25 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     }
   };
 
-  const stopSharing = async (record: RegistryShareRecord) => {
+  const requestDeleteShare = (record: RegistryShareRecord) => {
     if (busyToken) return;
-    setBusyToken(record.token);
     setError('');
+    setDeleteError('');
+    setDeleteTarget(record);
+  };
+
+  const deleteShare = async () => {
+    const record = deleteTarget;
+    if (!record || busyToken) return;
+    setBusyToken(record.token);
+    setDeleteError('');
     try {
       await service.deleteShare(record.token);
       setRecords(current => current.filter(item => item.token !== record.token));
-      setNotice('Share stopped.');
+      setDeleteTarget(null);
+      setNotice('Share deleted.');
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : String(deleteError));
+      setDeleteError(deleteError instanceof Error ? deleteError.message : String(deleteError));
     } finally {
       setBusyToken('');
     }
@@ -363,14 +377,27 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
               {createdUrl ? 'Done' : 'Cancel'}
             </button>
             {createdUrl ? (
-              <button
-                type="button"
-                className="app-confirm-btn primary"
-                aria-label="Copy share link"
-                onClick={() => void copyCreatedLink()}
-              >
-                <Icon name="copy" /> Copy link
-              </button>
+              <>
+                <a
+                  className="app-confirm-btn secondary share-link-icon-action"
+                  href={createdUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open share link"
+                  data-tooltip="Open share link"
+                >
+                  <Icon name="externalLink" />
+                </a>
+                <button
+                  type="button"
+                  className="app-confirm-btn primary share-link-icon-action"
+                  aria-label="Copy share link"
+                  data-tooltip="Copy share link"
+                  onClick={() => void copyCreatedLink()}
+                >
+                  <Icon name="copy" />
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -421,11 +448,51 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
                 <span>{shareRecordDescription(record)} · {record.expiresAt ? `expires ${formatExpiry(record.expiresAt)}` : 'permanent'}</span>
               </div>
               <div className="share-manager-record-actions">
-                <button type="button" onClick={() => void copyLink(record)} disabled={!record.url}>
-                  <Icon name="copy" /> Copy link
+                {record.url ? (
+                  <a
+                    className="share-link-icon-action"
+                    href={record.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open share link"
+                    data-tooltip="Open share link"
+                    data-share-action="open"
+                  >
+                    <Icon name="externalLink" />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="share-link-icon-action"
+                    aria-label="Open share link"
+                    data-tooltip="Open share link"
+                    data-share-action="open"
+                    disabled
+                  >
+                    <Icon name="externalLink" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="share-link-icon-action"
+                  aria-label="Copy share link"
+                  data-tooltip="Copy share link"
+                  data-share-action="copy"
+                  onClick={() => void copyLink(record)}
+                  disabled={!record.url}
+                >
+                  <Icon name="copy" />
                 </button>
-                <button type="button" className="share-manager-danger-button" onClick={() => void stopSharing(record)} disabled={busyToken === record.token}>
-                  {busyToken === record.token ? 'Stopping…' : 'Stop sharing'}
+                <button
+                  type="button"
+                  className="share-link-icon-action share-manager-danger-button"
+                  aria-label="Delete share"
+                  data-tooltip="Delete share"
+                  data-share-action="delete"
+                  onClick={() => requestDeleteShare(record)}
+                  disabled={Boolean(busyToken)}
+                >
+                  <Icon name={busyToken === record.token ? 'loader' : 'trash'} spin={busyToken === record.token} />
                 </button>
               </div>
             </article>
@@ -439,6 +506,20 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
       </section>
 
       <button type="button" className="share-manager-back-button" onClick={onBack}>Back</button>
+      <AppConfirmDialog
+        target={deleteTarget ? {
+          kind: 'shareDelete',
+          title: deleteTarget.title || shareRecordDescription(deleteTarget),
+        } : null}
+        busy={Boolean(deleteTarget && busyToken === deleteTarget.token)}
+        error={deleteError}
+        onCancel={() => {
+          if (busyToken) return;
+          setDeleteTarget(null);
+          setDeleteError('');
+        }}
+        onPrimary={() => void deleteShare()}
+      />
     </div>
   );
 }

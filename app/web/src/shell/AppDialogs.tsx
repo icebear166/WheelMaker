@@ -43,6 +43,10 @@ export type ConfirmTarget =
       title: string;
     }
   | {
+      kind: 'shareDelete';
+      title: string;
+    }
+  | {
       kind: 'goalClear';
       projectId: string;
       sessionId: string;
@@ -203,6 +207,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'archiveBatch') return `Archive sessions older than ${target.days} days?`;
   if (target.kind === 'restoreArchived') return 'Restore archived session?';
   if (target.kind === 'delete') return 'Delete session?';
+  if (target.kind === 'shareDelete') return 'Delete share?';
   if (target.kind === 'goalClear') return 'Clear goal?';
   if (target.kind === 'npmPackage') return `${agentPackageActionLabel(target.action)} package?`;
   if (target.kind === 'npmPackageHubUpdate') return 'Update npm packages?';
@@ -227,6 +232,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
   if (target.kind === 'delete') return target.title || 'Untitled session';
+  if (target.kind === 'shareDelete') return target.title || 'Untitled share';
   if (target.kind === 'goalClear') return target.objective;
   if (target.kind === 'npmPackage') return target.displayName || target.packageName;
   if (target.kind === 'npmPackageHubUpdate') {
@@ -271,6 +277,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
   }
   if (target.kind === 'delete') {
     return 'This permanently deletes the session data from the Hub.';
+  }
+  if (target.kind === 'shareDelete') {
+    return 'The public link will stop working immediately. The source document or session will not be deleted.';
   }
   if (target.kind === 'goalClear') {
     return 'The current turn will continue, but Goal will not start another turn. The objective and its saved progress will be removed.';
@@ -317,6 +326,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'releaseStoragePrune') return 'trash';
   if (target.kind === 'restoreArchived') return 'archiveRestore';
   if (target.kind === 'delete') return 'trash';
+  if (target.kind === 'shareDelete') return 'trash';
   if (target.kind === 'goalClear') return 'trash';
   if (target.kind === 'npmPackage') {
     if (target.action === 'uninstall') return 'trash';
@@ -341,6 +351,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'releaseStoragePrune') return 'Clean up';
   if (target.kind === 'restoreArchived') return 'Restore';
   if (target.kind === 'delete') return 'Delete';
+  if (target.kind === 'shareDelete') return 'Delete share';
   if (target.kind === 'goalClear') return 'Clear Goal';
   if (target.kind === 'npmPackage') return agentPackageActionLabel(target.action);
   if (target.kind === 'npmPackageHubUpdate') return 'Update';
@@ -358,6 +369,7 @@ function isDangerConfirmTarget(target: ConfirmTarget): boolean {
     target.kind === 'clearDatabase' ||
     target.kind === 'logout' ||
     target.kind === 'delete' ||
+    target.kind === 'shareDelete' ||
     target.kind === 'goalClear' ||
     target.kind === 'terminalClose' ||
     target.kind === 'releaseStoragePrune' ||
@@ -402,9 +414,10 @@ export function AppConfirmDialog({
     >
       <div
         className="app-confirm-dialog"
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="app-confirm-title"
+        aria-describedby="app-confirm-copy"
         onPointerDown={event => event.stopPropagation()}
       >
         <div className={confirmIconClassName}>
@@ -415,7 +428,7 @@ export function AppConfirmDialog({
             {confirmTitle}
           </div>
           <div className="app-confirm-name">{confirmName}</div>
-          <div className="app-confirm-copy">{confirmCopy}</div>
+          <div id="app-confirm-copy" className="app-confirm-copy">{confirmCopy}</div>
           {error ? (
             <div className="app-confirm-error">{error}</div>
           ) : null}

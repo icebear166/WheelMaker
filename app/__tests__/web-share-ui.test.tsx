@@ -94,7 +94,7 @@ test('ShareManager presents file creation as a modal with the Share server statu
   expect(renderer.root.findAllByProps({'aria-label': 'Current public shares'})).toHaveLength(0);
 });
 
-test('ShareManager automatically copies a created link and keeps an explicit copy action', async () => {
+test('ShareManager automatically copies a created link and offers compact open and copy actions', async () => {
   const {renderer} = await renderManager();
   await ReactTestRenderer.act(async () => {
     findButton(renderer, 'Create public share').props.onClick();
@@ -104,7 +104,28 @@ test('ShareManager automatically copies a created link and keeps an explicit cop
   const url = `https://share.example.test/s/${'a'.repeat(43)}`;
   expect(writeTextToClipboardMock).toHaveBeenCalledWith(url);
   expect(renderer.root.findByProps({'data-share-created-link': url})).toBeDefined();
-  expect(renderer.root.findByProps({'aria-label': 'Copy share link'})).toBeDefined();
+  const open = renderer.root.findByProps({'aria-label': 'Open share link'});
+  expect(open.type).toBe('a');
+  expect(open.props).toMatchObject({
+    href: url,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    'data-tooltip': 'Open share link',
+  });
+  expect(open.findByProps({'data-icon-name': 'externalLink'})).toBeDefined();
+  expect(open.children.filter(child => typeof child === 'string')).toHaveLength(0);
+
+  const copy = renderer.root.findByProps({'aria-label': 'Copy share link'});
+  expect(copy.type).toBe('button');
+  expect(copy.props['data-tooltip']).toBe('Copy share link');
+  expect(copy.findByProps({'data-icon-name': 'copy'})).toBeDefined();
+  expect(copy.children.filter(child => typeof child === 'string')).toHaveLength(0);
+  expect(findButton(renderer, 'Done')).toBeDefined();
+  expect(renderer.root.findAllByProps({'aria-label': 'Delete share'})).toHaveLength(0);
+
+  await ReactTestRenderer.act(async () => copy.props.onClick());
+  expect(writeTextToClipboardMock).toHaveBeenCalledTimes(2);
+  expect(writeTextToClipboardMock).toHaveBeenLastCalledWith(url);
 });
 
 test('ShareManager keeps the created link visible when automatic clipboard copy fails', async () => {
@@ -231,7 +252,7 @@ test('ShareManager creates a frozen current-response source without project path
   expect(payload).not.toHaveProperty('kind');
 });
 
-test('ShareManager labels and manages full-session records', async () => {
+test('ShareManager labels full-session records and presents three compact link actions', async () => {
   const token = 'c'.repeat(43);
   const url = `https://share.example.test/s/${token}`;
   const service = serviceFixture({
@@ -250,13 +271,82 @@ test('ShareManager labels and manages full-session records', async () => {
   const {renderer} = await renderManager({service, initialSource: null});
 
   expect(findText(renderer, 'Full session · Team sync · permanent')).toBeDefined();
-  await ReactTestRenderer.act(async () => findButtonContaining(renderer, 'Copy link').props.onClick());
+  const record = renderer.root.findByProps({'data-share-token': token});
+  const actions = record.findAll(node => node.props['data-share-action']);
+  expect(actions.map(action => action.props['data-share-action'])).toEqual(['open', 'copy', 'delete']);
+  actions.forEach(action => {
+    expect(action.children.filter(child => typeof child === 'string')).toHaveLength(0);
+  });
+
+  const open = record.findByProps({'data-share-action': 'open'});
+  expect(open.type).toBe('a');
+  expect(open.props).toMatchObject({
+    href: url,
+    target: '_blank',
+    rel: 'noopener noreferrer',
+    'aria-label': 'Open share link',
+    'data-tooltip': 'Open share link',
+  });
+  expect(open.findByProps({'data-icon-name': 'externalLink'})).toBeDefined();
+
+  const copy = record.findByProps({'data-share-action': 'copy'});
+  expect(copy.props).toMatchObject({'aria-label': 'Copy share link', 'data-tooltip': 'Copy share link'});
+  expect(copy.findByProps({'data-icon-name': 'copy'})).toBeDefined();
+  await ReactTestRenderer.act(async () => copy.props.onClick());
   expect(writeTextToClipboardMock).toHaveBeenCalledWith(url);
-  await ReactTestRenderer.act(async () => findButton(renderer, 'Stop sharing').props.onClick());
-  expect(service.deleteShare).toHaveBeenCalledWith(token);
+
+  const remove = record.findByProps({'data-share-action': 'delete'});
+  expect(remove.props).toMatchObject({'aria-label': 'Delete share', 'data-tooltip': 'Delete share'});
+  expect(remove.props.className).toContain('share-manager-danger-button');
+  expect(remove.findByProps({'data-icon-name': 'trash'})).toBeDefined();
+  const shareStyles = fs.readFileSync(path.resolve(__dirname, '../web/src/shares/shares.css'), 'utf8');
+  expect(shareStyles).toMatch(/\.share-manager-record-actions\s*\{[^}]*gap:\s*6px/);
+  expect(shareStyles).toMatch(/\.share-manager-record-actions \.share-manager-danger-button\s*\{[^}]*color:\s*var\(--state-danger/);
 });
 
-test('ShareManager keeps management usable while sharing is disabled and stops records', async () => {
+test('ShareManager confirms deletion before revoking a public link', async () => {
+  const token = 'd'.repeat(43);
+  const service = serviceFixture({
+    listShares: jest.fn(async () => ({enabled: true, items: [{
+      token,
+      title: 'Review notes',
+      projectId: 'hub:p',
+      path: 'review.html',
+      kind: 'html',
+      createdAt: '2026-08-10T12:00:00Z',
+      expiresAt: null,
+      sizeBytes: 3,
+      url: `https://share.example.test/s/${token}`,
+    }], nextCursor: undefined})),
+  });
+  const {renderer} = await renderManager({service, initialSource: null});
+  const remove = renderer.root.findByProps({'data-share-action': 'delete'});
+
+  await ReactTestRenderer.act(async () => remove.props.onClick());
+  expect(service.deleteShare).not.toHaveBeenCalled();
+  expect(renderer.root.findByProps({role: 'alertdialog'}).props).toMatchObject({
+    'aria-labelledby': 'app-confirm-title',
+    'aria-describedby': 'app-confirm-copy',
+  });
+  expect(findText(renderer, 'Delete share?')).toBeDefined();
+  expect(findText(renderer, 'Review notes')).toBeDefined();
+  expect(findText(renderer, 'The public link will stop working immediately. The source document or session will not be deleted.')).toBeDefined();
+
+  await ReactTestRenderer.act(async () => findButton(renderer, 'Cancel').props.onClick());
+  expect(service.deleteShare).not.toHaveBeenCalled();
+  expect(renderer.root.findByProps({'data-share-token': token})).toBeDefined();
+  expect(renderer.root.findAllByProps({className: 'app-confirm-backdrop'})).toHaveLength(0);
+
+  await ReactTestRenderer.act(async () => remove.props.onClick());
+  await ReactTestRenderer.act(async () => {
+    findButtonContaining(renderer, 'Delete share').props.onClick();
+    await flush();
+  });
+  expect(service.deleteShare).toHaveBeenCalledWith(token);
+  expect(renderer.root.findAllByProps({'data-share-token': token})).toHaveLength(0);
+});
+
+test('ShareManager disables open and copy without a URL but keeps confirmed deletion available', async () => {
   const token = 'b'.repeat(43);
   const service = serviceFixture({
     listShares: jest.fn(async () => ({enabled: false, items: [{token, title: 'Old', projectId: 'hub:p', path: 'old.html', kind: 'html', createdAt: '2026-08-10T12:00:00Z', expiresAt: null, sizeBytes: 3}], nextCursor: undefined})),
@@ -264,10 +354,47 @@ test('ShareManager keeps management usable while sharing is disabled and stops r
   const {renderer} = await renderManager({service, initialSource: null});
   expect(renderer.root.findByProps({'data-share-enabled': 'false'})).toBeDefined();
   expect(findText(renderer, 'Old')).toBeDefined();
-  const stop = findButton(renderer, 'Stop sharing');
-  await ReactTestRenderer.act(async () => stop.props.onClick());
+  const record = renderer.root.findByProps({'data-share-token': token});
+  expect(record.findByProps({'data-share-action': 'open'}).props.disabled).toBe(true);
+  expect(record.findByProps({'data-share-action': 'copy'}).props.disabled).toBe(true);
+  expect(record.findByProps({'data-share-action': 'delete'}).props.disabled).toBe(false);
+
+  await ReactTestRenderer.act(async () => record.findByProps({'data-share-action': 'delete'}).props.onClick());
+  await ReactTestRenderer.act(async () => {
+    findButtonContaining(renderer, 'Delete share').props.onClick();
+    await flush();
+  });
   expect(service.deleteShare).toHaveBeenCalledWith(token);
   expect(findText(renderer, 'No active shares.')).toBeDefined();
+});
+
+test('ShareManager keeps a record and the confirmation open when deletion fails', async () => {
+  const token = 'e'.repeat(43);
+  const service = serviceFixture({
+    listShares: jest.fn(async () => ({enabled: true, items: [{
+      token,
+      title: 'Persistent link',
+      projectId: 'hub:p',
+      path: 'persistent.html',
+      kind: 'html',
+      createdAt: '2026-08-10T12:00:00Z',
+      expiresAt: null,
+      sizeBytes: 3,
+      url: `https://share.example.test/s/${token}`,
+    }], nextCursor: undefined})),
+    deleteShare: jest.fn(async () => { throw new Error('delete denied'); }),
+  });
+  const {renderer} = await renderManager({service, initialSource: null});
+
+  await ReactTestRenderer.act(async () => renderer.root.findByProps({'data-share-action': 'delete'}).props.onClick());
+  await ReactTestRenderer.act(async () => {
+    findButtonContaining(renderer, 'Delete share').props.onClick();
+    await flush();
+  });
+
+  expect(renderer.root.findByProps({'data-share-token': token})).toBeDefined();
+  expect(findText(renderer, 'delete denied')).toBeDefined();
+  expect(findText(renderer, 'Delete share?')).toBeDefined();
 });
 
 test('ShareManager paginates with a cursor and a default 50-item page', async () => {
