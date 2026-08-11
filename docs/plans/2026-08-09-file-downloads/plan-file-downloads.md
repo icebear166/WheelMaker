@@ -1,6 +1,6 @@
 # File Downloads Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add secure, streaming downloads for every WheelMaker-managed current file to the browser, Desktop, or Android device through shared right-click and long-press file actions.
 
@@ -40,7 +40,7 @@ Expected: every required concept appears and no text claims arbitrary HTTP URLs,
 
 - [x] **Step 4: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for the spec, plan, and Wiki files. Record the result below; the configured policy should skip the commit until the whole task is complete.
+Invoke `git-workflow` in `checkpoint` mode for the spec, plan, and Wiki files. Record the result below; the configured policy should skip the commit until the whole task is complete.
 
 Checkpoint: skipped — `docs/user/git-preferences.md` permits automatic commits only after the entire task is complete and verified.
 
@@ -426,6 +426,6 @@ Result: PASS. `git diff --check` and `gofmt -l` are clean; normalized worktree-o
 
 - [x] **Step 7: Git finalize**
 
-Invoke `git-workflow-preferences` in `finalize` mode with the real result. On complete verification: refresh/rebase, commit task-owned files, push `feat/file-downloads`, merge into a clean local `main`, push `main`, then remove the clean worktree and task branches as configured. If any verification fails, do not commit and report the preserved worktree/evidence.
+Invoke `git-workflow` in `finalize` mode with the real result. On complete verification: refresh/rebase, commit task-owned files, push `feat/file-downloads`, merge into a clean local `main`, push `main`, then remove the clean worktree and task branches as configured. If any verification fails, do not commit and report the preserved worktree/evidence.
 
 Finalize: complete — refreshed against remote `main` through GitHub SSH-over-443, committed and pushed `feat/file-downloads`, fast-forwarded clean local `main`, and prepared the final plan-state commit before pushing `main` and removing the task worktree and branches.

@@ -709,7 +709,7 @@ Webpack production build exits with code 0.
 
 - [ ] **Step 4: Commit the completed one-pass polish**
 
-Before committing, use `git-workflow-preferences`, confirm the current branch is synchronized with `origin/main`, and then run the repository completion gate:
+Before committing, use `git-workflow`, confirm the current branch is synchronized with `origin/main`, and then run the repository completion gate:
 
 ```powershell
 git add -A

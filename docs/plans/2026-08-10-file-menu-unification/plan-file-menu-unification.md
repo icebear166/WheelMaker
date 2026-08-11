@@ -1,6 +1,6 @@
 # File Menu and Preview Entry Unification Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make every file-related context menu consume one grouped menu model and align Preview context-menu entry points across desktop and mobile without changing existing file actions or left-click behavior.
 
@@ -57,7 +57,7 @@
 - [x] Run all affected Jest suites, then `npm run tsc:web` and `npm run build:web` from `app`.
 - [x] Inspect the final diff for unrelated changes, protocol-version changes, duplicate menu JSX, stale labels, and accidental edits outside the feature worktree.
 - [x] Update this plan checkboxes and record verification results in the final handoff.
-- [x] Invoke git-workflow-preferences finalize: commit verified work, attempt branch push, and merge into clean local `main` only if the pre-existing dirty main workspace permits it; preserve the isolated worktree when merge/cleanup is unsafe.
+- [x] Invoke git-workflow finalize: commit verified work, attempt branch push, and merge into clean local `main` only if the pre-existing dirty main workspace permits it; preserve the isolated worktree when merge/cleanup is unsafe.
 
 ### Verification (2026-08-10)
 

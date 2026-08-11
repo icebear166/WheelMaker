@@ -1,6 +1,6 @@
 # Public Document Sharing Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement authenticated creation and management of immutable Markdown/HTML public snapshots served anonymously by the existing embedded Gateway.
 
@@ -32,7 +32,7 @@
 - [x] **Step 2: Run focused tests** and verify they fail because the field and methods do not exist.
 - [x] **Step 3: Implement the minimum shared field, `RegistryRouteShare`, method descriptors, TypeScript constants/types, and preservation assertion.** Keep protocol version unchanged and keep `share` optional.
 - [x] **Step 4: Run focused Go, Jest, and Node tests** and verify they pass.
-- [x] **Step 5: Checkpoint** only the task files with `git-workflow-preferences checkpoint`.
+- [x] **Step 5: Checkpoint** only the task files with `git-workflow checkpoint`.
 
 ### Task 2: Implement Registry Share storage, lifecycle, and WebSocket handlers
 
@@ -140,7 +140,7 @@
 - [x] **Step 2: Run final verification**: `go test ./...`; `npm test -- --runInBand`; `npm run tsc:web`; `npm run build:web`; and focused deployment/gateway Node tests.
 - [x] **Step 3: Inspect status and diff** for task-only files, protocol version stability, no generated `dist` edits, no placeholders, and no accidental stats/database artifacts.
 - [x] **Step 4: Checkpoint** the wiki/plan only after final verification passes.
-- [x] **Step 5: Finalize** with `git-workflow-preferences finalize complete`, following the configured commit/push/merge/cleanup rules.
+- [x] **Step 5: Finalize** with `git-workflow finalize complete`, following the configured commit/push/merge/cleanup rules.
 
 #### Verification notes
 

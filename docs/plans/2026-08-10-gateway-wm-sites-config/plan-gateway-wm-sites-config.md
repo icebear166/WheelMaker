@@ -1,6 +1,6 @@
 # Gateway `wm_sites` Config Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the Gateway schema 1 top-level site sections with schema 2 `wm_sites`, shared TLS, Hub-synced Registry/Share URL modes, and nested Release runtime configuration.
 
@@ -42,7 +42,7 @@ Expected: Any match is explicitly historical or replaced before continuing; curr
 
 Run: `git diff --check`
 
-Expected: PASS with no whitespace errors. Invoke `git-workflow-preferences` in checkpoint mode for the four Wiki files and record the resulting commit.
+Expected: PASS with no whitespace errors. Invoke `git-workflow` in checkpoint mode for the four Wiki files and record the resulting commit.
 
 ### Task 2: Implement Gateway schema 2 and shared site TLS with TDD
 
@@ -85,7 +85,7 @@ Expected: PASS with schema 2 and shared-TLS behavior covered.
 
 - [x] **Step 6: Checkpoint the Gateway unit**
 
-Invoke `git-workflow-preferences` in checkpoint mode for the listed Gateway files after the focused tests pass. Record commit hash and subject.
+Invoke `git-workflow` in checkpoint mode for the listed Gateway files after the focused tests pass. Record commit hash and subject.
 
 ### Task 3: Replace deploy-time Gateway migration with strict schema 2 handling
 
@@ -123,7 +123,7 @@ Expected: PASS with schema 1 bytes preserved on rejection and all Gateway deploy
 
 - [x] **Step 6: Checkpoint the deploy unit**
 
-Invoke `git-workflow-preferences` in checkpoint mode for the deploy implementation and tests after verification passes. Record commit hash and subject.
+Invoke `git-workflow` in checkpoint mode for the deploy implementation and tests after verification passes. Record commit hash and subject.
 
 ### Task 4: Move Release Server integration to `wm_sites.release`
 
@@ -162,7 +162,7 @@ Expected: PASS with nested read/write and schema 1 no-write behavior covered.
 
 - [x] **Step 6: Checkpoint the Release Server unit**
 
-Invoke `git-workflow-preferences` in checkpoint mode for the listed Release Server files after focused tests pass. Record commit hash and subject.
+Invoke `git-workflow` in checkpoint mode for the listed Release Server files after focused tests pass. Record commit hash and subject.
 
 ### Task 5: Complete integration verification and task records
 
@@ -225,4 +225,4 @@ Confirm every acceptance item in `docs/scope/2026-08-10-gateway-wm-sites-config.
 
 - [x] **Step 6: Final checkpoint and Git finalization**
 
-Mark all completed plan steps, invoke `git-workflow-preferences` checkpoint for the verification record, then invoke finalize with the actual result. Follow configured push, local `main` merge, main push, and successful branch/worktree cleanup behavior.
+Mark all completed plan steps, invoke `git-workflow` checkpoint for the verification record, then invoke finalize with the actual result. Follow configured push, local `main` merge, main push, and successful branch/worktree cleanup behavior.

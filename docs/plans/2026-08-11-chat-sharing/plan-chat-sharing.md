@@ -1,6 +1,6 @@
 # Chat Sharing Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace separate response image/HTML controls with one adaptive Share menu and support immutable response or full-session output as PNG, standalone HTML, or Public Share URL.
 
@@ -50,7 +50,7 @@ Expected: all three files start with summaries; the index link and stable compat
 
 - [x] **Step 5: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for only the three wiki files. Record the commit hash and subject, or the explicit reason no commit was created.
+Invoke `git-workflow` in `checkpoint` mode for only the three wiki files. Record the commit hash and subject, or the explicit reason no commit was created.
 
 ### Task 2: Extend Registry Public Share sources and schema compatibility
 
@@ -132,7 +132,7 @@ Expected: PASS with existing storage/config/delete tests unchanged and no Regist
 
 - [x] **Step 9: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for the four Registry files after the focused tests pass.
+Invoke `git-workflow` in `checkpoint` mode for the four Registry files after the focused tests pass.
 
 ### Task 3: Build the immutable chat-share projection
 
@@ -190,7 +190,7 @@ Expected: PASS.
 
 - [x] **Step 6: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for the projector and copy-range files after the focused tests pass.
+Invoke `git-workflow` in `checkpoint` mode for the projector and copy-range files after the focused tests pass.
 
 ### Task 4: Render one shared document and enforce PNG safety limits
 
@@ -255,7 +255,7 @@ Expected: PASS, including all existing Markdown HTML/image readiness tests.
 
 - [x] **Step 8: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for only the renderer/export files after focused tests pass.
+Invoke `git-workflow` in `checkpoint` mode for only the renderer/export files after focused tests pass.
 
 ### Task 5: Extend Web Share contracts and management UI
 
@@ -306,7 +306,7 @@ Expected: PASS with all existing file-share modal, warning, pagination, disabled
 
 - [x] **Step 7: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for the Web share contract/manager files after focused tests pass.
+Invoke `git-workflow` in `checkpoint` mode for the Web share contract/manager files after focused tests pass.
 
 ### Task 6: Replace response export buttons with the adaptive Share menu
 
@@ -362,7 +362,7 @@ Expected: PASS.
 
 - [x] **Step 7: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for the menu, ChatTurnView, and style files after tests pass.
+Invoke `git-workflow` in `checkpoint` mode for the menu, ChatTurnView, and style files after tests pass.
 
 ### Task 7: Orchestrate all six actions in WorkspaceApp
 
@@ -443,7 +443,7 @@ Expected: PASS with discriminated share sources and capture request states fully
 
 - [x] **Step 9: Git checkpoint**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for Workspace/App dialog/output test files after focused tests and type checking pass.
+Invoke `git-workflow` in `checkpoint` mode for Workspace/App dialog/output test files after focused tests and type checking pass.
 
 ### Task 8: Prove the complete approved contract
 
@@ -516,7 +516,7 @@ Expected: no whitespace errors, no generated `dist` content, and no files from t
 
 - [x] **Step 6: Final Git checkpoint and finalize**
 
-Invoke `git-workflow-preferences` in `checkpoint` mode for any final plan/wiki corrections after their validation. Then invoke it in `finalize` mode with the actual result (`complete`, `blocked`, or `verification_failed`), recording branch/worktree, commits, push, merge, and cleanup outcomes.
+Invoke `git-workflow` in `checkpoint` mode for any final plan/wiki corrections after their validation. Then invoke it in `finalize` mode with the actual result (`complete`, `blocked`, or `verification_failed`), recording branch/worktree, commits, push, merge, and cleanup outcomes.
 
 Finalization (2026-08-11): `verification_failed` only at the repository-wide Jest
 baseline described above. The feature branch is `feat/chat-sharing`; focused tests,

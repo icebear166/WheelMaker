@@ -1,6 +1,6 @@
 # Global Search UX Iteration Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the Windows target-picker search flow with direct context-aware shortcuts and make current-session, global-session, and Preview search surfaces visible, navigable, and consistent.
 
@@ -294,4 +294,4 @@
 
 - [ ] **Step 4: Review task-owned diff and finalize Git workflow**
 
-  Run `git status -sb`, `git diff --check`, and inspect the complete diff. Invoke `git-workflow-preferences` `finalize` with the actual verification result. If complete and green, commit/push the feature branch, merge into clean local `main`, push `main`, verify remote SHAs, and clean up the merged worktree/branches according to the repository preference.
+  Run `git status -sb`, `git diff --check`, and inspect the complete diff. Invoke `git-workflow` `finalize` with the actual verification result. If complete and green, commit/push the feature branch, merge into clean local `main`, push `main`, verify remote SHAs, and clean up the merged worktree/branches according to the repository preference.

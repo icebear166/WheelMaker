@@ -1,6 +1,6 @@
 # Hub, Registry, and Gateway Configuration Implementation Plan
 
-> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow-preferences through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SKILL: Use do-scoped to execute this plan task-by-task. Invoke git-workflow through prepare/checkpoint/finalize. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Hub main config the canonical source for shared Registry, Share, Relay, and local Gateway log settings while keeping Release-only settings in Gateway config and limiting hot reload to Gateway.
 
@@ -173,4 +173,4 @@
 
 - [x] Compare the final diff with the approved spec and confirm no Hub/Registry watcher, Hub Config API, protocol version, or secret ownership change was introduced.
 - [x] Check `git status -sb`, `git diff --check`, and the final test output.
-- [x] Run `git-workflow-preferences` finalize with the actual result, then report branch/worktree, commits, push/merge/cleanup, verification, and remaining risk.
+- [x] Run `git-workflow` finalize with the actual result, then report branch/worktree, commits, push/merge/cleanup, verification, and remaining risk.
