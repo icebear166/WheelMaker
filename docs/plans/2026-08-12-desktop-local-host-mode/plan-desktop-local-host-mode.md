@@ -137,41 +137,41 @@ Invoke `git-workflow` in `checkpoint` mode for the four Task 3 files. Record com
 
 **Acceptance:** The edge binds only `127.0.0.1:9633`, validates `~/.wheelmaker/web/local-index.html`, requires the persisted secret Base Path and exact Host, provides safe static files plus SPA fallback, and proxies only that Base Path's `/ws` routes to fixed `http://127.0.0.1:9630`. It preserves HTTP/WebSocket/preview/download semantics, consumes the Registry Session Cookie natively, attaches it upstream, and clears it on logout or unauthenticated responses.
 
-- [ ] **Step 1: Write failing listener/static isolation tests**
+- [x] **Step 1: Write failing listener/static isolation tests**
 
 Cover exact loopback/default addresses, fixed origin across restarts, missing `local-index.html`, occupied port, wrong Host, unknown/malformed/escaped Base Path, static hashed assets, directory/index denial, SPA fallback, response security headers, and graceful close. Use injectable test listener/upstream options only in package-private constructors; production defaults must remain constants.
 
-- [ ] **Step 2: Run static/listener tests to establish RED**
+- [x] **Step 2: Run static/listener tests to establish RED**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktopLocalhost(Listener|Static|BasePath|Startup|StableOrigin)'`
 
 Expected: FAIL because the edge does not exist.
 
-- [ ] **Step 3: Implement the listener and static handler**
+- [x] **Step 3: Implement the listener and static handler**
 
 Validate assets before exposing the URL, bind `tcp4` loopback at the fixed port, enforce exact Host and secret path, serve only files contained by the configured Web root, fall back to `local-index.html` only for eligible navigation requests, and return 404 outside the allowed namespace. Do not use `9632`, random ports, LAN listeners, embedded assets, or Gateway fallback.
 
-- [ ] **Step 4: Reach GREEN for listener/static behavior**
+- [x] **Step 4: Reach GREEN for listener/static behavior**
 
 Run the focused listener/static tests again.
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing real-Registry authentication/proxy tests**
+- [x] **Step 5: Write failing real-Registry authentication/proxy tests**
 
 Start `registry.New(...).Handler()` behind `httptest`, then exercise the Desktop edge contract for unauthenticated status, Token login, stripped `Set-Cookie`, stored opaque cookie, authenticated status after recreating the edge/state store, CSRF logout, revoked/rotated-session status, WebSocket authentication, file-download path, and HTML Preview response headers. Add upstream-unavailable and non-target-cookie negative cases. Assert request Token/body and CSRF are never persisted.
 
-- [ ] **Step 6: Run proxy tests to establish RED**
+- [x] **Step 6: Run proxy tests to establish RED**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktopLocalhost(Proxy|Registry|Session|WebSocket|Download|Preview)'`
 
 Expected: FAIL until reverse proxy and native cookie handling are implemented.
 
-- [ ] **Step 7: Implement the fixed Registry adapter**
+- [x] **Step 7: Implement the fixed Registry adapter**
 
 Use a narrowly configured `httputil.ReverseProxy` targeting `127.0.0.1:9630`; preserve the external Host/Origin contract, set trusted loopback forwarding metadata, remove client cookies, and attach only the validated stored Registry cookie. In response modification, consume and strip the target `Secure` cookie, persist it before success reaches WebView, inspect only bounded auth-status JSON for `authenticated:false`, and clear credentials on logout deletion or unauthorized responses. Preserve WebSocket upgrade and upstream Preview/download headers.
 
-- [ ] **Step 8: Verify the complete edge and checkpoint**
+- [x] **Step 8: Verify the complete edge and checkpoint**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktopLocalhost'`
 
