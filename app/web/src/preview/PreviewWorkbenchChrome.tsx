@@ -30,7 +30,7 @@ type PreviewWorkbenchChromeProps = {
   actionsMenuOpen: boolean;
   onClose: () => void;
   onTabSelect: (projectId: string, tabId: string) => void;
-  onTabClose: (tabId: string) => void;
+  onTabClose: (projectId: string, tabId: string) => void;
   onTabContextMenu?: (tabId: string, position: {x: number; y: number}) => void;
   onActionsMenuToggle: () => void;
   onActionsMenuClose: () => void;
@@ -252,6 +252,20 @@ export function PreviewWorkbenchChrome({
     };
   }, [tabListOpen]);
 
+  React.useLayoutEffect(() => {
+    const activeTabId = activeTab?.id;
+    const tabsNode = tabsBarRef.current;
+    if (!activeTabId || !tabsNode) {
+      return;
+    }
+    const activeTabNode = Array.from(
+      tabsNode.querySelectorAll<HTMLElement>('.preview-workbench-tab'),
+    ).find(node => node.dataset.previewTabId === activeTabId);
+    if (activeTabNode && typeof activeTabNode.scrollIntoView === 'function') {
+      activeTabNode.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    }
+  }, [activeTab?.id, tabs.length]);
+
   const tabsAccessory = (
     <div ref={overflowRef} className="preview-workbench-tabs-overflow">
       {tabsOverflowing ? (
@@ -293,7 +307,7 @@ export function PreviewWorkbenchChrome({
                   type="button"
                   className="preview-workbench-tabs-overflow-close"
                   aria-label={`Close ${tab.title}`}
-                  onClick={() => onTabClose(tab.id)}
+                  onClick={() => onTabClose(tab.projectId, tab.id)}
                 >
                   <Icon name="x" />
                 </button>
@@ -326,6 +340,7 @@ export function PreviewWorkbenchChrome({
           <div
             key={`preview-tab:${tab.projectId}:${tab.id}`}
             className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
+            data-preview-tab-id={tab.id}
             data-tooltip={tooltip}
             {...(onTabContextMenu ? bindTabContextMenu(tab.id) : {})}
           >
@@ -342,7 +357,7 @@ export function PreviewWorkbenchChrome({
             <button
               type="button"
               className="chat-file-workbench-tab-close"
-              onClick={() => onTabClose(tab.id)}
+              onClick={() => onTabClose(tab.projectId, tab.id)}
               aria-label={`Close ${tab.title}`}
             >
               <Icon name="x" />

@@ -206,7 +206,7 @@
   margin-right: 3px;
   border-radius: 5px;
   padding: 0;
-  opacity: 0;
+  opacity: 0.72;
   transition: opacity var(--motion-fast) var(--ease-standard);
 }
 

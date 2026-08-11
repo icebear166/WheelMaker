@@ -20915,13 +20915,13 @@ export function App() {
   const selectWorkbenchTab = (projectId: string, tabId: string) => {
     setPreviewWorkbench(current => selectPreviewTab(current, projectId, tabId));
   };
-  const closeWorkbenchTab = (tabId: string) => {
-    const projectId = previewWorkbench.activeProjectId;
+  const closeWorkbenchTab = (projectId: string, tabId: string) => {
     const loadKey = fileMemoryCacheKey(projectId, tabId);
     previewFileLoadControllersRef.current.get(loadKey)?.abort();
     previewFileLoadControllersRef.current.delete(loadKey);
-    const closingLastTab = previewWorkbenchTabs.length === 1 &&
-      previewWorkbenchTabs[0]?.id === tabId;
+    const projectTabs = previewWorkbench.tabsByProjectId[projectId] ?? [];
+    const closingLastTab = projectTabs.length === 1 &&
+      projectTabs[0]?.id === tabId;
     setPreviewWorkbench(current =>
       closePreviewTab(current, projectId, tabId),
     );

@@ -406,6 +406,8 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).not.toContain('.preview-workbench-project-pill');
     expect(stylesCss).toContain('.preview-workbench-drawer-panel');
     expect(stylesCss).toContain('.chat-file-workbench-empty');
+    const closeRule = stylesCss.match(/(?:^|\n)\.chat-file-workbench-tab-close \{\n  display: grid;[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(closeRule).toContain('opacity: 0.72;');
   });
 
   test('chat file preview keeps memoized empty props stable across chat typing rerenders', () => {
@@ -840,12 +842,14 @@ describe('web chat file peek viewer', () => {
 
   test('closing the last workbench tab leaves the preview open on the empty state', () => {
     const mainTsx = readSourceText(mainPath);
-    const closeStart = mainTsx.indexOf('const closeWorkbenchTab = (tabId: string) => {');
+    const closeStart = mainTsx.indexOf('const closeWorkbenchTab = (projectId: string, tabId: string) => {');
     expect(closeStart).toBeGreaterThanOrEqual(0);
     const closeEnd = mainTsx.indexOf('const toggleChatFilePreviewTree = () => {', closeStart);
     const closeBody = mainTsx.slice(closeStart, closeEnd);
 
-    expect(closeBody).toContain('const closingLastTab = previewWorkbenchTabs.length === 1');
+    expect(closeBody).toContain('const closingLastTab = projectTabs.length === 1');
+    expect(closeBody).toContain('fileMemoryCacheKey(projectId, tabId)');
+    expect(closeBody).toContain('closePreviewTab(current, projectId, tabId)');
     expect(closeBody).toContain('setChatPreviewManualOpen(true);');
     expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
   });

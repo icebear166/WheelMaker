@@ -139,11 +139,45 @@ describe('PreviewWorkbenchChrome drawer', () => {
     act(() => (document.querySelector('[aria-label="Show all open tabs"]') as HTMLButtonElement).click());
     const closeButtons = document.querySelectorAll('.preview-workbench-tabs-overflow-close');
     act(() => (closeButtons[1] as HTMLButtonElement).click());
-    expect(props.onTabClose).toHaveBeenCalledWith('file:src/b.ts');
+    expect(props.onTabClose).toHaveBeenCalledWith('p1', 'file:src/b.ts');
     expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeTruthy();
 
     escape();
     expect(document.querySelector('.preview-workbench-tabs-overflow-list')).toBeNull();
+  });
+
+  test('visible tabs expose a close control for every tab and pass project identity', () => {
+    const props = createProps({tabs: [fileTab, secondTab], activeTab: fileTab});
+    render(props);
+
+    const closeButtons = document.querySelectorAll('.chat-file-workbench-tab-close');
+    expect(closeButtons).toHaveLength(2);
+
+    act(() => (closeButtons[1] as HTMLButtonElement).click());
+    expect(props.onTabClose).toHaveBeenCalledWith('p1', 'file:src/b.ts');
+  });
+
+  test('scrolls the active tab into view after the tab selection is rendered', () => {
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      render(createProps({tabs: [fileTab, secondTab], activeTab: secondTab}));
+      expect(scrollIntoView).toHaveBeenCalledWith({block: 'nearest', inline: 'nearest'});
+    } finally {
+      if (originalScrollIntoView) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+          configurable: true,
+          value: originalScrollIntoView,
+        });
+      } else {
+        delete (HTMLElement.prototype as {scrollIntoView?: () => void}).scrollIntoView;
+      }
+    }
   });
 
   test('tab selection carries its project identity when no tab is active', () => {
