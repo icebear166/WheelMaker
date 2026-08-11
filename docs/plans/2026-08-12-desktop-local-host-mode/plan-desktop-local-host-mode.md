@@ -194,31 +194,31 @@ Invoke `git-workflow` in `checkpoint` mode for the three Task 4 files. Record co
 
 **Acceptance:** Only Desktop Bootstrap exposes `Gateway` and `Localhost`. Android/non-Desktop retains the current Gateway-only URL flow. Selecting Localhost saves Desktop mode without an address, starts the edge, and navigates its secret URL; startup failures preserve the selected mode and expose Retry/Change Connection. Legacy Gateway startup and HTTPS probe/save behavior remain unchanged. Explicit connection change logs out/clears site data, closes the edge, removes Localhost credential state, and returns to an unselected selector.
 
-- [ ] **Step 1: Write failing Bootstrap capability and runtime transition tests**
+- [x] **Step 1: Write failing Bootstrap capability and runtime transition tests**
 
 Require `connectionMode`/`supportsLocalhost` in Desktop state, a Desktop-only Localhost selection binding, explicit selector UI, no URL field for Localhost, existing Gateway validation, and state-driven Retry/Change Connection. Test saved Gateway direct launch, saved Localhost edge launch without Gateway probe, Localhost startup failure retention, Retry success, mode switching cleanup order, Local Dev enter/exit returning to the selected connection, and edge shutdown after the Desktop window exits.
 
-- [ ] **Step 2: Lock Android compatibility before implementation**
+- [x] **Step 2: Lock Android compatibility before implementation**
 
 Extend `scripts/release/android.test.mjs` to assert the shared Bootstrap still uses postMessage capability detection and does not assume the Desktop-only Localhost method exists. Run: `node --test scripts/release/android.test.mjs`
 
 Expected: the new assertions are RED until the selector is capability-gated; no Android production source is modified.
 
-- [ ] **Step 3: Run focused Desktop tests to establish RED**
+- [x] **Step 3: Run focused Desktop tests to establish RED**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktop(Bootstrap|Connection|LocalhostLaunch|Runtime|ServerSwitch|LocalDev)'`
 
 Expected: FAIL because the selector action and edge lifecycle are not wired.
 
-- [ ] **Step 4: Implement the capability-gated selector and lifecycle**
+- [x] **Step 4: Implement the capability-gated selector and lifecycle**
 
 Extend Desktop bootstrap state/results and direct bindings with an explicit Localhost capability/action. Keep Android's generic bridge path Gateway-only when the capability is absent. Inject a package-private edge factory into runtime tests while `main` constructs canonical defaults. Save mode before attempting Localhost startup, retain it on failure, reuse/restart the fixed edge on Retry, and never probe/fallback to Gateway.
 
-- [ ] **Step 5: Preserve explicit switch and Local Dev semantics**
+- [x] **Step 5: Preserve explicit switch and Local Dev semantics**
 
 Generalize the existing switch helper from server URL to connection target while retaining best-effort Registry logout and complete WebView site-data cleanup. For Localhost, use the edge's native credential/logout path, close the listener, remove Localhost state, clear Desktop config/authorization, and show the selector. Make Local Dev exit restore either Gateway or the active Localhost URL without granting Local Dev production capabilities.
 
-- [ ] **Step 6: Reach GREEN and checkpoint**
+- [x] **Step 6: Reach GREEN and checkpoint**
 
 Run the focused Desktop command again.
 

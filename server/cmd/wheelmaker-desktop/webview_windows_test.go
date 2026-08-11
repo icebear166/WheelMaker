@@ -44,6 +44,22 @@ func TestDesktopWebViewUsesNativeNavigationAndProfileAdapter(t *testing.T) {
 	}
 }
 
+func TestDesktopBootstrapBindsLocalhostSelection(t *testing.T) {
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"desktopBootstrapSelectLocalhostBinding",
+		"authorize(desktopBridgeSelectLocalhost)",
+		"desktopRuntime.SelectLocalhost(context.Background())",
+	} {
+		if !strings.Contains(string(source), want) {
+			t.Errorf("Windows Desktop bootstrap binding missing %q", want)
+		}
+	}
+}
+
 func TestDesktopWebViewInstallsWorkAreaConstraintForCustomTitleBar(t *testing.T) {
 	source, err := os.ReadFile("webview_windows.go")
 	if err != nil {

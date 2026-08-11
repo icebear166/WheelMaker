@@ -21,6 +21,9 @@
     p { margin: 0 0 1.25rem; color: #aeb6c5; line-height: 1.5; }
     label { display: block; margin-bottom: .5rem; font-weight: 600; }
     input { width: 100%; padding: .8rem; border: 1px solid #465064; border-radius: .55rem; background: #101319; color: inherit; }
+    .mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .mode-card { min-height: 5rem; text-align: left; }
+    .mode-card span { display: block; margin-top: .3rem; color: #667085; font-size: .82rem; font-weight: 500; }
     .actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
     button { padding: .7rem 1rem; border: 0; border-radius: .55rem; background: #e4ebff; color: #111318; font-weight: 700; cursor: pointer; }
     button.secondary { background: #313846; color: #f5f7fb; }
@@ -40,20 +43,34 @@
   </header>
   <main>
     <h1>Connect to WheelMaker</h1>
-    <p>Enter the HTTPS address of your WheelMaker server.</p>
-    <form id="form">
+    <p id="instructions">Choose how this Desktop connects.</p>
+    <div id="connection-modes" class="mode-grid" hidden>
+      <button id="gateway-mode" class="mode-card" type="button">Gateway<span>Connect through an HTTPS address.</span></button>
+      <button id="localhost-mode" class="mode-card secondary" type="button">Localhost<span>Connect to Registry on this PC.</span></button>
+    </div>
+    <form id="form" hidden>
       <label for="base-url">Server address</label>
       <input id="base-url" name="baseUrl" type="text" inputmode="url" autocomplete="url" placeholder="example.com" required>
       <div class="actions">
         <button id="save" type="submit">Connect</button>
-        <button id="retry" class="secondary" type="button" hidden>Retry</button>
-        <button id="reset" class="secondary" type="button" hidden>Change address</button>
       </div>
-      <div id="error" role="alert" aria-live="polite"></div>
     </form>
+    <section id="localhost-panel" hidden>
+      <p>WheelMaker Desktop will use the Registry running on this PC.</p>
+    </section>
+    <div class="actions">
+      <button id="retry" class="secondary" type="button" hidden>Retry</button>
+      <button id="reset" class="secondary" type="button" hidden>Change connection</button>
+    </div>
+    <div id="error" role="alert" aria-live="polite"></div>
   </main>
   <script>
     const form = document.getElementById('form');
+    const instructions = document.getElementById('instructions');
+    const connectionModes = document.getElementById('connection-modes');
+    const gatewayMode = document.getElementById('gateway-mode');
+    const localhostMode = document.getElementById('localhost-mode');
+    const localhostPanel = document.getElementById('localhost-panel');
     const input = document.getElementById('base-url');
     const save = document.getElementById('save');
     const retry = document.getElementById('retry');
@@ -68,6 +85,8 @@
     const BRIDGE_TIMEOUT_MS = 30_000;
     let fallbackRequestSequence = 0;
     const hasDesktopWindowControls = typeof window.wheelMakerBootstrap?.startDrag === 'function';
+    const supportsLocalhost = typeof window.wheelMakerBootstrap?.selectLocalhost === 'function';
+    let currentState = {};
 
     windowControls.hidden = !hasDesktopWindowControls;
     document.body.classList.toggle('android-bootstrap', !hasDesktopWindowControls);
@@ -111,6 +130,7 @@
       }
       if (action === 'bootstrap.getState') return bridge.getState();
       if (action === 'bootstrap.saveBaseUrl') return bridge.saveBaseUrl(payload.baseUrl);
+      if (action === 'bootstrap.selectLocalhost') return bridge.selectLocalhost();
       if (action === 'bootstrap.retry') return bridge.retry();
       if (action === 'bootstrap.reset') return bridge.reset();
       throw new Error('Unsupported bootstrap action.');
@@ -123,11 +143,24 @@
     }
 
     function render(state) {
+      currentState = state;
+      const mode = supportsLocalhost ? (state.connectionMode || '') : 'gateway';
       input.value = state.baseUrl || '';
       error.textContent = state.error || '';
-      retry.hidden = !state.baseUrl || !state.error;
-      reset.hidden = !state.baseUrl;
+      instructions.textContent = mode === 'gateway'
+        ? 'Enter the HTTPS address of your WheelMaker server.'
+        : mode === 'localhost'
+          ? 'Connect to WheelMaker services running on this PC.'
+          : 'Choose how this Desktop connects.';
+      connectionModes.hidden = !supportsLocalhost || mode !== '';
+      form.hidden = mode !== 'gateway';
+      localhostPanel.hidden = mode !== 'localhost';
+      retry.hidden = !state.error || mode === '';
+      reset.hidden = mode === '';
       save.disabled = Boolean(state.busy);
+      localhostMode.disabled = Boolean(state.busy);
+      retry.disabled = Boolean(state.busy);
+      reset.disabled = Boolean(state.busy);
     }
 
     async function runBootstrapAction(action, payload = {}, button = null) {
@@ -145,6 +178,8 @@
       event.preventDefault();
       await runBootstrapAction('bootstrap.saveBaseUrl', {baseUrl: input.value}, save);
     });
+    gatewayMode.addEventListener('click', () => render({...currentState, connectionMode: 'gateway', error: ''}));
+    localhostMode.addEventListener('click', () => void runBootstrapAction('bootstrap.selectLocalhost', {}, localhostMode));
     retry.addEventListener('click', () => void runBootstrapAction('bootstrap.retry', {}, retry));
     reset.addEventListener('click', () => void runBootstrapAction('bootstrap.reset', {}, reset));
     titlebar.addEventListener('mousedown', event => {

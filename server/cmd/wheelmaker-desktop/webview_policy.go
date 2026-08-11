@@ -14,6 +14,7 @@ type desktopPageMode uint8
 const (
 	desktopBootstrapPage desktopPageMode = iota
 	desktopTrustedRemotePage
+	desktopTrustedLocalhostPage
 	desktopTrustedLocalDevPage
 )
 
@@ -22,6 +23,7 @@ type desktopBridgeAction uint8
 const (
 	desktopBridgeGetState desktopBridgeAction = iota
 	desktopBridgeSaveBaseURL
+	desktopBridgeSelectLocalhost
 	desktopBridgeRetry
 	desktopBridgeReset
 	desktopBridgeGetDeviceName
@@ -57,8 +59,18 @@ const (
 )
 
 type desktopWebViewPolicy struct {
-	baseURL  *url.URL
-	localDev bool
+	baseURL   *url.URL
+	localhost bool
+	localDev  bool
+}
+
+func newDesktopLocalhostWebViewPolicy(baseURL string) (*desktopWebViewPolicy, error) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme != "http" || parsed.Host != "127.0.0.1:9633" || parsed.User != nil ||
+		parsed.RawQuery != "" || parsed.Fragment != "" || !validDesktopLocalhostBasePath(parsed.Path) {
+		return nil, errors.New("invalid Desktop Localhost URL")
+	}
+	return &desktopWebViewPolicy{baseURL: parsed, localhost: true}, nil
 }
 
 func newDesktopWebViewPolicy(baseURL string) (*desktopWebViewPolicy, error) {
@@ -91,7 +103,7 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		}
 		return desktopBootstrapActionAllowed(action)
 	}
-	if (mode != desktopTrustedRemotePage && mode != desktopTrustedLocalDevPage) || !p.contains(rawURL) {
+	if (mode != desktopTrustedRemotePage && mode != desktopTrustedLocalhostPage && mode != desktopTrustedLocalDevPage) || !p.contains(rawURL) {
 		return false
 	}
 	if mode == desktopTrustedLocalDevPage {
@@ -163,6 +175,14 @@ func (p *desktopWebViewPolicy) contains(rawURL string) bool {
 			parsed.RawQuery == "" && parsed.Fragment == "" &&
 			(cleanURLPath(parsed.Path) == "/" || strings.HasPrefix(cleanURLPath(parsed.Path), "/"))
 	}
+	if p.localhost {
+		if parsed.Scheme != "http" || parsed.Host != p.baseURL.Host || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return false
+		}
+		basePath := cleanURLPath(p.baseURL.Path)
+		targetPath := cleanURLPath(parsed.Path)
+		return targetPath == strings.TrimSuffix(basePath, "/") || strings.HasPrefix(targetPath, basePath)
+	}
 	if parsed.Scheme != "https" {
 		return false
 	}
@@ -208,6 +228,12 @@ func newDesktopWebViewSecurityState(baseURL string, mode desktopPageMode) (*desk
 			return nil, err
 		}
 		state.policy = policy
+	} else if mode == desktopTrustedLocalhostPage {
+		policy, err := newDesktopLocalhostWebViewPolicy(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		state.policy = policy
 	} else if mode == desktopTrustedLocalDevPage {
 		policy, err := newDesktopLocalDevWebViewPolicy()
 		if err != nil {
@@ -216,6 +242,21 @@ func newDesktopWebViewSecurityState(baseURL string, mode desktopPageMode) (*desk
 		state.policy = policy
 	}
 	return state, nil
+}
+
+func (s *desktopWebViewSecurityState) SetTrustedLocalhostPage(baseURL string) error {
+	policy, err := newDesktopLocalhostWebViewPolicy(baseURL)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.policy = policy
+	s.mode = desktopTrustedLocalhostPage
+	s.epoch++
+	s.committedEpoch = 0
+	s.committedURL = ""
+	return nil
 }
 
 func (s *desktopWebViewSecurityState) BeginTopLevelNavigation(rawURL string) uint64 {
@@ -298,6 +339,7 @@ func desktopBootstrapActionAllowed(action desktopBridgeAction) bool {
 	switch action {
 	case desktopBridgeGetState,
 		desktopBridgeSaveBaseURL,
+		desktopBridgeSelectLocalhost,
 		desktopBridgeRetry,
 		desktopBridgeReset,
 		desktopBridgeGetDeviceName,

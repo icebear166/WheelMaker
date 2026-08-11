@@ -114,6 +114,12 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			}
 			return desktopRuntime.SaveBaseURL(context.Background(), raw), nil
 		}},
+		{desktopBootstrapSelectLocalhostBinding, func() (desktopBootstrapResult, error) {
+			if err := authorize(desktopBridgeSelectLocalhost); err != nil {
+				return desktopBootstrapResult{}, err
+			}
+			return desktopRuntime.SelectLocalhost(context.Background()), nil
+		}},
 		{desktopBootstrapRetryBinding, func() (desktopBootstrapResult, error) {
 			if err := authorize(desktopBridgeRetry); err != nil {
 				return desktopBootstrapResult{}, err

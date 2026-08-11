@@ -6,32 +6,33 @@ const (
 	desktopResourceIconID     uint = 1
 	desktopTitleBarThemeColor      = "#1e1e1e"
 
-	desktopBootstrapGetStateBinding       = "__wheelMakerBootstrapGetState"
-	desktopBootstrapSaveBinding           = "__wheelMakerBootstrapSaveBaseURL"
-	desktopBootstrapRetryBinding          = "__wheelMakerBootstrapRetry"
-	desktopBootstrapResetBinding          = "__wheelMakerBootstrapReset"
-	desktopGetDeviceNameBinding           = "__wheelMakerDesktopGetDeviceName"
-	desktopStartDragBinding               = "__wheelMakerDesktopStartDrag"
-	desktopMinimizeBinding                = "__wheelMakerDesktopMinimize"
-	desktopToggleMaximizeBinding          = "__wheelMakerDesktopToggleMaximize"
-	desktopCloseBinding                   = "__wheelMakerDesktopClose"
-	desktopRequestServerBinding           = "__wheelMakerDesktopRequestServerChange"
-	desktopOpenProjectFileInVSCodeBinding = "__wheelMakerDesktopOpenProjectFileInVSCode"
-	desktopShowProjectFileInFolderBinding = "__wheelMakerDesktopShowProjectFileInFolder"
-	desktopOpenFileInVSCodeBinding        = "__wheelMakerDesktopOpenFileInVSCode"
-	desktopShowFileInFolderBinding        = "__wheelMakerDesktopShowFileInFolder"
-	desktopCopyFileToClipboardBinding     = "__wheelMakerDesktopCopyFileToClipboard"
-	desktopBeginHTMLFileClipboardBinding  = "__wheelMakerDesktopBeginHTMLFileClipboard"
-	desktopAppendHTMLFileClipboardBinding = "__wheelMakerDesktopAppendHTMLFileClipboard"
-	desktopCommitHTMLFileClipboardBinding = "__wheelMakerDesktopCommitHTMLFileClipboard"
-	desktopCancelHTMLFileClipboardBinding = "__wheelMakerDesktopCancelHTMLFileClipboard"
-	desktopGetUpdateInfoBinding           = "__wheelMakerDesktopGetUpdateInfo"
-	desktopRequestUpdateBinding           = "__wheelMakerDesktopRequestUpdate"
-	desktopDeepSeekLoginBinding           = "__wheelMakerDesktopDeepSeekLogin"
-	desktopEnterLocalDevBinding           = "__wheelMakerDesktopEnterLocalDev"
-	desktopGetLocalDevStateBinding        = "__wheelMakerDesktopGetLocalDevState"
-	desktopSaveLocalDevSourceBinding      = "__wheelMakerDesktopSaveLocalDevSource"
-	desktopRunLocalDevBinding             = "__wheelMakerDesktopRunLocalDev"
+	desktopBootstrapGetStateBinding        = "__wheelMakerBootstrapGetState"
+	desktopBootstrapSaveBinding            = "__wheelMakerBootstrapSaveBaseURL"
+	desktopBootstrapSelectLocalhostBinding = "__wheelMakerBootstrapSelectLocalhost"
+	desktopBootstrapRetryBinding           = "__wheelMakerBootstrapRetry"
+	desktopBootstrapResetBinding           = "__wheelMakerBootstrapReset"
+	desktopGetDeviceNameBinding            = "__wheelMakerDesktopGetDeviceName"
+	desktopStartDragBinding                = "__wheelMakerDesktopStartDrag"
+	desktopMinimizeBinding                 = "__wheelMakerDesktopMinimize"
+	desktopToggleMaximizeBinding           = "__wheelMakerDesktopToggleMaximize"
+	desktopCloseBinding                    = "__wheelMakerDesktopClose"
+	desktopRequestServerBinding            = "__wheelMakerDesktopRequestServerChange"
+	desktopOpenProjectFileInVSCodeBinding  = "__wheelMakerDesktopOpenProjectFileInVSCode"
+	desktopShowProjectFileInFolderBinding  = "__wheelMakerDesktopShowProjectFileInFolder"
+	desktopOpenFileInVSCodeBinding         = "__wheelMakerDesktopOpenFileInVSCode"
+	desktopShowFileInFolderBinding         = "__wheelMakerDesktopShowFileInFolder"
+	desktopCopyFileToClipboardBinding      = "__wheelMakerDesktopCopyFileToClipboard"
+	desktopBeginHTMLFileClipboardBinding   = "__wheelMakerDesktopBeginHTMLFileClipboard"
+	desktopAppendHTMLFileClipboardBinding  = "__wheelMakerDesktopAppendHTMLFileClipboard"
+	desktopCommitHTMLFileClipboardBinding  = "__wheelMakerDesktopCommitHTMLFileClipboard"
+	desktopCancelHTMLFileClipboardBinding  = "__wheelMakerDesktopCancelHTMLFileClipboard"
+	desktopGetUpdateInfoBinding            = "__wheelMakerDesktopGetUpdateInfo"
+	desktopRequestUpdateBinding            = "__wheelMakerDesktopRequestUpdate"
+	desktopDeepSeekLoginBinding            = "__wheelMakerDesktopDeepSeekLogin"
+	desktopEnterLocalDevBinding            = "__wheelMakerDesktopEnterLocalDev"
+	desktopGetLocalDevStateBinding         = "__wheelMakerDesktopGetLocalDevState"
+	desktopSaveLocalDevSourceBinding       = "__wheelMakerDesktopSaveLocalDevSource"
+	desktopRunLocalDevBinding              = "__wheelMakerDesktopRunLocalDev"
 )
 
 func desktopRuntimeInitScript() string {
@@ -47,6 +48,7 @@ func desktopRuntimeInitScript() string {
     window.wheelMakerBootstrap = Object.freeze({
       getState: invoke('` + desktopBootstrapGetStateBinding + `'),
       saveBaseUrl: invoke('` + desktopBootstrapSaveBinding + `'),
+      selectLocalhost: invoke('` + desktopBootstrapSelectLocalhostBinding + `'),
       retry: invoke('` + desktopBootstrapRetryBinding + `'),
       reset: invoke('` + desktopBootstrapResetBinding + `'),
 		getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),

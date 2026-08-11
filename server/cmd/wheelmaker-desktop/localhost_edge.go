@@ -58,6 +58,22 @@ func newDesktopLocalhostEdge(options desktopLocalhostEdgeOptions) *desktopLocalh
 	return &desktopLocalhostEdge{options: options}
 }
 
+func newDefaultDesktopLocalhostEdge() (desktopLocalhostRuntimeEdge, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("resolve user home: %w", err)
+	}
+	wheelMakerHome := filepath.Join(home, ".wheelmaker")
+	return newDesktopLocalhostEdge(desktopLocalhostEdgeOptions{
+		ListenAddress: desktopLocalhostListenAddress,
+		RegistryURL:   desktopLocalhostRegistryURL,
+		WebRoot:       filepath.Join(wheelMakerHome, "web"),
+		StateStore: newFileDesktopLocalhostStateStore(
+			filepath.Join(wheelMakerHome, "desktop", "localhost-state.json"),
+		),
+	}), nil
+}
+
 func desktopLocalhostFixedURL(basePath string) string {
 	return desktopLocalhostOrigin + basePath
 }
@@ -124,6 +140,13 @@ func (e *desktopLocalhostEdge) Close() error {
 		return nil
 	}
 	return err
+}
+
+func (e *desktopLocalhostEdge) DeleteState() error {
+	if err := e.Close(); err != nil {
+		return err
+	}
+	return e.options.StateStore.Delete()
 }
 
 func validateDesktopLocalhostEdgeOptions(options desktopLocalhostEdgeOptions) error {

@@ -9,6 +9,18 @@ import {buildAndroidRelease} from './android.mjs';
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 const CERTIFICATE_SHA = 'a'.repeat(64);
 
+test('shared Bootstrap exposes Localhost only through an explicit Desktop capability', async () => {
+  const bootstrap = await readFile(
+    join(process.cwd(), 'server', 'cmd', 'wheelmaker-desktop', 'bootstrap', 'index.html'),
+    'utf8',
+  );
+
+  assert.match(bootstrap, /typeof window\.wheelMakerBootstrap\?\.selectLocalhost === 'function'/);
+  assert.match(bootstrap, /typeof bridge\?\.postMessage === 'function'/);
+  assert.match(bootstrap, /bootstrap\.selectLocalhost/);
+  assert.match(bootstrap, /localhost-mode/);
+});
+
 test('android builder injects v1.x identity, verifies signing, and writes a portable manifest', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-android-builder-'));
   const repoRoot = join(root, 'repo');

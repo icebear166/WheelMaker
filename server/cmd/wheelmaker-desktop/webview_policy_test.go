@@ -178,9 +178,9 @@ func TestDesktopRuntimeEntersOnlyTheFixedLocalDevOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime := newDesktopRuntime(
-		&memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/"}},
+		&memoryDesktopConfigStore{config: desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/"}},
 		&recordingDesktopProber{},
-		desktopConfig{BaseURL: "https://example.com/"},
+		desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/"},
 		desktopBootstrapState{},
 		state,
 	)
@@ -205,7 +205,7 @@ func TestDesktopRuntimeExitsLocalDevToConfiguredServer(t *testing.T) {
 	runtime := newDesktopRuntime(
 		&memoryDesktopConfigStore{},
 		&recordingDesktopProber{},
-		desktopConfig{BaseURL: "https://example.com/app/"},
+		desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"},
 		desktopBootstrapState{},
 		state,
 	)
@@ -374,18 +374,18 @@ func TestDesktopBootstrapRuntimeSavesBeforeRemoteNavigation(t *testing.T) {
 	if !result.OK || result.BaseURL != "https://example.com/app/" {
 		t.Fatalf("result=%+v", result)
 	}
-	if prober.url != result.BaseURL || store.config.BaseURL != result.BaseURL || surface.navigatedURL != result.BaseURL {
-		t.Fatalf("probe=%q store=%q navigation=%q", prober.url, store.config.BaseURL, surface.navigatedURL)
+	if prober.url != result.BaseURL || store.config != (desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: result.BaseURL}) || surface.navigatedURL != result.BaseURL {
+		t.Fatalf("probe=%q store=%+v navigation=%q", prober.url, store.config, surface.navigatedURL)
 	}
 }
 
 func TestDesktopRemoteNavigationFailureReturnsToBootstrap(t *testing.T) {
-	store := &memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/app/"}}
+	store := &memoryDesktopConfigStore{config: desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"}}
 	security, err := newDesktopWebViewSecurityState(store.config.BaseURL, desktopTrustedRemotePage)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime := newDesktopRuntime(store, &recordingDesktopProber{}, store.config, desktopBootstrapState{BaseURL: store.config.BaseURL}, security)
+	runtime := newDesktopRuntime(store, &recordingDesktopProber{}, store.config, desktopBootstrapState{ConnectionMode: desktopConnectionGateway, BaseURL: store.config.BaseURL}, security)
 	surface := &recordingDesktopRuntimeSurface{}
 	runtime.AttachSurface(surface)
 

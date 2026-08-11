@@ -28,8 +28,14 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 		`default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`,
 		`runBootstrapAction('bootstrap.getState')`,
 		`runBootstrapAction('bootstrap.saveBaseUrl', {baseUrl: input.value}, save)`,
+		`runBootstrapAction('bootstrap.selectLocalhost', {}, localhostMode)`,
 		`runBootstrapAction('bootstrap.retry', {}, retry)`,
 		`runBootstrapAction('bootstrap.reset', {}, reset)`,
+		`id="connection-modes"`,
+		`id="gateway-mode"`,
+		`id="localhost-mode"`,
+		`id="localhost-panel"`,
+		`const supportsLocalhost = typeof window.wheelMakerBootstrap?.selectLocalhost === 'function';`,
 		`id="titlebar"`,
 		`id="minimize"`,
 		`id="maximize"`,
@@ -218,6 +224,40 @@ type recordingDesktopProber struct {
 	err error
 }
 
+type recordingDesktopLocalhostEdge struct {
+	url         string
+	startErrors []error
+	starts      int
+	closes      int
+	deletes     int
+}
+
+func (e *recordingDesktopLocalhostEdge) Start(context.Context) (string, error) {
+	e.starts++
+	if len(e.startErrors) != 0 {
+		err := e.startErrors[0]
+		e.startErrors = e.startErrors[1:]
+		if err != nil {
+			return "", err
+		}
+	}
+	return e.url, nil
+}
+
+func (e *recordingDesktopLocalhostEdge) Close() error {
+	e.closes++
+	return nil
+}
+
+func (e *recordingDesktopLocalhostEdge) DeleteState() error {
+	e.deletes++
+	return nil
+}
+
+func fixedDesktopLocalhostTestURL() string {
+	return desktopLocalhostFixedURL("/wm-local-" + strings.Repeat("A", 43) + "/")
+}
+
 func (p *recordingDesktopProber) Probe(_ context.Context, baseURL string) error {
 	p.url = baseURL
 	return p.err
@@ -238,6 +278,143 @@ func TestDesktopBootstrapLaunchWithoutConfig(t *testing.T) {
 	}
 	if launcher.opts.BootstrapState.BaseURL != "" || launcher.opts.BootstrapState.Error != "" {
 		t.Fatalf("bootstrap state=%+v", launcher.opts.BootstrapState)
+	}
+	if !launcher.opts.BootstrapState.SupportsLocalhost || launcher.opts.BootstrapState.ConnectionMode != "" {
+		t.Fatalf("bootstrap capability state=%+v", launcher.opts.BootstrapState)
+	}
+}
+
+func TestDesktopLocalhostLaunchUsesFixedEdgeWithoutGatewayProbe(t *testing.T) {
+	launcher := &recordingLauncher{}
+	prober := &recordingDesktopProber{err: errors.New("Gateway probe must not run")}
+	store := &memoryDesktopConfigStore{config: desktopConfig{ConnectionMode: desktopConnectionLocalhost}}
+	edge := &recordingDesktopLocalhostEdge{url: fixedDesktopLocalhostTestURL()}
+	dependencies := desktopAppDependencies{LocalhostEdgeFactory: func() (desktopLocalhostRuntimeEdge, error) {
+		return edge, nil
+	}}
+
+	if err := runDesktopAppWithDependencies(context.Background(), launcher, store, prober, false, dependencies); err != nil {
+		t.Fatalf("runDesktopAppWithDependencies: %v", err)
+	}
+	if launcher.target.URL != edge.url || launcher.target.HTML != "" {
+		t.Fatalf("target=%+v, want Localhost edge URL", launcher.target)
+	}
+	if prober.url != "" {
+		t.Fatalf("Localhost launch probed Gateway %q", prober.url)
+	}
+	if launcher.opts.Runtime.security.Mode() != desktopTrustedLocalhostPage {
+		t.Fatalf("security mode=%v, want trusted Localhost", launcher.opts.Runtime.security.Mode())
+	}
+	if edge.starts != 1 || edge.closes != 1 || edge.deletes != 0 {
+		t.Fatalf("edge lifecycle starts=%d closes=%d deletes=%d", edge.starts, edge.closes, edge.deletes)
+	}
+}
+
+func TestDesktopLocalhostStartupFailurePreservesModeForRetry(t *testing.T) {
+	launcher := &recordingLauncher{}
+	store := &memoryDesktopConfigStore{config: desktopConfig{ConnectionMode: desktopConnectionLocalhost}}
+	edge := &recordingDesktopLocalhostEdge{
+		url:         fixedDesktopLocalhostTestURL(),
+		startErrors: []error{errors.New("Registry unavailable")},
+	}
+	dependencies := desktopAppDependencies{LocalhostEdgeFactory: func() (desktopLocalhostRuntimeEdge, error) {
+		return edge, nil
+	}}
+
+	if err := runDesktopAppWithDependencies(context.Background(), launcher, store, &recordingDesktopProber{}, false, dependencies); err != nil {
+		t.Fatal(err)
+	}
+	if launcher.target.HTML != desktopBootstrapHTML || launcher.target.URL != "" {
+		t.Fatalf("target=%+v, want Bootstrap failure state", launcher.target)
+	}
+	state := launcher.opts.BootstrapState
+	if state.ConnectionMode != desktopConnectionLocalhost || !state.SupportsLocalhost || !strings.Contains(state.Error, "Registry unavailable") {
+		t.Fatalf("bootstrap state=%+v", state)
+	}
+	if store.config.ConnectionMode != desktopConnectionLocalhost || store.config.BaseURL != "" {
+		t.Fatalf("stored config=%+v, want retained Localhost", store.config)
+	}
+}
+
+func TestDesktopRuntimeSelectsAndRetriesLocalhost(t *testing.T) {
+	store := &memoryDesktopConfigStore{}
+	edge := &recordingDesktopLocalhostEdge{
+		url:         fixedDesktopLocalhostTestURL(),
+		startErrors: []error{errors.New("Registry unavailable"), nil},
+	}
+	security, err := newDesktopWebViewSecurityState("", desktopBootstrapPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntimeWithOptions(
+		store,
+		&recordingDesktopProber{},
+		desktopConfig{},
+		desktopBootstrapState{SupportsLocalhost: true},
+		security,
+		desktopRuntimeOptions{LocalhostEdgeFactory: func() (desktopLocalhostRuntimeEdge, error) { return edge, nil }},
+	)
+	surface := &recordingDesktopRuntimeSurface{}
+	runtime.AttachSurface(surface)
+
+	failed := runtime.SelectLocalhost(context.Background())
+	if failed.OK || failed.ConnectionMode != desktopConnectionLocalhost || !strings.Contains(failed.Error, "Registry unavailable") {
+		t.Fatalf("SelectLocalhost result=%+v", failed)
+	}
+	if store.config != (desktopConfig{ConnectionMode: desktopConnectionLocalhost}) {
+		t.Fatalf("config=%+v, Localhost mode must persist before startup", store.config)
+	}
+	if surface.navigatedURL != "" {
+		t.Fatalf("failed Localhost navigated to %q", surface.navigatedURL)
+	}
+
+	retried := runtime.Retry(context.Background())
+	if !retried.OK || retried.ConnectionMode != desktopConnectionLocalhost || retried.Error != "" {
+		t.Fatalf("Retry result=%+v", retried)
+	}
+	if surface.navigatedURL != edge.url || security.Mode() != desktopTrustedLocalhostPage || edge.starts != 2 {
+		t.Fatalf("navigation=%q mode=%v starts=%d", surface.navigatedURL, security.Mode(), edge.starts)
+	}
+}
+
+func TestDesktopRuntimeLocalhostCleanupAndLocalDevRestore(t *testing.T) {
+	edge := &recordingDesktopLocalhostEdge{url: fixedDesktopLocalhostTestURL()}
+	config := desktopConfig{ConnectionMode: desktopConnectionLocalhost}
+	security, err := newDesktopWebViewSecurityState(edge.url, desktopTrustedLocalhostPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntimeWithOptions(
+		&memoryDesktopConfigStore{config: config},
+		&recordingDesktopProber{},
+		config,
+		desktopBootstrapState{ConnectionMode: desktopConnectionLocalhost, SupportsLocalhost: true},
+		security,
+		desktopRuntimeOptions{
+			LocalhostEdgeFactory: func() (desktopLocalhostRuntimeEdge, error) { return edge, nil },
+			LocalhostEdge:        edge,
+			LocalhostURL:         edge.url,
+		},
+	)
+	surface := &recordingDesktopRuntimeSurface{}
+	runtime.AttachSurface(surface)
+
+	if err := runtime.EnterLocalDev(); err != nil {
+		t.Fatal(err)
+	}
+	if edge.closes != 1 || surface.navigatedURL != desktopLocalDevURL {
+		t.Fatalf("enter Local Dev closes=%d navigation=%q", edge.closes, surface.navigatedURL)
+	}
+	if err := runtime.ExitLocalDev(); err != nil {
+		t.Fatal(err)
+	}
+	if edge.starts != 1 || surface.navigatedURL != edge.url || security.Mode() != desktopTrustedLocalhostPage {
+		t.Fatalf("exit Local Dev starts=%d navigation=%q mode=%v", edge.starts, surface.navigatedURL, security.Mode())
+	}
+
+	runtime.ShowBootstrap()
+	if edge.closes != 2 || edge.deletes != 1 || runtime.GetState().ConnectionMode != "" {
+		t.Fatalf("connection cleanup closes=%d deletes=%d state=%+v", edge.closes, edge.deletes, runtime.GetState())
 	}
 }
 
@@ -268,6 +445,9 @@ func TestDesktopBootstrapInitScriptRecognizesEmbeddedDocument(t *testing.T) {
 	if !strings.Contains(script, "window.wheelMakerBootstrap") {
 		t.Fatal("desktop init script does not expose the bootstrap bridge")
 	}
+	if !strings.Contains(script, "selectLocalhost") || !strings.Contains(script, desktopBootstrapSelectLocalhostBinding) {
+		t.Fatal("desktop init script does not expose the Localhost selection capability")
+	}
 }
 
 func TestDesktopInitScriptInjectsLaunchOverlayOnAppPages(t *testing.T) {
@@ -297,8 +477,8 @@ func TestDesktopSavedServerLaunchesWithoutPreflightProbe(t *testing.T) {
 	if launcher.target.URL != "https://example.com/app/" || launcher.target.HTML != "" {
 		t.Fatalf("target=%+v, want direct remote URL", launcher.target)
 	}
-	if store.config.BaseURL != "https://example.com/app/" {
-		t.Fatalf("stored base URL=%q, want normalized value", store.config.BaseURL)
+	if store.config != (desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"}) {
+		t.Fatalf("stored config=%+v, want explicit normalized Gateway", store.config)
 	}
 }
 
