@@ -937,6 +937,21 @@
     font-size: 14px;
     padding: 6px 12px;
   }
+  .project-session-action-menu.sl-sheet.chat-share-menu .chat-share-menu-body {
+    padding: 4px 0;
+  }
+  .project-session-action-menu.sl-sheet.chat-share-menu .chat-share-menu-group {
+    padding: 7px 4px 9px 10px;
+  }
+  .project-session-action-menu.sl-sheet.chat-share-menu .chat-share-menu-group-label {
+    padding: 1px 8px 5px;
+    font-size: 10.5px;
+  }
+  .project-session-action-menu.sl-sheet.chat-share-menu .chat-share-menu-action {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
   .project-session-action-menu.sl-sheet .project-session-mark-picker {
     min-height: 48px;
   }

@@ -27,13 +27,16 @@ type shareConfigFile struct {
 }
 
 type shareCreatePayload struct {
-	ProjectID string `json:"projectId"`
-	Path      string `json:"path"`
-	Kind      string `json:"kind"`
-	Title     string `json:"title"`
-	Expiry    string `json:"expiry"`
-	Encoding  string `json:"encoding"`
-	Content   string `json:"content"`
+	SourceType string `json:"sourceType"`
+	ProjectID  string `json:"projectId"`
+	Path       string `json:"path"`
+	Kind       string `json:"kind"`
+	SessionID  string `json:"sessionId"`
+	TurnIndex  int    `json:"turnIndex"`
+	Title      string `json:"title"`
+	Expiry     string `json:"expiry"`
+	Encoding   string `json:"encoding"`
+	Content    string `json:"content"`
 }
 
 type shareListPayload struct {
@@ -60,15 +63,18 @@ type shareListResponse struct {
 }
 
 type shareListRecord struct {
-	Token     string     `json:"token"`
-	Title     string     `json:"title"`
-	ProjectID string     `json:"projectId"`
-	Path      string     `json:"path"`
-	Kind      string     `json:"kind"`
-	CreatedAt time.Time  `json:"createdAt"`
-	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	SizeBytes int64      `json:"sizeBytes"`
-	URL       string     `json:"url,omitempty"`
+	Token      string     `json:"token"`
+	Title      string     `json:"title"`
+	SourceType string     `json:"sourceType"`
+	ProjectID  string     `json:"projectId"`
+	Path       string     `json:"path,omitempty"`
+	Kind       string     `json:"kind,omitempty"`
+	SessionID  string     `json:"sessionId,omitempty"`
+	TurnIndex  int        `json:"turnIndex,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	SizeBytes  int64      `json:"sizeBytes"`
+	URL        string     `json:"url,omitempty"`
 }
 
 func (s *Server) currentShareConfig() shareRuntimeConfig {
@@ -144,13 +150,16 @@ func (s *Server) handleShareCreate(peer *peerConn, in envelope) {
 		return
 	}
 	result, err := s.shareStore.create(shareCreateInput{
-		ProjectID: payload.ProjectID,
-		Path:      payload.Path,
-		Kind:      payload.Kind,
-		Title:     payload.Title,
-		Expiry:    payload.Expiry,
-		Encoding:  payload.Encoding,
-		Content:   payload.Content,
+		SourceType: payload.SourceType,
+		ProjectID:  payload.ProjectID,
+		Path:       payload.Path,
+		Kind:       payload.Kind,
+		SessionID:  payload.SessionID,
+		TurnIndex:  payload.TurnIndex,
+		Title:      payload.Title,
+		Expiry:     payload.Expiry,
+		Encoding:   payload.Encoding,
+		Content:    payload.Content,
 	})
 	if err != nil {
 		code := codeInternal
@@ -196,14 +205,17 @@ func (s *Server) handleShareList(peer *peerConn, in envelope) {
 	response.Items = make([]shareListRecord, 0, len(page.Items))
 	for _, record := range page.Items {
 		item := shareListRecord{
-			Token:     record.Token,
-			Title:     record.Title,
-			ProjectID: record.ProjectID,
-			Path:      record.Path,
-			Kind:      record.Kind,
-			CreatedAt: record.CreatedAt,
-			ExpiresAt: record.ExpiresAt,
-			SizeBytes: record.SizeBytes,
+			Token:      record.Token,
+			Title:      record.Title,
+			SourceType: record.SourceType,
+			ProjectID:  record.ProjectID,
+			Path:       record.Path,
+			Kind:       record.Kind,
+			SessionID:  record.SessionID,
+			TurnIndex:  record.TurnIndex,
+			CreatedAt:  record.CreatedAt,
+			ExpiresAt:  record.ExpiresAt,
+			SizeBytes:  record.SizeBytes,
 		}
 		if config.enabled {
 			item.URL = shareURL(config.publicURL, record.Token)

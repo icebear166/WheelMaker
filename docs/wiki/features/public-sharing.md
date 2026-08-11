@@ -1,11 +1,27 @@
-> 摘要：本页维护项目内 Markdown/HTML 公共分享的快照语义、管理入口、生命周期和匿名访问边界。
+> 摘要：本页维护项目文档、聊天回答与完整会话公共分享的来源、快照、管理、生命周期和匿名访问边界。
 
-# Public document sharing
+# Public sharing
 
-WheelMaker can publish a project `.md`, `.markdown`, `.html`, or `.htm` file as an
-immutable, single-file HTML snapshot. The feature is managed from the authenticated
-Workspace, while recipients use a bearer link on the separate Share origin without
-logging in.
+WheelMaker can publish a supported project document, one assistant response, or a
+complete clean conversation as an immutable, single-file HTML snapshot. The feature
+is managed from the authenticated Workspace, while recipients use a bearer link on
+the separate Share origin without logging in.
+
+## Sources
+
+Share metadata distinguishes three source types:
+
+- `project_document` stores the project ID, relative path, and Markdown/HTML kind.
+  Omitting `sourceType` in an authenticated `share.create` request keeps this legacy
+  behavior.
+- `chat_response` stores the project ID, Session ID, and positive terminal turn index.
+- `chat_session` stores the project ID and Session ID.
+
+New records use schema 2. Registry continues reading schema 1 project-document
+records and projects them to `project_document` in memory without rewriting them.
+Field combinations that do not match their declared source fail closed. The method
+names, Share route, Registry protocol version, bearer token, and public URL shape do
+not change.
 
 ## Snapshot behavior
 
@@ -15,23 +31,32 @@ logging in.
 - HTML stores the source exactly as read when the share is created. The recipient's
   browser executes its scripts and resolves external dependencies at runtime; the
   executed iframe DOM or interaction state is never uploaded.
+- Chat responses and sessions use the shared chat document renderer described in
+  [`chat-sharing.md`](chat-sharing.md). The source is frozen when the user chooses
+  Public URL, so later Session changes do not affect the dialog or created HTML.
+  User attachments remain name-only and never become public files or authenticated
+  attachment links.
 - Each create operation gets a new 32-byte cryptographically random base64url token.
-  A share is never overwritten by later edits to its source file.
+  A share is never overwritten by later edits to its source file or Session.
 
 ## Management
 
 The App Menu opens the top-level **Public shares** management screen. Preview file
-actions and project-file context menus offer **Create public share** only for
-supported project files and open a compact create dialog instead of navigating to
-the management screen. The dialog shows the configured Share origin and whether it
-is enabled, pre-fills an editable share name from the current file, and keeps the
-expiry selector visible. After creation it displays the returned link, attempts to
-copy it automatically, and keeps an explicit copy action available. Clipboard
-failure does not hide or invalidate the created link.
+actions and project-file context menus offer **Create public share** for supported
+documents. Each completed chat response exposes Public URL for that response and the
+current full Session through its unified Share menu. All sources open the same compact
+create dialog instead of navigating to the management screen. The dialog shows the
+configured Share origin and whether it is enabled, identifies the frozen source,
+pre-fills an editable share name, and keeps the expiry selector visible. After
+creation it displays the returned link, attempts to copy it automatically, and keeps
+an explicit copy action available. Clipboard failure does not hide or invalidate the
+created link.
 
-The management screen uses a 50-item default cursor page (100 maximum), shows
-active records newest first, copies an enabled link, and stops a share by removing
-it.
+The management screen uses a 50-item default cursor page (100 maximum), shows active
+records newest first, labels project documents, chat responses, and full sessions by
+their applicable source context, copies an enabled link, and stops a share by
+removing it. Management remains token-owned: deleting, archiving, renaming, or
+continuing a source Session does not update or revoke an existing share.
 
 New links default to one day and may use one hour, one day, seven days, 30 days, or
 permanent expiry. Relative HTML dependencies are warned about before creation; the

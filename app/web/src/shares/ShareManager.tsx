@@ -10,14 +10,44 @@ import type {
 } from '../registry/registryTypes';
 import {compressShareContent, preflightShareEnvelope} from './shareCompression';
 import type {ShareDocumentKind, ShareSnapshot} from './shareSnapshot';
+import type {ChatShareSnapshot} from '../chat/share/chatShareSnapshot';
 
-export type ShareManagerSource = {
+export type ShareManagerProjectSource = {
+  sourceType?: 'project_document';
   projectId: string;
   path: string;
   kind: ShareDocumentKind;
   title: string;
   content?: string;
 };
+
+export type ShareManagerChatSource =
+  | {
+      sourceType: 'chat_response';
+      projectId: string;
+      sessionId: string;
+      turnIndex: number;
+      sessionTitle: string;
+      title: string;
+      snapshot: ChatShareSnapshot;
+    }
+  | {
+      sourceType: 'chat_session';
+      projectId: string;
+      sessionId: string;
+      turnIndex?: never;
+      sessionTitle: string;
+      title: string;
+      snapshot: ChatShareSnapshot;
+    };
+
+export type ShareManagerSource = ShareManagerProjectSource | ShareManagerChatSource;
+
+export function isShareManagerProjectSource(
+  source: ShareManagerSource,
+): source is ShareManagerProjectSource {
+  return source.sourceType === undefined || source.sourceType === 'project_document';
+}
 
 export type ShareManagerService = {
   listShares: (payload?: {cursor?: string; limit?: number}) => Promise<RegistryShareListResponse>;
@@ -39,6 +69,26 @@ const EXPIRY_OPTIONS: Array<{value: RegistryShareExpiry; label: string}> = [
   {value: '30d', label: '30 days'},
   {value: 'permanent', label: 'Permanent'},
 ];
+
+function shareManagerSourceDescription(source: ShareManagerSource): string {
+  if (source.sourceType === 'chat_response') {
+    return `Current response · ${source.sessionTitle}`;
+  }
+  if (source.sourceType === 'chat_session') {
+    return `Full session · ${source.sessionTitle}`;
+  }
+  return source.path;
+}
+
+function shareRecordDescription(record: RegistryShareRecord): string {
+  if (record.sourceType === 'chat_response') {
+    return `Current response · ${record.title} · turn ${record.turnIndex}`;
+  }
+  if (record.sourceType === 'chat_session') {
+    return `Full session · ${record.title}`;
+  }
+  return record.path;
+}
 
 export function ShareManager({service, initialSource = null, captureSnapshot, onBack}: ShareManagerProps) {
   const [records, setRecords] = useState<RegistryShareRecord[]>([]);
@@ -103,15 +153,36 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     setError('');
     try {
       const compressed = await compressShareContent(snapshot.html);
-      const payload: RegistryShareCreatePayload = {
+      const common = {
         projectId: currentSource.projectId,
-        path: currentSource.path,
-        kind: currentSource.kind,
         title: titleDraft.trim(),
         expiry,
-        encoding: 'gzip+base64',
+        encoding: 'gzip+base64' as const,
         content: compressed.content,
       };
+      let payload: RegistryShareCreatePayload;
+      if (currentSource.sourceType === 'chat_response') {
+        payload = {
+          ...common,
+          sourceType: 'chat_response',
+          sessionId: currentSource.sessionId,
+          turnIndex: currentSource.turnIndex,
+        };
+      } else if (currentSource.sourceType === 'chat_session') {
+        payload = {
+          ...common,
+          sourceType: 'chat_session',
+          sessionId: currentSource.sessionId,
+        };
+      } else if (isShareManagerProjectSource(currentSource)) {
+        payload = {
+          ...common,
+          path: currentSource.path,
+          kind: currentSource.kind,
+        };
+      } else {
+        throw new Error('Unsupported public share source.');
+      }
       preflightShareEnvelope(payload);
       const result = await service.createShare(payload);
       const nextUrl = result.url ?? '';
@@ -137,6 +208,7 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
 
   const beginCreate = async () => {
     if (!source || busy || loading || !enabled || !titleDraft.trim()) return;
+    setBusy(true);
     setError('');
     setNotice('');
     try {
@@ -148,6 +220,8 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
       await submitSnapshot(snapshot, source);
     } catch (captureError) {
       setError(captureError instanceof Error ? captureError.message : String(captureError));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -213,7 +287,7 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
           </div>
           <div className="app-confirm-content share-create-content">
             <div id="share-create-dialog-title" className="app-confirm-title">Create public share</div>
-            <div className="app-confirm-name">{source.path}</div>
+            <div className="app-confirm-name">{shareManagerSourceDescription(source)}</div>
 
             <div className="share-create-server">
               <div>
@@ -343,8 +417,8 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
           {records.map(record => (
             <article key={record.token} className="share-manager-record" data-share-token={record.token}>
               <div className="share-manager-record-main">
-                <strong>{record.title || record.path}</strong>
-                <span>{record.path} · {record.expiresAt ? `expires ${formatExpiry(record.expiresAt)}` : 'permanent'}</span>
+                <strong>{record.title || shareRecordDescription(record)}</strong>
+                <span>{shareRecordDescription(record)} · {record.expiresAt ? `expires ${formatExpiry(record.expiresAt)}` : 'permanent'}</span>
               </div>
               <div className="share-manager-record-actions">
                 <button type="button" onClick={() => void copyLink(record)} disabled={!record.url}>

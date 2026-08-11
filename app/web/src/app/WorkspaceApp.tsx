@@ -156,6 +156,7 @@ import {
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';
+import type {ChatShareAction} from '../chat/share/ChatShareMenu';
 import {ChatPermissionDialog} from '../chat/permission/ChatPermissionDialog';
 import {
   deriveChatPermissionState,
@@ -299,30 +300,41 @@ import {
 } from '../chat/composer/chatComposerTriggerQueries';
 import {
   buildPromptMarkdownImageFileName,
-  renderMarkdownElementToPngBlob,
-  resolveMarkdownImageExportWidth,
-  type MarkdownImageExportMode,
 } from '../chat/export/chatMarkdownImageExport';
 import {
   outputResponseImage,
   reserveResponseImageShare,
-  type ResponseImageOutputResult,
 } from '../chat/export/responseImageOutput';
 import {
   MarkdownHtmlExportSurface,
   type MarkdownHtmlExportSurfaceRequest,
+  type MarkdownHtmlImageResolver,
   type MarkdownHtmlImageResolution,
 } from '../chat/export/MarkdownHtmlExportDocument';
-import {ShareManager, type ShareManagerSource} from '../shares/ShareManager';
 import {
+  ChatShareCaptureSurface,
+  type ChatShareCaptureRequest,
+  type ChatShareCaptureResult,
+} from '../chat/share/ChatShareCaptureSurface';
+import {
+  buildResponseChatShareSnapshot,
+  buildSessionChatShareSnapshot,
+  type ChatShareSnapshot,
+} from '../chat/share/chatShareSnapshot';
+import {
+  isShareManagerProjectSource,
+  ShareManager,
+  type ShareManagerChatSource,
+  type ShareManagerSource,
+} from '../shares/ShareManager';
+import {
+  createChatShareSnapshot,
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
   shareKindForPath,
   type ShareSnapshot,
 } from '../shares/shareSnapshot';
 import {
-  MARKDOWN_EXPORT_CONTENT_CLASS_NAME,
-  MARKDOWN_EXPORT_CONTENT_STYLE,
   buildMarkdownHtmlFileNameFromStem,
   buildMarkdownHtmlFileName,
   buildPromptMarkdownHtmlFileStem,
@@ -2097,13 +2109,6 @@ function formatCompactRelativeAge(value: string): string {
   return `${Math.min(deltaYear, 99)}y`;
 }
 
-type MarkdownImageExportRequest = {
-  id: number;
-  content: string;
-  fileName: string;
-  userActionToken?: string;
-};
-
 type MarkdownHtmlExportRequest = MarkdownHtmlExportSurfaceRequest & {
   fileName: string;
   userActionToken?: string;
@@ -2117,6 +2122,19 @@ type MarkdownShareCapturePending = {
   reject: (error: Error) => void;
 };
 
+type ChatShareCaptureTask = ChatShareCaptureRequest & {
+  action: ChatShareAction;
+  purpose: 'local' | 'public';
+  fileName?: string;
+  userActionToken?: string;
+};
+
+type ChatShareCapturePending = {
+  source: ShareManagerChatSource;
+  resolve: (snapshot: ShareSnapshot) => void;
+  reject: (error: Error) => void;
+};
+
 type StartMarkdownHtmlExportInput = {
   content: string;
   title: string;
@@ -2126,114 +2144,27 @@ type StartMarkdownHtmlExportInput = {
   key: string;
 };
 
-type PromptMarkdownHtmlExportDraft = Omit<StartMarkdownHtmlExportInput, 'fileName'> & {
+type PromptMarkdownHtmlExportDraft = {
+  snapshot: ChatShareSnapshot;
+  action: ChatShareAction;
   fileNameStem: string;
 };
 
-type MarkdownImageExportSurfaceProps = {
-  request: MarkdownImageExportRequest;
-  exportMode: MarkdownImageExportMode;
-  markdownComponents: Components;
-  markdownUrlTransform: (value: string) => string;
-  onComplete: (result: ResponseImageOutputResult) => void;
-  onRenderError: (message: string) => void;
-  onShareError: (message: string) => void;
-};
-
-const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurface({
-  request,
-  exportMode,
-  markdownComponents,
-  markdownUrlTransform,
-  onComplete,
-  onRenderError,
-  onShareError,
-}: MarkdownImageExportSurfaceProps) {
-  const surfaceRef = useRef<HTMLDivElement | null>(null);
-  const markdownCapabilities = useMarkdownCapabilityPlugins(request.content);
-  const markdownImageExportWidth = resolveMarkdownImageExportWidth(exportMode);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const surface = surfaceRef.current;
-      if (!surface) {
-        return;
-      }
-      let blob: Blob;
-      try {
-        const backgroundColor = getComputedStyle(surface).backgroundColor || '#ffffff';
-        blob = await renderMarkdownElementToPngBlob(surface, {
-          backgroundColor,
-        });
-      } catch (err) {
-        if (!cancelled) {
-          onRenderError(err instanceof Error ? err.message : String(err));
-        }
-        return;
-      }
-      if (cancelled) {
-        return;
-      }
-      try {
-        const result = await outputResponseImage({
-          blob,
-          fileName: request.fileName,
-          userActionToken: request.userActionToken,
-        });
-        if (cancelled) {
-          return;
-        }
-        if (!result.ok) {
-          onShareError(result.error || result.status);
-          return;
-        }
-        onComplete(result);
-      } catch (err) {
-        if (!cancelled) {
-          onShareError(err instanceof Error ? err.message : String(err));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    request.id,
-    request.fileName,
-    exportMode,
-    markdownComponents,
-    markdownUrlTransform,
-    onComplete,
-    onRenderError,
-    onShareError,
-  ]);
-
-  return (
-    <div
-      className="markdown-image-export-host"
-      data-export-mode={exportMode}
-      style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}
-      aria-hidden="true"
-    >
-      <style>{MARKDOWN_EXPORT_CONTENT_STYLE}</style>
-      <div
-        ref={surfaceRef}
-        className={`markdown-image-export-surface markdown-preview ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}
-        data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
-      >
-        <ReactMarkdown
-          remarkPlugins={markdownCapabilities.remarkPlugins}
-          urlTransform={markdownUrlTransform}
-          rehypePlugins={markdownCapabilities.rehypePlugins}
-          components={markdownComponents}
-        >
-          {request.content}
-        </ReactMarkdown>
-      </div>
-    </div>
-  );
-});
+function buildSessionChatShareFileStem(snapshot: ChatShareSnapshot): string {
+  const title = snapshot.title
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-')
+    .replace(/[. ]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 100) || 'wheelmaker-session';
+  const parsed = new Date(snapshot.capturedAt);
+  const timestamp = (Number.isNaN(parsed.getTime()) ? new Date() : parsed)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, 'Z')
+    .replace(/[:T]/g, '-')
+    .replace(/Z$/, '');
+  return `${title}-${timestamp}`;
+}
 
 function promptArtifactPreviewTitle(fileCount: number): string {
   return `Diff · ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
@@ -3756,17 +3687,18 @@ export function App() {
   const [chatSessionQueuesByKey, setChatSessionQueuesByKey] = useState<ChatSessionQueuesByKey>({});
   const [chatCompactingByKey, setChatCompactingByKey] = useState<Record<string, boolean>>({});
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
-  const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
-  const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
   const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest] = useState<MarkdownHtmlExportRequest | null>(null);
   const [markdownShareCaptureRequest, setMarkdownShareCaptureRequest] = useState<MarkdownShareCaptureRequest | null>(null);
   const [promptMarkdownHtmlExportDraft, setPromptMarkdownHtmlExportDraft] = useState<PromptMarkdownHtmlExportDraft | null>(null);
+  const [chatShareCaptureTask, setChatShareCaptureTask] = useState<ChatShareCaptureTask | null>(null);
   const [exportingMarkdownHtmlKey, setExportingMarkdownHtmlKey] = useState('');
   const [toastMessage, setToastMessage] = useState('');
-  const markdownImageExportIdRef = useRef(0);
   const markdownHtmlExportIdRef = useRef(0);
   const markdownShareCaptureIdRef = useRef(0);
+  const chatShareCaptureIdRef = useRef(0);
+  const chatShareReservationPendingRef = useRef(false);
   const markdownShareCapturePendingRef = useRef<MarkdownShareCapturePending | null>(null);
+  const chatShareCapturePendingRef = useRef<ChatShareCapturePending | null>(null);
   const chatComposerTextRef = useRef('');
   const chatComposerTextCursorRef = useRef(0);
   const chatComposerTokensRef = useRef<ChatComposerToken[]>([]);
@@ -4107,8 +4039,9 @@ export function App() {
     } as React.CSSProperties);
   }, []);
 
-  const selectedFullChatMessages =
-    selectedChatEncodedKey && chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey
+  const selectedFullChatMessages = archivedMode
+    ? archivedPreview?.messages ?? []
+    : selectedChatEncodedKey && chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey
       ? chatMessages
       : [];
   const selectedPermissionState = useMemo(
@@ -17081,32 +17014,74 @@ export function App() {
 	}).catch(() => undefined);
   };
 
-  const exportPromptDoneMarkdownImage = async (doneTurnIndex: number) => {
-    if (exportingMarkdownImageTurnIndex !== null) {
-      return;
+  const createMarkdownImageResolver = useCallback((
+    exportProjectId: string,
+    sourcePath: string,
+  ): MarkdownHtmlImageResolver => async source => {
+    if (/^data:image\//i.test(source)) {
+      return {src: source};
     }
-    const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
-    if (!result.ok) {
-      return;
+    const projectImagePath = resolveProjectMarkdownImagePath(sourcePath, source);
+    if (projectImagePath !== null) {
+      if (!exportProjectId) {
+        return {
+          src: '',
+          fatal: true,
+          warning: `Unable to embed project image: ${source}`,
+        };
+      }
+      try {
+        const image = await service.readProjectFile(projectImagePath, exportProjectId);
+        const mimeType = image.mimeType || '';
+        if (
+          !image.isBinary ||
+          image.encoding !== 'base64' ||
+          !image.content ||
+          !mimeType.toLowerCase().startsWith('image/')
+        ) {
+          return {
+            src: '',
+            fatal: true,
+            warning: `Unable to embed project image: ${source}`,
+          };
+        }
+        return {src: `data:${mimeType};base64,${image.content}`};
+      } catch (error) {
+        return {
+          src: '',
+          fatal: true,
+          warning: `Unable to embed project image: ${source} (${error instanceof Error ? error.message : String(error)})`,
+        };
+      }
     }
-    setError('');
-    setExportingMarkdownImageTurnIndex(doneTurnIndex);
-    let userActionToken: string | undefined;
-    try {
-      userActionToken = await reserveResponseImageShare();
-    } catch (error) {
-      setExportingMarkdownImageTurnIndex(null);
-      setError(`Failed to share response image: ${error instanceof Error ? error.message : String(error)}`);
-      return;
+    if (/^https?:\/\//i.test(source)) {
+      try {
+        const response = await fetch(source);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const mimeType = (blob.type || response.headers.get('content-type') || '')
+          .split(';', 1)[0]
+          .trim();
+        if (!mimeType.toLowerCase().startsWith('image/')) {
+          throw new Error('response is not an image');
+        }
+        return {
+          src: `data:${mimeType};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}`,
+        };
+      } catch (error) {
+        return {
+          src: source,
+          warning: `Remote image remains linked: ${source} (${error instanceof Error ? error.message : String(error)})`,
+        };
+      }
     }
-    markdownImageExportIdRef.current += 1;
-    setMarkdownImageExportRequest({
-      id: markdownImageExportIdRef.current,
-      content: result.markdown,
-      fileName: buildPromptMarkdownImageFileName(doneTurnIndex),
-      userActionToken,
-    });
-  };
+    return {
+      src: source,
+      warning: `Image remains linked: ${source}`,
+    };
+  }, [service]);
 
   const startMarkdownHtmlExport = async ({
     content,
@@ -17130,71 +17105,7 @@ export function App() {
       return;
     }
 
-    const imageResolver = async (source: string): Promise<MarkdownHtmlImageResolution> => {
-      if (/^data:image\//i.test(source)) {
-        return {src: source};
-      }
-      const projectImagePath = resolveProjectMarkdownImagePath(sourcePath, source);
-      if (projectImagePath !== null) {
-        if (!exportProjectId) {
-          return {
-            src: '',
-            fatal: true,
-            warning: `Unable to embed project image: ${source}`,
-          };
-        }
-        try {
-          const image = await service.readProjectFile(projectImagePath, exportProjectId);
-          const mimeType = image.mimeType || '';
-          if (
-            !image.isBinary ||
-            image.encoding !== 'base64' ||
-            !image.content ||
-            !mimeType.toLowerCase().startsWith('image/')
-          ) {
-            return {
-              src: '',
-              fatal: true,
-              warning: `Unable to embed project image: ${source}`,
-            };
-          }
-          return {src: `data:${mimeType};base64,${image.content}`};
-        } catch (error) {
-          return {
-            src: '',
-            fatal: true,
-            warning: `Unable to embed project image: ${source} (${error instanceof Error ? error.message : String(error)})`,
-          };
-        }
-      }
-      if (/^https?:\/\//i.test(source)) {
-        try {
-          const response = await fetch(source);
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-          const blob = await response.blob();
-          const mimeType = (blob.type || response.headers.get('content-type') || '')
-            .split(';', 1)[0]
-            .trim();
-          if (!mimeType.toLowerCase().startsWith('image/')) {
-            throw new Error('response is not an image');
-          }
-          return {
-            src: `data:${mimeType};base64,${bytesToBase64(new Uint8Array(await blob.arrayBuffer()))}`,
-          };
-        } catch (error) {
-          return {
-            src: source,
-            warning: `Remote image remains linked: ${source} (${error instanceof Error ? error.message : String(error)})`,
-          };
-        }
-      }
-      return {
-        src: source,
-        warning: `Image remains linked: ${source}`,
-      };
-    };
+    const imageResolver = createMarkdownImageResolver(exportProjectId, sourcePath);
 
     markdownHtmlExportIdRef.current += 1;
     setMarkdownHtmlExportRequest({
@@ -17213,44 +17124,184 @@ export function App() {
     });
   };
 
-  const exportPromptDoneMarkdownHtml = async (doneTurnIndex: number) => {
-    const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
-    if (!result.ok) {
+  const buildFrozenChatShareSnapshot = useCallback((
+    scope: ChatShareAction['scope'],
+    doneTurnIndex: number,
+  ): ChatShareSnapshot | null => {
+    const sessionKey = archivedMode ? selectedArchivedKey : selectedChatKey;
+    if (!sessionKey) return null;
+    const title = archivedMode
+      ? resolveSessionDisplayTitle(archivedPreview?.session) || archivedPreview?.sessionId || sessionKey.sessionId
+      : selectedChatDisplayTitle || sessionKey.sessionId;
+    const context = {
+      projectId: sessionKey.projectId,
+      sessionId: sessionKey.sessionId,
+      title,
+      capturedAt: new Date().toISOString(),
+      presentation: {
+        themeMode,
+        codeTheme,
+        codeFont,
+        codeFontSize,
+        codeLineHeight,
+        codeTabSize,
+      },
+    };
+    return scope === 'response'
+      ? buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context)
+      : buildSessionChatShareSnapshot(selectedFullChatMessages, context);
+  }, [
+    archivedMode,
+    archivedPreview?.session,
+    archivedPreview?.sessionId,
+    codeFont,
+    codeFontSize,
+    codeLineHeight,
+    codeTabSize,
+    codeTheme,
+    resolveSessionDisplayTitle,
+    selectedArchivedKey,
+    selectedChatDisplayTitle,
+    selectedChatKey,
+    selectedFullChatMessages,
+    themeMode,
+  ]);
+
+  const sessionChatShareAvailable = useMemo(
+    () => buildFrozenChatShareSnapshot('session', 0) !== null,
+    [buildFrozenChatShareSnapshot],
+  );
+
+  const handleChatShareAction = async (doneTurnIndex: number, action: ChatShareAction) => {
+    if (chatShareCaptureTask) return;
+    const snapshot = buildFrozenChatShareSnapshot(action.scope, doneTurnIndex);
+    if (!snapshot) return;
+    setError('');
+
+    if (action.format === 'public_url') {
+      openShareCreate({
+        sourceType: action.scope === 'response' ? 'chat_response' : 'chat_session',
+        projectId: snapshot.projectId,
+        sessionId: snapshot.sessionId,
+        ...(action.scope === 'response' ? {turnIndex: snapshot.terminalTurnIndex ?? doneTurnIndex} : {}),
+        sessionTitle: snapshot.title,
+        title: snapshot.title,
+        snapshot,
+      } as ShareManagerChatSource);
       return;
     }
-    setPromptMarkdownHtmlExportDraft({
-      content: result.markdown,
-      title: `WheelMaker response ${doneTurnIndex}`,
-      fileNameStem: buildPromptMarkdownHtmlFileStem(),
-      projectId: selectedChatKey?.projectId || projectId,
-      sourcePath: '',
-      key: `prompt:${selectedChatEncodedKey}:${doneTurnIndex}`,
+
+    if (action.format === 'html') {
+      setPromptMarkdownHtmlExportDraft({
+        snapshot,
+        action,
+        fileNameStem: action.scope === 'session'
+          ? buildSessionChatShareFileStem(snapshot)
+          : buildPromptMarkdownHtmlFileStem(),
+      });
+      return;
+    }
+
+    if (chatShareReservationPendingRef.current) return;
+    chatShareReservationPendingRef.current = true;
+    let userActionToken: string | undefined;
+    try {
+      userActionToken = await reserveResponseImageShare();
+    } catch (error) {
+      setError(`Failed to share image: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    } finally {
+      chatShareReservationPendingRef.current = false;
+    }
+    chatShareCaptureIdRef.current += 1;
+    setChatShareCaptureTask({
+      id: chatShareCaptureIdRef.current,
+      mode: 'image',
+      snapshot,
+      widthMode: isWide ? 'desktop' : 'mobile',
+      imageResolver: createMarkdownImageResolver(snapshot.projectId, ''),
+      action,
+      purpose: 'local',
+      fileName: action.scope === 'response'
+        ? buildPromptMarkdownImageFileName(doneTurnIndex)
+        : `${buildSessionChatShareFileStem(snapshot)}.png`,
+      userActionToken,
     });
   };
   const copyPromptDoneMarkdownEvent = useStableEvent(copyPromptDoneMarkdown);
   const readAloudPromptDoneEvent = useStableEvent(readAloudPromptDone);
-  const exportPromptDoneMarkdownImageEvent = useStableEvent(exportPromptDoneMarkdownImage);
-  const exportPromptDoneMarkdownHtmlEvent = useStableEvent(exportPromptDoneMarkdownHtml);
+  const handleChatShareActionEvent = useStableEvent(handleChatShareAction);
 
-  const completeMarkdownImageExport = useCallback((result: ResponseImageOutputResult) => {
-    setMarkdownImageExportRequest(null);
-    setExportingMarkdownImageTurnIndex(null);
-    if (result.status === 'copied') {
-      setToastMessage('Response image copied to clipboard.');
+  const completeChatShareCapture = useCallback(async (result: ChatShareCaptureResult) => {
+    const task = chatShareCaptureTask;
+    if (!task || task.mode !== result.mode) return;
+    if (task.purpose === 'public') {
+      const pending = chatShareCapturePendingRef.current;
+      chatShareCapturePendingRef.current = null;
+      setChatShareCaptureTask(null);
+      if (pending) {
+        pending.resolve(createChatShareSnapshot({
+          title: pending.source.title,
+          html: result.mode === 'html' ? result.html : '',
+          warnings: result.unresolvedImageUrls.map(source => ({
+            source,
+            message: `Image remains linked: ${source}`,
+          })),
+        }));
+      }
+      return;
     }
-  }, []);
 
-  const failMarkdownImageExport = useCallback((message: string) => {
-    setMarkdownImageExportRequest(null);
-    setExportingMarkdownImageTurnIndex(null);
-    setError(`Failed to export response image: ${message}`);
-  }, []);
+    try {
+      if (result.mode === 'image') {
+        const output = await outputResponseImage({
+          blob: result.blob,
+          fileName: task.fileName || 'wheelmaker-chat.png',
+          userActionToken: task.userActionToken,
+        });
+        if (!output.ok) throw new Error(output.error || output.status);
+        if (output.status === 'copied') {
+          setToastMessage('Image copied to clipboard.');
+        } else if (output.status === 'shared') {
+          setToastMessage('Image shared.');
+        } else {
+          setToastMessage('Image downloaded.');
+        }
+      } else {
+        const output = await outputMarkdownHtml({
+          html: result.html,
+          fileName: task.fileName || 'wheelmaker-chat.html',
+          userActionToken: task.userActionToken,
+        });
+        if (!output.ok) throw new Error(output.error || output.status);
+        const delivery = output.status === 'copied'
+          ? 'HTML file copied to clipboard.'
+          : output.status === 'shared'
+            ? 'HTML file shared.'
+            : 'HTML file downloaded.';
+        setToastMessage(result.unresolvedImageUrls.length > 0
+          ? `${delivery} ${result.unresolvedImageUrls.length} image link(s) remain remote.`
+          : delivery);
+      }
+      setChatShareCaptureTask(null);
+    } catch (error) {
+      setChatShareCaptureTask(null);
+      setError(`Failed to share ${result.mode}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [chatShareCaptureTask]);
 
-  const failMarkdownImageShare = useCallback((message: string) => {
-    setMarkdownImageExportRequest(null);
-    setExportingMarkdownImageTurnIndex(null);
-    setError(`Failed to share response image: ${message}`);
-  }, []);
+  const failChatShareCapture = useCallback((message: string) => {
+    const task = chatShareCaptureTask;
+    if (!task) return;
+    if (task.purpose === 'public') {
+      const pending = chatShareCapturePendingRef.current;
+      chatShareCapturePendingRef.current = null;
+      pending?.reject(new Error(message));
+    } else {
+      setError(`Failed to share ${task.mode}: ${message}`);
+    }
+    setChatShareCaptureTask(null);
+  }, [chatShareCaptureTask]);
 
   const completeMarkdownHtmlExport = useCallback(async (
     result: {html: string; unresolvedImageUrls: string[]},
@@ -17315,6 +17366,28 @@ export function App() {
   }, []);
 
   const captureShareSource = useCallback(async (source: ShareManagerSource): Promise<ShareSnapshot> => {
+    if (!isShareManagerProjectSource(source)) {
+      if (chatShareCaptureTask) {
+        throw new Error('Another chat share capture is already in progress.');
+      }
+      return new Promise<ShareSnapshot>((resolve, reject) => {
+        const previous = chatShareCapturePendingRef.current;
+        if (previous) {
+          previous.reject(new Error('Another chat share capture is already in progress.'));
+        }
+        chatShareCapturePendingRef.current = {source, resolve, reject};
+        chatShareCaptureIdRef.current += 1;
+        setChatShareCaptureTask({
+          id: chatShareCaptureIdRef.current,
+          mode: 'html',
+          snapshot: source.snapshot,
+          widthMode: isWide ? 'desktop' : 'mobile',
+          imageResolver: createMarkdownImageResolver(source.projectId, ''),
+          action: {scope: source.snapshot.scope, format: 'public_url'},
+          purpose: 'public',
+        });
+      });
+    }
     if (source.kind === 'html') {
       const file = source.content !== undefined
         ? {content: source.content, isBinary: false}
@@ -17406,22 +17479,53 @@ export function App() {
         codeTabSize,
       });
     });
-  }, [codeFont, codeFontSize, codeLineHeight, codeTabSize, codeTheme, service, themeMode]);
+  }, [
+    chatShareCaptureTask,
+    codeFont,
+    codeFontSize,
+    codeLineHeight,
+    codeTabSize,
+    codeTheme,
+    createMarkdownImageResolver,
+    isWide,
+    service,
+    themeMode,
+  ]);
 
   const promptMarkdownHtmlExportNameError = promptMarkdownHtmlExportDraft
     ? validateMarkdownHtmlFileStem(promptMarkdownHtmlExportDraft.fileNameStem)
     : '';
-  const submitPromptMarkdownHtmlExport = () => {
+  const submitPromptMarkdownHtmlExport = async () => {
     const draft = promptMarkdownHtmlExportDraft;
-    if (!draft || promptMarkdownHtmlExportNameError) {
+    if (!draft || promptMarkdownHtmlExportNameError || chatShareCaptureTask) {
       return;
     }
-    const {fileNameStem, ...request} = draft;
+    if (chatShareReservationPendingRef.current) return;
+    chatShareReservationPendingRef.current = true;
+    let userActionToken: string | undefined;
+    try {
+      userActionToken = await reserveMarkdownHtmlShare();
+    } catch (error) {
+      setPromptMarkdownHtmlExportDraft(null);
+      setError(`Failed to share HTML: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    } finally {
+      chatShareReservationPendingRef.current = false;
+    }
+    const {fileNameStem, snapshot, action} = draft;
     setPromptMarkdownHtmlExportDraft(null);
-    startMarkdownHtmlExport({
-      ...request,
+    chatShareCaptureIdRef.current += 1;
+    setChatShareCaptureTask({
+      id: chatShareCaptureIdRef.current,
+      mode: 'html',
+      snapshot,
+      widthMode: isWide ? 'desktop' : 'mobile',
+      imageResolver: createMarkdownImageResolver(snapshot.projectId, ''),
+      action,
+      purpose: 'local',
       fileName: buildMarkdownHtmlFileNameFromStem(fileNameStem),
-    }).catch(() => undefined);
+      userActionToken,
+    });
   };
 
   const openPromptArtifactFileContextMenu = useCallback((
@@ -17976,8 +18080,18 @@ export function App() {
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
-          exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
-          exportHtmlBusy={message.method === 'prompt_done' && exportingMarkdownHtmlKey !== ''}
+          shareMenuMode={isWide ? 'popover' : 'sheet'}
+          shareResponseDisabled={
+            (copyRange ? !copyRange.ok : true) ||
+            chatShareCaptureTask !== null ||
+            promptMarkdownHtmlExportDraft?.action.scope === 'response'
+          }
+          shareSessionDisabled={
+            !sessionChatShareAvailable ||
+            chatShareCaptureTask !== null ||
+            promptMarkdownHtmlExportDraft?.action.scope === 'session'
+          }
+          shareBusyAction={chatShareCaptureTask?.action ?? promptMarkdownHtmlExportDraft?.action ?? null}
           forkSupported={
             selectedChatSession?.sessionActions?.fork?.supported === true &&
             selectedChatSession?.sessionActions?.fork?.historicalTurn === true
@@ -17997,14 +18111,9 @@ export function App() {
               ? () => copyPromptDoneMarkdownEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
-          onExportPromptDoneImage={
+          onSharePromptDone={
             message.method === 'prompt_done'
-              ? () => exportPromptDoneMarkdownImageEvent(doneTurnIndex).catch(() => undefined)
-              : undefined
-          }
-          onExportPromptDoneHtml={
-            message.method === 'prompt_done'
-              ? () => exportPromptDoneMarkdownHtmlEvent(doneTurnIndex).catch(() => undefined)
+              ? (_terminalTurnIndex, action) => handleChatShareActionEvent(doneTurnIndex, action)
               : undefined
           }
           onForkPromptDone={
@@ -18059,14 +18168,12 @@ export function App() {
     chatSearchMatchIdsByMessageKey,
     chatSendDisabled,
     copyPromptDoneMarkdownEvent,
-    exportPromptDoneMarkdownImageEvent,
-    exportPromptDoneMarkdownHtmlEvent,
-    exportingMarkdownHtmlKey,
-    exportingMarkdownImageTurnIndex,
+    chatShareCaptureTask,
     findPromptRequestForDone,
     forkingCurrentSessionKey,
     forkingPromptDoneKey,
     handleSelectChatReply,
+    handleChatShareActionEvent,
     latestSelectableAssistantReply,
     latestSelectableOptionReplyMessageKey,
     loadPromptAttachmentThumbnail,
@@ -18076,6 +18183,7 @@ export function App() {
     openPromptArtifactDiff,
     openingPromptArtifactKey,
     promptArtifactErrors,
+    promptMarkdownHtmlExportDraft?.action,
     readAloudPromptDoneEvent,
     retryFailedChatPrompt,
     resolvePromptAttachmentThumbnail,
@@ -18087,6 +18195,7 @@ export function App() {
     selectedFullChatMessages,
     selectedPermissionState,
     selectedPromptTurnStatusIndex,
+    sessionChatShareAvailable,
     sessionSearchTargetTurn,
     ttsState,
   ]);
@@ -18096,6 +18205,9 @@ export function App() {
     searchSourceIndexes: number[],
   ) => {
     const turnIndex = message.turnIndex ?? 0;
+    const copyRange = message.method === 'prompt_done'
+      ? buildPromptDoneCopyRange(searchSourceMessages, turnIndex)
+      : null;
     const permissionRecord = message.method === 'permission_request'
       ? archivedPermissionState.byRequestTurnIndex.get(turnIndex)
       : undefined;
@@ -18142,6 +18254,25 @@ export function App() {
           promptStatus={null}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
+          copyDisabled={copyRange ? !copyRange.ok : true}
+          shareMenuMode={isWide ? 'popover' : 'sheet'}
+          shareResponseDisabled={
+            (copyRange ? !copyRange.ok : true) ||
+            chatShareCaptureTask !== null ||
+            promptMarkdownHtmlExportDraft?.action.scope === 'response'
+          }
+          shareSessionDisabled={
+            !sessionChatShareAvailable ||
+            chatShareCaptureTask !== null ||
+            promptMarkdownHtmlExportDraft?.action.scope === 'session'
+          }
+          shareBusyAction={chatShareCaptureTask?.action ?? promptMarkdownHtmlExportDraft?.action ?? null}
+          onCopyPromptDone={message.method === 'prompt_done'
+            ? () => copyPromptDoneMarkdownEvent(turnIndex).catch(() => undefined)
+            : undefined}
+          onSharePromptDone={message.method === 'prompt_done'
+            ? (_terminalTurnIndex, action) => handleChatShareActionEvent(turnIndex, action)
+            : undefined}
           onOpenPromptAttachment={openChatAttachmentPreview}
           onOpenPromptAttachmentContextMenu={openPromptAttachmentContextMenu}
           resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
@@ -18160,6 +18291,7 @@ export function App() {
     );
   }, [
     archivedPermissionState,
+    chatShareCaptureTask,
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
     chatSearchActiveMatch,
@@ -18167,6 +18299,9 @@ export function App() {
     chatSearchMatchIdsByMessageKey,
     chatSearchOpen,
     chatSearchQuery,
+    copyPromptDoneMarkdownEvent,
+    handleChatShareActionEvent,
+    isWide,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     openPromptAttachmentContextMenu,
@@ -18174,8 +18309,10 @@ export function App() {
     openPromptArtifactDiff,
     openingPromptArtifactKey,
     promptArtifactErrors,
+    promptMarkdownHtmlExportDraft?.action,
     resolvePromptAttachmentThumbnail,
     selectedArchivedKey,
+    sessionChatShareAvailable,
   ]);
   const renderChatVirtuosoItem = useCallback((rootDisplayItem: ChatDisplayIndexItem) => {
     const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
@@ -22258,16 +22395,12 @@ export function App() {
           onError={failMarkdownShareCapture}
         />
       ) : null}
-      {markdownImageExportRequest ? (
-        <MarkdownImageExportSurface
-          key={markdownImageExportRequest.id}
-          request={markdownImageExportRequest}
-          exportMode={isWide ? 'desktop' : 'mobile'}
-          markdownComponents={chatMarkdownComponents}
-          markdownUrlTransform={chatMarkdownUrlTransform}
-          onComplete={completeMarkdownImageExport}
-          onRenderError={failMarkdownImageExport}
-          onShareError={failMarkdownImageShare}
+      {chatShareCaptureTask ? (
+        <ChatShareCaptureSurface
+          key={chatShareCaptureTask.id}
+          request={chatShareCaptureTask}
+          onComplete={completeChatShareCapture}
+          onError={failChatShareCapture}
         />
       ) : null}
       {skillRetryNotice ? (

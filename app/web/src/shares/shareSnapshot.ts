@@ -50,6 +50,18 @@ export function createHtmlShareSnapshot({
   };
 }
 
+export function createChatShareSnapshot({
+  title,
+  html,
+  warnings = [],
+}: {
+  title: string;
+  html: string;
+  warnings?: ShareDependencyWarning[];
+}): ShareSnapshot {
+  return {kind: 'html', title, html, warnings};
+}
+
 export function inspectShareHtmlDependencies(source: string): ShareDependencyWarning[] {
   const warnings: ShareDependencyWarning[] = [];
   const seen = new Set<string>();

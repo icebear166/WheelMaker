@@ -62,6 +62,144 @@ func TestShareStoreCreatePublishesMetadataAndContent(t *testing.T) {
 	}
 }
 
+func TestShareStoreSchema2Sources(t *testing.T) {
+	now := time.Date(2026, 8, 11, 9, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		input      shareCreateInput
+		sourceType string
+		sessionID  string
+		turnIndex  int
+	}{
+		{
+			name: "chat response",
+			input: shareCreateInput{
+				SourceType: "chat_response", ProjectID: "hub:p", SessionID: "sess-1", TurnIndex: 9,
+				Title: "Answer", Expiry: "permanent", Encoding: "gzip+base64", Content: gzipBase64ForTest(t, "<p>answer</p>"),
+			},
+			sourceType: "chat_response",
+			sessionID:  "sess-1",
+			turnIndex:  9,
+		},
+		{
+			name: "chat session",
+			input: shareCreateInput{
+				SourceType: "chat_session", ProjectID: "hub:p", SessionID: "sess-2",
+				Title: "Session", Expiry: "permanent", Encoding: "gzip+base64", Content: gzipBase64ForTest(t, "<p>session</p>"),
+			},
+			sourceType: "chat_session",
+			sessionID:  "sess-2",
+		},
+	}
+
+	for index, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := newShareStore(shareStoreConfig{
+				stateDir: t.TempDir(),
+				now:      func() time.Time { return now },
+				random:   bytes.NewReader(bytes.Repeat([]byte{byte(0x31 + index)}, shareTokenBytes)),
+			})
+			result, err := store.create(test.input)
+			if err != nil {
+				t.Fatalf("create() error = %v", err)
+			}
+			if result.Record.Schema != 2 || result.Record.SourceType != test.sourceType || result.Record.SessionID != test.sessionID || result.Record.TurnIndex != test.turnIndex {
+				t.Fatalf("created record = %+v", result.Record)
+			}
+			if result.Record.Path != "" || result.Record.Kind != "" {
+				t.Fatalf("chat record has project-document fields: %+v", result.Record)
+			}
+			page, err := store.list("", 10)
+			if err != nil {
+				t.Fatalf("list() error = %v", err)
+			}
+			if len(page.Items) != 1 || page.Items[0].SourceType != test.sourceType || page.Items[0].SessionID != test.sessionID || page.Items[0].TurnIndex != test.turnIndex {
+				t.Fatalf("listed records = %+v", page.Items)
+			}
+		})
+	}
+}
+
+func TestShareStoreRejectsInvalidSourceCombinations(t *testing.T) {
+	validContent := gzipBase64ForTest(t, "<p>share</p>")
+	tests := []struct {
+		name  string
+		input shareCreateInput
+	}{
+		{
+			name:  "response missing session",
+			input: shareCreateInput{SourceType: "chat_response", ProjectID: "hub:p", TurnIndex: 1, Title: "Answer", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+		{
+			name:  "response non-positive turn",
+			input: shareCreateInput{SourceType: "chat_response", ProjectID: "hub:p", SessionID: "sess-1", Title: "Answer", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+		{
+			name:  "response with path",
+			input: shareCreateInput{SourceType: "chat_response", ProjectID: "hub:p", SessionID: "sess-1", TurnIndex: 1, Path: "chat.md", Title: "Answer", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+		{
+			name:  "session with kind",
+			input: shareCreateInput{SourceType: "chat_session", ProjectID: "hub:p", SessionID: "sess-1", Kind: "html", Title: "Session", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+		{
+			name:  "session with turn",
+			input: shareCreateInput{SourceType: "chat_session", ProjectID: "hub:p", SessionID: "sess-1", TurnIndex: 2, Title: "Session", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+		{
+			name:  "project missing path",
+			input: shareCreateInput{SourceType: "project_document", ProjectID: "hub:p", Kind: "markdown", Title: "Doc", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+		{
+			name:  "legacy project with session",
+			input: shareCreateInput{ProjectID: "hub:p", Path: "docs/a.md", Kind: "markdown", SessionID: "sess-1", Title: "Doc", Expiry: "1d", Encoding: "gzip+base64", Content: validContent},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := newShareStore(shareStoreConfig{stateDir: t.TempDir()})
+			if _, err := store.create(test.input); err == nil {
+				t.Fatalf("create(%+v) succeeded, want invalid source error", test.input)
+			}
+		})
+	}
+}
+
+func TestShareStorePreservesSchema1ProjectRecord(t *testing.T) {
+	now := time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC)
+	store := newShareStore(shareStoreConfig{stateDir: t.TempDir(), now: func() time.Time { return now }})
+	if err := store.ensure(); err != nil {
+		t.Fatal(err)
+	}
+	token := strings.Repeat("l", shareTokenLength)
+	metadataPath := filepath.Join(store.recordsDir, token+".json")
+	writeTestShareRecord(t, metadataPath, shareRecord{
+		Schema: 1, Token: token, Title: "Legacy", ProjectID: "hub:p", Path: "docs/legacy.md", Kind: "markdown",
+		CreatedAt: now.Add(-time.Hour), ExpiresAt: timePtr(now.Add(time.Hour)), SizeBytes: 6,
+	})
+	if err := os.WriteFile(store.publicPath(token), []byte("legacy"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.repair(); err != nil {
+		t.Fatalf("repair() error = %v", err)
+	}
+	page, err := store.list("", 10)
+	if err != nil {
+		t.Fatalf("list() error = %v", err)
+	}
+	if len(page.Items) != 1 || page.Items[0].Schema != 1 || page.Items[0].SourceType != "project_document" || page.Items[0].Path != "docs/legacy.md" || page.Items[0].Kind != "markdown" {
+		t.Fatalf("legacy list = %+v", page.Items)
+	}
+	metadata, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read legacy metadata: %v", err)
+	}
+	if bytes.Contains(metadata, []byte(`"sourceType"`)) {
+		t.Fatalf("legacy metadata was rewritten: %s", metadata)
+	}
+}
+
 func TestShareStoreRejectsOversizedDecodedContent(t *testing.T) {
 	store := newShareStore(shareStoreConfig{stateDir: t.TempDir()})
 	content := strings.Repeat("x", maxShareHTMLBytes+1)

@@ -56,6 +56,10 @@ export type MarkdownHtmlExportDocumentProps = {
   onImageWarning?: (warning: MarkdownHtmlImageWarning) => void;
 };
 
+export type MarkdownHtmlExportContentProps = MarkdownHtmlExportDocumentProps & {
+  className: string;
+};
+
 export type MarkdownHtmlExportSurfaceRequest = MarkdownHtmlExportDocumentProps & {
   id: number;
   title: string;
@@ -141,8 +145,9 @@ function MarkdownHtmlExportImage({
   );
 }
 
-export function MarkdownHtmlExportDocument({
+export function MarkdownHtmlExportContent({
   content,
+  className,
   themeMode = 'light',
   codeTheme = DEFAULT_CODE_THEME,
   codeFont = DEFAULT_CODE_FONT,
@@ -151,7 +156,7 @@ export function MarkdownHtmlExportDocument({
   codeTabSize = DEFAULT_CODE_TAB_SIZE,
   imageResolver,
   onImageWarning,
-}: MarkdownHtmlExportDocumentProps) {
+}: MarkdownHtmlExportContentProps) {
   const markdownCapabilities = useMarkdownCapabilityPlugins(content);
   const markdownComponents = useMemo<Components>(
     () => ({
@@ -201,7 +206,7 @@ export function MarkdownHtmlExportDocument({
 
   return (
     <div
-      className={`markdown-preview markdown-html-export-document ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}
+      className={className}
       data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
     >
       <ReactMarkdown
@@ -212,6 +217,15 @@ export function MarkdownHtmlExportDocument({
         {content}
       </ReactMarkdown>
     </div>
+  );
+}
+
+export function MarkdownHtmlExportDocument(props: MarkdownHtmlExportDocumentProps) {
+  return (
+    <MarkdownHtmlExportContent
+      {...props}
+      className={`markdown-preview markdown-html-export-document ${MARKDOWN_EXPORT_CONTENT_CLASS_NAME}`}
+    />
   );
 }
 

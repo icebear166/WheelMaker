@@ -174,6 +174,76 @@ function normalizeAgentTypes(agentTypes: unknown): string[] {
     .filter((item): item is string => !!item);
 }
 
+function validRegistryProjectSharePath(path: string, kind: 'markdown' | 'html'): boolean {
+  const normalized = path.replaceAll('\\', '/').trim();
+  if (!normalized || normalized.startsWith('/') || normalized.includes(':') || normalized.split('/').some(part => part === '..')) {
+    return false;
+  }
+  const extension = normalized.slice(normalized.lastIndexOf('.')).toLowerCase();
+  return kind === 'markdown'
+    ? extension === '.md' || extension === '.markdown'
+    : extension === '.html' || extension === '.htm';
+}
+
+function parseRegistryShareRecord(value: unknown): RegistryShareRecord | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const input = value as Record<string, unknown>;
+  if (
+    typeof input.token !== 'string' || !input.token ||
+    typeof input.projectId !== 'string' || !input.projectId.trim()
+  ) {
+    return null;
+  }
+  const common = {
+    token: input.token,
+    title: typeof input.title === 'string' ? input.title : '',
+    projectId: input.projectId,
+    createdAt: typeof input.createdAt === 'string' ? input.createdAt : '',
+    expiresAt: typeof input.expiresAt === 'string'
+      ? input.expiresAt
+      : input.expiresAt === null ? null : undefined,
+    sizeBytes: typeof input.sizeBytes === 'number' && Number.isFinite(input.sizeBytes)
+      ? input.sizeBytes
+      : 0,
+    url: typeof input.url === 'string' ? input.url : undefined,
+  };
+  const sourceType = input.sourceType === undefined
+    ? 'project_document'
+    : input.sourceType;
+  if (sourceType === 'project_document') {
+    const kind = input.kind === 'markdown' || input.kind === 'html' ? input.kind : null;
+    const path = typeof input.path === 'string' ? input.path : '';
+    if (
+      !kind || !validRegistryProjectSharePath(path, kind) ||
+      input.sessionId !== undefined || input.turnIndex !== undefined
+    ) {
+      return null;
+    }
+    return {...common, sourceType, path, kind};
+  }
+  if (sourceType !== 'chat_response' && sourceType !== 'chat_session') {
+    return null;
+  }
+  if (
+    typeof input.sessionId !== 'string' || !input.sessionId.trim() ||
+    input.path !== undefined || input.kind !== undefined
+  ) {
+    return null;
+  }
+  if (sourceType === 'chat_response') {
+    if (typeof input.turnIndex !== 'number' || !Number.isInteger(input.turnIndex) || input.turnIndex <= 0) {
+      return null;
+    }
+    return {...common, sourceType, sessionId: input.sessionId, turnIndex: input.turnIndex};
+  }
+  if (input.turnIndex !== undefined) {
+    return null;
+  }
+  return {...common, sourceType, sessionId: input.sessionId};
+}
+
 function normalizeDeviceSession(raw: unknown): RegistryDeviceSession | null {
   if (!raw || typeof raw !== 'object') {
     return null;
@@ -1220,21 +1290,8 @@ export class RegistryRepository {
       : {};
     const items = Array.isArray(body.items)
       ? body.items.flatMap(item => {
-        if (!item || typeof item !== 'object') return [];
-        const input = item as Record<string, unknown>;
-        if (typeof input.token !== 'string' || !input.token) return [];
-        const record: RegistryShareRecord = {
-          token: input.token,
-          title: typeof input.title === 'string' ? input.title : '',
-          projectId: typeof input.projectId === 'string' ? input.projectId : '',
-          path: typeof input.path === 'string' ? input.path : '',
-          kind: input.kind === 'html' ? 'html' : 'markdown',
-          createdAt: typeof input.createdAt === 'string' ? input.createdAt : '',
-          expiresAt: typeof input.expiresAt === 'string' ? input.expiresAt : input.expiresAt === null ? null : undefined,
-          sizeBytes: typeof input.sizeBytes === 'number' && Number.isFinite(input.sizeBytes) ? input.sizeBytes : 0,
-          url: typeof input.url === 'string' ? input.url : undefined,
-        };
-        return [record];
+        const record = parseRegistryShareRecord(item);
+        return record ? [record] : [];
       })
       : [];
     return {
