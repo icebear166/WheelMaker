@@ -25,7 +25,7 @@
 > 来源：2026-08-11 scope 对话契约（不落 spec）。
 
 - 待发送附件与已发送 prompt 附件统一为扁平横排 chip：左侧 32×32 缩略图（图片）或文件图标，右侧两行文本，整体高度约 40–44px；不再使用竖向缩略图卡片。
-- 待发送 chip 第一行为文件名（单行省略）；第二行为状态行：queued/uploading 显示进度 %，completed 显示大小，failed 以红色单行省略显示错误文本，完整错误经 `data-tooltip` 悬停可见——上传错误必须常态可读，不允许只藏在 tooltip 里。
+- 待发送 chip 第一行为文件名（单行省略）；第二行为状态行：queued 显示 `Ready`，uploading 显示进度 %，completed 显示大小，failed 以红色单行省略显示错误文本，完整错误经 `data-tooltip` 悬停可见——上传错误必须常态可读，不允许只藏在 tooltip 里。
 - 上传进度以 chip 底部 2px 细条表达；remove 按钮常驻 chip 右端，failed 时旁边提供 retry 图标按钮（重新入队）。
 - chip 宽度随内容自适应（约 160–260px），一行排列多个并自动换行，窄屏跟随同一形态。
 - 已发送 prompt chip 沿用同一几何：32×32 图、name + mime|size meta 两行；点击打开、上下文菜单与缩略图懒加载行为不变。
