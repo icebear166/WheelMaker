@@ -65,14 +65,8 @@ function ChatShareEntryView({
   imageResolver?: MarkdownHtmlImageResolver;
   onImageWarning?: (warning: MarkdownHtmlImageWarning) => void;
 }) {
-  return (
-    <section className={`chat-share-entry ${entry.role}`}>
-      <div className="chat-share-entry-heading">
-        <span className="chat-share-role">{entry.role === 'user' ? 'User' : 'Assistant'}</span>
-        {entry.status ? (
-          <span className={`chat-share-status ${entry.status}`}>{STATUS_LABELS[entry.status]}</span>
-        ) : null}
-      </div>
+  const content = (
+    <>
       <MarkdownHtmlExportContent
         {...markdownProps(snapshot, imageResolver, onImageWarning)}
         content={entry.markdown}
@@ -91,6 +85,16 @@ function ChatShareEntryView({
           ))}
         </ul>
       ) : null}
+    </>
+  );
+  return (
+    <section className={`chat-share-entry ${entry.role}`}>
+      {entry.status ? (
+        <div className="chat-share-status-row">
+          <span className={`chat-share-status ${entry.status}`}>{STATUS_LABELS[entry.status]}</span>
+        </div>
+      ) : null}
+      {entry.role === 'user' ? <div className="chat-share-prompt">{content}</div> : content}
     </section>
   );
 }

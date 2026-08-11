@@ -8,6 +8,10 @@ import {
   type ChatShareAction,
 } from './ChatShareMenu';
 
+type ExpectedChatShareMenuProps = React.ComponentProps<typeof ChatShareMenu> & {
+  workDetailsAvailable?: boolean;
+};
+
 type RenderedMenu = {
   container: HTMLDivElement;
   root: Root;
@@ -17,7 +21,7 @@ type RenderedMenu = {
 
 const mountedRoots: Root[] = [];
 
-async function renderMenu(extra: Partial<React.ComponentProps<typeof ChatShareMenu>> = {}): Promise<RenderedMenu> {
+async function renderMenu(extra: Partial<ExpectedChatShareMenuProps> = {}): Promise<RenderedMenu> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -69,6 +73,7 @@ describe('ChatShareMenu', () => {
     const trigger = rendered.container.querySelector<HTMLButtonElement>('[aria-label="Share response or session"]')!;
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.querySelector('svg')?.getAttribute('data-icon-name')).toBe('share2');
 
     const menu = await openMenu(rendered);
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
@@ -82,8 +87,40 @@ describe('ChatShareMenu', () => {
     ]);
 
     await click(menu.querySelector<HTMLButtonElement>('[aria-label="Share current response as HTML file"]')!);
-    expect(rendered.onSelect).toHaveBeenCalledWith({scope: 'response', format: 'html'});
+    expect(rendered.onSelect).toHaveBeenCalledWith({
+      scope: 'response',
+      format: 'html',
+      includeWorkDetails: false,
+    });
     expect(document.body.querySelector('[role="menu"]')).toBeNull();
+  });
+
+  test('offers work details only when supported and resets it every time the menu opens', async () => {
+    const rendered = await renderMenu({workDetailsAvailable: true});
+    let menu = await openMenu(rendered);
+    let toggle = menu.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"][aria-label="Include work details"]')!;
+
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    await click(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    await click(menu.querySelector<HTMLButtonElement>('[aria-label="Share full session as image"]')!);
+    expect(rendered.onSelect).toHaveBeenCalledWith({
+      scope: 'session',
+      format: 'image',
+      includeWorkDetails: true,
+    });
+
+    menu = await openMenu(rendered);
+    toggle = menu.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"][aria-label="Include work details"]')!;
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+
+  test('does not expose work details for sessions without lifecycle support', async () => {
+    const rendered = await renderMenu();
+    const menu = await openMenu(rendered);
+
+    expect(menu.querySelector('[aria-label="Include work details"]')).toBeNull();
   });
 
   test('uses the shared mobile sheet hierarchy with the same actions', async () => {
@@ -94,6 +131,7 @@ describe('ChatShareMenu', () => {
     expect(menu.className).toContain('sl-sheet');
     expect(menu.querySelector('.mobile-project-sheet-grip')).toBeTruthy();
     expect(menu.querySelector('.wide-project-action-title-main')?.textContent).toBe('Share');
+    expect(menu.querySelector('.session-menu-header-icon')?.getAttribute('data-icon-name')).toBe('share2');
     expect(menu.querySelector('[aria-label="Close share menu"]')).toBeTruthy();
     expect(menu.querySelectorAll('[role="menuitem"]')).toHaveLength(6);
   });
@@ -106,7 +144,11 @@ describe('ChatShareMenu', () => {
     expect(items.slice(0, 3).every(item => item.disabled)).toBe(true);
     expect(items.slice(3).every(item => !item.disabled)).toBe(true);
     await click(menu.querySelector<HTMLButtonElement>('[aria-label="Share full session as public URL"]')!);
-    expect(rendered.onSelect).toHaveBeenCalledWith({scope: 'session', format: 'public_url'});
+    expect(rendered.onSelect).toHaveBeenCalledWith({
+      scope: 'session',
+      format: 'public_url',
+      includeWorkDetails: false,
+    });
   });
 
   test('supports menu keyboard navigation and restores trigger focus on Escape', async () => {

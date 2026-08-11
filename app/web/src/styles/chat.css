@@ -5137,6 +5137,59 @@ li.chat-reply-target::marker {
   gap: 3px;
 }
 
+.chat-share-menu-work-details {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  margin-bottom: 3px;
+  padding: 6px 11px;
+  border: 0;
+  border-bottom: 1px solid var(--border-faint);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-share-menu-work-details-check {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  color: var(--surface-canvas);
+}
+
+.chat-share-menu-work-details[aria-checked='true'] .chat-share-menu-work-details-check {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+}
+
+.chat-share-menu-work-details-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.chat-share-menu-work-details-copy > :last-child {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.chat-share-menu-work-details:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
 .chat-share-menu-group {
   padding: 4px 3px 5px 8px;
   border-left: 2px solid color-mix(in srgb, var(--accent-primary) 45%, transparent);
@@ -5196,6 +5249,11 @@ li.chat-reply-target::marker {
 }
 
 @media (hover: hover) {
+  .chat-share-menu-work-details:hover {
+    color: var(--text-primary);
+    background: var(--hover);
+  }
+
   .chat-share-menu-action:hover:not(:disabled) {
     background: var(--hover);
     color: var(--text-primary);

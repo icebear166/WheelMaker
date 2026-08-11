@@ -422,8 +422,13 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('reserveResponseImageShare,');
     expect(mainTsx).toContain("} from '../chat/export/responseImageOutput';");
     expect(mainTsx).toContain('const buildFrozenChatShareSnapshot = useCallback');
-    expect(mainTsx).toContain('buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context)');
-    expect(mainTsx).toContain('buildSessionChatShareSnapshot(selectedFullChatMessages, context)');
+    expect(mainTsx).toContain('const selectedChatMessageLifecycleSupported = archivedMode');
+    expect(mainTsx).toContain('hasMessageLifecycleFeature(archivedPreview?.session, true)');
+    expect(mainTsx).toContain('hasMessageLifecycleFeature(selectedChatSession)');
+    expect(mainTsx).toContain('includeWorkDetails: action.includeWorkDetails');
+    expect(mainTsx).toContain('buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context, contentOptions)');
+    expect(mainTsx).toContain('buildSessionChatShareSnapshot(selectedFullChatMessages, context, contentOptions)');
+    expect(mainTsx).toContain('shareWorkDetailsAvailable={selectedChatMessageLifecycleSupported}');
     expect(mainTsx).toContain('const [toastMessage, setToastMessage] = useState(\'\');');
     expect(mainTsx).toContain("if (output.status === 'copied') {");
     expect(mainTsx).toContain("setToastMessage('Image copied to clipboard.');");
@@ -3025,8 +3030,11 @@ describe('chat share orchestration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain('const buildFrozenChatShareSnapshot = useCallback');
-    expect(mainTsx).toContain('buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context)');
-    expect(mainTsx).toContain('buildSessionChatShareSnapshot(selectedFullChatMessages, context)');
+    expect(mainTsx).toContain('const selectedChatMessageLifecycleSupported = archivedMode');
+    expect(mainTsx).toContain('includeWorkDetails: action.includeWorkDetails');
+    expect(mainTsx).toContain('buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context, contentOptions)');
+    expect(mainTsx).toContain('buildSessionChatShareSnapshot(selectedFullChatMessages, context, contentOptions)');
+    expect(mainTsx).toContain('shareWorkDetailsAvailable={selectedChatMessageLifecycleSupported}');
     expect(mainTsx).toContain("const selectedFullChatMessages = archivedMode");
     expect(mainTsx).toContain("sourceType: action.scope === 'response' ? 'chat_response' : 'chat_session'");
     expect(mainTsx).toContain("mode: 'image'");

@@ -311,6 +311,7 @@ export type ChatTurnViewProps = {
   shareMenuMode?: 'popover' | 'sheet';
   shareResponseDisabled?: boolean;
   shareSessionDisabled?: boolean;
+  shareWorkDetailsAvailable?: boolean;
   shareBusyAction?: ChatShareAction | null;
   forkSupported?: boolean;
   forkCurrentSessionSupported?: boolean;
@@ -497,6 +498,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   shareMenuMode = 'popover',
   shareResponseDisabled,
   shareSessionDisabled = true,
+  shareWorkDetailsAvailable = false,
   shareBusyAction = null,
   forkSupported = false,
   forkCurrentSessionSupported = false,
@@ -1015,6 +1017,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 mode={shareMenuMode}
                 responseDisabled={shareResponseDisabled ?? copyDisabled}
                 sessionDisabled={shareSessionDisabled}
+                workDetailsAvailable={shareWorkDetailsAvailable}
                 busyAction={shareBusyAction}
                 onSelect={action => onSharePromptDone(message.turnIndex, action)}
               />

@@ -98,7 +98,7 @@ describe('chat share document', () => {
     expect(tree.root.findAllByProps({className: 'chat-share-header'})).toHaveLength(0);
   });
 
-  test('renders ordered conversation roles, metadata, statuses, and attachment labels', async () => {
+  test('renders prompts as chat-like bubbles and assistant answers without role headings', async () => {
     let tree!: ReactTestRenderer;
     await act(async () => {
       tree = create(<ChatShareDocument snapshot={snapshot('session')} />);
@@ -106,7 +106,11 @@ describe('chat share document', () => {
 
     expect(tree.root.findByProps({className: 'chat-share-title'}).children).toEqual(['Research <script>']);
     expect(tree.root.findByProps({className: 'chat-share-timestamp'}).props.dateTime).toBe('2026-08-11T08:30:00.000Z');
-    expect(tree.root.findAllByProps({className: 'chat-share-role'}).map(node => node.children.join(''))).toEqual(['User', 'Assistant']);
+    expect(tree.root.findAllByProps({className: 'chat-share-role'})).toHaveLength(0);
+    const userEntry = tree.root.findByProps({className: 'chat-share-entry user'});
+    const assistantEntry = tree.root.findByProps({className: 'chat-share-entry assistant'});
+    expect(userEntry.findAllByProps({className: 'chat-share-prompt'})).toHaveLength(1);
+    expect(assistantEntry.findAllByProps({className: 'chat-share-prompt'})).toHaveLength(0);
     expect(tree.root.findByProps({className: 'chat-share-status failed'}).children).toEqual(['Failed']);
     expect(tree.root.findAllByProps({className: 'chat-share-attachment-label'}).map(node => node.children.join(''))).toEqual([
       'report.pdf',
@@ -130,9 +134,10 @@ describe('chat share document', () => {
     expect(html).toContain('<title>Research &lt;script&gt;</title>');
     expect(html).toContain('class="wheelmaker-markdown-export wheelmaker-chat-share"');
     expect(html).toContain('.wheelmaker-chat-share .chat-share-entry {');
+    expect(html).toContain('.wheelmaker-chat-share .chat-share-prompt {');
+    expect(html).toContain('border-radius: 10px;');
     expect(html).toContain('Research &lt;script&gt;');
-    expect(html).toContain('User');
-    expect(html).toContain('Assistant');
+    expect(html).not.toContain('chat-share-role');
     expect(html).toContain('Failed');
     expect(html).toContain('report.pdf');
     expect(html).not.toContain('data-markdown-export-pending');

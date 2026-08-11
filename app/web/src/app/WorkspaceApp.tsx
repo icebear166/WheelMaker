@@ -17124,8 +17124,12 @@ export function App() {
     });
   };
 
+  const selectedChatMessageLifecycleSupported = archivedMode
+    ? hasMessageLifecycleFeature(archivedPreview?.session, true)
+    : hasMessageLifecycleFeature(selectedChatSession);
+
   const buildFrozenChatShareSnapshot = useCallback((
-    scope: ChatShareAction['scope'],
+    action: Pick<ChatShareAction, 'scope' | 'includeWorkDetails'>,
     doneTurnIndex: number,
   ): ChatShareSnapshot | null => {
     const sessionKey = archivedMode ? selectedArchivedKey : selectedChatKey;
@@ -17147,9 +17151,13 @@ export function App() {
         codeTabSize,
       },
     };
-    return scope === 'response'
-      ? buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context)
-      : buildSessionChatShareSnapshot(selectedFullChatMessages, context);
+    const contentOptions = {
+      messageLifecycleSupported: selectedChatMessageLifecycleSupported,
+      includeWorkDetails: action.includeWorkDetails,
+    };
+    return action.scope === 'response'
+      ? buildResponseChatShareSnapshot(selectedFullChatMessages, doneTurnIndex, context, contentOptions)
+      : buildSessionChatShareSnapshot(selectedFullChatMessages, context, contentOptions);
   }, [
     archivedMode,
     archivedPreview?.session,
@@ -17163,18 +17171,19 @@ export function App() {
     selectedArchivedKey,
     selectedChatDisplayTitle,
     selectedChatKey,
+    selectedChatMessageLifecycleSupported,
     selectedFullChatMessages,
     themeMode,
   ]);
 
   const sessionChatShareAvailable = useMemo(
-    () => buildFrozenChatShareSnapshot('session', 0) !== null,
+    () => buildFrozenChatShareSnapshot({scope: 'session', includeWorkDetails: false}, 0) !== null,
     [buildFrozenChatShareSnapshot],
   );
 
   const handleChatShareAction = async (doneTurnIndex: number, action: ChatShareAction) => {
     if (chatShareCaptureTask) return;
-    const snapshot = buildFrozenChatShareSnapshot(action.scope, doneTurnIndex);
+    const snapshot = buildFrozenChatShareSnapshot(action, doneTurnIndex);
     if (!snapshot) return;
     setError('');
 
@@ -17383,7 +17392,7 @@ export function App() {
           snapshot: source.snapshot,
           widthMode: isWide ? 'desktop' : 'mobile',
           imageResolver: createMarkdownImageResolver(source.projectId, ''),
-          action: {scope: source.snapshot.scope, format: 'public_url'},
+          action: {scope: source.snapshot.scope, format: 'public_url', includeWorkDetails: false},
           purpose: 'public',
         });
       });
@@ -18091,6 +18100,7 @@ export function App() {
             chatShareCaptureTask !== null ||
             promptMarkdownHtmlExportDraft?.action.scope === 'session'
           }
+          shareWorkDetailsAvailable={selectedChatMessageLifecycleSupported}
           shareBusyAction={chatShareCaptureTask?.action ?? promptMarkdownHtmlExportDraft?.action ?? null}
           forkSupported={
             selectedChatSession?.sessionActions?.fork?.supported === true &&
@@ -18266,6 +18276,7 @@ export function App() {
             chatShareCaptureTask !== null ||
             promptMarkdownHtmlExportDraft?.action.scope === 'session'
           }
+          shareWorkDetailsAvailable={selectedChatMessageLifecycleSupported}
           shareBusyAction={chatShareCaptureTask?.action ?? promptMarkdownHtmlExportDraft?.action ?? null}
           onCopyPromptDone={message.method === 'prompt_done'
             ? () => copyPromptDoneMarkdownEvent(turnIndex).catch(() => undefined)

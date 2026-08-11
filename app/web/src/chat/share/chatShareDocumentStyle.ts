@@ -18,23 +18,25 @@ export const CHAT_SHARE_DOCUMENT_STYLE = `
 }
 .wheelmaker-chat-share .chat-share-entry {
   margin: 0;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 14px 0;
 }
-.wheelmaker-chat-share .chat-share-entry:last-child { border-bottom: 0; }
-.wheelmaker-chat-share .chat-share-entry-heading {
+.wheelmaker-chat-share .chat-share-entry + .chat-share-entry { margin-top: 8px; }
+.wheelmaker-chat-share .chat-share-prompt {
+  display: flow-root;
+  width: fit-content;
+  max-width: min(920px, calc(100% - 28px));
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-panel));
+  color: color-mix(in srgb, var(--text-primary) 78%, var(--accent-primary));
+  overflow-wrap: anywhere;
+}
+.wheelmaker-chat-share .chat-share-status-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
   margin-bottom: 10px;
-}
-.wheelmaker-chat-share .chat-share-role {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
 }
 .wheelmaker-chat-share .chat-share-status {
   padding: 2px 7px;

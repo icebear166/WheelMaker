@@ -11,12 +11,14 @@ export type ChatShareFormat = 'image' | 'html' | 'public_url';
 export type ChatShareAction = Readonly<{
   scope: ChatShareScope;
   format: ChatShareFormat;
+  includeWorkDetails: boolean;
 }>;
 
 export type ChatShareMenuProps = {
   mode: 'popover' | 'sheet';
   responseDisabled: boolean;
   sessionDisabled: boolean;
+  workDetailsAvailable?: boolean;
   busyAction?: ChatShareAction | null;
   onSelect: (action: ChatShareAction) => void;
   onOpenChange?: (open: boolean) => void;
@@ -44,12 +46,14 @@ export function ChatShareMenu({
   mode,
   responseDisabled,
   sessionDisabled,
+  workDetailsAvailable = false,
   busyAction = null,
   onSelect,
   onOpenChange,
   portal = true,
 }: ChatShareMenuProps) {
   const [open, setOpen] = useState(false);
+  const [includeWorkDetails, setIncludeWorkDetails] = useState(false);
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +67,7 @@ export function ChatShareMenu({
   const {dragOffset, dragging, releaseDurationMs, handleProps} = useSheetDragToDismiss(() => close());
 
   const openMenu = useCallback(() => {
+    setIncludeWorkDetails(false);
     if (mode === 'popover' && typeof window !== 'undefined') {
       const placement = resolveWideProjectActionPopoverPlacement({
         anchorRect: triggerRef.current?.getBoundingClientRect() ?? null,
@@ -133,7 +138,11 @@ export function ChatShareMenu({
       <div className="chat-share-menu-group-label">{label}</div>
       <div className="chat-share-menu-group-actions">
         {SHARE_FORMATS.map(item => {
-          const action = {scope, format: item.format} as const;
+          const action = {
+            scope,
+            format: item.format,
+            includeWorkDetails: workDetailsAvailable && includeWorkDetails,
+          } as const;
           const busy = actionsEqual(busyAction, action);
           const scopeLabel = scope === 'response' ? 'current response' : 'full session';
           return (
@@ -191,7 +200,7 @@ export function ChatShareMenu({
         {mode === 'sheet' ? <div className="mobile-project-sheet-grip" aria-hidden="true" {...dragHandleProps} /> : null}
         {mode === 'sheet' ? (
           <div className="session-menu-header wide-project-action-title" {...dragHandleProps}>
-            <ChatIcon name="share" className="session-menu-header-icon" />
+            <ChatIcon name="share2" className="session-menu-header-icon" />
             <span className="wide-project-action-title-copy">
               <span className="wide-project-action-title-main">Share</span>
               <span className="wide-project-action-title-sub">Choose content and format</span>
@@ -208,6 +217,24 @@ export function ChatShareMenu({
           </div>
         ) : null}
         <div className="chat-share-menu-body">
+          {workDetailsAvailable ? (
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              className="chat-share-menu-work-details"
+              aria-label="Include work details"
+              aria-checked={includeWorkDetails}
+              onClick={() => setIncludeWorkDetails(value => !value)}
+            >
+              <span className="chat-share-menu-work-details-check" aria-hidden="true">
+                {includeWorkDetails ? <ChatIcon name="check" size={11} /> : null}
+              </span>
+              <span className="chat-share-menu-work-details-copy">
+                <span>Include work details</span>
+                <span>Commentary + final answer</span>
+              </span>
+            </button>
+          ) : null}
           {renderGroup('response', 'Current response', responseDisabled)}
           {renderGroup('session', 'Full session', sessionDisabled)}
         </div>
@@ -227,7 +254,7 @@ export function ChatShareMenu({
         data-tooltip="Share response or session"
         onClick={() => open ? close() : openMenu()}
       >
-        <ChatIcon name={busyAction ? 'loader' : 'share'} size={13} spin={!!busyAction} />
+        <ChatIcon name={busyAction ? 'loader' : 'share2'} size={13} spin={!!busyAction} />
       </button>
       {panel && portal && typeof document !== 'undefined'
         ? createPortal(panel, document.body)

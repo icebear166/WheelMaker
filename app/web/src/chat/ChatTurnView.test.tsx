@@ -165,13 +165,17 @@ describe('ChatTurnView sharing actions', () => {
     expect(tree.root.findAllByProps({'aria-label': 'Export response markdown image'})).toHaveLength(0);
     expect(tree.root.findAllByProps({'aria-label': 'Export response markdown as HTML'})).toHaveLength(0);
     const trigger = tree.root.findByProps({'aria-label': 'Share response or session'});
-    expect(trigger.findByProps({'data-icon-name': 'share'})).toBeTruthy();
+    expect(trigger.findByProps({'data-icon-name': 'share2'})).toBeTruthy();
 
     await act(async () => trigger.props.onClick());
     const action = tree.root.findByProps({'aria-label': 'Share current response as image'});
     await act(async () => action.props.onClick());
 
-    expect(onSharePromptDone).toHaveBeenCalledWith(2, {scope: 'response', format: 'image'});
+    expect(onSharePromptDone).toHaveBeenCalledWith(2, {
+      scope: 'response',
+      format: 'image',
+      includeWorkDetails: false,
+    });
   });
 });
 
