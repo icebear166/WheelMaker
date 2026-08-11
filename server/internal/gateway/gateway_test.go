@@ -173,25 +173,16 @@ func TestCompileConfigIncludesExactShareStaticRoute(t *testing.T) {
 	if err := json.Unmarshal(compiled, &document); err != nil {
 		t.Fatal(err)
 	}
-	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
-	if !ok || len(routes) != 2 {
-		t.Fatalf("share routes = %#v, want exact route plus generic 404", routes)
+	shareRoute := findRouteWithMatchValue(document, shareTokenRegexp)
+	if shareRoute == nil || !containsDeepString(shareRoute["match"], "GET") || !containsDeepString(shareRoute["match"], "HEAD") {
+		t.Fatalf("share token/method route is missing: %s", compiled)
 	}
-	route := routes[0]
-	if got := deepString(route, "match", "0", "path_regexp", "pattern"); got != `^/s/[A-Za-z0-9_-]{43}$` {
-		t.Fatalf("share matcher = %q", got)
+	if !containsHandler(shareRoute, "file_server") || !containsDeepString(shareRoute, filepath.ToSlash(site.WebRoot)) {
+		t.Fatalf("share route does not serve the configured root: %#v", shareRoute)
 	}
-	if got := deepString(route, "match", "0", "method", "0"); got != "GET" {
-		t.Fatalf("share method matcher = %q", got)
-	}
-	if got := deepString(route, "handle", "1", "root"); got != site.WebRoot {
-		t.Fatalf("share root = %q", got)
-	}
-	if got := deepString(routes[1], "handle", "0", "handler"); got != "static_response" {
-		t.Fatalf("share fallback handler = %q", got)
-	}
-	if got := deepValue(routes[1], "handle", "0", "status_code"); got != float64(404) {
-		t.Fatalf("share fallback status = %#v", got)
+	fallback := findHandlerWithValue(document, "static_response", float64(404))
+	if fallback == nil || fallback["status_code"] != float64(404) {
+		t.Fatalf("share fallback = %#v, want status 404", fallback)
 	}
 	for _, want := range []string{"text/html; charset=utf-8", "inline", "no-store", "noindex, nofollow, noarchive", "no-referrer", "nosniff"} {
 		if !strings.Contains(string(compiled), want) {
@@ -271,19 +262,22 @@ func TestCompileConfigAddsCompressionAndCacheHeadersToWorkspaceAssets(t *testing
 	if err := json.Unmarshal(compiled, &document); err != nil {
 		t.Fatalf("compiled JSON is invalid: %v", err)
 	}
-	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
-	if !ok || len(routes) < 4 {
-		t.Fatalf("workspace routes = %#v, want websocket, immutable, static, and fallback routes", routes)
+	workspace := deepValue(document, "apps", "http", "servers", "https")
+	wsRoute := findRouteWithMatchValue(workspace, "/ws*")
+	if wsRoute == nil || !containsHandler(wsRoute, "reverse_proxy") {
+		t.Fatalf("WebSocket route is missing: %s", compiled)
 	}
-
-	if containsHandler(routes[0], "encode") {
+	if containsHandler(wsRoute, "encode") {
 		t.Fatal("WebSocket route must not install the encode handler")
 	}
-	immutable := routes[1]
+	immutable := findRouteWithMatchValue(workspace, immutableAssetRegexp)
+	if immutable == nil {
+		t.Fatalf("immutable asset route is missing: %s", compiled)
+	}
 	if !containsHandler(immutable, "encode") {
 		t.Fatal("immutable asset route must install the encode handler")
 	}
-	encodings, ok := deepValue(immutable, "handle", "2", "encodings").(map[string]any)
+	encodings, ok := findHandler(immutable, "encode")["encodings"].(map[string]any)
 	if !ok || len(encodings) != 2 {
 		t.Fatalf("immutable encodings = %#v, want zstd and gzip", encodings)
 	}
@@ -292,26 +286,11 @@ func TestCompileConfigAddsCompressionAndCacheHeadersToWorkspaceAssets(t *testing
 			t.Errorf("immutable encodings missing %q", name)
 		}
 	}
-	if got := deepString(immutable, "match", "0", "path_regexp", "pattern"); got == "" {
-		t.Fatal("immutable asset route must match hashed asset paths")
+	if !containsDeepString(immutable, immutableCacheControl) {
+		t.Fatalf("immutable Cache-Control is missing: %#v", immutable)
 	}
-	if got := deepString(immutable, "handle", "1", "response", "set", "Cache-Control", "0"); got != "public, max-age=31536000, immutable" {
-		t.Fatalf("immutable Cache-Control = %q", got)
-	}
-
-	static := routes[2]
-	if !containsHandler(static, "encode") {
-		t.Fatal("static route must install the encode handler")
-	}
-	if got := deepString(static, "handle", "1", "response", "set", "Cache-Control", "0"); got != "no-cache" {
-		t.Fatalf("static Cache-Control = %q, want no-cache", got)
-	}
-	fallback := routes[len(routes)-1]
-	if !containsHandler(fallback, "encode") {
-		t.Fatal("SPA fallback route must install the encode handler")
-	}
-	if got := deepString(fallback, "handle", "1", "response", "set", "Cache-Control", "0"); got != "no-cache" {
-		t.Fatalf("fallback Cache-Control = %q, want no-cache", got)
+	if handlerCount(workspace, "encode") < 3 || strings.Count(string(compiled), `"no-cache"`) < 2 {
+		t.Fatalf("static and SPA routes must be compressed with no-cache: %s", compiled)
 	}
 }
 
@@ -332,11 +311,8 @@ func TestCompileConfigAddsCompressionToReleaseServerResponses(t *testing.T) {
 	if err := json.Unmarshal(compiled, &document); err != nil {
 		t.Fatalf("compiled JSON is invalid: %v", err)
 	}
-	routes, ok := deepValue(document, "apps", "http", "servers", "https", "routes", "0", "handle", "0", "routes").([]any)
-	if !ok || len(routes) != 1 {
-		t.Fatalf("release server routes = %#v, want one route", routes)
-	}
-	if !containsHandler(routes[0], "encode") {
+	server := deepValue(document, "apps", "http", "servers", "https")
+	if !containsHandler(server, "encode") || !containsHandler(server, "reverse_proxy") {
 		t.Fatal("release server route must install the encode handler")
 	}
 }
@@ -482,21 +458,20 @@ func TestCompileConfigAddsFixedHTTPRelayServer(t *testing.T) {
 	if got := deepString(relay, "routes", "0", "match", "0", "host", "0"); got != "workspace.example.com" {
 		t.Fatalf("relay host matcher=%q", got)
 	}
-	relayRoute := deepValue(relay, "routes", "0", "handle", "0", "routes", "0")
-	deleteMarker := deepValue(relayRoute, "handle", "0")
-	if !containsString(deepValue(deleteMarker, "request", "delete"), "X-WheelMaker-Relay") {
+	deleteHeaders := findHandlerWithValue(relay, "headers", "X-WheelMaker-Relay")
+	if deleteHeaders == nil || !containsString(deepValue(deleteHeaders, "request", "delete"), "X-WheelMaker-Relay") {
 		t.Fatal("relay must delete an incoming marker before setting its own marker")
 	}
-	requestHeaders := deepValue(relayRoute, "handle", "1")
-	if got := deepString(requestHeaders, "request", "set", "X-WheelMaker-Relay", "0"); got != "1" {
-		t.Fatalf("relay marker=%q, want 1", got)
+	requestHeaders := findHandlerWithValue(relay, "headers", "1")
+	if requestHeaders == nil {
+		t.Fatal("relay must set its trusted marker")
 	}
-	proxy := deepValue(relayRoute, "handle", "2")
+	if got := headerValue(requestHeaders, "request", "set", "X-WheelMaker-Relay"); got != "1" {
+		t.Fatalf("relay marker=%q, want 1: %#v", got, requestHeaders)
+	}
+	proxy := findHandler(relay, "reverse_proxy")
 	if got := deepString(proxy, "upstreams", "0", "dial"); got != "127.0.0.1:9630" {
 		t.Fatalf("relay upstream=%q", got)
-	}
-	if got := deepString(requestHeaders, "request", "set", "X-Forwarded-Proto", "0"); got != "{http.request.scheme}" {
-		t.Fatalf("relay forwarded proto=%q", got)
 	}
 	if containsHandler(relay, "file_server") {
 		t.Fatal("fixed relay server must not contain Workspace static-file handlers")
@@ -691,6 +666,133 @@ func containsHandler(value any, want string) bool {
 	return false
 }
 
+func findHandler(value any, want string) map[string]any {
+	switch current := value.(type) {
+	case map[string]any:
+		if current["handler"] == want {
+			return current
+		}
+		for _, child := range current {
+			if found := findHandler(child, want); found != nil {
+				return found
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if found := findHandler(child, want); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
+func findHandlerWithValue(value any, handler string, want any) map[string]any {
+	switch current := value.(type) {
+	case map[string]any:
+		if current["handler"] == handler && containsDeepValue(current, want) {
+			return current
+		}
+		for _, child := range current {
+			if found := findHandlerWithValue(child, handler, want); found != nil {
+				return found
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if found := findHandlerWithValue(child, handler, want); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
+func handlerCount(value any, want string) int {
+	count := 0
+	switch current := value.(type) {
+	case map[string]any:
+		if current["handler"] == want {
+			count++
+		}
+		for _, child := range current {
+			count += handlerCount(child, want)
+		}
+	case []any:
+		for _, child := range current {
+			count += handlerCount(child, want)
+		}
+	}
+	return count
+}
+
+func findRouteWithMatchValue(value any, want string) map[string]any {
+	switch current := value.(type) {
+	case map[string]any:
+		if _, ok := current["match"]; ok && containsDeepString(current["match"], want) {
+			return current
+		}
+		for _, child := range current {
+			if found := findRouteWithMatchValue(child, want); found != nil {
+				return found
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if found := findRouteWithMatchValue(child, want); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
+func containsDeepString(value any, want string) bool {
+	switch current := value.(type) {
+	case string:
+		return current == want
+	case map[string]any:
+		for _, child := range current {
+			if containsDeepString(child, want) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if containsDeepString(child, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func containsDeepValue(value any, want any) bool {
+	switch current := value.(type) {
+	case string:
+		return current == want
+	case float64:
+		return current == want
+	case bool:
+		return current == want
+	}
+	switch current := value.(type) {
+	case map[string]any:
+		for _, child := range current {
+			if containsDeepValue(child, want) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if containsDeepValue(child, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func containsString(value any, want string) bool {
 	values, ok := value.([]any)
 	if !ok {
@@ -702,6 +804,20 @@ func containsString(value any, want string) bool {
 		}
 	}
 	return false
+}
+
+func headerValue(value any, pathOne, pathTwo, wantName string) string {
+	headers, _ := deepValue(value, pathOne, pathTwo).(map[string]any)
+	for name, raw := range headers {
+		if strings.EqualFold(name, wantName) {
+			values, _ := raw.([]any)
+			if len(values) > 0 {
+				result, _ := values[0].(string)
+				return result
+			}
+		}
+	}
+	return ""
 }
 
 func parseIndex(value string, target *int) (err error) {

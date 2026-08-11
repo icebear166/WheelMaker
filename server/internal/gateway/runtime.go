@@ -14,14 +14,19 @@ import (
 	"time"
 
 	"github.com/caddyserver/caddy/v2"
+	"github.com/caddyserver/caddy/v2/caddyconfig"
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
 	shared "github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type ConfigBundle struct {
-	Global GlobalConfig
-	Sites  []SiteConfig
-	JSON   []byte
+	Global       GlobalConfig
+	Sites        []SiteConfig
+	JSON         []byte
+	Source       []byte
+	Warnings     []caddyconfig.Warning
+	Dependencies []string
+	Fingerprint  string
 }
 
 func LoadBundle(home string) (ConfigBundle, error) {
@@ -43,11 +48,19 @@ func LoadBundle(home string) (ConfigBundle, error) {
 		return ConfigBundle{}, fmt.Errorf("merged Gateway config: %w", err)
 	}
 	sites := sitesFromGlobal(global, paths)
-	compiled, err := CompileConfigAt(global, sites, paths.DataDir)
+	candidate, err := compileCaddyfileCandidate(global, sites, paths.DataDir, paths.CustomSitesRoot)
 	if err != nil {
 		return ConfigBundle{}, err
 	}
-	return ConfigBundle{Global: global, Sites: sites, JSON: compiled}, nil
+	return ConfigBundle{
+		Global:       global,
+		Sites:        sites,
+		JSON:         candidate.JSON,
+		Source:       candidate.Source,
+		Warnings:     candidate.Warnings,
+		Dependencies: candidate.Dependencies,
+		Fingerprint:  candidate.Fingerprint,
+	}, nil
 }
 
 func loadGlobalFile(path string) (GlobalConfig, error) {

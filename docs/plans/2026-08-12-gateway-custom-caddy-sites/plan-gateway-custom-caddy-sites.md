@@ -126,7 +126,7 @@ After verification passes, invoke `git-workflow` in `checkpoint` mode for the si
 
 **Acceptance:** `LoadBundle` deterministically imports top-level `sites/*.caddy`, preserves standard site-level Caddyfile semantics and source diagnostics, produces one valid JSON config containing managed and custom routes, tracks all source dependencies under `sites`, and rejects global options, non-embedded modules, managed hostname duplication, catch-all interception, and reserved listener use.
 
-- [ ] **Step 1: Add failing happy-path adapter tests**
+- [x] **Step 1: Add failing happy-path adapter tests**
 
 In existing Gateway tests, create a temporary Home with schema-2/Hub config plus custom files that exercise a unique HTTPS hostname, `reverse_proxy`, WebSocket-compatible proxying, `file_server`, matcher/`handle`, `rewrite`, `header`, a named snippet imported by a site, an imported nested file, and `tls internal`. Assert:
 
@@ -145,31 +145,31 @@ if err := ValidateJSON(bundle.JSON); err != nil { t.Fatal(err) }
 
 Compile the same disk state twice and assert equal JSON and equal ordered dependency paths.
 
-- [ ] **Step 2: Run happy-path tests to establish RED**
+- [x] **Step 2: Run happy-path tests to establish RED**
 
 Run: `go test ./internal/gateway -run 'TestLoadBundleIncludesCustomCaddySites|TestCustomCaddyCompilationIsDeterministic'`
 
 Expected: FAIL because custom Caddyfile loading/adaptation is not implemented.
 
-- [ ] **Step 3: Introduce the custom-source and adapted-candidate model**
+- [x] **Step 3: Introduce the custom-source and adapted-candidate model**
 
 Create `caddyfile.go` with focused types for source files/dependencies, adapter warnings, and the adapted candidate. Enumerate only top-level `*.caddy` entrypoints in lexical path order; allow native imports/snippets while requiring every imported file resolved from user input to remain under `CustomSitesRoot`, so recursive directory hashing covers content and import-glob membership deterministically. Preserve Caddy token file/line metadata in returned warnings/errors.
 
-- [ ] **Step 4: Render the existing managed behavior as controlled Caddyfile source**
+- [x] **Step 4: Render the existing managed behavior as controlled Caddyfile source**
 
 Refactor the compiler so the synthetic root owns exactly one global options block and emits Registry, Release, Share, and Relay routes with the existing matcher order, static roots, upstreams, headers, cache rules, compression, SPA fallback, redirects, TLS certificate policy, Relay marker replacement, admin `127.0.0.1:2019`, storage root, and log level. Keep `CompileConfig`/`CompileConfigAt` as managed-only compatibility entrypoints used by existing tests, but route them through the same adapter/validation implementation as `LoadBundle`.
 
-- [ ] **Step 5: Adapt and validate the combined source**
+- [x] **Step 5: Adapt and validate the combined source**
 
 Use `caddyconfig.GetAdapter("caddyfile")` registered by embedded standard modules. Adapt the controlled root plus imports to JSON, surface adapter warnings, decode and re-assert the managed admin/storage/log/listener boundaries, then call `ValidateJSON`. Extend `ConfigBundle` with warnings, ordered dependencies, and a content fingerprint needed by commands/runtime.
 
-- [ ] **Step 6: Run managed and custom happy-path regressions**
+- [x] **Step 6: Run managed and custom happy-path regressions**
 
 Run: `go test ./internal/gateway -run 'TestCompileConfig|TestLoadBundle|TestCustomCaddy|TestGatewayConfigIncludesReleaseRuntimeFields'`
 
 Expected: PASS, including existing managed-route semantic assertions.
 
-- [ ] **Step 7: Add failing boundary and diagnostic tests**
+- [x] **Step 7: Add failing boundary and diagnostic tests**
 
 Use table-driven cases for:
 
@@ -185,17 +185,17 @@ syntax error in a directly loaded and an imported file
 
 Each case must assert rejection before load, the offending file and positive line number, and the relevant hostname/port/managed owner. Add a control case proving `reverse_proxy 127.0.0.1:9630` is allowed because it is an upstream, not a listener.
 
-- [ ] **Step 8: Run boundary tests to establish RED**
+- [x] **Step 8: Run boundary tests to establish RED**
 
 Run: `go test ./internal/gateway -run 'TestCustomCaddyRejects|TestCustomCaddyAllowsManagedLoopbackUpstream'`
 
 Expected: FAIL until semantic boundary validation exists.
 
-- [ ] **Step 9: Implement minimal managed-boundary validation**
+- [x] **Step 9: Implement minimal managed-boundary validation**
 
 Validate case-insensitive hostnames independently of scheme/port, reject hostless listeners that overlap managed listeners, reject custom listener ports 2019/9630/9680/current Relay, and retain source positions from parsed Caddyfile tokens. Do not forbid unique custom hostnames sharing 80/443 or proxy upstreams using reserved loopback service ports.
 
-- [ ] **Step 10: Verify compiler and bundle behavior**
+- [x] **Step 10: Verify compiler and bundle behavior**
 
 Run: `go test ./internal/gateway`
 
