@@ -130,6 +130,60 @@ func TestDesktopBaseURLContract(t *testing.T) {
 	}
 }
 
+func TestDesktopConnectionConfigNormalizesLegacyGateway(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       desktopConfig
+		want        desktopConfig
+		wantChanged bool
+	}{
+		{
+			name: "empty legacy config remains unselected",
+		},
+		{
+			name:        "legacy base URL migrates to Gateway",
+			input:       desktopConfig{BaseURL: "https://example.com/app"},
+			want:        desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"},
+			wantChanged: true,
+		},
+		{
+			name:  "explicit Gateway remains Gateway",
+			input: desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"},
+			want:  desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"},
+		},
+		{
+			name:  "Localhost has no base URL",
+			input: desktopConfig{ConnectionMode: desktopConnectionLocalhost},
+			want:  desktopConfig{ConnectionMode: desktopConnectionLocalhost},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, changed, err := normalizeDesktopConfig(tt.input)
+			if err != nil {
+				t.Fatalf("normalizeDesktopConfig: %v", err)
+			}
+			if got != tt.want || changed != tt.wantChanged {
+				t.Fatalf("normalizeDesktopConfig(%+v)=(%+v, %v), want (%+v, %v)", tt.input, got, changed, tt.want, tt.wantChanged)
+			}
+		})
+	}
+}
+
+func TestDesktopConnectionConfigRejectsInvalidCombinations(t *testing.T) {
+	for _, config := range []desktopConfig{
+		{ConnectionMode: desktopConnectionMode("other")},
+		{ConnectionMode: desktopConnectionGateway},
+		{ConnectionMode: desktopConnectionGateway, BaseURL: "http://example.com/"},
+		{ConnectionMode: desktopConnectionLocalhost, BaseURL: "https://example.com/"},
+	} {
+		if got, _, err := normalizeDesktopConfig(config); err == nil {
+			t.Fatalf("normalizeDesktopConfig(%+v)=%+v, want rejection", config, got)
+		}
+	}
+}
+
 func TestDesktopUsesCustomTitleBar(t *testing.T) {
 	if !defaultDesktopWindowOptions().CustomTitleBar {
 		t.Fatal("desktop window must use the custom title bar")
@@ -337,7 +391,7 @@ func TestDesktopBaseURLProbeClientPolicy(t *testing.T) {
 func TestDesktopConfigStoreUsesPrivateAtomicBaseURLFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".wheelmaker", "desktop", "config.json")
 	store := newFileDesktopConfigStore(path)
-	want := desktopConfig{BaseURL: "https://example.com/app/"}
+	want := desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: "https://example.com/app/"}
 	if err := store.Save(want); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -345,8 +399,8 @@ func TestDesktopConfigStoreUsesPrivateAtomicBaseURLFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	if string(raw) != "{\"baseUrl\":\"https://example.com/app/\"}\n" {
-		t.Fatalf("config=%q, want only baseUrl", raw)
+	if string(raw) != "{\"connectionMode\":\"gateway\",\"baseUrl\":\"https://example.com/app/\"}\n" {
+		t.Fatalf("config=%q, want explicit Gateway mode and baseUrl", raw)
 	}
 	got, err := store.Load()
 	if err != nil {

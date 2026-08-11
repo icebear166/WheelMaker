@@ -86,41 +86,41 @@ After verification passes, invoke `git-workflow` in `checkpoint` mode for the fi
 
 **Acceptance:** Desktop config accepts only `gateway`/`localhost`; Gateway owns `baseUrl`; a legacy valid `baseUrl` migrates to Gateway; an empty legacy file remains unselected; invalid combinations fail closed. A separate current-user-only atomic state file persists a high-entropy URL-safe Base Path and, when present, only the opaque Registry cookie value/expiry. Corrupt, expired, malformed, or oversized state is rejected without exposing secrets.
 
-- [ ] **Step 1: Write failing config migration and validation tests**
+- [x] **Step 1: Write failing config migration and validation tests**
 
 Add table-driven tests for empty config, legacy Gateway migration, normalized Gateway mode, Localhost without `baseUrl`, unknown mode, Localhost with `baseUrl`, and Gateway without a valid HTTPS URL. Assert persisted JSON names the explicit mode and never reads `~/.wheelmaker/config.json`.
 
-- [ ] **Step 2: Run focused config tests to establish RED**
+- [x] **Step 2: Run focused config tests to establish RED**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktop(ConnectionConfig|LegacyConfig|ConfigStore)'`
 
 Expected: FAIL because `connectionMode` and strict normalization do not exist.
 
-- [ ] **Step 3: Implement the Desktop-only config contract**
+- [x] **Step 3: Implement the Desktop-only config contract**
 
 Introduce typed connection-mode constants and one boundary normalization/migration function used after `Load`. Save explicit mode values atomically through the existing private config store. Do not add Hub config paths, Registry port fields, dynamic ports, or HTTP Gateway URL support.
 
-- [ ] **Step 4: Reach GREEN for connection config**
+- [x] **Step 4: Reach GREEN for connection config**
 
 Run the focused config tests again.
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing private credential-state tests**
+- [x] **Step 5: Write failing private credential-state tests**
 
 In `localhost_edge_test.go`, cover first-run secret creation, restart stability, URL-safe entropy/segment validation, cookie capture fields, expiry, atomic `0600` behavior where observable, credential-only clearing, full removal on connection exit, corrupt/unknown/oversized JSON, and rejection of values containing control characters or a wrong cookie contract.
 
-- [ ] **Step 6: Run credential tests to establish RED**
+- [x] **Step 6: Run credential tests to establish RED**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktopLocalhost(State|Credential)'`
 
 Expected: FAIL because the Localhost state store does not exist.
 
-- [ ] **Step 7: Implement the minimal state store**
+- [x] **Step 7: Implement the minimal state store**
 
 Use `crypto/rand`, base64url without padding, strict schema decoding/size bounds, explicit expiry checks, and `shared.WriteConfigFile`. Keep Token and CSRF absent from all state structures. Provide separate operations for clearing the Session while retaining the Base Path during invalidation and deleting all Localhost state when leaving the mode.
 
-- [ ] **Step 8: Run config/state regressions and checkpoint**
+- [x] **Step 8: Run config/state regressions and checkpoint**
 
 Run from `server/`: `go test ./cmd/wheelmaker-desktop -run 'TestDesktop(ConnectionConfig|LegacyConfig|ConfigStore|LocalhostState|LocalhostCredential)'`
 

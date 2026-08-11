@@ -10,8 +10,47 @@ import (
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
+type desktopConnectionMode string
+
+const (
+	desktopConnectionGateway   desktopConnectionMode = "gateway"
+	desktopConnectionLocalhost desktopConnectionMode = "localhost"
+)
+
 type desktopConfig struct {
-	BaseURL string `json:"baseUrl,omitempty"`
+	ConnectionMode desktopConnectionMode `json:"connectionMode,omitempty"`
+	BaseURL        string                `json:"baseUrl,omitempty"`
+}
+
+func normalizeDesktopConfig(config desktopConfig) (desktopConfig, bool, error) {
+	switch config.ConnectionMode {
+	case "":
+		if config.BaseURL == "" {
+			return desktopConfig{}, false, nil
+		}
+		normalized, err := normalizeDesktopBaseURL(config.BaseURL)
+		if err != nil {
+			return desktopConfig{}, false, fmt.Errorf("invalid legacy Gateway base URL: %w", err)
+		}
+		return desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized}, true, nil
+	case desktopConnectionGateway:
+		if config.BaseURL == "" {
+			return desktopConfig{}, false, errors.New("Gateway connection requires a base URL")
+		}
+		normalized, err := normalizeDesktopBaseURL(config.BaseURL)
+		if err != nil {
+			return desktopConfig{}, false, fmt.Errorf("invalid Gateway base URL: %w", err)
+		}
+		result := desktopConfig{ConnectionMode: desktopConnectionGateway, BaseURL: normalized}
+		return result, result != config, nil
+	case desktopConnectionLocalhost:
+		if config.BaseURL != "" {
+			return desktopConfig{}, false, errors.New("Localhost connection must not define a base URL")
+		}
+		return config, false, nil
+	default:
+		return desktopConfig{}, false, fmt.Errorf("unsupported Desktop connection mode %q", config.ConnectionMode)
+	}
 }
 
 type desktopConfigStore interface {
@@ -51,6 +90,11 @@ func (s *fileDesktopConfigStore) Load() (desktopConfig, error) {
 }
 
 func (s *fileDesktopConfigStore) Save(config desktopConfig) error {
+	normalized, _, err := normalizeDesktopConfig(config)
+	if err != nil {
+		return err
+	}
+	config = normalized
 	raw, err := json.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("encode desktop config: %w", err)
