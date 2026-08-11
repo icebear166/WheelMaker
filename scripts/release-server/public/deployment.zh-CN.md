@@ -186,6 +186,8 @@ Gateway v2 会生成 $HOME/.wheelmaker/gateway/config.json，使用 schema 2 和
 
 以上只是相关片段，不要用省略字段的示例覆盖 Gateway 自动生成的完整文件。不要在 wm_sites.registry 或 wm_sites.share 下填写 publicUrl。sync_hub 表示从前面那份 Hub 配置读取地址。不要创建第二个 Share 服务，也不要维护第二份 Share URL。
 
+其他域名在 `~/.wheelmaker/gateway/sites/*.caddy` 中使用标准站点级 Caddyfile 语法配置。
+
 ### Gateway TLS
 
 首选自动申请公网 HTTPS：

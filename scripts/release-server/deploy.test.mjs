@@ -77,6 +77,14 @@ test('public AI deployment guides are Gateway-first v2 runbooks without Release 
   }
 });
 
+test('public AI deployment guides locate custom Gateway Caddy site configuration', async () => {
+  for (const name of ['deployment.md', 'deployment.zh-CN.md']) {
+    const guide = await readFile(new URL(`./public/${name}`, import.meta.url), 'utf8');
+    assert.match(guide, /~\/\.wheelmaker\/gateway\/sites\/\*\.caddy/);
+    assert.match(guide, /Caddyfile/);
+  }
+});
+
 test('release server deploy rejects a dirty tree and always cleans local staging', async () => {
   const state = {cleanups: []};
   const dependencies = recordingDependencies(state, {

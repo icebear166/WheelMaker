@@ -180,6 +180,8 @@ Gateway v2 creates $HOME/.wheelmaker/gateway/config.json with schema 2 and a wm_
 
 This is only a relevant fragment; do not replace the generated file with a shortened example. Do not add publicUrl under wm_sites.registry or wm_sites.share. sync_hub tells Gateway to read the addresses from the Hub config above. Do not create a second Share service or a second Share URL setting.
 
+Configure additional hostnames in `~/.wheelmaker/gateway/sites/*.caddy` using standard site-level Caddyfile syntax.
+
 ### Gateway TLS
 
 The preferred path is automatic public HTTPS:
