@@ -5,7 +5,8 @@
 WheelMaker 在每条可分享的完成回答旁保留独立 Copy，并用一个 Share
 入口统一图片、HTML 文件和公开 URL。Desktop 使用锚定按钮的浮动菜单，
 窄屏使用 bottom sheet；两个宿主都直接展示 **Current response** 与
-**Full session** 两组动作，不增加二级菜单。
+**Full session** 两组动作，不增加二级菜单。入口与 sheet 标题统一使用
+`share-2` 图标，以区别上传、外链和消息发送动作。
 
 ## Content snapshots
 
@@ -13,8 +14,16 @@ WheelMaker 在每条可分享的完成回答旁保留独立 Copy，并用一个 
 Markdown/代码展示设置。后续完成的新回答、标题或主题变更不会修改已打开的
 Public Share 弹窗所持有的快照。
 
-- Current response 与既有 Copy 规则一致，只包含所点击终止 turn 对应的助手
-  回答正文，不包含用户提问、thought、tool、plan 或完成状态。
+- 声明 `messageLifecycle` 能力的 Session 在 Share 菜单中显示
+  **Include work details**。开关每次打开菜单时默认关闭，并同时控制 Current
+  response 与 Full session：关闭时只保留 `final_answer`，开启时按原顺序合并
+  `commentary` 与最终回答。thought、tool、plan、权限、系统事件和底层数据
+  始终不进入分享稿。
+- 不支持 `messageLifecycle` 的 Session 不显示该开关，并沿用原有助手消息投影
+  规则。能力判断不绑定 Agent 名称；其他 Agent 协商同一能力后可自动支持，
+  无能力快照的历史 Codex Session 保留既有兼容识别。
+- Current response 只包含所点击终止 turn 对应、按上述能力规则投影的助手回答，
+  不包含用户提问或完成状态。
 - Full session 由已终止的用户/助手范围组成。流式尾部与控制面 turn 不进入
   分享稿；失败、取消或中断的范围保留已有输出并显示对应状态。
 - `session/gap`、孤立 turn 和无法解析的范围静默跳过，其余范围仍按顺序输出。
@@ -27,9 +36,11 @@ Public Share 弹窗所持有的快照。
 ## Shared document rendering
 
 图片、HTML 文件和公开 URL 消费同一个不可变聊天分享模型与 React 文档
-renderer。完整会话文档显示 Session 标题、快照时间以及 User/Assistant 分段，
-不包含 Workspace chrome；当前回答保持单篇 Markdown 文档版式。Markdown
-sanitization、代码高亮、公式、Mermaid 与图片 readiness 复用现有导出能力。
+renderer。完整会话文档显示 Session 标题和快照时间；用户 Prompt 使用与聊天
+界面一致的左对齐、淡强调色圆角气泡，附件标签归入同一 Prompt 区域，助手回答
+保持无外框的全文排版，不再重复显示 User/Assistant 标题。当前回答保持单篇
+Markdown 文档版式，文档不包含 Workspace chrome。Markdown sanitization、
+代码高亮、公式、Mermaid 与图片 readiness 复用现有导出能力。
 
 PNG 始终是一个不截断、不拆页的文件。renderer 在捕获前选择 `1x..2x` 中
 最高的安全 pixel ratio；位图任一边不得超过 16,384 px，总像素不得超过
