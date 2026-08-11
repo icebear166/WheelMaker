@@ -3,9 +3,11 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -34,6 +36,7 @@ func LoadBundle(home string) (ConfigBundle, error) {
 		return ConfigBundle{}, fmt.Errorf("gateway home must be an absolute path")
 	}
 	paths := ResolvePaths(home)
+	inputFingerprint := semanticFingerprint(paths)
 	global, err := loadGlobalFile(paths.ConfigFile)
 	if err != nil {
 		return ConfigBundle{}, err
@@ -52,6 +55,9 @@ func LoadBundle(home string) (ConfigBundle, error) {
 	if err != nil {
 		return ConfigBundle{}, err
 	}
+	if currentFingerprint := semanticFingerprint(paths); currentFingerprint != inputFingerprint {
+		return ConfigBundle{}, fmt.Errorf("Gateway configuration sources changed while the candidate was being built")
+	}
 	return ConfigBundle{
 		Global:       global,
 		Sites:        sites,
@@ -59,7 +65,7 @@ func LoadBundle(home string) (ConfigBundle, error) {
 		Source:       candidate.Source,
 		Warnings:     candidate.Warnings,
 		Dependencies: candidate.Dependencies,
-		Fingerprint:  candidate.Fingerprint,
+		Fingerprint:  inputFingerprint,
 	}, nil
 }
 
@@ -210,15 +216,103 @@ func ValidateJSON(configJSON []byte) error {
 	return nil
 }
 
-// RunManaged starts Caddy with a valid generated configuration and watches the
-// Gateway and parent Hub config files. A valid change is compiled, written atomically, and
-// hot-loaded; an invalid change is ignored so the last valid configuration
-// keeps serving. The polling interval intentionally avoids a filesystem
-// watcher dependency on Windows, Linux, and macOS.
-func RunManaged(ctx context.Context, home string, configJSON []byte) error {
-	if err := ValidateJSON(configJSON); err != nil {
+var (
+	managedRuntimeStart        = startCaddy
+	managedRuntimeReload       = Reload
+	managedRuntimeStop         = caddy.Stop
+	managedRuntimeStage        = stageGenerated
+	managedRuntimePromote      = promoteGenerated
+	managedRuntimePollInterval = time.Second
+)
+
+// RunManaged starts Caddy with a valid candidate and promotes generated JSON
+// only after the runtime accepts it. Later source changes follow the same
+// load-before-promote rule; rejected candidates leave the prior runtime and
+// generated artifact active.
+func RunManaged(ctx context.Context, home string, initial ConfigBundle) error {
+	if err := ValidateJSON(initial.JSON); err != nil {
 		return err
 	}
+	paths := ResolvePaths(home)
+	if initial.Fingerprint == "" {
+		initial.Fingerprint = semanticFingerprint(paths)
+	}
+	if current := semanticFingerprint(paths); current != initial.Fingerprint {
+		return fmt.Errorf("Gateway configuration sources changed before runtime start")
+	}
+	staged, err := managedRuntimeStage(paths.GeneratedConfig, initial.JSON)
+	if err != nil {
+		return err
+	}
+	if err := managedRuntimeStart(initial.JSON); err != nil {
+		_ = os.Remove(staged)
+		return err
+	}
+	if err := managedRuntimePromote(staged, paths.GeneratedConfig); err != nil {
+		_ = os.Remove(staged)
+		_ = managedRuntimeStop()
+		return fmt.Errorf("promote initial generated Caddy config: %w", err)
+	}
+	defer func() {
+		if err := managedRuntimeStop(); err != nil {
+			log.Printf("stop embedded Caddy: %v", err)
+		}
+	}()
+
+	acceptedJSON := append([]byte(nil), initial.JSON...)
+	acceptedFingerprint := initial.Fingerprint
+	ticker := time.NewTicker(managedRuntimePollInterval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			observedFingerprint := semanticFingerprint(paths)
+			if observedFingerprint == acceptedFingerprint {
+				continue
+			}
+			bundle, err := LoadBundle(home)
+			if err != nil {
+				log.Printf("gateway config change rejected: %v", err)
+				continue
+			}
+			if bundle.Fingerprint != observedFingerprint {
+				log.Printf("gateway config change deferred because sources changed during compilation")
+				continue
+			}
+			for _, warning := range bundle.Warnings {
+				log.Printf("gateway config warning: %s", warning.String())
+			}
+			staged, err := managedRuntimeStage(paths.GeneratedConfig, bundle.JSON)
+			if err != nil {
+				log.Printf("gateway generated config staging failed: %v", err)
+				continue
+			}
+			if err := managedRuntimeReload(bundle.JSON); err != nil {
+				_ = os.Remove(staged)
+				log.Printf("gateway config reload failed: %v", err)
+				continue
+			}
+			if err := managedRuntimePromote(staged, paths.GeneratedConfig); err != nil {
+				_ = os.Remove(staged)
+				rollbackErr := managedRuntimeReload(acceptedJSON)
+				if rollbackErr != nil {
+					return fmt.Errorf("promote generated Caddy config: %w; rollback runtime: %v", err, rollbackErr)
+				}
+				log.Printf("gateway generated config promotion failed; runtime rolled back: %v", err)
+				continue
+			}
+			acceptedJSON = append(acceptedJSON[:0], bundle.JSON...)
+			acceptedFingerprint = observedFingerprint
+		}
+	}
+}
+
+func startCaddy(configJSON []byte) error {
 	var cfg caddy.Config
 	if err := json.Unmarshal(configJSON, &cfg); err != nil {
 		return fmt.Errorf("decode generated Caddy config: %w", err)
@@ -226,52 +320,56 @@ func RunManaged(ctx context.Context, home string, configJSON []byte) error {
 	if err := caddy.Run(&cfg); err != nil {
 		return fmt.Errorf("start embedded Caddy: %w", err)
 	}
-	paths := ResolvePaths(home)
-	lastFingerprint := semanticFingerprint(paths)
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	defer caddy.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			fingerprint := semanticFingerprint(paths)
-			if fingerprint == lastFingerprint {
-				continue
-			}
-			bundle, err := LoadBundle(home)
-			if err != nil {
-				// Keep serving the previous valid config. The next poll retries
-				// after the deployer finishes its atomic file write.
-				log.Printf("gateway config change rejected: %v", err)
-				continue
-			}
-			if err := WriteGenerated(paths.GeneratedConfig, bundle.JSON); err != nil {
-				log.Printf("gateway generated config write failed: %v", err)
-				continue
-			}
-			if err := Reload(bundle.JSON); err != nil {
-				log.Printf("gateway config reload failed: %v", err)
-				continue
-			}
-			lastFingerprint = fingerprint
-		}
-	}
+	return nil
 }
 
 func semanticFingerprint(paths Paths) string {
-	parts := make([]string, 0, 1)
-	for _, path := range []string{paths.ConfigFile, paths.HubConfigFile} {
-		info, err := os.Stat(path)
-		if err != nil {
-			parts = append(parts, path+":missing")
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%s:%d:%d", path, info.ModTime().UnixNano(), info.Size()))
+	hash := sha256.New()
+	fingerprintFile(hash, "gateway-config", paths.ConfigFile)
+	fingerprintFile(hash, "hub-config", paths.HubConfigFile)
+	fingerprintTree(hash, paths.CustomSitesRoot)
+	return fmt.Sprintf("%x", hash.Sum(nil))
+}
+
+func fingerprintFile(hash io.Writer, label, path string) {
+	_, _ = io.WriteString(hash, label+"\x00"+filepath.ToSlash(path)+"\x00")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		_, _ = io.WriteString(hash, "error:"+err.Error()+"\x00")
+		return
 	}
-	sort.Strings(parts)
-	return strings.Join(parts, "|")
+	_, _ = hash.Write(contents)
+	_, _ = io.WriteString(hash, "\x00")
+}
+
+func fingerprintTree(hash io.Writer, root string) {
+	type treeFile struct {
+		relative string
+		path     string
+	}
+	files := make([]treeFile, 0)
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, treeFile{relative: filepath.ToSlash(relative), path: path})
+		return nil
+	})
+	if err != nil {
+		_, _ = io.WriteString(hash, "sites-error:"+err.Error()+"\x00")
+		return
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].relative < files[j].relative })
+	for _, file := range files {
+		fingerprintFile(hash, "site:"+file.relative, file.path)
+	}
 }
 
 func Reload(configJSON []byte) error {
@@ -285,31 +383,50 @@ func Reload(configJSON []byte) error {
 }
 
 func WriteGenerated(path string, configJSON []byte) error {
+	staged, err := stageGenerated(path, configJSON)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(staged)
+	return promoteGenerated(staged, path)
+}
+
+func stageGenerated(path string, configJSON []byte) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("create generated config directory: %w", err)
+		return "", fmt.Errorf("create generated config directory: %w", err)
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".caddy-*.json")
 	if err != nil {
-		return fmt.Errorf("create generated config temporary file: %w", err)
+		return "", fmt.Errorf("create generated config temporary file: %w", err)
 	}
 	temporaryName := temporary.Name()
-	defer os.Remove(temporaryName)
+	failed := true
+	defer func() {
+		if failed {
+			_ = os.Remove(temporaryName)
+		}
+	}()
 	if err := temporary.Chmod(0o600); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("secure generated config temporary file: %w", err)
+		return "", fmt.Errorf("secure generated config temporary file: %w", err)
 	}
 	if _, err := temporary.Write(configJSON); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("write generated config temporary file: %w", err)
+		return "", fmt.Errorf("write generated config temporary file: %w", err)
 	}
 	if err := temporary.Sync(); err != nil {
 		_ = temporary.Close()
-		return fmt.Errorf("flush generated config temporary file: %w", err)
+		return "", fmt.Errorf("flush generated config temporary file: %w", err)
 	}
 	if err := temporary.Close(); err != nil {
-		return fmt.Errorf("close generated config temporary file: %w", err)
+		return "", fmt.Errorf("close generated config temporary file: %w", err)
 	}
-	if err := os.Rename(temporaryName, path); err != nil {
+	failed = false
+	return temporaryName, nil
+}
+
+func promoteGenerated(staged, path string) error {
+	if err := os.Rename(staged, path); err != nil {
 		return fmt.Errorf("replace generated config: %w", err)
 	}
 	return nil

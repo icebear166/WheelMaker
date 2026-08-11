@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -25,7 +24,6 @@ type adaptedCandidate struct {
 	Source       []byte
 	Warnings     []caddyconfig.Warning
 	Dependencies []string
-	Fingerprint  string
 }
 
 func compileCaddyfileCandidate(global GlobalConfig, sites []SiteConfig, storageRoot, customRoot string) (adaptedCandidate, error) {
@@ -49,13 +47,11 @@ func compileCaddyfileCandidate(global GlobalConfig, sites []SiteConfig, storageR
 	}
 
 	formatted := caddyfile.Format(source.Bytes())
-	fingerprint, err := caddySourceFingerprint(formatted, dependencies)
+	importedDependencies, err := validateCustomCaddyBoundaries(formatted, customRoot, global, ordered)
 	if err != nil {
 		return adaptedCandidate{}, err
 	}
-	if err := validateCustomCaddyBoundaries(formatted, customRoot, global, ordered); err != nil {
-		return adaptedCandidate{}, err
-	}
+	dependencies = mergeSortedPaths(dependencies, importedDependencies)
 	adapter := caddyconfig.GetAdapter("caddyfile")
 	if adapter == nil {
 		return adaptedCandidate{}, fmt.Errorf("embedded Caddyfile adapter is unavailable")
@@ -64,6 +60,11 @@ func compileCaddyfileCandidate(global GlobalConfig, sites []SiteConfig, storageR
 	if err != nil {
 		return adaptedCandidate{}, fmt.Errorf("adapt Caddyfile: %w", err)
 	}
+	formattingWarnings, err := customFormattingWarnings(dependencies)
+	if err != nil {
+		return adaptedCandidate{}, err
+	}
+	warnings = append(warnings, formattingWarnings...)
 	configJSON, err = canonicalizeManagedServers(configJSON, global, ordered)
 	if err != nil {
 		return adaptedCandidate{}, err
@@ -79,24 +80,21 @@ func compileCaddyfileCandidate(global GlobalConfig, sites []SiteConfig, storageR
 		Source:       formatted,
 		Warnings:     warnings,
 		Dependencies: dependencies,
-		Fingerprint:  fingerprint,
 	}, nil
 }
 
-func caddySourceFingerprint(source []byte, dependencies []string) (string, error) {
-	hash := sha256.New()
-	_, _ = hash.Write(source)
+func customFormattingWarnings(dependencies []string) ([]caddyconfig.Warning, error) {
+	warnings := make([]caddyconfig.Warning, 0)
 	for _, path := range dependencies {
 		contents, err := os.ReadFile(path)
 		if err != nil {
-			return "", fmt.Errorf("fingerprint custom Caddy source %s: %w", path, err)
+			return nil, fmt.Errorf("inspect custom Caddy source formatting %s: %w", path, err)
 		}
-		_, _ = hash.Write([]byte{0})
-		_, _ = hash.Write([]byte(filepath.ToSlash(path)))
-		_, _ = hash.Write([]byte{0})
-		_, _ = hash.Write(contents)
+		if warning, different := caddyfile.FormattingDifference(path, contents); different {
+			warnings = append(warnings, warning)
+		}
 	}
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+	return warnings, nil
 }
 
 func validateManagedJSONBoundaries(configJSON []byte, global GlobalConfig, sites []SiteConfig, storageRoot string) error {
@@ -181,14 +179,15 @@ func hasSiteKind(sites []SiteConfig, kind SiteKind) bool {
 	return false
 }
 
-func validateCustomCaddyBoundaries(source []byte, customRoot string, global GlobalConfig, sites []SiteConfig) error {
+func validateCustomCaddyBoundaries(source []byte, customRoot string, global GlobalConfig, sites []SiteConfig) ([]string, error) {
 	if customRoot == "" {
-		return nil
+		return nil, nil
 	}
 	blocks, err := caddyfile.Parse(syntheticCaddyfileName, source)
 	if err != nil {
-		return fmt.Errorf("parse Caddyfile: %w", err)
+		return nil, fmt.Errorf("parse Caddyfile: %w", err)
 	}
+	dependencySet := make(map[string]struct{})
 	managedHosts := make(map[string]SiteKind, len(sites))
 	for _, site := range sites {
 		managedHosts[strings.ToLower(site.Host())] = site.Kind
@@ -209,16 +208,21 @@ func validateCustomCaddyBoundaries(source []byte, customRoot string, global Glob
 			}
 			inside, err := pathWithinRoot(token.File, customRoot)
 			if err != nil {
-				return sourceTokenError(token, "resolve imported Caddy source: %v", err)
+				return nil, sourceTokenError(token, "resolve imported Caddy source: %v", err)
 			}
 			if !inside {
-				return sourceTokenError(token, "imported Caddy source %q resolves outside custom sites root %q", token.File, customRoot)
+				return nil, sourceTokenError(token, "imported Caddy source %q resolves outside custom sites root %q", token.File, customRoot)
 			}
+			absolute, err := filepath.Abs(token.File)
+			if err != nil {
+				return nil, sourceTokenError(token, "resolve imported Caddy source: %v", err)
+			}
+			dependencySet[filepath.Clean(absolute)] = struct{}{}
 		}
 
 		if len(block.Keys) == 0 {
 			if token, ok := firstCustomToken(block, customRoot); ok {
-				return sourceTokenError(token, "custom global options are not allowed; Gateway owns global Caddy configuration")
+				return nil, sourceTokenError(token, "custom global options are not allowed; Gateway owns global Caddy configuration")
 			}
 			continue
 		}
@@ -232,22 +236,42 @@ func validateCustomCaddyBoundaries(source []byte, customRoot string, global Glob
 			}
 			address, err := httpcaddyfile.ParseAddress(key.Text)
 			if err != nil {
-				return sourceTokenError(key, "parse custom site address %q: %v", key.Text, err)
+				return nil, sourceTokenError(key, "parse custom site address %q: %v", key.Text, err)
 			}
 			address = address.Normalize()
 			if owner, exists := managedHosts[strings.ToLower(address.Host)]; exists {
-				return sourceTokenError(key, "custom hostname %q conflicts with WheelMaker-managed %s hostname %q", address.Host, owner, address.Host)
+				return nil, sourceTokenError(key, "custom hostname %q conflicts with WheelMaker-managed %s hostname %q", address.Host, owner, address.Host)
 			}
 			port := effectiveCaddyPort(address)
 			if address.Host == "" && (port == "80" || port == "443") {
-				return sourceTokenError(key, "custom catch-all listener :%s overlaps the WheelMaker-managed public listener", port)
+				return nil, sourceTokenError(key, "custom catch-all listener :%s overlaps the WheelMaker-managed public listener", port)
 			}
 			if owner, reserved := reservedPorts[port]; reserved {
-				return sourceTokenError(key, "custom listener port %s is reserved by %s", port, owner)
+				return nil, sourceTokenError(key, "custom listener port %s is reserved by %s", port, owner)
 			}
 		}
 	}
-	return nil
+	dependencies := make([]string, 0, len(dependencySet))
+	for path := range dependencySet {
+		dependencies = append(dependencies, path)
+	}
+	sort.Strings(dependencies)
+	return dependencies, nil
+}
+
+func mergeSortedPaths(groups ...[]string) []string {
+	unique := make(map[string]struct{})
+	for _, group := range groups {
+		for _, path := range group {
+			unique[filepath.Clean(path)] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(unique))
+	for path := range unique {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func blockTokens(block caddyfile.ServerBlock) []caddyfile.Token {

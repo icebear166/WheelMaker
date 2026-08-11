@@ -69,6 +69,75 @@ func TestRunValidateReadsGatewayConfig(t *testing.T) {
 	}
 }
 
+func TestRunValidatePrintsCustomCaddyWarnings(t *testing.T) {
+	home := commandGatewayHome(t, map[string]string{
+		"warning.caddy": "warning.example.com {\nrespond \"ok\"\n}\n",
+	})
+	var stdout, stderr strings.Builder
+	if err := run([]string{"validate", "--home", home}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(validate) error = %v", err)
+	}
+	if strings.TrimSpace(stdout.String()) != "valid" {
+		t.Fatalf("validate stdout = %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "warning.caddy") || !strings.Contains(stderr.String(), ":2") {
+		t.Fatalf("validate stderr does not include warning source position: %q", stderr.String())
+	}
+}
+
+func TestRunValidateReportsImportedCustomCaddyError(t *testing.T) {
+	home := commandGatewayHome(t, map[string]string{
+		"entry.caddy":      "import nested/bad.caddy\n",
+		"nested/bad.caddy": "bad.example.com {\n\trespond ok\n",
+	})
+	var stdout, stderr strings.Builder
+	err := run([]string{"validate", "--home", home}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "bad.caddy:2") {
+		t.Fatalf("run(validate) error = %v, want imported source line", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("validate stdout = %q", stdout.String())
+	}
+}
+
+func TestRunRenderPromotesOnlyValidCustomCaddyBundle(t *testing.T) {
+	home := commandGatewayHome(t, map[string]string{
+		"app.caddy": "app.example.com {\n\trespond ok\n}\n",
+	})
+	generated := filepath.Join(home, "generated", "caddy.json")
+	var stdout, stderr strings.Builder
+	if err := run([]string{"render", "--home", home}, &stdout, &stderr); err != nil {
+		t.Fatalf("run(render) error = %v", err)
+	}
+	if strings.TrimSpace(stdout.String()) != generated {
+		t.Fatalf("render stdout = %q, want %q", stdout.String(), generated)
+	}
+	accepted, err := os.ReadFile(generated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(accepted), "app.example.com") {
+		t.Fatalf("generated config is missing custom site: %s", accepted)
+	}
+
+	badPath := filepath.Join(home, "sites", "app.caddy")
+	if err := os.WriteFile(badPath, []byte("app.example.com {\n\trespond ok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := run([]string{"render", "--home", home}, &stdout, &stderr); err == nil {
+		t.Fatal("run(render) accepted invalid custom Caddy source")
+	}
+	retained, err := os.ReadFile(generated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(retained) != string(accepted) {
+		t.Fatalf("invalid render changed accepted generated config")
+	}
+}
+
 func TestRunRejectsUnknownCommand(t *testing.T) {
 	if err := run([]string{"unknown"}, io.Discard, io.Discard); err == nil {
 		t.Fatal("run(unknown) returned nil")
@@ -83,4 +152,34 @@ func gatewayPathsForTest(home string) testGatewayPaths {
 	return testGatewayPaths{
 		configFile: filepath.Join(home, "config.json"),
 	}
+}
+
+func commandGatewayHome(t *testing.T, customFiles map[string]string) string {
+	t.Helper()
+	home := filepath.Join(t.TempDir(), "gateway")
+	configFile := filepath.Join(home, "config.json")
+	if err := os.MkdirAll(filepath.Join(home, "sites"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configFile, []byte(`{
+  "schema": 2,
+  "wm_sites": {
+    "tls": {},
+    "registry": {"urlMode": "sync_hub"},
+    "release": {"publicUrl": "http://release.example.com"},
+    "share": {"urlMode": "sync_hub"}
+  }
+}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for relative, contents := range customFiles {
+		path := filepath.Join(home, "sites", relative)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return home
 }

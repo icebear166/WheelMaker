@@ -2,12 +2,14 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -473,6 +475,322 @@ func TestSemanticFingerprintTracksHubAndGatewayConfig(t *testing.T) {
 	if got := semanticFingerprint(paths); got == first {
 		t.Fatalf("semanticFingerprint did not change for Hub config: %q", got)
 	}
+}
+
+func TestSemanticFingerprintTracksCustomSiteTreeChanges(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{
+		"entry.caddy": "import nested/*.caddy\n",
+	})
+	paths := ResolvePaths(home)
+	previous := semanticFingerprint(paths)
+	assertChanged := func(action func()) {
+		t.Helper()
+		action()
+		next := semanticFingerprint(paths)
+		if next == previous {
+			t.Fatalf("semanticFingerprint did not change: %q", next)
+		}
+		previous = next
+	}
+
+	nested := filepath.Join(paths.CustomSitesRoot, "nested", "site.caddy")
+	assertChanged(func() {
+		if err := os.MkdirAll(filepath.Dir(nested), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(nested, []byte("one.example.com { respond ok }\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	renamed := filepath.Join(filepath.Dir(nested), "renamed.caddy")
+	assertChanged(func() {
+		if err := os.Rename(nested, renamed); err != nil {
+			t.Fatal(err)
+		}
+	})
+	assertChanged(func() {
+		if err := os.WriteFile(renamed, []byte("two.example.com { respond ok }\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	})
+	assertChanged(func() {
+		if err := os.Remove(renamed); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestRunManagedPromotesInitialCandidateOnlyAfterStart(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{
+		"app.caddy": "app.example.com {\n\trespond ok\n}\n",
+	})
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := ResolvePaths(home)
+	if err := os.MkdirAll(filepath.Dir(paths.GeneratedConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.GeneratedConfig, []byte("previous"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	context, cancel := context.WithCancel(context.Background())
+	installManagedRuntimeFakes(t)
+	started := false
+	managedRuntimeStart = func(configJSON []byte) error {
+		started = true
+		cancel()
+		return nil
+	}
+	managedRuntimePromote = func(staged, destination string) error {
+		if !started {
+			t.Fatal("generated config promoted before runtime start")
+		}
+		return promoteGenerated(staged, destination)
+	}
+	if err := RunManaged(context, home, bundle); err != nil {
+		t.Fatalf("RunManaged() error = %v", err)
+	}
+	generated, err := os.ReadFile(paths.GeneratedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(generated, bundle.JSON) {
+		t.Fatal("cold start did not promote the accepted candidate")
+	}
+}
+
+func TestRunManagedStartFailureKeepsGeneratedConfig(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{"app.caddy": "app.example.com {\n\trespond ok\n}\n"})
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := ResolvePaths(home)
+	if err := WriteGenerated(paths.GeneratedConfig, []byte("previous")); err != nil {
+		t.Fatal(err)
+	}
+	installManagedRuntimeFakes(t)
+	managedRuntimeStart = func([]byte) error { return errors.New("bind failed") }
+	if err := RunManaged(context.Background(), home, bundle); err == nil || !strings.Contains(err.Error(), "bind failed") {
+		t.Fatalf("RunManaged() error = %v", err)
+	}
+	generated, err := os.ReadFile(paths.GeneratedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(generated) != "previous" {
+		t.Fatalf("failed cold start changed generated config: %q", generated)
+	}
+}
+
+func TestRunManagedInitialPromotionFailureStopsRuntimeAndKeepsGeneratedConfig(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{"app.caddy": "app.example.com {\n\trespond ok\n}\n"})
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := ResolvePaths(home)
+	if err := WriteGenerated(paths.GeneratedConfig, []byte("previous")); err != nil {
+		t.Fatal(err)
+	}
+	installManagedRuntimeFakes(t)
+	managedRuntimeStart = func([]byte) error { return nil }
+	stopped := 0
+	managedRuntimeStop = func() error {
+		stopped++
+		return nil
+	}
+	managedRuntimePromote = func(string, string) error { return errors.New("disk failed") }
+	if err := RunManaged(context.Background(), home, bundle); err == nil || !strings.Contains(err.Error(), "disk failed") {
+		t.Fatalf("RunManaged() error = %v", err)
+	}
+	if stopped != 1 {
+		t.Fatalf("runtime stop count = %d, want 1", stopped)
+	}
+	generated, err := os.ReadFile(paths.GeneratedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(generated) != "previous" {
+		t.Fatalf("failed initial promotion changed generated config: %q", generated)
+	}
+}
+
+func TestRunManagedRejectsInvalidChangeThenPromotesFixedCandidate(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{"app.caddy": "app.example.com {\n\trespond ok\n}\n"})
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installManagedRuntimeFakes(t)
+	managedRuntimePollInterval = 5 * time.Millisecond
+	context, cancel := context.WithCancel(context.Background())
+	managedRuntimeStart = func([]byte) error { return nil }
+	reloads := make(chan []byte, 4)
+	managedRuntimeReload = func(configJSON []byte) error {
+		reloads <- append([]byte(nil), configJSON...)
+		cancel()
+		return nil
+	}
+	done := make(chan error, 1)
+	go func() { done <- RunManaged(context, home, bundle) }()
+	waitForFileContents(t, ResolvePaths(home).GeneratedConfig, bundle.JSON)
+
+	sitePath := filepath.Join(home, "sites", "app.caddy")
+	if err := os.WriteFile(sitePath, []byte("app.example.com {\n\trespond ok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-reloads:
+		t.Fatal("invalid candidate reached the runtime reloader")
+	case <-time.After(40 * time.Millisecond):
+	}
+	if generated, err := os.ReadFile(ResolvePaths(home).GeneratedConfig); err != nil || !bytes.Equal(generated, bundle.JSON) {
+		t.Fatalf("invalid candidate changed generated config: %q, %v", generated, err)
+	}
+	if err := os.WriteFile(sitePath, []byte("fixed.example.com {\n\trespond ok\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var accepted []byte
+	select {
+	case accepted = <-reloads:
+	case <-time.After(2 * time.Second):
+		t.Fatal("fixed candidate was not reloaded")
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("RunManaged() error = %v", err)
+	}
+	generated, err := os.ReadFile(ResolvePaths(home).GeneratedConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(generated, accepted) || !bytes.Contains(generated, []byte("fixed.example.com")) {
+		t.Fatalf("fixed candidate was not promoted: %s", generated)
+	}
+}
+
+func TestRunManagedRetriesAfterReloadFailureWithoutPromotion(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{"app.caddy": "app.example.com {\n\trespond ok\n}\n"})
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installManagedRuntimeFakes(t)
+	managedRuntimePollInterval = 5 * time.Millisecond
+	context, cancel := context.WithCancel(context.Background())
+	managedRuntimeStart = func([]byte) error { return nil }
+	attempts := make(chan struct{}, 3)
+	managedRuntimeReload = func([]byte) error {
+		attempts <- struct{}{}
+		if len(attempts) == 2 {
+			cancel()
+		}
+		return errors.New("reload failed")
+	}
+	done := make(chan error, 1)
+	go func() { done <- RunManaged(context, home, bundle) }()
+	waitForFileContents(t, ResolvePaths(home).GeneratedConfig, bundle.JSON)
+	if err := os.WriteFile(filepath.Join(home, "sites", "app.caddy"), []byte("changed.example.com {\n\trespond ok\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		select {
+		case <-attempts:
+		case <-time.After(2 * time.Second):
+			t.Fatal("failed candidate was not retried")
+		}
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("RunManaged() error = %v", err)
+	}
+	generated, err := os.ReadFile(ResolvePaths(home).GeneratedConfig)
+	if err != nil || !bytes.Equal(generated, bundle.JSON) {
+		t.Fatalf("failed reload changed generated config: %q, %v", generated, err)
+	}
+}
+
+func TestRunManagedRollsBackRuntimeWhenPromotionFails(t *testing.T) {
+	home := customBoundaryHome(t, map[string]string{"app.caddy": "app.example.com {\n\trespond ok\n}\n"})
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installManagedRuntimeFakes(t)
+	managedRuntimePollInterval = 5 * time.Millisecond
+	context, cancel := context.WithCancel(context.Background())
+	managedRuntimeStart = func([]byte) error { return nil }
+	var loaded [][]byte
+	managedRuntimeReload = func(configJSON []byte) error {
+		loaded = append(loaded, append([]byte(nil), configJSON...))
+		if len(loaded) == 2 {
+			cancel()
+		}
+		return nil
+	}
+	promotions := 0
+	managedRuntimePromote = func(staged, destination string) error {
+		promotions++
+		if promotions > 1 {
+			return errors.New("promotion failed")
+		}
+		return promoteGenerated(staged, destination)
+	}
+	done := make(chan error, 1)
+	go func() { done <- RunManaged(context, home, bundle) }()
+	waitForFileContents(t, ResolvePaths(home).GeneratedConfig, bundle.JSON)
+	if err := os.WriteFile(filepath.Join(home, "sites", "app.caddy"), []byte("changed.example.com {\n\trespond ok\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunManaged() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runtime rollback did not complete")
+	}
+	if len(loaded) != 2 || bytes.Equal(loaded[0], bundle.JSON) || !bytes.Equal(loaded[1], bundle.JSON) {
+		t.Fatalf("reload sequence does not contain candidate then rollback: %d configs", len(loaded))
+	}
+	generated, err := os.ReadFile(ResolvePaths(home).GeneratedConfig)
+	if err != nil || !bytes.Equal(generated, bundle.JSON) {
+		t.Fatalf("promotion failure changed generated config: %q, %v", generated, err)
+	}
+}
+
+func installManagedRuntimeFakes(t *testing.T) {
+	t.Helper()
+	oldStart := managedRuntimeStart
+	oldReload := managedRuntimeReload
+	oldStop := managedRuntimeStop
+	oldStage := managedRuntimeStage
+	oldPromote := managedRuntimePromote
+	oldInterval := managedRuntimePollInterval
+	managedRuntimeStop = func() error { return nil }
+	t.Cleanup(func() {
+		managedRuntimeStart = oldStart
+		managedRuntimeReload = oldReload
+		managedRuntimeStop = oldStop
+		managedRuntimeStage = oldStage
+		managedRuntimePromote = oldPromote
+		managedRuntimePollInterval = oldInterval
+	})
+}
+
+func waitForFileContents(t *testing.T, path string, want []byte) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		contents, err := os.ReadFile(path)
+		if err == nil && bytes.Equal(contents, want) {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("file %s did not reach expected contents", path)
 }
 
 func TestLoadBundleKeepsReleaseWhenHubShareIsInvalid(t *testing.T) {

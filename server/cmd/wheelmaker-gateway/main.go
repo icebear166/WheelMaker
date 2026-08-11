@@ -62,11 +62,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if *home == "" || flags.NArg() != 0 {
 			return errors.New("validate requires exactly --home")
 		}
-		bundle, err := gateway.LoadBundle(*home)
+		_, err := loadCandidate(*home, false, stderr)
 		if err != nil {
-			return err
-		}
-		if err := gateway.ValidateJSON(bundle.JSON); err != nil {
 			return err
 		}
 		_, err = fmt.Fprintln(stdout, "valid")
@@ -81,18 +78,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if *home == "" || flags.NArg() != 0 {
 			return errors.New("render requires exactly --home")
 		}
-		if err := gateway.EnsureHome(*home); err != nil {
-			return err
-		}
 		paths := gateway.ResolvePaths(*home)
-		if err := ensureGlobalConfig(paths.ConfigFile); err != nil {
-			return err
-		}
-		bundle, err := gateway.LoadBundle(*home)
+		bundle, err := loadCandidate(*home, true, stderr)
 		if err != nil {
-			return err
-		}
-		if err := gateway.ValidateJSON(bundle.JSON); err != nil {
 			return err
 		}
 		if err := gateway.WriteGenerated(paths.GeneratedConfig, bundle.JSON); err != nil {
@@ -110,7 +98,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if *home == "" || flags.NArg() != 0 {
 			return errors.New("serve requires exactly --home")
 		}
-		return serve(*home, stdout)
+		return serve(*home, stdout, stderr)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -134,19 +122,9 @@ func printPaths(home string, stdout io.Writer) error {
 	})
 }
 
-func serve(home string, stdout io.Writer) error {
-	if err := gateway.EnsureHome(home); err != nil {
-		return err
-	}
-	paths := gateway.ResolvePaths(home)
-	if err := ensureGlobalConfig(paths.ConfigFile); err != nil {
-		return err
-	}
-	bundle, err := gateway.LoadBundle(home)
+func serve(home string, stdout, stderr io.Writer) error {
+	bundle, err := loadCandidate(home, true, stderr)
 	if err != nil {
-		return err
-	}
-	if err := gateway.WriteGenerated(paths.GeneratedConfig, bundle.JSON); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(stdout, "serving Gateway from %s\n", home); err != nil {
@@ -154,7 +132,28 @@ func serve(home string, stdout io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return gateway.RunManaged(ctx, home, bundle.JSON)
+	return gateway.RunManaged(ctx, home, bundle)
+}
+
+func loadCandidate(home string, initialize bool, stderr io.Writer) (gateway.ConfigBundle, error) {
+	if initialize {
+		if err := gateway.EnsureHome(home); err != nil {
+			return gateway.ConfigBundle{}, err
+		}
+		if err := ensureGlobalConfig(gateway.ResolvePaths(home).ConfigFile); err != nil {
+			return gateway.ConfigBundle{}, err
+		}
+	}
+	bundle, err := gateway.LoadBundle(home)
+	if err != nil {
+		return gateway.ConfigBundle{}, err
+	}
+	for _, warning := range bundle.Warnings {
+		if _, err := fmt.Fprintf(stderr, "warning: %s\n", warning.String()); err != nil {
+			return gateway.ConfigBundle{}, err
+		}
+	}
+	return bundle, nil
 }
 
 func ensureGlobalConfig(path string) error {
