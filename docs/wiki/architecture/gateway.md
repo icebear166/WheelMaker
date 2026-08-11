@@ -1,4 +1,4 @@
-> 摘要：本页维护 WheelMaker Gateway 的宿主机级入口、统一配置、TLS 和运行时边界。
+> 摘要：本页维护 WheelMaker Gateway 公网入口与 Windows Desktop Localhost 本机入口的配置所有权、路由、安全和运行时边界。
 
 # Gateway
 
@@ -6,6 +6,52 @@ WheelMaker Gateway (`wheelmaker-gateway`) 是独立可执行程序，在进程�
 每台物理机只运行一个 Gateway，由它统一占用公网端口并按主机名聚合 Registry、Release
 和 Share 路由。Gateway 不合并进 Hub 或 Release Server，也不把 Registry Web 编译进
 二进制。
+
+Windows Desktop 另有一个与 Gateway 互斥的 Localhost 连接分支。它只为同机、同一操作
+系统用户运行的 EXE 提供本机 Workspace 入口，不是新的公网 Gateway，也不改变本页下述
+Gateway 的安装、配置或生命周期。
+
+## Desktop Localhost 入口
+
+Desktop 的连接配置是选择 `gateway` 或 `localhost` 的唯一事实源。Desktop 不读取 Hub
+`config.json` 来推导模式：Gateway 分支持久化 HTTPS Base URL 并沿用远程 TLS 流程；
+Localhost 分支不保存地址，固定使用 `http://127.0.0.1:9633`。旧 Desktop 配置只有合法
+`baseUrl` 时按 Gateway 迁移，没有连接配置时由用户在 Desktop 入口明确选择。
+
+Localhost 模式由 Desktop 进程内的 loopback edge 提供：
+
+```text
+WheelMakerDesktop.exe
+  http://127.0.0.1:9633/<private-base-path>/
+    static + SPA fallback -> ~/.wheelmaker/web/local-index.html + hashed assets
+    /ws subtree           -> http://127.0.0.1:9630
+```
+
+- listener 只绑定固定 IPv4 loopback `127.0.0.1:9633`，不选择动态端口、不接受 LAN 地址，
+  也不复用已退休的 `9632`；固定 Origin 使同一模式内的 localStorage、IndexedDB 和 Cache
+  Storage 在 Desktop 重启或升级后保持同一站点边界。
+- Desktop 私密保存一个高熵 Base Path。listener 对其他 Host、Base Path 和路径逃逸请求
+  fail closed；Localhost 页面、Registry HTTP/WebSocket、Preview 和下载都位于该 Base
+  Path 下。
+- 静态内容来自标准部署已有的 `~/.wheelmaker/web`，不嵌入 Desktop EXE。专用
+  `local-index.html` 与 Gateway `index.html` 复用同一批内容哈希 JS/CSS，但允许同源
+  `ws:` 且不使用 `upgrade-insecure-requests`；Gateway 的 HTTPS CSP 保持不变。
+- Registry 仍负责 Token 校验、Session、CSRF、撤销、过期、Token 轮换和全部业务路由。
+  Registry 返回的 Secure Session Cookie 由 Desktop edge 消费并以当前用户私有文件权限
+  保存，不返回 WebView；后续 HTTP/WebSocket 请求由 edge 附加该 opaque Cookie。Token
+  和 CSRF 不由 Desktop 持久化。
+- Desktop Bridge 只授权精确 Localhost Origin、私密 Base Path、顶层 Frame 和当前已提交
+  的导航。普通浏览器、Android、Local Dev、Bootstrap、其他本机页面、iframe 和旧导航
+  不继承 Localhost 能力。
+- `9633` 被占用、Web 资产缺失或 `9630` Registry 不可达时，Desktop 保留 Localhost 选择
+  并显示 Retry/Change Connection，不自动回退 Gateway。明确离开连接时沿用现有 logout、
+  credential 删除和 WebView 站点数据清理；Gateway 与 Localhost Origin 之间不迁移数据。
+
+Localhost 不安装、启动、停止或配置 Hub、Registry、Gateway。标准部署已经可以在
+`publicUrl` 为空时启动 loopback Registry `127.0.0.1:9630` 并安装 Web 目录，因此部署命令
+和 Hub 配置 schema 不增加 Localhost 参数。该模式仅支持 canonical `~/.wheelmaker`、同机
+同用户 Windows Desktop EXE；普通浏览器、Android、远程 Desktop、自定义 Registry 端口、
+自定义 Home 和 LAN 均不在支持范围内。
 
 ## 运行时边界
 
@@ -228,3 +274,5 @@ deploy-release-server.bat                            # 部署 Release，并更�
 > 原始 Gateway 设计（历史）：[`docs/scope/2026-08-05-wheelmaker-gateway.md`](../../scope/2026-08-05-wheelmaker-gateway.md)
 >
 > 用户 Caddy 站点：[`docs/scope/2026-08-12-gateway-custom-caddy-sites.md`](../../scope/2026-08-12-gateway-custom-caddy-sites.md)
+>
+> Desktop Localhost 模式：[`docs/scope/2026-08-12-desktop-local-host-mode.md`](../../scope/2026-08-12-desktop-local-host-mode.md)

@@ -21,21 +21,21 @@
 
 **Acceptance:** The Gateway architecture page explains that Desktop Localhost is an EXE-only loopback presentation/proxy adapter, does not use or configure Gateway, does not read Hub config, and relies on the existing empty-`publicUrl`/loopback Registry deployment state without changing deployment ownership.
 
-- [ ] **Step 1: Re-read the approved spec and current Gateway wiki**
+- [x] **Step 1: Re-read the approved spec and current Gateway wiki**
 
 Extract only stable architectural facts: connection ownership, fixed ports, static/proxy data flow, authentication ownership, supported clients, and explicit deployment/Gateway exclusions.
 
-- [ ] **Step 2: Update the wiki before production implementation**
+- [x] **Step 2: Update the wiki before production implementation**
 
 Add a concise Desktop Localhost section and update the layout/route discussion where needed. Preserve the existing Gateway lifecycle, schema, TLS, public route, and deployment documentation. Do not add a deployment mode or claim Hub config controls Desktop.
 
-- [ ] **Step 3: Verify wiki scope and formatting**
+- [x] **Step 3: Verify wiki scope and formatting**
 
 Run: `git diff --check -- docs/wiki/architecture/gateway.md`
 
 Expected: exit 0; only the approved Gateway wiki target changes.
 
-- [ ] **Step 4: Git checkpoint**
+- [x] **Step 4: Git checkpoint**
 
 After verification passes, invoke `git-workflow` in `checkpoint` mode for `docs/wiki/architecture/gateway.md`. Record commit hash + subject.
 
