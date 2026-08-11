@@ -117,6 +117,57 @@
   min-height: 0;
 }
 
+.preview-workbench-drawer-toolbar {
+  flex: 0 0 auto;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.preview-workbench-drawer-primary-control {
+  min-width: 0;
+  min-height: 28px;
+  flex: 1 1 auto;
+}
+
+.preview-workbench-drawer-icon-button {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.preview-workbench-drawer-icon-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.preview-workbench-drawer-icon-button:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 1px;
+}
+
+.preview-workbench-drawer-icon-button.active {
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
+}
+
+.preview-workbench-drawer-icon-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .workbench-chrome-fullscreen-toggle {
   position: absolute;
   right: max(14px, var(--wm-safe-area-right));

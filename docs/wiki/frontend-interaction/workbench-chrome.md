@@ -26,6 +26,9 @@ Preview 与 Terminal 是内容不同、Chrome 语言一致的 Workbench。两者
 - PC 端 drawer 在 Preview 左侧外部打开，覆盖 chat 列、不占用 Preview 空间，Preview resize 时跟随其左缘；移动端 drawer 仍在 Preview 内部左缘滑出。
 - drawer 是临时层：点击树内文件不关闭 drawer；点击 drawer 外区域、Esc 或再点激活按钮关闭；点击另一工具按钮原地切换内容。
 - 文件搜索框固定在 files drawer 面板顶部（含定位当前文件）；Git drawer 无搜索。
+- files 与 Git drawer 的顶部工具栏共享同一套高度、间距、分隔线和控件层级：文件搜索与 Git 分支选择占据主控件区域，定位、刷新和 pin 使用同尺寸 ghost 图标按钮。
+- pin 保持 Lucide 线性图标；开启态通过 accent 颜色与柔和背景表达，不把图标填充为实心轮廓。
+- 打开 files drawer 时仅 PC 端自动聚焦文件搜索；移动端保持当前焦点，用户点击搜索框后再唤起输入法。
 - 文件树（含搜索结果树）与 Git 面板共享一套行视觉：缩进参考线、目录/文件层级区分、hover/选中/当前预览文件高亮；Git 文件保持平铺结构，不做树形化。
 
 ## Terminal 呈现

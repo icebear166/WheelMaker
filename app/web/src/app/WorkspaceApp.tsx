@@ -9398,12 +9398,12 @@ export function App() {
   }, [clearPreviewFileTreeSearchTimer]);
 
   useEffect(() => {
-    if (previewWorkbench.drawerMode === 'files') {
+    if (isWide && previewWorkbench.drawerMode === 'files') {
       focusPreviewFileTreeSearch();
     } else {
       resetPreviewFileTreeSearchSession();
     }
-  }, [focusPreviewFileTreeSearch, previewWorkbench.drawerMode, resetPreviewFileTreeSearchSession]);
+  }, [focusPreviewFileTreeSearch, isWide, previewWorkbench.drawerMode, resetPreviewFileTreeSearchSession]);
 
   const clearQuickFileSearchTimer = useCallback(() => {
     if (quickFileSearchTimerRef.current !== null) {
@@ -21530,7 +21530,7 @@ export function App() {
       <Icon name="search" className="preview-workbench-tree-search-icon" />
       <input
         ref={previewFileTreeSearchInputRef}
-        className="preview-workbench-tree-search-input"
+        className="preview-workbench-tree-search-input preview-workbench-drawer-primary-control"
         value={previewFileTreeSearchQuery}
         onChange={event => updatePreviewFileTreeSearchQuery(event.target.value)}
         onKeyDown={handlePreviewFileTreeSearchInputKeyDown}
@@ -21539,7 +21539,7 @@ export function App() {
       />
       <button
         type="button"
-        className="preview-workbench-tree-tool-button"
+        className="preview-workbench-tree-tool-button preview-workbench-drawer-icon-button"
         onClick={locateActivePreviewFileInTree}
         disabled={!chatFilePeek?.path || isAbsolutePreviewFilePath(chatFilePeek.path)}
         data-tooltip={chatFilePeek?.path ? 'Locate current file' : 'No current file to locate'}
@@ -21549,13 +21549,13 @@ export function App() {
       </button>
       <button
         type="button"
-        className={`preview-workbench-tree-tool-button${previewDrawerPinned ? ' active' : ''}`}
+        className={`preview-workbench-tree-tool-button preview-workbench-drawer-icon-button${previewDrawerPinned ? ' active' : ''}`}
         onClick={() => setPreviewDrawerPinned(pinned => !pinned)}
         data-tooltip={previewDrawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
         aria-label={previewDrawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
         aria-pressed={previewDrawerPinned}
       >
-        <Icon name="pin" filled={previewDrawerPinned} />
+        <Icon name="pin" />
       </button>
     </>
   );

@@ -193,8 +193,8 @@ export function GitHistoryPanel({
 
   return (
     <div className="git-history-panel">
-      <div className="git-history-toolbar">
-        <div ref={branchMenuRef} className="git-branch-picker">
+      <div className="preview-workbench-drawer-toolbar git-history-toolbar">
+        <div ref={branchMenuRef} className="git-branch-picker preview-workbench-drawer-primary-control">
           <button
             type="button"
             className="git-toolbar-button git-branch-trigger"
@@ -236,7 +236,7 @@ export function GitHistoryPanel({
         </div>
         <button
           type="button"
-          className="git-toolbar-button icon-only"
+          className="git-toolbar-button icon-only preview-workbench-drawer-icon-button"
           aria-label="Refresh Git history"
           data-tooltip="Refresh Git history"
           disabled={!snapshot.online || snapshot.historyLoading || snapshot.statusLoading}
@@ -247,13 +247,13 @@ export function GitHistoryPanel({
         {onToggleDrawerPin ? (
           <button
             type="button"
-            className={`git-toolbar-button icon-only${drawerPinned ? ' active' : ''}`}
+            className={`git-toolbar-button icon-only preview-workbench-drawer-icon-button${drawerPinned ? ' active' : ''}`}
             aria-label={drawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
             data-tooltip={drawerPinned ? 'Unpin drawer' : 'Pin drawer open'}
             aria-pressed={drawerPinned}
             onClick={onToggleDrawerPin}
           >
-            <Icon name="pin" filled={drawerPinned} />
+            <Icon name="pin" />
           </button>
         ) : null}
         {!snapshot.online ? <span className="git-offline-pill">Offline</span> : null}

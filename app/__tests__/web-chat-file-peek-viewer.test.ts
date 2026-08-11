@@ -506,6 +506,48 @@ describe('web chat file peek viewer', () => {
     expect(drawerHost).toContain('bottom: 0;');
   });
 
+  test('mobile file drawer opening preserves focus while desktop opening focuses search', () => {
+    const mainTsx = readSourceText(mainPath);
+    const quickSearchStart = mainTsx.indexOf('const clearQuickFileSearchTimer = useCallback(');
+    expect(quickSearchStart).toBeGreaterThanOrEqual(0);
+    const focusEffectStart = mainTsx.lastIndexOf('useEffect(() => {', quickSearchStart);
+    const focusEffect = mainTsx.slice(focusEffectStart, quickSearchStart);
+
+    expect(focusEffect).toContain("if (isWide && previewWorkbench.drawerMode === 'files')");
+    expect(focusEffect).toContain(
+      '[focusPreviewFileTreeSearch, isWide, previewWorkbench.drawerMode, resetPreviewFileTreeSearchSession]',
+    );
+  });
+
+  test('file and Git drawers share toolbar controls and keep pin icons outlined', () => {
+    const mainTsx = readSourceText(mainPath);
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const gitTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'git', 'GitHistoryPanel.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(chromeTsx).toContain(
+      'className="preview-workbench-drawer-toolbar preview-workbench-drawer-search"',
+    );
+    expect(gitTsx).toContain(
+      'className="preview-workbench-drawer-toolbar git-history-toolbar"',
+    );
+    expect(mainTsx).toContain('preview-workbench-drawer-primary-control');
+    expect(gitTsx).toContain('preview-workbench-drawer-primary-control');
+    expect(mainTsx).toContain('preview-workbench-drawer-icon-button');
+    expect(gitTsx).toContain('preview-workbench-drawer-icon-button');
+    expect(mainTsx).not.toContain('<Icon name="pin" filled={previewDrawerPinned} />');
+    expect(gitTsx).not.toContain('<Icon name="pin" filled={drawerPinned} />');
+
+    const toolbar = cssRuleBlock(stylesCss, '.preview-workbench-drawer-toolbar');
+    expect(toolbar).toContain('min-height: 44px;');
+    expect(toolbar).toContain('gap: 6px;');
+    expect(toolbar).toContain('padding: 7px 8px;');
+    const iconButton = cssRuleBlock(stylesCss, '.preview-workbench-drawer-icon-button');
+    expect(iconButton).toContain('width: 28px;');
+    expect(iconButton).toContain('height: 28px;');
+    expect(iconButton).toContain('background: transparent;');
+  });
+
   test('preview file tree opens with inline search and renders search results as a tree', () => {
     const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
@@ -514,14 +556,20 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('fileDrawerSearch');
     expect(chromeTsx).toContain('const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);');
     expect(chromeTsx).toContain('!containsTarget(drawerToolsRef.current, target)');
-    expect(chromeTsx).toContain('className="preview-workbench-drawer-search"');
+    expect(chromeTsx).toContain(
+      'className="preview-workbench-drawer-toolbar preview-workbench-drawer-search"',
+    );
     expect(chromeTsx).toContain("mode === 'mobile'");
 
     expect(mainTsx).toContain('const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);');
     expect(mainTsx).toContain('const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState(\'\');');
     expect(mainTsx).toContain('const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);');
-    expect(mainTsx).toContain('className="preview-workbench-tree-search-input"');
-    expect(mainTsx).toContain('className="preview-workbench-tree-tool-button"');
+    expect(mainTsx).toContain(
+      'className="preview-workbench-tree-search-input preview-workbench-drawer-primary-control"',
+    );
+    expect(mainTsx).toContain(
+      'className="preview-workbench-tree-tool-button preview-workbench-drawer-icon-button"',
+    );
     expect(mainTsx).toContain('onClick={locateActivePreviewFileInTree}');
     expect(mainTsx).toContain('<Icon name="locateFixed"');
     expect(mainTsx).toContain('const previewFileTreeDepthIndent = 14;');

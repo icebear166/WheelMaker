@@ -126,7 +126,7 @@ export function PreviewWorkbenchChrome({
       className={`preview-workbench-drawer-panel${useDrawerPortal ? ' external' : ''}${drawerExiting ? ' exiting' : ''}`}
     >
       {renderedMode === 'files' && fileDrawerSearch ? (
-        <div className="preview-workbench-drawer-search">{fileDrawerSearch}</div>
+        <div className="preview-workbench-drawer-toolbar preview-workbench-drawer-search">{fileDrawerSearch}</div>
       ) : null}
       <div className="preview-workbench-drawer-content">{drawerContent}</div>
     </div>
