@@ -168,7 +168,7 @@ func TestFileDownloadPrepareValidatesBrowserSessionAndProbesHub(t *testing.T) {
 	if prepared.Payload["downloadPath"] == "" || prepared.Payload["fileName"] != "report.txt" || prepared.Payload["size"] != float64(12) {
 		t.Fatalf("prepared payload=%+v", prepared.Payload)
 	}
-	if path := prepared.Payload["downloadPath"].(string); path == "/download/" || len(path) <= len("/download/") {
+	if path := prepared.Payload["downloadPath"].(string); !strings.HasPrefix(path, "/ws/download/") || len(path) <= len("/ws/download/") {
 		t.Fatalf("downloadPath=%q", path)
 	}
 
@@ -311,7 +311,7 @@ func TestFileDownloadHTTPRejectsRange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := http.NewRequest(http.MethodGet, testServer.URL+"/download/"+token, nil)
+	request, err := http.NewRequest(http.MethodGet, testServer.URL+"/ws/download/"+token, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -388,22 +388,27 @@ func TestFileDownloadHTTPCancellationClosesHubTransfer(t *testing.T) {
 
 func TestRegistryFileDownloadRouteIsExact(t *testing.T) {
 	token := strings.Repeat("A", 43)
-	basePath, gotToken, ok := registryFileDownloadRoute("/wheelmaker/download/" + token)
+	basePath, gotToken, ok := registryFileDownloadRoute("/wheelmaker/ws/download/" + token)
 	if !ok || basePath != "/wheelmaker/" || gotToken != token {
 		t.Fatalf("route=(%q, %q, %v)", basePath, gotToken, ok)
 	}
+	rootBasePath, rootToken, rootOK := registryFileDownloadRoute("/ws/download/" + token)
+	if !rootOK || rootBasePath != "/" || rootToken != token {
+		t.Fatalf("root route=(%q, %q, %v)", rootBasePath, rootToken, rootOK)
+	}
 	for _, requestPath := range []string{
-		"/download/short",
-		"/wheelmaker/download/" + token + "/extra",
-		"/wheelmaker//download/" + token,
-		"/wheelmaker/../download/" + token,
-		"/wheelmaker\\download\\" + token,
+		"/download/" + token,
+		"/ws/download/short",
+		"/wheelmaker/ws/download/" + token + "/extra",
+		"/wheelmaker//ws/download/" + token,
+		"/wheelmaker/../ws/download/" + token,
+		"/wheelmaker\\ws\\download\\" + token,
 	} {
 		if _, _, accepted := registryFileDownloadRoute(requestPath); accepted {
 			t.Fatalf("accepted malformed route %q", requestPath)
 		}
 	}
-	request := httptest.NewRequest(http.MethodGet, "https://example.com/download/%41"+strings.Repeat("A", 42), nil)
+	request := httptest.NewRequest(http.MethodGet, "https://example.com/ws/download/%41"+strings.Repeat("A", 42), nil)
 	if request.URL.RawPath == "" {
 		t.Fatal("encoded test URL did not retain RawPath")
 	}

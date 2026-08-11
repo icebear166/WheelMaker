@@ -90,7 +90,7 @@ export function resolveRegistryDownloadURL(downloadPath: string, baseURI: string
   ) {
     throw new Error('Registry download URL is not same-origin.');
   }
-  const prefix = `${base.pathname}download/`;
+  const prefix = `${base.pathname}ws/download/`;
   const token = target.pathname.startsWith(prefix)
     ? target.pathname.slice(prefix.length)
     : '';
@@ -98,6 +98,11 @@ export function resolveRegistryDownloadURL(downloadPath: string, baseURI: string
     throw new Error('Registry download URL is invalid.');
   }
   return target.toString();
+}
+
+export function fileDownloadFailureMessage(error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return `Failed to download file: ${reason}`;
 }
 
 export async function startManagedFileDownload(

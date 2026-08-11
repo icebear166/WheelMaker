@@ -214,7 +214,7 @@ func (s *Server) handleFileDownloadPrepare(clientPeer *peerConn, state *connecti
 		_ = s.writeError(clientPeer, in.RequestID, in.Method, codeBusy, "too many pending file downloads", nil)
 		return
 	}
-	downloadPath := state.browserBasePath + "download/" + token
+	downloadPath := state.browserBasePath + "ws/download/" + token
 	_ = s.writeResponse(clientPeer, in.RequestID, in.Method, in.ProjectID, map[string]any{
 		"ok":           true,
 		"downloadPath": downloadPath,
@@ -243,7 +243,7 @@ func registryFileDownloadRoute(requestPath string) (basePath, token string, ok b
 	if requestPath == "" || !strings.HasPrefix(requestPath, "/") || strings.Contains(requestPath, "\\") || path.Clean(requestPath) != requestPath {
 		return "", "", false
 	}
-	const marker = "/download/"
+	const marker = "/ws/download/"
 	if strings.Count(requestPath, marker) != 1 {
 		return "", "", false
 	}

@@ -457,7 +457,8 @@ class MainActivity : Activity(), DeepSeekLoginHost, LaunchSplashHost {
                 if (result != null) {
                     sendSuccess(replyProxy, parsed.first.requestId, result)
                 }
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                recordNativeActionFailure(androidWebDiagnostics, parsed.first.action, error)
                 sendError(replyProxy, parsed.first.requestId, "native_action_failed")
             }
         }

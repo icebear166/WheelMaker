@@ -12,20 +12,21 @@ class AndroidFileDownloadRuntimeTest {
 
     @Test
     fun acceptsOnlyExactConfiguredDownloadCapabilityUrl() {
-        val valid = "https://example.com/app/download/$validToken"
+        val valid = "https://example.com/app/ws/download/$validToken"
         assertTrue(isTrustedRegistryDownloadUrl("https://example.com/app/", valid))
 
         for (url in listOf(
-            "http://example.com/app/download/$validToken",
-            "https://evil.example/app/download/$validToken",
-            "https://example.com:444/app/download/$validToken",
-            "https://user@example.com/app/download/$validToken",
-            "https://example.com/other/download/$validToken",
-            "https://example.com/app/download/$validToken/extra",
-            "https://example.com/app/download/$validToken?query=1",
-            "https://example.com/app/download/$validToken#fragment",
-            "https://example.com/app/download/%2e%2e/$validToken",
-            "https://example.com/app/download/short"
+            "http://example.com/app/ws/download/$validToken",
+            "https://evil.example/app/ws/download/$validToken",
+            "https://example.com:444/app/ws/download/$validToken",
+            "https://user@example.com/app/ws/download/$validToken",
+            "https://example.com/other/ws/download/$validToken",
+            "https://example.com/app/download/$validToken",
+            "https://example.com/app/ws/download/$validToken/extra",
+            "https://example.com/app/ws/download/$validToken?query=1",
+            "https://example.com/app/ws/download/$validToken#fragment",
+            "https://example.com/app/ws/download/%2e%2e/$validToken",
+            "https://example.com/app/ws/download/short"
         )) {
             assertFalse(url, isTrustedRegistryDownloadUrl("https://example.com/app/", url))
         }
@@ -43,7 +44,7 @@ class AndroidFileDownloadRuntimeTest {
                 42L
             }
         )
-        val url = "https://example.com/app/download/$validToken"
+        val url = "https://example.com/app/ws/download/$validToken"
 
         val downloadId = runtime.start(
             url = url,
@@ -88,7 +89,7 @@ class AndroidFileDownloadRuntimeTest {
 
         assertTrue(runCatching {
             runtime.start(
-                "https://evil.example/app/download/$validToken",
+                "https://evil.example/app/ws/download/$validToken",
                 "file.txt",
                 "text/plain",
                 10L

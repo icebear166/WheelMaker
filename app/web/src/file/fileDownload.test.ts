@@ -2,6 +2,7 @@ import {createAndroidNativeMessageTestHost} from '../../../testUtils/androidNati
 import type {AndroidNativeMessageTarget} from '../platform/android/androidNativeMessageBridge';
 import {
   fileDownloadSourceForLink,
+  fileDownloadFailureMessage,
   resolveRegistryDownloadURL,
   sessionAttachmentDownloadSource,
   startManagedFileDownload,
@@ -24,14 +25,15 @@ test('normalizes project, external, and persisted attachment sources', () => {
 
 test('accepts only an exact same-origin Registry capability URL', () => {
   expect(resolveRegistryDownloadURL(
-    '/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
+    '/wheelmaker/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
     'https://registry.example/wheelmaker/',
-  )).toBe('https://registry.example/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789');
+  )).toBe('https://registry.example/wheelmaker/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789');
   for (const path of [
-    'https://evil.example/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
+    'https://evil.example/wheelmaker/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
     '/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
-    '/wheelmaker/download/token/extra',
-    '/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789?x=1',
+    '/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
+    '/wheelmaker/ws/download/token/extra',
+    '/wheelmaker/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789?x=1',
   ]) {
     expect(() => resolveRegistryDownloadURL(path, 'https://registry.example/wheelmaker/')).toThrow();
   }
@@ -48,7 +50,7 @@ test('launches a browser download without fetching file bytes', async () => {
   };
   const prepare = jest.fn().mockResolvedValue({
     ok: true,
-    downloadPath: '/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
+    downloadPath: '/wheelmaker/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
     fileName: 'report.txt',
     mimeType: 'text/plain',
     size: 42,
@@ -67,7 +69,7 @@ test('launches a browser download without fetching file bytes', async () => {
 
   expect(prepare).toHaveBeenCalledWith('hub:project', 'csrf', {kind: 'project-file', path: 'report.txt'});
   expect(appendChild).toHaveBeenCalledWith(anchor);
-  expect(clicked).toEqual(['https://registry.example/wheelmaker/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789']);
+  expect(clicked).toEqual(['https://registry.example/wheelmaker/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789']);
   expect(removed).toHaveLength(1);
 });
 
@@ -87,7 +89,7 @@ test('reserves Android user action before prepare and launches the native downlo
     order.push('prepare');
     return {
       ok: true,
-      downloadPath: '/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
+      downloadPath: '/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
       fileName: 'report.txt', mimeType: 'text/plain', size: 42,
     };
   });
@@ -104,9 +106,16 @@ test('reserves Android user action before prepare and launches the native downlo
   expect(requests.at(-1)).toMatchObject({
     action: 'file.download.start',
     payload: {
-      url: 'https://registry.example/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
+      url: 'https://registry.example/ws/download/abcdefghijklmnopqrstuvwxyzABCDEFGH123456789',
       fileName: 'report.txt', mimeType: 'text/plain', size: 42,
       userActionToken: 'grant-1',
     },
   });
+});
+
+test('formats download failures for connected-workspace toast feedback', () => {
+  expect(fileDownloadFailureMessage(new Error('native_action_failed')))
+    .toBe('Failed to download file: native_action_failed');
+  expect(fileDownloadFailureMessage('request rejected'))
+    .toBe('Failed to download file: request rejected');
 });

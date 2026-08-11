@@ -88,6 +88,27 @@ class AndroidWebDiagnosticsTest {
     }
 
     @Test
+    fun recordsNativeActionFailureWithoutExceptionDetails() {
+        val diagnostics = AndroidWebDiagnostics(capacity = 3, now = { 1000L })
+
+        recordNativeActionFailure(
+            diagnostics,
+            "file.download.start",
+            IllegalStateException("cookie=secret-session")
+        )
+
+        val output = diagnostics.drainJson()
+        val details = JSONObject(output)
+            .getJSONArray("records")
+            .getJSONObject(0)
+            .getJSONObject("details")
+        assertEquals("native_action_failed", details.getString("nativeEvent"))
+        assertEquals("file.download.start", details.getString("action"))
+        assertEquals("unavailable", details.getString("reason"))
+        assertFalse(output.contains("secret-session"))
+    }
+
+    @Test
     fun mainActivitySharesNativeWebDiagnosticsBetweenClientAndBridge() {
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
@@ -100,6 +121,7 @@ class AndroidWebDiagnosticsTest {
         assertTrue(mainActivity.contains("configuredBaseUrl = { configuredBaseUrl }"))
         assertTrue(mainActivity.contains("WheelMakerBridge("))
         assertTrue(mainActivity.contains("androidWebDiagnostics"))
+        assertTrue(mainActivity.contains("recordNativeActionFailure(androidWebDiagnostics, parsed.first.action, error)"))
         assertTrue(bridge.contains("\"diagnostics.drain\""))
         assertTrue(bridge.contains("\"diagnostics.setLogLevel\""))
         assertTrue(bridge.contains("private fun setDiagnosticLogLevel(logLevel: String): String"))

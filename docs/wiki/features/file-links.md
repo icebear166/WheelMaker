@@ -56,7 +56,7 @@ Desktop 菜单按打开、文件复制、路径复制分为三组，不显示分
 
 下载目标始终是当前操作设备，不是文件所在的 Hub 主机。Web UI 只提交三种受管理来源：项目内当前普通文件、Hub 主机上的项目外绝对路径普通文件，以及能由 `sessionId` 配合 `attachmentId` 或受控 `file://` URI 解析的已发送 Session 附件。目录、已删除 Changed file、无法解析的附件、仅存在当前设备草稿中的附件、diff/历史快照、Relay 链接和任意 HTTP(S) URL 不进入下载链路。
 
-已认证 WebSocket 客户端通过 `file.download.prepare` 向 Registry 申请任务。请求包含当前 Web session 的 CSRF token、项目 ID 和一个源描述；Registry 先让项目所属 Hub 验证来源，再创建短时、高熵、只对应一个来源和一个下载任务的 capability URL。URL 只包含 Registry base path 与随机 token，不包含 Hub 地址或主机文件路径。下载 GET 还必须携带创建任务时的同一有效 Web session；token 本身不是匿名凭证，首次有效 GET 原子消费任务，后续 GET 不能再次读取内容。
+已认证 WebSocket 客户端通过 `file.download.prepare` 向 Registry 申请任务。请求包含当前 Web session 的 CSRF token、项目 ID 和一个源描述；Registry 先让项目所属 Hub 验证来源，再创建短时、高熵、只对应一个来源和一个下载任务的 capability URL。URL 固定为 Registry 的 `<base-path>/ws/download/<token>`，复用现有 `/ws*` Registry 入口，不要求 Gateway 增加单独下载路由；URL 不包含 Hub 地址或主机文件路径。下载 GET 还必须携带创建任务时的同一有效 Web session；token 本身不是匿名凭证，首次有效 GET 原子消费任务，后续 GET 不能再次读取内容。
 
 Registry 通过下载专用的 Hub `open`、顺序 `read` 和 `close` 方法传输内容。Hub 打开只读文件句柄，固定源文件名、大小、MIME 和文件身份；每次只读取一个有界分块，并在读取期间验证文件身份、大小和修改时间未变化。Registry 解码单个传输分块后立即写入同一个 HTTP 响应，不把完整文件读入 Hub、Registry 或 Web UI 内存，也不复用会整文件读取的 preview/read 方法。完成、客户端取消、Hub 断线、读取错误或源变化都会关闭句柄并使任务失效。
 
@@ -64,7 +64,7 @@ Registry 通过下载专用的 Hub `open`、顺序 `read` 和 `close` 方法传�
 
 - 浏览器通过同源 capability URL 交给浏览器下载管理器。
 - WheelMaker Desktop 通过同一 URL 交给 WebView2 原生下载界面，不新增读取 Hub 文件的 Desktop bridge。
-- Android Web UI 先在用户动作中保留一次 `file.download` grant，再将 prepare 返回的 URL 交给受信任 native bridge。Native 端重新验证 HTTPS scheme、Registry 精确 origin、base path 和 `/download/<token>` 结构，只复制该同源 URL 的当前 Web session cookie，然后交给系统 `DownloadManager` 与 Downloads 目录。
+- Android Web UI 先在用户动作中保留一次 `file.download` grant，再将 prepare 返回的 URL 交给受信任 native bridge。Native 端重新验证 HTTPS scheme、Registry 精确 origin、base path 和 `/ws/download/<token>` 结构，只复制该同源 URL 的当前 Web session cookie，然后交给系统 `DownloadManager` 与 Downloads 目录。下载准备或原生启动失败时，连接态界面显示 toast；Android 只记录原生 action 和分类原因，不记录异常正文、Cookie、URL 或 capability token。
 
 这些方法是 Registry 2.7 的增量能力，不修改 protocol version，也不改变现有 preview、附件读取或 Desktop `Copy file`。新客户端连接不支持下载方法的旧 Hub 时显示明确的不可用错误，不回退到整文件读取或 Base64 聚合。
 

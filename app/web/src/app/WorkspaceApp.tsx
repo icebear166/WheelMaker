@@ -604,6 +604,7 @@ import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/spee
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree } from '../file/FileExplorerTree';
 import {
+  fileDownloadFailureMessage,
   fileDownloadSourceForLink,
   sessionAttachmentDownloadSource,
   startManagedFileDownload,
@@ -20937,7 +20938,7 @@ export function App() {
   ) => {
     const csrfToken = registryAuth.status?.csrfToken || '';
     if (!csrfToken) {
-      setError('File download is unavailable.');
+      setToastMessage('File download is unavailable.');
       return;
     }
     startManagedFileDownload({
@@ -20947,7 +20948,7 @@ export function App() {
       prepare: (projectId, targetCSRFToken, targetSource) =>
         service.prepareFileDownload(projectId, targetCSRFToken, targetSource),
     }).catch(error => {
-      setError(`Failed to download file: ${error instanceof Error ? error.message : String(error)}`);
+      setToastMessage(fileDownloadFailureMessage(error));
     });
   };
   const handleChatFileLinkMenuAction = (action: ChatFileLinkMenuAction) => {
@@ -20979,7 +20980,7 @@ export function App() {
     }
     if (action === 'download') {
       if (!menuState.fileAvailable || !menuState.downloadSource) {
-        setError('File download is unavailable.');
+        setToastMessage('File download is unavailable.');
         return;
       }
       downloadManagedFile(menuProjectId, menuState.downloadSource);

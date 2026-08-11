@@ -93,6 +93,24 @@ class AndroidWebDiagnostics(
     }
 }
 
+internal fun recordNativeActionFailure(
+    diagnostics: AndroidWebDiagnostics,
+    action: String,
+    error: Exception
+) {
+    val reason = when (error) {
+        is IllegalArgumentException -> "invalid_argument"
+        is SecurityException -> "permission_denied"
+        is IllegalStateException -> "unavailable"
+        else -> "unexpected_error"
+    }
+    diagnostics.record(
+        "native_action_failed",
+        mapOf("action" to action, "reason" to reason),
+        level = "warn"
+    )
+}
+
 private data class AndroidWebDiagnosticRecord(
     val level: String,
     val details: Map<String, Any?>

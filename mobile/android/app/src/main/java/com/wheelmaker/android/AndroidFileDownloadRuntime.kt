@@ -58,7 +58,7 @@ fun isTrustedRegistryDownloadUrl(configuredBaseUrl: String, rawUrl: String): Boo
     if (candidate.rawPath != candidatePath || candidate.normalize().path != candidatePath) {
         return false
     }
-    val prefix = "${basePath}download/"
+    val prefix = "${basePath}ws/download/"
     if (!candidatePath.startsWith(prefix)) return false
     val token = candidatePath.removePrefix(prefix)
     return DOWNLOAD_TOKEN_PATTERN.matches(token)
