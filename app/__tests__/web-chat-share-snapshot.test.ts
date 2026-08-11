@@ -2,6 +2,7 @@ import {buildPromptDoneCopyRange} from '../web/src/chat/chatCopyRange';
 import {
   buildResponseChatShareSnapshot,
   buildSessionChatShareSnapshot,
+  type ChatShareContentOptions,
   type ChatShareSnapshotContext,
 } from '../web/src/chat/share/chatShareSnapshot';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
@@ -32,7 +33,97 @@ function context(): ChatShareSnapshotContext {
   };
 }
 
+function phasedMessage(
+  turnIndex: number,
+  text: string,
+  phase: 'commentary' | 'final_answer',
+): RegistryChatMessage {
+  return message(turnIndex, 'agent_message_chunk', {
+    text,
+    _meta: {wm: {messagePhase: phase}},
+  });
+}
+
 describe('chat share snapshot projector', () => {
+  test('hides lifecycle commentary by default for response and session snapshots', () => {
+    const turns = [
+      message(1, 'prompt_request', {contentBlocks: [{type: 'text', text: 'Question'}]}),
+      phasedMessage(2, 'Checking the implementation.', 'commentary'),
+      phasedMessage(3, 'Final answer.', 'final_answer'),
+      message(4, 'prompt_done', {stopReason: 'end_turn'}),
+    ];
+    const options: ChatShareContentOptions = {messageLifecycleSupported: true, includeWorkDetails: false};
+
+    const response = buildResponseChatShareSnapshot(turns, 4, context(), options);
+    const session = buildSessionChatShareSnapshot(turns, context(), options);
+
+    expect(response?.entries[0].markdown).toBe('Final answer.');
+    expect(session?.entries.find(entry => entry.role === 'assistant')?.markdown).toBe('Final answer.');
+  });
+
+  test('includes only commentary and final-answer messages when work details are selected', () => {
+    const turns = [
+      message(1, 'prompt_request', {contentBlocks: [{type: 'text', text: 'Question'}]}),
+      phasedMessage(2, 'Checking the implementation.', 'commentary'),
+      message(3, 'agent_message_chunk', {text: 'Unphased internal text'}),
+      message(4, 'agent_thought_chunk', {text: 'Hidden thought'}),
+      message(5, 'tool_call', {text: 'Hidden tool'}),
+      phasedMessage(6, 'Final answer.', 'final_answer'),
+      message(7, 'prompt_done', {stopReason: 'end_turn'}),
+    ];
+    const options: ChatShareContentOptions = {messageLifecycleSupported: true, includeWorkDetails: true};
+
+    const response = buildResponseChatShareSnapshot(turns, 7, context(), options);
+    const session = buildSessionChatShareSnapshot(turns, context(), options);
+
+    expect(response?.entries[0].markdown).toBe('Checking the implementation.\n\nFinal answer.');
+    expect(session?.entries.find(entry => entry.role === 'assistant')?.markdown).toBe(
+      'Checking the implementation.\n\nFinal answer.',
+    );
+    expect(JSON.stringify(session)).not.toMatch(/Unphased internal text|Hidden thought|Hidden tool/);
+  });
+
+  test('keeps unsupported sessions unchanged regardless of the work-details value', () => {
+    const turns = [
+      message(1, 'prompt_request', {contentBlocks: [{type: 'text', text: 'Question'}]}),
+      phasedMessage(2, 'Checking the implementation.', 'commentary'),
+      phasedMessage(3, 'Final answer.', 'final_answer'),
+      message(4, 'prompt_done', {stopReason: 'end_turn'}),
+    ];
+    const options: ChatShareContentOptions = {messageLifecycleSupported: false, includeWorkDetails: false};
+
+    const response = buildResponseChatShareSnapshot(turns, 4, context(), options);
+    const session = buildSessionChatShareSnapshot(turns, context(), options);
+
+    expect(response?.entries[0].markdown).toBe('Checking the implementation.\n\nFinal answer.');
+    expect(session?.entries.find(entry => entry.role === 'assistant')?.markdown).toBe(
+      'Checking the implementation.\n\nFinal answer.',
+    );
+  });
+
+  test('falls back to the last assistant message when lifecycle history has no phase metadata', () => {
+    const turns = [
+      message(1, 'prompt_request', {contentBlocks: [{type: 'text', text: 'Question'}]}),
+      message(2, 'agent_message_chunk', {text: 'Legacy progress'}),
+      message(3, 'agent_message_chunk', {text: 'Legacy final'}),
+      message(4, 'prompt_done', {stopReason: 'end_turn'}),
+    ];
+
+    const hidden = buildSessionChatShareSnapshot(turns, context(), {
+      messageLifecycleSupported: true,
+      includeWorkDetails: false,
+    });
+    const included = buildSessionChatShareSnapshot(turns, context(), {
+      messageLifecycleSupported: true,
+      includeWorkDetails: true,
+    });
+
+    expect(hidden?.entries.find(entry => entry.role === 'assistant')?.markdown).toBe('Legacy final');
+    expect(included?.entries.find(entry => entry.role === 'assistant')?.markdown).toBe(
+      'Legacy progress\n\nLegacy final',
+    );
+  });
+
   test('projects a current response with the existing copy range semantics', () => {
     const turns = [
       message(1, 'prompt_request', {contentBlocks: [{type: 'text', text: 'Question'}]}),

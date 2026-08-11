@@ -16,6 +16,11 @@ export type ChatShareScope = 'response' | 'session';
 export type ChatShareRole = 'user' | 'assistant';
 export type ChatShareTerminalStatus = 'failed' | 'cancelled' | 'interrupted';
 
+export type ChatShareContentOptions = Readonly<{
+  messageLifecycleSupported: boolean;
+  includeWorkDetails: boolean;
+}>;
+
 export type ChatShareAttachment = Readonly<{
   kind: 'image' | 'file';
   label: string;
@@ -84,6 +89,38 @@ function contentBlocks(message: RegistryChatMessage): RegistrySessionContentBloc
   return message.param.contentBlocks.filter(
     (block): block is RegistrySessionContentBlock => !!block && typeof block === 'object',
   );
+}
+
+function assistantMessagePhase(message: RegistryChatMessage): 'commentary' | 'final_answer' | '' {
+  if (message.method !== 'agent_message_chunk') return '';
+  const meta = message.param?._meta;
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return '';
+  const wm = (meta as Record<string, unknown>).wm;
+  if (!wm || typeof wm !== 'object' || Array.isArray(wm)) return '';
+  const phase = (wm as Record<string, unknown>).messagePhase;
+  return phase === 'commentary' || phase === 'final_answer' ? phase : '';
+}
+
+function shareAssistantMarkdown(
+  messages: RegistryChatMessage[],
+  options?: ChatShareContentOptions,
+): string {
+  const assistantMessages = messages.filter(message => message.method === 'agent_message_chunk');
+  if (!options?.messageLifecycleSupported) {
+    return buildAgentMessageMarkdown(assistantMessages);
+  }
+  const finalMessages = assistantMessages.filter(message => assistantMessagePhase(message) === 'final_answer');
+  if (finalMessages.length === 0) {
+    return buildAgentMessageMarkdown(options.includeWorkDetails
+      ? assistantMessages
+      : assistantMessages.slice(-1));
+  }
+  return buildAgentMessageMarkdown(options.includeWorkDetails
+    ? assistantMessages.filter(message => {
+        const phase = assistantMessagePhase(message);
+        return phase === 'commentary' || phase === 'final_answer';
+      })
+    : finalMessages);
 }
 
 function userMarkdown(messages: RegistryChatMessage[]): string {
@@ -180,6 +217,7 @@ export function buildResponseChatShareSnapshot(
   turns: RegistryChatMessage[],
   doneTurnIndex: number,
   context: ChatShareSnapshotContext,
+  contentOptions?: ChatShareContentOptions,
 ): ChatShareSnapshot | null {
   const terminalTurnIndex = Math.trunc(doneTurnIndex);
   const done = turns.find(message => (
@@ -197,12 +235,24 @@ export function buildResponseChatShareSnapshot(
   if (!range.ok) {
     return null;
   }
+  const markdown = shareAssistantMarkdown(
+    turns.filter(message => {
+      const turnIndex = positiveTurnIndex(message);
+      return message.sessionId === context.sessionId &&
+        turnIndex > range.startTurnIndex &&
+        turnIndex < range.endTurnIndex;
+    }),
+    contentOptions,
+  );
+  if (!markdown) {
+    return null;
+  }
   return freezeSnapshot({
     ...frozenSnapshotBase('response', context),
     terminalTurnIndex,
     entries: [{
       role: 'assistant',
-      markdown: range.markdown,
+      markdown,
       attachments: [],
       startTurnIndex: range.startTurnIndex,
       endTurnIndex: range.endTurnIndex,
@@ -213,12 +263,13 @@ export function buildResponseChatShareSnapshot(
 export function buildSessionChatShareSnapshot(
   turns: RegistryChatMessage[],
   context: ChatShareSnapshotContext,
+  contentOptions?: ChatShareContentOptions,
 ): ChatShareSnapshot | null {
   const entries: ChatShareEntry[] = [];
   for (const range of completedPromptRanges(turns, context.sessionId)) {
     const markdown = userMarkdown(range.messages);
     const attachments = userAttachments(range.messages);
-    const assistantMarkdown = buildAgentMessageMarkdown(range.messages.slice(1, -1));
+    const assistantMarkdown = shareAssistantMarkdown(range.messages.slice(1, -1), contentOptions);
     const status = resolvePromptDoneStatus(range.done.param)?.kind;
     if (markdown || attachments.length > 0) {
       entries.push({
