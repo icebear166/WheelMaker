@@ -17966,8 +17966,14 @@ export function App() {
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
-          exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
-          exportHtmlBusy={message.method === 'prompt_done' && exportingMarkdownHtmlKey !== ''}
+          shareMenuMode={isWide ? 'popover' : 'sheet'}
+          shareResponseDisabled={copyRange ? !copyRange.ok : true}
+          shareSessionDisabled={true}
+          shareBusyAction={exportingMarkdownImageTurnIndex !== null
+            ? {scope: 'response', format: 'image'}
+            : exportingMarkdownHtmlKey !== ''
+              ? {scope: 'response', format: 'html'}
+              : null}
           forkSupported={
             selectedChatSession?.sessionActions?.fork?.supported === true &&
             selectedChatSession?.sessionActions?.fork?.historicalTurn === true
@@ -17987,14 +17993,16 @@ export function App() {
               ? () => copyPromptDoneMarkdownEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
-          onExportPromptDoneImage={
+          onSharePromptDone={
             message.method === 'prompt_done'
-              ? () => exportPromptDoneMarkdownImageEvent(doneTurnIndex).catch(() => undefined)
-              : undefined
-          }
-          onExportPromptDoneHtml={
-            message.method === 'prompt_done'
-              ? () => exportPromptDoneMarkdownHtmlEvent(doneTurnIndex).catch(() => undefined)
+              ? (_terminalTurnIndex, action) => {
+                if (action.scope !== 'response') return;
+                if (action.format === 'image') {
+                  exportPromptDoneMarkdownImageEvent(doneTurnIndex).catch(() => undefined);
+                } else if (action.format === 'html') {
+                  exportPromptDoneMarkdownHtmlEvent(doneTurnIndex).catch(() => undefined);
+                }
+              }
               : undefined
           }
           onForkPromptDone={

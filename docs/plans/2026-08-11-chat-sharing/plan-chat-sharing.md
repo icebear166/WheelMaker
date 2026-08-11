@@ -320,7 +320,7 @@ Invoke `git-workflow-preferences` in `checkpoint` mode for the Web share contrac
 
 **Acceptance:** A completed response exposes Copy plus one Share trigger; the menu directly renders two labeled groups and six actions; Desktop uses a fixed anchored popover, narrow mode uses the shared bottom-sheet overlay; disabled/busy states, outside/scroll/Escape close, arrow-key navigation, focus restoration, and callbacks are covered.
 
-- [ ] **Step 1: Write failing menu component tests**
+- [x] **Step 1: Write failing menu component tests**
 
 Create `ChatShareMenu.test.tsx` and assert:
 
@@ -330,11 +330,11 @@ Create `ChatShareMenu.test.tsx` and assert:
 - per-scope disabled states leave the other group usable;
 - Escape closes and restores trigger focus; ArrowUp/ArrowDown/Home/End reuse shared keyboard semantics; scroll/resize/outside pointer close the popover.
 
-- [ ] **Step 2: Write failing ChatTurnView action assertions**
+- [x] **Step 2: Write failing ChatTurnView action assertions**
 
 Extend `ChatTurnView.test.tsx` to render `prompt_done` with Share callbacks. Assert Copy remains, camera/fileCode buttons are gone, one share icon trigger appears, non-share actions remain, and choosing a menu item forwards the clicked terminal turn plus action to the caller.
 
-- [ ] **Step 3: Run menu/view tests to verify RED**
+- [x] **Step 3: Run menu/view tests to verify RED**
 
 Run:
 
@@ -346,21 +346,21 @@ Workdir: `app`
 
 Expected: FAIL because the menu and consolidated action API do not exist.
 
-- [ ] **Step 4: Implement the adaptive menu**
+- [x] **Step 4: Implement the adaptive menu**
 
 Use a body portal so virtualization/clipping cannot cut off the surface. In wide mode compute a viewport-clamped fixed position from the trigger rect; in narrow mode render the existing sheet overlay and bottom-sheet presentation. Reuse `menuKeyboardNavigation` and the current menu motion classes; keep local open state ephemeral and close on scroll/resize.
 
-- [ ] **Step 5: Consolidate ChatTurnView props and controls**
+- [x] **Step 5: Consolidate ChatTurnView props and controls**
 
 Replace `onExportPromptDoneImage`/`onExportPromptDoneHtml` and their busy flags with one typed `onSharePromptDone(action)` plus response/session availability and `shareMenuMode`. Preserve Copy, read aloud, Fork, retry, duration, artifacts, and terminal status rendering.
 
-- [ ] **Step 6: Add menu styles and rerun tests**
+- [x] **Step 6: Add menu styles and rerun tests**
 
 Add only Share-specific sizing/group/label styles while reusing current popover/sheet materials and reduced-motion contracts. Run the Step 3 command.
 
 Expected: PASS.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint**
 
 Invoke `git-workflow-preferences` in `checkpoint` mode for the menu, ChatTurnView, and style files after tests pass.
 

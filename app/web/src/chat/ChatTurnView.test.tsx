@@ -147,6 +147,34 @@ describe('ChatTurnView failed prompt retry', () => {
   });
 });
 
+describe('ChatTurnView sharing actions', () => {
+  it('keeps Copy, replaces image/HTML buttons with Share, and forwards the terminal turn', async () => {
+    const onSharePromptDone = jest.fn();
+    const tree = await renderTurn(message('prompt_done', {stopReason: 'end_turn'}), {
+      copyDisabled: false,
+      readAloudEnabled: true,
+      onReadAloud: jest.fn(),
+      shareMenuMode: 'popover',
+      shareResponseDisabled: false,
+      shareSessionDisabled: false,
+      onSharePromptDone,
+    });
+
+    expect(tree.root.findByProps({'aria-label': 'Copy response markdown'})).toBeTruthy();
+    expect(tree.root.findByProps({'aria-label': 'Read response aloud'})).toBeTruthy();
+    expect(tree.root.findAllByProps({'aria-label': 'Export response markdown image'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({'aria-label': 'Export response markdown as HTML'})).toHaveLength(0);
+    const trigger = tree.root.findByProps({'aria-label': 'Share response or session'});
+    expect(trigger.findByProps({'data-icon-name': 'share'})).toBeTruthy();
+
+    await act(async () => trigger.props.onClick());
+    const action = tree.root.findByProps({'aria-label': 'Share current response as image'});
+    await act(async () => action.props.onClick());
+
+    expect(onSharePromptDone).toHaveBeenCalledWith(2, {scope: 'response', format: 'image'});
+  });
+});
+
 describe('ChatTurnView option replies', () => {
   const optionText = [
     'Pick one:',

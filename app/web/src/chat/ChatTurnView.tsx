@@ -34,6 +34,7 @@ import {splitChatSearchHighlightSegments} from './search/chatSearchState';
 import {createChatSearchHighlightPlugin} from './search/chatSearchHighlightPlugin';
 import {permissionRequestView, type ChatPermissionRecord} from './permission/chatPermissionState';
 import {useContextMenuGesture, useContextMenuTargetGesture} from '../common/useContextMenuGesture';
+import {ChatShareMenu, type ChatShareAction} from './share/ChatShareMenu';
 
 function renderChatTextWithHighlight(
   text: string,
@@ -307,14 +308,15 @@ export type ChatTurnViewProps = {
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
   copyDisabled?: boolean;
-  exportBusy?: boolean;
-  exportHtmlBusy?: boolean;
+  shareMenuMode?: 'popover' | 'sheet';
+  shareResponseDisabled?: boolean;
+  shareSessionDisabled?: boolean;
+  shareBusyAction?: ChatShareAction | null;
   forkSupported?: boolean;
   forkCurrentSessionSupported?: boolean;
   forkBusy?: boolean;
   onCopyPromptDone?: () => void;
-  onExportPromptDoneImage?: () => void;
-  onExportPromptDoneHtml?: () => void;
+  onSharePromptDone?: (doneTurnIndex: number, action: ChatShareAction) => void;
   onForkPromptDone?: (mode: 'historical' | 'current') => void;
   ttsState?: 'idle' | 'loading' | 'playing';
   readAloudEnabled?: boolean;
@@ -492,14 +494,15 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   markdownComponents,
   markdownUrlTransform,
   copyDisabled = true,
-  exportBusy = false,
-  exportHtmlBusy = false,
+  shareMenuMode = 'popover',
+  shareResponseDisabled,
+  shareSessionDisabled = true,
+  shareBusyAction = null,
   forkSupported = false,
   forkCurrentSessionSupported = false,
   forkBusy = false,
   onCopyPromptDone,
-  onExportPromptDoneImage,
-  onExportPromptDoneHtml,
+  onSharePromptDone,
   onForkPromptDone,
   ttsState = 'idle',
   readAloudEnabled = false,
@@ -1007,28 +1010,15 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             >
               <ChatIcon name="copy" size={13} />
             </button>
-            <button
-              type="button"
-              className="chat-prompt-action-button"
-              onClick={() => onExportPromptDoneImage?.()}
-              disabled={copyDisabled || exportBusy}
-              aria-busy={exportBusy}
-              data-tooltip="Export response image"
-              aria-label="Export response markdown image"
-            >
-              <ChatIcon name="camera" size={13} />
-            </button>
-            <button
-              type="button"
-              className="chat-prompt-action-button"
-              onClick={() => onExportPromptDoneHtml?.()}
-              disabled={copyDisabled || exportHtmlBusy}
-              aria-busy={exportHtmlBusy}
-              data-tooltip="Export response HTML"
-              aria-label="Export response markdown as HTML"
-            >
-              <ChatIcon name="fileCode" size={13} />
-            </button>
+            {onSharePromptDone ? (
+              <ChatShareMenu
+                mode={shareMenuMode}
+                responseDisabled={shareResponseDisabled ?? copyDisabled}
+                sessionDisabled={shareSessionDisabled}
+                busyAction={shareBusyAction}
+                onSelect={action => onSharePromptDone(message.turnIndex, action)}
+              />
+            ) : null}
           </div>
           {doneStatus ? (
             <div className={`chat-prompt-result-line ${doneStatus.kind}`}>
