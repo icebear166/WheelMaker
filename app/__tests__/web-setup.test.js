@@ -350,8 +350,12 @@ describe('web runtime setup', () => {
     expect(webpackConfig.entry).toEqual({bundle: path.resolve(projectRoot, 'web', 'src/main.tsx')});
     expect(bundleCssName).toBe('bundle.[contenthash].css');
     expect(asyncCssName).toBe('[name].[contenthash].css');
-    const htmlPlugin = webpackConfig.plugins.find(plugin => plugin.constructor.name === 'HtmlWebpackPlugin');
-    expect(htmlPlugin.options.inject).toBe('body');
+    const htmlPlugins = webpackConfig.plugins.filter(plugin => plugin.constructor.name === 'HtmlWebpackPlugin');
+    expect(htmlPlugins.map(plugin => plugin.options.filename)).toEqual(['index.html', 'local-index.html']);
+    for (const htmlPlugin of htmlPlugins) {
+      expect(htmlPlugin.options.inject).toBe('body');
+      expect(htmlPlugin.options.chunks).toEqual(['bundle']);
+    }
     expect(indexHtml).not.toContain('htmlWebpackPlugin.files.css');
     expect(indexHtml).not.toContain('htmlWebpackPlugin.files.js');
     expect(indexHtml).not.toContain("file.includes('/bundle')");

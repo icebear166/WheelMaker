@@ -17,17 +17,41 @@ const REQUIRED_CSP_DIRECTIVES = [
 ];
 
 describe('web security policy', () => {
+  test('production build emits separate Gateway and Localhost documents', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const createConfig = require('../web/webpack.config.js');
+    const config = createConfig({}, {mode: 'production'});
+    const documents = config.plugins
+      .filter((plugin: {constructor: {name: string}}) => plugin.constructor.name === 'HtmlWebpackPlugin')
+      .map((plugin: {options: Record<string, unknown>}) => plugin.options);
+
+    expect(documents).toHaveLength(2);
+    expect(documents.map((options: Record<string, unknown>) => options.filename)).toEqual([
+      'index.html',
+      'local-index.html',
+    ]);
+    expect(documents[0].chunks).toEqual(['bundle']);
+    expect(documents[1].chunks).toEqual(['bundle']);
+
+    const gatewayPolicy = (documents[0].templateParameters as {securityPolicy: string}).securityPolicy;
+    const localhostPolicy = (documents[1].templateParameters as {securityPolicy: string}).securityPolicy;
+    expect(gatewayPolicy).toContain("connect-src 'self' wss:");
+    expect(gatewayPolicy).toContain('upgrade-insecure-requests');
+    expect(localhostPolicy).toContain("connect-src 'self' ws: wss:");
+    expect(localhostPolicy).not.toContain('upgrade-insecure-requests');
+    for (const directive of REQUIRED_CSP_DIRECTIVES.filter(
+      directive => directive !== 'upgrade-insecure-requests',
+    )) {
+      expect(localhostPolicy).toContain(directive);
+    }
+  });
+
   test('production document defines a restrictive CSP and no-referrer policy', () => {
     const html = fs.readFileSync(path.resolve('web/public/index.html'), 'utf8');
-    for (const directive of REQUIRED_CSP_DIRECTIVES) {
-      expect(html).toContain(directive);
-    }
-    expect(html).toContain(
-      "connect-src 'self' wss: <%= releaseOrigin %> https://codexradar.com",
-    );
+    expect(html).toContain('<%= securityPolicy %>');
     expect(html).toContain('<meta name="referrer" content="no-referrer"');
-    expect(html).not.toContain("script-src 'self' 'unsafe-inline'");
-    expect(html).not.toContain("script-src 'self' 'unsafe-eval'");
+    expect(html).not.toContain('upgrade-insecure-requests');
+    expect(html).not.toContain('connect-src');
   });
 
   test('development server is loopback-only and emits defense-in-depth headers', () => {

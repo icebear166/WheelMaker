@@ -50,21 +50,21 @@ After verification passes, invoke `git-workflow` in `checkpoint` mode for `docs/
 
 **Acceptance:** A production Web build emits `index.html` and `local-index.html` using the same hashed JS/CSS assets. Gateway HTML retains `wss:` and `upgrade-insecure-requests`; Localhost HTML permits same-origin `ws:`, omits upgrade, and retains all other restrictive directives. The existing Registry client derives the secret Base Path and loopback WebSocket endpoint from the local document URL.
 
-- [ ] **Step 1: Write failing Web build/CSP tests**
+- [x] **Step 1: Write failing Web build/CSP tests**
 
 Extend the existing security/setup tests to require two `HtmlWebpackPlugin` outputs with shared entry assets and separate policy parameters. Assert the Localhost policy contains `connect-src 'self' ws: wss:` and excludes `upgrade-insecure-requests`, while the Gateway policy remains byte-for-byte equivalent in semantics. Extend the Registry endpoint table with a URL such as `http://127.0.0.1:9633/<secret>/` under explicit loopback allowance.
 
-- [ ] **Step 2: Run focused Jest tests to establish RED**
+- [x] **Step 2: Run focused Jest tests to establish RED**
 
 Run from `app/`: `npm test -- --runInBand __tests__/web-security-policy.test.ts __tests__/web-setup.test.js __tests__/web-registry-base-url.test.ts`
 
 Expected: FAIL because `local-index.html` is not configured and the production template cannot receive distinct policies.
 
-- [ ] **Step 3: Parameterize the production template and add the Localhost output**
+- [x] **Step 3: Parameterize the production template and add the Localhost output**
 
 Replace the hard-coded CSP value in `public/index.html` with an escaped webpack template parameter. Configure one plugin for `index.html` with the current Gateway policy and one for `local-index.html` with the local policy; both must inject the same production chunks. Keep the development-server policy and preview-header exception intact.
 
-- [ ] **Step 4: Reach GREEN and inspect actual generated HTML**
+- [x] **Step 4: Reach GREEN and inspect actual generated HTML**
 
 Run the focused Jest command again.
 
@@ -72,7 +72,7 @@ Run from `app/` with a temporary `WHEELMAKER_WEB_TARGET`: `npm run build:web`
 
 Inspect both generated documents and assert their script/style asset names match, the Gateway document still upgrades insecure requests, and the Localhost document allows `ws:` without upgrade.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 After verification passes, invoke `git-workflow` in `checkpoint` mode for the five Task 2 files. Do not commit generated Web output. Record commit hash + subject.
 

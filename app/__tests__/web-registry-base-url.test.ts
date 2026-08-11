@@ -38,11 +38,15 @@ describe('registry endpoints derived from page base URL', () => {
 
   test('allows explicit insecure loopback only for development tests', () => {
     const endpoints = deriveRegistryEndpoints(
-      'http://127.0.0.1:8080/',
+      'http://127.0.0.1:9633/wm-local-a1b2c3/',
       {allowInsecureLoopback: true},
     );
-    expect(endpoints.wsURL).toBe('ws://127.0.0.1:8080/ws');
-    expect(endpoints.previewURL.toString()).toBe('http://127.0.0.1:8080/ws/preview/');
+    expect(endpoints.authURL.toString()).toBe('http://127.0.0.1:9633/wm-local-a1b2c3/ws');
+    expect(endpoints.wsURL).toBe('ws://127.0.0.1:9633/wm-local-a1b2c3/ws');
+    expect(endpoints.previewURL.toString()).toBe(
+      'http://127.0.0.1:9633/wm-local-a1b2c3/ws/preview/',
+    );
+    expect(endpoints.basePath).toBe('/wm-local-a1b2c3/');
     expect(() => deriveRegistryEndpoints('http://example.com/', {allowInsecureLoopback: true})).toThrow();
   });
 });

@@ -184,9 +184,18 @@ module.exports = (_env = {}, argv = {}) => {
     plugins: [
       new HtmlWebpackPlugin({
         template: path.resolve(__dirname, 'public/index.html'),
-        templateParameters: {releaseOrigin},
+        templateParameters: {securityPolicy: WEB_SECURITY_POLICY},
+        filename: 'index.html',
+        chunks: ['bundle'],
         inject: 'body',
       }),
+      ...(isProduction ? [new HtmlWebpackPlugin({
+        template: path.resolve(__dirname, 'public/index.html'),
+        templateParameters: {securityPolicy: LOCAL_WEB_SECURITY_POLICY},
+        filename: 'local-index.html',
+        chunks: ['bundle'],
+        inject: 'body',
+      })] : []),
       ...(isProduction ? [new MiniCssExtractPlugin({
         filename: cssFilename(isProduction),
         chunkFilename: cssChunkFilename(isProduction),
