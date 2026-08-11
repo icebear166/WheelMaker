@@ -831,7 +831,7 @@
 
 .quick-file-search-panel {
   width: min(620px, 100%);
-  max-height: min(560px, calc(100vh - 112px));
+  max-height: min(560px, calc(100dvh - 112px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -841,42 +841,51 @@
   box-shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
 }
 
-.quick-file-search-header {
-  min-height: 32px;
+.quick-file-search-input-row {
+  min-height: 42px;
   display: flex;
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 0 10px;
+  padding: 0 12px;
   color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.quick-file-search-project {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .quick-file-search-input {
-  height: 38px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 42px;
   border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: 0;
-  background: var(--surface-raised);
+  background: transparent;
   color: var(--text-primary);
-  padding: 0 12px;
+  padding: 0;
   font-size: 14px;
   outline: none;
+}
+
+.quick-file-search-project {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  padding: 2px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .quick-file-search-results {
   min-height: 42px;
   overflow: auto;
   padding: 6px;
+}
+
+.quick-file-search-results.refreshing .quick-file-search-option {
+  opacity: 0.55;
 }
 
 .quick-file-search-option {
@@ -919,11 +928,32 @@
   font-size: 11px;
 }
 
+.quick-file-search-match {
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* Reuse the mention-menu skeleton visuals but match the 34px option rows so
+   the swap to real results does not shift the panel geometry. */
+.quick-file-search-skeleton .chat-file-mention-skeleton-row {
+  min-height: 34px;
+  grid-template-columns: 18px minmax(96px, 0.5fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px 7px;
+}
+
 .quick-file-search-empty {
   padding: 18px 10px;
   color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
+}
+
+.quick-file-search-empty-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
 }
 
 .preview-selection-context-menu {

@@ -603,6 +603,7 @@ import {
 import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/speech/VoiceInputButton';
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree } from '../file/FileExplorerTree';
+import {splitFileMatchHighlight} from '../file/fileMatchHighlight';
 import {
   fileDownloadFailureMessage,
   fileDownloadSourceForLink,
@@ -1291,6 +1292,21 @@ function chatFileMentionName(path: string): string {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
   const parts = normalized.split('/').filter(Boolean);
   return parts[parts.length - 1] || normalized || 'file';
+}
+
+function renderQuickFileMatchText(text: string, query: string, keyPrefix: string): React.ReactNode {
+  const segments = splitFileMatchHighlight(text, query);
+  if (!segments.some(segment => segment.match)) {
+    return text;
+  }
+  return segments.map((segment, index) => (
+    <span
+      key={`${keyPrefix}:${index}`}
+      className={segment.match ? 'quick-file-search-match' : undefined}
+    >
+      {segment.text}
+    </span>
+  ));
 }
 
 function isArrowNavigationKey(key: string): boolean {
@@ -3275,6 +3291,7 @@ export function App() {
   const [quickFileIndexed, setQuickFileIndexed] = useState(true);
   const [quickFileActiveIndex, setQuickFileActiveIndex] = useState(0);
   const quickFileInputRef = useRef<HTMLInputElement | null>(null);
+  const quickFileResultsRef = useRef<HTMLDivElement | null>(null);
   const quickFileSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const quickFileSearchGenerationRef = useRef(0);
   const quickFileQueryIdRef = useRef(0);
@@ -3332,8 +3349,8 @@ export function App() {
     }
   }, []);
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
-  const fileIconResourcesNeeded = chatPreviewOpen &&
-    previewWorkbench.drawerMode === 'files';
+  const fileIconResourcesNeeded = quickFileOpen ||
+    (chatPreviewOpen && previewWorkbench.drawerMode === 'files');
 
   useEffect(() => {
     if (!fileIconResourcesNeeded || fileIconResources) {
@@ -20035,6 +20052,15 @@ export function App() {
   }, [quickFileOpen, quickFileResults.length]);
 
   useEffect(() => {
+    if (!quickFileOpen) {
+      return;
+    }
+    const list = quickFileResultsRef.current;
+    const activeItem = list?.querySelector<HTMLElement>('.quick-file-search-option.selected');
+    activeItem?.scrollIntoView({block: 'nearest'});
+  }, [quickFileOpen, quickFileActiveIndex, quickFileResults]);
+
+  useEffect(() => {
     const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) {
         return;
@@ -20052,9 +20078,6 @@ export function App() {
         return;
       }
       if (!chatPreviewOpen) {
-        return;
-      }
-      if (quickFileOpen) {
         return;
       }
       if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
@@ -21764,42 +21787,48 @@ export function App() {
       onPointerDown={closeQuickFileSearch}
     >
       <div className="quick-file-search-panel" onPointerDown={event => event.stopPropagation()}>
-        <div className="quick-file-search-header">
-          <Icon name="search" />
+        <div className="quick-file-search-input-row">
+          {quickFileLoading ? <Icon name="loader" spin /> : <Icon name="search" />}
+          <input
+            ref={quickFileInputRef}
+            className="quick-file-search-input"
+            value={quickFileQuery}
+            onChange={event => {
+              const query = event.target.value;
+              if (!quickFileProjectId) {
+                setQuickFileQuery(query);
+                setQuickFileError('Select a project first.');
+                return;
+              }
+              scheduleQuickFileSearch(quickFileProjectId, query);
+            }}
+            onKeyDown={handleQuickFileKeyDown}
+            placeholder="Open file"
+            aria-label="Open file"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="quick-file-search-results"
+            aria-activedescendant={
+              quickFileResults.length > 0 ? `quick-file-option-${quickFileActiveIndex}` : undefined
+            }
+          />
           <span className="quick-file-search-project" data-tooltip={quickFileProjectName}>
             {quickFileProjectName}
           </span>
         </div>
-        <input
-          ref={quickFileInputRef}
-          className="quick-file-search-input"
-          value={quickFileQuery}
-          onChange={event => {
-            const query = event.target.value;
-            if (!quickFileProjectId) {
-              setQuickFileQuery(query);
-              setQuickFileError('Select a project first.');
-              return;
-            }
-            scheduleQuickFileSearch(quickFileProjectId, query);
-          }}
-          onKeyDown={handleQuickFileKeyDown}
-          placeholder="Open file"
-          aria-label="Open file"
-        />
-        <div className="quick-file-search-results" role="listbox" aria-label="Files">
-          {quickFileLoading ? (
-            <div className="quick-file-search-empty">Loading...</div>
-          ) : quickFileError ? (
-            <div className="quick-file-search-empty">{quickFileError}</div>
-          ) : !quickFileIndexed ? (
-            <div className="quick-file-search-empty">File index is not ready.</div>
-          ) : quickFileResults.length === 0 ? (
-            <div className="quick-file-search-empty">{quickFileQuery ? 'No files found' : 'No indexed files'}</div>
-          ) : (
+        <div
+          ref={quickFileResultsRef}
+          id="quick-file-search-results"
+          className={`quick-file-search-results${quickFileLoading && quickFileResults.length > 0 ? ' refreshing' : ''}`}
+          role="listbox"
+          aria-label="Files"
+          aria-busy={quickFileLoading}
+        >
+          {quickFileResults.length > 0 ? (
             quickFileResults.map((result, index) => {
               const selected = index === quickFileActiveIndex;
               const name = result.name || chatFileMentionName(result.path);
+              const fileIcon = fileIconResources ? resolveFileIcon(name) : null;
               const fileMenuTarget = managedProjectFileMenuTarget(
                 quickFileProjectId,
                 result.path,
@@ -21807,6 +21836,7 @@ export function App() {
               return (
                 <button
                   key={`quick-file:${result.path}`}
+                  id={`quick-file-option-${index}`}
                   type="button"
                   className={`quick-file-search-option${selected ? ' selected' : ''}`}
                   {...(fileMenuTarget ? bindManagedFileContextMenu(fileMenuTarget) : {})}
@@ -21816,14 +21846,49 @@ export function App() {
                   onClick={() => openQuickFileResult(result)}
                   data-tooltip={result.path}
                 >
-                  <Icon name="fileCode" />
-                  <span className="quick-file-search-name">{name}</span>
-                  <span className="quick-file-search-path">{result.path}</span>
+                  {fileIcon ? (
+                    <span className="node-icon seti-icon" style={{color: fileIcon.color}}>
+                      <span className="seti-glyph">{fileIcon.glyph}</span>
+                    </span>
+                  ) : (
+                    <Icon name="file" />
+                  )}
+                  <span className="quick-file-search-name">
+                    {renderQuickFileMatchText(name, quickFileQuery, `quick-file-name:${result.path}`)}
+                  </span>
+                  <span className="quick-file-search-path">
+                    {renderQuickFileMatchText(result.path, quickFileQuery, `quick-file-path:${result.path}`)}
+                  </span>
                 </button>
               );
             })
+          ) : quickFileLoading ? (
+            <div className="quick-file-search-skeleton" aria-hidden="true">
+              {CHAT_FILE_MENTION_SKELETON_ROWS.map(row => (
+                <div key={row} className="chat-file-mention-skeleton-row">
+                  <span className="chat-file-mention-skeleton-icon" />
+                  <span className="chat-file-mention-skeleton-name" />
+                  <span className="chat-file-mention-skeleton-path" />
+                </div>
+              ))}
+            </div>
+          ) : quickFileError ? (
+            <div className="quick-file-search-empty">{quickFileError}</div>
+          ) : !quickFileIndexed ? (
+            <div className="quick-file-search-empty">
+              File index is not ready.
+              <span className="quick-file-search-empty-hint">Wait a moment and try again.</span>
+            </div>
+          ) : (
+            <div className="quick-file-search-empty">
+              {quickFileQuery ? `No files matching “${quickFileQuery}”` : 'No indexed files'}
+              {quickFileQuery ? (
+                <span className="quick-file-search-empty-hint">Try a different file name or path.</span>
+              ) : null}
+            </div>
           )}
         </div>
+        <ChatMenuKeyHints hints={[['↑↓', 'Select'], ['↵', 'Open'], ['esc', 'Close']]} />
       </div>
     </div>
   ) : null;
