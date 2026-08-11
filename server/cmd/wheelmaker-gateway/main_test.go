@@ -44,6 +44,9 @@ func TestRunPathsPrintsStableLayout(t *testing.T) {
 	if paths["sharePublicRoot"] != filepath.Join(filepath.Dir(home), "shares", "public") {
 		t.Fatalf("sharePublicRoot = %q", paths["sharePublicRoot"])
 	}
+	if paths["customSitesRoot"] != filepath.Join(home, "sites") {
+		t.Fatalf("customSitesRoot = %q", paths["customSitesRoot"])
+	}
 }
 
 func TestRunValidateReadsGatewayConfig(t *testing.T) {

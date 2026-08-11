@@ -88,6 +88,7 @@ type Paths struct {
 	RegistryWebRoot string
 	ReleaseDataRoot string
 	SharePublicRoot string
+	CustomSitesRoot string
 	GeneratedConfig string
 	StateRelease    string
 	DataDir         string
@@ -106,6 +107,7 @@ func ResolvePaths(home string) Paths {
 		RegistryWebRoot: filepath.Join(stateRoot, "web"),
 		ReleaseDataRoot: filepath.Join(stateRoot, "release-server", "data"),
 		SharePublicRoot: filepath.Join(stateRoot, "shares", "public"),
+		CustomSitesRoot: filepath.Join(home, "sites"),
 		GeneratedConfig: filepath.Join(home, "generated", "caddy.json"),
 		StateRelease:    filepath.Join(home, "state", "release.json"),
 		DataDir:         filepath.Join(home, "data"),
@@ -385,7 +387,7 @@ func EnsureHome(home string) error {
 		return fmt.Errorf("gateway home must be an absolute path")
 	}
 	paths := ResolvePaths(home)
-	for _, dir := range []string{paths.Home, filepath.Dir(paths.GeneratedConfig), filepath.Dir(paths.StateRelease), paths.DataDir, paths.LogsDir, paths.DownloadsDir, paths.RollbackDir, paths.SharePublicRoot} {
+	for _, dir := range []string{paths.Home, filepath.Dir(paths.GeneratedConfig), filepath.Dir(paths.StateRelease), paths.DataDir, paths.LogsDir, paths.DownloadsDir, paths.RollbackDir, paths.SharePublicRoot, paths.CustomSitesRoot} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("create gateway directory %s: %w", dir, err)
 		}

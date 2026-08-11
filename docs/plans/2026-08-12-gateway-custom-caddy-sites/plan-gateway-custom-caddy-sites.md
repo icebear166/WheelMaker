@@ -58,7 +58,7 @@ After verification passes, invoke `git-workflow` in `checkpoint` mode for `docs/
 
 **Acceptance:** Go and Node path resolvers expose the same `gateway/sites` root; `EnsureHome` and Gateway installation create it idempotently; existing files are byte-for-byte preserved; `paths` prints it; schema-2 JSON remains unchanged.
 
-- [ ] **Step 1: Write failing Go path/layout tests**
+- [x] **Step 1: Write failing Go path/layout tests**
 
 Extend `TestResolvePathsUsesFixedGatewayHomeLayout`, `TestResolvePathsDerivesRuntimeRoots`, and `TestRunPathsPrintsStableLayout` with assertions equivalent to:
 
@@ -73,37 +73,37 @@ if output["customSitesRoot"] != filepath.Join(home, "sites") {
 
 Add an `EnsureHome` assertion that the directory exists and a pre-existing `.caddy` file retains its exact bytes.
 
-- [ ] **Step 2: Run the focused Go tests to establish RED**
+- [x] **Step 2: Run the focused Go tests to establish RED**
 
 Run: `go test ./internal/gateway ./cmd/wheelmaker-gateway -run 'TestResolvePaths|TestEnsureHome|TestRunPaths'`
 
 Expected: FAIL because `CustomSitesRoot`/`customSitesRoot` and directory creation do not exist.
 
-- [ ] **Step 3: Implement the Go layout contract**
+- [x] **Step 3: Implement the Go layout contract**
 
 Add `CustomSitesRoot` to `gateway.Paths`, resolve it as `<gateway-home>/sites`, create it from `EnsureHome`, and include `customSitesRoot` in the `paths` command JSON. Do not alter `GlobalConfig`, `GlobalSchemaVersion`, or Gateway config decoding.
 
-- [ ] **Step 4: Run the focused Go tests to reach GREEN**
+- [x] **Step 4: Run the focused Go tests to reach GREEN**
 
 Run: `go test ./internal/gateway ./cmd/wheelmaker-gateway -run 'TestResolvePaths|TestEnsureHome|TestRunPaths'`
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing Node deployment tests**
+- [x] **Step 5: Write failing Node deployment tests**
 
 Extend `gateway-config.test.mjs` so `gatewayConfigPaths(home).customSitesRoot` equals `join(home, 'sites')`, the first `ensureGatewayConfiguration(home)` creates the directory, and a second call preserves a sentinel `sites/existing.caddy` byte-for-byte while the normalized config remains exactly schema 2.
 
-- [ ] **Step 6: Run the focused Node test to establish RED**
+- [x] **Step 6: Run the focused Node test to establish RED**
 
 Run: `node --test scripts/deploy/gateway-config.test.mjs`
 
 Expected: FAIL because the sites path/directory is absent.
 
-- [ ] **Step 7: Implement deployment layout initialization**
+- [x] **Step 7: Implement deployment layout initialization**
 
 Add `customSitesRoot` to `gatewayConfigPaths`, create it recursively in the Gateway-specific ensure/install path, and leave its contents untouched. Do not inspect Nginx, create example sites, or add JSON config fields.
 
-- [ ] **Step 8: Run layout regressions**
+- [x] **Step 8: Run layout regressions**
 
 Run: `go test ./internal/gateway ./cmd/wheelmaker-gateway`
 
@@ -111,7 +111,7 @@ Run: `node --test scripts/deploy/gateway-config.test.mjs scripts/deploy/gateway-
 
 Expected: PASS.
 
-- [ ] **Step 9: Git checkpoint**
+- [x] **Step 9: Git checkpoint**
 
 After verification passes, invoke `git-workflow` in `checkpoint` mode for the six Task 2 files. Record commit hash + subject.
 

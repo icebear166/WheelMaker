@@ -30,12 +30,46 @@ func TestResolvePathsUsesFixedGatewayHomeLayout(t *testing.T) {
 	if paths.GeneratedConfig != `C:\Users\alice\.wheelmaker\gateway\generated\caddy.json` {
 		t.Fatalf("GeneratedConfig = %q", paths.GeneratedConfig)
 	}
+	if paths.CustomSitesRoot != `C:\Users\alice\.wheelmaker\gateway\sites` {
+		t.Fatalf("CustomSitesRoot = %q", paths.CustomSitesRoot)
+	}
 }
 
 func TestResolvePathsDerivesRuntimeRoots(t *testing.T) {
 	paths := ResolvePaths(`C:\Users\alice\.wheelmaker\gateway`)
 	if paths.SharePublicRoot != `C:\Users\alice\.wheelmaker\shares\public` {
 		t.Fatalf("SharePublicRoot = %q", paths.SharePublicRoot)
+	}
+}
+
+func TestEnsureHomeCreatesAndPreservesCustomSitesRoot(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "gateway")
+	paths := ResolvePaths(home)
+	if err := EnsureHome(home); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(paths.CustomSitesRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("CustomSitesRoot is not a directory: %s", paths.CustomSitesRoot)
+	}
+
+	sitePath := filepath.Join(paths.CustomSitesRoot, "existing.caddy")
+	want := []byte("existing.example.com { respond \"ok\" }\n")
+	if err := os.WriteFile(sitePath, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureHome(home); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(sitePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("existing site bytes = %q, want %q", got, want)
 	}
 }
 

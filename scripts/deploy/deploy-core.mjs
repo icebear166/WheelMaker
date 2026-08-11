@@ -2371,6 +2371,7 @@ export function gatewayConfigPaths(home) {
     registryWebRoot: resolve(root, '..', 'web'),
     releaseDataRoot: resolve(root, '..', 'release-server', 'data'),
     sharePublicRoot: resolve(root, '..', 'shares', 'public'),
+    customSitesRoot: join(root, 'sites'),
     generated: join(root, 'generated', 'caddy.json'),
     state: join(root, 'state', 'release.json'),
     data: join(root, 'data'),
@@ -2401,6 +2402,7 @@ export function defaultGatewayConfiguration(home) {
 
 export async function ensureGatewayConfiguration(home) {
   const paths = gatewayConfigPaths(home);
+  await mkdir(paths.customSitesRoot, {recursive: true});
   const current = await readGatewayJsonIfPresent(paths.config);
   const original = current === null ? null : JSON.stringify(current);
   const candidate = current === null ? defaultGatewayConfiguration(paths.home) : current;

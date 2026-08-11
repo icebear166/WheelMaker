@@ -124,6 +124,7 @@ func printPaths(home string, stdout io.Writer) error {
 		"registryWebRoot": paths.RegistryWebRoot,
 		"releaseDataRoot": paths.ReleaseDataRoot,
 		"sharePublicRoot": paths.SharePublicRoot,
+		"customSitesRoot": paths.CustomSitesRoot,
 		"generatedConfig": paths.GeneratedConfig,
 		"stateRelease":    paths.StateRelease,
 		"dataDir":         paths.DataDir,

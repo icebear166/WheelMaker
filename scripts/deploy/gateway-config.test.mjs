@@ -57,6 +57,8 @@ test('Gateway deployment materializes the full config once and preserves existin
   const paths = gatewayConfigPaths(root);
 
   const first = await ensureGatewayConfiguration(root);
+  assert.equal(paths.customSitesRoot, join(root, 'sites'));
+  await access(paths.customSitesRoot);
   assert.deepEqual(first.wm_sites.registry, {urlMode: 'sync_hub'});
   assert.equal(first.wm_sites.release.publicUrl, '');
   assert.deepEqual(first.wm_sites.share, {urlMode: 'sync_hub'});
@@ -69,9 +71,13 @@ test('Gateway deployment materializes the full config once and preserves existin
       release: {...first.wm_sites.release, publicUrl: 'https://release.example.com'},
     },
   }));
+  const customSite = join(paths.customSitesRoot, 'existing.caddy');
+  const customSiteBytes = 'existing.example.com { reverse_proxy 127.0.0.1:3000 }\n';
+  await writeFile(customSite, customSiteBytes);
   const second = await ensureGatewayConfiguration(root);
   assert.equal(second.wm_sites.release.publicUrl, 'https://release.example.com');
   assert.equal(second.wm_sites.release.dataRoot, first.wm_sites.release.dataRoot);
+  assert.equal(await readFile(customSite, 'utf8'), customSiteBytes);
 });
 
 test('Gateway schema 1 is rejected without modifying its bytes', async t => {
