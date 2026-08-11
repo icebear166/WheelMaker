@@ -238,6 +238,11 @@
 .project-session-row-wrap .session-state-leading.permission-pending {
   left: 0;
 }
+/* 12px spinner centered in the 14px gutter (center at 7px) so it stays clear
+   of the row's selected background. */
+.project-session-row-wrap .session-state-leading.running {
+  left: -2px;
+}
 .wide-session-pin-btn {
   flex: none;
   width: 24px;
