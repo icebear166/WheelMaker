@@ -22,15 +22,15 @@
 
 **Acceptance:** Both confirmed wiki targets describe only V2/default-HEAD behavior, V1-or-missing-lock reconstruction, immutable commit pinning, and precise copy/source statuses; neither page presents ref as editable or stored current state.
 
-- [ ] **Step 1: Rewrite the feature-level current facts**
+- [x] **Step 1: Rewrite the feature-level current facts**
 
 Update `skills-management.md` so Source identity is repository-only, `.skill-source-lock.json` is version 2, explicit ref inputs are rejected, V1 payloads are discarded, missing/V1 locks rebuild from native provenance, and `Needs refresh`/`Stale`/`Copies differ`/`Error` have separate meanings.
 
-- [ ] **Step 2: Rewrite the HubState ownership and operation facts**
+- [x] **Step 2: Rewrite the HubState ownership and operation facts**
 
 Update `hub-state.md` so Source Store owns source/commit/catalog without ref, Resolver reads remote `HEAD`, native locks are grouped without ref, and source operations no longer include source/ref modification.
 
-- [ ] **Step 3: Verify wiki shape and stale statements**
+- [x] **Step 3: Verify wiki shape and stale statements**
 
 Run:
 
@@ -42,20 +42,21 @@ rg -n '可修改 ref|解析 ref|source/ref|修改 ref|version 1' docs/wiki/featu
 
 Expected: both first lines begin with `> 摘要：`; the final `rg` returns no matches.
 
-- [ ] **Step 4: Git checkpoint**
+- [x] **Step 4: Git checkpoint**
 
-After verification passes, invoke `git-workflow` in `checkpoint` mode for only these two wiki files. Record commit hash + subject in the task notes.
+Checkpoint: `caed445d docs(wiki): follow default skill source branches`.
 
 ### Task 2: Replace V1/ref persistence and ref resolution with V2/default HEAD
 
 **Files:**
 - Modify: `server/internal/hub/tools/skill_sources.go`
 - Modify: `server/internal/hub/tools/skill_source_resolver.go`
+- Modify: `server/internal/hub/tools/skill_source_catalog.go` (remove native ref/address ambiguity fallback needed by repository-only reconstruction)
 - Test: `server/internal/hub/tools/tools_test.go`
 
 **Acceptance:** New writes are strict deterministic V2 JSON without ref; V1 and missing source locks rebuild from readable native provenance by repository only; failed rebuilds preserve V1 bytes; resolver pins the remote-advertised default `HEAD` for arbitrary default branch names.
 
-- [ ] **Step 1: Write failing V2 store and rebuild tests**
+- [x] **Step 1: Write failing V2 store and rebuild tests**
 
 Replace V1/ref expectations and add tests equivalent to:
 
@@ -88,7 +89,7 @@ func TestSkillSourceRebuildFailurePreservesV1Bytes(t *testing.T) {
 
 Assert encoded bytes contain `"version": 2` and no `"ref"`; strict V2 decoding must reject an injected `ref` field.
 
-- [ ] **Step 2: Run store/rebuild tests and verify RED**
+- [x] **Step 2: Run store/rebuild tests and verify RED**
 
 Run:
 
@@ -98,11 +99,11 @@ go test ./internal/hub/tools -run 'TestSkillSource(StoreWritesStableValidatedJSO
 
 Expected: FAIL because the current schema requires version 1/ref and missing refs are unmanaged.
 
-- [ ] **Step 3: Implement strict V2 and atomic reconstruction**
+- [x] **Step 3: Implement strict V2 and atomic reconstruction**
 
 Set version 2; remove `Ref` from source/native grouping structs; separate envelope detection from strict V2 decode; expose missing versus malformed native locks; rebuild from normalized repository groups for V1 and a first-observed missing source lock; validate before CAS atomic replacement. Preserve unknown-version rejection and never rewrite native locks or installed directories. A missing Project source lock with prior reconciliation history remains an intentional external deletion and must not be bootstrapped again.
 
-- [ ] **Step 4: Write and run a failing remote default-HEAD resolver test**
+- [x] **Step 4: Write and run a failing remote default-HEAD resolver test**
 
 Create local bare remotes whose symbolic `HEAD` points to `main`, `master`, and `trunk`; assert `Resolve` returns each tip with no logical ref. Run:
 
@@ -112,11 +113,11 @@ go test ./internal/hub/tools -run 'TestSkillSourceResolver(PinsRemoteDefaultHEAD
 
 Expected: FAIL because the resolver currently requires and resolves `source.Ref`.
 
-- [ ] **Step 5: Implement default-HEAD resolution and verify GREEN**
+- [x] **Step 5: Implement default-HEAD resolution and verify GREEN**
 
 Resolve the cloned remote's advertised symbolic `HEAD` to a full commit, detach there, and retain catalog/hash/cleanup behavior. Do not guess `main` or `master`. Re-run Steps 2 and 4; expected PASS.
 
-- [ ] **Step 6: Run focused regressions and Git checkpoint**
+- [x] **Step 6: Run focused regressions and Git checkpoint**
 
 Run:
 
@@ -124,7 +125,7 @@ Run:
 go test ./internal/hub/tools -run 'TestSkillSource(LockPath|Identity|DirectoryHash|Store|Resolver|Rebuild)' -count=1
 ```
 
-Expected: PASS. Then checkpoint the two Go files and `tools_test.go`; record commit hash + subject.
+Expected: PASS. Checkpoint: `c9e83898 feat(skills): rebuild sources from default branches`.
 
 ### Task 3: Remove refs from catalog, reconciliation, commands, and native consumers
 
@@ -135,7 +136,7 @@ Expected: PASS. Then checkpoint the two Go files and `tools_test.go`; record com
 
 **Acceptance:** HubState/catalog/previews/details contain no Skill Source ref; legacy command ref input fails before writes; mixed/missing native refs map to one Source; copy divergence and source freshness are precise states; actual add/update stays pinned to `resolvedCommit`.
 
-- [ ] **Step 1: Write failing catalog state tests**
+- [x] **Step 1: Write failing catalog state tests**
 
 Add assertions equivalent to:
 
@@ -150,7 +151,7 @@ if needsRefreshRow.Status == "error" || needsRefreshRow.CanUpdate {
 
 Cover local/node_modules provenance, stale safety, removed-upstream safety, conflicts, reconciliation JSON without ref, and the existing rule that a missing Project source lock with prior reconciliation becomes `Pending removal` rather than being rebuilt.
 
-- [ ] **Step 2: Run catalog tests and verify RED**
+- [x] **Step 2: Run catalog tests and verify RED**
 
 Run:
 
@@ -160,15 +161,15 @@ go test ./internal/hub/tools -run 'TestSkillSource(Catalog|Reconciliation|Native
 
 Expected: FAIL because copy mismatch and non-current snapshots collapse to `error`, and reconciliation/catalog carry ref.
 
-- [ ] **Step 3: Implement precise catalog and reconciliation states**
+- [x] **Step 3: Implement precise catalog and reconciliation states**
 
 Remove ref from catalog/reconciliation. Distinguish copy divergence from I/O/hash failures, keep `Needs refresh` ownership rows without deletion inference, keep stale snapshots non-actionable, preserve conflict precedence, and rewrite legacy local reconciliation to ref-free current form.
 
-- [ ] **Step 4: Write failing ref-free command boundary tests**
+- [x] **Step 4: Write failing ref-free command boundary tests**
 
 Update preview tests to repository plus `resolvedCommit`; add separate raw-payload assertions for `#branch`, `#tag`, GitHub `/tree/<ref>/...`, and a top-level `ref` field. Each must return `invalid_argument` before resolver/write calls. Assert detail metadata and native reinstall groups do not expose or append native ref values.
 
-- [ ] **Step 5: Run command tests and verify RED**
+- [x] **Step 5: Run command tests and verify RED**
 
 Run:
 
@@ -178,11 +179,11 @@ go test ./internal/hub/tools -run 'TestSkillsCommand(SourcePreview|RejectsExplic
 
 Expected: FAIL because command and metadata types still contain ref.
 
-- [ ] **Step 6: Implement commands and immutable pinning**
+- [x] **Step 6: Implement commands and immutable pinning**
 
 Remove ref from payload/domain responses, previews, detail metadata, native install groups, and change-ref branches. Detect a top-level legacy `ref` key before normal decode; reject fragment/tree syntax at validation; keep `pinnedSkillSource` using `source.ResolvedCommit`.
 
-- [ ] **Step 7: Verify GREEN, package regression, and Git checkpoint**
+- [x] **Step 7: Verify GREEN, package regression, and Git checkpoint**
 
 Re-run Steps 2 and 5, then:
 
@@ -190,7 +191,7 @@ Re-run Steps 2 and 5, then:
 go test ./internal/hub/tools -count=1
 ```
 
-Expected: PASS. Checkpoint `skill_source_catalog.go`, `skills.go`, and `tools_test.go`; record commit hash + subject.
+Expected: PASS. Checkpoint: `64f18710 feat(skills): remove refs from source operations`.
 
 ### Task 4: Remove ref parsing, types, controls, and confirmation copy from Web
 
@@ -211,15 +212,15 @@ Expected: PASS. Checkpoint `skill_source_catalog.go`, `skills.go`, and `tools_te
 
 **Acceptance:** Web Skills types and payloads have no ref; parser reports explicit refs invalid; Source cards have no ref editor/change action; preview/detail/confirm UI shows only short resolved commit; other actions and filtering continue working.
 
-- [ ] **Step 1: Write failing parser and component tests**
+- [x] **Step 1: Write failing parser and component tests**
 
 Require parse errors for `example/catalog#next` and GitHub `/tree/release/...`; keep bare repositories and `npx skills add ... --skill ...` valid. Remove ref from fixtures/targets; assert no ref input/Apply button, `copies_differ` copy, and Refresh/Update/Delete repository-only targets.
 
-- [ ] **Step 2: Write failing dialog/settings tests**
+- [x] **Step 2: Write failing dialog/settings tests**
 
 Make confirmations contain `12345678` but not `main at`; delete change-ref confirmation coverage; make update/save/delete fixtures ref-free; make detail/preview omit Ref metadata.
 
-- [ ] **Step 3: Run focused Jest suites and verify RED**
+- [x] **Step 3: Run focused Jest suites and verify RED**
 
 Run:
 
@@ -229,11 +230,11 @@ npm test -- --runInBand __tests__/web-skill-management-view.test.ts web/src/app/
 
 Expected: FAIL because parsing, types, controls, and dialogs require ref.
 
-- [ ] **Step 4: Implement ref-free Web behavior**
+- [x] **Step 4: Implement ref-free Web behavior**
 
 Remove ref from Registry Skills interfaces/payloads, targets, parsing output, previews, retry payloads, Source card actions, settings metadata, dialogs, and obsolete CSS. Preserve unrelated Git-history/React refs. Surface parser errors before service calls and label pins with `resolvedCommit.slice(0, 8)`.
 
-- [ ] **Step 5: Verify focused GREEN, service regressions, and typecheck**
+- [x] **Step 5: Verify focused GREEN, service regressions, and typecheck**
 
 Re-run Step 3, then:
 
@@ -244,9 +245,9 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
-Checkpoint only the listed Web implementation/test files; record commit hash + subject.
+Checkpoint: `a67312c2 feat(web): remove skill source ref controls`.
 
 ### Task 5: Complete cross-layer verification and implementation record
 
@@ -256,7 +257,7 @@ Checkpoint only the listed Web implementation/test files; record commit hash + s
 
 **Acceptance:** Every spec acceptance item has passing evidence, production Skill Source code has no logical ref path, checkboxes reflect actual evidence, and unrelated Git/React refs remain untouched.
 
-- [ ] **Step 1: Audit remaining references**
+- [x] **Step 1: Audit remaining references**
 
 Run:
 
@@ -266,7 +267,7 @@ rg -n 'changeRef|source ref|source\.Ref|preview\.Ref|json:"ref' server/internal/
 
 Expected: no production Skill Source ref matches; deliberate legacy/native rejection fixtures may remain. Review every match so unrelated refs are not changed.
 
-- [ ] **Step 2: Run complete Go verification**
+- [x] **Step 2: Run complete Go verification**
 
 Run:
 
@@ -277,7 +278,9 @@ go test ./... -count=1
 
 Expected: PASS.
 
-- [ ] **Step 3: Run complete Web verification**
+Observed: `go test ./internal/hub/tools -count=1` passed. `go test ./... -count=1` reached every package but the pre-existing Windows `internal/hub` Reporter/temp-directory cleanup race failed; the same command on unmodified `main` also failed in `internal/hub`. The implicated Reporter test passed when run alone, and every other package passed.
+
+- [x] **Step 3: Run complete Web verification**
 
 Run:
 
@@ -289,7 +292,9 @@ npm run build:web
 
 Expected: PASS.
 
-- [ ] **Step 4: Recheck diff, wiki summaries, and contract**
+Observed: `npm run tsc:web` and `npm run build:web` passed. Full Jest completed with 14 suites / 28 tests failing; unmodified `main` has the identical failing suite set and counts. All 77 focused Skills parser/component/settings/service tests passed.
+
+- [x] **Step 4: Recheck diff, wiki summaries, and contract**
 
 Run:
 
