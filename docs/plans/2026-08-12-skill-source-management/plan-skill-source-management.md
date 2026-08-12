@@ -55,23 +55,23 @@ Invoke `git-workflow` checkpoint after verification and record the resulting com
 
 **Acceptance:** Hub and Project source locks have safe path selection, strict versioned validation, stable normalization/sorting, deterministic whole-directory hashes, credential rejection, atomic compare-and-swap writes, and byte-preserving failure behavior.
 
-- [ ] **Step 1: Read the TDD skill before production code**
+- [x] **Step 1: Read the TDD skill before production code**
 
 Follow its red/green/refactor cycle for every production unit in Tasks 2-6.
 
-- [ ] **Step 2: Write failing Source Store and source identity tests**
+- [x] **Step 2: Write failing Source Store and source identity tests**
 
 Cover Hub default/XDG and Project paths, HTTP(S) userinfo/query credential rejection, valid HTTPS and SCP-style SSH normalization, case-insensitive source-key deduplication, unknown schema, malformed/duplicate records, stable sorting/JSON, and immutable source-address behavior.
 
-- [ ] **Step 3: Write failing deterministic hash and safety tests**
+- [x] **Step 3: Write failing deterministic hash and safety tests**
 
 Use temporary directories to assert normalized relative-path plus raw-byte hashing includes supporting files, ignores checkout `.git`, changes on file/path/content changes, is order independent, and rejects unreadable entries or links escaping the skill root.
 
-- [ ] **Step 4: Write failing atomic persistence tests**
+- [x] **Step 4: Write failing atomic persistence tests**
 
 Assert same-directory temp write and compare-and-swap semantics, external-edit detection, cleanup after injected write/rename errors, and exact old bytes retained on every failure.
 
-- [ ] **Step 5: Run focused Go tests to verify RED**
+- [x] **Step 5: Run focused Go tests to verify RED**
 
 Run: `go test ./internal/hub/tools -run 'TestSkillSource(Store|Identity|LockPath|DirectoryHash)'`
 
@@ -79,17 +79,17 @@ Working directory: `server`
 
 Expected: FAIL because the source snapshot domain does not exist.
 
-- [ ] **Step 6: Implement the minimal Source Store**
+- [x] **Step 6: Implement the minimal Source Store**
 
 Add version 1 structs and validation, source normalization/security checks, stable serialization, hash traversal, path resolution, file-revision tokens, and atomic CAS replacement. Keep the source lock independent from upstream lock schemas and never persist credentials or local hashes.
 
-- [ ] **Step 7: Run focused Go tests to verify GREEN**
+- [x] **Step 7: Run focused Go tests to verify GREEN**
 
 Run the Step 5 command, then `go test ./internal/hub/tools`.
 
 Expected: PASS.
 
-- [ ] **Step 8: Git checkpoint**
+- [x] **Step 8: Git checkpoint** — `2848b6a5 feat(skills): add source snapshot store`
 
 Invoke `git-workflow` checkpoint for Task 2 after verification and record the commit hash and subject.
 
