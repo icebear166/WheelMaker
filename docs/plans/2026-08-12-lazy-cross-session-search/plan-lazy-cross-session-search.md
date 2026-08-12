@@ -161,35 +161,39 @@ Invoke `git-workflow` checkpoint for Task 3 files after Step 4 passes; record co
 
 **Acceptance:** Each project search uses a fixed-size worker pool, emits each matching session once at its first title/searchable-turn hit, stops promptly on cancellation, and ignores every non-user/non-visible-agent turn method while preserving response compatibility.
 
-- [ ] **Step 1: Write failing searchable-content table tests**
+- [x] **Step 1: Write failing searchable-content table tests**
 
 Extend existing `client_test.go` tests so `prompt_request`, `user_message_chunk`, and `agent_message_chunk` can match, while `agent_thought_chunk`, tool calls, plans, system, prompt_done/status text, and unknown generic payload fields cannot.
 
-- [ ] **Step 2: Write failing concurrency, deduplication, short-circuit, and cancellation tests**
+- [x] **Step 2: Write failing concurrency, deduplication, short-circuit, and cancellation tests**
 
 Exercise an extracted bounded runner with an instrumented callback. Assert active workers never exceed the configured limit, one session identity is appended at most once, a title hit does not scan turns, the first matching turn stops further reads for that session, and cancellation prevents queued work from starting.
 
-- [ ] **Step 3: Run focused Go tests to verify RED**
+- [x] **Step 3: Run focused Go tests to verify RED**
 
 Run: `go test ./internal/hub/client -run 'Test.*SessionSearch' -race`
 
 Expected: FAIL because current project scanning is serial and visible-text extraction includes excluded methods/fallbacks.
 
-- [ ] **Step 4: Implement the bounded first-hit scanner**
+- [x] **Step 4: Implement the bounded first-hit scanner**
 
 Add a fixed worker limit for one project task, cancellation-aware job dispatch, locked result identity deduplication, and completion after all workers exit. Preserve existing start/query/cancel JSON shapes and `source`/`turnIndex` compatibility fields. Replace generic visible-text fallback with explicit user/visible-agent extraction only; retain newest-first turn-store short-circuiting.
 
-- [ ] **Step 5: Run focused Go tests to verify GREEN**
+- [x] **Step 5: Run focused Go tests to verify GREEN**
 
 Run: `go test ./internal/hub/client -run 'Test.*SessionSearch' -race`
 
 Expected: PASS.
 
-- [ ] **Step 6: Run adjacent Hub protocol regressions**
+Environment note: `go test ./internal/hub/client -run 'Test.*SessionSearch'` passes. The requested `-race` variant cannot start on this Windows host because CGO is disabled and no `gcc` C compiler is installed.
+
+- [x] **Step 6: Run adjacent Hub protocol regressions**
 
 Run: `go test ./internal/hub/... -race`
 
 Expected: PASS.
+
+Environment note: the non-race `go test ./internal/hub/...` suite passes; the same host limitation prevents `-race` execution.
 
 - [ ] **Step 7: Git checkpoint**
 

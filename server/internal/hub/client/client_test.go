@@ -5707,6 +5707,214 @@ func TestSessionSearchVisibleTextReadsSteeredContentBlocksAndLegacyText(t *testi
 	}
 }
 
+func TestSessionSearchVisibleTextIncludesOnlyUserAndVisibleAgentContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{
+			name: "prompt request",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodPromptRequest, acp.SessionTurnPromptRequest{
+				ContentBlocks: []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "user prompt"}},
+			}),
+			want: "user prompt",
+		},
+		{
+			name:    "user message chunk",
+			content: buildSessionTurnContentJSON(acp.SessionUpdateUserMessageChunk, acp.SessionTurnTextResult{Text: "user steer"}),
+			want:    "user steer",
+		},
+		{
+			name:    "agent message chunk",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodAgentMessage, acp.SessionTurnTextResult{Text: "visible answer"}),
+			want:    "visible answer",
+		},
+		{
+			name:    "agent thought chunk",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodAgentThought, acp.SessionTurnTextResult{Text: "private reasoning"}),
+		},
+		{
+			name:    "tool call",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodToolCall, map[string]any{"text": "tool output"}),
+		},
+		{
+			name: "agent plan",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodAgentPlan, acp.SessionTurnPlanPayload{
+				Entries: []acp.SessionTurnPlanResult{{Content: "plan content", Status: "pending"}},
+			}),
+		},
+		{
+			name:    "system",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodSystem, acp.SessionTurnTextResult{Text: "system notice"}),
+		},
+		{
+			name: "prompt done",
+			content: buildSessionTurnContentJSON(acp.SessionTurnMethodPromptDone, acp.SessionTurnPromptResult{
+				StopReason: "failed",
+				Message:    "status failure",
+			}),
+		},
+		{
+			name:    "unknown generic payload",
+			content: buildSessionTurnContentJSON("future_status", map[string]any{"text": "generic text", "status": "running"}),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := sessionSearchTurnVisibleText(test.content); got != test.want {
+				t.Fatalf("visible text = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestSessionSearchWorkersBoundConcurrency(t *testing.T) {
+	sessions := make([]sessionSearchSnapshot, 12)
+	for index := range sessions {
+		sessions[index].SessionID = fmt.Sprintf("session-%d", index)
+	}
+	const limit = 3
+	started := make(chan struct{}, len(sessions))
+	release := make(chan struct{})
+	done := make(chan struct{})
+	var mu sync.Mutex
+	active := 0
+	maxActive := 0
+	processed := 0
+	go func() {
+		runSessionSearchWorkers(context.Background(), sessions, limit, func(_ context.Context, _ sessionSearchSnapshot) {
+			mu.Lock()
+			active++
+			processed++
+			if active > maxActive {
+				maxActive = active
+			}
+			mu.Unlock()
+			started <- struct{}{}
+			<-release
+			mu.Lock()
+			active--
+			mu.Unlock()
+		})
+		close(done)
+	}()
+
+	for index := 0; index < limit; index++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("workers did not start")
+		}
+	}
+	select {
+	case <-started:
+		t.Fatal("worker limit was exceeded while the first workers were blocked")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("workers did not finish")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if processed != len(sessions) {
+		t.Fatalf("processed = %d, want %d", processed, len(sessions))
+	}
+	if maxActive != limit {
+		t.Fatalf("max active = %d, want %d", maxActive, limit)
+	}
+}
+
+func TestSessionSearchWorkersStopQueuedWorkAfterCancellation(t *testing.T) {
+	sessions := make([]sessionSearchSnapshot, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	release := make(chan struct{})
+	started := make(chan struct{}, len(sessions))
+	done := make(chan struct{})
+	var mu sync.Mutex
+	processed := 0
+	go func() {
+		runSessionSearchWorkers(ctx, sessions, 2, func(_ context.Context, _ sessionSearchSnapshot) {
+			mu.Lock()
+			processed++
+			mu.Unlock()
+			started <- struct{}{}
+			<-release
+		})
+		close(done)
+	}()
+	for index := 0; index < 2; index++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("workers did not start")
+		}
+	}
+	cancel()
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled workers did not finish")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if processed > 2 {
+		t.Fatalf("processed = %d, want at most the two active sessions", processed)
+	}
+}
+
+func TestSessionSearchResultDeduplicatesSessionIdentity(t *testing.T) {
+	task := &sessionSearchTask{searchID: "search"}
+	manager := &sessionSearchManager{tasks: map[string]*sessionSearchTask{"search": task}}
+	result := sessionSearchResult{ProjectID: "project", SessionID: "session", Source: "title"}
+	manager.appendResult(task, result)
+	manager.appendResult(task, sessionSearchResult{
+		ProjectID: "project", SessionID: "session", Source: "prompt", TurnIndex: 4,
+	})
+	if got := len(manager.tasks["search"].results); got != 1 {
+		t.Fatalf("result count = %d, want one result per session", got)
+	}
+}
+
+func TestSessionSearchReplacedTaskIgnoresStaleWorkerUpdates(t *testing.T) {
+	stale := &sessionSearchTask{searchID: "search"}
+	current := &sessionSearchTask{searchID: "search"}
+	manager := &sessionSearchManager{tasks: map[string]*sessionSearchTask{"search": current}}
+
+	manager.appendResult(stale, sessionSearchResult{ProjectID: "project", SessionID: "stale", Source: "title"})
+	manager.appendError(stale, sessionSearchError{ProjectID: "project", Message: "stale"})
+	manager.markDone(stale)
+
+	if len(current.results) != 0 || len(current.errors) != 0 || current.done {
+		t.Fatalf("replacement task was mutated by stale workers: %#v", current)
+	}
+}
+
+func TestSessionSearchSnapshotStopsAtTitleHit(t *testing.T) {
+	turnSearches := 0
+	result, matched, err := searchSessionSnapshot(
+		context.Background(),
+		"project",
+		sessionSearchSnapshot{SessionID: "session", Title: "Matching title", LatestTurnIndex: 9},
+		"matching",
+		func(context.Context, string, int64, string) (int64, bool, error) {
+			turnSearches++
+			return 0, false, nil
+		},
+	)
+	if err != nil || !matched {
+		t.Fatalf("search result = %#v, matched=%v, err=%v", result, matched, err)
+	}
+	if result.Source != "title" || turnSearches != 0 {
+		t.Fatalf("result = %#v, turn searches = %d", result, turnSearches)
+	}
+}
+
 func TestSessionRecoveryKeepsSteeredMessageInsideNativeTurn(t *testing.T) {
 	client := newSessionViewTestClient(t)
 	ctx := context.Background()

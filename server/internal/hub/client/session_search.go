@@ -17,6 +17,7 @@ const (
 	sessionSearchMaxTasks     = 8
 	sessionSearchMaxQuerySize = 200
 	sessionSearchIdleForCap   = 30 * time.Second
+	sessionSearchWorkerLimit  = 4
 )
 
 type sessionSearchRequest struct {
@@ -60,6 +61,7 @@ type sessionSearchTask struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	results     []sessionSearchResult
+	resultIDs   map[string]struct{}
 	errors      []sessionSearchError
 	done        bool
 	lastTouched time.Time
@@ -162,6 +164,7 @@ func (m *sessionSearchManager) start(ctx context.Context, projectID, searchID, q
 		ctx:         taskCtx,
 		cancel:      cancel,
 		results:     []sessionSearchResult{},
+		resultIDs:   map[string]struct{}{},
 		errors:      []sessionSearchError{},
 		lastTouched: now,
 		startedAt:   now,
@@ -220,40 +223,104 @@ func (m *sessionSearchManager) cancel(searchID string) sessionSearchResponse {
 }
 
 func (m *sessionSearchManager) run(task *sessionSearchTask) {
-	defer m.markDone(task.searchID)
-	for _, session := range task.sessions {
-		if err := task.ctx.Err(); err != nil {
-			return
-		}
-		if sessionSearchContains(resolveSessionSearchTitle(session.Title), task.queryFold) {
-			m.appendResult(task.searchID, sessionSearchResult{
-				ProjectID: task.projectID,
-				SessionID: session.SessionID,
-				Source:    "title",
-			})
-			continue
-		}
-		turnIndex, matched, err := m.searchPromptTurns(task.ctx, session.SessionID, session.LatestTurnIndex, task.queryFold)
+	defer m.markDone(task)
+	runSessionSearchWorkers(task.ctx, task.sessions, sessionSearchWorkerLimit, func(ctx context.Context, session sessionSearchSnapshot) {
+		result, matched, err := searchSessionSnapshot(
+			ctx,
+			task.projectID,
+			session,
+			task.queryFold,
+			m.searchPromptTurns,
+		)
 		if err != nil {
-			if task.ctx.Err() != nil {
+			if ctx.Err() != nil {
 				return
 			}
-			m.appendError(task.searchID, sessionSearchError{
+			m.appendError(task, sessionSearchError{
 				ProjectID: task.projectID,
 				SessionID: session.SessionID,
 				Message:   err.Error(),
 			})
-			continue
+			return
 		}
 		if matched {
-			m.appendResult(task.searchID, sessionSearchResult{
-				ProjectID: task.projectID,
-				SessionID: session.SessionID,
-				Source:    "prompt",
-				TurnIndex: turnIndex,
-			})
+			m.appendResult(task, result)
+		}
+	})
+}
+
+func runSessionSearchWorkers(
+	ctx context.Context,
+	sessions []sessionSearchSnapshot,
+	workerLimit int,
+	search func(context.Context, sessionSearchSnapshot),
+) {
+	if len(sessions) == 0 || workerLimit <= 0 || search == nil || ctx.Err() != nil {
+		return
+	}
+	if workerLimit > len(sessions) {
+		workerLimit = len(sessions)
+	}
+	jobs := make(chan sessionSearchSnapshot)
+	var workers sync.WaitGroup
+	workers.Add(workerLimit)
+	for index := 0; index < workerLimit; index++ {
+		go func() {
+			defer workers.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case session, ok := <-jobs:
+					if !ok || ctx.Err() != nil {
+						return
+					}
+					search(ctx, session)
+				}
+			}
+		}()
+	}
+
+	for _, session := range sessions {
+		select {
+		case <-ctx.Done():
+			close(jobs)
+			workers.Wait()
+			return
+		case jobs <- session:
 		}
 	}
+	close(jobs)
+	workers.Wait()
+}
+
+func searchSessionSnapshot(
+	ctx context.Context,
+	projectID string,
+	session sessionSearchSnapshot,
+	queryFold string,
+	searchTurns func(context.Context, string, int64, string) (int64, bool, error),
+) (sessionSearchResult, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return sessionSearchResult{}, false, err
+	}
+	if sessionSearchContains(resolveSessionSearchTitle(session.Title), queryFold) {
+		return sessionSearchResult{
+			ProjectID: projectID,
+			SessionID: session.SessionID,
+			Source:    "title",
+		}, true, nil
+	}
+	turnIndex, matched, err := searchTurns(ctx, session.SessionID, session.LatestTurnIndex, queryFold)
+	if err != nil || !matched {
+		return sessionSearchResult{}, false, err
+	}
+	return sessionSearchResult{
+		ProjectID: projectID,
+		SessionID: session.SessionID,
+		Source:    "prompt",
+		TurnIndex: turnIndex,
+	}, true, nil
 }
 
 func (m *sessionSearchManager) searchPromptTurns(ctx context.Context, sessionID string, latestTurnIndex int64, queryFold string) (int64, bool, error) {
@@ -289,27 +356,36 @@ func (m *sessionSearchManager) searchPromptTurns(ctx context.Context, sessionID 
 	return 0, false, nil
 }
 
-func (m *sessionSearchManager) appendResult(searchID string, result sessionSearchResult) {
+func (m *sessionSearchManager) appendResult(task *sessionSearchTask, result sessionSearchResult) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if task := m.tasks[searchID]; task != nil {
-		task.results = append(task.results, result)
+	current := m.tasks[task.searchID]
+	if current != task {
+		return
+	}
+	if current.resultIDs == nil {
+		current.resultIDs = map[string]struct{}{}
+	}
+	if _, exists := current.resultIDs[result.SessionID]; exists {
+		return
+	}
+	current.resultIDs[result.SessionID] = struct{}{}
+	current.results = append(current.results, result)
+}
+
+func (m *sessionSearchManager) appendError(task *sessionSearchTask, searchErr sessionSearchError) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if current := m.tasks[task.searchID]; current == task {
+		current.errors = append(current.errors, searchErr)
 	}
 }
 
-func (m *sessionSearchManager) appendError(searchID string, searchErr sessionSearchError) {
+func (m *sessionSearchManager) markDone(task *sessionSearchTask) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if task := m.tasks[searchID]; task != nil {
-		task.errors = append(task.errors, searchErr)
-	}
-}
-
-func (m *sessionSearchManager) markDone(searchID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if task := m.tasks[searchID]; task != nil {
-		task.done = true
+	if current := m.tasks[task.searchID]; current == task {
+		current.done = true
 	}
 }
 
@@ -412,18 +488,6 @@ func sessionSearchTurnVisibleText(content string) string {
 			return ""
 		}
 		return sessionSearchContentBlockText(payload.ContentBlocks)
-	case acp.SessionTurnMethodPromptDone:
-		var payload acp.SessionTurnPromptResult
-		if err := json.Unmarshal(turn.Param, &payload); err != nil {
-			return ""
-		}
-		stopReason := strings.ToLower(strings.TrimSpace(payload.StopReason))
-		switch stopReason {
-		case "cancelled", "canceled", "interrupted", "failed", "error":
-			return strings.Join(nonEmptySessionSearchParts(payload.StopReason, payload.Message), "\n")
-		default:
-			return strings.TrimSpace(payload.Message)
-		}
 	case acp.SessionUpdateUserMessageChunk:
 		var payload acp.SessionTurnUserMessage
 		if err := json.Unmarshal(turn.Param, &payload); err != nil {
@@ -433,26 +497,14 @@ func sessionSearchTurnVisibleText(content string) string {
 			return text
 		}
 		return strings.TrimSpace(payload.Text)
-	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought, acp.SessionTurnMethodSystem:
+	case acp.SessionTurnMethodAgentMessage:
 		var payload acp.SessionTurnTextResult
 		if err := json.Unmarshal(turn.Param, &payload); err != nil {
 			return ""
 		}
 		return strings.TrimSpace(payload.Text)
-	case acp.SessionTurnMethodToolCall:
-		return ""
-	case acp.SessionTurnMethodAgentPlan:
-		var payload acp.SessionTurnPlanPayload
-		if err := json.Unmarshal(turn.Param, &payload); err != nil {
-			return ""
-		}
-		parts := make([]string, 0, len(payload.Entries)*2)
-		for _, entry := range payload.Entries {
-			parts = append(parts, strings.TrimSpace(entry.Content), strings.TrimSpace(entry.Status))
-		}
-		return strings.Join(nonEmptySessionSearchParts(parts...), "\n")
 	default:
-		return sessionSearchGenericVisibleText(turn.Param)
+		return ""
 	}
 }
 
@@ -463,45 +515,6 @@ func sessionSearchContentBlockText(blocks []acp.ContentBlock) string {
 			parts = append(parts, strings.TrimSpace(block.Text))
 		}
 	}
-	return strings.Join(nonEmptySessionSearchParts(parts...), "\n")
-}
-
-func sessionSearchGenericVisibleText(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return ""
-	}
-	parts := []string{}
-	var walk func(any)
-	walk = func(input any) {
-		switch typed := input.(type) {
-		case map[string]any:
-			for key, value := range typed {
-				switch key {
-				case "text", "output", "cmd", "content", "message", "status":
-					if text, ok := value.(string); ok {
-						parts = append(parts, strings.TrimSpace(text))
-						continue
-					}
-				}
-				if key == "contentBlocks" {
-					if blocks, ok := value.([]any); ok {
-						for _, block := range blocks {
-							walk(block)
-						}
-					}
-				}
-			}
-		case []any:
-			for _, item := range typed {
-				walk(item)
-			}
-		}
-	}
-	walk(value)
 	return strings.Join(nonEmptySessionSearchParts(parts...), "\n")
 }
 
