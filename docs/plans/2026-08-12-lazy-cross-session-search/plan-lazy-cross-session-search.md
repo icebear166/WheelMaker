@@ -195,7 +195,7 @@ Expected: PASS.
 
 Environment note: the non-race `go test ./internal/hub/...` suite passes; the same host limitation prevents `-race` execution.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint** — `22d33d5f perf(search): bound session scanning`
 
 Invoke `git-workflow` checkpoint for Task 4 files after Step 6 passes; record commit hash and subject.
 
