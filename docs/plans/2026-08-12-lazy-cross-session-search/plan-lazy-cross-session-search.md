@@ -149,7 +149,7 @@ Run: `npm test -- --runInBand __tests__/web-chat-search-controller.test.ts __tes
 
 Expected: PASS, including existing match counts/highlights/navigation semantics.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint** — `6fe51851 feat(search): hand off to local chat search`
 
 Invoke `git-workflow` checkpoint for Task 3 files after Step 4 passes; record commit hash and subject.
 
