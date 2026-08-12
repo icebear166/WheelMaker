@@ -150,6 +150,39 @@ describe('web session search UI wiring', () => {
     expect(mobileHeaderBlock).toContain('height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
   });
 
+  test('keeps mobile search results inside the ordinary session-list navigation frame', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const sheetStart = main.indexOf('const renderMobileChatSessionSheet = () => {');
+    const sheetEnd = main.indexOf('const renderMobileProjectActionSheet = () => {', sheetStart);
+    expect(sheetStart).toBeGreaterThanOrEqual(0);
+    expect(sheetEnd).toBeGreaterThan(sheetStart);
+    const mobileSheet = main.slice(sheetStart, sheetEnd);
+
+    expect(mobileSheet).toContain('{archivedMode ? (');
+    expect(mobileSheet).not.toContain('archivedMode || sessionSearchActive');
+    expect(mobileSheet).toMatch(
+      /<ChatSessionNav[\s\S]*className="mobile-project-session-nav"[\s\S]*dataSessionListDensity=\{MOBILE_SESSION_LIST_DENSITY\}[\s\S]*<SessionListView \{\.\.\.viewProps\} \/>[\s\S]*<\/ChatSessionNav>/,
+    );
+  });
+
+  test('lets expanded mobile search own the full header width', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const styles = readWebStyles(projectRoot);
+    const headerStart = main.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
+    const headerEnd = main.indexOf('const renderMobileChatSessionSheet = (', headerStart);
+    expect(headerStart).toBeGreaterThanOrEqual(0);
+    expect(headerEnd).toBeGreaterThan(headerStart);
+    const header = main.slice(headerStart, headerEnd);
+
+    expect(header).toContain('{!searchHeaderExpanded ? renderChatHubSummary() : null}');
+    const actionsBlock = styles.match(/\.chat-session-header\.mobile\.search-open \.chat-sidebar-title-actions \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const searchWrapBlock = styles.match(/\.chat-session-header\.mobile\.search-open \.chat-header-search-wrap \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(actionsBlock).toContain('width: 100%;');
+    expect(searchWrapBlock).toContain('width: 100%;');
+  });
+
   test('renders full Hub labels and compact search state without result counts', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');

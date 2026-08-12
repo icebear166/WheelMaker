@@ -61,6 +61,14 @@
   padding: var(--wm-safe-area-top) 8px 0;
 }
 
+.chat-session-header.mobile.search-open .chat-sidebar-title-actions {
+  width: 100%;
+}
+
+.chat-session-header.mobile.search-open .chat-header-search-wrap {
+  width: 100%;
+}
+
 .chat-title-bar {
   display: flex;
   align-items: center;

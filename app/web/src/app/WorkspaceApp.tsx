@@ -16250,7 +16250,7 @@ export function App() {
           )
         ) : null}
         <div className="chat-sidebar-title-actions">
-          {renderChatHubSummary()}
+          {!searchHeaderExpanded ? renderChatHubSummary() : null}
           {mobile ? (
             <>
               {renderChatArchiveControls()}
@@ -16269,15 +16269,15 @@ export function App() {
       <>
         {renderChatSessionHeader(true)}
         {renderArchiveBatchStatus()}
-        {archivedMode || sessionSearchActive ? (
+        {archivedMode ? (
           <SessionListView {...viewProps} />
         ) : (
-        <ChatSessionNav
-          className="mobile-project-session-nav"
-          dataSessionListDensity={MOBILE_SESSION_LIST_DENSITY}
-        >
-          <SessionListView {...viewProps} />
-        </ChatSessionNav>
+          <ChatSessionNav
+            className="mobile-project-session-nav"
+            dataSessionListDensity={MOBILE_SESSION_LIST_DENSITY}
+          >
+            <SessionListView {...viewProps} />
+          </ChatSessionNav>
         )}
       </>
     );
