@@ -10,6 +10,8 @@
 
 > 文件下载来源：[`docs/scope/2026-08-09-file-downloads.md`](../../scope/2026-08-09-file-downloads.md)
 
+> 上下文菜单手势来源：[`docs/scope/2026-08-12-unified-context-menu-gestures.md`](../../scope/2026-08-12-unified-context-menu-gestures.md)
+
 ## 本地文件识别
 
 聊天文件链接支持项目内相对路径、规范化后逃出项目根目录的相对路径、Windows 盘符或 UNC 绝对路径、POSIX 绝对路径、`file://` URI 和 `vscode://file` URI。链接中的行号后缀或锚点用于 preview 跳转，不属于复制路径的结果。其他 URI scheme 继续作为普通链接处理。
@@ -31,7 +33,7 @@
 
 ## 文件链接菜单
 
-鼠标右键点击或触屏长按已识别的文件目标会打开同一套共享文件菜单。入口包括聊天文件链接、已发送附件、Changed Files 中未删除的单个文件行、普通 file preview/tab，以及 Preview 文件树和搜索结果。Changed file 左键继续打开 diff，`Changed N files` 汇总按钮不接管文件菜单。
+鼠标右键点击或 touch/pen 长按已识别的文件目标会打开同一套共享文件菜单。入口包括聊天文件链接、已发送附件、Changed Files 中未删除的单个文件行、普通 file preview/tab，以及 Preview 文件树、Preview 文件搜索结果和 Quick Open 文件结果。Changed file 左键继续打开 diff，`Changed N files` 汇总按钮不接管文件菜单。长按延迟、移动取消、haptic、合成事件抑制、目标局部禁选中与嵌套按钮规则统一遵循 [`../frontend-interaction/context-menu-gestures.md`](../frontend-interaction/context-menu-gestures.md)。
 
 菜单第一项固定为 `Preview file`，用于打开普通 file preview tab；有效的当前普通文件或可解析的已发送附件随后显示 `Download`。文件已删除或读取失败时，预览 tab 使用现有错误状态说明原因。项目内文件显示 `Copy relative path` 和 `Copy absolute path`；项目外文件只显示 `Copy absolute path`。复制结果只包含路径，不包含链接中的行号。
 
@@ -48,7 +50,7 @@ Desktop 菜单按打开、文件复制、路径复制分为三组，不显示分
 
 两个文件复制动作和路径复制动作之间使用轻量分隔线；不可用动作隐藏后不保留多余分隔线。浏览器与 Android 不显示 `Copy file`，项目内 Markdown 使用 `Export as HTML`。
 
-点击空白处、按 Escape、选择动作、滚动或调整窗口尺寸会关闭菜单。长按在超过移动阈值、抬起或取消时不触发；完成长按后吞掉随后的合成 click，避免同时打开 preview。普通网页链接、Relay 链接和无法识别的 URI 不受文件菜单接管。现有 preview 文件菜单及其动作继续保留。
+点击空白处、按 Escape、选择动作、滚动或调整窗口尺寸会关闭菜单。普通网页链接、Relay 链接和无法识别的 URI 不受文件菜单接管。现有 preview 文件菜单及其动作继续保留。
 
 菜单使用现有线性图标体系和主题 token。浅色主题使用较低浓度阴影并保持清晰边界；深浅主题中的图标、分隔线、hover 和 focus-visible 状态都必须清晰。
 

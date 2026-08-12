@@ -25,21 +25,21 @@
 
 **Acceptance:** The confirmed cross-target gesture policy has one discoverable wiki authority; file and session pages link to it and retain only their domain-specific menu behavior.
 
-- [ ] **Step 1: Create the interaction policy page**
+- [x] **Step 1: Create the interaction policy page**
 
   Record the supported targets, 450ms/8px arbitration, input-device trigger rules, local selection/callout suppression, one haptic per committed long press, click/de-duplication behavior, nested action ownership, and selectable-text exclusions. Link the approved scope as the source.
 
-- [ ] **Step 2: Update the directory and domain indexes**
+- [x] **Step 2: Update the directory and domain indexes**
 
   Add `context-menu-gestures.md` to the Frontend Interaction page list. Update `session-list.md` and `file-links.md` to reference the shared policy while preserving Session/Project menu contents and file action boundaries.
 
-- [ ] **Step 3: Validate wiki structure and links**
+- [x] **Step 3: Validate wiki structure and links**
 
   Run: `Get-Content docs/wiki/frontend-interaction/context-menu-gestures.md -TotalCount 2; rg -n "context-menu-gestures" docs/wiki/frontend-interaction docs/wiki/features/file-links.md; git diff --check`
 
   Expected: Every changed wiki page starts with `> 摘要：`, the new page is indexed and referenced, and diff validation succeeds.
 
-- [ ] **Step 4: Git checkpoint**
+- [x] **Step 4: Git checkpoint**
 
   Invoke `git-workflow` checkpoint for the four wiki files plus this checked plan. Record the commit hash and subject in the execution report.
 

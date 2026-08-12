@@ -2,7 +2,7 @@
 
 # Session 列表交互
 
-> 来源：[`../../scope/2026-07-22-pin-session.md`](../../scope/2026-07-22-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav.md)、[`../../scope/2026-07-26-session-color-mark.md`](../../scope/2026-07-26-session-color-mark.md)
+> 来源：[`../../scope/2026-07-22-pin-session.md`](../../scope/2026-07-22-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade.md)、[`../../scope/2026-07-26-mobile-floating-nav.md`](../../scope/2026-07-26-mobile-floating-nav.md)、[`../../scope/2026-07-26-session-color-mark.md`](../../scope/2026-07-26-session-color-mark.md)、[`../../scope/2026-08-12-unified-context-menu-gestures.md`](../../scope/2026-08-12-unified-context-menu-gestures.md)
 
 本页用于持续记录 Session 列表层面的稳定交互。对话内容、Turn 展示和侧边栏容器布局分别由其他前端交互页面维护；图标、动效和配色等视觉语言约定见 [`visual-language.md`](visual-language.md)。
 
@@ -36,8 +36,9 @@ Project 活跃 Session 列表先分为 pinned 与 unpinned 两组，pinned 组�
 
 ## 操作入口
 
-- 桌面端 Session 通过右键菜单或行尾更多菜单执行 Pin/Unpin、Mark、Rename、Archive、Reload 和 Delete 等操作。
-- 移动端 Project 与 Session 统一通过长按打开各自操作菜单，再选择 Pin/Unpin 或 Mark；长按本身不直接切换 pin。Project 长按 sheet 同时提供 "Resume session" 入口（选 agent → 可恢复会话列表 → import）。
+- 普通项目 Session 与 Recent Session 通过鼠标右键或 touch/pen 长按打开同一 Session 菜单；搜索结果保持跳转入口，Archived 保持恢复入口，Draft 不提供该菜单。
+- Project 标题通过右键或长按打开 Project Actions，其中仅包含 Resume session 和 Pin/Unpin；New Session 继续由常驻 `+` 承担。
+- Session/Project 的延迟、移动取消、haptic、嵌套按钮和浏览器默认行为遵循 [`context-menu-gestures.md`](context-menu-gestures.md)。长按本身不直接切换 pin。
 - 运行中的 Session 仍可 pin/unpin；只有该 Session 的 pin 请求进行中才禁用重复提交。
 
 ## Pin 展示与取消
