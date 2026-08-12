@@ -298,13 +298,13 @@ Invoke `git-workflow` checkpoint for Task 6 after verification and record the co
 
 **Acceptance:** Every approved acceptance item has evidence, no real user skill directory or public network is touched by tests, no credential reaches snapshots/errors/logs, no Registry protocol version changes, and the implementation branch is ready for finalize.
 
-- [ ] **Step 1: Run source-management security and behavior tests**
+- [x] **Step 1: Run source-management security and behavior tests**
 
 Run focused Go tests covering credentials, symlink boundaries, Git cleanup, CAS conflicts, migration idempotence, stale safety, pinned commits, conflicts, removed-upstream, best-effort results, source delete/ref changes, and Pending removal.
 
 Expected: PASS using only temp directories, local Git fixtures, and fake runners.
 
-- [ ] **Step 2: Run the complete Go suite**
+- [x] **Step 2: Run the complete Go suite**
 
 Run: `go test ./...`
 
@@ -312,7 +312,7 @@ Working directory: `server`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run the complete Web test suite**
+- [x] **Step 3: Run the complete Web test suite**
 
 Run: `npm test -- --runInBand`
 
@@ -320,7 +320,7 @@ Working directory: `app`
 
 Expected: PASS, or any pre-existing baseline failures are reproduced on `origin/main` and documented with zero branch-only regressions.
 
-- [ ] **Step 4: Run TypeScript and production build checks**
+- [x] **Step 4: Run TypeScript and production build checks**
 
 Run: `npm run tsc:web` and `npm run build:web`
 
@@ -328,16 +328,36 @@ Working directory: `app`
 
 Expected: PASS.
 
-- [ ] **Step 5: Inspect scope, generated artifacts, secrets, and protocol compatibility**
+- [x] **Step 5: Inspect scope, generated artifacts, secrets, and protocol compatibility**
 
 Run: `git diff --check`, `git status -sb`, `git diff --stat origin/main...HEAD`, targeted secret-pattern checks on `.skill-source-lock.json` fixtures/output, and `git diff origin/main...HEAD -- server/internal/protocol app/web/src/registry/registryMethods.ts`.
 
 Expected: No whitespace errors, unowned/generated artifacts, credential material, public Registry method changes, or protocol-version changes.
 
-- [ ] **Step 6: Reconcile all spec acceptance items**
+- [x] **Step 6: Reconcile all spec acceptance items**
 
 Map each item in `docs/scope/2026-08-12-skill-source-management.md` to passing automated evidence or a documented manual UI check. Repair only in-scope gaps and rerun the narrowest affected verification before repeating release gates.
 
-- [ ] **Step 7: Complete the plan and Git lifecycle**
+- [x] **Step 7: Complete the plan and Git lifecycle**
 
 Mark all verified steps complete, checkpoint this plan if needed, then invoke `git-workflow` finalize with commit list, verification evidence, push/merge result, and cleanup status.
+
+#### Final verification record — 2026-08-12
+
+- Focused source-management Go tests passed with temp directories, local Git fixtures, and fake runners. Coverage includes schema/path selection, atomic CAS writes, migration ambiguity/idempotence, resolver cleanup and symlink boundaries, stale retention, credential rejection/redaction, live hashes, conflicts, removed-upstream, pinned installs, ref/source deletion, whole-lock Project deletion reconciliation, itemized skip/conflict results, and best-effort continuation after both item and source refresh failures.
+- `go test ./...` passed from `server` with isolated temporary `XDG_STATE_HOME` and `XDG_CONFIG_HOME`.
+- Skills-adjacent Web suites passed: 5 suites / 26 tests, including source ledger filtering/actions, per-scope preferences, ref catalog diffs, destructive/overwrite confirmations, and typed repository/service paths. `npm run tsc:web` passed.
+- Full `npm test -- --runInBand` had exactly two baseline failures: `web-setup.test.js` expects a `1536` SVG viewBox while tracked `icon.svg` uses `1254`, and `web-chat-ui.test.ts` expects a retired floating-control drag transform. Both exact failures reproduced from the clean `main` worktree; there are zero branch-only Web failures.
+- `npm run build:web` completed successfully. Build output was emitted outside the repository worktree and no generated repository artifact was added.
+- `git diff --check` passed; the implementation diff is limited to the planned Hub tools/HubState, typed Web model/service/UI/tests, plan, and wiki surfaces. No real `.skill-source-lock.json` is tracked.
+- `gitleaks git . --log-opts="origin/main..HEAD" --redact --no-banner` scanned 14 commits with no leaks. Targeted secret strings occur only in negative security fixtures and are asserted absent from returned errors/snapshots.
+- `server/internal/protocol` and `app/web/src/registry/registryMethods.ts` have no diff from `origin/main`; the Registry protocol version and public method set remain unchanged.
+
+#### Acceptance reconciliation
+
+- Source-lock ownership/schema/atomicity and idempotent migration map to Source Store and migration tests; Project whole-lock deletion now maps to persisted reconciliation and `Pending removal` tests.
+- Complete explicit refresh, immutable commit pinning, directory hashes, remote additions/removals, resolver cleanup, and stale failure safety map to resolver/catalog/command fault-injection tests.
+- Live local hashing, update visibility, fixed-agent copy completeness, same-name conflict blocking, removed-upstream manual uninstall, and unmanaged grouping map to catalog composition and source-ledger component tests.
+- Bare source save, explicit named install, forced refresh, ref catalog diff/CAS apply, precise Update All selection, itemized success/failure/skip/conflict, source-refresh best effort, and delete-after-uninstall semantics map to command operation and confirmation tests.
+- Scope-local default-off uninstalled preferences, source-first repository metadata including refresh time, stale action blocking, overwrite warnings, cancellation, and partial-result visibility/retry map to Web unit/component tests and the successful TypeScript/production build.
+- Credential boundaries, no-public-network test execution, unchanged upstream lock schema, unchanged Registry protocol, and no tracked/generated lock output map to the security tests and final repository audits above.
