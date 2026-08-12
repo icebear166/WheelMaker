@@ -137,11 +137,10 @@ export function useChatSearchController(input: {
     setOpen(true);
     setActiveIndex(0);
     onOpenRequestConsumed?.(resolved.generation);
-    const frameId = window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
     });
-    return () => window.cancelAnimationFrame(frameId);
   }, [onOpenRequestConsumed, openRequest, sourceKey]);
 
   useEffect(() => {
