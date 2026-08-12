@@ -100,6 +100,76 @@ test('single-skill update confirmation names the selected skill', () => {
   expect(copy).toContain('Hub: hub-a');
 });
 
+test('source update confirmation explicitly warns before overwriting local content', () => {
+  const copy = confirmCopy({
+    kind: 'skillPreview',
+    action: 'update',
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+    previewId: 'preview-1',
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    resolvedCommit: '1234567890abcdef',
+    skills: ['baseline-ui'],
+    overwritesLocal: true,
+  });
+
+  expect(copy).toContain('Local content changes will be overwritten');
+  expect(copy).toContain('main at 12345678');
+});
+
+test('source deletion confirmation promises lock removal only after every uninstall succeeds', () => {
+  const copy = confirmCopy({
+    kind: 'skillPreview',
+    action: 'deleteSource',
+    hubId: 'hub-a',
+    scope: 'hub',
+    previewId: 'preview-delete',
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    resolvedCommit: '1234567890abcdef',
+    skills: ['one', 'two'],
+  });
+
+  expect(copy).toContain('removes this source');
+  expect(copy).toContain('only after every uninstall succeeds');
+});
+
+test('canceling a source preview never invokes the apply callback', () => {
+  const onCancel = jest.fn();
+  const onPrimary = jest.fn();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppConfirmDialog
+        target={{
+          kind: 'skillPreview',
+          action: 'saveSource',
+          hubId: 'hub-a',
+          scope: 'hub',
+          previewId: 'preview-save',
+          source: 'https://github.com/acme/skills.git',
+          sourceKey: 'github.com/acme/skills',
+          ref: 'main',
+          resolvedCommit: '1234567890abcdef',
+          skills: ['one'],
+        }}
+        busy={false}
+        error=""
+        onCancel={onCancel}
+        onPrimary={onPrimary}
+      />,
+    );
+  });
+
+  act(() => renderer.root.findByProps({className: 'app-confirm-btn secondary'}).props.onClick());
+  expect(onCancel).toHaveBeenCalledTimes(1);
+  expect(onPrimary).not.toHaveBeenCalled();
+});
+
 test('marks a Hub-owned confirmation as part of the Hub interaction surface', () => {
   const props = {
     target: {

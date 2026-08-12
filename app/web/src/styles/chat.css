@@ -2191,6 +2191,8 @@
 .chat-hub-skill-icon-button,
 .chat-hub-skill-toolbar-button,
 .chat-hub-skill-update-all,
+.chat-hub-skill-source-actions button,
+.chat-hub-skill-source-ref-apply,
 .chat-hub-skill-row-actions button,
 button.chat-hub-skill-name {
   transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
@@ -2210,6 +2212,8 @@ button.chat-hub-skill-name {
   .chat-hub-skill-icon-button,
   .chat-hub-skill-toolbar-button,
   .chat-hub-skill-update-all,
+  .chat-hub-skill-source-actions button,
+  .chat-hub-skill-source-ref-apply,
   .chat-hub-skill-row-actions button,
   button.chat-hub-skill-name {
     transition-property: background, background-color, border-color, color, box-shadow, outline-color, opacity;
@@ -2415,7 +2419,9 @@ button.chat-hub-gateway-capsule:disabled {
 }
 
 .chat-hub-skill-row {
-  grid-template-columns: 18px minmax(0, 1fr) 52px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  min-height: 32px;
+  height: auto;
 }
 
 .chat-hub-scan-row {
@@ -2575,9 +2581,28 @@ button.chat-hub-skill-name:disabled {
   gap: 2px;
 }
 
+.chat-hub-skill-uninstalled-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chat-hub-skill-uninstalled-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent-primary);
+}
+
 .chat-hub-skill-icon-button,
 .chat-hub-skill-toolbar-button,
 .chat-hub-skill-update-all,
+.chat-hub-skill-source-actions button,
+.chat-hub-skill-source-ref-apply,
 .chat-hub-skill-row-actions button {
   appearance: none;
   min-width: 24px;
@@ -2600,10 +2625,14 @@ button.chat-hub-skill-name:disabled {
 .chat-hub-skill-icon-button:hover:not(:disabled),
 .chat-hub-skill-toolbar-button:hover:not(:disabled),
 .chat-hub-skill-update-all:hover:not(:disabled),
+.chat-hub-skill-source-actions button:hover:not(:disabled),
+.chat-hub-skill-source-ref-apply:hover:not(:disabled),
 .chat-hub-skill-row-actions button:hover:not(:disabled),
 .chat-hub-skill-icon-button:focus-visible,
 .chat-hub-skill-toolbar-button:focus-visible,
 .chat-hub-skill-update-all:focus-visible,
+.chat-hub-skill-source-actions button:focus-visible,
+.chat-hub-skill-source-ref-apply:focus-visible,
 .chat-hub-skill-row-actions button:focus-visible {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--hover) 80%, transparent);
@@ -2612,12 +2641,15 @@ button.chat-hub-skill-name:disabled {
 .chat-hub-skill-icon-button:disabled,
 .chat-hub-skill-toolbar-button:disabled,
 .chat-hub-skill-update-all:disabled,
+.chat-hub-skill-source-actions button:disabled,
+.chat-hub-skill-source-ref-apply:disabled,
 .chat-hub-skill-row-actions button:disabled {
   opacity: 0.42;
   cursor: default;
 }
 
 .chat-hub-skill-toolbar-button.is-danger,
+.chat-hub-skill-source-actions button.is-danger,
 .chat-hub-skill-row-actions button.is-danger {
   color: var(--danger, #df6674);
 }
@@ -2633,55 +2665,229 @@ button.chat-hub-skill-name:disabled {
   padding-inline: 6px;
 }
 
-.chat-hub-skill-checkbox-slot {
-  width: 16px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chat-hub-skill-checkbox-slot input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--accent-primary);
-}
-
-.chat-hub-skill-checkbox-slot input.is-hidden,
-.chat-hub-skill-row-actions.is-selection-mode {
-  visibility: hidden;
-}
-
-.chat-hub-skill-external {
+.chat-hub-skill-status {
   flex: 0 0 auto;
-  width: 14px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-tertiary);
-}
-
-.chat-hub-skill-sync-summary,
-.chat-hub-skill-sync {
-  color: var(--warning, #d8a13b);
-}
-
-.chat-hub-skill-sync {
-  flex: 0 0 auto;
-  max-width: 92px;
+  max-width: 106px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 9px;
+  color: var(--text-tertiary);
 }
 
 .chat-hub-skill-row-actions {
-  width: 52px;
-  display: grid;
-  grid-template-columns: repeat(2, 24px);
+  display: flex;
+  justify-content: flex-end;
   gap: 2px;
+}
+
+.chat-hub-skill-row.is-uninstalled {
+  opacity: 0.58;
+}
+
+.chat-hub-skill-row.is-removed {
+  background: color-mix(in srgb, var(--danger, #df6674) 7%, transparent);
+}
+
+.chat-hub-skill-row.is-removed .chat-hub-skill-status {
+  color: var(--danger, #df6674);
+}
+
+.chat-hub-skill-row.is-conflict {
+  opacity: 0.52;
+  background: color-mix(in srgb, var(--text-tertiary) 7%, transparent);
+}
+
+.chat-hub-skill-sources {
+  display: grid;
+  gap: 7px;
+}
+
+.chat-hub-skill-source {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 68%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-panel) 75%, transparent);
+}
+
+.chat-hub-skill-source.is-stale,
+.chat-hub-skill-source.is-pending-removal {
+  border-color: color-mix(in srgb, var(--warning, #d8a13b) 38%, var(--border-subtle));
+}
+
+.chat-hub-skill-source-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 7px;
+  min-height: 34px;
+  padding: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
+}
+
+.chat-hub-skill-source-identity {
+  min-width: 0;
+  flex: 1 1 150px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chat-hub-skill-source-identity strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.chat-hub-skill-source-state {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chat-hub-skill-source-state.is-stale,
+.chat-hub-skill-source-state.is-pending_removal {
+  color: var(--warning, #d8a13b);
+}
+
+.chat-hub-skill-source-meta {
+  min-width: 0;
+  flex: 1 1 230px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 8.5px;
+}
+
+.chat-hub-skill-source-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.chat-hub-skill-source-ref-input {
+  width: 58px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  padding: 0 4px;
+  font: inherit;
+}
+
+.chat-hub-skill-source-ref-input:focus-visible {
+  border-color: var(--accent-primary);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  outline-offset: 1px;
+}
+
+.chat-hub-skill-source-ref-apply {
+  height: 20px;
+  min-width: 0;
+  padding-inline: 4px;
+}
+
+.chat-hub-skill-source-commit,
+.chat-hub-skill-source-counts {
+  white-space: nowrap;
+}
+
+.chat-hub-skill-source-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.chat-hub-skill-source-error {
+  padding: 5px 7px;
+  color: var(--warning, #d8a13b);
+  background: color-mix(in srgb, var(--warning, #d8a13b) 7%, transparent);
+  font-size: 9px;
+}
+
+.chat-hub-skill-source-empty {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.chat-hub-skill-source .chat-hub-skill-list {
+  padding: 2px 4px;
+}
+
+.chat-hub-skill-operation-results {
+  margin: 0 0 7px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 68%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-panel) 75%, transparent);
+}
+
+.chat-hub-skill-operation-results.is-partial,
+.chat-hub-skill-operation-results.is-failed {
+  border-color: color-mix(in srgb, var(--danger, #df6674) 34%, var(--border-subtle));
+}
+
+.chat-hub-skill-operation-results > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 7px;
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.chat-hub-skill-operation-results > header span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-hub-skill-operation-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 25px;
+  padding: 0 7px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 45%, transparent);
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.chat-hub-skill-operation-result > span:first-child {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-hub-skill-operation-result strong {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.chat-hub-skill-operation-result[data-result-status='failed'] strong {
+  color: var(--danger, #df6674);
 }
 
 .chat-hub-skill-state {

@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import {Icon} from '../common/Icon';
 import type {
   RegistrySkillDetail,
-  RegistrySkillSourceCandidate,
+  RegistrySkillSourcePreview,
   RegistrySkillSupportingFile,
 } from '../registry/registryTypes';
 
@@ -17,12 +17,10 @@ export type SkillInstallContentProps = {
   onSourceInputChange: (value: string) => void;
   sourceLoading: boolean;
   sourceError: string;
-  candidates: RegistrySkillSourceCandidate[];
-  selectedNames: string[];
-  onList: () => Promise<void>;
-  onToggleAll: () => void;
-  onToggleCandidate: (name: string) => void;
-  onInstall: () => void;
+  preview: RegistrySkillSourcePreview | null;
+  requestedSkillNames: string[];
+  onPreview: () => Promise<void>;
+  onApply: (previewId: string) => void;
 };
 
 export type SkillDetailContentProps = {
@@ -63,17 +61,16 @@ export function SkillInstallContent({
   onSourceInputChange,
   sourceLoading,
   sourceError,
-  candidates,
-  selectedNames,
-  onList,
-  onToggleAll,
-  onToggleCandidate,
-  onInstall,
+  preview,
+  requestedSkillNames,
+  onPreview,
+  onApply,
 }: SkillInstallContentProps) {
-  const selected = new Set(selectedNames);
-  const candidateNames = Array.from(new Set(candidates.map(candidate => candidate.name).filter(Boolean)));
-  const allCandidatesSelected = candidateNames.length > 0 &&
-    candidateNames.every(name => selected.has(name));
+  const explicitNames = preview?.skills?.length ? preview.skills : requestedSkillNames;
+  const explicit = explicitNames.length > 0 || preview?.kind === 'previewInstall';
+  const previewNames = explicit
+    ? explicitNames
+    : preview?.skillList.map(skill => skill.name) ?? [];
 
   return (
     <div className="skill-install-content">
@@ -96,57 +93,59 @@ export function SkillInstallContent({
           onChange={event => onSourceInputChange(event.target.value)}
           onKeyDown={event => {
             if (event.key === 'Enter') {
-              onList().catch(() => undefined);
+              onPreview().catch(() => undefined);
             }
           }}
-          placeholder="owner/repo or npx skills add --skill name"
+          placeholder="owner/repo, Git URL, or npx skills add --skill name"
         />
         <button
           type="button"
           className="set-btn"
-          aria-label="List source skills"
+          aria-label="Preview skill source"
           disabled={sourceLoading}
-          onClick={() => onList().catch(() => undefined)}
+          onClick={() => onPreview().catch(() => undefined)}
         >
-          {sourceLoading ? 'Listing...' : 'List'}
+          {sourceLoading ? 'Checking...' : 'Preview'}
         </button>
       </div>
       {sourceError ? <div className="set-error">{sourceError}</div> : null}
-      {candidateNames.length > 0 ? (
+      {preview ? (
+        <div className="skill-install-preview-summary">
+          <span className="skill-install-preview-mode">
+            {explicit ? `${explicitNames.length} skill${explicitNames.length === 1 ? '' : 's'}` : 'Source only'}
+          </span>
+          <span className="skill-install-preview-source" data-tooltip={preview.source}>{preview.sourceKey}</span>
+          <span className="skill-install-preview-revision">{preview.ref} · {preview.resolvedCommit.slice(0, 8)}</span>
+        </div>
+      ) : null}
+      {previewNames.length > 0 ? (
         <div className="settings-skills-candidates">
-          <label className="settings-skill-row settings-skill-candidate-row settings-skill-select-all-row">
-            <input
-              type="checkbox"
-              checked={allCandidatesSelected}
-              onChange={onToggleAll}
-            />
-            <span className="settings-skill-row-main">
-              <span className="settings-skill-name">Select all</span>
-            </span>
-          </label>
-          {candidateNames.map(skillName => (
-            <label key={`candidate:${skillName}`} className="settings-skill-row settings-skill-candidate-row">
-              <input
-                type="checkbox"
-                checked={selected.has(skillName)}
-                onChange={() => onToggleCandidate(skillName)}
-              />
+          {previewNames.map(skillName => (
+            <div key={`candidate:${skillName}`} className="settings-skill-row settings-skill-candidate-row">
               <span className="settings-skill-row-main">
                 <span className="settings-skill-name">{skillName}</span>
               </span>
-            </label>
+              <span className="settings-skill-meta">{explicit ? 'Install' : 'Available after save'}</span>
+            </div>
           ))}
         </div>
       ) : null}
       <div className="settings-skills-install-actions">
-        <span className="settings-skill-meta">Selected: {selectedNames.length}</span>
+        <span className="settings-skill-meta">
+          {preview
+            ? explicit
+              ? `Pinned at ${preview.resolvedCommit.slice(0, 8)}`
+              : `${preview.skillList.length} skills discovered`
+            : 'Preview resolves and pins the source before any write.'}
+        </span>
         <button
           type="button"
           className="set-btn set-btn--primary"
-          disabled={selectedNames.length === 0}
-          onClick={onInstall}
+          aria-label={explicit ? `Install ${explicitNames.length} skills` : 'Save skill source'}
+          disabled={!preview || sourceLoading}
+          onClick={() => preview && onApply(preview.id)}
         >
-          Install
+          {explicit ? 'Install' : 'Save source'}
         </button>
       </div>
     </div>

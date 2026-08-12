@@ -80,6 +80,7 @@ import type {
   RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
+  RegistrySkillSourcePayload,
   RegistrySpeechCancelPayload,
   RegistrySpeechChunkPayload,
   RegistrySpeechFinishPayload,
@@ -1261,6 +1262,31 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.updateSkills(payload);
+  }
+
+  async previewSkillSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.previewSkillSource(payload);
+  }
+
+  async previewSkillInstall(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.previewSkillInstall(payload);
+  }
+
+  async previewSkillUpdate(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.previewSkillUpdate(payload);
+  }
+
+  async previewSkillDeleteSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.previewSkillDeleteSource(payload);
+  }
+
+  async applySkillPreview(hubId: string, previewId: string): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.applySkillPreview(hubId, previewId);
   }
 
   async startSpeech(payload: RegistrySpeechStartPayload): Promise<RegistrySpeechStartResponse> {

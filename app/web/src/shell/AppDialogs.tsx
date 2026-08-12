@@ -105,6 +105,20 @@ export type ConfirmTarget =
       hubIds: string[];
     }
   | {
+      kind: 'skillPreview';
+      action: 'saveSource' | 'install' | 'refresh' | 'changeRef' | 'update' | 'deleteSource';
+      hubId: string;
+      scope: RegistrySkillScope;
+      projectName?: string;
+      previewId: string;
+      source: string;
+      sourceKey?: string;
+      ref: string;
+      resolvedCommit: string;
+      skills: string[];
+      overwritesLocal?: boolean;
+    }
+  | {
       kind: 'skillInstall';
       hubId: string;
       scope: RegistrySkillScope;
@@ -222,6 +236,14 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   }
   if (target.kind === 'gatewayUpdate') return 'Update Gateway?';
   if (target.kind === 'wheelMakerUpdateAll') return 'Update all hubs?';
+  if (target.kind === 'skillPreview') {
+    if (target.action === 'deleteSource') return 'Delete skill source?';
+    if (target.action === 'install') return 'Install skills?';
+    if (target.action === 'update') return 'Update skills?';
+    if (target.action === 'changeRef') return 'Change source ref?';
+    if (target.action === 'refresh') return 'Refresh skill source?';
+    return 'Save skill source?';
+  }
   if (target.kind === 'skillInstall') return 'Install skills?';
   if (target.kind === 'skillUninstall') return 'Uninstall skill?';
   if (target.kind === 'skillBatchUninstall') return 'Uninstall skills?';
@@ -248,6 +270,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdate') return `Hub: ${target.hubId}`;
   if (target.kind === 'gatewayUpdate') return `Hub: ${target.hubId}`;
   if (target.kind === 'wheelMakerUpdateAll') return `${target.hubIds.length} hubs`;
+  if (target.kind === 'skillPreview') return target.sourceKey || target.source;
   if (target.kind === 'skillInstall') return skillScopeLabel(target);
   if (target.kind === 'skillUninstall') return target.skillName;
   if (target.kind === 'skillBatchUninstall') return `${target.skillNames.length} skills`;
@@ -310,6 +333,21 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdateAll') {
     return `This requests the verified stable release on ${target.hubIds.length} hubs. Each current-user updater deploys and restarts its Hub independently.`;
   }
+  if (target.kind === 'skillPreview') {
+    const pin = `${target.ref} at ${target.resolvedCommit.slice(0, 8)}`;
+    if (target.action === 'deleteSource') {
+      return `Uninstalls ${target.skills.length} managed skill${target.skills.length === 1 ? '' : 's'} and removes this source from ${skillScopeLabel(target)} only after every uninstall succeeds.`;
+    }
+    if (target.action === 'install') {
+      return `Installs ${target.skills.join(', ')} from the pinned source ${pin}.${target.overwritesLocal ? ' Existing local content will be overwritten.' : ''}`;
+    }
+    if (target.action === 'update') {
+      return `Updates ${target.skills.length} changed skill${target.skills.length === 1 ? '' : 's'} from ${pin}.${target.overwritesLocal ? ' Local content changes will be overwritten.' : ''}`;
+    }
+    if (target.action === 'changeRef') return `Changes the source to ${pin}. No skill is installed automatically.`;
+    if (target.action === 'refresh') return `Refreshes the catalog at ${pin}. No skill is installed or removed.`;
+    return `Saves the full catalog at ${pin}. Its ${target.skills.length || 'discovered'} skills remain uninstalled until you choose Install.`;
+  }
   if (target.kind === 'skillInstall') {
     return `Source: ${target.source}. Skills: ${target.skills.join(', ')}.`;
   }
@@ -347,6 +385,11 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'refreshCw';
   if (target.kind === 'gatewayUpdate') return 'refreshCw';
   if (target.kind === 'wheelMakerUpdateAll') return 'refreshCw';
+  if (target.kind === 'skillPreview') {
+    if (target.action === 'deleteSource') return 'trash';
+    if (target.action === 'install') return 'cloudDownload';
+    return target.action === 'saveSource' ? 'plus' : 'refreshCw';
+  }
   if (target.kind === 'skillInstall') return 'cloudDownload';
   if (target.kind === 'skillUninstall') return 'trash';
   if (target.kind === 'skillBatchUninstall') return 'trash';
@@ -370,6 +413,14 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'Restart' : 'Update';
   if (target.kind === 'gatewayUpdate') return 'Update';
   if (target.kind === 'wheelMakerUpdateAll') return 'Update';
+  if (target.kind === 'skillPreview') {
+    if (target.action === 'deleteSource') return 'Delete source';
+    if (target.action === 'install') return 'Install';
+    if (target.action === 'update') return 'Update';
+    if (target.action === 'changeRef') return 'Change ref';
+    if (target.action === 'refresh') return 'Refresh';
+    return 'Save source';
+  }
   if (target.kind === 'skillInstall') return 'Install';
   if (target.kind === 'skillUninstall') return 'Uninstall';
   if (target.kind === 'skillBatchUninstall') return 'Uninstall';
@@ -387,6 +438,7 @@ function isDangerConfirmTarget(target: ConfirmTarget): boolean {
     target.kind === 'terminalClose' ||
     target.kind === 'releaseStoragePrune' ||
     (target.kind === 'npmPackage' && target.action === 'uninstall') ||
+    (target.kind === 'skillPreview' && target.action === 'deleteSource') ||
     target.kind === 'skillUninstall' ||
     target.kind === 'skillBatchUninstall'
   );

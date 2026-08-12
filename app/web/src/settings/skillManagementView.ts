@@ -13,6 +13,16 @@ export type SkillScopeTarget = {
 
 export type SkillInstallTarget = SkillScopeTarget;
 
+export type SkillSourceTarget = SkillScopeTarget & {
+  source: string;
+  sourceKey: string;
+  ref: string;
+};
+
+export type SkillSourceSkillTarget = SkillSourceTarget & {
+  skillName: string;
+};
+
 export type SkillDetailTarget = SkillScopeTarget & {
   skillName: string;
 };

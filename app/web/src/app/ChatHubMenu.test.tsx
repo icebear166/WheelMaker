@@ -43,9 +43,13 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onPackageAction: jest.fn(),
     onRequestSkillInstall: jest.fn(),
     onRequestSkillDetail: jest.fn(),
-    onRequestSkillUpdate: jest.fn(),
+    onRefreshSkillSource: jest.fn(),
+    onChangeSkillSourceRef: jest.fn(),
+    onDeleteSkillSource: jest.fn(),
+    onInstallSourceSkill: jest.fn(),
+    onUpdateSourceSkill: jest.fn(),
+    onUpdateSkillSources: jest.fn(),
     onRequestSkillUninstall: jest.fn(),
-    onRequestSkillBatchUninstall: jest.fn(),
     onRetrySkills: jest.fn(),
     onScanAllIndexes: jest.fn(),
     onScanProject: jest.fn(),
@@ -93,12 +97,10 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
       onSourceInputChange: jest.fn(),
       sourceLoading: false,
       sourceError: '',
-      candidates: [],
-      selectedNames: [],
-      onList: jest.fn().mockResolvedValue(undefined),
-      onToggleAll: jest.fn(),
-      onToggleCandidate: jest.fn(),
-      onInstall: jest.fn(),
+      preview: null,
+      requestedSkillNames: [],
+      onPreview: jest.fn().mockResolvedValue(undefined),
+      onApply: jest.fn(),
     },
     skillDetail: {
       entries: {},
@@ -166,6 +168,31 @@ function flickerOpsView(): ChatHubOpsView {
       packages: [],
     },
   });
+}
+
+function skillSourceScope(skillNames: string[] = ['baseline-ui']) {
+  return {
+    sources: [{
+      source: 'https://github.com/acme/skills.git',
+      sourceKey: 'github.com/acme/skills',
+      ref: 'main',
+      resolvedCommit: '1234567890abcdef',
+      status: 'ready',
+      installedCount: skillNames.length,
+      updateCount: skillNames.length,
+      skills: skillNames.map(name => ({
+        name,
+        status: 'update_available',
+        installed: true,
+        managed: true,
+        conflict: false,
+        canInstall: false,
+        canUpdate: true,
+        canUninstall: true,
+      })),
+    }],
+    unmanagedSkills: [],
+  };
 }
 
 test('detail toggling is mutually exclusive only within its row group', () => {
@@ -426,7 +453,7 @@ test('MCP opens a local inline zero-state without dispatching an operation', asy
   expect(detail.findByProps({className: 'chat-hub-detail-empty'}).children)
     .toEqual(['No MCP servers configured.']);
   expect(callbacks.onRequestNpmUpdate).not.toHaveBeenCalled();
-  expect(callbacks.onRequestSkillUpdate).not.toHaveBeenCalled();
+  expect(callbacks.onUpdateSkillSources).not.toHaveBeenCalled();
 });
 
 test('hub row disables unavailable actions', async () => {
@@ -606,7 +633,7 @@ test('npm detail keeps version next to the name and hugs actions right', async (
   expect(callbacks.onRequestNpmUpdate).toHaveBeenCalledWith('hub-a');
 });
 
-test('skills detail shows only Hub-global skills with scoped actions', async () => {
+test('skills detail shows the Hub-global source catalog with scoped actions', async () => {
   const {props, callbacks} = createHarness({
     expandedSections: {'hub-a': ['skills']},
     opsByHubId: {
@@ -618,9 +645,10 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
           pendingKey: '',
           hubItems: [
             {name: 'baseline-ui', category: 'UI', categoryKey: 'ui', managed: true},
-            {name: 'external-skill', category: 'External', categoryKey: 'external', managed: false},
           ],
           projects: [],
+          hubSources: skillSourceScope(),
+          projectSources: {},
         },
       }),
     },
@@ -630,11 +658,10 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  const rows = renderer.root.findAllByProps({className: 'chat-hub-skill-row'});
-  expect(rows).toHaveLength(2);
-  const managedName = rows[0].findByProps({className: 'chat-hub-skill-name'});
+  const row = renderer.root.findByProps({'data-skill-name': 'baseline-ui'});
+  const managedName = row.findByProps({className: 'chat-hub-skill-name'});
   expect(managedName.children).toEqual(['baseline-ui']);
-  const managedActions = rows[0].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
+  const managedActions = row.findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
   expect(managedActions.map(button => button.props['aria-label']))
     .toEqual(['Update baseline-ui', 'Uninstall baseline-ui']);
   act(() => managedName.props.onClick());
@@ -644,10 +671,13 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
     skillName: 'baseline-ui',
   });
   act(() => managedActions[0].props.onClick());
-  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
+  expect(callbacks.onUpdateSourceSkill).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
-    skills: ['baseline-ui'],
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    skillName: 'baseline-ui',
   });
   act(() => managedActions[1].props.onClick());
   expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
@@ -655,23 +685,16 @@ test('skills detail shows only Hub-global skills with scoped actions', async () 
     scope: 'hub',
     skillName: 'baseline-ui',
   });
-
-  const externalActions = rows[1].findByProps({className: 'chat-hub-skill-row-actions'}).findAllByType('button');
-  expect(rows[1].findAllByProps({className: 'chat-hub-action-slot'})).toHaveLength(2);
-  const externalName = rows[1].findByProps({className: 'chat-hub-skill-name'});
-  expect(externalName.props['data-tooltip']).toBe('external-skill');
-  expect(externalName.props.disabled).not.toBe(true);
-  expect(externalActions).toHaveLength(0);
-  const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skills'});
+  const updateAll = renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'});
   act(() => updateAll.props.onClick());
-  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
+  expect(callbacks.onUpdateSkillSources).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'hub',
   });
   expect(callbacks.onClose).not.toHaveBeenCalled();
 });
 
-test('skills detail disables stale row actions while the Hub snapshot refreshes', async () => {
+test('skills detail disables row actions while the Hub snapshot refreshes', async () => {
   const {props} = createHarness({
     expandedSections: {'hub-a': ['skills']},
     opsByHubId: {
@@ -683,6 +706,8 @@ test('skills detail disables stale row actions while the Hub snapshot refreshes'
           pendingKey: '',
           hubItems: [{name: 'baseline-ui', category: 'UI', categoryKey: 'ui', managed: true}],
           projects: [],
+          hubSources: skillSourceScope(),
+          projectSources: {},
         },
       }),
     },
@@ -692,7 +717,7 @@ test('skills detail disables stale row actions while the Hub snapshot refreshes'
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
 
-  const actions = renderer.root.findByProps({className: 'chat-hub-skill-row'})
+  const actions = renderer.root.findByProps({'data-skill-name': 'baseline-ui'})
     .findByProps({className: 'chat-hub-skill-row-actions'})
     .findAllByType('button');
   expect(actions.every(button => button.props.disabled)).toBe(true);
@@ -738,6 +763,12 @@ test('projects row disclosures keep bulk visibility out of the title and scan al
               skills: [{name: 'three', category: '', categoryKey: '', managed: true}],
             },
           ],
+          hubSources: {sources: [], unmanagedSkills: []},
+          projectSources: {
+            alpha: skillSourceScope(['one', 'two']),
+            offline: skillSourceScope(['three']),
+            'beta-project': skillSourceScope(['beta-skill']),
+          },
         },
         index: {
           pending: false, indexedCount: 1, totalCount: 2,
@@ -826,6 +857,12 @@ test('Project Skills lists every project and keeps every action in the selected 
               skills: [{name: 'beta-skill', category: '', categoryKey: '', managed: true}],
             },
           ],
+          hubSources: {sources: [], unmanagedSkills: []},
+          projectSources: {
+            alpha: skillSourceScope(['one', 'two']),
+            offline: skillSourceScope(['three']),
+            'beta-project': skillSourceScope(['beta-skill']),
+          },
         },
       }),
     },
@@ -845,7 +882,7 @@ test('Project Skills lists every project and keeps every action in the selected 
   expect(renderer.root.findAllByProps({role: 'option'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({'data-project-name': 'offline'})).toHaveLength(0);
 
-  act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
+  act(() => renderer.root.findByProps({'aria-label': 'Add Project skill source'}).props.onClick());
   expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'project',
@@ -859,11 +896,14 @@ test('Project Skills lists every project and keeps every action in the selected 
     skillName: 'one',
   });
   act(() => renderer.root.findByProps({'aria-label': 'Update one'}).props.onClick());
-  expect(callbacks.onRequestSkillUpdate).toHaveBeenCalledWith({
+  expect(callbacks.onUpdateSourceSkill).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'project',
     projectName: 'alpha',
-    skills: ['one'],
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    skillName: 'one',
   });
   act(() => renderer.root.findByProps({'aria-label': 'Uninstall one'}).props.onClick());
   expect(callbacks.onRequestSkillUninstall).toHaveBeenCalledWith({
@@ -872,16 +912,6 @@ test('Project Skills lists every project and keeps every action in the selected 
     projectName: 'alpha',
     skillName: 'one',
   });
-  act(() => renderer.root.findByProps({'aria-label': 'Select Project skills'}).props.onClick());
-  act(() => renderer.root.findByProps({'aria-label': 'Select two'}).props.onChange());
-  act(() => renderer.root.findByProps({'aria-label': 'Uninstall selected Project skills'}).props.onClick());
-  expect(callbacks.onRequestSkillBatchUninstall).toHaveBeenCalledWith({
-    hubId: 'hub-a',
-    scope: 'project',
-    projectName: 'alpha',
-    skillNames: ['two'],
-  });
-
   act(() => projectTrigger.props.onClick());
   expect(renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'}).props['aria-expanded'])
     .toBe(true);
@@ -892,7 +922,7 @@ test('Project Skills lists every project and keeps every action in the selected 
   expect(selectedBeta.props['aria-expanded']).toBe(false);
   expect(selectedBeta.props['data-selected-project']).toBe('beta-project');
   expect(selectedBeta.props['data-tooltip']).toBe('beta-project');
-  act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
+  act(() => renderer.root.findByProps({'aria-label': 'Add Project skill source'}).props.onClick());
   expect(callbacks.onRequestSkillInstall).toHaveBeenLastCalledWith({
     hubId: 'hub-a',
     scope: 'project',
@@ -936,7 +966,7 @@ test('Project Skills defaults to the active chat project instead of the first pr
 
   expect(renderer.root.findByProps({className: 'chat-hub-project-skill-trigger'})
     .props['data-selected-project']).toBe('zeta');
-  act(() => renderer.root.findByProps({'aria-label': 'Add Project skills'}).props.onClick());
+  act(() => renderer.root.findByProps({'aria-label': 'Add Project skill source'}).props.onClick());
   expect(callbacks.onRequestSkillInstall).toHaveBeenCalledWith({
     hubId: 'hub-a',
     scope: 'project',

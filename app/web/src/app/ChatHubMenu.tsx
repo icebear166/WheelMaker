@@ -10,16 +10,19 @@ import type {
   RegistryHubConfig,
   RegistryHubConfigUpdatePayload,
   RegistrySkillProjectSnapshot,
+  RegistrySkillOperation,
   RegistrySkillSnapshot,
+  RegistrySkillSourceScopeSnapshot,
 } from '../registry/registryTypes';
 import {
   projectSkillTotal,
   sortSkillProjects,
-  type SkillBatchUninstallTarget,
   type SkillDetailTarget,
   type SkillInstallTarget,
+  type SkillScopeTarget,
+  type SkillSourceSkillTarget,
+  type SkillSourceTarget,
   type SkillUninstallTarget,
-  type SkillUpdateTarget,
 } from '../settings/skillManagementView';
 import {
   HUB_COLOR_PRESETS,
@@ -133,10 +136,13 @@ export interface ChatHubOpsView {
   skills: {
     loading: boolean;
     operationRunning: boolean;
+    operation?: RegistrySkillOperation | null;
     error: string;
     pendingKey: string;
     hubItems: RegistrySkillSnapshot[];
     projects: RegistrySkillProjectSnapshot[];
+    hubSources?: RegistrySkillSourceScopeSnapshot;
+    projectSources?: Record<string, RegistrySkillSourceScopeSnapshot>;
   };
   index: {
     pending: boolean;
@@ -194,6 +200,8 @@ const EMPTY_OPS_VIEW: ChatHubOpsView = {
     pendingKey: '',
     hubItems: [],
     projects: [],
+    hubSources: {sources: [], unmanagedSkills: []},
+    projectSources: {},
   },
   index: {pending: false, indexedCount: 0, totalCount: 0, projects: []},
 };
@@ -235,9 +243,13 @@ export interface ChatHubMenuProps {
   onPackageAction: (hubId: string, action: 'install' | 'update' | 'uninstall', pkg: ChatHubNpmPackageView) => void;
   onRequestSkillInstall: (target: SkillInstallTarget) => void;
   onRequestSkillDetail: (target: SkillDetailTarget) => void;
-  onRequestSkillUpdate: (target: SkillUpdateTarget) => void;
+  onRefreshSkillSource: (target: SkillSourceTarget) => void;
+  onChangeSkillSourceRef: (target: SkillSourceTarget) => void;
+  onDeleteSkillSource: (target: SkillSourceTarget) => void;
+  onInstallSourceSkill: (target: SkillSourceSkillTarget) => void;
+  onUpdateSourceSkill: (target: SkillSourceSkillTarget) => void;
+  onUpdateSkillSources: (target: SkillScopeTarget | SkillSourceTarget) => void;
   onRequestSkillUninstall: (target: SkillUninstallTarget) => void;
-  onRequestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
   onRetrySkills: (hubId: string) => void;
   skillSurface: ChatHubSkillSurface | null;
   skillSurfaceExiting: boolean;
@@ -776,10 +788,11 @@ function ChatHubSkillsDetail({
       <ChatHubSkillScopeDetail
         target={{hubId, scope: 'hub'}}
         label="Global skills"
-        skills={ops.skills.hubItems}
+        snapshot={ops.skills.hubSources ?? {sources: [], unmanagedSkills: []}}
         loading={ops.skills.loading}
         error={ops.skills.error}
         operationRunning={ops.skills.operationRunning}
+        operation={ops.skills.operation}
         pendingKey={ops.skills.pendingKey}
         actions={actions}
       />
@@ -937,10 +950,13 @@ function ChatHubProjectSkillsDetail({
           projectName: selectedProject.projectName,
         }}
         label="Project skills"
-        skills={selectedProject.skills}
+        snapshot={ops.skills.projectSources?.[selectedProject.projectId || '']
+          ?? ops.skills.projectSources?.[selectedProject.projectName]
+          ?? {sources: [], unmanagedSkills: []}}
         loading={ops.skills.loading}
         error={selectedProject.error || ops.skills.error}
         operationRunning={ops.skills.operationRunning}
+        operation={ops.skills.operation}
         pendingKey={ops.skills.pendingKey}
         actions={actions}
       />
@@ -1021,9 +1037,13 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
     onPackageAction,
     onRequestSkillInstall,
     onRequestSkillDetail,
-    onRequestSkillUpdate,
+    onRefreshSkillSource,
+    onChangeSkillSourceRef,
+    onDeleteSkillSource,
+    onInstallSourceSkill,
+    onUpdateSourceSkill,
+    onUpdateSkillSources,
     onRequestSkillUninstall,
-    onRequestSkillBatchUninstall,
     onRetrySkills,
     onScanAllIndexes,
     onScanProject,
@@ -1045,9 +1065,13 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
   const skillActions: ChatHubSkillActions = {
     onAdd: onRequestSkillInstall,
     onDetail: onRequestSkillDetail,
-    onUpdate: onRequestSkillUpdate,
+    onRefreshSource: onRefreshSkillSource,
+    onChangeSourceRef: onChangeSkillSourceRef,
+    onDeleteSource: onDeleteSkillSource,
+    onInstallSkill: onInstallSourceSkill,
+    onUpdateSkill: onUpdateSourceSkill,
+    onUpdateAll: onUpdateSkillSources,
     onUninstall: onRequestSkillUninstall,
-    onBatchUninstall: onRequestSkillBatchUninstall,
     onRetry: onRetrySkills,
   };
 
@@ -1393,7 +1417,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
               <span className="chat-hub-page-title">
                 {skillSurface
                   ? skillSurface.kind === 'install'
-                    ? 'Add Skill'
+                    ? 'Add Skill Source'
                     : skillSurface.target.skillName
                   : 'Hubs'}
               </span>

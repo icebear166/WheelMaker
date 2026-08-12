@@ -1,41 +1,64 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
-import {skillActionPendingKey} from '../settings/skillManagementView';
+import type {RegistrySkillSourceScopeSnapshot} from '../registry/registryTypes';
 import {
   ChatHubSkillScopeDetail,
   type ChatHubSkillActions,
 } from './ChatHubSkillManagement';
-import type {RegistrySkillSnapshot} from '../registry/registryTypes';
 
 const hubTarget = {hubId: 'hub-a', scope: 'hub' as const};
-const projectTarget = {
-  hubId: 'hub-a',
-  scope: 'project' as const,
-  projectName: 'alpha',
+const projectTarget = {hubId: 'hub-a', scope: 'project' as const, projectName: 'alpha'};
+const catalog: RegistrySkillSourceScopeSnapshot = {
+  sources: [{
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    resolvedCommit: '1234567890abcdef',
+    status: 'ready',
+    installedCount: 3,
+    updateCount: 1,
+    skills: [
+      {name: 'installed', status: 'up_to_date', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: false, canUninstall: true},
+      {name: 'changed', status: 'update_available', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: true, canUninstall: true},
+      {name: 'new-skill', status: 'uninstalled', installed: false, managed: false, conflict: false, canInstall: true, canUpdate: false, canUninstall: false},
+      {name: 'gone', status: 'removed_upstream', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: false, canUninstall: true},
+      {name: 'duplicate', status: 'conflict', installed: true, managed: true, conflict: true, canInstall: false, canUpdate: false, canUninstall: false, error: 'Same name is owned elsewhere'},
+    ],
+  }],
+  unmanagedSkills: [{
+    name: 'local-only',
+    status: 'unmanaged',
+    installed: true,
+    managed: false,
+    conflict: false,
+    canInstall: false,
+    canUpdate: false,
+    canUninstall: false,
+  }],
 };
-const skills: RegistrySkillSnapshot[] = [
-  {name: 'baseline-ui', category: 'UI', categoryKey: 'ui', managed: true},
-  {name: 'external-skill', category: 'External', categoryKey: 'external', managed: false},
-];
 
 function createActions(): ChatHubSkillActions {
   return {
     onAdd: jest.fn(),
     onDetail: jest.fn(),
-    onUpdate: jest.fn(),
+    onRefreshSource: jest.fn(),
+    onChangeSourceRef: jest.fn(),
+    onDeleteSource: jest.fn(),
+    onInstallSkill: jest.fn(),
+    onUpdateSkill: jest.fn(),
+    onUpdateAll: jest.fn(),
     onUninstall: jest.fn(),
-    onBatchUninstall: jest.fn(),
     onRetry: jest.fn(),
   };
 }
 
 async function renderScope(options: {
   target?: typeof hubTarget | typeof projectTarget;
-  pendingKey?: string;
+  snapshot?: RegistrySkillSourceScopeSnapshot;
   actions?: ChatHubSkillActions;
-  items?: RegistrySkillSnapshot[];
-}) {
+  operationRunning?: boolean;
+} = {}) {
   const actions = options.actions ?? createActions();
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -43,11 +66,18 @@ async function renderScope(options: {
       <ChatHubSkillScopeDetail
         target={options.target ?? hubTarget}
         label={(options.target ?? hubTarget).scope === 'hub' ? 'Global skills' : 'Project skills'}
-        skills={options.items ?? skills}
+        snapshot={options.snapshot ?? catalog}
         loading={false}
         error=""
-        operationRunning={false}
-        pendingKey={options.pendingKey ?? ''}
+        operationRunning={options.operationRunning ?? false}
+        operation={options.operationRunning ? {
+          running: true,
+          action: 'update',
+          status: 'running',
+          startedAt: '2026-08-12T10:00:00Z',
+          exitCode: null,
+        } : null}
+        pendingKey=""
         actions={actions}
       />,
     );
@@ -55,162 +85,128 @@ async function renderScope(options: {
   return {renderer, actions};
 }
 
-test('aligns skill rows, opens details from the name, and keeps External beside the name', async () => {
-  const {renderer, actions} = await renderScope({});
+test('renders source-first hierarchy and hides uninstalled skills by default per scope', async () => {
+  const {renderer} = await renderScope();
 
-  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row'})).toHaveLength(2);
-  const skillRows = renderer.root.findAllByProps({className: 'chat-hub-skill-row'});
-  expect(skillRows.map(row => row.props.className)).toEqual([
-    'chat-hub-skill-row',
-    'chat-hub-skill-row',
-  ]);
-  expect(skillRows.every(
-    row => row.findAllByProps({className: 'chat-hub-skill-meta'}).length === 0,
-  )).toBe(true);
-  expect(renderer.root.findAllByProps({'aria-label': 'Refresh skills'})).toHaveLength(0);
-  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-row-actions'})
-    .every(rowActions => rowActions.findAllByProps({className: 'chat-hub-action-slot'}).length === 2))
-    .toBe(true);
-  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-category'})).toHaveLength(0);
-  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-meta'})).toHaveLength(0);
-  expect(renderer.root.findAllByProps({'data-icon-name': 'info'})).toHaveLength(0);
-
-  const managed = renderer.root.findByProps({'data-skill-name': 'baseline-ui'});
-  expect(managed.findAllByType('button').map(button => button.props['aria-label']))
-    .toEqual(['View baseline-ui details', 'Update baseline-ui', 'Uninstall baseline-ui']);
-  expect(managed.findByProps({className: 'chat-hub-skill-name'}).type).toBe('button');
-  expect(managed.findByProps({className: 'chat-hub-skill-name'}).props['data-tooltip']).toBe('baseline-ui');
-
-  const external = renderer.root.findByProps({'data-skill-name': 'external-skill'});
-  const externalNameCell = external.findByProps({className: 'chat-hub-skill-name-cell'});
-  expect(externalNameCell.findByProps({'aria-label': 'View external-skill details'}).type).toBe('button');
-  expect(externalNameCell.findByProps({className: 'chat-hub-skill-external'})
-    .findByProps({'data-icon-name': 'link'})).toBeTruthy();
-  expect(external.findAllByProps({'aria-label': 'Update external-skill'})).toHaveLength(0);
-  expect(external.findAllByProps({'aria-label': 'Uninstall external-skill'})).toHaveLength(0);
-
-  act(() => managed.findByProps({className: 'chat-hub-skill-name'}).props.onClick());
-  expect(actions.onDetail).toHaveBeenCalledWith({...hubTarget, skillName: 'baseline-ui'});
+  expect(renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'})).toBeTruthy();
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-ref-input'}).props.value).toBe('main');
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-commit'}).children.join('')).toContain('12345678');
+  expect(renderer.root.findAllByProps({'data-skill-name': 'new-skill'})).toHaveLength(0);
+  expect(renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.checked).toBe(false);
+  expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
 });
 
-test('keeps Hub update-all and selection-mode uninstall inside Hub scope', async () => {
-  const {renderer, actions} = await renderScope({});
+test('shows remote additions after enabling the scope preference and offers install only there', async () => {
+  const {renderer, actions} = await renderScope({target: projectTarget});
 
-  act(() => renderer.root.findByProps({'aria-label': 'Add Hub skills'}).props.onClick());
-  expect(actions.onAdd).toHaveBeenCalledWith(hubTarget);
-
-  act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skills'}).props.onClick());
-  expect(actions.onUpdate).toHaveBeenCalledWith(hubTarget);
-
-  act(() => renderer.root.findByProps({'aria-label': 'Select Hub skills'}).props.onClick());
-  const checkbox = renderer.root.findByProps({'aria-label': 'Select baseline-ui'});
-  act(() => checkbox.props.onChange());
-  act(() => renderer.root.findByProps({'aria-label': 'Uninstall selected Hub skills'}).props.onClick());
-  expect(actions.onBatchUninstall).toHaveBeenCalledWith({
-    ...hubTarget,
-    skillNames: ['baseline-ui'],
-  });
-});
-
-test('keeps Project update-all and selection-mode uninstall inside selected Project scope', async () => {
-  const actions = createActions();
-  const {renderer} = await renderScope({
-    target: projectTarget,
-    actions,
-    items: [{name: 'project-skill', category: '', categoryKey: '', managed: true}],
-  });
-
-  act(() => renderer.root.findByProps({'aria-label': 'Update all Project skills'}).props.onClick());
-  expect(actions.onUpdate).toHaveBeenCalledWith(projectTarget);
-
-  act(() => renderer.root.findByProps({'aria-label': 'Select Project skills'}).props.onClick());
-  act(() => renderer.root.findByProps({'aria-label': 'Select project-skill'}).props.onChange());
-  act(() => renderer.root.findByProps({'aria-label': 'Uninstall selected Project skills'}).props.onClick());
-  expect(actions.onBatchUninstall).toHaveBeenCalledWith({
+  act(() => renderer.root.findByProps({'aria-label': 'Show uninstalled Project skills'}).props.onChange({target: {checked: true}}));
+  const added = renderer.root.findByProps({'data-skill-name': 'new-skill'});
+  expect(added.props.className).toContain('is-uninstalled');
+  act(() => added.findByProps({'aria-label': 'Install new-skill'}).props.onClick());
+  expect(actions.onInstallSkill).toHaveBeenCalledWith({
     ...projectTarget,
-    skillNames: ['project-skill'],
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    skillName: 'new-skill',
   });
 });
 
-test('replaces only the pending update icon while preserving aligned action slots', async () => {
-  const pendingKey = skillActionPendingKey({
+test('offers update only for a live hash mismatch and keeps removed skills manual', async () => {
+  const {renderer, actions} = await renderScope();
+  const installed = renderer.root.findByProps({'data-skill-name': 'installed'});
+  const changed = renderer.root.findByProps({'data-skill-name': 'changed'});
+  const removed = renderer.root.findByProps({'data-skill-name': 'gone'});
+
+  expect(installed.findAllByProps({'aria-label': 'Update installed'})).toHaveLength(0);
+  act(() => changed.findByProps({'aria-label': 'Update changed'}).props.onClick());
+  expect(actions.onUpdateSkill).toHaveBeenCalledWith({
     ...hubTarget,
-    skillName: 'baseline-ui',
-    action: 'skillUpdate',
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'main',
+    skillName: 'changed',
   });
-  const {renderer} = await renderScope({pendingKey});
-  const managed = renderer.root.findByProps({'data-skill-name': 'baseline-ui'});
-  const actionButtons = managed
-    .findByProps({className: 'chat-hub-skill-row-actions'})
-    .findAllByType('button');
-
-  expect(actionButtons).toHaveLength(2);
-  expect(actionButtons[0].findByType('svg').props['data-icon-name']).toBe('loader');
-  expect(actionButtons[1].findByType('svg').props['data-icon-name']).toBe('trash');
+  expect(removed.props.className).toContain('is-removed');
+  expect(removed.findAllByProps({'aria-label': 'Update gone'})).toHaveLength(0);
+  act(() => removed.findByProps({'aria-label': 'Uninstall gone'}).props.onClick());
+  expect(actions.onUninstall).toHaveBeenCalledWith({...hubTarget, skillName: 'gone'});
 });
 
-test('shows non-blocking directory sync diagnostics on affected skill rows', async () => {
-  const {renderer} = await renderScope({
-    items: [{
-      name: 'scope',
-      category: 'Managed',
-      categoryKey: 'managed',
-      managed: true,
-      sync: {status: 'contentMismatch'},
-    }],
-  });
+test('disables every skill action for same-name conflicts', async () => {
+  const {renderer} = await renderScope();
+  const conflict = renderer.root.findByProps({'data-skill-name': 'duplicate'});
 
-  const diagnostic = renderer.root.findByProps({className: 'chat-hub-skill-sync'});
-  expect(diagnostic.props['data-tooltip']).toBe('Skill content differs across agent directories');
-  expect(diagnostic.children.join('')).toContain('Content differs');
-  expect(renderer.root.findByProps({'aria-label': 'Update scope'})).toBeTruthy();
+  expect(conflict.props.className).toContain('is-conflict');
+  expect(conflict.findAllByType('button')).toHaveLength(0);
+  expect(conflict.findByProps({className: 'chat-hub-skill-status'}).children.join('')).toContain('Conflict');
 });
 
-test('reuses session agent capsules and keeps External after skill status', async () => {
-  const {renderer} = await renderScope({
-    items: [
-      {
-        name: 'codex-only',
-        category: 'Managed',
-        categoryKey: 'managed',
-        managed: true,
-        locations: {agents: {path: 'C:/project/.agents/skills/codex-only/SKILL.md'}},
-      },
-      {
-        name: 'both',
-        category: 'External',
-        categoryKey: 'external',
-        managed: false,
-        locations: {
-          agents: {path: 'C:/project/.agents/skills/both/SKILL.md'},
-          claude: {path: 'C:/project/.claude/skills/both/SKILL.md'},
-        },
-        sync: {status: 'contentMismatch'},
-      },
-    ],
+test('routes source refresh, ref change, update-all, and delete through source actions', async () => {
+  const {renderer, actions} = await renderScope();
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+
+  act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'}).props.onClick());
+  expect(actions.onUpdateAll).toHaveBeenCalledWith(hubTarget);
+  act(() => source.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.onClick());
+  expect(actions.onRefreshSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
+  act(() => source.findByProps({className: 'chat-hub-skill-source-ref-input'}).props.onChange({target: {value: 'next'}}));
+  act(() => source.findByProps({'aria-label': 'Apply ref for github.com/acme/skills'}).props.onClick());
+  expect(actions.onChangeSourceRef).toHaveBeenCalledWith(expect.objectContaining({ref: 'next'}));
+  act(() => source.findByProps({'aria-label': 'Delete github.com/acme/skills source'}).props.onClick());
+  expect(actions.onDeleteSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
+});
+
+test('keeps stale catalog visible while blocking install and update operations', async () => {
+  const stale = {
+    ...catalog,
+    sources: catalog.sources.map(source => ({...source, status: 'stale', error: 'Network unavailable'})),
+  };
+  const {renderer} = await renderScope({snapshot: stale});
+
+  act(() => renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.onChange({target: {checked: true}}));
+  expect(renderer.root.findByProps({'aria-label': 'Install new-skill'}).props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'Update changed'}).props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.disabled).toBe(false);
+});
+
+test('keeps itemized partial results visible for targeted retry feedback', async () => {
+  const actions = createActions();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(
+      <ChatHubSkillScopeDetail
+        target={hubTarget}
+        label="Global skills"
+        snapshot={catalog}
+        loading={false}
+        error=""
+        operationRunning={false}
+        operation={{
+          running: false,
+          action: 'update',
+          scope: 'hub',
+          status: 'partial',
+          startedAt: '2026-08-12T10:00:00Z',
+          finishedAt: '2026-08-12T10:00:02Z',
+          exitCode: 1,
+          errorSummary: '1 skill operation(s) failed',
+          results: [
+            {skill: 'installed', action: 'update', status: 'succeeded'},
+            {skill: 'changed', action: 'update', status: 'failed', errorSummary: 'command failed'},
+          ],
+        }}
+        pendingKey=""
+        actions={actions}
+      />,
+    );
   });
 
-  const codexOnly = renderer.root.findByProps({'data-skill-name': 'codex-only'});
-  expect(codexOnly.findByProps({className: 'wide-session-agent-tag wide-session-agent-0'}).children)
-    .toEqual(['codex']);
-  expect(codexOnly.findAllByProps({className: 'wide-session-agent-tag wide-session-agent-2'}))
-    .toHaveLength(0);
-
-  const both = renderer.root.findByProps({'data-skill-name': 'both'});
-  expect(both.findAll(node => typeof node.props.className === 'string'
-    && node.props.className.startsWith('wide-session-agent-tag '))
-    .map(node => [node.props.className, node.children])).toEqual([
-    ['wide-session-agent-tag wide-session-agent-0', ['codex']],
-    ['wide-session-agent-tag wide-session-agent-2', ['claude']],
-  ]);
-
-  const nameCell = both.findByProps({className: 'chat-hub-skill-name-cell'});
-  const nameCellClasses = nameCell.findAll(node => typeof node.props.className === 'string')
-    .map(node => node.props.className);
-  expect(nameCellClasses.indexOf('wide-session-agent-tag wide-session-agent-0'))
-    .toBeLessThan(nameCellClasses.indexOf('wide-session-agent-tag wide-session-agent-2'));
-  expect(nameCellClasses.indexOf('wide-session-agent-tag wide-session-agent-2'))
-    .toBeLessThan(nameCellClasses.indexOf('chat-hub-skill-sync'));
-  expect(nameCellClasses.indexOf('chat-hub-skill-sync'))
-    .toBeLessThan(nameCellClasses.indexOf('chat-hub-skill-external'));
+  const resultRows = renderer.root.findAllByProps({className: 'chat-hub-skill-operation-result'});
+  expect(resultRows).toHaveLength(2);
+  expect(resultRows[0].findAllByType('span').map(node => node.children.join(''))).toContain('installed');
+  expect(resultRows[0].findByType('strong').children.join('')).toBe('Succeeded');
+  expect(resultRows[1].findAllByType('span').map(node => node.children.join(''))).toContain('changed');
+  expect(resultRows[1].findByType('strong').children.join('')).toBe('Failed');
+  expect(resultRows[1].props['data-tooltip']).toBe('command failed');
 });

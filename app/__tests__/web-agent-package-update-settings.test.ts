@@ -211,9 +211,9 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('onRequestWheelMakerRestart={handleChatHubWheelMakerRestart}');
     expect(mainTsx).toContain('onRequestNpmUpdate={handleChatHubNpmUpdate}');
     expect(mainTsx).toContain('onPackageAction={handleChatHubPackageAction}');
-    expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');
+    expect(mainTsx).toContain('onUpdateSkillSources={requestSkillSourcesUpdate}');
     expect(mainTsx).toContain('onRequestSkillUninstall={requestSkillUninstall}');
-    expect(mainTsx).toContain('onRequestSkillBatchUninstall={requestSkillBatchUninstall}');
+    expect(mainTsx).toContain('onDeleteSkillSource={requestSkillSourceDelete}');
     expect(mainTsx).not.toContain('onScanSkills={handleChatHubScanSkills}');
     expect(mainTsx).toContain('onScanAllIndexes={handleChatHubScanAllIndexes}');
     expect(mainTsx).toContain('onScanProject={handleChatHubScanProject}');
@@ -226,7 +226,7 @@ describe('agent package update settings UI source structure', () => {
     expect(menuTsx).toContain('chat-hub-disclosure-action');
     expect(menuTsx).not.toContain('className="chat-hub-action-toggle"');
     expect(menuTsx).toContain('className="chat-hub-npm-row"');
-    expect(skillTsx).toContain('className="chat-hub-skill-row"');
+    expect(skillTsx).toContain("'chat-hub-skill-row'");
     expect(menuTsx).toContain('className="chat-hub-scan-row"');
     expect(menuTsx).toContain('className="chat-hub-footer"');
     expect(menuTsx).toContain('Update all hubs');
@@ -350,7 +350,7 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).not.toContain('aria-label="CC Switch"');
 
     const floatingStart = mainTsx.indexOf('const floatingControlStack = !isWide ? (');
-    const desktopScreenStart = mainTsx.indexOf('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (', floatingStart);
+    const desktopScreenStart = mainTsx.indexOf('const desktopSettingsScreen = isWide && settingsScreenVisible ? (', floatingStart);
     const mobileOnly = mainTsx.slice(floatingStart, desktopScreenStart);
     expect(mobileOnly).not.toContain("openSettingsDetail('update')");
 
@@ -358,7 +358,7 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).not.toContain('settingsShortcutBar');
     expect(mainTsx).not.toContain('shortcutBar=');
     expect(mainTsx).not.toContain('MobileSettingsShortcutBar');
-    expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (');
+    expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && settingsScreenVisible ? (');
     expect(settingsSurfaceTsx).not.toContain('MOBILE_SETTINGS_SHORTCUTS');
     expect(settingsSurfaceTsx).not.toContain('MobileSettingsShortcutBar');
 

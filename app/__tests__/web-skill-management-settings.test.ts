@@ -44,13 +44,15 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).not.toContain('refreshSkillManagement(registryHubIds)');
   });
 
-  test('keeps skill commands and retry feedback without polling', () => {
+  test('routes source mutations through preview and apply without polling', () => {
     expect(mainTsx).toContain("service.hubStore.refresh(hubId, ['skills'], true)");
     expect(mainTsx).not.toContain('service.scanSkills');
-    expect(mainTsx).toContain('service.listSkillsSource');
-    expect(mainTsx).toContain('service.installSkills');
+    expect(mainTsx).toContain('service.previewSkillSource');
+    expect(mainTsx).toContain('service.previewSkillInstall');
+    expect(mainTsx).toContain('service.previewSkillUpdate');
+    expect(mainTsx).toContain('service.previewSkillDeleteSource');
+    expect(mainTsx).toContain('service.applySkillPreview');
     expect(mainTsx).toContain('service.getSkillDetail');
-    expect(mainTsx).toContain('service.updateSkills');
     expect(mainTsx).toContain('service.uninstallSkills');
     expect(mainTsx).not.toContain('skillOperationPollTimerRef');
     expect(mainTsx).not.toContain('schedule' + 'SkillOperationPoll');
@@ -59,15 +61,11 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).toContain('setSkillRetryNotice(createSkillRetryNotice(message, target))');
   });
 
-  test('keeps skill updates on the selected scope', () => {
-    const updateStart = mainTsx.indexOf('results = [await service.updateSkills({');
-    const updateEnd = mainTsx.indexOf('})];', updateStart);
-    const updateBlock = mainTsx.slice(updateStart, updateEnd);
-
-    expect(updateStart).toBeGreaterThanOrEqual(0);
-    expect(updateEnd).toBeGreaterThan(updateStart);
-    expect(updateBlock).toContain('scope: target.scope');
-    expect(updateBlock).toContain('projectName: target.projectName');
+  test('keeps source previews on the selected scope and applies only a confirmed preview id', () => {
+    expect(mainTsx).toContain('scope: target.scope');
+    expect(mainTsx).toContain('projectName: target.projectName');
+    expect(mainTsx).toContain('service.applySkillPreview(target.hubId, target.previewId)');
+    expect(mainTsx).not.toContain('service.applySkillPreview(target.hubId, skillSourcePreview');
   });
 
   test('wires Hub-global and Project skill data to the Hub menu', () => {
@@ -76,11 +74,14 @@ describe('Hub-owned skill management source structure', () => {
     expect(mainTsx).toContain('const skillProjects = skillHub?.data?.projects ?? [];');
     expect(mainTsx).toContain('hubItems: hubSkills,');
     expect(mainTsx).toContain('projects: skillProjects,');
+    expect(mainTsx).toContain('hubSources: skillHub?.data?.hubSources');
+    expect(mainTsx).toContain('const projectSourceScopes = skillHub?.data?.projectSources');
+    expect(mainTsx).toContain('projectSources: projectSourceScopes');
     expect(mainTsx).toContain('pendingKey: skillsPendingKey,');
     expect(mainTsx).toContain('onRequestSkillInstall={requestSkillInstall}');
     expect(mainTsx).toContain('onRequestSkillDetail={requestSkillDetail}');
-    expect(mainTsx).toContain('onRequestSkillUpdate={requestSkillUpdate}');
-    expect(mainTsx).toContain('onRequestSkillBatchUninstall={requestSkillBatchUninstall}');
+    expect(mainTsx).toContain('onUpdateSkillSources={requestSkillSourcesUpdate}');
+    expect(mainTsx).toContain('onDeleteSkillSource={requestSkillSourceDelete}');
     expect(mainTsx).toContain("service.hubStore.refresh(hubId, ['skills'], true)");
     expect(mainTsx).not.toContain('refreshSkillManagementHubRef');
   });
@@ -91,7 +92,9 @@ describe('Hub-owned skill management source structure', () => {
     expect(chatHubCompanionTsx).toContain('<SkillInstallContent');
     expect(chatHubCompanionTsx).toContain('<SkillDetailContent');
     expect(contentTsx).toContain("export const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';");
-    expect(contentTsx).toContain('Select all');
+    expect(contentTsx).toContain('Source only');
+    expect(contentTsx).not.toContain('Select all');
+    expect(contentTsx).not.toContain('type="checkbox"');
     expect(contentTsx).toContain('Skill.md');
     expect(contentTsx).toContain('Supporting files');
     expect(contentTsx).toContain('className="skill-detail-markdown markdown-preview"');
@@ -104,7 +107,7 @@ describe('Hub-owned skill management source structure', () => {
     expect(stylesCss).not.toContain('.settings-skills-detail-panel');
     expect(stylesCss).toContain('.skill-install-marketplace');
     expect(stylesCss).toContain('.settings-skills-source-row');
-    expect(stylesCss).toContain('.settings-skills-candidates');
+    expect(stylesCss).toContain('.skill-install-preview-summary');
     expect(stylesCss).toContain('.settings-skills-detail-body');
     expect(stylesCss).toContain('.settings-skills-detail-meta');
     expect(stylesCss).toContain('.skill-detail-markdown');
@@ -114,5 +117,18 @@ describe('Hub-owned skill management source structure', () => {
   test('keeps Hub skill rows independent from old settings-only task presentation', () => {
     expect(chatHubSkillTsx).not.toContain('agent-package-task');
     expect(chatHubSkillTsx).not.toContain('skillOperationStatusLabel');
+  });
+
+  test('uses a source ledger with per-scope uninstalled preference and disabled conflicts', () => {
+    expect(chatHubSkillTsx).toContain('data-source-key={source.sourceKey}');
+    expect(chatHubSkillTsx).toContain('readSkillShowUninstalled(target)');
+    expect(chatHubSkillTsx).toContain('writeSkillShowUninstalled(target, value)');
+    expect(chatHubSkillTsx).toContain("skill.status === 'conflict'");
+    expect(chatHubSkillTsx).toContain("skill.status === 'removed_upstream'");
+    expect(chatHubSkillTsx).toContain('skill.canUpdate');
+    expect(chatHubSkillTsx).toContain("source.status === 'stale'");
+    expect(stylesCss).toContain('.chat-hub-skill-source');
+    expect(stylesCss).toContain('.chat-hub-skill-row.is-removed');
+    expect(stylesCss).toContain('.chat-hub-skill-row.is-conflict');
   });
 });

@@ -45,8 +45,8 @@ export function ChatHubSkillCompanion({
   detail,
   onClose,
 }: ChatHubSkillCompanionProps) {
-  const title = surface.kind === 'install' ? 'Add Skill' : surface.target.skillName;
-  const closeLabel = surface.kind === 'install' ? 'Close Add Skill' : 'Close Skill details';
+  const title = surface.kind === 'install' ? 'Add Skill Source' : surface.target.skillName;
+  const closeLabel = surface.kind === 'install' ? 'Close Add Skill Source' : 'Close Skill details';
   const detailEntry = surface.kind === 'detail'
     ? detail.entries[skillDetailCacheKey(surface.target)]
     : undefined;

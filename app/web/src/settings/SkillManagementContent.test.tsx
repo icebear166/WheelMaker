@@ -16,7 +16,7 @@ import {
 } from './SkillManagementContent';
 
 test('keeps Marketplace inside the Add Skill content', async () => {
-  const onList = jest.fn().mockResolvedValue(undefined);
+  const onPreview = jest.fn().mockResolvedValue(undefined);
   let renderer!: TestRenderer.ReactTestRenderer;
   await act(async () => {
     renderer = TestRenderer.create(
@@ -25,24 +25,64 @@ test('keeps Marketplace inside the Add Skill content', async () => {
         onSourceInputChange={jest.fn()}
         sourceLoading={false}
         sourceError=""
-        candidates={[{name: 'baseline-ui', category: 'UI', categoryKey: 'ui'}]}
-        selectedNames={[]}
-        onList={onList}
-        onToggleAll={jest.fn()}
-        onToggleCandidate={jest.fn()}
-        onInstall={jest.fn()}
+        preview={null}
+        requestedSkillNames={[]}
+        onPreview={onPreview}
+        onApply={jest.fn()}
       />,
     );
   });
 
   expect(renderer.root.findByProps({className: 'skill-install-marketplace'}).props.href)
     .toBe('https://www.skills.sh/');
-  expect(renderer.root.findByProps({placeholder: 'owner/repo or npx skills add --skill name'}))
+  expect(renderer.root.findByProps({placeholder: 'owner/repo, Git URL, or npx skills add --skill name'}))
     .toBeTruthy();
+  expect(renderer.root.findAllByType('input').filter(input => input.props.type === 'checkbox'))
+    .toHaveLength(0);
   await act(async () => {
-    await renderer.root.findByProps({'aria-label': 'List source skills'}).props.onClick();
+    await renderer.root.findByProps({'aria-label': 'Preview skill source'}).props.onClick();
   });
-  expect(onList).toHaveBeenCalled();
+  expect(onPreview).toHaveBeenCalled();
+});
+
+test('shows a bare repository as source-only and explicit skills without a selection step', async () => {
+  const applyBare = jest.fn();
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(
+      <SkillInstallContent
+        sourceInput="acme/skills"
+        onSourceInputChange={jest.fn()}
+        sourceLoading={false}
+        sourceError=""
+        preview={{
+          id: 'preview-1',
+          kind: 'previewSource',
+          scope: 'hub',
+          source: 'https://github.com/acme/skills.git',
+          sourceKey: 'github.com/acme/skills',
+          ref: 'main',
+          resolvedCommit: '1234567890abcdef',
+          skillList: [
+            {name: 'baseline-ui', skillPath: 'skills/baseline-ui', contentSha256: 'a'.repeat(64)},
+            {name: 'scope', skillPath: 'skills/scope', contentSha256: 'b'.repeat(64)},
+          ],
+          createdAt: '2026-08-12T10:00:00Z',
+        }}
+        requestedSkillNames={[]}
+        onPreview={jest.fn()}
+        onApply={applyBare}
+      />,
+    );
+  });
+
+  expect(renderer.root.findByProps({className: 'skill-install-preview-mode'}).children.join(''))
+    .toContain('Source only');
+  expect(renderer.root.findAll(node => node.props.className === 'settings-skill-row settings-skill-candidate-row'))
+    .toHaveLength(2);
+  expect(renderer.root.findAllByProps({className: 'settings-skill-select-all-row'})).toHaveLength(0);
+  act(() => renderer.root.findByProps({'aria-label': 'Save skill source'}).props.onClick());
+  expect(applyBare).toHaveBeenCalledWith('preview-1');
 });
 
 test('renders managed state, markdown, and supporting files in detail content', async () => {

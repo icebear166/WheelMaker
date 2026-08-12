@@ -18,15 +18,13 @@ const installHarness = {
   onSourceInputChange: jest.fn(),
   sourceLoading: false,
   sourceError: '',
-  candidates: [],
-  selectedNames: [],
-  onList: jest.fn().mockResolvedValue(undefined),
-  onToggleAll: jest.fn(),
-  onToggleCandidate: jest.fn(),
-  onInstall: jest.fn(),
+  preview: null,
+  requestedSkillNames: [],
+  onPreview: jest.fn().mockResolvedValue(undefined),
+  onApply: jest.fn(),
 };
 
-test('renders one Add Skill companion with the bound target', async () => {
+test('renders one Add Skill Source companion with the bound target', async () => {
   const target = {hubId: 'hub-a', scope: 'project' as const, projectName: 'alpha'};
   const onClose = jest.fn();
   let renderer!: TestRenderer.ReactTestRenderer;
@@ -42,11 +40,11 @@ test('renders one Add Skill companion with the bound target', async () => {
   });
 
   expect(renderer.root.findByProps({className: 'chat-hub-skill-companion-title'}).children)
-    .toEqual(['Add Skill']);
+    .toEqual(['Add Skill Source']);
   expect(renderer.root.findByProps({className: 'chat-hub-skill-companion-scope'}).children)
     .toEqual(['Project: alpha']);
   expect(renderer.root.findAllByProps({className: 'skill-install-marketplace'})).toHaveLength(1);
-  act(() => renderer.root.findByProps({'aria-label': 'Close Add Skill'}).props.onClick());
+  act(() => renderer.root.findByProps({'aria-label': 'Close Add Skill Source'}).props.onClick());
   expect(onClose).toHaveBeenCalled();
 });
 
