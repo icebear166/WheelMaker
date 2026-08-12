@@ -1,10 +1,12 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -3448,4 +3450,338 @@ func TestSkillSourceStoreCompareAndSwapPreservesExternalEdit(t *testing.T) {
 	if string(raw) != string(external) {
 		t.Fatalf("external bytes changed to %q", raw)
 	}
+}
+
+func TestSkillSourceResolverPinsCommitAndDiscoversCompleteCatalog(t *testing.T) {
+	repository := t.TempDir()
+	runSkillSourceGit(t, repository, "init", "-b", "main")
+	runSkillSourceGit(t, repository, "config", "user.email", "skills@example.com")
+	runSkillSourceGit(t, repository, "config", "user.name", "Skills Test")
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "zeta"), "# Zeta\n", map[string]string{
+		"references/guide.md": "guide one\n",
+	})
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "alpha"), "# Alpha\n", nil)
+	runSkillSourceGit(t, repository, "add", ".")
+	runSkillSourceGit(t, repository, "commit", "-m", "initial catalog")
+	wantCommit := strings.TrimSpace(runSkillSourceGit(t, repository, "rev-parse", "HEAD"))
+
+	temporaryRoot := t.TempDir()
+	resolver := newSkillSourceResolver(temporaryRoot)
+	snapshot, err := resolver.Resolve(context.Background(), skillSourceSnapshot{
+		Source: repository, SourceKey: "x/y", Ref: "main",
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error=%v", err)
+	}
+	if snapshot.ResolvedCommit != wantCommit || snapshot.RefreshedAt == "" {
+		t.Fatalf("snapshot commit/time=(%q, %q), want %q and timestamp", snapshot.ResolvedCommit, snapshot.RefreshedAt, wantCommit)
+	}
+	if got := []string{snapshot.SkillList[0].Name, snapshot.SkillList[1].Name}; !reflect.DeepEqual(got, []string{"alpha", "zeta"}) {
+		t.Fatalf("catalog names=%v, want alpha,zeta", got)
+	}
+	if snapshot.SkillList[1].SkillPath != "skills/zeta/SKILL.md" || len(snapshot.SkillList[1].ContentSHA256) != 64 {
+		t.Fatalf("zeta snapshot=%#v", snapshot.SkillList[1])
+	}
+	entries, err := os.ReadDir(temporaryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("temporary resolver entries remain: %v", entries)
+	}
+}
+
+func TestSkillSourceResolverTracksAdditionsDeletionsAndSupportingFiles(t *testing.T) {
+	repository := t.TempDir()
+	runSkillSourceGit(t, repository, "init", "-b", "main")
+	runSkillSourceGit(t, repository, "config", "user.email", "skills@example.com")
+	runSkillSourceGit(t, repository, "config", "user.name", "Skills Test")
+	writeSkillSourceFixture(t, filepath.Join(repository, "first"), "# First\n", map[string]string{"guide.md": "one\n"})
+	runSkillSourceGit(t, repository, "add", ".")
+	runSkillSourceGit(t, repository, "commit", "-m", "first")
+
+	resolver := newSkillSourceResolver(t.TempDir())
+	before, err := resolver.Resolve(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: "x/y", Ref: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(repository, "first")); err != nil {
+		t.Fatal(err)
+	}
+	writeSkillSourceFixture(t, filepath.Join(repository, "second"), "# Second\n", map[string]string{"guide.md": "two\n"})
+	runSkillSourceGit(t, repository, "add", "-A")
+	runSkillSourceGit(t, repository, "commit", "-m", "second")
+	after, err := resolver.Resolve(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: "x/y", Ref: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before.SkillList) != 1 || before.SkillList[0].Name != "first" || len(after.SkillList) != 1 || after.SkillList[0].Name != "second" {
+		t.Fatalf("before=%#v after=%#v", before.SkillList, after.SkillList)
+	}
+	if before.ResolvedCommit == after.ResolvedCommit {
+		t.Fatal("branch movement did not resolve to a new immutable commit")
+	}
+}
+
+func TestSkillSourceResolverCleansTemporaryCheckoutAfterFailure(t *testing.T) {
+	repository := t.TempDir()
+	runSkillSourceGit(t, repository, "init", "-b", "main")
+	temporaryRoot := t.TempDir()
+	resolver := newSkillSourceResolver(temporaryRoot)
+	if _, err := resolver.Resolve(context.Background(), skillSourceSnapshot{
+		Source: repository, SourceKey: "x/y", Ref: "missing-ref",
+	}); err == nil {
+		t.Fatal("Resolve() succeeded for a missing ref")
+	}
+	entries, err := os.ReadDir(temporaryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("temporary resolver entries remain after failure: %v", entries)
+	}
+}
+
+func runSkillSourceGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	command := exec.Command("git", args...)
+	command.Dir = dir
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, output)
+	}
+	return string(output)
+}
+
+func writeSkillSourceFixture(t *testing.T, root, skillMarkdown string, files map[string]string) {
+	t.Helper()
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte(skillMarkdown), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for relativePath, content := range files {
+		path := filepath.Join(root, filepath.FromSlash(relativePath))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestSkillSourceMigrationCreatesOnlyUnambiguousNeedsRefreshSources(t *testing.T) {
+	root := t.TempDir()
+	nativePath := filepath.Join(root, "skills-lock.json")
+	sourcePath := filepath.Join(root, ".skill-source-lock.json")
+	native := []byte(`{
+  "version": 1,
+  "skills": {
+    "alpha": {"source":"https://github.com/example/catalog.git","sourceUrl":"https://github.com/example/catalog.git","sourceType":"github","ref":"main","skillPath":"skills/alpha/SKILL.md"},
+    "beta": {"source":"https://github.com/example/catalog.git","sourceUrl":"https://github.com/example/catalog.git","sourceType":"github","ref":"main","skillPath":"skills/beta/SKILL.md"},
+    "local-one": {"source":"../local-one","sourceType":"local"}
+  }
+}`)
+	if err := os.WriteFile(nativePath, native, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := readOrMigrateSkillSourceLock(nativePath, sourcePath)
+	if err != nil {
+		t.Fatalf("readOrMigrateSkillSourceLock() error=%v", err)
+	}
+	if !result.Migrated || len(result.Lock.Sources) != 1 {
+		t.Fatalf("migration result=%#v, want one migrated source", result)
+	}
+	source := result.Lock.Sources[0]
+	if source.SourceKey != "github.com/example/catalog" || source.Ref != "main" || source.ResolvedCommit != "" || len(source.SkillList) != 0 {
+		t.Fatalf("migrated source=%#v, want needs-refresh catalog source", source)
+	}
+	if !reflect.DeepEqual(result.UnmanagedSkills, []string{"local-one"}) || len(result.NeedsResolutionSkills) != 0 {
+		t.Fatalf("migration classifications=%#v", result)
+	}
+	afterNative, err := os.ReadFile(nativePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(afterNative, native) {
+		t.Fatal("migration changed upstream native lock bytes")
+	}
+
+	firstSourceBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := readOrMigrateSkillSourceLock(nativePath, sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSourceBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Migrated || !bytes.Equal(firstSourceBytes, secondSourceBytes) {
+		t.Fatalf("second migration changed source lock: migrated=%v", second.Migrated)
+	}
+}
+
+func TestSkillSourceMigrationLeavesMultipleRefsAndAddressesForResolution(t *testing.T) {
+	root := t.TempDir()
+	nativePath := filepath.Join(root, "skills-lock.json")
+	sourcePath := filepath.Join(root, ".skill-source-lock.json")
+	native := `{
+  "version": 1,
+  "skills": {
+    "alpha": {"source":"https://github.com/example/catalog.git","sourceType":"github","ref":"main"},
+    "beta": {"source":"https://github.com/example/catalog.git","sourceType":"github","ref":"develop"},
+    "gamma": {"source":"git@github.com:another/catalog.git","sourceType":"git","ref":"main"},
+    "delta": {"source":"https://github.com/another/catalog.git","sourceType":"github","ref":"main"},
+    "unknown": {"source":"not-a-remote","sourceType":"git","ref":"main"}
+  }
+}`
+	if err := os.WriteFile(nativePath, []byte(native), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := readOrMigrateSkillSourceLock(nativePath, sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Lock.Sources) != 0 {
+		t.Fatalf("ambiguous sources were migrated: %#v", result.Lock.Sources)
+	}
+	if !reflect.DeepEqual(result.NeedsResolutionSkills, []string{"alpha", "beta", "delta", "gamma"}) {
+		t.Fatalf("needs resolution=%v", result.NeedsResolutionSkills)
+	}
+	if !reflect.DeepEqual(result.UnmanagedSkills, []string{"unknown"}) {
+		t.Fatalf("unmanaged=%v", result.UnmanagedSkills)
+	}
+}
+
+func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *testing.T) {
+	root := t.TempDir()
+	alphaOne := filepath.Join(root, "agents", "alpha")
+	alphaTwo := filepath.Join(root, "claude", "alpha")
+	beta := filepath.Join(root, "agents", "beta")
+	removed := filepath.Join(root, "agents", "removed")
+	unmanaged := filepath.Join(root, "agents", "unmanaged")
+	for _, dir := range []string{alphaOne, alphaTwo} {
+		writeSkillSourceFixture(t, dir, "# Alpha\n", map[string]string{"guide.md": "same\n"})
+	}
+	writeSkillSourceFixture(t, beta, "# Beta local\n", nil)
+	writeSkillSourceFixture(t, removed, "# Removed\n", nil)
+	writeSkillSourceFixture(t, unmanaged, "# Unmanaged\n", nil)
+	alphaHash, err := hashSkillDirectory(alphaOne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remoteBeta := filepath.Join(root, "remote-beta")
+	writeSkillSourceFixture(t, remoteBeta, "# Beta remote\n", nil)
+	betaHash, err := hashSkillDirectory(remoteBeta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deltaRemote := filepath.Join(root, "remote-delta")
+	writeSkillSourceFixture(t, deltaRemote, "# Delta\n", nil)
+	deltaHash, err := hashSkillDirectory(deltaRemote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{
+				{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: alphaHash},
+				{Name: "beta", SkillPath: "beta/SKILL.md", ContentSHA256: betaHash},
+				{Name: "delta", SkillPath: "delta/SKILL.md", ContentSHA256: deltaHash},
+			},
+		}},
+	}
+	native := []nativeSkillSourceEntry{
+		{Name: "alpha", Source: "https://github.com/example/catalog.git", Ref: "main"},
+		{Name: "beta", Source: "https://github.com/example/catalog.git", Ref: "main"},
+		{Name: "removed", Source: "https://github.com/example/catalog.git", Ref: "main"},
+	}
+	installed := []skillSourceInstalledSnapshot{
+		{Name: "alpha", Managed: true, Locations: []string{filepath.Join(alphaOne, "SKILL.md"), filepath.Join(alphaTwo, "SKILL.md")}},
+		{Name: "beta", Managed: true, Locations: []string{filepath.Join(beta, "SKILL.md")}},
+		{Name: "removed", Managed: true, Locations: []string{filepath.Join(removed, "SKILL.md")}},
+		{Name: "unmanaged", Locations: []string{filepath.Join(unmanaged, "SKILL.md")}},
+	}
+
+	catalog := composeSkillSourceCatalog(lock, native, installed, nil)
+	if len(catalog.Sources) != 1 || len(catalog.UnmanagedSkills) != 1 || catalog.UnmanagedSkills[0].Name != "unmanaged" {
+		t.Fatalf("catalog groups=%#v", catalog)
+	}
+	rows := skillSourceRowsByName(catalog.Sources[0].Skills)
+	if rows["alpha"].Status != "up_to_date" || rows["alpha"].CanUpdate {
+		t.Fatalf("alpha row=%#v", rows["alpha"])
+	}
+	if rows["beta"].Status != "update_available" || !rows["beta"].CanUpdate || rows["beta"].LocalContentSHA256 == betaHash {
+		t.Fatalf("beta row=%#v", rows["beta"])
+	}
+	if rows["delta"].Status != "uninstalled" || !rows["delta"].CanInstall || rows["delta"].Installed {
+		t.Fatalf("delta row=%#v", rows["delta"])
+	}
+	if rows["removed"].Status != "removed_upstream" || !rows["removed"].CanUninstall || rows["removed"].CanUpdate {
+		t.Fatalf("removed row=%#v", rows["removed"])
+	}
+}
+
+func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
+	local := filepath.Join(t.TempDir(), "shared")
+	writeSkillSourceFixture(t, local, "# Shared\n", nil)
+	hash, err := hashSkillDirectory(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm}
+	for _, repository := range []string{"one", "two"} {
+		lock.Sources = append(lock.Sources, skillSourceSnapshot{
+			Source: "https://github.com/example/" + repository + ".git", SourceKey: "github.com/example/" + repository, Ref: "main",
+			ResolvedCommit: strings.Repeat(repository[:1], 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "Shared", SkillPath: "Shared/SKILL.md", ContentSHA256: hash}},
+		})
+	}
+	installed := []skillSourceInstalledSnapshot{{Name: "shared", Locations: []string{filepath.Join(local, "SKILL.md")}}}
+	catalog := composeSkillSourceCatalog(lock, nil, installed, nil)
+	for _, source := range catalog.Sources {
+		row := source.Skills[0]
+		if row.Status != "conflict" || !row.Conflict || row.CanInstall || row.CanUpdate || row.CanUninstall {
+			t.Fatalf("conflicting row=%#v", row)
+		}
+	}
+}
+
+func TestSkillSourceCatalogRetainsStaleSnapshotWithoutInferringDeletion(t *testing.T) {
+	local := filepath.Join(t.TempDir(), "removed")
+	writeSkillSourceFixture(t, local, "# Removed\n", nil)
+	lock := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z", SkillList: []skillSourceSkillSnapshot{},
+		}},
+	}
+	native := []nativeSkillSourceEntry{{Name: "removed", Source: "https://github.com/example/catalog.git", Ref: "main"}}
+	installed := []skillSourceInstalledSnapshot{{Name: "removed", Managed: true, Locations: []string{filepath.Join(local, "SKILL.md")}}}
+	catalog := composeSkillSourceCatalog(lock, native, installed, map[string]string{"github.com/example/catalog": "fetch failed"})
+	if catalog.Sources[0].Status != "stale" || catalog.Sources[0].Error != "fetch failed" {
+		t.Fatalf("stale source=%#v", catalog.Sources[0])
+	}
+	if len(catalog.Sources[0].Skills) != 0 {
+		t.Fatalf("stale source inferred removed rows: %#v", catalog.Sources[0].Skills)
+	}
+}
+
+func skillSourceRowsByName(rows []skillsSourceCatalogSkillSnapshot) map[string]skillsSourceCatalogSkillSnapshot {
+	out := make(map[string]skillsSourceCatalogSkillSnapshot, len(rows))
+	for _, row := range rows {
+		out[strings.ToLower(row.Name)] = row
+	}
+	return out
 }

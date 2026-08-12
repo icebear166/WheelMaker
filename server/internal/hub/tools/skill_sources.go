@@ -51,6 +51,29 @@ type skillSourceSkillSnapshot struct {
 	ContentSHA256 string `json:"contentSha256"`
 }
 
+type skillSourceMigrationResult struct {
+	Lock                  skillSourceLock
+	Revision              string
+	Migrated              bool
+	NeedsResolutionSkills []string
+	UnmanagedSkills       []string
+}
+
+type nativeSkillSourceEntry struct {
+	Name       string
+	Source     string
+	SourceURL  string
+	SourceType string
+	Ref        string
+}
+
+type nativeSkillSourceGroup struct {
+	SourceKey string
+	Sources   map[string]struct{}
+	Refs      map[string]struct{}
+	Skills    []string
+}
+
 func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
 	if projectRoot = strings.TrimSpace(projectRoot); projectRoot != "" {
 		return filepath.Join(projectRoot, ".skill-source-lock.json")
@@ -69,6 +92,145 @@ func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
 		homeDir = resolved
 	}
 	return filepath.Join(homeDir, ".agents", ".skill-source-lock.json")
+}
+
+func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillSourceMigrationResult, error) {
+	lock, revision, err := readSkillSourceLockFile(sourceLockPath)
+	if err != nil {
+		return skillSourceMigrationResult{}, err
+	}
+	entries := readNativeSkillSourceEntries(nativeLockPath)
+	groups, unmanaged := classifyNativeSkillSourceEntries(entries)
+	result := skillSourceMigrationResult{
+		Lock:            lock,
+		Revision:        revision,
+		UnmanagedSkills: unmanaged,
+	}
+	configured := make(map[string]struct{}, len(lock.Sources))
+	for _, source := range lock.Sources {
+		configured[strings.ToLower(source.SourceKey)] = struct{}{}
+	}
+	for _, group := range groups {
+		if len(group.Sources) != 1 || len(group.Refs) != 1 {
+			result.NeedsResolutionSkills = append(result.NeedsResolutionSkills, group.Skills...)
+			continue
+		}
+		if _, exists := configured[strings.ToLower(group.SourceKey)]; exists || revision != skillSourceMissingRevision {
+			continue
+		}
+		var source string
+		for candidate := range group.Sources {
+			source = candidate
+		}
+		var ref string
+		for candidate := range group.Refs {
+			ref = candidate
+		}
+		lock.Sources = append(lock.Sources, skillSourceSnapshot{
+			Source:    source,
+			SourceKey: group.SourceKey,
+			Ref:       ref,
+			SkillList: []skillSourceSkillSnapshot{},
+		})
+		configured[strings.ToLower(group.SourceKey)] = struct{}{}
+	}
+	sort.Strings(result.NeedsResolutionSkills)
+	if revision == skillSourceMissingRevision && len(lock.Sources) > 0 {
+		updatedRevision, err := writeSkillSourceLockFile(sourceLockPath, revision, lock)
+		if err != nil {
+			return skillSourceMigrationResult{}, err
+		}
+		result.Lock = lock
+		result.Revision = updatedRevision
+		result.Migrated = true
+	}
+	return result, nil
+}
+
+func readNativeSkillSourceEntries(path string) []nativeSkillSourceEntry {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var body struct {
+		Skills map[string]struct {
+			Source     string `json:"source"`
+			SourceURL  string `json:"sourceUrl"`
+			SourceType string `json:"sourceType"`
+			Ref        string `json:"ref"`
+		} `json:"skills"`
+	}
+	if json.Unmarshal(raw, &body) != nil {
+		return nil
+	}
+	names := make([]string, 0, len(body.Skills))
+	for name := range body.Skills {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	entries := make([]nativeSkillSourceEntry, 0, len(names))
+	for _, name := range names {
+		value := body.Skills[name]
+		entries = append(entries, nativeSkillSourceEntry{
+			Name:       strings.TrimSpace(name),
+			Source:     strings.TrimSpace(value.Source),
+			SourceURL:  strings.TrimSpace(value.SourceURL),
+			SourceType: strings.ToLower(strings.TrimSpace(value.SourceType)),
+			Ref:        strings.TrimSpace(value.Ref),
+		})
+	}
+	return entries
+}
+
+func classifyNativeSkillSourceEntries(entries []nativeSkillSourceEntry) ([]nativeSkillSourceGroup, []string) {
+	grouped := map[string]*nativeSkillSourceGroup{}
+	var unmanaged []string
+	for _, entry := range entries {
+		if entry.Name == "" {
+			continue
+		}
+		if entry.SourceType == "local" || entry.SourceType == "node_modules" {
+			unmanaged = append(unmanaged, entry.Name)
+			continue
+		}
+		address := entry.SourceURL
+		if address == "" {
+			address = entry.Source
+		}
+		normalizedSource, sourceKey, err := normalizeSkillGitSource(address)
+		if err != nil || entry.Ref == "" {
+			unmanaged = append(unmanaged, entry.Name)
+			continue
+		}
+		group := grouped[sourceKey]
+		if group == nil {
+			group = &nativeSkillSourceGroup{
+				SourceKey: sourceKey,
+				Sources:   map[string]struct{}{},
+				Refs:      map[string]struct{}{},
+			}
+			grouped[sourceKey] = group
+		}
+		group.Sources[normalizedSource] = struct{}{}
+		group.Refs[entry.Ref] = struct{}{}
+		group.Skills = append(group.Skills, entry.Name)
+	}
+	keys := make([]string, 0, len(grouped))
+	for key := range grouped {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	groups := make([]nativeSkillSourceGroup, 0, len(keys))
+	for _, key := range keys {
+		group := *grouped[key]
+		sort.Strings(group.Skills)
+		groups = append(groups, group)
+	}
+	sort.Strings(unmanaged)
+	return groups, unmanaged
 }
 
 func normalizeSkillGitSource(raw string) (string, string, error) {

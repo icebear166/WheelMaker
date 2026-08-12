@@ -1427,6 +1427,44 @@ func TestHubSkillChangeReusesProjectLocalInventory(t *testing.T) {
 	assertCanonicalSkillNames(t, got.EffectiveSkills["hub-a:p2"]["claude"], "hub-skill", "local-two")
 }
 
+func TestSkillsStateAddsSourceCatalogsWithoutChangingEffectiveSkills(t *testing.T) {
+	coordinator := newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+		ScanHub: func(context.Context) (map[string]skillInventoryItem, error) {
+			return map[string]skillInventoryItem{
+				"global": {Name: "global", Agents: []string{"codex"}},
+			}, nil
+		},
+		ScanProject: func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error) {
+			return map[string]skillInventoryItem{
+				"local": {Name: "local", Agents: []string{"codex"}},
+			}, nil
+		},
+		ScanHubSources: func(context.Context, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+			return tools.SkillsSourceScopeSnapshot{Sources: []tools.SkillsSourceCatalogSnapshot{{
+				SourceKey: "github.com/example/global", Status: "needs_refresh",
+			}}}, nil
+		},
+		ScanProjectSources: func(_ context.Context, target projectSkillsTarget, _ map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+			return tools.SkillsSourceScopeSnapshot{Sources: []tools.SkillsSourceCatalogSnapshot{{
+				SourceKey: "github.com/example/" + target.ProjectID, Status: "ready",
+			}}}, nil
+		},
+	})
+	coordinator.SetTargets([]projectSkillsTarget{{ProjectID: "p1", Agents: []string{"codex"}}})
+
+	snapshot, err := coordinator.RefreshAll(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCanonicalSkillNames(t, snapshot.EffectiveSkills["p1"]["codex"], "global", "local")
+	if got := snapshot.HubSources.Sources[0].SourceKey; got != "github.com/example/global" {
+		t.Fatalf("hub source=%q", got)
+	}
+	if got := snapshot.ProjectSources["p1"].Sources[0].SourceKey; got != "github.com/example/p1" {
+		t.Fatalf("project source=%q", got)
+	}
+}
+
 func writeCanonicalSkillFixture(t *testing.T, dir, name, description string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {

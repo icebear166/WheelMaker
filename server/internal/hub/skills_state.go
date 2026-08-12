@@ -46,6 +46,8 @@ type skillsStateSnapshot struct {
 	HubInventory            map[string]skillInventoryItem              `json:"hubInventory"`
 	ProjectLocalInventories map[string]map[string]skillInventoryItem   `json:"projectLocalInventories"`
 	EffectiveSkills         map[string]map[string][]skillInventoryItem `json:"effectiveSkills"`
+	HubSources              tools.SkillsSourceScopeSnapshot            `json:"hubSources"`
+	ProjectSources          map[string]tools.SkillsSourceScopeSnapshot `json:"projectSources"`
 	Operation               *tools.SkillsOperationSnapshot             `json:"operation,omitempty"`
 }
 
@@ -215,26 +217,31 @@ func managedSkillsLockPath(root string) string {
 }
 
 type skillsStateCoordinatorOptions struct {
-	ScanHub     func(context.Context) (map[string]skillInventoryItem, error)
-	ScanProject func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error)
-	Targets     func() []projectSkillsTarget
+	ScanHub            func(context.Context) (map[string]skillInventoryItem, error)
+	ScanProject        func(context.Context, projectSkillsTarget) (map[string]skillInventoryItem, error)
+	ScanHubSources     func(context.Context, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error)
+	ScanProjectSources func(context.Context, projectSkillsTarget, map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error)
+	Targets            func() []projectSkillsTarget
 }
 
 type skillsStateCoordinator struct {
-	mu        sync.Mutex
-	options   skillsStateCoordinatorOptions
-	hub       map[string]skillInventoryItem
-	projects  map[string]map[string]skillInventoryItem
-	targets   map[string]projectSkillsTarget
-	operation *tools.SkillsOperationSnapshot
+	mu             sync.Mutex
+	options        skillsStateCoordinatorOptions
+	hub            map[string]skillInventoryItem
+	projects       map[string]map[string]skillInventoryItem
+	hubSources     tools.SkillsSourceScopeSnapshot
+	projectSources map[string]tools.SkillsSourceScopeSnapshot
+	targets        map[string]projectSkillsTarget
+	operation      *tools.SkillsOperationSnapshot
 }
 
 func newSkillsStateCoordinator(options skillsStateCoordinatorOptions) *skillsStateCoordinator {
 	return &skillsStateCoordinator{
-		options:  options,
-		hub:      map[string]skillInventoryItem{},
-		projects: map[string]map[string]skillInventoryItem{},
-		targets:  map[string]projectSkillsTarget{},
+		options:        options,
+		hub:            map[string]skillInventoryItem{},
+		projects:       map[string]map[string]skillInventoryItem{},
+		projectSources: map[string]tools.SkillsSourceScopeSnapshot{},
+		targets:        map[string]projectSkillsTarget{},
 	}
 }
 
@@ -251,6 +258,11 @@ func (c *skillsStateCoordinator) SetTargets(targets []projectSkillsTarget) {
 	for projectID := range c.projects {
 		if _, ok := next[projectID]; !ok {
 			delete(c.projects, projectID)
+		}
+	}
+	for projectID := range c.projectSources {
+		if _, ok := next[projectID]; !ok {
+			delete(c.projectSources, projectID)
 		}
 	}
 }
@@ -278,18 +290,30 @@ func (c *skillsStateCoordinator) RefreshAll(ctx context.Context) (skillsStateSna
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
+	hubSources, err := c.scanHubSources(ctx, hub)
+	if err != nil {
+		return skillsStateSnapshot{}, err
+	}
 	targets := c.currentTargets()
 	projects := make(map[string]map[string]skillInventoryItem, len(targets))
+	projectSources := make(map[string]tools.SkillsSourceScopeSnapshot, len(targets))
 	for _, target := range targets {
 		inventory, scanErr := c.options.ScanProject(ctx, target)
 		if scanErr != nil {
 			return skillsStateSnapshot{}, scanErr
 		}
 		projects[target.ProjectID] = inventory
+		sources, scanErr := c.scanProjectSources(ctx, target, inventory)
+		if scanErr != nil {
+			return skillsStateSnapshot{}, scanErr
+		}
+		projectSources[target.ProjectID] = sources
 	}
 	c.mu.Lock()
 	c.hub = cloneSkillInventory(hub)
 	c.projects = cloneProjectSkillInventories(projects)
+	c.hubSources = cloneSkillsSourceScopeSnapshot(hubSources)
+	c.projectSources = cloneProjectSkillsSourceSnapshots(projectSources)
 	snapshot := c.snapshotLocked()
 	c.mu.Unlock()
 	return snapshot, nil
@@ -300,8 +324,13 @@ func (c *skillsStateCoordinator) RefreshHub(ctx context.Context) (skillsStateSna
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
+	sources, err := c.scanHubSources(ctx, hub)
+	if err != nil {
+		return skillsStateSnapshot{}, err
+	}
 	c.mu.Lock()
 	c.hub = cloneSkillInventory(hub)
+	c.hubSources = cloneSkillsSourceScopeSnapshot(sources)
 	snapshot := c.snapshotLocked()
 	c.mu.Unlock()
 	return snapshot, nil
@@ -316,8 +345,13 @@ func (c *skillsStateCoordinator) RefreshProject(ctx context.Context, projectID s
 	if err != nil {
 		return skillsStateSnapshot{}, err
 	}
+	sources, err := c.scanProjectSources(ctx, target, inventory)
+	if err != nil {
+		return skillsStateSnapshot{}, err
+	}
 	c.mu.Lock()
 	c.projects[projectID] = cloneSkillInventory(inventory)
+	c.projectSources[projectID] = cloneSkillsSourceScopeSnapshot(sources)
 	snapshot := c.snapshotLocked()
 	c.mu.Unlock()
 	return snapshot, nil
@@ -391,8 +425,24 @@ func (c *skillsStateCoordinator) snapshotLocked() skillsStateSnapshot {
 		HubInventory:            hub,
 		ProjectLocalInventories: projects,
 		EffectiveSkills:         effective,
+		HubSources:              cloneSkillsSourceScopeSnapshot(c.hubSources),
+		ProjectSources:          cloneProjectSkillsSourceSnapshots(c.projectSources),
 		Operation:               cloneSkillsStateOperation(c.operation),
 	}
+}
+
+func (c *skillsStateCoordinator) scanHubSources(ctx context.Context, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+	if c.options.ScanHubSources == nil {
+		return tools.SkillsSourceScopeSnapshot{}, nil
+	}
+	return c.options.ScanHubSources(ctx, cloneSkillInventory(inventory))
+}
+
+func (c *skillsStateCoordinator) scanProjectSources(ctx context.Context, target projectSkillsTarget, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+	if c.options.ScanProjectSources == nil {
+		return tools.SkillsSourceScopeSnapshot{}, nil
+	}
+	return c.options.ScanProjectSources(ctx, cloneProjectSkillsTarget(target), cloneSkillInventory(inventory))
 }
 
 func cloneSkillsStateOperation(operation *tools.SkillsOperationSnapshot) *tools.SkillsOperationSnapshot {
@@ -420,6 +470,54 @@ func cloneProjectSkillInventories(source map[string]map[string]skillInventoryIte
 	out := make(map[string]map[string]skillInventoryItem, len(source))
 	for projectID, inventory := range source {
 		out[projectID] = cloneSkillInventory(inventory)
+	}
+	return out
+}
+
+func cloneProjectSkillsSourceSnapshots(source map[string]tools.SkillsSourceScopeSnapshot) map[string]tools.SkillsSourceScopeSnapshot {
+	out := make(map[string]tools.SkillsSourceScopeSnapshot, len(source))
+	for projectID, snapshot := range source {
+		out[projectID] = cloneSkillsSourceScopeSnapshot(snapshot)
+	}
+	return out
+}
+
+func cloneSkillsSourceScopeSnapshot(source tools.SkillsSourceScopeSnapshot) tools.SkillsSourceScopeSnapshot {
+	out := tools.SkillsSourceScopeSnapshot{
+		Sources:               make([]tools.SkillsSourceCatalogSnapshot, len(source.Sources)),
+		UnmanagedSkills:       append([]tools.SkillsSourceCatalogSkillSnapshot(nil), source.UnmanagedSkills...),
+		NeedsResolutionSkills: append([]string(nil), source.NeedsResolutionSkills...),
+	}
+	for index, snapshot := range source.Sources {
+		out.Sources[index] = snapshot
+		out.Sources[index].Skills = append([]tools.SkillsSourceCatalogSkillSnapshot(nil), snapshot.Skills...)
+	}
+	return out
+}
+
+func skillInventoryAsInstalledSnapshots(inventory map[string]skillInventoryItem) []tools.SkillsInstalledSkillSnapshot {
+	names := make([]string, 0, len(inventory))
+	for name := range inventory {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]tools.SkillsInstalledSkillSnapshot, 0, len(names))
+	for _, name := range names {
+		item := inventory[name]
+		locationNames := make([]string, 0, len(item.Locations))
+		for locationName := range item.Locations {
+			locationNames = append(locationNames, locationName)
+		}
+		sort.Strings(locationNames)
+		locations := make([]string, 0, len(locationNames))
+		for _, locationName := range locationNames {
+			if path := strings.TrimSpace(item.Locations[locationName].Path); path != "" {
+				locations = append(locations, path)
+			}
+		}
+		out = append(out, tools.SkillsInstalledSkillSnapshot{
+			Name: item.Name, Managed: item.Managed, Locations: locations,
+		})
 	}
 	return out
 }

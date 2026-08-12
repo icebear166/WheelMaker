@@ -1849,7 +1849,19 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 				return scanHubSkillsInventory(ctx, r.skillsAgents())
 			},
 			ScanProject: scanProjectSkillsInventory,
-			Targets:     r.skillsTargets,
+			ScanHubSources: func(ctx context.Context, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
+					GlobalLockPath: managedSkillsLockPath(""),
+					Installed:      skillInventoryAsInstalledSnapshots(inventory),
+				})
+			},
+			ScanProjectSources: func(ctx context.Context, target projectSkillsTarget, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
+					ProjectRoot: target.Path,
+					Installed:   skillInventoryAsInstalledSnapshots(inventory),
+				})
+			},
+			Targets: r.skillsTargets,
 		})
 	}
 	return r.skillsState
