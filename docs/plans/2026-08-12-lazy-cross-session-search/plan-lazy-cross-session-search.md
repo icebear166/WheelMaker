@@ -115,7 +115,7 @@ Run: `npm test -- --runInBand __tests__/web-session-search-state.test.ts __tests
 
 Expected: PASS.
 
-- [ ] **Step 10: Git checkpoint**
+- [x] **Step 10: Git checkpoint** — `8340def6 feat(search): filter shared session list`
 
 Invoke `git-workflow` checkpoint for Task 2 files after Step 9 passes; record commit hash and subject.
 
