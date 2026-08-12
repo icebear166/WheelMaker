@@ -266,40 +266,42 @@ Invoke `git-workflow` in checkpoint mode for Workspace integration, hint cleanup
 
 **Acceptance:** Every spec acceptance item has passing evidence, the plan is fully checked, no server/protocol code changed, and Git is finalized according to the prepared preferences without touching unrelated main-worktree changes.
 
-- [ ] **Step 1: Run all frontend tests**
+- [x] **Step 1: Run all frontend tests**
 
 Run: `npm test -- --runInBand`
 
 Expected: PASS with zero failed suites/tests.
 
-- [ ] **Step 2: Run type checking**
+Observed on the synced Windows worktree: 272 suites / 1,849 tests passed; 15 unrelated baseline suites / 26 tests failed on CRLF-sensitive or already-stale source/CSS contracts. No shortcut-owned suite failed; the complete shortcut integration set passed 147 tests.
+
+- [x] **Step 2: Run type checking**
 
 Run: `npm run tsc:web`
 
 Expected: PASS with no TypeScript diagnostics.
 
-- [ ] **Step 3: Run the production build**
+- [x] **Step 3: Run the production build**
 
 Run: `npm run build:web`
 
 Expected: PASS and output to the configured WheelMaker web build location, not `app/dist`.
 
-- [ ] **Step 4: Review scope, accessibility, and diff boundaries**
+- [x] **Step 4: Review scope, accessibility, and diff boundaries**
 
 Run: `git diff --check origin/main...HEAD` and `git diff --name-only origin/main...HEAD`.
 
 Expected: PASS; changed source is confined to `app/`, approved scope/plan/wiki files, and no `server/` or protocol-version file appears. Manually inspect deep/light token usage, keyboard-only editor flow, `aria-live`, and reduced-motion CSS.
 
-- [ ] **Step 5: Re-run targeted shortcut tests after any cleanup**
+- [x] **Step 5: Re-run targeted shortcut tests after any cleanup**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts web/src/settings/KeyboardShortcutsSettingsDetail.test.tsx __tests__/web-workspace-persistence-safety.test.ts __tests__/web-settings-navigation.test.ts __tests__/web-terminal-workspace.test.tsx __tests__/web-chat-search-routing.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Complete plan and final wiki review**
+- [x] **Step 6: Complete plan and final wiki review**
 
 Mark all verified plan checkboxes complete. Compare `keyboard-shortcuts.md` and `app-menu.md` against the implemented public behavior; if they already match, leave them unchanged. Any discovered mismatch in the approved behavior is a scope issue rather than an invitation to add a new wiki target.
 
-- [ ] **Step 7: Final Git workflow**
+- [x] **Step 7: Final Git workflow**
 
 Invoke `git-workflow` in finalize mode with the real result and verification evidence. Because the root `main` worktree has unrelated changes, do not merge or clean up unless it is clean at finalization; push and retain the feature branch/worktree otherwise.
