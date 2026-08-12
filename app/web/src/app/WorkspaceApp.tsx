@@ -18465,6 +18465,13 @@ export function App() {
       const displayItemSearchHighlighted =
         sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
         chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+      const displayItemSearchExpanded = displayItem.kind === 'work-group' &&
+        !!chatSearchActiveMatch &&
+        displayItem.sourceIndexes.some(sourceIndex => {
+          const sourceMessage = sourceMessages[sourceIndex];
+          return !!sourceMessage &&
+            chatSearchMessageKey(sourceMessage, sourceIndex) === chatSearchActiveMatch.messageKey;
+        });
       const toolGroupActive =
         !chatReadOnlyPreview &&
         displayItem.kind === 'tool-group' &&
@@ -18476,6 +18483,8 @@ export function App() {
             status={displayItem.workStatus ?? 'worked'}
             durationMs={displayItem.durationMs ?? 0}
             highlighted={displayItemSearchHighlighted}
+            searchOpen={chatSearchOpen}
+            searchExpanded={displayItemSearchExpanded}
           >
             {(displayItem.childItems ?? []).map(childItem => (
               <div
@@ -18558,6 +18567,8 @@ export function App() {
     archivedMode,
     archivedPreview,
     cancelQueuedPrompt,
+    chatSearchActiveMatch,
+    chatSearchOpen,
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
     chatMessages,

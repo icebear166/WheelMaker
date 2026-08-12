@@ -83,6 +83,50 @@ describe('chat turn groups', () => {
     expect(view.root.findAllByProps({className: 'chat-work-group-content'})).toHaveLength(0);
   });
 
+  test('auto-expands for the active search result and stays open after search closes', async () => {
+    let view!: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(() => {
+      view = ReactTestRenderer.create(
+        <ChatWorkGroup status="worked" durationMs={0} searchOpen searchExpanded>
+          <div className="work-child">Work</div>
+        </ChatWorkGroup>,
+      );
+    });
+
+    expect(view.root.findAllByProps({className: 'chat-work-group-content'})).toHaveLength(1);
+
+    await ReactTestRenderer.act(() => {
+      view.update(
+        <ChatWorkGroup status="worked" durationMs={0} searchOpen={false} searchExpanded={false}>
+          <div className="work-child">Work</div>
+        </ChatWorkGroup>,
+      );
+    });
+
+    expect(view.root.findAllByProps({className: 'chat-work-group-content'})).toHaveLength(1);
+  });
+
+  test('closes an automatic expansion when the active search result moves away', async () => {
+    let view!: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(() => {
+      view = ReactTestRenderer.create(
+        <ChatWorkGroup status="worked" durationMs={0} searchOpen searchExpanded>
+          <div className="work-child">Work</div>
+        </ChatWorkGroup>,
+      );
+    });
+
+    await ReactTestRenderer.act(() => {
+      view.update(
+        <ChatWorkGroup status="worked" durationMs={0} searchOpen searchExpanded={false}>
+          <div className="work-child">Work</div>
+        </ChatWorkGroup>,
+      );
+    });
+
+    expect(view.root.findAllByProps({className: 'chat-work-group-content'})).toHaveLength(0);
+  });
+
   test('uses a fixed neutral completed-work row', () => {
     const styles = fs.readFileSync(
       path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'),

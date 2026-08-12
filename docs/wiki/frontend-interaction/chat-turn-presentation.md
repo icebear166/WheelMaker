@@ -37,4 +37,13 @@ Chat 对话以 raw turns 为源数据，Display Index 负责生成适合 `react-
 - 旧历史没有 phase 时，`prompt_done` 前最后一条 assistant message 视为 final answer；此前工作折叠。若最后一条明确为 commentary，则没有 final answer。
 - 展开后复用原有 turn 与 tool group 组件及顺序，只新增顶部折叠栏。展开状态仅属于当前渲染生命周期；重载或切换 session 后默认折叠。
 
+## 搜索与折叠工作组
+
+> 来源：当前产品确认（2026-08-12）
+
+- Chat 搜索继续统计折叠工作组内部的可搜索 assistant 正文，不因当前折叠状态减少结果。
+- 当前选中的搜索结果位于折叠工作组内时，自动展开该工作组，然后再滚动到结果并应用当前匹配高亮。
+- 结果切换到另一个折叠工作组时，只自动展开新的当前结果所在组；未选中的工作组保持原有折叠状态。
+- 搜索关闭后，当前搜索过程中为最后一个结果自动展开的工作组保持展开；重载或切换 Session 后仍按默认折叠状态开始。
+
 协议与持久化边界见 [`../../scope/2026-08-02-acp-extension-boundary-v27.md`](../../scope/2026-08-02-acp-extension-boundary-v27.md)。

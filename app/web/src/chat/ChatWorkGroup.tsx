@@ -19,14 +19,33 @@ export const ChatWorkGroup = React.memo(function ChatWorkGroup({
   status,
   durationMs,
   highlighted,
+  searchOpen = false,
+  searchExpanded = false,
   children,
 }: {
   status: ChatWorkGroupStatus;
   durationMs: number;
   highlighted?: boolean;
+  searchOpen?: boolean;
+  searchExpanded?: boolean;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const [manuallyOpen, setManuallyOpen] = React.useState(false);
+  const [searchAutoOpen, setSearchAutoOpen] = React.useState(false);
+  const previousSearchOpenRef = React.useRef(searchOpen);
+  React.useEffect(() => {
+    const previousSearchOpen = previousSearchOpenRef.current;
+    if (searchExpanded) {
+      setSearchAutoOpen(true);
+    } else if (!searchOpen && previousSearchOpen && searchAutoOpen) {
+      setSearchAutoOpen(false);
+      setManuallyOpen(true);
+    } else if (searchOpen && searchAutoOpen) {
+      setSearchAutoOpen(false);
+    }
+    previousSearchOpenRef.current = searchOpen;
+  }, [searchAutoOpen, searchExpanded, searchOpen]);
+  const open = manuallyOpen || searchAutoOpen || searchExpanded;
   const label = workGroupLabel(status, durationMs);
 
   return (
@@ -43,7 +62,7 @@ export const ChatWorkGroup = React.memo(function ChatWorkGroup({
         className="chat-work-group-header"
         aria-expanded={open}
         aria-label={`${open ? 'Collapse' : 'Expand'} completed work`}
-        onClick={() => setOpen(current => !current)}
+        onClick={() => setManuallyOpen(current => !current)}
       >
         <ChatIcon name="chevronRight" size={11} className="chat-work-group-chevron" />
         <span className="chat-work-group-label">{label}</span>

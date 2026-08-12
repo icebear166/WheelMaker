@@ -232,6 +232,9 @@ describe('web chat turn rendering', () => {
     expect(main).toContain("displayItem.kind === 'work-group'");
     expect(main).toContain('combineAssistantGroupMessages');
     expect(main).toContain('displayItem.childItems');
+    expect(main).toContain("const displayItemSearchExpanded = displayItem.kind === 'work-group' &&");
+    expect(main).toContain('displayItem.sourceIndexes.some(sourceIndex =>');
+    expect(main).toContain('searchExpanded={displayItemSearchExpanded}');
     expect(main).toContain('<ChatWorkGroup');
   });
 
