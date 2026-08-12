@@ -81,22 +81,22 @@ describe('skill management view helpers', () => {
     });
   });
 
-  test('normalizes direct GitHub skill URLs and source refs without a selection mode', () => {
+  test('rejects direct GitHub tree URLs and explicit source refs', () => {
     expect(parseSkillSourceInput('https://github.com/example/catalog/tree/release/skills/diagnose')).toEqual({
-      source: 'https://github.com/example/catalog.git',
-      ref: 'release',
-      skillNames: ['diagnose'],
+      source: '',
+      skillNames: [],
+      error: 'Skill source refs are unsupported. Use the repository URL.',
     });
     expect(parseSkillSourceInput('npx skills add example/catalog#next --skill tdd')).toEqual({
-      source: 'example/catalog',
-      ref: 'next',
-      skillNames: ['tdd'],
+      source: '',
+      skillNames: [],
+      error: 'Skill source refs are unsupported. Use the repository URL.',
     });
   });
 
   test('hides only ordinary uninstalled rows by default', () => {
     expect(shouldShowSkillCatalogRow({status: 'uninstalled'}, false)).toBe(false);
-    for (const status of ['up_to_date', 'update_available', 'removed_upstream', 'conflict', 'error', 'pending_removal']) {
+    for (const status of ['up_to_date', 'update_available', 'copies_differ', 'needs_refresh', 'removed_upstream', 'conflict', 'error', 'pending_removal']) {
       expect(shouldShowSkillCatalogRow({status}, false)).toBe(true);
     }
     expect(shouldShowSkillCatalogRow({status: 'uninstalled'}, true)).toBe(true);

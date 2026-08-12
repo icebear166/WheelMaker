@@ -2200,7 +2200,6 @@
 .chat-hub-skill-toolbar-button,
 .chat-hub-skill-update-all,
 .chat-hub-skill-source-actions button,
-.chat-hub-skill-source-ref-apply,
 .chat-hub-skill-row-actions button,
 button.chat-hub-skill-name {
   transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
@@ -2221,7 +2220,6 @@ button.chat-hub-skill-name {
   .chat-hub-skill-toolbar-button,
   .chat-hub-skill-update-all,
   .chat-hub-skill-source-actions button,
-  .chat-hub-skill-source-ref-apply,
   .chat-hub-skill-row-actions button,
   button.chat-hub-skill-name {
     transition-property: background, background-color, border-color, color, box-shadow, outline-color, opacity;
@@ -2610,7 +2608,6 @@ button.chat-hub-skill-name:disabled {
 .chat-hub-skill-toolbar-button,
 .chat-hub-skill-update-all,
 .chat-hub-skill-source-actions button,
-.chat-hub-skill-source-ref-apply,
 .chat-hub-skill-row-actions button {
   appearance: none;
   min-width: 24px;
@@ -2634,13 +2631,11 @@ button.chat-hub-skill-name:disabled {
 .chat-hub-skill-toolbar-button:hover:not(:disabled),
 .chat-hub-skill-update-all:hover:not(:disabled),
 .chat-hub-skill-source-actions button:hover:not(:disabled),
-.chat-hub-skill-source-ref-apply:hover:not(:disabled),
 .chat-hub-skill-row-actions button:hover:not(:disabled),
 .chat-hub-skill-icon-button:focus-visible,
 .chat-hub-skill-toolbar-button:focus-visible,
 .chat-hub-skill-update-all:focus-visible,
 .chat-hub-skill-source-actions button:focus-visible,
-.chat-hub-skill-source-ref-apply:focus-visible,
 .chat-hub-skill-row-actions button:focus-visible {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--hover) 80%, transparent);
@@ -2650,7 +2645,6 @@ button.chat-hub-skill-name:disabled {
 .chat-hub-skill-toolbar-button:disabled,
 .chat-hub-skill-update-all:disabled,
 .chat-hub-skill-source-actions button:disabled,
-.chat-hub-skill-source-ref-apply:disabled,
 .chat-hub-skill-row-actions button:disabled {
   opacity: 0.42;
   cursor: default;
@@ -2775,36 +2769,6 @@ button.chat-hub-skill-name:disabled {
   color: var(--text-tertiary);
   font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
   font-size: 8.5px;
-}
-
-.chat-hub-skill-source-ref {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.chat-hub-skill-source-ref-input {
-  width: 58px;
-  height: 20px;
-  box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  padding: 0 4px;
-  font: inherit;
-}
-
-.chat-hub-skill-source-ref-input:focus-visible {
-  border-color: var(--accent-primary);
-  outline: 2px solid color-mix(in srgb, var(--accent-primary) 22%, transparent);
-  outline-offset: 1px;
-}
-
-.chat-hub-skill-source-ref-apply {
-  height: 20px;
-  min-width: 0;
-  padding-inline: 4px;
 }
 
 .chat-hub-skill-source-commit,

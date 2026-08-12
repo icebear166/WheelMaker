@@ -115,7 +115,7 @@ export function SkillInstallContent({
             {explicit ? `${explicitNames.length} skill${explicitNames.length === 1 ? '' : 's'}` : 'Source only'}
           </span>
           <span className="skill-install-preview-source" data-tooltip={preview.source}>{preview.sourceKey}</span>
-          <span className="skill-install-preview-revision">{preview.ref} · {preview.resolvedCommit.slice(0, 8)}</span>
+          <span className="skill-install-preview-revision">{preview.resolvedCommit.slice(0, 8)}</span>
         </div>
       ) : null}
       {previewNames.length > 0 ? (
@@ -177,7 +177,6 @@ export function SkillDetailContent({
               {renderDetailMetaRow('Source', detail.source)}
               {renderDetailMetaRow('Source URL', detail.sourceUrl)}
               {renderDetailMetaRow('Source type', detail.sourceType)}
-              {renderDetailMetaRow('Ref', detail.ref)}
               {renderDetailMetaRow('Skill path', detail.skillPath)}
               {renderDetailMetaRow('Plugin', detail.pluginName)}
               {renderDetailMetaRow('Installed', detail.installedAt)}

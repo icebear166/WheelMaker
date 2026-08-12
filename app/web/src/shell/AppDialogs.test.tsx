@@ -110,39 +110,14 @@ test('source update confirmation explicitly warns before overwriting local conte
     previewId: 'preview-1',
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     resolvedCommit: '1234567890abcdef',
     skills: ['baseline-ui'],
     overwritesLocal: true,
   });
 
   expect(copy).toContain('Local content changes will be overwritten');
-  expect(copy).toContain('main at 12345678');
-});
-
-test('source ref confirmation lists catalog additions removals and content changes', () => {
-  const copy = confirmCopy({
-    kind: 'skillPreview',
-    action: 'changeRef',
-    hubId: 'hub-a',
-    scope: 'project',
-    projectName: 'alpha',
-    previewId: 'preview-ref',
-    source: 'https://github.com/acme/skills.git',
-    sourceKey: 'github.com/acme/skills',
-    ref: 'next',
-    resolvedCommit: '1234567890abcdef',
-    skills: [],
-    catalogChanges: {
-      added: ['new-skill'],
-      removed: ['retired-skill'],
-      changed: ['updated-skill'],
-    },
-  });
-
-  expect(copy).toContain('Added: new-skill');
-  expect(copy).toContain('Removed: retired-skill');
-  expect(copy).toContain('Changed: updated-skill');
+  expect(copy).toContain('12345678');
+  expect(copy).not.toContain('main at');
 });
 
 test('source deletion confirmation promises lock removal only after every uninstall succeeds', () => {
@@ -154,7 +129,6 @@ test('source deletion confirmation promises lock removal only after every uninst
     previewId: 'preview-delete',
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     resolvedCommit: '1234567890abcdef',
     skills: ['one', 'two'],
   });
@@ -178,7 +152,6 @@ test('canceling a source preview never invokes the apply callback', () => {
           previewId: 'preview-save',
           source: 'https://github.com/acme/skills.git',
           sourceKey: 'github.com/acme/skills',
-          ref: 'main',
           resolvedCommit: '1234567890abcdef',
           skills: ['one'],
         }}

@@ -1070,7 +1070,6 @@ export interface RegistrySkillDetail {
   source?: string;
   sourceUrl?: string;
   sourceType?: string;
-  ref?: string;
   skillPath?: string;
   pluginName?: string;
   installedAt?: string;
@@ -1107,7 +1106,9 @@ export type RegistrySkillCatalogStatus =
   | 'conflict'
   | 'error'
   | 'pending_removal'
-  | 'unmanaged';
+  | 'unmanaged'
+  | 'copies_differ'
+  | 'needs_refresh';
 
 export type RegistrySkillSourceStatus = 'ready' | 'needs_refresh' | 'stale' | 'pending_removal';
 
@@ -1129,7 +1130,6 @@ export interface RegistrySkillCatalogItem {
 export interface RegistrySkillSourceSnapshot {
   source: string;
   sourceKey: string;
-  ref: string;
   resolvedCommit?: string;
   refreshedAt?: string;
   status: RegistrySkillSourceStatus | string;
@@ -1158,7 +1158,6 @@ export interface RegistrySkillSourcePreview {
   projectName?: string;
   source: string;
   sourceKey: string;
-  ref: string;
   resolvedCommit: string;
   skillList: RegistrySkillSourceListItem[];
   skills?: string[];
@@ -1230,7 +1229,6 @@ export interface RegistrySkillSourcePayload {
   scope: RegistrySkillScope;
   projectName?: string;
   source: string;
-  ref?: string;
   skills?: string[];
 }
 

@@ -44,7 +44,6 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onRequestSkillInstall: jest.fn(),
     onRequestSkillDetail: jest.fn(),
     onRefreshSkillSource: jest.fn(),
-    onChangeSkillSourceRef: jest.fn(),
     onDeleteSkillSource: jest.fn(),
     onInstallSourceSkill: jest.fn(),
     onUpdateSourceSkill: jest.fn(),
@@ -175,7 +174,6 @@ function skillSourceScope(skillNames: string[] = ['baseline-ui']) {
     sources: [{
       source: 'https://github.com/acme/skills.git',
       sourceKey: 'github.com/acme/skills',
-      ref: 'main',
       resolvedCommit: '1234567890abcdef',
       status: 'ready',
       installedCount: skillNames.length,
@@ -676,7 +674,6 @@ test('skills detail shows the Hub-global source catalog with scoped actions', as
     scope: 'hub',
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     skillName: 'baseline-ui',
   });
   act(() => managedActions[1].props.onClick());
@@ -902,7 +899,6 @@ test('Project Skills lists every project and keeps every action in the selected 
     projectName: 'alpha',
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     skillName: 'one',
   });
   act(() => renderer.root.findByProps({'aria-label': 'Uninstall one'}).props.onClick());

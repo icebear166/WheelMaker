@@ -176,7 +176,7 @@ describe('skill management registry service', () => {
     const repository = new RegistryRepository(client);
     const target = {
       hubId: 'hub-a', scope: 'project' as const, projectName: 'WheelMaker',
-      source: 'https://github.com/example/catalog.git', ref: 'main',
+      source: 'https://github.com/example/catalog.git',
     };
 
     await repository.previewSkillSource(target);
@@ -187,7 +187,7 @@ describe('skill management registry service', () => {
 
     const params = {
       scope: 'project', projectName: 'WheelMaker',
-      source: 'https://github.com/example/catalog.git', ref: 'main',
+      source: 'https://github.com/example/catalog.git',
     };
 
     for (const [index, action] of ['previewSource', 'previewInstall', 'previewUpdate', 'previewDeleteSource'].entries()) {

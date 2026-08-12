@@ -3,7 +3,6 @@ import type {
   RegistrySkillCatalogItem,
   RegistrySkillProjectSnapshot,
   RegistrySkillScope,
-  RegistrySkillSourceListItem,
 } from '../registry/registryTypes';
 
 export type SkillScopeTarget = {
@@ -17,15 +16,7 @@ export type SkillInstallTarget = SkillScopeTarget;
 export type SkillSourceTarget = SkillScopeTarget & {
   source: string;
   sourceKey: string;
-  ref: string;
-  currentSkillList?: RegistrySkillSourceListItem[];
 };
-
-export interface SkillSourceCatalogChanges {
-  added: string[];
-  removed: string[];
-  changed: string[];
-}
 
 export type SkillSourceSkillTarget = SkillSourceTarget & {
   skillName: string;
@@ -55,8 +46,10 @@ export type SkillPendingKeyInput = SkillScopeTarget & {
 export interface ParsedSkillSourceInput {
   source: string;
   skillNames: string[];
-  ref?: string;
+  error?: string;
 }
+
+const UNSUPPORTED_SKILL_SOURCE_REF = 'Skill source refs are unsupported. Use the repository URL.';
 
 export function deriveSkillHubIds(hubs: RegistryHub[]): string[] {
   return Array.from(new Set(
@@ -74,28 +67,12 @@ export function parseSkillSourceInput(input: string): ParsedSkillSourceInput {
 
   const sourceIndex = findSkillSourceTokenIndex(tokens);
   const sourceToken = sourceIndex >= 0 ? tokens[sourceIndex] : '';
-  const direct = parseDirectGitHubSkillURL(sourceToken);
-  if (direct) return direct;
-  const hashIndex = sourceToken.lastIndexOf('#');
-  const source = hashIndex > 0 ? sourceToken.slice(0, hashIndex) : sourceToken;
-  const ref = hashIndex > 0 ? sourceToken.slice(hashIndex + 1).trim() : '';
-  const parsed: ParsedSkillSourceInput = {
-    source,
-    skillNames: extractSkillNamesFromTokens(tokens),
-  };
-  if (ref) parsed.ref = ref;
-  return parsed;
-}
-
-function parseDirectGitHubSkillURL(source: string): ParsedSkillSourceInput | null {
-  const match = /^https:\/\/github\.com\/([^/]+)\/([^/#]+)\/tree\/([^/]+)\/(.+)$/i.exec(source);
-  if (!match) return null;
-  const [, owner, repository, ref, skillPath] = match;
-  const skillName = skillPath.split('/').filter(Boolean).at(-1) ?? '';
+  if (sourceToken.includes('#') || /^https:\/\/github\.com\/[^/]+\/[^/#]+\/tree\//i.test(sourceToken)) {
+    return {source: '', skillNames: [], error: UNSUPPORTED_SKILL_SOURCE_REF};
+  }
   return {
-    source: `https://github.com/${owner}/${repository.replace(/\.git$/i, '')}.git`,
-    ref,
-    skillNames: skillName ? [skillName] : [],
+    source: sourceToken,
+    skillNames: extractSkillNamesFromTokens(tokens),
   };
 }
 
@@ -269,29 +246,4 @@ export function shouldShowSkillCatalogRow(
   showUninstalled: boolean,
 ): boolean {
   return showUninstalled || row.status !== 'uninstalled';
-}
-
-export function diffSkillSourceCatalog(
-  current: RegistrySkillSourceListItem[],
-  next: RegistrySkillSourceListItem[],
-): SkillSourceCatalogChanges {
-  const currentByName = new Map(current.map(skill => [skill.name.toLowerCase(), skill]));
-  const nextByName = new Map(next.map(skill => [skill.name.toLowerCase(), skill]));
-  const added = next
-    .filter(skill => !currentByName.has(skill.name.toLowerCase()))
-    .map(skill => skill.name);
-  const removed = current
-    .filter(skill => !nextByName.has(skill.name.toLowerCase()))
-    .map(skill => skill.name);
-  const changed = next
-    .filter(skill => {
-      const previous = currentByName.get(skill.name.toLowerCase());
-      return Boolean(previous && (
-        previous.contentSha256 !== skill.contentSha256
-        || previous.skillPath !== skill.skillPath
-      ));
-    })
-    .map(skill => skill.name);
-  const sort = (names: string[]) => names.sort((left, right) => left.localeCompare(right));
-  return {added: sort(added), removed: sort(removed), changed: sort(changed)};
 }

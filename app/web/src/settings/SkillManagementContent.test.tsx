@@ -61,7 +61,6 @@ test('shows a bare repository as source-only and explicit skills without a selec
           scope: 'hub',
           source: 'https://github.com/acme/skills.git',
           sourceKey: 'github.com/acme/skills',
-          ref: 'main',
           resolvedCommit: '1234567890abcdef',
           skillList: [
             {name: 'baseline-ui', skillPath: 'skills/baseline-ui', contentSha256: 'a'.repeat(64)},
@@ -78,6 +77,8 @@ test('shows a bare repository as source-only and explicit skills without a selec
 
   expect(renderer.root.findByProps({className: 'skill-install-preview-mode'}).children.join(''))
     .toContain('Source only');
+  expect(renderer.root.findByProps({className: 'skill-install-preview-revision'}).children.join(''))
+    .toBe('12345678');
   expect(renderer.root.findAll(node => node.props.className === 'settings-skill-row settings-skill-candidate-row'))
     .toHaveLength(2);
   expect(renderer.root.findAllByProps({className: 'settings-skill-select-all-row'})).toHaveLength(0);

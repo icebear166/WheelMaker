@@ -13,7 +13,6 @@ const catalog: RegistrySkillSourceScopeSnapshot = {
   sources: [{
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     resolvedCommit: '1234567890abcdef',
     refreshedAt: '2026-08-12T12:34:56Z',
     status: 'ready',
@@ -44,7 +43,6 @@ function createActions(): ChatHubSkillActions {
     onAdd: jest.fn(),
     onDetail: jest.fn(),
     onRefreshSource: jest.fn(),
-    onChangeSourceRef: jest.fn(),
     onDeleteSource: jest.fn(),
     onInstallSkill: jest.fn(),
     onUpdateSkill: jest.fn(),
@@ -90,7 +88,7 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   const {renderer} = await renderScope();
 
   expect(renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'})).toBeTruthy();
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-ref-input'}).props.value).toBe('main');
+  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-ref-input'})).toHaveLength(0);
   expect(renderer.root.findByProps({className: 'chat-hub-skill-source-commit'}).children.join('')).toContain('12345678');
   expect(renderer.root.findByProps({className: 'chat-hub-skill-source-refreshed'}).children.join('')).toContain('2026-08-12');
   expect(renderer.root.findAllByProps({'data-skill-name': 'new-skill'})).toHaveLength(0);
@@ -109,7 +107,6 @@ test('shows remote additions after enabling the scope preference and offers inst
     ...projectTarget,
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     skillName: 'new-skill',
   });
 });
@@ -126,7 +123,6 @@ test('offers update only for a live hash mismatch and keeps removed skills manua
     ...hubTarget,
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
-    ref: 'main',
     skillName: 'changed',
   });
   expect(removed.props.className).toContain('is-removed');
@@ -144,25 +140,37 @@ test('disables every skill action for same-name conflicts', async () => {
   expect(conflict.findByProps({className: 'chat-hub-skill-status'}).children.join('')).toContain('Conflict');
 });
 
-test('routes source refresh, ref change, update-all, and delete through source actions', async () => {
+test('routes source refresh, update-all, and delete through ref-free source actions', async () => {
   const {renderer, actions} = await renderScope();
   const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
 
   act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'}).props.onClick());
   expect(actions.onUpdateAll).toHaveBeenCalledWith(hubTarget);
   act(() => source.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.onClick());
-  expect(actions.onRefreshSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
-  act(() => source.findByProps({className: 'chat-hub-skill-source-ref-input'}).props.onChange({target: {value: 'next'}}));
-  act(() => source.findByProps({'aria-label': 'Apply ref for github.com/acme/skills'}).props.onClick());
-  expect(actions.onChangeSourceRef).toHaveBeenCalledWith(expect.objectContaining({ref: 'next'}));
-  expect(actions.onChangeSourceRef).toHaveBeenCalledWith(expect.objectContaining({
-    currentSkillList: expect.arrayContaining([
-      expect.objectContaining({name: 'installed'}),
-      expect.objectContaining({name: 'changed'}),
-    ]),
-  }));
+  expect(actions.onRefreshSource).toHaveBeenCalledWith({
+    ...hubTarget,
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+  });
+  expect(source.findAllByProps({'aria-label': 'Apply ref for github.com/acme/skills'})).toHaveLength(0);
   act(() => source.findByProps({'aria-label': 'Delete github.com/acme/skills source'}).props.onClick());
   expect(actions.onDeleteSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
+});
+
+test('renders copies-differ as a precise actionable state', async () => {
+  const snapshot = {
+    ...catalog,
+    sources: catalog.sources.map(source => ({
+      ...source,
+      skills: source.skills.map(skill => skill.name === 'changed'
+        ? {...skill, status: 'copies_differ', canUpdate: true}
+        : skill),
+    })),
+  };
+  const {renderer} = await renderScope({snapshot});
+  const changed = renderer.root.findByProps({'data-skill-name': 'changed'});
+  expect(changed.findByProps({className: 'chat-hub-skill-status'}).children.join('')).toBe('Copies differ');
+  expect(changed.findByProps({'aria-label': 'Update changed'})).toBeTruthy();
 });
 
 test('keeps stale catalog visible while blocking install and update operations', async () => {

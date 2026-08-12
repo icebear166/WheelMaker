@@ -25,7 +25,6 @@ export interface ChatHubSkillActions {
   onAdd: (target: SkillInstallTarget) => void;
   onDetail: (target: SkillDetailTarget) => void;
   onRefreshSource: (target: SkillSourceTarget) => void;
-  onChangeSourceRef: (target: SkillSourceTarget) => void;
   onDeleteSource: (target: SkillSourceTarget) => void;
   onInstallSkill: (target: SkillSourceSkillTarget) => void;
   onUpdateSkill: (target: SkillSourceSkillTarget) => void;
@@ -55,6 +54,8 @@ const STATUS_COPY: Record<string, string> = {
   error: 'Error',
   pending_removal: 'Pending removal',
   unmanaged: 'Unmanaged',
+  copies_differ: 'Copies differ',
+  needs_refresh: 'Needs refresh',
 };
 
 function sourceTarget(target: SkillScopeTarget, source: RegistrySkillSourceSnapshot): SkillSourceTarget {
@@ -62,16 +63,7 @@ function sourceTarget(target: SkillScopeTarget, source: RegistrySkillSourceSnaps
     ...target,
     source: source.source,
     sourceKey: source.sourceKey,
-    ref: source.ref,
   };
-}
-
-function sourceSkillList(source: RegistrySkillSourceSnapshot) {
-  return source.skills.flatMap(skill => (
-    skill.skillPath && skill.remoteContentSha256
-      ? [{name: skill.name, skillPath: skill.skillPath, contentSha256: skill.remoteContentSha256}]
-      : []
-  ));
 }
 
 function refreshedAtCopy(refreshedAt?: string): string {
@@ -180,7 +172,6 @@ function SkillSourceLedger({
   busy: boolean;
   actions: ChatHubSkillActions;
 }) {
-  const [refDraft, setRefDraft] = useState(source.ref);
   const stale = source.status === 'stale';
   const visibleSkills = useMemo(
     () => [...source.skills]
@@ -188,8 +179,6 @@ function SkillSourceLedger({
       .sort((left, right) => left.name.localeCompare(right.name)),
     [showUninstalled, source.skills],
   );
-
-  useEffect(() => setRefDraft(source.ref), [source.ref, source.sourceKey]);
 
   const baseTarget = sourceTarget(target, source);
   const statusCopy = source.status.replaceAll('_', ' ');
@@ -204,29 +193,6 @@ function SkillSourceLedger({
           <span className={`chat-hub-skill-source-state is-${source.status}`}>{statusCopy}</span>
         </span>
         <span className="chat-hub-skill-source-meta">
-          <label className="chat-hub-skill-source-ref">
-            <span>ref</span>
-            <input
-              className="chat-hub-skill-source-ref-input"
-              aria-label={`Ref for ${source.sourceKey}`}
-              value={refDraft}
-              disabled={busy}
-              onChange={event => setRefDraft(event.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="chat-hub-skill-source-ref-apply"
-            aria-label={`Apply ref for ${source.sourceKey}`}
-            disabled={busy || stale || !refDraft || refDraft === source.ref}
-            onClick={() => actions.onChangeSourceRef({
-              ...baseTarget,
-              ref: refDraft,
-              currentSkillList: sourceSkillList(source),
-            })}
-          >
-            Apply
-          </button>
           <span className="chat-hub-skill-source-commit" data-tooltip={source.resolvedCommit || 'Not resolved'}>
             {source.resolvedCommit ? source.resolvedCommit.slice(0, 8) : 'unresolved'}
           </span>

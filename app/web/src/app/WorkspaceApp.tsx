@@ -525,7 +525,6 @@ import {
   type WheelMakerPublicMetadata,
 } from '../settings/agentPackageUpdateView';
 import {
-  diffSkillSourceCatalog,
   parseSkillSourceInput,
   sameSkillScopeTarget,
   skillActionPendingKey,
@@ -6990,7 +6989,6 @@ export function App() {
         onRequestSkillInstall={requestSkillInstall}
         onRequestSkillDetail={requestSkillDetail}
         onRefreshSkillSource={requestSkillSourceRefresh}
-        onChangeSkillSourceRef={requestSkillSourceRefChange}
         onDeleteSkillSource={requestSkillSourceDelete}
         onInstallSourceSkill={requestSourceSkillInstall}
         onUpdateSourceSkill={requestSourceSkillUpdate}
@@ -13731,7 +13729,6 @@ export function App() {
     previewId: preview.id,
     source: preview.source,
     sourceKey: preview.sourceKey,
-    ref: preview.ref,
     resolvedCommit: preview.resolvedCommit,
     skills: preview.skills?.length
       ? preview.skills
@@ -13745,6 +13742,10 @@ export function App() {
     const target = skillInstallTarget;
     const parsed = parseSkillSourceInput(skillSourceInput);
     const source = parsed.source;
+    if (parsed.error) {
+      setSkillSourceError(parsed.error);
+      return;
+    }
     if (!target || !source) {
       setSkillSourceError('Source is required.');
       return;
@@ -13755,7 +13756,6 @@ export function App() {
       const payload = {
         ...target,
         source,
-        ref: parsed.ref,
         skills: parsed.skillNames,
       };
       const result = parsed.skillNames.length > 0
@@ -13802,7 +13802,6 @@ export function App() {
         scope: target.scope,
         projectName: target.projectName,
         source: hasSource ? target.source : '',
-        ref: hasSource ? target.ref : undefined,
         skills,
       };
       const result = action === 'install'
@@ -13817,12 +13816,6 @@ export function App() {
       }
       const confirm = skillPreviewConfirmTarget(result.preview, action);
       confirm.hubId = target.hubId;
-      if (action === 'changeRef' && hasSource) {
-        confirm.catalogChanges = diffSkillSourceCatalog(
-          target.currentSkillList ?? [],
-          result.preview.skillList,
-        );
-      }
       setConfirmTarget(confirm);
     } catch (err) {
       setToastMessage(err instanceof Error ? err.message : String(err));
@@ -13833,10 +13826,6 @@ export function App() {
 
   const requestSkillSourceRefresh = useCallback((target: SkillSourceTarget) => {
     void previewSkillLedgerAction('refresh', target);
-  }, [previewSkillLedgerAction]);
-
-  const requestSkillSourceRefChange = useCallback((target: SkillSourceTarget) => {
-    void previewSkillLedgerAction('changeRef', target);
   }, [previewSkillLedgerAction]);
 
   const requestSkillSourceDelete = useCallback((target: SkillSourceTarget) => {
@@ -13990,7 +13979,6 @@ export function App() {
         projectName: retry.target.projectName,
         source: retry.target.source,
         sourceKey: retry.target.sourceKey || '',
-        ref: retry.target.ref,
       };
       void previewSkillLedgerAction(retry.target.action, sourceTarget, retry.target.skills);
       return;
