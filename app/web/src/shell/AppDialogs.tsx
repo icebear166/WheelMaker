@@ -379,7 +379,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
     return target.action === 'install' ? 'cloudDownload' : 'refreshCw';
   }
   if (target.kind === 'npmPackageHubUpdate') return 'refreshCw';
-  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'refreshCw';
+  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'cloudDownload';
   if (target.kind === 'gatewayUpdate') return 'refreshCw';
   if (target.kind === 'wheelMakerUpdateAll') return 'refreshCw';
   if (target.kind === 'skillPreview') {

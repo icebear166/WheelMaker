@@ -1147,7 +1147,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               onClick={() => onRequestWheelMakerUpdate(hubId)}
             >
               <Icon
-                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'refreshCw'}
+                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'cloudDownload'}
                 spin={ops.wheelMaker.pendingAction === 'update'}
               />
               {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}

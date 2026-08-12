@@ -1031,9 +1031,18 @@ describe('web chat integration', () => {
     const stylesCss = readWebStyles(projectRoot);
     const row = cssRuleBlocksContainingSelector(stylesCss, '.chat-hub-skill-row').join('\n');
     const actions = cssRuleBlock(stylesCss, '.chat-hub-skill-row-actions');
+    const sourceHeader = cssRuleBlock(stylesCss, '.chat-hub-skill-source-header');
+    const sourceDisclosure = cssRuleBlock(stylesCss, '.chat-hub-skill-source-disclosure');
+    const sourceStatusDot = cssRuleBlock(stylesCss, '.chat-hub-skill-source-status-dot');
+    const actionSlot = cssRuleBlock(stylesCss, '.chat-hub-skill-action-slot');
 
-    expect(row).toContain('grid-template-columns: 18px minmax(0, 1fr) 52px;');
+    expect(row).toContain('grid-template-columns: minmax(0, 1fr) 52px;');
     expect(actions).toContain('grid-template-columns: repeat(2, 24px);');
+    expect(sourceHeader).toContain('flex-wrap: nowrap;');
+    expect(sourceDisclosure).toContain('min-width: 0;');
+    expect(sourceDisclosure).toContain('overflow: hidden;');
+    expect(sourceStatusDot).toContain('width: 6px;');
+    expect(actionSlot).toContain('width: 24px;');
     expect(skillTsx).toContain('className="chat-hub-skill-name-cell"');
     expect(skillTsx).toContain('className="chat-hub-skill-name"');
     expect(skillTsx).toContain('aria-label={`View ${skill.name} details`}');

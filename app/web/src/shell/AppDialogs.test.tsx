@@ -220,6 +220,30 @@ test('Restart confirmation uses runtime-reload copy and power icon', () => {
   expect(primary.children.join('')).toContain('Restart');
 });
 
+test('WheelMaker update confirmation uses the download icon', () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppConfirmDialog
+        target={{
+          kind: 'wheelMakerUpdate',
+          action: 'update',
+          hubId: 'hub-a',
+          currentVersion: 'v1.2.0',
+          latestVersion: 'v1.3.0',
+        }}
+        busy={false}
+        error=""
+        onCancel={() => undefined}
+        onPrimary={() => undefined}
+      />,
+    );
+  });
+
+  const primary = renderer.root.findByProps({className: 'app-confirm-btn primary'});
+  expect(primary.findByProps({'data-icon-name': 'cloudDownload'})).toBeDefined();
+});
+
 test('HTML export name dialog presents an editable stem with a fixed extension', () => {
   const onCancel = jest.fn();
   const onSubmit = jest.fn();

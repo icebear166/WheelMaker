@@ -517,7 +517,7 @@ test('only Restart shows loading while its restart request is pending', async ()
   const restart = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
   expect(update.props.disabled).toBe(true);
   expect(restart.props.disabled).toBe(true);
-  expect(update.findByType(Icon).props.name).toBe('refreshCw');
+  expect(update.findByType(Icon).props.name).toBe('cloudDownload');
   expect(restart.findByType(Icon).props.name).toBe('loader');
 });
 
@@ -1238,7 +1238,7 @@ test('version action uses an update or restart icon instead of a detached status
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
   const updateAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
-  expect(updateAction.findByType(Icon).props.name).toBe('refreshCw');
+  expect(updateAction.findByType(Icon).props.name).toBe('cloudDownload');
   const restartAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
   expect(restartAction.findByType(Icon).props.name).toBe('power');
   expect(renderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);

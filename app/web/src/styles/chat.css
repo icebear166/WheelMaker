@@ -2548,7 +2548,7 @@ button.chat-hub-gateway-capsule:disabled {
 }
 
 .chat-hub-skill-row {
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) 52px;
   min-height: 32px;
   height: auto;
 }
@@ -2801,9 +2801,19 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-skill-row-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 24px);
+  align-items: center;
   justify-content: flex-end;
   gap: 2px;
+}
+
+.chat-hub-skill-action-slot {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .chat-hub-skill-row.is-uninstalled {
@@ -2843,7 +2853,7 @@ button.chat-hub-skill-name:disabled {
 
 .chat-hub-skill-source-header {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 5px 7px;
   min-height: 34px;
@@ -2901,10 +2911,72 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-skill-source-actions {
+  flex: 0 0 auto;
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 1px;
+}
+
+.chat-hub-skill-source-disclosure {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  height: 24px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-hub-skill-source-disclosure:hover,
+.chat-hub-skill-source-disclosure:focus-visible {
+  background: color-mix(in srgb, var(--hover) 80%, transparent);
+}
+
+.chat-hub-skill-source-disclosure .sl-icon {
+  flex: 0 0 14px;
+  color: var(--text-tertiary);
+}
+
+.chat-hub-skill-source-disclosure strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.chat-hub-skill-source-status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.chat-hub-skill-source-status-dot.is-ready {
+  background: var(--state-success, #58a86d);
+}
+
+.chat-hub-skill-source-status-dot.is-needs-refresh,
+.chat-hub-skill-source-status-dot.is-stale,
+.chat-hub-skill-source-status-dot.is-pending-removal {
+  background: var(--warning, #d8a13b);
+}
+
+.chat-hub-skill-source-status-dot.is-error {
+  background: var(--danger, #df6674);
 }
 
 .chat-hub-skill-source-error {

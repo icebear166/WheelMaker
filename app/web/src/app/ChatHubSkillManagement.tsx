@@ -350,7 +350,7 @@ export function ChatHubSkillScopeDetail({
             disabled={busy || sources.length === 0 || updateCount === 0}
             onClick={() => actions.onUpdateAll(target)}
           >
-            <Icon name={operationRunning ? 'loader' : 'refreshCw'} spin={operationRunning} />
+            <Icon name={operationRunning ? 'loader' : 'circleArrowUp'} spin={operationRunning} />
           </button>
         </div>
       </div>

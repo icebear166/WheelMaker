@@ -156,6 +156,8 @@ test('routes source refresh, update-all, and delete through ref-free source acti
   const {renderer, actions} = await renderScope();
   const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
 
+  expect(renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'}).findByType('svg').props['data-icon-name'])
+    .toBe('circleArrowUp');
   act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'}).props.onClick());
   expect(actions.onUpdateAll).toHaveBeenCalledWith(hubTarget);
   act(() => source.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.onClick());

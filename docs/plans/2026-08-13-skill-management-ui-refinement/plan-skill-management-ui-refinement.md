@@ -78,7 +78,7 @@
 - [x] **Step 5: Refactor and regression check**
   - Verify action target construction remains source-aware, pending/busy disables all writes, and Source status still blocks updates when stale.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
   - Stage only the Task 2 component/helper/test files and use `git-workflow checkpoint`.
 
 ### Task 3: Apply the new layout, status styling, and Hub update icon
@@ -92,26 +92,27 @@
 
 **Acceptance:** The Source header and Skill rows remain aligned in a narrow Hub surface, ordinary controls are icon-only with accessible labels, Source status dots and exceptional rows are visible, and both the Hub update button and its confirmation use `cloudDownload` while restart remains `power`.
 
-- [ ] **Step 1: Write failing layout/icon tests**
+- [x] **Step 1: Write failing layout/icon tests**
   - Assert the Source header is a non-wrapping single-line layout with a fixed action group, the Skill action group has two 24px columns, and the list uses the collapsed/expanded class contract.
   - Assert the Hub update action and `resolveConfirmIcon` return `cloudDownload`, while restart remains `power`.
   - Assert Source and Skill icon buttons have existing accessible-name/tooltip attributes and focus-visible rules remain present.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
   - Run: `npm test -- --runInBand app/__tests__/web-chat-ui.test.ts app/web/src/app/ChatHubMenu.test.tsx`
   - Expected: FAIL on the old refresh glyph, Source metadata layout, and three-slot action CSS.
 
-- [ ] **Step 3: Implement minimally**
+- [x] **Step 3: Implement minimally**
   - Update CSS selectors and responsive rules without changing unrelated Hub sections.
   - Change only the WheelMaker update glyph and matching confirmation icon; keep callback names and operation behavior unchanged.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
   - Run the same focused tests; expected PASS.
+  - The changed skill-row selector test and Hub menu suite pass; the broader `web-chat-ui.test.ts` file still contains an unrelated pre-existing failure for a missing `.floating-control-stack[data-drag-state='dragging']` selector.
 
-- [ ] **Step 5: Refactor and regression check**
+- [x] **Step 5: Refactor and regression check**
   - Run all Hub menu and skill-management Web tests; inspect `git diff --check`.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
   - Stage only Task 3 files and use `git-workflow checkpoint`.
 
 ### Task 4: Synchronize stable UI documentation and complete verification
@@ -129,7 +130,7 @@
 
 - [ ] **Step 2: Run focused verification**
   - Run: `npm test -- --runInBand app/web/src/app/ChatHubSkillManagement.test.tsx app/web/src/app/ChatHubMenu.test.tsx app/__tests__/web-skill-management-settings.test.ts app/__tests__/web-chat-ui.test.ts`
-  - Expected: PASS.
+  - Expected: PASS for the changed suites; the full `web-chat-ui.test.ts` run retains the unrelated `.floating-control-stack[data-drag-state='dragging']` baseline failure, while the changed skill-row selector test passes.
 
 - [ ] **Step 3: Run repository Web checks**
   - Run the configured typecheck and Web build command discovered from `package.json`.
