@@ -22004,9 +22004,7 @@ export function App() {
                   <span className="quick-file-search-name">
                     {renderQuickFileMatchText(name, quickFileQuery, `quick-file-name:${result.path}`)}
                   </span>
-                  <span className="quick-file-search-path">
-                    {renderQuickFileMatchText(result.path, quickFileQuery, `quick-file-path:${result.path}`)}
-                  </span>
+                  <span className="quick-file-search-path">{result.path}</span>
                 </button>
               );
             })
