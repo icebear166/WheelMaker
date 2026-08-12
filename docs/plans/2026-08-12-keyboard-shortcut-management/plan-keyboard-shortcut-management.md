@@ -23,25 +23,25 @@
 
 **Acceptance:** The wiki describes only the approved stable command model, platform/responsive boundary, persistence/conflict semantics, and PC Settings entry; the frontend-interaction index links the new page.
 
-- [ ] **Step 1: Read the confirmed wiki targets and directory index**
+- [x] **Step 1: Read the confirmed wiki targets and directory index**
 
 Read the full current `app-menu.md` and `frontend-interaction.md` after the already-completed first-line summary scan. Use the approved spec as the source; do not copy execution checklists into wiki.
 
-- [ ] **Step 2: Write the stable shortcut page**
+- [x] **Step 2: Write the stable shortcut page**
 
 Create `keyboard-shortcuts.md` with a first-line summary, title, the eight command defaults, logical `Primary` behavior, wide-PC/modal/input boundaries, override/null/default semantics, collision and unavailable-action behavior, and the relationship between the registry, router, editor, and dynamic hints.
 
-- [ ] **Step 3: Update Settings and the directory index**
+- [x] **Step 3: Update Settings and the directory index**
 
 Update `app-menu.md` so PC Settings has Application → Keyboard Shortcuts while mobile retains the existing four groups and no keyboard entry. Add the new page to `frontend-interaction.md` as required by the wiki index contract.
 
-- [ ] **Step 4: Verify the wiki contract**
+- [x] **Step 4: Verify the wiki contract**
 
 Run: `git diff --check -- docs/wiki/frontend-interaction`
 
 Expected: PASS; each changed wiki file starts with `> 摘要：`, the new page is indexed, and no plan/checklist language is present.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint**
 
 Invoke `git-workflow` in checkpoint mode for the three wiki files. Record the resulting commit hash and subject in the execution log.
 

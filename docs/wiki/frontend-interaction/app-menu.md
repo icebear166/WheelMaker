@@ -31,7 +31,7 @@ APK/EXE 每次打开菜单都执行一次无缓存更新检查。Update 右侧�
 
 ## Settings 边界
 
-Settings 首页固定为四个分组：`Chat`（对话行为 + 语音输入/TTS）、`Code`（代码展示）、`State`（连接状态、设备、数据库、本地缓存与登出）、`Debug`（诊断开关与日志）。子详情页只有 Connection Status、Devices、Database、Logs 四个，不再有 peer 页与底部 shortcut bar。
+PC 宽屏 Settings 首页在现有内容之前增加 `Application` 分组，其中 `Keyboard Shortcuts` 打开应用内快捷键管理详情；该入口与受管理快捷键在窄屏/移动布局均不出现。PC 后续分组仍为 `Chat`（对话行为 + 语音输入/TTS）、`Code`（代码展示）、`State`（连接状态、设备、数据库、本地缓存与登出）、`Debug`（诊断开关与日志）。移动端继续只有这四个分组。除 PC 专属 Keyboard Shortcuts 外，子详情页仍只有 Status、Devices、Database、Logs，不再有 peer 页与底部 shortcut bar。
 
 Port Relay 是一级菜单入口与独立页面，不出现在 Settings 内。
 
