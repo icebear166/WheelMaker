@@ -118,6 +118,7 @@ import type {
   RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
+  RegistrySkillSourcePayload,
   RegistryTerminalCreateResponse,
   RegistryTerminalGetResponse,
   RegistryTerminalInputEvent,
@@ -2870,6 +2871,45 @@ export class RegistryRepository {
     return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
       ok: false,
       hubId,
+      errorSummary: 'missing hub state response',
+    };
+  }
+
+  async previewSkillSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillSourcePreview('previewSource', payload);
+  }
+
+  async previewSkillInstall(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillSourcePreview('previewInstall', payload);
+  }
+
+  async previewSkillUpdate(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillSourcePreview('previewUpdate', payload);
+  }
+
+  async previewSkillDeleteSource(payload: RegistrySkillSourcePayload): Promise<RegistrySkillCommandResponse> {
+    return this.runSkillSourcePreview('previewDeleteSource', payload);
+  }
+
+  async applySkillPreview(hubId: string, previewId: string): Promise<RegistrySkillCommandResponse> {
+    const response = await this.runHubStateAction(hubId, 'skills', 'applyPreview', {previewId});
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
+  }
+
+  private async runSkillSourcePreview(
+    action: 'previewSource' | 'previewInstall' | 'previewUpdate' | 'previewDeleteSource',
+    payload: RegistrySkillSourcePayload,
+  ): Promise<RegistrySkillCommandResponse> {
+    const {hubId, ...params} = payload;
+    const response = await this.runHubStateAction(hubId, 'skills', action, params);
+    return hubStateActionResult<RegistrySkillCommandResponse>(response) ?? {
+      ok: false,
+      hubId,
+      source: payload.source,
       errorSummary: 'missing hub state response',
     };
   }

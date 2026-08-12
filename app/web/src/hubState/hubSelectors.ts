@@ -4,6 +4,7 @@ import type {
   RegistryHubState,
   RegistryNpmCommandResponse,
   RegistrySkillOperation,
+  RegistrySkillSourceScopeSnapshot,
   RegistryWheelMakerUpdateResponse,
 } from '../registry/registryTypes';
 import type {HubStoreSnapshot} from './hubStore';
@@ -21,6 +22,8 @@ export interface RegistrySkillsStateSnapshot {
   hubInventory?: Record<string, RegistrySkillInventoryItem>;
   projectLocalInventories?: Record<string, Record<string, RegistrySkillInventoryItem>>;
   effectiveSkills?: Record<string, Record<string, RegistrySkillInventoryItem[]>>;
+  hubSources?: RegistrySkillSourceScopeSnapshot;
+  projectSources?: Record<string, RegistrySkillSourceScopeSnapshot>;
   operation?: RegistrySkillOperation | null;
 }
 

@@ -2,12 +2,15 @@ import {
   deriveSkillHubIds,
   isSkillActionPendingForHub,
   parseSkillSourceInput,
+  readSkillShowUninstalled,
+  shouldShowSkillCatalogRow,
   projectSkillTotal,
   sameSkillScopeTarget,
   skillActionPendingKey,
   skillScopeLabel,
   skillScopeSelectionKey,
   sortSkillProjects,
+  writeSkillShowUninstalled,
 } from '../web/src/settings/skillManagementView';
 
 describe('skill management view helpers', () => {
@@ -76,5 +79,42 @@ describe('skill management view helpers', () => {
       source: 'mattpocock/skills',
       skillNames: ['tdd', 'diagnose'],
     });
+  });
+
+  test('normalizes direct GitHub skill URLs and source refs without a selection mode', () => {
+    expect(parseSkillSourceInput('https://github.com/example/catalog/tree/release/skills/diagnose')).toEqual({
+      source: 'https://github.com/example/catalog.git',
+      ref: 'release',
+      skillNames: ['diagnose'],
+    });
+    expect(parseSkillSourceInput('npx skills add example/catalog#next --skill tdd')).toEqual({
+      source: 'example/catalog',
+      ref: 'next',
+      skillNames: ['tdd'],
+    });
+  });
+
+  test('hides only ordinary uninstalled rows by default', () => {
+    expect(shouldShowSkillCatalogRow({status: 'uninstalled'}, false)).toBe(false);
+    for (const status of ['up_to_date', 'update_available', 'removed_upstream', 'conflict', 'error', 'pending_removal']) {
+      expect(shouldShowSkillCatalogRow({status}, false)).toBe(true);
+    }
+    expect(shouldShowSkillCatalogRow({status: 'uninstalled'}, true)).toBe(true);
+  });
+
+  test('persists show-uninstalled independently per stable scope key', () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const hub = {hubId: 'hub:a', scope: 'hub' as const};
+    const project = {hubId: 'hub:a', scope: 'project' as const, projectName: 'Wheel Maker'};
+
+    expect(readSkillShowUninstalled(hub, storage)).toBe(false);
+    expect(readSkillShowUninstalled(project, storage)).toBe(false);
+    writeSkillShowUninstalled(project, true, storage);
+    expect(readSkillShowUninstalled(project, storage)).toBe(true);
+    expect(readSkillShowUninstalled(hub, storage)).toBe(false);
   });
 });

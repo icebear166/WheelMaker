@@ -952,6 +952,8 @@ function deriveHubOperationalViews(snapshot: HubStoreSnapshot): {
             projectName: projectId.includes(':') ? projectId.slice(projectId.indexOf(':') + 1) : projectId,
             skills: toItems(inventory),
           })),
+          hubSources: data.hubSources,
+          projectSources: data.projectSources,
           operation: data.operation ?? null,
         },
       };

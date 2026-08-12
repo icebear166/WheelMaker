@@ -1,5 +1,6 @@
 import type {
   RegistryHub,
+  RegistrySkillCatalogItem,
   RegistrySkillProjectSnapshot,
   RegistrySkillScope,
 } from '../registry/registryTypes';
@@ -36,6 +37,7 @@ export type SkillPendingKeyInput = SkillScopeTarget & {
 export interface ParsedSkillSourceInput {
   source: string;
   skillNames: string[];
+  ref?: string;
 }
 
 export function deriveSkillHubIds(hubs: RegistryHub[]): string[] {
@@ -53,10 +55,29 @@ export function parseSkillSourceInput(input: string): ParsedSkillSourceInput {
   }
 
   const sourceIndex = findSkillSourceTokenIndex(tokens);
-  const source = sourceIndex >= 0 ? tokens[sourceIndex] : '';
-  return {
+  const sourceToken = sourceIndex >= 0 ? tokens[sourceIndex] : '';
+  const direct = parseDirectGitHubSkillURL(sourceToken);
+  if (direct) return direct;
+  const hashIndex = sourceToken.lastIndexOf('#');
+  const source = hashIndex > 0 ? sourceToken.slice(0, hashIndex) : sourceToken;
+  const ref = hashIndex > 0 ? sourceToken.slice(hashIndex + 1).trim() : '';
+  const parsed: ParsedSkillSourceInput = {
     source,
     skillNames: extractSkillNamesFromTokens(tokens),
+  };
+  if (ref) parsed.ref = ref;
+  return parsed;
+}
+
+function parseDirectGitHubSkillURL(source: string): ParsedSkillSourceInput | null {
+  const match = /^https:\/\/github\.com\/([^/]+)\/([^/#]+)\/tree\/([^/]+)\/(.+)$/i.exec(source);
+  if (!match) return null;
+  const [, owner, repository, ref, skillPath] = match;
+  const skillName = skillPath.split('/').filter(Boolean).at(-1) ?? '';
+  return {
+    source: `https://github.com/${owner}/${repository.replace(/\.git$/i, '')}.git`,
+    ref,
+    skillNames: skillName ? [skillName] : [],
   };
 }
 
@@ -188,4 +209,46 @@ export function isSkillActionPendingForHub(pendingKey: string, hubId: string): b
   const normalizedHubId = (hubId || '').trim();
   if (!pendingKey || !normalizedHubId) return false;
   return pendingKey.split(':', 1)[0] === normalizedHubId;
+}
+
+type SkillPreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+function skillPreferenceStorage(storage?: SkillPreferenceStorage): SkillPreferenceStorage | null {
+  if (storage) return storage;
+  if (typeof window === 'undefined') return null;
+  return window.localStorage;
+}
+
+export function skillShowUninstalledPreferenceKey(input: SkillScopeTarget): string {
+  return `wheelmaker.skills.showUninstalled.v1/${encodeURIComponent(input.hubId)}/${input.scope}/${encodeURIComponent(input.projectName || '')}`;
+}
+
+export function readSkillShowUninstalled(
+  input: SkillScopeTarget,
+  storage?: SkillPreferenceStorage,
+): boolean {
+  try {
+    return skillPreferenceStorage(storage)?.getItem(skillShowUninstalledPreferenceKey(input)) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function writeSkillShowUninstalled(
+  input: SkillScopeTarget,
+  value: boolean,
+  storage?: SkillPreferenceStorage,
+): void {
+  try {
+    skillPreferenceStorage(storage)?.setItem(skillShowUninstalledPreferenceKey(input), value ? 'true' : 'false');
+  } catch {
+    // A blocked preference store must not block Skills management.
+  }
+}
+
+export function shouldShowSkillCatalogRow(
+  row: Pick<RegistrySkillCatalogItem, 'status'>,
+  showUninstalled: boolean,
+): boolean {
+  return showUninstalled || row.status !== 'uninstalled';
 }

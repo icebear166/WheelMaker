@@ -1099,6 +1099,80 @@ export interface RegistrySkillSourceCandidate {
   categoryKey: string;
 }
 
+export type RegistrySkillCatalogStatus =
+  | 'uninstalled'
+  | 'up_to_date'
+  | 'update_available'
+  | 'removed_upstream'
+  | 'conflict'
+  | 'error'
+  | 'pending_removal'
+  | 'unmanaged';
+
+export type RegistrySkillSourceStatus = 'ready' | 'needs_refresh' | 'stale' | 'pending_removal';
+
+export interface RegistrySkillCatalogItem {
+  name: string;
+  skillPath?: string;
+  remoteContentSha256?: string;
+  localContentSha256?: string;
+  status: RegistrySkillCatalogStatus | string;
+  installed: boolean;
+  managed: boolean;
+  conflict: boolean;
+  error?: string;
+  canInstall: boolean;
+  canUpdate: boolean;
+  canUninstall: boolean;
+}
+
+export interface RegistrySkillSourceSnapshot {
+  source: string;
+  sourceKey: string;
+  ref: string;
+  resolvedCommit?: string;
+  refreshedAt?: string;
+  status: RegistrySkillSourceStatus | string;
+  error?: string;
+  installedCount: number;
+  updateCount: number;
+  skills: RegistrySkillCatalogItem[];
+}
+
+export interface RegistrySkillSourceScopeSnapshot {
+  sources: RegistrySkillSourceSnapshot[];
+  unmanagedSkills: RegistrySkillCatalogItem[];
+  needsResolutionSkills?: string[];
+}
+
+export interface RegistrySkillSourceListItem {
+  name: string;
+  skillPath: string;
+  contentSha256: string;
+}
+
+export interface RegistrySkillSourcePreview {
+  id: string;
+  kind: 'previewSource' | 'previewInstall' | 'previewUpdate' | 'previewDeleteSource' | string;
+  scope: RegistrySkillScope;
+  projectName?: string;
+  source: string;
+  sourceKey: string;
+  ref: string;
+  resolvedCommit: string;
+  skillList: RegistrySkillSourceListItem[];
+  skills?: string[];
+  overwritesLocal?: boolean;
+  createdAt: string;
+}
+
+export interface RegistrySkillOperationItemResult {
+  skill: string;
+  action: string;
+  status: 'succeeded' | 'failed' | 'skipped' | 'conflict' | string;
+  errorSummary?: string;
+}
+
 export interface RegistrySkillOperation {
   running: boolean;
   action: 'install' | 'uninstall' | 'update' | string;
@@ -1112,6 +1186,7 @@ export interface RegistrySkillOperation {
   exitCode: number | null;
   errorSummary?: string;
   message?: string;
+  results?: RegistrySkillOperationItemResult[];
 }
 
 export interface RegistrySkillCommandResponse {
@@ -1130,6 +1205,9 @@ export interface RegistrySkillCommandResponse {
   operation?: RegistrySkillOperation | null;
   message?: string;
   errorSummary?: string;
+  preview?: RegistrySkillSourcePreview;
+  hubSources?: RegistrySkillSourceScopeSnapshot;
+  projectSources?: Record<string, RegistrySkillSourceScopeSnapshot>;
 }
 
 export interface RegistrySkillInstallPayload {
@@ -1144,6 +1222,15 @@ export interface RegistrySkillScopePayload {
   hubId: string;
   scope: RegistrySkillScope;
   projectName?: string;
+  skills?: string[];
+}
+
+export interface RegistrySkillSourcePayload {
+  hubId: string;
+  scope: RegistrySkillScope;
+  projectName?: string;
+  source: string;
+  ref?: string;
   skills?: string[];
 }
 

@@ -165,4 +165,47 @@ describe('skill management registry service', () => {
       timeoutMs: 60000,
     });
   });
+
+  test('routes source previews and apply through the existing Skills HubState action', async () => {
+    const client = {
+      request: jest.fn().mockResolvedValue({
+        type: 'response',
+        payload: {result: {ok: true, hubId: 'hub-a', preview: {id: 'preview-1'}}},
+      }),
+    } as unknown as RegistryClient;
+    const repository = new RegistryRepository(client);
+    const target = {
+      hubId: 'hub-a', scope: 'project' as const, projectName: 'WheelMaker',
+      source: 'https://github.com/example/catalog.git', ref: 'main',
+    };
+
+    await repository.previewSkillSource(target);
+    await repository.previewSkillInstall({...target, skills: ['alpha']});
+    await repository.previewSkillUpdate(target);
+    await repository.previewSkillDeleteSource(target);
+    await repository.applySkillPreview('hub-a', 'preview-1');
+
+    const params = {
+      scope: 'project', projectName: 'WheelMaker',
+      source: 'https://github.com/example/catalog.git', ref: 'main',
+    };
+
+    for (const [index, action] of ['previewSource', 'previewInstall', 'previewUpdate', 'previewDeleteSource'].entries()) {
+      expect(client.request).toHaveBeenNthCalledWith(index + 1, {
+        method: RegistryMethods.HubStateAction,
+        hubId: 'hub-a',
+        payload: {
+          section: 'skills', action,
+          params: index === 1 ? {...params, skills: ['alpha']} : params,
+        },
+        timeoutMs: 60000,
+      });
+    }
+    expect(client.request).toHaveBeenNthCalledWith(5, {
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'skills', action: 'applyPreview', params: {previewId: 'preview-1'}},
+      timeoutMs: 60000,
+    });
+  });
 });
