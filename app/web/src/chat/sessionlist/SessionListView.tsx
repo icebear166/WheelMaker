@@ -1,8 +1,9 @@
 import React, {type ReactNode} from 'react';
 import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
-import {SessionRow, DraftSessionRow, type SessionRowGestureHandlers} from './SessionRow';
+import {SessionRow, DraftSessionRow} from './SessionRow';
 import {ProjectSection} from './ProjectSection';
 import {RecentSessionsSection, type RecentGroup} from './RecentSessionsSection';
+import {useContextMenuTargetGesture} from '../../common/useContextMenuGesture';
 
 export type SessionListMode = 'normal' | 'archived' | 'search';
 
@@ -66,11 +67,12 @@ export type SessionListViewProps = {
   onTogglePinnedProject: (projectId: string) => void;
   onToggleOlder: (projectId: string) => void;
   onOpenProjectMenu: (projectId: string, kind: 'new' | 'resume', anchor: HTMLElement | null) => void;
-  onOpenSessionContextMenu: (projectId: string, sessionId: string, event: React.MouseEvent<HTMLButtonElement>) => void;
-  sessionGestureHandlers: (projectId: string, sessionId: string) => Omit<SessionRowGestureHandlers, 'onContextMenu'>;
-  consumeSessionLongPressClick: (projectId: string, sessionId: string, event: React.MouseEvent<HTMLButtonElement>) => boolean;
-  projectGestureHandlers: (projectId: string) => SessionRowGestureHandlers;
-  consumeProjectLongPressClick: (projectId: string, event: React.MouseEvent<HTMLButtonElement>) => boolean;
+  onOpenSessionContextMenu: (
+    projectId: string,
+    sessionId: string,
+    position: {x: number; y: number},
+  ) => void;
+  onOpenProjectContextMenu: (projectId: string, position: {x: number; y: number}) => void;
   // slots rendered outside the normal project list
   emptyProjectsHint: ReactNode;
   hiddenProjectRows: ReactNode;
@@ -79,6 +81,15 @@ export type SessionListViewProps = {
 };
 
 export function SessionListView(props: SessionListViewProps) {
+  const bindSessionContextMenu = useContextMenuTargetGesture<{
+    projectId: string;
+    sessionId: string;
+  }>((target, position) => {
+    props.onOpenSessionContextMenu(target.projectId, target.sessionId, position);
+  });
+  const bindProjectContextMenu = useContextMenuTargetGesture<string>((projectId, position) => {
+    props.onOpenProjectContextMenu(projectId, position);
+  });
   const {
     mobile,
     mode,
@@ -119,16 +130,8 @@ export function SessionListView(props: SessionListViewProps) {
         markColor={session.markColor}
         recent={recent}
         leadingState={props.renderLeadingState(session, projectId)}
-        gestureHandlers={{
-          ...props.sessionGestureHandlers(projectId, session.sessionId),
-          onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event),
-        }}
-        onClick={event => {
-          if (props.consumeSessionLongPressClick(projectId, session.sessionId, event)) {
-            return;
-          }
-          props.onSelectSession(projectId, session.sessionId, event);
-        }}
+        gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}
+        onClick={event => props.onSelectSession(projectId, session.sessionId, event)}
         onUnpin={() => props.onUnpinSession(projectId, session.sessionId)}
         unpinLabel={`Unpin session ${title}`}
       />
@@ -165,13 +168,8 @@ export function SessionListView(props: SessionListViewProps) {
             collapsed={collapsed}
             pinned={props.pinnedProjectIds.includes(projectId)}
             active={projectId === props.activeProjectId}
-            projectGestureHandlers={props.projectGestureHandlers(projectId)}
-            onToggleCollapsed={event => {
-              if (props.consumeProjectLongPressClick(projectId, event)) {
-                return;
-              }
-              props.onToggleProjectCollapsed(projectId);
-            }}
+            projectGestureHandlers={bindProjectContextMenu(projectId)}
+            onToggleCollapsed={() => props.onToggleProjectCollapsed(projectId)}
             onNew={event => {
               event.stopPropagation();
               props.onOpenProjectMenu(projectId, 'new', event.currentTarget);

@@ -2,6 +2,24 @@ import React from 'react';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {SessionListView, type SessionListViewProps} from './SessionListView';
 
+function pointerEvent(values: Record<string, unknown>) {
+  return {
+    pointerType: 'touch',
+    button: 0,
+    preventDefault: jest.fn(),
+    stopPropagation: jest.fn(),
+    ...values,
+  } as never;
+}
+
+function contextMenuEvent(values: Record<string, unknown>) {
+  return {
+    preventDefault: jest.fn(),
+    stopPropagation: jest.fn(),
+    ...values,
+  } as never;
+}
+
 function makeProps(overrides?: Partial<SessionListViewProps>): SessionListViewProps {
   return {
     mobile: false,
@@ -45,21 +63,7 @@ function makeProps(overrides?: Partial<SessionListViewProps>): SessionListViewPr
     onToggleOlder: jest.fn(),
     onOpenProjectMenu: jest.fn(),
     onOpenSessionContextMenu: jest.fn(),
-    sessionGestureHandlers: () => ({
-      onPointerDown: () => undefined,
-      onPointerUp: () => undefined,
-      onPointerCancel: () => undefined,
-      onPointerLeave: () => undefined,
-    }),
-    consumeSessionLongPressClick: () => false,
-    projectGestureHandlers: () => ({
-      onPointerDown: () => undefined,
-      onPointerUp: () => undefined,
-      onPointerCancel: () => undefined,
-      onPointerLeave: () => undefined,
-      onContextMenu: () => undefined,
-    }),
-    consumeProjectLongPressClick: () => false,
+    onOpenProjectContextMenu: jest.fn(),
     emptyProjectsHint: null,
     hiddenProjectRows: null,
     archivedRows: null,
@@ -69,6 +73,14 @@ function makeProps(overrides?: Partial<SessionListViewProps>): SessionListViewPr
 }
 
 describe('SessionListView', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('renders project sections and empty hint for a project without sessions', async () => {
     let tree: ReactTestRenderer | undefined;
     await act(async () => {
@@ -140,5 +152,83 @@ describe('SessionListView', () => {
     expect(
       tree!.root.findAllByProps({className: 'wide-session-mark session-mark-green'}),
     ).toHaveLength(2);
+  });
+
+  it('opens normal and Recent Session menus through the shared position gesture', async () => {
+    const onOpenSessionContextMenu = jest.fn();
+    const session = {sessionId: 's1', title: 'Fix bug', updatedAt: '2026-07-24T00:00:00Z'};
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = create(
+        <SessionListView
+          {...makeProps({
+            onOpenSessionContextMenu,
+            recentGroups: [{
+              projectId: 'p1',
+              projectName: 'WheelMaker',
+              hubLabel: 'local',
+              hubVariantClass: 'wide-project-hub variant-0',
+              hubAccentStyle: {'--hub-accent': '#58a6ff'} as React.CSSProperties,
+              sessions: [session],
+            }],
+          })}
+        />,
+      );
+    });
+    const rows = tree!.root.findAllByType('button').filter(button =>
+      typeof button.props.className === 'string'
+      && button.props.className.includes('wide-session-row')
+      && !button.props.className.includes('draft-session-row'),
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.every(row => row.props['data-context-menu-target'] === 'true')).toBe(true);
+
+    await act(async () => {
+      rows[0].props.onContextMenu(contextMenuEvent({clientX: 11, clientY: 12}));
+    });
+    expect(onOpenSessionContextMenu).toHaveBeenCalledWith('p1', 's1', {x: 11, y: 12});
+
+    await act(async () => {
+      rows[1].props.onPointerDown(pointerEvent({pointerId: 7, clientX: 21, clientY: 22}));
+      jest.advanceTimersByTime(450);
+    });
+    expect(onOpenSessionContextMenu).toHaveBeenLastCalledWith('p1', 's1', {x: 21, y: 22});
+  });
+
+  it('opens Project title menus through the shared gesture and excludes Draft rows', async () => {
+    const onOpenProjectContextMenu = jest.fn();
+    let tree: ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = create(
+        <SessionListView
+          {...makeProps({
+            onOpenProjectContextMenu,
+            draftSessionsByProjectId: {
+              p1: [{draftId: 'd1', title: 'Sending', status: 'sendingFirstPrompt'}],
+            },
+          })}
+        />,
+      );
+    });
+    const project = tree!.root.findAllByType('button').find(button =>
+      button.props.className === 'wide-project-toggle',
+    )!;
+    expect(project.props['data-context-menu-target']).toBe('true');
+    await act(async () => {
+      project.props.onContextMenu(contextMenuEvent({clientX: 31, clientY: 32}));
+    });
+    expect(onOpenProjectContextMenu).toHaveBeenCalledWith('p1', {x: 31, y: 32});
+
+    await act(async () => {
+      project.props.onPointerDown(pointerEvent({pointerId: 8, clientX: 41, clientY: 42}));
+      jest.advanceTimersByTime(450);
+    });
+    expect(onOpenProjectContextMenu).toHaveBeenLastCalledWith('p1', {x: 41, y: 42});
+
+    const draft = tree!.root.findAllByType('button').find(button =>
+      typeof button.props.className === 'string'
+      && button.props.className.includes('draft-session-row'),
+    )!;
+    expect(draft.props['data-context-menu-target']).toBeUndefined();
   });
 });

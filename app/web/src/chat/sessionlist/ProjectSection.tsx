@@ -1,6 +1,7 @@
 import React, {type ReactNode} from 'react';
 import {SessionIcon} from './SessionIcon';
 import type {SessionRowGestureHandlers} from './SessionRow';
+import {useContextMenuActionGesture} from '../../common/useContextMenuGesture';
 
 export type ProjectSectionProps = {
   name: string;
@@ -37,6 +38,7 @@ export function ProjectSection({
   onRetryError,
   children,
 }: ProjectSectionProps) {
+  const projectActionGesture = useContextMenuActionGesture();
   return (
     <div
       className={`wide-project-section${active ? ' active' : ''}${pinned ? ' pinned' : ''}${collapsed ? ' collapsed' : ''}`}
@@ -75,7 +77,7 @@ export function ProjectSection({
             className="wide-project-action-btn sl-action-secondary"
             data-tooltip="Resume session"
             aria-label={`Resume session in ${name}`}
-            onPointerDown={event => event.stopPropagation()}
+            {...projectActionGesture}
             onClick={onResume}
           >
             <SessionIcon name="import" />
@@ -86,7 +88,7 @@ export function ProjectSection({
             data-tooltip={pinned ? 'Unpin project' : 'Pin project to top'}
             aria-label={pinned ? `Unpin project ${name}` : `Pin project ${name}`}
             aria-pressed={pinned}
-            onPointerDown={event => event.stopPropagation()}
+            {...projectActionGesture}
             onClick={event => {
               event.stopPropagation();
               onTogglePin();
@@ -99,7 +101,7 @@ export function ProjectSection({
             className="wide-project-action-btn sl-action-primary"
             data-tooltip="New session"
             aria-label={`New session in ${name}`}
-            onPointerDown={event => event.stopPropagation()}
+            {...projectActionGesture}
             onClick={onNew}
           >
             <SessionIcon name="plus" />

@@ -3,6 +3,7 @@ import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {ProjectSection} from './ProjectSection';
 
 const gesture = {
+  'data-context-menu-target': 'true' as const,
   onPointerDown: () => undefined,
   onPointerUp: () => undefined,
   onPointerCancel: () => undefined,
@@ -63,5 +64,44 @@ describe('ProjectSection', () => {
     const pinned = await renderSection({pinned: true});
     expect(pinned.tree.root.findAll(node => node.type === 'svg' && typeof node.props.className === 'string' && node.props.className.includes('wide-project-pin-badge'))).toHaveLength(1);
     expect(pinned.tree.root.findByProps({'data-tooltip': 'Unpin project'}).props.className).toContain('active');
+  });
+
+  it('lets project actions short click but suppresses their held click', async () => {
+    jest.useFakeTimers();
+    const {tree, props} = await renderSection();
+    const actionButtons = [
+      tree.root.findByProps({'data-tooltip': 'Resume session'}),
+      tree.root.findByProps({'data-tooltip': 'Pin project to top'}),
+      tree.root.findByProps({'data-tooltip': 'New session'}),
+    ];
+    expect(actionButtons.every(button => button.props['data-context-menu-action'] === 'true')).toBe(true);
+
+    await act(async () => {
+      actionButtons[0].props.onClick({stopPropagation: jest.fn()});
+      actionButtons[1].props.onClick({stopPropagation: jest.fn()});
+      actionButtons[2].props.onClick({stopPropagation: jest.fn()});
+    });
+    expect(props.onResume).toHaveBeenCalledTimes(1);
+    expect(props.onTogglePin).toHaveBeenCalledTimes(1);
+    expect(props.onNew).toHaveBeenCalledTimes(1);
+
+    for (const [index, button] of actionButtons.entries()) {
+      const pointerDown = {
+        pointerType: 'touch', button: 0, pointerId: index + 10,
+        clientX: 2, clientY: 3, stopPropagation: jest.fn(),
+      };
+      await act(async () => {
+        button.props.onPointerDown(pointerDown);
+        jest.advanceTimersByTime(450);
+      });
+      const heldClick = {preventDefault: jest.fn(), stopPropagation: jest.fn()};
+      await act(async () => button.props.onClickCapture(heldClick));
+      expect(heldClick.preventDefault).toHaveBeenCalledTimes(1);
+      expect(pointerDown.stopPropagation).toHaveBeenCalledTimes(1);
+    }
+    expect(props.onResume).toHaveBeenCalledTimes(1);
+    expect(props.onTogglePin).toHaveBeenCalledTimes(1);
+    expect(props.onNew).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 });

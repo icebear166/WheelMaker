@@ -3,6 +3,7 @@ import {act, create, type ReactTestInstance, type ReactTestRenderer} from 'react
 import {SessionRow} from './SessionRow';
 
 const gesture = {
+  'data-context-menu-target': 'true' as const,
   onPointerDown: () => undefined,
   onPointerUp: () => undefined,
   onPointerCancel: () => undefined,
@@ -60,6 +61,27 @@ describe('SessionRow', () => {
     });
     expect(onUnpin).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('suppresses the Unpin action after a touch hold', async () => {
+    jest.useFakeTimers();
+    const {tree, onUnpin} = await renderRow({pinned: true});
+    const pinBtn = tree().root.findByProps({className: 'wide-session-pin-btn'});
+    const pointerDown = {pointerType: 'touch', button: 0, pointerId: 3, clientX: 4, clientY: 5, stopPropagation: jest.fn()};
+    await act(async () => {
+      pinBtn.props.onPointerDown(pointerDown);
+      jest.advanceTimersByTime(450);
+    });
+    const heldClick = {preventDefault: jest.fn(), stopPropagation: jest.fn()};
+    await act(async () => {
+      pinBtn.props.onClickCapture(heldClick);
+    });
+    expect(pointerDown.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(heldClick.preventDefault).toHaveBeenCalledTimes(1);
+    expect(heldClick.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onUnpin).not.toHaveBeenCalled();
+    expect(pinBtn.props['data-context-menu-action']).toBe('true');
+    jest.useRealTimers();
   });
 
   it('marks selected rows', async () => {

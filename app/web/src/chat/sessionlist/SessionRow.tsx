@@ -3,14 +3,12 @@ import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
 import {AgentTag} from '../AgentTag';
 import {SessionIcon} from './SessionIcon';
 import {sessionMarkColorClass} from './sessionMark';
+import {
+  useContextMenuActionGesture,
+  type ContextMenuGestureHandlers,
+} from '../../common/useContextMenuGesture';
 
-export type SessionRowGestureHandlers = {
-  onPointerDown: React.PointerEventHandler<HTMLButtonElement>;
-  onPointerUp: React.PointerEventHandler<HTMLButtonElement>;
-  onPointerCancel: React.PointerEventHandler<HTMLButtonElement>;
-  onPointerLeave: React.PointerEventHandler<HTMLButtonElement>;
-  onContextMenu: React.MouseEventHandler<HTMLButtonElement>;
-};
+export type SessionRowGestureHandlers = ContextMenuGestureHandlers;
 
 export type SessionRowProps = {
   title: string;
@@ -50,6 +48,7 @@ export function SessionRow({
   onUnpin,
   unpinLabel,
 }: SessionRowProps) {
+  const unpinGesture = useContextMenuActionGesture();
   return (
     <div className={`project-session-row-wrap${recent ? ' recent-session-row-wrap' : ''}${pinned ? ' has-pin-action' : ''}`}>
       {leadingState}
@@ -81,7 +80,7 @@ export function SessionRow({
           aria-label={unpinLabel ?? `Unpin session ${title}`}
           aria-pressed={true}
           disabled={pinning}
-          onPointerDown={event => event.stopPropagation()}
+          {...unpinGesture}
           onClick={event => {
             event.preventDefault();
             event.stopPropagation();

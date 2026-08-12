@@ -814,20 +814,12 @@ type ChatAttachment = {
 };
 type WideProjectActionMenuState = {
   projectId: string;
-  kind: 'new' | 'resume';
-  phase: 'agents' | 'sessions';
+  kind: 'new' | 'resume' | 'actions';
+  phase: 'agents' | 'sessions' | 'actions';
   agentType: string;
   popover?: WideProjectActionPopoverPlacement | null;
 };
-type MobileProjectActionMenuState =
-  | WideProjectActionMenuState
-  | {
-      projectId: string;
-      kind: 'actions';
-      phase: 'actions';
-      agentType: '';
-      popover: null;
-    };
+type MobileProjectActionMenuState = WideProjectActionMenuState;
 type ProjectSessionActionMenuState = {
   projectId: string;
   sessionId: string;
@@ -1221,8 +1213,6 @@ function estimateSessionReadPayloadBytes(result: RegistrySessionReadResponse): n
 }
 
 const fileMemoryCacheKey = (activeProjectId: string, path: string) => `${activeProjectId}\n${path}`;
-const PROJECT_PIN_LONG_PRESS_MS = 450;
-const PROJECT_SESSION_LONG_PRESS_MS = 450;
 const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.wide-project-action-popover',
   '.project-session-action-menu',
@@ -2996,10 +2986,6 @@ export function App() {
   const floatingControlSideRef = useRef(floatingControlSide);
   const floatingSidePulseTimerRef = useRef<number | null>(null);
   const desktopSidebarResizeRef = useRef<DesktopSidebarResizeState | null>(null);
-  const projectPinLongPressTimerRef = useRef<number | null>(null);
-  const projectPinLongPressTargetRef = useRef('');
-  const projectSessionLongPressTimerRef = useRef<number | null>(null);
-  const projectSessionLongPressTargetRef = useRef('');
   const layoutModeRef = useRef(layoutMode);
   const setFloatingControlYRatio = useCallback(
     (next: WorkspaceUiStateValue<number>) => {
@@ -8082,12 +8068,6 @@ export function App() {
     },
     [closeSidebarTransientMenus, setCollapsedProjectIds],
   );
-  const clearProjectPinLongPress = useCallback(() => {
-    if (projectPinLongPressTimerRef.current !== null) {
-      window.clearTimeout(projectPinLongPressTimerRef.current);
-      projectPinLongPressTimerRef.current = null;
-    }
-  }, []);
   const togglePinnedProject = useCallback(
     (targetProjectId: string) => {
       setPinnedProjectIds(current => togglePinnedProjectId(current, targetProjectId));
@@ -8126,141 +8106,8 @@ export function App() {
       };
     });
   }, [closeSidebarTransientMenus, resetProjectResumeState]);
-  const startProjectPinLongPress = useCallback(
-    (targetProjectId: string, event: React.PointerEvent<HTMLButtonElement>) => {
-      if (isWide) {
-        return;
-      }
-      if (event.pointerType === 'mouse' && event.button !== 0) {
-        return;
-      }
-      clearProjectPinLongPress();
-      projectPinLongPressTargetRef.current = '';
-      const target = event.currentTarget;
-      if (target.setPointerCapture) {
-        try {
-          target.setPointerCapture(event.pointerId);
-        } catch {
-          // Pointer capture is best-effort; the timer still covers normal press flows.
-        }
-      }
-      projectPinLongPressTimerRef.current = window.setTimeout(() => {
-        projectPinLongPressTimerRef.current = null;
-        projectPinLongPressTargetRef.current = targetProjectId;
-        triggerMobileHaptic();
-        openMobileProjectActionMenu(targetProjectId, 'actions');
-      }, PROJECT_PIN_LONG_PRESS_MS);
-    },
-    [clearProjectPinLongPress, isWide, openMobileProjectActionMenu],
-  );
-  const finishProjectPinLongPress = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      clearProjectPinLongPress();
-      const target = event.currentTarget;
-      if (target.hasPointerCapture?.(event.pointerId)) {
-        try {
-          target.releasePointerCapture(event.pointerId);
-        } catch {
-          // ignore
-        }
-      }
-    },
-    [clearProjectPinLongPress],
-  );
-  const consumeProjectPinLongPressClick = useCallback(
-    (targetProjectId: string, event: React.MouseEvent<HTMLButtonElement>): boolean => {
-      if (projectPinLongPressTargetRef.current !== targetProjectId) {
-        return false;
-      }
-      projectPinLongPressTargetRef.current = '';
-      event.preventDefault();
-      event.stopPropagation();
-      return true;
-    },
-    [],
-  );
-  useEffect(() => clearProjectPinLongPress, [clearProjectPinLongPress]);
-  const clearProjectSessionLongPress = useCallback(() => {
-    if (projectSessionLongPressTimerRef.current !== null) {
-      window.clearTimeout(projectSessionLongPressTimerRef.current);
-      projectSessionLongPressTimerRef.current = null;
-    }
-  }, []);
   const projectSessionActionKey = (targetProjectId: string, sessionId: string) =>
     `${targetProjectId}:${sessionId}`;
-  const startProjectSessionLongPress = useCallback(
-    (
-      targetProjectId: string,
-      sessionId: string,
-      event: React.PointerEvent<HTMLButtonElement>,
-    ) => {
-      if (isWide) {
-        return;
-      }
-      if (event.pointerType === 'mouse' && event.button !== 0) {
-        return;
-      }
-      clearProjectSessionLongPress();
-      projectSessionLongPressTargetRef.current = '';
-      const target = event.currentTarget;
-      if (target.setPointerCapture) {
-        try {
-          target.setPointerCapture(event.pointerId);
-        } catch {
-          // ignore
-        }
-      }
-      projectSessionLongPressTimerRef.current = window.setTimeout(() => {
-        projectSessionLongPressTimerRef.current = null;
-        projectSessionLongPressTargetRef.current = projectSessionActionKey(
-          targetProjectId,
-          sessionId,
-        );
-        triggerMobileHaptic();
-        // Mobile presents the menu as a bottom sheet, so no anchor placement.
-        setProjectSessionActionMenu({
-          projectId: targetProjectId,
-          sessionId,
-          popover: null,
-        });
-      }, PROJECT_SESSION_LONG_PRESS_MS);
-    },
-    [clearProjectSessionLongPress, isWide],
-  );
-  const finishProjectSessionLongPress = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      clearProjectSessionLongPress();
-      const target = event.currentTarget;
-      if (target.hasPointerCapture?.(event.pointerId)) {
-        try {
-          target.releasePointerCapture(event.pointerId);
-        } catch {
-          // ignore
-        }
-      }
-    },
-    [clearProjectSessionLongPress],
-  );
-  const consumeProjectSessionLongPressClick = useCallback(
-    (
-      targetProjectId: string,
-      sessionId: string,
-      event: React.MouseEvent<HTMLButtonElement>,
-    ): boolean => {
-      if (
-        projectSessionLongPressTargetRef.current !==
-        projectSessionActionKey(targetProjectId, sessionId)
-      ) {
-        return false;
-      }
-      projectSessionLongPressTargetRef.current = '';
-      event.preventDefault();
-      event.stopPropagation();
-      return true;
-    },
-    [],
-  );
-  useEffect(() => clearProjectSessionLongPress, [clearProjectSessionLongPress]);
   useEffect(() => {
     if (!projectSessionActionMenu) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -8273,38 +8120,36 @@ export function App() {
     window.addEventListener('pointerdown', onPointerDown);
     return () => window.removeEventListener('pointerdown', onPointerDown);
   }, [projectSessionActionMenu]);
-  const openProjectSessionContextMenu = (
+  const openProjectSessionContextMenu = useCallback((
     targetProjectId: string,
     sessionId: string,
-    event: React.MouseEvent<HTMLButtonElement>,
+    position: {x: number; y: number},
   ) => {
-    event.preventDefault();
-    event.stopPropagation();
     closeSidebarTransientMenus();
-    clearProjectSessionLongPress();
     const normalizedSessionId = sessionId.trim();
     if (!targetProjectId || !normalizedSessionId) {
       return;
     }
-    projectSessionLongPressTargetRef.current = projectSessionActionKey(targetProjectId, normalizedSessionId);
     setProjectSessionActionMenu({
       projectId: targetProjectId,
       sessionId: normalizedSessionId,
-      popover: resolveWideProjectActionPopoverPlacement({
-        anchorRect: {
-          left: event.clientX,
-          top: event.clientY,
-          bottom: event.clientY,
-          right: event.clientX,
-        },
-        viewportWidth: window.innerWidth,
-        viewportHeight: window.innerHeight,
-        preferredWidth: 224,
-        preferredMaxHeight: 320,
-        align: 'start',
-      }),
+      popover: isWide
+        ? resolveWideProjectActionPopoverPlacement({
+            anchorRect: {
+              left: position.x,
+              top: position.y,
+              bottom: position.y,
+              right: position.x,
+            },
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            preferredWidth: 224,
+            preferredMaxHeight: 320,
+            align: 'start',
+          })
+        : null,
     });
-  };
+  }, [closeSidebarTransientMenus, isWide, setProjectSessionActionMenu]);
   projectsRef.current = projects;
   terminalSyncRef.current = terminalSync;
   activeTerminalKeyRef.current = activeTerminalKey;
@@ -10716,6 +10561,52 @@ export function App() {
       }),
     });
   };
+
+  const openProjectContextMenu = useCallback((
+    targetProjectId: string,
+    position: {x: number; y: number},
+  ) => {
+    if (!targetProjectId) {
+      return;
+    }
+    closeSidebarTransientMenus();
+    resetProjectResumeState();
+    if (!isWide) {
+      setMobileProjectActionMenu({
+        projectId: targetProjectId,
+        kind: 'actions',
+        phase: 'actions',
+        agentType: '',
+        popover: null,
+      });
+      return;
+    }
+    setWideProjectActionMenu({
+      projectId: targetProjectId,
+      kind: 'actions',
+      phase: 'actions',
+      agentType: '',
+      popover: resolveWideProjectActionPopoverPlacement({
+        anchorRect: {
+          left: position.x,
+          top: position.y,
+          bottom: position.y,
+          right: position.x,
+        },
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        preferredWidth: 224,
+        preferredMaxHeight: 240,
+        align: 'start',
+      }),
+    });
+  }, [
+    closeSidebarTransientMenus,
+    isWide,
+    resetProjectResumeState,
+    setMobileProjectActionMenu,
+    setWideProjectActionMenu,
+  ]);
 
   const removeProjectChatSessionFromState = (
     targetProjectId: string,
@@ -16624,15 +16515,49 @@ export function App() {
           : undefined}
       >
         <div className="wide-project-action-title">
-          <SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'import'} />
+          <SessionIcon name={actionMenu.kind === 'actions' ? 'list' : actionMenu.kind === 'new' ? 'plus' : 'import'} />
           <span className="wide-project-action-title-copy">
             <span className="wide-project-action-title-main">
-              {actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
+              {actionMenu.kind === 'actions'
+                ? 'Project Actions'
+                : actionMenu.kind === 'new'
+                  ? 'New Session'
+                  : 'Resume Session'}
             </span>
             <span className="wide-project-action-title-sub">{actionProject.name}</span>
           </span>
         </div>
-        {actionMenu.phase === 'agents' ? (
+        {actionMenu.kind === 'actions' ? (
+          <>
+            <button
+              type="button"
+              className="wide-project-action-menu-item"
+              onClick={() => {
+                resetProjectResumeState();
+                setWideProjectActionMenu({
+                  ...actionMenu,
+                  kind: 'resume',
+                  phase: 'agents',
+                  agentType: '',
+                });
+              }}
+            >
+              <SessionIcon name="import" />
+              <span>Resume session</span>
+            </button>
+            <button
+              type="button"
+              className="wide-project-action-menu-item"
+              onClick={() => {
+                togglePinnedProject(targetProjectId);
+                setWideProjectActionMenu(null);
+              }}
+            >
+              <SessionIcon name="pin" />
+              <span>{pinnedProjectIds.includes(targetProjectId) ? 'Unpin Project' : 'Pin Project'}</span>
+            </button>
+          </>
+        ) : actionMenu.phase === 'agents' ? (
           <>
             <AgentChoiceMenu
               key={`${targetProjectId}:${actionMenu.kind}:agents`}
@@ -16770,21 +16695,7 @@ export function App() {
       }
     },
     onOpenSessionContextMenu: openProjectSessionContextMenu,
-    sessionGestureHandlers: (targetProjectId: string, sessionId: string) => ({
-      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event),
-      onPointerUp: finishProjectSessionLongPress,
-      onPointerCancel: finishProjectSessionLongPress,
-      onPointerLeave: finishProjectSessionLongPress,
-    }),
-    consumeSessionLongPressClick: consumeProjectSessionLongPressClick,
-    projectGestureHandlers: (targetProjectId: string) => ({
-      onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectPinLongPress(targetProjectId, event),
-      onPointerUp: finishProjectPinLongPress,
-      onPointerCancel: finishProjectPinLongPress,
-      onPointerLeave: finishProjectPinLongPress,
-      onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault(),
-    }),
-    consumeProjectLongPressClick: consumeProjectPinLongPressClick,
+    onOpenProjectContextMenu: openProjectContextMenu,
     emptyProjectsHint: mobile ? (
       <div className="chat-empty-hint chat-empty-state">
         <SessionIcon name="inbox" size={28} />

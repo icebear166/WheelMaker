@@ -11,7 +11,7 @@ type ActivePress = {
   y: number;
 };
 
-type ContextMenuGestureHandlers = Pick<
+export type ContextMenuGestureHandlers = Pick<
   React.HTMLAttributes<HTMLElement>,
   | 'onContextMenu'
   | 'onPointerDown'

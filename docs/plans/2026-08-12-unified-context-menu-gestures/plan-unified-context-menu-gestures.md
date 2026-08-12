@@ -105,47 +105,48 @@
 - Modify: `app/web/src/chat/sessionlist/ProjectSection.tsx`
 - Modify: `app/web/src/app/WorkspaceApp.tsx`
 - Modify: `app/__tests__/web-chat-ui.test.ts`
+- Modify: `app/__tests__/web-context-menu-gesture-contract.test.ts`
 - Modify: `docs/plans/2026-08-12-unified-context-menu-gestures/plan-unified-context-menu-gestures.md`
 
 **Acceptance:** Normal and Recent Session rows plus Project titles use the shared gesture on every input-capable layout; Search/Archived/Draft remain excluded; mobile layout renders Sheets and wide layout renders Popovers; Project Actions contains Resume and Pin/Unpin only.
 
-- [ ] **Step 1: Write failing Session/Project binding tests**
+- [x] **Step 1: Write failing Session/Project binding tests**
 
   Update `SessionListView.test.tsx` to drive touch/pen timers through rendered normal and Recent rows and assert callbacks receive `(projectId, sessionId, {x, y})`; assert Project title right-click/long-press receives `(projectId, {x, y})`. Keep archived/search slot tests and add a Draft assertion showing no shared target marker.
 
-- [ ] **Step 2: Write failing nested-action tests**
+- [x] **Step 2: Write failing nested-action tests**
 
   Use fake timers in `SessionRow.test.tsx` and `ProjectSection.test.tsx`. Assert Session Unpin and Project Resume/Pin/New execute on short click, but after a 450ms touch hold their click is prevented, no parent menu handler runs, and no haptic is emitted.
 
-- [ ] **Step 3: Update source-contract assertions before implementation**
+- [x] **Step 3: Update source-contract assertions before implementation**
 
   Replace the old `PROJECT_PIN_LONG_PRESS_MS`, `PROJECT_SESSION_LONG_PRESS_MS`, manual timer/ref, pointer-capture, and consume-click expectations in `web-chat-ui.test.ts` with assertions that Workspace receives position-based Session/Project callbacks and no longer owns those long-press state machines. Add assertions for wide Project Actions containing Resume and Pin/Unpin but not New Session.
 
-- [ ] **Step 4: Run RED tests**
+- [x] **Step 4: Run RED tests**
 
   Run: `npm test -- --runInBand web/src/chat/sessionlist/SessionListView.test.tsx web/src/chat/sessionlist/SessionRow.test.tsx web/src/chat/sessionlist/ProjectSection.test.tsx __tests__/web-chat-ui.test.ts`
 
   Expected: FAIL because list props still expose manual handlers/consume functions, nested controls lack the action guard, and wide Project titles have no actions menu.
 
-- [ ] **Step 5: Move gesture ownership into SessionListView**
+- [x] **Step 5: Move gesture ownership into SessionListView**
 
   Replace handler factories and consume-click props with position-based `onOpenSessionContextMenu` and `onOpenProjectContextMenu` callbacks. Bind shared target gestures only while rendering normal/Recent Session rows and Project headers; do not bind Draft, search, archived, or older-toggle rows.
 
-- [ ] **Step 6: Preserve menu ownership in Workspace**
+- [x] **Step 6: Preserve menu ownership in Workspace**
 
   Delete Session/Project timer refs, 450ms constants, pointer-capture helpers, and consume-click branches. Normalize Session/Project target callbacks, close transient menus, compute wide popover placement from gesture coordinates, and select Sheet versus Popover from current layout. Extend wide Project action state/rendering for the existing Resume and Pin/Unpin actions; keep New Session exclusively on `+`.
 
-- [ ] **Step 7: Apply the nested-action guard**
+- [x] **Step 7: Apply the nested-action guard**
 
   Bind the shared action guard to Session Unpin and Project Resume/Pin/New controls without changing their existing business callbacks or disabled states.
 
-- [ ] **Step 8: Run GREEN and focused regressions**
+- [x] **Step 8: Run GREEN and focused regressions**
 
   Run: `npm test -- --runInBand web/src/chat/sessionlist/SessionListView.test.tsx web/src/chat/sessionlist/SessionRow.test.tsx web/src/chat/sessionlist/ProjectSection.test.tsx web/src/chat/sessionlist/SessionMenu.test.tsx __tests__/web-chat-ui.test.ts`
 
   Expected: PASS with normal/Recent coverage and existing menu actions intact.
 
-- [ ] **Step 9: Git checkpoint**
+- [x] **Step 9: Git checkpoint**
 
   Invoke `git-workflow` checkpoint for Session/Project implementation, tests, and checked plan after GREEN.
 
