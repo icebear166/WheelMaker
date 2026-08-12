@@ -66,6 +66,19 @@ function sourceTarget(target: SkillScopeTarget, source: RegistrySkillSourceSnaps
   };
 }
 
+function sourceSkillList(source: RegistrySkillSourceSnapshot) {
+  return source.skills.flatMap(skill => (
+    skill.skillPath && skill.remoteContentSha256
+      ? [{name: skill.name, skillPath: skill.skillPath, contentSha256: skill.remoteContentSha256}]
+      : []
+  ));
+}
+
+function refreshedAtCopy(refreshedAt?: string): string {
+  if (!refreshedAt) return 'never refreshed';
+  return refreshedAt.replace('T', ' ').replace(/Z$/, ' UTC');
+}
+
 function SkillCatalogRow({
   target,
   source,
@@ -206,13 +219,24 @@ function SkillSourceLedger({
             className="chat-hub-skill-source-ref-apply"
             aria-label={`Apply ref for ${source.sourceKey}`}
             disabled={busy || stale || !refDraft || refDraft === source.ref}
-            onClick={() => actions.onChangeSourceRef({...baseTarget, ref: refDraft})}
+            onClick={() => actions.onChangeSourceRef({
+              ...baseTarget,
+              ref: refDraft,
+              currentSkillList: sourceSkillList(source),
+            })}
           >
             Apply
           </button>
           <span className="chat-hub-skill-source-commit" data-tooltip={source.resolvedCommit || 'Not resolved'}>
             {source.resolvedCommit ? source.resolvedCommit.slice(0, 8) : 'unresolved'}
           </span>
+          <time
+            className="chat-hub-skill-source-refreshed"
+            dateTime={source.refreshedAt}
+            data-tooltip={source.refreshedAt || 'No successful refresh yet'}
+          >
+            {refreshedAtCopy(source.refreshedAt)}
+          </time>
           <span className="chat-hub-skill-source-counts">
             {source.installedCount} installed · {source.updateCount} updates
           </span>

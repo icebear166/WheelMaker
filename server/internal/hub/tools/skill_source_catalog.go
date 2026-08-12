@@ -58,6 +58,7 @@ type SkillsSourceScopeInput struct {
 	HomeDir            string
 	ReconciliationPath string
 	Installed          []SkillsInstalledSkillSnapshot
+	StaleErrors        map[string]string
 }
 
 type skillSourceReconciliation struct {
@@ -93,12 +94,18 @@ func ScanSkillsSourceScope(ctx context.Context, input SkillsSourceScopeInput) (S
 	if err != nil {
 		return SkillsSourceScopeSnapshot{}, err
 	}
-	migration, err := readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath)
-	if err != nil {
-		return SkillsSourceScopeSnapshot{}, err
+	var migration skillSourceMigrationResult
+	_, sourceLockStatErr := os.Stat(sourceLockPath)
+	if errors.Is(sourceLockStatErr, os.ErrNotExist) && len(reconciliation.Sources) > 0 {
+		migration = skillSourceMigrationResult{Lock: newSkillSourceLock(), Revision: skillSourceMissingRevision}
+	} else {
+		migration, err = readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath)
+		if err != nil {
+			return SkillsSourceScopeSnapshot{}, err
+		}
 	}
 	native := readNativeSkillSourceEntries(nativeLockPath)
-	snapshot := composeSkillSourceCatalog(migration.Lock, native, input.Installed, nil)
+	snapshot := composeSkillSourceCatalog(migration.Lock, native, input.Installed, input.StaleErrors)
 	if len(snapshot.NeedsResolutionSkills) == 0 && len(migration.NeedsResolutionSkills) > 0 {
 		snapshot.NeedsResolutionSkills = append([]string(nil), migration.NeedsResolutionSkills...)
 	}

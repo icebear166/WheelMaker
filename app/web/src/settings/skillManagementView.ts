@@ -3,6 +3,7 @@ import type {
   RegistrySkillCatalogItem,
   RegistrySkillProjectSnapshot,
   RegistrySkillScope,
+  RegistrySkillSourceListItem,
 } from '../registry/registryTypes';
 
 export type SkillScopeTarget = {
@@ -17,7 +18,14 @@ export type SkillSourceTarget = SkillScopeTarget & {
   source: string;
   sourceKey: string;
   ref: string;
+  currentSkillList?: RegistrySkillSourceListItem[];
 };
+
+export interface SkillSourceCatalogChanges {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
 
 export type SkillSourceSkillTarget = SkillSourceTarget & {
   skillName: string;
@@ -261,4 +269,29 @@ export function shouldShowSkillCatalogRow(
   showUninstalled: boolean,
 ): boolean {
   return showUninstalled || row.status !== 'uninstalled';
+}
+
+export function diffSkillSourceCatalog(
+  current: RegistrySkillSourceListItem[],
+  next: RegistrySkillSourceListItem[],
+): SkillSourceCatalogChanges {
+  const currentByName = new Map(current.map(skill => [skill.name.toLowerCase(), skill]));
+  const nextByName = new Map(next.map(skill => [skill.name.toLowerCase(), skill]));
+  const added = next
+    .filter(skill => !currentByName.has(skill.name.toLowerCase()))
+    .map(skill => skill.name);
+  const removed = current
+    .filter(skill => !nextByName.has(skill.name.toLowerCase()))
+    .map(skill => skill.name);
+  const changed = next
+    .filter(skill => {
+      const previous = currentByName.get(skill.name.toLowerCase());
+      return Boolean(previous && (
+        previous.contentSha256 !== skill.contentSha256
+        || previous.skillPath !== skill.skillPath
+      ));
+    })
+    .map(skill => skill.name);
+  const sort = (names: string[]) => names.sort((left, right) => left.localeCompare(right));
+  return {added: sort(added), removed: sort(removed), changed: sort(changed)};
 }

@@ -187,7 +187,11 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 	case "listSource":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
 	case "previewSource", "previewInstall", "previewUpdate", "previewDeleteSource":
-		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, action, params))
+		result, err := r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, action, params))
+		scope, _ := params["scope"].(string)
+		projectName, _ := params["projectName"].(string)
+		r.refreshSkillsStateTarget(scope, projectName)
+		return result, err
 	case "applyPreview":
 		return r.runSkillsStateAction(ctx, action, params)
 	case "install":

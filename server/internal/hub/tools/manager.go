@@ -123,6 +123,13 @@ func (m *Manager) SetProjects(projects []ProjectInfo) {
 	}
 }
 
+func (m *Manager) SkillSourceErrors(scope, projectName string) map[string]string {
+	if m == nil || m.skillsCommand == nil {
+		return nil
+	}
+	return m.skillsCommand.SkillSourceErrors(scope, projectName)
+}
+
 func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMessage) (any, *CommandError) {
 	if m == nil {
 		return nil, &CommandError{Code: rp.CodeInternal, Message: "tools manager is not configured"}

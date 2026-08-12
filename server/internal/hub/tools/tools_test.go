@@ -3779,6 +3779,69 @@ func TestSkillSourceCatalogRetainsStaleSnapshotWithoutInferringDeletion(t *testi
 	}
 }
 
+func TestSkillsCommandFailedRefreshPublishesStaleErrorWithoutChangingSavedCatalog(t *testing.T) {
+	root := t.TempDir()
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
+	oldHash := strings.Repeat("a", 64)
+	initial := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+			ResolvedCommit: strings.Repeat("b", 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "skills/alpha/SKILL.md", ContentSHA256: oldHash}},
+		}},
+	}
+	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(sourceLockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: filepath.Join(root, "home"),
+		ResolveSource: func(context.Context, skillSourceSnapshot) (skillSourceSnapshot, error) {
+			return skillSourceSnapshot{}, errors.New("fetch failed for https://github.com/example/catalog.git?token=secret")
+		},
+	})
+
+	_, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewSource", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git", "ref": "main",
+	}))
+	if commandErr == nil {
+		t.Fatal("previewSource error=nil, want resolver failure")
+	}
+	after, err := os.ReadFile(sourceLockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("failed refresh changed the saved source lock")
+	}
+	errorsBySource := cmd.SkillSourceErrors("hub", "")
+	message := errorsBySource["github.com/example/catalog"]
+	if message == "" || strings.Contains(message, "token=secret") {
+		t.Fatalf("stale error=%q, want sanitized resolver error", message)
+	}
+	snapshot, err := ScanSkillsSourceScope(context.Background(), SkillsSourceScopeInput{
+		GlobalLockPath: globalLock,
+		HomeDir:        filepath.Join(root, "home"),
+		StaleErrors:    errorsBySource,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Sources) != 1 || snapshot.Sources[0].Status != "stale" || len(snapshot.Sources[0].Skills) != 1 {
+		t.Fatalf("stale snapshot=%#v", snapshot)
+	}
+	row := snapshot.Sources[0].Skills[0]
+	if row.Name != "alpha" || row.CanInstall || row.CanUpdate {
+		t.Fatalf("stale catalog row=%#v", row)
+	}
+}
+
 func skillSourceRowsByName(rows []skillsSourceCatalogSkillSnapshot) map[string]skillsSourceCatalogSkillSnapshot {
 	out := make(map[string]skillsSourceCatalogSkillSnapshot, len(rows))
 	for _, row := range rows {
@@ -3959,6 +4022,13 @@ func TestSkillsCommandPreviewUpdateAllSelectsOnlyInstalledChangedSkills(t *testi
 	if operation.Status != "succeeded" {
 		t.Fatalf("operation=%#v", operation)
 	}
+	results := map[string]skillsOperationItemResult{}
+	for _, result := range operation.Results {
+		results[result.Skill] = result
+	}
+	if results["alpha"].Status != "succeeded" || results["new-skill"].Status != "skipped" || results["removed"].Status != "skipped" {
+		t.Fatalf("itemized update results=%#v", operation.Results)
+	}
 	pinnedSource := "https://github.com/example/catalog.git#" + strings.Repeat("e", 40)
 	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y") {
 		t.Fatalf("alpha update missing: %#v", runner.calls)
@@ -4028,6 +4098,92 @@ func TestSkillsCommandPreviewUpdateContinuesAfterItemFailure(t *testing.T) {
 	}
 	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "beta", "-y") {
 		t.Fatalf("beta did not continue after alpha failure: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandPreviewUpdateAllContinuesAfterSourceRefreshFailure(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
+	for _, name := range []string{"alpha", "beta"} {
+		for _, profile := range []string{".agents", ".claude"} {
+			writeSkillSourceFixture(t, filepath.Join(home, profile, "skills", name), "# local "+name+"\n", nil)
+		}
+	}
+	if err := os.WriteFile(globalLock, []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/bad.git","ref":"main"},"beta":{"source":"https://github.com/example/good.git","ref":"main"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{
+		{
+			Source: "https://github.com/example/bad.git", SourceKey: "github.com/example/bad", Ref: "main",
+			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T10:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: strings.Repeat("1", 64)}},
+		},
+		{
+			Source: "https://github.com/example/good.git", SourceKey: "github.com/example/good", Ref: "main",
+			ResolvedCommit: strings.Repeat("b", 40), RefreshedAt: "2026-08-12T10:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "beta", SkillPath: "beta/SKILL.md", ContentSHA256: strings.Repeat("2", 64)}},
+		},
+	}}
+	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	goodCommit := strings.Repeat("c", 40)
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: home,
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			if strings.Contains(source.SourceKey, "/bad") {
+				return skillSourceSnapshot{}, errors.New("fetch failed")
+			}
+			source.ResolvedCommit = goodCommit
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{{
+				Name: "beta", SkillPath: "beta/SKILL.md", ContentSHA256: strings.Repeat("f", 64),
+			}}
+			return source, nil
+		},
+	})
+
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewUpdate", "hubId": "hub-a", "scope": "hub",
+	}))
+	if commandErr != nil {
+		t.Fatalf("previewUpdate error=%#v", commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	if preview == nil || !reflect.DeepEqual(preview.Skills, []string{"beta"}) {
+		t.Fatalf("preview=%#v", preview)
+	}
+	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "applyPreview", "hubId": "hub-a", "previewId": preview.ID,
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	results := map[string]skillsOperationItemResult{}
+	for _, result := range operation.Results {
+		results[result.Skill] = result
+	}
+	if operation.Status != "succeeded" || results["alpha"].Status != "skipped" || results["beta"].Status != "succeeded" {
+		t.Fatalf("best-effort source results=%#v operation=%#v", operation.Results, operation)
+	}
+	if !runner.hasCall("", "skills", "add", "https://github.com/example/good.git#"+goodCommit, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "beta", "-y") {
+		t.Fatalf("good source update missing: %#v", runner.calls)
+	}
+	if message := cmd.SkillSourceErrors("hub", "")["github.com/example/bad"]; message == "" {
+		t.Fatal("failed source was not retained as stale")
+	}
+}
+
+func TestSkillUpdateNonActionResultReportsConflict(t *testing.T) {
+	result, include := skillUpdateNonActionResult(SkillsSourceCatalogSkillSnapshot{
+		Name: "shared", Status: "conflict", Conflict: true, Error: "Same name exists in multiple sources.",
+	})
+	if !include || result.Status != "conflict" || result.ErrorSummary == "" {
+		t.Fatalf("conflict result=%#v include=%t", result, include)
 	}
 }
 
@@ -4150,6 +4306,46 @@ func TestSkillSourceCatalogRestoresPendingRemovalFromLocalReconciliation(t *test
 	}
 	if len(third.Sources) != 0 {
 		t.Fatalf("resolved pending removal retained: %#v", third.Sources)
+	}
+}
+
+func TestSkillSourceCatalogTreatsDeletedProjectSourceLockAsPendingRemovalAfterReconciliation(t *testing.T) {
+	projectRoot := t.TempDir()
+	nativePath := filepath.Join(projectRoot, "skills-lock.json")
+	sourcePath := filepath.Join(projectRoot, ".skill-source-lock.json")
+	reconciliationPath := filepath.Join(t.TempDir(), "project-skills.json")
+	if err := os.WriteFile(nativePath, []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeSkillSourceFixture(t, filepath.Join(projectRoot, ".agents", "skills", "alpha"), "# Alpha\n", nil)
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+	}}}
+	if _, err := writeSkillSourceLockFile(sourcePath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	input := SkillsSourceScopeInput{
+		ProjectRoot: projectRoot, ReconciliationPath: reconciliationPath,
+		Installed: []SkillsInstalledSkillSnapshot{{
+			Name: "alpha", Managed: true, Locations: []string{filepath.Join(projectRoot, ".agents", "skills", "alpha", "SKILL.md")},
+		}},
+	}
+	if _, err := ScanSkillsSourceScope(context.Background(), input); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot, err := ScanSkillsSourceScope(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Sources) != 1 || snapshot.Sources[0].Status != "pending_removal" {
+		t.Fatalf("deleted source lock snapshot=%#v", snapshot)
+	}
+	if _, err := os.Stat(sourcePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scan recreated an externally deleted source lock: %v", err)
 	}
 }
 

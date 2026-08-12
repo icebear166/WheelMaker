@@ -2841,6 +2841,37 @@ func TestHubStateSkillsActionPublishesRunningOperationWithoutReplacingInventory(
 	}
 }
 
+func TestHubStateSkillsFailedPreviewRefreshesPublishedCatalogState(t *testing.T) {
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-skills-preview", StateDir: t.TempDir()},
+		nil,
+	)
+	reporter.toolHandler = &stubToolCommandHandler{err: &tools.CommandError{
+		Code: rp.CodeInternal, Message: "source refresh failed",
+	}}
+	refreshCalls := atomic.Int32{}
+	reporter.skillsState = newSkillsStateCoordinator(skillsStateCoordinatorOptions{
+		ScanHub: func(context.Context) (map[string]skillInventoryItem, error) {
+			refreshCalls.Add(1)
+			return map[string]skillInventoryItem{}, nil
+		},
+	})
+
+	_, err := reporter.actionHubStateSkills(
+		context.Background(),
+		"previewSource",
+		map[string]any{
+			"scope": "hub", "source": "https://github.com/example/catalog.git", "ref": "main",
+		},
+	)
+	if err == nil {
+		t.Fatal("previewSource error=nil, want tool failure")
+	}
+	if got := refreshCalls.Load(); got != 1 {
+		t.Fatalf("skills refresh calls=%d, want 1 after failed preview", got)
+	}
+}
+
 func TestHubStateFileIndexAdapterReturnsStatus(t *testing.T) {
 	root := t.TempDir()
 	reporter := NewReporter(

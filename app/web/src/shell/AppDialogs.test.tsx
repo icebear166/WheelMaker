@@ -120,6 +120,31 @@ test('source update confirmation explicitly warns before overwriting local conte
   expect(copy).toContain('main at 12345678');
 });
 
+test('source ref confirmation lists catalog additions removals and content changes', () => {
+  const copy = confirmCopy({
+    kind: 'skillPreview',
+    action: 'changeRef',
+    hubId: 'hub-a',
+    scope: 'project',
+    projectName: 'alpha',
+    previewId: 'preview-ref',
+    source: 'https://github.com/acme/skills.git',
+    sourceKey: 'github.com/acme/skills',
+    ref: 'next',
+    resolvedCommit: '1234567890abcdef',
+    skills: [],
+    catalogChanges: {
+      added: ['new-skill'],
+      removed: ['retired-skill'],
+      changed: ['updated-skill'],
+    },
+  });
+
+  expect(copy).toContain('Added: new-skill');
+  expect(copy).toContain('Removed: retired-skill');
+  expect(copy).toContain('Changed: updated-skill');
+});
+
 test('source deletion confirmation promises lock removal only after every uninstall succeeds', () => {
   const copy = confirmCopy({
     kind: 'skillPreview',

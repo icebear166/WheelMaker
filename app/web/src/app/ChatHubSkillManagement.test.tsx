@@ -15,13 +15,14 @@ const catalog: RegistrySkillSourceScopeSnapshot = {
     sourceKey: 'github.com/acme/skills',
     ref: 'main',
     resolvedCommit: '1234567890abcdef',
+    refreshedAt: '2026-08-12T12:34:56Z',
     status: 'ready',
     installedCount: 3,
     updateCount: 1,
     skills: [
-      {name: 'installed', status: 'up_to_date', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: false, canUninstall: true},
-      {name: 'changed', status: 'update_available', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: true, canUninstall: true},
-      {name: 'new-skill', status: 'uninstalled', installed: false, managed: false, conflict: false, canInstall: true, canUpdate: false, canUninstall: false},
+      {name: 'installed', skillPath: 'skills/installed/SKILL.md', remoteContentSha256: 'a'.repeat(64), status: 'up_to_date', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: false, canUninstall: true},
+      {name: 'changed', skillPath: 'skills/changed/SKILL.md', remoteContentSha256: 'b'.repeat(64), status: 'update_available', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: true, canUninstall: true},
+      {name: 'new-skill', skillPath: 'skills/new-skill/SKILL.md', remoteContentSha256: 'c'.repeat(64), status: 'uninstalled', installed: false, managed: false, conflict: false, canInstall: true, canUpdate: false, canUninstall: false},
       {name: 'gone', status: 'removed_upstream', installed: true, managed: true, conflict: false, canInstall: false, canUpdate: false, canUninstall: true},
       {name: 'duplicate', status: 'conflict', installed: true, managed: true, conflict: true, canInstall: false, canUpdate: false, canUninstall: false, error: 'Same name is owned elsewhere'},
     ],
@@ -91,6 +92,7 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   expect(renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'})).toBeTruthy();
   expect(renderer.root.findByProps({className: 'chat-hub-skill-source-ref-input'}).props.value).toBe('main');
   expect(renderer.root.findByProps({className: 'chat-hub-skill-source-commit'}).children.join('')).toContain('12345678');
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-refreshed'}).children.join('')).toContain('2026-08-12');
   expect(renderer.root.findAllByProps({'data-skill-name': 'new-skill'})).toHaveLength(0);
   expect(renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.checked).toBe(false);
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
@@ -153,6 +155,12 @@ test('routes source refresh, ref change, update-all, and delete through source a
   act(() => source.findByProps({className: 'chat-hub-skill-source-ref-input'}).props.onChange({target: {value: 'next'}}));
   act(() => source.findByProps({'aria-label': 'Apply ref for github.com/acme/skills'}).props.onClick());
   expect(actions.onChangeSourceRef).toHaveBeenCalledWith(expect.objectContaining({ref: 'next'}));
+  expect(actions.onChangeSourceRef).toHaveBeenCalledWith(expect.objectContaining({
+    currentSkillList: expect.arrayContaining([
+      expect.objectContaining({name: 'installed'}),
+      expect.objectContaining({name: 'changed'}),
+    ]),
+  }));
   act(() => source.findByProps({'aria-label': 'Delete github.com/acme/skills source'}).props.onClick());
   expect(actions.onDeleteSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
 });

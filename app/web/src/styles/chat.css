@@ -2800,6 +2800,7 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-hub-skill-source-commit,
+.chat-hub-skill-source-refreshed,
 .chat-hub-skill-source-counts {
   white-space: nowrap;
 }

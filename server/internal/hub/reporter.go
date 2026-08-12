@@ -123,6 +123,10 @@ type toolCommandHandler interface {
 	HandleDebugWebTransfer(method string, payload json.RawMessage) (tools.ReleaseTargetStatus, *tools.CommandError)
 }
 
+type skillSourceErrorProvider interface {
+	SkillSourceErrors(scope, projectName string) map[string]string
+}
+
 // ReporterConfig controls hub->registry connection behavior.
 type ReporterConfig struct {
 	// PublicURL is the canonical Registry HTTP(S) origin. An empty value uses
@@ -1271,6 +1275,14 @@ func (r *Reporter) refreshSkillsStateTarget(scope, projectName string) {
 	)
 }
 
+func (r *Reporter) skillSourceErrors(scope, projectName string) map[string]string {
+	provider, ok := r.ensureToolHandler().(skillSourceErrorProvider)
+	if !ok {
+		return nil
+	}
+	return provider.SkillSourceErrors(scope, projectName)
+}
+
 func (r *Reporter) onReleaseJobUpdated(job tools.ReleasePublishJob) {
 	_ = r.publishHubEvent(rp.RegistryMethodReleasePublishUpdated, map[string]any{
 		"job": job,
@@ -1858,6 +1870,7 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
 					GlobalLockPath: managedSkillsLockPath(""),
 					Installed:      skillInventoryAsInstalledSnapshots(inventory),
+					StaleErrors:    r.skillSourceErrors("hub", ""),
 				})
 			},
 			ScanProjectSources: func(ctx context.Context, target projectSkillsTarget, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
@@ -1869,10 +1882,17 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 						strings.TrimPrefix(hubHashLines(target.ProjectID, target.Path), "sha256:")+".json",
 					)
 				}
+				projectName := ""
+				r.mu.RLock()
+				if project, exists := r.projectsByID[target.ProjectID]; exists {
+					projectName = project.Name
+				}
+				r.mu.RUnlock()
 				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
 					ProjectRoot:        target.Path,
 					ReconciliationPath: reconciliationPath,
 					Installed:          skillInventoryAsInstalledSnapshots(inventory),
+					StaleErrors:        r.skillSourceErrors("project", projectName),
 				})
 			},
 			Targets: r.skillsTargets,

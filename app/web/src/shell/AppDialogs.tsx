@@ -117,6 +117,11 @@ export type ConfirmTarget =
       resolvedCommit: string;
       skills: string[];
       overwritesLocal?: boolean;
+      catalogChanges?: {
+        added: string[];
+        removed: string[];
+        changed: string[];
+      };
     }
   | {
       kind: 'skillInstall';
@@ -344,7 +349,17 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     if (target.action === 'update') {
       return `Updates ${target.skills.length} changed skill${target.skills.length === 1 ? '' : 's'} from ${pin}.${target.overwritesLocal ? ' Local content changes will be overwritten.' : ''}`;
     }
-    if (target.action === 'changeRef') return `Changes the source to ${pin}. No skill is installed automatically.`;
+    if (target.action === 'changeRef') {
+      const changes = target.catalogChanges;
+      const changeCopy = changes
+        ? [
+            `Added: ${changes.added.join(', ') || 'none'}.`,
+            `Removed: ${changes.removed.join(', ') || 'none'}.`,
+            `Changed: ${changes.changed.join(', ') || 'none'}.`,
+          ].join(' ')
+        : 'Catalog differences are unavailable.';
+      return `Changes the source to ${pin}. ${changeCopy} No skill is installed automatically.`;
+    }
     if (target.action === 'refresh') return `Refreshes the catalog at ${pin}. No skill is installed or removed.`;
     return `Saves the full catalog at ${pin}. Its ${target.skills.length || 'discovered'} skills remain uninstalled until you choose Install.`;
   }

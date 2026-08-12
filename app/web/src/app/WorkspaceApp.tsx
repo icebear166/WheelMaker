@@ -525,6 +525,7 @@ import {
   type WheelMakerPublicMetadata,
 } from '../settings/agentPackageUpdateView';
 import {
+  diffSkillSourceCatalog,
   parseSkillSourceInput,
   sameSkillScopeTarget,
   skillActionPendingKey,
@@ -13816,6 +13817,12 @@ export function App() {
       }
       const confirm = skillPreviewConfirmTarget(result.preview, action);
       confirm.hubId = target.hubId;
+      if (action === 'changeRef' && hasSource) {
+        confirm.catalogChanges = diffSkillSourceCatalog(
+          target.currentSkillList ?? [],
+          result.preview.skillList,
+        );
+      }
       setConfirmTarget(confirm);
     } catch (err) {
       setToastMessage(err instanceof Error ? err.message : String(err));

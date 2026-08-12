@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	skillSourceRepoPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-	skillSourceSlugPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-	skillNamePattern       = regexp.MustCompile(`^[@A-Za-z0-9][@A-Za-z0-9_.:-]*$`)
-	ansiEscapePattern      = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+	skillSourceRepoPattern   = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	skillSourceSlugPattern   = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	skillNamePattern         = regexp.MustCompile(`^[@A-Za-z0-9][@A-Za-z0-9_.:-]*$`)
+	ansiEscapePattern        = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+	skillSourceSecretPattern = regexp.MustCompile(`(?i)(token|access_token|auth|password|key)=([^&\s]+)`)
 )
 
 var fixedSkillAgents = []string{"codex", "claude-code", "opencode", "github-copilot"}
@@ -116,6 +117,7 @@ type SkillsCommand struct {
 	projects               []ProjectInfo
 	operation              *skillsOperationSnapshot
 	previews               map[string]skillsStoredSourcePreview
+	sourceErrors           map[string]map[string]string
 	previewCounter         uint64
 	skillsNodeMu           sync.Mutex
 	skillsNodeChecked      bool
@@ -152,6 +154,7 @@ func newSkillsCommandWithRunner(runner skillsCommandRunner, config skillsCommand
 		onOperationDone: config.OnOperationDone,
 		resolveSource:   config.ResolveSource,
 		previews:        map[string]skillsStoredSourcePreview{},
+		sourceErrors:    map[string]map[string]string{},
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -167,6 +170,48 @@ func (c *SkillsCommand) SetProjects(projects []ProjectInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.projects = append([]ProjectInfo(nil), projects...)
+}
+
+func (c *SkillsCommand) SkillSourceErrors(scope, projectName string) map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	stored := c.sourceErrors[skillSourceErrorScopeKey(scope, projectName)]
+	if len(stored) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(stored))
+	for sourceKey, message := range stored {
+		result[sourceKey] = message
+	}
+	return result
+}
+
+func (c *SkillsCommand) setSkillSourceError(target skillsCommandTarget, sourceKey, message string) {
+	scopeKey := skillSourceErrorScopeKey(target.scope, target.projectName)
+	sourceKey = strings.ToLower(strings.TrimSpace(sourceKey))
+	message = strings.TrimSpace(message)
+	if sourceKey == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if message == "" {
+		if stored := c.sourceErrors[scopeKey]; stored != nil {
+			delete(stored, sourceKey)
+			if len(stored) == 0 {
+				delete(c.sourceErrors, scopeKey)
+			}
+		}
+		return
+	}
+	if c.sourceErrors[scopeKey] == nil {
+		c.sourceErrors[scopeKey] = map[string]string{}
+	}
+	c.sourceErrors[scopeKey][sourceKey] = message
+}
+
+func skillSourceErrorScopeKey(scope, projectName string) string {
+	return strings.ToLower(strings.TrimSpace(scope)) + "\x00" + strings.TrimSpace(projectName)
 }
 
 type skillsCommandPayload struct {
@@ -222,6 +267,7 @@ type skillsStoredSourcePreview struct {
 	expectedRevision string
 	updatedLock      skillSourceLock
 	runs             []skillsOperationRun
+	initialResults   []skillsOperationItemResult
 	deleteSource     bool
 }
 
@@ -520,7 +566,11 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 	candidate := skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, Ref: ref, SkillList: []skillSourceSkillSnapshot{}}
 	resolved, err := c.resolveSource(ctx, candidate)
 	if err != nil {
-		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: sanitizeSkillSourceError(err.Error(), payload.Source)}
+		message := sanitizeSkillSourceError(err.Error(), payload.Source)
+		if existingIndex >= 0 && strings.EqualFold(lock.Sources[existingIndex].Ref, ref) {
+			c.setSkillSourceError(target, sourceKey, message)
+		}
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: message}
 	}
 	if resolved.Source == "" {
 		resolved.Source = normalizedSource
@@ -534,8 +584,12 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 	validation := newSkillSourceLock()
 	validation.Sources = []skillSourceSnapshot{resolved}
 	if err := validateSkillSourceLock(validation); err != nil {
+		if existingIndex >= 0 && strings.EqualFold(lock.Sources[existingIndex].Ref, ref) {
+			c.setSkillSourceError(target, sourceKey, err.Error())
+		}
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
 	}
+	c.setSkillSourceError(target, sourceKey, "")
 	if existingIndex >= 0 {
 		lock.Sources[existingIndex] = resolved
 	} else {
@@ -639,6 +693,7 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 	}
 	resolvedByKey := map[string]skillSourceSnapshot{}
 	selectedCount := 0
+	var firstResolveError *skillsCommandError
 	for index, source := range lock.Sources {
 		if selectedKey != "" && !strings.EqualFold(source.SourceKey, selectedKey) {
 			continue
@@ -646,40 +701,75 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 		selectedCount++
 		resolved, resolveErr := c.resolveSource(ctx, source)
 		if resolveErr != nil {
-			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: sanitizeSkillSourceError(resolveErr.Error(), source.Source)}
+			message := sanitizeSkillSourceError(resolveErr.Error(), source.Source)
+			c.setSkillSourceError(target, source.SourceKey, message)
+			if selectedKey != "" {
+				return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: message}
+			}
+			if firstResolveError == nil {
+				firstResolveError = &skillsCommandError{Code: rp.CodeInternal, Message: message}
+			}
+			continue
 		}
 		validation := newSkillSourceLock()
 		validation.Sources = []skillSourceSnapshot{resolved}
 		if err := validateSkillSourceLock(validation); err != nil {
-			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+			c.setSkillSourceError(target, source.SourceKey, err.Error())
+			if selectedKey != "" {
+				return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+			}
+			if firstResolveError == nil {
+				firstResolveError = &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+			}
+			continue
 		}
+		c.setSkillSourceError(target, source.SourceKey, "")
 		lock.Sources[index] = resolved
 		resolvedByKey[strings.ToLower(resolved.SourceKey)] = resolved
 	}
 	if selectedCount == 0 {
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill source not found"}
 	}
+	if len(resolvedByKey) == 0 && firstResolveError != nil {
+		return skillsCommandResponse{}, firstResolveError
+	}
 	native := readNativeSkillSourceEntries(c.skillsLockFile(target))
 	installed, installErr := c.installedSnapshotsForTarget(target, native)
 	if installErr != nil {
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: installErr.Error()}
 	}
-	catalog := composeSkillSourceCatalog(lock, native, installed, nil)
+	catalog := composeSkillSourceCatalog(lock, native, installed, c.SkillSourceErrors(target.scope, target.projectName))
 	requested := map[string]struct{}{}
 	for _, name := range payload.Skills {
 		requested[strings.ToLower(name)] = struct{}{}
 	}
 	var selectedSkills []string
 	var runs []skillsOperationRun
+	var initialResults []skillsOperationItemResult
 	var previewSource skillSourceSnapshot
 	for _, source := range catalog.Sources {
 		resolved, refreshed := resolvedByKey[strings.ToLower(source.SourceKey)]
 		if !refreshed {
+			if selectedKey == "" {
+				for _, row := range source.Skills {
+					if row.Installed {
+						initialResults = append(initialResults, skillsOperationItemResult{
+							Skill: row.Name, Action: "update", Status: "skipped",
+							ErrorSummary: "Source refresh failed: " + source.Error,
+						})
+					}
+				}
+			}
 			continue
 		}
 		previewSource = resolved
 		for _, row := range source.Skills {
 			if !row.CanUpdate {
+				if len(requested) == 0 {
+					if result, include := skillUpdateNonActionResult(row); include {
+						initialResults = append(initialResults, result)
+					}
+				}
 				continue
 			}
 			if len(requested) > 0 {
@@ -699,6 +789,9 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 	}
 	sort.Slice(runs, func(i, j int) bool { return strings.ToLower(runs[i].skill) < strings.ToLower(runs[j].skill) })
 	sort.Slice(selectedSkills, func(i, j int) bool { return strings.ToLower(selectedSkills[i]) < strings.ToLower(selectedSkills[j]) })
+	sort.Slice(initialResults, func(i, j int) bool {
+		return strings.ToLower(initialResults[i].Skill) < strings.ToLower(initialResults[j].Skill)
+	})
 	preview := skillsSourcePreview{
 		Kind: "previewUpdate", Scope: target.scope, ProjectName: target.projectName,
 		Skills: append([]string(nil), selectedSkills...), OverwritesLocal: len(selectedSkills) > 0,
@@ -713,7 +806,7 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 	}
 	stored := skillsStoredSourcePreview{
 		preview: preview, target: target, lockPath: lockPath,
-		expectedRevision: migration.Revision, updatedLock: lock, runs: runs,
+		expectedRevision: migration.Revision, updatedLock: lock, runs: runs, initialResults: initialResults,
 	}
 	if cmdErr := c.storeSourcePreview(&stored); cmdErr != nil {
 		return skillsCommandResponse{}, cmdErr
@@ -913,6 +1006,9 @@ func (c *SkillsCommand) runSkillsSourcePreviewOperation(operation *skillsOperati
 	}
 	failed := 0
 	var lastExitCode *int
+	for _, result := range stored.initialResults {
+		c.appendSkillsOperationResult(operation, result)
+	}
 	for _, run := range stored.runs {
 		if run.prepareInstallDirs {
 			if err := c.prepareSkillsInstallDirs(run.target); err != nil {
@@ -957,6 +1053,30 @@ func (c *SkillsCommand) runSkillsSourcePreviewOperation(operation *skillsOperati
 	c.finishOperation(operation, "succeeded", nil, "", "Skills operation completed.")
 }
 
+func skillUpdateNonActionResult(row SkillsSourceCatalogSkillSnapshot) (skillsOperationItemResult, bool) {
+	result := skillsOperationItemResult{Skill: row.Name, Action: "update"}
+	switch {
+	case row.Conflict || row.Status == "conflict":
+		result.Status = "conflict"
+		result.ErrorSummary = row.Error
+	case row.Status == "uninstalled":
+		result.Status = "skipped"
+		result.ErrorSummary = "Not installed; Update All does not install new skills."
+	case row.Status == "removed_upstream":
+		result.Status = "skipped"
+		result.ErrorSummary = "Removed upstream; manual uninstall is required."
+	case row.Status == "up_to_date":
+		result.Status = "skipped"
+		result.ErrorSummary = "Already up to date."
+	case row.Status == "error":
+		result.Status = "skipped"
+		result.ErrorSummary = row.Error
+	default:
+		return skillsOperationItemResult{}, false
+	}
+	return result, true
+}
+
 func (c *SkillsCommand) appendSkillsOperationResult(operation *skillsOperationSnapshot, result skillsOperationItemResult) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -975,6 +1095,7 @@ func pinnedSkillSource(source skillSourceSnapshot) string {
 
 func sanitizeSkillSourceError(message, source string) string {
 	message = strings.ReplaceAll(message, strings.TrimSpace(source), "[skill source]")
+	message = skillSourceSecretPattern.ReplaceAllString(message, "$1=[redacted]")
 	if len(message) > 500 {
 		message = message[:500]
 	}
