@@ -232,14 +232,11 @@ import {
   type ChatRealtimeFlushScheduler,
 } from '../chat/turns/chatRealtimeFlush';
 import {
-  SESSION_SEARCH_DEBOUNCE_MS,
-  buildSessionSearchSections,
-  formatSessionSearchResultMeta,
+  buildSessionSearchFilter,
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
-  splitSessionSearchTitleHighlight,
+  resolveSessionSearchProjects,
   type SessionSearchResultsByProjectId,
-  type SessionSearchSectionRow,
 } from '../chat/session/sessionSearchState';
 import {chatSearchMessageKey} from '../chat/search/chatSearchState';
 import {useChatSearchController} from '../chat/search/useChatSearchController';
@@ -3636,10 +3633,13 @@ export function App() {
   const draftSessionCreatePromisesRef = useRef<Record<string, Promise<RegistryChatSession>>>({});
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const [sessionSearchInput, setSessionSearchInput] = useState('');
+  const [sessionSearchProjectScope, setSessionSearchProjectScope] = useState('');
   const sessionSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [activeSessionSearchId, setActiveSessionSearchId] = useState('');
   const activeSessionSearchIdRef = useRef('');
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
+  const [sessionSearchProjectItems, setSessionSearchProjectItems] = useState<RegistryProject[]>([]);
+  const activeSessionSearchProjectItemsRef = useRef<RegistryProject[]>([]);
   const [searchResultsByProjectId, setSearchResultsByProjectId] = useState<SessionSearchResultsByProjectId>({});
   const [sessionSearchDoneByProjectId, setSessionSearchDoneByProjectId] = useState<Record<string, boolean>>({});
   const sessionSearchDoneByProjectIdRef = useRef<Record<string, boolean>>({});
@@ -3667,7 +3667,6 @@ export function App() {
     chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
   }, []);
   const sessionSearchUnchangedPollsRef = useRef(0);
-  const sessionSearchDebounceTimerRef = useRef<number | null>(null);
   const sessionSearchPollTimerRef = useRef<number | null>(null);
   const sessionSearchIdCounterRef = useRef(0);
   const [sessionSearchTargetTurn, setSessionSearchTargetTurn] = useState<{
@@ -5715,37 +5714,20 @@ export function App() {
     const color = resolveHubColor(hubColors, hubId);
     return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
   }, [hubColors]);
-  const sessionSearchSections = useMemo(
-    () => buildSessionSearchSections({
-      projects: visibleProjectItems,
+  const sessionSearchFilter = useMemo(
+    () => buildSessionSearchFilter({
+      projects: sessionSearchProjectItems,
       sessionsByProjectId: projectSessionsByProjectId,
       resultsByProjectId: searchResultsByProjectId,
     }),
-    [projectSessionsByProjectId, searchResultsByProjectId, visibleProjectItems],
+    [projectSessionsByProjectId, searchResultsByProjectId, sessionSearchProjectItems],
   );
-  const sessionSearchRows = useMemo(
-    () => sessionSearchSections.flatMap(section => section.rows.map(row => ({
-      projectId: section.project.projectId,
-      row,
-    }))),
-    [sessionSearchSections],
-  );
-  const [sessionSearchActiveResultIndex, setSessionSearchActiveResultIndex] = useState(0);
-  useEffect(() => {
-    setSessionSearchActiveResultIndex(current =>
-      Math.min(current, Math.max(0, sessionSearchRows.length - 1)),
-    );
-  }, [sessionSearchRows.length]);
   const archivedSessionSections = useMemo(
     () => buildArchivedSessionSections({
       projects: sortedProjectItems,
       archivedByProjectId,
     }),
     [archivedByProjectId, sortedProjectItems],
-  );
-  const sessionSearchResultCount = useMemo(
-    () => sessionSearchSections.reduce((sum, section) => sum + section.rows.length, 0),
-    [sessionSearchSections],
   );
   const sessionSearchActive = !!activeSessionSearchId;
   const sessionSearchHeaderExpanded = sessionSearchOpen || sessionSearchActive;
@@ -5781,47 +5763,35 @@ export function App() {
     sessionSearchHeaderExpanded,
     wideProjectActionMenu,
   ]);
-  const sessionSearchProjectDoneCount = useMemo(() => {
-    if (!activeSessionSearchId) {
-      return 0;
-    }
-    return visibleProjectItems.reduce(
-      (sum, item) => sum + (sessionSearchDoneByProjectId[item.projectId] === true ? 1 : 0),
-      0,
-    );
-  }, [activeSessionSearchId, sessionSearchDoneByProjectId, visibleProjectItems]);
   const sessionSearchErrorCount = useMemo(
     () => Object.values(sessionSearchErrorsByProjectId).filter(message => message.trim()).length,
     [sessionSearchErrorsByProjectId],
   );
   const sessionSearchAllDone = useMemo(() => {
-    if (!activeSessionSearchId || visibleProjectItems.length === 0) {
+    if (!activeSessionSearchId || sessionSearchProjectItems.length === 0) {
       return false;
     }
-    return visibleProjectItems.every(item => sessionSearchDoneByProjectId[item.projectId] === true);
-  }, [activeSessionSearchId, sessionSearchDoneByProjectId, visibleProjectItems]);
-  const sessionSearchStatusParts = useMemo(() => {
+    return sessionSearchProjectItems.every(item => sessionSearchDoneByProjectId[item.projectId] === true);
+  }, [activeSessionSearchId, sessionSearchDoneByProjectId, sessionSearchProjectItems]);
+  const sessionSearchStatus = useMemo(() => {
     if (!sessionSearchActive) {
-      return [];
+      return '';
     }
-    const resultLabel = `${sessionSearchResultCount} result${sessionSearchResultCount === 1 ? '' : 's'}`;
-    const parts = sessionSearchAllDone
-      ? [resultLabel]
-      : [
-          `Searching ${sessionSearchProjectDoneCount}/${visibleProjectItems.length} projects`,
-          resultLabel,
-        ];
+    if (!sessionSearchAllDone) {
+      return 'Searching...';
+    }
     if (sessionSearchErrorCount > 0) {
-      parts.push(`${sessionSearchErrorCount} error${sessionSearchErrorCount === 1 ? '' : 's'}`);
+      return 'Some projects failed';
     }
-    return parts;
+    if (sessionSearchFilter.projects.length === 0) {
+      return 'No matching sessions';
+    }
+    return '';
   }, [
     sessionSearchActive,
     sessionSearchAllDone,
     sessionSearchErrorCount,
-    sessionSearchProjectDoneCount,
-    sessionSearchResultCount,
-    visibleProjectItems.length,
+    sessionSearchFilter.projects.length,
   ]);
   useEffect(() => {
     if (!sessionSearchHeaderExpanded) {
@@ -5983,7 +5953,7 @@ export function App() {
   }, []);
   const cancelSessionSearch = useCallback(async (
     searchId = activeSessionSearchIdRef.current,
-    projectItems = visibleProjectItems,
+    projectItems = activeSessionSearchProjectItemsRef.current,
   ) => {
     const normalizedSearchId = searchId.trim();
     if (!normalizedSearchId) {
@@ -5994,7 +5964,7 @@ export function App() {
         service.cancelProjectSessionSearch(projectItem.projectId, normalizedSearchId),
       ),
     );
-  }, [visibleProjectItems]);
+  }, []);
 
   const querySessionSearch = useCallback(async (
     searchId = activeSessionSearchIdRef.current,
@@ -6004,7 +5974,8 @@ export function App() {
       return false;
     }
     const doneSnapshot = sessionSearchDoneByProjectIdRef.current;
-    const pendingProjects = visibleProjectItems.filter(projectItem =>
+    const projectItems = activeSessionSearchProjectItemsRef.current;
+    const pendingProjects = projectItems.filter(projectItem =>
       doneSnapshot[projectItem.projectId] !== true,
     );
     if (pendingProjects.length === 0) {
@@ -6051,13 +6022,14 @@ export function App() {
       ? 0
       : sessionSearchUnchangedPollsRef.current + 1;
     return anyChanged;
-  }, [visibleProjectItems]);
+  }, []);
 
   const clearSessionSearchState = useCallback(() => {
     activeSessionSearchIdRef.current = '';
+    activeSessionSearchProjectItemsRef.current = [];
     setActiveSessionSearchId('');
     setSessionSearchQuery('');
-    setSessionSearchActiveResultIndex(0);
+    setSessionSearchProjectItems([]);
     setSearchResultsByProjectId({});
     setSessionSearchDoneByProjectId({});
     setSessionSearchErrorsByProjectId({});
@@ -6070,29 +6042,30 @@ export function App() {
 
   const exitSessionSearch = useCallback(async () => {
     const searchId = activeSessionSearchIdRef.current;
-    const projectItems = visibleProjectItems;
+    const projectItems = activeSessionSearchProjectItemsRef.current;
     clearSessionSearchState();
     setSessionSearchOpen(false);
     await cancelSessionSearch(searchId, projectItems);
-  }, [cancelSessionSearch, clearSessionSearchState, visibleProjectItems]);
+  }, [cancelSessionSearch, clearSessionSearchState]);
 
   const startSessionSearch = useCallback(async () => {
     const query = sessionSearchInput.trim();
     if (!query) {
-      await exitSessionSearch();
       return;
     }
     const previousSearchId = activeSessionSearchIdRef.current;
-    const projectItems = visibleProjectItems;
-    if (previousSearchId) {
-      await cancelSessionSearch(previousSearchId, projectItems);
+    const previousProjectItems = activeSessionSearchProjectItemsRef.current;
+    const projectItems = resolveSessionSearchProjects(visibleProjectItems, sessionSearchProjectScope);
+    if (projectItems.length === 0) {
+      return;
     }
     sessionSearchIdCounterRef.current += 1;
     const searchId = `session-search-${Date.now()}-${sessionSearchIdCounterRef.current}`;
     activeSessionSearchIdRef.current = searchId;
+    activeSessionSearchProjectItemsRef.current = projectItems;
     setActiveSessionSearchId(searchId);
     setSessionSearchQuery(query);
-    setSessionSearchActiveResultIndex(0);
+    setSessionSearchProjectItems(projectItems);
     setSearchResultsByProjectId({});
     setSessionSearchErrorsByProjectId({});
     setSessionSearchDoneByProjectId(
@@ -6100,6 +6073,9 @@ export function App() {
     );
     sessionSearchUnchangedPollsRef.current = 0;
     setSessionSearchOpen(true);
+    if (previousSearchId) {
+      cancelSessionSearch(previousSearchId, previousProjectItems).catch(() => undefined);
+    }
 
     await Promise.all(
       projectItems.map(async projectItem => {
@@ -6123,42 +6099,11 @@ export function App() {
     if (activeSessionSearchIdRef.current === searchId) {
       querySessionSearch(searchId).catch(() => undefined);
     }
-  }, [cancelSessionSearch, exitSessionSearch, querySessionSearch, sessionSearchInput, visibleProjectItems]);
-
-  useEffect(() => {
-    if (sessionSearchDebounceTimerRef.current !== null) {
-      window.clearTimeout(sessionSearchDebounceTimerRef.current);
-      sessionSearchDebounceTimerRef.current = null;
-    }
-    if (!sessionSearchOpen) {
-      return;
-    }
-    const previousSearchId = activeSessionSearchIdRef.current;
-    if (previousSearchId) {
-      clearSessionSearchState();
-      cancelSessionSearch(previousSearchId, visibleProjectItems).catch(() => undefined);
-    } else if (!sessionSearchInput.trim()) {
-      clearSessionSearchState();
-    }
-    if (!sessionSearchInput.trim()) {
-      return;
-    }
-    sessionSearchDebounceTimerRef.current = window.setTimeout(() => {
-      sessionSearchDebounceTimerRef.current = null;
-      startSessionSearch().catch(() => undefined);
-    }, SESSION_SEARCH_DEBOUNCE_MS);
-    return () => {
-      if (sessionSearchDebounceTimerRef.current !== null) {
-        window.clearTimeout(sessionSearchDebounceTimerRef.current);
-        sessionSearchDebounceTimerRef.current = null;
-      }
-    };
   }, [
     cancelSessionSearch,
-    clearSessionSearchState,
+    querySessionSearch,
     sessionSearchInput,
-    sessionSearchOpen,
-    startSessionSearch,
+    sessionSearchProjectScope,
     visibleProjectItems,
   ]);
 
@@ -6181,8 +6126,9 @@ export function App() {
         return;
       }
       const doneSnapshot = sessionSearchDoneByProjectIdRef.current;
-      const allDone = visibleProjectItems.length > 0 &&
-        visibleProjectItems.every(projectItem => doneSnapshot[projectItem.projectId] === true);
+      const projectItems = activeSessionSearchProjectItemsRef.current;
+      const allDone = projectItems.length > 0 &&
+        projectItems.every(projectItem => doneSnapshot[projectItem.projectId] === true);
       if (allDone) {
         return;
       }
@@ -6202,7 +6148,7 @@ export function App() {
         sessionSearchPollTimerRef.current = null;
       }
     };
-  }, [activeSessionSearchId, querySessionSearch, visibleProjectItems]);
+  }, [activeSessionSearchId, querySessionSearch]);
   useEffect(() => {
     floatingDragStateRef.current = floatingDragState;
   }, [floatingDragState]);
@@ -14597,50 +14543,10 @@ export function App() {
 
   const handleSessionSearchResultClick = async (
     targetProjectId: string,
-    row: SessionSearchSectionRow,
+    sessionId: string,
     options?: {closeMobileDrawer?: boolean},
   ) => {
-    const promptTargetTurnIndex = row.result.source === 'prompt'
-      ? row.result.turnIndex
-      : undefined;
-    await selectProjectChatSession(targetProjectId, row.session.sessionId, {
-      ...options,
-      targetTurnIndex: promptTargetTurnIndex,
-    });
-    if (row.result.source !== 'prompt' || !row.result.turnIndex) {
-      return;
-    }
-    const runtimeKey = buildChatRuntimeKey(targetProjectId, row.session.sessionId);
-    const generation = Date.now();
-    setSessionSearchTargetTurn({
-      runtimeKey,
-      turnIndex: row.result.turnIndex,
-      generation,
-    });
-    if (sessionSearchHighlightTimerRef.current !== null) {
-      window.clearTimeout(sessionSearchHighlightTimerRef.current);
-    }
-    sessionSearchHighlightTimerRef.current = window.setTimeout(() => {
-      setSessionSearchTargetTurn(current =>
-        current?.generation === generation ? null : current,
-      );
-    }, 2000);
-  };
-
-  const navigateSessionSearchResult = (delta: 1 | -1) => {
-    if (sessionSearchRows.length === 0) {
-      return;
-    }
-    const nextIndex =
-      (sessionSearchActiveResultIndex + delta + sessionSearchRows.length) % sessionSearchRows.length;
-    setSessionSearchActiveResultIndex(nextIndex);
-    const target = sessionSearchRows[nextIndex];
-    if (!target) {
-      return;
-    }
-    handleSessionSearchResultClick(target.projectId, target.row, {
-      closeMobileDrawer: !isWide,
-    }).catch(() => undefined);
+    await selectProjectChatSession(targetProjectId, sessionId, options);
   };
 
   const handleSessionSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -14656,7 +14562,7 @@ export function App() {
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      navigateSessionSearchResult(event.shiftKey ? -1 : 1);
+      startSessionSearch().catch(() => undefined);
     }
   };
 
@@ -14682,31 +14588,13 @@ export function App() {
     }, 2000);
   }, [selectedChatEncodedKey]);
 
-  const renderSessionSearchHighlightedTitle = (
-    title: string,
-    row: SessionSearchSectionRow,
-  ) => {
-    const segments = splitSessionSearchTitleHighlight(title, sessionSearchQuery);
-    if (segments.length === 0) {
-      return title;
-    }
-    return segments.map((segment, index) => (
-      <span
-        key={`${row.session.sessionId}:title-highlight:${index}`}
-        className={segment.match ? 'session-search-title-highlight' : undefined}
-      >
-        {segment.text}
-      </span>
-    ));
-  };
-
   const renderSessionSearchStatusLine = () => {
-    if (!sessionSearchActive || sessionSearchStatusParts.length === 0) {
+    if (!sessionSearchStatus) {
       return null;
     }
     return (
       <div className="chat-header-search-status">
-        {sessionSearchStatusParts.join(' · ')}
+        {sessionSearchStatus}
       </div>
     );
   };
@@ -14743,6 +14631,28 @@ export function App() {
             placeholder="Search sessions"
             aria-label="Search sessions"
           />
+          <select
+            className="session-search-project-select"
+            value={sessionSearchProjectScope}
+            onChange={event => setSessionSearchProjectScope(event.target.value)}
+            aria-label="Search project"
+          >
+            <option value="">All Projects</option>
+            {visibleProjectItems.map(projectItem => (
+              <option key={projectItem.projectId} value={projectItem.projectId}>
+                {projectItem.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="session-search-icon-btn session-search-submit-btn"
+            aria-label="Run session search"
+            disabled={!sessionSearchInput.trim()}
+            onClick={() => startSessionSearch().catch(() => undefined)}
+          >
+            <SessionIcon name="search" />
+          </button>
           <button
             type="button"
             className="session-search-icon-btn"
@@ -15092,125 +15002,6 @@ export function App() {
     }
     handleCloseTerminal(terminal).catch(err => setError(err instanceof Error ? err.message : String(err)));
   }, [handleCloseTerminal]);
-
-  const renderSessionSearchRow = (
-    targetProjectId: string,
-    row: SessionSearchSectionRow,
-    mobile: boolean,
-    active: boolean,
-  ) => {
-    const sessionAgent = (row.session.agentType || '').trim();
-    const title = resolveSessionDisplayTitle(row.session) || row.session.sessionId;
-    const selected =
-      selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, row.session.sessionId);
-    return (
-      <div
-        key={`${targetProjectId}:search:${row.session.sessionId}`}
-        className="project-session-row-wrap session-search-row-wrap"
-      >
-        {renderSessionLeadingState(row.session, targetProjectId)}
-        <button
-          type="button"
-        className={`wide-session-row session-search-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}${active ? ' active' : ''}`}
-        aria-current={active ? 'true' : undefined}
-        data-tooltip={title}
-          onClick={() => {
-            handleSessionSearchResultClick(targetProjectId, row, {
-              closeMobileDrawer: mobile,
-            }).catch(() => undefined);
-          }}
-        >
-          <span className="wide-session-title session-search-title">
-            {renderSessionSearchHighlightedTitle(title, row)}
-          </span>
-          <span className="session-search-result-meta">
-            {formatSessionSearchResultMeta(row.result)}
-          </span>
-          <AgentTag agentType={sessionAgent} />
-          <span className="wide-session-time" data-tooltip={row.session.updatedAt || ''}>
-            {formatCompactRelativeAge(row.session.updatedAt)}
-          </span>
-        </button>
-      </div>
-    );
-  };
-
-  const renderSessionSearchResults = (mobile: boolean) => {
-    const errorMessages = Object.entries(sessionSearchErrorsByProjectId)
-      .map(([entryProjectId, message]) => {
-        const text = message.trim();
-        if (!text) {
-          return null;
-        }
-        const projectName = projects.find(item => item.projectId === entryProjectId)?.name || entryProjectId;
-        return `${projectName}: ${text}`;
-      })
-      .filter((item): item is string => item !== null);
-    const body = (
-      <>
-        {sessionSearchSections.map(section => {
-          const projectHub = projectHubId(section.project);
-          const projectHubVariant = tagVariantClass('wide-project-hub', projectHub);
-          return (
-            <div
-              key={`session-search-project:${section.project.projectId}`}
-              className={`wide-project-section session-search-project-section${section.project.projectId === projectId ? ' active' : ''}`}
-            >
-              <div className={`wide-project-row session-search-project-row${mobile ? ' mobile-project-row' : ''}`}>
-                <div className="wide-project-toggle session-search-project-label">
-                  <span className="wide-project-folder-wrap">
-                    <SessionIcon
-                      name="search"
-                      className={`wide-project-folder-icon ${projectHubVariant}`}
-                      style={hubAccentStyle(projectHub)}
-                    />
-                  </span>
-                  <span className="wide-project-title-group">
-                    <span className="wide-project-name" data-tooltip={section.project.name}>
-                      {section.project.name}
-                    </span>
-                    <span className={`wide-project-hub-tag ${projectHubVariant}`} style={hubAccentStyle(projectHub)}>
-                      <span className="wide-project-hub-dot" aria-hidden="true" />
-                      <span className="wide-project-hub-label">{projectHub}</span>
-                    </span>
-                  </span>
-                </div>
-              </div>
-              <div className={`wide-project-session-list session-search-result-list${mobile ? ' mobile-project-session-list' : ''}`}>
-                {section.rows.map(row => {
-                  const active = sessionSearchRows[sessionSearchActiveResultIndex]?.projectId === section.project.projectId &&
-                    sessionSearchRows[sessionSearchActiveResultIndex]?.row.session.sessionId === row.session.sessionId;
-                  return renderSessionSearchRow(section.project.projectId, row, mobile, active);
-                })}
-              </div>
-            </div>
-          );
-        })}
-        {sessionSearchSections.length === 0 ? (
-          <div className="wide-project-empty session-search-empty">
-            {sessionSearchAllDone ? 'No matching sessions' : 'Searching... 0 results'}
-          </div>
-        ) : null}
-        {errorMessages.length > 0 ? (
-          <div className="session-search-error-list">
-            {errorMessages.map(message => (
-              <div key={message} className="session-search-error">
-                {message}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </>
-    );
-    if (mobile) {
-      return (
-        <div className="mobile-project-session-nav session-search-nav">
-          {body}
-        </div>
-      );
-    }
-    return body;
-  };
 
   const renderArchiveBatchStatus = () => {
     if (!archiveBatchProgress && !archiveBatchSummary) {
@@ -16694,11 +16485,11 @@ export function App() {
     recentCollapsed: collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID),
     showRecentHeading,
     onToggleRecent: () => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID),
-    projectItems: visibleProjectItems,
+    projectItems: sessionSearchActive ? sessionSearchFilter.projects : visibleProjectItems,
     activeProjectId: projectId,
     collapsedProjectIds,
     pinnedProjectIds,
-    sessionsByProjectId: projectSessionsByProjectId,
+    sessionsByProjectId: sessionSearchActive ? sessionSearchFilter.sessionsByProjectId : projectSessionsByProjectId,
     draftSessionsByProjectId,
     olderExpandedByProjectId: olderSessionsExpandedByProjectId,
     selectedChatEncodedKey,
@@ -16719,6 +16510,12 @@ export function App() {
       return {visibleSessions: split.visibleSessions as Array<{sessionId: string; updatedAt?: string}>, showToggle: split.showToggle, hiddenOlderCount: split.hiddenOlderCount};
     },
     onSelectSession: (targetProjectId: string, sessionId: string) => {
+      if (sessionSearchActive) {
+        handleSessionSearchResultClick(targetProjectId, sessionId, {
+          closeMobileDrawer: mobile,
+        }).catch(() => undefined);
+        return;
+      }
       if (mobile) {
         selectProjectChatSession(targetProjectId, sessionId, {closeMobileDrawer: true}).catch(() => undefined);
       } else {
@@ -16752,7 +16549,11 @@ export function App() {
     ),
     hiddenProjectRows: renderHiddenProjectRows(mobile),
     archivedRows: renderArchivedSessionRows(mobile),
-    searchResults: renderSessionSearchResults(mobile),
+    searchStatus: sessionSearchFilter.projects.length === 0 ? (
+      <div className="wide-project-empty session-search-empty">
+        {sessionSearchStatus}
+      </div>
+    ) : null,
   });
 
   const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {

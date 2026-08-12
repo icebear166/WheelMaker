@@ -3,7 +3,7 @@ import path from 'path';
 
 import {readWebStyles} from '../testHelpers/webStyles';
 describe('web session search UI wiring', () => {
-  test('runs live debounced search with keyboard navigation and active result metadata', () => {
+  test('submits session search explicitly with an All Projects or single-project scope', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const controlsStart = main.indexOf('const renderChatHeaderSearchControls = () =>');
@@ -12,11 +12,15 @@ describe('web session search UI wiring', () => {
     expect(controlsEnd).toBeGreaterThan(controlsStart);
     const controls = main.slice(controlsStart, controlsEnd);
 
-    expect(main).toContain('SESSION_SEARCH_DEBOUNCE_MS');
-    expect(main).toContain('sessionSearchDebounceTimerRef');
+    expect(main).toContain("const [sessionSearchProjectScope, setSessionSearchProjectScope] = useState('');");
     expect(main).toContain('handleSessionSearchInputKeyDown');
-    expect(main).toContain('navigateSessionSearchResult');
-    expect(main).toContain('formatSessionSearchResultMeta(row.result)');
+    expect(main).toContain("const projectItems = resolveSessionSearchProjects(visibleProjectItems, sessionSearchProjectScope);");
+    expect(main).not.toContain('SESSION_SEARCH_DEBOUNCE_MS');
+    expect(main).not.toContain('sessionSearchDebounceTimerRef');
+    expect(main).not.toContain('navigateSessionSearchResult');
+    expect(main).not.toContain('formatSessionSearchResultMeta');
+    expect(main).not.toContain('splitSessionSearchTitleHighlight');
+    expect(main).not.toContain('renderSessionSearchRow');
     expect(main).toContain('activeMatch: chatSearchActiveMatch');
     expect(main).toContain('data-chat-search-match-root');
     expect(main).toContain('applyChatSearchCodeHighlights');
@@ -26,15 +30,22 @@ describe('web session search UI wiring', () => {
     expect(main).toContain("event.key === 'ArrowUp'");
     expect(main).toContain('chat-turn-search-highlight-active');
     expect(main).not.toContain('highlightActive={turnIsChatSearchActive}');
-    expect(main).toContain("${active ? ' active' : ''}");
-    expect(main).toContain('aria-current={active ? \'true\' : undefined}');
     expect(controls).toContain('onKeyDown={handleSessionSearchInputKeyDown}');
-    expect(controls).not.toContain('onSubmit=');
-    expect(controls).not.toContain('type="submit"');
-    expect(controls).not.toContain('name="check"');
+    expect(controls).toContain('value={sessionSearchProjectScope}');
+    expect(controls).toContain('onChange={event => setSessionSearchProjectScope(event.target.value)}');
+    expect(controls).toContain('<option value="">All Projects</option>');
+    expect(controls).toContain('aria-label="Run session search"');
+    expect(controls).toContain('startSessionSearch().catch(() => undefined)');
+
+    const keydownStart = main.indexOf('const handleSessionSearchInputKeyDown = (');
+    const keydownEnd = main.indexOf('const jumpToChatPromptTurn =', keydownStart);
+    const keydown = main.slice(keydownStart, keydownEnd);
+    expect(keydown).toContain("event.key === 'Enter'");
+    expect(keydown).toContain('startSessionSearch().catch(() => undefined)');
+    expect(keydown).not.toContain('navigateSessionSearchResult');
   });
 
-  test('keeps search protocol wiring with prompt turn navigation', () => {
+  test('keeps per-project protocol polling bound to the submitted project snapshot', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = readWebStyles(projectRoot);
@@ -43,45 +54,22 @@ describe('web session search UI wiring', () => {
     expect(main).toContain('startSessionSearch');
     expect(main).toContain('querySessionSearch');
     expect(main).toContain('cancelSessionSearch');
-    expect(main).toContain('scrollToTurnIndex');
-    expect(main).toContain('sessionSearchTargetTurn');
+    expect(main).toContain('activeSessionSearchProjectItemsRef');
+    expect(main).toContain('activeSessionSearchProjectItemsRef.current = projectItems;');
+    expect(main).toContain('const projectItems = activeSessionSearchProjectItemsRef.current;');
+    expect(main).toContain('buildSessionSearchFilter({');
+    expect(main).toContain('projectItems: sessionSearchActive ? sessionSearchFilter.projects : visibleProjectItems');
+    expect(main).toContain('sessionsByProjectId: sessionSearchActive ? sessionSearchFilter.sessionsByProjectId : projectSessionsByProjectId');
+    expect(main).not.toContain('renderSessionSearchResults');
     expect(styles).toContain('.session-search-control');
     expect(styles).toContain('.chat-turn-search-highlight');
   });
 
-  test('keeps the outer search frame on the active turn only', () => {
+  test('keeps the outer search frame owned by current-session search', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(main).toMatch(
-      /const searchHighlighted =\s*\(sessionSearchTargetTurn\?\.runtimeKey === selectedChatEncodedKey\s*&&\s*sessionSearchTargetTurn\.turnIndex === \(message\.turnIndex \?\? 0\)\)\s*\|\|\s*turnIsChatSearchActive;/,
-    );
     expect(main).toMatch(/const searchHighlighted =\s*turnIsChatSearchActive;/);
-  });
-
-  test('loads the matched prompt turn before applying search-result navigation', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const clickStart = main.indexOf('const handleSessionSearchResultClick = async (');
-    const clickEnd = main.indexOf('const renderSessionSearchHighlightedTitle = (', clickStart);
-    expect(clickStart).toBeGreaterThanOrEqual(0);
-    expect(clickEnd).toBeGreaterThan(clickStart);
-    const clickBody = main.slice(clickStart, clickEnd);
-
-    expect(clickBody).toContain("row.result.source === 'prompt'");
-    expect(clickBody).toContain('targetTurnIndex: promptTargetTurnIndex');
-    expect(main).toContain('const searchTargetTurnIsVisible = chatDisplayIndex.items.some(');
-    expect(main).toContain('!searchTargetTurnIsVisible');
-
-    const selectStart = main.indexOf('const selectProjectChatSession = async (');
-    const selectEnd = main.indexOf('const selectWideProjectSession = async', selectStart);
-    expect(selectStart).toBeGreaterThanOrEqual(0);
-    expect(selectEnd).toBeGreaterThan(selectStart);
-    const selectBody = main.slice(selectStart, selectEnd);
-    expect(selectBody).toContain('targetTurnIndex?: number');
-    expect(selectBody).toContain('forceFull: hasTargetTurnIndex');
-    expect(selectBody).toContain('incremental: !hasTargetTurnIndex');
-    expect(selectBody).toContain('revealTurnIndex: targetTurnIndex');
   });
 
   test('keeps session search controls in session panels and the mobile chat header', () => {
@@ -141,7 +129,7 @@ describe('web session search UI wiring', () => {
     expect(mobileHeaderBlock).toContain('height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
   });
 
-  test('renders full Hub labels and aggregate header search status text', () => {
+  test('renders full Hub labels and compact search state without result counts', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = readWebStyles(projectRoot);
@@ -157,16 +145,14 @@ describe('web session search UI wiring', () => {
       hubSummary.indexOf('<span className="chat-hub-summary-project-label">{projectLabel}</span>'),
     );
     expect(hubSummary).not.toContain('{mobile ? (');
-    expect(main).toContain('const sessionSearchProjectDoneCount = useMemo(');
-    expect(main).toContain("`Searching ${sessionSearchProjectDoneCount}/${visibleProjectItems.length} projects`");
-    expect(main).toContain('parts.push(`${sessionSearchErrorCount} error${sessionSearchErrorCount === 1 ? \'\' : \'s\'}`);');
-    expect(main).toContain('sessionSearchStatusParts.join(\' · \')');
+    expect(main).toContain("return 'Searching...';");
+    expect(main).toContain("return 'Some projects failed';");
+    expect(main).toContain("return 'No matching sessions';");
     expect(main).not.toContain('className="chat-hub-summary-count"');
     expect(main).not.toContain('Prompt · turn');
     expect(main).not.toContain('matched prompt text');
-    expect(main).not.toContain(') : row.result.source === \'prompt\' ? (');
-    expect(main).toContain('session-search-result-meta');
-    expect(main).toContain('data-tooltip={title}');
+    expect(main).not.toContain('session-search-result-meta');
+    expect(main).not.toContain('sessionSearchResultCount');
 
     const hubButtonBlock = (styles.match(/\.chat-hub-summary-button \{[\s\S]*?\n\}/g) ?? [])
       .find(block => block.includes('height: 24px;')) ?? '';

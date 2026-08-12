@@ -77,7 +77,7 @@ export type SessionListViewProps = {
   emptyProjectsHint: ReactNode;
   hiddenProjectRows: ReactNode;
   archivedRows: ReactNode;
-  searchResults: ReactNode;
+  searchStatus: ReactNode;
 };
 
 export function SessionListView(props: SessionListViewProps) {
@@ -102,15 +102,13 @@ export function SessionListView(props: SessionListViewProps) {
     emptyProjectsHint,
     hiddenProjectRows,
     archivedRows,
-    searchResults,
+    searchStatus,
   } = props;
 
   if (mode === 'archived') {
     return <>{archivedRows}</>;
   }
-  if (mode === 'search') {
-    return <>{searchResults}</>;
-  }
+  const searchMode = mode === 'search';
 
   const renderRow = (projectId: string, session: AnySession, recent: boolean) => {
     const title = props.resolveTitle(session) || session.sessionId;
@@ -130,9 +128,9 @@ export function SessionListView(props: SessionListViewProps) {
         markColor={session.markColor}
         recent={recent}
         leadingState={props.renderLeadingState(session, projectId)}
-        gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}
+        gestureHandlers={searchMode ? undefined : bindSessionContextMenu({projectId, sessionId: session.sessionId})}
         onClick={event => props.onSelectSession(projectId, session.sessionId, event)}
-        onUnpin={() => props.onUnpinSession(projectId, session.sessionId)}
+        onUnpin={searchMode ? undefined : () => props.onUnpinSession(projectId, session.sessionId)}
         unpinLabel={`Unpin session ${title}`}
       />
     );
@@ -141,7 +139,7 @@ export function SessionListView(props: SessionListViewProps) {
   return (
     <>
       {!hasProjects ? emptyProjectsHint : null}
-      {recentGroups.length > 0 ? (
+      {!searchMode && recentGroups.length > 0 ? (
         <RecentSessionsSection
           groups={recentGroups}
           collapsed={recentCollapsed}
@@ -155,8 +153,10 @@ export function SessionListView(props: SessionListViewProps) {
         const projectId = item.projectId;
         const collapsed = props.collapsedProjectIds.includes(projectId);
         const sessions = props.sessionsByProjectId[projectId] ?? [];
-        const drafts = props.draftSessionsByProjectId[projectId] ?? [];
-        const split = props.splitOlder(projectId, sessions);
+        const drafts = searchMode ? [] : props.draftSessionsByProjectId[projectId] ?? [];
+        const split = searchMode
+          ? {visibleSessions: sessions, showToggle: false, hiddenOlderCount: 0}
+          : props.splitOlder(projectId, sessions);
         const hubId = item.hubId || 'local';
         return (
           <ProjectSection
@@ -168,7 +168,8 @@ export function SessionListView(props: SessionListViewProps) {
             collapsed={collapsed}
             pinned={props.pinnedProjectIds.includes(projectId)}
             active={projectId === props.activeProjectId}
-            projectGestureHandlers={bindProjectContextMenu(projectId)}
+            readOnly={searchMode}
+            projectGestureHandlers={searchMode ? undefined : bindProjectContextMenu(projectId)}
             onToggleCollapsed={() => props.onToggleProjectCollapsed(projectId)}
             onNew={event => {
               event.stopPropagation();
@@ -179,7 +180,7 @@ export function SessionListView(props: SessionListViewProps) {
               props.onOpenProjectMenu(projectId, 'resume', event.currentTarget);
             }}
             onTogglePin={() => props.onTogglePinnedProject(projectId)}
-            error={mobile ? props.mobileSessionErrors[projectId] ?? '' : ''}
+            error={!searchMode && mobile ? props.mobileSessionErrors[projectId] ?? '' : ''}
             onRetryError={props.onRetryMobileSessions}
           >
             {drafts.map(draft => (
@@ -211,11 +212,12 @@ export function SessionListView(props: SessionListViewProps) {
                 </span>
               </button>
             ) : null}
-            {sessions.length === 0 ? <div className="wide-project-empty">No sessions yet.</div> : null}
+            {!searchMode && sessions.length === 0 ? <div className="wide-project-empty">No sessions yet.</div> : null}
           </ProjectSection>
         );
       })}
-      {hiddenProjectRows}
+      {!searchMode ? hiddenProjectRows : null}
+      {searchMode ? searchStatus : null}
     </>
   );
 }

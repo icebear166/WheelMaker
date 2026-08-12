@@ -702,6 +702,24 @@
   color: color-mix(in srgb, var(--text-secondary) 80%, transparent);
 }
 
+.session-search-project-select {
+  min-width: 0;
+  max-width: 104px;
+  height: 22px;
+  padding: 0 4px;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  outline: none;
+  text-overflow: ellipsis;
+}
+
+.session-search-project-select:focus-visible {
+  color: var(--text-primary);
+}
+
 .session-search-icon-btn {
   appearance: none;
   flex: 0 0 auto;
@@ -723,6 +741,17 @@
   border-color: color-mix(in srgb, var(--border-subtle) 80%, transparent);
   background: var(--hover);
   color: var(--text-primary);
+}
+
+.session-search-icon-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.session-search-icon-btn:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
 }
 
 .session-search-status {
@@ -748,38 +777,8 @@
   text-overflow: ellipsis;
 }
 
-.session-search-project-label {
-  cursor: default;
-}
-
-.session-search-result-list {
-  animation: none;
-}
-
-.session-search-row {
-  grid-template-columns: 9px minmax(0, 1fr) auto auto;
-}
-
-.session-search-title-highlight {
-  border-radius: 3px;
-  background: color-mix(in srgb, #ffd166 38%, transparent);
-  color: color-mix(in srgb, var(--text-primary) 94%, #ffd166);
-}
-
 .session-search-empty {
   margin: 4px 0 0 21px;
-}
-
-.session-search-error-list {
-  margin: 8px 4px 0 21px;
-  display: grid;
-  gap: 4px;
-}
-
-.session-search-error {
-  color: #ff8a8a;
-  font-size: 11px;
-  line-height: 1.35;
 }
 
 .session-state-marker.archived {
@@ -8411,28 +8410,6 @@ li.chat-reply-target::marker {
 
 .chat-search-status.no-results {
   color: var(--state-warning);
-}
-
-.session-search-result-meta {
-  flex: 0 0 auto;
-  max-width: 96px;
-  overflow: hidden;
-  color: var(--text-tertiary);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-search-row.active,
-.session-search-row[aria-current='true'] {
-  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-raised));
-  box-shadow: inset 2px 0 0 var(--accent-primary);
-  color: var(--text-primary);
-}
-
-.session-search-row.active .session-search-result-meta,
-.session-search-row[aria-current='true'] .session-search-result-meta {
-  color: color-mix(in srgb, var(--accent-primary) 70%, var(--text-secondary));
 }
 
 .chat-search-match {

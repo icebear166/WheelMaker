@@ -104,4 +104,17 @@ describe('ProjectSection', () => {
     expect(props.onNew).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
+
+  it('keeps collapse but removes management actions and gestures when read only', async () => {
+    const {tree, props} = await renderSection({readOnly: true} as Partial<React.ComponentProps<typeof ProjectSection>>);
+
+    const toggle = tree.root.findByProps({className: 'wide-project-toggle'});
+    expect(toggle.props['data-context-menu-target']).toBeUndefined();
+    expect(tree.root.findAllByProps({'data-tooltip': 'New session'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({'data-tooltip': 'Resume session'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({'data-tooltip': 'Pin project to top'})).toHaveLength(0);
+
+    await act(async () => toggle.props.onClick({}));
+    expect(props.onToggleCollapsed).toHaveBeenCalledTimes(1);
+  });
 });

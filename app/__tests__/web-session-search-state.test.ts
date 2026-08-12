@@ -1,10 +1,8 @@
 import {
-  SESSION_SEARCH_DEBOUNCE_MS,
-  buildSessionSearchSections,
-  formatSessionSearchResultMeta,
+  buildSessionSearchFilter,
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
-  splitSessionSearchTitleHighlight,
+  resolveSessionSearchProjects,
 } from '../web/src/chat/session/sessionSearchState';
 import type {RegistryChatSession, RegistryProject, RegistrySessionSearchResult} from '../web/src/registry/registryTypes';
 
@@ -24,11 +22,10 @@ const projects: RegistryProject[] = [
 ];
 
 describe('session search state helpers', () => {
-  test('formats source and optional turn metadata without inventing snippets', () => {
-    expect(formatSessionSearchResultMeta({source: 'title'})).toBe('Title');
-    expect(formatSessionSearchResultMeta({source: 'prompt', turnIndex: 4})).toBe('Prompt · Turn 4');
-    expect(formatSessionSearchResultMeta({source: 'prompt', turnIndex: 0})).toBe('Prompt');
-    expect(SESSION_SEARCH_DEBOUNCE_MS).toBe(300);
+  test('resolves all visible projects or one selected visible project', () => {
+    expect(resolveSessionSearchProjects(projects, '')).toEqual(projects);
+    expect(resolveSessionSearchProjects(projects, 'p2')).toEqual([projects[1]]);
+    expect(resolveSessionSearchProjects(projects, 'hidden')).toEqual([]);
   });
 
   test('backs off polling after three unchanged query responses', () => {
@@ -37,12 +34,12 @@ describe('session search state helpers', () => {
     expect(resolveSessionSearchPollDelay({changed: false, unchangedPolls: 3})).toBe(800);
   });
 
-  test('replaces full per-project result sets and reports visible changes', () => {
+  test('compares result sets by session identity rather than match metadata', () => {
     const first: RegistrySessionSearchResult[] = [
       {projectId: 'p1', sessionId: 's1', source: 'title'},
     ];
     const second: RegistrySessionSearchResult[] = [
-      {projectId: 'p1', sessionId: 's2', source: 'prompt', turnIndex: 7},
+      {projectId: 'p1', sessionId: 's1', source: 'prompt', turnIndex: 7},
     ];
 
     const afterFirst = mergeSessionSearchResultsByProject({}, 'p1', first);
@@ -51,12 +48,12 @@ describe('session search state helpers', () => {
 
     expect(afterFirst.changed).toBe(true);
     expect(afterSame.changed).toBe(false);
-    expect(afterSecond.changed).toBe(true);
-    expect(afterSecond.resultsByProjectId.p1).toEqual(second);
+    expect(afterSecond.changed).toBe(false);
+    expect(afterSecond.resultsByProjectId).toBe(afterFirst.resultsByProjectId);
   });
 
-  test('builds sections in normal project and session order', () => {
-    const sections = buildSessionSearchSections({
+  test('builds one filtered row per session in normal project and session order', () => {
+    const filtered = buildSessionSearchFilter({
       projects,
       sessionsByProjectId: {
         p1: [session('s2', 'Second'), session('s1', 'First')],
@@ -66,23 +63,14 @@ describe('session search state helpers', () => {
         p1: [
           {projectId: 'p1', sessionId: 's1', source: 'title'},
           {projectId: 'p1', sessionId: 's2', source: 'prompt', turnIndex: 4},
+          {projectId: 'p1', sessionId: 's2', source: 'title'},
         ],
         p2: [],
       },
     });
 
-    expect(sections).toHaveLength(1);
-    expect(sections[0].project.projectId).toBe('p1');
-    expect(sections[0].rows.map(row => row.session.sessionId)).toEqual(['s2', 's1']);
-    expect(sections[0].rows[0].result).toEqual({projectId: 'p1', sessionId: 's2', source: 'prompt', turnIndex: 4});
-  });
-
-  test('splits title highlight segments case-insensitively', () => {
-    expect(splitSessionSearchTitleHighlight('Deploy deployer', 'dep')).toEqual([
-      {text: 'Dep', match: true},
-      {text: 'loy ', match: false},
-      {text: 'dep', match: true},
-      {text: 'loyer', match: false},
-    ]);
+    expect(filtered.projects.map(project => project.projectId)).toEqual(['p1']);
+    expect(filtered.sessionsByProjectId.p1.map(item => item.sessionId)).toEqual(['s2', 's1']);
+    expect(filtered.sessionsByProjectId.p2).toEqual([]);
   });
 });

@@ -42,7 +42,7 @@ Run: `git diff --check -- docs/wiki/frontend-interaction/pc-chat-sidebar-modes.m
 
 Expected: PASS with only the two approved wiki targets changed in this task.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint** — `407f36b5 docs(wiki): define lazy session search`
 
 Invoke `git-workflow` checkpoint for the two wiki files after Step 4 passes; record commit hash and subject.
 
@@ -62,7 +62,7 @@ Invoke `git-workflow` checkpoint for the two wiki files after Step 4 passes; rec
 
 **Acceptance:** Typing and scope changes are draft-only; search button and Enter submit the same frozen query/scope, cancel and clear the prior run, then progressively filter the ordinary ProjectSection/SessionRow list while exposing no management actions or match metadata.
 
-- [ ] **Step 1: Write failing state-helper tests**
+- [x] **Step 1: Write failing state-helper tests**
 
 Replace metadata/title-highlight/debounce expectations with tests that:
 
@@ -75,41 +75,41 @@ expect(buildSessionSearchFilter(...).sessionsByProjectId.p1.map(item => item.ses
 
 Also assert duplicate and out-of-order Registry results produce one row per session in the original project/session order and do not require `source` or `turnIndex` for UI decisions.
 
-- [ ] **Step 2: Write failing shared component tests**
+- [x] **Step 2: Write failing shared component tests**
 
 Add `SessionListView.test.tsx` and extend `ProjectSection.test.tsx` to render `mode="search"`. Assert matching rows use `SessionRow`, Project collapse remains clickable, and no Recent/Draft/older toggle/empty-project management row, project actions, unpin button, or context-menu gesture attributes are present.
 
-- [ ] **Step 3: Run the state and component tests to verify RED**
+- [x] **Step 3: Run the state and component tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-session-search-state.test.ts web/src/chat/sessionlist/ProjectSection.test.tsx web/src/chat/sessionlist/SessionListView.test.tsx`
 
 Expected: FAIL because the filter helpers and read-only shared list mode do not yet exist.
 
-- [ ] **Step 4: Implement minimal state helpers and shared list mode**
+- [x] **Step 4: Implement minimal state helpers and shared list mode**
 
 Replace `formatSessionSearchResultMeta`, `splitSessionSearchTitleHighlight`, and the debounce constant with identity-based helpers. Remove the dedicated search-result slot/renderer. Make search mode traverse the same `ProjectSection` and `SessionRow` path with filtered projects/sessions, while optional gesture/action props enforce the read-only capability boundary.
 
-- [ ] **Step 5: Run the state and component tests to verify GREEN**
+- [x] **Step 5: Run the state and component tests to verify GREEN**
 
 Run: `npm test -- --runInBand __tests__/web-session-search-state.test.ts web/src/chat/sessionlist/ProjectSection.test.tsx web/src/chat/sessionlist/SessionListView.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 6: Write failing Workspace wiring assertions**
+- [x] **Step 6: Write failing Workspace wiring assertions**
 
 Update `web-session-search-ui.test.ts` to require a scope select with All Projects default, an explicit submit button, Enter calling the same submit handler, committed project snapshots for start/query/cancel, progressive identity merging, shared `SessionListView` search data, compact Searching/No matches/partial failure states, and absence of debounce, active-result navigation, source/turn rendering, title highlight, result count, and `renderSessionSearchRow`.
 
-- [ ] **Step 7: Run the Workspace wiring test to verify RED**
+- [x] **Step 7: Run the Workspace wiring test to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-session-search-ui.test.ts`
 
 Expected: FAIL against the current debounced dedicated-result implementation.
 
-- [ ] **Step 8: Implement explicit submit, project scope, and progressive shared-list wiring**
+- [x] **Step 8: Implement explicit submit, project scope, and progressive shared-list wiring**
 
 In `WorkspaceApp`, keep draft input/scope separate from committed query/project snapshots. Submit only on button/Enter, cancel the previous snapshot, synchronously clear old results, start only selected visible projects, and make polling/cancel use the committed snapshot rather than live visible-project state. Remove active result indexes and direct turn targeting. Feed filtered project/session collections into `SessionListView` and add only compact pending/empty/partial-failure status text. Adjust search-control CSS without changing the overall sidebar layout.
 
-- [ ] **Step 9: Run focused frontend regression checks**
+- [x] **Step 9: Run focused frontend regression checks**
 
 Run: `npm test -- --runInBand __tests__/web-session-search-state.test.ts __tests__/web-session-search-ui.test.ts __tests__/web-session-search-service.test.ts __tests__/web-chat-search-routing.test.ts web/src/chat/sessionlist/ProjectSection.test.tsx web/src/chat/sessionlist/SessionListView.test.tsx`
 

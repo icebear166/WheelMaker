@@ -11,7 +11,8 @@ export type ProjectSectionProps = {
   collapsed: boolean;
   pinned: boolean;
   active: boolean;
-  projectGestureHandlers: SessionRowGestureHandlers;
+  readOnly?: boolean;
+  projectGestureHandlers?: SessionRowGestureHandlers;
   onToggleCollapsed: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onNew: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onResume: (event: React.MouseEvent<HTMLButtonElement>) => void;
@@ -29,6 +30,7 @@ export function ProjectSection({
   collapsed,
   pinned,
   active,
+  readOnly = false,
   projectGestureHandlers,
   onToggleCollapsed,
   onNew,
@@ -47,7 +49,7 @@ export function ProjectSection({
         <button
           type="button"
           className="wide-project-toggle"
-          {...projectGestureHandlers}
+          {...(readOnly ? {} : projectGestureHandlers)}
           onClick={onToggleCollapsed}
           data-tooltip={collapsed ? 'Expand project' : 'Collapse project'}
           aria-expanded={!collapsed}
@@ -71,7 +73,7 @@ export function ProjectSection({
             </span>
           </span>
         </button>
-        <div className="wide-project-actions">
+        {!readOnly ? <div className="wide-project-actions">
           <button
             type="button"
             className="wide-project-action-btn sl-action-secondary"
@@ -106,7 +108,7 @@ export function ProjectSection({
           >
             <SessionIcon name="plus" />
           </button>
-        </div>
+        </div> : null}
       </div>
       {error ? (
         <div className="mobile-project-session-error">

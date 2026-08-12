@@ -6,7 +6,6 @@ import type {
 
 export const SESSION_SEARCH_FAST_POLL_MS = 300;
 export const SESSION_SEARCH_SLOW_POLL_MS = 800;
-export const SESSION_SEARCH_DEBOUNCE_MS = 300;
 const SESSION_SEARCH_SLOW_AFTER_UNCHANGED_POLLS = 3;
 
 export type SessionSearchPollDelayInput = {
@@ -16,30 +15,19 @@ export type SessionSearchPollDelayInput = {
 
 export type SessionSearchResultsByProjectId = Record<string, RegistrySessionSearchResult[]>;
 
-export type SessionSearchHighlightSegment = {
-  text: string;
-  match: boolean;
+export type SessionSearchFilter = {
+  projects: RegistryProject[];
+  sessionsByProjectId: Record<string, RegistryChatSession[]>;
 };
 
-export type SessionSearchSectionRow = {
-  session: RegistryChatSession;
-  result: RegistrySessionSearchResult;
-};
-
-export type SessionSearchSection = {
-  project: RegistryProject;
-  rows: SessionSearchSectionRow[];
-};
-
-export function formatSessionSearchResultMeta(
-  result: Pick<RegistrySessionSearchResult, 'source' | 'turnIndex'>,
-): string {
-  if (result.source === 'title') {
-    return 'Title';
+export function resolveSessionSearchProjects(
+  projects: RegistryProject[],
+  selectedProjectId: string,
+): RegistryProject[] {
+  if (!selectedProjectId) {
+    return projects;
   }
-  return typeof result.turnIndex === 'number' && result.turnIndex > 0
-    ? `Prompt · Turn ${result.turnIndex}`
-    : 'Prompt';
+  return projects.filter(project => project.projectId === selectedProjectId);
 }
 
 export function resolveSessionSearchPollDelay(input: SessionSearchPollDelayInput): number {
@@ -61,14 +49,30 @@ export function sameSessionSearchResults(
     const b = right[index];
     if (
       a.projectId !== b.projectId ||
-      a.sessionId !== b.sessionId ||
-      a.source !== b.source ||
-      (a.turnIndex ?? 0) !== (b.turnIndex ?? 0)
+      a.sessionId !== b.sessionId
     ) {
       return false;
     }
   }
   return true;
+}
+
+export function buildSessionSearchFilter(input: {
+  projects: RegistryProject[];
+  sessionsByProjectId: Record<string, RegistryChatSession[]>;
+  resultsByProjectId: SessionSearchResultsByProjectId;
+}): SessionSearchFilter {
+  const sessionsByProjectId: Record<string, RegistryChatSession[]> = {};
+  const projects = input.projects.filter(project => {
+    const matchedSessionIds = new Set(
+      (input.resultsByProjectId[project.projectId] ?? []).map(result => result.sessionId),
+    );
+    const sessions = (input.sessionsByProjectId[project.projectId] ?? [])
+      .filter(session => matchedSessionIds.has(session.sessionId));
+    sessionsByProjectId[project.projectId] = sessions;
+    return sessions.length > 0;
+  });
+  return {projects, sessionsByProjectId};
 }
 
 export function mergeSessionSearchResultsByProject(
@@ -89,54 +93,4 @@ export function mergeSessionSearchResultsByProject(
     },
     changed: true,
   };
-}
-
-export function buildSessionSearchSections(input: {
-  projects: RegistryProject[];
-  sessionsByProjectId: Record<string, RegistryChatSession[]>;
-  resultsByProjectId: SessionSearchResultsByProjectId;
-}): SessionSearchSection[] {
-  return input.projects
-    .map(project => {
-      const resultBySessionId = new Map<string, RegistrySessionSearchResult>();
-      for (const result of input.resultsByProjectId[project.projectId] ?? []) {
-        if (!resultBySessionId.has(result.sessionId)) {
-          resultBySessionId.set(result.sessionId, result);
-        }
-      }
-      const rows = (input.sessionsByProjectId[project.projectId] ?? [])
-        .map(session => {
-          const result = resultBySessionId.get(session.sessionId);
-          return result ? {session, result} : null;
-        })
-        .filter((item): item is SessionSearchSectionRow => item !== null);
-      return rows.length > 0 ? {project, rows} : null;
-    })
-    .filter((item): item is SessionSearchSection => item !== null);
-}
-
-export function splitSessionSearchTitleHighlight(title: string, query: string): SessionSearchHighlightSegment[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!title || !normalizedQuery) {
-    return title ? [{text: title, match: false}] : [];
-  }
-  const lowerTitle = title.toLowerCase();
-  const segments: SessionSearchHighlightSegment[] = [];
-  let cursor = 0;
-  while (cursor < title.length) {
-    const matchIndex = lowerTitle.indexOf(normalizedQuery, cursor);
-    if (matchIndex < 0) {
-      segments.push({text: title.slice(cursor), match: false});
-      break;
-    }
-    if (matchIndex > cursor) {
-      segments.push({text: title.slice(cursor, matchIndex), match: false});
-    }
-    segments.push({
-      text: title.slice(matchIndex, matchIndex + normalizedQuery.length),
-      match: true,
-    });
-    cursor = matchIndex + normalizedQuery.length;
-  }
-  return segments.filter(segment => segment.text.length > 0);
 }

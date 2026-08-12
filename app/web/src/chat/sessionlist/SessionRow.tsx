@@ -23,7 +23,7 @@ export type SessionRowProps = {
   recent?: boolean;
   leadingState?: ReactNode;
   rowTitleAttr?: string;
-  gestureHandlers: SessionRowGestureHandlers;
+  gestureHandlers?: SessionRowGestureHandlers;
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onUnpin?: () => void;
   unpinLabel?: string;
@@ -50,7 +50,7 @@ export function SessionRow({
 }: SessionRowProps) {
   const unpinGesture = useContextMenuActionGesture();
   return (
-    <div className={`project-session-row-wrap${recent ? ' recent-session-row-wrap' : ''}${pinned ? ' has-pin-action' : ''}`}>
+    <div className={`project-session-row-wrap${recent ? ' recent-session-row-wrap' : ''}${pinned && onUnpin ? ' has-pin-action' : ''}`}>
       {leadingState}
       <button
         type="button"
