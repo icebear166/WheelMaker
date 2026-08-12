@@ -73,7 +73,7 @@ MyFlicker 的 `@myflicker/cli` 仅在 Hub 首次 NPM 扫描时能从 `https://np
 
 ## Hub 全局 Skills
 
-Skills detail 只读取当前 Hub 的 HubState `skills.hubInventory`。工具栏提供 Add Skill、选择模式和带文字的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。
+Skills detail 只读取当前 Hub 的 HubState `skills.hubInventory`。工具栏提供 Add Skill、选择模式和图标式的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。
 
 Hub 菜单中的 Source-first Skills ledger 采用紧凑的单行 Source header：展开 chevron、状态点、可截断 source 名称、Refresh、Update all 和 Delete。Source 默认展开；标题的非操作区域切换列表，当前页面会话按 Hub/scope/Project/source identity 记忆展开状态，重新打开应用恢复展开。Refresh 始终占位，Update all 没有可更新项、没有有效快照或操作繁忙时保持固定位置并置灰；错误条在收起时仍可见。Skill 行的第一动作槽在未安装时使用 `cloudDownload`、需要对齐时使用 `circleArrowUp`，第二槽固定为 Uninstall；普通已安装/未安装/最新状态不重复显示状态文字，冲突、远端删除、错误和待删除等异常保留文字与状态色。所有图标按钮都提供 tooltip、aria-label、键盘焦点和 pending/disabled 表达。
 

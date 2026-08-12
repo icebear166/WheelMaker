@@ -124,19 +124,20 @@
 
 **Acceptance:** Wiki pages describe the stable icon semantics, Source ledger, session-only disclosure state, and two-slot Skill actions; the full relevant Web checks pass with no server/protocol/source-lock changes.
 
-- [ ] **Step 1: Update approved wiki targets**
+- [x] **Step 1: Update approved wiki targets**
   - Add the Hub update-vs-restart icon rule to `hub-menu.md`.
   - Add Source header, disclosure, status-dot, action-slot, and session preference rules to `skills-management.md`.
 
-- [ ] **Step 2: Run focused verification**
+- [x] **Step 2: Run focused verification**
   - Run: `npm test -- --runInBand app/web/src/app/ChatHubSkillManagement.test.tsx app/web/src/app/ChatHubMenu.test.tsx app/__tests__/web-skill-management-settings.test.ts app/__tests__/web-chat-ui.test.ts`
   - Expected: PASS for the changed suites; the full `web-chat-ui.test.ts` run retains the unrelated `.floating-control-stack[data-drag-state='dragging']` baseline failure, while the changed skill-row selector test passes.
+  - Evidence: Skill management (12), Hub menu (32), App dialogs (12), source settings (8), and the changed skill-row selector test (1) passed; the broader `web-chat-ui.test.ts` file's unrelated failure was isolated.
 
-- [ ] **Step 3: Run repository Web checks**
+- [x] **Step 3: Run repository Web checks**
   - Run the configured typecheck and Web build command discovered from `package.json`.
-  - Expected: PASS; if an existing unrelated environment failure appears, record the exact command/output and continue only with equivalent local checks.
+  - Evidence: `npm run tsc:web -- --pretty false` passed; `npm run build:web` compiled successfully in production mode.
 
-- [ ] **Step 4: Review acceptance and boundaries**
+- [x] **Step 4: Review acceptance and boundaries**
   - Confirm all spec acceptance items have evidence, `git diff --check` passes, and `git diff --name-only` contains only approved UI/wiki/spec/plan files.
 
 - [ ] **Step 5: Git checkpoint/finalize**
