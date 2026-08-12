@@ -9,9 +9,12 @@ import type {
 } from '../registry/registryTypes';
 import {
   isSkillActionPendingForHub,
+  readSkillSourceExpanded,
   readSkillShowUninstalled,
   shouldShowSkillCatalogRow,
+  skillSourceExpandedPreferenceKey,
   skillScopeSelectionKey,
+  writeSkillSourceExpanded,
   writeSkillShowUninstalled,
   type SkillDetailTarget,
   type SkillInstallTarget,
@@ -58,6 +61,20 @@ const STATUS_COPY: Record<string, string> = {
   needs_refresh: 'Needs refresh',
 };
 
+const EXCEPTIONAL_SKILL_STATUSES = new Set([
+  'copies_differ',
+  'conflict',
+  'error',
+  'needs_refresh',
+  'pending_removal',
+  'removed_upstream',
+  'unmanaged',
+]);
+
+function skillStatusCopy(status: string): string {
+  return STATUS_COPY[status] || status.replaceAll('_', ' ');
+}
+
 function sourceTarget(target: SkillScopeTarget, source: RegistrySkillSourceSnapshot): SkillSourceTarget {
   return {
     ...target,
@@ -66,24 +83,17 @@ function sourceTarget(target: SkillScopeTarget, source: RegistrySkillSourceSnaps
   };
 }
 
-function refreshedAtCopy(refreshedAt?: string): string {
-  if (!refreshedAt) return 'never refreshed';
-  return refreshedAt.replace('T', ' ').replace(/Z$/, ' UTC');
-}
-
 function SkillCatalogRow({
   target,
   source,
   skill,
   busy,
-  stale,
   actions,
 }: {
   target: SkillScopeTarget;
   source?: RegistrySkillSourceSnapshot;
   skill: RegistrySkillCatalogItem;
   busy: boolean;
-  stale: boolean;
   actions: ChatHubSkillActions;
 }) {
   const conflicted = skill.conflict || skill.status === 'conflict';
@@ -91,6 +101,8 @@ function SkillCatalogRow({
   const uninstalled = skill.status === 'uninstalled';
   const canOpenDetail = skill.installed && !conflicted;
   const actionTarget = source ? {...sourceTarget(target, source), skillName: skill.name} : null;
+  const sourceUnavailable = source?.status === 'stale' || source?.status === 'needs_refresh';
+  const showStatus = EXCEPTIONAL_SKILL_STATUSES.has(skill.status);
   const className = [
     'chat-hub-skill-row',
     uninstalled ? 'is-uninstalled' : '',
@@ -115,45 +127,50 @@ function SkillCatalogRow({
         ) : (
           <span className="chat-hub-skill-name" data-tooltip={skill.name}>{skill.name}</span>
         )}
-        <span
-          className="chat-hub-skill-status"
-          data-tooltip={skill.error || STATUS_COPY[skill.status] || skill.status}
-        >
-          {STATUS_COPY[skill.status] || skill.status}
-        </span>
+        {showStatus ? (
+          <span
+            className="chat-hub-skill-status"
+            data-tooltip={skill.error || skillStatusCopy(skill.status)}
+          >
+            {skillStatusCopy(skill.status)}
+          </span>
+        ) : null}
       </span>
       <span className="chat-hub-skill-row-actions">
-        {actionTarget && skill.canInstall && !conflicted ? (
-          <button
-            type="button"
-            aria-label={`Install ${skill.name}`}
-            disabled={busy || stale}
-            onClick={() => actions.onInstallSkill(actionTarget)}
-          >
-            <Icon name="cloudDownload" />
-          </button>
-        ) : null}
-        {actionTarget && skill.canUpdate && !conflicted ? (
-          <button
-            type="button"
-            aria-label={`Update ${skill.name}`}
-            disabled={busy || stale}
-            onClick={() => actions.onUpdateSkill(actionTarget)}
-          >
-            <Icon name="refreshCw" />
-          </button>
-        ) : null}
-        {skill.canUninstall && !conflicted ? (
-          <button
-            type="button"
-            className="is-danger"
-            aria-label={`Uninstall ${skill.name}`}
-            disabled={busy}
-            onClick={() => actions.onUninstall({...target, skillName: skill.name})}
-          >
-            <Icon name="trash" />
-          </button>
-        ) : null}
+        <span className="chat-hub-skill-action-slot chat-hub-skill-primary-action-slot">
+          {actionTarget && !conflicted && skill.canInstall ? (
+            <button
+              type="button"
+              aria-label={`Download ${skill.name}`}
+              disabled={busy || sourceUnavailable}
+              onClick={() => actions.onInstallSkill(actionTarget)}
+            >
+              <Icon name="cloudDownload" />
+            </button>
+          ) : actionTarget && !conflicted && skill.canUpdate ? (
+            <button
+              type="button"
+              aria-label={`Update ${skill.name}`}
+              disabled={busy || sourceUnavailable}
+              onClick={() => actions.onUpdateSkill(actionTarget)}
+            >
+              <Icon name="circleArrowUp" />
+            </button>
+          ) : null}
+        </span>
+        <span className="chat-hub-skill-action-slot chat-hub-skill-uninstall-action-slot">
+          {skill.canUninstall && !conflicted ? (
+            <button
+              type="button"
+              className="is-danger"
+              aria-label={`Uninstall ${skill.name}`}
+              disabled={busy}
+              onClick={() => actions.onUninstall({...target, skillName: skill.name})}
+            >
+              <Icon name="trash" />
+            </button>
+          ) : null}
+        </span>
       </span>
     </div>
   );
@@ -172,7 +189,6 @@ function SkillSourceLedger({
   busy: boolean;
   actions: ChatHubSkillActions;
 }) {
-  const stale = source.status === 'stale';
   const visibleSkills = useMemo(
     () => [...(source.skills ?? [])]
       .filter(skill => shouldShowSkillCatalogRow(skill, showUninstalled))
@@ -181,32 +197,43 @@ function SkillSourceLedger({
   );
 
   const baseTarget = sourceTarget(target, source);
-  const statusCopy = source.status.replaceAll('_', ' ');
+  const sourcePreferenceKey = skillSourceExpandedPreferenceKey(baseTarget);
+  const [expanded, setExpanded] = useState(() => readSkillSourceExpanded(baseTarget));
+  const statusCopy = skillStatusCopy(source.status);
+  const sourceStatusClass = source.status.replaceAll('_', '-');
+  const sourceUnavailable = source.status !== 'ready';
+
+  useEffect(() => {
+    setExpanded(readSkillSourceExpanded(baseTarget));
+  }, [sourcePreferenceKey]);
+
+  const toggleExpanded = () => {
+    const next = !expanded;
+    setExpanded(next);
+    writeSkillSourceExpanded(baseTarget, next);
+  };
+
   return (
     <section
-      className={`chat-hub-skill-source is-${source.status.replaceAll('_', '-')}`}
+      className={`chat-hub-skill-source is-${sourceStatusClass}${expanded ? ' is-expanded' : ' is-collapsed'}`}
       data-source-key={source.sourceKey}
     >
       <header className="chat-hub-skill-source-header">
-        <span className="chat-hub-skill-source-identity">
+        <button
+          type="button"
+          className="chat-hub-skill-source-disclosure"
+          aria-label={`Toggle ${source.sourceKey} skills`}
+          aria-expanded={expanded}
+          onClick={toggleExpanded}
+        >
+          <Icon name={expanded ? 'chevronDown' : 'chevronRight'} />
+          <span
+            className={`chat-hub-skill-source-status-dot is-${sourceStatusClass}`}
+            aria-label={`${statusCopy} source`}
+            data-tooltip={statusCopy}
+          />
           <strong data-tooltip={source.source}>{source.sourceKey}</strong>
-          <span className={`chat-hub-skill-source-state is-${source.status}`}>{statusCopy}</span>
-        </span>
-        <span className="chat-hub-skill-source-meta">
-          <span className="chat-hub-skill-source-commit" data-tooltip={source.resolvedCommit || 'Not resolved'}>
-            {source.resolvedCommit ? source.resolvedCommit.slice(0, 8) : 'unresolved'}
-          </span>
-          <time
-            className="chat-hub-skill-source-refreshed"
-            dateTime={source.refreshedAt}
-            data-tooltip={source.refreshedAt || 'No successful refresh yet'}
-          >
-            {refreshedAtCopy(source.refreshedAt)}
-          </time>
-          <span className="chat-hub-skill-source-counts">
-            {source.installedCount} installed · {source.updateCount} updates
-          </span>
-        </span>
+        </button>
         <span className="chat-hub-skill-source-actions">
           <button
             type="button"
@@ -214,15 +241,15 @@ function SkillSourceLedger({
             disabled={busy}
             onClick={() => actions.onRefreshSource(baseTarget)}
           >
-            <Icon name="scanLine" />
+            <Icon name="refreshCw" />
           </button>
           <button
             type="button"
-            aria-label={`Update ${source.sourceKey} skills`}
-            disabled={busy || stale || source.updateCount === 0}
+            aria-label={`Update all ${source.sourceKey} skills`}
+            disabled={busy || sourceUnavailable || source.updateCount === 0}
             onClick={() => actions.onUpdateAll(baseTarget)}
           >
-            <Icon name="refreshCw" />
+            <Icon name="circleArrowUp" />
           </button>
           <button
             type="button"
@@ -236,24 +263,25 @@ function SkillSourceLedger({
         </span>
       </header>
       {source.error ? <div className="chat-hub-skill-source-error">{source.error}</div> : null}
-      <div className="chat-hub-skill-list">
-        {visibleSkills.map(skill => (
-          <SkillCatalogRow
-            key={`${source.sourceKey}:${skill.name}`}
-            target={target}
-            source={source}
-            skill={skill}
-            busy={busy}
-            stale={stale}
-            actions={actions}
-          />
-        ))}
-        {visibleSkills.length === 0 ? (
-          <div className="chat-hub-skill-source-empty">
-            {showUninstalled ? 'No skills in this source.' : 'No installed skills. Show uninstalled to browse this source.'}
-          </div>
-        ) : null}
-      </div>
+      {expanded ? (
+        <div className="chat-hub-skill-list">
+          {visibleSkills.map(skill => (
+            <SkillCatalogRow
+              key={`${source.sourceKey}:${skill.name}`}
+              target={target}
+              source={source}
+              skill={skill}
+              busy={busy}
+              actions={actions}
+            />
+          ))}
+          {visibleSkills.length === 0 ? (
+            <div className="chat-hub-skill-source-empty">
+              {showUninstalled ? 'No skills in this source.' : 'No installed skills. Show uninstalled to browse this source.'}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -323,7 +351,6 @@ export function ChatHubSkillScopeDetail({
             onClick={() => actions.onUpdateAll(target)}
           >
             <Icon name={operationRunning ? 'loader' : 'refreshCw'} spin={operationRunning} />
-            <span>{operationRunning ? 'Updating…' : 'Update all sources'}</span>
           </button>
         </div>
       </div>
@@ -390,7 +417,6 @@ export function ChatHubSkillScopeDetail({
                   target={target}
                   skill={skill}
                   busy={busy}
-                  stale={false}
                   actions={actions}
                 />
               ))}

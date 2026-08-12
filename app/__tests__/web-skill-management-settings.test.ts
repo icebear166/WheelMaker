@@ -126,7 +126,7 @@ describe('Hub-owned skill management source structure', () => {
     expect(chatHubSkillTsx).toContain("skill.status === 'conflict'");
     expect(chatHubSkillTsx).toContain("skill.status === 'removed_upstream'");
     expect(chatHubSkillTsx).toContain('skill.canUpdate');
-    expect(chatHubSkillTsx).toContain("source.status === 'stale'");
+    expect(chatHubSkillTsx).toContain("source?.status === 'stale'");
     expect(stylesCss).toContain('.chat-hub-skill-source');
     expect(stylesCss).toContain('.chat-hub-skill-row.is-removed');
     expect(stylesCss).toContain('.chat-hub-skill-row.is-conflict');

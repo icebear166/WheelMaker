@@ -43,7 +43,7 @@
 - [x] **Step 5: Refactor and regression check**
   - Run the existing skill management source-structure tests and ensure no localStorage/show-uninstalled behavior changes.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
   - Verify only the Task 1 files are changed, then use `git-workflow checkpoint` and record the commit.
 
 ### Task 2: Reshape Source ledger and Skill action slots
@@ -55,27 +55,27 @@
 
 **Acceptance:** Each Source renders a single-line, default-expanded header with disclosure, status dot, source name, refresh, update-all, and delete actions; its list can collapse without hiding the error strip. Each Skill uses a fixed two-slot action column: install/download or update in slot one, uninstall in slot two; ordinary status text is omitted while exceptional status text remains.
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
   - Render a ready Source with one uninstalled Skill, one update-available Skill, one up-to-date Skill, and one removed Skill.
   - Assert the Source header exposes disclosure, Refresh, Update all, and Delete labels; clicking the non-action header toggles the list while clicking Refresh does not.
   - Assert the first Skill action slot uses `cloudDownload`, the update slot uses `circleArrowUp`, and the second slot uses `trash` where allowed.
   - Assert `Up to date`, `Not installed`, and `Update available` are not visible as row text, while `Removed upstream` remains visible and the Source error remains visible when collapsed.
   - Assert a Source with no update count still renders a disabled Update all button.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
   - Run: `npm test -- --runInBand app/web/src/app/ChatHubSkillManagement.test.tsx app/__tests__/web-skill-management-settings.test.ts`
   - Expected: FAIL against the current multi-line Source metadata and three-icon/label behavior.
 
-- [ ] **Step 3: Implement minimally**
+- [x] **Step 3: Implement minimally**
   - Add Source disclosure state keyed by target/source identity and use a button/heading structure that isolates action click propagation.
   - Replace Source metadata rows with one header line and status dot/tooltips.
   - Replace row action rendering with the fixed primary/secondary slots and exception-only status copy, preserving capability checks and existing callbacks.
   - Keep unmanaged, loading, empty, operation-result, retry, detail, and show-uninstalled paths intact.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
   - Run the focused component/source-structure tests; expected PASS.
 
-- [ ] **Step 5: Refactor and regression check**
+- [x] **Step 5: Refactor and regression check**
   - Verify action target construction remains source-aware, pending/busy disables all writes, and Source status still blocks updates when stale.
 
 - [ ] **Step 6: Git checkpoint**

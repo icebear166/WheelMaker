@@ -7,6 +7,7 @@ import {
 const hubSource = {
   hubId: 'hub-a',
   scope: 'hub' as const,
+  source: 'https://github.com/acme/skills.git',
   sourceKey: 'github.com/acme/skills',
 };
 
@@ -14,6 +15,7 @@ const projectSource = {
   hubId: 'hub-a',
   scope: 'project' as const,
   projectName: 'project-a',
+  source: 'https://github.com/acme/skills.git',
   sourceKey: 'github.com/acme/skills',
 };
 

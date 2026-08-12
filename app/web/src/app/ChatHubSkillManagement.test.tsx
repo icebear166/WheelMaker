@@ -89,8 +89,7 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
 
   expect(renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'})).toBeTruthy();
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-ref-input'})).toHaveLength(0);
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-commit'}).children.join('')).toContain('12345678');
-  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-refreshed'}).children.join('')).toContain('2026-08-12');
+  expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-meta'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({'data-skill-name': 'new-skill'})).toHaveLength(0);
   expect(renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.checked).toBe(false);
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
@@ -115,7 +114,7 @@ test('shows remote additions after enabling the scope preference and offers inst
   act(() => renderer.root.findByProps({'aria-label': 'Show uninstalled Project skills'}).props.onChange({target: {checked: true}}));
   const added = renderer.root.findByProps({'data-skill-name': 'new-skill'});
   expect(added.props.className).toContain('is-uninstalled');
-  act(() => added.findByProps({'aria-label': 'Install new-skill'}).props.onClick());
+  act(() => added.findByProps({'aria-label': 'Download new-skill'}).props.onClick());
   expect(actions.onInstallSkill).toHaveBeenCalledWith({
     ...projectTarget,
     source: 'https://github.com/acme/skills.git',
@@ -194,7 +193,7 @@ test('keeps stale catalog visible while blocking install and update operations',
   const {renderer} = await renderScope({snapshot: stale});
 
   act(() => renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.onChange({target: {checked: true}}));
-  expect(renderer.root.findByProps({'aria-label': 'Install new-skill'}).props.disabled).toBe(true);
+  expect(renderer.root.findByProps({'aria-label': 'Download new-skill'}).props.disabled).toBe(true);
   expect(renderer.root.findByProps({'aria-label': 'Update changed'}).props.disabled).toBe(true);
   expect(renderer.root.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.disabled).toBe(false);
 });
@@ -238,4 +237,47 @@ test('keeps itemized partial results visible for targeted retry feedback', async
   expect(resultRows[1].findAllByType('span').map(node => node.children.join(''))).toContain('changed');
   expect(resultRows[1].findByType('strong').children.join('')).toBe('Failed');
   expect(resultRows[1].props['data-tooltip']).toBe('command failed');
+});
+
+test('renders a compact source header with fixed source actions', async () => {
+  const {renderer} = await renderScope();
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+  const disclosure = source.findByProps({className: 'chat-hub-skill-source-disclosure'});
+
+  expect(disclosure.props['aria-expanded']).toBe(true);
+  expect(source.findAllByProps({className: 'chat-hub-skill-source-meta'})).toHaveLength(0);
+  expect(source.findByProps({'aria-label': 'Refresh github.com/acme/skills'})).toBeTruthy();
+  expect(source.findByProps({'aria-label': 'Update all github.com/acme/skills skills'})).toBeTruthy();
+  expect(source.findByProps({'aria-label': 'Delete github.com/acme/skills source'})).toBeTruthy();
+});
+
+test('uses a two-slot skill action column and suppresses ordinary status copy', async () => {
+  const {renderer} = await renderScope();
+  const installed = renderer.root.findByProps({'data-skill-name': 'installed'});
+  const changed = renderer.root.findByProps({'data-skill-name': 'changed'});
+  const removed = renderer.root.findByProps({'data-skill-name': 'gone'});
+
+  expect(installed.findAllByProps({className: 'chat-hub-skill-status'})).toHaveLength(0);
+  expect(changed.findAllByProps({className: 'chat-hub-skill-status'})).toHaveLength(0);
+  expect(installed.findByProps({className: 'chat-hub-skill-action-slot chat-hub-skill-primary-action-slot'})).toBeTruthy();
+  expect(installed.findByProps({className: 'chat-hub-skill-action-slot chat-hub-skill-uninstall-action-slot'})).toBeTruthy();
+  expect(changed.findByProps({'aria-label': 'Update changed'}).findByType('svg').props['data-icon-name'])
+    .toBe('circleArrowUp');
+  expect(removed.findByProps({className: 'chat-hub-skill-status'}).children.join('')).toBe('Removed upstream');
+});
+
+test('collapsing a source hides its list but keeps the error visible', async () => {
+  const stale = {
+    ...catalog,
+    sources: catalog.sources.map(source => ({...source, status: 'stale', error: 'Network unavailable'})),
+  };
+  const {renderer} = await renderScope({snapshot: stale});
+  const source = renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'});
+  const disclosure = source.findByProps({className: 'chat-hub-skill-source-disclosure'});
+
+  act(() => disclosure.props.onClick());
+  expect(disclosure.props['aria-expanded']).toBe(false);
+  expect(source.findAllByProps({className: 'chat-hub-skill-list'})).toHaveLength(0);
+  expect(source.findByProps({className: 'chat-hub-skill-source-error'}).children.join(''))
+    .toContain('Network unavailable');
 });
