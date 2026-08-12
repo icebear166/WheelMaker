@@ -307,10 +307,10 @@ Get-Content docs/wiki/architecture/hub-state.md -TotalCount 1
 
 Expected: no whitespace errors; only task-owned changes; summaries intact. Compare the final diff against every approved-spec acceptance item.
 
-- [ ] **Step 5: Mark plan and checkpoint**
+- [x] **Step 5: Mark plan and checkpoint**
 
-Update every checkbox only after its evidence passes. Checkpoint the plan and any final task-owned adjustments; record commit hash + subject.
+Checkpoint: `b964d560 docs(plan): record skill source verification`.
 
-- [ ] **Step 6: Git finalize**
+- [x] **Step 6: Git finalize**
 
 Finalize with the real result. On complete, follow prepared preferences to fetch/rebase, push feature branch, merge into clean local `main`, push `main`, verify remote SHAs, and clean merged task worktree/branches.
