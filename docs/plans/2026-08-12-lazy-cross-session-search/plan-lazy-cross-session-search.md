@@ -245,6 +245,6 @@ Run: `git diff --check && git status -sb && git diff --stat && git diff -- serve
 
 Expected: No whitespace errors, no unowned files, and no Registry method or protocol-version change.
 
-- [ ] **Step 6: Complete the plan and Git lifecycle**
+- [x] **Step 6: Complete the plan and Git lifecycle**
 
 Mark all verified plan steps complete, checkpoint the updated plan if needed, then invoke `git-workflow` finalize with the real result and verification evidence.
