@@ -30,7 +30,7 @@ describe('web chat read-on-demand behavior', () => {
     expect(mainTsx).toContain('readProjectSessionWithStaleCacheRepair(');
     expect(mainTsx).toContain('isStaleSessionReadResult(');
     expect(mainTsx).toContain('clearProjectSessionCache(activeProjectId, sessionId);');
-    expect(mainTsx).toContain('service.readProjectSession(activeProjectId, sessionId, 0, readOptions);');
+    expect(mainTsx).toContain('service.readProjectSession(activeProjectId, sessionId, 0, repairReadOptions);');
     expect(mainTsx).toContain("startWorkspaceDiagnosticSpan('session_read'");
     expect(mainTsx).toContain('requestedAfterTurnIndex:');
     expect(mainTsx).toContain('cacheHit: existingMessages.length > 0');
@@ -91,5 +91,26 @@ describe('web chat read-on-demand behavior', () => {
     const scheduleBlock = mainTsx.slice(resetEnd, scheduleEnd);
     // The failure-retry path must still clear the marker so backoff can re-read.
     expect(scheduleBlock).toContain("chatSelectedLoadAttemptRuntimeKeyRef.current = ''");
+  });
+
+  test('keeps the existing session cache until a stale-cursor full reread succeeds', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+    const repairStart = mainTsx.indexOf('const readProjectSessionWithStaleCacheRepair = async (');
+    const repairEnd = mainTsx.indexOf('const loadChatSession = async (', repairStart);
+    const repairBlock = mainTsx.slice(repairStart, repairEnd);
+    const fullReadIndex = repairBlock.indexOf(
+      'await service.readProjectSession(activeProjectId, sessionId, 0, repairReadOptions)',
+    );
+    const clearCacheIndex = repairBlock.indexOf(
+      'clearProjectSessionCache(activeProjectId, sessionId);',
+    );
+
+    expect(fullReadIndex).toBeGreaterThan(-1);
+    expect(clearCacheIndex).toBeGreaterThan(fullReadIndex);
+    expect(repairBlock).toContain('await onPage?.({');
   });
 });

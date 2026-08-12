@@ -2,19 +2,22 @@ import fs from 'fs';
 import path from 'path';
 
 describe('web reconnect fallback behavior', () => {
-  test('keeps cached workspace visible during silent reconnect and falls back after grace period', () => {
+  test('keeps cached workspace visible and retries silent reconnect until recovery', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
-    expect(mainTsx).toContain('const RECONNECT_GRACE_PERIOD_MS = 30_000;');
+    expect(mainTsx).not.toContain('RECONNECT_GRACE_PERIOD_MS');
+    expect(mainTsx).not.toContain('reconnectStartedAtRef');
+    expect(mainTsx).not.toContain('Please reconnect manually.');
     expect(mainTsx).toMatch(
       /const\s+canSilentReconnect\s*=\s*!!projectIdRef\.current;/,
     );
     expect(mainTsx).not.toContain('addressRef');
-    expect(mainTsx).toContain('if (elapsed < RECONNECT_GRACE_PERIOD_MS) {');
+    expect(mainTsx).toContain('reconnectScheduled = true;');
+    expect(mainTsx).toContain('scheduleReconnectAttempt();');
     expect(mainTsx).toMatch(
       /connect\(\{\s*silentReconnect:\s*true\s*\}\)\.catch\(\(\)\s*=>\s*undefined\);/,
     );
@@ -88,6 +91,16 @@ describe('web reconnect fallback behavior', () => {
     expect(mainTsx).toContain('disconnectForSupervisor(reason);');
     expect(mainTsx).toContain('await connect({ silentReconnect: true });');
     expect(mainTsx).toContain('shouldDisconnectOnBackground: () => !isVoiceInputActive(),');
+  });
+
+  test('does not carry an intentional-close sentinel across repository connections', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(mainTsx).not.toContain('supervisorManagedCloseRef');
   });
 
   test('triggers local notification for completed prompts only', () => {

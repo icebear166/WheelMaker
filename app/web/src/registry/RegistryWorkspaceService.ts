@@ -279,9 +279,11 @@ export class RegistryWorkspaceService {
   }
 
   close(): void {
-    this.repository?.close();
+    const repository = this.repository;
+    this.unbindRepository();
     this.repository = null;
     this.session = null;
+    repository?.close();
   }
 
   getSession(): WorkspaceSession | null {
@@ -623,7 +625,7 @@ export class RegistryWorkspaceService {
 
   async listProjectSessions(projectId: string): Promise<RegistrySessionSummary[]> {
     if (!this.repository) {
-      return [];
+      throw new Error('session is not ready');
     }
     return this.repository.listSessions(projectId);
   }
@@ -647,12 +649,7 @@ export class RegistryWorkspaceService {
     options: RegistrySessionReadOptions = {},
   ): Promise<RegistrySessionReadResponse> {
     if (!this.repository) {
-      return {
-        sessionId: '',
-        turns: [],
-        messages: [],
-        latestTurnIndex: 0,
-      };
+      throw new Error('session is not ready');
     }
     return this.repository.readSession(projectId, sessionId, afterTurnIndex, options);
   }

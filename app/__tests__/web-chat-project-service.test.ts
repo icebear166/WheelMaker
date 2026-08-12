@@ -1,6 +1,52 @@
 import { RegistryWorkspaceService } from '../web/src/registry/RegistryWorkspaceService';
 
 describe('registry workspace project-scoped chat service methods', () => {
+  test('does not publish an intentional close as a remote repository close', async () => {
+    const closeListeners = new Set<() => void>();
+    const repository = {
+      initialize: jest.fn().mockResolvedValue(undefined),
+      listProjectSnapshot: jest.fn().mockResolvedValue({projects: [], hubs: []}),
+      onEvent: jest.fn(() => () => undefined),
+      onClose: jest.fn((listener: () => void) => {
+        closeListeners.add(listener);
+        return () => closeListeners.delete(listener);
+      }),
+      close: jest.fn(() => {
+        closeListeners.forEach(listener => listener());
+      }),
+    };
+    const service = new RegistryWorkspaceService({
+      createRepository: () => repository as never,
+    });
+    const onRemoteClose = jest.fn();
+    service.onClose(onRemoteClose);
+
+    await service.connect('ws://registry.example/ws');
+    service.close();
+
+    expect(repository.close).toHaveBeenCalledTimes(1);
+    expect(onRemoteClose).not.toHaveBeenCalled();
+
+    await service.connect('ws://registry.example/ws');
+    closeListeners.forEach(listener => listener());
+
+    expect(onRemoteClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects project session listing while disconnected instead of reporting an empty list', async () => {
+    const service = new RegistryWorkspaceService();
+
+    await expect(service.listProjectSessions('project-1')).rejects.toThrow('session is not ready');
+  });
+
+  test('rejects project session reads while disconnected instead of reporting an empty session', async () => {
+    const service = new RegistryWorkspaceService();
+
+    await expect(service.readProjectSession('project-1', 'session-1', 4)).rejects.toThrow(
+      'session is not ready',
+    );
+  });
+
   test('preserves binary file metadata for Markdown export image reads', async () => {
     const service = new RegistryWorkspaceService();
     const repository = {

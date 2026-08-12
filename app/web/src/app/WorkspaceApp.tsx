@@ -1193,7 +1193,6 @@ const wipeBrowserStorage = async (): Promise<void> => {
 };
 const MAX_AUTO_RENDER_DIFF_CHARS = 200000;
 const RECONNECT_RETRY_DELAY_MS = 1000;
-const RECONNECT_GRACE_PERIOD_MS = 30_000;
 const CHAT_NEW_DRAFT_SESSION_KEY = '__new__';
 const CHAT_DRAFT_KEY_PROJECT_FALLBACK = '__no_project__';
 const RECENT_SESSIONS_VIRTUAL_PROJECT_ID = '__recent_sessions__';
@@ -3573,9 +3572,7 @@ export function App() {
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
-  const reconnectStartedAtRef = useRef<number | null>(null);
   const connectInFlightRef = useRef(false);
-  const supervisorManagedCloseRef = useRef(false);
   const dirHashRef = useRef<Record<string, string>>({});
   const previewFileLoadControllersRef = useRef<Map<string, AbortController>>(new Map());
   const chatFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -9724,9 +9721,21 @@ export function App() {
     if (!isStaleSessionReadResult(checkpoint, result.latestTurnIndex)) {
       return {result, appliedAfterTurnIndex: checkpoint};
     }
+    const {onPage, ...repairReadOptions} = readOptions;
+    const repairedResult = await service.readProjectSession(activeProjectId, sessionId, 0, repairReadOptions);
     clearProjectSessionCache(activeProjectId, sessionId);
     onCacheReset?.();
-    const repairedResult = await service.readProjectSession(activeProjectId, sessionId, 0, readOptions);
+    const throughTurnIndex = repairedResult.turns.reduce(
+      (latest, turn) => Math.max(latest, turn.turnIndex),
+      0,
+    );
+    if (throughTurnIndex > 0) {
+      await onPage?.({
+        ...repairedResult,
+        afterTurnIndex: 0,
+        throughTurnIndex,
+      });
+    }
     return {result: repairedResult, appliedAfterTurnIndex: 0};
   };
 
@@ -12524,7 +12533,6 @@ export function App() {
     setError('');
     clearReconnectTimer();
     if (!silentReconnect) {
-      reconnectStartedAtRef.current = null;
       setReconnecting(false);
     }
     try {
@@ -12544,7 +12552,6 @@ export function App() {
       setHasPendingProjectUpdates(false);
       dirHashRef.current = {};
       applyHydratedProjectState(result.hydrated);
-      reconnectStartedAtRef.current = null;
       setReconnecting(false);
       setConnected(true);
       void synchronizeServerSettings();
@@ -12566,23 +12573,10 @@ export function App() {
       const message = err instanceof Error ? err.message : String(err);
       connectError = message;
       if (silentReconnect) {
-        const reconnectStartedAt = reconnectStartedAtRef.current ?? Date.now();
-        reconnectStartedAtRef.current = reconnectStartedAt;
-        const elapsed = Date.now() - reconnectStartedAt;
-        if (elapsed < RECONNECT_GRACE_PERIOD_MS) {
-          setError('');
-          setReconnecting(true);
-          reconnectScheduled = true;
-          scheduleReconnectAttempt();
-          return;
-        }
-        reconnectStartedAtRef.current = null;
-        setReconnecting(false);
-        setError(
-          `Registry reconnect failed for ${Math.floor(
-            RECONNECT_GRACE_PERIOD_MS / 15000,
-          )}s. Please reconnect manually.`,
-        );
+        setError('');
+        setReconnecting(true);
+        reconnectScheduled = true;
+        scheduleReconnectAttempt();
         return;
       }
       setError(message);
@@ -12630,7 +12624,6 @@ export function App() {
 
   const returnToRegistryLogin = () => {
     void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
-    supervisorManagedCloseRef.current = true;
     service.close();
     setConnected(false);
     setReconnecting(false);
@@ -12646,9 +12639,7 @@ export function App() {
   const disconnectForSupervisor = (
     reason: 'background' | 'offline' | 'stop',
   ) => {
-    supervisorManagedCloseRef.current = true;
     clearReconnectTimer();
-    reconnectStartedAtRef.current = null;
     const shouldKeepWorkspaceVisible =
       reason !== 'stop' && !!projectIdRef.current;
     setReconnecting(shouldKeepWorkspaceVisible);
@@ -12673,9 +12664,7 @@ export function App() {
     setLogoutPending(true);
     setConfirmError('');
     try {
-      supervisorManagedCloseRef.current = true;
       clearReconnectTimer();
-      reconnectStartedAtRef.current = null;
       setError('');
       setAutoConnecting(false);
       setReconnecting(false);
@@ -15985,22 +15974,14 @@ export function App() {
       if (isVoiceInputActive()) {
         handleVoiceRegistryClosedDuringInput('close');
       }
-      if (supervisorManagedCloseRef.current) {
-        supervisorManagedCloseRef.current = false;
-        return;
-      }
       const canSilentReconnect =
         !!projectIdRef.current;
       if (!canSilentReconnect) {
-        reconnectStartedAtRef.current = null;
         setReconnecting(false);
         setError(
           'Registry connection closed. Reconnect to resume live updates.',
         );
         return;
-      }
-      if (reconnectStartedAtRef.current === null) {
-        reconnectStartedAtRef.current = Date.now();
       }
       setError('');
       setReconnecting(true);

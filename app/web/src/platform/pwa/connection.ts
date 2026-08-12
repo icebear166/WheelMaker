@@ -74,18 +74,15 @@ export class ForegroundConnectionSupervisor {
     if (!this.started) return;
     this.clearReconnectTimer();
     this.hooks.disconnect('offline');
+    this.scheduleRetry();
   };
 
   private isForeground(): boolean {
     return !this.env.document?.hidden;
   }
 
-  private isOnline(): boolean {
-    return this.env.navigator?.onLine !== false;
-  }
-
   private scheduleRetry(): void {
-    if (!this.started || !this.isForeground() || !this.isOnline() || this.reconnectTimer) {
+    if (!this.started || !this.isForeground() || this.reconnectTimer) {
       return;
     }
     const setTimeoutImpl = this.env.setTimeoutImpl ?? setTimeout;
@@ -103,7 +100,7 @@ export class ForegroundConnectionSupervisor {
   }
 
   private async tryConnect(): Promise<void> {
-    if (!this.started || !this.isForeground() || !this.isOnline()) {
+    if (!this.started || !this.isForeground()) {
       return;
     }
     try {
