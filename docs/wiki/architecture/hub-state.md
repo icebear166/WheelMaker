@@ -76,9 +76,22 @@ Queue 长度、普通 updater 开始、心跳、单个文件事件、日志行�
 hubInventory
 projectLocalInventories[projectId]
 effectiveSkills[projectId][agent]
+hubSources
+projectSources[projectId]
+unmanagedSkills
+sourceReconciliation
+operation
 ```
 
-Hub Skill 更新时只重扫 Hub inventory，再复用 Project 本地 inventory 派生全部 effective Skills。Project Skill 更新时只重扫目标 Project。最终始终原子提交完整 `skills` Section，使 Hub 菜单和 Composer 使用同一 revision。
+Hub Skill 更新时只重扫 Hub inventory，再复用 Project 本地 inventory 派生全部 effective Skills。Project Skill 更新时只重扫目标 Project。source 目录、刷新错误、冲突、本地实时 hash、Pending removal 和 operation 结果也由同一 Section 承载；最终始终原子提交完整 `skills` Section，使 Hub 菜单和 Composer 使用同一 revision。
+
+Skills source 管理由三个边界共同组成：
+
+- Source Store 拥有 Hub/Project 的 `.skill-source-lock.json`，只保存远端 source/ref/commit/完整目录及远端 hash。
+- Source Resolver 在受控临时 Git checkout 中解析 ref、发现 Skills 并计算整个目录的确定性 hash。
+- Installed State Adapter 读取上游原生 lock 与 agent-visible 目录，并继续用固定版本 `skills` CLI 执行 add/remove。
+
+source lock 不是安装数据库。本机安装事实和本地目录 hash 不写入共享 source lock；每次 scan 都从原生 lock、实际路径和文件内容重新计算。Project source lock 可随 Git 共享，外部 Git 变化只改变期望目录；本机删除重试等 reconciliation metadata 由 Hub 本地状态拥有。Web 的 per-scope `Show uninstalled skills` 只属于当前客户端。
 
 Skills inventory 只在 Hub 初始化、显式 reindex、Project/Agent 拓扑变化、install/uninstall/update 完成和手动 refresh 时按 Hub/Project 定向刷新；Registry 重连只重新发布当前完整 HubState，不重新扫描。系统不监听文件系统、不轮询，也不因外部文件事件主动刷新。inventory 记录位置、`SKILL.md` 指纹、链接目标、managed metadata 和 Agent 可见性，并派生：
 
@@ -86,7 +99,9 @@ Skills inventory 只在 Hub 初始化、显式 reindex、Project/Agent 拓扑变
 aligned | contentMismatch | unknown
 ```
 
-目录差异只作为非阻塞诊断，不自动复制或覆盖。Composer 按当前 Project 和 Agent 的 effective Skills 生成提示； supporting files 不参与递归一致性比较。
+目录差异只作为非阻塞诊断，不自动复制或覆盖。Composer 按当前 Project 和 Agent 的 effective Skills 生成提示。旧 inventory location 的 `aligned | contentMismatch | unknown` 诊断仍只比较 `SKILL.md`；source 管理的更新判定则使用整个 skill 目录（包括 supporting files）的确定性 hash，并要求所有预期可见副本都存在且一致。
+
+source refresh、source/ref 修改、Install、Update、Uninstall 和删除 source 都会写持久化状态或本机目录，因此共享每 Hub 单一运行中 Skills operation。Refresh 失败保留旧目录并标记 Stale，不允许从失败快照推断远端删除。Install/Update 执行前先刷新并确认固定 commit 的预览；批量动作 best-effort 汇总逐项结果，不自动安装远端新增项或删除 Removed upstream 项。普通页面 scan 保持同步只读。
 
 ### Skills 扫描目录与聚合
 
