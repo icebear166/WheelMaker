@@ -52,4 +52,17 @@ describe('web context menu gesture style contract', () => {
     expect(actionsBlock).toContain('Pin Project');
     expect(actionsBlock).not.toContain('New Session');
   });
+
+  test('keeps all Workspace-managed file result entry points on the shared binder', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const workspaceApp = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    expect(workspaceApp).toContain('const bindManagedFileContextMenu = useContextMenuTargetGesture<ManagedFileMenuTarget>');
+    expect(workspaceApp).toMatch(/<a[\s\S]*?bindManagedFileContextMenu\(fileMenuTarget\)[\s\S]*?className=\{\[/);
+    expect(workspaceApp).toMatch(/className=\{`preview-workbench-file-search-node file[\s\S]*?bindManagedFileContextMenu\(fileMenuTarget\)/);
+    expect(workspaceApp).toMatch(/className=\{`quick-file-search-option[\s\S]*?bindManagedFileContextMenu\(fileMenuTarget\)/);
+  });
 });

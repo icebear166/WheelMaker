@@ -154,7 +154,7 @@
 
 **Files:**
 - Modify: `app/web/src/chat/ChatTurnView.test.tsx`
-- Create: `app/web/src/file/FileExplorerTree.test.tsx`
+- Modify: `app/__tests__/web-preview-file-regressions.test.tsx`
 - Modify: `app/web/src/preview/PreviewWorkbenchChrome.test.tsx`
 - Modify: `app/web/src/preview/PreviewWorkbenchChrome.tsx`
 - Modify: `app/__tests__/web-context-menu-gesture-contract.test.ts`
@@ -162,31 +162,31 @@
 
 **Acceptance:** Chat file links, attachments, artifact files, file tree rows, Preview/Quick Open search results, and Preview Tabs expose the shared non-selection contract; Preview Tab Close owns its gesture and cannot open the parent menu or close after a long hold.
 
-- [ ] **Step 1: Write failing target-coverage assertions**
+- [x] **Step 1: Write failing target-coverage assertions**
 
   Render attachment/artifact targets in `ChatTurnView.test.tsx`, file rows in a new `FileExplorerTree.test.tsx`, and tabs in `PreviewWorkbenchChrome.test.tsx`; assert context-menu-enabled targets receive the shared data marker while ordinary chat text and non-menu rows do not. Extend the source-contract test to enumerate Workspace-managed chat file links, Preview search rows, and Quick Open rows as shared target-bind consumers.
 
-- [ ] **Step 2: Write the failing Preview Close arbitration test**
+- [x] **Step 2: Write the failing Preview Close arbitration test**
 
   In `PreviewWorkbenchChrome.test.tsx`, assert a short close click calls `onTabClose` once and not `onTabContextMenu`; after a 450ms touch hold, the synthesized click is prevented, neither callback runs, and `navigator.vibrate` is not called.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
   Run: `npm test -- --runInBand web/src/chat/ChatTurnView.test.tsx web/src/file/FileExplorerTree.test.tsx web/src/preview/PreviewWorkbenchChrome.test.tsx __tests__/web-context-menu-gesture-contract.test.ts`
 
   Expected: FAIL on Preview Close because it currently bubbles pointer events and executes after a hold; any uncovered target marker assertions also fail.
 
-- [ ] **Step 4: Isolate Preview Tab Close and close target gaps**
+- [x] **Step 4: Isolate Preview Tab Close and close target gaps**
 
   Bind the shared nested-action guard to the tab close button. If a listed file target does not already consume the target gesture binder, route it through that binder without changing click behavior or menu target construction.
 
-- [ ] **Step 5: Run GREEN and file-menu regressions**
+- [x] **Step 5: Run GREEN and file-menu regressions**
 
   Run: `npm test -- --runInBand web/src/chat/ChatTurnView.test.tsx web/src/file/FileExplorerTree.test.tsx web/src/preview/PreviewWorkbenchChrome.test.tsx web/src/preview/PreviewTabContextMenu.test.tsx web/src/common/ContextMenu.test.tsx __tests__/web-context-menu-gesture-contract.test.ts`
 
   Expected: PASS; file action models and menu rendering remain unchanged.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
   Invoke `git-workflow` checkpoint for file/Preview coverage, implementation, tests, and checked plan after GREEN.
 

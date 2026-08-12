@@ -240,8 +240,10 @@ describe('preview file regressions', () => {
       preventDefault: jest.fn(), clientX: 11, clientY: 13,
     }));
     expect(onFileContextMenu).toHaveBeenCalledWith('report.txt', {x: 11, y: 13});
+    expect(file.props['data-context-menu-target']).toBe('true');
     const directory = renderer.root.find(node => node.props.className === 'item dir');
     expect(directory.props.onContextMenu).toBeUndefined();
+    expect(directory.props['data-context-menu-target']).toBeUndefined();
   });
 
   test('finds a Markdown block whose source range contains the requested line', () => {

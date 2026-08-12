@@ -10,7 +10,10 @@ import {
 import {Icon, type IconName} from '../common/Icon';
 import {WorkbenchChrome} from '../shell/workbench/WorkbenchChrome';
 import {MENU_EXIT_MS} from '../chat/sessionlist/menuExit';
-import {useContextMenuTargetGesture} from '../common/useContextMenuGesture';
+import {
+  useContextMenuActionGesture,
+  useContextMenuTargetGesture,
+} from '../common/useContextMenuGesture';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
 
@@ -82,6 +85,7 @@ export function PreviewWorkbenchChrome({
   const bindTabContextMenu = useContextMenuTargetGesture<string>((tabId, position) => {
     onTabContextMenu?.(tabId, position);
   });
+  const tabCloseGesture = useContextMenuActionGesture();
   const drawerToolsRef = React.useRef<HTMLDivElement | null>(null);
   const drawerPanelRef = React.useRef<HTMLDivElement | null>(null);
   const actionsMenuRef = React.useRef<HTMLDivElement | null>(null);
@@ -307,6 +311,7 @@ export function PreviewWorkbenchChrome({
                   type="button"
                   className="preview-workbench-tabs-overflow-close"
                   aria-label={`Close ${tab.title}`}
+                  {...tabCloseGesture}
                   onClick={() => onTabClose(tab.projectId, tab.id)}
                 >
                   <Icon name="x" />
@@ -357,6 +362,7 @@ export function PreviewWorkbenchChrome({
             <button
               type="button"
               className="chat-file-workbench-tab-close"
+              {...tabCloseGesture}
               onClick={() => onTabClose(tab.projectId, tab.id)}
               aria-label={`Close ${tab.title}`}
             >

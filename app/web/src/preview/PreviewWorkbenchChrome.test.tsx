@@ -157,6 +157,53 @@ describe('PreviewWorkbenchChrome drawer', () => {
     expect(props.onTabClose).toHaveBeenCalledWith('p1', 'file:src/b.ts');
   });
 
+  test('tab close owns short click and suppresses its touch hold without opening the tab menu', () => {
+    jest.useFakeTimers();
+    const vibrate = jest.fn();
+    Object.defineProperty(navigator, 'vibrate', {configurable: true, value: vibrate});
+    try {
+      const onTabClose = jest.fn();
+      const props = createProps({
+        tabs: [fileTab],
+        activeTab: fileTab,
+        onTabClose,
+        onTabContextMenu: jest.fn(),
+      });
+      render(props);
+      const tab = document.querySelector('.preview-workbench-tab') as HTMLElement;
+      const close = document.querySelector('.chat-file-workbench-tab-close') as HTMLButtonElement;
+      expect(tab.getAttribute('data-context-menu-target')).toBe('true');
+      expect(close.getAttribute('data-context-menu-action')).toBe('true');
+
+      act(() => close.click());
+      expect(onTabClose).toHaveBeenCalledTimes(1);
+      expect(props.onTabContextMenu).not.toHaveBeenCalled();
+
+      onTabClose.mockClear();
+      const pointerDownEvent = new MouseEvent('pointerdown', {bubbles: true, cancelable: true});
+      Object.defineProperties(pointerDownEvent, {
+        pointerType: {configurable: true, value: 'touch'},
+        pointerId: {configurable: true, value: 23},
+        clientX: {configurable: true, value: 8},
+        clientY: {configurable: true, value: 9},
+        button: {configurable: true, value: 0},
+      });
+      act(() => {
+        close.dispatchEvent(pointerDownEvent);
+        jest.advanceTimersByTime(450);
+      });
+      const heldClick = new MouseEvent('click', {bubbles: true, cancelable: true});
+      act(() => close.dispatchEvent(heldClick));
+
+      expect(heldClick.defaultPrevented).toBe(true);
+      expect(onTabClose).not.toHaveBeenCalled();
+      expect(props.onTabContextMenu).not.toHaveBeenCalled();
+      expect(vibrate).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('scrolls the active tab into view after the tab selection is rendered', () => {
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
     const scrollIntoView = jest.fn();

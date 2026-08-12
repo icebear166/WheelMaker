@@ -242,6 +242,8 @@ describe('ChatTurnView Changed Files interactions', () => {
     );
     expect(contextEvent.preventDefault).toHaveBeenCalledTimes(1);
     expect(summary.props.onContextMenu).toBeUndefined();
+    expect(summary.props['data-context-menu-target']).toBeUndefined();
+    expect(fileRow.props['data-context-menu-target']).toBe('true');
   });
 });
 
@@ -268,13 +270,15 @@ describe('ChatTurnView attachment interactions', () => {
       {x: 15, y: 21},
     );
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(chip.props['data-context-menu-target']).toBe('true');
   });
 
   it('does not install attachment context handlers without an eligible callback', async () => {
     const tree = await renderTurn(message('user_message_chunk', {
       contentBlocks: [{type: 'resource_link', uri: 'file:///draft.txt', name: 'draft.txt'}],
     }));
-    expect(tree.root.findByProps({className: 'chat-prompt-attachment-chip file'}).props.onContextMenu)
-      .toBeUndefined();
+    const chip = tree.root.findByProps({className: 'chat-prompt-attachment-chip file'});
+    expect(chip.props.onContextMenu).toBeUndefined();
+    expect(chip.props['data-context-menu-target']).toBeUndefined();
   });
 });
