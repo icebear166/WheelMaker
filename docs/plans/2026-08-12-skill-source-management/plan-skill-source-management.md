@@ -105,19 +105,19 @@ Invoke `git-workflow` checkpoint for Task 2 after verification and record the co
 
 **Acceptance:** Explicit refresh resolves a ref to an immutable commit and complete valid catalog using local Git fixtures; first read migrates only unambiguous native-lock sources; composition yields structured source/unmanaged rows with correct live hash, stale, conflict, removed, error, and action-availability states while retaining existing effective inventories.
 
-- [ ] **Step 1: Write failing local-Git resolver tests**
+- [x] **Step 1: Write failing local-Git resolver tests**
 
 Create temporary repositories with branches/tags, nested skills, supporting files, additions/deletions, and branch movement. Assert full commit pinning, stable discovery/hash output, unsafe-skill rejection, cancellation/error cleanup, no shell interpolation, and no dependency on public network access.
 
-- [ ] **Step 2: Write failing migration tests**
+- [x] **Step 2: Write failing migration tests**
 
 Cover idempotent creation of `Needs refresh` sources from unique native-lock source/ref pairs, no install or native-lock mutation, ambiguous multi-ref/address output as `Needs resolution`, and local/node_modules/unverifiable entries remaining unmanaged.
 
-- [ ] **Step 3: Write failing catalog reconciliation tests**
+- [x] **Step 3: Write failing catalog reconciliation tests**
 
 Cover `uninstalled`, `up_to_date`, `update_available`, `removed_upstream`, `conflict`, and `error`; require whole-directory live hashing across every expected agent copy, source-source and source-unmanaged case-insensitive collision blocking, stale snapshot retention/action blocking, and unchanged `effectiveSkills` behavior.
 
-- [ ] **Step 4: Run focused Go tests to verify RED**
+- [x] **Step 4: Run focused Go tests to verify RED**
 
 Run: `go test ./internal/hub/tools -run 'TestSkillSource(Resolver|Migration|Catalog)' && go test ./internal/hub -run 'TestSkillsState'`
 
@@ -125,17 +125,17 @@ Working directory: `server`
 
 Expected: FAIL because resolver, migration, and source catalog composition are absent.
 
-- [ ] **Step 5: Implement the resolver and installed-state composition**
+- [x] **Step 5: Implement the resolver and installed-state composition**
 
 Use argument arrays with temporary Git clone/fetch/checkout, pin `resolvedCommit`, discover `SKILL.md` roots, reject partial catalogs, and clean temporary paths. Parse the native locks into source ownership, migrate only safe identities, scan local skill directories in real time, detect missing copies/collisions, and extend the Skills snapshot while preserving legacy inventory fields.
 
-- [ ] **Step 6: Run focused and adjacent Go tests to verify GREEN**
+- [x] **Step 6: Run focused and adjacent Go tests to verify GREEN**
 
 Run the Step 4 commands, then `go test ./internal/hub/tools ./internal/hub`.
 
 Expected: PASS.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint** — `15acadb2 feat(skills): resolve and reconcile source catalogs`
 
 Invoke `git-workflow` checkpoint for Task 3 after verification and record the commit hash and subject.
 
