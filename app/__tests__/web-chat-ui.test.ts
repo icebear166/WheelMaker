@@ -1984,7 +1984,7 @@ describe('web chat integration', () => {
     expect(mobileSheet).not.toContain('className="project-wrap"');
     expect(listViewTsx).toContain('split.visibleSessions.map(session => renderRow(projectId, session, false))');
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
-    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
+    expect(listViewTsx).toContain('gestureHandlers={searchMode ? undefined : bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
     expect(mainTsx).toContain("tagVariantClass('wide-project-hub', section.projectHubId || 'local')");
     expect(mainTsx).toContain('<AgentTag agentType={sessionAgent} />');

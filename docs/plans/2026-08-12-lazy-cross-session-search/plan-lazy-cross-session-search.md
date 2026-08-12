@@ -207,13 +207,13 @@ Invoke `git-workflow` checkpoint for Task 4 files after Step 6 passes; record co
 
 **Acceptance:** Every spec acceptance item has passing evidence, no protocol version changed, and the feature branch is ready for Git finalize.
 
-- [ ] **Step 1: Verify no obsolete cross-session UI remains**
+- [x] **Step 1: Verify no obsolete cross-session UI remains**
 
 Run: `rg -n "SESSION_SEARCH_DEBOUNCE_MS|formatSessionSearchResultMeta|splitSessionSearchTitleHighlight|renderSessionSearchRow|navigateSessionSearchResult|sessionSearchTargetTurn" app/web/src app/__tests__`
 
 Expected: No obsolete implementation references remain; any intentional negative-test strings are clearly scoped.
 
-- [ ] **Step 2: Run the complete Go suite**
+- [x] **Step 2: Run the complete Go suite**
 
 Run: `go test ./...`
 
@@ -221,7 +221,7 @@ Working directory: `server`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run the complete web test suite**
+- [x] **Step 3: Run the complete web test suite**
 
 Run: `npm test -- --runInBand`
 
@@ -229,7 +229,9 @@ Working directory: `app`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run TypeScript and production build checks**
+Baseline note: all 74 feature and adjacent session/search tests pass. The full suite retains the same 15 failing suites and 26 failing tests as `main`; this branch introduced no additional failures. The existing failures cover unrelated stale UI/static-style contracts.
+
+- [x] **Step 4: Run TypeScript and production build checks**
 
 Run: `npm run tsc:web && npm run build:web`
 
@@ -237,7 +239,7 @@ Working directory: `app`
 
 Expected: PASS; build output goes to the configured WheelMaker web output, not `app/dist`.
 
-- [ ] **Step 5: Inspect final diff and protocol compatibility**
+- [x] **Step 5: Inspect final diff and protocol compatibility**
 
 Run: `git diff --check && git status -sb && git diff --stat && git diff -- server/internal/protocol app/web/src/registry/registryMethods.ts`
 

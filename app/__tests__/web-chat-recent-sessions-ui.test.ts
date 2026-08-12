@@ -53,7 +53,7 @@ describe('web chat recent sessions', () => {
     expect(recentSectionTsx).toContain('recent-project-divider-create');
     expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, kind, anchor)");
     expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, kind)");
-    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
+    expect(listViewTsx).toContain('gestureHandlers={searchMode ? undefined : bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
     expect(listViewTsx).toContain('props.onOpenSessionContextMenu(target.projectId, target.sessionId, position);');
     expect(sessionRowTsx).toContain('<AgentTag agentType={agentType} />');
     expect(sessionlistCss).toContain('.recent-project-divider');
@@ -65,7 +65,7 @@ describe('web chat recent sessions', () => {
   test('recent rows reuse live session pin state without changing recent selection', () => {
     expect(mainTsx).toContain('?? snapshot');
     expect(listViewTsx).toContain('pinned={session.pinned === true}');
-    expect(sessionRowTsx).toContain("${pinned ? ' has-pin-action' : ''}");
+    expect(sessionRowTsx).toContain("${pinned && onUnpin ? ' has-pin-action' : ''}");
     expect(sessionRowTsx).toContain('className="wide-session-pin-btn"');
     expect(sessionRowTsx).toContain('{!pinned ? (');
     expect(mainTsx).toContain('handlePinProjectSession(targetProjectId, sessionId, false)');
@@ -169,8 +169,8 @@ describe('web chat recent sessions', () => {
   test('shares context gestures across layouts while nested actions stay isolated', () => {
     expect(listViewTsx).toContain('const bindSessionContextMenu = useContextMenuTargetGesture<');
     expect(listViewTsx).toContain('const bindProjectContextMenu = useContextMenuTargetGesture<string>');
-    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
-    expect(listViewTsx).toContain('projectGestureHandlers={bindProjectContextMenu(projectId)}');
+    expect(listViewTsx).toContain('gestureHandlers={searchMode ? undefined : bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
+    expect(listViewTsx).toContain('projectGestureHandlers={searchMode ? undefined : bindProjectContextMenu(projectId)}');
     expect(sessionRowTsx).toContain('const unpinGesture = useContextMenuActionGesture();');
     expect(projectSectionTsx).toContain('const projectActionGesture = useContextMenuActionGesture();');
     expect(mainTsx).toContain('const openProjectSessionContextMenu = useCallback((');

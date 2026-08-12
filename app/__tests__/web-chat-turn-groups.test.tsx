@@ -371,7 +371,7 @@ describe('chat turn groups', () => {
     expect(workspace).toContain('displayItem.sourceIndexes');
     expect(workspace).toContain('active={toolGroupActive}');
     expect(workspace).toContain(
-      'chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex)',
+      'chatDisplayItemContainsTurn(item, chatPromptHistoryTargetTurn.turnIndex)',
     );
   });
 

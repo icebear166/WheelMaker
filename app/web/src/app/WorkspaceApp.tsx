@@ -3677,12 +3677,12 @@ export function App() {
   const sessionSearchUnchangedPollsRef = useRef(0);
   const sessionSearchPollTimerRef = useRef<number | null>(null);
   const sessionSearchIdCounterRef = useRef(0);
-  const [sessionSearchTargetTurn, setSessionSearchTargetTurn] = useState<{
+  const [chatPromptHistoryTargetTurn, setChatPromptHistoryTargetTurn] = useState<{
     runtimeKey: string;
     turnIndex: number;
     generation: number;
   } | null>(null);
-  const sessionSearchHighlightTimerRef = useRef<number | null>(null);
+  const chatPromptHistoryHighlightTimerRef = useRef<number | null>(null);
   const [wideProjectActionMenu, setWideProjectActionMenu, wideProjectActionMenuExiting] = useMenuExitState<WideProjectActionMenuState>();
   const [mobileProjectActionMenu, setMobileProjectActionMenu, mobileProjectActionMenuExiting] = useMenuExitState<MobileProjectActionMenuState>();
   const [mobileRelayTargetSheet, setMobileRelayTargetSheet, mobileRelayTargetSheetExiting] =
@@ -4288,23 +4288,23 @@ export function App() {
 
   useEffect(() => {
     if (
-      !sessionSearchTargetTurn ||
-      sessionSearchTargetTurn.runtimeKey !== selectedChatEncodedKey ||
+      !chatPromptHistoryTargetTurn ||
+      chatPromptHistoryTargetTurn.runtimeKey !== selectedChatEncodedKey ||
       chatDisplayIndex.items.length === 0
     ) {
       return;
     }
     const searchTargetTurnIsVisible = chatDisplayIndex.items.some(
-      item => chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex),
+      item => chatDisplayItemContainsTurn(item, chatPromptHistoryTargetTurn.turnIndex),
     );
     if (!searchTargetTurnIsVisible) {
       return;
     }
     const frameId = window.requestAnimationFrame(() => {
-      chatVirtuosoListRef.current?.scrollToTurnIndex(sessionSearchTargetTurn.turnIndex, 'smooth');
+      chatVirtuosoListRef.current?.scrollToTurnIndex(chatPromptHistoryTargetTurn.turnIndex, 'smooth');
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [chatDisplayIndex, selectedChatEncodedKey, sessionSearchTargetTurn]);
+  }, [chatDisplayIndex, selectedChatEncodedKey, chatPromptHistoryTargetTurn]);
 
   const chatComposerStatusCompact = !isWide || windowWidth < 980 || (chatPreviewOpen && windowWidth < 1280);
 
@@ -5967,9 +5967,9 @@ export function App() {
         window.clearTimeout(sessionSearchPollTimerRef.current);
         sessionSearchPollTimerRef.current = null;
       }
-      if (sessionSearchHighlightTimerRef.current !== null) {
-        window.clearTimeout(sessionSearchHighlightTimerRef.current);
-        sessionSearchHighlightTimerRef.current = null;
+      if (chatPromptHistoryHighlightTimerRef.current !== null) {
+        window.clearTimeout(chatPromptHistoryHighlightTimerRef.current);
+        chatPromptHistoryHighlightTimerRef.current = null;
       }
     };
   }, []);
@@ -14627,17 +14627,17 @@ export function App() {
     }
     setChatTitlePromptMenuOpen(false);
     const generation = Date.now();
-    setSessionSearchTargetTurn({
+    setChatPromptHistoryTargetTurn({
       runtimeKey: selectedChatEncodedKey,
       turnIndex,
       generation,
     });
     chatVirtuosoListRef.current?.scrollToTurnIndex(turnIndex, 'smooth');
-    if (sessionSearchHighlightTimerRef.current !== null) {
-      window.clearTimeout(sessionSearchHighlightTimerRef.current);
+    if (chatPromptHistoryHighlightTimerRef.current !== null) {
+      window.clearTimeout(chatPromptHistoryHighlightTimerRef.current);
     }
-    sessionSearchHighlightTimerRef.current = window.setTimeout(() => {
-      setSessionSearchTargetTurn(current =>
+    chatPromptHistoryHighlightTimerRef.current = window.setTimeout(() => {
+      setChatPromptHistoryTargetTurn(current =>
         current?.generation === generation ? null : current,
       );
     }, 2000);
@@ -17970,8 +17970,8 @@ export function App() {
         searchMatchIds.includes(activeSearchMatchId)
       );
     const searchHighlighted =
-      (sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
-        sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
+      (chatPromptHistoryTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+        chatPromptHistoryTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
       turnIsChatSearchActive;
     return (
       <div
@@ -18110,7 +18110,7 @@ export function App() {
     selectedPermissionState,
     selectedPromptTurnStatusIndex,
     sessionChatShareAvailable,
-    sessionSearchTargetTurn,
+    chatPromptHistoryTargetTurn,
     ttsState,
   ]);
   const renderArchivedChatMessageTurn = useCallback((
@@ -18276,8 +18276,8 @@ export function App() {
           : {}),
       } satisfies ChatQueueActions : {};
       const displayItemSearchHighlighted =
-        sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
-        chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+        chatPromptHistoryTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+        chatDisplayItemContainsTurn(displayItem, chatPromptHistoryTargetTurn.turnIndex);
       const displayItemSearchExpanded = displayItem.kind === 'work-group' &&
         !!chatSearchActiveMatch &&
         displayItem.sourceIndexes.some(sourceIndex => {
@@ -18400,7 +18400,7 @@ export function App() {
     selectedActiveToolGroupKey,
     selectedPendingPrompt,
     selectedQueueItems,
-    sessionSearchTargetTurn,
+    chatPromptHistoryTargetTurn,
     steerQueuedPrompt,
     mutateQueuedPrompt,
   ]);
