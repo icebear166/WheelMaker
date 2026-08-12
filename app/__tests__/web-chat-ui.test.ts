@@ -66,6 +66,7 @@ describe('web chat integration', () => {
   test('keeps iOS long-press session menus from selecting text or activating the row', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sessionListTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionListView.tsx'));
     const stylesCss = readWebStyles(projectRoot);
     const nonSelectableSelectors = [
       '.desktop-window-controls',
@@ -91,15 +92,23 @@ describe('web chat integration', () => {
     expect(selectableMarketplaceUrlBlock).toContain('user-select: text;');
     expect(selectableMarketplaceUrlBlock).not.toContain('-webkit-touch-callout: none;');
 
-    const contextMenuStart = mainTsx.indexOf('const openProjectSessionContextMenu = (');
-    const contextMenuEnd = mainTsx.indexOf('setProjectSessionActionMenu({', contextMenuStart);
+    const sharedTargetBlock = cssRuleBlockContainingSelector(
+      stylesCss,
+      "[data-context-menu-target='true']",
+    );
+    expect(sharedTargetBlock).toContain('-webkit-touch-callout: none;');
+    expect(sharedTargetBlock).toContain('-webkit-user-select: none;');
+    expect(sharedTargetBlock).toContain('user-select: none;');
+    expect(sessionListTsx).toContain('bindSessionContextMenu({projectId, sessionId: session.sessionId})');
+
+    const contextMenuStart = mainTsx.indexOf('const openProjectSessionContextMenu = useCallback((');
+    const contextMenuEnd = mainTsx.indexOf('}, [closeSidebarTransientMenus, isWide, setProjectSessionActionMenu]);', contextMenuStart);
     expect(contextMenuStart).toBeGreaterThanOrEqual(0);
     expect(contextMenuEnd).toBeGreaterThan(contextMenuStart);
     const contextMenuBody = mainTsx.slice(contextMenuStart, contextMenuEnd);
-    expect(contextMenuBody).toContain(
-      'projectSessionLongPressTargetRef.current = projectSessionActionKey(targetProjectId, normalizedSessionId);',
-    );
-    expect(contextMenuBody).not.toContain("projectSessionLongPressTargetRef.current = '';");
+    expect(contextMenuBody).toContain('position: {x: number; y: number}');
+    expect(contextMenuBody).toContain('popover: isWide');
+    expect(mainTsx).not.toContain('projectSessionLongPressTargetRef');
   });
 
   test('defaults app chrome to non-selectable while preserving content text selection', () => {
@@ -1975,7 +1984,7 @@ describe('web chat integration', () => {
     expect(mobileSheet).not.toContain('className="project-wrap"');
     expect(listViewTsx).toContain('split.visibleSessions.map(session => renderRow(projectId, session, false))');
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
-    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
+    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
     expect(mainTsx).toContain("tagVariantClass('wide-project-hub', section.projectHubId || 'local')");
     expect(mainTsx).toContain('<AgentTag agentType={sessionAgent} />');
@@ -2163,8 +2172,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const togglePinnedProject = useCallback(');
     expect(mainTsx).not.toContain('const startProjectPinLongPress = useCallback(');
     expect(mainTsx).toContain('const openProjectContextMenu = useCallback(');
-    expect(mainTsx).toContain("kind: 'actions';");
-    expect(mainTsx).toContain("phase: 'actions';");
+    expect(mainTsx).toContain("kind: 'new' | 'resume' | 'actions';");
+    expect(mainTsx).toContain("phase: 'agents' | 'sessions' | 'actions';");
     expect(mainTsx).not.toContain('const consumeProjectPinLongPressClick = useCallback(');
     expect(mainTsx).toContain('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {');
     expect(mainTsx).toContain('className="wide-project-session-nav"');
@@ -2244,10 +2253,10 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("projectSessionActionMenu.popover.placement === 'above'");
     expect(mainTsx).toContain("'--sl-popover-shift': 'translateY(-100%)'");
     expect(mainTsx).toContain('anchorRect: {');
-    expect(mainTsx).toContain('left: event.clientX,');
-    expect(mainTsx).toContain('top: event.clientY,');
-    expect(mainTsx).toContain('bottom: event.clientY,');
-    expect(mainTsx).toContain('right: event.clientX,');
+    expect(mainTsx).toContain('left: position.x,');
+    expect(mainTsx).toContain('top: position.y,');
+    expect(mainTsx).toContain('bottom: position.y,');
+    expect(mainTsx).toContain('right: position.x,');
     expect(mainTsx).toContain("align: 'start',");
     expect(mainTsx).toContain('const sessionActionDisabled = !!session.running ||');
     expect(mainTsx).toContain('const renameActionDisabled = chatRenamingSessionId === sessionId;');
@@ -2270,8 +2279,8 @@ describe('web chat integration', () => {
     expect(deleteMenuIndex).toBeGreaterThan(archiveMenuIndex);
     expect(mainTsx).toContain("if (target?.closest('.project-session-action-menu')) {");
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
-    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
-    expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
+    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
+    expect(listViewTsx).toContain('props.onOpenSessionContextMenu(target.projectId, target.sessionId, position);');
     expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
     expect(mainTsx).toContain('const wideSidebarMain = renderWideProjectSessionNav();');
     expect(mainTsx).not.toContain('const wideSidebarMain = sidebarSettingsOpen');

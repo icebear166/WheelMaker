@@ -168,6 +168,22 @@ describe('useContextMenuGesture', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
+  test('does not arm long press for an unknown pointer type', () => {
+    const onOpen = jest.fn();
+    act(() => root.render(<Harness onOpen={onOpen} />));
+    const button = container.querySelector('button')!;
+
+    act(() => {
+      button.dispatchEvent(pointerEvent('pointerdown', {
+        pointerType: '', pointerId: 12, button: 0, clientX: 6, clientY: 8,
+      }));
+      jest.advanceTimersByTime(500);
+    });
+
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(vibrate).not.toHaveBeenCalled();
+  });
+
   test('binds the same gesture state to a target value', () => {
     const onOpen = jest.fn();
     act(() => root.render(<TargetHarness onOpen={onOpen} />));

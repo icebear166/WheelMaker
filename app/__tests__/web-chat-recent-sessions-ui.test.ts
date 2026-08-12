@@ -53,8 +53,8 @@ describe('web chat recent sessions', () => {
     expect(recentSectionTsx).toContain('recent-project-divider-create');
     expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, kind, anchor)");
     expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, kind)");
-    expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
-    expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
+    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
+    expect(listViewTsx).toContain('props.onOpenSessionContextMenu(target.projectId, target.sessionId, position);');
     expect(sessionRowTsx).toContain('<AgentTag agentType={agentType} />');
     expect(sessionlistCss).toContain('.recent-project-divider');
     expect(sessionlistCss).toContain('.recent-project-divider-create');
@@ -165,21 +165,17 @@ describe('web chat recent sessions', () => {
     expect(surfaceTsx).not.toContain('useState');
   });
 
-  test('limits long-press session and pin actions to the mobile sidebar', () => {
-    const pinLongPressStart = mainTsx.slice(
-      mainTsx.indexOf('const startProjectPinLongPress ='),
-      mainTsx.indexOf('const finishProjectPinLongPress ='),
-    );
-    const sessionLongPressStart = mainTsx.slice(
-      mainTsx.indexOf('const startProjectSessionLongPress ='),
-      mainTsx.indexOf('const finishProjectSessionLongPress ='),
-    );
-
-    expect(pinLongPressStart).toContain('if (isWide) {');
-    expect(pinLongPressStart).toContain("openMobileProjectActionMenu(targetProjectId, 'actions');");
-    expect(pinLongPressStart).not.toContain('togglePinnedProject(targetProjectId);');
-    expect(sessionLongPressStart).toContain('if (isWide) {');
-    expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
+  test('shares context gestures across layouts while nested actions stay isolated', () => {
+    expect(listViewTsx).toContain('const bindSessionContextMenu = useContextMenuTargetGesture<');
+    expect(listViewTsx).toContain('const bindProjectContextMenu = useContextMenuTargetGesture<string>');
+    expect(listViewTsx).toContain('gestureHandlers={bindSessionContextMenu({projectId, sessionId: session.sessionId})}');
+    expect(listViewTsx).toContain('projectGestureHandlers={bindProjectContextMenu(projectId)}');
+    expect(sessionRowTsx).toContain('const unpinGesture = useContextMenuActionGesture();');
+    expect(projectSectionTsx).toContain('const projectActionGesture = useContextMenuActionGesture();');
+    expect(mainTsx).toContain('const openProjectSessionContextMenu = useCallback((');
+    expect(mainTsx).toContain('const openProjectContextMenu = useCallback((');
+    expect(mainTsx).toContain('popover: isWide');
+    expect(mainTsx).toContain('if (!isWide) {');
     expect(mainTsx).toContain("sheetMenu.kind === 'actions'");
     expect(mainTsx).toContain("pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'");
 

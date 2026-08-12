@@ -198,13 +198,15 @@
 
 **Acceptance:** Every automated acceptance signal passes, the diff stays within the approved scope, manual-only device checks are reported explicitly, and the configured branch/push/merge/cleanup workflow is completed.
 
-- [ ] **Step 1: Run the complete related Jest suite**
+- [x] **Step 1: Run the complete related Jest suite**
 
   Run: `npm test -- --runInBand web/src/common/useContextMenuGesture.test.tsx web/src/chat/ChatTurnView.test.tsx web/src/file/FileExplorerTree.test.tsx web/src/preview/PreviewWorkbenchChrome.test.tsx web/src/preview/PreviewTabContextMenu.test.tsx web/src/common/ContextMenu.test.tsx web/src/chat/sessionlist/SessionListView.test.tsx web/src/chat/sessionlist/SessionRow.test.tsx web/src/chat/sessionlist/ProjectSection.test.tsx web/src/chat/sessionlist/SessionMenu.test.tsx __tests__/web-context-menu-gesture-contract.test.ts __tests__/web-responsive-ui-state.test.ts __tests__/web-chat-ui.test.ts`
 
   Expected: PASS with no unexpected console errors or warnings.
 
-- [ ] **Step 2: Run static and production-build validation**
+  Result: 14 directly related suites passed (131 tests). Full Jest has the same 15 failing baseline suites on this branch and current `main`; no task-owned suite remains in the failure set.
+
+- [x] **Step 2: Run static and production-build validation**
 
   Run: `npm run tsc:web`
 
@@ -214,18 +216,22 @@
 
   Expected: all commands exit 0.
 
-- [ ] **Step 3: Audit exclusions and changed files**
+- [x] **Step 3: Audit exclusions and changed files**
 
   Inspect `git status -sb`, `git diff --stat origin/main...HEAD`, and the final diff. Confirm Preview selection Copy, Terminal selection/Copy, chat body selection, Search/Archived/Draft Session behavior, voice hold, Floating Nav, file action models, protocols, and server code were not changed outside the approved compatibility work.
 
-- [ ] **Step 4: Record manual-device residual risk**
+- [x] **Step 4: Record manual-device residual risk**
 
   Report Android WebView/mobile browser/tablet/touch-PC callout and scroll checks as pending unless this environment provides those real devices; do not present automated jsdom/CSS/build evidence as a real-device pass.
 
-- [ ] **Step 5: Final wiki review**
+  Result: Real Android WebView/mobile Safari/tablet/touch-PC verification remains pending; automated jsdom, CSS contract, TypeScript, and production-build evidence is reported separately.
+
+- [x] **Step 5: Final wiki review**
 
   If implementation confirms additional stable facts within the four authorized wiki files, update only those facts and rerun first-line/link/diff checks. Do not create another wiki target.
 
-- [ ] **Step 6: Final Git checkpoint and finalize**
+  Result: The four authorized wiki targets already match the implementation; first-line, index, reference, and diff checks pass without further wiki edits.
+
+- [x] **Step 6: Final Git checkpoint and finalize**
 
   Check off the plan, checkpoint any remaining task-owned changes, then invoke `git-workflow` finalize with the real completion and verification result. Report commits, remote branch, merge/cleanup outcome, and any skipped action with its reason.

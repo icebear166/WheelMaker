@@ -38,7 +38,7 @@ type ContextMenuActionGestureHandlers = Pick<
 };
 
 function isLongPressPointer(event: React.PointerEvent<HTMLElement>): boolean {
-  return event.pointerType !== 'mouse' && event.button === 0;
+  return (event.pointerType === 'touch' || event.pointerType === 'pen') && event.button === 0;
 }
 
 export function useContextMenuGesture(

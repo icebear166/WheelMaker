@@ -13,7 +13,7 @@ describe('web resume session ui', () => {
     expect(mainTsx).not.toContain('<SessionIcon name="play"');
     expect(mainTsx).toContain(": 'import';");
     expect(mainTsx).toContain(
-      "<SessionIcon name={actionMenu.kind === 'new' ? 'plus' : 'import'} />",
+      "<SessionIcon name={actionMenu.kind === 'actions' ? 'list' : actionMenu.kind === 'new' ? 'plus' : 'import'} />",
     );
     expect(mainTsx).toContain('<SessionIcon name="import" />');
     expect(mainTsx).not.toContain('messageSquareMore');
@@ -76,7 +76,11 @@ describe('web resume session ui', () => {
     expect(mainTsx).not.toContain('className="chat-resume-list"');
     expect(mainTsx).toContain('wide-project-action-popover sl-session-list-popover${wideProjectActionMenuExiting');
     expect(mainTsx).toContain('mobile-project-sheet${mobileProjectActionMenuExiting');
-    expect(mainTsx).toContain("actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
+    expect(mainTsx).toContain("actionMenu.kind === 'actions'");
+    expect(mainTsx).toContain("? 'Project Actions'");
+    expect(mainTsx).toContain(": actionMenu.kind === 'new'");
+    expect(mainTsx).toContain("? 'New Session'");
+    expect(mainTsx).toContain(": 'Resume Session'}");
     expect(mainTsx).toContain("const sheetTitle = sheetIsActions");
     expect(mainTsx).toContain("? 'Project Actions'");
     expect(mainTsx).toContain('{sheetTitle}');
