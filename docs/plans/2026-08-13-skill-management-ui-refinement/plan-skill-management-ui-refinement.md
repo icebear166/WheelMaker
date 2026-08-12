@@ -140,5 +140,6 @@
 - [x] **Step 4: Review acceptance and boundaries**
   - Confirm all spec acceptance items have evidence, `git diff --check` passes, and `git diff --name-only` contains only approved UI/wiki/spec/plan files.
 
-- [ ] **Step 5: Git checkpoint/finalize**
+- [x] **Step 5: Git checkpoint/finalize**
   - Use `git-workflow checkpoint` if the wiki unit is independent, then use `git-workflow finalize` with the true result. Push the feature branch, merge to clean `main` per preferences, push `main`, verify remote SHA, and clean the merged worktree/branch.
+  - Evidence: feature branch `feat/skill-management-ui-refinement` was pushed, fast-forwarded into `main`, and `origin/main` now points to the verified implementation commit.
