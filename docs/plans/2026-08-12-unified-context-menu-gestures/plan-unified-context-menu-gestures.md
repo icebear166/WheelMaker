@@ -54,7 +54,7 @@
 
 **Acceptance:** One shared state machine handles mouse, touch, and pen; long press emits one haptic/open, movement permanently cancels the current press, synthetic follow-up events cannot double-open or click, and target-local CSS wins over selectable chat descendants.
 
-- [ ] **Step 1: Write failing shared-hook tests**
+- [x] **Step 1: Write failing shared-hook tests**
 
   Extend the jsdom harness to assert:
 
@@ -66,31 +66,31 @@
   - unmount and target replacement clear timers and do not open a stale target;
   - the nested-action guard stops parent pointer/contextmenu propagation, permits a short click, suppresses a held click, and never vibrates.
 
-- [ ] **Step 2: Write the failing style-contract test**
+- [x] **Step 2: Write the failing style-contract test**
 
   In `web-context-menu-gesture-contract.test.ts`, read `settings.css` and assert that the shared target selector and its descendants set `-webkit-touch-callout: none`, `-webkit-user-select: none`, and `user-select: none` after the general selectable-text rule. Also assert that the selector does not target `.chat-main-message`, `.wm-shiki-line-content`, or `.terminal-xterm-surface` wholesale.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
   Run: `npm test -- --runInBand web/src/common/useContextMenuGesture.test.tsx __tests__/web-context-menu-gesture-contract.test.ts`
 
   Expected: FAIL because haptic/de-duplication/action-guard behavior and the shared CSS marker do not exist yet.
 
-- [ ] **Step 4: Implement the minimum shared state machine**
+- [x] **Step 4: Implement the minimum shared state machine**
 
   Keep 450ms and 8px constants in `useContextMenuGesture.ts`. Track pointer ID, origin, committed/cancelled state, target snapshot, and one-shot click/contextmenu suppression. Only touch/pen primary presses start timers; pointer movement is observed without preventing default scrolling. Call the existing light haptic utility only when a normal target commits. Export a typed nested-action guard using the same timing and cancellation rules but no open callback or haptic.
 
-- [ ] **Step 5: Implement the local CSS contract**
+- [x] **Step 5: Implement the local CSS contract**
 
   Add the marker/descendant rule after the general selectable-content reset in `settings.css`, with sufficient cascade specificity to keep marked file/Session/Project/Tab targets non-selectable while adjacent text remains selectable.
 
-- [ ] **Step 6: Run GREEN and focused regression tests**
+- [x] **Step 6: Run GREEN and focused regression tests**
 
   Run: `npm test -- --runInBand web/src/common/useContextMenuGesture.test.tsx __tests__/web-context-menu-gesture-contract.test.ts __tests__/web-responsive-ui-state.test.ts`
 
   Expected: PASS; existing mobile haptic behavior remains intact.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint**
 
   Invoke `git-workflow` checkpoint for the shared hook, tests, CSS, and checked plan after GREEN.
 

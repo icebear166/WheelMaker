@@ -18,6 +18,15 @@ textarea,
   user-select: text;
 }
 
+[data-context-menu-target='true'],
+[data-context-menu-target='true'] *,
+[data-context-menu-action='true'],
+[data-context-menu-action='true'] * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .project-wrap,
 .settings-wrap {
   position: relative;
