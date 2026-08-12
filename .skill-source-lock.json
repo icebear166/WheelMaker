@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "hashAlgorithm": "sha256-v1",
+  "sources": [
+    {
+      "source": "https://github.com/anthropics/skills.git",
+      "sourceKey": "github.com/anthropics/skills",
+      "skillList": []
+    },
+    {
+      "source": "https://github.com/better-auth/better-icons.git",
+      "sourceKey": "github.com/better-auth/better-icons",
+      "skillList": []
+    },
+    {
+      "source": "https://github.com/emilkowalski/skills.git",
+      "sourceKey": "github.com/emilkowalski/skills",
+      "skillList": []
+    },
+    {
+      "source": "https://github.com/ibelick/ui-skills.git",
+      "sourceKey": "github.com/ibelick/ui-skills",
+      "skillList": []
+    }
+  ]
+}
