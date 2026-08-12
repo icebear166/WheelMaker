@@ -184,7 +184,7 @@ import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
 import {AgentTag} from '../chat/AgentTag';
 import {Icon} from '../common/Icon';
-import {useContextMenuTargetGesture} from '../common/useContextMenuGesture';
+import {contextMenuSurfaceProps, useContextMenuTargetGesture} from '../common/useContextMenuGesture';
 import {ContextMenu, ContextMenuItems} from '../common/ContextMenu';
 import {RetryToast} from '../common/RetryToast';
 import {createSkillRetryNotice, type SkillRetryNotice} from './skillRetryNotice';
@@ -16317,6 +16317,7 @@ export function App() {
         />
         <div
           className={`mobile-project-sheet${mobileProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
+          {...contextMenuSurfaceProps}
           role="dialog"
           aria-modal="true"
           aria-label={sheetIsActions ? 'Project actions' : sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
@@ -16468,6 +16469,7 @@ export function App() {
       <div
         ref={wideProjectActionMenuRef}
         className={`wide-project-action-popover sl-session-list-popover${wideProjectActionMenuExiting ? ' sl-menu-exit' : ''}`}
+        {...contextMenuSurfaceProps}
         style={actionMenu.popover
           ? {
               top: `${actionMenu.popover.top}px`,

@@ -1,4 +1,5 @@
 import React, {useEffect, useRef} from 'react';
+import {contextMenuSurfaceProps} from '../../common/useContextMenuGesture';
 import {focusFirstMenuItem, handleMenuKeyDown} from '../../common/menuKeyboardNavigation';
 import type {RegistrySessionMarkColor} from '../../registry/registryTypes';
 import {SessionIcon, type SessionIconName} from './SessionIcon';
@@ -97,6 +98,7 @@ export function SessionMenu({
     <div
       ref={menuRef}
       className={`project-session-action-menu sl-session-list-popover${sheet ? ' sl-sheet' : ''}${exiting ? ' sl-menu-exit' : ''}${exiting && dragOffset > 0 ? ' from-drag' : ''}${dragging ? ' dragging' : ''}`}
+      {...contextMenuSurfaceProps}
       role="menu"
       aria-label="Session actions"
       style={sheet

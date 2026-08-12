@@ -31,6 +31,16 @@ async function renderMenu(extra?: Partial<React.ComponentProps<typeof SessionMen
 }
 
 describe('SessionMenu', () => {
+  it('owns native context menu behavior across its title and actions', async () => {
+    const {tree} = await renderMenu({sheet: true});
+    const menu = tree.root.findByProps({role: 'menu'});
+    const preventDefault = jest.fn();
+
+    expect(menu.props['data-context-menu-surface']).toBe('true');
+    act(() => menu.props.onContextMenu({preventDefault}));
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the mark palette above Pin with separators between menu groups', async () => {
     const {tree} = await renderMenu();
     const menu = tree.root.findByProps({role: 'menu'});

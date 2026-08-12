@@ -2,6 +2,7 @@ import React, {useEffect, useRef} from 'react';
 import {focusFirstMenuItem, handleMenuKeyDown} from './menuKeyboardNavigation';
 import {ChatIcon} from '../chat/ChatIcon';
 import type {ContextMenuModel, FileMenuAction} from '../file/fileMenuModel';
+import {contextMenuSurfaceProps} from './useContextMenuGesture';
 
 type ContextMenuProps<Action extends string = FileMenuAction> = {
   x: number;
@@ -66,6 +67,7 @@ export function ContextMenu<Action extends string = FileMenuAction>({
     <div
       ref={menuRef}
       className={`${className}${exiting ? ' sl-menu-exit' : ''}`}
+      {...contextMenuSurfaceProps}
       style={{left: x, top: y}}
       role="menu"
       aria-label={ariaLabel}

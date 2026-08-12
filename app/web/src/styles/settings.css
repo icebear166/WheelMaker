@@ -21,7 +21,9 @@ textarea,
 [data-context-menu-target='true'],
 [data-context-menu-target='true'] *,
 [data-context-menu-action='true'],
-[data-context-menu-action='true'] * {
+[data-context-menu-action='true'] *,
+[data-context-menu-surface='true'],
+[data-context-menu-surface='true'] * {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;

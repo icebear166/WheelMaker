@@ -37,6 +37,20 @@ type ContextMenuActionGestureHandlers = Pick<
   'data-context-menu-action': 'true';
 };
 
+export type ContextMenuSurfaceProps = Pick<
+  React.HTMLAttributes<HTMLDivElement>,
+  'onContextMenu'
+> & {
+  'data-context-menu-surface': 'true';
+};
+
+export const contextMenuSurfaceProps: ContextMenuSurfaceProps = {
+  'data-context-menu-surface': 'true',
+  onContextMenu: event => {
+    event.preventDefault();
+  },
+};
+
 function isLongPressPointer(event: React.PointerEvent<HTMLElement>): boolean {
   return (event.pointerType === 'touch' || event.pointerType === 'pen') && event.button === 0;
 }

@@ -20,6 +20,14 @@ describe('web context menu gesture style contract', () => {
     expect(targetRule).not.toContain('.chat-main-message');
     expect(targetRule).not.toContain('.wm-shiki-line-content');
     expect(targetRule).not.toContain('.terminal-xterm-surface');
+
+    const surfaceSelector = "[data-context-menu-surface='true']";
+    const surfaceRuleIndex = settingsCss.indexOf(surfaceSelector);
+    expect(surfaceRuleIndex).toBeGreaterThan(selectableResetIndex);
+    const surfaceRule = settingsCss.slice(surfaceRuleIndex, settingsCss.indexOf('}', surfaceRuleIndex));
+    expect(surfaceRule).toContain('-webkit-touch-callout: none;');
+    expect(surfaceRule).toContain('-webkit-user-select: none;');
+    expect(surfaceRule).toContain('user-select: none;');
   });
 
   test('routes Session and Project targets through the shared position contract', () => {
@@ -42,6 +50,8 @@ describe('web context menu gesture style contract', () => {
     expect(workspaceApp).not.toContain('PROJECT_SESSION_LONG_PRESS_MS');
     expect(workspaceApp).not.toContain('projectPinLongPressTimerRef');
     expect(workspaceApp).not.toContain('projectSessionLongPressTimerRef');
+    expect(workspaceApp).toMatch(/className=\{`mobile-project-sheet[^\n]*\n\s+\{\.\.\.contextMenuSurfaceProps\}/);
+    expect(workspaceApp).toMatch(/className=\{`wide-project-action-popover[^\n]*\n\s+\{\.\.\.contextMenuSurfaceProps\}/);
 
     const actionsStart = workspaceApp.indexOf("actionMenu.kind === 'actions' ? (");
     const actionsEnd = workspaceApp.indexOf(") : actionMenu.phase === 'agents' ? (", actionsStart);

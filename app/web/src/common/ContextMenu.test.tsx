@@ -20,6 +20,30 @@ const model: ContextMenuModel = {
 };
 
 describe('ContextMenu', () => {
+  test('owns native context menu behavior on the rendered menu surface', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <ContextMenu
+          x={10}
+          y={20}
+          model={model}
+          onAction={jest.fn()}
+          onClose={jest.fn()}
+          className="context-menu"
+        />,
+      );
+    });
+
+    const menu = renderer.root.findByProps({role: 'menu'});
+    const preventDefault = jest.fn();
+    expect(menu.props['data-context-menu-surface']).toBe('true');
+    act(() => menu.props.onContextMenu({preventDefault}));
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+
+    act(() => renderer.unmount());
+  });
+
   test('renders model groups and dispatches enabled actions', () => {
     const onAction = jest.fn();
     const onClose = jest.fn();

@@ -22,7 +22,7 @@ Session 搜索结果、Archived、Draft 不因本规则获得菜单。聊天正�
 
 ## 浏览器默认行为
 
-自定义菜单目标及其标签文本必须局部禁用文本选择和 WebKit 长按 callout，并接管目标上的浏览器默认上下文菜单。该禁用只跟随明确标记的业务目标，不能扩大到相邻聊天正文、代码正文、Terminal 或整个页面。
+自定义菜单目标及其标签文本必须局部禁用文本选择和 WebKit 长按 callout，并接管目标上的浏览器默认上下文菜单。弹出的自定义菜单 surface 及其标题、菜单项文字也必须使用独立共享标记禁用文本选择与 WebKit 长按 callout，并接管 surface 内的浏览器默认上下文菜单；这不会清除触发菜单前已有的正文选区。上述禁用只跟随明确标记的业务目标或菜单 surface，不能扩大到相邻聊天正文、代码正文、Terminal、所有 `[role='menu']` 或整个页面。
 
 touch/pen 待长按阶段不阻止 pointer 默认行为，以保留原生滚动。pointer up、cancel、leave、超阈值移动、目标切换或组件卸载都要结束待定手势并清理一次性抑制状态。
 
@@ -36,4 +36,4 @@ touch/pen 待长按阶段不阻止 pointer 默认行为，以保留原生滚动�
 
 ## 职责边界
 
-共享 Web 手势入口统一维护 timer、移动阈值、pointer 生命周期、目标快照、重复触发防护、关联 click 抑制、light haptic 和目标局部的 selection/callout 样式契约。业务 owner 仍负责目标归一化、菜单项、Sheet/Popover 状态、定位和 action dispatch。
+共享 Web 手势入口统一维护 timer、移动阈值、pointer 生命周期、目标快照、重复触发防护、关联 click 抑制、light haptic，以及目标与菜单 surface 局部的 selection/callout 样式契约。业务 owner 仍负责目标归一化、菜单项、Sheet/Popover 状态、定位和 action dispatch。
