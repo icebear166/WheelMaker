@@ -39,7 +39,6 @@ type skillSourceLock struct {
 type skillSourceSnapshot struct {
 	Source         string                     `json:"source"`
 	SourceKey      string                     `json:"sourceKey"`
-	Ref            string                     `json:"-"`
 	ResolvedCommit string                     `json:"resolvedCommit,omitempty"`
 	RefreshedAt    string                     `json:"refreshedAt,omitempty"`
 	SkillList      []skillSourceSkillSnapshot `json:"skillList"`
@@ -64,7 +63,6 @@ type nativeSkillSourceEntry struct {
 	Source     string
 	SourceURL  string
 	SourceType string
-	Ref        string
 }
 
 type nativeSkillSourceGroup struct {

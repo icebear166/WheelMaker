@@ -222,7 +222,6 @@ type skillsCommandPayload struct {
 	Source      string   `json:"source,omitempty"`
 	SkillName   string   `json:"skillName,omitempty"`
 	Skills      []string `json:"skills,omitempty"`
-	Ref         string   `json:"ref,omitempty"`
 	PreviewID   string   `json:"previewId,omitempty"`
 }
 
@@ -252,7 +251,6 @@ type skillsSourcePreview struct {
 	ProjectName     string                     `json:"projectName,omitempty"`
 	Source          string                     `json:"source"`
 	SourceKey       string                     `json:"sourceKey"`
-	Ref             string                     `json:"ref"`
 	ResolvedCommit  string                     `json:"resolvedCommit"`
 	SkillList       []skillSourceSkillSnapshot `json:"skillList"`
 	Skills          []string                   `json:"skills,omitempty"`
@@ -330,7 +328,6 @@ type skillsSkillDetailSnapshot struct {
 	Source          string                 `json:"source,omitempty"`
 	SourceURL       string                 `json:"sourceUrl,omitempty"`
 	SourceType      string                 `json:"sourceType,omitempty"`
-	Ref             string                 `json:"ref,omitempty"`
 	SkillPath       string                 `json:"skillPath,omitempty"`
 	PluginName      string                 `json:"pluginName,omitempty"`
 	InstalledAt     string                 `json:"installedAt,omitempty"`
@@ -368,6 +365,13 @@ func (e *skillsCommandError) Error() string {
 }
 
 func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *skillsCommandError) {
+	var rawFields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &rawFields); err != nil {
+		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "invalid cmd.skills payload"}
+	}
+	if _, exists := rawFields["ref"]; exists {
+		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill source refs are unsupported; use the repository default branch"}
+	}
 	var payload skillsCommandPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "invalid cmd.skills payload"}
@@ -377,7 +381,6 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	payload.Scope = strings.TrimSpace(payload.Scope)
 	payload.ProjectName = strings.TrimSpace(payload.ProjectName)
 	payload.Source = strings.TrimSpace(payload.Source)
-	payload.Ref = strings.TrimSpace(payload.Ref)
 	payload.PreviewID = strings.TrimSpace(payload.PreviewID)
 	payload.SkillName = strings.TrimSpace(payload.SkillName)
 	payload.Skills = normalizeSkillNames(payload.Skills)
@@ -389,6 +392,11 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	}
 	if c.hubID != "" && payload.HubID != c.hubID {
 		return nil, &skillsCommandError{Code: rp.CodeForbidden, Message: "hubId does not match this hub"}
+	}
+	if payload.Source != "" {
+		if err := validateSkillSourceHasNoExplicitRef(payload.Source); err != nil {
+			return nil, err
+		}
 	}
 
 	switch payload.Action {
@@ -550,24 +558,11 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 			break
 		}
 	}
-	ref := payload.Ref
-	if ref == "" {
-		if existingIndex >= 0 {
-			ref = lock.Sources[existingIndex].Ref
-		} else {
-			ref = "HEAD"
-		}
-	}
-	if payload.Action == "previewInstall" && existingIndex >= 0 && lock.Sources[existingIndex].Ref != ref {
-		return skillsCommandResponse{}, &skillsCommandError{
-			Code: rp.CodeConflict, Message: "source ref differs; preview and confirm the ref change before installing",
-		}
-	}
-	candidate := skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, Ref: ref, SkillList: []skillSourceSkillSnapshot{}}
+	candidate := skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, SkillList: []skillSourceSkillSnapshot{}}
 	resolved, err := c.resolveSource(ctx, candidate)
 	if err != nil {
 		message := sanitizeSkillSourceError(err.Error(), payload.Source)
-		if existingIndex >= 0 && strings.EqualFold(lock.Sources[existingIndex].Ref, ref) {
+		if existingIndex >= 0 {
 			c.setSkillSourceError(target, sourceKey, message)
 		}
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: message}
@@ -578,13 +573,10 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 	if resolved.SourceKey == "" {
 		resolved.SourceKey = sourceKey
 	}
-	if resolved.Ref == "" {
-		resolved.Ref = ref
-	}
 	validation := newSkillSourceLock()
 	validation.Sources = []skillSourceSnapshot{resolved}
 	if err := validateSkillSourceLock(validation); err != nil {
-		if existingIndex >= 0 && strings.EqualFold(lock.Sources[existingIndex].Ref, ref) {
+		if existingIndex >= 0 {
 			c.setSkillSourceError(target, sourceKey, err.Error())
 		}
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
@@ -641,7 +633,7 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 	}
 	preview := skillsSourcePreview{
 		Kind: payload.Action, Scope: target.scope, ProjectName: target.projectName,
-		Source: resolved.Source, SourceKey: resolved.SourceKey, Ref: resolved.Ref,
+		Source: resolved.Source, SourceKey: resolved.SourceKey,
 		ResolvedCommit: resolved.ResolvedCommit,
 		SkillList:      append([]skillSourceSkillSnapshot(nil), resolved.SkillList...),
 		Skills:         append([]string(nil), selectedSkills...),
@@ -800,7 +792,6 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 	if selectedCount == 1 {
 		preview.Source = previewSource.Source
 		preview.SourceKey = previewSource.SourceKey
-		preview.Ref = previewSource.Ref
 		preview.ResolvedCommit = previewSource.ResolvedCommit
 		preview.SkillList = append([]skillSourceSkillSnapshot(nil), previewSource.SkillList...)
 	}
@@ -859,11 +850,7 @@ func (c *SkillsCommand) previewDeleteSource(payload skillsCommandPayload) (skill
 		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill source not found"}
 	}
 	if !found {
-		ref := payload.Ref
-		if ref == "" {
-			ref = "HEAD"
-		}
-		source = skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, Ref: ref, SkillList: []skillSourceSkillSnapshot{}}
+		source = skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, SkillList: []skillSourceSkillSnapshot{}}
 	}
 	lock.Sources = nextSources
 	sort.Slice(skills, func(i, j int) bool { return strings.ToLower(skills[i]) < strings.ToLower(skills[j]) })
@@ -876,7 +863,7 @@ func (c *SkillsCommand) previewDeleteSource(payload skillsCommandPayload) (skill
 	}
 	preview := skillsSourcePreview{
 		Kind: "previewDeleteSource", Scope: target.scope, ProjectName: target.projectName,
-		Source: source.Source, SourceKey: source.SourceKey, Ref: source.Ref,
+		Source: source.Source, SourceKey: source.SourceKey,
 		ResolvedCommit: source.ResolvedCommit, SkillList: append([]skillSourceSkillSnapshot(nil), source.SkillList...),
 		Skills: append([]string(nil), skills...), CreatedAt: c.now().Format(time.RFC3339),
 	}
@@ -1631,7 +1618,6 @@ func (c *SkillsCommand) skillDetailFromSnapshot(target skillsCommandTarget, skil
 		Source:          lockDetail.Source,
 		SourceURL:       lockDetail.SourceURL,
 		SourceType:      lockDetail.SourceType,
-		Ref:             lockDetail.Ref,
 		SkillPath:       lockDetail.SkillPath,
 		PluginName:      lockDetail.PluginName,
 		InstalledAt:     lockDetail.InstalledAt,
@@ -1945,7 +1931,6 @@ type skillsLockDetailMetadata struct {
 	Source      string
 	SourceURL   string
 	SourceType  string
-	Ref         string
 	SkillPath   string
 	PluginName  string
 	InstalledAt string
@@ -1970,7 +1955,6 @@ func readSkillsLockScanMetadata(path string) skillsLockScanMetadata {
 			Source      string `json:"source"`
 			SourceURL   string `json:"sourceUrl"`
 			SourceType  string `json:"sourceType"`
-			Ref         string `json:"ref"`
 			SkillPath   string `json:"skillPath"`
 			PluginName  string `json:"pluginName"`
 			InstalledAt string `json:"installedAt"`
@@ -1994,7 +1978,6 @@ func readSkillsLockScanMetadata(path string) skillsLockScanMetadata {
 			Source:      strings.TrimSpace(skill.Source),
 			SourceURL:   strings.TrimSpace(skill.SourceURL),
 			SourceType:  strings.TrimSpace(skill.SourceType),
-			Ref:         strings.TrimSpace(skill.Ref),
 			SkillPath:   strings.TrimSpace(skill.SkillPath),
 			PluginName:  pluginName,
 			InstalledAt: strings.TrimSpace(skill.InstalledAt),
@@ -2022,7 +2005,6 @@ func readSkillsLockInstallGroups(path string) []skillsLockInstallGroup {
 			Source     string `json:"source"`
 			SourceURL  string `json:"sourceUrl"`
 			SourceType string `json:"sourceType"`
-			Ref        string `json:"ref"`
 		} `json:"skills"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
@@ -2052,9 +2034,6 @@ func readSkillsLockInstallGroups(path string) []skillsLockInstallGroup {
 		}
 		if source == "" {
 			continue
-		}
-		if ref := strings.TrimSpace(entry.Ref); ref != "" {
-			source += "#" + ref
 		}
 		if _, ok := grouped[source]; !ok {
 			sources = append(sources, source)
@@ -2191,6 +2170,20 @@ func categoryTitleFromKey(key string) string {
 		parts[i] = strings.ToUpper(part[:1]) + part[1:]
 	}
 	return strings.Join(parts, " ")
+}
+
+func validateSkillSourceHasNoExplicitRef(source string) *skillsCommandError {
+	if strings.Contains(source, "#") {
+		return &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill source refs are unsupported; use the repository default branch"}
+	}
+	parsed, err := url.Parse(source)
+	if err == nil && (strings.EqualFold(parsed.Hostname(), "github.com") || strings.EqualFold(parsed.Hostname(), "www.github.com")) {
+		parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+		if len(parts) >= 4 && strings.EqualFold(parts[2], "tree") {
+			return &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "GitHub tree URLs with refs are unsupported; use the repository URL"}
+		}
+	}
+	return nil
 }
 
 func validateRemoteSkillSource(source string) *skillsCommandError {

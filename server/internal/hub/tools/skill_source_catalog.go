@@ -21,7 +21,6 @@ type SkillsSourceScopeSnapshot struct {
 type SkillsSourceCatalogSnapshot struct {
 	Source         string                             `json:"source"`
 	SourceKey      string                             `json:"sourceKey"`
-	Ref            string                             `json:"ref"`
 	ResolvedCommit string                             `json:"resolvedCommit,omitempty"`
 	RefreshedAt    string                             `json:"refreshedAt,omitempty"`
 	Status         string                             `json:"status"`
@@ -69,7 +68,6 @@ type skillSourceReconciliation struct {
 type skillSourceReconciledItem struct {
 	Source    string `json:"source"`
 	SourceKey string `json:"sourceKey"`
-	Ref       string `json:"ref"`
 }
 
 type skillSourceInstalledSnapshot = SkillsInstalledSkillSnapshot
@@ -111,9 +109,9 @@ func ScanSkillsSourceScope(ctx context.Context, input SkillsSourceScopeInput) (S
 	}
 	pending := appendPendingSkillSourceRemovals(&snapshot, reconciliation, migration.Lock, native, input.Installed)
 	if strings.TrimSpace(input.ReconciliationPath) != "" {
-		next := skillSourceReconciliation{Version: 1, Sources: make([]skillSourceReconciledItem, 0, len(migration.Lock.Sources)+len(pending))}
+		next := skillSourceReconciliation{Version: 2, Sources: make([]skillSourceReconciledItem, 0, len(migration.Lock.Sources)+len(pending))}
 		for _, source := range migration.Lock.Sources {
-			next.Sources = append(next.Sources, skillSourceReconciledItem{Source: source.Source, SourceKey: source.SourceKey, Ref: source.Ref})
+			next.Sources = append(next.Sources, skillSourceReconciledItem{Source: source.Source, SourceKey: source.SourceKey})
 		}
 		next.Sources = append(next.Sources, pending...)
 		_, existingErr := os.Stat(input.ReconciliationPath)
@@ -181,7 +179,7 @@ func appendPendingSkillSourceRemovals(
 		}
 		sort.Slice(rows, func(i, j int) bool { return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name) })
 		snapshot.Sources = append(snapshot.Sources, SkillsSourceCatalogSnapshot{
-			Source: previousSource.Source, SourceKey: previousSource.SourceKey, Ref: previousSource.Ref,
+			Source: previousSource.Source, SourceKey: previousSource.SourceKey,
 			Status: "pending_removal", InstalledCount: len(rows), Skills: rows,
 		})
 		active = append(active, previousSource)
@@ -204,23 +202,47 @@ func appendPendingSkillSourceRemovals(
 
 func readSkillSourceReconciliation(path string) (skillSourceReconciliation, error) {
 	if strings.TrimSpace(path) == "" {
-		return skillSourceReconciliation{Version: 1, Sources: []skillSourceReconciledItem{}}, nil
+		return skillSourceReconciliation{Version: 2, Sources: []skillSourceReconciledItem{}}, nil
 	}
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return skillSourceReconciliation{Version: 1, Sources: []skillSourceReconciledItem{}}, nil
+		return skillSourceReconciliation{Version: 2, Sources: []skillSourceReconciledItem{}}, nil
 	}
 	if err != nil {
 		return skillSourceReconciliation{}, err
+	}
+	var envelope struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return skillSourceReconciliation{}, fmt.Errorf("decode skill source reconciliation: %w", err)
+	}
+	if envelope.Version == 1 {
+		var legacy struct {
+			Version int `json:"version"`
+			Sources []struct {
+				Source    string `json:"source"`
+				SourceKey string `json:"sourceKey"`
+				Ref       string `json:"ref"`
+			} `json:"sources"`
+		}
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return skillSourceReconciliation{}, fmt.Errorf("decode skill source reconciliation: %w", err)
+		}
+		state := skillSourceReconciliation{Version: 2, Sources: make([]skillSourceReconciledItem, 0, len(legacy.Sources))}
+		for _, source := range legacy.Sources {
+			state.Sources = append(state.Sources, skillSourceReconciledItem{Source: source.Source, SourceKey: source.SourceKey})
+		}
+		return state, nil
+	}
+	if envelope.Version != 2 {
+		return skillSourceReconciliation{}, fmt.Errorf("unsupported skill source reconciliation version %d", envelope.Version)
 	}
 	var state skillSourceReconciliation
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&state); err != nil {
 		return skillSourceReconciliation{}, fmt.Errorf("decode skill source reconciliation: %w", err)
-	}
-	if state.Version != 1 {
-		return skillSourceReconciliation{}, fmt.Errorf("unsupported skill source reconciliation version %d", state.Version)
 	}
 	return state, nil
 }
@@ -325,7 +347,7 @@ func composeSkillSourceCatalog(
 	}
 	for _, source := range lock.Sources {
 		view := SkillsSourceCatalogSnapshot{
-			Source: source.Source, SourceKey: source.SourceKey, Ref: source.Ref,
+			Source: source.Source, SourceKey: source.SourceKey,
 			ResolvedCommit: source.ResolvedCommit, RefreshedAt: source.RefreshedAt,
 			Status: "ready", Skills: []SkillsSourceCatalogSkillSnapshot{},
 		}
@@ -353,12 +375,14 @@ func composeSkillSourceCatalog(
 				localHash, localErr := hashInstalledSkillCopies(local.Locations)
 				row.LocalContentSHA256 = localHash
 				switch {
-				case localErr != nil:
+				case errors.Is(localErr, errInstalledSkillCopiesDiffer) && view.Status == "ready":
+					row.Status = "copies_differ"
+					row.CanUpdate = true
+				case localErr != nil && !errors.Is(localErr, errInstalledSkillCopiesDiffer):
 					row.Status = "error"
 					row.Error = localErr.Error()
 				case view.Status != "ready":
-					row.Status = "error"
-					row.Error = "Source snapshot is not current."
+					row.Status = view.Status
 				case localHash == remote.ContentSHA256:
 					row.Status = "up_to_date"
 				default:
@@ -367,6 +391,30 @@ func composeSkillSourceCatalog(
 				}
 			}
 			view.Skills = append(view.Skills, row)
+		}
+		if view.Status == "needs_refresh" {
+			for nameKey, ownerKey := range ownerByName {
+				if ownerKey != strings.ToLower(source.SourceKey) {
+					continue
+				}
+				if _, exists := remoteNames[nameKey]; exists {
+					continue
+				}
+				local, exists := installedByName[nameKey]
+				if !exists {
+					continue
+				}
+				localHash, localErr := hashInstalledSkillCopies(local.Locations)
+				row := SkillsSourceCatalogSkillSnapshot{
+					Name: local.Name, LocalContentSHA256: localHash, Status: "needs_refresh",
+					Installed: true, Managed: local.Managed, CanUninstall: true,
+				}
+				if localErr != nil && !errors.Is(localErr, errInstalledSkillCopiesDiffer) {
+					row.Status = "error"
+					row.Error = localErr.Error()
+				}
+				view.Skills = append(view.Skills, row)
+			}
 		}
 		if view.Status == "ready" {
 			for nameKey, ownerKey := range ownerByName {
@@ -431,6 +479,8 @@ func composeSkillSourceCatalog(
 	return result
 }
 
+var errInstalledSkillCopiesDiffer = errors.New("installed skill copies have different content")
+
 func hashInstalledSkillCopies(locations []string) (string, error) {
 	if len(locations) == 0 {
 		return "", fmt.Errorf("installed skill has no visible locations")
@@ -469,7 +519,7 @@ func hashInstalledSkillCopies(locations []string) (string, error) {
 		return "", fmt.Errorf("installed skill has no visible locations")
 	}
 	if len(uniqueHashes) != 1 {
-		return firstHash, fmt.Errorf("installed skill copies have different content")
+		return firstHash, errInstalledSkillCopiesDiffer
 	}
 	return firstHash, nil
 }

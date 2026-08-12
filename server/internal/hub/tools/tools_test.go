@@ -3696,7 +3696,7 @@ func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *te
 	lock := skillSourceLock{
 		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
 		Sources: []skillSourceSnapshot{{
-			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
 			SkillList: []skillSourceSkillSnapshot{
 				{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: alphaHash},
@@ -3706,9 +3706,9 @@ func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *te
 		}},
 	}
 	native := []nativeSkillSourceEntry{
-		{Name: "alpha", Source: "https://github.com/example/catalog.git", Ref: "main"},
-		{Name: "beta", Source: "https://github.com/example/catalog.git", Ref: "main"},
-		{Name: "removed", Source: "https://github.com/example/catalog.git", Ref: "main"},
+		{Name: "alpha", Source: "https://github.com/example/catalog.git"},
+		{Name: "beta", Source: "https://github.com/example/catalog.git"},
+		{Name: "removed", Source: "https://github.com/example/catalog.git"},
 	}
 	installed := []skillSourceInstalledSnapshot{
 		{Name: "alpha", Managed: true, Locations: []string{filepath.Join(alphaOne, "SKILL.md"), filepath.Join(alphaTwo, "SKILL.md")}},
@@ -3736,6 +3736,51 @@ func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *te
 	}
 }
 
+func TestSkillSourceCatalogDistinguishesCopiesDifferAndNeedsRefresh(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "agents", "alpha")
+	second := filepath.Join(root, "claude", "alpha")
+	writeSkillSourceFixture(t, first, "# Alpha one\n", nil)
+	writeSkillSourceFixture(t, second, "# Alpha two\n", nil)
+	remoteHash, err := hashSkillDirectory(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := []nativeSkillSourceEntry{{Name: "alpha", Source: "https://github.com/example/catalog.git"}}
+	installed := []skillSourceInstalledSnapshot{{
+		Name: "alpha", Managed: true,
+		Locations: []string{filepath.Join(first, "SKILL.md"), filepath.Join(second, "SKILL.md")},
+	}}
+	ready := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
+			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
+		}},
+	}
+	row := composeSkillSourceCatalog(ready, native, installed, nil).Sources[0].Skills[0]
+	if row.Status != "copies_differ" || !row.CanUpdate || row.Error != "" {
+		t.Fatalf("ready row=%#v, want actionable copies_differ", row)
+	}
+
+	needsRefresh := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
+			SkillList: []skillSourceSkillSnapshot{},
+		}},
+	}
+	view := composeSkillSourceCatalog(needsRefresh, native, installed, nil).Sources[0]
+	if view.Status != "needs_refresh" || len(view.Skills) != 1 {
+		t.Fatalf("needs-refresh source=%#v", view)
+	}
+	row = view.Skills[0]
+	if row.Status != "needs_refresh" || row.CanUpdate || row.Error != "" {
+		t.Fatalf("needs-refresh row=%#v, want non-error ownership row", row)
+	}
+}
+
 func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
 	local := filepath.Join(t.TempDir(), "shared")
 	writeSkillSourceFixture(t, local, "# Shared\n", nil)
@@ -3746,7 +3791,7 @@ func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
 	lock := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm}
 	for _, repository := range []string{"one", "two"} {
 		lock.Sources = append(lock.Sources, skillSourceSnapshot{
-			Source: "https://github.com/example/" + repository + ".git", SourceKey: "github.com/example/" + repository, Ref: "main",
+			Source: "https://github.com/example/" + repository + ".git", SourceKey: "github.com/example/" + repository,
 			ResolvedCommit: strings.Repeat(repository[:1], 40), RefreshedAt: "2026-08-12T12:00:00Z",
 			SkillList: []skillSourceSkillSnapshot{{Name: "Shared", SkillPath: "Shared/SKILL.md", ContentSHA256: hash}},
 		})
@@ -3767,11 +3812,11 @@ func TestSkillSourceCatalogRetainsStaleSnapshotWithoutInferringDeletion(t *testi
 	lock := skillSourceLock{
 		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
 		Sources: []skillSourceSnapshot{{
-			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z", SkillList: []skillSourceSkillSnapshot{},
 		}},
 	}
-	native := []nativeSkillSourceEntry{{Name: "removed", Source: "https://github.com/example/catalog.git", Ref: "main"}}
+	native := []nativeSkillSourceEntry{{Name: "removed", Source: "https://github.com/example/catalog.git"}}
 	installed := []skillSourceInstalledSnapshot{{Name: "removed", Managed: true, Locations: []string{filepath.Join(local, "SKILL.md")}}}
 	catalog := composeSkillSourceCatalog(lock, native, installed, map[string]string{"github.com/example/catalog": "fetch failed"})
 	if catalog.Sources[0].Status != "stale" || catalog.Sources[0].Error != "fetch failed" {
@@ -3790,7 +3835,7 @@ func TestSkillsCommandFailedRefreshPublishesStaleErrorWithoutChangingSavedCatalo
 	initial := skillSourceLock{
 		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
 		Sources: []skillSourceSnapshot{{
-			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 			ResolvedCommit: strings.Repeat("b", 40), RefreshedAt: "2026-08-12T12:00:00Z",
 			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "skills/alpha/SKILL.md", ContentSHA256: oldHash}},
 		}},
@@ -3811,7 +3856,7 @@ func TestSkillsCommandFailedRefreshPublishesStaleErrorWithoutChangingSavedCatalo
 
 	_, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "previewSource", "hubId": "hub-a", "scope": "hub",
-		"source": "https://github.com/example/catalog.git", "ref": "main",
+		"source": "https://github.com/example/catalog.git",
 	}))
 	if commandErr == nil {
 		t.Fatal("previewSource error=nil, want resolver failure")
@@ -3853,6 +3898,56 @@ func skillSourceRowsByName(rows []skillsSourceCatalogSkillSnapshot) map[string]s
 	return out
 }
 
+func TestSkillsCommandRejectsExplicitRefBeforePreview(t *testing.T) {
+	root := t.TempDir()
+	resolveCalls := 0
+	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: filepath.Join(root, ".skill-lock.json"), HomeDir: filepath.Join(root, "home"),
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			resolveCalls++
+			source.ResolvedCommit = strings.Repeat("a", 40)
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{}
+			return source, nil
+		},
+	})
+	testCases := []map[string]any{
+		{"source": "example/catalog#next"},
+		{"source": "https://github.com/example/catalog#v1.0.0"},
+		{"source": "https://github.com/example/catalog/tree/release/skills/alpha"},
+		{"source": "https://github.com/example/catalog.git", "ref": "release"},
+	}
+	for index, testCase := range testCases {
+		payload := map[string]any{
+			"action": "previewSource", "hubId": "hub-a", "scope": "hub",
+		}
+		for key, value := range testCase {
+			payload[key] = value
+		}
+		if _, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, payload)); commandErr == nil || commandErr.Code != rp.CodeInvalidArgument {
+			t.Fatalf("case %d error=%#v, want invalid_argument", index, commandErr)
+		}
+	}
+	if resolveCalls != 0 {
+		t.Fatalf("explicit refs reached resolver %d time(s)", resolveCalls)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".skill-source-lock.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("explicit ref preview wrote source lock: %v", err)
+	}
+}
+
+func TestSkillsLockInstallGroupsIgnoreRef(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "skills-lock.json")
+	raw := `{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"},"beta":{"source":"https://github.com/example/catalog.git","ref":"release"}}}`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	groups := readSkillsLockInstallGroups(path)
+	if len(groups) != 1 || groups[0].Source != "https://github.com/example/catalog.git" || !reflect.DeepEqual(groups[0].Skills, []string{"alpha", "beta"}) {
+		t.Fatalf("install groups=%#v, want one repository-only group", groups)
+	}
+}
+
 func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *testing.T) {
 	root := t.TempDir()
 	globalLock := filepath.Join(root, ".skill-lock.json")
@@ -3872,7 +3967,7 @@ func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *test
 
 	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "previewSource", "hubId": "hub-a", "scope": "hub",
-		"source": "https://github.com/example/catalog.git", "ref": "main",
+		"source": "https://github.com/example/catalog.git",
 	}))
 	if commandErr != nil {
 		t.Fatalf("previewSource error=%#v", commandErr)
@@ -3881,8 +3976,16 @@ func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *test
 	if preview == nil || preview.ID == "" || preview.ResolvedCommit != strings.Repeat("b", 40) || len(preview.SkillList) != 1 {
 		t.Fatalf("preview=%#v", preview)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".skill-source-lock.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("preview wrote source lock before confirmation: %v", err)
+	previewJSON, err := json.Marshal(preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(previewJSON, []byte(`"ref"`)) {
+		t.Fatalf("preview contains logical ref: %s", previewJSON)
+	}
+	bootstrap, _, err := readSkillSourceLockFile(filepath.Join(root, ".skill-source-lock.json"))
+	if err != nil || len(bootstrap.Sources) != 0 {
+		t.Fatalf("preview persisted candidate source before confirmation: lock=%#v err=%v", bootstrap, err)
 	}
 
 	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
@@ -3913,7 +4016,7 @@ func TestSkillsCommandPreviewInstallPinsResolvedCommitAndExplicitSkills(t *testi
 	initial := skillSourceLock{
 		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
 		Sources: []skillSourceSnapshot{{
-			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main", SkillList: []skillSourceSkillSnapshot{},
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", SkillList: []skillSourceSkillSnapshot{},
 		}},
 	}
 	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
@@ -3935,7 +4038,7 @@ func TestSkillsCommandPreviewInstallPinsResolvedCommitAndExplicitSkills(t *testi
 
 	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "previewInstall", "hubId": "hub-a", "scope": "hub",
-		"source": "https://github.com/example/catalog.git", "ref": "main", "skills": []string{"alpha"},
+		"source": "https://github.com/example/catalog.git", "skills": []string{"alpha"},
 	}))
 	if commandErr != nil {
 		t.Fatalf("previewInstall error=%#v", commandErr)
@@ -3979,7 +4082,7 @@ func TestSkillsCommandPreviewUpdateAllSelectsOnlyInstalledChangedSkills(t *testi
 	}
 	initial := skillSourceLock{
 		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
-		Sources: []skillSourceSnapshot{{Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main"}},
+		Sources: []skillSourceSnapshot{{Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog"}},
 	}
 	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
 		t.Fatal(err)
@@ -4059,7 +4162,7 @@ func TestSkillsCommandPreviewUpdateContinuesAfterItemFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
-		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 	}}}
 	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
 		t.Fatal(err)
@@ -4119,12 +4222,12 @@ func TestSkillsCommandPreviewUpdateAllContinuesAfterSourceRefreshFailure(t *test
 	}
 	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{
 		{
-			Source: "https://github.com/example/bad.git", SourceKey: "github.com/example/bad", Ref: "main",
+			Source: "https://github.com/example/bad.git", SourceKey: "github.com/example/bad",
 			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T10:00:00Z",
 			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: strings.Repeat("1", 64)}},
 		},
 		{
-			Source: "https://github.com/example/good.git", SourceKey: "github.com/example/good", Ref: "main",
+			Source: "https://github.com/example/good.git", SourceKey: "github.com/example/good",
 			ResolvedCommit: strings.Repeat("b", 40), RefreshedAt: "2026-08-12T10:00:00Z",
 			SkillList: []skillSourceSkillSnapshot{{Name: "beta", SkillPath: "beta/SKILL.md", ContentSHA256: strings.Repeat("2", 64)}},
 		},
@@ -4198,7 +4301,7 @@ func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing
 		t.Fatal(err)
 	}
 	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
-		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 	}}}
 	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
 		t.Fatal(err)
@@ -4256,7 +4359,7 @@ func TestSkillsCommandPreviewInstallRejectsUnmanagedSameNameConflict(t *testing.
 	})
 	_, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "previewInstall", "hubId": "hub-a", "scope": "hub",
-		"source": "https://github.com/example/catalog.git", "ref": "main", "skills": []string{"shared"},
+		"source": "https://github.com/example/catalog.git", "skills": []string{"shared"},
 	}))
 	if commandErr == nil || commandErr.Code != rp.CodeConflict {
 		t.Fatalf("previewInstall error=%#v, want conflict", commandErr)
@@ -4273,7 +4376,7 @@ func TestSkillSourceCatalogRestoresPendingRemovalFromLocalReconciliation(t *test
 	}
 	writeSkillSourceFixture(t, filepath.Join(projectRoot, ".agents", "skills", "alpha"), "# Alpha\n", nil)
 	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
-		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 	}}}
 	revision, err := writeSkillSourceLockFile(sourcePath, skillSourceMissingRevision, initial)
 	if err != nil || revision == "" {
@@ -4322,7 +4425,7 @@ func TestSkillSourceCatalogTreatsDeletedProjectSourceLockAsPendingRemovalAfterRe
 	}
 	writeSkillSourceFixture(t, filepath.Join(projectRoot, ".agents", "skills", "alpha"), "# Alpha\n", nil)
 	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
-		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
 	}}}
 	if _, err := writeSkillSourceLockFile(sourcePath, skillSourceMissingRevision, initial); err != nil {
 		t.Fatal(err)
@@ -4335,6 +4438,13 @@ func TestSkillSourceCatalogTreatsDeletedProjectSourceLockAsPendingRemovalAfterRe
 	}
 	if _, err := ScanSkillsSourceScope(context.Background(), input); err != nil {
 		t.Fatal(err)
+	}
+	reconciliation, err := os.ReadFile(reconciliationPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(reconciliation, []byte(`"ref"`)) {
+		t.Fatalf("reconciliation contains logical ref: %s", reconciliation)
 	}
 	if err := os.Remove(sourcePath); err != nil {
 		t.Fatal(err)
@@ -4365,7 +4475,7 @@ func TestSkillsCommandPreviewDeleteHandlesExternallyRemovedProjectSource(t *test
 	})
 	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "previewDeleteSource", "hubId": "hub-a", "scope": "project", "projectName": "project",
-		"source": "https://github.com/example/catalog.git", "ref": "main",
+		"source": "https://github.com/example/catalog.git",
 	}))
 	if commandErr != nil {
 		t.Fatalf("previewDeleteSource error=%#v", commandErr)
