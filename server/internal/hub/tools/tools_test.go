@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -3784,4 +3785,394 @@ func skillSourceRowsByName(rows []skillsSourceCatalogSkillSnapshot) map[string]s
 		out[strings.ToLower(row.Name)] = row
 	}
 	return out
+}
+
+func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *testing.T) {
+	root := t.TempDir()
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	remoteHash := strings.Repeat("a", 64)
+	resolveCalls := 0
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: filepath.Join(root, "home"),
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			resolveCalls++
+			source.ResolvedCommit = strings.Repeat("b", 40)
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "skills/alpha/SKILL.md", ContentSHA256: remoteHash}}
+			return source, nil
+		},
+	})
+
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewSource", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git", "ref": "main",
+	}))
+	if commandErr != nil {
+		t.Fatalf("previewSource error=%#v", commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	if preview == nil || preview.ID == "" || preview.ResolvedCommit != strings.Repeat("b", 40) || len(preview.SkillList) != 1 {
+		t.Fatalf("preview=%#v", preview)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".skill-source-lock.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("preview wrote source lock before confirmation: %v", err)
+	}
+
+	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "applyPreview", "hubId": "hub-a", "previewId": preview.ID,
+	}))
+	if commandErr != nil {
+		t.Fatalf("applyPreview error=%#v", commandErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "succeeded" || resolveCalls != 1 {
+		t.Fatalf("operation=%#v resolveCalls=%d", operation, resolveCalls)
+	}
+	lock, _, err := readSkillSourceLockFile(filepath.Join(root, ".skill-source-lock.json"))
+	if err != nil || len(lock.Sources) != 1 || lock.Sources[0].ResolvedCommit != strings.Repeat("b", 40) {
+		t.Fatalf("saved lock=%#v error=%v", lock, err)
+	}
+	for _, call := range runner.calls {
+		if slices.Contains(call.Args, "add") {
+			t.Fatalf("bare source unexpectedly installed a skill: %#v", runner.calls)
+		}
+	}
+}
+
+func TestSkillsCommandPreviewInstallPinsResolvedCommitAndExplicitSkills(t *testing.T) {
+	root := t.TempDir()
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
+	initial := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main", SkillList: []skillSourceSkillSnapshot{},
+		}},
+	}
+	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: filepath.Join(root, "home"),
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			source.ResolvedCommit = strings.Repeat("c", 40)
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{
+				{Name: "alpha", SkillPath: "skills/alpha/SKILL.md", ContentSHA256: strings.Repeat("a", 64)},
+				{Name: "new-skill", SkillPath: "skills/new-skill/SKILL.md", ContentSHA256: strings.Repeat("d", 64)},
+			}
+			return source, nil
+		},
+	})
+
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewInstall", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git", "ref": "main", "skills": []string{"alpha"},
+	}))
+	if commandErr != nil {
+		t.Fatalf("previewInstall error=%#v", commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	if preview == nil || !reflect.DeepEqual(preview.Skills, []string{"alpha"}) || len(preview.SkillList) != 2 {
+		t.Fatalf("preview=%#v", preview)
+	}
+	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "applyPreview", "hubId": "hub-a", "previewId": preview.ID,
+	}))
+	if commandErr != nil {
+		t.Fatalf("applyPreview error=%#v", commandErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("operation=%#v", operation)
+	}
+	pinnedSource := "https://github.com/example/catalog.git#" + strings.Repeat("c", 40)
+	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y") {
+		t.Fatalf("pinned install call missing: %#v", runner.calls)
+	}
+	if runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "new-skill", "-y") {
+		t.Fatalf("explicit install included an unselected catalog skill: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandPreviewUpdateAllSelectsOnlyInstalledChangedSkills(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
+	for _, name := range []string{"alpha", "removed"} {
+		for _, profile := range []string{".agents", ".claude"} {
+			writeSkillSourceFixture(t, filepath.Join(home, profile, "skills", name), "# "+name+" local\n", nil)
+		}
+	}
+	native := `{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","sourceType":"github","ref":"main"},"removed":{"source":"https://github.com/example/catalog.git","sourceType":"github","ref":"main"}}}`
+	if err := os.WriteFile(globalLock, []byte(native), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	initial := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main"}},
+	}
+	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	remoteRoot := filepath.Join(root, "remote-alpha")
+	writeSkillSourceFixture(t, remoteRoot, "# alpha remote\n", nil)
+	remoteHash, err := hashSkillDirectory(remoteRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: home,
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			source.ResolvedCommit = strings.Repeat("e", 40)
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{
+				{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash},
+				{Name: "new-skill", SkillPath: "new-skill/SKILL.md", ContentSHA256: strings.Repeat("f", 64)},
+			}
+			return source, nil
+		},
+	})
+
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewUpdate", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git",
+	}))
+	if commandErr != nil {
+		t.Fatalf("previewUpdate error=%#v", commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	if preview == nil || !reflect.DeepEqual(preview.Skills, []string{"alpha"}) || !preview.OverwritesLocal {
+		t.Fatalf("preview=%#v, want alpha-only overwrite", preview)
+	}
+	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "applyPreview", "hubId": "hub-a", "previewId": preview.ID,
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("operation=%#v", operation)
+	}
+	pinnedSource := "https://github.com/example/catalog.git#" + strings.Repeat("e", 40)
+	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y") {
+		t.Fatalf("alpha update missing: %#v", runner.calls)
+	}
+	for _, forbidden := range []string{"new-skill", "removed"} {
+		for _, call := range runner.calls {
+			if slices.Contains(call.Args, forbidden) {
+				t.Fatalf("update all included %q: %#v", forbidden, runner.calls)
+			}
+		}
+	}
+}
+
+func TestSkillsCommandPreviewUpdateContinuesAfterItemFailure(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
+	for _, name := range []string{"alpha", "beta"} {
+		for _, profile := range []string{".agents", ".claude"} {
+			writeSkillSourceFixture(t, filepath.Join(home, profile, "skills", name), "# local "+name+"\n", nil)
+		}
+	}
+	if err := os.WriteFile(globalLock, []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"},"beta":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+	}}}
+	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	resolvedCommit := strings.Repeat("a", 40)
+	pinnedSource := "https://github.com/example/catalog.git#" + resolvedCommit
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y"}, skillsCommandResult{ExitCode: 1, Stderr: "alpha failed"})
+	runner.set("", "npx", []string{"--yes", "skills@1.5.18", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y"}, skillsCommandResult{ExitCode: 1, Stderr: "alpha failed"})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: home,
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			source.ResolvedCommit = resolvedCommit
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{
+				{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: strings.Repeat("1", 64)},
+				{Name: "beta", SkillPath: "beta/SKILL.md", ContentSHA256: strings.Repeat("2", 64)},
+			}
+			return source, nil
+		},
+	})
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewUpdate", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "applyPreview", "hubId": "hub-a", "previewId": preview.ID,
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "partial" || len(operation.Results) != 2 || operation.Results[0].Status != "failed" || operation.Results[1].Status != "succeeded" {
+		t.Fatalf("operation=%#v", operation)
+	}
+	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "beta", "-y") {
+		t.Fatalf("beta did not continue after alpha failure: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing.T) {
+	root := t.TempDir()
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
+	if err := os.WriteFile(globalLock, []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+	}}}
+	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
+		t.Fatal(err)
+	}
+	runner := newFakeSkillsRunner()
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: filepath.Join(root, "home")})
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewDeleteSource", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	if preview == nil || !reflect.DeepEqual(preview.Skills, []string{"alpha"}) {
+		t.Fatalf("preview=%#v", preview)
+	}
+	_, commandErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "applyPreview", "hubId": "hub-a", "previewId": preview.ID,
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "succeeded" || len(operation.Results) != 1 || operation.Results[0].Skill != "alpha" {
+		t.Fatalf("operation=%#v", operation)
+	}
+	if !runner.hasCall("", "skills", "remove", "-g", "--skill", "alpha", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y") {
+		t.Fatalf("source skill uninstall missing: %#v", runner.calls)
+	}
+	lock, _, err := readSkillSourceLockFile(sourceLockPath)
+	if err != nil || len(lock.Sources) != 0 {
+		t.Fatalf("source retained after successful uninstall: %#v err=%v", lock, err)
+	}
+}
+
+func TestSkillsCommandPreviewInstallRejectsUnmanagedSameNameConflict(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	globalLock := filepath.Join(root, ".skill-lock.json")
+	if err := os.WriteFile(globalLock, []byte(`{"version":1,"skills":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeSkillSourceFixture(t, filepath.Join(home, ".agents", "skills", "shared"), "# unmanaged shared\n", nil)
+	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: home,
+		ResolveSource: func(_ context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
+			source.ResolvedCommit = strings.Repeat("a", 40)
+			source.RefreshedAt = "2026-08-12T12:00:00Z"
+			source.SkillList = []skillSourceSkillSnapshot{{
+				Name: "shared", SkillPath: "shared/SKILL.md", ContentSHA256: strings.Repeat("b", 64),
+			}}
+			return source, nil
+		},
+	})
+	_, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewInstall", "hubId": "hub-a", "scope": "hub",
+		"source": "https://github.com/example/catalog.git", "ref": "main", "skills": []string{"shared"},
+	}))
+	if commandErr == nil || commandErr.Code != rp.CodeConflict {
+		t.Fatalf("previewInstall error=%#v, want conflict", commandErr)
+	}
+}
+
+func TestSkillSourceCatalogRestoresPendingRemovalFromLocalReconciliation(t *testing.T) {
+	projectRoot := t.TempDir()
+	nativePath := filepath.Join(projectRoot, "skills-lock.json")
+	sourcePath := filepath.Join(projectRoot, ".skill-source-lock.json")
+	reconciliationPath := filepath.Join(t.TempDir(), "project-skills.json")
+	if err := os.WriteFile(nativePath, []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeSkillSourceFixture(t, filepath.Join(projectRoot, ".agents", "skills", "alpha"), "# Alpha\n", nil)
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{{
+		Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog", Ref: "main",
+	}}}
+	revision, err := writeSkillSourceLockFile(sourcePath, skillSourceMissingRevision, initial)
+	if err != nil || revision == "" {
+		t.Fatal(err)
+	}
+	input := SkillsSourceScopeInput{
+		ProjectRoot: projectRoot, ReconciliationPath: reconciliationPath,
+		Installed: []SkillsInstalledSkillSnapshot{{
+			Name: "alpha", Managed: true, Locations: []string{filepath.Join(projectRoot, ".agents", "skills", "alpha", "SKILL.md")},
+		}},
+	}
+	first, err := ScanSkillsSourceScope(context.Background(), input)
+	if err != nil || len(first.Sources) != 1 {
+		t.Fatalf("initial scan=%#v err=%v", first, err)
+	}
+	empty := newSkillSourceLock()
+	if _, err := writeSkillSourceLockFile(sourcePath, revision, empty); err != nil {
+		t.Fatal(err)
+	}
+	second, err := ScanSkillsSourceScope(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Sources) != 1 || second.Sources[0].Status != "pending_removal" || len(second.Sources[0].Skills) != 1 || !second.Sources[0].Skills[0].CanUninstall {
+		t.Fatalf("pending removal snapshot=%#v", second)
+	}
+	if err := os.WriteFile(nativePath, []byte(`{"version":1,"skills":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	third, err := ScanSkillsSourceScope(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(third.Sources) != 0 {
+		t.Fatalf("resolved pending removal retained: %#v", third.Sources)
+	}
+}
+
+func TestSkillsCommandPreviewDeleteHandlesExternallyRemovedProjectSource(t *testing.T) {
+	projectRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(projectRoot, "skills-lock.json"), []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeSkillSourceLockFile(filepath.Join(projectRoot, ".skill-source-lock.json"), skillSourceMissingRevision, newSkillSourceLock()); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{
+		HubID: "hub-a", Projects: []ProjectInfo{{Name: "project", Path: projectRoot}},
+	})
+	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "previewDeleteSource", "hubId": "hub-a", "scope": "project", "projectName": "project",
+		"source": "https://github.com/example/catalog.git", "ref": "main",
+	}))
+	if commandErr != nil {
+		t.Fatalf("previewDeleteSource error=%#v", commandErr)
+	}
+	preview := response.(skillsCommandResponse).Preview
+	if preview == nil || !reflect.DeepEqual(preview.Skills, []string{"alpha"}) {
+		t.Fatalf("preview=%#v", preview)
+	}
 }

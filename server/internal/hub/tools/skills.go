@@ -99,6 +99,7 @@ type skillsCommandConfig struct {
 	HomeDir         string
 	OnOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
 	LookPath        func(name string) (string, error)
+	ResolveSource   func(context.Context, skillSourceSnapshot) (skillSourceSnapshot, error)
 }
 
 type SkillsCommand struct {
@@ -109,10 +110,13 @@ type SkillsCommand struct {
 	globalLockPath  string
 	homeDir         string
 	onOperationDone func(scope, projectName string, operation SkillsOperationSnapshot)
+	resolveSource   func(context.Context, skillSourceSnapshot) (skillSourceSnapshot, error)
 
 	mu                     sync.RWMutex
 	projects               []ProjectInfo
 	operation              *skillsOperationSnapshot
+	previews               map[string]skillsStoredSourcePreview
+	previewCounter         uint64
 	skillsNodeMu           sync.Mutex
 	skillsNodeChecked      bool
 	skillsNodeError        string
@@ -146,9 +150,14 @@ func newSkillsCommandWithRunner(runner skillsCommandRunner, config skillsCommand
 		globalLockPath:  strings.TrimSpace(config.GlobalLockPath),
 		homeDir:         strings.TrimSpace(config.HomeDir),
 		onOperationDone: config.OnOperationDone,
+		resolveSource:   config.ResolveSource,
+		previews:        map[string]skillsStoredSourcePreview{},
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
+	}
+	if cmd.resolveSource == nil {
+		cmd.resolveSource = newSkillSourceResolver("").Resolve
 	}
 	cmd.SetProjects(config.Projects)
 	return cmd
@@ -168,6 +177,8 @@ type skillsCommandPayload struct {
 	Source      string   `json:"source,omitempty"`
 	SkillName   string   `json:"skillName,omitempty"`
 	Skills      []string `json:"skills,omitempty"`
+	Ref         string   `json:"ref,omitempty"`
+	PreviewID   string   `json:"previewId,omitempty"`
 }
 
 type skillsCommandResponse struct {
@@ -186,21 +197,55 @@ type skillsCommandResponse struct {
 	Operation    *skillsOperationSnapshot   `json:"operation,omitempty"`
 	Message      string                     `json:"message,omitempty"`
 	ErrorSummary string                     `json:"errorSummary,omitempty"`
+	Preview      *skillsSourcePreview       `json:"preview,omitempty"`
+}
+
+type skillsSourcePreview struct {
+	ID              string                     `json:"id"`
+	Kind            string                     `json:"kind"`
+	Scope           string                     `json:"scope"`
+	ProjectName     string                     `json:"projectName,omitempty"`
+	Source          string                     `json:"source"`
+	SourceKey       string                     `json:"sourceKey"`
+	Ref             string                     `json:"ref"`
+	ResolvedCommit  string                     `json:"resolvedCommit"`
+	SkillList       []skillSourceSkillSnapshot `json:"skillList"`
+	Skills          []string                   `json:"skills,omitempty"`
+	OverwritesLocal bool                       `json:"overwritesLocal,omitempty"`
+	CreatedAt       string                     `json:"createdAt"`
+}
+
+type skillsStoredSourcePreview struct {
+	preview          skillsSourcePreview
+	target           skillsCommandTarget
+	lockPath         string
+	expectedRevision string
+	updatedLock      skillSourceLock
+	runs             []skillsOperationRun
+	deleteSource     bool
 }
 
 type skillsOperationSnapshot struct {
-	Running      bool     `json:"running"`
-	Action       string   `json:"action"`
-	Scope        string   `json:"scope,omitempty"`
-	ProjectName  string   `json:"projectName,omitempty"`
-	Source       string   `json:"source,omitempty"`
-	Skills       []string `json:"skills,omitempty"`
-	Status       string   `json:"status"`
-	StartedAt    string   `json:"startedAt"`
-	FinishedAt   string   `json:"finishedAt,omitempty"`
-	ExitCode     *int     `json:"exitCode"`
-	ErrorSummary string   `json:"errorSummary,omitempty"`
-	Message      string   `json:"message,omitempty"`
+	Running      bool                        `json:"running"`
+	Action       string                      `json:"action"`
+	Scope        string                      `json:"scope,omitempty"`
+	ProjectName  string                      `json:"projectName,omitempty"`
+	Source       string                      `json:"source,omitempty"`
+	Skills       []string                    `json:"skills,omitempty"`
+	Status       string                      `json:"status"`
+	StartedAt    string                      `json:"startedAt"`
+	FinishedAt   string                      `json:"finishedAt,omitempty"`
+	ExitCode     *int                        `json:"exitCode"`
+	ErrorSummary string                      `json:"errorSummary,omitempty"`
+	Message      string                      `json:"message,omitempty"`
+	Results      []skillsOperationItemResult `json:"results,omitempty"`
+}
+
+type skillsOperationItemResult struct {
+	Skill        string `json:"skill"`
+	Action       string `json:"action"`
+	Status       string `json:"status"`
+	ErrorSummary string `json:"errorSummary,omitempty"`
 }
 
 type SkillsOperationSnapshot = skillsOperationSnapshot
@@ -286,6 +331,8 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	payload.Scope = strings.TrimSpace(payload.Scope)
 	payload.ProjectName = strings.TrimSpace(payload.ProjectName)
 	payload.Source = strings.TrimSpace(payload.Source)
+	payload.Ref = strings.TrimSpace(payload.Ref)
+	payload.PreviewID = strings.TrimSpace(payload.PreviewID)
 	payload.SkillName = strings.TrimSpace(payload.SkillName)
 	payload.Skills = normalizeSkillNames(payload.Skills)
 	if payload.SkillName != "" && len(payload.Skills) == 0 {
@@ -311,6 +358,14 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 		return c.startUninstall(payload)
 	case "update":
 		return c.startUpdate(payload)
+	case "previewSource", "previewInstall":
+		return c.previewSource(ctx, payload)
+	case "previewUpdate":
+		return c.previewUpdate(ctx, payload)
+	case "previewDeleteSource":
+		return c.previewDeleteSource(payload)
+	case "applyPreview":
+		return c.applySourcePreview(payload)
 	default:
 		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.skills action"}
 	}
@@ -422,6 +477,520 @@ func (c *SkillsCommand) listSource(ctx context.Context, payload skillsCommandPay
 	}, nil
 }
 
+func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommandPayload) (skillsCommandResponse, *skillsCommandError) {
+	target, cmdErr := c.resolveTarget(payload)
+	if cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+	normalizedSource, sourceKey, err := normalizeSkillGitSource(payload.Source)
+	if err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeForbidden, Message: err.Error()}
+	}
+	lockPath := c.sourceLockFile(target)
+	migration, err := readOrMigrateSkillSourceLock(c.skillsLockFile(target), lockPath)
+	if err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	lock := migration.Lock
+	existingIndex := -1
+	for index, source := range lock.Sources {
+		if strings.EqualFold(source.SourceKey, sourceKey) {
+			existingIndex = index
+			if source.Source != normalizedSource {
+				return skillsCommandResponse{}, &skillsCommandError{
+					Code: rp.CodeConflict, Message: "repository already exists in this scope with a different immutable address",
+				}
+			}
+			break
+		}
+	}
+	ref := payload.Ref
+	if ref == "" {
+		if existingIndex >= 0 {
+			ref = lock.Sources[existingIndex].Ref
+		} else {
+			ref = "HEAD"
+		}
+	}
+	if payload.Action == "previewInstall" && existingIndex >= 0 && lock.Sources[existingIndex].Ref != ref {
+		return skillsCommandResponse{}, &skillsCommandError{
+			Code: rp.CodeConflict, Message: "source ref differs; preview and confirm the ref change before installing",
+		}
+	}
+	candidate := skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, Ref: ref, SkillList: []skillSourceSkillSnapshot{}}
+	resolved, err := c.resolveSource(ctx, candidate)
+	if err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: sanitizeSkillSourceError(err.Error(), payload.Source)}
+	}
+	if resolved.Source == "" {
+		resolved.Source = normalizedSource
+	}
+	if resolved.SourceKey == "" {
+		resolved.SourceKey = sourceKey
+	}
+	if resolved.Ref == "" {
+		resolved.Ref = ref
+	}
+	validation := newSkillSourceLock()
+	validation.Sources = []skillSourceSnapshot{resolved}
+	if err := validateSkillSourceLock(validation); err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	if existingIndex >= 0 {
+		lock.Sources[existingIndex] = resolved
+	} else {
+		lock.Sources = append(lock.Sources, resolved)
+	}
+	sortSkillSourceLock(&lock)
+
+	selectedSkills := []string{}
+	if payload.Action == "previewInstall" {
+		if len(payload.Skills) == 0 {
+			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skills are required"}
+		}
+		if err := validateSkillNames(payload.Skills); err != nil {
+			return skillsCommandResponse{}, err
+		}
+		remoteNames := make(map[string]string, len(resolved.SkillList))
+		for _, skill := range resolved.SkillList {
+			remoteNames[strings.ToLower(skill.Name)] = skill.Name
+		}
+		for _, requested := range payload.Skills {
+			name, exists := remoteNames[strings.ToLower(requested)]
+			if !exists {
+				return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill not found in refreshed source: " + requested}
+			}
+			selectedSkills = append(selectedSkills, name)
+		}
+		native := readNativeSkillSourceEntries(c.skillsLockFile(target))
+		installed, installErr := c.installedSnapshotsForTarget(target, native)
+		if installErr != nil {
+			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: installErr.Error()}
+		}
+		catalog := composeSkillSourceCatalog(lock, native, installed, nil)
+		eligible := map[string]bool{}
+		for _, source := range catalog.Sources {
+			if !strings.EqualFold(source.SourceKey, sourceKey) {
+				continue
+			}
+			for _, row := range source.Skills {
+				eligible[strings.ToLower(row.Name)] = row.CanInstall
+			}
+		}
+		for _, skill := range selectedSkills {
+			if !eligible[strings.ToLower(skill)] {
+				return skillsCommandResponse{}, &skillsCommandError{
+					Code: rp.CodeConflict, Message: "skill is already installed or conflicts with another source: " + skill,
+				}
+			}
+		}
+	}
+	preview := skillsSourcePreview{
+		Kind: payload.Action, Scope: target.scope, ProjectName: target.projectName,
+		Source: resolved.Source, SourceKey: resolved.SourceKey, Ref: resolved.Ref,
+		ResolvedCommit: resolved.ResolvedCommit,
+		SkillList:      append([]skillSourceSkillSnapshot(nil), resolved.SkillList...),
+		Skills:         append([]string(nil), selectedSkills...),
+		CreatedAt:      c.now().Format(time.RFC3339),
+	}
+	runs := []skillsOperationRun{}
+	if payload.Action == "previewInstall" {
+		for _, skill := range selectedSkills {
+			runs = append(runs, skillsOperationRun{
+				target: target, args: skillsAddArgs(target, pinnedSkillSource(resolved), []string{skill}),
+				skill: skill, action: "install", message: "Installed skills.", prepareInstallDirs: true,
+			})
+		}
+	}
+	stored := skillsStoredSourcePreview{
+		preview: preview, target: target, lockPath: lockPath,
+		expectedRevision: migration.Revision, updatedLock: lock, runs: runs,
+	}
+	if cmdErr := c.storeSourcePreview(&stored); cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+	return skillsCommandResponse{
+		OK: true, HubID: payload.HubID, UpdatedAt: preview.CreatedAt,
+		Source: resolved.Source, Scope: target.scope, ProjectName: target.projectName,
+		Preview: cloneSkillsSourcePreview(&stored.preview),
+	}, nil
+}
+
+func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommandPayload) (skillsCommandResponse, *skillsCommandError) {
+	target, cmdErr := c.resolveTarget(payload)
+	if cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+	if err := validateSkillNames(payload.Skills); err != nil {
+		return skillsCommandResponse{}, err
+	}
+	lockPath := c.sourceLockFile(target)
+	migration, err := readOrMigrateSkillSourceLock(c.skillsLockFile(target), lockPath)
+	if err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	lock := migration.Lock
+	selectedKey := ""
+	if payload.Source != "" {
+		_, selectedKey, err = normalizeSkillGitSource(payload.Source)
+		if err != nil {
+			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeForbidden, Message: err.Error()}
+		}
+	}
+	resolvedByKey := map[string]skillSourceSnapshot{}
+	selectedCount := 0
+	for index, source := range lock.Sources {
+		if selectedKey != "" && !strings.EqualFold(source.SourceKey, selectedKey) {
+			continue
+		}
+		selectedCount++
+		resolved, resolveErr := c.resolveSource(ctx, source)
+		if resolveErr != nil {
+			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: sanitizeSkillSourceError(resolveErr.Error(), source.Source)}
+		}
+		validation := newSkillSourceLock()
+		validation.Sources = []skillSourceSnapshot{resolved}
+		if err := validateSkillSourceLock(validation); err != nil {
+			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+		}
+		lock.Sources[index] = resolved
+		resolvedByKey[strings.ToLower(resolved.SourceKey)] = resolved
+	}
+	if selectedCount == 0 {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill source not found"}
+	}
+	native := readNativeSkillSourceEntries(c.skillsLockFile(target))
+	installed, installErr := c.installedSnapshotsForTarget(target, native)
+	if installErr != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: installErr.Error()}
+	}
+	catalog := composeSkillSourceCatalog(lock, native, installed, nil)
+	requested := map[string]struct{}{}
+	for _, name := range payload.Skills {
+		requested[strings.ToLower(name)] = struct{}{}
+	}
+	var selectedSkills []string
+	var runs []skillsOperationRun
+	var previewSource skillSourceSnapshot
+	for _, source := range catalog.Sources {
+		resolved, refreshed := resolvedByKey[strings.ToLower(source.SourceKey)]
+		if !refreshed {
+			continue
+		}
+		previewSource = resolved
+		for _, row := range source.Skills {
+			if !row.CanUpdate {
+				continue
+			}
+			if len(requested) > 0 {
+				if _, exists := requested[strings.ToLower(row.Name)]; !exists {
+					continue
+				}
+			}
+			selectedSkills = append(selectedSkills, row.Name)
+			runs = append(runs, skillsOperationRun{
+				target: target, args: skillsAddArgs(target, pinnedSkillSource(resolved), []string{row.Name}),
+				skill: row.Name, action: "update", message: "Updated skills.", prepareInstallDirs: true,
+			})
+		}
+	}
+	if len(requested) > 0 && len(selectedSkills) != len(requested) {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeConflict, Message: "one or more requested skills are not eligible for update after refresh"}
+	}
+	sort.Slice(runs, func(i, j int) bool { return strings.ToLower(runs[i].skill) < strings.ToLower(runs[j].skill) })
+	sort.Slice(selectedSkills, func(i, j int) bool { return strings.ToLower(selectedSkills[i]) < strings.ToLower(selectedSkills[j]) })
+	preview := skillsSourcePreview{
+		Kind: "previewUpdate", Scope: target.scope, ProjectName: target.projectName,
+		Skills: append([]string(nil), selectedSkills...), OverwritesLocal: len(selectedSkills) > 0,
+		CreatedAt: c.now().Format(time.RFC3339),
+	}
+	if selectedCount == 1 {
+		preview.Source = previewSource.Source
+		preview.SourceKey = previewSource.SourceKey
+		preview.Ref = previewSource.Ref
+		preview.ResolvedCommit = previewSource.ResolvedCommit
+		preview.SkillList = append([]skillSourceSkillSnapshot(nil), previewSource.SkillList...)
+	}
+	stored := skillsStoredSourcePreview{
+		preview: preview, target: target, lockPath: lockPath,
+		expectedRevision: migration.Revision, updatedLock: lock, runs: runs,
+	}
+	if cmdErr := c.storeSourcePreview(&stored); cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+	return skillsCommandResponse{
+		OK: true, HubID: payload.HubID, UpdatedAt: preview.CreatedAt,
+		Source: preview.Source, Scope: target.scope, ProjectName: target.projectName,
+		Preview: cloneSkillsSourcePreview(&stored.preview),
+	}, nil
+}
+
+func (c *SkillsCommand) previewDeleteSource(payload skillsCommandPayload) (skillsCommandResponse, *skillsCommandError) {
+	target, cmdErr := c.resolveTarget(payload)
+	if cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+	normalizedSource, sourceKey, err := normalizeSkillGitSource(payload.Source)
+	if err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeForbidden, Message: err.Error()}
+	}
+	lockPath := c.sourceLockFile(target)
+	migration, err := readOrMigrateSkillSourceLock(c.skillsLockFile(target), lockPath)
+	if err != nil {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	lock := migration.Lock
+	found := false
+	var source skillSourceSnapshot
+	nextSources := make([]skillSourceSnapshot, 0, len(lock.Sources))
+	for _, candidate := range lock.Sources {
+		if strings.EqualFold(candidate.SourceKey, sourceKey) {
+			found = true
+			source = candidate
+			continue
+		}
+		nextSources = append(nextSources, candidate)
+	}
+	var skills []string
+	for _, entry := range readNativeSkillSourceEntries(c.skillsLockFile(target)) {
+		address := entry.SourceURL
+		if address == "" {
+			address = entry.Source
+		}
+		_, ownerKey, normalizeErr := normalizeSkillGitSource(address)
+		if normalizeErr == nil && strings.EqualFold(ownerKey, sourceKey) {
+			skills = append(skills, entry.Name)
+		}
+	}
+	if !found && len(skills) == 0 {
+		return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill source not found"}
+	}
+	if !found {
+		ref := payload.Ref
+		if ref == "" {
+			ref = "HEAD"
+		}
+		source = skillSourceSnapshot{Source: normalizedSource, SourceKey: sourceKey, Ref: ref, SkillList: []skillSourceSkillSnapshot{}}
+	}
+	lock.Sources = nextSources
+	sort.Slice(skills, func(i, j int) bool { return strings.ToLower(skills[i]) < strings.ToLower(skills[j]) })
+	runs := make([]skillsOperationRun, 0, len(skills))
+	for _, skill := range skills {
+		runs = append(runs, skillsOperationRun{
+			target: target, args: skillsRemoveArgs(target, []string{skill}),
+			skill: skill, action: "uninstall", message: "Uninstalled source skills.",
+		})
+	}
+	preview := skillsSourcePreview{
+		Kind: "previewDeleteSource", Scope: target.scope, ProjectName: target.projectName,
+		Source: source.Source, SourceKey: source.SourceKey, Ref: source.Ref,
+		ResolvedCommit: source.ResolvedCommit, SkillList: append([]skillSourceSkillSnapshot(nil), source.SkillList...),
+		Skills: append([]string(nil), skills...), CreatedAt: c.now().Format(time.RFC3339),
+	}
+	stored := skillsStoredSourcePreview{
+		preview: preview, target: target, lockPath: lockPath,
+		expectedRevision: migration.Revision, updatedLock: lock, runs: runs, deleteSource: true,
+	}
+	if cmdErr := c.storeSourcePreview(&stored); cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+	return skillsCommandResponse{
+		OK: true, HubID: payload.HubID, UpdatedAt: preview.CreatedAt,
+		Source: source.Source, Scope: target.scope, ProjectName: target.projectName,
+		Preview: cloneSkillsSourcePreview(&stored.preview),
+	}, nil
+}
+
+func (c *SkillsCommand) installedSnapshotsForTarget(target skillsCommandTarget, native []nativeSkillSourceEntry) ([]skillSourceInstalledSnapshot, error) {
+	directories, err := c.skillsInstallDirs(target)
+	if err != nil {
+		return nil, err
+	}
+	installedByName := map[string]*skillSourceInstalledSnapshot{}
+	for _, entry := range native {
+		if entry.Name == "" || validateSkillNames([]string{entry.Name}) != nil {
+			continue
+		}
+		locations := make([]string, 0, len(directories))
+		for _, directory := range directories {
+			locations = append(locations, filepath.Join(directory, entry.Name, "SKILL.md"))
+		}
+		item := &skillSourceInstalledSnapshot{Name: entry.Name, Managed: true, Locations: locations}
+		installedByName[strings.ToLower(entry.Name)] = item
+	}
+	for _, directory := range directories {
+		entries, readErr := os.ReadDir(directory)
+		if errors.Is(readErr, os.ErrNotExist) {
+			continue
+		}
+		if readErr != nil {
+			return nil, readErr
+		}
+		for _, entry := range entries {
+			root := filepath.Join(directory, entry.Name())
+			info, statErr := os.Stat(root)
+			if statErr != nil || !info.IsDir() {
+				continue
+			}
+			skillFile := filepath.Join(root, "SKILL.md")
+			if info, statErr = os.Stat(skillFile); statErr != nil || info.IsDir() {
+				continue
+			}
+			key := strings.ToLower(entry.Name())
+			item := installedByName[key]
+			if item == nil {
+				item = &skillSourceInstalledSnapshot{Name: entry.Name()}
+				installedByName[key] = item
+			}
+			if !item.Managed {
+				item.Locations = append(item.Locations, skillFile)
+			}
+		}
+	}
+	keys := make([]string, 0, len(installedByName))
+	for key := range installedByName {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	installed := make([]skillSourceInstalledSnapshot, 0, len(keys))
+	for _, key := range keys {
+		installed = append(installed, *installedByName[key])
+	}
+	return installed, nil
+}
+
+func (c *SkillsCommand) storeSourcePreview(stored *skillsStoredSourcePreview) *skillsCommandError {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.operation != nil && c.operation.Running {
+		return &skillsCommandError{Code: rp.CodeConflict, Message: "skills operation already running"}
+	}
+	c.previewCounter++
+	stored.preview.ID = fmt.Sprintf("skills-preview-%d", c.previewCounter)
+	c.previews[stored.preview.ID] = *stored
+	return nil
+}
+
+func (c *SkillsCommand) applySourcePreview(payload skillsCommandPayload) (any, *skillsCommandError) {
+	if payload.PreviewID == "" {
+		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "previewId is required"}
+	}
+	c.mu.RLock()
+	stored, exists := c.previews[payload.PreviewID]
+	c.mu.RUnlock()
+	if !exists {
+		return nil, &skillsCommandError{Code: rp.CodeNotFound, Message: "skills preview not found or expired"}
+	}
+	operationPayload := payload
+	operationPayload.Action = stored.preview.Kind
+	operationPayload.Scope = stored.target.scope
+	operationPayload.ProjectName = stored.target.projectName
+	operationPayload.Source = stored.preview.Source
+	operationPayload.Skills = append([]string(nil), stored.preview.Skills...)
+	operation, cmdErr := c.acceptOperation(operationPayload)
+	if cmdErr != nil {
+		return nil, cmdErr
+	}
+	c.mu.Lock()
+	delete(c.previews, payload.PreviewID)
+	c.mu.Unlock()
+	accepted := cloneSkillsOperation(operation)
+	go c.runSkillsSourcePreviewOperation(operation, stored)
+	return skillsCommandResponse{
+		OK: true, Accepted: true, HubID: payload.HubID, UpdatedAt: operation.StartedAt,
+		Source: stored.preview.Source, Scope: stored.target.scope, ProjectName: stored.target.projectName,
+		Operation: accepted,
+	}, nil
+}
+
+func (c *SkillsCommand) runSkillsSourcePreviewOperation(operation *skillsOperationSnapshot, stored skillsStoredSourcePreview) {
+	if !stored.deleteSource {
+		if _, err := writeSkillSourceLockFile(stored.lockPath, stored.expectedRevision, stored.updatedLock); err != nil {
+			exitCode := -1
+			c.finishOperation(operation, "failed", &exitCode, err.Error(), "")
+			return
+		}
+	}
+	failed := 0
+	var lastExitCode *int
+	for _, run := range stored.runs {
+		if run.prepareInstallDirs {
+			if err := c.prepareSkillsInstallDirs(run.target); err != nil {
+				failed++
+				code := -1
+				lastExitCode = &code
+				c.appendSkillsOperationResult(operation, skillsOperationItemResult{
+					Skill: run.skill, Action: run.action, Status: "failed", ErrorSummary: err.Error(),
+				})
+				continue
+			}
+		}
+		result := c.runSkills(context.Background(), run.target.dir, run.args...)
+		if skillsCommandFailed(result) {
+			failed++
+			code := result.ExitCode
+			lastExitCode = &code
+			c.appendSkillsOperationResult(operation, skillsOperationItemResult{
+				Skill: run.skill, Action: run.action, Status: "failed", ErrorSummary: skillsResultSummary(result),
+			})
+			continue
+		}
+		c.appendSkillsOperationResult(operation, skillsOperationItemResult{
+			Skill: run.skill, Action: run.action, Status: "succeeded",
+		})
+	}
+	if stored.deleteSource && failed == 0 {
+		if _, err := writeSkillSourceLockFile(stored.lockPath, stored.expectedRevision, stored.updatedLock); err != nil {
+			exitCode := -1
+			c.finishOperation(operation, "failed", &exitCode, err.Error(), "")
+			return
+		}
+	}
+	if failed > 0 {
+		status := "partial"
+		if failed == len(stored.runs) {
+			status = "failed"
+		}
+		c.finishOperation(operation, status, lastExitCode, fmt.Sprintf("%d skill operation(s) failed", failed), "Skills operation completed with item failures.")
+		return
+	}
+	c.finishOperation(operation, "succeeded", nil, "", "Skills operation completed.")
+}
+
+func (c *SkillsCommand) appendSkillsOperationResult(operation *skillsOperationSnapshot, result skillsOperationItemResult) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.operation == operation {
+		operation.Results = append(operation.Results, result)
+	}
+}
+
+func (c *SkillsCommand) sourceLockFile(target skillsCommandTarget) string {
+	return skillSourceLockPath(target.dir, c.globalLockFile(), c.homeDir)
+}
+
+func pinnedSkillSource(source skillSourceSnapshot) string {
+	return source.Source + "#" + source.ResolvedCommit
+}
+
+func sanitizeSkillSourceError(message, source string) string {
+	message = strings.ReplaceAll(message, strings.TrimSpace(source), "[skill source]")
+	if len(message) > 500 {
+		message = message[:500]
+	}
+	return message
+}
+
+func cloneSkillsSourcePreview(preview *skillsSourcePreview) *skillsSourcePreview {
+	if preview == nil {
+		return nil
+	}
+	clone := *preview
+	clone.SkillList = append([]skillSourceSkillSnapshot(nil), preview.SkillList...)
+	clone.Skills = append([]string(nil), preview.Skills...)
+	return &clone
+}
+
 func (c *SkillsCommand) startInstall(payload skillsCommandPayload) (any, *skillsCommandError) {
 	if err := validateRemoteSkillSource(payload.Source); err != nil {
 		return nil, err
@@ -482,6 +1051,8 @@ func (c *SkillsCommand) startUpdate(payload skillsCommandPayload) (any, *skillsC
 type skillsOperationRun struct {
 	target             skillsCommandTarget
 	args               []string
+	skill              string
+	action             string
 	message            string
 	prepareInstallDirs bool
 }
@@ -589,6 +1160,7 @@ func cloneSkillsOperation(operation *skillsOperationSnapshot) *skillsOperationSn
 	}
 	clone := *operation
 	clone.Skills = append([]string(nil), operation.Skills...)
+	clone.Results = append([]skillsOperationItemResult(nil), operation.Results...)
 	if operation.ExitCode != nil {
 		code := *operation.ExitCode
 		clone.ExitCode = &code

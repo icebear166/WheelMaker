@@ -1093,12 +1093,17 @@ func validateHubStateAction(section string, action string) error {
 			"requestUpdate": {},
 		},
 		hubStateSectionSkills: {
-			"listSource": {},
-			"install":    {},
-			"uninstall":  {},
-			"update":     {},
-			"detail":     {},
-			"reindex":    {},
+			"listSource":          {},
+			"install":             {},
+			"uninstall":           {},
+			"update":              {},
+			"detail":              {},
+			"reindex":             {},
+			"previewSource":       {},
+			"previewInstall":      {},
+			"previewUpdate":       {},
+			"previewDeleteSource": {},
+			"applyPreview":        {},
 		},
 		hubStateSectionFileIndex: {
 			"rebuild": {},
@@ -1856,9 +1861,18 @@ func (r *Reporter) ensureSkillsStateCoordinator() *skillsStateCoordinator {
 				})
 			},
 			ScanProjectSources: func(ctx context.Context, target projectSkillsTarget, inventory map[string]skillInventoryItem) (tools.SkillsSourceScopeSnapshot, error) {
+				reconciliationPath := ""
+				if stateDir := strings.TrimSpace(r.cfg.StateDir); stateDir != "" {
+					reconciliationPath = filepath.Join(
+						stateDir,
+						"skills-source-reconciliation",
+						strings.TrimPrefix(hubHashLines(target.ProjectID, target.Path), "sha256:")+".json",
+					)
+				}
 				return tools.ScanSkillsSourceScope(ctx, tools.SkillsSourceScopeInput{
-					ProjectRoot: target.Path,
-					Installed:   skillInventoryAsInstalledSnapshots(inventory),
+					ProjectRoot:        target.Path,
+					ReconciliationPath: reconciliationPath,
+					Installed:          skillInventoryAsInstalledSnapshots(inventory),
 				})
 			},
 			Targets: r.skillsTargets,

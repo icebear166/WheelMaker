@@ -186,6 +186,10 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 		}, nil
 	case "listSource":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
+	case "previewSource", "previewInstall", "previewUpdate", "previewDeleteSource":
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, action, params))
+	case "applyPreview":
+		return r.runSkillsStateAction(ctx, action, params)
 	case "install":
 		return r.runSkillsStateAction(ctx, "install", params)
 	case "uninstall":
