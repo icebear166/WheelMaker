@@ -200,15 +200,15 @@ Invoke `git-workflow` checkpoint for Task 4 after verification and record the co
 
 **Acceptance:** The client consumes complete source snapshots and operation previews/results through HubState actions, derives no permissions from labels/colors, preserves Composer inputs, and stores a default-off `Show uninstalled skills` preference independently for each stable Hub/scope key.
 
-- [ ] **Step 1: Write failing type/parser/service tests**
+- [x] **Step 1: Write failing type/parser/service tests**
 
 Cover source/catalog/action/result shapes, HubState-only action routing, complete input normalization for bare Git/direct skill/`npx skills add --skill`, and preservation of `effectiveSkills`. Reject unsupported or ambiguous input before dispatch.
 
-- [ ] **Step 2: Write failing preference/filter tests**
+- [x] **Step 2: Write failing preference/filter tests**
 
 Assert stable Hub and Project keys, default false, independent persistence per scope, ordinary uninstalled filtering only, and unconditional visibility of installed, conflict, removed, stale/error, and pending-removal rows.
 
-- [ ] **Step 3: Run focused Jest tests to verify RED**
+- [x] **Step 3: Run focused Jest tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-skill-management-view.test.ts __tests__/web-skill-management-service.test.ts`
 
@@ -216,11 +216,11 @@ Working directory: `app`
 
 Expected: FAIL because source types/actions and scope visibility helpers do not exist.
 
-- [ ] **Step 4: Implement the minimal typed client model**
+- [x] **Step 4: Implement the minimal typed client model**
 
 Extend current Skills section parsing and repository methods; add explicit source action/preview/result targets and scoped localStorage helpers; remove the old selected-candidate model; retain legacy installed/effective inventory compatibility while UI migration is in progress.
 
-- [ ] **Step 5: Run focused tests and typecheck to verify GREEN**
+- [x] **Step 5: Run focused tests and typecheck to verify GREEN**
 
 Run the Step 3 command, then `npm run tsc:web`.
 
@@ -228,7 +228,7 @@ Working directory: `app`
 
 Expected: PASS.
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint** — `0e3cdfbc feat(skills): add web source catalog model`
 
 Invoke `git-workflow` checkpoint for Task 5 after verification and record the commit hash and subject.
 
