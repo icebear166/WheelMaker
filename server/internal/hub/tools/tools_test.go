@@ -3185,3 +3185,267 @@ func TestReleaseCommandStoragePropagatesScriptFailure(t *testing.T) {
 		t.Fatalf("error=%v, want INTERNAL", commandErr)
 	}
 }
+
+func TestSkillSourceLockPathUsesScopeAndGlobalLockDirectory(t *testing.T) {
+	projectRoot := t.TempDir()
+	if got, want := skillSourceLockPath(projectRoot, "", ""), filepath.Join(projectRoot, ".skill-source-lock.json"); got != want {
+		t.Fatalf("project lock path=%q, want %q", got, want)
+	}
+
+	globalDir := t.TempDir()
+	upstreamLock := filepath.Join(globalDir, ".skill-lock.json")
+	if got, want := skillSourceLockPath("", upstreamLock, t.TempDir()), filepath.Join(globalDir, ".skill-source-lock.json"); got != want {
+		t.Fatalf("global lock path=%q, want %q", got, want)
+	}
+}
+
+func TestSkillSourceLockPathUsesXDGThenAgentsHome(t *testing.T) {
+	xdg := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", xdg)
+	if got, want := skillSourceLockPath("", "", home), filepath.Join(xdg, "skills", ".skill-source-lock.json"); got != want {
+		t.Fatalf("xdg lock path=%q, want %q", got, want)
+	}
+
+	t.Setenv("XDG_STATE_HOME", "")
+	if got, want := skillSourceLockPath("", "", home), filepath.Join(home, ".agents", ".skill-source-lock.json"); got != want {
+		t.Fatalf("home lock path=%q, want %q", got, want)
+	}
+}
+
+func TestSkillSourceIdentityNormalizesHTTPSAndSSHRepositories(t *testing.T) {
+	tests := []struct {
+		input      string
+		wantSource string
+		wantKey    string
+	}{
+		{
+			input:      "https://GitHub.com/OpenAI/skills.git/",
+			wantSource: "https://github.com/OpenAI/skills.git",
+			wantKey:    "github.com/openai/skills",
+		},
+		{
+			input:      "git@GitHub.com:OpenAI/skills.git",
+			wantSource: "git@github.com:OpenAI/skills.git",
+			wantKey:    "github.com/openai/skills",
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.input, func(t *testing.T) {
+			source, key, err := normalizeSkillGitSource(testCase.input)
+			if err != nil {
+				t.Fatalf("normalizeSkillGitSource() error=%v", err)
+			}
+			if source != testCase.wantSource || key != testCase.wantKey {
+				t.Fatalf("normalizeSkillGitSource()=(%q, %q), want (%q, %q)", source, key, testCase.wantSource, testCase.wantKey)
+			}
+		})
+	}
+}
+
+func TestSkillSourceIdentityRejectsEmbeddedHTTPSecretsAndLocalSources(t *testing.T) {
+	for _, source := range []string{
+		"https://token@github.com/openai/skills.git",
+		"https://github.com/openai/skills.git?token=secret",
+		"https://github.com/openai/skills.git#secret",
+		"C:/local/skills",
+		"../local/skills",
+		"file:///tmp/skills",
+	} {
+		t.Run(source, func(t *testing.T) {
+			if _, _, err := normalizeSkillGitSource(source); err == nil {
+				t.Fatalf("normalizeSkillGitSource(%q) succeeded, want rejection", source)
+			}
+		})
+	}
+}
+
+func TestSkillSourceDirectoryHashIncludesPathsAndSupportingFiles(t *testing.T) {
+	rootA := t.TempDir()
+	rootB := t.TempDir()
+	for _, root := range []string{rootA, rootB} {
+		if err := os.MkdirAll(filepath.Join(root, "references"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte("# Skill\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "references", "guide.md"), []byte("guide\r\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, ".git"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, ".git", "HEAD"), []byte(root), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	hashA, err := hashSkillDirectory(rootA)
+	if err != nil {
+		t.Fatalf("hashSkillDirectory(rootA) error=%v", err)
+	}
+	hashB, err := hashSkillDirectory(rootB)
+	if err != nil {
+		t.Fatalf("hashSkillDirectory(rootB) error=%v", err)
+	}
+	if hashA != hashB || len(hashA) != 64 {
+		t.Fatalf("hashes=(%q, %q), want identical SHA-256 values", hashA, hashB)
+	}
+
+	if err := os.WriteFile(filepath.Join(rootB, "references", "guide.md"), []byte("changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := hashSkillDirectory(rootB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed == hashA {
+		t.Fatal("supporting-file content change did not change directory hash")
+	}
+
+	if err := os.Rename(filepath.Join(rootB, "references", "guide.md"), filepath.Join(rootB, "references", "renamed.md")); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := hashSkillDirectory(rootB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed == changed {
+		t.Fatal("relative path change did not change directory hash")
+	}
+}
+
+func TestSkillSourceDirectoryHashRejectsEscapingSymlink(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(filepath.Join(root, "SKILL.md"), []byte("# Skill\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outside, []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "outside.txt")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := hashSkillDirectory(root); err == nil {
+		t.Fatal("hashSkillDirectory() accepted a symlink escaping the skill root")
+	}
+}
+
+func TestSkillSourceStoreWritesStableValidatedJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
+	lock := skillSourceLock{
+		Version:       skillSourceLockVersion,
+		HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{
+			{
+				Source:         "https://github.com/example/b.git",
+				SourceKey:      "github.com/example/b",
+				Ref:            "main",
+				ResolvedCommit: strings.Repeat("b", 40),
+				RefreshedAt:    "2026-08-12T12:00:00Z",
+				SkillList: []skillSourceSkillSnapshot{
+					{Name: "z-skill", SkillPath: "z/SKILL.md", ContentSHA256: strings.Repeat("f", 64)},
+					{Name: "a-skill", SkillPath: "a/SKILL.md", ContentSHA256: strings.Repeat("a", 64)},
+				},
+			},
+			{
+				Source:    "https://github.com/example/a.git",
+				SourceKey: "github.com/example/a",
+				Ref:       "main",
+			},
+		},
+	}
+	revision, err := writeSkillSourceLockFile(path, skillSourceMissingRevision, lock)
+	if err != nil {
+		t.Fatalf("writeSkillSourceLockFile() error=%v", err)
+	}
+	if revision == "" || revision == skillSourceMissingRevision {
+		t.Fatalf("revision=%q, want content revision", revision)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Index(string(raw), "example/a") > strings.Index(string(raw), "example/b") ||
+		strings.Index(string(raw), "a-skill") > strings.Index(string(raw), "z-skill") {
+		t.Fatalf("source lock is not stably sorted:\n%s", raw)
+	}
+	loaded, loadedRevision, err := readSkillSourceLockFile(path)
+	if err != nil {
+		t.Fatalf("readSkillSourceLockFile() error=%v", err)
+	}
+	if loadedRevision != revision || len(loaded.Sources) != 2 || loaded.Sources[0].SourceKey != "github.com/example/a" {
+		t.Fatalf("loaded=%#v revision=%q, want sorted lock revision %q", loaded, loadedRevision, revision)
+	}
+}
+
+func TestSkillSourceStoreRejectsUnknownVersionAndDuplicateSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
+	invalidValues := []string{
+		`{"version":2,"hashAlgorithm":"sha256-v1","sources":[]}`,
+		`{"version":1,"hashAlgorithm":"sha256-v1","sources":[{"source":"https://github.com/a/b.git","sourceKey":"github.com/a/b","ref":"main"},{"source":"git@github.com:a/b.git","sourceKey":"github.com/a/b","ref":"main"}]}`,
+		`{"version":1,"hashAlgorithm":"sha256-v1","sources":[]} {}`,
+	}
+	for index, raw := range invalidValues {
+		if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := readSkillSourceLockFile(path); err == nil {
+			t.Fatalf("invalid source lock %d was accepted", index)
+		}
+	}
+}
+
+func TestSkillSourceStoreAtomicallyReplacesMatchingRevision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm}
+	revision, err := writeSkillSourceLockFile(path, skillSourceMissingRevision, initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := initial
+	updated.Sources = []skillSourceSnapshot{{
+		Source: "https://github.com/example/new.git", SourceKey: "github.com/example/new", Ref: "main",
+	}}
+	updatedRevision, err := writeSkillSourceLockFile(path, revision, updated)
+	if err != nil {
+		t.Fatalf("writeSkillSourceLockFile(update) error=%v", err)
+	}
+	loaded, loadedRevision, err := readSkillSourceLockFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loadedRevision != updatedRevision || len(loaded.Sources) != 1 || loaded.Sources[0].SourceKey != "github.com/example/new" {
+		t.Fatalf("loaded=%#v revision=%q, want updated revision %q", loaded, loadedRevision, updatedRevision)
+	}
+}
+
+func TestSkillSourceStoreCompareAndSwapPreservesExternalEdit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".skill-source-lock.json")
+	initial := skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm}
+	revision, err := writeSkillSourceLockFile(path, skillSourceMissingRevision, initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	external := []byte("{\"external\":true}\n")
+	if err := os.WriteFile(path, external, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	updated := initial
+	updated.Sources = []skillSourceSnapshot{{
+		Source: "https://github.com/example/new.git", SourceKey: "github.com/example/new", Ref: "main",
+	}}
+	if _, err := writeSkillSourceLockFile(path, revision, updated); !errors.Is(err, errSkillSourceLockChanged) {
+		t.Fatalf("writeSkillSourceLockFile() error=%v, want errSkillSourceLockChanged", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != string(external) {
+		t.Fatalf("external bytes changed to %q", raw)
+	}
+}
