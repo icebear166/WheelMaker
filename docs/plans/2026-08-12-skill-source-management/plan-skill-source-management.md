@@ -152,19 +152,19 @@ Invoke `git-workflow` checkpoint for Task 3 after verification and record the co
 
 **Acceptance:** Add/refresh/ref-preview/ref-apply/install/update/update-all/uninstall/delete/pending-removal actions all use the existing asynchronous single-write lifecycle, force fresh previews where required, pin installs to the previewed commit, never infer deletion from stale data, and report itemized best-effort results.
 
-- [ ] **Step 1: Write failing action contract tests**
+- [x] **Step 1: Write failing action contract tests**
 
 Assert bare sources refresh/save without add, explicit skill URLs/`--skill` input install only named catalog entries, existing source merge requires the same ref, ref changes require preview plus CAS apply, and every write action rejects a concurrent Skills operation.
 
-- [ ] **Step 2: Write failing pinned install/update tests**
+- [x] **Step 2: Write failing pinned install/update tests**
 
 With a fake runner, require source at `resolvedCommit`, fixed agents, Hub/Project scope, Project `--copy`, and `-y`; move the branch after preview and prove arguments/content remain pinned. Require a fresh preview before install/update and an overwrite-local warning marker for every mismatch.
 
-- [ ] **Step 3: Write failing batch/delete/reconciliation tests**
+- [x] **Step 3: Write failing batch/delete/reconciliation tests**
 
 Assert Update All selects only installed, present, changed, non-conflicting rows; skips additions and removed-upstream rows; continues after individual failures; returns success/failure/skip/conflict results; rescans afterward; and deletes a source only after all managed uninstalls succeed. Cover persisted Pending removal for externally deleted Project sources without automatic uninstall.
 
-- [ ] **Step 4: Run focused Go tests to verify RED**
+- [x] **Step 4: Run focused Go tests to verify RED**
 
 Run: `go test ./internal/hub/tools -run 'TestSkillsCommand.*(Source|Refresh|Pinned|UpdateAll|Delete|BestEffort)' && go test ./internal/hub -run 'TestHubStateSkills'`
 
@@ -172,17 +172,17 @@ Working directory: `server`
 
 Expected: FAIL because the new lifecycle/actions and result model do not exist.
 
-- [ ] **Step 5: Implement the source actions and operation result model**
+- [x] **Step 5: Implement the source actions and operation result model**
 
 Extend the internal Skills action payload/response without adding public Registry methods. Reuse the single running operation guard for source-lock and native-install writes; refresh before previewed operations; execute batches sequentially and best-effort; republish running/terminal state; rescan installed state; and store only source identity/deletion retry metadata locally.
 
-- [ ] **Step 6: Run focused and full Hub tests to verify GREEN**
+- [x] **Step 6: Run focused and full Hub tests to verify GREEN**
 
 Run the Step 4 commands, then `go test ./internal/hub/...`.
 
 Expected: PASS with Registry protocol version unchanged.
 
-- [ ] **Step 7: Git checkpoint**
+- [x] **Step 7: Git checkpoint** — `62c49549 feat(skills): add pinned source operations`
 
 Invoke `git-workflow` checkpoint for Task 4 after verification and record the commit hash and subject.
 
