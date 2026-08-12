@@ -25,7 +25,7 @@ Latest v1.3                                  Update all hubs
 ```
 
 - **Settings 行**：整行手风琴。展开内容是 Flicker Bridge 段（Off/V1/V2 是唯一生命周期与模式控件）和紧凑单行 API key 编辑器（状态图标 + 行内密码输入 + Set/Replace + Clear）。收缩摘要显示 Flicker `V1`/`V2` 或 `Off`，使用颜色点表达状态。
-- **Hub 标题行**：颜色点在名称前；版本号是只读状态，右侧提供独立的 Update 与 Restart 图标动作，无展开行为。已安装的正常 Hub 有新版本时同时显示两个动作；已是最新版或本地版本较新时只显示 Restart；未安装或 `update_only` Hub 只显示 Update。Update 使用 `cloudDownload`，Restart 使用 `refreshCw`，存在新版本时红色提示点附着在 Update 动作上。两个动作都走 `wheelmakerUpdate` confirm 流程，pending 时动作组禁用。版本动作默认透明，仅 hover/focus/active 时出现背景。
+- **Hub 标题行**：颜色点在名称前；版本号是只读状态，右侧提供独立的 Update 与 Restart 图标动作，无展开行为。已安装的正常 Hub 有新版本时同时显示两个动作；已是最新版或本地版本较新时只显示 Restart；未安装或 `update_only` Hub 只显示 Update。Update 使用 `cloudDownload`，Restart 使用 `power`，存在新版本时红色提示点附着在 Update 动作上。两个动作都走 `wheelmakerUpdate` confirm 流程，pending 时动作组禁用。版本动作默认透明，仅 hover/focus/active 时出现背景。
 - **Global 行**：固定三个等宽入口，顺序为 NPM、MCP、Skills。入口都采用“图标 + 数量”，不显示文字标签和 disclosure chevron：
   - NPM 使用 package 图标，数量沿用现有统计；存在可更新包时显示不占布局空间的红色提示点。展开逐包列表，批量 `Update all` 位于 detail 工具栏。
   - MCP 使用官方 MCP 图标，当前数量固定为 `0`；点击展开本地空态 `MCP servers` / `No MCP servers configured.`，不发起网络、API 或协议调用。
@@ -74,6 +74,8 @@ MyFlicker 的 `@myflicker/cli` 仅在 Hub 首次 NPM 扫描时能从 `https://np
 ## Hub 全局 Skills
 
 Skills detail 只读取当前 Hub 的 HubState `skills.hubInventory`。工具栏提供 Add Skill、选择模式和带文字的 Hub 范围 `Update all`；后者只更新 Hub 全局 Skills，明确排除 Project Skills。snapshot 不提供远端更新可用性，因此存在 managed Skill 时允许执行 Update all，不存在时禁用并显示 `No managed skills`，不伪造 `Up to date`。列表不分组，逐项行使用 32px 单行网格，只显示名称和必要状态；点击名称打开详情，右侧保留固定对齐的 Update、Uninstall 图标槽。外部或不可管理 Skill 在名称后直接显示 External 标识，可查看详情但禁用更新与卸载。
+
+Hub 菜单中的 Source-first Skills ledger 采用紧凑的单行 Source header：展开 chevron、状态点、可截断 source 名称、Refresh、Update all 和 Delete。Source 默认展开；标题的非操作区域切换列表，当前页面会话按 Hub/scope/Project/source identity 记忆展开状态，重新打开应用恢复展开。Refresh 始终占位，Update all 没有可更新项、没有有效快照或操作繁忙时保持固定位置并置灰；错误条在收起时仍可见。Skill 行的第一动作槽在未安装时使用 `cloudDownload`、需要对齐时使用 `circleArrowUp`，第二槽固定为 Uninstall；普通已安装/未安装/最新状态不重复显示状态文字，冲突、远端删除、错误和待删除等异常保留文字与状态色。所有图标按钮都提供 tooltip、aria-label、键盘焦点和 pending/disabled 表达。
 
 Skill 行的 `Codex` / `Claude` 胶囊只表示该 Skill 是否实际存在于 `.agents/skills` / `.claude/skills`；它不表示 npm 包是否安装，也不表示兼容性或缺失状态。内容不一致时只显示 `content differs` 非阻塞诊断，不自动复制或覆盖目录。
 
