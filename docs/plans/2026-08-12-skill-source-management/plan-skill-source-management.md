@@ -250,19 +250,19 @@ Invoke `git-workflow` checkpoint for Task 5 after verification and record the co
 
 **Acceptance:** Hub and each Project show sources first, source rows expose repository/ref/commit/status/counts, the default-off scope switch controls only normal uninstalled rows, unmanaged skills have a dedicated group, conflicts are disabled, and every destructive/overwrite/source-lifecycle action has an accurate preview and accessible confirmation/result state.
 
-- [ ] **Step 1: Perform frontend-design two-pass planning before component code**
+- [x] **Step 1: Perform frontend-design two-pass planning before component code**
 
 Pass 1: sketch source ledger, expanded catalog, unmanaged group, add-source surface, and preview/result dialog states using current component primitives. Pass 2: reject layouts that obscure scope, depend on color, duplicate selection UI, or collapse source and skill actions into one control. Keep responsive wrapping, keyboard focus, and reduced-motion behavior explicit.
 
-- [ ] **Step 2: Write failing source-list component tests**
+- [x] **Step 2: Write failing source-list component tests**
 
 Assert source-first hierarchy, repository ledger metadata, expansion to the full filtered catalog, independent scope toggles, status text/icons, hidden ordinary uninstalled rows by default, unmanaged group, conflict-disabled actions, Update only on hash mismatch, and Removed upstream manual Uninstall only.
 
-- [ ] **Step 3: Write failing add/preview/action tests**
+- [x] **Step 3: Write failing add/preview/action tests**
 
 Assert bare Git confirms source-only save, explicit names are separately listed for install without checkboxes/select-all, refresh/ref-change/update/update-all/delete dialogs render the server preview, overwrite confirmations state local replacement, cancellation performs no write, stale states block dependent actions, and itemized partial results remain visible/retriable.
 
-- [ ] **Step 4: Run focused component tests to verify RED**
+- [x] **Step 4: Run focused component tests to verify RED**
 
 Run: `npm test -- --runInBand web/src/app/ChatHubSkillManagement.test.tsx web/src/app/ChatHubSkillCompanion.test.tsx web/src/settings/SkillManagementContent.test.tsx __tests__/web-skill-management-settings.test.ts`
 
@@ -270,15 +270,15 @@ Working directory: `app`
 
 Expected: FAIL against the installed-skill-first and checkbox-selection UI.
 
-- [ ] **Step 5: Implement the repository ledger and companion flows**
+- [x] **Step 5: Implement the repository ledger and companion flows**
 
 Reshape props/wiring around source snapshots and explicit action availability. Render ledger metadata in monospace where appropriate, meaningful non-color status labels, aligned skill action slots, a client-local scope switch, and server-provided previews/results. Remove selection mode and candidate selection. Preserve skill detail and Marketplace affordances where still relevant.
 
-- [ ] **Step 6: Refine responsive, focus, and reduced-motion styling**
+- [x] **Step 6: Refine responsive, focus, and reduced-motion styling**
 
 Use existing spacing/color variables, allow long repository/ref text to wrap or truncate with accessible titles, retain visible focus rings and minimum action targets, avoid new ambient animations, and ensure narrow companion/menu surfaces remain usable.
 
-- [ ] **Step 7: Run focused and adjacent frontend tests to verify GREEN**
+- [x] **Step 7: Run focused and adjacent frontend tests to verify GREEN**
 
 Run the Step 4 command plus `npm test -- --runInBand __tests__/web-skill-management-view.test.ts __tests__/web-skill-management-service.test.ts`.
 
@@ -286,7 +286,7 @@ Working directory: `app`
 
 Expected: PASS.
 
-- [ ] **Step 8: Git checkpoint**
+- [x] **Step 8: Git checkpoint** — `b6c1182f feat(skills): add source repository ledger`
 
 Invoke `git-workflow` checkpoint for Task 6 after verification and record the commit hash and subject.
 
