@@ -25,25 +25,25 @@
 
 **Acceptance:** The wiki explains the durable source-first behavior and state ownership without duplicating implementation checklists or treating the source lock as an installation database.
 
-- [ ] **Step 1: Read the wiki skill and the three target locations**
+- [x] **Step 1: Read the wiki skill and the three target locations**
 
 Read the complete `wiki` skill instructions, then inspect the feature index and HubState architecture conventions before editing.
 
-- [ ] **Step 2: Add the Skills management feature page**
+- [x] **Step 2: Add the Skills management feature page**
 
 Document source/scoped catalog behavior, explicit refresh, per-scope hidden-uninstalled default, local/remote hash reconciliation, conflict and removed-upstream handling, pinned confirmation flows, migration, Project Git behavior, and source deletion/ref-change semantics.
 
-- [ ] **Step 3: Update the feature index and HubState ownership page**
+- [x] **Step 3: Update the feature index and HubState ownership page**
 
 Link the new feature page. Record Source Store/Resolver/Installed State Adapter ownership, Skills section composition, client-local display preferences, and the unchanged single-operation/protocol-version boundary.
 
-- [ ] **Step 4: Verify the wiki diff**
+- [x] **Step 4: Verify the wiki diff**
 
 Run: `git diff --check -- docs/wiki/features/skills-management.md docs/wiki/features/features.md docs/wiki/architecture/hub-state.md`
 
 Expected: PASS; only approved wiki targets are changed in this task.
 
-- [ ] **Step 5: Git checkpoint**
+- [x] **Step 5: Git checkpoint** — `51a4b903 docs(wiki): define skill source management`
 
 Invoke `git-workflow` checkpoint after verification and record the resulting commit hash and subject here.
 
