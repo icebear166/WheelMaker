@@ -38,6 +38,6 @@ Codex 原生 Goal status 直接映射为 WheelMaker 通用 status。`thread/goal
 
 该 provider 的 `CODEX_HOME` 固定为 `<stateDir>/.data/cx-deepseek`，并拥有独立 instance creator、runtime pool、catalog 和恢复源；原生 `codex` 仍使用用户自己的 Codex home。DeepSeek Key 复用 Hub `apiKeys.deepSeek`，仅作为子进程环境变量 `DEEPSEEK_API_KEY` 注入。provider 设置通过 `codex app-server -c key=value` 覆盖，不覆盖 App Server 自有的 `config.toml`。
 
-模型元数据来自随 WheelMaker 版本发布、经过校验的 DeepSeek 官方 Codex catalog 资产。首版只暴露官方确认支持 Responses/Codex 的 `deepseek-v4-flash`，不根据通用 `/models` 推导 Codex catalog，也不运行远程安装脚本。catalog 保留官方文本输入、function tools、freeform `apply_patch`、text `web_search`、推理档位、上下文窗口和模型指令；图片与文件输入不在能力声明内。Codex CLI 最低版本为 `0.144.0`。
+模型元数据来自随 WheelMaker 版本发布、经过校验的 DeepSeek 官方 Codex catalog 资产。catalog 同时暴露 `deepseek-v4-flash` 与 `deepseek-v4-pro`，其中 Flash 保持默认模型，Pro 通过现有模型选择器按需启用；WheelMaker 不根据通用 `/models` 推导 Codex catalog，也不运行远程安装脚本。两个条目保留官方文本输入、function tools、freeform `apply_patch`、text `web_search`、`low` / `high` / `max` 推理档位、1M 上下文窗口和模型指令；图片与文件输入不在能力声明内。Codex CLI 最低版本为 `0.144.0`。
 
-来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)。
+来源：[`../../scope/2026-07-31-cx-deepseek-codex-mode.md`](../../scope/2026-07-31-cx-deepseek-codex-mode.md)、[DeepSeek Responses API](https://api-docs.deepseek.com/guides/responses_api/)、[DeepSeek Codex 集成](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/)。

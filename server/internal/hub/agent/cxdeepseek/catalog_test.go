@@ -12,39 +12,41 @@ import (
 	"testing"
 )
 
-func TestEmbeddedCatalogIsOfficialFlashOnly(t *testing.T) {
+func TestEmbeddedCatalogContainsOfficialFlashAndPro(t *testing.T) {
 	doc, err := validateCatalog(embeddedCatalog)
 	if err != nil {
 		t.Fatalf("validateCatalog() error = %v", err)
 	}
-	if len(doc.Models) != 1 || doc.Models[0].Slug != ModelID {
-		t.Fatalf("models = %#v, want only %q", doc.Models, ModelID)
+	wantModels := []string{ModelID, "deepseek-v4-pro"}
+	if got := catalogModelSlugs(doc); !reflect.DeepEqual(got, wantModels) {
+		t.Fatalf("model slugs = %v, want %v", got, wantModels)
 	}
-	model := doc.Models[0]
-	if !reflect.DeepEqual(model.InputModalities, []string{"text"}) ||
-		model.ApplyPatchToolType != "freeform" ||
-		model.WebSearchToolType != "text" ||
-		!model.SupportsParallelToolCalls ||
-		model.ContextWindow != 1048576 ||
-		model.MaxContextWindow != 1048576 ||
-		model.DefaultReasoningLevel != "high" ||
-		model.MinimalClientVersion != MinimumCodexVersion ||
-		!model.SupportedInAPI ||
-		!model.SupportsSearchTool {
-		t.Fatalf("model capability mismatch: %#v", model)
+	if ModelID != "deepseek-v4-flash" {
+		t.Fatalf("default model = %q, want deepseek-v4-flash", ModelID)
 	}
-	wantEfforts := []string{"low", "high", "max"}
-	if got := reasoningEfforts(model); !reflect.DeepEqual(got, wantEfforts) {
-		t.Fatalf("reasoning efforts = %v, want %v", got, wantEfforts)
-	}
-	if len(bytes.TrimSpace(model.ModelMessages)) == 0 || bytes.Equal(bytes.TrimSpace(model.ModelMessages), []byte("{}")) {
-		t.Fatal("official model_messages are missing")
-	}
-	if len(model.BaseInstructions) < 1000 {
-		t.Fatalf("official base_instructions are missing or abbreviated: %d bytes", len(model.BaseInstructions))
-	}
-	if bytes.Contains(embeddedCatalog, []byte("deepseek-v4-pro")) {
-		t.Fatal("catalog exposes unsupported DeepSeek Pro model")
+	for _, model := range doc.Models {
+		if !reflect.DeepEqual(model.InputModalities, []string{"text"}) ||
+			model.ApplyPatchToolType != "freeform" ||
+			model.WebSearchToolType != "text" ||
+			!model.SupportsParallelToolCalls ||
+			model.ContextWindow != 1048576 ||
+			model.MaxContextWindow != 1048576 ||
+			model.DefaultReasoningLevel != "high" ||
+			model.MinimalClientVersion != MinimumCodexVersion ||
+			!model.SupportedInAPI ||
+			!model.SupportsSearchTool {
+			t.Fatalf("model capability mismatch: %#v", model)
+		}
+		wantEfforts := []string{"low", "high", "max"}
+		if got := reasoningEfforts(model); !reflect.DeepEqual(got, wantEfforts) {
+			t.Fatalf("reasoning efforts for %q = %v, want %v", model.Slug, got, wantEfforts)
+		}
+		if len(bytes.TrimSpace(model.ModelMessages)) == 0 || bytes.Equal(bytes.TrimSpace(model.ModelMessages), []byte("{}")) {
+			t.Fatalf("official model_messages are missing for %q", model.Slug)
+		}
+		if len(model.BaseInstructions) < 1000 {
+			t.Fatalf("official base_instructions for %q are missing or abbreviated: %d bytes", model.Slug, len(model.BaseInstructions))
+		}
 	}
 }
 
@@ -56,22 +58,29 @@ func TestValidateCatalogRejectsUnsupportedDocuments(t *testing.T) {
 	}{
 		{name: "malformed JSON", raw: []byte(`{"models":`)},
 		{name: "zero models", mutate: func(doc map[string]any) { doc["models"] = []any{} }},
-		{name: "non-Flash slug", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["slug"] = "deepseek-v4-pro" }},
-		{name: "image input", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["input_modalities"] = []any{"text", "image"} }},
-		{name: "missing apply patch", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["apply_patch_tool_type"] = "" }},
-		{name: "missing web search", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["web_search_tool_type"] = "" }},
-		{name: "search disabled", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["supports_search_tool"] = false }},
-		{name: "parallel tools disabled", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["supports_parallel_tool_calls"] = false }},
-		{name: "wrong context window", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["context_window"] = 128000 }},
-		{name: "wrong max context window", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["max_context_window"] = 128000 }},
-		{name: "unsupported in API", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["supported_in_api"] = false }},
-		{name: "wrong effort set", mutate: func(doc map[string]any) {
-			catalogModelMap(t, doc)["supported_reasoning_levels"] = []any{map[string]any{"effort": "high"}}
+		{name: "missing Pro", mutate: removeCatalogModel("deepseek-v4-pro")},
+		{name: "missing Flash", mutate: removeCatalogModel(ModelID)},
+		{name: "unknown slug", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["slug"] = "deepseek-v4-unknown" }},
+		{name: "duplicate slug", mutate: func(doc map[string]any) { catalogModelMap(t, doc, "deepseek-v4-pro")["slug"] = ModelID }},
+		{name: "image input", mutate: func(doc map[string]any) {
+			catalogModelMap(t, doc, ModelID)["input_modalities"] = []any{"text", "image"}
 		}},
-		{name: "wrong default effort", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["default_reasoning_level"] = "low" }},
-		{name: "wrong minimum version", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["minimal_client_version"] = "0.143.0" }},
-		{name: "empty model messages", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["model_messages"] = map[string]any{} }},
-		{name: "empty base instructions", mutate: func(doc map[string]any) { catalogModelMap(t, doc)["base_instructions"] = "" }},
+		{name: "missing apply patch", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["apply_patch_tool_type"] = "" }},
+		{name: "missing web search", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["web_search_tool_type"] = "" }},
+		{name: "search disabled", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["supports_search_tool"] = false }},
+		{name: "parallel tools disabled", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["supports_parallel_tool_calls"] = false }},
+		{name: "wrong context window", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["context_window"] = 128000 }},
+		{name: "wrong max context window", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["max_context_window"] = 128000 }},
+		{name: "unsupported in API", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["supported_in_api"] = false }},
+		{name: "wrong effort set", mutate: func(doc map[string]any) {
+			catalogModelMap(t, doc, ModelID)["supported_reasoning_levels"] = []any{map[string]any{"effort": "high"}}
+		}},
+		{name: "wrong default effort", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["default_reasoning_level"] = "low" }},
+		{name: "wrong minimum version", mutate: func(doc map[string]any) {
+			catalogModelMap(t, doc, "deepseek-v4-pro")["minimal_client_version"] = "0.143.0"
+		}},
+		{name: "empty model messages", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["model_messages"] = map[string]any{} }},
+		{name: "empty base instructions", mutate: func(doc map[string]any) { catalogModelMap(t, doc, ModelID)["base_instructions"] = "" }},
 	}
 
 	for _, test := range tests {
@@ -101,17 +110,42 @@ func catalogVariant(t *testing.T, mutate func(map[string]any)) []byte {
 	return raw
 }
 
-func catalogModelMap(t *testing.T, doc map[string]any) map[string]any {
+func catalogModelMap(t *testing.T, doc map[string]any, slug string) map[string]any {
 	t.Helper()
 	models, ok := doc["models"].([]any)
-	if !ok || len(models) != 1 {
+	if !ok {
 		t.Fatalf("catalog models = %#v", doc["models"])
 	}
-	model, ok := models[0].(map[string]any)
-	if !ok {
-		t.Fatalf("catalog model = %#v", models[0])
+	for _, raw := range models {
+		model, modelOK := raw.(map[string]any)
+		if modelOK && model["slug"] == slug {
+			return model
+		}
 	}
-	return model
+	t.Fatalf("catalog model %q not found in %#v", slug, models)
+	return nil
+}
+
+func removeCatalogModel(slug string) func(map[string]any) {
+	return func(doc map[string]any) {
+		models, _ := doc["models"].([]any)
+		kept := make([]any, 0, len(models))
+		for _, raw := range models {
+			model, _ := raw.(map[string]any)
+			if model["slug"] != slug {
+				kept = append(kept, raw)
+			}
+		}
+		doc["models"] = kept
+	}
+}
+
+func catalogModelSlugs(doc catalogDocument) []string {
+	slugs := make([]string, 0, len(doc.Models))
+	for _, model := range doc.Models {
+		slugs = append(slugs, model.Slug)
+	}
+	return slugs
 }
 
 func TestMaterializePreservesLastValidCatalogWhenRenameFails(t *testing.T) {

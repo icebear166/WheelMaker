@@ -15,6 +15,7 @@ import (
 
 const (
 	ModelID             = "deepseek-v4-flash"
+	proModelID          = "deepseek-v4-pro"
 	MinimumCodexVersion = "0.144.0"
 	CatalogFileName     = "models.json"
 )
@@ -52,28 +53,39 @@ func validateCatalog(raw []byte) (catalogDocument, error) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return doc, fmt.Errorf("decode DeepSeek Codex catalog: %w", err)
 	}
-	if len(doc.Models) != 1 {
-		return doc, fmt.Errorf("DeepSeek Codex catalog must contain exactly one model")
+	if len(doc.Models) != 2 {
+		return doc, fmt.Errorf("DeepSeek Codex catalog must contain exactly two models")
 	}
-	model := doc.Models[0]
-	if model.Slug != ModelID || !reflect.DeepEqual(model.InputModalities, []string{"text"}) {
-		return doc, fmt.Errorf("DeepSeek Codex catalog has unsupported model or input modalities")
-	}
-	if model.ApplyPatchToolType != "freeform" || model.WebSearchToolType != "text" || !model.SupportsSearchTool || !model.SupportsParallelToolCalls {
-		return doc, fmt.Errorf("DeepSeek Codex catalog is missing required tool capabilities")
-	}
-	if model.ContextWindow != 1048576 || model.MaxContextWindow != 1048576 || !model.SupportedInAPI {
-		return doc, fmt.Errorf("DeepSeek Codex catalog has invalid API or context metadata")
-	}
-	if model.DefaultReasoningLevel != "high" || !reflect.DeepEqual(reasoningEfforts(model), []string{"low", "high", "max"}) {
-		return doc, fmt.Errorf("DeepSeek Codex catalog has invalid reasoning metadata")
-	}
-	if model.MinimalClientVersion != MinimumCodexVersion {
-		return doc, fmt.Errorf("DeepSeek Codex catalog requires unexpected Codex version %q", model.MinimalClientVersion)
-	}
-	modelMessages := bytes.TrimSpace(model.ModelMessages)
-	if len(modelMessages) == 0 || bytes.Equal(modelMessages, []byte("{}")) || strings.TrimSpace(model.BaseInstructions) == "" {
-		return doc, fmt.Errorf("DeepSeek Codex catalog is missing official instructions")
+	seen := make(map[string]struct{}, len(doc.Models))
+	for _, model := range doc.Models {
+		switch model.Slug {
+		case ModelID, proModelID:
+		default:
+			return doc, fmt.Errorf("DeepSeek Codex catalog contains unsupported model %q", model.Slug)
+		}
+		if _, duplicate := seen[model.Slug]; duplicate {
+			return doc, fmt.Errorf("DeepSeek Codex catalog contains duplicate model %q", model.Slug)
+		}
+		seen[model.Slug] = struct{}{}
+		if !reflect.DeepEqual(model.InputModalities, []string{"text"}) {
+			return doc, fmt.Errorf("DeepSeek Codex catalog model %q has unsupported input modalities", model.Slug)
+		}
+		if model.ApplyPatchToolType != "freeform" || model.WebSearchToolType != "text" || !model.SupportsSearchTool || !model.SupportsParallelToolCalls {
+			return doc, fmt.Errorf("DeepSeek Codex catalog model %q is missing required tool capabilities", model.Slug)
+		}
+		if model.ContextWindow != 1048576 || model.MaxContextWindow != 1048576 || !model.SupportedInAPI {
+			return doc, fmt.Errorf("DeepSeek Codex catalog model %q has invalid API or context metadata", model.Slug)
+		}
+		if model.DefaultReasoningLevel != "high" || !reflect.DeepEqual(reasoningEfforts(model), []string{"low", "high", "max"}) {
+			return doc, fmt.Errorf("DeepSeek Codex catalog model %q has invalid reasoning metadata", model.Slug)
+		}
+		if model.MinimalClientVersion != MinimumCodexVersion {
+			return doc, fmt.Errorf("DeepSeek Codex catalog model %q requires unexpected Codex version %q", model.Slug, model.MinimalClientVersion)
+		}
+		modelMessages := bytes.TrimSpace(model.ModelMessages)
+		if len(modelMessages) == 0 || bytes.Equal(modelMessages, []byte("{}")) || strings.TrimSpace(model.BaseInstructions) == "" {
+			return doc, fmt.Errorf("DeepSeek Codex catalog model %q is missing official instructions", model.Slug)
+		}
 	}
 	return doc, nil
 }
