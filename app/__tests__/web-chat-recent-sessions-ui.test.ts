@@ -145,8 +145,9 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('const floatingViewProps = buildSessionListViewProps(false, false);');
     expect(mainTsx).toContain('buildSessionListViewProps(false,');
     expect(mainTsx).toContain('buildSessionListViewProps(true,');
-    expect(floatingSource).toContain('showSlideOutShortcut');
-    expect(mainTsx.match(/showSlideOutShortcut/g)).toHaveLength(1);
+    expect(floatingSource).not.toContain('showSlideOutShortcut');
+    expect(mainTsx).not.toContain('showSlideOutShortcut');
+    expect(chatCss).not.toContain('.chat-session-global-bar-shortcut');
     expect(surfaceTsx).toContain('title="Recent Sessions"');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });

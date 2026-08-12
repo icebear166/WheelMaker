@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import {
   SHORTCUT_COMMANDS,
   assignShortcutBinding,
@@ -5,11 +8,14 @@ import {
   clearShortcutBinding,
   findShortcutConflict,
   formatShortcutBinding,
+  formatShortcutTooltip,
   matchWorkspaceShortcut,
   normalizeShortcutEvent,
   replaceShortcutConflict,
   resetShortcutOverrides,
   resolveEffectiveShortcutBindings,
+  resolveShortcutPlatform,
+  resolveWorkspaceShortcutDispatch,
   restoreShortcutDefault,
   sanitizeShortcutOverrides,
   validateShortcutCandidate,
@@ -56,6 +62,19 @@ describe('keyboard shortcut registry', () => {
     ]);
   });
 
+  test('detects the three supported desktop platform families', () => {
+    expect(resolveShortcutPlatform({platform: 'Win32', userAgent: 'Windows NT 10.0'})).toBe('windows');
+    expect(resolveShortcutPlatform({platform: 'Linux x86_64', userAgent: 'X11'})).toBe('linux');
+    expect(resolveShortcutPlatform({platform: 'MacIntel', userAgent: 'Macintosh'})).toBe('mac');
+  });
+
+  test('formats live tooltips without a binding remnant when unassigned', () => {
+    expect(formatShortcutTooltip('Search current session', {primary: true, key: 'k'}, 'windows'))
+      .toBe('Search current session (Ctrl+K)');
+    expect(formatShortcutTooltip('Search current session', null, 'windows'))
+      .toBe('Search current session');
+  });
+
   test('normalizes character values rather than physical key codes', () => {
     expect(normalizeShortcutEvent(keyboardEvent({key: 'É', ctrlKey: true}), 'windows')).toEqual({
       primary: true,
@@ -86,6 +105,11 @@ describe('keyboard shortcut registry', () => {
       isWide: true,
       paused: false,
     })).toBeNull();
+    expect(matchWorkspaceShortcut(keyboardEvent({key: 'p'}), effective, {
+      platform: 'linux',
+      isWide: true,
+      paused: false,
+    })).toBe('quickOpen');
   });
 
   test('ignores shortcuts outside the active Workspace routing boundary', () => {
@@ -95,6 +119,85 @@ describe('keyboard shortcut registry', () => {
     expect(matchWorkspaceShortcut(keyboardEvent({defaultPrevented: true}), effective, context)).toBeNull();
     expect(matchWorkspaceShortcut(keyboardEvent(), effective, {...context, isWide: false})).toBeNull();
     expect(matchWorkspaceShortcut(keyboardEvent(), effective, {...context, paused: true})).toBeNull();
+  });
+});
+
+describe('workspace shortcut dispatch', () => {
+  const effective = resolveEffectiveShortcutBindings({});
+  const context = {
+    platform: 'windows' as const,
+    isWide: true,
+    paused: false,
+    availability: {},
+  };
+
+  test('distinguishes executable, unavailable, and ignored events', () => {
+    expect(resolveWorkspaceShortcutDispatch(keyboardEvent(), effective, context)).toEqual({
+      kind: 'execute',
+      actionId: 'toggleSessions',
+      preventDefault: true,
+    });
+    expect(resolveWorkspaceShortcutDispatch(
+      keyboardEvent({key: 'p'}),
+      effective,
+      {...context, availability: {quickOpen: 'Open a project to use Quick Open.'}},
+    )).toEqual({
+      kind: 'unavailable',
+      actionId: 'quickOpen',
+      reason: 'Open a project to use Quick Open.',
+      preventDefault: true,
+    });
+    expect(resolveWorkspaceShortcutDispatch(
+      keyboardEvent({key: 'x'}),
+      effective,
+      context,
+    )).toEqual({kind: 'ignore', preventDefault: false});
+  });
+
+  test('leaves narrow, modal, composing, and locally consumed events untouched', () => {
+    expect(resolveWorkspaceShortcutDispatch(keyboardEvent(), effective, {...context, isWide: false}))
+      .toEqual({kind: 'ignore', preventDefault: false});
+    expect(resolveWorkspaceShortcutDispatch(keyboardEvent(), effective, {...context, paused: true}))
+      .toEqual({kind: 'ignore', preventDefault: false});
+    expect(resolveWorkspaceShortcutDispatch(keyboardEvent({isComposing: true}), effective, context))
+      .toEqual({kind: 'ignore', preventDefault: false});
+    expect(resolveWorkspaceShortcutDispatch(keyboardEvent({defaultPrevented: true}), effective, context))
+      .toEqual({kind: 'ignore', preventDefault: false});
+  });
+
+  test('uses one managed Workspace listener and removes distributed key matching', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../web/src/app/WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain("window.addEventListener('keydown', handleWorkspaceShortcutKeyDown);");
+    expect(source).toContain('resolveWorkspaceShortcutDispatch(event, effectiveShortcutBindings');
+    for (const actionId of SHORTCUT_COMMANDS.map(command => command.id)) {
+      expect(source).toContain(`case '${actionId}':`);
+    }
+    expect(source).not.toContain('resolveWindowsWorkspaceShortcut');
+    expect(source).not.toContain('handleGlobalPreviewKeyDown');
+    expect(source).not.toContain('handleGlobalSearchKeyDown');
+    expect(source).not.toContain('resolveWorkspaceSearchShortcutTarget');
+  });
+
+  test('shares persisted bindings with Settings, routing, and dynamic hints', () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, '../web/src/app/WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('() => persistedGlobal.keyboardShortcutOverrides');
+    expect(source).toContain('keyboardShortcutOverrides,');
+    expect(source).toContain('<KeyboardShortcutsSettingsDetail');
+    expect(source).toContain('onChange={setKeyboardShortcutOverrides}');
+    expect(source).toContain("data-tooltip={shortcutTooltip('Search current session', 'searchCurrentContext')}");
+    expect(source).toContain("data-tooltip={shortcutTooltip('Search sessions', 'searchSessions')}");
+    expect(source).toContain('return formatShortcutTooltip(label, effectiveShortcutBindings[actionId], shortcutPlatform);');
+    expect(source).not.toContain('Search current session (Ctrl+F)');
+    expect(source).toContain("if (!isWide && settingsDetailView === 'keyboardShortcuts') {");
+    expect(source).toContain("paused: document.querySelector('[aria-modal=\"true\"]') !== null");
   });
 });
 

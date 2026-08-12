@@ -42,6 +42,23 @@ export type ShortcutValidation = {
   message: string;
 };
 
+export type WorkspaceShortcutDispatch =
+  | {kind: 'ignore'; preventDefault: false}
+  | {kind: 'execute'; actionId: ShortcutActionId; preventDefault: true}
+  | {
+      kind: 'unavailable';
+      actionId: ShortcutActionId;
+      reason: string;
+      preventDefault: true;
+    };
+
+export type WorkspaceShortcutDispatchContext = {
+  platform: ShortcutPlatform;
+  isWide: boolean;
+  paused: boolean;
+  availability: Partial<Record<ShortcutActionId, string | null>>;
+};
+
 export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
   {
     id: 'toggleSessions',
@@ -113,6 +130,17 @@ export const SHORTCUT_ACTION_IDS = SHORTCUT_COMMANDS.map(command => command.id) 
 
 const SHORTCUT_ACTION_ID_SET = new Set<string>(SHORTCUT_ACTION_IDS);
 const MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift']);
+
+export function resolveShortcutPlatform(environment: {
+  platform?: string;
+  userAgent?: string;
+}): ShortcutPlatform {
+  const platform = environment.platform ?? '';
+  const userAgent = environment.userAgent ?? '';
+  if (/Mac/i.test(platform) || /Macintosh/i.test(userAgent)) return 'mac';
+  if (/Linux/i.test(platform) || /Linux|X11/i.test(userAgent)) return 'linux';
+  return 'windows';
+}
 
 function normalizeKey(key: string): string {
   if (key === ' ' || key === 'Spacebar') return 'Space';
@@ -262,6 +290,15 @@ export function formatShortcutBinding(
   return keys;
 }
 
+export function formatShortcutTooltip(
+  label: string,
+  binding: ShortcutBinding | null | undefined,
+  platform: ShortcutPlatform,
+): string {
+  const keys = formatShortcutBinding(binding, platform);
+  return keys.length > 0 ? `${label} (${keys.join('+')})` : label;
+}
+
 export function matchWorkspaceShortcut(
   event: ShortcutEvent,
   effective: EffectiveShortcutBindings,
@@ -271,6 +308,20 @@ export function matchWorkspaceShortcut(
   const candidate = normalizeShortcutEvent(event, context.platform);
   if (!candidate) return null;
   return SHORTCUT_ACTION_IDS.find(actionId => bindingsEqual(effective[actionId], candidate)) ?? null;
+}
+
+export function resolveWorkspaceShortcutDispatch(
+  event: ShortcutEvent,
+  effective: EffectiveShortcutBindings,
+  context: WorkspaceShortcutDispatchContext,
+): WorkspaceShortcutDispatch {
+  const actionId = matchWorkspaceShortcut(event, effective, context);
+  if (!actionId) return {kind: 'ignore', preventDefault: false};
+  const reason = context.availability[actionId];
+  if (typeof reason === 'string' && reason) {
+    return {kind: 'unavailable', actionId, reason, preventDefault: true};
+  }
+  return {kind: 'execute', actionId, preventDefault: true};
 }
 
 function hasModifier(binding: ShortcutBinding): boolean {

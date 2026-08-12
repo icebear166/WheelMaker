@@ -715,8 +715,9 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const previewSearchMatches = useMemo(');
     expect(mainTsx).toContain('buildPreviewSearchMatches(activeWorkbenchTab, previewSearchQuery)');
     expect(mainTsx).toContain('const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {');
-    expect(mainTsx).toContain("event.key === 'Tab' && (event.ctrlKey || event.metaKey)");
-    expect(mainTsx).toContain('cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? \'\', event.shiftKey ? -1 : 1)');
+    expect(mainTsx).toContain("case 'nextPreviewTab':");
+    expect(mainTsx).toContain("case 'previousPreviewTab':");
+    expect(mainTsx).toContain('cyclePreviewTabId(');
     expect(mainTsx).not.toContain("const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {\n    if (event.key.toLowerCase() === 'f'");
     expect(mainTsx).toContain('className="preview-workbench-search-bar"');
     expect(mainTsx).toContain('className="preview-workbench-search-hud"');
@@ -730,7 +731,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('selectedChatKeyRef.current?.projectId ||\n      previewWorkbenchRef.current.activeProjectId ||\n      projectIdRef.current');
     expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
     expect(mainTsx).toContain('openChatFilePeek(result.path, null, quickFileProjectId);');
-    expect(mainTsx).toContain("event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)");
+    expect(mainTsx).toContain("case 'quickOpen':");
     expect(mainTsx).toContain('className="quick-file-search-overlay"');
 
     expect(mainTsx).toContain('const [previewSelectionMenu, setPreviewSelectionMenu, previewSelectionMenuExiting] = useMenuExitState<PreviewSelectionMenuState>();');
@@ -760,7 +761,7 @@ describe('web chat file peek viewer', () => {
       'setPreviewSearchActiveIndex(current =>',
       'if (!previewSearchOpen || previewSearchMatches.length === 0) {',
       'if (!quickFileOpen) {',
-      'const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {',
+      'const handleWorkspaceShortcutKeyDown = (event: KeyboardEvent) => {',
     ].forEach(pattern => {
       const hookIndex = mainTsx.indexOf(pattern);
       expect(hookIndex).toBeGreaterThanOrEqual(0);
@@ -768,43 +769,37 @@ describe('web chat file peek viewer', () => {
     });
   });
 
-  test('global preview shortcuts keep preview keys gated while workspace search owns Ctrl+F', () => {
+  test('the unified Workspace router gates Preview shortcuts and owns search', () => {
     const mainTsx = readSourceText(mainPath);
-    const handlerStart = mainTsx.indexOf('const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {');
+    const handlerStart = mainTsx.indexOf('const handleWorkspaceShortcutKeyDown = (event: KeyboardEvent) => {');
     expect(handlerStart).toBeGreaterThanOrEqual(0);
-    const handlerEnd = mainTsx.indexOf("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);", handlerStart);
+    const handlerEnd = mainTsx.indexOf("window.addEventListener('keydown', handleWorkspaceShortcutKeyDown);", handlerStart);
     expect(handlerEnd).toBeGreaterThan(handlerStart);
     const handlerBody = mainTsx.slice(handlerStart, handlerEnd);
-    const pShortcutIndex = handlerBody.indexOf("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
-    const previewOpenGateIndex = handlerBody.indexOf('if (!chatPreviewOpen) {');
 
-    expect(handlerBody).toContain('if (!chatPreviewOpen) {');
-    expect(pShortcutIndex).toBeGreaterThanOrEqual(0);
-    expect(previewOpenGateIndex).toBeGreaterThan(pShortcutIndex);
-    expect(handlerBody).toContain("if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {");
-    expect(handlerBody).toContain("cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1)");
-    expect(handlerBody).toContain('const projectId = activeWorkbenchTab?.projectId ?? chatPreviewProjectId;');
-    expect(handlerBody).toContain('selectPreviewTab(current, projectId, nextTabId)');
-    expect(handlerBody).not.toContain("event.key.toLowerCase() === 'f'");
-    expect(handlerBody).not.toContain('openChatSearch();');
-    expect(handlerBody).not.toContain('setPreviewSearchOpen(true);');
-    expect(mainTsx).toContain("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);");
-    expect(mainTsx).toContain("window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);");
-    expect(mainTsx).toContain('resolveWorkspaceSearchShortcutTarget(event, {');
+    expect(handlerBody).toContain('const previewTabsUnavailable = !chatPreviewOpen || previewWorkbenchTabs.length === 0;');
+    expect(handlerBody).toContain("nextPreviewTab: previewTabsUnavailable ? 'Open Preview and a tab to switch Preview tabs.' : null");
+    expect(handlerBody).toContain("case 'nextPreviewTab':");
+    expect(handlerBody).toContain("case 'previousPreviewTab':");
+    expect(handlerBody).toContain('cyclePreviewTabId(');
+    expect(handlerBody).toContain('setPreviewWorkbench(current => selectPreviewTab(current, targetProjectId, nextTabId));');
+    expect(handlerBody).toContain("case 'searchCurrentContext':");
+    expect(mainTsx).toContain("window.addEventListener('keydown', handleWorkspaceShortcutKeyDown);");
+    expect(mainTsx).toContain("window.removeEventListener('keydown', handleWorkspaceShortcutKeyDown);");
+    expect(mainTsx).not.toContain('resolveWorkspaceSearchShortcutTarget');
   });
 
   test('workspace shortcuts route directly to current chat, Preview, or Sessions', () => {
     const mainTsx = readSourceText(mainPath);
     expect(mainTsx).toContain("from '../chat/search/searchRouting'");
-    expect(mainTsx).toContain('resolveWorkspaceSearchShortcutTarget');
-    expect(mainTsx).toContain('const handleGlobalSearchKeyDown = (event: KeyboardEvent) => {');
-    expect(mainTsx).toContain('event.target instanceof Element &&');
+    expect(mainTsx).toContain('resolveWorkspaceSearchTarget');
+    expect(mainTsx).toContain('const handleWorkspaceShortcutKeyDown = (event: KeyboardEvent) => {');
+    expect(mainTsx).toContain('event.target instanceof Element');
     expect(mainTsx).toContain("event.target.closest('.preview-workbench-surface')");
     expect(mainTsx).toContain('previewSearchUnavailableMessage');
-    expect(mainTsx).toContain('resolveWorkspaceSearchShortcutTarget(event, {');
-    expect(mainTsx).toContain("case 'current':");
-    expect(mainTsx).toContain("case 'preview':");
-    expect(mainTsx).toContain("case 'sessions':");
+    expect(mainTsx).toContain('resolveWorkspaceSearchTarget({');
+    expect(mainTsx).toContain("if (target === 'preview') {");
+    expect(mainTsx).toContain("case 'searchSessions':");
     expect(mainTsx).toContain('openPreviewSearch();');
     expect(mainTsx).toContain('openSessionSearch();');
     expect(mainTsx).not.toContain('setSearchTargetPickerOpen');

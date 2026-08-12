@@ -12,7 +12,6 @@ describe('ChatSessionGlobalBar', () => {
           leading={<button type="button">Archive</button>}
           slideOutOpen={false}
           onToggleSlideOut={() => undefined}
-          showSlideOutShortcut
           pinActive={false}
           onTogglePin={() => undefined}
         />,
@@ -21,10 +20,7 @@ describe('ChatSessionGlobalBar', () => {
 
     expect(tree!.root.findByProps({className: 'chat-session-global-bar-leading-actions'})).toBeDefined();
     const actions = tree!.root.findByProps({className: 'chat-session-global-bar-layout-actions'});
-    expect(actions.children.slice(0, 2).map(child =>
-      typeof child === 'string' ? child : child.props.className,
-    )).toEqual(['chat-session-global-bar-shortcut', 'chat-session-global-bar-btn']);
-    expect(actions.findByProps({className: 'chat-session-global-bar-shortcut'}).children).toEqual(['Ctrl+1']);
+    expect(actions.findAllByProps({className: 'chat-session-global-bar-shortcut'})).toHaveLength(0);
     expect(actions.findByProps({'aria-label': 'Show all sessions'})).toBeDefined();
     const buttons = actions.findAllByType('button');
     expect(buttons.map(button => button.props['aria-label'])).toEqual([

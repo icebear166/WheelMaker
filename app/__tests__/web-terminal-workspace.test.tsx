@@ -1,32 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import {
-  resolveSessionsShortcutAction,
-  resolveWindowsWorkspaceShortcut,
-} from '../web/src/app/workspaceShortcuts';
+import {resolveSessionsShortcutAction} from '../web/src/app/workspaceShortcuts';
 
 const root = path.join(__dirname, '..');
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'utf8').replace(/\r\n/g, '\n');
-const shortcutEvent = (overrides: Partial<Parameters<typeof resolveWindowsWorkspaceShortcut>[0]> = {}) => ({
-  code: 'Digit1',
-  ctrlKey: true,
-  shiftKey: false,
-  altKey: false,
-  metaKey: false,
-  isComposing: false,
-  defaultPrevented: false,
-  ...overrides,
-});
-
 describe('terminal workspace integration', () => {
-  test('maps the Windows desktop workspace shortcuts', () => {
-    const environment = {isWindows: true, isWide: true};
-
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'Digit1'}), environment)).toBe('sessions');
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'Digit2'}), environment)).toBe('preview');
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'Backquote'}), environment)).toBe('terminal');
-  });
-
   test('opens and closes the slide-out without Pin when the saved mode is unpinned', () => {
     expect(resolveSessionsShortcutAction({
       sessionPanelPinned: false,
@@ -53,29 +31,16 @@ describe('terminal workspace integration', () => {
     })).toBe('restore-pin');
   });
 
-  test('rejects old, shifted, non-Windows, mobile, and modified shortcuts', () => {
-    const windowsDesktop = {isWindows: true, isWide: true};
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'KeyT'}), windowsDesktop)).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'Backquote', shiftKey: true}), windowsDesktop)).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent(), {isWindows: false, isWide: true})).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent(), {isWindows: true, isWide: false})).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({ctrlKey: false}), windowsDesktop)).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({altKey: true}), windowsDesktop)).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({metaKey: true}), windowsDesktop)).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({isComposing: true}), windowsDesktop)).toBeNull();
-    expect(resolveWindowsWorkspaceShortcut(shortcutEvent({defaultPrevented: true}), windowsDesktop)).toBeNull();
-  });
-
-  test('wires Windows workspace shortcuts to the existing surface toggles', () => {
+  test('wires managed shortcuts to the existing surface toggles', () => {
     const source = read('web/src/app/WorkspaceApp.tsx');
-    expect(source).toContain('resolveWindowsWorkspaceShortcut(event, {isWindows: isWindowsPlatform, isWide})');
-    expect(source).toContain("case 'sessions':");
-    expect(source).toContain("case 'preview':");
-    expect(source).toContain("case 'terminal':");
+    expect(source).toContain('resolveWorkspaceShortcutDispatch(event, effectiveShortcutBindings');
+    expect(source).toContain("case 'toggleSessions':");
+    expect(source).toContain("case 'togglePreview':");
+    expect(source).toContain("case 'toggleTerminal':");
     expect(source).not.toContain("event.key === 't' || event.key === 'T'");
 
-    const sessionsStart = source.indexOf("case 'sessions':");
-    const previewStart = source.indexOf("case 'preview':", sessionsStart);
+    const sessionsStart = source.indexOf("case 'toggleSessions':");
+    const previewStart = source.indexOf("case 'togglePreview':", sessionsStart);
     const sessionsBlock = source.slice(sessionsStart, previewStart);
     expect(sessionsBlock).toContain('resolveSessionsShortcutAction({');
     expect(sessionsBlock).toContain('sessionPanelPinned: !sidebarCollapsed');

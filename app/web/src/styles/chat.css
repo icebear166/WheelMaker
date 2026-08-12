@@ -4299,12 +4299,6 @@ button.chat-hub-skill-name:disabled {
   margin-left: auto;
 }
 
-.chat-session-global-bar-shortcut {
-  color: var(--text-secondary);
-  font: 500 10px/1 var(--font-mono);
-  white-space: nowrap;
-}
-
 .chat-session-global-bar-title {
   font-size: 11px;
   font-weight: 600;

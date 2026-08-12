@@ -6,7 +6,7 @@
 
 **Scope Source:** `docs/scope/2026-08-12-keyboard-shortcut-management.md`
 
-**Architecture:** A pure `shortcuts` domain module owns command metadata, logical bindings, platform formatting, event matching, validation, conflicts, and override resolution. `WorkspacePersistence` stores only per-action overrides; `WorkspaceApp` owns the effective snapshot, action handlers, availability, and the single capture router, while a Settings detail component edits the same snapshot without owning command execution.
+**Architecture:** A pure `shortcuts` domain module owns command metadata, logical bindings, platform formatting, event matching, validation, conflicts, and override resolution. `WorkspacePersistence` stores only per-action overrides; `WorkspaceApp` owns the effective snapshot, action handlers, availability, and the single bubble-phase router, while a Settings detail component edits the same snapshot without owning command execution. Bubble phase is required so React-local controls can consume an event before Workspace routing.
 
 **Tech Stack:** React 19, TypeScript, Jest/react-test-renderer, IndexedDB-backed `WorkspacePersistence`, existing WheelMaker CSS/Icon/motion tokens.
 
@@ -204,57 +204,57 @@ Invoke `git-workflow` in checkpoint mode for the Settings component, navigation,
 - Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
 - Modify: `app/__tests__/web-chat-recent-sessions-ui.test.ts`
 
-**Acceptance:** One capture listener uses the effective snapshot to execute all eight existing actions exactly once, pauses for narrow/composing/local-consumed/modal states, reports unavailable actions through the existing accessible toast, preserves contextual search/session semantics, and removes the visible Ctrl+1 label while dynamic tooltips reflect live bindings.
+**Acceptance:** One bubble-phase listener uses the effective snapshot to execute all eight existing actions exactly once, pauses for narrow/composing/local-consumed/modal states, reports unavailable actions through the existing accessible toast, preserves contextual search/session semantics, and removes the visible Ctrl+1 label while dynamic tooltips reflect live bindings.
 
-- [ ] **Step 1: Write failing Workspace router tests**
+- [x] **Step 1: Write failing Workspace router tests**
 
-Extend `web-keyboard-shortcuts.test.ts` with a pure dispatch decision API that distinguishes execute/unavailable/ignore and asserts `preventDefault` intent. Update source-contract tests to require one managed capture listener, eight handler entries, modal/narrow gates, and absence of the old Windows/search/Preview shortcut listeners.
+Extend `web-keyboard-shortcuts.test.ts` with a pure dispatch decision API that distinguishes execute/unavailable/ignore and asserts `preventDefault` intent. Update source-contract tests to require one managed bubble-phase listener, eight handler entries, modal/narrow gates, and absence of the old Windows/search/Preview shortcut listeners.
 
-- [ ] **Step 2: Run router tests to verify RED**
+- [x] **Step 2: Run router tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts __tests__/web-terminal-workspace.test.tsx __tests__/web-chat-search-routing.test.ts __tests__/web-chat-file-peek-viewer.test.ts`
 
 Expected: FAIL because the old distributed effects remain and no unified dispatch contract exists.
 
-- [ ] **Step 3: Add effective shortcut state and the single router to WorkspaceApp**
+- [x] **Step 3: Add effective shortcut state and the single router to WorkspaceApp**
 
-Initialize `keyboardShortcutOverrides` from `persistedGlobal`, memoize the platform/effective snapshot, persist it in the existing global-state effect, expose immutable editor callbacks, and render the new detail. Register one window capture listener after all eight existing action callbacks are available; feed it `isWide`, composition/default-prevented status, whether an `aria-modal=true` surface is present, event focus context, and per-action availability/reason.
+Initialize `keyboardShortcutOverrides` from `persistedGlobal`, memoize the platform/effective snapshot, persist it in the existing global-state effect, expose immutable editor callbacks, and render the new detail. Register one window bubble-phase listener after all eight existing action callbacks are available; feed it `isWide`, composition/default-prevented status, whether an `aria-modal=true` surface is present, event focus context, and per-action availability/reason.
 
-- [ ] **Step 4: Reuse existing action controllers and remove old key matching**
+- [x] **Step 4: Reuse existing action controllers and remove old key matching**
 
 Move only dispatch ownership: retain `resolveSessionsShortcutAction`, contextual Chat/Preview search target selection, Preview tab cycling, and existing toggle/open callbacks. Remove `resolveWindowsWorkspaceShortcut` and the old dedicated layout, Quick Open/Preview tab, and search key matching effects so each event is handled once.
 
-- [ ] **Step 5: Run router tests to verify GREEN**
+- [x] **Step 5: Run router tests to verify GREEN**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts __tests__/web-terminal-workspace.test.tsx __tests__/web-chat-search-routing.test.ts __tests__/web-chat-file-peek-viewer.test.ts`
 
 Expected: PASS; tests cover Windows/Linux/macOS, inputs, composition, local `defaultPrevented`, modal pause, unavailable Preview-tab feedback, and single execution.
 
-- [ ] **Step 6: Write failing hint-removal and dynamic-tooltip tests**
+- [x] **Step 6: Write failing hint-removal and dynamic-tooltip tests**
 
 Update `ChatSessionGlobalBar.test.tsx` and `web-chat-recent-sessions-ui.test.ts` to require no shortcut prop/span/CSS. Add source or render assertions that current-session and Sessions search tooltips are formatted from the effective snapshot and omit the parenthetical binding when unbound.
 
-- [ ] **Step 7: Run hint tests to verify RED**
+- [x] **Step 7: Run hint tests to verify RED**
 
 Run: `npm test -- --runInBand web/src/chat/ChatSessionGlobalBar.test.tsx __tests__/web-chat-recent-sessions-ui.test.ts __tests__/web-keyboard-shortcuts.test.ts`
 
 Expected: FAIL because the visible Ctrl+1 label and hard-coded Ctrl+F tooltip remain.
 
-- [ ] **Step 8: Remove Ctrl+1 and make remaining shortcut hints dynamic**
+- [x] **Step 8: Remove Ctrl+1 and make remaining shortcut hints dynamic**
 
 Delete `showSlideOutShortcut`, the visible span, and its obsolete CSS. Use the shared formatter for existing search/Quick Open shortcut hints; when an action is `null`, render the plain action tooltip without a stale default binding.
 
-- [ ] **Step 9: Handle responsive exit and unavailable feedback**
+- [x] **Step 9: Handle responsive exit and unavailable feedback**
 
 When layout becomes narrow while `settingsDetailView === 'keyboardShortcuts'`, return to Settings root. For matched unavailable actions, call the existing `setToastMessage` path with the registry availability reason and prevent browser fallback; do not create a second toast system.
 
-- [ ] **Step 10: Run the complete shortcut integration regression set**
+- [x] **Step 10: Run the complete shortcut integration regression set**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts __tests__/web-terminal-workspace.test.tsx __tests__/web-chat-search-routing.test.ts __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-chat-recent-sessions-ui.test.ts web/src/chat/ChatSessionGlobalBar.test.tsx web/src/settings/KeyboardShortcutsSettingsDetail.test.tsx __tests__/web-settings-navigation.test.ts __tests__/web-workspace-persistence-safety.test.ts`
 
 Expected: PASS with no stale `Ctrl+1`, old shortcut resolver, or duplicate managed listener expectations.
 
-- [ ] **Step 11: Git checkpoint**
+- [x] **Step 11: Git checkpoint**
 
 Invoke `git-workflow` in checkpoint mode for Workspace integration, hint cleanup, and related tests. Record commit hash and subject.
 

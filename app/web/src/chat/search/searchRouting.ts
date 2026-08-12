@@ -1,34 +1,13 @@
-export type WorkspaceSearchTarget = 'current' | 'preview' | 'sessions';
-
-export type WorkspaceSearchShortcutEvent = {
-  altKey?: boolean;
-  ctrlKey?: boolean;
-  key: string;
-  metaKey?: boolean;
-  shiftKey?: boolean;
-};
+export type WorkspaceSearchTarget = 'current' | 'preview';
 
 export type WorkspaceSearchShortcutContext = {
   previewFocused: boolean;
   previewSearchable: boolean;
 };
 
-export function resolveWorkspaceSearchShortcutTarget(
-  event: WorkspaceSearchShortcutEvent,
+export function resolveWorkspaceSearchTarget(
   context: WorkspaceSearchShortcutContext,
-): WorkspaceSearchTarget | null {
-  if (
-    event.key.toLowerCase() !== 'f' ||
-    event.altKey ||
-    (!event.ctrlKey && !event.metaKey)
-  ) {
-    return null;
-  }
-
-  if (event.shiftKey) {
-    return 'sessions';
-  }
-
+): WorkspaceSearchTarget {
   return context.previewFocused && context.previewSearchable ? 'preview' : 'current';
 }
 

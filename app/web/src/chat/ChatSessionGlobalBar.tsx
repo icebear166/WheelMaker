@@ -5,8 +5,6 @@ export type ChatSessionGlobalBarProps = {
   /** Floating recent panel only: toggle the all-sessions slide-out. */
   slideOutOpen?: boolean;
   onToggleSlideOut?: () => void;
-  /** Floating recent panel only: expose the keyboard toggle next to the button. */
-  showSlideOutShortcut?: boolean;
   /** Show the pin toggle (pin = switch to the fixed sidebar mode). */
   pinActive?: boolean;
   onTogglePin?: () => void;
@@ -17,7 +15,6 @@ export type ChatSessionGlobalBarProps = {
 export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
   slideOutOpen,
   onToggleSlideOut,
-  showSlideOutShortcut,
   pinActive,
   onTogglePin,
   leading,
@@ -26,9 +23,6 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
     <div className={`chat-session-global-bar${slideOutOpen ? ' slide-out-open' : ''}`}>
       <div className="chat-session-global-bar-leading-actions">{leading}</div>
       <div className="chat-session-global-bar-layout-actions">
-        {showSlideOutShortcut && onToggleSlideOut ? (
-          <span className="chat-session-global-bar-shortcut" aria-hidden="true">Ctrl+1</span>
-        ) : null}
         {onToggleSlideOut ? (
           <button
             type="button"

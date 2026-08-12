@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore} from 'react';
 import {createPortal} from 'react-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import {resolveSessionsShortcutAction, resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
+import {resolveSessionsShortcutAction} from './workspaceShortcuts';
 import {
   normalizeFlickerBridgeStatus,
 } from './flickerBridgeState';
@@ -250,7 +250,7 @@ import {
 } from '../chat/search/chatSearchDomHighlighter';
 import {
   resolveSessionSearchExpansion,
-  resolveWorkspaceSearchShortcutTarget,
+  resolveWorkspaceSearchTarget,
 } from '../chat/search/searchRouting';
 import {
   mergeChatSession,
@@ -471,6 +471,14 @@ import {
   SettingsSurface,
   settingsDetailTitle,
 } from '../settings/SettingsSurface';
+import {
+  formatShortcutTooltip,
+  resolveEffectiveShortcutBindings,
+  resolveShortcutPlatform,
+  resolveWorkspaceShortcutDispatch,
+  type ShortcutActionId,
+  type ShortcutOverrides,
+} from '../shortcuts/keyboardShortcuts';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {MobileUsageDialog} from '../usage/MobileUsageDialog';
@@ -773,6 +781,9 @@ const ReleasePublishSettings = React.lazy(() => loadSettingsBundle().then(module
 })));
 const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SettingsRootContent,
+})));
+const KeyboardShortcutsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
+  default: module.KeyboardShortcutsSettingsDetail,
 })));
 
 type ThemeMode = 'dark' | 'light';
@@ -2720,6 +2731,9 @@ export function App() {
       ? persistedGlobal.promptCompletionNotificationsEnabled
       : true,
   );
+  const [keyboardShortcutOverrides, setKeyboardShortcutOverrides] = useState<ShortcutOverrides>(
+    () => persistedGlobal.keyboardShortcutOverrides,
+  );
   const notificationProvider = useMemo(() => createNotificationProvider(), []);
   const [notificationPermissionState, setNotificationPermissionState] =
     useState<WheelMakerNotificationPermissionState>('unsupported');
@@ -2787,10 +2801,20 @@ export function App() {
     }
     return false;
   }, []);
-  const isWindowsPlatform = useMemo(
-    () => /windows/i.test(window.navigator.userAgent),
+  const shortcutPlatform = useMemo(
+    () => resolveShortcutPlatform({
+      platform: window.navigator.platform,
+      userAgent: window.navigator.userAgent,
+    }),
     [],
   );
+  const effectiveShortcutBindings = useMemo(
+    () => resolveEffectiveShortcutBindings(keyboardShortcutOverrides),
+    [keyboardShortcutOverrides],
+  );
+  const shortcutTooltip = useCallback((label: string, actionId: ShortcutActionId) => {
+    return formatShortcutTooltip(label, effectiveShortcutBindings[actionId], shortcutPlatform);
+  }, [effectiveShortcutBindings, shortcutPlatform]);
 
   const [workspaceUiState, dispatchWorkspaceUi] = useReducer(
     workspaceUiReducer,
@@ -6809,6 +6833,7 @@ export function App() {
       showMonitor,
       logLevel,
       promptCompletionNotificationsEnabled,
+      keyboardShortcutOverrides,
       selectedProjectId: projectId,
       floatingControlYRatio,
       floatingControlSide,
@@ -6833,6 +6858,7 @@ export function App() {
     showMonitor,
     logLevel,
     promptCompletionNotificationsEnabled,
+    keyboardShortcutOverrides,
     projectId,
     floatingControlYRatio,
     floatingControlSide,
@@ -7656,6 +7682,11 @@ export function App() {
     }
     openSettingsRoot();
   }, [closeSettingsPanel, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
+  useEffect(() => {
+    if (!isWide && settingsDetailView === 'keyboardShortcuts') {
+      setSettingsDetailView(null);
+    }
+  }, [isWide, settingsDetailView]);
   useEffect(() => {
     if (isWide || !sidebarSettingsOpen) {
       mobileSettingsHistoryKeyRef.current = null;
@@ -14689,6 +14720,7 @@ export function App() {
             type="button"
             className="session-search-icon-btn chat-menu-icon-button"
             onClick={() => setSessionSearchOpen(true)}
+            data-tooltip={shortcutTooltip('Search sessions', 'searchSessions')}
             aria-label="Search sessions"
           >
             <SessionIcon name="search" />
@@ -16087,6 +16119,17 @@ export function App() {
     <SettingsDetailShell>{content}</SettingsDetailShell>
   );
 
+  const renderKeyboardShortcutsSettingsDetail = () =>
+    renderSettingsDetailShell(
+      <React.Suspense fallback={null}>
+        <KeyboardShortcutsSettingsDetail
+          platform={shortcutPlatform}
+          overrides={keyboardShortcutOverrides}
+          onChange={setKeyboardShortcutOverrides}
+        />
+      </React.Suspense>,
+    );
+
   const renderDatabaseSettingsDetail = () =>
     renderSettingsDetailShell(
       <React.Suspense fallback={null}>
@@ -16190,6 +16233,9 @@ export function App() {
     );
 
   const renderSettingsDetailContent = (detail: SettingsDetail) => {
+    if (detail === 'keyboardShortcuts') {
+      return renderKeyboardShortcutsSettingsDetail();
+    }
     if (detail === 'database') {
       return renderDatabaseSettingsDetail();
     }
@@ -18675,54 +18721,6 @@ export function App() {
       }
     } catch {}
   }, []);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const shortcut = resolveWindowsWorkspaceShortcut(event, {isWindows: isWindowsPlatform, isWide});
-      if (!shortcut) return;
-      event.preventDefault();
-      switch (shortcut) {
-        case 'sessions':
-          switch (resolveSessionsShortcutAction({
-            sessionPanelPinned: !sidebarCollapsed,
-            temporarilyUnpinned: sessionPanelShortcutUnpinned,
-            slideOutOpen: sessionNavSlideOut.open,
-          })) {
-            case 'open-slideout':
-              dispatchSessionNavSlideOut({ type: 'open' });
-              break;
-            case 'close-slideout':
-              sessionNavSlideOutAutoClose.closeNow();
-              break;
-            case 'temporarily-unpin':
-              sessionNavSlideOutAutoClose.closeNow();
-              setSessionPanelShortcutUnpinned(true);
-              break;
-            case 'restore-pin':
-              sessionNavSlideOutAutoClose.closeNow();
-              setSessionPanelShortcutUnpinned(false);
-              break;
-          }
-          return;
-        case 'preview':
-          toggleChatPreviewFromTitle();
-          return;
-        case 'terminal':
-          toggleTerminalFromTitle();
-          return;
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    isWide,
-    isWindowsPlatform,
-    sessionNavSlideOut.open,
-    sessionNavSlideOutAutoClose,
-    sessionPanelShortcutUnpinned,
-    sidebarCollapsed,
-    toggleChatPreviewFromTitle,
-    toggleTerminalFromTitle,
-  ]);
   const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
   const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
   const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
@@ -18842,7 +18840,7 @@ export function App() {
           type="button"
           className={`chat-search-toggle${chatSearchOpen ? ' active' : ''}`}
           onClick={() => (chatSearchOpen ? closeChatSearch() : openChatSearch())}
-          data-tooltip="Search current session (Ctrl+F)"
+          data-tooltip={shortcutTooltip('Search current session', 'searchCurrentContext')}
           aria-label="Search current session"
           aria-pressed={chatSearchOpen}
         >
@@ -19263,7 +19261,6 @@ export function App() {
                   onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   header={
                     <ChatSessionGlobalBar
-                      showSlideOutShortcut
                       slideOutOpen={sessionNavSlideOut.open}
                       onToggleSlideOut={() =>
                         sessionNavSlideOut.open
@@ -20222,87 +20219,112 @@ export function App() {
   }, [quickFileOpen, quickFileActiveIndex, quickFileResults]);
 
   useEffect(() => {
-    const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
-        return;
-      }
-      if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        if (quickFileOpen) {
-          quickFileInputRef.current?.focus();
-          return;
-        }
-        openQuickFileSearch();
-        return;
-      }
-      if (quickFileOpen) {
-        return;
-      }
-      if (!chatPreviewOpen) {
-        return;
-      }
-      if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        const nextTabId = cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1);
-        if (nextTabId) {
-          const projectId = activeWorkbenchTab?.projectId ?? chatPreviewProjectId;
-          setPreviewWorkbench(current => selectPreviewTab(current, projectId, nextTabId));
-        }
-        return;
-      }
-    };
-    window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);
-    return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);
-  }, [
-    activeWorkbenchTab?.id,
-    activeWorkbenchTab?.projectId,
-    chatPreviewOpen,
-    chatPreviewProjectId,
-    openQuickFileSearch,
-    previewWorkbenchTabs,
-    quickFileOpen,
-  ]);
-
-  useEffect(() => {
-    if (!isWide) {
-      return;
-    }
-    const handleGlobalSearchKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || quickFileOpen) {
-        return;
-      }
-      const previewFocused = event.target instanceof Element &&
-        event.target.closest('.preview-workbench-surface') !== null;
-      const target = resolveWorkspaceSearchShortcutTarget(event, {
-        previewFocused,
-        previewSearchable: !!activeWorkbenchTab && !previewSearchUnavailableMessage,
+    const handleWorkspaceShortcutKeyDown = (event: KeyboardEvent) => {
+      const previewTabsUnavailable = !chatPreviewOpen || previewWorkbenchTabs.length === 0;
+      const decision = resolveWorkspaceShortcutDispatch(event, effectiveShortcutBindings, {
+        platform: shortcutPlatform,
+        isWide,
+        paused: document.querySelector('[aria-modal="true"]') !== null,
+        availability: {
+          quickOpen: resolveQuickFileProjectId() ? null : 'Open a project to use Quick Open.',
+          nextPreviewTab: previewTabsUnavailable ? 'Open Preview and a tab to switch Preview tabs.' : null,
+          previousPreviewTab: previewTabsUnavailable ? 'Open Preview and a tab to switch Preview tabs.' : null,
+        },
       });
-      if (!target) {
+      if (decision.kind === 'ignore') return;
+      event.preventDefault();
+      if (decision.kind === 'unavailable') {
+        setToastMessage(decision.reason);
         return;
       }
-      event.preventDefault();
-      switch (target) {
-        case 'current':
-          openChatSearch();
+
+      switch (decision.actionId) {
+        case 'toggleSessions':
+          switch (resolveSessionsShortcutAction({
+            sessionPanelPinned: !sidebarCollapsed,
+            temporarilyUnpinned: sessionPanelShortcutUnpinned,
+            slideOutOpen: sessionNavSlideOut.open,
+          })) {
+            case 'open-slideout':
+              dispatchSessionNavSlideOut({type: 'open'});
+              break;
+            case 'close-slideout':
+              sessionNavSlideOutAutoClose.closeNow();
+              break;
+            case 'temporarily-unpin':
+              sessionNavSlideOutAutoClose.closeNow();
+              setSessionPanelShortcutUnpinned(true);
+              break;
+            case 'restore-pin':
+              sessionNavSlideOutAutoClose.closeNow();
+              setSessionPanelShortcutUnpinned(false);
+              break;
+          }
           return;
-        case 'preview':
-          openPreviewSearch();
+        case 'togglePreview':
+          toggleChatPreviewFromTitle();
           return;
-        case 'sessions':
+        case 'toggleTerminal':
+          toggleTerminalFromTitle();
+          return;
+        case 'quickOpen':
+          openQuickFileSearch();
+          return;
+        case 'nextPreviewTab':
+        case 'previousPreviewTab': {
+          const direction = decision.actionId === 'previousPreviewTab' ? -1 : 1;
+          const nextTabId = cyclePreviewTabId(
+            previewWorkbenchTabs,
+            activeWorkbenchTab?.id ?? '',
+            direction,
+          );
+          if (nextTabId) {
+            const targetProjectId = activeWorkbenchTab?.projectId ?? chatPreviewProjectId;
+            setPreviewWorkbench(current => selectPreviewTab(current, targetProjectId, nextTabId));
+          }
+          return;
+        }
+        case 'searchCurrentContext': {
+          const previewFocused = event.target instanceof Element
+            && event.target.closest('.preview-workbench-surface') !== null;
+          const target = resolveWorkspaceSearchTarget({
+            previewFocused,
+            previewSearchable: !!activeWorkbenchTab && !previewSearchUnavailableMessage,
+          });
+          if (target === 'preview') {
+            openPreviewSearch();
+          } else {
+            openChatSearch();
+          }
+          return;
+        }
+        case 'searchSessions':
           openSessionSearch();
           return;
       }
     };
-    window.addEventListener('keydown', handleGlobalSearchKeyDown, true);
-    return () => window.removeEventListener('keydown', handleGlobalSearchKeyDown, true);
+    window.addEventListener('keydown', handleWorkspaceShortcutKeyDown);
+    return () => window.removeEventListener('keydown', handleWorkspaceShortcutKeyDown);
   }, [
     activeWorkbenchTab,
+    chatPreviewOpen,
+    chatPreviewProjectId,
+    effectiveShortcutBindings,
     isWide,
     openChatSearch,
     openPreviewSearch,
+    openQuickFileSearch,
     openSessionSearch,
     previewSearchUnavailableMessage,
-    quickFileOpen,
+    previewWorkbenchTabs,
+    resolveQuickFileProjectId,
+    sessionNavSlideOut.open,
+    sessionNavSlideOutAutoClose,
+    sessionPanelShortcutUnpinned,
+    shortcutPlatform,
+    sidebarCollapsed,
+    toggleChatPreviewFromTitle,
+    toggleTerminalFromTitle,
   ]);
 
   const hasCachedWorkspace = projects.length > 0 || !!projectId;
@@ -20999,19 +21021,6 @@ export function App() {
     startPreviewFileTreeSearchFromKey(event.key);
   };
   const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      const nextTabId = cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1);
-      if (nextTabId) {
-        selectWorkbenchTab(activeWorkbenchTab?.projectId ?? chatPreviewProjectId, nextTabId);
-      }
-      return;
-    }
-    if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      openQuickFileSearch();
-      return;
-    }
     handlePreviewFileTreeKeyDown(event);
   };
   const handleQuickFileKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
