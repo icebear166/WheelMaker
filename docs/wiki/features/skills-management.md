@@ -23,6 +23,10 @@ source lock 缺失且本机没有该 scope 的历史 reconciliation 时，WheelM
 
 页面打开只读取已保存目录和本机安装状态，不访问远端。`Refresh` 会在临时 Git checkout 中把远端广告的默认 `HEAD` 解析为完整 commit，发现全部有效 skill 并计算目录 hash；无法解析 `HEAD` 时不猜测 `main` 或 `master`。只有完整解析、校验和 hash 都成功后，才以 compare-and-swap 原子替换该 source 的快照。
 
+Git source 的公开目录固定为仓库根目录下的 `skills/` 子树。WheelMaker 不扫描仓库根目录、`.agents/`、`.claude/`、`.github/skills/`、备份目录、翻译目录、Claude plugin 声明路径或其他位置，也不在 `skills/` 缺失或没有有效 skill 时退回全仓库扫描。`skills/` 内按任意深度递归；某个目录包含 `SKILL.md` 后，该目录成为完整 skill 根目录，其子目录不再作为独立 skill 搜索。`skills/SKILL.md` 表示以 `skills/` 本身为根的单个 skill。
+
+发现到的名称按大小写不敏感判重。`skills/` 内存在同名 skill 时整个刷新失败，错误列出冲突的仓库相对路径；已有成功快照继续以 `Stale` 展示，首次刷新失败则保持 unresolved。整个 skill 根目录继续参与确定性 SHA-256，且任何逃出临时 checkout 的符号链接都会拒绝本次刷新。
+
 刷新失败保留上次成功目录并显示 `Stale` 与错误。Stale 快照不能用于 Install、Update 或远端删除推断。刷新成功后：
 
 - 新出现的远端项成为未安装 skill。

@@ -102,19 +102,30 @@ func runSkillSourceGitCommand(ctx context.Context, dir string, args ...string) (
 }
 
 func discoverSkillSourceCatalog(checkout string) ([]skillSourceSkillSnapshot, error) {
+	skillsRoot := filepath.Join(checkout, "skills")
+	info, err := os.Lstat(skillsRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, errors.New("skill source skills directory was not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect skill source skills directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, errors.New("skill source skills path is not a directory")
+	}
 	var skillFiles []string
-	err := filepath.WalkDir(checkout, func(path string, entry os.DirEntry, walkErr error) error {
+	err = filepath.WalkDir(skillsRoot, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
-		}
-		if path == checkout {
-			return nil
 		}
 		relative, err := filepath.Rel(checkout, path)
 		if err != nil {
 			return err
 		}
 		normalized := filepath.ToSlash(relative)
+		if entry.IsDir() && entry.Name() == ".git" {
+			return filepath.SkipDir
+		}
 		if normalized == ".git" || strings.HasPrefix(normalized, ".git/") {
 			if entry.IsDir() {
 				return filepath.SkipDir
@@ -131,13 +142,28 @@ func discoverSkillSourceCatalog(checkout string) ([]skillSourceSkillSnapshot, er
 				return fmt.Errorf("skill source link %q escapes checkout", normalized)
 			}
 		}
-		if !entry.IsDir() && entry.Name() == "SKILL.md" {
-			skillFiles = append(skillFiles, path)
+		if !entry.IsDir() {
+			return nil
 		}
-		return nil
+		skillFile := filepath.Join(path, "SKILL.md")
+		skillInfo, skillErr := os.Lstat(skillFile)
+		if errors.Is(skillErr, os.ErrNotExist) {
+			return nil
+		}
+		if skillErr != nil {
+			return skillErr
+		}
+		if skillInfo.IsDir() {
+			return nil
+		}
+		skillFiles = append(skillFiles, skillFile)
+		return filepath.SkipDir
 	})
 	if err != nil {
 		return nil, fmt.Errorf("discover skill source catalog: %w", err)
+	}
+	if len(skillFiles) == 0 {
+		return nil, errors.New("skill source skills directory does not contain any skills")
 	}
 	sort.Strings(skillFiles)
 	seen := map[string]string{}
@@ -149,21 +175,22 @@ func discoverSkillSourceCatalog(checkout string) ([]skillSourceSkillSnapshot, er
 			return nil, err
 		}
 		key := strings.ToLower(name)
-		if previous, exists := seen[key]; exists {
-			return nil, fmt.Errorf("duplicate skill name %q at %s and %s", name, previous, skillFile)
-		}
-		seen[key] = skillFile
-		contentHash, err := hashSkillDirectory(root)
-		if err != nil {
-			return nil, fmt.Errorf("hash skill %q: %w", name, err)
-		}
 		relative, err := filepath.Rel(checkout, skillFile)
 		if err != nil {
 			return nil, err
 		}
+		normalized := filepath.ToSlash(relative)
+		if previous, exists := seen[key]; exists {
+			return nil, fmt.Errorf("duplicate skill name %q at %s and %s", name, previous, normalized)
+		}
+		seen[key] = normalized
+		contentHash, err := hashSkillDirectory(root)
+		if err != nil {
+			return nil, fmt.Errorf("hash skill %q: %w", name, err)
+		}
 		skills = append(skills, skillSourceSkillSnapshot{
 			Name:          name,
-			SkillPath:     filepath.ToSlash(relative),
+			SkillPath:     normalized,
 			ContentSHA256: contentHash,
 		})
 	}

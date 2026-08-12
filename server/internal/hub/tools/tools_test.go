@@ -3498,12 +3498,102 @@ func TestSkillSourceResolverPinsRemoteDefaultHEADAndDiscoversCompleteCatalog(t *
 	}
 }
 
+func TestSkillSourceResolverDiscoversOnlyNestedSkillsDirectoryCatalog(t *testing.T) {
+	checkout := t.TempDir()
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "published"), "# Published\n", nil)
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "groups", "deep", "nested"), "# Nested\n", map[string]string{
+		"references/guide.md":         "guide\n",
+		"references/example/SKILL.md": "# Supporting fixture\n",
+	})
+	for _, root := range []string{
+		filepath.Join(checkout, ".agents", "skills", "installed-copy"),
+		filepath.Join(checkout, ".claude", "skills", "installed-copy"),
+		filepath.Join(checkout, ".github", "skills", "github-only"),
+		filepath.Join(checkout, "skills-zh", "translated"),
+		filepath.Join(checkout, "skills.bak", "backup"),
+	} {
+		writeSkillSourceFixture(t, root, "# Ignored\n", nil)
+	}
+
+	skills, err := discoverSkillSourceCatalog(checkout)
+	if err != nil {
+		t.Fatalf("discoverSkillSourceCatalog() error=%v", err)
+	}
+	if len(skills) != 2 {
+		t.Fatalf("catalog=%#v, want exactly two skills", skills)
+	}
+	if got := []string{skills[0].Name, skills[1].Name}; !reflect.DeepEqual(got, []string{"nested", "published"}) {
+		t.Fatalf("catalog names=%v, want nested,published", got)
+	}
+	if skills[0].SkillPath != "skills/groups/deep/nested/SKILL.md" {
+		t.Fatalf("nested skill path=%q, want skills/groups/deep/nested/SKILL.md", skills[0].SkillPath)
+	}
+}
+
+func TestSkillSourceResolverTreatsSkillsRootAsOneSkill(t *testing.T) {
+	checkout := t.TempDir()
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills"), "---\nname: catalog-root\n---\n# Root\n", nil)
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "nested"), "# Must not be discovered\n", nil)
+
+	skills, err := discoverSkillSourceCatalog(checkout)
+	if err != nil {
+		t.Fatalf("discoverSkillSourceCatalog() error=%v", err)
+	}
+	if len(skills) != 1 || skills[0].Name != "catalog-root" || skills[0].SkillPath != "skills/SKILL.md" {
+		t.Fatalf("catalog=%#v, want only skills/SKILL.md", skills)
+	}
+}
+
+func TestSkillSourceResolverRejectsMissingOrEmptySkillsDirectory(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		configure func(string)
+		wantError string
+	}{
+		{name: "missing", configure: func(string) {}, wantError: "skills directory was not found"},
+		{name: "empty", configure: func(checkout string) {
+			if err := os.MkdirAll(filepath.Join(checkout, "skills", "docs"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, wantError: "skills directory does not contain any skills"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			checkout := t.TempDir()
+			testCase.configure(checkout)
+			_, err := discoverSkillSourceCatalog(checkout)
+			if err == nil || !strings.Contains(err.Error(), testCase.wantError) {
+				t.Fatalf("discoverSkillSourceCatalog() error=%v, want %q", err, testCase.wantError)
+			}
+		})
+	}
+}
+
+func TestSkillSourceResolverRejectsCaseInsensitiveDuplicateNamesWithRelativePaths(t *testing.T) {
+	checkout := t.TempDir()
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "one"), "---\nname: Shared\n---\n# One\n", nil)
+	writeSkillSourceFixture(t, filepath.Join(checkout, "skills", "two"), "---\nname: shared\n---\n# Two\n", nil)
+
+	_, err := discoverSkillSourceCatalog(checkout)
+	if err == nil {
+		t.Fatal("discoverSkillSourceCatalog() accepted duplicate names")
+	}
+	message := filepath.ToSlash(err.Error())
+	for _, expected := range []string{`duplicate skill name "shared"`, "skills/one/SKILL.md", "skills/two/SKILL.md"} {
+		if !strings.Contains(strings.ToLower(message), strings.ToLower(expected)) {
+			t.Fatalf("error=%q, want relative conflict detail %q", message, expected)
+		}
+	}
+	if strings.Contains(message, filepath.ToSlash(checkout)) {
+		t.Fatalf("error leaks temporary checkout path: %q", message)
+	}
+}
+
 func TestSkillSourceResolverTracksAdditionsDeletionsAndSupportingFiles(t *testing.T) {
 	repository := t.TempDir()
 	runSkillSourceGit(t, repository, "init", "-b", "main")
 	runSkillSourceGit(t, repository, "config", "user.email", "skills@example.com")
 	runSkillSourceGit(t, repository, "config", "user.name", "Skills Test")
-	writeSkillSourceFixture(t, filepath.Join(repository, "first"), "# First\n", map[string]string{"guide.md": "one\n"})
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "first"), "# First\n", map[string]string{"guide.md": "one\n"})
 	runSkillSourceGit(t, repository, "add", ".")
 	runSkillSourceGit(t, repository, "commit", "-m", "first")
 
@@ -3512,10 +3602,10 @@ func TestSkillSourceResolverTracksAdditionsDeletionsAndSupportingFiles(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.RemoveAll(filepath.Join(repository, "first")); err != nil {
+	if err := os.RemoveAll(filepath.Join(repository, "skills", "first")); err != nil {
 		t.Fatal(err)
 	}
-	writeSkillSourceFixture(t, filepath.Join(repository, "second"), "# Second\n", map[string]string{"guide.md": "two\n"})
+	writeSkillSourceFixture(t, filepath.Join(repository, "skills", "second"), "# Second\n", map[string]string{"guide.md": "two\n"})
 	runSkillSourceGit(t, repository, "add", "-A")
 	runSkillSourceGit(t, repository, "commit", "-m", "second")
 	after, err := resolver.Resolve(context.Background(), skillSourceSnapshot{Source: repository, SourceKey: "x/y"})
