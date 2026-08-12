@@ -87,11 +87,13 @@ Hub Skill 更新时只重扫 Hub inventory，再复用 Project 本地 inventory 
 
 Skills source 管理由三个边界共同组成：
 
-- Source Store 拥有 Hub/Project 的 `.skill-source-lock.json`，只保存远端 source/ref/commit/完整目录及远端 hash。
-- Source Resolver 在受控临时 Git checkout 中解析 ref、发现 Skills 并计算整个目录的确定性 hash。
+- Source Store 拥有 Hub/Project 的 version 2 `.skill-source-lock.json`，只保存远端 source/commit/完整目录及远端 hash。
+- Source Resolver 在受控临时 Git checkout 中把远端广告的默认 `HEAD` 解析为完整 commit，发现 Skills 并计算整个目录的确定性 hash。
 - Installed State Adapter 读取上游原生 lock 与 agent-visible 目录，并继续用固定版本 `skills` CLI 执行 add/remove。
 
 source lock 不是安装数据库。本机安装事实和本地目录 hash 不写入共享 source lock；每次 scan 都从原生 lock、实际路径和文件内容重新计算。Project source lock 可随 Git 共享，外部 Git 变化只改变期望目录；本机删除重试等 reconciliation metadata 由 Hub 本地状态拥有。Web 的 per-scope `Show uninstalled skills` 只属于当前客户端。
+
+source lock 首次缺失时从原生 lock 的规范化仓库直接构造 V2；已有 V1 则丢弃其 payload 并以同样方式重建。原生 lock 中缺失或存在的 ref 都不参与 source 归属；但 Project source lock 在已有 reconciliation 历史后被 Git 外部删除时，仍作为 `Pending removal` 处理，不自动重建。
 
 Skills inventory 只在 Hub 初始化、显式 reindex、Project/Agent 拓扑变化、install/uninstall/update 完成和手动 refresh 时按 Hub/Project 定向刷新；Registry 重连只重新发布当前完整 HubState，不重新扫描。系统不监听文件系统、不轮询，也不因外部文件事件主动刷新。inventory 记录位置、`SKILL.md` 指纹、链接目标、managed metadata 和 Agent 可见性，并派生：
 
@@ -101,7 +103,7 @@ aligned | contentMismatch | unknown
 
 目录差异只作为非阻塞诊断，不自动复制或覆盖。Composer 按当前 Project 和 Agent 的 effective Skills 生成提示。旧 inventory location 的 `aligned | contentMismatch | unknown` 诊断仍只比较 `SKILL.md`；source 管理的更新判定则使用整个 skill 目录（包括 supporting files）的确定性 hash，并要求所有预期可见副本都存在且一致。
 
-source refresh、source/ref 修改、Install、Update、Uninstall 和删除 source 都会写持久化状态或本机目录，因此共享每 Hub 单一运行中 Skills operation。Refresh 失败保留旧目录并标记 Stale，不允许从失败快照推断远端删除。Install/Update 执行前先刷新并确认固定 commit 的预览；批量动作 best-effort 汇总逐项结果，不自动安装远端新增项或删除 Removed upstream 项。普通页面 scan 保持同步只读。
+source refresh、source 新增/删除、Install、Update 和 Uninstall 都会写持久化状态或本机目录，因此共享每 Hub 单一运行中 Skills operation。Refresh 失败保留旧目录并标记 `Stale`，首次成功刷新前为 `Needs refresh`，本地副本缺失或彼此不同为 `Copies differ`，真正读取/hash 失败才为 `Error`。不允许从失败快照推断远端删除。Install/Update 执行前先刷新并确认固定 `resolvedCommit` 的预览；批量动作 best-effort 汇总逐项结果，不自动安装远端新增项或删除 Removed upstream 项。普通页面 scan 保持同步只读。
 
 ### Skills 扫描目录与聚合
 
