@@ -1,5 +1,8 @@
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
-import {resolveChatSearchMessages} from '../web/src/chat/search/useChatSearchController';
+import {
+  resolveChatSearchMessages,
+  resolveChatSearchOpenRequest,
+} from '../web/src/chat/search/useChatSearchController';
 
 function message(sessionId: string, text: string): RegistryChatMessage {
   return {
@@ -26,5 +29,30 @@ describe('chat search controller', () => {
       archivedMessages,
       archivedMode: false,
     })).toBe(liveMessages);
+  });
+
+  test('accepts only a newer programmatic open request for the current source', () => {
+    const request = {sourceKey: 'live:p1:s1', query: '  needle  ', generation: 3};
+
+    expect(resolveChatSearchOpenRequest({
+      request,
+      sourceKey: 'live:p1:s1',
+      lastConsumedGeneration: 2,
+    })).toEqual({query: 'needle', generation: 3});
+    expect(resolveChatSearchOpenRequest({
+      request,
+      sourceKey: 'live:p1:s2',
+      lastConsumedGeneration: 2,
+    })).toBeNull();
+    expect(resolveChatSearchOpenRequest({
+      request,
+      sourceKey: 'live:p1:s1',
+      lastConsumedGeneration: 3,
+    })).toBeNull();
+    expect(resolveChatSearchOpenRequest({
+      request: {...request, query: '   '},
+      sourceKey: 'live:p1:s1',
+      lastConsumedGeneration: 2,
+    })).toBeNull();
   });
 });

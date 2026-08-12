@@ -15,12 +15,38 @@ export function resolveChatSearchMessages(input: {
   return input.archivedMode ? input.archivedMessages : input.liveMessages;
 }
 
+export type ChatSearchOpenRequest = {
+  sourceKey: string;
+  query: string;
+  generation: number;
+};
+
+export function resolveChatSearchOpenRequest(input: {
+  request: ChatSearchOpenRequest | null | undefined;
+  sourceKey: string;
+  lastConsumedGeneration: number;
+}): {query: string; generation: number} | null {
+  const request = input.request;
+  const query = request?.query.trim() ?? '';
+  if (
+    !request ||
+    request.sourceKey !== input.sourceKey ||
+    request.generation <= input.lastConsumedGeneration ||
+    !query
+  ) {
+    return null;
+  }
+  return {query, generation: request.generation};
+}
+
 export function useChatSearchController(input: {
   sourceKey: string;
   liveMessages: RegistryChatMessage[];
   archivedMessages: RegistryChatMessage[];
   archivedMode: boolean;
   scrollToMatch: (match: ChatSearchMatch) => void;
+  openRequest?: ChatSearchOpenRequest | null;
+  onOpenRequestConsumed?: (generation: number) => void;
 }) {
   const {
     sourceKey,
@@ -28,11 +54,14 @@ export function useChatSearchController(input: {
     archivedMessages,
     archivedMode,
     scrollToMatch,
+    openRequest,
+    onOpenRequestConsumed,
   } = input;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const lastConsumedOpenRequestGenerationRef = useRef(0);
   const messages = resolveChatSearchMessages({liveMessages, archivedMessages, archivedMode});
   const matches = useMemo(
     () => buildChatSearchMatches(messages, query),
@@ -93,6 +122,27 @@ export function useChatSearchController(input: {
     setQuery('');
     setActiveIndex(0);
   }, [sourceKey]);
+
+  useEffect(() => {
+    const resolved = resolveChatSearchOpenRequest({
+      request: openRequest,
+      sourceKey,
+      lastConsumedGeneration: lastConsumedOpenRequestGenerationRef.current,
+    });
+    if (!resolved) {
+      return;
+    }
+    lastConsumedOpenRequestGenerationRef.current = resolved.generation;
+    setQuery(resolved.query);
+    setOpen(true);
+    setActiveIndex(0);
+    onOpenRequestConsumed?.(resolved.generation);
+    const frameId = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [onOpenRequestConsumed, openRequest, sourceKey]);
 
   useEffect(() => {
     setActiveIndex(current => Math.min(current, Math.max(0, matches.length - 1)));

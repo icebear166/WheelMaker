@@ -3640,6 +3640,14 @@ export function App() {
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [sessionSearchProjectItems, setSessionSearchProjectItems] = useState<RegistryProject[]>([]);
   const activeSessionSearchProjectItemsRef = useRef<RegistryProject[]>([]);
+  const [pendingSessionSearchHandoff, setPendingSessionSearchHandoff] = useState<{
+    projectId: string;
+    sessionId: string;
+    query: string;
+    generation: number;
+    ready: boolean;
+  } | null>(null);
+  const sessionSearchHandoffGenerationRef = useRef(0);
   const [searchResultsByProjectId, setSearchResultsByProjectId] = useState<SessionSearchResultsByProjectId>({});
   const [sessionSearchDoneByProjectId, setSessionSearchDoneByProjectId] = useState<Record<string, boolean>>({});
   const sessionSearchDoneByProjectIdRef = useRef<Record<string, boolean>>({});
@@ -3922,6 +3930,11 @@ export function App() {
     () => encodeChatSessionKey(selectedChatKey),
     [selectedChatKey],
   );
+  const consumeSessionSearchHandoff = useCallback((generation: number) => {
+    setPendingSessionSearchHandoff(current =>
+      current?.generation === generation ? null : current,
+    );
+  }, []);
   const {
     open: chatSearchOpen,
     query: chatSearchQuery,
@@ -3943,6 +3956,15 @@ export function App() {
     archivedMessages: archivedPreview?.messages ?? [],
     archivedMode,
     scrollToMatch: scrollToChatSearchMatch,
+    openRequest: pendingSessionSearchHandoff?.ready ? {
+      sourceKey: `live:${encodeChatSessionKey(chatSessionKeyFromParts(
+        pendingSessionSearchHandoff.projectId,
+        pendingSessionSearchHandoff.sessionId,
+      ))}`,
+      query: pendingSessionSearchHandoff.query,
+      generation: pendingSessionSearchHandoff.generation,
+    } : null,
+    onOpenRequestConsumed: consumeSessionSearchHandoff,
   });
   const chatSearchMatchIdsByMessageKey = useMemo(
     () => {
@@ -6033,6 +6055,7 @@ export function App() {
     setSearchResultsByProjectId({});
     setSessionSearchDoneByProjectId({});
     setSessionSearchErrorsByProjectId({});
+    setPendingSessionSearchHandoff(null);
     sessionSearchUnchangedPollsRef.current = 0;
     if (sessionSearchPollTimerRef.current !== null) {
       window.clearTimeout(sessionSearchPollTimerRef.current);
@@ -6071,6 +6094,7 @@ export function App() {
     setSessionSearchDoneByProjectId(
       Object.fromEntries(projectItems.map(projectItem => [projectItem.projectId, false])),
     );
+    setPendingSessionSearchHandoff(null);
     sessionSearchUnchangedPollsRef.current = 0;
     setSessionSearchOpen(true);
     if (previousSearchId) {
@@ -14414,10 +14438,10 @@ export function App() {
     targetProjectId: string,
     sessionId: string,
     options?: {closeMobileDrawer?: boolean; targetTurnIndex?: number},
-  ) => {
-    if (!targetProjectId || !sessionId) return;
+  ): Promise<boolean> => {
+    if (!targetProjectId || !sessionId) return false;
     const nextSelectedKey = chatSessionKeyFromParts(targetProjectId, sessionId);
-    if (!nextSelectedKey) return;
+    if (!nextSelectedKey) return false;
     const finishSelectDiagnostic = startWorkspaceDiagnosticSpan('select_session', {
       projectId: targetProjectId,
       sessionId,
@@ -14461,6 +14485,7 @@ export function App() {
         ...(selectError ? {error: selectError} : {}),
       }, selectError ? 'error' : 'info');
     }
+    return selected;
   };
 
   const resolveChatTitleProjectSession = useCallback((targetProjectId: string): RegistryChatSession | null => {
@@ -14546,7 +14571,37 @@ export function App() {
     sessionId: string,
     options?: {closeMobileDrawer?: boolean},
   ) => {
-    await selectProjectChatSession(targetProjectId, sessionId, options);
+    const query = sessionSearchQuery.trim();
+    if (!query) {
+      return;
+    }
+    sessionSearchHandoffGenerationRef.current += 1;
+    const generation = sessionSearchHandoffGenerationRef.current;
+    setPendingSessionSearchHandoff({
+      projectId: targetProjectId,
+      sessionId,
+      query: sessionSearchQuery,
+      generation,
+      ready: false,
+    });
+    try {
+      const selected = await selectProjectChatSession(targetProjectId, sessionId, options);
+      const currentSelection = selectedChatKeyRef.current;
+      if (
+        !selected ||
+        currentSelection?.projectId !== targetProjectId ||
+        currentSelection.sessionId !== sessionId
+      ) {
+        consumeSessionSearchHandoff(generation);
+        return;
+      }
+      setPendingSessionSearchHandoff(current =>
+        current?.generation === generation ? {...current, ready: true} : current,
+      );
+    } catch (error) {
+      consumeSessionSearchHandoff(generation);
+      throw error;
+    }
   };
 
   const handleSessionSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {

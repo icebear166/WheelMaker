@@ -65,6 +65,27 @@ describe('web session search UI wiring', () => {
     expect(styles).toContain('.chat-turn-search-highlight');
   });
 
+  test('hands a selected result to local chat search only after normal loading succeeds', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const clickStart = main.indexOf('const handleSessionSearchResultClick = async (');
+    const clickEnd = main.indexOf('const handleSessionSearchInputKeyDown =', clickStart);
+    expect(clickStart).toBeGreaterThanOrEqual(0);
+    expect(clickEnd).toBeGreaterThan(clickStart);
+    const clickHandler = main.slice(clickStart, clickEnd);
+
+    expect(main).toContain('pendingSessionSearchHandoff');
+    expect(main).toContain('sessionSearchHandoffGenerationRef');
+    expect(main).toContain('openRequest: pendingSessionSearchHandoff?.ready');
+    expect(main).toContain('onOpenRequestConsumed: consumeSessionSearchHandoff');
+    expect(clickHandler).toContain('query: sessionSearchQuery');
+    expect(clickHandler).toContain('await selectProjectChatSession(targetProjectId, sessionId, options)');
+    expect(clickHandler).toContain('ready: true');
+    expect(clickHandler).not.toContain('result.source');
+    expect(clickHandler).not.toContain('result.turnIndex');
+    expect(clickHandler).not.toContain('targetTurnIndex');
+  });
+
   test('keeps the outer search frame owned by current-session search', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');

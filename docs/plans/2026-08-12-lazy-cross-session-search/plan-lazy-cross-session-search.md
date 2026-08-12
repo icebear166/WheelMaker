@@ -129,21 +129,21 @@ Invoke `git-workflow` checkpoint for Task 2 files after Step 9 passes; record co
 
 **Acceptance:** Selecting any filtered session preserves the cross-session sidebar, loads through the normal session path without a server turn target, and opens current-session search with the committed query only if that target remains selected; a title-only result naturally produces zero local matches.
 
-- [ ] **Step 1: Write failing controller and handoff tests**
+- [x] **Step 1: Write failing controller and handoff tests**
 
 Add a controller-level helper test for a programmatic open request carrying `sourceKey + query + generation`, including stale-target rejection. Update Workspace wiring assertions to require a pending handoff keyed by project/session/query and to forbid reading `result.source` or `result.turnIndex` in the click path.
 
-- [ ] **Step 2: Run handoff tests to verify RED**
+- [x] **Step 2: Run handoff tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-chat-search-controller.test.ts __tests__/web-session-search-ui.test.ts`
 
 Expected: FAIL because programmatic local-search handoff is not implemented.
 
-- [ ] **Step 3: Implement the minimal one-shot handoff**
+- [x] **Step 3: Implement the minimal one-shot handoff**
 
 Extend the chat search controller with a programmatic open-with-query entry that preserves existing manual `Ctrl/Cmd+F` behavior. On result click, record `projectId + sessionId + committed query + generation`, await normal `selectProjectChatSession`, verify the loaded selection/generation, then open local search and consume the handoff. Clear stale requests on a newer click, load failure, close, or source mismatch.
 
-- [ ] **Step 4: Run handoff and chat-search regressions to verify GREEN**
+- [x] **Step 4: Run handoff and chat-search regressions to verify GREEN**
 
 Run: `npm test -- --runInBand __tests__/web-chat-search-controller.test.ts __tests__/web-chat-search-state.test.ts __tests__/web-session-search-ui.test.ts`
 
