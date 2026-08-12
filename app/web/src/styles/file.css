@@ -842,10 +842,10 @@
 }
 
 .quick-file-search-input-row {
-  min-height: 42px;
+  min-height: 36px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 12px;
   color: var(--text-secondary);
@@ -854,12 +854,12 @@
 .quick-file-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 42px;
+  height: 36px;
   border: 0;
   background: transparent;
   color: var(--text-primary);
   padding: 0;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
 }
 
