@@ -65,7 +65,7 @@ type SettingsRootContentProps = {
   requestLogout: () => void;
 };
 
-type SettingsSectionId = 'chat' | 'code' | 'state' | 'debug';
+type SettingsSectionId = 'application' | 'chat' | 'code' | 'state' | 'debug';
 
 type SettingsSectionOptions = {
   id: SettingsSectionId;
@@ -161,6 +161,15 @@ export function SettingsRootContent({
 }: SettingsRootContentProps) {
   return (
     <div className="settings-list">
+      {isWide ? (
+        <SettingsSection id="application" title="Application" icon="settings" rows={(
+          <SettingsNavRow
+            icon="keyboard"
+            label="Keyboard Shortcuts"
+            onClick={() => openSettingsDetail('keyboardShortcuts')}
+          />
+        )} />
+      ) : null}
       <SettingsSection id="chat" title="Chat" icon="messageCircle" rows={(
         <>
           {isWide ? (

@@ -2788,3 +2788,376 @@ textarea,
     flex: 1 1 100%;
   }
 }
+
+/* ---- keyboard shortcut command index ---- */
+.keyboard-shortcuts-detail {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 4px 8px 24px;
+}
+
+.keyboard-shortcuts-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+}
+
+.keyboard-shortcuts-summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.keyboard-shortcuts-summary strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.keyboard-shortcuts-summary span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.keyboard-shortcuts-reset,
+.keyboard-shortcuts-reset-confirm button,
+.keyboard-shortcut-row-actions button,
+.keyboard-shortcut-conflict button {
+  min-height: 26px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.keyboard-shortcuts-reset:hover:not(:disabled),
+.keyboard-shortcuts-reset-confirm button:hover,
+.keyboard-shortcut-row-actions button:hover,
+.keyboard-shortcut-conflict button:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.keyboard-shortcuts-reset:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.keyboard-shortcuts-reset-confirm {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--state-warning) 38%, var(--border-subtle));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--state-warning) 7%, var(--surface-panel));
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.keyboard-shortcuts-reset-confirm span {
+  margin-right: auto;
+}
+
+.keyboard-shortcuts-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.keyboard-shortcuts-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.keyboard-shortcuts-group h3 {
+  margin: 0;
+  padding: 0 3px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.keyboard-shortcuts-command-list {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-panel) 94%, transparent);
+}
+
+.keyboard-shortcut-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 18px;
+  min-height: 62px;
+  padding: 9px 10px 9px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 56%, transparent);
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.keyboard-shortcut-command:last-child {
+  border-bottom: 0;
+}
+
+.keyboard-shortcut-command:hover,
+.keyboard-shortcut-command:focus-within {
+  background: color-mix(in srgb, var(--hover) 74%, transparent);
+}
+
+.keyboard-shortcut-command.is-recording {
+  background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
+}
+
+.keyboard-shortcut-command-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.keyboard-shortcut-command-copy strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyboard-shortcut-command-copy span,
+.keyboard-shortcut-command-copy small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyboard-shortcut-command-copy small {
+  color: var(--text-tertiary);
+}
+
+.keyboard-shortcut-command-controls {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 142px;
+}
+
+.keyboard-shortcut-binding {
+  min-width: 64px;
+  min-height: 30px;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 92%, transparent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset;
+}
+
+.keyboard-shortcut-binding:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 38%, var(--border-subtle));
+  background: var(--hover);
+}
+
+.keyboard-shortcut-record-button:focus-visible,
+.keyboard-shortcut-recorder:focus-visible,
+.keyboard-shortcuts-detail button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.keyboard-shortcut-keycaps {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.keyboard-shortcut-keycaps kbd {
+  min-width: 22px;
+  padding: 3px 5px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 96%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text-tertiary) 46%, var(--border-subtle));
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-raised) 94%, var(--surface-panel));
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.1;
+  text-align: center;
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 7%, transparent) inset;
+}
+
+.keyboard-shortcut-plus {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.keyboard-shortcut-recorder {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 142px;
+  min-height: 46px;
+  padding: 6px 8px;
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--accent-primary) 66%, var(--border-subtle));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--accent-primary) 9%, var(--surface-raised));
+  color: var(--text-primary);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  text-align: left;
+  cursor: default;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.keyboard-shortcut-recorder::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent-primary);
+  animation: keyboard-shortcut-signal 1.25s var(--ease-standard) infinite alternate;
+}
+
+.keyboard-shortcut-recorder-label {
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.keyboard-shortcut-recorder-keys {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.keyboard-shortcut-recorder-cancel {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.keyboard-shortcut-row-actions {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.keyboard-shortcut-row-actions button {
+  min-height: 20px;
+  padding: 0 5px;
+  border-color: transparent;
+  font-size: 9.5px;
+}
+
+.keyboard-shortcut-conflict {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: -2px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--state-warning) 25%, transparent);
+  color: var(--state-warning);
+  font-size: 10.5px;
+}
+
+.keyboard-shortcut-feedback {
+  min-height: 30px;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.keyboard-shortcut-feedback.is-warning {
+  border-color: color-mix(in srgb, var(--state-warning) 30%, var(--border-subtle));
+  color: var(--state-warning);
+}
+
+.keyboard-shortcut-feedback.is-error {
+  border-color: color-mix(in srgb, var(--state-danger) 30%, var(--border-subtle));
+  color: var(--state-danger);
+}
+
+.keyboard-shortcuts-live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes keyboard-shortcut-signal {
+  from {
+    opacity: 0.46;
+    transform: scaleY(0.58);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@media (max-width: 620px) {
+  .keyboard-shortcut-command {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .keyboard-shortcut-command-controls {
+    min-width: 0;
+    justify-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .keyboard-shortcut-command,
+  .keyboard-shortcut-recorder,
+  .keyboard-shortcut-recorder kbd {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}

@@ -133,51 +133,51 @@ Invoke `git-workflow` in checkpoint mode for the shortcut domain, its test, pers
 
 **Acceptance:** Wide Settings exposes Application → Keyboard Shortcuts; the detail renders grouped commands and accurate counts, records keys inline, handles validation/warnings/conflicts/clear/restore/reset accessibly, and is absent/unreachable on narrow layouts.
 
-- [ ] **Step 1: Write failing Settings navigation tests**
+- [x] **Step 1: Write failing Settings navigation tests**
 
 Update `web-settings-navigation.test.ts` to expect `keyboardShortcuts` as a detail title, Application before Chat only when `isWide`, and the new bundle export. Add a narrow-layout assertion that no Application row is rendered.
 
-- [ ] **Step 2: Run Settings navigation tests to verify RED**
+- [x] **Step 2: Run Settings navigation tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-settings-navigation.test.ts`
 
 Expected: FAIL because the detail and Application group do not exist.
 
-- [ ] **Step 3: Wire the responsive Settings detail contract**
+- [x] **Step 3: Wire the responsive Settings detail contract**
 
 Extend `SettingsDetail`/title/bundle, add Application to `SettingsSectionId`, and render one Keyboard Shortcuts navigation row before Chat only for `isWide`. Keep the existing Chat/Code/State/Debug order unchanged after Application.
 
-- [ ] **Step 4: Run Settings navigation tests to verify GREEN**
+- [x] **Step 4: Run Settings navigation tests to verify GREEN**
 
 Run: `npm test -- --runInBand __tests__/web-settings-navigation.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing editor interaction tests**
+- [x] **Step 5: Write failing editor interaction tests**
 
 In `KeyboardShortcutsSettingsDetail.test.tsx`, render the component with real domain snapshots and assert grouping/counts, platform keycaps, focusable recording mode, modifier preview, Escape cancellation, immediate legal assignment, blocked and warning text, conflict Replace/Cancel, clear, restore, reset confirmation, and `aria-live` feedback.
 
-- [ ] **Step 6: Run editor tests to verify RED**
+- [x] **Step 6: Run editor tests to verify RED**
 
 Run: `npm test -- --runInBand web/src/settings/KeyboardShortcutsSettingsDetail.test.tsx`
 
 Expected: FAIL because the editor component does not exist.
 
-- [ ] **Step 7: Implement the editor with the existing Icon system**
+- [x] **Step 7: Implement the editor with the existing Icon system**
 
 Build the grouped command list from `SHORTCUT_COMMANDS`; use buttons and semantic `<kbd>` elements, focus the recording surface after activation, prevent/stop only recording keystrokes, keep the old value until validation or conflict resolution completes, and send immutable next overrides through one `onChange` callback. Use inline reset confirmation rather than adding a new global dialog kind.
 
-- [ ] **Step 8: Run editor tests to verify GREEN**
+- [x] **Step 8: Run editor tests to verify GREEN**
 
 Run: `npm test -- --runInBand web/src/settings/KeyboardShortcutsSettingsDetail.test.tsx __tests__/web-settings-navigation.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 9: Add the disciplined command-index styling**
+- [x] **Step 9: Add the disciplined command-index styling**
 
 Add Settings-scoped styles for summary counters, group labels, compact command rows, current/recording keycaps, inline status/actions, warning/error states, focus-visible behavior, and the single emphasized recording signal band. Use existing surface/text/state/motion/radius tokens and add a `prefers-reduced-motion` rule that removes recording movement without hiding state.
 
-- [ ] **Step 10: Add and run CSS contract assertions**
+- [x] **Step 10: Add and run CSS contract assertions**
 
 Extend `web-settings-navigation.test.ts` to assert the shortcut classes use existing tokens, `<kbd>` remains visible, focus-visible exists, and reduced motion disables transform/animation.
 
@@ -185,7 +185,7 @@ Run: `npm test -- --runInBand web/src/settings/KeyboardShortcutsSettingsDetail.t
 
 Expected: PASS.
 
-- [ ] **Step 11: Git checkpoint**
+- [x] **Step 11: Git checkpoint**
 
 Invoke `git-workflow` in checkpoint mode for the Settings component, navigation, styles, and their tests. Record commit hash and subject.
 

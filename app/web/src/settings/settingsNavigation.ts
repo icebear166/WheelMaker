@@ -1,4 +1,5 @@
 export type SettingsDetail =
+  | 'keyboardShortcuts'
   | 'connectionStatus'
   | 'database'
   | 'debugLogs'
@@ -7,6 +8,7 @@ export type SettingsDetail =
 export type SettingsPageKind = 'root' | 'detail';
 
 export const SETTINGS_DETAILS: readonly SettingsDetail[] = [
+  'keyboardShortcuts',
   'connectionStatus',
   'database',
   'debugLogs',

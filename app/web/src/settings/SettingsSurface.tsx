@@ -29,6 +29,8 @@ export type SettingsScreenProps = MobileSettingsScreenProps & {
 
 export function settingsDetailTitle(detail: SettingsDetail): string {
   switch (detail) {
+    case 'keyboardShortcuts':
+      return 'Keyboard Shortcuts';
     case 'database':
       return 'Database';
     case 'connectionStatus':

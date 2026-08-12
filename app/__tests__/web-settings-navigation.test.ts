@@ -13,6 +13,7 @@ import {
 describe('settings navigation model', () => {
   test('classifies settings pages into root and details', () => {
     expect(SETTINGS_DETAILS).toEqual([
+      'keyboardShortcuts',
       'connectionStatus',
       'database',
       'debugLogs',
@@ -20,6 +21,7 @@ describe('settings navigation model', () => {
     ]);
 
     expect(settingsPageKind(null)).toBe('root');
+    expect(settingsPageKind('keyboardShortcuts')).toBe('detail');
     expect(settingsPageKind('connectionStatus')).toBe('detail');
     expect(settingsPageKind('database')).toBe('detail');
 
@@ -30,12 +32,13 @@ describe('settings navigation model', () => {
 
   test('keeps settings detail titles stable', () => {
     expect(settingsDetailTitle('connectionStatus')).toBe('Status');
+    expect(settingsDetailTitle('keyboardShortcuts')).toBe('Keyboard Shortcuts');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
     expect(settingsDetailTitle('deviceSessions')).toBe('Devices');
   });
 
-  test('groups the settings root into chat, code, state, and debug', () => {
+  test('adds a PC-only application group before the existing settings groups', () => {
     const projectRoot = path.join(__dirname, '..');
     const surface = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
     const root = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
@@ -44,11 +47,15 @@ describe('settings navigation model', () => {
     expect(surface).toContain('settings-workbench-panel');
     expect(surface).toContain('settings-workbench-nav');
     expect(surface).toContain('settings-workbench-detail-page');
-    expect(root).toContain("type SettingsSectionId = 'chat' | 'code' | 'state' | 'debug';");
+    expect(root).toContain("type SettingsSectionId = 'application' | 'chat' | 'code' | 'state' | 'debug';");
     expect(root).toContain('settings-section-${id}');
-    for (const id of ['chat', 'code', 'state', 'debug']) {
+    for (const id of ['application', 'chat', 'code', 'state', 'debug']) {
       expect(root).toContain(`id="${id}"`);
     }
+    expect(root).toContain('{isWide ? (');
+    expect(root).toContain('label="Keyboard Shortcuts"');
+    expect(root).toContain("openSettingsDetail('keyboardShortcuts')");
+    expect(root.indexOf('id="application"')).toBeLessThan(root.indexOf('id="chat"'));
     expect(root.indexOf('id="chat"')).toBeLessThan(root.indexOf('id="code"'));
     expect(root.indexOf('id="code"')).toBeLessThan(root.indexOf('id="state"'));
     expect(root.indexOf('id="state"')).toBeLessThan(root.indexOf('id="debug"'));
@@ -61,6 +68,9 @@ describe('settings navigation model', () => {
     expect(root).toContain('settings-subsection-title">Speech');
     expect(root).toContain('label="Status"');
     expect(root).toContain('Log Level');
+
+    const bundle = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsBundle.ts'), 'utf8');
+    expect(bundle).toContain("export { KeyboardShortcutsSettingsDetail } from './KeyboardShortcutsSettingsDetail';");
   });
 
   test('lays out the desktop settings workbench without hand-placed sections', () => {
@@ -125,5 +135,19 @@ describe('settings navigation model', () => {
     expect(css).not.toContain('/* workspace-ui-targeted-evolution: settings */');
     expect(css).toContain('.settings-danger-row');
     expect(css).toContain('var(--state-danger)');
+  });
+
+  test('styles the shortcut command index, recording state, and reduced motion', () => {
+    const css = fs.readFileSync(
+      path.resolve(__dirname, '../web/src/styles/settings.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    expect(css).toMatch(/\.keyboard-shortcuts-detail \{[\s\S]*display: grid;[\s\S]*\}/);
+    expect(css).toMatch(/\.keyboard-shortcut-command \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;[\s\S]*transition:[\s\S]*var\(--motion-fast\)[\s\S]*\}/);
+    expect(css).toMatch(/\.keyboard-shortcut-recorder \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\)[\s\S]*\}/);
+    expect(css).toMatch(/\.keyboard-shortcut-keycaps kbd[\s\S]*font-family: var\(--font-mono\);/);
+    expect(css).toMatch(/\.keyboard-shortcut-record-button:focus-visible[\s\S]*outline: 2px solid var\(--accent-primary\);/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.keyboard-shortcut-command,[\s\S]*\.keyboard-shortcut-recorder,[\s\S]*\.keyboard-shortcut-recorder kbd \{[\s\S]*animation: none;[\s\S]*transition: none;[\s\S]*transform: none;[\s\S]*\}/);
   });
 });
