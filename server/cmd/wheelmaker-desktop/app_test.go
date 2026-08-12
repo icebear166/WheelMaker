@@ -95,6 +95,19 @@ func TestBootstrapOnlyShowsWindowControlsForDesktopBridge(t *testing.T) {
 	}
 }
 
+func TestBootstrapWaitsForDesktopNavigationCommitBeforeLoadingState(t *testing.T) {
+	body, err := os.ReadFile("bootstrap/index.html")
+	if err != nil {
+		t.Fatalf("read bootstrap asset: %v", err)
+	}
+	html := string(body)
+	readyIndex := strings.Index(html, "await Promise.resolve(window.wheelMakerBootstrap?.ready);")
+	loadStateIndex := strings.LastIndex(html, "runBootstrapAction('bootstrap.getState')")
+	if readyIndex < 0 || loadStateIndex < 0 || readyIndex > loadStateIndex {
+		t.Fatalf("Bootstrap must await the Desktop navigation commit before loading state: ready=%d getState=%d", readyIndex, loadStateIndex)
+	}
+}
+
 func TestDesktopBaseURLContract(t *testing.T) {
 	tests := []struct {
 		name string

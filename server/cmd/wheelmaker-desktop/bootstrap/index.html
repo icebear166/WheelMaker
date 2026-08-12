@@ -196,7 +196,10 @@
     minimize.addEventListener('click', () => void callWindow('minimize'));
     maximize.addEventListener('click', () => void callWindow('toggleMaximize'));
     close.addEventListener('click', () => void callWindow('close'));
-    window.addEventListener('DOMContentLoaded', () => void runBootstrapAction('bootstrap.getState'));
+    window.addEventListener('DOMContentLoaded', async () => {
+      await Promise.resolve(window.wheelMakerBootstrap?.ready);
+      await runBootstrapAction('bootstrap.getState');
+    });
   </script>
 </body>
 </html>

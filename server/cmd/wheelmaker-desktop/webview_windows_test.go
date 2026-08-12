@@ -60,6 +60,30 @@ func TestDesktopBootstrapBindsLocalhostSelection(t *testing.T) {
 	}
 }
 
+func TestDesktopBootstrapReadySignalFollowsCommittedNavigation(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	for _, want := range []string{
+		"const desktopBootstrapReady = new Promise",
+		"window.addEventListener('__wheelMakerDesktopBootstrapReady'",
+		"ready: desktopBootstrapReady",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("Desktop runtime Bootstrap readiness script missing %q", want)
+		}
+	}
+
+	source, err := os.ReadFile("webview_profile_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceText := string(source)
+	commitIndex := strings.Index(sourceText, "CommitTopLevelNavigation(epoch, rawURL)")
+	signalIndex := strings.Index(sourceText, "a.webview.Eval(desktopBootstrapReadySignalScript())")
+	if commitIndex < 0 || signalIndex < 0 || signalIndex < commitIndex {
+		t.Fatalf("Bootstrap ready signal must follow committed navigation: commit=%d signal=%d", commitIndex, signalIndex)
+	}
+}
+
 func TestDesktopRuntimeInitScriptAuthorizesExactLocalhostPage(t *testing.T) {
 	baseURL := fixedDesktopLocalhostTestURL()
 	script := desktopRuntimeInitScript(baseURL)

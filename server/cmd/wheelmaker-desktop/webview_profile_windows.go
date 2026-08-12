@@ -404,6 +404,9 @@ func (a *desktopWebViewPolicyAdapter) navigationCompleted(args *desktopNavigatio
 		return
 	}
 	a.runtime.security.CommitTopLevelNavigation(epoch, rawURL)
+	if a.runtime.security.Authorize(epoch, true, desktopBridgeGetState) {
+		a.webview.Eval(desktopBootstrapReadySignalScript())
+	}
 }
 
 func (a *desktopWebViewPolicyAdapter) source() (string, error) {

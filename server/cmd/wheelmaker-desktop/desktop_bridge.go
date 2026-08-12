@@ -3,8 +3,9 @@ package main
 import "strconv"
 
 const (
-	desktopResourceIconID     uint = 1
-	desktopTitleBarThemeColor      = "#1e1e1e"
+	desktopResourceIconID      uint = 1
+	desktopTitleBarThemeColor       = "#1e1e1e"
+	desktopBootstrapReadyEvent      = "__wheelMakerDesktopBootstrapReady"
 
 	desktopBootstrapGetStateBinding        = "__wheelMakerBootstrapGetState"
 	desktopBootstrapSaveBinding            = "__wheelMakerBootstrapSaveBaseURL"
@@ -50,8 +51,12 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
     if (typeof fn !== 'function') return Promise.reject(new Error('Native bridge unavailable'));
     return fn(...args);
   };
+	const desktopBootstrapReady = new Promise(resolve => {
+		window.addEventListener('` + desktopBootstrapReadyEvent + `', resolve, {once: true});
+	});
 	if (location.href === 'about:blank' || location.href === ` + bootstrapDocumentURL + `) {
     window.wheelMakerBootstrap = Object.freeze({
+		ready: desktopBootstrapReady,
       getState: invoke('` + desktopBootstrapGetStateBinding + `'),
       saveBaseUrl: invoke('` + desktopBootstrapSaveBinding + `'),
       selectLocalhost: invoke('` + desktopBootstrapSelectLocalhostBinding + `'),
@@ -121,4 +126,8 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
 		});
   }
 })();` + "\n" + desktopLaunchOverlayScript()
+}
+
+func desktopBootstrapReadySignalScript() string {
+	return `window.dispatchEvent(new Event(` + strconv.Quote(desktopBootstrapReadyEvent) + `));`
 }
