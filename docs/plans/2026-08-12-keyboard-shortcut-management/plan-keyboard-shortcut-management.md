@@ -55,67 +55,67 @@ Invoke `git-workflow` in checkpoint mode for the three wiki files. Record the re
 
 **Acceptance:** Eight stable actions resolve to collision-free logical bindings; Primary maps by platform, key values use character semantics, validation distinguishes blocked versus warned combinations, replacement is atomic, and valid/null overrides survive persistence while old or damaged data resolves safely.
 
-- [ ] **Step 1: Write failing domain tests for registry and platform formatting**
+- [x] **Step 1: Write failing domain tests for registry and platform formatting**
 
 In `web-keyboard-shortcuts.test.ts`, assert the exact action order/group/default table, Windows/Linux `Ctrl` versus macOS `Cmd` keycaps, lowercase normalization of letter keys, exact modifier matching, and narrow/composing/default-prevented/paused routing rejection.
 
-- [ ] **Step 2: Run the registry tests to verify RED**
+- [x] **Step 2: Run the registry tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts`
 
 Expected: FAIL because `web/src/shortcuts/keyboardShortcuts.ts` and its APIs do not exist.
 
-- [ ] **Step 3: Implement the registry, logical binding, formatting, and matching primitives**
+- [x] **Step 3: Implement the registry, logical binding, formatting, and matching primitives**
 
 Create the domain module with `ShortcutActionId`, `ShortcutPlatform`, `ShortcutBinding`, `ShortcutOverrides`, `SHORTCUT_COMMANDS`, `normalizeShortcutEvent`, `formatShortcutBinding`, `resolveEffectiveShortcutBindings`, and `matchWorkspaceShortcut`. Store an abstract `primary` modifier and normalize `KeyboardEvent.key`; do not store physical `code` values.
 
-- [ ] **Step 4: Run the registry tests to verify GREEN**
+- [x] **Step 4: Run the registry tests to verify GREEN**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts`
 
 Expected: PASS for registry, platform formatting, normalization, and matching cases.
 
-- [ ] **Step 5: Write failing validation and conflict tests**
+- [x] **Step 5: Write failing validation and conflict tests**
 
 Add cases for modifier-only and bare text rejection, allowed function keys, blocked refresh/close/quit/devtools/system-switch combinations, warning-only browser combinations, default compatibility exceptions, duplicate detection, cancel/no-op, atomic replace with the old action set to `null`, clear, single restore, and reset-all.
 
-- [ ] **Step 6: Run validation tests to verify RED**
+- [x] **Step 6: Run validation tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts`
 
 Expected: FAIL only for missing validation/update APIs.
 
-- [ ] **Step 7: Implement validation and immutable override updates**
+- [x] **Step 7: Implement validation and immutable override updates**
 
 Add pure `validateShortcutCandidate`, `findShortcutConflict`, `assignShortcutBinding`, `replaceShortcutConflict`, `clearShortcutBinding`, `restoreShortcutDefault`, and `resetShortcutOverrides`. The blocked/warning policy is platform-aware; UI-created state never contains duplicate effective bindings.
 
-- [ ] **Step 8: Run validation tests to verify GREEN**
+- [x] **Step 8: Run validation tests to verify GREEN**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 9: Write failing persistence compatibility tests**
+- [x] **Step 9: Write failing persistence compatibility tests**
 
 Extend `web-workspace-persistence-safety.test.ts` to seed valid, null, unknown, malformed, and conflicting `keyboardShortcutOverrides` rows; assert deterministic safe resolution inputs, patch-only persistence of that key, and reset behavior.
 
-- [ ] **Step 10: Run persistence tests to verify RED**
+- [x] **Step 10: Run persistence tests to verify RED**
 
 Run: `npm test -- --runInBand __tests__/web-workspace-persistence-safety.test.ts`
 
 Expected: FAIL because `PersistedGlobalState` has no shortcut override field/key/sanitizer.
 
-- [ ] **Step 11: Add shortcut overrides to WorkspacePersistence**
+- [x] **Step 11: Add shortcut overrides to WorkspacePersistence**
 
 Add `keyboardShortcutOverrides` to `PersistedGlobalState`, `GLOBAL_KEYS`, defaults, input sanitation, returned state, and patch/global row serialization. Reuse the domain sanitizer so unknown/malformed entries are ignored, explicit `null` is retained, and corrupted collisions cannot become active.
 
-- [ ] **Step 12: Run domain and persistence regressions**
+- [x] **Step 12: Run domain and persistence regressions**
 
 Run: `npm test -- --runInBand __tests__/web-keyboard-shortcuts.test.ts __tests__/web-workspace-persistence-safety.test.ts`
 
 Expected: PASS with no console errors or warnings.
 
-- [ ] **Step 13: Git checkpoint**
+- [x] **Step 13: Git checkpoint**
 
 Invoke `git-workflow` in checkpoint mode for the shortcut domain, its test, persistence, and persistence test. Record commit hash and subject.
 

@@ -32,6 +32,10 @@ import {
   sanitizeFloatingControlYRatio,
 } from '../preferences/floatingControlPreferences';
 import { sanitizeHubColorMap } from './hubProjectPreferences';
+import {
+  sanitizeShortcutOverrides,
+  type ShortcutOverrides,
+} from '../shortcuts/keyboardShortcuts';
 
 export type PersistedThemeMode = 'dark' | 'light';
 export type PersistedFloatingControlSide = 'left' | 'right';
@@ -77,6 +81,7 @@ export type PersistedGlobalState = {
   selectedPortRelayTarget: PortRelayTarget | null;
   portRelayListenPort: number;
   previewWorkbenchSnapshot: PreviewWorkbenchSnapshot | null;
+  keyboardShortcutOverrides: ShortcutOverrides;
 };
 
 export type PersistedChatCursor = {
@@ -300,6 +305,7 @@ const GLOBAL_KEYS = {
   selectedPortRelayTarget: 'selectedPortRelayTarget',
   portRelayListenPort: 'portRelayListenPort',
   previewWorkbenchSnapshot: 'previewWorkbenchSnapshot',
+  keyboardShortcutOverrides: 'keyboardShortcutOverrides',
 } as const;
 
 const REMOVED_GLOBAL_PREFERENCE_KEYS = new Set([
@@ -344,6 +350,7 @@ function defaultGlobalState(): PersistedGlobalState {
     selectedPortRelayTarget: null,
     portRelayListenPort: 28810,
     previewWorkbenchSnapshot: null,
+    keyboardShortcutOverrides: {},
   };
 }
 
@@ -567,6 +574,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     selectedPortRelayTarget: normalizePortRelayTarget(input.selectedPortRelayTarget),
     portRelayListenPort: normalizePortRelayListenPort(input.portRelayListenPort, base.portRelayListenPort),
     previewWorkbenchSnapshot: sanitizePreviewWorkbenchSnapshot(input.previewWorkbenchSnapshot),
+    keyboardShortcutOverrides: sanitizeShortcutOverrides(input.keyboardShortcutOverrides),
   };
 }
 
@@ -1170,6 +1178,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(this.state.global.selectedPortRelayTarget), updatedAt},
       {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(this.state.global.portRelayListenPort), updatedAt},
       {k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(this.state.global.previewWorkbenchSnapshot), updatedAt},
+      {k: GLOBAL_KEYS.keyboardShortcutOverrides, v: serialize(this.state.global.keyboardShortcutOverrides), updatedAt},
     ];
   }
 

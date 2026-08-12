@@ -351,6 +351,61 @@ describe('workspace persistence safety', () => {
     expect(rowValue(db.rows('wm_global_kv'), 'sessionPanelPinned')).toBe(true);
   });
 
+  test('sanitizes shortcut overrides loaded from older or damaged client data', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase({
+      wm_global_kv: [{
+        k: 'keyboardShortcutOverrides',
+        v: JSON.stringify({
+          unknown: {primary: true, key: 'x'},
+          toggleSessions: {primary: true, key: '9'},
+          togglePreview: {primary: true, key: '9'},
+          toggleTerminal: null,
+          quickOpen: {primary: 'yes', key: 'q'},
+        }),
+        updatedAt: now,
+      }],
+    });
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+
+    expect(repository.getGlobalState()).toMatchObject({
+      keyboardShortcutOverrides: {
+        toggleSessions: {primary: true, key: '9'},
+        togglePreview: null,
+        toggleTerminal: null,
+      },
+    });
+  });
+
+  test('persists shortcut overrides as one patched global key', async () => {
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings());
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.resetMutationLog();
+
+    repository.patchGlobalState({
+      keyboardShortcutOverrides: {
+        toggleSessions: null,
+        toggleTerminal: {alt: true, key: 'F8'},
+      },
+    } as never);
+    await repository.flushPendingWrites();
+
+    expect(repository.getGlobalState()).toMatchObject({
+      keyboardShortcutOverrides: {
+        toggleSessions: null,
+        toggleTerminal: {alt: true, key: 'F8'},
+      },
+    });
+    expect(rowValue(db.rows('wm_global_kv'), 'keyboardShortcutOverrides')).toEqual({
+      toggleSessions: null,
+      toggleTerminal: {alt: true, key: 'F8'},
+    });
+    const puts = db.lastMutation()[0]?.puts as Array<{k: string}> | undefined;
+    expect((puts ?? []).map(row => row.k)).toEqual(['keyboardShortcutOverrides']);
+  });
+
   test('clears only rebuildable caches and retries a setting after quota failure', async () => {
     const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
       wm_project_state: [{projectId: 'p1', stateJson: '{}', updatedAt: Date.now()}],
