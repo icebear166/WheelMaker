@@ -24,23 +24,23 @@
 
 **Acceptance:** `circleArrowUp` is an available icon in the existing glyph registry, and Source disclosure state can be read/written through `sessionStorage` using an identity-safe key with corrupt/unavailable storage falling back to expanded.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
   - Assert `ICON_NAMES` includes `circleArrowUp` and the glyph renders through `Icon`.
   - Assert a new `skillSourceExpandedPreferenceKey` differs for Hub/Project/Source identities.
   - Assert missing storage returns `true`, explicit `false` reads as collapsed, explicit `true` reads as expanded, and malformed JSON/storage exceptions return expanded.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
   - Run: `npm test -- --runInBand app/web/src/settings/skillManagementView.test.ts app/web/src/common/Icon.test.tsx`
   - Expected: FAIL because the glyph and preference helpers do not exist.
 
-- [ ] **Step 3: Implement minimally**
+- [x] **Step 3: Implement minimally**
   - Add the Lucide `circle-arrow-up` geometry to `Icon.tsx`.
   - Add session-storage helpers in `skillManagementView.ts`; store only collapsed Source keys and treat absent keys as expanded.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
   - Run the same focused Jest command; expected PASS.
 
-- [ ] **Step 5: Refactor and regression check**
+- [x] **Step 5: Refactor and regression check**
   - Run the existing skill management source-structure tests and ensure no localStorage/show-uninstalled behavior changes.
 
 - [ ] **Step 6: Git checkpoint**

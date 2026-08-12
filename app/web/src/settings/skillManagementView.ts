@@ -208,10 +208,20 @@ export function isSkillActionPendingForHub(pendingKey: string, hubId: string): b
 
 type SkillPreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
+type SkillSourceIdentity = SkillSourceTarget;
+
+const SKILL_SOURCE_EXPANDED_PREFERENCE_KEY = 'wheelmaker.skills.sourceExpanded.v1';
+
 function skillPreferenceStorage(storage?: SkillPreferenceStorage): SkillPreferenceStorage | null {
   if (storage) return storage;
   if (typeof window === 'undefined') return null;
   return window.localStorage;
+}
+
+function skillSessionPreferenceStorage(storage?: SkillPreferenceStorage): SkillPreferenceStorage | null {
+  if (storage) return storage;
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage;
 }
 
 export function skillShowUninstalledPreferenceKey(input: SkillScopeTarget): string {
@@ -238,6 +248,52 @@ export function writeSkillShowUninstalled(
     skillPreferenceStorage(storage)?.setItem(skillShowUninstalledPreferenceKey(input), value ? 'true' : 'false');
   } catch {
     // A blocked preference store must not block Skills management.
+  }
+}
+
+export function skillSourceExpandedPreferenceKey(input: SkillSourceIdentity): string {
+  return [
+    input.hubId,
+    input.scope,
+    input.projectName || '',
+    input.sourceKey,
+  ].map(value => encodeURIComponent(value)).join('/');
+}
+
+export function readSkillSourceExpanded(
+  input: SkillSourceIdentity,
+  storage?: SkillPreferenceStorage,
+): boolean {
+  try {
+    const raw = skillSessionPreferenceStorage(storage)?.getItem(SKILL_SOURCE_EXPANDED_PREFERENCE_KEY);
+    if (!raw) return true;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return parsed[skillSourceExpandedPreferenceKey(input)] !== false;
+  } catch {
+    return true;
+  }
+}
+
+export function writeSkillSourceExpanded(
+  input: SkillSourceIdentity,
+  expanded: boolean,
+  storage?: SkillPreferenceStorage,
+): void {
+  try {
+    const target = skillSessionPreferenceStorage(storage);
+    if (!target) return;
+    const raw = target.getItem(SKILL_SOURCE_EXPANDED_PREFERENCE_KEY);
+    const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+    const key = skillSourceExpandedPreferenceKey(input);
+    if (expanded) {
+      delete parsed[key];
+    } else {
+      parsed[key] = false;
+    }
+    const next = Object.fromEntries(Object.entries(parsed).filter(([, value]) => value === false));
+    target.setItem(SKILL_SOURCE_EXPANDED_PREFERENCE_KEY, JSON.stringify(next));
+  } catch {
+    // A blocked or corrupt preference store must not block Skills management.
   }
 }
 
