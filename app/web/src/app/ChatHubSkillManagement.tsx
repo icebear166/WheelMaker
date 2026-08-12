@@ -174,7 +174,7 @@ function SkillSourceLedger({
 }) {
   const stale = source.status === 'stale';
   const visibleSkills = useMemo(
-    () => [...source.skills]
+    () => [...(source.skills ?? [])]
       .filter(skill => shouldShowSkillCatalogRow(skill, showUninstalled))
       .sort((left, right) => left.name.localeCompare(right.name)),
     [showUninstalled, source.skills],

@@ -96,6 +96,19 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
 });
 
+test('treats nullable source skills from the registry as an empty catalog', async () => {
+  const nullableCatalog = {
+    ...catalog,
+    sources: [{...catalog.sources[0], skills: null}],
+  } as unknown as RegistrySkillSourceScopeSnapshot;
+
+  const {renderer} = await renderScope({snapshot: nullableCatalog});
+
+  expect(renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'})).toBeTruthy();
+  expect(renderer.root.findByProps({className: 'chat-hub-skill-source-empty'}).children.join(''))
+    .toContain('No installed skills');
+});
+
 test('shows remote additions after enabling the scope preference and offers install only there', async () => {
   const {renderer, actions} = await renderScope({target: projectTarget});
 

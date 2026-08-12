@@ -485,12 +485,14 @@ func cloneProjectSkillsSourceSnapshots(source map[string]tools.SkillsSourceScope
 func cloneSkillsSourceScopeSnapshot(source tools.SkillsSourceScopeSnapshot) tools.SkillsSourceScopeSnapshot {
 	out := tools.SkillsSourceScopeSnapshot{
 		Sources:               make([]tools.SkillsSourceCatalogSnapshot, len(source.Sources)),
-		UnmanagedSkills:       append([]tools.SkillsSourceCatalogSkillSnapshot(nil), source.UnmanagedSkills...),
+		UnmanagedSkills:       make([]tools.SkillsSourceCatalogSkillSnapshot, len(source.UnmanagedSkills)),
 		NeedsResolutionSkills: append([]string(nil), source.NeedsResolutionSkills...),
 	}
+	copy(out.UnmanagedSkills, source.UnmanagedSkills)
 	for index, snapshot := range source.Sources {
 		out.Sources[index] = snapshot
-		out.Sources[index].Skills = append([]tools.SkillsSourceCatalogSkillSnapshot(nil), snapshot.Skills...)
+		out.Sources[index].Skills = make([]tools.SkillsSourceCatalogSkillSnapshot, len(snapshot.Skills))
+		copy(out.Sources[index].Skills, snapshot.Skills)
 	}
 	return out
 }
