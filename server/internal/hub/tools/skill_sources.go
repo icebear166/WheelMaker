@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	skillSourceLockVersion     = 1
+	skillSourceLockVersion     = 2
 	skillSourceHashAlgorithm   = "sha256-v1"
 	skillSourceMissingRevision = "missing"
 )
@@ -39,7 +39,7 @@ type skillSourceLock struct {
 type skillSourceSnapshot struct {
 	Source         string                     `json:"source"`
 	SourceKey      string                     `json:"sourceKey"`
-	Ref            string                     `json:"ref"`
+	Ref            string                     `json:"-"`
 	ResolvedCommit string                     `json:"resolvedCommit,omitempty"`
 	RefreshedAt    string                     `json:"refreshedAt,omitempty"`
 	SkillList      []skillSourceSkillSnapshot `json:"skillList"`
@@ -70,7 +70,6 @@ type nativeSkillSourceEntry struct {
 type nativeSkillSourceGroup struct {
 	SourceKey string
 	Sources   map[string]struct{}
-	Refs      map[string]struct{}
 	Skills    []string
 }
 
@@ -95,47 +94,37 @@ func skillSourceLockPath(projectRoot, globalLockPath, homeDir string) string {
 }
 
 func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillSourceMigrationResult, error) {
-	lock, revision, err := readSkillSourceLockFile(sourceLockPath)
+	lock, revision, rebuild, err := readSkillSourceLockForRebuild(sourceLockPath)
 	if err != nil {
 		return skillSourceMigrationResult{}, err
 	}
-	entries := readNativeSkillSourceEntries(nativeLockPath)
+	entries, err := loadNativeSkillSourceEntries(nativeLockPath)
+	if err != nil && rebuild {
+		return skillSourceMigrationResult{}, err
+	}
+	if err != nil {
+		entries = nil
+	}
 	groups, unmanaged := classifyNativeSkillSourceEntries(entries)
 	result := skillSourceMigrationResult{
 		Lock:            lock,
 		Revision:        revision,
 		UnmanagedSkills: unmanaged,
 	}
-	configured := make(map[string]struct{}, len(lock.Sources))
-	for _, source := range lock.Sources {
-		configured[strings.ToLower(source.SourceKey)] = struct{}{}
-	}
-	for _, group := range groups {
-		if len(group.Sources) != 1 || len(group.Refs) != 1 {
-			result.NeedsResolutionSkills = append(result.NeedsResolutionSkills, group.Skills...)
-			continue
+	if rebuild {
+		lock = newSkillSourceLock()
+		for _, group := range groups {
+			sources := make([]string, 0, len(group.Sources))
+			for source := range group.Sources {
+				sources = append(sources, source)
+			}
+			sort.Strings(sources)
+			lock.Sources = append(lock.Sources, skillSourceSnapshot{
+				Source:    sources[0],
+				SourceKey: group.SourceKey,
+				SkillList: []skillSourceSkillSnapshot{},
+			})
 		}
-		if _, exists := configured[strings.ToLower(group.SourceKey)]; exists || revision != skillSourceMissingRevision {
-			continue
-		}
-		var source string
-		for candidate := range group.Sources {
-			source = candidate
-		}
-		var ref string
-		for candidate := range group.Refs {
-			ref = candidate
-		}
-		lock.Sources = append(lock.Sources, skillSourceSnapshot{
-			Source:    source,
-			SourceKey: group.SourceKey,
-			Ref:       ref,
-			SkillList: []skillSourceSkillSnapshot{},
-		})
-		configured[strings.ToLower(group.SourceKey)] = struct{}{}
-	}
-	sort.Strings(result.NeedsResolutionSkills)
-	if revision == skillSourceMissingRevision && len(lock.Sources) > 0 {
 		updatedRevision, err := writeSkillSourceLockFile(sourceLockPath, revision, lock)
 		if err != nil {
 			return skillSourceMigrationResult{}, err
@@ -148,23 +137,30 @@ func readOrMigrateSkillSourceLock(nativeLockPath, sourceLockPath string) (skillS
 }
 
 func readNativeSkillSourceEntries(path string) []nativeSkillSourceEntry {
+	entries, _ := loadNativeSkillSourceEntries(path)
+	return entries
+}
+
+func loadNativeSkillSourceEntries(path string) ([]nativeSkillSourceEntry, error) {
 	if strings.TrimSpace(path) == "" {
-		return nil
+		return nil, nil
 	}
 	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("read native skill lock: %w", err)
 	}
 	var body struct {
 		Skills map[string]struct {
 			Source     string `json:"source"`
 			SourceURL  string `json:"sourceUrl"`
 			SourceType string `json:"sourceType"`
-			Ref        string `json:"ref"`
 		} `json:"skills"`
 	}
-	if json.Unmarshal(raw, &body) != nil {
-		return nil
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, fmt.Errorf("decode native skill lock: %w", err)
 	}
 	names := make([]string, 0, len(body.Skills))
 	for name := range body.Skills {
@@ -179,10 +175,9 @@ func readNativeSkillSourceEntries(path string) []nativeSkillSourceEntry {
 			Source:     strings.TrimSpace(value.Source),
 			SourceURL:  strings.TrimSpace(value.SourceURL),
 			SourceType: strings.ToLower(strings.TrimSpace(value.SourceType)),
-			Ref:        strings.TrimSpace(value.Ref),
 		})
 	}
-	return entries
+	return entries, nil
 }
 
 func classifyNativeSkillSourceEntries(entries []nativeSkillSourceEntry) ([]nativeSkillSourceGroup, []string) {
@@ -201,7 +196,7 @@ func classifyNativeSkillSourceEntries(entries []nativeSkillSourceEntry) ([]nativ
 			address = entry.Source
 		}
 		normalizedSource, sourceKey, err := normalizeSkillGitSource(address)
-		if err != nil || entry.Ref == "" {
+		if err != nil {
 			unmanaged = append(unmanaged, entry.Name)
 			continue
 		}
@@ -210,12 +205,10 @@ func classifyNativeSkillSourceEntries(entries []nativeSkillSourceEntry) ([]nativ
 			group = &nativeSkillSourceGroup{
 				SourceKey: sourceKey,
 				Sources:   map[string]struct{}{},
-				Refs:      map[string]struct{}{},
 			}
 			grouped[sourceKey] = group
 		}
 		group.Sources[normalizedSource] = struct{}{}
-		group.Refs[entry.Ref] = struct{}{}
 		group.Skills = append(group.Skills, entry.Name)
 	}
 	keys := make([]string, 0, len(grouped))
@@ -396,6 +389,31 @@ func newSkillSourceLock() skillSourceLock {
 	return skillSourceLock{Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm, Sources: []skillSourceSnapshot{}}
 }
 
+func readSkillSourceLockForRebuild(path string) (skillSourceLock, string, bool, error) {
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return newSkillSourceLock(), skillSourceMissingRevision, true, nil
+	}
+	if err != nil {
+		return skillSourceLock{}, "", false, fmt.Errorf("read skill source lock: %w", err)
+	}
+	var envelope struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return skillSourceLock{}, "", false, fmt.Errorf("decode skill source lock: %w", err)
+	}
+	revision := skillSourceRevision(raw)
+	if envelope.Version == 1 {
+		return newSkillSourceLock(), revision, true, nil
+	}
+	lock, err := decodeSkillSourceLock(raw)
+	if err != nil {
+		return skillSourceLock{}, "", false, err
+	}
+	return lock, revision, false, nil
+}
+
 func readSkillSourceLockFile(path string) (skillSourceLock, string, error) {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -449,9 +467,6 @@ func validateSkillSourceLock(lock skillSourceLock) error {
 			return fmt.Errorf("duplicate skill source %q", source.SourceKey)
 		}
 		seenSources[key] = struct{}{}
-		if strings.TrimSpace(source.Ref) == "" || strings.HasPrefix(source.Ref, "-") || strings.ContainsAny(source.Ref, "\x00\r\n") {
-			return fmt.Errorf("skill source %q has invalid ref", source.SourceKey)
-		}
 		if source.ResolvedCommit != "" && (len(source.ResolvedCommit) < 40 || len(source.ResolvedCommit) > 64 || !skillSourceHexPattern.MatchString(source.ResolvedCommit)) {
 			return fmt.Errorf("skill source %q has invalid resolved commit", source.SourceKey)
 		}

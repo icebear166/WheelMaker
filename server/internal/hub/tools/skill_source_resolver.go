@@ -30,9 +30,6 @@ func newSkillSourceResolver(temporaryRoot string) *skillSourceResolver {
 }
 
 func (r *skillSourceResolver) Resolve(ctx context.Context, source skillSourceSnapshot) (skillSourceSnapshot, error) {
-	if err := validateSkillSourceRef(source.Ref); err != nil {
-		return skillSourceSnapshot{}, err
-	}
 	address := strings.TrimSpace(source.Source)
 	if address == "" || strings.HasPrefix(address, "-") || strings.ContainsAny(address, "\x00\r\n") {
 		return skillSourceSnapshot{}, errors.New("invalid skill source address")
@@ -46,7 +43,7 @@ func (r *skillSourceResolver) Resolve(ctx context.Context, source skillSourceSna
 	if _, err := runSkillSourceGitCommand(ctx, "", "clone", "--quiet", "--no-checkout", address, checkout); err != nil {
 		return skillSourceSnapshot{}, fmt.Errorf("clone skill source: %w", err)
 	}
-	commit, err := resolveSkillSourceCommit(ctx, checkout, source.Ref)
+	commit, err := resolveSkillSourceDefaultCommit(ctx, checkout)
 	if err != nil {
 		return skillSourceSnapshot{}, err
 	}
@@ -64,27 +61,24 @@ func (r *skillSourceResolver) Resolve(ctx context.Context, source skillSourceSna
 	return result, nil
 }
 
-func validateSkillSourceRef(ref string) error {
-	ref = strings.TrimSpace(ref)
-	if ref == "" || strings.HasPrefix(ref, "-") || len(ref) > 1024 || strings.ContainsAny(ref, "\x00\r\n") {
-		return errors.New("invalid skill source ref")
+func resolveSkillSourceDefaultCommit(ctx context.Context, checkout string) (string, error) {
+	remoteHead, err := runSkillSourceGitCommand(ctx, checkout, "symbolic-ref", "--quiet", "refs/remotes/origin/HEAD")
+	if err != nil {
+		return "", errors.New("skill source remote default HEAD was not found")
 	}
-	return nil
-}
-
-func resolveSkillSourceCommit(ctx context.Context, checkout, ref string) (string, error) {
-	candidates := []string{ref + "^{commit}", "refs/tags/" + ref + "^{commit}", "refs/remotes/origin/" + ref + "^{commit}"}
-	for _, candidate := range candidates {
-		output, err := runSkillSourceGitCommand(ctx, checkout, "rev-parse", "--verify", "--end-of-options", candidate)
-		if err != nil {
-			continue
-		}
-		commit := strings.TrimSpace(output)
-		if len(commit) >= 40 && len(commit) <= 64 && skillSourceHexPattern.MatchString(commit) {
-			return commit, nil
-		}
+	remoteHead = strings.TrimSpace(remoteHead)
+	if !strings.HasPrefix(remoteHead, "refs/remotes/origin/") {
+		return "", errors.New("skill source remote default HEAD is invalid")
 	}
-	return "", fmt.Errorf("skill source ref %q was not found", ref)
+	output, err := runSkillSourceGitCommand(ctx, checkout, "rev-parse", "--verify", "--end-of-options", remoteHead+"^{commit}")
+	if err != nil {
+		return "", errors.New("skill source remote default HEAD was not found")
+	}
+	commit := strings.TrimSpace(output)
+	if len(commit) < 40 || len(commit) > 64 || !skillSourceHexPattern.MatchString(commit) {
+		return "", errors.New("skill source remote default HEAD resolved to an invalid commit")
+	}
+	return commit, nil
 }
 
 func runSkillSourceGitCommand(ctx context.Context, dir string, args ...string) (string, error) {

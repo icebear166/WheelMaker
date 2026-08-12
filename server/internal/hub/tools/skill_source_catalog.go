@@ -427,14 +427,6 @@ func composeSkillSourceCatalog(
 			}
 		}
 	}
-	groups, _ := classifyNativeSkillSourceEntries(native)
-	for _, group := range groups {
-		if len(group.Sources) != 1 || len(group.Refs) != 1 {
-			if _, configuredSource := configured[strings.ToLower(group.SourceKey)]; !configuredSource {
-				result.NeedsResolutionSkills = append(result.NeedsResolutionSkills, group.Skills...)
-			}
-		}
-	}
 	sort.Strings(result.NeedsResolutionSkills)
 	return result
 }
