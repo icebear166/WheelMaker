@@ -17,6 +17,7 @@ import (
 const (
 	hubStateSectionAgentPackages    = "agentPackages"
 	hubStateSectionWheelmakerUpdate = "wheelmakerUpdate"
+	hubStateSectionGatewayUpdate    = "gatewayUpdate"
 	hubStateSectionSkills           = "skills"
 	hubStateSectionTokenStats       = "tokenStats"
 	hubStateSectionFileIndex        = "fileIndex"

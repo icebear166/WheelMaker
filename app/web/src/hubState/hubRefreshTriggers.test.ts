@@ -13,7 +13,7 @@ test('menu and hub expansion refresh only on opening edges', async () => {
   await triggers.setMenuOpen(true, ['hub-a']);
   await triggers.setHubExpanded('hub-a', true);
   await triggers.setHubExpanded('hub-a', true);
-  expect(refresh).toHaveBeenNthCalledWith(1, 'hub-a', ['wheelmakerUpdate'], false);
+  expect(refresh).toHaveBeenNthCalledWith(1, 'hub-a', ['wheelmakerUpdate', 'gatewayUpdate'], false);
   expect(refresh).toHaveBeenNthCalledWith(
     2,
     'hub-a',
@@ -39,8 +39,8 @@ test('refreshes Hubs that appear after the menu is already open', async () => {
   await triggers.setMenuOpen(true, ['hub-a']);
   await triggers.setMenuOpen(true, ['hub-a', 'hub-b']);
 
-  expect(refresh).toHaveBeenNthCalledWith(1, 'hub-a', ['wheelmakerUpdate'], false);
-  expect(refresh).toHaveBeenNthCalledWith(2, 'hub-b', ['wheelmakerUpdate'], false);
+  expect(refresh).toHaveBeenNthCalledWith(1, 'hub-a', ['wheelmakerUpdate', 'gatewayUpdate'], false);
+  expect(refresh).toHaveBeenNthCalledWith(2, 'hub-b', ['wheelmakerUpdate', 'gatewayUpdate'], false);
 });
 
 test('treats visibly expanded Hubs as expansion edges on each menu opening', async () => {

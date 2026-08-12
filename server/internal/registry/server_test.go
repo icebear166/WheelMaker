@@ -538,6 +538,22 @@ func TestUpdateOnlyHubRequestAllowedRequiresExactUpdatePayload(t *testing.T) {
 			want: true,
 		},
 		{
+			name:    "refresh Gateway update",
+			method:  rp.RegistryMethodHubStateRefresh,
+			payload: map[string]any{"sections": []string{"gatewayUpdate"}},
+			want:    true,
+		},
+		{
+			name:   "request Gateway update",
+			method: rp.RegistryMethodHubStateAction,
+			payload: map[string]any{
+				"section": "gatewayUpdate",
+				"action":  "requestUpdate",
+				"params":  map[string]any{},
+			},
+			want: true,
+		},
+		{
 			name:    "get is not update query",
 			method:  rp.RegistryMethodHubStateGet,
 			payload: map[string]any{"sections": []string{"wheelmakerUpdate"}},

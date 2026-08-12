@@ -38,6 +38,7 @@ function createHarness(overrides: Partial<ChatHubMenuProps> = {}) {
     onUpdateHubConfig: jest.fn().mockResolvedValue(undefined),
     onRequestWheelMakerUpdate: jest.fn(),
     onRequestWheelMakerRestart: jest.fn(),
+    onRequestGatewayUpdate: jest.fn(),
     onRequestNpmUpdate: jest.fn(),
     onPackageAction: jest.fn(),
     onRequestSkillInstall: jest.fn(),
@@ -126,6 +127,14 @@ function opsView(patch: Partial<ChatHubOpsView> = {}): ChatHubOpsView {
       updateVisible: true,
       restartVisible: true,
       updateAvailable: true,
+    },
+    gateway: {
+      loading: false,
+      pending: false,
+      pendingAction: null,
+      currentVersion: '-',
+      updateVisible: false,
+      updateAvailable: false,
     },
     npm: {
       loading: false,
@@ -319,6 +328,68 @@ test('hub row uses independent update and restart actions with three icon-count 
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'mcp');
   act(() => skills.props.onClick());
   expect(callbacks.onToggleSection).toHaveBeenCalledWith('hub-a', 'skills');
+});
+
+test('hub row shows a Gateway capsule with an update dot for an outdated Gateway', async () => {
+  const {props, callbacks} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        gateway: {
+          loading: false,
+          pending: false,
+          pendingAction: null,
+          currentVersion: 'v1.3',
+          updateVisible: true,
+          updateAvailable: true,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const version = row.findByProps({className: 'chat-hub-version-readout'});
+  expect(version.findAllByProps({className: 'chat-hub-action-label'}).map(item => item.children)).toEqual([
+    ['v1.2'],
+  ]);
+  const nameGroup = row.findByProps({className: 'chat-hub-row-name-group'});
+  const gatewayCapsule = nameGroup.findByProps({className: 'chat-hub-gateway-capsule'});
+  expect(gatewayCapsule.type).toBe('button');
+  expect(gatewayCapsule.props['aria-label']).toBe('Update Gateway v1.3');
+  expect(gatewayCapsule.findByProps({className: 'chat-hub-gateway-capsule-label'}).children).toEqual(['Gateway']);
+  expect(gatewayCapsule.findByProps({className: 'chat-hub-update-dot'})).toBeTruthy();
+  act(() => gatewayCapsule.props.onClick());
+  expect(callbacks.onRequestGatewayUpdate).toHaveBeenCalledWith('hub-a');
+});
+
+test('hub row keeps the Gateway capsule without a dot when Gateway is current', async () => {
+  const {props} = createHarness({
+    opsByHubId: {
+      'hub-a': opsView({
+        gateway: {
+          loading: false,
+          pending: false,
+          pendingAction: null,
+          currentVersion: 'v1.3',
+          updateVisible: true,
+          updateAvailable: false,
+        },
+      }),
+    },
+  });
+  let renderer!: TestRenderer.ReactTestRenderer;
+  await act(async () => {
+    renderer = TestRenderer.create(<ChatHubMenu {...props} />);
+  });
+
+  const row = renderer.root.findByProps({className: 'chat-hub-row'});
+  const nameGroup = row.findByProps({className: 'chat-hub-row-name-group'});
+  const gatewayCapsule = nameGroup.findByProps({className: 'chat-hub-gateway-capsule'});
+  expect(gatewayCapsule.type).toBe('button');
+  expect(gatewayCapsule.findAllByProps({className: 'chat-hub-update-dot'})).toHaveLength(0);
 });
 
 test('MCP opens a local inline zero-state without dispatching an operation', async () => {

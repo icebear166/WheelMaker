@@ -56,3 +56,24 @@ test('prunes release storage through the registry', async () => {
     payload: {sourcePath: '/src/WheelMaker'},
   });
 });
+
+test('requests a Gateway update through its dedicated HubState section', async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const repository = new RegistryRepository({
+    request: async (input: Record<string, unknown>) => {
+      requests.push(input);
+      return {payload: {
+        accepted: true,
+        result: {ok: true, accepted: true, status: 'update_pending', hubId: 'hub-a', canRequestUpdate: false},
+      }};
+    },
+  } as any);
+
+  const result = await repository.requestGatewayUpdate('hub-a');
+  expect(result.status).toBe('update_pending');
+  expect(requests[0]).toMatchObject({
+    method: 'hub.state.action',
+    hubId: 'hub-a',
+    payload: {section: 'gatewayUpdate', action: 'requestUpdate', params: {}},
+  });
+});
