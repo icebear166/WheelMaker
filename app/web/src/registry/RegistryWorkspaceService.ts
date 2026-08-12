@@ -137,6 +137,11 @@ export type ProjectGitLogOptions = {
   limit?: number;
 };
 
+type PendingRepositoryConnection = {
+  repository: RegistryRepository;
+  closed: boolean;
+};
+
 export function translateExternalFileError(error: unknown): never {
   const details = error instanceof RegistryRequestError
     && error.details
@@ -164,6 +169,9 @@ export class RegistryWorkspaceService {
   private session: WorkspaceSession | null = null;
   private eventListeners = new Set<(event: RegistryEnvelope) => void>();
   private closeListeners = new Set<() => void>();
+  private connectionGeneration = 0;
+  private pendingConnections = new Map<number, PendingRepositoryConnection>();
+  private boundRepository: RegistryRepository | null = null;
   private unsubscribeRepositoryEvent: (() => void) | null = null;
   private unsubscribeRepositoryClose: (() => void) | null = null;
   private readonly createRepository: () => RegistryRepository;
@@ -207,27 +215,53 @@ export class RegistryWorkspaceService {
   }
 
   async connect(wsUrl: string): Promise<WorkspaceSession> {
+    const connectionGeneration = ++this.connectionGeneration;
+    this.closePendingConnections();
     const repository = this.createRepository();
+    const pendingConnection: PendingRepositoryConnection = {repository, closed: false};
+    this.pendingConnections.set(connectionGeneration, pendingConnection);
     try {
       await repository.initialize(wsUrl, this.clientName);
+      if (connectionGeneration !== this.connectionGeneration) {
+        throw new Error('connection attempt superseded');
+      }
+      const snapshot = await this.listProjectSnapshotWithRetry(repository);
+      if (connectionGeneration !== this.connectionGeneration) {
+        throw new Error('connection attempt superseded');
+      }
+      const selectedProjectId = snapshot.projects[0]?.projectId ?? '';
+      this.pendingConnections.delete(connectionGeneration);
       const previousRepository = this.repository;
       this.bindRepository(repository);
-      const snapshot = await this.listProjectSnapshotWithRetry(repository);
-      const selectedProjectId = snapshot.projects[0]?.projectId ?? '';
-      previousRepository?.close();
       this.repository = repository;
       this.session = {...snapshot, selectedProjectId};
+      previousRepository?.close();
       void this.hubStore.discover(snapshot.hubs.map(hub => hub.hubId));
       return this.session;
     } catch (error) {
-      this.unbindRepository();
-      repository.close();
+      this.pendingConnections.delete(connectionGeneration);
+      this.unbindRepository(repository);
+      if (!pendingConnection.closed) {
+        pendingConnection.closed = true;
+        repository.close();
+      }
       throw error;
+    }
+  }
+
+  private closePendingConnections(): void {
+    const pendingConnections = Array.from(this.pendingConnections.values());
+    this.pendingConnections.clear();
+    for (const pendingConnection of pendingConnections) {
+      if (pendingConnection.closed) continue;
+      pendingConnection.closed = true;
+      pendingConnection.repository.close();
     }
   }
 
   private bindRepository(repository: RegistryRepository): void {
     this.unbindRepository();
+    this.boundRepository = repository;
     this.unsubscribeRepositoryEvent = repository.onEvent(event => {
       this.releasePublishStore.ingest(event);
       if (event.method === RegistryMethods.HubStateUpdated && event.hubId) {
@@ -255,11 +289,15 @@ export class RegistryWorkspaceService {
     });
   }
 
-  private unbindRepository(): void {
+  private unbindRepository(repository?: RegistryRepository): void {
+    if (repository && this.boundRepository !== repository) {
+      return;
+    }
     this.unsubscribeRepositoryEvent?.();
     this.unsubscribeRepositoryEvent = null;
     this.unsubscribeRepositoryClose?.();
     this.unsubscribeRepositoryClose = null;
+    this.boundRepository = null;
   }
 
   private async listProjectSnapshotWithRetry(repository: RegistryRepository): Promise<RegistryProjectListResponse> {
@@ -279,8 +317,10 @@ export class RegistryWorkspaceService {
   }
 
   close(): void {
+    this.connectionGeneration += 1;
+    this.closePendingConnections();
     const repository = this.repository;
-    this.unbindRepository();
+    this.unbindRepository(repository ?? undefined);
     this.repository = null;
     this.session = null;
     repository?.close();

@@ -4,6 +4,49 @@ import path from 'path';
 import {RegistryClient} from '../web/src/registry/RegistryClient';
 
 describe('web registry client close policy', () => {
+  test('closes and rejects a websocket connection that is still opening', async () => {
+    const originalWebSocket = globalThis.WebSocket;
+    class PendingWebSocket {
+      static readonly OPEN = 1;
+      static readonly instances: PendingWebSocket[] = [];
+      readyState = 0;
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: ((event: {code: number; reason: string}) => void) | null = null;
+      onmessage: (() => void) | null = null;
+      send = jest.fn();
+      close = jest.fn(() => {
+        this.readyState = 3;
+        this.finishClose();
+      });
+
+      constructor(_url: string) {
+        PendingWebSocket.instances.push(this);
+      }
+
+      finishClose(): void {
+        this.onclose?.({code: 1000, reason: 'client close'});
+      }
+    }
+    (globalThis as typeof globalThis & {WebSocket: typeof PendingWebSocket}).WebSocket = PendingWebSocket;
+    const client = new RegistryClient(8000);
+    let connectPromise: Promise<void> | null = null;
+    let socket: PendingWebSocket | null = null;
+
+    try {
+      connectPromise = client.connect('ws://registry.example/ws');
+      socket = PendingWebSocket.instances[0];
+      client.close();
+
+      expect(socket.close).toHaveBeenCalledTimes(1);
+      await expect(connectPromise).rejects.toThrow('registry websocket closed during connect');
+    } finally {
+      socket?.finishClose();
+      await connectPromise?.catch(() => undefined);
+      (globalThis as typeof globalThis & {WebSocket?: typeof WebSocket}).WebSocket = originalWebSocket;
+    }
+  });
+
   test('does not treat websocket error event as immediate disconnect', () => {
     const projectRoot = path.join(__dirname, '..');
     const clientTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryClient.ts'), 'utf8');

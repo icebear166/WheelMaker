@@ -43,6 +43,7 @@ function parseErrorPayload(payload: unknown): RegistryErrorPayload {
 
 export class RegistryClient {
   private ws: WebSocket | null = null;
+  private cancelConnect: (() => void) | null = null;
   private seq = 1;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly eventListeners = new Set<(event: RegistryEnvelope) => void>();
@@ -57,13 +58,21 @@ export class RegistryClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
+    this.cancelConnect?.();
     await new Promise<void>((resolve, reject) => {
       const ws = new WebSocket(url);
       let settled = false;
       let sawErrorEvent = false;
+      let cancelConnect: (() => void) | null = null;
+      const clearConnectAttempt = () => {
+        if (this.cancelConnect === cancelConnect) {
+          this.cancelConnect = null;
+        }
+      };
       const connectTimer = setTimeout(() => {
         if (settled) return;
         settled = true;
+        clearConnectAttempt();
         reject(
           new Error(
             `registry websocket connect timeout: url=${url} (check network, TLS cert, and nginx websocket proxy)`,
@@ -74,20 +83,26 @@ export class RegistryClient {
         } catch {}
       }, this.timeoutMs);
 
-      const fail = (message: string) => {
+      const fail = (message: string, closeSocket = true) => {
         if (settled) return;
         settled = true;
         clearTimeout(connectTimer);
+        clearConnectAttempt();
         reject(new Error(message));
-        try {
-          ws.close();
-        } catch {}
+        if (closeSocket) {
+          try {
+            ws.close();
+          } catch {}
+        }
       };
+      cancelConnect = () => fail(`registry websocket closed during connect: url=${url}`);
+      this.cancelConnect = cancelConnect;
 
       ws.onopen = () => {
         if (settled) return;
         settled = true;
         clearTimeout(connectTimer);
+        clearConnectAttempt();
         this.ws = ws;
         this.bind(ws);
         resolve();
@@ -100,6 +115,7 @@ export class RegistryClient {
           const suffix = sawErrorEvent ? ' (after websocket error event)' : '';
           fail(
             `registry websocket closed during connect: code=${event.code} reason=${event.reason || 'n/a'} url=${url}${suffix}`,
+            false,
           );
         }
       };
@@ -186,6 +202,7 @@ export class RegistryClient {
 
   close(): void {
     this.closing = true;
+    this.cancelConnect?.();
     for (const [id, pending] of this.pending.entries()) {
       clearTimeout(pending.timer);
       pending.removeAbortListener?.();

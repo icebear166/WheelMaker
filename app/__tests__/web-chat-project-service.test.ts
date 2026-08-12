@@ -1,6 +1,72 @@
 import { RegistryWorkspaceService } from '../web/src/registry/RegistryWorkspaceService';
 
 describe('registry workspace project-scoped chat service methods', () => {
+  test('keeps a newer repository active when close invalidates an in-flight reconnect', async () => {
+    let releaseStaleSnapshot: ((snapshot: {projects: Array<{projectId: string}>; hubs: []}) => void) | null = null;
+    let markStaleSnapshotStarted: (() => void) | null = null;
+    const staleSnapshotStarted = new Promise<void>(resolve => {
+      markStaleSnapshotStarted = resolve;
+    });
+    const staleSnapshot = new Promise<{projects: Array<{projectId: string}>; hubs: []}>(resolve => {
+      releaseStaleSnapshot = resolve;
+    });
+    const createRepository = (
+      projectId: string,
+      snapshot: Promise<{projects: Array<{projectId: string}>; hubs: []}> | null = null,
+    ) => {
+      const eventListeners = new Set<(event: {type: 'event'; method: string; payload: {}}) => void>();
+      const closeListeners = new Set<() => void>();
+      return {
+        initialize: jest.fn().mockResolvedValue(undefined),
+        listProjectSnapshot: jest.fn(async () => {
+          if (snapshot) {
+            markStaleSnapshotStarted?.();
+            return snapshot;
+          }
+          return {projects: [{projectId}], hubs: []};
+        }),
+        onEvent: jest.fn((listener: (event: {type: 'event'; method: string; payload: {}}) => void) => {
+          eventListeners.add(listener);
+          return () => eventListeners.delete(listener);
+        }),
+        onClose: jest.fn((listener: () => void) => {
+          closeListeners.add(listener);
+          return () => closeListeners.delete(listener);
+        }),
+        close: jest.fn(() => {
+          closeListeners.forEach(listener => listener());
+        }),
+        emitEvent: (method: string) => {
+          eventListeners.forEach(listener => listener({type: 'event', method, payload: {}}));
+        },
+      };
+    };
+    const initialRepository = createRepository('project-initial');
+    const staleRepository = createRepository('project-stale', staleSnapshot);
+    const recoveredRepository = createRepository('project-recovered');
+    const repositories = [initialRepository, staleRepository, recoveredRepository];
+    const service = new RegistryWorkspaceService({
+      createRepository: () => repositories.shift() as never,
+    });
+    const onEvent = jest.fn();
+    service.onEvent(onEvent);
+
+    await service.connect('ws://registry.example/initial');
+    const staleConnect = service.connect('ws://registry.example/stale');
+    await staleSnapshotStarted;
+    service.close();
+    expect(staleRepository.close).toHaveBeenCalledTimes(1);
+    const recoveredSession = await service.connect('ws://registry.example/recovered');
+    releaseStaleSnapshot?.({projects: [{projectId: 'project-stale'}], hubs: []});
+
+    await expect(staleConnect).rejects.toThrow('connection attempt superseded');
+    expect(recoveredSession.selectedProjectId).toBe('project-recovered');
+    expect(service.getSession()?.selectedProjectId).toBe('project-recovered');
+    recoveredRepository.emitEvent('session.message');
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(staleRepository.close).toHaveBeenCalledTimes(1);
+  });
+
   test('does not publish an intentional close as a remote repository close', async () => {
     const closeListeners = new Set<() => void>();
     const repository = {
