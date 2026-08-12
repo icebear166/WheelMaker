@@ -52,6 +52,13 @@ describe('SessionRow', () => {
     expect(pinBtn.findAllByType('svg')).toHaveLength(1);
   });
 
+  it('shows a noninteractive pin indicator when unpin is unavailable', async () => {
+    const {tree} = await renderRow({pinned: true, onUnpin: undefined});
+
+    expect(tree().root.findByProps({className: 'wide-session-pin-indicator'}).findAllByType('svg')).toHaveLength(1);
+    expect(tree().root.findAllByProps({className: 'wide-session-pin-btn'})).toHaveLength(0);
+  });
+
   it('fires onUnpin from the pin button without triggering row click', async () => {
     const {tree, onClick, onUnpin} = await renderRow({pinned: true});
     const pinBtn = tree().root.findByProps({className: 'wide-session-pin-btn'});

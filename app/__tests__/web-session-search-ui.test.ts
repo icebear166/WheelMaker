@@ -32,8 +32,8 @@ describe('web session search UI wiring', () => {
     expect(main).not.toContain('highlightActive={turnIsChatSearchActive}');
     expect(controls).toContain('onKeyDown={handleSessionSearchInputKeyDown}');
     expect(controls).toContain('value={sessionSearchProjectScope}');
-    expect(controls).toContain('onChange={event => setSessionSearchProjectScope(event.target.value)}');
-    expect(controls).toContain('<option value="">All Projects</option>');
+    expect(controls).toContain('<SessionSearchProjectPicker');
+    expect(controls).toContain('onChange={setSessionSearchProjectScope}');
     expect(controls).toContain('aria-label="Run session search"');
     expect(controls).toContain('startSessionSearch().catch(() => undefined)');
 
@@ -200,7 +200,7 @@ describe('web session search UI wiring', () => {
     );
     expect(hubSummary).not.toContain('{mobile ? (');
     expect(main).toContain("return 'Searching...';");
-    expect(main).toContain("return 'Some projects failed';");
+    expect(main).toContain("return 'Some sessions couldn’t be searched';");
     expect(main).toContain("return 'No matching sessions';");
     expect(main).not.toContain('className="chat-hub-summary-count"');
     expect(main).not.toContain('Prompt · turn');
@@ -217,6 +217,19 @@ describe('web session search UI wiring', () => {
     expect(styles).not.toContain('.mobile-chat-drawer-header .chat-hub-summary-copy');
     expect(styles).not.toContain('.chat-hub-summary-label {\n  display: none;');
     expect(styles).not.toContain('.chat-hub-summary-count {');
+  });
+
+  test('uses the custom project picker instead of the native select', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const picker = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'chat', 'session', 'SessionSearchProjectPicker.tsx'), 'utf8');
+
+    expect(main).toContain('<SessionSearchProjectPicker');
+    expect(main).not.toContain('className="session-search-project-select"');
+    expect(picker).toContain('role="listbox"');
+    expect(picker).toContain('role="option"');
+    expect(picker).toContain('focusFirstMenuItem');
+    expect(picker).toContain('handleMenuKeyDown');
   });
 
   test('keeps the Hub popover inside the left sidebar', () => {

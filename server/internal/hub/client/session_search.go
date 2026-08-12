@@ -328,9 +328,55 @@ func (m *sessionSearchManager) searchPromptTurns(ctx context.Context, sessionID 
 		return 0, false, fmt.Errorf("session recorder is required")
 	}
 	recorder := m.client.sessionRecorder
+	if recorder.store == nil {
+		return 0, false, fmt.Errorf("session store is required")
+	}
+	rec, err := recorder.store.LoadSession(ctx, recorder.projectName, sessionID)
+	if err != nil {
+		return 0, false, err
+	}
+	if rec == nil {
+		return 0, false, fmt.Errorf("session not found: %s", sessionID)
+	}
+	persistedLatest := sessionSyncLatestPersistedTurnIndex(rec.SessionSyncJSON)
+
+	// A running prompt is kept in memory until prompt_done. Search the live
+	// turns first, then read only the persisted range. The summary snapshot can
+	// include those live turns, but the turn files cannot, so passing the full
+	// latest index to scanTurnsNewestFirst would report a false missing-file
+	// error for every still-running session.
+	recorder.writeMu.Lock()
+	liveTurns := []sessionViewTurn{}
+	if state := recorder.promptState[sessionID]; state != nil {
+		for _, turn := range sortedSessionTurns(state.turns) {
+			if turn.turnIndex <= persistedLatest || (latestTurnIndex > 0 && turn.turnIndex > latestTurnIndex) {
+				continue
+			}
+			liveTurns = append(liveTurns, sessionViewTurn{
+				TurnIndex: turn.turnIndex,
+				Content:   buildSessionTurnContentJSON(turn.method, turn.payload),
+				Finished:  turn.finished,
+			})
+		}
+	}
+	recorder.writeMu.Unlock()
+	for index := len(liveTurns) - 1; index >= 0; index-- {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		turn := liveTurns[index]
+		if sessionSearchContains(sessionSearchTurnVisibleText(turn.Content), queryFold) {
+			return turn.TurnIndex, true, nil
+		}
+	}
+
 	if recorder.turnStore != nil {
+		persistedSearchLatest := persistedLatest
+		if latestTurnIndex > 0 && latestTurnIndex < persistedSearchLatest {
+			persistedSearchLatest = latestTurnIndex
+		}
 		var matchedTurn int64
-		err := recorder.turnStore.scanTurnsNewestFirst(ctx, recorder.projectName, sessionID, latestTurnIndex, func(turn sessionViewTurn) (bool, error) {
+		err := recorder.turnStore.scanTurnsNewestFirst(ctx, recorder.projectName, sessionID, persistedSearchLatest, func(turn sessionViewTurn) (bool, error) {
 			if sessionSearchContains(sessionSearchTurnVisibleText(turn.Content), queryFold) {
 				matchedTurn = turn.TurnIndex
 				return true, nil
@@ -349,6 +395,9 @@ func (m *sessionSearchManager) searchPromptTurns(ctx context.Context, sessionID 
 	}
 	for index := len(turns) - 1; index >= 0; index-- {
 		turn := turns[index]
+		if latestTurnIndex > 0 && turn.TurnIndex > latestTurnIndex {
+			continue
+		}
 		if sessionSearchContains(sessionSearchTurnVisibleText(turn.Content), queryFold) {
 			return turn.TurnIndex, true, nil
 		}

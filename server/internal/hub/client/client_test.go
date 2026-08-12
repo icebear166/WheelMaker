@@ -3081,6 +3081,34 @@ func TestHandleSessionRequestSessionSearchFindsTitleAndNewestPrompt(t *testing.T
 	}
 }
 
+func TestHandleSessionRequestSessionSearchIncludesLivePromptBeforePersistence(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(t.TempDir())
+	ctx := context.Background()
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-live", "Live session")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-live", "live search needle", nil)); err != nil {
+		t.Fatalf("RecordEvent live prompt: %v", err)
+	}
+
+	if _, err := c.HandleSessionRequest(ctx, "session.search", "proj1", json.RawMessage(`{"action":"start","searchId":"search-live","query":"live search needle"}`)); err != nil {
+		t.Fatalf("HandleSessionRequest(session.search start): %v", err)
+	}
+	done := waitSessionSearchDoneForTest(t, c, ctx, "search-live")
+	if len(done.Errors) != 0 {
+		t.Fatalf("search errors = %#v, want none for live prompt", done.Errors)
+	}
+	result, ok := resultBySessionIDForTest(done.Results, "sess-live")
+	if !ok {
+		t.Fatalf("results = %#v, want live session match", done.Results)
+	}
+	if result.Source != "prompt" || result.TurnIndex != 1 {
+		t.Fatalf("live prompt result = %#v, want prompt turn 1", result)
+	}
+}
+
 func TestHandleSessionRequestSessionSearchValidationQueryAndCancel(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()

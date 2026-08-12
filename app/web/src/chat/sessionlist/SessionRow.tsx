@@ -90,6 +90,16 @@ export function SessionRow({
           {pinning ? <SessionIcon name="loader" spin /> : <SessionIcon name="pin" />}
         </button>
       ) : null}
+      {pinned && !onUnpin ? (
+        <span
+          className="wide-session-pin-indicator"
+          role="img"
+          aria-label="Pinned session"
+          data-tooltip="Pinned session"
+        >
+          <SessionIcon name="pin" />
+        </span>
+      ) : null}
       {markColor ? (
         <span
           className={`wide-session-mark ${sessionMarkColorClass(markColor)}`}

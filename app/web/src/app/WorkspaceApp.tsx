@@ -177,6 +177,7 @@ import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
+import {SessionSearchProjectPicker} from '../chat/session/SessionSearchProjectPicker';
 import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
@@ -5803,7 +5804,7 @@ export function App() {
       return 'Searching...';
     }
     if (sessionSearchErrorCount > 0) {
-      return 'Some projects failed';
+      return 'Some sessions couldn’t be searched';
     }
     if (sessionSearchFilter.projects.length === 0) {
       return 'No matching sessions';
@@ -14742,19 +14743,11 @@ export function App() {
             placeholder="Search sessions"
             aria-label="Search sessions"
           />
-          <select
-            className="session-search-project-select"
+          <SessionSearchProjectPicker
+            projects={visibleProjectItems}
             value={sessionSearchProjectScope}
-            onChange={event => setSessionSearchProjectScope(event.target.value)}
-            aria-label="Search project"
-          >
-            <option value="">All Projects</option>
-            {visibleProjectItems.map(projectItem => (
-              <option key={projectItem.projectId} value={projectItem.projectId}>
-                {projectItem.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSessionSearchProjectScope}
+          />
           <button
             type="button"
             className="session-search-icon-btn session-search-submit-btn"

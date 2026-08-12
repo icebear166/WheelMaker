@@ -710,22 +710,145 @@
   color: color-mix(in srgb, var(--text-secondary) 80%, transparent);
 }
 
-.session-search-project-select {
+.session-search-project-picker {
+  position: relative;
   min-width: 0;
-  max-width: 104px;
-  height: 22px;
-  padding: 0 4px;
+  flex: 0 1 auto;
+}
+
+.session-search-project-trigger {
+  min-width: 0;
+  max-width: 164px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 7px;
   border: 0;
   border-left: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: 0 5px 5px 0;
   background: transparent;
   color: var(--text-secondary);
   font-size: 10px;
-  outline: none;
-  text-overflow: ellipsis;
+  text-align: left;
+  cursor: pointer;
 }
 
-.session-search-project-select:focus-visible {
+.session-search-project-trigger:hover,
+.session-search-project-trigger:focus-visible,
+.session-search-project-trigger[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
   color: var(--text-primary);
+  outline: none;
+}
+
+.session-search-project-trigger .sl-icon {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+}
+
+.session-search-project-label,
+.session-search-project-trigger-hub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-search-project-label {
+  flex: 1 1 auto;
+}
+
+.session-search-project-trigger-hub {
+  flex: 0 1 auto;
+  max-width: 72px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.session-search-project-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 95;
+  width: min(272px, calc(100vw - 24px));
+  max-height: min(360px, calc(100vh - 96px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.session-search-project-option {
+  width: 100%;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-search-project-option:hover,
+.session-search-project-option:focus-visible,
+.session-search-project-option.selected {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  outline: none;
+}
+
+.session-search-project-option-check {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-primary);
+}
+
+.session-search-project-option-check .sl-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.session-search-project-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.session-search-project-name,
+.session-search-project-hub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-search-project-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.session-search-project-hub {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+@media (max-width: 620px) {
+  .session-search-project-trigger {
+    max-width: 132px;
+  }
+
+  .session-search-project-trigger-hub {
+    display: none;
+  }
 }
 
 .session-search-icon-btn {

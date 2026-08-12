@@ -259,6 +259,20 @@
 .wide-session-pin-btn:hover {
   background: var(--hover);
 }
+.wide-session-pin-indicator {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  margin-right: 4px;
+  color: var(--accent-primary);
+  pointer-events: none;
+}
+.wide-session-pin-indicator .sl-icon {
+  width: 14px;
+  height: 14px;
+}
 .session-mark-red {
   --session-mark-color: var(--state-danger);
 }
