@@ -236,6 +236,14 @@ type Cursor = { turnIndex: number };
 - 选中 session 的显示视图由 raw source store 派生完整轻量 Display Index，再由 `react-virtuoso` 只挂载 visible + overscan items。上滑/下滑只改变 virtualizer range，不触发 server read。
 - 尾部锁定时新 turn 和 streaming 高度增长跟随到底；用户离开底部后保持当前锚点并显示回到底部 affordance。
 
+### 跨 Session 搜索
+
+`session.search` 是 Project-scoped 的异步 Hub 任务，使用 `start/query/cancel` 三种 action。App 在一次显式提交时冻结 query 与可见 Project 范围：All Projects 由 App 向各 Project 并行 start，单 Project 只启动目标分支。每个 Project 的 query 只复制任务内存中的累计结果、完成态与错误，不重新读取 turn 文件；关闭搜索或新的提交会按 searchId 取消旧任务，旧结果不得写入新任务状态。该链路不启动 Agent，也不建设跨提交缓存、持久索引或数据库表。
+
+Hub 在 start 时快照活跃 Session，并以固定上限的 worker pool 并发扫描。单 Session 先判断标题，再从最新 turn 向前读取热历史；只提取 `prompt_request`、`user_message_chunk` 和 `agent_message_chunk` 的可见文本，thought、tool、plan、system、status、done 与未知 generic 字段均不可命中。标题或任一可搜索 turn 首次命中后立即停止该 Session 的后续读取，并只累计一次 Session identity。取消上下文同时约束待分发和正在读取的工作。
+
+跨 Session 结果的稳定语义只有 `projectId + sessionId`。既有响应中的 `source` 和 `turnIndex` 保留兼容但不再决定 App 展示或点击行为，Registry protocol version 不变。App 将累计 identity 映射回现有 Project/Session 索引，因此渐进返回不会改变规范排序；分支读取失败只形成部分失败状态，不清空其他分支的成功结果。用户选择结果后仍走正常 `session.read`，加载完成再把已提交 query 交给前端当前会话搜索完成正文匹配与定位。
+
 ### Hub 内存 Session Queue
 
 Prompt 与 compact 共用由 Hub `Session` 持有的 FIFO。Queue 不写入 SQLite、SessionRecorder、turn history 或 Registry；Hub 重启后允许丢失。Queue 非空（包括 failed 后暂停）时 Session 不得被闲置回收，所有 App 断开后 Hub 仍继续调度。Goal、status、fork 等 Session action 不进入 queue，其他 active execution 会阻止下一项启动。

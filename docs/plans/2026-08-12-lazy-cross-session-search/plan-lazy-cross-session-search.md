@@ -22,21 +22,21 @@
 
 **Acceptance:** The confirmed UI workflow and Hub scan/poll/cancel ownership are documented without copying implementation checklists into the wiki.
 
-- [ ] **Step 1: Read both confirmed wiki targets and locate their existing search/session-read sections**
+- [x] **Step 1: Read both confirmed wiki targets and locate their existing search/session-read sections**
 
 Run: `rg -n "search|Search|session.read|Turn|轮询" docs/wiki/frontend-interaction/pc-chat-sidebar-modes.md docs/wiki/architecture/session-management-and-sync.md`
 
 Expected: Existing sidebar/search and session storage sections are identified without opening unrelated wiki pages.
 
-- [ ] **Step 2: Update the sidebar interaction contract**
+- [x] **Step 2: Update the sidebar interaction contract**
 
 Record explicit submit, All/one visible Project scope, normal Project/Session list reuse, read-only search actions, progressive filtering, partial-failure feedback, and the post-load handoff to current-session search. Explicitly state that cross-session results do not show match counts, source, turn, snippet, or title highlight.
 
-- [ ] **Step 3: Update the session management architecture contract**
+- [x] **Step 3: Update the session management architecture contract**
 
 Record per-project task ownership, one scan per submit, memory-only query polling, bounded per-project session concurrency, first-hit short-circuit, cancellation/searchId isolation, strict searchable turn methods, and the absence of a persistent index or protocol-version change.
 
-- [ ] **Step 4: Verify wiki scope and formatting**
+- [x] **Step 4: Verify wiki scope and formatting**
 
 Run: `git diff --check -- docs/wiki/frontend-interaction/pc-chat-sidebar-modes.md docs/wiki/architecture/session-management-and-sync.md`
 

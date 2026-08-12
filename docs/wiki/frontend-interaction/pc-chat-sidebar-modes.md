@@ -58,5 +58,7 @@ pin 态与浮动态共用同一公式。Goal/Plan/Limits 在 pin 态是聊天主
 
 - 搜索入口按区域归属：chat 标题栏搜索按钮打开当前会话搜索，Sessions 标题栏搜索按钮打开跨会话搜索，Preview chrome 搜索按钮打开文件内搜索；会话搜索条只覆盖 800px 对话列上方，不提供多目标切换器。
 - **键盘搜索路由**：Windows/Linux 使用 `Ctrl`、macOS 使用 `Cmd`。`Ctrl/Cmd+F` 在聊天区域打开当前会话搜索；当焦点位于可搜索 Preview 时打开当前 Preview 搜索；Preview 不支持文本搜索时回退到当前会话。`Ctrl/Cmd+Shift+F` 从任意工作区焦点直接打开 Sessions 侧栏搜索，不弹出目标选择器。
-- 全局 Sessions 搜索覆盖所有可见 Project 的活跃会话，不包含 Archived；结果继续在 Sessions 侧栏中按 Project 分组展示。输入停止短暂 debounce 后自动查询，Enter / Shift+Enter 用于结果导航，Esc 取消并关闭。
+- 跨 Sessions 搜索是现有列表的过滤模式，不是独立 Global Center。范围默认是 **All Projects**，也可单选一个可见 Project；只覆盖提交时范围内可见 Project 的活跃会话，不包含 hidden Project 或 Archived。输入和范围选择只是草稿，只有点击搜索按钮或按 Enter 才提交；新提交立即取消旧任务并清空旧结果，Esc 取消并关闭。
+- 搜索命中的 Session 按正常 Project 分组和 Session 排序逐步出现，并完全复用正常 Project header 与 Session row。搜索态只保留 Project 展开/收起和 Session 选择，隐藏 Recent、Draft、older 折叠行、Project 新建/恢复/Pin、Session Unpin 及右键/长按管理入口；结果不展示命中数、来源、Prompt、Turn、snippet 或标题高亮。
+- 点击搜索结果后保持 Sessions 搜索和过滤列表打开。目标 Session 通过正常加载链路就绪后，以已提交关键词打开当前会话搜索；正文匹配数量、高亮、首项定位和前后导航都由当前会话搜索负责。若跨 Session 层只命中标题，当前会话搜索允许显示正文 `0` 结果。搜索分支部分失败时保留成功结果并显示简短的部分失败状态，再次提交会重试所选完整范围。
 - Archived 列表视图在会话面板内完整可见，不被右侧悬浮列等任何层遮挡；归档会话行保持一条一行，标题与操作不折行、不错位。
