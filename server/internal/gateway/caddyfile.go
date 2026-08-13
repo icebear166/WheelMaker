@@ -725,7 +725,7 @@ func canonicalizeManagedServers(configJSON []byte, global GlobalConfig, sites []
 
 func ensureManagedTLSPolicies(servers map[string]any, sites []SiteConfig, relayPort int) {
 	if server, ok := servers["https"].(map[string]any); ok {
-		server["tls_connection_policies"] = tlsConnectionPolicies(sites)
+		server["tls_connection_policies"] = sharedHTTPSConnectionPolicies(server, sites)
 	}
 	if relayPort == 0 {
 		return
@@ -738,6 +738,43 @@ func ensureManagedTLSPolicies(servers map[string]any, sites []SiteConfig, relayP
 			return
 		}
 	}
+}
+
+func sharedHTTPSConnectionPolicies(server map[string]any, sites []SiteConfig) []any {
+	hosts := make(map[string]struct{})
+	for _, site := range sites {
+		if site.HTTPS() {
+			hosts[site.Host()] = struct{}{}
+		}
+	}
+	routes, _ := server["routes"].([]any)
+	for _, rawRoute := range routes {
+		route, _ := rawRoute.(map[string]any)
+		matchers, _ := route["match"].([]any)
+		for _, rawMatcher := range matchers {
+			matcher, _ := rawMatcher.(map[string]any)
+			routeHosts, _ := matcher["host"].([]any)
+			for _, rawHost := range routeHosts {
+				if host, ok := rawHost.(string); ok && host != "" {
+					hosts[host] = struct{}{}
+				}
+			}
+		}
+	}
+	ordered := make([]string, 0, len(hosts))
+	for host := range hosts {
+		ordered = append(ordered, host)
+	}
+	sort.Strings(ordered)
+	policies := make([]any, 0, len(ordered))
+	for _, host := range ordered {
+		policies = append(policies, map[string]any{
+			"match": map[string]any{
+				"sni": []string{host},
+			},
+		})
+	}
+	return policies
 }
 
 func deepMap(document map[string]any, path ...string) (map[string]any, bool) {

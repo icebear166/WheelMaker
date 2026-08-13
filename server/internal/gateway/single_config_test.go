@@ -231,6 +231,34 @@ func TestLoadBundleIncludesCustomCaddySites(t *testing.T) {
 	}
 }
 
+func TestLoadBundlePreservesTLSPoliciesForCustomHTTPSHosts(t *testing.T) {
+	home := customCaddyBundleHome(t)
+
+	bundle, err := LoadBundle(home)
+	if err != nil {
+		t.Fatalf("LoadBundle() error = %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(bundle.JSON, &document); err != nil {
+		t.Fatal(err)
+	}
+	policies, ok := deepValue(document, "apps", "http", "servers", "https", "tls_connection_policies").([]any)
+	if !ok {
+		t.Fatalf("HTTPS TLS policies are missing: %s", bundle.JSON)
+	}
+	hosts := make(map[string]bool)
+	for _, policy := range policies {
+		for _, host := range deepValue(policy, "match", "sni").([]any) {
+			hosts[host.(string)] = true
+		}
+	}
+	for _, want := range []string{"registry.example.com", "custom.example.com", "secure.example.com"} {
+		if !hosts[want] {
+			t.Errorf("HTTPS TLS policies do not include %q: %#v", want, hosts)
+		}
+	}
+}
+
 func TestCustomCaddyCompilationIsDeterministic(t *testing.T) {
 	home := customCaddyBundleHome(t)
 	first, err := LoadBundle(home)
