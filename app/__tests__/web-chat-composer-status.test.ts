@@ -445,9 +445,9 @@ describe('chat composer status helpers', () => {
     expect(temporaryLayerStyles).toContain('transition: --chat-edge-hidden-alpha 180ms var(--ease-out);');
     expect(temporaryLayerStyles).toContain(".chat-recent-sessions-surface.desktop:is(:hover, :focus-within),");
     expect(temporaryLayerStyles).toContain(".chat-plan-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),");
-    expect(temporaryLayerStyles).toContain(".chat-function-surface.desktop.monitor-surface:is(.chat-edge-surface-hover-revealed, :focus-within) {");
+    expect(temporaryLayerStyles).toContain(".chat-function-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within) {");
     expect(temporaryLayerStyles).not.toContain(".chat-plan-surface.desktop:is(:hover");
-    expect(temporaryLayerStyles).not.toContain(".chat-function-surface.desktop.monitor-surface:is(:hover");
+    expect(temporaryLayerStyles).not.toContain(".chat-function-surface.desktop:is(:hover");
     expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 100%;');
     expect(temporaryLayerStyles).toContain('.chat-edge-surface-glass {');
     expect(cssRuleBlock(temporaryLayerStyles, '.chat-edge-surface-glass')).toContain(

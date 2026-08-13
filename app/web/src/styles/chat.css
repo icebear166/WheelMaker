@@ -7942,7 +7942,7 @@ li.chat-reply-target::marker {
 .chat-recent-sessions-surface.desktop:is(:hover, :focus-within),
 .chat-goal-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),
 .chat-plan-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),
-.chat-function-surface.desktop.monitor-surface:is(.chat-edge-surface-hover-revealed, :focus-within) {
+.chat-function-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within) {
   --chat-edge-hidden-alpha: 100%;
   clip-path: none;
 }

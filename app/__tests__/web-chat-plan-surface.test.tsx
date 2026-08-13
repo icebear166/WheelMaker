@@ -101,9 +101,9 @@ describe('ChatPlanSurface', () => {
     expect(stylesCss).toContain('.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),');
     expect(stylesCss).toContain('.chat-goal-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),');
     expect(stylesCss).toContain('.chat-plan-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within),');
-    expect(stylesCss).toContain('.chat-function-surface.desktop.monitor-surface:is(.chat-edge-surface-hover-revealed, :focus-within) {');
+    expect(stylesCss).toContain('.chat-function-surface.desktop:is(.chat-edge-surface-hover-revealed, :focus-within) {');
     expect(stylesCss).not.toContain('.chat-plan-surface.desktop:is(:hover');
-    expect(stylesCss).not.toContain('.chat-function-surface.desktop.monitor-surface:is(:hover');
+    expect(stylesCss).not.toContain('.chat-function-surface.desktop:is(:hover');
     expect(stylesCss).not.toContain('.chat-edge-surface-stack:is(:hover, :focus-within)');
   });
 
