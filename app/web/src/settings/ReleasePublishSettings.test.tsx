@@ -41,6 +41,9 @@ test('uses a single-column publish page layout', async () => {
   expect(tree!.root.findAllByProps({className: 'release-publish-page'})).toHaveLength(1);
   expect(tree!.root.findAllByProps({className: 'release-publish-actions'})).toHaveLength(3);
   expect(tree!.root.findAllByType('section').map(section => section.props['aria-label'])).toEqual(['Publishing source', 'Version release', 'Temporary Web', 'Release storage']);
+  const versionSection = tree!.root.findByProps({className: 'set-card', 'aria-label': 'Version release'});
+  expect(versionSection.findAllByProps({'data-icon-name': 'uploadCloud'})).toHaveLength(2);
+  expect(versionSection.findAllByProps({'data-icon-name': 'cloudDownload'})).toHaveLength(0);
 });
 
 test('shows the publishing Hub failure instead of a missing state response', async () => {

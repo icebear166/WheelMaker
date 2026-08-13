@@ -327,7 +327,7 @@ export function WheelMakerAppMenu({
       {updateController ? (
         <MenuRow
           action="update"
-          icon="cloudDownload"
+          icon="circleArrowUp"
           label="Update"
           meta={updateView.meta}
           disabled={updateView.disabled}

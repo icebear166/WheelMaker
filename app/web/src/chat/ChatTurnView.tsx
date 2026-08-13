@@ -782,7 +782,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             ) : null}
             {promptStatus === 'confirming' ? (
               <span className="chat-prompt-status chat-prompt-status-confirming" data-tooltip="Sending">
-                <ChatIcon name="refreshCw" size={12} />
+                <ChatIcon name="loader" spin size={12} />
               </span>
             ) : null}
             {queueStatus ? (

@@ -119,7 +119,7 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
                   props.onRestart(active);
                 }}
               >
-                <Icon name="refreshCw" />
+                <Icon name="power" />
                 Restart
               </button>
             </div>

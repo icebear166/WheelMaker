@@ -11,7 +11,7 @@ const operations: Array<{operation: DesktopLocalDevOperation; label: string; ico
   {operation: 'build', label: 'Build', icon: 'package'},
   {operation: 'start', label: 'Start', icon: 'play'},
   {operation: 'stop', label: 'Stop', icon: 'square'},
-  {operation: 'restart', label: 'Restart', icon: 'refreshCw'},
+  {operation: 'restart', label: 'Restart', icon: 'power'},
   {operation: 'open-directory', label: 'Open artifacts', icon: 'folderOpen'},
   {operation: 'exit', label: 'Exit Local Dev', icon: 'logOut', tone: 'danger'},
 ];

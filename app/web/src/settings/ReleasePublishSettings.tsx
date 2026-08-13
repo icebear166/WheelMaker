@@ -297,7 +297,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
 
       <section className="set-card" aria-label="Version release">
         <div className="set-card-head">
-          <Icon name="cloudDownload" size={15} className="port-relay-section-icon" />
+          <Icon name="uploadCloud" size={15} className="port-relay-section-icon" />
           <span className="set-card-title">Version release</span>
         </div>
         <div className="set-card-body">
@@ -334,7 +334,7 @@ export function ReleasePublishSettings({hubIds, start, query, subscribe, querySt
               disabled={!canStartVersion}
               onClick={() => requestPublish('version')}
             >
-              <Icon name={pendingKind === 'version' ? 'loader' : 'cloudDownload'} spin={pendingKind === 'version'} size={13} />
+              <Icon name={pendingKind === 'version' ? 'loader' : 'uploadCloud'} spin={pendingKind === 'version'} size={13} />
               {pendingKind === 'version' ? 'Publishing...' : 'Publish version'}
             </button>
           </div>

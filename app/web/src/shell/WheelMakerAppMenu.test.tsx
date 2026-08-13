@@ -140,6 +140,7 @@ test('native update checks on every open and starts only once', async () => {
     .toBe('v1.8 → v1.9');
   expect(renderer!.root.findByProps({'data-client-update-dot': 'app-menu'})).toBeDefined();
   expect(renderer!.root.findByProps({'data-client-update-dot': 'menu'})).toBeDefined();
+  expect(renderer!.root.findByProps({'data-app-menu-action': 'update'}).findByProps({'data-icon-name': 'circleArrowUp'})).toBeDefined();
 
   await ReactTestRenderer.act(async () => {
     const update = renderer!.root.findByProps({'data-app-menu-action': 'update'});

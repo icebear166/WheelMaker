@@ -368,7 +368,7 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'terminalClose') return 'ban';
   if (target.kind === 'clearDatabase') return 'trash';
   if (target.kind === 'logout') return 'logOut';
-  if (target.kind === 'releasePublish') return 'cloudDownload';
+  if (target.kind === 'releasePublish') return 'uploadCloud';
   if (target.kind === 'releaseStoragePrune') return 'trash';
   if (target.kind === 'restoreArchived') return 'archiveRestore';
   if (target.kind === 'delete') return 'trash';

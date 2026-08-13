@@ -244,6 +244,35 @@ test('WheelMaker update confirmation uses the upgrade icon', () => {
   expect(primary.findByProps({'data-icon-name': 'circleArrowUp'})).toBeDefined();
 });
 
+test('Release publish confirmation uses the upload icon', () => {
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AppConfirmDialog
+        target={{
+          kind: 'releasePublish',
+          action: 'version',
+          publisherHubId: 'publisher',
+          sourcePath: '/src/WheelMaker',
+          serverHubId: 'server',
+          webHubId: '',
+          desktop: false,
+          android: false,
+          gateway: false,
+          autoPull: false,
+        }}
+        busy={false}
+        error=""
+        onCancel={() => undefined}
+        onPrimary={() => undefined}
+      />,
+    );
+  });
+
+  const primary = renderer.root.findByProps({className: 'app-confirm-btn primary'});
+  expect(primary.findByProps({'data-icon-name': 'uploadCloud'})).toBeDefined();
+});
+
 test('HTML export name dialog presents an editable stem with a fixed extension', () => {
   const onCancel = jest.fn();
   const onSubmit = jest.fn();
