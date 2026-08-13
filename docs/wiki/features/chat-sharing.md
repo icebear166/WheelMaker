@@ -40,7 +40,10 @@ renderer。完整会话文档显示 Session 标题和快照时间；用户 Promp
 界面一致的左对齐、淡强调色圆角气泡，附件标签归入同一 Prompt 区域，助手回答
 保持无外框的全文排版，不再重复显示 User/Assistant 标题。当前回答保持单篇
 Markdown 文档版式，文档不包含 Workspace chrome。Markdown sanitization、
-代码高亮、公式、Mermaid 与图片 readiness 复用现有导出能力。
+代码高亮、公式、Mermaid 与图片 readiness 复用现有导出能力。分享产物中的
+代码块高亮与文件导出同一管线：明暗双套 CSS 变量（固定 `dark-plus`/`light-plus`
+配对）由查看者系统主题经 `prefers-color-scheme` 纯 CSS 切换，不含脚本；
+Mermaid 图保持快照时主题。
 
 PNG 始终是一个不截断、不拆页的文件。renderer 在捕获前选择 `1x..2x` 中
 最高的安全 pixel ratio；位图任一边不得超过 16,384 px，总像素不得超过
@@ -60,4 +63,6 @@ PNG/HTML，Windows Desktop 将图片或 HTML 文件放入系统剪贴板，Andro
 [`public-sharing.md`](public-sharing.md)。
 
 来源设计与验收基线见
-[`docs/scope/2026-08-11-chat-sharing.md`](../../scope/2026-08-11-chat-sharing.md)。
+[`docs/scope/2026-08-11-chat-sharing.md`](../../scope/2026-08-11-chat-sharing.md)；
+导出代码主题自适应见
+[`docs/scope/2026-08-13-export-adaptive-code-theme.md`](../../scope/2026-08-13-export-adaptive-code-theme.md)。

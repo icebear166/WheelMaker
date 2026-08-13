@@ -14,6 +14,8 @@
 
 > 外部文件 Share/Export 来源：2026-08-13 对话确认契约（未落 spec）
 
+> 导出代码主题自适应来源：[`docs/scope/2026-08-13-export-adaptive-code-theme.md`](../../scope/2026-08-13-export-adaptive-code-theme.md)
+
 ## 本地文件识别
 
 聊天文件链接支持项目内相对路径、规范化后逃出项目根目录的相对路径、Windows 盘符或 UNC 绝对路径、POSIX 绝对路径、`file://` URI 和 `vscode://file` URI。链接中的行号后缀或锚点用于 preview 跳转，不属于复制路径的结果。其他 URI scheme 继续作为普通链接处理。
@@ -84,7 +86,7 @@ Desktop 使用可信页面授权保护的绝对文件 bridge。Bridge 只接受�
 
 项目内与项目外 Markdown 文件可以从 preview 工作台的更多操作菜单导出为独立 HTML；聊天中已识别的项目内与项目外 Markdown 文件链接和 Changed file 右键菜单也提供相同能力。非 Markdown 文件和明确标记为已删除的 Changed file 不提供该动作。
 
-导出网页内嵌核心排版、代码高亮和相对路径图片，并跟随系统浅/深色主题。项目内图片只能在项目根目录内按来源文件目录解析；项目外文件的相对图片按来源文件所在目录经外部只读方法解析嵌入。远程图片尽力内嵌，失败时保留原 URL 并向用户提示。原始 Markdown HTML 经过安全清理，脚本、事件属性与危险 URL 不得进入导出页面。
+导出网页内嵌核心排版、代码高亮和相对路径图片，并跟随系统浅/深色主题。代码块高亮以明暗双套 CSS 变量内嵌（固定 `dark-plus`/`light-plus` 配对，不随用户 codeTheme 设置），由查看者系统主题经 `prefers-color-scheme` 媒体查询纯 CSS 切换，产物不含脚本；Mermaid 图保持导出时主题。项目内图片只能在项目根目录内按来源文件目录解析；项目外文件的相对图片按来源文件所在目录经外部只读方法解析嵌入。远程图片尽力内嵌，失败时保留原 URL 并向用户提示。原始 Markdown HTML 经过安全清理，脚本、事件属性与危险 URL 不得进入导出页面。
 
 交付方式由运行环境决定：Desktop 右键菜单使用 `Copy file as HTML`，把受控临时 `.html` 文件放入系统剪贴板，粘贴应得到文件而非源码文本；Android、浏览器和 PWA 继续使用 `Export as HTML`，分别通过系统分享面板或下载交付文件。文件导出不打断用户，将源 Markdown 文件名的 `.md` 后缀替换为 `.html`。回复导出先显示文件名输入框，名称主体默认使用用户本地时间的 `YYYY-MM-DD_HH-mm-ss` 格式，`.html` 后缀由界面固定附加；自定义名称只对本次导出生效。
 
