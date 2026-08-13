@@ -1,4 +1,4 @@
-> 摘要：本页维护 PC 端 Chat 的固定地址栏、浮动/滑出/pin 会话面板、左右功能卡片与 800px 对话列的布局规则、搜索入口和 Archived 视图约定。
+> 摘要：本页维护 PC 端 Chat 的固定地址栏、浮动/滑出/pin 会话面板、左右功能卡片与对话列宽档位（800/1200px）的布局规则、搜索入口和 Archived 视图约定。
 
 # PC Chat 侧边栏模式
 
@@ -36,27 +36,27 @@ pin 态把同构 Sessions 面板以 360px 固定宽度放进固定顶栏下方�
 
 移动端 Goal surface 位于 composer 上方，并排在 Plan surface 上方；目标、状态和统计使用紧凑 pill，展开后提供 edit、Pause/Resume 与 Clear。
 
-## 800px 对话列连续对齐
+## 对话列宽档位与连续对齐
 
-对话列固定为 800px，不再提供 full 宽度档与设置项，旧持久化宽度值直接忽略。文字列使用连续的 margin 与宽度公式。主窗口 W = 窗口宽 − preview 宽 − pin 侧边栏宽（浮动态为 0），R 为悬浮列预留宽（360px 浮动列宽 + 0px edge gap + 12px 列间距），V = 100px 为悬浮卡片最小可见宽度。文字列随 W 连续变化、无跳变：
+对话列提供 800px 与 1200px 两档固定宽度，默认 800px；档位是跨重启的全局偏好（按设备持久化），唯一入口是 Chat 标题栏右侧动作区的列宽切换按钮（仅桌面端渲染，active 态表示 1200px 档）。不提供 full 宽度档与自定义数值；旧持久化宽度值直接忽略，移动端不参与本规则。文字列使用连续的 margin 与宽度公式。主窗口 W = 窗口宽 − preview 宽 − pin 侧边栏宽（浮动态为 0），R 为悬浮列预留宽（360px 浮动列宽 + 0px edge gap + 12px 列间距），V = 100px 为悬浮卡片最小可见宽度，C 为当前档位列宽（800 或 1200）。文字列随 W 连续变化、无跳变：
 
-1. **居中段**：左 margin = (W − 800) / 2；
+1. **居中段**：左 margin = (W − C) / 2；
 2. **左贴段**：居中会侵入 R 时，左 margin 保持 R，右 gutter 继续收缩；
 3. **遮挡段**：右 gutter 收至最小值后，左 margin 侵入 R，文字列经 fade mask 遮挡悬浮列；
-4. **压缩段**：浮窗只剩 V 可见时，左 margin 保持 V，对话列从 800px 开始随 W 压缩，不再继续遮挡浮窗。
+4. **压缩段**：浮窗只剩 V 可见时，左 margin 保持 V，对话列从 C 开始随 W 压缩，不再继续遮挡浮窗。
 
-pin 态与浮动态共用同一公式。Goal/Plan/Limits 在 pin 态是聊天主区内的悬浮层；空间不足时覆盖并淡出对话左缘，而不额外占用对话布局宽度。
+列宽由单一 CSS 变量 `--chat-view-column-width`（默认 800px）承载，档位切换只改变变量值，对齐与渐隐公式不变。pin 态与浮动态共用同一公式。Goal/Plan/Limits 在 pin 态是聊天主区内的悬浮层；空间不足时覆盖并淡出对话左缘，而不额外占用对话布局宽度。
 
 ## 右侧 Model efficiency 卡片
 
 - Model efficiency 独立锚定在 Chat 主区右缘，宽度与左侧 Limits 卡片列一致，不加入 Recent Sessions、Goal、Plan、Limits 的左侧堆叠顺序。
 - 卡片默认使用 Simple 矩阵，支持折叠、Detail、手动刷新和隐藏；其显示偏好独立于 Limits，标题栏和表面样式继续复用 edge surface 约定。
-- Preview 打开时卡片跟随缩小后的 Chat 主区右缘，不自动隐藏、折叠或关闭 Preview。卡片与 800px 对话列相交时使用 `right` 方向的 edge-surface 几何淡出正文交界，卡片操作区保持可交互。
+- Preview 打开时卡片跟随缩小后的 Chat 主区右缘，不自动隐藏、折叠或关闭 Preview。卡片与对话列相交时使用 `right` 方向的 edge-surface 几何淡出正文交界，卡片操作区保持可交互。
 - Simple/Detail 内容和数据边界见 [`../features/model-efficiency.md`](../features/model-efficiency.md)。
 
 ## 搜索入口与 Archived 视图
 
-- 搜索入口按区域归属：chat 标题栏搜索按钮打开当前会话搜索，Sessions 标题栏搜索按钮打开跨会话搜索，Preview chrome 搜索按钮打开文件内搜索；会话搜索条只覆盖 800px 对话列上方，不提供多目标切换器。
+- 搜索入口按区域归属：chat 标题栏搜索按钮打开当前会话搜索，Sessions 标题栏搜索按钮打开跨会话搜索，Preview chrome 搜索按钮打开文件内搜索；会话搜索条只覆盖对话列上方，不提供多目标切换器。
 - **键盘搜索路由**：Windows/Linux 使用 `Ctrl`、macOS 使用 `Cmd`。`Ctrl/Cmd+F` 在聊天区域打开当前会话搜索；当焦点位于可搜索 Preview 时打开当前 Preview 搜索；Preview 不支持文本搜索时回退到当前会话。`Ctrl/Cmd+Shift+F` 从任意工作区焦点直接打开 Sessions 侧栏搜索，不弹出目标选择器。
 - 跨 Sessions 搜索是现有列表的过滤模式，不是独立 Global Center。范围默认是 **All Projects**，也可单选一个可见 Project；只覆盖提交时范围内可见 Project 的活跃会话，不包含 hidden Project 或 Archived。输入和范围选择只是草稿，只有点击搜索按钮或按 Enter 才提交；新提交立即取消旧任务并清空旧结果，Esc 取消并关闭。
 - 搜索命中的 Session 按正常 Project 分组和 Session 排序逐步出现，并完全复用正常 Project header 与 Session row。搜索态只保留 Project 展开/收起和 Session 选择，隐藏 Recent、Draft、older 折叠行、Project 新建/恢复/Pin、Session Unpin 及右键/长按管理入口；结果不展示命中数、来源、Prompt、Turn、snippet 或标题高亮。
