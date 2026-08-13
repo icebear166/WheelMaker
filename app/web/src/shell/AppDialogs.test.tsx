@@ -220,7 +220,7 @@ test('Restart confirmation uses runtime-reload copy and power icon', () => {
   expect(primary.children.join('')).toContain('Restart');
 });
 
-test('WheelMaker update confirmation uses the download icon', () => {
+test('WheelMaker update confirmation uses the upgrade icon', () => {
   let renderer!: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
@@ -241,7 +241,7 @@ test('WheelMaker update confirmation uses the download icon', () => {
   });
 
   const primary = renderer.root.findByProps({className: 'app-confirm-btn primary'});
-  expect(primary.findByProps({'data-icon-name': 'cloudDownload'})).toBeDefined();
+  expect(primary.findByProps({'data-icon-name': 'circleArrowUp'})).toBeDefined();
 });
 
 test('HTML export name dialog presents an editable stem with a fixed extension', () => {

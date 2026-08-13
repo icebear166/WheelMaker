@@ -376,21 +376,21 @@ function resolveConfirmIcon(target: ConfirmTarget): IconName {
   if (target.kind === 'goalClear') return 'trash';
   if (target.kind === 'npmPackage') {
     if (target.action === 'uninstall') return 'trash';
-    return target.action === 'install' ? 'cloudDownload' : 'refreshCw';
+    return target.action === 'install' ? 'cloudDownload' : 'circleArrowUp';
   }
-  if (target.kind === 'npmPackageHubUpdate') return 'refreshCw';
-  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'cloudDownload';
-  if (target.kind === 'gatewayUpdate') return 'refreshCw';
-  if (target.kind === 'wheelMakerUpdateAll') return 'refreshCw';
+  if (target.kind === 'npmPackageHubUpdate') return 'circleArrowUp';
+  if (target.kind === 'wheelMakerUpdate') return target.action === 'restart' ? 'power' : 'circleArrowUp';
+  if (target.kind === 'gatewayUpdate') return 'circleArrowUp';
+  if (target.kind === 'wheelMakerUpdateAll') return 'circleArrowUp';
   if (target.kind === 'skillPreview') {
     if (target.action === 'deleteSource') return 'trash';
     if (target.action === 'install') return 'cloudDownload';
-    return target.action === 'saveSource' ? 'plus' : 'refreshCw';
+    return target.action === 'saveSource' ? 'plus' : 'circleArrowUp';
   }
   if (target.kind === 'skillInstall') return 'cloudDownload';
   if (target.kind === 'skillUninstall') return 'trash';
   if (target.kind === 'skillBatchUninstall') return 'trash';
-  if (target.kind === 'skillUpdate') return 'refreshCw';
+  if (target.kind === 'skillUpdate') return 'circleArrowUp';
   return 'archive';
 }
 

@@ -20,6 +20,7 @@
 ## 图标体系
 
 - 图标统一使用 **Lucide 风格细线性 SVG**，按需引入（tree-shaking），不使用图标字体；codicons 已废弃，新增界面不得再引入 `codicon-*`。
+- 操作类图标按语义固定映射，一个图标只表达一个语义：升级（WheelMaker / NPM 包 / skill 等所有升级入口）统一 `circleArrowUp`；纯刷新/重扫（skill 源刷新、项目扫描）统一 `refreshCw`；下载/安装（NPM install、skill download）统一 `cloudDownload`；重启统一 `power`；pending 态统一 `loader`。
 - agent 不配置专属图标，统一使用文字 pill 标识；pill 样式走精致化设计。
 - 运行/完成/失败等会话状态使用 CSS 状态点（非图标），视觉保持收敛。
 

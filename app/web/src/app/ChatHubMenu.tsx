@@ -694,7 +694,7 @@ function ChatHubDetailToolbar({
         disabled={disabled || pending}
         onClick={onAction}
       >
-        <Icon name={pending ? 'loader' : 'refreshCw'} spin={pending} />
+        <Icon name={pending ? 'loader' : 'circleArrowUp'} spin={pending} />
         <span>{pending ? 'Running…' : 'Update all'}</span>
       </button>
     </div>
@@ -750,7 +750,7 @@ function ChatHubNpmDetail({
                   disabled={pkg.pending}
                   onClick={() => onPackageAction(hubId, pkg.action!, pkg)}
                 >
-                  <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'refreshCw'} spin={pkg.pending} />
+                  <Icon name={pkg.pending ? 'loader' : pkg.action === 'install' ? 'cloudDownload' : 'circleArrowUp'} spin={pkg.pending} />
                 </button>
               ) : null}
               {pkg.canUninstall ? (
@@ -1147,7 +1147,7 @@ function ChatHubBlock(props: ChatHubMenuProps & {hubId: string}): React.JSX.Elem
               onClick={() => onRequestWheelMakerUpdate(hubId)}
             >
               <Icon
-                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'cloudDownload'}
+                name={ops.wheelMaker.pendingAction === 'update' ? 'loader' : 'circleArrowUp'}
                 spin={ops.wheelMaker.pendingAction === 'update'}
               />
               {ops.wheelMaker.updateAvailable ? <span className="chat-hub-update-dot" aria-hidden="true" /> : null}
@@ -1370,7 +1370,7 @@ export const ChatHubMenu = React.memo(function ChatHubMenu(props: ChatHubMenuPro
           disabled={updateAllAvailableCount === 0 || updateAllPending}
           onClick={onUpdateAllHubs}
         >
-          {updateAllPending ? <Icon name="loader" spin /> : <Icon name="refreshCw" />}
+          {updateAllPending ? <Icon name="loader" spin /> : <Icon name="circleArrowUp" />}
           {updateAllPending ? 'Updating all hubs…' : 'Update all hubs'}
         </button>
       </div>

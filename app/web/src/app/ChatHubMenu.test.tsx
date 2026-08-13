@@ -517,7 +517,7 @@ test('only Restart shows loading while its restart request is pending', async ()
   const restart = row.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
   expect(update.props.disabled).toBe(true);
   expect(restart.props.disabled).toBe(true);
-  expect(update.findByType(Icon).props.name).toBe('cloudDownload');
+  expect(update.findByType(Icon).props.name).toBe('circleArrowUp');
   expect(restart.findByType(Icon).props.name).toBe('loader');
 });
 
@@ -620,6 +620,9 @@ test('npm detail keeps version next to the name and hugs actions right', async (
   expect(firstActions[0].props.className).toBe('chat-hub-icon-btn accent');
   expect(secondActions[0].props.className).toBe('chat-hub-icon-btn');
   expect(thirdActions[0].props.className).toBe('chat-hub-icon-btn danger');
+  expect(renderer.root.findByProps({className: 'chat-hub-detail-action'}).findByType(Icon).props.name).toBe('circleArrowUp');
+  expect(firstActions[0].findByType(Icon).props.name).toBe('circleArrowUp');
+  expect(secondActions[0].findByType(Icon).props.name).toBe('cloudDownload');
   act(() => firstActions[0].props.onClick());
   expect(callbacks.onPackageAction).toHaveBeenCalledWith('hub-a', 'update', expect.objectContaining({packageName: '@a/one'}));
   act(() => secondActions[0].props.onClick());
@@ -1004,6 +1007,7 @@ test('footer shows latest version and update-all action', async () => {
   expect(footer.findByProps({className: 'chat-hub-footer-version-value'}).children).toEqual(['v1.3']);
   const button = footer.findByProps({className: 'chat-hub-footer-update-all'});
   expect(button.props.disabled).toBe(false);
+  expect(button.findByType(Icon).props.name).toBe('circleArrowUp');
   act(() => button.props.onClick());
   expect(callbacks.onUpdateAllHubs).toHaveBeenCalled();
 
@@ -1238,7 +1242,7 @@ test('version action uses an update or restart icon instead of a detached status
     renderer = TestRenderer.create(<ChatHubMenu {...props} />);
   });
   const updateAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-update-action'});
-  expect(updateAction.findByType(Icon).props.name).toBe('cloudDownload');
+  expect(updateAction.findByType(Icon).props.name).toBe('circleArrowUp');
   const restartAction = renderer.root.findByProps({className: 'chat-hub-action chat-hub-version-action chat-hub-version-restart-action'});
   expect(restartAction.findByType(Icon).props.name).toBe('power');
   expect(renderer.root.findAllByProps({className: 'chat-hub-section-version-dot'})).toHaveLength(0);
