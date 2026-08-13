@@ -1522,6 +1522,9 @@ func (c *codexappConn) matchForkPromptTurns(sessionID string, prompts []protocol
 	nativeInputs := make([][]appServerUserInput, 0, len(turns))
 	nativeTurnIDs := make([]string, 0, len(turns))
 	for _, turn := range turns {
+		if codexappTurnIsCancelled(turn) {
+			continue
+		}
 		inputs, ok := codexappTurnUserInputs(turn)
 		if !ok {
 			continue
@@ -1562,6 +1565,15 @@ func (c *codexappConn) matchForkPromptTurns(sessionID string, prompts []protocol
 		}
 	}
 	return points, true, nil
+}
+
+func codexappTurnIsCancelled(turn appServerTurn) bool {
+	switch strings.ToLower(strings.TrimSpace(turn.Status)) {
+	case "cancelled", "canceled", "interrupted":
+		return true
+	default:
+		return false
+	}
 }
 
 func codexappTurnUserInputs(turn appServerTurn) ([]appServerUserInput, bool) {

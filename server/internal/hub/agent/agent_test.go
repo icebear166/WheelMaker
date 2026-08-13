@@ -4967,6 +4967,61 @@ func TestCodexAppForkSessionUsesLastTurnIDAndRemapsTargetTurns(t *testing.T) {
 	}
 }
 
+func TestCodexAppForkSessionIgnoresInterruptedTurnsWhenRemappingTarget(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	interruptedTurn := codexappTestPromptTurn("target-turn-interrupted", "cancelled")
+	interruptedTurn["status"] = "interrupted"
+	archiveCalls := 0
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/fork":
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{
+				"thread": map[string]any{
+					"id":      "thread-target",
+					"preview": "Forked thread",
+					"turns": []map[string]any{
+						codexappTestPromptTurn("target-turn-1", "first"),
+						interruptedTurn,
+						codexappTestPromptTurn("target-turn-2", "second"),
+					},
+				},
+			}})
+		case "thread/archive":
+			archiveCalls++
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntimeAndProject(rt, t.TempDir(), "proj")
+	result, err := conn.ForkSession(
+		context.Background(),
+		"thread-source",
+		"source-turn-2",
+		[]protocol.SessionForkPrompt{
+			{DoneTurnIndex: 3, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "first"}}},
+			{DoneTurnIndex: 7, ContentBlocks: []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "second"}}},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ForkSession: %v", err)
+	}
+	if archiveCalls != 0 {
+		t.Fatalf("thread/archive calls=%d, want 0", archiveCalls)
+	}
+	if result.SessionID != "thread-target" || result.Title != "Forked thread" {
+		t.Fatalf("result = %#v", result)
+	}
+	if len(result.ForkPoints) != 2 || result.ForkPoints[3].Ref != "target-turn-1" || result.ForkPoints[7].Ref != "target-turn-2" {
+		t.Fatalf("fork points = %#v", result.ForkPoints)
+	}
+}
+
 func TestCodexAppStandardForkCarriesWmHistoricalExtension(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)
