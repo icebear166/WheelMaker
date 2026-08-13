@@ -243,4 +243,14 @@ describe('Mermaid viewport interaction contracts', () => {
     expect(codeCss).toContain('transform-origin: 0 0;');
     expect(codeCss).toContain('.mermaid-block:focus-visible');
   });
+
+  it('provides a larger modal diagram surface with a dismissible backdrop', () => {
+    const codeCss = read('code.css');
+
+    expect(codeCss).toContain('.mermaid-expand-button');
+    expect(codeCss).toContain('.mermaid-modal-overlay');
+    expect(codeCss).toContain('.mermaid-modal-dialog');
+    expect(codeCss).toContain('.mermaid-modal-canvas');
+    expect(codeCss).toContain('backdrop-filter: blur');
+  });
 });

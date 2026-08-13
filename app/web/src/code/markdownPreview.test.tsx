@@ -119,4 +119,53 @@ describe('MermaidBlock interactions', () => {
 
     expect(releasePointerCapture).toHaveBeenCalledWith(7);
   });
+
+  it('opens a larger modal viewer without resetting the current viewport', async () => {
+    const renderer = await renderMermaidBlock();
+    const preventDefault = jest.fn();
+    const block = renderer.root.findByProps({className: 'mermaid-block'});
+
+    await act(async () => {
+      block.props.onKeyDown({key: '+', preventDefault});
+    });
+
+    const expandButton = renderer.root.findByProps({
+      'aria-label': 'Open Mermaid diagram viewer',
+    });
+    await act(async () => {
+      expandButton.props.onClick({stopPropagation: jest.fn()});
+    });
+
+    const dialog = renderer.root.findByProps({role: 'dialog'});
+    expect(dialog.props['aria-modal']).toBe(true);
+    expect(renderer.root.findByProps({className: 'mermaid-modal-viewport'}).props.style.transform)
+      .toContain('scale(1.2)');
+
+    await act(async () => {
+      dialog.props.onKeyDown({key: 'Escape', preventDefault, stopPropagation: jest.fn()});
+    });
+
+    expect(() => renderer.root.findByProps({role: 'dialog'})).toThrow();
+    expect(renderer.root.findByProps({className: 'mermaid-viewport'}).props.style.transform)
+      .toContain('scale(1.2)');
+  });
+
+  it('closes the modal when its backdrop is clicked', async () => {
+    const renderer = await renderMermaidBlock();
+    const expandButton = renderer.root.findByProps({
+      'aria-label': 'Open Mermaid diagram viewer',
+    });
+
+    await act(async () => {
+      expandButton.props.onClick({stopPropagation: jest.fn()});
+    });
+
+    const overlay = renderer.root.findByProps({className: 'mermaid-modal-overlay'});
+    const backdrop = {};
+    await act(async () => {
+      overlay.props.onClick({target: backdrop, currentTarget: backdrop});
+    });
+
+    expect(() => renderer.root.findByProps({role: 'dialog'})).toThrow();
+  });
 });

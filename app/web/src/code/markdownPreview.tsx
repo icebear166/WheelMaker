@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import {Icon} from '../common/Icon';
 import {
   MERMAID_PAN_STEP,
   MERMAID_ZOOM_STEP,
@@ -140,13 +141,19 @@ export function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
   const [svg, setSvg] = useState('');
   const [error, setError] = useState('');
   const [viewport, setViewport] = useState(createMermaidViewport);
-  const [dragging, setDragging] = useState(false);
+  const [draggingSurface, setDraggingSurface] = useState<'inline' | 'modal' | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const blockRef = useRef<HTMLDivElement>(null);
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const modalCanvasRef = useRef<HTMLDivElement>(null);
+  const wasExpandedRef = useRef(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
     startY: number;
     viewport: ReturnType<typeof createMermaidViewport>;
+    surface: 'inline' | 'modal';
   } | null>(null);
 
   useEffect(() => {
@@ -163,7 +170,7 @@ export function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
     setSvg('');
     setError('');
     setViewport(createMermaidViewport());
-    setDragging(false);
+    setDraggingSurface(null);
     dragRef.current = null;
 
     (async () => {
@@ -191,14 +198,43 @@ export function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
     };
   }, [content, themeMode]);
 
-  const viewportAnchor = (clientX: number, clientY: number) => {
-    const rect = blockRef.current?.getBoundingClientRect();
+  useEffect(() => {
+    if (expanded) {
+      closeButtonRef.current?.focus();
+    } else if (wasExpandedRef.current) {
+      expandButtonRef.current?.focus();
+    }
+    wasExpandedRef.current = expanded;
+  }, [expanded]);
+
+  useEffect(() => {
+    if (!expanded || typeof window === 'undefined') return;
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setExpanded(false);
+    };
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [expanded]);
+
+  type ViewportSurface = Pick<HTMLElement, 'getBoundingClientRect'>;
+
+  const viewportRect = (surface?: ViewportSurface | null) =>
+    surface?.getBoundingClientRect?.() ?? blockRef.current?.getBoundingClientRect() ?? null;
+
+  const viewportAnchor = (
+    surface: ViewportSurface | null | undefined,
+    clientX: number,
+    clientY: number,
+  ) => {
+    const rect = viewportRect(surface);
     if (!rect) return {x: 0, y: 0};
     return {x: clientX - rect.left, y: clientY - rect.top};
   };
 
-  const keyboardZoomAnchor = () => {
-    const rect = blockRef.current?.getBoundingClientRect();
+  const keyboardZoomAnchor = (surface?: ViewportSurface | null) => {
+    const rect = viewportRect(surface);
     if (!rect) return {x: 0, y: 0};
     return {x: rect.width / 2, y: rect.height / 2};
   };
@@ -211,17 +247,90 @@ export function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
     ));
   };
 
-  const finishDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+  const finishDrag = (event: React.PointerEvent<HTMLDivElement>, surface: 'inline' | 'modal') => {
+    if (
+      !dragRef.current
+      || dragRef.current.pointerId !== event.pointerId
+      || dragRef.current.surface !== surface
+    ) return;
     dragRef.current = null;
-    setDragging(false);
+    setDraggingSurface(null);
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
   };
 
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+    zoomViewport(
+      event.deltaY < 0 ? 1 : -1,
+      viewportAnchor(event.currentTarget, event.clientX, event.clientY),
+    );
+  };
+
+  const beginDrag = (event: React.PointerEvent<HTMLDivElement>, surface: 'inline' | 'modal') => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      viewport,
+      surface,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDraggingSurface(surface);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>, surface: 'inline' | 'modal') => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.surface !== surface) return;
+    event.preventDefault();
+    setViewport({
+      ...drag.viewport,
+      offsetX: drag.viewport.offsetX + event.clientX - drag.startX,
+      offsetY: drag.viewport.offsetY + event.clientY - drag.startY,
+    });
+  };
+
+  const handleViewportKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    surface?: ViewportSurface | null,
+  ) => {
+    const action = mermaidViewportKeyAction(event.key);
+    if (!action) return;
+    event.preventDefault();
+    switch (action) {
+      case 'zoom-in':
+        zoomViewport(1, keyboardZoomAnchor(surface ?? event.currentTarget));
+        break;
+      case 'zoom-out':
+        zoomViewport(-1, keyboardZoomAnchor(surface ?? event.currentTarget));
+        break;
+      case 'reset':
+        dragRef.current = null;
+        setDraggingSurface(null);
+        setViewport(createMermaidViewport());
+        break;
+      case 'pan-left':
+        setViewport(current => panMermaidViewport(current, -MERMAID_PAN_STEP, 0));
+        break;
+      case 'pan-right':
+        setViewport(current => panMermaidViewport(current, MERMAID_PAN_STEP, 0));
+        break;
+      case 'pan-up':
+        setViewport(current => panMermaidViewport(current, 0, -MERMAID_PAN_STEP));
+        break;
+      case 'pan-down':
+        setViewport(current => panMermaidViewport(current, 0, MERMAID_PAN_STEP));
+        break;
+    }
+  };
+
   const viewportTransform = `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})`;
-  const blockClassName = `mermaid-block${dragging ? ' is-dragging' : ''}`;
+  const blockClassName = `mermaid-block${draggingSurface === 'inline' ? ' is-dragging' : ''}`;
   let body: React.ReactNode;
 
   if (error) {
@@ -242,76 +351,100 @@ export function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
     );
   }
 
-  return (
+  const modal = expanded && svg && !error ? (
     <div
-      ref={blockRef}
-      className={blockClassName}
-      tabIndex={0}
-      role="region"
-      aria-label="Mermaid diagram. Use the mouse wheel to zoom and drag to pan."
-      onWheel={event => {
-        if (event.deltaY === 0) return;
-        event.preventDefault();
-        zoomViewport(event.deltaY < 0 ? 1 : -1, viewportAnchor(event.clientX, event.clientY));
-      }}
-      onPointerDown={event => {
-        if (event.button !== 0) return;
-        event.preventDefault();
-        event.currentTarget.focus();
-        dragRef.current = {
-          pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
-          viewport,
-        };
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-        setDragging(true);
-      }}
-      onPointerMove={event => {
-        const drag = dragRef.current;
-        if (!drag || drag.pointerId !== event.pointerId) return;
-        event.preventDefault();
-        setViewport({
-          ...drag.viewport,
-          offsetX: drag.viewport.offsetX + event.clientX - drag.startX,
-          offsetY: drag.viewport.offsetY + event.clientY - drag.startY,
-        });
-      }}
-      onPointerUp={finishDrag}
-      onPointerCancel={finishDrag}
-      onKeyDown={event => {
-        const action = mermaidViewportKeyAction(event.key);
-        if (!action) return;
-        event.preventDefault();
-        switch (action) {
-          case 'zoom-in':
-            zoomViewport(1, keyboardZoomAnchor());
-            break;
-          case 'zoom-out':
-            zoomViewport(-1, keyboardZoomAnchor());
-            break;
-          case 'reset':
-            dragRef.current = null;
-            setDragging(false);
-            setViewport(createMermaidViewport());
-            break;
-          case 'pan-left':
-            setViewport(current => panMermaidViewport(current, -MERMAID_PAN_STEP, 0));
-            break;
-          case 'pan-right':
-            setViewport(current => panMermaidViewport(current, MERMAID_PAN_STEP, 0));
-            break;
-          case 'pan-up':
-            setViewport(current => panMermaidViewport(current, 0, -MERMAID_PAN_STEP));
-            break;
-          case 'pan-down':
-            setViewport(current => panMermaidViewport(current, 0, MERMAID_PAN_STEP));
-            break;
+      className="mermaid-modal-overlay"
+      onClick={event => {
+        if (event.target === event.currentTarget) {
+          setExpanded(false);
         }
       }}
     >
-      {body}
+      <div
+        className="mermaid-modal-dialog"
+        role="dialog"
+        aria-modal={true}
+        aria-label="Mermaid diagram viewer"
+        tabIndex={-1}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            setExpanded(false);
+            return;
+          }
+          handleViewportKeyDown(event, modalCanvasRef.current ?? event.currentTarget);
+        }}
+      >
+        <div className="mermaid-modal-toolbar">
+          <span className="mermaid-modal-title">Mermaid diagram</span>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="mermaid-modal-close-button"
+            aria-label="Close Mermaid diagram viewer"
+            data-tooltip="Close diagram viewer"
+            onClick={() => setExpanded(false)}
+          >
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        <div
+          ref={modalCanvasRef}
+          className={`mermaid-modal-canvas${draggingSurface === 'modal' ? ' is-dragging' : ''}`}
+          tabIndex={0}
+          aria-label="Mermaid diagram canvas"
+          onWheel={handleWheel}
+          onPointerDown={event => beginDrag(event, 'modal')}
+          onPointerMove={event => handlePointerMove(event, 'modal')}
+          onPointerUp={event => finishDrag(event, 'modal')}
+          onPointerCancel={event => finishDrag(event, 'modal')}
+        >
+          <div
+            className="mermaid-modal-viewport"
+            style={{transform: viewportTransform}}
+            dangerouslySetInnerHTML={{__html: svg}}
+          />
+        </div>
+      </div>
     </div>
+  ) : null;
+
+  return (
+    <>
+      <div
+        ref={blockRef}
+        className={blockClassName}
+        tabIndex={0}
+        role="region"
+        aria-label="Mermaid diagram. Use the mouse wheel to zoom and drag to pan."
+        onWheel={handleWheel}
+        onPointerDown={event => beginDrag(event, 'inline')}
+        onPointerMove={event => handlePointerMove(event, 'inline')}
+        onPointerUp={event => finishDrag(event, 'inline')}
+        onPointerCancel={event => finishDrag(event, 'inline')}
+        onKeyDown={event => handleViewportKeyDown(event)}
+      >
+        {body}
+        {svg && !error ? (
+          <button
+            ref={expandButtonRef}
+            type="button"
+            className="mermaid-expand-button"
+            aria-label="Open Mermaid diagram viewer"
+            data-tooltip="Open diagram viewer"
+            onPointerDown={event => event.stopPropagation()}
+            onClick={event => {
+              event.stopPropagation();
+              setExpanded(true);
+            }}
+          >
+            <Icon name="maximize" size={15} />
+          </button>
+        ) : null}
+      </div>
+      {modal}
+    </>
   );
 }
 
