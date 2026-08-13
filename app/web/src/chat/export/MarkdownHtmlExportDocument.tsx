@@ -173,6 +173,7 @@ export function MarkdownHtmlExportContent({
         wrap: true,
         lineNumbers: false,
         framed: true,
+        adaptiveCodeTheme: true,
       }),
       img: ({node: _node, src, alt, ...props}) => (
         <MarkdownHtmlExportImage

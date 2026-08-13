@@ -17,7 +17,7 @@ jest.mock('remark-gfm', () => ({
   default: jest.fn(),
 }));
 
-import {MermaidBlock} from './markdownPreview';
+import {MermaidBlock, markdownCodeRenderer} from './markdownPreview';
 
 async function renderMermaidBlock(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | undefined;
@@ -167,5 +167,79 @@ describe('MermaidBlock interactions', () => {
     });
 
     expect(() => renderer.root.findByProps({role: 'dialog'})).toThrow();
+  });
+});
+
+
+const adaptiveCodeOptions = {
+  className: 'language-ts',
+  children: 'const answer: number = 42;\n',
+  themeMode: 'dark' as const,
+  codeTheme: 'auto-plus' as const,
+  codeFont: 'consolas' as const,
+  codeFontSize: 13,
+  codeLineHeight: 1.5,
+  codeTabSize: 2,
+  wrap: true,
+  lineNumbers: false,
+  framed: true,
+};
+
+async function renderCodeRenderer(options: Parameters<typeof markdownCodeRenderer>[0]) {
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(<>{markdownCodeRenderer(options)}</>);
+  });
+  for (let i = 0; i < 100; i++) {
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    });
+    const wrap = renderer!.root.findAll(node => node.props?.dangerouslySetInnerHTML);
+    if (wrap.some(node => !node.props['data-markdown-export-pending'])) return renderer!;
+  }
+  return renderer!;
+}
+
+describe('markdownCodeRenderer adaptive code theme', () => {
+  it('renders fenced code with light/dark CSS variables in adaptive mode', async () => {
+    const renderer = await renderCodeRenderer({...adaptiveCodeOptions, adaptiveCodeTheme: true});
+
+    const wrap = renderer.root.findByProps({className: 'code-wrap wrap'});
+    const html = wrap.props.dangerouslySetInnerHTML.__html as string;
+    expect(html).toContain('--shiki-light:');
+    expect(html).toContain('--shiki-dark:');
+
+    act(() => renderer.unmount());
+  });
+
+  it('keeps fixed single-theme colors without the adaptive flag', async () => {
+    const renderer = await renderCodeRenderer(adaptiveCodeOptions);
+
+    const wrap = renderer.root.findByProps({className: 'code-wrap wrap'});
+    const html = wrap.props.dangerouslySetInnerHTML.__html as string;
+    expect(html).toMatch(/color:#/);
+    expect(html).not.toContain('--shiki-light:');
+
+    act(() => renderer.unmount());
+  });
+
+  it('bypasses chunked virtualization for large blocks in adaptive mode', async () => {
+    const bigContent = `${'const x = 1;\n'.repeat(2100)}`;
+    const adaptive = await renderCodeRenderer({
+      ...adaptiveCodeOptions,
+      children: bigContent,
+      adaptiveCodeTheme: true,
+    });
+    const live = await renderCodeRenderer({
+      ...adaptiveCodeOptions,
+      children: bigContent,
+    });
+
+    expect(adaptive.root.findAll(node => node.props?.['data-chunk-sentinel'] !== undefined)).toHaveLength(0);
+    expect(live.root.findAll(node => node.props?.['data-chunk-sentinel'] !== undefined).length)
+      .toBeGreaterThan(0);
+
+    act(() => adaptive.unmount());
+    act(() => live.unmount());
   });
 });

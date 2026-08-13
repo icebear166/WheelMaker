@@ -477,6 +477,7 @@ export const markdownCodeRenderer = ({
   wrap,
   lineNumbers,
   framed,
+  adaptiveCodeTheme,
 }: {
   className?: string;
   children?: React.ReactNode;
@@ -489,6 +490,7 @@ export const markdownCodeRenderer = ({
   wrap: boolean;
   lineNumbers: boolean;
   framed?: boolean;
+  adaptiveCodeTheme?: boolean;
 }) => {
   const languageMatch = /language-([\w-]+)/.exec(className || '');
   const language = (languageMatch?.[1] || '').toLowerCase();
@@ -512,6 +514,7 @@ export const markdownCodeRenderer = ({
         codeLineHeight={codeLineHeight}
         codeTabSize={codeTabSize}
         framed={framed}
+        adaptiveCodeTheme={adaptiveCodeTheme}
       />
     );
   }

@@ -62,6 +62,8 @@ export type ShikiCodeBlockProps = {
   /** Wrap the block in a framed card with a language label and copy button. */
   framed?: boolean;
   highlightedLines?: Set<number>;
+  /** Export/share rendering: light/dark CSS variable colors, never virtualized. */
+  adaptiveCodeTheme?: boolean;
   onLineClick?: (line: number, event: MouseEvent) => void;
 };
 
@@ -347,9 +349,11 @@ function ShikiCodeBlockVirtualized({
 export function ShikiCodeBlock(props: ShikiCodeBlockProps) {
   const lineCount = useMemo(() => countCodeLines(props.content), [props.content]);
 
-  const block =
-    lineCount >= VIRTUALIZE_LINE_THRESHOLD ||
-    props.content.length >= INCREMENTAL_CHARACTER_THRESHOLD
+  // Adaptive (export/share) rendering is one-shot and offscreen, so chunked
+  // virtualization is skipped entirely in favor of a single full render.
+  const block = !props.adaptiveCodeTheme &&
+    (lineCount >= VIRTUALIZE_LINE_THRESHOLD ||
+      props.content.length >= INCREMENTAL_CHARACTER_THRESHOLD)
       ? <ShikiCodeBlockVirtualized {...props} />
       : <ShikiCodeBlockSmall {...props} />;
 
@@ -376,6 +380,7 @@ function ShikiCodeBlockSmall({
   codeTabSize,
   framed,
   highlightedLines,
+  adaptiveCodeTheme,
   onLineClick,
 }: ShikiCodeBlockProps) {
   const [html, setHtml] = useState('');
@@ -422,6 +427,7 @@ function ShikiCodeBlockSmall({
         mode: 'block',
         highlightedLines,
         transparentBackground,
+        adaptiveCodeTheme,
       });
       if (!cancelled) {
         setHtml(nextHtml);
@@ -448,6 +454,7 @@ function ShikiCodeBlockSmall({
     lineNumbers,
     highlightedLines,
     transparentBackground,
+    adaptiveCodeTheme,
   ]);
 
   const handleClick = useLineClick(onLineClick);
