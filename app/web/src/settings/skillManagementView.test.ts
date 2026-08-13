@@ -1,5 +1,6 @@
 import {
   readSkillSourceExpanded,
+  skillSourceDisplayName,
   skillSourceExpandedPreferenceKey,
   writeSkillSourceExpanded,
 } from './skillManagementView';
@@ -82,4 +83,10 @@ test('uses sessionStorage by default instead of persistent localStorage', () => 
     if (localDescriptor) Object.defineProperty(window, 'localStorage', localDescriptor);
     if (sessionDescriptor) Object.defineProperty(window, 'sessionStorage', sessionDescriptor);
   }
+});
+
+test('drops the host segment for compact source display names', () => {
+  expect(skillSourceDisplayName('github.com/acme/skills')).toBe('acme/skills');
+  expect(skillSourceDisplayName('git.corp.example.com/group/sub/repo')).toBe('group/sub/repo');
+  expect(skillSourceDisplayName('single')).toBe('single');
 });

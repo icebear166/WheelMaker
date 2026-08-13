@@ -3,7 +3,7 @@ import type { ArchiveCandidate } from '../chat/session/sessionArchiveState';
 import {Icon, type IconName} from '../common/Icon';
 import {writeTextToClipboard} from '../platform/clipboard';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/agentPackageUpdateView';
-import { skillScopeLabel } from '../settings/skillManagementView';
+import { skillScopeLabel, skillSourceDisplayName } from '../settings/skillManagementView';
 import type {
   RegistrySessionGoal,
   RegistrySessionGoalPatch,
@@ -268,7 +268,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdate') return `Hub: ${target.hubId}`;
   if (target.kind === 'gatewayUpdate') return `Hub: ${target.hubId}`;
   if (target.kind === 'wheelMakerUpdateAll') return `${target.hubIds.length} hubs`;
-  if (target.kind === 'skillPreview') return target.sourceKey || target.source;
+  if (target.kind === 'skillPreview') return target.sourceKey ? skillSourceDisplayName(target.sourceKey) : target.source;
   if (target.kind === 'skillInstall') return skillScopeLabel(target);
   if (target.kind === 'skillUninstall') return target.skillName;
   if (target.kind === 'skillBatchUninstall') return `${target.skillNames.length} skills`;

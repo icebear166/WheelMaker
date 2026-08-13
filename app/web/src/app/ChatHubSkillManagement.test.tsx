@@ -91,7 +91,7 @@ test('renders source-first hierarchy and hides uninstalled skills by default per
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-ref-input'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({className: 'chat-hub-skill-source-meta'})).toHaveLength(0);
   expect(renderer.root.findAllByProps({'data-skill-name': 'new-skill'})).toHaveLength(0);
-  expect(renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.checked).toBe(false);
+  expect(renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props.checked).toBe(false);
   expect(renderer.root.findByProps({'data-skill-name': 'local-only'})).toBeTruthy();
 });
 
@@ -119,7 +119,7 @@ test('offers uninstall for unmanaged skills', async () => {
 test('shows remote additions after enabling the scope preference and offers install only there', async () => {
   const {renderer, actions} = await renderScope({target: projectTarget});
 
-  act(() => renderer.root.findByProps({'aria-label': 'Show uninstalled Project skills'}).props.onChange({target: {checked: true}}));
+  act(() => renderer.root.findByProps({'aria-label': 'Show all Project skills'}).props.onChange({target: {checked: true}}));
   const added = renderer.root.findByProps({'data-skill-name': 'new-skill'});
   expect(added.props.className).toContain('is-uninstalled');
   act(() => added.findByProps({'aria-label': 'Download new-skill'}).props.onClick());
@@ -168,14 +168,14 @@ test('routes source refresh, update-all, and delete through ref-free source acti
     .toBe('circleArrowUp');
   act(() => renderer.root.findByProps({'aria-label': 'Update all Hub skill sources'}).props.onClick());
   expect(actions.onUpdateAll).toHaveBeenCalledWith(hubTarget);
-  act(() => source.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.onClick());
+  act(() => source.findByProps({'aria-label': 'Refresh acme/skills'}).props.onClick());
   expect(actions.onRefreshSource).toHaveBeenCalledWith({
     ...hubTarget,
     source: 'https://github.com/acme/skills.git',
     sourceKey: 'github.com/acme/skills',
   });
-  expect(source.findAllByProps({'aria-label': 'Apply ref for github.com/acme/skills'})).toHaveLength(0);
-  act(() => source.findByProps({'aria-label': 'Delete github.com/acme/skills source'}).props.onClick());
+  expect(source.findAllByProps({'aria-label': 'Apply ref for acme/skills'})).toHaveLength(0);
+  act(() => source.findByProps({'aria-label': 'Delete acme/skills source'}).props.onClick());
   expect(actions.onDeleteSource).toHaveBeenCalledWith(expect.objectContaining({sourceKey: 'github.com/acme/skills'}));
 });
 
@@ -202,10 +202,10 @@ test('keeps stale catalog visible while blocking install and update operations',
   };
   const {renderer} = await renderScope({snapshot: stale});
 
-  act(() => renderer.root.findByProps({'aria-label': 'Show uninstalled Hub skills'}).props.onChange({target: {checked: true}}));
+  act(() => renderer.root.findByProps({'aria-label': 'Show all Hub skills'}).props.onChange({target: {checked: true}}));
   expect(renderer.root.findByProps({'aria-label': 'Download new-skill'}).props.disabled).toBe(true);
   expect(renderer.root.findByProps({'aria-label': 'Update changed'}).props.disabled).toBe(true);
-  expect(renderer.root.findByProps({'aria-label': 'Refresh github.com/acme/skills'}).props.disabled).toBe(false);
+  expect(renderer.root.findByProps({'aria-label': 'Refresh acme/skills'}).props.disabled).toBe(false);
 });
 
 test('keeps itemized partial results visible for targeted retry feedback', async () => {
@@ -256,9 +256,9 @@ test('renders a compact source header with fixed source actions', async () => {
 
   expect(disclosure.props['aria-expanded']).toBe(true);
   expect(source.findAllByProps({className: 'chat-hub-skill-source-meta'})).toHaveLength(0);
-  expect(source.findByProps({'aria-label': 'Refresh github.com/acme/skills'})).toBeTruthy();
-  expect(source.findByProps({'aria-label': 'Update all github.com/acme/skills skills'})).toBeTruthy();
-  expect(source.findByProps({'aria-label': 'Delete github.com/acme/skills source'})).toBeTruthy();
+  expect(source.findByProps({'aria-label': 'Refresh acme/skills'})).toBeTruthy();
+  expect(source.findByProps({'aria-label': 'Update all acme/skills skills'})).toBeTruthy();
+  expect(source.findByProps({'aria-label': 'Delete acme/skills source'})).toBeTruthy();
 });
 
 test('uses a two-slot skill action column and suppresses ordinary status copy', async () => {

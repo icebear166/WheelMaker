@@ -33,11 +33,11 @@ Git source 的公开目录固定为仓库根目录下的 `skills/` 子树。Whee
 - 本地仍安装但目录中已不存在的项成为 `Removed upstream`。
 - 本地内容与远端 hash 相同为 `Up to date`；本地预期副本缺失或彼此内容不同为 `Copies differ`，在快照有效时可更新对齐。
 
-每个 scope 独立保存客户端本地的 `Show uninstalled skills` 开关，默认关闭。关闭只隐藏普通未安装项；已安装、冲突、Removed upstream、错误和 Pending removal 始终可见。该偏好不写入 source lock，也不随 Project Git 共享。
+每个 scope 独立保存客户端本地的 `Show all` 开关，默认关闭。关闭只隐藏普通未安装项；已安装、冲突、Removed upstream、错误和 Pending removal 始终可见。该偏好不写入 source lock，也不随 Project Git 共享。
 
 ### UI ledger 交互
 
-Skills 页面以 Source 为一级可折叠 ledger。Source header 固定为单行，显示展开 chevron、状态色点、source 名称及 Refresh、Update all、Delete 三个图标动作；不在 header 中重复展示 commit、刷新时间和数量元数据。Source 默认展开，点击 header 的非操作区域收起或展开；展开状态只存在当前页面会话，按 Hub、scope、Project 和 `sourceKey` 隔离，应用重新打开后恢复展开。Refresh 始终保留，Update all 没有可更新项、没有有效快照或操作繁忙时固定占位并置灰，刷新错误在收起时仍保持可见。
+Skills 页面以 Source 为一级可折叠 ledger。Source header 固定为单行，显示展开 chevron、状态色点、source 名称及 Refresh、Update all、Delete 三个图标动作；source 名称显示为去掉 host 的 `owner/repo` 路径，完整 URL 保留在 tooltip 中；不在 header 中重复展示 commit、刷新时间和数量元数据。Source 默认展开，点击 header 的非操作区域收起或展开；展开状态只存在当前页面会话，按 Hub、scope、Project 和 `sourceKey` 隔离，应用重新打开后恢复展开。Refresh 始终保留，Update all 没有可更新项、没有有效快照或操作繁忙时固定占位并置灰，刷新错误在收起时仍保持可见。
 
 Skill 行使用两个固定动作槽：第一槽按 capability 显示安装（产品文案为 Download）或 Update，第二槽显示 Uninstall。普通 `Not installed`、`Up to date` 和 `Update available` 不再重复显示行内状态文字；`Copies differ`、`Conflict`、`Removed upstream`、`Error`、`Pending removal` 和 `Unmanaged` 等异常继续显示文字与状态色。图标按钮使用统一的 Lucide stroke 语义：Download 为 `cloudDownload`，Update 为 `circleArrowUp`，Refresh 为 `refreshCw`，删除/卸载为 `trash`，并且必须提供 tooltip、aria-label、键盘焦点和 disabled/pending 状态。
 

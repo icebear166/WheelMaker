@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import {Icon} from '../common/Icon';
+import {skillSourceDisplayName} from './skillManagementView';
 import type {
   RegistrySkillDetail,
   RegistrySkillSourcePreview,
@@ -114,7 +115,7 @@ export function SkillInstallContent({
           <span className="skill-install-preview-mode">
             {explicit ? `${explicitNames.length} skill${explicitNames.length === 1 ? '' : 's'}` : 'Source only'}
           </span>
-          <span className="skill-install-preview-source" data-tooltip={preview.source}>{preview.sourceKey}</span>
+          <span className="skill-install-preview-source" data-tooltip={preview.source}>{skillSourceDisplayName(preview.sourceKey)}</span>
           <span className="skill-install-preview-revision">{preview.resolvedCommit.slice(0, 8)}</span>
         </div>
       ) : null}

@@ -91,7 +91,7 @@ Skills source 管理由三个边界共同组成：
 - Source Resolver 在受控临时 Git checkout 中把远端广告的默认 `HEAD` 解析为完整 commit，发现 Skills 并计算整个目录的确定性 hash。
 - Installed State Adapter 读取上游原生 lock 与 agent-visible 目录，并继续用固定版本 `skills` CLI 执行 add/remove。
 
-source lock 不是安装数据库。本机安装事实和本地目录 hash 不写入共享 source lock；每次 scan 都从原生 lock、实际路径和文件内容重新计算。Project source lock 可随 Git 共享，外部 Git 变化只改变期望目录；本机删除重试等 reconciliation metadata 由 Hub 本地状态拥有。Web 的 per-scope `Show uninstalled skills` 只属于当前客户端。
+source lock 不是安装数据库。本机安装事实和本地目录 hash 不写入共享 source lock；每次 scan 都从原生 lock、实际路径和文件内容重新计算。Project source lock 可随 Git 共享，外部 Git 变化只改变期望目录；本机删除重试等 reconciliation metadata 由 Hub 本地状态拥有。Web 的 per-scope `Show all` 开关只属于当前客户端。
 
 source lock 首次缺失时从原生 lock 的规范化仓库直接构造 V2；已有 V1 则丢弃其 payload 并以同样方式重建。原生 lock 中缺失或存在的 ref 都不参与 source 归属；但 Project source lock 在已有 reconciliation 历史后被 Git 外部删除时，仍作为 `Pending removal` 处理，不自动重建。
 

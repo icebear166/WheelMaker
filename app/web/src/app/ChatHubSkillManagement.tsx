@@ -12,6 +12,7 @@ import {
   readSkillSourceExpanded,
   readSkillShowUninstalled,
   shouldShowSkillCatalogRow,
+  skillSourceDisplayName,
   skillSourceExpandedPreferenceKey,
   skillScopeSelectionKey,
   writeSkillSourceExpanded,
@@ -202,6 +203,7 @@ function SkillSourceLedger({
   const statusCopy = skillStatusCopy(source.status);
   const sourceStatusClass = source.status.replaceAll('_', '-');
   const sourceUnavailable = source.status !== 'ready';
+  const displayName = skillSourceDisplayName(source.sourceKey);
 
   useEffect(() => {
     setExpanded(readSkillSourceExpanded(baseTarget));
@@ -222,7 +224,7 @@ function SkillSourceLedger({
         <button
           type="button"
           className="chat-hub-skill-source-disclosure"
-          aria-label={`Toggle ${source.sourceKey} skills`}
+          aria-label={`Toggle ${displayName} skills`}
           aria-expanded={expanded}
           onClick={toggleExpanded}
         >
@@ -232,12 +234,12 @@ function SkillSourceLedger({
             aria-label={`${statusCopy} source`}
             data-tooltip={statusCopy}
           />
-          <strong data-tooltip={source.source}>{source.sourceKey}</strong>
+          <strong data-tooltip={source.source}>{displayName}</strong>
         </button>
         <span className="chat-hub-skill-source-actions">
           <button
             type="button"
-            aria-label={`Refresh ${source.sourceKey}`}
+            aria-label={`Refresh ${displayName}`}
             disabled={busy}
             onClick={() => actions.onRefreshSource(baseTarget)}
           >
@@ -245,7 +247,7 @@ function SkillSourceLedger({
           </button>
           <button
             type="button"
-            aria-label={`Update all ${source.sourceKey} skills`}
+            aria-label={`Update all ${displayName} skills`}
             disabled={busy || sourceUnavailable || source.updateCount === 0}
             onClick={() => actions.onUpdateAll(baseTarget)}
           >
@@ -254,7 +256,7 @@ function SkillSourceLedger({
           <button
             type="button"
             className="is-danger"
-            aria-label={`Delete ${source.sourceKey} source`}
+            aria-label={`Delete ${displayName} source`}
             disabled={busy}
             onClick={() => actions.onDeleteSource(baseTarget)}
           >
@@ -277,7 +279,7 @@ function SkillSourceLedger({
           ))}
           {visibleSkills.length === 0 ? (
             <div className="chat-hub-skill-source-empty">
-              {showUninstalled ? 'No skills in this source.' : 'No installed skills. Show uninstalled to browse this source.'}
+              {showUninstalled ? 'No skills in this source.' : 'No installed skills. Show all to browse this source.'}
             </div>
           ) : null}
         </div>
@@ -328,11 +330,11 @@ export function ChatHubSkillScopeDetail({
           <label className="chat-hub-skill-uninstalled-toggle">
             <input
               type="checkbox"
-              aria-label={`Show uninstalled ${scopeLabel} skills`}
+              aria-label={`Show all ${scopeLabel} skills`}
               checked={showUninstalled}
               onChange={event => toggleUninstalled(event.target.checked)}
             />
-            <span>Show uninstalled</span>
+            <span>Show all</span>
           </label>
           <button
             type="button"

@@ -251,6 +251,15 @@ export function writeSkillShowUninstalled(
   }
 }
 
+// Compact ledger label: drop the host segment so github.com/owner/repo reads as
+// owner/repo. The full URL remains available via tooltips and confirmation copy.
+export function skillSourceDisplayName(sourceKey: string): string {
+  const separator = sourceKey.indexOf('/');
+  return separator > 0 && separator < sourceKey.length - 1
+    ? sourceKey.slice(separator + 1)
+    : sourceKey;
+}
+
 export function skillSourceExpandedPreferenceKey(input: SkillSourceIdentity): string {
   return [
     input.hubId,
