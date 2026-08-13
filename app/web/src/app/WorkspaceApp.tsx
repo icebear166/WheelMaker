@@ -697,8 +697,6 @@ import {splitUnifiedDiffFileBlocks} from '../git/unifiedDiffFiles';
 import { WorkspaceController } from '../workspace/WorkspaceController';
 import { WorkspaceStore } from '../workspace/WorkspaceStore';
 import {
-  CHAT_COLUMN_WIDTH_DEFAULT,
-  CHAT_COLUMN_WIDTH_WIDE,
   DESKTOP_SIDEBAR_WIDTH_DEFAULT,
   DESKTOP_SIDEBAR_WIDTH_MAX,
   DESKTOP_SIDEBAR_WIDTH_MIN,
@@ -3046,6 +3044,9 @@ export function App() {
   }, [setSidebarCollapsed]);
   const setDesktopSidebarWidth = useCallback((next: WorkspaceUiStateValue<number>) => {
     dispatchWorkspaceUi({ type: 'desktop/setSidebarWidth', next });
+  }, []);
+  const setChatColumnWidth = useCallback((value: number) => {
+    dispatchWorkspaceUi({ type: 'desktop/setChatColumnWidth', next: value });
   }, []);
   const setCollapsedProjectIds = useCallback((next: WorkspaceUiStateValue<string[]>) => {
     dispatchWorkspaceUi({ type: 'shared/setCollapsedProjectIds', next });
@@ -16178,6 +16179,8 @@ export function App() {
     <React.Suspense fallback={null}>
       <SettingsRootContent
         isWide={isWide}
+        chatColumnWidth={chatColumnWidth}
+        setChatColumnWidth={setChatColumnWidth}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
         showMonitor={showMonitor}
@@ -18542,14 +18545,6 @@ export function App() {
     }
     updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === mode ? 'closed' : mode);
   }, [chatPreviewOpen, updatePreviewDrawerMode]);
-  const toggleChatColumnWidth = useCallback(() => {
-    dispatchWorkspaceUi({
-      type: 'desktop/setChatColumnWidth',
-      next: chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE
-        ? CHAT_COLUMN_WIDTH_DEFAULT
-        : CHAT_COLUMN_WIDTH_WIDE,
-    });
-  }, [chatColumnWidth]);
   const floatingNavRelayState = resolveFloatingNavRelayState({
     ready: portRelayReady,
     frameUrl: portRelayFrameUrl,
@@ -18848,16 +18843,6 @@ export function App() {
               {!chatPreviewOpen && previewTabCount > 0 ? (
                 <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
               ) : null}
-            </button>
-            <button
-              type="button"
-              className={`chat-column-width-toggle${chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? ' active' : ''}`}
-              onClick={toggleChatColumnWidth}
-              data-tooltip={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? 'Switch chat column to 800px' : 'Switch chat column to 1200px'}
-              aria-label={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? 'Switch chat column to 800px' : 'Switch chat column to 1200px'}
-              aria-pressed={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE}
-            >
-              <SessionIcon name="unfoldHorizontal" />
             </button>
           </>
         ) : null}

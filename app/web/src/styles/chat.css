@@ -116,7 +116,6 @@
 
 .chat-title-prompt-icon-button,
 .chat-search-toggle,
-.chat-column-width-toggle,
 .chat-terminal-toggle,
 .chat-drawer-toggle,
 .chat-preview-toggle {
@@ -141,7 +140,6 @@
 
 .chat-title-prompt-icon-button:hover,
 .chat-search-toggle:hover,
-.chat-column-width-toggle:hover,
 .chat-terminal-toggle:hover,
 .chat-drawer-toggle:hover:not(:disabled),
 .chat-preview-toggle:hover {
@@ -151,7 +149,6 @@
 
 .chat-title-prompt-icon-button.open,
 .chat-search-toggle.active,
-.chat-column-width-toggle.active,
 .chat-terminal-toggle.active,
 .chat-drawer-toggle.active,
 .chat-preview-toggle.active {
@@ -161,7 +158,6 @@
 
 .chat-title-prompt-icon-button.open:hover,
 .chat-search-toggle.active:hover,
-.chat-column-width-toggle.active:hover,
 .chat-terminal-toggle.active:hover,
 .chat-drawer-toggle.active:hover:not(:disabled),
 .chat-preview-toggle.active:hover {

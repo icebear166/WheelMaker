@@ -26,6 +26,10 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from '../code/shikiSettings';
+import {
+  CHAT_COLUMN_WIDTH_DEFAULT,
+  CHAT_COLUMN_WIDTH_WIDE,
+} from '../shell/state/workspaceUiState';
 import type {SettingsDetail} from './settingsNavigation';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
@@ -34,6 +38,8 @@ const CODE_TAB_SIZE_OPTIONS = [2, 4, 8] as const;
 
 type SettingsRootContentProps = {
   isWide: boolean;
+  chatColumnWidth: number;
+  setChatColumnWidth: (value: number) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
   showMonitor: boolean;
@@ -129,6 +135,8 @@ function SettingsNavRow({icon, label, danger = false, onClick}: SettingsNavRowPr
 
 export function SettingsRootContent({
   isWide,
+  chatColumnWidth,
+  setChatColumnWidth,
   mobileEnterKeyBehavior,
   setMobileEnterKeyBehavior,
   showMonitor,
@@ -172,6 +180,27 @@ export function SettingsRootContent({
       ) : null}
       <SettingsSection id="chat" title="Chat" icon="messageCircle" rows={(
         <>
+          {isWide ? (
+            <SettingsControlRow
+              icon="unfoldHorizontal"
+              label="Chat Column Width"
+              control={(
+                <select
+                  className="sidebar-setting-select"
+                  value={String(chatColumnWidth)}
+                  onChange={event => {
+                    const next = Number(event.target.value);
+                    if (next === CHAT_COLUMN_WIDTH_DEFAULT || next === CHAT_COLUMN_WIDTH_WIDE) {
+                      setChatColumnWidth(next);
+                    }
+                  }}
+                >
+                  <option value={CHAT_COLUMN_WIDTH_DEFAULT}>800px</option>
+                  <option value={CHAT_COLUMN_WIDTH_WIDE}>1200px</option>
+                </select>
+              )}
+            />
+          ) : null}
           {isWide ? (
             <SettingsControlRow
               icon="activity"

@@ -60,16 +60,24 @@ describe('web chat fixed 800px layout', () => {
     expect(stylesCss).not.toContain('.mobile-project-toggle {');
   });
 
-  test('keeps the chat view width preference out of the settings page', () => {
+  test('places the chat view width preference in Chat settings instead of the title bar', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
     const persistence = readSourceText(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(persistence).not.toContain('chatViewWidth');
-    expect(settingsRootTsx).not.toContain('chatViewWidth');
-    expect(settingsRootTsx).not.toContain('Chat View Width');
-    expect(mainTsx).not.toContain('chatViewWidth');
+    expect(settingsRootTsx).toContain('chatColumnWidth: number;');
+    expect(settingsRootTsx).toContain('setChatColumnWidth: (value: number) => void;');
+    expect(settingsRootTsx).toContain('label="Chat Column Width"');
+    expect(settingsRootTsx).toContain('value={String(chatColumnWidth)}');
+    expect(settingsRootTsx).toContain('value={CHAT_COLUMN_WIDTH_DEFAULT}');
+    expect(settingsRootTsx).toContain('value={CHAT_COLUMN_WIDTH_WIDE}');
+    expect(mainTsx).not.toContain('chat-column-width-toggle');
+    expect(mainTsx).not.toContain('<SessionIcon name="unfoldHorizontal" />');
+    expect(mainTsx).toContain('setChatColumnWidth={setChatColumnWidth}');
+    expect(stylesCss).not.toContain('.chat-column-width-toggle');
     expect(mainTsx).toContain('const chatMainClassName = isWide');
     expect(mainTsx).toContain("`chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`");
   });
@@ -129,7 +137,7 @@ describe('web chat fixed 800px layout', () => {
     expect(fixedPreviewPane).not.toContain('width: auto;');
   });
 
-  test('switches the chat column between 800px and 1200px tiers from the title bar', () => {
+  test('keeps the chat column tier state and layout wiring independent from its settings entry point', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const iconTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'common', 'Icon.tsx'));
@@ -139,12 +147,8 @@ describe('web chat fixed 800px layout', () => {
     expect(mainTsx).toContain('const chatColumnWidth = workspaceUiState.desktop.chatColumnWidth;');
     expect(mainTsx).toContain("'--chat-view-column-width': `${chatColumnWidth}px`,");
     expect(mainTsx).toContain("type: 'desktop/setChatColumnWidth'");
-    expect(mainTsx).toContain("className={`chat-column-width-toggle${chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? ' active' : ''}`}");
-    expect(mainTsx).toContain('aria-pressed={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE}');
-    expect(mainTsx).toContain('<SessionIcon name="unfoldHorizontal" />');
     expect(mainTsx).toContain('      desktopSidebarWidth,\n      chatColumnWidth,');
     expect(iconTsx).toContain('unfoldHorizontal:');
-    expect(stylesCss).toContain('.chat-column-width-toggle,');
     expect(stylesCss).toContain('width: min(var(--chat-view-column-width, 800px), 100%);');
     expect(stylesCss).toContain('width: min(var(--chat-view-column-width, 800px), calc(100% - 16px));');
     expect(stylesCss).toContain('--chat-fixed-column: min(var(--chat-view-column-width, 800px), max(0px, calc(100% - var(--chat-edge-min-visible))));');
