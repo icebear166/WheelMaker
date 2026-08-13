@@ -225,7 +225,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const [markdownHtmlExportRequest, setMarkdownHtmlExportRequest]');
     expect(mainTsx).toContain('const [promptMarkdownHtmlExportDraft, setPromptMarkdownHtmlExportDraft]');
     expect(mainTsx).toContain("if (action === 'export-html')");
-    expect(mainTsx).toContain('service.readProjectFile(relativePath, menuProjectId)');
+    expect(mainTsx).toContain('service.readProjectFile(exportPath, menuProjectId)');
     expect(mainTsx).toContain('const startMarkdownHtmlExport = async');
     expect(mainTsx).toContain('image.encoding !== \'base64\'');
     expect(mainTsx).toContain('data:${mimeType};base64,${image.content}');

@@ -237,6 +237,46 @@ export function resolveProjectMarkdownImagePath(
   return resolved.join('/') || null;
 }
 
+// External markdown files live outside the project root, so unlike
+// resolveProjectMarkdownImagePath this variant preserves the host-absolute root
+// (POSIX '/', UNC '//', or drive letter) and clamps '..' at that root instead of
+// rejecting escapes.
+export function resolveExternalMarkdownImagePath(
+  markdownPath: string,
+  source: string,
+): string | null {
+  if (!source || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(source)) {
+    return null;
+  }
+  const relativeSource = source.split(/[?#]/, 1)[0] || '';
+  const normalizedBase = markdownPath.replaceAll('\\', '/');
+  const root = normalizedBase.startsWith('//')
+    ? '//'
+    : normalizedBase.startsWith('/')
+      ? '/'
+      : '';
+  const parts = [
+    ...normalizedBase.split('/').slice(0, -1),
+    ...relativeSource.replaceAll('\\', '/').split('/'),
+  ];
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (resolved.length === 0) {
+        if (root) continue;
+        return null;
+      }
+      if (resolved.length === 1 && /^[A-Za-z]:$/.test(resolved[0])) continue;
+      resolved.pop();
+      continue;
+    }
+    resolved.push(part);
+  }
+  if (resolved.length === 0) return null;
+  return root + resolved.join('/');
+}
+
 export function buildStandaloneMarkdownHtmlDocument({
   title,
   bodyHtml,

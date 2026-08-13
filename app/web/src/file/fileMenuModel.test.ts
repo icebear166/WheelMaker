@@ -132,6 +132,64 @@ describe('file menu model', () => {
     ]);
   });
 
+  test('offers share and HTML export for an external Markdown file', () => {
+    const model = buildContextMenuModel({
+      ...option({
+        kind: 'external-file',
+        path: 'D:/outside/notes.md',
+      }),
+      platform: 'browser',
+    });
+
+    expect(actions(model)).toEqual([
+      'preview',
+      'download',
+      'share',
+      'export-html',
+      'copy-absolute',
+    ]);
+  });
+
+  test('offers share and HTML export for an external Markdown file at a POSIX path', () => {
+    const model = buildContextMenuModel({
+      ...option({
+        kind: 'external-file',
+        path: '/home/user/notes.markdown',
+      }),
+      platform: 'browser',
+    });
+
+    expect(actions(model)).toContain('share');
+    expect(actions(model)).toContain('export-html');
+  });
+
+  test('offers only share for an external HTML file', () => {
+    const model = buildContextMenuModel({
+      ...option({
+        kind: 'external-file',
+        path: '/home/user/page.html',
+      }),
+      platform: 'browser',
+    });
+
+    expect(actions(model)).toContain('share');
+    expect(actions(model)).not.toContain('export-html');
+  });
+
+  test('hides share and export for an unavailable external Markdown file', () => {
+    const model = buildContextMenuModel({
+      ...option({
+        kind: 'external-file',
+        path: '/home/user/notes.md',
+        available: false,
+      }),
+      platform: 'browser',
+    });
+
+    expect(labels(model)).not.toContain('Share MD/HTML');
+    expect(labels(model)).not.toContain('Export as HTML');
+  });
+
   test('keeps an attachment preview/download menu without path actions', () => {
     const model = buildContextMenuModel({
       ...option({
@@ -255,6 +313,37 @@ describe('file menu model', () => {
     });
 
     expect(actions(model)).toEqual(['download', 'copy-file', 'copy-absolute']);
+  });
+
+  test('offers share and HTML export for an external Preview Markdown tab', () => {
+    const model = buildContextMenuModel({
+      surface: 'preview-tab',
+      platform: 'browser',
+      target: {
+        kind: 'preview-external-file',
+        path: '/home/user/notes.md',
+        available: true,
+        downloadAvailable: true,
+      },
+    });
+
+    expect(actions(model)).toEqual(['download', 'share', 'export-html', 'copy-absolute']);
+  });
+
+  test('offers only share for an external Preview HTML tab', () => {
+    const model = buildContextMenuModel({
+      surface: 'preview-tab',
+      platform: 'browser',
+      target: {
+        kind: 'preview-external-file',
+        path: '/home/user/page.htm',
+        available: true,
+        downloadAvailable: true,
+      },
+    });
+
+    expect(actions(model)).toContain('share');
+    expect(actions(model)).not.toContain('export-html');
   });
 
   test('returns a separate Copy action for text selection', () => {

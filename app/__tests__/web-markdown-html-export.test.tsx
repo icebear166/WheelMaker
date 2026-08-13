@@ -6,6 +6,7 @@ import {
   buildMarkdownHtmlFileName,
   buildPromptMarkdownHtmlFileStem,
   buildStandaloneMarkdownHtmlDocument,
+  resolveExternalMarkdownImagePath,
   resolveProjectMarkdownImagePath,
   validateMarkdownHtmlFileStem,
 } from '../web/src/chat/export/markdownHtmlExport';
@@ -50,6 +51,42 @@ describe('markdown HTML export', () => {
     ).toBeNull();
     expect(
       resolveProjectMarkdownImagePath('docs/guide/readme.md', 'https://example.test/logo.png'),
+    ).toBeNull();
+  });
+
+  test('resolves external image paths against the host-absolute source directory', () => {
+    expect(
+      resolveExternalMarkdownImagePath('/home/user/docs/note.md', 'img/a.png'),
+    ).toBe('/home/user/docs/img/a.png');
+    expect(
+      resolveExternalMarkdownImagePath('/home/user/docs/note.md', '../assets/logo.png'),
+    ).toBe('/home/user/assets/logo.png');
+    expect(
+      resolveExternalMarkdownImagePath('/home/user/note.md', '../../../x.png'),
+    ).toBe('/x.png');
+    expect(
+      resolveExternalMarkdownImagePath('D:\\docs\\note.md', 'img\\a.png'),
+    ).toBe('D:/docs/img/a.png');
+    expect(
+      resolveExternalMarkdownImagePath('D:/note.md', '../a.png'),
+    ).toBe('D:/a.png');
+    expect(
+      resolveExternalMarkdownImagePath('\\\\server\\share\\note.md', 'a.png'),
+    ).toBe('//server/share/a.png');
+  });
+
+  test('rejects non-file image sources for external markdown files', () => {
+    expect(
+      resolveExternalMarkdownImagePath('/home/user/note.md', 'https://example.test/a.png'),
+    ).toBeNull();
+    expect(
+      resolveExternalMarkdownImagePath('/home/user/note.md', 'data:image/png;base64,xx'),
+    ).toBeNull();
+    expect(
+      resolveExternalMarkdownImagePath('/home/user/note.md', '#anchor'),
+    ).toBeNull();
+    expect(
+      resolveExternalMarkdownImagePath('note.md', '../../x.png'),
     ).toBeNull();
   });
 

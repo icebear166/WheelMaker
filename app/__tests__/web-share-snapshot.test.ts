@@ -3,6 +3,7 @@ import {
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
   inspectShareHtmlDependencies,
+  shareKindForExternalPath,
   shareKindForPath,
 } from '../web/src/shares/shareSnapshot';
 import {serializeMarkdownHtmlExportSurface} from '../web/src/chat/export/markdownHtmlExportSurface';
@@ -14,6 +15,15 @@ describe('share snapshots', () => {
     expect(shareKindForPath('docs/index.html')).toBe('html');
     expect(shareKindForPath('docs/index.htm')).toBe('html');
     expect(shareKindForPath('docs/data.json')).toBeUndefined();
+  });
+
+  test('detects share kinds for host-absolute external paths', () => {
+    expect(shareKindForExternalPath('/home/user/notes.md')).toBe('markdown');
+    expect(shareKindForExternalPath('/home/user/notes.markdown')).toBe('markdown');
+    expect(shareKindForExternalPath('D:\\docs\\page.html')).toBe('html');
+    expect(shareKindForExternalPath('/home/user/page.htm')).toBe('html');
+    expect(shareKindForExternalPath('/home/user/../outside/notes.md')).toBe('markdown');
+    expect(shareKindForExternalPath('/home/user/data.json')).toBeUndefined();
   });
 
   test('keeps Markdown export output as the standalone HTML snapshot', () => {

@@ -169,6 +169,34 @@ describe('chat file link context menu', () => {
     act(() => renderer.unmount());
   });
 
+  test('offers share and HTML export for an external Markdown file', () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <ChatFileLinkContextMenu
+          {...internalProps}
+          model={fileModel({
+            kind: 'external-file',
+            path: '/home/user/notes.md',
+          }, 'browser', {
+            canOpenInVSCode: false,
+            canShowInExplorer: false,
+            canCopyFile: false,
+          })}
+        />,
+      );
+    });
+
+    expect(labels(renderer)).toEqual([
+      'Preview',
+      'Download',
+      'Share MD/HTML',
+      'Export as HTML',
+      'Copy absolute path',
+    ]);
+    act(() => renderer.unmount());
+  });
+
   test('emits every visible action for a fully capable Markdown menu', () => {
     const onAction = jest.fn();
     let renderer!: TestRenderer.ReactTestRenderer;

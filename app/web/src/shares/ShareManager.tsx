@@ -20,6 +20,7 @@ export type ShareManagerProjectSource = {
   kind: ShareDocumentKind;
   title: string;
   content?: string;
+  external?: boolean;
 };
 
 export type ShareManagerChatSource =

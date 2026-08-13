@@ -330,6 +330,7 @@ import {
   createChatShareSnapshot,
   createHtmlShareSnapshot,
   createMarkdownShareSnapshot,
+  shareKindForExternalPath,
   shareKindForPath,
   type ShareSnapshot,
 } from '../shares/shareSnapshot';
@@ -337,6 +338,7 @@ import {
   buildMarkdownHtmlFileNameFromStem,
   buildMarkdownHtmlFileName,
   buildPromptMarkdownHtmlFileStem,
+  resolveExternalMarkdownImagePath,
   resolveProjectMarkdownImagePath,
   validateMarkdownHtmlFileStem,
 } from '../chat/export/markdownHtmlExport';
@@ -2168,6 +2170,7 @@ type StartMarkdownHtmlExportInput = {
   fileName: string;
   projectId: string;
   sourcePath: string;
+  external?: boolean;
   key: string;
 };
 
@@ -16979,11 +16982,14 @@ export function App() {
   const createMarkdownImageResolver = useCallback((
     exportProjectId: string,
     sourcePath: string,
+    external = false,
   ): MarkdownHtmlImageResolver => async source => {
     if (/^data:image\//i.test(source)) {
       return {src: source};
     }
-    const projectImagePath = resolveProjectMarkdownImagePath(sourcePath, source);
+    const projectImagePath = external
+      ? resolveExternalMarkdownImagePath(sourcePath, source)
+      : resolveProjectMarkdownImagePath(sourcePath, source);
     if (projectImagePath !== null) {
       if (!exportProjectId) {
         return {
@@ -16993,7 +16999,9 @@ export function App() {
         };
       }
       try {
-        const image = await service.readProjectFile(projectImagePath, exportProjectId);
+        const image = external
+          ? await service.readExternalFile(exportProjectId, projectImagePath)
+          : await service.readProjectFile(projectImagePath, exportProjectId);
         const mimeType = image.mimeType || '';
         if (
           !image.isBinary ||
@@ -17051,6 +17059,7 @@ export function App() {
     fileName,
     projectId: exportProjectId,
     sourcePath,
+    external = false,
     key,
   }: StartMarkdownHtmlExportInput) => {
     if (exportingMarkdownHtmlKey) {
@@ -17067,7 +17076,7 @@ export function App() {
       return;
     }
 
-    const imageResolver = createMarkdownImageResolver(exportProjectId, sourcePath);
+    const imageResolver = createMarkdownImageResolver(exportProjectId, sourcePath, external);
 
     markdownHtmlExportIdRef.current += 1;
     setMarkdownHtmlExportRequest({
@@ -17362,7 +17371,9 @@ export function App() {
     if (source.kind === 'html') {
       const file = source.content !== undefined
         ? {content: source.content, isBinary: false}
-        : await service.readProjectFile(source.path, source.projectId);
+        : source.external
+          ? await service.readExternalFile(source.projectId, source.path)
+          : await service.readProjectFile(source.path, source.projectId);
       if (file.isBinary) {
         throw new Error('HTML file content is unavailable.');
       }
@@ -17371,7 +17382,9 @@ export function App() {
 
     const file = source.content !== undefined
       ? {content: source.content, isBinary: false}
-      : await service.readProjectFile(source.path, source.projectId);
+      : source.external
+        ? await service.readExternalFile(source.projectId, source.path)
+        : await service.readProjectFile(source.path, source.projectId);
     if (file.isBinary) {
       throw new Error('Markdown file content is unavailable.');
     }
@@ -17380,10 +17393,14 @@ export function App() {
       if (/^data:image\//i.test(imageSource)) {
         return {src: imageSource};
       }
-      const projectImagePath = resolveProjectMarkdownImagePath(source.path, imageSource);
+      const projectImagePath = source.external
+        ? resolveExternalMarkdownImagePath(source.path, imageSource)
+        : resolveProjectMarkdownImagePath(source.path, imageSource);
       if (projectImagePath !== null) {
         try {
-          const image = await service.readProjectFile(projectImagePath, source.projectId);
+          const image = source.external
+            ? await service.readExternalFile(source.projectId, projectImagePath)
+            : await service.readProjectFile(projectImagePath, source.projectId);
           const mimeType = image.mimeType || '';
           if (
             !image.isBinary ||
@@ -21130,31 +21147,41 @@ export function App() {
       return;
     }
     if (action === 'share') {
-      if (relativePath === null) return;
-      const kind = shareKindForPath(relativePath);
+      const external = menuState.targetKind === 'external-file';
+      const sharePath = external ? absolutePath : relativePath;
+      if (!sharePath) return;
+      const kind = external ? shareKindForExternalPath(sharePath) : shareKindForPath(sharePath);
       if (!kind) return;
       openShareCreate({
         projectId: menuProjectId,
-        path: relativePath,
+        path: sharePath,
         kind,
-        title: relativePath.split('/').pop() || relativePath,
+        title: sharePath.replaceAll('\\', '/').split('/').pop() || sharePath,
+        ...(external ? {external: true} : {}),
       });
       return;
     }
     if (action === 'export-html') {
-      if (!link || relativePath === null || !isMarkdownPath(menuFilePath)) return;
-      service.readProjectFile(relativePath, menuProjectId)
+      if (!link) return;
+      const external = menuState.targetKind === 'external-file';
+      const exportPath = external ? absolutePath : relativePath;
+      if (!exportPath || !isMarkdownPath(exportPath)) return;
+      (external
+        ? service.readExternalFile(menuProjectId, exportPath)
+        : service.readProjectFile(exportPath, menuProjectId)
+      )
         .then(file => {
           if (file.isBinary) {
             throw new Error('Markdown file content is unavailable.');
           }
           return startMarkdownHtmlExport({
             content: file.content,
-            title: relativePath.split('/').pop() || relativePath,
-            fileName: buildMarkdownHtmlFileName(relativePath),
+            title: exportPath.replaceAll('\\', '/').split('/').pop() || exportPath,
+            fileName: buildMarkdownHtmlFileName(exportPath),
             projectId: menuProjectId,
-            sourcePath: relativePath,
-            key: `file:${menuProjectId}:${relativePath}`,
+            sourcePath: exportPath,
+            external,
+            key: `file:${menuProjectId}:${exportPath}`,
           });
         })
         .catch(error => {
@@ -21342,34 +21369,36 @@ export function App() {
     }
     if (action === 'share') {
       closeMenu();
-      if (tab.type !== 'file' || fileTarget?.relativePath === null || !fileTarget?.relativePath) return;
-      const kind = shareKindForPath(fileTarget.relativePath);
+      if (tab.type !== 'file' || !fileTarget) return;
+      const external = fileTarget.relativePath === null;
+      const sharePath = external ? fileTarget.absolutePath : fileTarget.relativePath;
+      if (!sharePath) return;
+      const kind = external ? shareKindForExternalPath(sharePath) : shareKindForPath(sharePath);
       if (!kind) return;
       openShareCreate({
         projectId: tab.projectId,
-        path: fileTarget.relativePath,
+        path: sharePath,
         kind,
-        title: tab.title || tab.path.split('/').pop() || 'Document',
+        title: tab.title || sharePath.replaceAll('\\', '/').split('/').pop() || 'Document',
         content: tab.content,
+        ...(external ? {external: true} : {}),
       });
       return;
     }
     if (action === 'export-html') {
       closeMenu();
-      if (
-        tab.type !== 'file' ||
-        fileTarget?.relativePath === null ||
-        !fileTarget?.relativePath ||
-        tab.info?.isBinary ||
-        !isMarkdownPath(fileTarget.relativePath)
-      ) return;
+      if (tab.type !== 'file' || !fileTarget || tab.info?.isBinary) return;
+      const external = fileTarget.relativePath === null;
+      const exportPath = external ? fileTarget.absolutePath : fileTarget.relativePath;
+      if (!exportPath || !isMarkdownPath(exportPath)) return;
       startMarkdownHtmlExport({
         content: tab.content,
-        title: tab.title || tab.path.split('/').pop() || 'Markdown document',
-        fileName: buildMarkdownHtmlFileName(fileTarget.relativePath),
+        title: tab.title || exportPath.replaceAll('\\', '/').split('/').pop() || 'Markdown document',
+        fileName: buildMarkdownHtmlFileName(exportPath),
         projectId: tab.projectId,
-        sourcePath: fileTarget.relativePath,
-        key: `file:${tab.projectId}:${fileTarget.relativePath}`,
+        sourcePath: exportPath,
+        external,
+        key: `file:${tab.projectId}:${exportPath}`,
       }).catch(() => undefined);
       return;
     }

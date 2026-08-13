@@ -1,5 +1,5 @@
 import type {ChatIconName} from '../chat/ChatIcon';
-import {shareKindForPath} from '../shares/shareSnapshot';
+import {shareKindForExternalPath, shareKindForPath} from '../shares/shareSnapshot';
 
 export type FileMenuPlatform = 'desktop' | 'browser' | 'android';
 export type ContextMenuSurface = 'file' | 'preview-tab' | 'selection';
@@ -140,11 +140,14 @@ function buildFileModel(
   addItem(itemsByGroup['transfer-share-export'], canUseDesktop && capabilities.canCopyFile && canCopyFileTarget(target.kind)
     ? {action: 'copy-file', icon: 'copy', label: 'Copy file'}
     : null);
-  const shareable = projectPath && available && !!target.path && !!shareKindForPath(target.path);
+  const shareable = available && !!target.path && (
+    (projectPath && !!shareKindForPath(target.path))
+    || (target.kind === 'external-file' && !!shareKindForExternalPath(target.path))
+  );
   addItem(itemsByGroup['transfer-share-export'], shareable
     ? {action: 'share', icon: 'share', label: 'Share MD/HTML'}
     : null);
-  addItem(itemsByGroup['transfer-share-export'], projectPath && available && isMarkdownPath(target.path)
+  addItem(itemsByGroup['transfer-share-export'], (projectPath || target.kind === 'external-file') && available && isMarkdownPath(target.path)
     ? {action: 'export-html', icon: 'fileCode', label: 'Export as HTML'}
     : null);
 
@@ -190,11 +193,14 @@ function buildPreviewTabModel(
   addItem(transfer, canUseDesktop && capabilities.canCopyFile && fileTarget
     ? {action: 'copy-file', icon: 'copy', label: 'Copy file'}
     : null);
-  const shareable = projectFile && available && !!target.path && !!shareKindForPath(target.path);
+  const shareable = available && !!target.path && (
+    (projectFile && !!shareKindForPath(target.path))
+    || (target.kind === 'preview-external-file' && !!shareKindForExternalPath(target.path))
+  );
   addItem(transfer, shareable
     ? {action: 'share', icon: 'share', label: 'Share MD/HTML'}
     : null);
-  addItem(transfer, projectFile && available && isMarkdownPath(target.path)
+  addItem(transfer, (projectFile || target.kind === 'preview-external-file') && available && isMarkdownPath(target.path)
     ? {action: 'export-html', icon: 'fileCode', label: 'Export as HTML'}
     : null);
 

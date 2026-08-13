@@ -23,6 +23,17 @@ export function shareKindForPath(path: string): ShareDocumentKind | undefined {
   return undefined;
 }
 
+// External files use host-absolute paths, so unlike shareKindForPath this check
+// is extension-only and accepts POSIX roots, drive letters, and '..' segments.
+export function shareKindForExternalPath(path: string): ShareDocumentKind | undefined {
+  const normalized = path.replaceAll('\\', '/').trim();
+  if (!normalized) return undefined;
+  const extension = normalized.slice(normalized.lastIndexOf('.')).toLowerCase();
+  if (extension === '.md' || extension === '.markdown') return 'markdown';
+  if (extension === '.html' || extension === '.htm') return 'html';
+  return undefined;
+}
+
 export function createMarkdownShareSnapshot({
   title,
   html,
