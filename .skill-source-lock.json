@@ -10,12 +10,73 @@
     {
       "source": "https://github.com/better-auth/better-icons.git",
       "sourceKey": "github.com/better-auth/better-icons",
-      "skillList": []
+      "resolvedCommit": "033316ecb8f4982235af4111a2257e80231f5ab1",
+      "refreshedAt": "2026-08-13T12:00:29Z",
+      "skillList": [
+        {
+          "name": "better-icons",
+          "skillPath": "skills/SKILL.md",
+          "contentSha256": "b0f8e8740e71afdfc3fb7c361d6b2599b49c26f59ce1d2c7be2936e8b6e80fe1"
+        }
+      ]
     },
     {
       "source": "https://github.com/emilkowalski/skills.git",
       "sourceKey": "github.com/emilkowalski/skills",
-      "skillList": []
+      "resolvedCommit": "78761e1b57f97dce65b983d640c70a68f39e8163",
+      "refreshedAt": "2026-08-13T12:00:23Z",
+      "skillList": [
+        {
+          "name": "animate",
+          "skillPath": "skills/animate/SKILL.md",
+          "contentSha256": "f715bdbec7d50b142f534112010b9b40c5000c55a5343fafb86b3a814ce57068"
+        },
+        {
+          "name": "animation-vocabulary",
+          "skillPath": "skills/animation-vocabulary/SKILL.md",
+          "contentSha256": "387ee2e18f12a61f9ca1ccef8f7107a0303400da163a9cd5b29ace3b107fbc69"
+        },
+        {
+          "name": "apple-design",
+          "skillPath": "skills/apple-design/SKILL.md",
+          "contentSha256": "3880d6d7b186558cd859f47e10ae430f9d5f72e8178943fee58c4448c421e82f"
+        },
+        {
+          "name": "ask-sonner",
+          "skillPath": "skills/ask-sonner/SKILL.md",
+          "contentSha256": "156bd163b907aa4cf8962bf9913b3d36734281ce9d4662dbb59955dccb5a823a"
+        },
+        {
+          "name": "emil-design-eng",
+          "skillPath": "skills/emil-design-eng/SKILL.md",
+          "contentSha256": "c62d240bcdbda234a4e86e6792a2d953a6db55edc258e965da7c222b75e8642e"
+        },
+        {
+          "name": "find-animation-opportunities",
+          "skillPath": "skills/find-animation-opportunities/SKILL.md",
+          "contentSha256": "2d01e1c9a210bb138126ddc0fd56735d8228694d1ee3f5ef8a264e605baca6db"
+        },
+        {
+          "name": "improve-animations",
+          "skillPath": "skills/improve-animations/SKILL.md",
+          "contentSha256": "a3ae6c203b0f0010f08bafafd986f44bf48a74d573e0625957e3a0255fdfd8fe"
+        },
+        {
+          "name": "pick-ui-library",
+          "skillPath": "skills/pick-ui-library/SKILL.md",
+          "contentSha256": "9bc9916916c03205a4181918f9932c49a359864c97e7550ddd031b3781f643a6"
+        },
+        {
+          "name": "prototype",
+          "skillPath": "skills/prototype/SKILL.md",
+          "contentSha256": "033c99c96042391cd8f3b09ffea4d54539d8e5a195f4e8c611f831571d5a163a"
+        },
+        {
+          "name": "review-animations",
+          "skillPath": "skills/review-animations/SKILL.md",
+          "contentSha256": "487d1f32c6b55c83b85045297d801b9cc136e7212082cecaab59ea6f0166c3be"
+        }
+      ]
     },
     {
       "source": "https://github.com/ibelick/ui-skills.git",
