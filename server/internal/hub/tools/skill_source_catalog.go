@@ -452,7 +452,7 @@ func composeSkillSourceCatalog(
 		localHash, localErr := hashInstalledSkillCopies(local.Locations)
 		row := SkillsSourceCatalogSkillSnapshot{
 			Name: local.Name, LocalContentSHA256: localHash, Status: "unmanaged",
-			Installed: true, Managed: local.Managed,
+			Installed: true, Managed: local.Managed, CanUninstall: true,
 		}
 		if localErr != nil {
 			row.Status = "error"

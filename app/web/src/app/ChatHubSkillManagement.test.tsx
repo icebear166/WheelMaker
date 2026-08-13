@@ -34,7 +34,7 @@ const catalog: RegistrySkillSourceScopeSnapshot = {
     conflict: false,
     canInstall: false,
     canUpdate: false,
-    canUninstall: false,
+    canUninstall: true,
   }],
 };
 
@@ -106,6 +106,14 @@ test('treats nullable source skills from the registry as an empty catalog', asyn
   expect(renderer.root.findByProps({'data-source-key': 'github.com/acme/skills'})).toBeTruthy();
   expect(renderer.root.findByProps({className: 'chat-hub-skill-source-empty'}).children.join(''))
     .toContain('No installed skills');
+});
+
+test('offers uninstall for unmanaged skills', async () => {
+  const {renderer, actions} = await renderScope();
+  const unmanaged = renderer.root.findByProps({'data-skill-name': 'local-only'});
+
+  act(() => unmanaged.findByProps({'aria-label': 'Uninstall local-only'}).props.onClick());
+  expect(actions.onUninstall).toHaveBeenCalledWith({...hubTarget, skillName: 'local-only'});
 });
 
 test('shows remote additions after enabling the scope preference and offers install only there', async () => {

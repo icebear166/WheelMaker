@@ -3808,7 +3808,7 @@ func TestSkillSourceCatalogReconcilesLiveDirectoryHashesAndRemovedUpstream(t *te
 	}
 
 	catalog := composeSkillSourceCatalog(lock, native, installed, nil)
-	if len(catalog.Sources) != 1 || len(catalog.UnmanagedSkills) != 1 || catalog.UnmanagedSkills[0].Name != "unmanaged" {
+	if len(catalog.Sources) != 1 || len(catalog.UnmanagedSkills) != 1 || catalog.UnmanagedSkills[0].Name != "unmanaged" || !catalog.UnmanagedSkills[0].CanUninstall {
 		t.Fatalf("catalog groups=%#v", catalog)
 	}
 	rows := skillSourceRowsByName(catalog.Sources[0].Skills)
@@ -4099,7 +4099,7 @@ func TestSkillsCommandSourcePreviewAndApplySavesCatalogWithoutInstalling(t *test
 	}
 }
 
-func TestSkillsCommandPreviewInstallPinsResolvedCommitAndExplicitSkills(t *testing.T) {
+func TestSkillsCommandPreviewInstallUsesResolvedSourceAndExplicitSkills(t *testing.T) {
 	root := t.TempDir()
 	globalLock := filepath.Join(root, ".skill-lock.json")
 	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
@@ -4147,7 +4147,7 @@ func TestSkillsCommandPreviewInstallPinsResolvedCommitAndExplicitSkills(t *testi
 	if operation.Status != "succeeded" {
 		t.Fatalf("operation=%#v", operation)
 	}
-	pinnedSource := "https://github.com/example/catalog.git#" + strings.Repeat("c", 40)
+	pinnedSource := "https://github.com/example/catalog.git"
 	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y") {
 		t.Fatalf("pinned install call missing: %#v", runner.calls)
 	}
@@ -4225,7 +4225,7 @@ func TestSkillsCommandPreviewUpdateAllSelectsOnlyInstalledChangedSkills(t *testi
 	if results["alpha"].Status != "succeeded" || results["new-skill"].Status != "skipped" || results["removed"].Status != "skipped" {
 		t.Fatalf("itemized update results=%#v", operation.Results)
 	}
-	pinnedSource := "https://github.com/example/catalog.git#" + strings.Repeat("e", 40)
+	pinnedSource := "https://github.com/example/catalog.git"
 	if !runner.hasCall("", "skills", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y") {
 		t.Fatalf("alpha update missing: %#v", runner.calls)
 	}
@@ -4258,7 +4258,7 @@ func TestSkillsCommandPreviewUpdateContinuesAfterItemFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolvedCommit := strings.Repeat("a", 40)
-	pinnedSource := "https://github.com/example/catalog.git#" + resolvedCommit
+	pinnedSource := "https://github.com/example/catalog.git"
 	runner := newFakeSkillsRunner()
 	runner.set("", "skills", []string{"add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y"}, skillsCommandResult{ExitCode: 1, Stderr: "alpha failed"})
 	runner.set("", "npx", []string{"--yes", "skills@1.5.18", "add", pinnedSource, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "alpha", "-y"}, skillsCommandResult{ExitCode: 1, Stderr: "alpha failed"})
@@ -4366,7 +4366,7 @@ func TestSkillsCommandPreviewUpdateAllContinuesAfterSourceRefreshFailure(t *test
 	if operation.Status != "succeeded" || results["alpha"].Status != "skipped" || results["beta"].Status != "succeeded" {
 		t.Fatalf("best-effort source results=%#v operation=%#v", operation.Results, operation)
 	}
-	if !runner.hasCall("", "skills", "add", "https://github.com/example/good.git#"+goodCommit, "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "beta", "-y") {
+	if !runner.hasCall("", "skills", "add", "https://github.com/example/good.git", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "beta", "-y") {
 		t.Fatalf("good source update missing: %#v", runner.calls)
 	}
 	if message := cmd.SkillSourceErrors("hub", "")["github.com/example/bad"]; message == "" {

@@ -643,7 +643,7 @@ func (c *SkillsCommand) previewSource(ctx context.Context, payload skillsCommand
 	if payload.Action == "previewInstall" {
 		for _, skill := range selectedSkills {
 			runs = append(runs, skillsOperationRun{
-				target: target, args: skillsAddArgs(target, pinnedSkillSource(resolved), []string{skill}),
+				target: target, args: skillsAddArgs(target, skillSourceAddress(resolved), []string{skill}),
 				skill: skill, action: "install", message: "Installed skills.", prepareInstallDirs: true,
 			})
 		}
@@ -771,7 +771,7 @@ func (c *SkillsCommand) previewUpdate(ctx context.Context, payload skillsCommand
 			}
 			selectedSkills = append(selectedSkills, row.Name)
 			runs = append(runs, skillsOperationRun{
-				target: target, args: skillsAddArgs(target, pinnedSkillSource(resolved), []string{row.Name}),
+				target: target, args: skillsAddArgs(target, skillSourceAddress(resolved), []string{row.Name}),
 				skill: row.Name, action: "update", message: "Updated skills.", prepareInstallDirs: true,
 			})
 		}
@@ -1076,8 +1076,8 @@ func (c *SkillsCommand) sourceLockFile(target skillsCommandTarget) string {
 	return skillSourceLockPath(target.dir, c.globalLockFile(), c.homeDir)
 }
 
-func pinnedSkillSource(source skillSourceSnapshot) string {
-	return source.Source + "#" + source.ResolvedCommit
+func skillSourceAddress(source skillSourceSnapshot) string {
+	return source.Source
 }
 
 func sanitizeSkillSourceError(message, source string) string {
