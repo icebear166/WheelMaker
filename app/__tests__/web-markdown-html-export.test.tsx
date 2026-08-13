@@ -6,6 +6,7 @@ import {
   buildMarkdownHtmlFileName,
   buildPromptMarkdownHtmlFileStem,
   buildStandaloneMarkdownHtmlDocument,
+  MARKDOWN_EXPORT_CONTENT_STYLE,
   resolveExternalMarkdownImagePath,
   resolveProjectMarkdownImagePath,
   validateMarkdownHtmlFileStem,
@@ -88,6 +89,18 @@ describe('markdown HTML export', () => {
     expect(
       resolveExternalMarkdownImagePath('note.md', '../../x.png'),
     ).toBeNull();
+  });
+
+  test('switches exported shiki token colors with the viewer color scheme', () => {
+    expect(MARKDOWN_EXPORT_CONTENT_STYLE).toContain('var(--shiki-dark)');
+    expect(MARKDOWN_EXPORT_CONTENT_STYLE).toContain('@media (prefers-color-scheme: light)');
+    expect(MARKDOWN_EXPORT_CONTENT_STYLE).toContain('var(--shiki-light)');
+  });
+
+  test('renders exported code blocks through the adaptive dual-theme pipeline', () => {
+    // Both capture surfaces (file export/share and chat share) consume
+    // MarkdownHtmlExportContent, so this flag covers every export pipeline.
+    expect(readMarkdownHtmlExportDocumentSource()).toContain('adaptiveCodeTheme: true');
   });
 
   test('creates an offline HTML document', () => {

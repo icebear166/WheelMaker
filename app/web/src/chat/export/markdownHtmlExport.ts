@@ -131,6 +131,17 @@ export const MARKDOWN_EXPORT_CONTENT_STYLE = `
   height: auto;
   margin: 0 auto;
 }
+/* Adaptive code blocks carry light/dark color pairs as CSS variables; the
+   viewer's color scheme picks which one applies (dark by default, matching
+   the page chrome direction). Spans with inline colors (line numbers) win. */
+.wheelmaker-markdown-export .shiki span {
+  color: var(--shiki-dark);
+}
+@media (prefers-color-scheme: light) {
+  .wheelmaker-markdown-export .shiki span {
+    color: var(--shiki-light);
+  }
+}
 `;
 
 const MARKDOWN_HTML_EXPORT_PAGE_STYLE = `
