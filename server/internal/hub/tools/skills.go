@@ -857,8 +857,8 @@ func (c *SkillsCommand) previewDeleteSource(payload skillsCommandPayload) (skill
 	runs := make([]skillsOperationRun, 0, len(skills))
 	for _, skill := range skills {
 		runs = append(runs, skillsOperationRun{
-			target: target, args: skillsRemoveArgs(target, []string{skill}),
-			skill: skill, action: "uninstall", message: "Uninstalled source skills.",
+			target: target, skill: skill, action: "uninstall", message: "Uninstalled source skills.",
+			removeSkillDirectories: true, removeSkills: []string{skill},
 		})
 	}
 	preview := skillsSourcePreview{
@@ -997,6 +997,25 @@ func (c *SkillsCommand) runSkillsSourcePreviewOperation(operation *skillsOperati
 		c.appendSkillsOperationResult(operation, result)
 	}
 	for _, run := range stored.runs {
+		if run.removeSkillDirectories {
+			removeSkills := run.removeSkills
+			if len(removeSkills) == 0 && run.skill != "" {
+				removeSkills = []string{run.skill}
+			}
+			if err := c.removeSkillDirectories(run.target, removeSkills); err != nil {
+				failed++
+				code := -1
+				lastExitCode = &code
+				c.appendSkillsOperationResult(operation, skillsOperationItemResult{
+					Skill: run.skill, Action: run.action, Status: "failed", ErrorSummary: err.Error(),
+				})
+				continue
+			}
+			c.appendSkillsOperationResult(operation, skillsOperationItemResult{
+				Skill: run.skill, Action: run.action, Status: "succeeded",
+			})
+			continue
+		}
 		if run.prepareInstallDirs {
 			if err := c.prepareSkillsInstallDirs(run.target); err != nil {
 				failed++
@@ -1133,11 +1152,9 @@ func (c *SkillsCommand) startUninstall(payload skillsCommandPayload) (any, *skil
 	if cmdErr != nil {
 		return nil, cmdErr
 	}
-	args := skillsRemoveArgs(target, payload.Skills)
 	return c.startOperation(payload, []skillsOperationRun{{
-		target:  target,
-		args:    args,
-		message: "Uninstalled skills.",
+		target: target, message: "Uninstalled skills.",
+		removeSkillDirectories: true, removeSkills: append([]string(nil), payload.Skills...),
 	}})
 }
 
@@ -1157,12 +1174,14 @@ func (c *SkillsCommand) startUpdate(payload skillsCommandPayload) (any, *skillsC
 }
 
 type skillsOperationRun struct {
-	target             skillsCommandTarget
-	args               []string
-	skill              string
-	action             string
-	message            string
-	prepareInstallDirs bool
+	target                 skillsCommandTarget
+	args                   []string
+	skill                  string
+	action                 string
+	message                string
+	prepareInstallDirs     bool
+	removeSkillDirectories bool
+	removeSkills           []string
 }
 
 func (c *SkillsCommand) startOperation(payload skillsCommandPayload, runs []skillsOperationRun) (any, *skillsCommandError) {
@@ -1207,6 +1226,21 @@ func (c *SkillsCommand) acceptOperation(payload skillsCommandPayload) (*skillsOp
 func (c *SkillsCommand) runSkillsOperation(operation *skillsOperationSnapshot, runs []skillsOperationRun) {
 	messages := make([]string, 0, len(runs))
 	for _, run := range runs {
+		if run.removeSkillDirectories {
+			removeSkills := run.removeSkills
+			if len(removeSkills) == 0 && run.skill != "" {
+				removeSkills = []string{run.skill}
+			}
+			if err := c.removeSkillDirectories(run.target, removeSkills); err != nil {
+				exitCode := -1
+				c.finishOperation(operation, "failed", &exitCode, err.Error(), "")
+				return
+			}
+			if run.message != "" {
+				messages = append(messages, run.message)
+			}
+			continue
+		}
 		if run.prepareInstallDirs {
 			if err := c.prepareSkillsInstallDirs(run.target); err != nil {
 				exitCode := -1
@@ -1291,18 +1325,6 @@ func skillsAddArgs(target skillsCommandTarget, source string, skills []string) [
 	return append(args, "-y")
 }
 
-func skillsRemoveArgs(target skillsCommandTarget, skills []string) []string {
-	args := []string{"remove"}
-	if target.scope == "hub" {
-		args = append(args, "-g")
-	}
-	args = append(args, "--skill")
-	args = append(args, skills...)
-	args = append(args, "--agent")
-	args = append(args, fixedSkillAgents...)
-	return append(args, "-y")
-}
-
 func (c *SkillsCommand) updateRuns(target skillsCommandTarget, requestedSkills []string) ([]skillsOperationRun, *skillsCommandError) {
 	lockPath := c.skillsLockFile(target)
 	groups := readSkillsLockInstallGroups(lockPath)
@@ -1368,6 +1390,119 @@ func (c *SkillsCommand) prepareSkillsInstallDirs(target skillsCommandTarget) err
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("prepare skills directory %s: %w", dir, err)
 		}
+	}
+	return nil
+}
+
+func (c *SkillsCommand) removeSkillDirectories(target skillsCommandTarget, skills []string) error {
+	if len(skills) == 0 {
+		return fmt.Errorf("skills are required")
+	}
+	if err := validateSkillNames(skills); err != nil {
+		return err
+	}
+	dirs, err := c.skillsInstallDirs(target)
+	if err != nil {
+		return err
+	}
+	for _, directory := range dirs {
+		root, err := filepath.Abs(directory)
+		if err != nil {
+			return fmt.Errorf("resolve skills directory %s: %w", directory, err)
+		}
+		for _, skill := range skills {
+			path := filepath.Join(root, skill)
+			relative, err := filepath.Rel(root, path)
+			if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+				return fmt.Errorf("skill path escapes skills directory: %s", skill)
+			}
+			if err := os.RemoveAll(path); err != nil {
+				return fmt.Errorf("remove skill directory %s: %w", path, err)
+			}
+		}
+	}
+	return removeNativeSkillLockEntries(c.skillsLockFile(target), skills)
+}
+
+func removeNativeSkillLockEntries(path string, names []string) error {
+	path = strings.TrimSpace(path)
+	if path == "" || len(names) == 0 {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read native skill lock: %w", err)
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("decode native skill lock: %w", err)
+	}
+	skillsRaw, exists := document["skills"]
+	if !exists {
+		return nil
+	}
+	var skills map[string]json.RawMessage
+	if err := json.Unmarshal(skillsRaw, &skills); err != nil {
+		return fmt.Errorf("decode native skill lock skills: %w", err)
+	}
+	wanted := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		wanted[strings.ToLower(name)] = struct{}{}
+	}
+	changed := false
+	for name := range skills {
+		if _, remove := wanted[strings.ToLower(name)]; remove {
+			delete(skills, name)
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	updatedSkills, err := json.Marshal(skills)
+	if err != nil {
+		return fmt.Errorf("encode native skill lock skills: %w", err)
+	}
+	document["skills"] = updatedSkills
+	updated, err := json.MarshalIndent(document, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode native skill lock: %w", err)
+	}
+	updated = append(updated, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create native skill lock directory: %w", err)
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".skills-lock-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temporary native skill lock: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = temporary.Close()
+		}
+		_ = os.Remove(temporaryPath)
+	}()
+	if err := temporary.Chmod(0o600); err != nil {
+		return fmt.Errorf("secure temporary native skill lock: %w", err)
+	}
+	if _, err := temporary.Write(updated); err != nil {
+		return fmt.Errorf("write temporary native skill lock: %w", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		return fmt.Errorf("flush temporary native skill lock: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		closed = true
+		return fmt.Errorf("close temporary native skill lock: %w", err)
+	}
+	closed = true
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return fmt.Errorf("replace native skill lock: %w", err)
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -2001,21 +2002,53 @@ func TestSkillsCommandInstallUsesGlobalSymlinkAndProjectCopy(t *testing.T) {
 	assertDirExists(t, filepath.Join(projectRoot, ".claude", "skills"))
 }
 
-func TestSkillsCommandUninstallRemovesAllLinkedAgents(t *testing.T) {
+func TestSkillsCommandUninstallRemovesManagedAndUnmanagedSkillDirectories(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	globalLock := filepath.Join(root, "global-lock.json")
+	if err := os.WriteFile(globalLock, []byte(`{"version":1,"skills":{"tdd":{"source":"https://github.com/example/catalog.git"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, directory := range []string{
+		filepath.Join(home, ".agents", "skills", "tdd"),
+		filepath.Join(home, ".claude", "skills", "tdd"),
+		filepath.Join(home, ".agents", "skills", "local"),
+		filepath.Join(home, ".claude", "skills", "local"),
+	} {
+		writeSkillSourceFixture(t, directory, "# TDD\n", nil)
+	}
 	runner := newFakeSkillsRunner()
-	runner.set("", "skills", []string{"list", "-g", "--json"}, skillsCommandResult{Stdout: "[]", ExitCode: 0})
-	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a", HomeDir: home, GlobalLockPath: globalLock})
 
 	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "uninstall",
 		"hubId":  "hub-a",
 		"scope":  "hub",
-		"skills": []string{"tdd"},
+		"skills": []string{"tdd", "local"},
 	}))
 	if cmdErr != nil {
 		t.Fatalf("uninstall error: %#v", cmdErr)
 	}
-	waitForSkillsCall(t, runner, "", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y")
+	operation := waitForSkillsOperationDone(t, cmd)
+	if operation.Status != "succeeded" {
+		t.Fatalf("operation=%#v, want succeeded", operation)
+	}
+	for _, directory := range []string{
+		filepath.Join(home, ".agents", "skills", "tdd"),
+		filepath.Join(home, ".claude", "skills", "tdd"),
+		filepath.Join(home, ".agents", "skills", "local"),
+		filepath.Join(home, ".claude", "skills", "local"),
+	} {
+		if _, err := os.Lstat(directory); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("skill directory %s still exists, err=%v", directory, err)
+		}
+	}
+	if countSkillsCalls(runner, "", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y") != 0 {
+		t.Fatalf("uninstall should remove managed directories directly: %#v", runner.calls)
+	}
+	if entries := readNativeSkillSourceEntries(globalLock); len(entries) != 0 {
+		t.Fatalf("native skill lock retained removed skill: %#v", entries)
+	}
 }
 
 func TestSkillsCommandUpdateUsesHubAndProjectScopes(t *testing.T) {
@@ -2187,23 +2220,25 @@ func TestSkillsCommandOnOperationDoneCalledAfterFailure(t *testing.T) {
 
 func TestSkillsCommandRejectsConcurrentWriteOperations(t *testing.T) {
 	runner := newFakeSkillsRunner()
-	block := runner.block("", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y")
+	block := runner.block("", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y")
 	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
 
 	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "install",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+		"source": "mattpocock/skills",
+		"skills": []string{"tdd"},
+	}))
+	if cmdErr != nil {
+		t.Fatalf("first install error: %#v", cmdErr)
+	}
+	waitForSkillsCall(t, runner, "", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y")
+	_, cmdErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "uninstall",
 		"hubId":  "hub-a",
 		"scope":  "hub",
 		"skills": []string{"tdd"},
-	}))
-	if cmdErr != nil {
-		t.Fatalf("first uninstall error: %#v", cmdErr)
-	}
-	waitForSkillsCall(t, runner, "", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y")
-	_, cmdErr = cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
-		"action": "update",
-		"hubId":  "hub-a",
-		"scope":  "hub",
 	}))
 	if cmdErr == nil || cmdErr.Code != rp.CodeConflict {
 		t.Fatalf("cmdErr=%#v, want CONFLICT", cmdErr)
@@ -3871,6 +3906,45 @@ func TestSkillSourceCatalogDistinguishesCopiesDifferAndNeedsRefresh(t *testing.T
 	}
 }
 
+func TestSkillSourceCatalogTreatsSymlinkedCopiesAsSameContent(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "agents", "alpha")
+	second := filepath.Join(root, "claude", "alpha")
+	writeSkillSourceFixture(t, first, "# Alpha\n", nil)
+	if err := os.MkdirAll(filepath.Dir(second), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(first, second); err != nil {
+		if runtime.GOOS != "windows" {
+			t.Skipf("directory symlinks are unavailable: %v", err)
+		}
+		if output, junctionErr := exec.Command("cmd.exe", "/c", "mklink", "/J", second, first).CombinedOutput(); junctionErr != nil {
+			t.Skipf("directory links are unavailable: symlink=%v junction=%v (%s)", err, junctionErr, output)
+		}
+	}
+	remoteHash, err := hashSkillDirectory(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := []nativeSkillSourceEntry{{Name: "alpha", Source: "https://github.com/example/catalog.git"}}
+	installed := []skillSourceInstalledSnapshot{{
+		Name: "alpha", Managed: true,
+		Locations: []string{filepath.Join(first, "SKILL.md"), filepath.Join(second, "SKILL.md")},
+	}}
+	lock := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
+			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
+		}},
+	}
+	row := composeSkillSourceCatalog(lock, native, installed, nil).Sources[0].Skills[0]
+	if row.Status != "up_to_date" || row.CanUpdate || row.Error != "" {
+		t.Fatalf("symlinked copies row=%#v, want up_to_date", row)
+	}
+}
+
 func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
 	local := filepath.Join(t.TempDir(), "shared")
 	writeSkillSourceFixture(t, local, "# Shared\n", nil)
@@ -4385,6 +4459,7 @@ func TestSkillUpdateNonActionResultReportsConflict(t *testing.T) {
 
 func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing.T) {
 	root := t.TempDir()
+	home := filepath.Join(root, "home")
 	globalLock := filepath.Join(root, ".skill-lock.json")
 	sourceLockPath := filepath.Join(root, ".skill-source-lock.json")
 	if err := os.WriteFile(globalLock, []byte(`{"version":1,"skills":{"alpha":{"source":"https://github.com/example/catalog.git","ref":"main"}}}`), 0o600); err != nil {
@@ -4396,8 +4471,14 @@ func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing
 	if _, err := writeSkillSourceLockFile(sourceLockPath, skillSourceMissingRevision, initial); err != nil {
 		t.Fatal(err)
 	}
+	for _, directory := range []string{
+		filepath.Join(home, ".agents", "skills", "alpha"),
+		filepath.Join(home, ".claude", "skills", "alpha"),
+	} {
+		writeSkillSourceFixture(t, directory, "# Alpha\n", nil)
+	}
 	runner := newFakeSkillsRunner()
-	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: filepath.Join(root, "home")})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a", GlobalLockPath: globalLock, HomeDir: home})
 	response, commandErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
 		"action": "previewDeleteSource", "hubId": "hub-a", "scope": "hub",
 		"source": "https://github.com/example/catalog.git",
@@ -4419,8 +4500,19 @@ func TestSkillsCommandPreviewDeleteRemovesInstalledSkillsBeforeSource(t *testing
 	if operation.Status != "succeeded" || len(operation.Results) != 1 || operation.Results[0].Skill != "alpha" {
 		t.Fatalf("operation=%#v", operation)
 	}
-	if !runner.hasCall("", "skills", "remove", "-g", "--skill", "alpha", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y") {
-		t.Fatalf("source skill uninstall missing: %#v", runner.calls)
+	for _, directory := range []string{
+		filepath.Join(home, ".agents", "skills", "alpha"),
+		filepath.Join(home, ".claude", "skills", "alpha"),
+	} {
+		if _, err := os.Lstat(directory); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("source skill directory %s still exists, err=%v", directory, err)
+		}
+	}
+	if runner.hasCall("", "skills", "remove", "-g", "--skill", "alpha", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y") {
+		t.Fatalf("source skill uninstall should remove managed directories directly: %#v", runner.calls)
+	}
+	if entries := readNativeSkillSourceEntries(globalLock); len(entries) != 0 {
+		t.Fatalf("native skill lock retained removed source skill: %#v", entries)
 	}
 	lock, _, err := readSkillSourceLockFile(sourceLockPath)
 	if err != nil || len(lock.Sources) != 0 {
