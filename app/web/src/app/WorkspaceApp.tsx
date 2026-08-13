@@ -69,6 +69,7 @@ import { PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
 import { writeTextToClipboard } from '../platform/clipboard';
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
+import {startReconnectWatchdog} from '../platform/pwa/connection';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {
   WheelMakerAppMenu,
@@ -12748,8 +12749,22 @@ export function App() {
       },
     );
     supervisor.start();
+    // Resume signals (visibilitychange/online) are unreliable on some Android
+    // WebViews; the frame-driven watchdog is the last-resort reconnect trigger
+    // while the page is actually rendering.
+    const stopReconnectWatchdog = startReconnectWatchdog({
+      shouldReconnect: () =>
+        !connectedRef.current &&
+        !connectInFlightRef.current &&
+        !!projectIdRef.current &&
+        registryAuthController.snapshot().state === 'authenticated',
+      reconnect: () => {
+        void connect({silentReconnect: true});
+      },
+    });
     return () => {
       supervisor.stop();
+      stopReconnectWatchdog();
     };
   }, []);
 

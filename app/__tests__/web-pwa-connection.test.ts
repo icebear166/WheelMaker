@@ -1,4 +1,4 @@
-import {ForegroundConnectionSupervisor} from '../web/src/platform/pwa/connection';
+import {ForegroundConnectionSupervisor, startReconnectWatchdog} from '../web/src/platform/pwa/connection';
 
 function createSupervisorEnv() {
   const documentListeners = new Map<string, () => void>();
@@ -138,5 +138,84 @@ describe('PWA foreground connection supervisor', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe('reconnect watchdog', () => {
+  function createFrameDriver() {
+    const callbacks = new Map<number, (now: number) => void>();
+    let nextHandle = 1;
+    return {
+      requestFrame: (callback: (now: number) => void): number => {
+        const handle = nextHandle++;
+        callbacks.set(handle, callback);
+        return handle;
+      },
+      cancelFrame: (handle: number): void => {
+        callbacks.delete(handle);
+      },
+      step: (now: number): void => {
+        const pending = Array.from(callbacks.values());
+        callbacks.clear();
+        for (const callback of pending) {
+          callback(now);
+        }
+      },
+    };
+  }
+
+  test('reconnects while the page renders disconnected, throttled to the minimum interval, until stopped', () => {
+    const driver = createFrameDriver();
+    const reconnect = jest.fn();
+    const stop = startReconnectWatchdog(
+      {shouldReconnect: () => true, reconnect},
+      {minIntervalMs: 1000, requestFrame: driver.requestFrame, cancelFrame: driver.cancelFrame},
+    );
+
+    driver.step(0);
+    driver.step(100);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    driver.step(1000);
+    driver.step(1500);
+    expect(reconnect).toHaveBeenCalledTimes(2);
+
+    stop();
+    driver.step(3000);
+    expect(reconnect).toHaveBeenCalledTimes(2);
+  });
+
+  test('never reconnects while shouldReconnect is false', () => {
+    const driver = createFrameDriver();
+    const reconnect = jest.fn();
+    const stop = startReconnectWatchdog(
+      {shouldReconnect: () => false, reconnect},
+      {minIntervalMs: 1000, requestFrame: driver.requestFrame, cancelFrame: driver.cancelFrame},
+    );
+
+    driver.step(0);
+    driver.step(1000);
+    driver.step(2000);
+
+    expect(reconnect).not.toHaveBeenCalled();
+    stop();
+  });
+
+  test('reconnects on the first frame after the page becomes reconnectable again', () => {
+    let needed = false;
+    const driver = createFrameDriver();
+    const reconnect = jest.fn();
+    const stop = startReconnectWatchdog(
+      {shouldReconnect: () => needed, reconnect},
+      {minIntervalMs: 1000, requestFrame: driver.requestFrame, cancelFrame: driver.cancelFrame},
+    );
+
+    driver.step(0);
+    driver.step(1000);
+    expect(reconnect).not.toHaveBeenCalled();
+
+    needed = true;
+    driver.step(2000);
+    expect(reconnect).toHaveBeenCalledTimes(1);
+    stop();
   });
 });

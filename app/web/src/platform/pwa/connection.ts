@@ -111,3 +111,55 @@ export class ForegroundConnectionSupervisor {
     }
   }
 }
+
+export type ReconnectWatchdogHooks = {
+  shouldReconnect: () => boolean;
+  reconnect: () => void;
+};
+
+export type ReconnectWatchdogOptions = {
+  minIntervalMs?: number;
+  requestFrame?: (callback: (now: number) => void) => number;
+  cancelFrame?: (handle: number) => void;
+};
+
+// Recovery driven by requestAnimationFrame: frames only run while the page is
+// actually rendering, so the watchdog stays silent in the background and does
+// not depend on visibilitychange/online events that some WebViews never
+// dispatch after a resume.
+export function startReconnectWatchdog(
+  hooks: ReconnectWatchdogHooks,
+  options: ReconnectWatchdogOptions = {},
+): () => void {
+  const requestFrame =
+    options.requestFrame ??
+    (typeof requestAnimationFrame !== 'undefined' ? requestAnimationFrame.bind(globalThis) : undefined);
+  const cancelFrame =
+    options.cancelFrame ??
+    (typeof cancelAnimationFrame !== 'undefined' ? cancelAnimationFrame.bind(globalThis) : undefined);
+  if (!requestFrame || !cancelFrame) {
+    return () => {};
+  }
+  const minIntervalMs = options.minIntervalMs ?? 1000;
+  let frameHandle: number | null = null;
+  let lastAttemptAt = Number.NEGATIVE_INFINITY;
+  let stopped = false;
+
+  const tick = (now: number): void => {
+    if (stopped) return;
+    frameHandle = requestFrame(tick);
+    if (now - lastAttemptAt < minIntervalMs) return;
+    if (!hooks.shouldReconnect()) return;
+    lastAttemptAt = now;
+    hooks.reconnect();
+  };
+  frameHandle = requestFrame(tick);
+
+  return () => {
+    stopped = true;
+    if (frameHandle !== null) {
+      cancelFrame(frameHandle);
+    }
+    frameHandle = null;
+  };
+}
