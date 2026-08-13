@@ -20582,7 +20582,7 @@ export function App() {
 
   const desktopSettingsScreen = isWide && settingsScreenVisible ? (
     <SettingsScreen
-      className={`desktop-settings-screen${settingsMotionClass}${settingsExitClass}`}
+      className={`desktop-settings-screen settings-main-screen${settingsMotionClass}${settingsExitClass}`}
       title={mobileSettingsTitle}
       actions={mobileSettingsActions}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Close settings'}

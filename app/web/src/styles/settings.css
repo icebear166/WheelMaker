@@ -197,18 +197,14 @@ textarea,
 }
 
 .mobile-settings-screen .settings-row {
-  min-height: 56px;
+  min-height: 44px;
   margin: 0;
   padding: 0 16px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
   border-radius: 0;
   background: transparent;
-  font-size: 14px;
-}
-
-.mobile-settings-screen .settings-row-icon {
-  width: 20px;
+  font-size: 13px;
 }
 
 .mobile-settings-screen .settings-row:hover {
@@ -217,13 +213,10 @@ textarea,
 
 .mobile-settings-screen .sidebar-setting-select {
   max-width: min(48vw, 200px);
-  border-radius: 999px;
+  height: 30px;
+  border-radius: var(--radius-control);
   font-size: 13px;
-  padding: 5px 10px;
-}
-
-.mobile-settings-screen .settings-danger-row {
-  min-height: 56px;
+  padding: 0 10px;
 }
 
 .mobile-settings-screen .settings-detail-page {
@@ -236,8 +229,8 @@ textarea,
 }
 
 .mobile-settings-screen .settings-detail-row {
-  min-height: 56px;
-  font-size: 14px;
+  min-height: 44px;
+  font-size: 13px;
 }
 
 .mobile-settings-screen.desktop-settings-screen {
@@ -266,6 +259,10 @@ textarea,
     0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset;
 }
 
+.desktop-settings-screen.settings-main-screen .settings-workbench-panel {
+  width: min(740px, calc(100vw - 56px));
+}
+
 .desktop-settings-screen .settings-screen-panel-row {
   flex: 0 1 auto;
   min-width: 0;
@@ -274,11 +271,9 @@ textarea,
   align-items: stretch;
 }
 
-@media (min-width: 860px) {
-  .desktop-settings-screen .settings-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-  }
+.desktop-settings-screen .settings-list {
+  width: min(640px, 100%);
+  margin: 0 auto;
 }
 
 .desktop-settings-screen .mobile-settings-nav {
@@ -293,7 +288,7 @@ textarea,
 }
 
 .desktop-settings-screen .mobile-settings-scroll {
-  padding: 14px 0 0;
+  padding: 14px 0 14px;
   background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-canvas));
 }
 
@@ -324,7 +319,7 @@ textarea,
 
 .settings-detail-row {
   width: 100%;
-  min-height: 52px;
+  min-height: 44px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
   background: transparent;
@@ -1310,11 +1305,7 @@ textarea,
   content: '';
   flex: 1 1 auto;
   height: 1px;
-  background: linear-gradient(
-    to right,
-    color-mix(in srgb, var(--border-subtle) 70%, transparent),
-    transparent
-  );
+  background: color-mix(in srgb, var(--border-subtle) 55%, transparent);
 }
 
 .settings-section-rows {
@@ -1341,7 +1332,7 @@ textarea,
   gap: 12px;
   padding: 0 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   text-align: left;
   transition: background var(--motion-fast) var(--ease-standard);
 }
@@ -1544,8 +1535,8 @@ textarea,
 
 .settings-section-title {
   color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
   letter-spacing: 0.01em;
   text-transform: none;
 }
@@ -1559,7 +1550,7 @@ textarea,
 }
 
 .settings-row {
-  min-height: 46px;
+  min-height: 44px;
   border-bottom-color: var(--border-subtle);
   color: var(--text-primary);
   transition:
@@ -1618,12 +1609,6 @@ textarea,
   font-variant-numeric: tabular-nums;
 }
 
-
-@media (max-width: 900px) {
-  .mobile-settings-screen .settings-row {
-    min-height: 56px;
-  }
-}
 
 /* Update settings revamp — compact hub cards and unified status icons */
 .update-overview-bar {
@@ -2168,12 +2153,6 @@ textarea,
   color: var(--state-danger);
 }
 
-.mobile-settings-screen .settings-row-icon,
-.mobile-settings-screen .settings-row > span:first-child > .sl-icon:first-child {
-  width: 20px;
-  height: 20px;
-}
-
 /* checkboxes / selects aligned to the kit's ghost control language */
 .settings-workbench-panel input[type='checkbox'] {
   accent-color: var(--accent-primary);
@@ -2250,7 +2229,7 @@ textarea,
   padding: 6px 12px 8px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.35;
 }
 
@@ -2307,7 +2286,7 @@ textarea,
 
 /* compact secret editor rows adopt the settings-row rhythm inside sections */
 .settings-section-rows .secret-compact-row {
-  min-height: 46px;
+  min-height: 44px;
   gap: 10px;
   padding: 0 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
@@ -2700,7 +2679,7 @@ textarea,
 .settings-subsection-title {
   padding: 10px 14px 4px;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
   text-transform: uppercase;
