@@ -21,7 +21,7 @@ function item(
 }
 
 describe('model efficiency normalization', () => {
-  test('reads the webpage efficiency feed and filters its 21 points to 19 supported rows', () => {
+  test('reads the official efficiency feed and keeps DeepSeek V4 Pro rows', () => {
     const point = (
       model: string,
       effort: string,
@@ -36,7 +36,7 @@ describe('model efficiency normalization', () => {
       average_minutes: averageMinutes,
     });
     const payload = {
-      source_updated_at: '2026-07-22T13:58:55+08:00',
+      source_updated_at: '2026-08-13T04:00:24Z',
       points: [
         point('gpt-5.6-sol', 'low', 76.34, 2.06, 12.42),
         point('gpt-5.6-sol', 'medium', 89.73, 3.62, 17.58),
@@ -59,24 +59,28 @@ describe('model efficiency normalization', () => {
         point('gpt-5.5', 'xhigh', 97.77, 5.83, 22.35),
         point('deepseek-v4-flash', 'max', 84.38, 0.1, 26.43),
         point('deepseek-v4-flash', 'high', 65.63, 0.09, 27.48),
+        point('deepseek-v4-pro', 'max', 82.98, 0.242751, 38.94),
+        point('deepseek-v4-pro', 'high', 87.5, 0.172213, 25.14),
+        point('deepseek-v4-pro', 'low', 88.24, 0.148983, 22.15),
       ],
     };
 
     const normalized = normalizeModelEfficiencyPayload(payload);
-    expect(normalized).toHaveLength(19);
+    expect(normalized).toHaveLength(22);
     expect(normalized.filter(entry => entry.family === 'gpt-5.6-sol')).toHaveLength(6);
     expect(normalized.filter(entry => entry.family === 'gpt-5.6-terra')).toHaveLength(6);
     expect(normalized.filter(entry => entry.family === 'gpt-5.6-luna')).toHaveLength(5);
     expect(normalized.filter(entry => entry.family === 'deepseek-v4-flash')).toHaveLength(2);
+    expect(normalized.filter(entry => entry.family === 'deepseek-v4-pro')).toHaveLength(3);
     expect(normalized[0]).toEqual(item('ultra', 101.79, 26.09, 3225.6));
     expect(normalized.at(-1)).toEqual({
-      family: 'deepseek-v4-flash',
-      effort: 'high',
-      score: 65.63,
-      averageCostUsd: 0.09,
-      averageTaskSeconds: 1648.8,
+      family: 'deepseek-v4-pro',
+      effort: 'low',
+      score: 88.24,
+      averageCostUsd: 0.148983,
+      averageTaskSeconds: 1329,
     });
-    expect(readModelEfficiencyUpdatedAt(payload)).toBe('2026-07-22T13:58:55+08:00');
+    expect(readModelEfficiencyUpdatedAt(payload)).toBe('2026-08-13T04:00:24Z');
   });
 
   test('requires a supported family, recognized effort, and finite score', () => {

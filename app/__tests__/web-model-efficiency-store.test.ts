@@ -6,7 +6,7 @@ import {RegistryWorkspaceService} from '../web/src/registry/RegistryWorkspaceSer
 import {RegistryMethods} from '../web/src/registry/registryMethods';
 
 const successfulPayload = {
-  source_updated_at: '2026-07-22T13:58:55+08:00',
+  source_updated_at: '2026-08-13T04:00:24Z',
   points: [{
     model: 'gpt-5.6-sol',
     effort: 'max',
@@ -35,7 +35,7 @@ describe('ModelEfficiencyStore', () => {
 
     expect(loader).toHaveBeenCalledTimes(1);
     expect(store.snapshot().status).toBe('ready');
-    expect(store.snapshot().updatedAt).toBe('2026-07-22T13:58:55+08:00');
+    expect(store.snapshot().updatedAt).toBe('2026-08-13T04:00:24Z');
   });
 
   test('loads and normalizes the current CodexRadar snapshot', async () => {
@@ -55,7 +55,7 @@ describe('ModelEfficiencyStore', () => {
     expect(store.snapshot()).toEqual({
       status: 'ready',
       refreshing: false,
-      updatedAt: '2026-07-22T13:58:55+08:00',
+      updatedAt: '2026-08-13T04:00:24Z',
       items: [{
         family: 'gpt-5.6-sol',
         effort: 'max',
@@ -170,7 +170,7 @@ describe('RegistryRepository CodexRadar access', () => {
   });
 
   test('exposes the Repository method through the connected Workspace service', async () => {
-    const payload = {source_updated_at: '2026-07-22T13:58:55+08:00', points: []};
+    const payload = {source_updated_at: '2026-08-13T04:00:24Z', points: []};
     const repository = {
       getCodexRadarEfficiency: jest.fn().mockResolvedValue(payload),
     };

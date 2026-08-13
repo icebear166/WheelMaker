@@ -44,6 +44,10 @@
   --model-efficiency-family-color: #4d6bfe;
 }
 
+.model-efficiency-family-row[data-model-efficiency-family='deepseek-v4-pro'] {
+  --model-efficiency-family-color: #8b5cf6;
+}
+
 .model-efficiency-family-heading {
   display: grid;
   align-content: start;

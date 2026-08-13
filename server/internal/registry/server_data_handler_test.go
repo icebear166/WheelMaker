@@ -16,29 +16,20 @@ import (
 )
 
 const codexRadarEfficiencyCacheFixture = `{
-	"combos": [{"model":"gpt-5.6-sol","effort":"low"}],
-	"tasks": [{"id":"task-a"}],
-	"cells": {
-		"task-a|gpt-5.6-sol|low": {"ran_by":[{"passed":true,"duration_sec":60,"actual_cost_usd":1,"graded_at":"2026-07-31T10:00:00Z"}]}
-	}
+	"schema": 2,
+	"mode": "weighted_latest_3",
+	"source_updated_at": "2026-08-13T04:00:24Z",
+	"points": [
+		{"model":"gpt-5.6-sol","effort":"low","iq":120,"average_price_usd":1,"average_minutes":2},
+		{"model":"deepseek-v4-pro","effort":"max","iq":82.98,"average_price_usd":0.242751,"average_minutes":38.94},
+		{"model":"deepseek-v4-flash","effort":"low","iq":null,"average_price_usd":null,"average_minutes":null}
+	]
 }`
 
-func TestCodexRadarEfficiencyGetAggregatesLiveTable(t *testing.T) {
+func TestCodexRadarEfficiencyGetUsesOfficialPoints(t *testing.T) {
 	server := New(Config{})
 	server.codexRadarEfficiencyLoader = func(context.Context) (json.RawMessage, error) {
-		return json.RawMessage(`{
-			"combos": [
-				{"model":"gpt-5.6-sol","effort":"max"},
-				{"model":"gpt-5.6-sol","effort":"low"}
-			],
-			"tasks": [{"id":"task-a"},{"id":"task-b"}],
-			"cells": {
-				"task-a|gpt-5.6-sol|max": {"ran_by":[{"passed":true,"duration_sec":120,"actual_cost_usd":2,"graded_at":"2026-07-31T10:00:00Z"}]},
-				"task-b|gpt-5.6-sol|max": {"ran_by":[{"passed":false,"duration_sec":180,"actual_cost_usd":4,"graded_at":"2026-07-31T10:05:00Z"}]},
-				"task-a|gpt-5.6-sol|low": {"ran_by":[{"passed":true,"duration_sec":60,"actual_cost_usd":1,"graded_at":"2026-07-31T10:01:00Z"}]},
-				"task-b|gpt-5.6-sol|low": {"ran_by":[{"passed":true,"duration_sec":90,"actual_cost_usd":2,"graded_at":"2026-07-31T10:02:00Z"}]}
-			}
-		}`), nil
+		return json.RawMessage(codexRadarEfficiencyCacheFixture), nil
 	}
 	response := invokeServerDataHandler(t, server, &connectionState{browserSession: true, role: string(rp.RegistryRoleClient), clientName: "wheelmaker-web"}, envelope{
 		RequestID: 1,
@@ -61,17 +52,24 @@ func TestCodexRadarEfficiencyGetAggregatesLiveTable(t *testing.T) {
 	if err := json.Unmarshal(response.Payload, &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload.SourceUpdatedAt != "2026-07-31T10:05:00Z" {
+	if payload.SourceUpdatedAt != "2026-08-13T04:00:24Z" {
 		t.Fatalf("source_updated_at=%q", payload.SourceUpdatedAt)
 	}
 	if len(payload.Points) != 2 {
 		t.Fatalf("points=%+v", payload.Points)
 	}
-	if payload.Points[0].Effort != "max" || payload.Points[0].IQ != 75 || payload.Points[0].AveragePriceUSD != 3 || payload.Points[0].AverageMinutes != 2.5 {
-		t.Fatalf("max point=%+v", payload.Points[0])
+	if payload.Points[0].Model != "gpt-5.6-sol" || payload.Points[0].Effort != "low" || payload.Points[0].IQ != 120 || payload.Points[0].AveragePriceUSD != 1 || payload.Points[0].AverageMinutes != 2 {
+		t.Fatalf("gpt point=%+v", payload.Points[0])
 	}
-	if payload.Points[1].Effort != "low" || payload.Points[1].IQ != 150 || payload.Points[1].AveragePriceUSD != 1.5 || payload.Points[1].AverageMinutes != 1.25 {
-		t.Fatalf("low point=%+v", payload.Points[1])
+	if payload.Points[1].Model != "deepseek-v4-pro" || payload.Points[1].Effort != "max" || payload.Points[1].IQ != 82.98 || payload.Points[1].AveragePriceUSD != 0.242751 || payload.Points[1].AverageMinutes != 38.94 {
+		t.Fatalf("deepseek point=%+v", payload.Points[1])
+	}
+}
+
+func TestNewCodexRadarEfficiencyFetcherUsesOfficialEndpoint(t *testing.T) {
+	fetcher := newCodexRadarEfficiencyFetcher()
+	if fetcher.endpoint != "https://api.codexradar.com/api/v1/intelligence-efficiency?benchmark=deep-swe" {
+		t.Fatalf("endpoint=%q", fetcher.endpoint)
 	}
 }
 

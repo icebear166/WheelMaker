@@ -86,7 +86,7 @@ describe('model efficiency workspace integration', () => {
   });
 
   test('passes the same snapshot and manual refresh into the existing mobile dialog', () => {
-    const overlayStart = main.indexOf('const mobileUsageOverlay = !isWide && mobileUsageOpen ? (');
+    const overlayStart = main.indexOf('const mobileUsageOverlay = !isWide && (mobileUsageOpen || mobileUsageMounted) ? (');
     const overlayEnd = main.indexOf(') : null;', overlayStart);
     const overlay = overlayStart >= 0 && overlayEnd >= 0
       ? main.slice(overlayStart, overlayEnd)

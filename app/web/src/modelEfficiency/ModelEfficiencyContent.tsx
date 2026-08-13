@@ -14,6 +14,7 @@ const FAMILY_BRANDS: Record<ModelEfficiencyFamily, string> = {
   'gpt-5.6-terra': 'GPT',
   'gpt-5.6-luna': 'GPT',
   'deepseek-v4-flash': 'DeepSeek',
+  'deepseek-v4-pro': 'DeepSeek',
 };
 
 const FAMILY_NAMES: Record<ModelEfficiencyFamily, string> = {
@@ -21,6 +22,7 @@ const FAMILY_NAMES: Record<ModelEfficiencyFamily, string> = {
   'gpt-5.6-terra': 'Terra',
   'gpt-5.6-luna': 'Luna',
   'deepseek-v4-flash': 'V4 Flash',
+  'deepseek-v4-pro': 'V4 Pro',
 };
 
 const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
@@ -28,6 +30,7 @@ const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
   'gpt-5.6-terra': 'GPT Terra',
   'gpt-5.6-luna': 'GPT Luna',
   'deepseek-v4-flash': 'DeepSeek V4 Flash',
+  'deepseek-v4-pro': 'DeepSeek V4 Pro',
 };
 
 function formatScore(score: number): string {
