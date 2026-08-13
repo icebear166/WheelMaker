@@ -29,6 +29,12 @@ export class RegistryRequestError extends Error {
   }
 }
 
+export const REGISTRY_LIVENESS_PROBE_TIMEOUT_MS = 2000;
+
+// Any envelope from the server proves the connection is alive, so the probe
+// uses a cheap read-only method that stays free of side effects.
+const LIVENESS_PROBE_METHOD = RegistryMethods.ServerConfigGet;
+
 function parseErrorPayload(payload: unknown): RegistryErrorPayload {
   if (!payload || typeof payload !== 'object') {
     return {};
@@ -49,6 +55,7 @@ export class RegistryClient {
   private readonly eventListeners = new Set<(event: RegistryEnvelope) => void>();
   private readonly closeListeners = new Set<() => void>();
   private closing = false;
+  private livenessProbeSocket: WebSocket | null = null;
 
   constructor(
     private readonly timeoutMs = 8000,
@@ -162,6 +169,7 @@ export class RegistryClient {
         this.pending.delete(requestId);
         pending.removeAbortListener?.();
         reject(new Error(`registry request timed out (${timeoutMs}ms): ${args.method}`));
+        this.startLivenessProbe();
       }, timeoutMs);
       const handleAbort = () => {
         const pending = this.pending.get(requestId);
@@ -198,6 +206,47 @@ export class RegistryClient {
     };
     const raw = JSON.stringify(envelope);
     this.ws.send(raw);
+  }
+
+  private startLivenessProbe(): void {
+    if (this.livenessProbeSocket) {
+      return;
+    }
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    this.livenessProbeSocket = ws;
+    const requestId = this.seq++;
+    const finish = () => {
+      clearTimeout(timer);
+      this.pending.delete(requestId);
+      if (this.livenessProbeSocket === ws) {
+        this.livenessProbeSocket = null;
+      }
+    };
+    const declareConnectionDead = () => {
+      finish();
+      // No envelope came back within the probe window: the socket is
+      // half-open. Tear it down so close listeners can arm a reconnect with a
+      // fresh socket.
+      if (this.ws === ws) {
+        this.close();
+      }
+    };
+    const timer = setTimeout(declareConnectionDead, REGISTRY_LIVENESS_PROBE_TIMEOUT_MS);
+    const envelope: RegistryEnvelope = {
+      requestId,
+      type: 'request',
+      method: LIVENESS_PROBE_METHOD,
+      payload: {},
+    };
+    this.pending.set(requestId, {resolve: finish, reject: finish, timer});
+    try {
+      ws.send(JSON.stringify(envelope));
+    } catch {
+      declareConnectionDead();
+    }
   }
 
   close(): void {
