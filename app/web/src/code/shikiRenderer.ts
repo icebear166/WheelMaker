@@ -24,6 +24,8 @@ type RenderShikiBaseOptions = {
   highlightedLines?: Set<number>;
   /** Rewrite the pre background to transparent so a surrounding frame surface shows through. */
   transparentBackground?: boolean;
+  /** Export/share rendering: emit light/dark CSS variable pairs instead of fixed theme colors. */
+  adaptiveCodeTheme?: boolean;
 };
 
 type RenderShikiOptions = RenderShikiBaseOptions & {
@@ -333,12 +335,23 @@ function renderWithHighlighter(
   mode: RenderMode,
   diffLines?: DiffRenderLine[],
   highlightedLines?: Set<number>,
+  adaptiveCodeTheme = false,
 ): string {
   const normalizedCode = code || ' ';
+  // Adaptive output carries light/dark CSS variable pairs (defaultColor: false
+  // keeps fixed colors out) so exported/share documents follow the viewer's
+  // color scheme; in-app rendering keeps the single fixed theme.
+  const colorOptions = adaptiveCodeTheme
+    ? {
+        themes: {light: SHIKI_THEME_LIGHT, dark: SHIKI_THEME_DARK} as const,
+        defaultColor: false as const,
+        cssVariablePrefix: '--shiki-',
+      }
+    : {theme};
   if (mode === 'inline') {
     return highlighter.codeToHtml(normalizedCode, {
       lang,
-      theme,
+      ...colorOptions,
       structure: 'inline',
       tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
       tokenizeTimeLimit: TOKENIZE_TIME_LIMIT_MS,
@@ -346,7 +359,7 @@ function renderWithHighlighter(
   }
   return highlighter.codeToHtml(normalizedCode, {
     lang,
-    theme,
+    ...colorOptions,
     structure: 'classic',
     tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
     tokenizeTimeLimit: TOKENIZE_TIME_LIMIT_MS,
@@ -365,18 +378,23 @@ function renderWithHighlighter(
 
 export async function renderShikiHtml(options: RenderShikiOptions): Promise<string> {
   const language = resolveLanguage(options.language);
+  const adaptive = options.adaptiveCodeTheme === true;
+  // Adaptive mode always renders the curated dark-plus/light-plus pair, which
+  // the highlighter preloads; single-theme mode resolves and loads on demand.
   const theme = resolveTheme(options.themeMode, options.codeTheme);
   const highlighter = await getHighlighter();
-  try {
-    await ensureThemeLoaded(highlighter, theme);
-  } catch {
-    // fall through with already loaded default themes
+  if (!adaptive) {
+    try {
+      await ensureThemeLoaded(highlighter, theme);
+    } catch {
+      // fall through with already loaded default themes
+    }
   }
   const langCandidates = language === 'text' ? ['text'] : [language, 'text'];
 
   let inlineCacheKey = '';
   if (options.mode === 'inline') {
-    inlineCacheKey = getInlineCacheKey(options, language, theme);
+    inlineCacheKey = getInlineCacheKey(options, language, adaptive ? 'adaptive' : theme);
     const cached = inlineCache.get(inlineCacheKey);
     if (cached) return cached;
   }
@@ -398,8 +416,9 @@ export async function renderShikiHtml(options: RenderShikiOptions): Promise<stri
         options.mode,
         undefined,
         options.highlightedLines,
+        adaptive,
       );
-      const output = options.mode === 'block'
+      const output = options.mode === 'block' && !adaptive
         ? alignAutomaticThemeBackground(
           html,
           options.codeTheme,
