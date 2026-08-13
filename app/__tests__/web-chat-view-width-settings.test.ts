@@ -60,7 +60,7 @@ describe('web chat fixed 800px layout', () => {
     expect(stylesCss).not.toContain('.mobile-project-toggle {');
   });
 
-  test('removes the chat view width setting and always uses the fixed 800px layout', () => {
+  test('keeps the chat view width preference out of the settings page', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
@@ -84,10 +84,10 @@ describe('web chat fixed 800px layout', () => {
     expect((mainTsx.match(/className="chat-view-content chat-empty-state-content"/g) ?? []).length).toBe(3);
     expect(mainTsx).toContain('className="chat-composer-content"');
     expect(stylesCss).toMatch(
-      /\.chat-view-width-fixed-800 \.chat-view-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
+      /\.chat-view-width-fixed-800 \.chat-view-content \{[\s\S]*width: min\(var\(--chat-view-column-width, 800px\), 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-view-width-fixed-800 \.chat-composer-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
+      /\.chat-view-width-fixed-800 \.chat-composer-content \{[\s\S]*width: min\(var\(--chat-view-column-width, 800px\), 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-main \{[\s\S]*--chat-scrollbar-gutter-width: 8px;[\s\S]*\}/,
@@ -110,7 +110,8 @@ describe('web chat fixed 800px layout', () => {
     const shellTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('const CHAT_FIXED_VIEW_WIDTH = 800;');
+    expect(mainTsx).not.toContain('CHAT_FIXED_VIEW_WIDTH');
+    expect(mainTsx).toContain('availableWidth - chatColumnWidth,');
     expect(mainTsx).toContain('const desktopChatFixedPreview = isWide && chatPreviewOpen;');
     expect(mainTsx).toContain('const [chatFilePeekWidthResized, setChatFilePeekWidthResized] = useState(false);');
     expect(mainTsx).toContain('const fixedChatPreviewDefaultWidth = useMemo(() => {');
@@ -126,5 +127,28 @@ describe('web chat fixed 800px layout', () => {
     expect(fixedPreviewPane).toContain('max-width: none;');
     expect(fixedPreviewPane).not.toContain('flex: 1 1 auto;');
     expect(fixedPreviewPane).not.toContain('width: auto;');
+  });
+
+  test('switches the chat column between 800px and 1200px tiers from the title bar', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const iconTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'common', 'Icon.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('chatColumnWidth: globalState.chatColumnWidth,');
+    expect(mainTsx).toContain('const chatColumnWidth = workspaceUiState.desktop.chatColumnWidth;');
+    expect(mainTsx).toContain("'--chat-view-column-width': `${chatColumnWidth}px`,");
+    expect(mainTsx).toContain("type: 'desktop/setChatColumnWidth'");
+    expect(mainTsx).toContain("className={`chat-column-width-toggle${chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? ' active' : ''}`}");
+    expect(mainTsx).toContain('aria-pressed={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE}');
+    expect(mainTsx).toContain('<SessionIcon name="unfoldHorizontal" />');
+    expect(mainTsx).toContain('      desktopSidebarWidth,\n      chatColumnWidth,');
+    expect(iconTsx).toContain('unfoldHorizontal:');
+    expect(stylesCss).toContain('.chat-column-width-toggle,');
+    expect(stylesCss).toContain('width: min(var(--chat-view-column-width, 800px), 100%);');
+    expect(stylesCss).toContain('width: min(var(--chat-view-column-width, 800px), calc(100% - 16px));');
+    expect(stylesCss).toContain('--chat-fixed-column: min(var(--chat-view-column-width, 800px), max(0px, calc(100% - var(--chat-edge-min-visible))));');
+    expect(stylesCss).not.toContain('width: min(800px, 100%);');
+    expect(stylesCss).not.toContain('width: min(800px, calc(100% - 16px));');
   });
 });

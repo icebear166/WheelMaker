@@ -206,6 +206,8 @@ const GLYPHS = {
   gitBranch: (<><path d="M15 6a9 9 0 0 0-9 9V3" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /></>),
   // lucide:list-collapse (verified via better-icons)
   listCollapse: (<><path d="M10 5h11" /><path d="M10 12h11" /><path d="M10 19h11" /><path d="m3 10 3-3-3-3" /><path d="m3 22 3-3-3-3" /></>),
+  // lucide:unfold-horizontal (verified via better-icons)
+  unfoldHorizontal: (<><path d="m16 7 5 5-5 5" /><path d="m8 7-5 5 5 5" /></>),
 } as const;
 
 export type IconName = keyof typeof GLYPHS;

@@ -116,6 +116,7 @@
 
 .chat-title-prompt-icon-button,
 .chat-search-toggle,
+.chat-column-width-toggle,
 .chat-terminal-toggle,
 .chat-drawer-toggle,
 .chat-preview-toggle {
@@ -140,6 +141,7 @@
 
 .chat-title-prompt-icon-button:hover,
 .chat-search-toggle:hover,
+.chat-column-width-toggle:hover,
 .chat-terminal-toggle:hover,
 .chat-drawer-toggle:hover:not(:disabled),
 .chat-preview-toggle:hover {
@@ -149,6 +151,7 @@
 
 .chat-title-prompt-icon-button.open,
 .chat-search-toggle.active,
+.chat-column-width-toggle.active,
 .chat-terminal-toggle.active,
 .chat-drawer-toggle.active,
 .chat-preview-toggle.active {
@@ -158,6 +161,7 @@
 
 .chat-title-prompt-icon-button.open:hover,
 .chat-search-toggle.active:hover,
+.chat-column-width-toggle.active:hover,
 .chat-terminal-toggle.active:hover,
 .chat-drawer-toggle.active:hover:not(:disabled),
 .chat-preview-toggle.active:hover {
@@ -3533,13 +3537,13 @@ button.chat-hub-skill-name:disabled {
 }
 
 .chat-view-width-fixed-800 .chat-view-content {
-  width: min(800px, 100%);
+  width: min(var(--chat-view-column-width, 800px), 100%);
   margin-left: auto;
   margin-right: auto;
 }
 
 .chat-view-width-fixed-800 .chat-composer-content {
-  width: min(800px, 100%);
+  width: min(var(--chat-view-column-width, 800px), 100%);
   margin-left: auto;
   margin-right: auto;
 }
@@ -3547,10 +3551,11 @@ button.chat-hub-skill-name:disabled {
 .chat-view-width-fixed-800 .chat-composer {
   /* Mirror the chat-block content box exactly: 18px padding plus the 8px
      classic scrollbar that .chat-block always shows (overflow-y: scroll +
-     scrollbar-gutter: stable). Both columns then resolve min(800px, 100%)
-     centering and the edge-surface clamps against identical reference
-     widths, so their left/right edges cannot drift apart when the preview
-     squeezes the chat column. */
+     scrollbar-gutter: stable). Both columns then resolve
+     min(var(--chat-view-column-width, 800px), 100%) centering and the
+     edge-surface clamps against identical reference widths, so their
+     left/right edges cannot drift apart when the preview squeezes the
+     chat column. */
   padding-left: 18px;
   padding-right: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
 }
@@ -6133,7 +6138,7 @@ li.chat-reply-target::marker {
   );
   /* Continuous layout (mirrors resolveFixedChatLayout in chat/layout/fixedChatAlignment.ts):
      centered -> docked -> overlap with fade -> chat column compression at the minimum reveal. */
-  --chat-fixed-column: min(800px, max(0px, calc(100% - var(--chat-edge-min-visible))));
+  --chat-fixed-column: min(var(--chat-view-column-width, 800px), max(0px, calc(100% - var(--chat-edge-min-visible))));
   --chat-fixed-centered: calc((100% - var(--chat-fixed-column)) / 2);
   --chat-fixed-right-min: calc(100% - var(--chat-fixed-column) - var(--chat-edge-reserve-edge-gap));
 }
@@ -8401,7 +8406,7 @@ li.chat-reply-target::marker {
 
 
 .chat-view-width-fixed-800 .chat-search-bar {
-  width: min(800px, 100%);
+  width: min(var(--chat-view-column-width, 800px), 100%);
   margin: 4px auto 0;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 8px;
@@ -8751,7 +8756,7 @@ li.chat-reply-target::marker {
 .chat-main.chat-view-width-fixed-800[data-chat-search-open='true'] .chat-search-hud {
   right: auto;
   left: 50%;
-  width: min(800px, calc(100% - 16px));
+  width: min(var(--chat-view-column-width, 800px), calc(100% - 16px));
   transform: translateX(-50%);
 }
 

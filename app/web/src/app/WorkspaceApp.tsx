@@ -697,6 +697,8 @@ import {splitUnifiedDiffFileBlocks} from '../git/unifiedDiffFiles';
 import { WorkspaceController } from '../workspace/WorkspaceController';
 import { WorkspaceStore } from '../workspace/WorkspaceStore';
 import {
+  CHAT_COLUMN_WIDTH_DEFAULT,
+  CHAT_COLUMN_WIDTH_WIDE,
   DESKTOP_SIDEBAR_WIDTH_DEFAULT,
   DESKTOP_SIDEBAR_WIDTH_MAX,
   DESKTOP_SIDEBAR_WIDTH_MIN,
@@ -1238,7 +1240,6 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.app-confirm-dialog',
 ].join(', ');
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
-const CHAT_FIXED_VIEW_WIDTH = 800;
 const CHAT_SESSION_PANEL_WIDTH = 360;
 const CHAT_FILE_PEEK_WIDTH_DEFAULT = 520;
 const CHAT_FILE_PEEK_WIDTH_MIN = 360;
@@ -2827,6 +2828,7 @@ export function App() {
       createWorkspaceUiState({
         collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? [],
         desktopSidebarWidth: globalState.desktopSidebarWidth,
+        chatColumnWidth: globalState.chatColumnWidth,
         sessionPanelPinned: globalState.sessionPanelPinned,
         pinnedProjectIds: globalState.pinnedProjectIds ?? [],
         hiddenProjectIds: globalState.hiddenProjectIds ?? [],
@@ -2973,6 +2975,7 @@ export function App() {
     }
   }, [sessionNavSlideOutAutoClose, sidebarCollapsed]);
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
+  const chatColumnWidth = workspaceUiState.desktop.chatColumnWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
   const hiddenProjectIds = workspaceUiState.shared.hiddenProjectIds;
@@ -4793,8 +4796,9 @@ export function App() {
   const chatMainStyle = useMemo(
     () => ({
       ...(chatKeyboardInset > 0 ? { paddingBottom: `${chatKeyboardInset}px` } : {}),
+      '--chat-view-column-width': `${chatColumnWidth}px`,
     }) as React.CSSProperties,
-    [chatKeyboardInset],
+    [chatKeyboardInset, chatColumnWidth],
   );
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -6813,6 +6817,7 @@ export function App() {
       floatingControlYRatio,
       floatingControlSide,
       desktopSidebarWidth,
+      chatColumnWidth,
       sessionPanelPinned: !sidebarCollapsed,
       collapsedProjectIds,
       pinnedProjectIds,
@@ -6838,6 +6843,7 @@ export function App() {
     floatingControlYRatio,
     floatingControlSide,
     desktopSidebarWidth,
+    chatColumnWidth,
     sidebarCollapsed,
     collapsedProjectIds,
     pinnedProjectIds,
@@ -7980,12 +7986,12 @@ export function App() {
     const occupiedWidth = chatSidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const availableWidth = windowWidth > 0
       ? windowWidth - occupiedWidth
-      : CHAT_FIXED_VIEW_WIDTH + CHAT_FILE_PEEK_WIDTH_DEFAULT;
+      : chatColumnWidth + CHAT_FILE_PEEK_WIDTH_DEFAULT;
     return clampChatFilePeekWidthForViewport(
-      availableWidth - CHAT_FIXED_VIEW_WIDTH,
+      availableWidth - chatColumnWidth,
       true,
     );
-  }, [chatSidebarCollapsed, clampChatFilePeekWidthForViewport, desktopLayoutSidebarWidth, windowWidth]);
+  }, [chatColumnWidth, chatSidebarCollapsed, clampChatFilePeekWidthForViewport, desktopLayoutSidebarWidth, windowWidth]);
   const effectiveChatFilePeekWidth = useMemo(
     () => {
       const committedWidth = desktopChatFixedPreview && !chatFilePeekWidthResized
@@ -18524,6 +18530,14 @@ export function App() {
     }
     updatePreviewDrawerMode(previewWorkbenchRef.current.drawerMode === mode ? 'closed' : mode);
   }, [chatPreviewOpen, updatePreviewDrawerMode]);
+  const toggleChatColumnWidth = useCallback(() => {
+    dispatchWorkspaceUi({
+      type: 'desktop/setChatColumnWidth',
+      next: chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE
+        ? CHAT_COLUMN_WIDTH_DEFAULT
+        : CHAT_COLUMN_WIDTH_WIDE,
+    });
+  }, [chatColumnWidth]);
   const floatingNavRelayState = resolveFloatingNavRelayState({
     ready: portRelayReady,
     frameUrl: portRelayFrameUrl,
@@ -18822,6 +18836,16 @@ export function App() {
               {!chatPreviewOpen && previewTabCount > 0 ? (
                 <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
               ) : null}
+            </button>
+            <button
+              type="button"
+              className={`chat-column-width-toggle${chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? ' active' : ''}`}
+              onClick={toggleChatColumnWidth}
+              data-tooltip={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? 'Switch chat column to 800px' : 'Switch chat column to 1200px'}
+              aria-label={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE ? 'Switch chat column to 800px' : 'Switch chat column to 1200px'}
+              aria-pressed={chatColumnWidth === CHAT_COLUMN_WIDTH_WIDE}
+            >
+              <SessionIcon name="unfoldHorizontal" />
             </button>
           </>
         ) : null}

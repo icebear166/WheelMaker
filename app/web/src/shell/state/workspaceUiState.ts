@@ -11,6 +11,9 @@ export const DESKTOP_SIDEBAR_WIDTH_MIN = 320;
 export const DESKTOP_SIDEBAR_WIDTH_DEFAULT = 380;
 export const DESKTOP_SIDEBAR_WIDTH_MAX = 560;
 
+export const CHAT_COLUMN_WIDTH_DEFAULT = 800;
+export const CHAT_COLUMN_WIDTH_WIDE = 1200;
+
 export type WorkspaceUiState = {
   shared: {
     settingsOpen: boolean;
@@ -23,6 +26,7 @@ export type WorkspaceUiState = {
   desktop: {
     sidebarCollapsed: boolean;
     sidebarWidth: number;
+    chatColumnWidth: number;
   };
   mobile: {
     drawerOpen: boolean;
@@ -40,6 +44,7 @@ export type WorkspaceUiStateInput = {
   sessionPanelPinned?: unknown;
   sidebarCollapsed?: unknown;
   desktopSidebarWidth?: unknown;
+  chatColumnWidth?: unknown;
   collapsedProjectIds?: unknown;
   desktopCollapsedProjectIds?: unknown;
   pinnedProjectIds?: unknown;
@@ -62,6 +67,7 @@ export type WorkspaceUiAction =
   | { type: 'shared/setHubColors'; next: WorkspaceUiStateValue<Record<string, string>> }
   | { type: 'desktop/setSidebarCollapsed'; next: WorkspaceUiStateValue<boolean> }
   | { type: 'desktop/setSidebarWidth'; next: WorkspaceUiStateValue<number> }
+  | { type: 'desktop/setChatColumnWidth'; next: WorkspaceUiStateValue<number> }
   | { type: 'mobile/setDrawerOpen'; next: WorkspaceUiStateValue<boolean> }
   | {
       type: 'mobile/setFloatingControlYRatio';
@@ -105,6 +111,18 @@ export function sanitizeDesktopSidebarWidth(
   );
 }
 
+export function sanitizeChatColumnWidth(
+  value: unknown,
+  fallback = CHAT_COLUMN_WIDTH_DEFAULT,
+): number {
+  if (value === CHAT_COLUMN_WIDTH_DEFAULT || value === CHAT_COLUMN_WIDTH_WIDE) {
+    return value;
+  }
+  return fallback === CHAT_COLUMN_WIDTH_WIDE
+    ? CHAT_COLUMN_WIDTH_WIDE
+    : CHAT_COLUMN_WIDTH_DEFAULT;
+}
+
 function sanitizeStringList(value: unknown): string[] {
   return Array.isArray(value)
     ? Array.from(new Set(value.filter(item => typeof item === 'string' && item)))
@@ -140,6 +158,7 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
             ? input.sidebarCollapsed
             : true,
       sidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth),
+      chatColumnWidth: sanitizeChatColumnWidth(input.chatColumnWidth),
     },
     mobile: {
       drawerOpen: typeof input.drawerOpen === 'boolean' ? input.drawerOpen : false,
@@ -202,6 +221,16 @@ export function workspaceUiReducer(
           sidebarWidth: sanitizeDesktopSidebarWidth(
             resolveNext(state.desktop.sidebarWidth, action.next),
             state.desktop.sidebarWidth,
+          ),
+        },
+      };
+    case 'desktop/setChatColumnWidth':
+      return {
+        ...state,
+        desktop: {
+          ...state.desktop,
+          chatColumnWidth: sanitizeChatColumnWidth(
+            resolveNext(state.desktop.chatColumnWidth, action.next),
           ),
         },
       };

@@ -70,6 +70,7 @@ export type PersistedGlobalState = {
   floatingControlYRatio: number;
   floatingControlSide: PersistedFloatingControlSide;
   desktopSidebarWidth: number;
+  chatColumnWidth: number;
   sessionPanelPinned: boolean;
   collapsedProjectIds: string[];
   desktopCollapsedProjectIds: string[];
@@ -294,6 +295,7 @@ const GLOBAL_KEYS = {
   floatingControlSlot: 'floatingControlSlot',
   floatingControlSide: 'floatingControlSide',
   desktopSidebarWidth: 'desktopSidebarWidth',
+  chatColumnWidth: 'chatColumnWidth',
   sessionPanelPinned: 'sessionPanelPinned',
   collapsedProjectIds: 'collapsedProjectIds',
   desktopCollapsedProjectIds: 'desktopCollapsedProjectIds',
@@ -339,6 +341,7 @@ function defaultGlobalState(): PersistedGlobalState {
     floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,
     floatingControlSide: 'right',
     desktopSidebarWidth: 380,
+    chatColumnWidth: 800,
     sessionPanelPinned: false,
     collapsedProjectIds: [],
     desktopCollapsedProjectIds: [],
@@ -533,6 +536,8 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     const numeric = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
     return Math.min(560, Math.max(320, Math.round(numeric)));
   };
+  const sanitizeChatColumnWidth = (value: unknown, fallback: number): number =>
+    value === 800 || value === 1200 ? value : fallback;
   const sanitizeFloatingControlSide = (value: unknown, fallback: PersistedFloatingControlSide): PersistedFloatingControlSide =>
     value === 'left' || value === 'right' ? value : fallback;
   const hasLegacyMonitorVisibility = typeof input.showLimitsMonitor === 'boolean'
@@ -561,6 +566,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     floatingControlYRatio,
     floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),
     desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),
+    chatColumnWidth: sanitizeChatColumnWidth(input.chatColumnWidth, base.chatColumnWidth),
     sessionPanelPinned: typeof input.sessionPanelPinned === 'boolean'
       ? input.sessionPanelPinned
       : base.sessionPanelPinned,
@@ -1167,6 +1173,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt},
       {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt},
       {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt},
+      {k: GLOBAL_KEYS.chatColumnWidth, v: serialize(this.state.global.chatColumnWidth), updatedAt},
       {k: GLOBAL_KEYS.sessionPanelPinned, v: serialize(this.state.global.sessionPanelPinned), updatedAt},
       {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt},
       {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt},

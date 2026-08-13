@@ -351,6 +351,19 @@ describe('workspace persistence safety', () => {
     expect(rowValue(db.rows('wm_global_kv'), 'sessionPanelPinned')).toBe(true);
   });
 
+  test('persists the chat column width preference', async () => {
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings());
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.resetMutationLog();
+
+    repository.patchGlobalState({chatColumnWidth: 1200} as never);
+    await repository.flushPendingWrites();
+
+    expect(repository.getGlobalState()).toMatchObject({chatColumnWidth: 1200});
+    expect(rowValue(db.rows('wm_global_kv'), 'chatColumnWidth')).toBe(1200);
+  });
+
   test('sanitizes shortcut overrides loaded from older or damaged client data', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase({

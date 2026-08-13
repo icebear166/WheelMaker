@@ -405,6 +405,7 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('const [workspaceUiState, dispatchWorkspaceUi] = useReducer(');
     expect(mainTsx).toContain('collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? []');
     expect(mainTsx).toContain('desktopSidebarWidth: globalState.desktopSidebarWidth');
+    expect(mainTsx).toContain('chatColumnWidth: globalState.chatColumnWidth,');
     expect(mainTsx).toContain('pinnedProjectIds: globalState.pinnedProjectIds ?? []');
     expect(mainTsx).toContain('hiddenProjectIds: globalState.hiddenProjectIds ?? []');
     expect(mainTsx).toContain('expandedHubIds: globalState.expandedHubIds ?? []');
@@ -413,6 +414,7 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain('floatingControlIdleOpacity: globalState.floatingControlIdleOpacity,');
     expect(mainTsx).toContain('floatingControlYRatio,\n      floatingControlSide,\n      desktopSidebarWidth,');
     expect(mainTsx).toContain('const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;');
+    expect(mainTsx).toContain('const chatColumnWidth = workspaceUiState.desktop.chatColumnWidth;');
     expect(mainTsx).not.toContain('const floatingControlIdleOpacity = workspaceUiState.mobile.floatingControlIdleOpacity;');
     expect(mainTsx).toContain('const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;');
     expect(mainTsx).toContain('const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;');
@@ -711,5 +713,21 @@ describe('web responsive ui state', () => {
     );
     expect(persistenceTs).not.toContain('next.floatingControlIdleOpacity');
     expect(persistenceTs).not.toContain('next.useLatestPromptTitle');
+  });
+
+  test('persists chat column width as global app state', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const persistenceTs = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
+      'utf8',
+    );
+
+    expect(persistenceTs).toContain('chatColumnWidth: number;');
+    expect(persistenceTs).toContain("chatColumnWidth: 'chatColumnWidth',");
+    expect(persistenceTs).toContain('chatColumnWidth: 800,');
+    expect(persistenceTs).toContain('chatColumnWidth: sanitizeChatColumnWidth(input.chatColumnWidth, base.chatColumnWidth),');
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.chatColumnWidth, v: serialize(this.state.global.chatColumnWidth), updatedAt}',
+    );
   });
 });

@@ -113,3 +113,36 @@ describe('resolveFixedChatLayout', () => {
     })).toEqual({marginLeft: 25, columnWidth: 800});
   });
 });
+
+describe('1200px column tier', () => {
+  it('centers the 1200px column when the main area is wide', () => {
+    // W=2000, C=1200 -> centered = 400; rightMin = 782; min(R,782)=390; max(400,390)=400
+    expect(resolveFixedChatMarginLeft({
+      mainWidth: 2000,
+      surfaceReservedWidth: R,
+      edgeGap: EDGE_GAP,
+      columnWidth: 1200,
+    })).toBe(400);
+  });
+
+  it('compresses the 1200px column when the main area is narrower', () => {
+    expect(fixedChatAlignmentModule.resolveFixedChatLayout({
+      mainWidth: 1100,
+      surfaceReservedWidth: 0,
+      edgeGap: 0,
+      minimumSurfaceReveal: 100,
+      columnWidth: 1200,
+    })).toEqual({marginLeft: 0, columnWidth: 1100});
+  });
+
+  it('keeps the surface reveal when docking the 1200px column', () => {
+    // W=1300, C=1200: column = min(1200, 1300-100) = 1200; centered=50; rightMin=100; margin=100
+    expect(fixedChatAlignmentModule.resolveFixedChatLayout({
+      mainWidth: 1300,
+      surfaceReservedWidth: R,
+      edgeGap: 0,
+      minimumSurfaceReveal: 100,
+      columnWidth: 1200,
+    })).toEqual({marginLeft: 100, columnWidth: 1200});
+  });
+});
