@@ -179,7 +179,7 @@ import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
 import {SessionSearchProjectPicker} from '../chat/session/SessionSearchProjectPicker';
-import {useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
+import {MENU_EXIT_MS, useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
 import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
@@ -467,6 +467,7 @@ import {
 } from '../settings/settingsNavigation';
 import {
   MobileSettingsScreen,
+  SettingsDesktopSplit,
   SettingsDetailShell,
   SettingsScreen,
   SettingsSurface,
@@ -3103,6 +3104,41 @@ export function App() {
   const mobileSharesHistoryRef = useRef(false);
   const sidebarSettingsOpenRef = useRef(sidebarSettingsOpen);
   const settingsDetailViewRef = useRef<SettingsDetailView>(settingsDetailView);
+  const [settingsDetailPaneExit, setSettingsDetailPaneExit] = useState<SettingsDetail | null>(null);
+  const settingsDetailPaneExitTimerRef = useRef<number | null>(null);
+  const settingsDetailPrevRef = useRef<SettingsDetail | null>(settingsDetailView);
+  useEffect(() => {
+    const prev = settingsDetailPrevRef.current;
+    settingsDetailPrevRef.current = settingsDetailView;
+    if (!isWide) {
+      return;
+    }
+    if (prev !== null && settingsDetailView === null) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setSettingsDetailPaneExit(null);
+        return;
+      }
+      setSettingsDetailPaneExit(prev);
+      if (settingsDetailPaneExitTimerRef.current !== null) {
+        window.clearTimeout(settingsDetailPaneExitTimerRef.current);
+      }
+      settingsDetailPaneExitTimerRef.current = window.setTimeout(() => {
+        settingsDetailPaneExitTimerRef.current = null;
+        setSettingsDetailPaneExit(null);
+      }, MENU_EXIT_MS);
+      return;
+    }
+    if (settingsDetailView !== null && settingsDetailPaneExitTimerRef.current !== null) {
+      window.clearTimeout(settingsDetailPaneExitTimerRef.current);
+      settingsDetailPaneExitTimerRef.current = null;
+      setSettingsDetailPaneExit(null);
+    }
+  }, [isWide, settingsDetailView]);
+  useEffect(() => () => {
+    if (settingsDetailPaneExitTimerRef.current !== null) {
+      window.clearTimeout(settingsDetailPaneExitTimerRef.current);
+    }
+  }, []);
   const releasePublishingOpenRef = useRef(releasePublishingOpen);
   const portRelayScreenOpenRef = useRef(portRelayScreenOpen);
   const sharesScreenOpenRef = useRef(sharesScreenOpen);
@@ -16214,6 +16250,16 @@ export function App() {
     </React.Suspense>
   );
 
+  const renderDesktopSettingsContent = () => (
+    <SettingsDesktopSplit
+      detail={desktopSettingsDetailPane}
+      detailExiting={desktopSettingsDetailExiting}
+      renderRoot={renderSettingsRootContent}
+      renderDetail={renderSettingsDetailContent}
+      onCloseDetail={handleMobileSettingsBackButton}
+    />
+  );
+
   const renderSettingsContent = () => (
     <SettingsSurface
       detailView={settingsDetailView}
@@ -20600,17 +20646,19 @@ export function App() {
   const settingsScreenVisible = sidebarSettingsOpen || settingsScreenMounted;
   const settingsMotionClass = settingsDetailView ? ' settings-detail-screen' : '';
   const settingsExitClass = settingsScreenExiting ? ' settings-screen-exiting' : '';
+  const desktopSettingsDetailPane = settingsDetailView ?? settingsDetailPaneExit;
+  const desktopSettingsDetailExiting = settingsDetailView === null && settingsDetailPaneExit !== null;
 
   const desktopSettingsScreen = isWide && settingsScreenVisible ? (
     <SettingsScreen
-      className={`desktop-settings-screen settings-main-screen${settingsMotionClass}${settingsExitClass}`}
-      title={mobileSettingsTitle}
-      actions={mobileSettingsActions}
+      className={`desktop-settings-screen settings-main-screen${desktopSettingsDetailPane ? ' has-detail' : ''}${settingsExitClass}`}
+      title="Settings"
+      actions={<span className="mobile-settings-action-spacer" aria-hidden="true" />}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Close settings'}
       onBack={handleMobileSettingsBackButton}
       onBackdropClick={handleMobileSettingsBackButton}
     >
-      {renderSettingsContent()}
+      {renderDesktopSettingsContent()}
     </SettingsScreen>
   ) : null;
 

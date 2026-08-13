@@ -58,6 +58,18 @@ describe('P0 motion contracts', () => {
     expect(workspaceApp).toContain('mobileUsageExiting');
   });
 
+  it('keeps the desktop settings root resident and animates only the detail pane', () => {
+    const settingsCss = read('settings.css');
+    const workspaceApp = read('../app/WorkspaceApp.tsx');
+
+    expect(workspaceApp).toContain('SettingsDesktopSplit');
+    expect(workspaceApp).toContain('settingsDetailPaneExit');
+    expect(workspaceApp).toContain('settings-main-screen${desktopSettingsDetailPane');
+    expect(settingsCss).toContain('@keyframes settingsDetailPaneIn');
+    expect(settingsCss).toContain('@keyframes settingsDetailPaneOut');
+    expect(settingsCss).toContain('.settings-desktop-detail-pane.is-exiting');
+  });
+
   it('uses one tokenized exit duration for shared menu surfaces', () => {
     const sessionListCss = read('sessionlist.css');
     const chatCss = read('chat.css');

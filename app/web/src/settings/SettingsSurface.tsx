@@ -50,6 +50,44 @@ export function SettingsSurface({
   return detailView ? renderDetail(detailView) : renderRoot();
 }
 
+export type SettingsDesktopSplitProps = {
+  detail: SettingsDetail | null;
+  detailExiting: boolean;
+  renderRoot: () => ReactNode;
+  renderDetail: (detail: SettingsDetail) => ReactNode;
+  onCloseDetail: () => void;
+};
+
+export function SettingsDesktopSplit({
+  detail,
+  detailExiting,
+  renderRoot,
+  renderDetail,
+  onCloseDetail,
+}: SettingsDesktopSplitProps) {
+  return (
+    <div className="settings-desktop-split">
+      <div className="settings-desktop-root">{renderRoot()}</div>
+      {detail ? (
+        <div className={`settings-desktop-detail-pane${detailExiting ? ' is-exiting' : ''}`}>
+          <div className="settings-desktop-detail-head">
+            <div className="settings-desktop-detail-title">{settingsDetailTitle(detail)}</div>
+            <button
+              type="button"
+              className="settings-desktop-detail-close"
+              onClick={onCloseDetail}
+              aria-label="Close detail"
+            >
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+          <div className="settings-desktop-detail-body">{renderDetail(detail)}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function SettingsDetailShell({
   children,
 }: SettingsDetailShellProps) {
