@@ -12,6 +12,9 @@
     "listen": true,
     "port": 9630
   },
+  "knowledgeRegistry": {
+    "publicUrl": "https://wiki.example.com"
+  },
   "log": {
     "level": "warn"
   }
