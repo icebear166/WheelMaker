@@ -3945,6 +3945,44 @@ func TestSkillSourceCatalogTreatsSymlinkedCopiesAsSameContent(t *testing.T) {
 	}
 }
 
+func TestSkillSourceCatalogTreatsJunctionChildCopiesAsSameContent(t *testing.T) {
+	root := t.TempDir()
+	targetRoot := filepath.Join(root, "agents", "skills")
+	linkedRoot := filepath.Join(root, "claude", "skills")
+	first := filepath.Join(targetRoot, "alpha")
+	linked := filepath.Join(linkedRoot, "alpha")
+	writeSkillSourceFixture(t, first, "# Alpha\n", nil)
+	if err := os.MkdirAll(filepath.Dir(linkedRoot), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command("cmd.exe", "/c", "mklink", "/J", linkedRoot, targetRoot).CombinedOutput(); err != nil {
+		t.Skipf("directory junctions are unavailable: %v (%s)", err, output)
+	}
+
+	remoteHash, err := hashSkillDirectory(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := []nativeSkillSourceEntry{{Name: "alpha", Source: "https://github.com/example/catalog.git"}}
+	installed := []skillSourceInstalledSnapshot{{
+		Name: "alpha", Managed: true,
+		Locations: []string{filepath.Join(linked, "SKILL.md")},
+	}}
+	lock := skillSourceLock{
+		Version: skillSourceLockVersion, HashAlgorithm: skillSourceHashAlgorithm,
+		Sources: []skillSourceSnapshot{{
+			Source: "https://github.com/example/catalog.git", SourceKey: "github.com/example/catalog",
+			ResolvedCommit: strings.Repeat("a", 40), RefreshedAt: "2026-08-12T12:00:00Z",
+			SkillList: []skillSourceSkillSnapshot{{Name: "alpha", SkillPath: "alpha/SKILL.md", ContentSHA256: remoteHash}},
+		}},
+	}
+
+	row := composeSkillSourceCatalog(lock, native, installed, nil).Sources[0].Skills[0]
+	if row.Status != "up_to_date" || row.CanUpdate || row.Error != "" {
+		t.Fatalf("junction child row=%#v, want up_to_date", row)
+	}
+}
+
 func TestSkillSourceCatalogBlocksEverySameNameSourceRow(t *testing.T) {
 	local := filepath.Join(t.TempDir(), "shared")
 	writeSkillSourceFixture(t, local, "# Shared\n", nil)

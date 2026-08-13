@@ -503,7 +503,10 @@ func hashInstalledSkillCopies(locations []string) (string, error) {
 		}
 		resolved, err := filepath.EvalSymlinks(absolute)
 		if err != nil {
-			return "", fmt.Errorf("resolve installed skill root %q: %w", absolute, err)
+			if _, statErr := os.Stat(absolute); statErr != nil {
+				return "", fmt.Errorf("resolve installed skill root %q: %w", absolute, err)
+			}
+			resolved = absolute
 		}
 		if linkTarget, linkErr := os.Readlink(absolute); linkErr == nil {
 			if !filepath.IsAbs(linkTarget) {
@@ -511,7 +514,10 @@ func hashInstalledSkillCopies(locations []string) (string, error) {
 			}
 			resolved, err = filepath.EvalSymlinks(linkTarget)
 			if err != nil {
-				return "", fmt.Errorf("resolve installed skill root %q: %w", absolute, err)
+				if _, statErr := os.Stat(absolute); statErr != nil {
+					return "", fmt.Errorf("resolve installed skill root %q: %w", absolute, err)
+				}
+				resolved = absolute
 			}
 		}
 		absolute, err = filepath.Abs(resolved)
