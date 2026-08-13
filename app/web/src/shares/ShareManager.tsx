@@ -61,6 +61,7 @@ export type ShareManagerProps = {
   initialSource?: ShareManagerSource | null;
   captureSnapshot: (source: ShareManagerSource) => Promise<ShareSnapshot>;
   onBack: () => void;
+  keyboardInset?: number;
 };
 
 const EXPIRY_OPTIONS: Array<{value: RegistryShareExpiry; label: string}> = [
@@ -91,7 +92,15 @@ function shareRecordDescription(record: RegistryShareRecord): string {
   return record.path;
 }
 
-export function ShareManager({service, initialSource = null, captureSnapshot, onBack}: ShareManagerProps) {
+// The share action opens this dialog inside the same tap gesture, so auto-focusing
+// the name field summons the virtual keyboard on touch devices (notably iOS), which
+// then covers the bottom-sheet dialog. Touch users tap the field explicitly instead.
+function shouldAutoFocusShareName(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return !window.matchMedia('(hover: none)').matches;
+}
+
+export function ShareManager({service, initialSource = null, captureSnapshot, onBack, keyboardInset = 0}: ShareManagerProps) {
   const [records, setRecords] = useState<RegistryShareRecord[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [publicUrl, setPublicUrl] = useState('');
@@ -285,6 +294,9 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
       <div
         className="app-confirm-backdrop share-create-backdrop"
         role="presentation"
+        // Lift the bottom sheet above the virtual keyboard; on iOS the layout
+        // viewport does not shrink, so a fixed bottom sheet hides behind it.
+        style={keyboardInset > 0 ? {paddingBottom: keyboardInset} : undefined}
         onPointerDown={() => {
           if (!busy) onBack();
         }}
@@ -331,7 +343,7 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
                     aria-label="Share name"
                     value={titleDraft}
                     maxLength={512}
-                    autoFocus
+                    autoFocus={shouldAutoFocusShareName()}
                     disabled={busy}
                     onChange={event => {
                       setTitleDraft(event.target.value);

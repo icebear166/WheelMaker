@@ -22324,6 +22324,7 @@ export function App() {
           service={service}
           initialSource={shareSource}
           captureSnapshot={captureShareSource}
+          keyboardInset={chatKeyboardInset}
           onBack={() => setShareSource(null)}
         />
       ) : null}

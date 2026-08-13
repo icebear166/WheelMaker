@@ -56,6 +56,7 @@ async function renderManager(props = {}) {
         initialSource={initialSource}
         captureSnapshot={captureSnapshot}
         onBack={jest.fn()}
+        keyboardInset={props.keyboardInset}
       />,
     );
   });
@@ -92,6 +93,40 @@ test('ShareManager presents file creation as a modal with the Share server statu
   expect(renderer.root.findByProps({'data-share-enabled': 'true'})).toBeDefined();
   expect(findText(renderer, 'https://share.example.test')).toBeDefined();
   expect(renderer.root.findAllByProps({'aria-label': 'Current public shares'})).toHaveLength(0);
+});
+
+test('ShareManager autofocuses the share name only on hover-capable devices', async () => {
+  const {renderer} = await renderManager();
+  expect(renderer.root.findByProps({'aria-label': 'Share name'}).props.autoFocus).toBe(true);
+
+  const originalMatchMedia = window.matchMedia;
+  window.matchMedia = query => ({
+    matches: query === '(hover: none)',
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  });
+  try {
+    const {renderer: touchRenderer} = await renderManager();
+    expect(touchRenderer.root.findByProps({'aria-label': 'Share name'}).props.autoFocus).toBe(false);
+  } finally {
+    window.matchMedia = originalMatchMedia;
+  }
+});
+
+test('ShareManager lifts the create dialog above the virtual keyboard inset', async () => {
+  const {renderer} = await renderManager({keyboardInset: 240});
+  const backdrop = renderer.root.findByProps({className: 'app-confirm-backdrop share-create-backdrop'});
+  expect(backdrop.props.style).toEqual({paddingBottom: 240});
+
+  const {renderer: plainRenderer} = await renderManager();
+  expect(
+    plainRenderer.root.findByProps({className: 'app-confirm-backdrop share-create-backdrop'}).props.style,
+  ).toBeUndefined();
 });
 
 test('ShareManager automatically copies a created link and offers compact open and copy actions', async () => {
