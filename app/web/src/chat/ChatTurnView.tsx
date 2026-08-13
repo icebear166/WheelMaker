@@ -714,12 +714,14 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     const question = requestView.detailsText || requestView.title;
     return (
       <div className="chat-permission-history-row" role="status">
-        <ChatIcon name="help" className="chat-permission-history-icon" />
-        <span className="chat-permission-history-label">Permission</span>
-        <div className="chat-permission-history-qa">
+        <div className="chat-permission-history-line">
+          <ChatIcon name="help" className="chat-permission-history-icon" />
           {question ? (
             <span className="chat-permission-history-question" title={question}>{question}</span>
           ) : null}
+        </div>
+        <div className="chat-permission-history-line">
+          <ChatIcon name="cornerDownRight" className="chat-permission-history-icon chat-permission-history-icon-answer" />
           <span className="chat-permission-history-summary" title={summary}>{summary}</span>
         </div>
       </div>

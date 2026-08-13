@@ -14,6 +14,7 @@ jest.mock('../web/src/code/markdownPreview', () => ({
 }));
 
 import {ChatTurnView} from '../web/src/chat/ChatTurnView';
+import {ChatIcon} from '../web/src/chat/ChatIcon';
 import type {ChatPermissionRecord} from '../web/src/chat/permission/chatPermissionState';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
@@ -53,7 +54,9 @@ describe('request permission history row', () => {
     const renderer = await renderPermission({
       permissionId: 'perm-1', requestTurnIndex: 2, request, status: 'selected', optionId: 'allow', optionName: 'Allow',
     });
-    expect(renderer.root.findByProps({className: 'chat-permission-history-qa'})).toBeTruthy();
+    expect(renderer.root.findAllByProps({className: 'chat-permission-history-line'})).toHaveLength(2);
+    expect(renderer.root.findAllByType(ChatIcon).map(icon => icon.props.name)).toEqual(['help', 'cornerDownRight']);
+    expect(renderer.root.findAllByProps({className: 'chat-permission-history-label'})).toHaveLength(0);
     expect(renderer.root.findByProps({className: 'chat-permission-history-question'}).children.join(' ')).toContain('Choose');
     expect(renderer.root.findByProps({className: 'chat-permission-history-summary'}).children.join(' ')).toContain('Allow');
     expect(renderer.root.findAllByType('button')).toHaveLength(0);

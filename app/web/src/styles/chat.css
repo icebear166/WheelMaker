@@ -8048,12 +8048,19 @@ li.chat-reply-target::marker {
 
 .chat-permission-history-row {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
   min-height: 28px;
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.chat-permission-history-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
 }
 
 .chat-permission-history-icon {
@@ -8062,18 +8069,8 @@ li.chat-reply-target::marker {
   color: var(--accent-primary);
 }
 
-.chat-permission-history-label {
-  flex-shrink: 0;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.chat-permission-history-qa {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+.chat-permission-history-icon-answer {
+  color: var(--text-secondary);
 }
 
 .chat-permission-history-question {
