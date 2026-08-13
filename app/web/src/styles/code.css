@@ -149,15 +149,36 @@
 }
 
 .mermaid-block {
+  position: relative;
   margin: 10px 0 12px;
   padding: 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface-panel);
   overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
 }
 
-.mermaid-block svg {
+.mermaid-block.is-dragging {
+  cursor: grabbing;
+}
+
+.mermaid-block:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.mermaid-viewport {
+  min-width: 100%;
+  min-height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.mermaid-viewport svg {
   display: block;
   max-width: 100%;
   height: auto;

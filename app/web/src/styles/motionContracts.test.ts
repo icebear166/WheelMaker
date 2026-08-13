@@ -232,3 +232,15 @@ describe('P2 motion contracts', () => {
     );
   });
 });
+
+describe('Mermaid viewport interaction contracts', () => {
+  it('keeps the diagram surface draggable and keyboard focusable', () => {
+    const codeCss = read('code.css');
+
+    expect(codeCss).toContain('touch-action: none;');
+    expect(codeCss).toContain('.mermaid-block.is-dragging');
+    expect(codeCss).toContain('.mermaid-viewport {');
+    expect(codeCss).toContain('transform-origin: 0 0;');
+    expect(codeCss).toContain('.mermaid-block:focus-visible');
+  });
+});

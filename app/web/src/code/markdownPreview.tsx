@@ -1,7 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import {
+  MERMAID_PAN_STEP,
+  MERMAID_ZOOM_STEP,
+  createMermaidViewport,
+  mermaidViewportKeyAction,
+  panMermaidViewport,
+  setMermaidViewportScale,
+} from './mermaidViewport';
 import { ShikiCodeBlock } from './ShikiCodeBlock';
 import {remarkWindowsFileLinks} from './markdownFileLinks';
 import type { CodeFontId, CodeThemeId } from './shikiSettings';
@@ -128,9 +136,18 @@ type MermaidBlockProps = {
   themeMode: ThemeMode;
 };
 
-function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
+export function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
   const [svg, setSvg] = useState('');
   const [error, setError] = useState('');
+  const [viewport, setViewport] = useState(createMermaidViewport);
+  const [dragging, setDragging] = useState(false);
+  const blockRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    viewport: ReturnType<typeof createMermaidViewport>;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +162,9 @@ function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
 
     setSvg('');
     setError('');
+    setViewport(createMermaidViewport());
+    setDragging(false);
+    dragRef.current = null;
 
     (async () => {
       try {
@@ -171,20 +191,127 @@ function MermaidBlock({ content, themeMode }: MermaidBlockProps) {
     };
   }, [content, themeMode]);
 
-  if (error) {
-    return <div className="mermaid-error">{error}</div>;
-  }
+  const viewportAnchor = (clientX: number, clientY: number) => {
+    const rect = blockRef.current?.getBoundingClientRect();
+    if (!rect) return {x: 0, y: 0};
+    return {x: clientX - rect.left, y: clientY - rect.top};
+  };
 
-  if (!svg) {
-    return (
+  const keyboardZoomAnchor = () => {
+    const rect = blockRef.current?.getBoundingClientRect();
+    if (!rect) return {x: 0, y: 0};
+    return {x: rect.width / 2, y: rect.height / 2};
+  };
+
+  const zoomViewport = (direction: 1 | -1, anchor: {x: number; y: number}) => {
+    setViewport(current => setMermaidViewportScale(
+      current,
+      current.scale + direction * MERMAID_ZOOM_STEP,
+      anchor,
+    ));
+  };
+
+  const finishDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current || dragRef.current.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDragging(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+  };
+
+  const viewportTransform = `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})`;
+  const blockClassName = `mermaid-block${dragging ? ' is-dragging' : ''}`;
+  let body: React.ReactNode;
+
+  if (error) {
+    body = <div className="mermaid-error">{error}</div>;
+  } else if (!svg) {
+    body = (
       <div className="muted block" data-markdown-export-pending="true">
         Rendering mermaid diagram...
       </div>
     );
+  } else {
+    body = (
+      <div
+        className="mermaid-viewport"
+        style={{transform: viewportTransform}}
+        dangerouslySetInnerHTML={{__html: svg}}
+      />
+    );
   }
 
   return (
-    <div className="mermaid-block" dangerouslySetInnerHTML={{ __html: svg }} />
+    <div
+      ref={blockRef}
+      className={blockClassName}
+      tabIndex={0}
+      role="region"
+      aria-label="Mermaid diagram. Use the mouse wheel to zoom and drag to pan."
+      onWheel={event => {
+        if (event.deltaY === 0) return;
+        event.preventDefault();
+        zoomViewport(event.deltaY < 0 ? 1 : -1, viewportAnchor(event.clientX, event.clientY));
+      }}
+      onPointerDown={event => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.focus();
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          viewport,
+        };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        setDragging(true);
+      }}
+      onPointerMove={event => {
+        const drag = dragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        setViewport({
+          ...drag.viewport,
+          offsetX: drag.viewport.offsetX + event.clientX - drag.startX,
+          offsetY: drag.viewport.offsetY + event.clientY - drag.startY,
+        });
+      }}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      onKeyDown={event => {
+        const action = mermaidViewportKeyAction(event.key);
+        if (!action) return;
+        event.preventDefault();
+        switch (action) {
+          case 'zoom-in':
+            zoomViewport(1, keyboardZoomAnchor());
+            break;
+          case 'zoom-out':
+            zoomViewport(-1, keyboardZoomAnchor());
+            break;
+          case 'reset':
+            dragRef.current = null;
+            setDragging(false);
+            setViewport(createMermaidViewport());
+            break;
+          case 'pan-left':
+            setViewport(current => panMermaidViewport(current, -MERMAID_PAN_STEP, 0));
+            break;
+          case 'pan-right':
+            setViewport(current => panMermaidViewport(current, MERMAID_PAN_STEP, 0));
+            break;
+          case 'pan-up':
+            setViewport(current => panMermaidViewport(current, 0, -MERMAID_PAN_STEP));
+            break;
+          case 'pan-down':
+            setViewport(current => panMermaidViewport(current, 0, MERMAID_PAN_STEP));
+            break;
+        }
+      }}
+    >
+      {body}
+    </div>
   );
 }
 
