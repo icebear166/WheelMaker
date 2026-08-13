@@ -7501,11 +7501,23 @@ export function App() {
         return;
       }
       clearGestureMoveLongPressTimer();
+      if (current.phase === 'pressing') {
+        // Commit a tap on pointerup instead of waiting for click. Mobile Safari
+        // can omit the click that follows a captured pointer sequence, notably
+        // while a long chat scroller is settling, which made the first tap only
+        // stop scrolling. Ignore a click if the browser does emit one.
+        gestureNavigationSuppressClickUntilRef.current =
+          Date.now() + GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS;
+        openGestureNavigationActions(shouldOpenDrawerWithFloatingNav(floatingNavCurrent));
+        return;
+      }
       gestureNavStateRef.current = null;
       setGestureNavState(null);
     },
     [
       clearGestureMoveLongPressTimer,
+      floatingNavCurrent,
+      openGestureNavigationActions,
     ],
   );
   const cancelGestureNavigation = useCallback(

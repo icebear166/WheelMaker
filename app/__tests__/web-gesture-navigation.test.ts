@@ -66,7 +66,7 @@ describe('gesture navigation', () => {
     })).toBe(true);
   });
 
-  test('suppresses chat click expansion after movement cancellation', () => {
+  test('commits taps on pointerup and suppresses duplicate click expansion', () => {
     const main = readMain();
     const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
     const currentSelectEnd = main.indexOf('const beginGestureNavigationPress = useCallback', currentSelectStart);
@@ -74,6 +74,9 @@ describe('gesture navigation', () => {
     const pointerMoveStart = main.indexOf('const handleGestureNavigationPointerMove = useCallback(');
     const pointerMoveEnd = main.indexOf('const finishGestureNavigation = useCallback', pointerMoveStart);
     const pointerMoveBody = main.slice(pointerMoveStart, pointerMoveEnd);
+    const pointerUpStart = main.indexOf('const finishGestureNavigation = useCallback(');
+    const pointerUpEnd = main.indexOf('const cancelGestureNavigation = useCallback', pointerUpStart);
+    const pointerUpBody = main.slice(pointerUpStart, pointerUpEnd);
 
     expect(main).toContain('const gestureNavigationSuppressClickUntilRef = useRef(0);');
     expect(main).not.toContain('gestureNavigationSuppressClickRef');
@@ -87,6 +90,11 @@ describe('gesture navigation', () => {
     expect(pointerMoveBody).toContain('clearGestureMoveLongPressTimer();');
     expect(pointerMoveBody).toContain('gestureNavigationSuppressClickUntilRef.current');
     expect(pointerMoveBody).not.toContain("intent === 'expand'");
+    expect(pointerUpBody).toContain("current.phase === 'pressing'");
+    expect(pointerUpBody).toContain('gestureNavigationSuppressClickUntilRef.current');
+    expect(pointerUpBody).toContain(
+      'openGestureNavigationActions(shouldOpenDrawerWithFloatingNav(floatingNavCurrent));',
+    );
     expect(main).not.toContain('GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS');
   });
 
