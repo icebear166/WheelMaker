@@ -7717,6 +7717,7 @@ export function App() {
     setSidebarSettingsOpen(false);
   }, [setSidebarSettingsOpen]);
   const openSettingsRoot = useCallback(() => {
+    setDrawerOpen(false);
     setReleasePublishingOpen(false);
     mobilePortRelayHistoryRef.current = false;
     setPortRelayScreenOpen(false);
@@ -7725,7 +7726,7 @@ export function App() {
     setShareSource(null);
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
-  }, [setSidebarSettingsOpen]);
+  }, [setDrawerOpen, setSidebarSettingsOpen]);
   const openReleasePublishing = useCallback(() => {
     closeSettingsPanel();
     setDrawerOpen(false);
@@ -18948,6 +18949,7 @@ export function App() {
   const renderChatTitleBar = (mobile: boolean) => (
     <DesktopDragRegion className="block-title chat-title-bar">
       {!mobile ? renderChatSessionHeader(false) : null}
+      {mobile ? renderWheelMakerAppMenu(true) : null}
       <div className="chat-title-context">
         {mobile ? renderMobileChatBreadcrumbTitle() : renderDesktopChatBreadcrumbTitle()}
       </div>

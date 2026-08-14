@@ -78,6 +78,15 @@
   background: var(--desktop-top-surface);
 }
 
+.narrow-shell .chat-title-bar {
+  flex: 0 0 calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
+  height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
+  min-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
+  max-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
+  gap: var(--chat-menu-header-gap);
+  padding: var(--wm-safe-area-top) 8px 0;
+}
+
 .chat-title-bar > .chat-session-header {
   flex: 0 0 var(--chat-session-panel-width);
   width: var(--chat-session-panel-width);
