@@ -171,31 +171,31 @@ After verification passes, invoke `git-workflow` checkpoint for the new chat ski
 
 **Acceptance:** Settings → Chat exposes choose/replace/remove for the global skin on both layout modes, shows the current preview/name, disables conflicting actions while saving/deleting, and keeps the previous preview on decode/storage failure with an actionable error.
 
-- [ ] **Step 1: Write failing component tests.**
+- [x] **Step 1: Write failing component tests.**
 
 In `ChatSkinSettings.test.tsx`, render the component with no asset and assert a button/input with `accept="image/*"` is available; render it with an asset and assert the thumbnail, filename, Replace, and Remove controls; assert the controls are disabled while busy and the error text has `role="alert"`. Assert a selected file is passed to `onSelect` and Remove calls `onRemove`.
 
-- [ ] **Step 2: Run the focused test to verify RED.**
+- [x] **Step 2: Run the focused test to verify RED.**
 
 Run: `npm test -- --runInBand ChatSkinSettings.test.tsx`
 
 Expected: FAIL because the component and SettingsRootContent props do not exist.
 
-- [ ] **Step 3: Implement the Settings component and root wiring.**
+- [x] **Step 3: Implement the Settings component and root wiring.**
 
 Add a compact Chat skin subsection using the existing Settings icon/row language. Use a broad image picker hint, leave actual support to the browser decoder, and never add a client-side size check. Wire `SettingsRootContent` props from `WorkspaceApp` to the asset controller; on successful save/remove update preview state, and on failure preserve the previous preview and expose the operation error without closing Settings.
 
-- [ ] **Step 4: Add settings CSS and mobile layout rules.**
+- [x] **Step 4: Add settings CSS and mobile layout rules.**
 
 Style the preview as a small contained thumbnail with filename/status text and compact ghost/primary actions. Keep controls keyboard-focusable, readable in dark/light themes, and usable in the existing mobile Settings scroll surface. Do not add a native `title` tooltip or a new icon family.
 
-- [ ] **Step 5: Run focused Settings and UI regressions to verify GREEN.**
+- [x] **Step 5: Run focused Settings and UI regressions to verify GREEN.**
 
 Run: `npm test -- --runInBand ChatSkinSettings.test.tsx web-chat-ui.test.ts`
 
 Expected: PASS; Settings prop contracts and existing Chat section ordering remain valid.
 
-- [ ] **Step 6: Git checkpoint.**
+- [x] **Step 6: Git checkpoint.**
 
 After verification passes, invoke `git-workflow` checkpoint for `ChatSkinSettings.tsx`, its test, `SettingsRootContent.tsx`, `WorkspaceApp.tsx`, and `settings.css` only.
 

@@ -16262,6 +16262,12 @@ export function App() {
         setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
         handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
         notificationPermissionState={notificationPermissionState}
+        chatSkinPreviewUrl={chatSkinObjectUrl}
+        chatSkinFileName={chatSkinAsset?.name ?? ''}
+        chatSkinBusy={false}
+        chatSkinError=""
+        onChatSkinSelect={handleChatSkinSelect}
+        onChatSkinRemove={handleChatSkinRemove}
         serverSettings={serverSettings}
         serverSettingsBusy={serverSettingsBusy}
         serverSettingsError={serverSettingsError}

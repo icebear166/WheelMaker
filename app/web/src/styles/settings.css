@@ -2706,6 +2706,106 @@ textarea,
   order: 0;
 }
 
+.chat-skin-settings {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 11px 14px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+}
+
+.chat-skin-settings-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chat-skin-settings-title {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-skin-settings-description,
+.chat-skin-settings-empty {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chat-skin-settings-preview {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+}
+
+.chat-skin-settings-preview img {
+  display: block;
+  width: 72px;
+  height: 48px;
+  flex: 0 0 72px;
+  border-radius: 4px;
+  background: var(--surface-canvas);
+  object-fit: contain;
+}
+
+.chat-skin-settings-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-family: var(--font-mono, 'JetBrains Mono', Consolas, monospace);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-skin-settings-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chat-skin-settings-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.chat-skin-settings-action {
+  min-height: 29px;
+}
+
+.chat-skin-settings-error {
+  color: var(--state-danger);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settings-section-rows > .chat-skin-settings:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 560px) {
+  .chat-skin-settings {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .chat-skin-settings-action {
+    min-height: 32px;
+  }
+}
+
 /* ---- database page danger zone ---- */
 .database-clear-card {
   border-color: color-mix(in srgb, var(--state-danger) 32%, var(--border-subtle));
