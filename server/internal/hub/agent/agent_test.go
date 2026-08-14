@@ -323,9 +323,16 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				"CLAUDE_CODE_USE_FOUNDRY": "",
 			},
 			wantSettings: map[string]any{
-				"model":                  "glm-5.3",
-				"availableModels":        []any{"glm-5.3", "glm-5.2[1m]", "glm-5-turbo", "glm-5v-turbo", "glm-5.1", "glm-4.7", "glm-4.5-air"},
-				"enforceAvailableModels": true,
+				"model": "glm-5.3",
+				"models": []any{
+					map[string]any{"id": "glm-5.3", "name": "GLM-5.3 (1M)"},
+					map[string]any{"id": "glm-5.2[1m]", "name": "GLM-5.2 (1M)"},
+					map[string]any{"id": "glm-5-turbo", "name": "GLM-5-Turbo"},
+					map[string]any{"id": "glm-5.1", "name": "GLM-5.1"},
+					map[string]any{"id": "glm-4.7", "name": "GLM-4.7"},
+					map[string]any{"id": "glm-4.5-air", "name": "GLM-4.5-Air"},
+				},
+				"availableModels": []any{"glm-5.3", "glm-5.2[1m]", "glm-5-turbo", "glm-5.1", "glm-4.7", "glm-4.5-air"},
 				"env": map[string]any{
 					"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.3",
 					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "GLM-5.3 (1M)",
@@ -339,6 +346,7 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 					"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
 					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 					"API_TIMEOUT_MS":                           "3000000",
+					gatewayModelDiscoveryEnv:                   "1",
 				},
 			},
 		},
@@ -454,6 +462,9 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				for _, model := range gotSettings["availableModels"].([]any) {
 					if model == "glm-5.2" {
 						t.Fatal("GLM model picker unexpectedly contains the non-1M glm-5.2 variant")
+					}
+					if model == "glm-5v-turbo" {
+						t.Fatal("GLM model picker unexpectedly contains glm-5v-turbo (not part of z.ai coding plans)")
 					}
 				}
 			}
