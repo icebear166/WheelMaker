@@ -98,6 +98,18 @@ describe('gesture navigation', () => {
     expect(main).not.toContain('GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS');
   });
 
+  test('uses the pointerup tap fallback only on iOS', () => {
+    const main = readMain();
+    const pointerUpStart = main.indexOf('const finishGestureNavigation = useCallback(');
+    const pointerUpEnd = main.indexOf('const cancelGestureNavigation = useCallback', pointerUpStart);
+    const pointerUpBody = main.slice(pointerUpStart, pointerUpEnd);
+
+    expect(main).toContain("const isIOSPlatform = pwaFoundation.capabilities.platform === 'ios';");
+    expect(pointerUpBody).toContain("if (isIOSPlatform && current.phase === 'pressing')");
+    expect(pointerUpBody).toContain('gestureNavStateRef.current = null;');
+    expect(pointerUpBody).toContain('setGestureNavState(null);');
+  });
+
   test('keeps floating drag state local and out of the workspace store', () => {
     const main = readMain();
     const uiState = fs.readFileSync(

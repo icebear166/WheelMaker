@@ -1140,6 +1140,7 @@ function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
 }
 
 const pwaFoundation = initializePWAFoundation();
+const isIOSPlatform = pwaFoundation.capabilities.platform === 'ios';
 const nativeShellHost = isNativeShellHost();
 if (nativeShellHost) {
   cleanupNativeWebViewPWA().catch(() => undefined);
@@ -7538,7 +7539,7 @@ export function App() {
         return;
       }
       clearGestureMoveLongPressTimer();
-      if (current.phase === 'pressing') {
+      if (isIOSPlatform && current.phase === 'pressing') {
         // Commit a tap on pointerup instead of waiting for click. Mobile Safari
         // can omit the click that follows a captured pointer sequence, notably
         // while a long chat scroller is settling, which made the first tap only
