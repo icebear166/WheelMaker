@@ -98,6 +98,16 @@ export type PersistedChatSessionContent = {
   turns: RegistrySessionTurn[];
 };
 
+export type WorkspaceChatSkinAssetInput = {
+  blob: Blob;
+  name: string;
+  mimeType: string;
+};
+
+export type PersistedChatSkinAsset = WorkspaceChatSkinAssetInput & {
+  updatedAt: number;
+};
+
 type PersistedWorkspaceState = {
   global: PersistedGlobalState;
   projects: Record<string, PersistedProjectState>;
@@ -105,6 +115,7 @@ type PersistedWorkspaceState = {
 
 export type WorkspaceDatabaseDump = {
   global: Array<{k: string; v: string; updatedAt: number}>;
+  globalAssets: Array<{k: string; name: string; mimeType: string; size: number; updatedAt: number}>;
   projects: Array<{projectId: string; stateJson: string; updatedAt: number}>;
   chatSessionIndex: Array<{k: string; projectId: string; sessionId: string; sessionJson: string; cursorJson: string; updatedAt: number}>;
   chatSessionContent: Array<{k: string; projectId: string; sessionId: string; turnsJson: string; updatedAt: number}>;
@@ -144,8 +155,9 @@ export type WorkspaceStorageError = {
 };
 
 const WORKSPACE_DB_NAME = 'wheelmaker.workspace.db';
-const WORKSPACE_DB_VERSION = 7;
+const WORKSPACE_DB_VERSION = 8;
 const TABLE_GLOBAL_KV = 'wm_global_kv';
+const TABLE_GLOBAL_ASSETS = 'wm_global_assets';
 const TABLE_PROJECT_STATE = 'wm_project_state';
 const TABLE_CHAT_SESSION_INDEX = 'wm_chat_session_index';
 const TABLE_CHAT_SESSION_CONTENT = 'wm_chat_session_content';
@@ -612,6 +624,8 @@ function chatProjectPrefix(projectId: string): string {
   return `cs:${projectId}:`;
 }
 
+const CHAT_SKIN_ASSET_KEY = 'chatSkin';
+
 
 function parseChatSessionKey(key: string): {projectId: string; sessionId: string} | null {
   if (!key.startsWith('cs:')) return null;
@@ -629,6 +643,14 @@ function parseChatSessionKey(key: string): {projectId: string; sessionId: string
 type RawKVRow = {
   k: string;
   v: string;
+  updatedAt: number;
+};
+
+type RawGlobalAssetRow = {
+  k: string;
+  blob: Blob;
+  name: string;
+  mimeType: string;
   updatedAt: number;
 };
 
@@ -650,6 +672,22 @@ function globalRowsForPatch(
 function redactGlobalDumpRows(rows: RawKVRow[]): RawKVRow[] {
   const obsolete = new Set(obsoleteBrowserCredentialRows(rows));
   return rows.filter(row => !obsolete.has(row.k));
+}
+
+function globalAssetMetadata(row: RawGlobalAssetRow): {
+  k: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  updatedAt: number;
+} {
+  return {
+    k: row.k,
+    name: row.name || '',
+    mimeType: row.mimeType || '',
+    size: typeof Blob !== 'undefined' && row.blob instanceof Blob ? row.blob.size : 0,
+    updatedAt: row.updatedAt,
+  };
 }
 
 type RawProjectStateRow = {
@@ -718,6 +756,9 @@ class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
         const db = req.result;
         if (!db.objectStoreNames.contains(TABLE_GLOBAL_KV)) {
           db.createObjectStore(TABLE_GLOBAL_KV, {keyPath: 'k'});
+        }
+        if (!db.objectStoreNames.contains(TABLE_GLOBAL_ASSETS)) {
+          db.createObjectStore(TABLE_GLOBAL_ASSETS, {keyPath: 'k'});
         }
         if (!db.objectStoreNames.contains(TABLE_PROJECT_STATE)) {
           db.createObjectStore(TABLE_PROJECT_STATE, {keyPath: 'projectId'});
@@ -867,6 +908,7 @@ export class WorkspacePersistenceRepository {
   private readonly chatSessionContent = new Map<string, PersistedChatSessionContent>();
   private readonly chatSessionContentUpdatedAt = new Map<string, number>();
   private readonly fileCache = new Map<string, FileCacheEntry>();
+  private chatSkinAsset: PersistedChatSkinAsset | null = null;
   private readonly readyPromise: Promise<void>;
   private writeQueue: Promise<void> = Promise.resolve();
   private lastStorageError: WorkspaceStorageError | null = null;
@@ -895,13 +937,19 @@ export class WorkspacePersistenceRepository {
   }
 
   private async initialize(): Promise<void> {
-    const [globalRows, projectRows, chatIndexRows, chatContentRows, fileRows] = await Promise.all([
+    const [globalRows, projectRows, chatIndexRows, chatContentRows, fileRows, chatSkinRows] = await Promise.all([
       this.db.getAllRows<RawKVRow>(TABLE_GLOBAL_KV),
       this.db.getAllRows<RawProjectStateRow>(TABLE_PROJECT_STATE),
       this.db.getAllRows<RawChatSessionIndexRow>(TABLE_CHAT_SESSION_INDEX),
       this.db.getAllRows<RawChatSessionContentRow>(TABLE_CHAT_SESSION_CONTENT),
       this.db.getAllRows<RawFileCacheRow>(TABLE_FILE_CACHE),
+      this.db.getAllRows<RawGlobalAssetRow>(TABLE_GLOBAL_ASSETS).catch(error => {
+        this.reportStorageError('load chat skin asset', error);
+        return [];
+      }),
     ]);
+
+    this.restoreChatSkinAsset(chatSkinRows);
 
     const obsoleteRows = [...new Set([
       ...obsoleteBrowserCredentialRows(globalRows),
@@ -922,7 +970,8 @@ export class WorkspacePersistenceRepository {
       projectRows.length > 0 ||
       chatIndexRows.length > 0 ||
       chatContentRows.length > 0 ||
-      fileRows.length > 0;
+      fileRows.length > 0 ||
+      chatSkinRows.length > 0;
 
     if (!hasPersisted) {
       this.state = defaultWorkspaceState();
@@ -969,6 +1018,20 @@ export class WorkspacePersistenceRepository {
     return {
       global: sanitizeGlobalState(globalPatch),
       projects,
+    };
+  }
+
+  private restoreChatSkinAsset(rows: RawGlobalAssetRow[]): void {
+    const row = rows.find(item => item.k === CHAT_SKIN_ASSET_KEY);
+    if (!row || typeof Blob === 'undefined' || !(row.blob instanceof Blob)) {
+      this.chatSkinAsset = null;
+      return;
+    }
+    this.chatSkinAsset = {
+      blob: row.blob,
+      name: typeof row.name === 'string' ? row.name : '',
+      mimeType: typeof row.mimeType === 'string' ? row.mimeType : row.blob.type,
+      updatedAt: Number.isFinite(row.updatedAt) ? row.updatedAt : Date.now(),
     };
   }
 
@@ -1345,6 +1408,42 @@ export class WorkspacePersistenceRepository {
     return cloneState(this.state.global);
   }
 
+  async getChatSkinAsset(): Promise<PersistedChatSkinAsset | null> {
+    await this.ready();
+    return this.chatSkinAsset ? {...this.chatSkinAsset} : null;
+  }
+
+  async saveChatSkinAsset(input: WorkspaceChatSkinAssetInput): Promise<void> {
+    await this.ready();
+    const nextAsset: PersistedChatSkinAsset = {
+      blob: input.blob,
+      name: input.name,
+      mimeType: input.mimeType,
+      updatedAt: Date.now(),
+    };
+    try {
+      await this.db.putRow(TABLE_GLOBAL_ASSETS, {
+        k: CHAT_SKIN_ASSET_KEY,
+        ...nextAsset,
+      });
+    } catch (error) {
+      this.reportStorageError('save chat skin asset', error);
+      throw error;
+    }
+    this.chatSkinAsset = nextAsset;
+  }
+
+  async deleteChatSkinAsset(): Promise<void> {
+    await this.ready();
+    try {
+      await this.db.deleteRow(TABLE_GLOBAL_ASSETS, CHAT_SKIN_ASSET_KEY);
+    } catch (error) {
+      this.reportStorageError('delete chat skin asset', error);
+      throw error;
+    }
+    this.chatSkinAsset = null;
+  }
+
   getProjectState(projectId: string): PersistedProjectState {
     return cloneState(this.state.projects[projectId] ?? defaultProjectState());
   }
@@ -1580,13 +1679,15 @@ export class WorkspacePersistenceRepository {
     this.chatSessionContent.clear();
     this.chatSessionContentUpdatedAt.clear();
     this.fileCache.clear();
+    this.chatSkinAsset = null;
     this.lastStorageError = null;
   }
 
   async dumpDatabase(): Promise<WorkspaceDatabaseDump> {
     await this.flushPendingWrites();
-    const [global, projects, chatSessionIndex, chatSessionContent, fileCache, meta] = await Promise.all([
+    const [global, globalAssetRows, projects, chatSessionIndex, chatSessionContent, fileCache, meta] = await Promise.all([
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_GLOBAL_KV),
+      this.db.getAllRows<RawGlobalAssetRow>(TABLE_GLOBAL_ASSETS),
       this.db.getAllRows<{projectId: string; stateJson: string; updatedAt: number}>(TABLE_PROJECT_STATE),
       this.db.getAllRows<{k: string; projectId: string; sessionId: string; sessionJson: string; cursorJson: string; updatedAt: number}>(TABLE_CHAT_SESSION_INDEX),
       this.db.getAllRows<{k: string; projectId: string; sessionId: string; turnsJson: string; updatedAt: number}>(TABLE_CHAT_SESSION_CONTENT),
@@ -1605,6 +1706,7 @@ export class WorkspacePersistenceRepository {
     const storage = buildWorkspaceDatabaseStorageStats(
       {
         [TABLE_GLOBAL_KV]: global,
+        [TABLE_GLOBAL_ASSETS]: globalAssetRows.map(globalAssetMetadata),
         [TABLE_PROJECT_STATE]: projects,
         [TABLE_CHAT_SESSION_INDEX]: chatSessionIndex,
         [TABLE_CHAT_SESSION_CONTENT]: chatSessionContent,
@@ -1616,6 +1718,7 @@ export class WorkspacePersistenceRepository {
     );
     return {
       global: sortByKey(redactGlobalDumpRows(global)),
+      globalAssets: globalAssetRows.map(globalAssetMetadata).sort((left, right) => left.k.localeCompare(right.k)),
       projects: sortByProjectId(projects),
       chatSessionIndex: sortByKey(chatSessionIndex),
       chatSessionContent: sortByKey(chatSessionContent),

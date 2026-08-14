@@ -42,7 +42,7 @@ Expected: no whitespace errors; checkpoint only this wiki file.
 
 **Acceptance:** A single `chatSkin` asset can be saved, loaded, replaced, and deleted as a Blob without entering `PersistedGlobalState`; existing global settings and rebuildable caches survive asset errors; database reset removes the asset; storage stats and JSON diagnostics expose metadata rather than binary contents.
 
-- [ ] **Step 1: Write the failing persistence tests.**
+- [x] **Step 1: Write the failing persistence tests.**
 
 Create an asset-aware in-memory `WorkspaceDatabaseAdapter` test double and assert:
 
@@ -82,29 +82,29 @@ test('reports a skin quota failure without clearing caches or changing the activ
 });
 ```
 
-- [ ] **Step 2: Run the focused test to verify RED.**
+- [x] **Step 2: Run the focused test to verify RED.**
 
 Run: `npm test -- --runInBand web-workspace-chat-skin.test.ts`
 
 Expected: FAIL because the asset APIs/store do not exist; no production persistence code is written before this failure is observed.
 
-- [ ] **Step 3: Implement the minimum persistence boundary.**
+- [x] **Step 3: Implement the minimum persistence boundary.**
 
 Add `wm_global_assets`, bump the IndexedDB schema version additively, define a typed asset row with `k`, `blob`, `mimeType`, `name`, and `updatedAt`, and expose `getChatSkinAsset()`, `saveChatSkinAsset()`, and `deleteChatSkinAsset()` on the repository and `WorkspaceStore`. Keep global JSON state unchanged. Make asset writes explicit async operations that report quota/storage errors without invoking rebuildable-cache cleanup. Include the asset store in reset, storage statistics, and metadata-only database dump output.
 
-- [ ] **Step 4: Run the focused test to verify GREEN.**
+- [x] **Step 4: Run the focused test to verify GREEN.**
 
 Run: `npm test -- --runInBand web-workspace-chat-skin.test.ts`
 
 Expected: PASS with no unhandled storage errors.
 
-- [ ] **Step 5: Run persistence regressions.**
+- [x] **Step 5: Run persistence regressions.**
 
 Run: `npm test -- --runInBand web-workspace-persistence-safety.test.ts web-workspace-persistence-reset-policy.test.ts web-workspace-database-storage-stats.test.ts`
 
 Expected: PASS; existing global settings, cache repair, reset policy, and storage-stat contracts remain intact.
 
-- [ ] **Step 6: Git checkpoint.**
+- [x] **Step 6: Git checkpoint.**
 
 After verification passes, invoke `git-workflow` checkpoint for `app/web/src/workspace/WorkspacePersistence.ts`, `app/web/src/workspace/WorkspaceStore.ts`, and `app/__tests__/web-workspace-chat-skin.test.ts` only.
 
