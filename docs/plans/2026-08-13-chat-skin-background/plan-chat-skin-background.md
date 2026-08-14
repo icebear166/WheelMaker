@@ -21,13 +21,13 @@
 
 **Acceptance:** The existing visual-language page records only the confirmed long-term rules for chat skin layering, low-opacity fusion, content readability, non-interaction, responsive behavior, and reduced-transparency fallback; its first-line summary and existing scope remain intact.
 
-- [ ] **Step 1: Read the full target page and locate the material-language and settings sections.**
+- [x] **Step 1: Read the full target page and locate the material-language and settings sections.**
 
-- [ ] **Step 2: Append a concise confirmed rule block with a source link to `docs/scope/2026-08-13-chat-skin-background.md`.**
+- [x] **Step 2: Append a concise confirmed rule block with a source link to `docs/scope/2026-08-13-chat-skin-background.md`.**
 
-- [ ] **Step 3: Check the page has a summary first line, a title, no temporary checklist/spec content, and a source path.**
+- [x] **Step 3: Check the page has a summary first line, a title, no temporary checklist/spec content, and a source path.**
 
-- [ ] **Step 4: Git checkpoint.**
+- [x] **Step 4: Git checkpoint.**
 
 Run: `git diff --check -- docs/wiki/frontend-interaction/visual-language.md`
 
