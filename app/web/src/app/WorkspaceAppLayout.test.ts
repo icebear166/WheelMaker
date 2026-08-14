@@ -41,9 +41,9 @@ test('mobile Chat title bar reuses the Drawer WheelMaker logo menu and geometry'
     '.narrow-shell .chat-title-bar {',
     '.chat-title-bar > .chat-session-header',
   );
-  expect(mobileChatTitleStyles).toContain('gap: 2px;');
+  expect(mobileChatTitleStyles).toContain('gap: 0px;');
   expect(mobileChatTitleStyles).toContain('flex: 0 0 calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
   expect(mobileChatTitleStyles).toContain('padding: var(--wm-safe-area-top) 8px 0;');
   expect(chatStyles).toContain('.narrow-shell .chat-title-bar .chat-title-project-button {');
-  expect(chatStyles).toContain('padding-left: 4px;');
+  expect(chatStyles).toContain('padding-left: 2px;');
 });
