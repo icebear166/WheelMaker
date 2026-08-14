@@ -71,6 +71,11 @@ describe('web chat integration', () => {
     expect(settingsSkinTsx).toContain('onScaleChange');
     expect(settingsSkinTsx).toContain('onOpacityChange');
     expect(settingsSkinTsx).toContain('onOffsetChange');
+    expect(settingsSkinTsx).toContain('className="chat-skin-settings-row settings-row"');
+    expect(settingsSkinTsx).toContain('className="chat-skin-settings-preview"');
+    expect(settingsSkinTsx).toContain('className="chat-skin-settings-remove set-btn set-btn--danger"');
+    expect(settingsSkinTsx).toContain('className="chat-skin-settings-adjust"');
+    expect(settingsSkinTsx).toContain('hasSkin && controlsOpen');
     expect(settingsRootTsx).toContain('chatSkinOffset');
     expect(settingsRootTsx).toContain('onChatSkinOffsetChange');
     expect(persistenceTs).toContain('chatSkinOffset');
@@ -92,6 +97,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('object-fit: contain;');
     expect(stylesCss).toContain('object-position: right bottom;');
     expect(stylesCss).toContain('@media (prefers-reduced-transparency: reduce)');
+    expect(stylesCss).toContain('.chat-skin-settings-row');
+    expect(stylesCss).toContain('.chat-skin-settings-preview');
   });
 
   test('composer text changes do not force desktop layout measurement', () => {

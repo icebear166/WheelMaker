@@ -5,6 +5,7 @@ import {ChatSkinSettings} from './ChatSkinSettings';
 
 function renderSettings(overrides = {}) {
   let tree;
+  const fileInputClick = jest.fn();
   const props = {
     previewUrl: '',
     fileName: '',
@@ -21,34 +22,56 @@ function renderSettings(overrides = {}) {
     ...overrides,
   };
   act(() => {
-    tree = create(<ChatSkinSettings {...props} />);
+    tree = create(<ChatSkinSettings {...props} />, {
+      createNodeMock: element => element.type === 'input' && element.props.type === 'file'
+        ? {click: fileInputClick}
+        : {},
+    });
   });
-  return {tree, props};
+  return {tree, props, fileInputClick};
 }
 
 describe('ChatSkinSettings', () => {
   test('offers a browser image picker when no skin is selected', () => {
-    const {tree} = renderSettings();
+    const {tree, fileInputClick} = renderSettings();
     const input = tree.root.findAllByType('input').find(candidate => candidate.props.type === 'file');
+    const chooseButton = tree.root.findAllByType('button').find(button => button.children.includes('Choose image'));
 
     expect(input).toBeDefined();
+    expect(chooseButton).toBeDefined();
     if (!input) return;
     expect(input.props.type).toBe('file');
     expect(input.props.accept).toBe('image/*');
-    expect(tree.root.findAllByType('button').some(button => button.children.includes('Choose image'))).toBe(true);
+    if (!chooseButton) return;
+    act(() => chooseButton.props.onClick());
+    expect(fileInputClick).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType('input').filter(candidate => candidate.props.type === 'range')).toHaveLength(0);
+    expect(tree.root.findAllByProps({className: 'chat-skin-settings-adjust'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({className: 'chat-skin-settings-remove'})).toHaveLength(0);
   });
 
-  test('shows the preview, filename, replace, and remove actions', () => {
-    const {tree} = renderSettings({previewUrl: 'blob:skin', fileName: 'skin.png'});
+  test('uses the preview image as the replace action and keeps controls collapsed', () => {
+    const {tree, fileInputClick} = renderSettings({previewUrl: 'blob:skin', fileName: 'skin.png'});
 
     expect(tree.root.findByType('img').props.src).toBe('blob:skin');
     expect(JSON.stringify(tree.toJSON())).toContain('skin.png');
-    expect(tree.root.findAllByType('button').some(button => button.children.includes('Replace'))).toBe(true);
-    expect(tree.root.findAllByType('button').some(button => button.children.includes('Remove'))).toBe(true);
+    const preview = tree.root.findByProps({className: 'chat-skin-settings-preview'});
+    expect(preview.type).toBe('button');
+    expect(preview.props['aria-label']).toBe('Replace chat skin image');
+    act(() => preview.props.onClick());
+    expect(fileInputClick).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByType('button').some(button => button.props.className?.includes('chat-skin-settings-remove'))).toBe(true);
+    expect(tree.root.findByProps({className: 'chat-skin-settings-adjust'}).props['aria-expanded']).toBe(false);
+    expect(tree.root.findAllByType('input').filter(candidate => candidate.props.type === 'range')).toHaveLength(0);
   });
 
-  test('exposes scale, opacity, and image offset controls for the active skin', () => {
+  test('reveals scale, opacity, and image offset controls after expanding an active skin', () => {
     const {tree, props} = renderSettings({previewUrl: 'blob:skin', scale: 0.75, opacity: 0.42, offset: 24});
+    const adjust = tree.root.findByProps({className: 'chat-skin-settings-adjust'});
+
+    expect(tree.root.findAllByType('input').filter(input => input.props.type === 'range')).toHaveLength(0);
+    act(() => adjust.props.onClick());
+    expect(tree.root.findByProps({className: 'chat-skin-settings-adjust'}).props['aria-expanded']).toBe(true);
     const rangeInputs = tree.root.findAllByType('input').filter(input => input.props.type === 'range');
 
     expect(rangeInputs).toHaveLength(3);

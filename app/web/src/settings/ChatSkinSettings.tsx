@@ -48,6 +48,7 @@ export function ChatSkinSettings({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
   const [operationError, setOperationError] = useState('');
+  const [controlsOpen, setControlsOpen] = useState(false);
   const hasSkin = Boolean(previewUrl);
   const displayFileName = fileName || 'Selected image';
   const isBusy = busy || operationBusy;
@@ -72,97 +73,114 @@ export function ChatSkinSettings({
     void runOperation(() => onSelect(file));
   };
 
+  const handleRemove = () => {
+    void runOperation(async () => {
+      await onRemove();
+      setControlsOpen(false);
+    });
+  };
+
   return (
     <div className="chat-skin-settings" aria-label="Chat skin">
-      <div className="chat-skin-settings-copy">
-        <div className="chat-skin-settings-title">Chat skin</div>
-        <div className="chat-skin-settings-description">
-          A subtle local image behind the current chat.
-        </div>
-      </div>
-      {hasSkin ? (
-        <div className="chat-skin-settings-preview">
-          <img src={previewUrl} alt={`${displayFileName} preview`} />
-          <span className="chat-skin-settings-name">{displayFileName}</span>
-        </div>
-      ) : (
-        <div className="chat-skin-settings-empty">No image selected</div>
-      )}
-      <div className="chat-skin-settings-controls">
-        <label className="chat-skin-settings-control">
-          <span>
-            <span>Scale</span>
-            <output>{Math.round(scale * 100)}%</output>
+      <input
+        ref={inputRef}
+        className="chat-skin-settings-input"
+        type="file"
+        accept="image/*"
+        disabled={isBusy}
+        onChange={handleFileChange}
+      />
+      <div className="chat-skin-settings-row settings-row">
+        <span className="settings-row-label chat-skin-settings-label">
+          <span className="chat-skin-settings-title">Chat skin</span>
+          <span className="chat-skin-settings-status">
+            {hasSkin ? displayFileName : 'Not set'}
           </span>
-          <input
-            type="range"
-            min={CHAT_SKIN_SCALE_MIN * 100}
-            max={CHAT_SKIN_SCALE_MAX * 100}
-            step="1"
-            value={Math.round(scale * 100)}
-            disabled={isBusy || !hasSkin}
-            onChange={event => onScaleChange(Number(event.target.value) / 100)}
-          />
-        </label>
-        <label className="chat-skin-settings-control">
-          <span>
-            <span>Opacity</span>
-            <output>{Math.round(opacity * 100)}%</output>
-          </span>
-          <input
-            type="range"
-            min={CHAT_SKIN_OPACITY_MIN}
-            max={CHAT_SKIN_OPACITY_MAX}
-            step="0.01"
-            value={opacity}
-            disabled={isBusy || !hasSkin}
-            onChange={event => onOpacityChange(Number(event.target.value))}
-          />
-        </label>
-        <label className="chat-skin-settings-control">
-          <span>
-            <span>Image offset</span>
-            <output>{offset > 0 ? `+${Math.round(offset)}` : Math.round(offset)}px</output>
-          </span>
-          <input
-            type="range"
-            min={CHAT_SKIN_OFFSET_MIN}
-            max={CHAT_SKIN_OFFSET_MAX}
-            step="1"
-            value={Math.round(offset)}
-            disabled={isBusy || !hasSkin}
-            onChange={event => onOffsetChange(Number(event.target.value))}
-          />
-        </label>
-      </div>
-      <div className="chat-skin-settings-actions">
-        <input
-          ref={inputRef}
-          className="chat-skin-settings-input"
-          type="file"
-          accept="image/*"
-          disabled={isBusy}
-          onChange={handleFileChange}
-        />
-        <button
-          type="button"
-          className="set-btn set-btn--primary chat-skin-settings-action"
-          disabled={isBusy}
-          onClick={() => inputRef.current?.click()}
-        >
-          {hasSkin ? 'Replace' : 'Choose image'}
-        </button>
-        {hasSkin ? (
+        </span>
+        <span className="chat-skin-settings-actions">
           <button
             type="button"
-            className="set-btn set-btn--danger chat-skin-settings-action"
+            className="chat-skin-settings-preview"
             disabled={isBusy}
-            onClick={() => { void runOperation(onRemove); }}
+            aria-label={hasSkin ? 'Replace chat skin image' : 'Choose chat skin image'}
+            onClick={() => inputRef.current?.click()}
           >
-            Remove
+            {hasSkin ? <img src={previewUrl} alt={`${displayFileName} preview`} /> : 'Choose image'}
           </button>
-        ) : null}
+          {hasSkin ? (
+            <>
+              <button
+                type="button"
+                className="chat-skin-settings-remove set-btn set-btn--danger"
+                disabled={isBusy}
+                aria-label="Remove chat skin"
+                onClick={handleRemove}
+              >
+                Remove
+              </button>
+              <button
+                type="button"
+                className="chat-skin-settings-adjust"
+                disabled={isBusy}
+                aria-expanded={controlsOpen}
+                aria-controls="chat-skin-controls"
+                onClick={() => setControlsOpen(open => !open)}
+              >
+                Adjust
+              </button>
+            </>
+          ) : null}
+        </span>
       </div>
+      {hasSkin && controlsOpen ? (
+        <div className="chat-skin-settings-controls" id="chat-skin-controls" aria-label="Chat skin adjustments">
+          <label className="chat-skin-settings-control">
+            <span>
+              <span>Scale</span>
+              <output>{Math.round(scale * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min={CHAT_SKIN_SCALE_MIN * 100}
+              max={CHAT_SKIN_SCALE_MAX * 100}
+              step="1"
+              value={Math.round(scale * 100)}
+              disabled={isBusy}
+              onChange={event => onScaleChange(Number(event.target.value) / 100)}
+            />
+          </label>
+          <label className="chat-skin-settings-control">
+            <span>
+              <span>Opacity</span>
+              <output>{Math.round(opacity * 100)}%</output>
+            </span>
+            <input
+              type="range"
+              min={CHAT_SKIN_OPACITY_MIN}
+              max={CHAT_SKIN_OPACITY_MAX}
+              step="0.01"
+              value={opacity}
+              disabled={isBusy}
+              onChange={event => onOpacityChange(Number(event.target.value))}
+            />
+          </label>
+          <label className="chat-skin-settings-control">
+            <span>
+              <span>Image offset</span>
+              <output>{offset > 0 ? `+${Math.round(offset)}` : Math.round(offset)}px</output>
+            </span>
+            <input
+              type="range"
+              min={CHAT_SKIN_OFFSET_MIN}
+              max={CHAT_SKIN_OFFSET_MAX}
+              step="1"
+              value={Math.round(offset)}
+              disabled={isBusy}
+              onChange={event => onOffsetChange(Number(event.target.value))}
+            />
+          </label>
+        </div>
+      ) : null}
       {visibleError ? (
         <div className="chat-skin-settings-error" role="alert">
           {visibleError}
