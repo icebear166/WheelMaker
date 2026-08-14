@@ -1,12 +1,22 @@
 import React, {useRef, useState} from 'react';
+import {
+  CHAT_SKIN_OPACITY_MAX,
+  CHAT_SKIN_OPACITY_MIN,
+  CHAT_SKIN_SCALE_MAX,
+  CHAT_SKIN_SCALE_MIN,
+} from '../chat/chatSkin';
 
 export type ChatSkinSettingsProps = {
   previewUrl: string;
   fileName: string;
+  scale: number;
+  opacity: number;
   busy: boolean;
   error: string;
   onSelect: (file: File) => void | Promise<void>;
   onRemove: () => void | Promise<void>;
+  onScaleChange: (value: number) => void;
+  onOpacityChange: (value: number) => void;
 };
 
 function errorMessage(error: unknown): string {
@@ -20,10 +30,14 @@ function errorMessage(error: unknown): string {
 export function ChatSkinSettings({
   previewUrl,
   fileName,
+  scale,
+  opacity,
   busy,
   error,
   onSelect,
   onRemove,
+  onScaleChange,
+  onOpacityChange,
 }: ChatSkinSettingsProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
@@ -68,6 +82,38 @@ export function ChatSkinSettings({
       ) : (
         <div className="chat-skin-settings-empty">No image selected</div>
       )}
+      <div className="chat-skin-settings-controls">
+        <label className="chat-skin-settings-control">
+          <span>
+            <span>Scale</span>
+            <output>{Math.round(scale * 100)}%</output>
+          </span>
+          <input
+            type="range"
+            min={CHAT_SKIN_SCALE_MIN}
+            max={CHAT_SKIN_SCALE_MAX}
+            step="0.05"
+            value={scale}
+            disabled={isBusy || !hasSkin}
+            onChange={event => onScaleChange(Number(event.target.value))}
+          />
+        </label>
+        <label className="chat-skin-settings-control">
+          <span>
+            <span>Opacity</span>
+            <output>{Math.round(opacity * 100)}%</output>
+          </span>
+          <input
+            type="range"
+            min={CHAT_SKIN_OPACITY_MIN}
+            max={CHAT_SKIN_OPACITY_MAX}
+            step="0.01"
+            value={opacity}
+            disabled={isBusy || !hasSkin}
+            onChange={event => onOpacityChange(Number(event.target.value))}
+          />
+        </label>
+      </div>
       <div className="chat-skin-settings-actions">
         <input
           ref={inputRef}

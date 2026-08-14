@@ -157,7 +157,14 @@ import {
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import {ChatSkinLayer} from '../chat/ChatSkinLayer';
-import {decodeChatSkinBlob, revokeChatSkinObjectUrl} from '../chat/chatSkin';
+import {
+  CHAT_SKIN_OPACITY_DEFAULT,
+  CHAT_SKIN_SCALE_DEFAULT,
+  clampChatSkinOpacity,
+  clampChatSkinScale,
+  decodeChatSkinBlob,
+  revokeChatSkinObjectUrl,
+} from '../chat/chatSkin';
 import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';
 import type {ChatShareAction} from '../chat/share/ChatShareMenu';
 import {ChatPermissionDialog} from '../chat/permission/ChatPermissionDialog';
@@ -2773,6 +2780,12 @@ export function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(
     persistedGlobal.themeMode === 'light' ? 'light' : 'dark',
   );
+  const [chatSkinScale, setChatSkinScale] = useState(() => clampChatSkinScale(
+    persistedGlobal.chatSkinScale ?? CHAT_SKIN_SCALE_DEFAULT,
+  ));
+  const [chatSkinOpacity, setChatSkinOpacity] = useState(() => clampChatSkinOpacity(
+    persistedGlobal.chatSkinOpacity ?? CHAT_SKIN_OPACITY_DEFAULT,
+  ));
   useLayoutEffect(() => applyDocumentTheme(document.documentElement, themeMode), [themeMode]);
   const [codeTheme, setCodeTheme] = useState<CodeThemeId>(
     typeof persistedGlobal.codeTheme === 'string' &&
@@ -4919,15 +4932,6 @@ export function App() {
     }) as React.CSSProperties,
     [chatKeyboardInset, chatColumnWidth],
   );
-  const chatSkinBottomOffset = useMemo(
-    () => Math.max(
-      18,
-      chatKeyboardInset +
-        safeAreaBottomInset +
-        (chatComposerTop === null ? 0 : 8),
-    ),
-    [chatComposerTop, chatKeyboardInset, safeAreaBottomInset],
-  );
   useEffect(() => {
     if (!toastMessage) return undefined;
     const timer = window.setTimeout(() => setToastMessage(''), 2200);
@@ -6947,6 +6951,8 @@ export function App() {
       promptCompletionNotificationsEnabled,
       keyboardShortcutOverrides,
       selectedProjectId: projectId,
+      chatSkinScale,
+      chatSkinOpacity,
       floatingControlYRatio,
       floatingControlSide,
       desktopSidebarWidth,
@@ -6973,6 +6979,8 @@ export function App() {
     promptCompletionNotificationsEnabled,
     keyboardShortcutOverrides,
     projectId,
+    chatSkinScale,
+    chatSkinOpacity,
     floatingControlYRatio,
     floatingControlSide,
     desktopSidebarWidth,
@@ -16327,10 +16335,14 @@ export function App() {
         notificationPermissionState={notificationPermissionState}
         chatSkinPreviewUrl={chatSkinObjectUrl}
         chatSkinFileName={chatSkinAsset?.name ?? ''}
+        chatSkinScale={chatSkinScale}
+        chatSkinOpacity={chatSkinOpacity}
         chatSkinBusy={false}
         chatSkinError=""
         onChatSkinSelect={handleChatSkinSelect}
         onChatSkinRemove={handleChatSkinRemove}
+        onChatSkinScaleChange={value => setChatSkinScale(clampChatSkinScale(value))}
+        onChatSkinOpacityChange={value => setChatSkinOpacity(clampChatSkinOpacity(value))}
         serverSettings={serverSettings}
         serverSettingsBusy={serverSettingsBusy}
         serverSettingsError={serverSettingsError}
@@ -19297,7 +19309,8 @@ export function App() {
             {chatSkinObjectUrl ? (
               <ChatSkinLayer
                 src={chatSkinObjectUrl}
-                bottomOffset={chatSkinBottomOffset}
+                scale={chatSkinScale}
+                opacity={chatSkinOpacity}
               />
             ) : null}
             <div

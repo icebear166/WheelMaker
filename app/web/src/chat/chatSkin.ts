@@ -1,3 +1,24 @@
+export const CHAT_SKIN_SCALE_MIN = 0.5;
+export const CHAT_SKIN_SCALE_MAX = 2;
+export const CHAT_SKIN_SCALE_DEFAULT = 1;
+export const CHAT_SKIN_OPACITY_MIN = 0;
+export const CHAT_SKIN_OPACITY_MAX = 1;
+export const CHAT_SKIN_OPACITY_DEFAULT = 0.17;
+
+function finiteNumberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+export function clampChatSkinScale(value: unknown): number {
+  const numeric = finiteNumberOr(value, CHAT_SKIN_SCALE_DEFAULT);
+  return Math.min(CHAT_SKIN_SCALE_MAX, Math.max(CHAT_SKIN_SCALE_MIN, numeric));
+}
+
+export function clampChatSkinOpacity(value: unknown): number {
+  const numeric = finiteNumberOr(value, CHAT_SKIN_OPACITY_DEFAULT);
+  return Math.min(CHAT_SKIN_OPACITY_MAX, Math.max(CHAT_SKIN_OPACITY_MIN, numeric));
+}
+
 export function revokeChatSkinObjectUrl(objectUrl: string | null | undefined): void {
   if (!objectUrl) return;
   URL.revokeObjectURL(objectUrl);

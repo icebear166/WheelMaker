@@ -17,6 +17,12 @@ import {
   type MobileEnterKeyBehavior,
 } from '../chat/mobileEnterKeyBehavior';
 import {
+  CHAT_SKIN_OPACITY_DEFAULT,
+  clampChatSkinOpacity,
+  CHAT_SKIN_SCALE_DEFAULT,
+  clampChatSkinScale,
+} from '../chat/chatSkin';
+import {
   normalizePortRelayListenPort,
   normalizePortRelayTarget,
   normalizePortRelayTargets,
@@ -67,6 +73,8 @@ export type PersistedGlobalState = {
   selectedProjectId: string;
   selectedChatProjectId: string;
   selectedChatSessionId: string;
+  chatSkinScale: number;
+  chatSkinOpacity: number;
   floatingControlYRatio: number;
   floatingControlSide: PersistedFloatingControlSide;
   desktopSidebarWidth: number;
@@ -303,6 +311,8 @@ const GLOBAL_KEYS = {
   selectedProjectId: 'selectedProjectId',
   selectedChatProjectId: 'selectedChatProjectId',
   selectedChatSessionId: 'selectedChatSessionId',
+  chatSkinScale: 'chatSkinScale',
+  chatSkinOpacity: 'chatSkinOpacity',
   floatingControlYRatio: 'floatingControlYRatio',
   floatingControlSlot: 'floatingControlSlot',
   floatingControlSide: 'floatingControlSide',
@@ -350,6 +360,8 @@ function defaultGlobalState(): PersistedGlobalState {
     selectedProjectId: '',
     selectedChatProjectId: '',
     selectedChatSessionId: '',
+    chatSkinScale: CHAT_SKIN_SCALE_DEFAULT,
+    chatSkinOpacity: CHAT_SKIN_OPACITY_DEFAULT,
     floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,
     floatingControlSide: 'right',
     desktopSidebarWidth: 380,
@@ -575,6 +587,8 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     selectedProjectId: typeof input.selectedProjectId === 'string' ? input.selectedProjectId : base.selectedProjectId,
     selectedChatProjectId: typeof input.selectedChatProjectId === 'string' ? input.selectedChatProjectId : base.selectedChatProjectId,
     selectedChatSessionId: typeof input.selectedChatSessionId === 'string' ? input.selectedChatSessionId : base.selectedChatSessionId,
+    chatSkinScale: clampChatSkinScale(input.chatSkinScale ?? base.chatSkinScale),
+    chatSkinOpacity: clampChatSkinOpacity(input.chatSkinOpacity ?? base.chatSkinOpacity),
     floatingControlYRatio,
     floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),
     desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),

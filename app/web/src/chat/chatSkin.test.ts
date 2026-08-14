@@ -1,4 +1,9 @@
-import {decodeChatSkinBlob, revokeChatSkinObjectUrl} from './chatSkin';
+import {
+  clampChatSkinOpacity,
+  clampChatSkinScale,
+  decodeChatSkinBlob,
+  revokeChatSkinObjectUrl,
+} from './chatSkin';
 
 describe('chat skin image helpers', () => {
   const originalImage = globalThis.Image;
@@ -47,6 +52,13 @@ describe('chat skin image helpers', () => {
 
   test('resolves after the browser loads the candidate image', async () => {
     await expect(decodeChatSkinBlob(new Blob(['skin'], {type: 'image/png'}))).resolves.toBe('blob:chat-skin');
+  });
+
+  test('clamps skin display settings to safe visual ranges', () => {
+    expect(clampChatSkinScale(0.1)).toBe(0.5);
+    expect(clampChatSkinScale(4)).toBe(2);
+    expect(clampChatSkinOpacity(-1)).toBe(0);
+    expect(clampChatSkinOpacity(2)).toBe(1);
   });
 
   test('rejects after the browser cannot decode the candidate image', async () => {

@@ -51,10 +51,14 @@ type SettingsRootContentProps = {
   notificationPermissionState: string;
   chatSkinPreviewUrl: string;
   chatSkinFileName: string;
+  chatSkinScale: number;
+  chatSkinOpacity: number;
   chatSkinBusy: boolean;
   chatSkinError: string;
   onChatSkinSelect: (file: File) => void | Promise<void>;
   onChatSkinRemove: () => void | Promise<void>;
+  onChatSkinScaleChange: (value: number) => void;
+  onChatSkinOpacityChange: (value: number) => void;
   serverSettings: ServerSettings;
   serverSettingsBusy: boolean;
   serverSettingsError: string;
@@ -154,10 +158,14 @@ export function SettingsRootContent({
   notificationPermissionState,
   chatSkinPreviewUrl,
   chatSkinFileName,
+  chatSkinScale,
+  chatSkinOpacity,
   chatSkinBusy,
   chatSkinError,
   onChatSkinSelect,
   onChatSkinRemove,
+  onChatSkinScaleChange,
+  onChatSkinOpacityChange,
   serverSettings,
   serverSettingsBusy,
   serverSettingsError,
@@ -274,10 +282,14 @@ export function SettingsRootContent({
           <ChatSkinSettings
             previewUrl={chatSkinPreviewUrl}
             fileName={chatSkinFileName}
+            scale={chatSkinScale}
+            opacity={chatSkinOpacity}
             busy={chatSkinBusy}
             error={chatSkinError}
             onSelect={onChatSkinSelect}
             onRemove={onChatSkinRemove}
+            onScaleChange={onChatSkinScaleChange}
+            onOpacityChange={onChatSkinOpacityChange}
           />
           <div className="settings-subsection">
             <div className="settings-subsection-title">Voice Input</div>

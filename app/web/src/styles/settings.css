@@ -2903,6 +2903,36 @@ textarea,
   white-space: nowrap;
 }
 
+.chat-skin-settings-controls {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.chat-skin-settings-control {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.chat-skin-settings-control > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-skin-settings-control output {
+  color: var(--text-primary);
+  font-family: var(--font-mono, 'JetBrains Mono', Consolas, monospace);
+}
+
+.chat-skin-settings-control input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-primary);
+}
+
 .chat-skin-settings-actions {
   display: flex;
   align-items: center;

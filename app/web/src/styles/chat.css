@@ -3514,25 +3514,17 @@ button.chat-hub-skill-name:disabled {
 
 .chat-skin-layer {
   position: absolute;
-  left: clamp(12px, 4vw, 54px);
-  bottom: var(--chat-skin-bottom-offset, 18px);
+  right: 0;
+  bottom: 0;
   z-index: 0;
   width: min(44%, 380px);
   height: min(58%, 380px);
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.17;
+  opacity: var(--chat-skin-opacity, 0.17);
+  transform: scale(var(--chat-skin-scale, 1));
+  transform-origin: right bottom;
   filter: blur(1.5px) saturate(0.82);
-  mask-image: linear-gradient(90deg, #000 0%, #000 76%, transparent 100%);
-}
-
-.chat-skin-layer::after {
-  position: absolute;
-  inset: 0;
-  content: '';
-  background:
-    linear-gradient(180deg, transparent 54%, var(--surface-canvas) 100%),
-    linear-gradient(90deg, transparent 70%, var(--surface-canvas) 100%);
 }
 
 .chat-skin-layer img {
@@ -3540,7 +3532,7 @@ button.chat-hub-skill-name:disabled {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  object-position: left bottom;
+  object-position: right bottom;
 }
 
 .chat-main > .chat-block,
@@ -3550,8 +3542,7 @@ button.chat-hub-skill-name:disabled {
 }
 
 @media (max-width: 900px) {
-  .chat-skin-layer {
-    left: 12px;
+.chat-skin-layer {
     width: min(70vw, 300px);
     height: min(46%, 300px);
     filter: blur(1px) saturate(0.82);
@@ -3559,10 +3550,9 @@ button.chat-hub-skill-name:disabled {
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .chat-skin-layer {
-    opacity: 0.12;
+.chat-skin-layer {
+    opacity: min(var(--chat-skin-opacity, 0.17), 0.12);
     filter: none;
-    mask-image: linear-gradient(90deg, #000 0%, #000 82%, transparent 100%);
   }
 }
 
