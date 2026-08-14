@@ -1642,6 +1642,54 @@ func TestCXDeepSeekCodexBridgeUsesProviderIdentityAndTextOnlyCapability(t *testi
 	}
 }
 
+func TestCodexAppInitializeAdvertisesOfficialAppServerCapabilities(t *testing.T) {
+	transport := newFakeCodexappTransport()
+	runtime := newCodexappRuntimeWithTransport(transport)
+	t.Cleanup(func() { _ = runtime.close() })
+	conn := newCodexappConnWithRuntime(runtime, t.TempDir())
+	t.Cleanup(func() { _ = conn.Close() })
+
+	done := make(chan error, 1)
+	go func() {
+		var result protocol.InitializeResult
+		done <- conn.Send(context.Background(), protocol.MethodInitialize, protocol.InitializeParams{}, &result)
+	}()
+
+	request := transport.nextSent(t)
+	if request["method"] != "initialize" {
+		t.Fatalf("first app-server message = %#v", request)
+	}
+	params, ok := request["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("initialize params = %#v, want object", request["params"])
+	}
+	capabilities, ok := params["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatalf("initialize capabilities = %#v, want object", params["capabilities"])
+	}
+	want := map[string]bool{
+		"experimentalApi":                true,
+		"mcpServerOpenaiFormElicitation": true,
+		"requestAttestation":             false,
+	}
+	for key, expected := range want {
+		got, ok := capabilities[key].(bool)
+		if !ok || got != expected {
+			t.Errorf("initialize capabilities[%q] = %#v, want %v", key, capabilities[key], expected)
+		}
+	}
+
+	if err := transport.emit(map[string]any{"id": request["id"], "result": map[string]any{}}); err != nil {
+		t.Fatal(err)
+	}
+	if notification := transport.nextSent(t); notification["method"] != "initialized" {
+		t.Fatalf("initialized notification = %#v", notification)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCXDeepSeekCodexBridgeRejectsImageInputsBeforeTurnStart(t *testing.T) {
 	tests := []struct {
 		name  string

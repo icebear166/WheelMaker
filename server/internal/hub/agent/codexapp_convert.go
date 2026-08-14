@@ -67,8 +67,15 @@ type appServerClientInfo struct {
 	Version string `json:"version"`
 }
 
+type appServerInitializeCapabilities struct {
+	ExperimentalAPI                bool `json:"experimentalApi"`
+	MCPServerOpenAIFormElicitation bool `json:"mcpServerOpenaiFormElicitation"`
+	RequestAttestation             bool `json:"requestAttestation"`
+}
+
 type appServerInitializeParams struct {
-	ClientInfo appServerClientInfo `json:"clientInfo"`
+	ClientInfo   appServerClientInfo             `json:"clientInfo"`
+	Capabilities appServerInitializeCapabilities `json:"capabilities"`
 }
 
 type appServerModelListResponse struct {

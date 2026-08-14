@@ -1113,6 +1113,11 @@ func (c *codexappConn) sendInitialize(ctx context.Context, params protocol.Initi
 		var ignored json.RawMessage
 		if err := c.runtime.request(ctx, "initialize", appServerInitializeParams{
 			ClientInfo: appServerClientInfo{Name: "wheelmaker", Title: "WheelMaker", Version: "0.1.0"},
+			Capabilities: appServerInitializeCapabilities{
+				ExperimentalAPI:                true,
+				MCPServerOpenAIFormElicitation: true,
+				RequestAttestation:             false,
+			},
 		}, &ignored); err != nil {
 			return err
 		}
