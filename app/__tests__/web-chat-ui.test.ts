@@ -76,9 +76,11 @@ describe('web chat integration', () => {
     expect(skinLayerBlock).toContain('position: absolute;');
     expect(skinLayerBlock).toContain('right: 0;');
     expect(skinLayerBlock).toContain('bottom: 0;');
+    expect(skinLayerBlock).toContain('height: var(--chat-skin-scale, 100%);');
+    expect(skinLayerBlock).toContain('width: auto;');
     expect(skinLayerBlock).toContain('pointer-events: none;');
     expect(skinLayerBlock).toContain('opacity: var(--chat-skin-opacity, 0.17);');
-    expect(skinLayerBlock).toContain('transform: scale(var(--chat-skin-scale, 1));');
+    expect(skinLayerBlock).not.toContain('transform: scale(var(--chat-skin-scale, 1));');
     expect(stylesCss).toContain('object-fit: contain;');
     expect(stylesCss).toContain('object-position: right bottom;');
     expect(stylesCss).toContain('@media (prefers-reduced-transparency: reduce)');

@@ -1,5 +1,5 @@
-export const CHAT_SKIN_SCALE_MIN = 0.5;
-export const CHAT_SKIN_SCALE_MAX = 2;
+export const CHAT_SKIN_SCALE_MIN = 0;
+export const CHAT_SKIN_SCALE_MAX = 1;
 export const CHAT_SKIN_SCALE_DEFAULT = 1;
 export const CHAT_SKIN_OPACITY_MIN = 0;
 export const CHAT_SKIN_OPACITY_MAX = 1;

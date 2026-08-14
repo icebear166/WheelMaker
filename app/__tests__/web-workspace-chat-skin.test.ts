@@ -151,15 +151,15 @@ describe('workspace chat skin persistence', () => {
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
 
-    repository.patchGlobalState({chatSkinScale: 1.65, chatSkinOpacity: 0.42});
+    repository.patchGlobalState({chatSkinScale: 0, chatSkinOpacity: 0.42});
     await repository.flushPendingWrites();
 
     expect(repository.getGlobalState()).toMatchObject({
-      chatSkinScale: 1.65,
+      chatSkinScale: 0,
       chatSkinOpacity: 0.42,
     });
     expect(db.rows('wm_global_kv')).toEqual(expect.arrayContaining([
-      expect.objectContaining({k: 'chatSkinScale', v: JSON.stringify(1.65)}),
+      expect.objectContaining({k: 'chatSkinScale', v: JSON.stringify(0)}),
       expect.objectContaining({k: 'chatSkinOpacity', v: JSON.stringify(0.42)}),
     ]));
   });

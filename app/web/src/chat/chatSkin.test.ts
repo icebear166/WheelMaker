@@ -55,8 +55,8 @@ describe('chat skin image helpers', () => {
   });
 
   test('clamps skin display settings to safe visual ranges', () => {
-    expect(clampChatSkinScale(0.1)).toBe(0.5);
-    expect(clampChatSkinScale(4)).toBe(2);
+    expect(clampChatSkinScale(-0.1)).toBe(0);
+    expect(clampChatSkinScale(2)).toBe(1);
     expect(clampChatSkinOpacity(-1)).toBe(0);
     expect(clampChatSkinOpacity(2)).toBe(1);
   });

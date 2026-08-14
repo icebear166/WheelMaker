@@ -90,12 +90,12 @@ export function ChatSkinSettings({
           </span>
           <input
             type="range"
-            min={CHAT_SKIN_SCALE_MIN}
-            max={CHAT_SKIN_SCALE_MAX}
-            step="0.05"
-            value={scale}
+            min={CHAT_SKIN_SCALE_MIN * 100}
+            max={CHAT_SKIN_SCALE_MAX * 100}
+            step="1"
+            value={Math.round(scale * 100)}
             disabled={isBusy || !hasSkin}
-            onChange={event => onScaleChange(Number(event.target.value))}
+            onChange={event => onScaleChange(Number(event.target.value) / 100)}
           />
         </label>
         <label className="chat-skin-settings-control">

@@ -8,16 +8,18 @@ export type ChatSkinLayerProps = {
 };
 
 export function ChatSkinLayer({src, scale, opacity}: ChatSkinLayerProps): React.JSX.Element {
+  const normalizedScale = clampChatSkinScale(scale);
   return (
-    <div
+    <img
       className="chat-skin-layer"
       aria-hidden="true"
       style={{
-        '--chat-skin-scale': String(clampChatSkinScale(scale)),
+        '--chat-skin-scale': `${normalizedScale * 100}%`,
         '--chat-skin-opacity': String(clampChatSkinOpacity(opacity)),
       } as React.CSSProperties}
-    >
-      <img src={src} alt="" draggable={false} />
-    </div>
+      src={src}
+      alt=""
+      draggable={false}
+    />
   );
 }

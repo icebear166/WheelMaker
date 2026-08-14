@@ -46,19 +46,19 @@ describe('ChatSkinSettings', () => {
   });
 
   test('exposes scale and opacity controls for the active skin', () => {
-    const {tree, props} = renderSettings({previewUrl: 'blob:skin', scale: 1.35, opacity: 0.42});
+    const {tree, props} = renderSettings({previewUrl: 'blob:skin', scale: 0.75, opacity: 0.42});
     const rangeInputs = tree.root.findAllByType('input').filter(input => input.props.type === 'range');
 
     expect(rangeInputs).toHaveLength(2);
-    expect(rangeInputs[0].props.value).toBe(1.35);
+    expect(rangeInputs[0].props.value).toBe(75);
     expect(rangeInputs[1].props.value).toBe(0.42);
 
     act(() => {
-      rangeInputs[0].props.onChange({target: {value: '1.5'}});
+      rangeInputs[0].props.onChange({target: {value: '50'}});
       rangeInputs[1].props.onChange({target: {value: '0.55'}});
     });
 
-    expect(props.onScaleChange).toHaveBeenCalledWith(1.5);
+    expect(props.onScaleChange).toHaveBeenCalledWith(0.5);
     expect(props.onOpacityChange).toHaveBeenCalledWith(0.55);
   });
 
