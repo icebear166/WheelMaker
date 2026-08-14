@@ -1,7 +1,10 @@
 import React from 'react';
 import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import type {RegistryProject} from '../../registry/registryTypes';
-import {SessionSearchProjectPicker} from './SessionSearchProjectPicker';
+import {
+  resolveSessionSearchProjectMenuPlacement,
+  SessionSearchProjectPicker,
+} from './SessionSearchProjectPicker';
 
 const projects: RegistryProject[] = [
   {projectId: 'p1', name: 'WheelMaker', online: true, path: 'D:/Code/WheelMaker', hubId: 'local-hub'},
@@ -24,6 +27,20 @@ async function renderPicker(value = '') {
 }
 
 describe('SessionSearchProjectPicker', () => {
+  it('keeps the project menu inside the mobile viewport and flips it above the trigger when needed', () => {
+    const placement = resolveSessionSearchProjectMenuPlacement({
+      viewportWidth: 450,
+      viewportHeight: 800,
+      trigger: {left: 200, right: 300, top: 700, bottom: 730},
+    });
+
+    expect(placement.width).toBeLessThanOrEqual(426);
+    expect(placement.left).toBeGreaterThanOrEqual(12);
+    expect(placement.left + placement.width).toBeLessThanOrEqual(438);
+    expect(placement.top).toBeLessThan(700);
+    expect(placement.top + placement.maxHeight).toBeLessThanOrEqual(788);
+  });
+
   it('renders an All Projects trigger and opens the custom project menu', async () => {
     const {tree} = await renderPicker();
     const trigger = tree.root.findByProps({className: 'session-search-project-trigger'});
