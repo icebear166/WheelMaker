@@ -4255,6 +4255,9 @@ func TestCodexAppGenerateAndSetTitleUsesEphemeralStructuredThread(t *testing.T) 
 		switch method {
 		case "thread/start":
 			params := msg["params"].(map[string]any)
+			if params["model"] != "gpt-5.6-luna" {
+				t.Errorf("title thread model=%#v, want gpt-5.6-luna", params["model"])
+			}
 			if params["ephemeral"] != true {
 				t.Errorf("title thread ephemeral=%#v, want true", params["ephemeral"])
 			}

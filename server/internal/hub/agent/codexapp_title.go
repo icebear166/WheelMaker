@@ -15,6 +15,7 @@ const (
 	codexappTitleGenerationTimeout = 30 * time.Second
 	codexappTitlePromptLimit       = 2000
 	codexappTitleMaximumLength     = 36
+	codexappTitleGenerationModel   = "gpt-5.6-luna"
 )
 
 const codexappTitleOutputSchema = `{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":36},"description":{"type":"string","minLength":1}},"required":["title","description"],"additionalProperties":false}`
@@ -175,6 +176,7 @@ func (r *codexappRuntime) generateTitle(ctx context.Context, cwd string, prompt 
 
 	var threadResponse appServerThreadStartResponse
 	if err := r.request(titleCtx, "thread/start", appServerTitleThreadStartParams{
+		Model:                      codexappOptionalString(codexappTitleGenerationModel),
 		CWD:                        codexappOptionalString(cwd),
 		ApprovalPolicy:             "never",
 		Permissions:                ":read-only",
