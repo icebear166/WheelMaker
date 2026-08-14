@@ -156,6 +156,8 @@ import {
 } from '../chat/mobileChatQuickSwitch';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
+import {ChatSkinLayer} from '../chat/ChatSkinLayer';
+import {decodeChatSkinBlob, revokeChatSkinObjectUrl} from '../chat/chatSkin';
 import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';
 import type {ChatShareAction} from '../chat/share/ChatShareMenu';
 import {ChatPermissionDialog} from '../chat/permission/ChatPermissionDialog';
@@ -706,6 +708,7 @@ import {
   type WorkspaceUiStateValue,
 } from '../shell/state/workspaceUiState';
 import type {
+  PersistedChatSkinAsset,
   PersistedFloatingControlSide,
   WorkspaceDatabaseStorageStats,
 } from '../workspace/WorkspacePersistence';
@@ -2661,6 +2664,66 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
 
 export function App() {
   const persistedGlobal = useMemo(() => workspaceStore.getGlobalState(), []);
+  const [chatSkinAsset, setChatSkinAsset] = useState<PersistedChatSkinAsset | null>(null);
+  const [chatSkinObjectUrl, setChatSkinObjectUrl] = useState('');
+  const chatSkinObjectUrlRef = useRef('');
+  const commitChatSkinObjectUrl = useCallback((nextObjectUrl: string) => {
+    const previousObjectUrl = chatSkinObjectUrlRef.current;
+    chatSkinObjectUrlRef.current = nextObjectUrl;
+    setChatSkinObjectUrl(nextObjectUrl);
+    if (previousObjectUrl && previousObjectUrl !== nextObjectUrl) {
+      revokeChatSkinObjectUrl(previousObjectUrl);
+    }
+  }, []);
+  const handleChatSkinSelect = useCallback(async (file: File): Promise<void> => {
+    const candidateObjectUrl = await decodeChatSkinBlob(file);
+    try {
+      await workspaceStore.saveChatSkinAsset({
+        blob: file,
+        name: file.name,
+        mimeType: file.type,
+      });
+    } catch (error) {
+      revokeChatSkinObjectUrl(candidateObjectUrl);
+      throw error;
+    }
+    commitChatSkinObjectUrl(candidateObjectUrl);
+    setChatSkinAsset({
+      blob: file,
+      name: file.name,
+      mimeType: file.type,
+      updatedAt: Date.now(),
+    });
+  }, [commitChatSkinObjectUrl]);
+  const handleChatSkinRemove = useCallback(async (): Promise<void> => {
+    await workspaceStore.deleteChatSkinAsset();
+    const previousObjectUrl = chatSkinObjectUrlRef.current;
+    chatSkinObjectUrlRef.current = '';
+    setChatSkinObjectUrl('');
+    setChatSkinAsset(null);
+    revokeChatSkinObjectUrl(previousObjectUrl);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    workspaceStore.getChatSkinAsset().then(asset => {
+      if (!asset || cancelled) return;
+      return decodeChatSkinBlob(asset.blob).then(objectUrl => {
+        if (cancelled) {
+          revokeChatSkinObjectUrl(objectUrl);
+          return;
+        }
+        setChatSkinAsset(asset);
+        commitChatSkinObjectUrl(objectUrl);
+      });
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [commitChatSkinObjectUrl]);
+  useEffect(() => () => {
+    revokeChatSkinObjectUrl(chatSkinObjectUrlRef.current);
+    chatSkinObjectUrlRef.current = '';
+  }, []);
   const registryEndpoints = useMemo(() => deriveRegistryEndpoints(document.baseURI, {
     allowInsecureLoopback: window.location.protocol === 'http:',
   }), []);
@@ -4800,6 +4863,15 @@ export function App() {
       '--chat-view-column-width': `${chatColumnWidth}px`,
     }) as React.CSSProperties,
     [chatKeyboardInset, chatColumnWidth],
+  );
+  const chatSkinBottomOffset = useMemo(
+    () => Math.max(
+      18,
+      chatKeyboardInset +
+        safeAreaBottomInset +
+        (chatComposerTop === null ? 0 : 8),
+    ),
+    [chatComposerTop, chatKeyboardInset, safeAreaBottomInset],
   );
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -14370,6 +14442,7 @@ export function App() {
     return JSON.stringify(
       {
         wm_global_kv: dump.global,
+        wm_global_assets: dump.globalAssets,
         wm_project_state: dump.projects,
         wm_chat_session_index: dump.chatSessionIndex,
         wm_chat_session_content: dump.chatSessionContent,
@@ -19142,6 +19215,12 @@ export function App() {
             style={chatMainStyle}
           >
             {chatSearchBar}
+            {chatSkinObjectUrl ? (
+              <ChatSkinLayer
+                src={chatSkinObjectUrl}
+                bottomOffset={chatSkinBottomOffset}
+              />
+            ) : null}
             <div
               ref={chatScrollRef}
               className="scroll-panel chat-block"

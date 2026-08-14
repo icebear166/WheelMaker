@@ -41,6 +41,28 @@ function cssNumericProperty(stylesCss: string, selector: string, property: strin
 }
 
 describe('web chat integration', () => {
+  test('keeps the local chat skin below chat content and out of share surfaces', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const shareCaptureTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'share', 'ChatShareCaptureSurface.tsx'));
+    const shareDocumentTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'share', 'ChatShareDocument.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("import {ChatSkinLayer} from '../chat/ChatSkinLayer';");
+    expect(mainTsx).toContain('<ChatSkinLayer');
+    expect(mainTsx).toContain('chatSkinObjectUrl');
+    expect(mainTsx).toContain('chatSkinBottomOffset');
+    expect(shareCaptureTsx).not.toContain('ChatSkinLayer');
+    expect(shareDocumentTsx).not.toContain('ChatSkinLayer');
+    expect(shareDocumentTsx).not.toContain('chatSkinObjectUrl');
+    const skinLayerBlock = cssRuleBlock(stylesCss, '.chat-skin-layer');
+    expect(skinLayerBlock).toContain('position: absolute;');
+    expect(skinLayerBlock).toContain('pointer-events: none;');
+    expect(skinLayerBlock).toContain('opacity: 0.17;');
+    expect(stylesCss).toContain('object-fit: contain;');
+    expect(stylesCss).toContain('@media (prefers-reduced-transparency: reduce)');
+  });
+
   test('composer text changes do not force desktop layout measurement', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

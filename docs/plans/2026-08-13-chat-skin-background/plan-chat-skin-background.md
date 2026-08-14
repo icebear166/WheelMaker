@@ -121,7 +121,7 @@ After verification passes, invoke `git-workflow` checkpoint for `app/web/src/wor
 
 **Acceptance:** `WorkspaceApp` loads the persisted Blob without blocking the workspace, validates new browser-decodable images before commit, releases candidate/old Object URLs, and renders exactly one responsive, non-interactive layer below chat content on desktop and mobile without adding layout height or entering share capture.
 
-- [ ] **Step 1: Write failing helper and layer tests.**
+- [x] **Step 1: Write failing helper and layer tests.**
 
 In `chatSkin.test.ts`, test that `decodeChatSkinBlob` resolves after an image load and rejects after an image error, and that `revokeChatSkinObjectUrl` calls `URL.revokeObjectURL` exactly once for a non-empty URL and never for an empty URL. In `ChatSkinLayer.test.tsx`, assert:
 
@@ -136,25 +136,25 @@ test('renders the skin below content as a hidden decorative layer', () => {
 
 In `web-chat-ui.test.ts`, add source-contract assertions that `WorkspaceApp` renders `ChatSkinLayer` inside `.chat-main`, passes the loaded URL and composer-safe offset, and does not pass the skin into `ChatShareCaptureSurface` or `ChatShareDocument`.
 
-- [ ] **Step 2: Run the focused tests to verify RED.**
+- [x] **Step 2: Run the focused tests to verify RED.**
 
 Run: `npm test -- --runInBand chatSkin.test.ts ChatSkinLayer.test.tsx web-chat-ui.test.ts`
 
 Expected: FAIL because the helper, component, and WorkspaceApp wiring do not exist.
 
-- [ ] **Step 3: Implement the minimum runtime and layer.**
+- [x] **Step 3: Implement the minimum runtime and layer.**
 
 Add browser image decode validation using a temporary Object URL and an `HTMLImageElement` load/error promise. Add `ChatSkinLayer` with `aria-hidden`, empty alt text, `pointer-events: none`, contained image sizing, and a custom bottom offset. In `WorkspaceApp`, load the asset after persistence readiness, keep the active URL in a ref/state pair, validate a candidate before calling `saveChatSkinAsset`, switch URLs only after save success, preserve old state on failures, and release URLs on replacement/removal/unmount. Reuse the existing composer measurement and keyboard/safe-area state to compute the reserved bottom offset. Render the layer as a direct child of `.chat-main` and leave share/export trees unchanged.
 
-- [ ] **Step 4: Add the visual CSS and reduced-transparency fallback.**
+- [x] **Step 4: Add the visual CSS and reduced-transparency fallback.**
 
 Use a single absolutely positioned layer with a lower content z-index, responsive max dimensions, `object-fit: contain`, approximately `opacity: .17`, bottom/edge mask gradient, and light image blur. Keep it out of layout flow, avoid `backdrop-filter`, and add `prefers-reduced-transparency: reduce` rules that remove blur and use a stable low-contrast treatment. Add mobile rules that shrink the layer and preserve the measured composer/safe-area gap.
 
-- [ ] **Step 5: Run the focused tests to verify GREEN.**
+- [x] **Step 5: Run the focused tests to verify GREEN.**
 
-Run: `npm test -- --runInBand chatSkin.test.ts ChatSkinLayer.test.tsx web-chat-ui.test.ts`
+Run: `npm test -- --runInBand chatSkin.test.ts ChatSkinLayer.test.tsx web-chat-ui.test.ts -t "keeps the local chat skin"`
 
-Expected: PASS with no URL lifecycle or source-contract failures.
+Expected: PASS with no URL lifecycle or skin source-contract failures. The full `web-chat-ui.test.ts` file currently retains an unrelated pre-existing Settings CSS contract failure.
 
 - [ ] **Step 6: Git checkpoint.**
 
