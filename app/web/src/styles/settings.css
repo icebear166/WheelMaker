@@ -2955,6 +2955,7 @@ textarea,
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   border: 1px solid var(--border-subtle);
   background: transparent;
   color: var(--text-secondary);
@@ -2967,38 +2968,31 @@ textarea,
     border-color var(--motion-fast) var(--ease-standard);
 }
 
+.chat-skin-settings-adjust .sl-icon {
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.chat-skin-settings-adjust[aria-expanded='true'] .sl-icon {
+  transform: rotate(180deg);
+}
+
 .chat-skin-settings-controls {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
   min-width: 0;
-  padding: 8px 12px 11px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
-  background: color-mix(in srgb, var(--surface-raised) 36%, transparent);
 }
 
-.chat-skin-settings-control {
-  display: grid;
-  gap: 4px;
-  color: var(--text-secondary);
-  font-size: 11px;
+.chat-skin-settings-controls .settings-range-control {
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 
-.chat-skin-settings-control > span {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.chat-skin-settings-controls .settings-range-control input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 80px;
+  max-width: 220px;
 }
 
-.chat-skin-settings-control output {
-  color: var(--text-primary);
-  font-family: var(--font-mono, 'JetBrains Mono', Consolas, monospace);
-}
-
-.chat-skin-settings-control input[type='range'] {
-  width: 100%;
-  accent-color: var(--accent-primary);
+.chat-skin-settings-controls .settings-range-value {
+  flex: 0 0 44px;
 }
 
 .chat-skin-settings-input {
@@ -3027,9 +3021,17 @@ textarea,
     display: none;
   }
 
-  .chat-skin-settings-controls {
-    grid-template-columns: 1fr;
-    gap: 7px;
+  .chat-skin-settings-btn-text {
+    display: none;
+  }
+
+  .chat-skin-settings-preview {
+    min-width: 64px;
+  }
+
+  .chat-skin-settings-remove,
+  .chat-skin-settings-adjust {
+    padding: 0 8px;
   }
 }
 

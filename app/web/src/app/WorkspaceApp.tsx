@@ -165,6 +165,7 @@ import {
   clampChatSkinOpacity,
   clampChatSkinScale,
   decodeChatSkinBlob,
+  prepareChatSkinImage,
   revokeChatSkinObjectUrl,
   resolveChatSkinAnchor,
   type ChatSkinAnchor,
@@ -2698,12 +2699,13 @@ export function App() {
     }
   }, []);
   const handleChatSkinSelect = useCallback(async (file: File): Promise<void> => {
-    const candidateObjectUrl = await decodeChatSkinBlob(file);
+    const prepared = await prepareChatSkinImage(file);
+    const candidateObjectUrl = await decodeChatSkinBlob(prepared);
     try {
       await workspaceStore.saveChatSkinAsset({
-        blob: file,
+        blob: prepared,
         name: file.name,
-        mimeType: file.type,
+        mimeType: prepared.type || file.type,
       });
     } catch (error) {
       revokeChatSkinObjectUrl(candidateObjectUrl);
@@ -2715,9 +2717,9 @@ export function App() {
     }
     commitChatSkinObjectUrl(candidateObjectUrl);
     setChatSkinAsset({
-      blob: file,
+      blob: prepared,
       name: file.name,
-      mimeType: file.type,
+      mimeType: prepared.type || file.type,
       updatedAt: Date.now(),
     });
   }, [commitChatSkinObjectUrl]);
@@ -6998,9 +7000,6 @@ export function App() {
       promptCompletionNotificationsEnabled,
       keyboardShortcutOverrides,
       selectedProjectId: projectId,
-      chatSkinScale,
-      chatSkinOpacity,
-      chatSkinOffset,
       floatingControlYRatio,
       floatingControlSide,
       desktopSidebarWidth,
@@ -7027,9 +7026,6 @@ export function App() {
     promptCompletionNotificationsEnabled,
     keyboardShortcutOverrides,
     projectId,
-    chatSkinScale,
-    chatSkinOpacity,
-    chatSkinOffset,
     floatingControlYRatio,
     floatingControlSide,
     desktopSidebarWidth,
@@ -7041,6 +7037,15 @@ export function App() {
     expandedHubIds,
     hubColors,
   ]);
+
+  // Skin sliders fire per drag tick; debounce so persistence only sees the
+  // settled values instead of a write per input event.
+  useEffect(() => {
+    const persistTimer = window.setTimeout(() => {
+      workspaceStore.rememberGlobalState({chatSkinScale, chatSkinOpacity, chatSkinOffset});
+    }, 250);
+    return () => window.clearTimeout(persistTimer);
+  }, [chatSkinScale, chatSkinOpacity, chatSkinOffset]);
 
   const currentProjectName = useMemo(
     () =>
@@ -16388,8 +16393,6 @@ export function App() {
         chatSkinScale={chatSkinScale}
         chatSkinOpacity={chatSkinOpacity}
         chatSkinOffset={chatSkinOffset}
-        chatSkinBusy={false}
-        chatSkinError=""
         onChatSkinSelect={handleChatSkinSelect}
         onChatSkinRemove={handleChatSkinRemove}
         onChatSkinScaleChange={value => setChatSkinScale(clampChatSkinScale(value))}

@@ -9,8 +9,6 @@ function renderSettings(overrides = {}) {
   const props = {
     previewUrl: '',
     fileName: '',
-    busy: false,
-    error: '',
     scale: 1,
     opacity: 0.17,
     offset: 24,
@@ -31,10 +29,14 @@ function renderSettings(overrides = {}) {
   return {tree, props, fileInputClick};
 }
 
+function findFileInput(tree) {
+  return tree.root.findAllByType('input').find(candidate => candidate.props.type === 'file');
+}
+
 describe('ChatSkinSettings', () => {
   test('offers a browser image picker when no skin is selected', () => {
     const {tree, fileInputClick} = renderSettings();
-    const input = tree.root.findAllByType('input').find(candidate => candidate.props.type === 'file');
+    const input = findFileInput(tree);
     const chooseButton = tree.root.findAllByType('button').find(button => button.children.includes('Choose image'));
 
     expect(input).toBeDefined();
@@ -76,8 +78,11 @@ describe('ChatSkinSettings', () => {
 
     expect(rangeInputs).toHaveLength(3);
     expect(rangeInputs[0].props.value).toBe(75);
+    expect(rangeInputs[0].props['aria-label']).toBe('Scale');
     expect(rangeInputs[1].props.value).toBe(0.42);
+    expect(rangeInputs[1].props['aria-label']).toBe('Opacity');
     expect(rangeInputs[2].props.value).toBe(24);
+    expect(rangeInputs[2].props['aria-label']).toBe('Horizontal shift');
 
     act(() => {
       rangeInputs[0].props.onChange({target: {value: '50'}});
@@ -90,19 +95,69 @@ describe('ChatSkinSettings', () => {
     expect(props.onOffsetChange).toHaveBeenCalledWith(-60);
   });
 
-  test('disables actions while busy and exposes an actionable error', () => {
-    const {tree} = renderSettings({previewUrl: 'blob:skin', fileName: 'skin.png', busy: true, error: 'Could not save image.'});
-    const buttons = tree.root.findAllByType('button');
+  test('expands the adjustment controls after the first image is selected', async () => {
+    const {tree, props} = renderSettings();
+    const input = findFileInput(tree);
+    if (!input) throw new Error('missing file input');
+    const file = new File(['skin'], 'new.webp', {type: 'image/webp'});
 
-    expect(buttons.every(button => button.props.disabled === true)).toBe(true);
+    await act(async () => {
+      input.props.onChange({target: {files: [file]}});
+    });
+    act(() => {
+      tree.update(<ChatSkinSettings {...props} previewUrl="blob:skin" fileName="new.webp" />);
+    });
+
+    expect(tree.root.findByProps({className: 'chat-skin-settings-adjust'}).props['aria-expanded']).toBe(true);
+    expect(tree.root.findAllByType('input').filter(candidate => candidate.props.type === 'range')).toHaveLength(3);
+  });
+
+  test('keeps the controls layout untouched when replacing an existing image', async () => {
+    const {tree} = renderSettings({previewUrl: 'blob:skin', fileName: 'skin.png'});
+    const input = findFileInput(tree);
+    if (!input) throw new Error('missing file input');
+    const file = new File(['skin'], 'new.webp', {type: 'image/webp'});
+
+    await act(async () => {
+      input.props.onChange({target: {files: [file]}});
+    });
+
+    expect(tree.root.findByProps({className: 'chat-skin-settings-adjust'}).props['aria-expanded']).toBe(false);
+    expect(tree.root.findAllByType('input').filter(candidate => candidate.props.type === 'range')).toHaveLength(0);
+  });
+
+  test('disables actions while an operation runs and exposes an actionable error', async () => {
+    let rejectSelect: (error: Error) => void = () => undefined;
+    const {tree} = renderSettings({
+      previewUrl: 'blob:skin',
+      fileName: 'skin.png',
+      onSelect: jest.fn(() => new Promise<void>((_resolve, reject) => {
+        rejectSelect = reject;
+      })),
+    });
+    const input = findFileInput(tree);
+    if (!input) throw new Error('missing file input');
+    const file = new File(['skin'], 'new.webp', {type: 'image/webp'});
+
+    await act(async () => {
+      input.props.onChange({target: {files: [file]}});
+    });
+    expect(tree.root.findAllByType('button').every(button => button.props.disabled === true)).toBe(true);
+
+    await act(async () => {
+      rejectSelect(new Error('Could not save image.'));
+    });
+
     expect(tree.root.findByProps({role: 'alert'}).children.join('')).toContain('Could not save image.');
+    expect(tree.root.findAllByType('button').every(button => button.props.disabled === true)).toBe(false);
   });
 
   test('passes the selected file to onSelect and removes the active skin', async () => {
     const {tree, props} = renderSettings({previewUrl: 'blob:skin', fileName: 'skin.png'});
     const file = new File(['skin'], 'new.webp', {type: 'image/webp'});
-    const input = tree.root.findAllByType('input').find(candidate => candidate.props.type === 'file');
-    const removeButton = tree.root.findAllByType('button').find(button => button.children.includes('Remove'));
+    const input = findFileInput(tree);
+    const removeButton = tree.root.findAllByType('button')
+      .find(button => button.props.className?.includes('chat-skin-settings-remove'));
 
     expect(input).toBeDefined();
     expect(removeButton).toBeDefined();

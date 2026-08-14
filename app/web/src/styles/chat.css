@@ -3537,9 +3537,6 @@ button.chat-hub-skill-name:disabled {
   display: block;
   pointer-events: none;
   opacity: var(--chat-skin-opacity, 0.17);
-  filter: blur(1.5px) saturate(0.82);
-  object-fit: contain;
-  object-position: right bottom;
 }
 
 .chat-main > .chat-block,
@@ -3548,16 +3545,9 @@ button.chat-hub-skill-name:disabled {
   z-index: 1;
 }
 
-@media (max-width: 900px) {
-.chat-skin-layer {
-    filter: blur(1px) saturate(0.82);
-  }
-}
-
 @media (prefers-reduced-transparency: reduce) {
 .chat-skin-layer {
     opacity: min(var(--chat-skin-opacity, 0.17), 0.12);
-    filter: none;
   }
 }
 

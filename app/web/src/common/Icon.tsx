@@ -149,6 +149,14 @@ const GLYPHS = {
   moveVertical: (<><path d="M12 2v20m-4-4l4 4l4-4M8 6l4-4l4 4" /></>),
   // lucide:indent-increase
   indentIncrease: (<><path d="M21 12H11m10 6H11M21 6H11M3 8l4 4l-4 4" /></>),
+  // lucide:image (verified via better-icons)
+  image: (<><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></>),
+  // lucide:scaling (verified via better-icons)
+  scaling: (<><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M14 15H9v-5" /><path d="M16 3h5v5" /><path d="M21 3 9 15" /></>),
+  // lucide:contrast (verified via better-icons)
+  contrast: (<><circle cx="12" cy="12" r="10" /><path d="M12 18a6 6 0 0 0 0-12z" /></>),
+  // lucide:move-horizontal (verified via better-icons)
+  moveHorizontal: (<><path d="m18 8 4 4-4 4" /><path d="M2 12h20" /><path d="m6 8-4 4 4 4" /></>),
   // lucide:filter
   filter: (<><path d="M22 3H2l8 9.46V19l4 2v-8.54z" /></>),
   // lucide:scroll-text

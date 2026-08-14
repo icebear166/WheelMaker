@@ -3,8 +3,10 @@ import {
   clampChatSkinOpacity,
   clampChatSkinScale,
   decodeChatSkinBlob,
-  revokeChatSkinObjectUrl,
+  prepareChatSkinImage,
   resolveChatSkinAnchor,
+  resolveChatSkinImageSize,
+  revokeChatSkinObjectUrl,
 } from './chatSkin';
 
 describe('chat skin image helpers', () => {
@@ -85,5 +87,18 @@ describe('chat skin image helpers', () => {
 
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:chat-skin');
+  });
+
+  test('keeps small skin images at native size and caps the longest edge', () => {
+    expect(resolveChatSkinImageSize(800, 600)).toEqual({width: 800, height: 600});
+    expect(resolveChatSkinImageSize(4000, 2000)).toEqual({width: 1280, height: 640});
+    expect(resolveChatSkinImageSize(900, 3000)).toEqual({width: 384, height: 1280});
+    expect(resolveChatSkinImageSize(0, 0)).toEqual({width: 0, height: 0});
+  });
+
+  test('returns the original blob when canvas preprocessing is unavailable', async () => {
+    const blob = new Blob(['skin'], {type: 'image/png'});
+
+    await expect(prepareChatSkinImage(blob)).resolves.toBe(blob);
   });
 });

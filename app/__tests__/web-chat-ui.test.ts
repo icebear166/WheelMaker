@@ -68,6 +68,7 @@ describe('web chat integration', () => {
     expect(settingsRootTsx).toContain('<ChatSkinSettings');
     expect(mainTsx).toContain('chatSkinPreviewUrl={chatSkinObjectUrl}');
     expect(settingsSkinTsx).toContain('type="range"');
+    expect(settingsSkinTsx).toContain('settings-range-row');
     expect(settingsSkinTsx).toContain('onScaleChange');
     expect(settingsSkinTsx).toContain('onOpacityChange');
     expect(settingsSkinTsx).toContain('onOffsetChange');
@@ -94,8 +95,8 @@ describe('web chat integration', () => {
     expect(skinLayerBlock).toContain('pointer-events: none;');
     expect(skinLayerBlock).toContain('opacity: var(--chat-skin-opacity, 0.17);');
     expect(skinLayerBlock).not.toContain('transform: scale(var(--chat-skin-scale, 1));');
-    expect(stylesCss).toContain('object-fit: contain;');
-    expect(stylesCss).toContain('object-position: right bottom;');
+    expect(skinLayerBlock).not.toContain('object-fit');
+    expect(skinLayerBlock).not.toContain('filter:');
     expect(stylesCss).toContain('@media (prefers-reduced-transparency: reduce)');
     expect(stylesCss).toContain('.chat-skin-settings-row');
     expect(stylesCss).toContain('.chat-skin-settings-preview');

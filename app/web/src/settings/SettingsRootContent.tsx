@@ -54,8 +54,6 @@ type SettingsRootContentProps = {
   chatSkinScale: number;
   chatSkinOpacity: number;
   chatSkinOffset: number;
-  chatSkinBusy: boolean;
-  chatSkinError: string;
   onChatSkinSelect: (file: File) => void | Promise<void>;
   onChatSkinRemove: () => void | Promise<void>;
   onChatSkinScaleChange: (value: number) => void;
@@ -163,8 +161,6 @@ export function SettingsRootContent({
   chatSkinScale,
   chatSkinOpacity,
   chatSkinOffset,
-  chatSkinBusy,
-  chatSkinError,
   onChatSkinSelect,
   onChatSkinRemove,
   onChatSkinScaleChange,
@@ -289,8 +285,6 @@ export function SettingsRootContent({
             scale={chatSkinScale}
             opacity={chatSkinOpacity}
             offset={chatSkinOffset}
-            busy={chatSkinBusy}
-            error={chatSkinError}
             onSelect={onChatSkinSelect}
             onRemove={onChatSkinRemove}
             onScaleChange={onChatSkinScaleChange}
