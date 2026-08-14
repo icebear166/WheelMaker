@@ -249,6 +249,7 @@ import {
 } from '../chat/turns/chatRealtimeFlush';
 import {
   buildSessionSearchFilter,
+  isSessionSearchPollingReady,
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
   resolveSessionSearchProjects,
@@ -3788,6 +3789,7 @@ export function App() {
   const [sessionSearchProjectScope, setSessionSearchProjectScope] = useState('');
   const sessionSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [activeSessionSearchId, setActiveSessionSearchId] = useState('');
+  const [sessionSearchStartReadyId, setSessionSearchStartReadyId] = useState('');
   const activeSessionSearchIdRef = useRef('');
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [sessionSearchProjectItems, setSessionSearchProjectItems] = useState<RegistryProject[]>([]);
@@ -6208,6 +6210,7 @@ export function App() {
     activeSessionSearchIdRef.current = '';
     activeSessionSearchProjectItemsRef.current = [];
     setActiveSessionSearchId('');
+    setSessionSearchStartReadyId('');
     setSessionSearchQuery('');
     setSessionSearchProjectItems([]);
     setSearchResultsByProjectId({});
@@ -6245,6 +6248,7 @@ export function App() {
     activeSessionSearchIdRef.current = searchId;
     activeSessionSearchProjectItemsRef.current = projectItems;
     setActiveSessionSearchId(searchId);
+    setSessionSearchStartReadyId('');
     setSessionSearchQuery(query);
     setSessionSearchProjectItems(projectItems);
     setSearchResultsByProjectId({});
@@ -6279,7 +6283,7 @@ export function App() {
       }),
     );
     if (activeSessionSearchIdRef.current === searchId) {
-      querySessionSearch(searchId).catch(() => undefined);
+      setSessionSearchStartReadyId(searchId);
     }
   }, [
     cancelSessionSearch,
@@ -6290,7 +6294,7 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (!activeSessionSearchId) {
+    if (!isSessionSearchPollingReady(activeSessionSearchId, sessionSearchStartReadyId)) {
       if (sessionSearchPollTimerRef.current !== null) {
         window.clearTimeout(sessionSearchPollTimerRef.current);
         sessionSearchPollTimerRef.current = null;
@@ -6330,7 +6334,7 @@ export function App() {
         sessionSearchPollTimerRef.current = null;
       }
     };
-  }, [activeSessionSearchId, querySessionSearch]);
+  }, [activeSessionSearchId, querySessionSearch, sessionSearchStartReadyId]);
   useEffect(() => {
     floatingDragStateRef.current = floatingDragState;
   }, [floatingDragState]);

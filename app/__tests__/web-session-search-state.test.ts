@@ -1,5 +1,6 @@
 import {
   buildSessionSearchFilter,
+  isSessionSearchPollingReady,
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
   resolveSessionSearchProjects,
@@ -22,6 +23,13 @@ const projects: RegistryProject[] = [
 ];
 
 describe('session search state helpers', () => {
+  test('does not poll until the active search start has completed', () => {
+    expect(isSessionSearchPollingReady('search-1', '')).toBe(false);
+    expect(isSessionSearchPollingReady('search-1', 'search-2')).toBe(false);
+    expect(isSessionSearchPollingReady('', 'search-1')).toBe(false);
+    expect(isSessionSearchPollingReady('search-1', 'search-1')).toBe(true);
+  });
+
   test('resolves all visible projects or one selected visible project', () => {
     expect(resolveSessionSearchProjects(projects, '')).toEqual(projects);
     expect(resolveSessionSearchProjects(projects, 'p2')).toEqual([projects[1]]);

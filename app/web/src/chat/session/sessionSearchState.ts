@@ -20,6 +20,12 @@ export type SessionSearchFilter = {
   sessionsByProjectId: Record<string, RegistryChatSession[]>;
 };
 
+export function isSessionSearchPollingReady(activeSearchId: string, startedSearchId: string): boolean {
+  const activeId = activeSearchId.trim();
+  const startedId = startedSearchId.trim();
+  return activeId !== '' && activeId === startedId;
+}
+
 export function resolveSessionSearchProjects(
   projects: RegistryProject[],
   selectedProjectId: string,
