@@ -44,6 +44,7 @@ describe('web chat integration', () => {
   test('keeps the local chat skin below chat content and out of share surfaces', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const persistenceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
     const settingsSkinTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'ChatSkinSettings.tsx'));
     const shareCaptureTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'share', 'ChatShareCaptureSurface.tsx'));
@@ -60,6 +61,9 @@ describe('web chat integration', () => {
     expect(settingsRootTsx).toContain("import {ChatSkinSettings} from './ChatSkinSettings';");
     expect(settingsRootTsx).toContain('<ChatSkinSettings');
     expect(mainTsx).toContain('chatSkinPreviewUrl={chatSkinObjectUrl}');
+    expect(mainTsx).toContain('wm_global_assets: dump.globalAssets');
+    expect(persistenceTs).toContain('globalAssets: Array<{k: string; name: string; mimeType: string; size: number; updatedAt: number}>;');
+    expect(persistenceTs).toContain('function globalAssetMetadata');
     expect(mainTsx).toContain('onChatSkinSelect={handleChatSkinSelect}');
     expect(settingsSkinTsx).toContain('accept="image/*"');
     expect(settingsSkinTsx).toContain('onRemove');

@@ -10,6 +10,9 @@ export type ChatSkinSettingsProps = {
 };
 
 function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'name' in error && error.name === 'QuotaExceededError') {
+    return 'Local storage is full. The current skin was kept; remove it or free browser storage, then try again.';
+  }
   if (error instanceof Error && error.message) return error.message;
   return 'Could not update the chat skin. Try another image or try again.';
 }
@@ -25,7 +28,8 @@ export function ChatSkinSettings({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
   const [operationError, setOperationError] = useState('');
-  const hasSkin = Boolean(previewUrl && fileName);
+  const hasSkin = Boolean(previewUrl);
+  const displayFileName = fileName || 'Selected image';
   const isBusy = busy || operationBusy;
   const visibleError = operationError || error;
 
@@ -58,8 +62,8 @@ export function ChatSkinSettings({
       </div>
       {hasSkin ? (
         <div className="chat-skin-settings-preview">
-          <img src={previewUrl} alt={`${fileName} preview`} />
-          <span className="chat-skin-settings-name">{fileName}</span>
+          <img src={previewUrl} alt={`${displayFileName} preview`} />
+          <span className="chat-skin-settings-name">{displayFileName}</span>
         </div>
       ) : (
         <div className="chat-skin-settings-empty">No image selected</div>

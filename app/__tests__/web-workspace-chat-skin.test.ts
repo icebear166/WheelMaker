@@ -173,4 +173,27 @@ describe('workspace chat skin persistence', () => {
     await expect(repository.getChatSkinAsset()).resolves.toMatchObject({name: 'old.png'});
     expect(db.clearedStores()).not.toContain('wm_chat_session_content');
   });
+
+  test('exposes asset metadata without serializing the Blob and removes it on reset', async () => {
+    const db = dbWithTheme();
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    await repository.saveChatSkinAsset({
+      blob: new Blob(['skin'], {type: 'image/png'}),
+      name: 'skin.png',
+      mimeType: 'image/png',
+    });
+
+    const dump = await repository.dumpDatabase();
+    expect(dump.globalAssets).toEqual([
+      expect.objectContaining({k: 'chatSkin', name: 'skin.png', mimeType: 'image/png', size: 4}),
+    ]);
+    expect(dump.globalAssets[0]).not.toHaveProperty('blob');
+    expect(JSON.stringify(dump.globalAssets)).not.toContain('"blob"');
+
+    await repository.resetDatabase();
+
+    await expect(repository.getChatSkinAsset()).resolves.toBeNull();
+    expect(db.rows('wm_global_assets')).toHaveLength(0);
+  });
 });

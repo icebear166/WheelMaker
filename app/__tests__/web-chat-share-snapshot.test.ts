@@ -277,5 +277,7 @@ describe('chat share snapshot projector', () => {
       endTurnIndex: 3,
     });
     expect(JSON.stringify(snapshot)).not.toMatch(/private-base64|file:\/\/\/secret|changed\.pdf|Changed prompt|\bdata\b|\buri\b/);
+    expect(JSON.stringify(snapshot)).not.toContain('chatSkin');
+    expect(JSON.stringify(snapshot)).not.toContain('blob:');
   });
 });

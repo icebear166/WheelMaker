@@ -2667,6 +2667,7 @@ export function App() {
   const [chatSkinAsset, setChatSkinAsset] = useState<PersistedChatSkinAsset | null>(null);
   const [chatSkinObjectUrl, setChatSkinObjectUrl] = useState('');
   const chatSkinObjectUrlRef = useRef('');
+  const chatSkinMountedRef = useRef(true);
   const commitChatSkinObjectUrl = useCallback((nextObjectUrl: string) => {
     const previousObjectUrl = chatSkinObjectUrlRef.current;
     chatSkinObjectUrlRef.current = nextObjectUrl;
@@ -2687,6 +2688,10 @@ export function App() {
       revokeChatSkinObjectUrl(candidateObjectUrl);
       throw error;
     }
+    if (!chatSkinMountedRef.current) {
+      revokeChatSkinObjectUrl(candidateObjectUrl);
+      return;
+    }
     commitChatSkinObjectUrl(candidateObjectUrl);
     setChatSkinAsset({
       blob: file,
@@ -2697,6 +2702,7 @@ export function App() {
   }, [commitChatSkinObjectUrl]);
   const handleChatSkinRemove = useCallback(async (): Promise<void> => {
     await workspaceStore.deleteChatSkinAsset();
+    if (!chatSkinMountedRef.current) return;
     const previousObjectUrl = chatSkinObjectUrlRef.current;
     chatSkinObjectUrlRef.current = '';
     setChatSkinObjectUrl('');
@@ -2720,9 +2726,13 @@ export function App() {
       cancelled = true;
     };
   }, [commitChatSkinObjectUrl]);
-  useEffect(() => () => {
-    revokeChatSkinObjectUrl(chatSkinObjectUrlRef.current);
-    chatSkinObjectUrlRef.current = '';
+  useEffect(() => {
+    chatSkinMountedRef.current = true;
+    return () => {
+      chatSkinMountedRef.current = false;
+      revokeChatSkinObjectUrl(chatSkinObjectUrlRef.current);
+      chatSkinObjectUrlRef.current = '';
+    };
   }, []);
   const registryEndpoints = useMemo(() => deriveRegistryEndpoints(document.baseURI, {
     allowInsecureLoopback: window.location.protocol === 'http:',
@@ -4880,9 +4890,14 @@ export function App() {
   }, [toastMessage]);
 
   useEffect(() => workspaceStore.subscribeStorageErrors(storageError => {
+    const isChatSkinOperation = storageError.operation.includes('chat skin');
     setToastMessage(storageError.quotaExceeded
-      ? 'Local storage is full. Cache was cleared, but settings could not be saved.'
-      : 'Local settings could not be saved. Export the database from Settings for diagnostics.');
+      ? isChatSkinOperation
+        ? 'Local storage is full. The current chat skin was kept; free browser storage and try again.'
+        : 'Local storage is full. Cache was cleared, but settings could not be saved.'
+      : isChatSkinOperation
+        ? 'The chat skin could not be saved. The current skin was kept; try again.'
+        : 'Local settings could not be saved. Export the database from Settings for diagnostics.');
   }), []);
 
   useEffect(() => {

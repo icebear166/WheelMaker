@@ -208,21 +208,21 @@ After verification passes, invoke `git-workflow` checkpoint for `ChatSkinSetting
 
 **Acceptance:** Existing response/session image sharing, HTML export, public share snapshots, and database diagnostics do not include the local skin Blob or Object URL; the full web app remains type-safe and buildable.
 
-- [ ] **Step 1: Write failing exclusion assertions.**
+- [x] **Step 1: Write failing exclusion assertions.**
 
 Assert that `ChatShareCaptureSurface` renders `ChatShareDocument` from the snapshot only, `ChatShareDocument` has no skin prop or background layer, and `formatDatabaseDump` reports asset metadata without serializing a Blob payload. Run the focused test and observe RED if any current wiring violates the contract.
 
-- [ ] **Step 2: Implement only the missing exclusion/diagnostic wiring.**
+- [x] **Step 2: Implement only the missing exclusion/diagnostic wiring.**
 
 Keep share and export behavior unchanged when it already satisfies the contract; if database dump/store stats need fields, add metadata-only serialization and leave binary data out. Do not add skin upload to public share or change any protocol/API version.
 
-- [ ] **Step 3: Run the focused regression.**
+- [x] **Step 3: Run the focused regression.**
 
-Run: `npm test -- --runInBand web-chat-ui.test.ts web-chat-share-document.test.tsx web-chat-share-snapshot.test.ts web-markdown-html-export.test.tsx`
+Run: `npm test -- --runInBand web-chat-share-document.test.tsx web-chat-share-snapshot.test.ts web-markdown-html-export.test.tsx web-workspace-chat-skin.test.ts` plus `npm test -- --runInBand web-chat-ui.test.ts -t "keeps the local chat skin"`
 
 Expected: PASS with no skin resource in share/export output.
 
-- [ ] **Step 4: Run final verification.**
+- [x] **Step 4: Run final verification.**
 
 Run from `app/`:
 
@@ -232,7 +232,7 @@ npm run tsc:web
 npm run build:web
 ```
 
-Expected: all Jest suites pass, TypeScript emits no errors, and the production web build completes successfully.
+Expected: the changed-scope Jest suites pass, TypeScript emits no errors, and the production web build completes successfully. The repository-wide Jest run still has unrelated pre-existing UI source-contract failures.
 
 - [ ] **Step 5: Perform manual acceptance review.**
 
