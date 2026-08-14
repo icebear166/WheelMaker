@@ -156,6 +156,8 @@ import {
 } from '../chat/mobileChatQuickSwitch';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
+import {ChatSkinLayer} from '../chat/ChatSkinLayer';
+import {decodeChatSkinBlob, revokeChatSkinObjectUrl} from '../chat/chatSkin';
 import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';
 import type {ChatShareAction} from '../chat/share/ChatShareMenu';
 import {ChatPermissionDialog} from '../chat/permission/ChatPermissionDialog';
@@ -707,6 +709,7 @@ import {
   type WorkspaceUiStateValue,
 } from '../shell/state/workspaceUiState';
 import type {
+  PersistedChatSkinAsset,
   PersistedFloatingControlSide,
   WorkspaceDatabaseStorageStats,
 } from '../workspace/WorkspacePersistence';
@@ -2671,6 +2674,76 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
 
 export function App() {
   const persistedGlobal = useMemo(() => workspaceStore.getGlobalState(), []);
+  const [chatSkinAsset, setChatSkinAsset] = useState<PersistedChatSkinAsset | null>(null);
+  const [chatSkinObjectUrl, setChatSkinObjectUrl] = useState('');
+  const chatSkinObjectUrlRef = useRef('');
+  const chatSkinMountedRef = useRef(true);
+  const commitChatSkinObjectUrl = useCallback((nextObjectUrl: string) => {
+    const previousObjectUrl = chatSkinObjectUrlRef.current;
+    chatSkinObjectUrlRef.current = nextObjectUrl;
+    setChatSkinObjectUrl(nextObjectUrl);
+    if (previousObjectUrl && previousObjectUrl !== nextObjectUrl) {
+      revokeChatSkinObjectUrl(previousObjectUrl);
+    }
+  }, []);
+  const handleChatSkinSelect = useCallback(async (file: File): Promise<void> => {
+    const candidateObjectUrl = await decodeChatSkinBlob(file);
+    try {
+      await workspaceStore.saveChatSkinAsset({
+        blob: file,
+        name: file.name,
+        mimeType: file.type,
+      });
+    } catch (error) {
+      revokeChatSkinObjectUrl(candidateObjectUrl);
+      throw error;
+    }
+    if (!chatSkinMountedRef.current) {
+      revokeChatSkinObjectUrl(candidateObjectUrl);
+      return;
+    }
+    commitChatSkinObjectUrl(candidateObjectUrl);
+    setChatSkinAsset({
+      blob: file,
+      name: file.name,
+      mimeType: file.type,
+      updatedAt: Date.now(),
+    });
+  }, [commitChatSkinObjectUrl]);
+  const handleChatSkinRemove = useCallback(async (): Promise<void> => {
+    await workspaceStore.deleteChatSkinAsset();
+    if (!chatSkinMountedRef.current) return;
+    const previousObjectUrl = chatSkinObjectUrlRef.current;
+    chatSkinObjectUrlRef.current = '';
+    setChatSkinObjectUrl('');
+    setChatSkinAsset(null);
+    revokeChatSkinObjectUrl(previousObjectUrl);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    workspaceStore.getChatSkinAsset().then(asset => {
+      if (!asset || cancelled) return;
+      return decodeChatSkinBlob(asset.blob).then(objectUrl => {
+        if (cancelled) {
+          revokeChatSkinObjectUrl(objectUrl);
+          return;
+        }
+        setChatSkinAsset(asset);
+        commitChatSkinObjectUrl(objectUrl);
+      });
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [commitChatSkinObjectUrl]);
+  useEffect(() => {
+    chatSkinMountedRef.current = true;
+    return () => {
+      chatSkinMountedRef.current = false;
+      revokeChatSkinObjectUrl(chatSkinObjectUrlRef.current);
+      chatSkinObjectUrlRef.current = '';
+    };
+  }, []);
   const registryEndpoints = useMemo(() => deriveRegistryEndpoints(document.baseURI, {
     allowInsecureLoopback: window.location.protocol === 'http:',
   }), []);
@@ -4846,6 +4919,15 @@ export function App() {
     }) as React.CSSProperties,
     [chatKeyboardInset, chatColumnWidth],
   );
+  const chatSkinBottomOffset = useMemo(
+    () => Math.max(
+      18,
+      chatKeyboardInset +
+        safeAreaBottomInset +
+        (chatComposerTop === null ? 0 : 8),
+    ),
+    [chatComposerTop, chatKeyboardInset, safeAreaBottomInset],
+  );
   useEffect(() => {
     if (!toastMessage) return undefined;
     const timer = window.setTimeout(() => setToastMessage(''), 2200);
@@ -4853,9 +4935,14 @@ export function App() {
   }, [toastMessage]);
 
   useEffect(() => workspaceStore.subscribeStorageErrors(storageError => {
+    const isChatSkinOperation = storageError.operation.includes('chat skin');
     setToastMessage(storageError.quotaExceeded
-      ? 'Local storage is full. Cache was cleared, but settings could not be saved.'
-      : 'Local settings could not be saved. Export the database from Settings for diagnostics.');
+      ? isChatSkinOperation
+        ? 'Local storage is full. The current chat skin was kept; free browser storage and try again.'
+        : 'Local storage is full. Cache was cleared, but settings could not be saved.'
+      : isChatSkinOperation
+        ? 'The chat skin could not be saved. The current skin was kept; try again.'
+        : 'Local settings could not be saved. Export the database from Settings for diagnostics.');
   }), []);
 
   useEffect(() => {
@@ -14418,6 +14505,7 @@ export function App() {
     return JSON.stringify(
       {
         wm_global_kv: dump.global,
+        wm_global_assets: dump.globalAssets,
         wm_project_state: dump.projects,
         wm_chat_session_index: dump.chatSessionIndex,
         wm_chat_session_content: dump.chatSessionContent,
@@ -16237,6 +16325,12 @@ export function App() {
         setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
         handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
         notificationPermissionState={notificationPermissionState}
+        chatSkinPreviewUrl={chatSkinObjectUrl}
+        chatSkinFileName={chatSkinAsset?.name ?? ''}
+        chatSkinBusy={false}
+        chatSkinError=""
+        onChatSkinSelect={handleChatSkinSelect}
+        onChatSkinRemove={handleChatSkinRemove}
         serverSettings={serverSettings}
         serverSettingsBusy={serverSettingsBusy}
         serverSettingsError={serverSettingsError}
@@ -19200,6 +19294,12 @@ export function App() {
             style={chatMainStyle}
           >
             {chatSearchBar}
+            {chatSkinObjectUrl ? (
+              <ChatSkinLayer
+                src={chatSkinObjectUrl}
+                bottomOffset={chatSkinBottomOffset}
+              />
+            ) : null}
             <div
               ref={chatScrollRef}
               className="scroll-panel chat-block"

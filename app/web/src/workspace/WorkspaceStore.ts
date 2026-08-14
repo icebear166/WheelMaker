@@ -13,8 +13,10 @@ import {
 import { sanitizeCachedSessionMessages } from '../chat/turns/chatSync';
 import {
   WorkspacePersistenceRepository,
+  type PersistedChatSkinAsset,
   type PersistedChatCursor,
   type PersistedGlobalState,
+  type WorkspaceChatSkinAssetInput,
   type WorkspaceDatabaseDump,
   type WorkspaceStorageError,
 } from './WorkspacePersistence';
@@ -94,6 +96,18 @@ export class WorkspaceStore {
 
   getGlobalState(): PersistedGlobalState {
     return this.persistence.getGlobalState();
+  }
+
+  getChatSkinAsset(): Promise<PersistedChatSkinAsset | null> {
+    return this.persistence.getChatSkinAsset();
+  }
+
+  saveChatSkinAsset(input: WorkspaceChatSkinAssetInput): Promise<void> {
+    return this.persistence.saveChatSkinAsset(input);
+  }
+
+  deleteChatSkinAsset(): Promise<void> {
+    return this.persistence.deleteChatSkinAsset();
   }
 
   rememberGlobalState(patch: Partial<PersistedGlobalState>): void {

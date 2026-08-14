@@ -96,6 +96,7 @@ describe('chat share document', () => {
     expect(root).toBeTruthy();
     expect(tree.root.findByType('strong').children).toEqual(['Current answer']);
     expect(tree.root.findAllByProps({className: 'chat-share-header'})).toHaveLength(0);
+    expect(tree.root.findAllByProps({className: 'chat-skin-layer'})).toHaveLength(0);
   });
 
   test('renders prompts as chat-like bubbles and assistant answers without role headings', async () => {
@@ -116,6 +117,7 @@ describe('chat share document', () => {
       'report.pdf',
       'Image attachment',
     ]);
+    expect(tree.root.findAllByProps({className: 'chat-skin-layer'})).toHaveLength(0);
   });
 
   test('serializes the same semantic document with conversation styles and no pending markers', () => {
@@ -143,5 +145,6 @@ describe('chat share document', () => {
     expect(html).not.toContain('data-markdown-export-pending');
     expect(html).not.toContain('private-base64');
     expect(html).not.toContain('workspace');
+    expect(html).not.toContain('chat-skin-layer');
   });
 });

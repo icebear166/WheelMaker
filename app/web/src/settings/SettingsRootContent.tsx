@@ -31,6 +31,7 @@ import {
   CHAT_COLUMN_WIDTH_WIDE,
 } from '../shell/state/workspaceUiState';
 import type {SettingsDetail} from './settingsNavigation';
+import {ChatSkinSettings} from './ChatSkinSettings';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
 const CODE_LINE_HEIGHT_OPTIONS = [1.35, 1.45, 1.5, 1.6, 1.7] as const;
@@ -48,6 +49,12 @@ type SettingsRootContentProps = {
   setPromptCompletionNotificationsEnabled: (value: boolean) => void;
   handlePromptCompletionNotificationsChange: (enabled: boolean) => void;
   notificationPermissionState: string;
+  chatSkinPreviewUrl: string;
+  chatSkinFileName: string;
+  chatSkinBusy: boolean;
+  chatSkinError: string;
+  onChatSkinSelect: (file: File) => void | Promise<void>;
+  onChatSkinRemove: () => void | Promise<void>;
   serverSettings: ServerSettings;
   serverSettingsBusy: boolean;
   serverSettingsError: string;
@@ -145,6 +152,12 @@ export function SettingsRootContent({
   setPromptCompletionNotificationsEnabled,
   handlePromptCompletionNotificationsChange,
   notificationPermissionState,
+  chatSkinPreviewUrl,
+  chatSkinFileName,
+  chatSkinBusy,
+  chatSkinError,
+  onChatSkinSelect,
+  onChatSkinRemove,
   serverSettings,
   serverSettingsBusy,
   serverSettingsError,
@@ -258,6 +271,14 @@ export function SettingsRootContent({
           {notificationPermissionState === 'denied' ? (
             <div className="settings-row-note">Blocked by system permission</div>
           ) : null}
+          <ChatSkinSettings
+            previewUrl={chatSkinPreviewUrl}
+            fileName={chatSkinFileName}
+            busy={chatSkinBusy}
+            error={chatSkinError}
+            onSelect={onChatSkinSelect}
+            onRemove={onChatSkinRemove}
+          />
           <div className="settings-subsection">
             <div className="settings-subsection-title">Voice Input</div>
             <div className="settings-subsection-rows">
