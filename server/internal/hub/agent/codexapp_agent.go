@@ -280,15 +280,16 @@ func newCodexappRuntime(provider *codexAppProvider, cwd string, projectName stri
 type codexappRuntime struct {
 	transport codexappTransport
 
-	mu       sync.Mutex
-	nextID   int64
-	pending  map[string]chan codexappRPCResponse
-	conns    map[string]*codexappConn
-	queues   map[string]*codexappThreadQueue
-	closed   bool
-	closeErr error
-	done     chan struct{}
-	onStop   func(*codexappRuntime)
+	mu                   sync.Mutex
+	nextID               int64
+	pending              map[string]chan codexappRPCResponse
+	conns                map[string]*codexappConn
+	queues               map[string]*codexappThreadQueue
+	notificationHandlers map[string]func(string, json.RawMessage)
+	closed               bool
+	closeErr             error
+	done                 chan struct{}
+	onStop               func(*codexappRuntime)
 
 	initializeMu      sync.Mutex
 	initialized       bool
@@ -302,11 +303,12 @@ type codexappInitializeAttempt struct {
 
 func newCodexappRuntimeWithTransport(transport codexappTransport) *codexappRuntime {
 	rt := &codexappRuntime{
-		transport: transport,
-		pending:   map[string]chan codexappRPCResponse{},
-		conns:     map[string]*codexappConn{},
-		queues:    map[string]*codexappThreadQueue{},
-		done:      make(chan struct{}),
+		transport:            transport,
+		pending:              map[string]chan codexappRPCResponse{},
+		conns:                map[string]*codexappConn{},
+		queues:               map[string]*codexappThreadQueue{},
+		notificationHandlers: map[string]func(string, json.RawMessage){},
+		done:                 make(chan struct{}),
 	}
 	if transport != nil {
 		transport.OnMessage(rt.handleMessage)
@@ -316,7 +318,8 @@ func newCodexappRuntimeWithTransport(transport codexappTransport) *codexappRunti
 }
 
 type codexappThreadQueue struct {
-	ch chan codexappRuntimeEvent
+	threadID string
+	ch       chan codexappRuntimeEvent
 }
 
 type codexappRuntimeEvent struct {
@@ -545,6 +548,7 @@ func (r *codexappRuntime) threadQueue(threadID string) *codexappThreadQueue {
 		return queue
 	}
 	queue := &codexappThreadQueue{ch: make(chan codexappRuntimeEvent, 64)}
+	queue.threadID = threadID
 	r.queues[threadID] = queue
 	go r.runThreadQueue(queue)
 	return queue
@@ -556,6 +560,8 @@ func (r *codexappRuntime) runThreadQueue(queue *codexappThreadQueue) {
 		case event := <-queue.ch:
 			if event.request {
 				r.handleServerRequest(event.msg)
+			} else if handler := r.notificationHandlerForThread(queue.threadID); handler != nil {
+				handler(event.msg.Method, event.msg.Params)
 			} else {
 				r.handleNotification(event.msg)
 			}
@@ -563,6 +569,35 @@ func (r *codexappRuntime) runThreadQueue(queue *codexappThreadQueue) {
 			return
 		}
 	}
+}
+
+func (r *codexappRuntime) registerThreadNotificationHandler(threadID string, handler func(string, json.RawMessage)) func() {
+	threadID = strings.TrimSpace(threadID)
+	if r == nil || threadID == "" || handler == nil {
+		return func() {}
+	}
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return func() {}
+	}
+	r.notificationHandlers[threadID] = handler
+	r.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			r.mu.Lock()
+			delete(r.notificationHandlers, threadID)
+			r.mu.Unlock()
+		})
+	}
+}
+
+func (r *codexappRuntime) notificationHandlerForThread(threadID string) func(string, json.RawMessage) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.notificationHandlers[threadID]
 }
 
 func (r *codexappRuntime) resolveResponse(msg codexappRPCEnvelope) {
@@ -639,6 +674,10 @@ type codexappConn struct {
 	activeTurnID      string
 	lastTurnID        string
 	promptDone        chan codexappPromptResult
+	autoTitleEligible bool
+	autoTitleStarted  bool
+	autoTitleCancel   context.CancelFunc
+	autoTitleRun      uint64
 	compactDone       chan SessionCompactResult
 	compactTurnID     string
 	compactItemID     string
@@ -990,6 +1029,7 @@ func (c *codexappConn) Close() error {
 		return nil
 	}
 	c.closeOnce.Do(func() {
+		c.cancelAutoTitleGeneration()
 		c.mu.Lock()
 		threadID := c.threadID
 		c.mu.Unlock()
@@ -1128,6 +1168,7 @@ func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNew
 		return errors.New("codexapp thread/start returned empty thread id")
 	}
 	c.bindSessionIDs(threadID, threadID)
+	c.setAutoTitleEligibility(strings.TrimSpace(resp.Thread.displayTitle()) == "")
 	threadTitle := strings.TrimSpace(resp.Thread.displayTitle())
 	if threadTitle != "" {
 		c.emitSessionUpdate(protocol.SessionUpdateParams{
@@ -1152,6 +1193,7 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 	if acpSessionID == "" {
 		return errors.New("codexapp session/load requires sessionId")
 	}
+	c.setAutoTitleEligibility(false)
 	if err := c.refreshModels(ctx); err != nil {
 		return err
 	}
@@ -1624,6 +1666,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 	if resp.Turn.ID != "" {
 		c.setActiveTurnID(resp.Turn.ID)
 	}
+	c.startAutoTitleGeneration(threadID, input)
 
 	select {
 	case promptResult := <-done:

@@ -4228,6 +4228,338 @@ func TestCodexAppFastModeRemainsOnWhenCurrentModelHasNoFastTier(t *testing.T) {
 	}
 }
 
+func TestCodexAppGenerateAndSetTitleUsesEphemeralStructuredThread(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-1", "formal-thread")
+	updates := make(chan protocol.SessionUpdateParams, 1)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/start":
+			params := msg["params"].(map[string]any)
+			if params["ephemeral"] != true {
+				t.Errorf("title thread ephemeral=%#v, want true", params["ephemeral"])
+			}
+			if params["permissions"] != ":read-only" {
+				t.Errorf("title thread permissions=%#v, want :read-only", params["permissions"])
+			}
+			if params["approvalPolicy"] != "never" {
+				t.Errorf("title thread approvalPolicy=%#v, want never", params["approvalPolicy"])
+			}
+			if params["threadSource"] != "system" {
+				t.Errorf("title thread source=%#v, want system", params["threadSource"])
+			}
+			config := params["config"].(map[string]any)
+			if config["model_reasoning_effort"] != "low" {
+				t.Errorf("title thread config model_reasoning_effort=%#v, want low", config["model_reasoning_effort"])
+			}
+			roots, ok := params["runtimeWorkspaceRoots"].([]any)
+			if !ok || len(roots) != 0 {
+				t.Errorf("title thread runtimeWorkspaceRoots=%#v, want empty array", params["runtimeWorkspaceRoots"])
+			}
+			if err := tr.emit(map[string]any{
+				"id":     id,
+				"result": map[string]any{"thread": map[string]any{"id": "title-thread"}},
+			}); err != nil {
+				t.Errorf("emit title thread response: %v", err)
+			}
+		case "turn/start":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "title-thread" {
+				t.Errorf("title turn threadId=%#v, want title-thread", params["threadId"])
+			}
+			if params["permissions"] != ":read-only" {
+				t.Errorf("title turn permissions=%#v, want :read-only", params["permissions"])
+			}
+			if params["effort"] != nil {
+				t.Errorf("title turn effort=%#v, want null", params["effort"])
+			}
+			input := params["input"].([]any)
+			textInput := input[0].(map[string]any)
+			if !strings.Contains(textInput["text"].(string), "Please fix the title sync") {
+				t.Errorf("title prompt=%q, want original prompt", textInput["text"])
+			}
+			schema := params["outputSchema"].(map[string]any)
+			properties := schema["properties"].(map[string]any)
+			titleSchema := properties["title"].(map[string]any)
+			if titleSchema["maxLength"] != float64(36) {
+				t.Errorf("title schema maxLength=%#v, want 36", titleSchema["maxLength"])
+			}
+			if err := tr.emit(map[string]any{
+				"id":     id,
+				"result": map[string]any{"turn": map[string]any{"id": "title-turn"}},
+			}); err != nil {
+				t.Errorf("emit title turn response: %v", err)
+			}
+			_ = tr.emit(map[string]any{
+				"method": "item/agentMessage/delta",
+				"params": map[string]any{
+					"threadId": "title-thread",
+					"turnId":   "title-turn",
+					"delta":    `{"title":"Fix title sync","description":"Synchronize generated thread names"}`,
+				},
+			})
+			_ = tr.emit(map[string]any{
+				"method": "turn/completed",
+				"params": map[string]any{
+					"threadId": "title-thread",
+					"turn":     map[string]any{"id": "title-turn", "status": "completed"},
+				},
+			})
+		case "thread/unsubscribe":
+			if params := msg["params"].(map[string]any); params["threadId"] != "title-thread" {
+				t.Errorf("unsubscribe threadId=%#v, want title-thread", params["threadId"])
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"status": "unsubscribed"}}); err != nil {
+				t.Errorf("emit unsubscribe response: %v", err)
+			}
+		case "thread/name/set":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "formal-thread" || params["name"] != "Fix title sync" {
+				t.Errorf("thread/name/set params=%#v", params)
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{}}); err != nil {
+				t.Errorf("emit name response: %v", err)
+			}
+			if err := tr.emit(map[string]any{
+				"method": "thread/name/updated",
+				"params": map[string]any{"threadId": "formal-thread", "threadName": "Fix title sync"},
+			}); err != nil {
+				t.Errorf("emit name update: %v", err)
+			}
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	if err := conn.generateAndSetTitle(context.Background(), "formal-thread", "Please fix the title sync"); err != nil {
+		t.Fatalf("generateAndSetTitle: %v", err)
+	}
+
+	select {
+	case update := <-updates:
+		if update.SessionID != "session-1" || update.Update.Title != "Fix title sync" {
+			t.Fatalf("title update=%#v", update)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for standard title update")
+	}
+}
+
+func TestCodexAppAutoTitleRunsOnlyOnceForEligibleSession(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-1", "formal-thread")
+	conn.autoTitleEligible = true
+	updates := make(chan protocol.SessionUpdateParams, 2)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+	titleStarts := make(chan struct{}, 2)
+
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "turn/start":
+			params := msg["params"].(map[string]any)
+			threadID := params["threadId"].(string)
+			turnID := "formal-turn"
+			if threadID == "title-thread" {
+				turnID = "title-turn"
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"turn": map[string]any{"id": turnID}}}); err != nil {
+				t.Errorf("emit turn response: %v", err)
+			}
+			if threadID == "title-thread" {
+				_ = tr.emit(map[string]any{
+					"method": "item/agentMessage/delta",
+					"params": map[string]any{"threadId": threadID, "turnId": turnID, "delta": `{"title":"Name first request","description":"Name the first request"}`},
+				})
+			}
+			if err := tr.emit(map[string]any{
+				"method": "turn/completed",
+				"params": map[string]any{"threadId": threadID, "turn": map[string]any{"id": turnID, "status": "completed"}},
+			}); err != nil {
+				t.Errorf("emit turn completion: %v", err)
+			}
+		case "thread/start":
+			select {
+			case titleStarts <- struct{}{}:
+			default:
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "title-thread"}}}); err != nil {
+				t.Errorf("emit title thread response: %v", err)
+			}
+		case "thread/name/set":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "formal-thread" || params["name"] != "Name first request" {
+				t.Errorf("thread/name/set params=%#v", params)
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{}}); err != nil {
+				t.Errorf("emit name response: %v", err)
+			}
+			_ = tr.emit(map[string]any{"method": "thread/name/updated", "params": map[string]any{"threadId": "formal-thread", "threadName": "Name first request"}})
+		case "thread/unsubscribe":
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"status": "unsubscribed"}}); err != nil {
+				t.Errorf("emit unsubscribe response: %v", err)
+			}
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	runPrompt := func(text string) {
+		t.Helper()
+		var result protocol.PromptOutcome
+		if err := conn.sendSessionPrompt(context.Background(), protocol.SessionPromptParams{
+			SessionID: "session-1",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: text}},
+		}, &result); err != nil {
+			t.Fatalf("sendSessionPrompt(%q): %v", text, err)
+		}
+	}
+
+	runPrompt("Name the first request")
+	select {
+	case update := <-updates:
+		if update.Update.Title != "Name first request" {
+			t.Fatalf("first title update=%#v", update)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for first title update")
+	}
+	select {
+	case <-titleStarts:
+	case <-time.After(time.Second):
+		t.Fatal("title generation start was not observed")
+	}
+	runPrompt("This second request must not rename the session")
+	select {
+	case <-titleStarts:
+		t.Fatal("second prompt started another title generation")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestCodexAppAutoTitleFailureDoesNotFailPrompt(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-1", "formal-thread")
+	conn.autoTitleEligible = true
+	titleStarted := make(chan struct{}, 1)
+	nameSet := make(chan struct{}, 1)
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "turn/start":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "formal-thread" {
+				t.Errorf("unexpected title turn after failed thread/start: %#v", params)
+				return
+			}
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{"turn": map[string]any{"id": "formal-turn"}}})
+			_ = tr.emit(map[string]any{"method": "turn/completed", "params": map[string]any{
+				"threadId": "formal-thread",
+				"turn":     map[string]any{"id": "formal-turn", "status": "completed"},
+			}})
+		case "thread/start":
+			select {
+			case titleStarted <- struct{}{}:
+			default:
+			}
+			_ = tr.emit(map[string]any{"id": id, "error": map[string]any{"code": -32000, "message": "title service unavailable"}})
+		case "thread/name/set":
+			select {
+			case nameSet <- struct{}{}:
+			default:
+			}
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	var result protocol.PromptOutcome
+	if err := conn.sendSessionPrompt(context.Background(), protocol.SessionPromptParams{
+		SessionID: "session-1",
+		Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "A prompt whose title may fail"}},
+	}, &result); err != nil {
+		t.Fatalf("sendSessionPrompt: %v", err)
+	}
+	if result.StopReason != protocol.StopReasonEndTurn {
+		t.Fatalf("prompt stopReason=%q, want end_turn", result.StopReason)
+	}
+	select {
+	case <-titleStarted:
+	case <-time.After(time.Second):
+		t.Fatal("title generation did not start")
+	}
+	select {
+	case <-nameSet:
+		t.Fatal("thread/name/set sent after title generation failure")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestCodexAppParseGeneratedTitleMatchesOfficialNormalization(t *testing.T) {
+	got, err := codexappParseGeneratedTitle(`{"title":"\nTitle: \"Fix the auth bug!!!\"\n","description":"Searchable auth bug fix"}`)
+	if err != nil {
+		t.Fatalf("codexappParseGeneratedTitle: %v", err)
+	}
+	if got != "Fix the auth bug" {
+		t.Fatalf("normalized title=%q, want Fix the auth bug", got)
+	}
+}
+
+func TestCodexAppAutoTitleOnlyEnablesNativeCodex(t *testing.T) {
+	conn := newCodexappConnWithRuntimeAndProfile(nil, t.TempDir(), "proj", codexappConnProfile{
+		Provider: protocol.ACPProviderCXDeepSeek,
+	})
+	conn.setAutoTitleEligibility(true)
+	if conn.autoTitleEligible {
+		t.Fatal("non-native Codex provider became eligible for automatic title generation")
+	}
+}
+
+func TestCodexAppSessionNewEnablesAutoTitleForUntitledNativeCodex(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "model/list":
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{"data": []map[string]any{{"id": "gpt-5", "displayName": "GPT-5"}}}})
+		case "thread/start":
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "new-thread"}}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	var result protocol.SessionNewResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{CWD: t.TempDir()}, &result); err != nil {
+		t.Fatalf("SessionNew: %v", err)
+	}
+	if !conn.autoTitleEligible {
+		t.Fatal("untitled native Codex session was not enabled for automatic title generation")
+	}
+}
+
 func mustJSONMap(t *testing.T, value any) map[string]any {
 	t.Helper()
 	raw, err := json.Marshal(value)
@@ -4702,6 +5034,9 @@ func TestCodexAppSessionLoadReplaysThreadTurnsBeforeReturning(t *testing.T) {
 		CWD:       t.TempDir(),
 	}, &loadRes); err != nil {
 		t.Fatalf("SessionLoad: %v", err)
+	}
+	if conn.autoTitleEligible {
+		t.Fatal("loaded session unexpectedly remained eligible for automatic title generation")
 	}
 
 	first := waitForCodexappUpdate(t, updates)
