@@ -139,7 +139,10 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 		registerConfiguredProvider(f, protocol.ACPProviderCCQwen, NewCCQwenProvider(options.StateDir, qwenKey), available)
 	}
 	if zaiKey := strings.TrimSpace(options.ZAIAPIKey); zaiKey != "" {
-		registerConfiguredProvider(f, protocol.ACPProviderCCGLM, NewCCGLMProvider(options.StateDir, zaiKey), available)
+		glmProvider := NewCCGLMProvider(options.StateDir, zaiKey)
+		if available(glmProvider) {
+			f.Register(protocol.ACPProviderCCGLM, ccGLMInstanceCreator(glmProvider))
+		}
 	}
 	if flickerKey := strings.TrimSpace(options.FlickerAPIKey); flickerKey != "" {
 		flickerProvider := NewCCFlickerProvider(options.StateDir, flickerKey, options.FlickerModelStore)
@@ -294,6 +297,18 @@ func ccFlickerInstanceCreator(provider *acpProvider) InstanceCreator {
 			store = profile.flickerStore
 		}
 		return newFlickerEffortInstance(base, store, profile)
+	})
+}
+
+// ccGLMInstanceCreator relabels model picker entries from the GLM profile's
+// curated display names; the CLI surfaces only tier aliases for z.ai.
+func ccGLMInstanceCreator(provider *acpProvider) InstanceCreator {
+	return claudeACPInstanceCreatorWithStarter(provider, startOwnedProviderConn, func(base Instance) Instance {
+		profile := provider.claudeSettings
+		if profile == nil {
+			return base
+		}
+		return newModelDisplayNameInstance(base, profile.staticModels)
 	})
 }
 

@@ -323,16 +323,9 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				"CLAUDE_CODE_USE_FOUNDRY": "",
 			},
 			wantSettings: map[string]any{
-				"model": "glm-5.3",
-				"models": []any{
-					map[string]any{"id": "glm-5.3", "name": "GLM-5.3 (1M)"},
-					map[string]any{"id": "glm-5.2[1m]", "name": "GLM-5.2 (1M)"},
-					map[string]any{"id": "glm-5-turbo", "name": "GLM-5-Turbo"},
-					map[string]any{"id": "glm-5.1", "name": "GLM-5.1"},
-					map[string]any{"id": "glm-4.7", "name": "GLM-4.7"},
-					map[string]any{"id": "glm-4.5-air", "name": "GLM-4.5-Air"},
-				},
-				"availableModels": []any{"glm-5.3", "glm-5.2[1m]", "glm-5-turbo", "glm-5.1", "glm-4.7", "glm-4.5-air"},
+				"model":                  "glm-5.3",
+				"availableModels":        []any{"glm-5.3", "glm-5.2[1m]", "glm-5-turbo", "glm-5.1", "glm-4.7", "glm-4.5-air"},
+				"enforceAvailableModels": true,
 				"env": map[string]any{
 					"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.3",
 					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "GLM-5.3 (1M)",
@@ -346,7 +339,6 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 					"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
 					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 					"API_TIMEOUT_MS":                           "3000000",
-					gatewayModelDiscoveryEnv:                   "1",
 				},
 			},
 		},
@@ -8228,6 +8220,97 @@ func TestFlickerEffortInstanceUsesCatalogModelDisplayNames(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("model option names = %#v, want %#v", got, want)
+	}
+}
+
+func TestCCGLMInstanceRenamesModelDisplayNames(t *testing.T) {
+	profile := claudeCompatibleGLMProfile(t.TempDir())
+	rawModelOptions := func() protocol.ConfigOption {
+		return protocol.ConfigOption{
+			ID:       protocol.ConfigOptionIDModel,
+			Category: protocol.ConfigOptionCategoryModel,
+			Options: []protocol.ConfigOptionValue{
+				{Value: "default", Name: "Default (recommended)"},
+				{Value: "glm-5.3", Name: "GLM-5.3 (1M)"},
+				{Value: "glm-5.2[1m]", Name: "glm-5.2[1m]"},
+				{Value: "glm-5-turbo", Name: "glm-5-turbo"},
+				{Value: "glm-5.1", Name: "glm-5.1"},
+				{Value: "glm-4.7", Name: "glm-4.7"},
+				{Value: "glm-4.5-air", Name: "GLM-4.5-Air"},
+			},
+		}
+	}
+	wantNames := map[string]string{
+		"default":     "Default (recommended)",
+		"glm-5.3":     "GLM-5.3 (1M)",
+		"glm-5.2[1m]": "GLM-5.2 (1M)",
+		"glm-5-turbo": "GLM-5-Turbo",
+		"glm-5.1":     "GLM-5.1",
+		"glm-4.7":     "GLM-4.7",
+		"glm-4.5-air": "GLM-4.5-Air",
+	}
+	modelOptionNames := func(t *testing.T, options []protocol.ConfigOption) map[string]string {
+		t.Helper()
+		modelOption := flickerConfigOption(options, protocol.ConfigOptionIDModel)
+		if modelOption == nil {
+			t.Fatal("model option is missing")
+		}
+		got := make(map[string]string, len(modelOption.Options))
+		for _, option := range modelOption.Options {
+			got[option.Value] = option.Name
+		}
+		return got
+	}
+	baseConn := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, _ any, result any) error {
+			switch method {
+			case protocol.MethodSessionNew:
+				return assignResult(result, protocol.SessionNewResult{
+					SessionID:     "session-1",
+					ConfigOptions: []protocol.ConfigOption{rawModelOptions()},
+				})
+			case protocol.MethodSessionLoad:
+				return assignResult(result, protocol.SessionLoadResult{
+					ConfigOptions: []protocol.ConfigOption{rawModelOptions()},
+				})
+			case protocol.MethodSetConfigOption:
+				return assignResult(result, protocol.SetSessionConfigOptionResponse{
+					ConfigOptions: protocol.WireSessionConfigOptions([]protocol.ConfigOption{rawModelOptions()}),
+				})
+			default:
+				t.Fatalf("unexpected method %q", method)
+				return nil
+			}
+		},
+	}
+	instance := newModelDisplayNameInstance(NewInstance("cc-glm", baseConn), profile.staticModels)
+
+	newResult, err := instance.SessionNew(context.Background(), protocol.SessionNewParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := modelOptionNames(t, newResult.ConfigOptions); !reflect.DeepEqual(got, wantNames) {
+		t.Fatalf("session/new model names = %#v, want %#v", got, wantNames)
+	}
+
+	loadResult, err := instance.SessionLoad(context.Background(), protocol.SessionLoadParams{SessionID: "session-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := modelOptionNames(t, loadResult.ConfigOptions); !reflect.DeepEqual(got, wantNames) {
+		t.Fatalf("session/load model names = %#v, want %#v", got, wantNames)
+	}
+
+	setOptions, err := instance.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "session-1",
+		ConfigID:  protocol.ConfigOptionIDModel,
+		Value:     "glm-5.1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := modelOptionNames(t, setOptions); !reflect.DeepEqual(got, wantNames) {
+		t.Fatalf("set config option model names = %#v, want %#v", got, wantNames)
 	}
 }
 

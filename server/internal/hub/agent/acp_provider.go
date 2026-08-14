@@ -447,12 +447,10 @@ func claudeCompatibleGLMProfile(stateDir string) claudeCompatibleProfile {
 		// so AUTO_COMPACT_WINDOW stays at 1_000_000. glm-5.2[1m] is kept in the
 		// picker as a fallback. glm-5v-turbo is deliberately excluded: z.ai
 		// coding plans reject it with 429, and it duplicates glm-5-turbo for
-		// coding use. Gateway discovery supplies live per-model metadata while
-		// staticModels keeps curated ids (z.ai's /v1/models catalog lags and
-		// omits glm-5.3 and glm-5.2[1m]) and unifies picker display names with
-		// z.ai's own naming style.
-		defaultModel:     "glm-5.3",
-		gatewayDiscovery: true,
+		// coding use. staticModels carries curated display names (matching
+		// z.ai's own naming style); cc-glm's instance creator relabels model
+		// configOptions from them because the CLI surfaces only tier aliases.
+		defaultModel: "glm-5.3",
 		staticModels: []claudeModelEntry{
 			{ID: "glm-5.3", Name: "GLM-5.3 (1M)"},
 			{ID: "glm-5.2[1m]", Name: "GLM-5.2 (1M)"},
@@ -461,6 +459,7 @@ func claudeCompatibleGLMProfile(stateDir string) claudeCompatibleProfile {
 			{ID: "glm-4.7", Name: "GLM-4.7"},
 			{ID: "glm-4.5-air", Name: "GLM-4.5-Air"},
 		},
+		availableModels: []string{"glm-5.3", "glm-5.2[1m]", "glm-5-turbo", "glm-5.1", "glm-4.7", "glm-4.5-air"},
 		settingsEnv: map[string]string{
 			"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.3",
 			"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "GLM-5.3 (1M)",
