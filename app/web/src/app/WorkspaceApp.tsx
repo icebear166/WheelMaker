@@ -1239,6 +1239,14 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.chat-title-prompt-menu',
   '.app-confirm-dialog',
 ].join(', ');
+const GESTURE_NAV_PRESERVED_SURFACE_SELECTOR = [
+  '.drawer',
+  '.drawer-overlay',
+  SIDEBAR_TRANSIENT_MENU_SELECTOR,
+  '.app-menu-surface',
+  '.topbar-menu-surface',
+  '.sl-sheet-overlay',
+].join(', ');
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_SESSION_PANEL_WIDTH = 360;
 const CHAT_FILE_PEEK_WIDTH_DEFAULT = 520;
@@ -7586,10 +7594,13 @@ export function App() {
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target && floatingControlStackRef.current?.contains(target)) {
-        return;
-      }
-      if (target && (target as Element).closest?.('.drawer, .drawer-overlay')) {
+      if (
+        target instanceof Element &&
+        (
+          floatingControlStackRef.current?.contains(target) ||
+          target.closest(GESTURE_NAV_PRESERVED_SURFACE_SELECTOR)
+        )
+      ) {
         return;
       }
       cancelGestureNavigation();

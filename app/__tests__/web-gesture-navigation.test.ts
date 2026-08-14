@@ -110,6 +110,23 @@ describe('gesture navigation', () => {
     expect(pointerUpBody).toContain('setGestureNavState(null);');
   });
 
+  test('preserves expanded navigation while tapping transient popup surfaces', () => {
+    const main = readMain();
+    const navigationEffectStart = main.indexOf(
+      'const onPointerDown = (event: PointerEvent) => {',
+      main.indexOf('if (!gestureNavigationExpanded)'),
+    );
+    const navigationEffectEnd = main.indexOf("window.addEventListener('keydown'", navigationEffectStart);
+    const navigationEffectBody = main.slice(navigationEffectStart, navigationEffectEnd);
+
+    expect(main).toContain('const GESTURE_NAV_PRESERVED_SURFACE_SELECTOR = [');
+    expect(main).toContain('SIDEBAR_TRANSIENT_MENU_SELECTOR');
+    expect(main).toContain("'.app-menu-surface'");
+    expect(main).toContain("'.topbar-menu-surface'");
+    expect(main).toContain("'.sl-sheet-overlay'");
+    expect(navigationEffectBody).toContain('target.closest(GESTURE_NAV_PRESERVED_SURFACE_SELECTOR)');
+  });
+
   test('keeps floating drag state local and out of the workspace store', () => {
     const main = readMain();
     const uiState = fs.readFileSync(

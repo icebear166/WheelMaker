@@ -134,6 +134,31 @@ describe('AgentChoiceMenu', () => {
     expect(pills[1].props['aria-selected']).toBe(false);
   });
 
+  test('ignores touch pointer enter but keeps mouse hover active state', async () => {
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <AgentChoiceMenu agents={['claude', 'codex']} variant="wide" onSelect={jest.fn()} />,
+      );
+    });
+
+    const secondPill = renderer!.root.findAllByProps({role: 'option'})[1];
+    expect(typeof secondPill.props.onPointerEnter).toBe('function');
+
+    await ReactTestRenderer.act(() => {
+      secondPill.props.onPointerEnter({pointerType: 'touch'});
+    });
+    expect(renderer!.root.findAllByProps({role: 'option'})[0].props['aria-selected']).toBe(true);
+    expect(renderer!.root.findAllByProps({role: 'option'})[1].props['aria-selected']).toBe(false);
+
+    await ReactTestRenderer.act(() => {
+      secondPill.props.onPointerEnter({pointerType: 'mouse'});
+    });
+    expect(renderer!.root.findAllByProps({role: 'option'})[0].props['aria-selected']).toBe(false);
+    expect(renderer!.root.findAllByProps({role: 'option'})[1].props['aria-selected']).toBe(true);
+  });
+
   test('confirms the active pill on Enter and closes on Escape', async () => {
     const onSelect = jest.fn();
     const onClose = jest.fn();
