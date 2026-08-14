@@ -238,6 +238,6 @@ Expected: the changed-scope Jest suites pass, TypeScript emits no errors, and th
 
 Verify in a desktop and narrow/mobile viewport: choose a transparent PNG and another browser-decodable format, see the layer at the chat lower-left, switch projects/sessions, replace/remove, refresh, force a storage failure, open Settings while the composer is expanded, and run response/session image/HTML/public share. Confirm text/input interaction and share output are unchanged.
 
-- [ ] **Step 6: Git checkpoint.**
+- [x] **Step 6: Git checkpoint.**
 
-After all verification passes, invoke `git-workflow` checkpoint for the final regression-test changes. Then proceed to `finalize` with the real completion result.
+After changed-scope verification passes, invoke `git-workflow` checkpoint for the final regression-test changes. The live desktop/mobile browser review remains for the next interactive review.
