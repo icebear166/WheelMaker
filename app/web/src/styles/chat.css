@@ -83,8 +83,12 @@
   height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
   min-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
   max-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
-  gap: var(--chat-menu-header-gap);
+  gap: 2px;
   padding: var(--wm-safe-area-top) 8px 0;
+}
+
+.narrow-shell .chat-title-bar .chat-title-project-button {
+  padding-left: 4px;
 }
 
 .chat-title-bar > .chat-session-header {

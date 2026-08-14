@@ -36,7 +36,14 @@ test('mobile Chat title bar reuses the Drawer WheelMaker logo menu and geometry'
 
   expect(renderChatTitleBar).toContain('{!mobile ? renderChatSessionHeader(false) : null}');
   expect(renderChatTitleBar).toContain('{mobile ? renderWheelMakerAppMenu(true) : null}');
-  expect(chatStyles).toContain('.narrow-shell .chat-title-bar {');
-  expect(chatStyles).toContain('flex: 0 0 calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
-  expect(chatStyles).toContain('padding: var(--wm-safe-area-top) 8px 0;');
+  const mobileChatTitleStyles = sourceBetween(
+    chatStyles,
+    '.narrow-shell .chat-title-bar {',
+    '.chat-title-bar > .chat-session-header',
+  );
+  expect(mobileChatTitleStyles).toContain('gap: 2px;');
+  expect(mobileChatTitleStyles).toContain('flex: 0 0 calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+  expect(mobileChatTitleStyles).toContain('padding: var(--wm-safe-area-top) 8px 0;');
+  expect(chatStyles).toContain('.narrow-shell .chat-title-bar .chat-title-project-button {');
+  expect(chatStyles).toContain('padding-left: 4px;');
 });
