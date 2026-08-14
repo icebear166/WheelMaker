@@ -101,6 +101,18 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-skin-settings-preview');
   });
 
+  test('keeps the chat skin anchor synced with live chat geometry', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('const chatSkinLayoutObserver = typeof ResizeObserver === \'function\'');
+    expect(mainTsx).toContain('chatSkinLayoutObserver.observe(chatMainRef.current);');
+    expect(mainTsx).toContain('chatSkinLayoutObserver.observe(chatComposerRef.current);');
+    expect(mainTsx).toContain('chatSkinLayoutObserver.observe(chatComposerFrameRef.current);');
+    expect(mainTsx).toContain('return () => chatSkinLayoutObserver.disconnect();');
+    expect(mainTsx).toContain('}, [chatMainClassName, chatMainStyle, measureChatSkinAnchor]);');
+  });
+
   test('composer text changes do not force desktop layout measurement', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

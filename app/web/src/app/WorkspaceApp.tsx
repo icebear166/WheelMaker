@@ -6437,6 +6437,26 @@ export function App() {
     }
   }, [resizeChatComposerTextarea, measureChatComposerTop, measureChatSkinAnchor, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);
 
+  useLayoutEffect(() => {
+    measureChatSkinAnchor();
+    const chatSkinLayoutObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(measureChatSkinAnchor)
+      : null;
+    if (!chatSkinLayoutObserver) {
+      return undefined;
+    }
+    if (chatMainRef.current) {
+      chatSkinLayoutObserver.observe(chatMainRef.current);
+    }
+    if (chatComposerRef.current) {
+      chatSkinLayoutObserver.observe(chatComposerRef.current);
+    }
+    if (chatComposerFrameRef.current) {
+      chatSkinLayoutObserver.observe(chatComposerFrameRef.current);
+    }
+    return () => chatSkinLayoutObserver.disconnect();
+  }, [chatMainClassName, chatMainStyle, measureChatSkinAnchor]);
+
   useEffect(() => {
     const measure = () => {
       measureChatSkinAnchor();
