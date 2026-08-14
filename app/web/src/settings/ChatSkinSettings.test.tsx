@@ -12,10 +12,12 @@ function renderSettings(overrides = {}) {
     error: '',
     scale: 1,
     opacity: 0.17,
+    offset: 24,
     onSelect: jest.fn(async () => undefined),
     onRemove: jest.fn(async () => undefined),
     onScaleChange: jest.fn(),
     onOpacityChange: jest.fn(),
+    onOffsetChange: jest.fn(),
     ...overrides,
   };
   act(() => {
@@ -45,21 +47,24 @@ describe('ChatSkinSettings', () => {
     expect(tree.root.findAllByType('button').some(button => button.children.includes('Remove'))).toBe(true);
   });
 
-  test('exposes scale and opacity controls for the active skin', () => {
-    const {tree, props} = renderSettings({previewUrl: 'blob:skin', scale: 0.75, opacity: 0.42});
+  test('exposes scale, opacity, and image offset controls for the active skin', () => {
+    const {tree, props} = renderSettings({previewUrl: 'blob:skin', scale: 0.75, opacity: 0.42, offset: 24});
     const rangeInputs = tree.root.findAllByType('input').filter(input => input.props.type === 'range');
 
-    expect(rangeInputs).toHaveLength(2);
+    expect(rangeInputs).toHaveLength(3);
     expect(rangeInputs[0].props.value).toBe(75);
     expect(rangeInputs[1].props.value).toBe(0.42);
+    expect(rangeInputs[2].props.value).toBe(24);
 
     act(() => {
       rangeInputs[0].props.onChange({target: {value: '50'}});
       rangeInputs[1].props.onChange({target: {value: '0.55'}});
+      rangeInputs[2].props.onChange({target: {value: '-60'}});
     });
 
     expect(props.onScaleChange).toHaveBeenCalledWith(0.5);
     expect(props.onOpacityChange).toHaveBeenCalledWith(0.55);
+    expect(props.onOffsetChange).toHaveBeenCalledWith(-60);
   });
 
   test('disables actions while busy and exposes an actionable error', () => {

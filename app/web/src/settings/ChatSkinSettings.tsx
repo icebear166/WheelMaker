@@ -2,6 +2,8 @@ import React, {useRef, useState} from 'react';
 import {
   CHAT_SKIN_OPACITY_MAX,
   CHAT_SKIN_OPACITY_MIN,
+  CHAT_SKIN_OFFSET_MAX,
+  CHAT_SKIN_OFFSET_MIN,
   CHAT_SKIN_SCALE_MAX,
   CHAT_SKIN_SCALE_MIN,
 } from '../chat/chatSkin';
@@ -11,12 +13,14 @@ export type ChatSkinSettingsProps = {
   fileName: string;
   scale: number;
   opacity: number;
+  offset: number;
   busy: boolean;
   error: string;
   onSelect: (file: File) => void | Promise<void>;
   onRemove: () => void | Promise<void>;
   onScaleChange: (value: number) => void;
   onOpacityChange: (value: number) => void;
+  onOffsetChange: (value: number) => void;
 };
 
 function errorMessage(error: unknown): string {
@@ -32,12 +36,14 @@ export function ChatSkinSettings({
   fileName,
   scale,
   opacity,
+  offset,
   busy,
   error,
   onSelect,
   onRemove,
   onScaleChange,
   onOpacityChange,
+  onOffsetChange,
 }: ChatSkinSettingsProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [operationBusy, setOperationBusy] = useState(false);
@@ -111,6 +117,21 @@ export function ChatSkinSettings({
             value={opacity}
             disabled={isBusy || !hasSkin}
             onChange={event => onOpacityChange(Number(event.target.value))}
+          />
+        </label>
+        <label className="chat-skin-settings-control">
+          <span>
+            <span>Image offset</span>
+            <output>{offset > 0 ? `+${Math.round(offset)}` : Math.round(offset)}px</output>
+          </span>
+          <input
+            type="range"
+            min={CHAT_SKIN_OFFSET_MIN}
+            max={CHAT_SKIN_OFFSET_MAX}
+            step="1"
+            value={Math.round(offset)}
+            disabled={isBusy || !hasSkin}
+            onChange={event => onOffsetChange(Number(event.target.value))}
           />
         </label>
       </div>

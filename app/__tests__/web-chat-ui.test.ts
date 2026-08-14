@@ -41,7 +41,7 @@ function cssNumericProperty(stylesCss: string, selector: string, property: strin
 }
 
 describe('web chat integration', () => {
-  test('anchors the local chat skin to the chat bottom-right and keeps it out of share surfaces', () => {
+  test('anchors the local chat skin to the composer bottom-right and keeps it out of share surfaces', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const persistenceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'));
@@ -54,9 +54,13 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("import {ChatSkinLayer} from '../chat/ChatSkinLayer';");
     expect(mainTsx).toContain('<ChatSkinLayer');
     expect(mainTsx).toContain('chatSkinObjectUrl');
-    expect(mainTsx).not.toContain('chatSkinBottomOffset');
     expect(mainTsx).toContain('scale={chatSkinScale}');
     expect(mainTsx).toContain('opacity={chatSkinOpacity}');
+    expect(mainTsx).toContain('anchorRight={chatSkinAnchor.right}');
+    expect(mainTsx).toContain('anchorBottom={chatSkinAnchor.bottom}');
+    expect(mainTsx).toContain('offset={chatSkinOffset}');
+    expect(mainTsx).toContain('chatComposerFrameRef');
+    expect(mainTsx).toContain('resolveChatSkinAnchor');
     expect(shareCaptureTsx).not.toContain('ChatSkinLayer');
     expect(shareDocumentTsx).not.toContain('ChatSkinLayer');
     expect(shareDocumentTsx).not.toContain('chatSkinObjectUrl');
@@ -66,6 +70,10 @@ describe('web chat integration', () => {
     expect(settingsSkinTsx).toContain('type="range"');
     expect(settingsSkinTsx).toContain('onScaleChange');
     expect(settingsSkinTsx).toContain('onOpacityChange');
+    expect(settingsSkinTsx).toContain('onOffsetChange');
+    expect(settingsRootTsx).toContain('chatSkinOffset');
+    expect(settingsRootTsx).toContain('onChatSkinOffsetChange');
+    expect(persistenceTs).toContain('chatSkinOffset');
     expect(mainTsx).toContain('wm_global_assets: dump.globalAssets');
     expect(persistenceTs).toContain('globalAssets: Array<{k: string; name: string; mimeType: string; size: number; updatedAt: number}>;');
     expect(persistenceTs).toContain('function globalAssetMetadata');
@@ -74,8 +82,8 @@ describe('web chat integration', () => {
     expect(settingsSkinTsx).toContain('onRemove');
     const skinLayerBlock = cssRuleBlock(stylesCss, '.chat-skin-layer');
     expect(skinLayerBlock).toContain('position: absolute;');
-    expect(skinLayerBlock).toContain('right: 0;');
-    expect(skinLayerBlock).toContain('bottom: 0;');
+    expect(skinLayerBlock).toContain('right: calc(var(--chat-skin-anchor-right, 0px) + var(--chat-skin-offset, 0px));');
+    expect(skinLayerBlock).toContain('bottom: var(--chat-skin-anchor-bottom, 0px);');
     expect(skinLayerBlock).toContain('height: var(--chat-skin-scale, 100%);');
     expect(skinLayerBlock).toContain('width: auto;');
     expect(skinLayerBlock).toContain('pointer-events: none;');
@@ -92,7 +100,7 @@ describe('web chat integration', () => {
 
     expect(mainTsx).toContain('const shouldMeasureChatComposerLayout = !isWide;');
     expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
-    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
+    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, measureChatSkinAnchor, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
   });
 
   test('composer text changes keep rendered chat turns memoized', () => {
@@ -362,7 +370,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('useLayoutEffect(() => {');
     expect(mainTsx).toContain('resizeChatComposerTextarea();');
     expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
-    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
+    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, measureChatSkinAnchor, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
     expect(mainTsx).not.toContain('const chatBottomFollowAction = resolveChatBottomFollowAction({');
     expect(mainTsx).not.toContain("if (chatBottomFollowAction === 'scrollToBottom') {");
     expect(mainTsx).toContain('}, [selectedChatId, chatMessages, chatPendingPromptsByKey, chatLoading, resizeChatComposerTextarea]);');

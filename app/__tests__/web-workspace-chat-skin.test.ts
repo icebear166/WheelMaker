@@ -146,21 +146,23 @@ describe('workspace chat skin persistence', () => {
     expect(db.rows('wm_global_assets')).toHaveLength(1);
   });
 
-  test('persists the chat skin scale and opacity as global preferences', async () => {
+  test('persists the chat skin scale, opacity, and image offset as global preferences', async () => {
     const db = dbWithTheme();
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
 
-    repository.patchGlobalState({chatSkinScale: 0, chatSkinOpacity: 0.42});
+    repository.patchGlobalState({chatSkinScale: 0, chatSkinOpacity: 0.42, chatSkinOffset: -120});
     await repository.flushPendingWrites();
 
     expect(repository.getGlobalState()).toMatchObject({
       chatSkinScale: 0,
       chatSkinOpacity: 0.42,
+      chatSkinOffset: -120,
     });
     expect(db.rows('wm_global_kv')).toEqual(expect.arrayContaining([
       expect.objectContaining({k: 'chatSkinScale', v: JSON.stringify(0)}),
       expect.objectContaining({k: 'chatSkinOpacity', v: JSON.stringify(0.42)}),
+      expect.objectContaining({k: 'chatSkinOffset', v: JSON.stringify(-120)}),
     ]));
   });
 

@@ -158,12 +158,16 @@ import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import {ChatSkinLayer} from '../chat/ChatSkinLayer';
 import {
+  CHAT_SKIN_OFFSET_DEFAULT,
   CHAT_SKIN_OPACITY_DEFAULT,
   CHAT_SKIN_SCALE_DEFAULT,
+  clampChatSkinOffset,
   clampChatSkinOpacity,
   clampChatSkinScale,
   decodeChatSkinBlob,
   revokeChatSkinObjectUrl,
+  resolveChatSkinAnchor,
+  type ChatSkinAnchor,
 } from '../chat/chatSkin';
 import {ChatQueueCompactView, ChatTurnView, type ChatQueueActions} from '../chat/ChatTurnView';
 import type {ChatShareAction} from '../chat/share/ChatShareMenu';
@@ -2786,6 +2790,10 @@ export function App() {
   const [chatSkinOpacity, setChatSkinOpacity] = useState(() => clampChatSkinOpacity(
     persistedGlobal.chatSkinOpacity ?? CHAT_SKIN_OPACITY_DEFAULT,
   ));
+  const [chatSkinOffset, setChatSkinOffset] = useState(() => clampChatSkinOffset(
+    persistedGlobal.chatSkinOffset ?? CHAT_SKIN_OFFSET_DEFAULT,
+  ));
+  const [chatSkinAnchor, setChatSkinAnchor] = useState<ChatSkinAnchor>({right: 0, bottom: 0});
   useLayoutEffect(() => applyDocumentTheme(document.documentElement, themeMode), [themeMode]);
   const [codeTheme, setCodeTheme] = useState<CodeThemeId>(
     typeof persistedGlobal.codeTheme === 'string' &&
@@ -3100,7 +3108,9 @@ export function App() {
   const gestureMoveLongPressTimerRef = useRef<number | null>(null);
   const gestureNavigationSuppressClickUntilRef = useRef(0);
   const [floatingControlStackHeight, setFloatingControlStackHeight] = useState(FLOATING_NAV_BUTTON_SIZE_PX);
+  const chatMainRef = useRef<HTMLDivElement | null>(null);
   const chatComposerRef = useRef<HTMLDivElement | null>(null);
+  const chatComposerFrameRef = useRef<HTMLDivElement | null>(null);
   const [chatComposerTop, setChatComposerTop] = useState<number | null>(null);
   const [floatingDefaultComposerTop, setFloatingDefaultComposerTop] = useState<number | null>(null);
   const floatingClickCooldownUntilRef = useRef(0);
@@ -6406,22 +6416,38 @@ export function App() {
     const rect = chatComposerRef.current?.getBoundingClientRect();
     setChatComposerTop(rect ? Math.round(rect.top) : null);
   }, []);
+  const measureChatSkinAnchor = useCallback(() => {
+    const nextAnchor = resolveChatSkinAnchor(
+      chatMainRef.current?.getBoundingClientRect() ?? null,
+      chatComposerFrameRef.current?.getBoundingClientRect() ?? null,
+    );
+    setChatSkinAnchor(current => (
+      current.right === nextAnchor.right && current.bottom === nextAnchor.bottom
+        ? current
+        : nextAnchor
+    ));
+  }, []);
   const shouldMeasureChatComposerLayout = !isWide;
 
   useLayoutEffect(() => {
     resizeChatComposerTextarea();
+    measureChatSkinAnchor();
     if (shouldMeasureChatComposerLayout) {
       measureChatComposerTop();
     }
-  }, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);
+  }, [resizeChatComposerTextarea, measureChatComposerTop, measureChatSkinAnchor, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);
 
   useEffect(() => {
+    const measure = () => {
+      measureChatSkinAnchor();
+      if (shouldMeasureChatComposerLayout) {
+        measureChatComposerTop();
+      }
+    };
+    measure();
     if (!shouldMeasureChatComposerLayout) {
       setChatComposerTop(null);
-      return;
     }
-    const measure = () => measureChatComposerTop();
-    measure();
     window.addEventListener('resize', measure);
     window.visualViewport?.addEventListener('resize', measure);
     window.visualViewport?.addEventListener('scroll', measure);
@@ -6432,12 +6458,13 @@ export function App() {
     };
   }, [
     shouldMeasureChatComposerLayout,
-        measureChatComposerTop,
-        chatComposerText,
-        chatAttachments.length,
-        voiceRecording,
-        chatKeyboardInset,
-        windowHeight,
+    measureChatComposerTop,
+    measureChatSkinAnchor,
+    chatComposerText,
+    chatAttachments.length,
+    voiceRecording,
+    chatKeyboardInset,
+    windowHeight,
   ]);
 
   useEffect(() => {
@@ -6953,6 +6980,7 @@ export function App() {
       selectedProjectId: projectId,
       chatSkinScale,
       chatSkinOpacity,
+      chatSkinOffset,
       floatingControlYRatio,
       floatingControlSide,
       desktopSidebarWidth,
@@ -6981,6 +7009,7 @@ export function App() {
     projectId,
     chatSkinScale,
     chatSkinOpacity,
+    chatSkinOffset,
     floatingControlYRatio,
     floatingControlSide,
     desktopSidebarWidth,
@@ -16338,12 +16367,14 @@ export function App() {
         chatSkinFileName={chatSkinAsset?.name ?? ''}
         chatSkinScale={chatSkinScale}
         chatSkinOpacity={chatSkinOpacity}
+        chatSkinOffset={chatSkinOffset}
         chatSkinBusy={false}
         chatSkinError=""
         onChatSkinSelect={handleChatSkinSelect}
         onChatSkinRemove={handleChatSkinRemove}
         onChatSkinScaleChange={value => setChatSkinScale(clampChatSkinScale(value))}
         onChatSkinOpacityChange={value => setChatSkinOpacity(clampChatSkinOpacity(value))}
+        onChatSkinOffsetChange={value => setChatSkinOffset(clampChatSkinOffset(value))}
         serverSettings={serverSettings}
         serverSettingsBusy={serverSettingsBusy}
         serverSettingsError={serverSettingsError}
@@ -19303,6 +19334,7 @@ export function App() {
         <ChatSurface>
           {!isWide ? renderChatTitleBar(true) : null}
           <div
+            ref={chatMainRef}
             className={chatMainClassName}
             data-chat-search-open={chatSearchOpen ? 'true' : undefined}
             style={chatMainStyle}
@@ -19313,6 +19345,9 @@ export function App() {
                 src={chatSkinObjectUrl}
                 scale={chatSkinScale}
                 opacity={chatSkinOpacity}
+                anchorRight={chatSkinAnchor.right}
+                anchorBottom={chatSkinAnchor.bottom}
+                offset={chatSkinOffset}
               />
             ) : null}
             <div
@@ -19566,6 +19601,7 @@ export function App() {
               onChange={handleChatImageChange}
             />
             <div
+              ref={chatComposerFrameRef}
               className={`chat-composer-frame${chatComposerDragActive ? ' drag-over' : ''}`}
               onDragOver={event => {
                 if (selectedChatSubmitPending) {

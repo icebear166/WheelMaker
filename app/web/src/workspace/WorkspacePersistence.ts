@@ -17,7 +17,9 @@ import {
   type MobileEnterKeyBehavior,
 } from '../chat/mobileEnterKeyBehavior';
 import {
+  CHAT_SKIN_OFFSET_DEFAULT,
   CHAT_SKIN_OPACITY_DEFAULT,
+  clampChatSkinOffset,
   clampChatSkinOpacity,
   CHAT_SKIN_SCALE_DEFAULT,
   clampChatSkinScale,
@@ -75,6 +77,7 @@ export type PersistedGlobalState = {
   selectedChatSessionId: string;
   chatSkinScale: number;
   chatSkinOpacity: number;
+  chatSkinOffset: number;
   floatingControlYRatio: number;
   floatingControlSide: PersistedFloatingControlSide;
   desktopSidebarWidth: number;
@@ -313,6 +316,7 @@ const GLOBAL_KEYS = {
   selectedChatSessionId: 'selectedChatSessionId',
   chatSkinScale: 'chatSkinScale',
   chatSkinOpacity: 'chatSkinOpacity',
+  chatSkinOffset: 'chatSkinOffset',
   floatingControlYRatio: 'floatingControlYRatio',
   floatingControlSlot: 'floatingControlSlot',
   floatingControlSide: 'floatingControlSide',
@@ -362,6 +366,7 @@ function defaultGlobalState(): PersistedGlobalState {
     selectedChatSessionId: '',
     chatSkinScale: CHAT_SKIN_SCALE_DEFAULT,
     chatSkinOpacity: CHAT_SKIN_OPACITY_DEFAULT,
+    chatSkinOffset: CHAT_SKIN_OFFSET_DEFAULT,
     floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,
     floatingControlSide: 'right',
     desktopSidebarWidth: 380,
@@ -589,6 +594,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     selectedChatSessionId: typeof input.selectedChatSessionId === 'string' ? input.selectedChatSessionId : base.selectedChatSessionId,
     chatSkinScale: clampChatSkinScale(input.chatSkinScale ?? base.chatSkinScale),
     chatSkinOpacity: clampChatSkinOpacity(input.chatSkinOpacity ?? base.chatSkinOpacity),
+    chatSkinOffset: clampChatSkinOffset(input.chatSkinOffset ?? base.chatSkinOffset),
     floatingControlYRatio,
     floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),
     desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),
@@ -1247,6 +1253,9 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt},
       {k: GLOBAL_KEYS.selectedChatProjectId, v: serialize(this.state.global.selectedChatProjectId), updatedAt},
       {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(this.state.global.selectedChatSessionId), updatedAt},
+      {k: GLOBAL_KEYS.chatSkinScale, v: serialize(this.state.global.chatSkinScale), updatedAt},
+      {k: GLOBAL_KEYS.chatSkinOpacity, v: serialize(this.state.global.chatSkinOpacity), updatedAt},
+      {k: GLOBAL_KEYS.chatSkinOffset, v: serialize(this.state.global.chatSkinOffset), updatedAt},
       {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt},
       {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt},
       {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt},

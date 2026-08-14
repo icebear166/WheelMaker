@@ -3523,8 +3523,8 @@ button.chat-hub-skill-name:disabled {
 
 .chat-skin-layer {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  right: calc(var(--chat-skin-anchor-right, 0px) + var(--chat-skin-offset, 0px));
+  bottom: var(--chat-skin-anchor-bottom, 0px);
   z-index: 0;
   width: auto;
   height: var(--chat-skin-scale, 100%);

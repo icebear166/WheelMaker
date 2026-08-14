@@ -1,8 +1,10 @@
 import {
+  clampChatSkinOffset,
   clampChatSkinOpacity,
   clampChatSkinScale,
   decodeChatSkinBlob,
   revokeChatSkinObjectUrl,
+  resolveChatSkinAnchor,
 } from './chatSkin';
 
 describe('chat skin image helpers', () => {
@@ -59,6 +61,16 @@ describe('chat skin image helpers', () => {
     expect(clampChatSkinScale(2)).toBe(1);
     expect(clampChatSkinOpacity(-1)).toBe(0);
     expect(clampChatSkinOpacity(2)).toBe(1);
+    expect(clampChatSkinOffset(-1000)).toBe(-320);
+    expect(clampChatSkinOffset(1000)).toBe(320);
+  });
+
+  test('resolves the composer bottom-right distance from the chat surface', () => {
+    expect(resolveChatSkinAnchor(
+      {right: 1000, bottom: 800},
+      {right: 940, bottom: 760},
+    )).toEqual({right: 60, bottom: 40});
+    expect(resolveChatSkinAnchor(null, null)).toEqual({right: 0, bottom: 0});
   });
 
   test('rejects after the browser cannot decode the candidate image', async () => {

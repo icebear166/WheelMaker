@@ -3,10 +3,19 @@ import {act, create, type ReactTestRenderer} from 'react-test-renderer';
 import {ChatSkinLayer} from './ChatSkinLayer';
 
 describe('ChatSkinLayer', () => {
-  test('anchors the hidden decorative skin to the chat bottom-right with display controls', () => {
+  test('anchors the hidden decorative skin to the composer bottom-right with display controls', () => {
     let renderer: ReactTestRenderer | undefined;
     act(() => {
-      renderer = create(<ChatSkinLayer src="blob:skin" scale={0.75} opacity={0.42} />);
+      renderer = create(
+        <ChatSkinLayer
+          src="blob:skin"
+          scale={0.75}
+          opacity={0.42}
+          anchorRight={60}
+          anchorBottom={40}
+          offset={24}
+        />,
+      );
     });
     const tree = renderer?.root;
     expect(tree).toBeDefined();
@@ -20,6 +29,9 @@ describe('ChatSkinLayer', () => {
     expect(layer.props.style).toMatchObject({
       '--chat-skin-scale': '75%',
       '--chat-skin-opacity': '0.42',
+      '--chat-skin-anchor-right': '60px',
+      '--chat-skin-anchor-bottom': '40px',
+      '--chat-skin-offset': '24px',
     });
   });
 });
