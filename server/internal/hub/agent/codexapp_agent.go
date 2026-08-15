@@ -677,6 +677,7 @@ type codexappConn struct {
 	autoTitleEligible bool
 	autoTitleStarted  bool
 	autoTitleCancel   context.CancelFunc
+	autoTitleDone     chan struct{}
 	autoTitleRun      uint64
 	compactDone       chan SessionCompactResult
 	compactTurnID     string
@@ -1437,6 +1438,9 @@ func (c *codexappConn) CompactSession(ctx context.Context, sessionID string) (<-
 	if strings.TrimSpace(threadID) == "" {
 		return nil, errors.New("codexapp compact requires sessionId")
 	}
+	if err := c.waitForAutoTitleGeneration(ctx); err != nil {
+		return nil, err
+	}
 	done := make(chan SessionCompactResult, 1)
 	c.mu.Lock()
 	if c.promptDone != nil || c.compactDone != nil {
@@ -1647,6 +1651,9 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 	}
 	input, err := c.promptToInputWithArtifacts(p.SessionID, p.Prompt)
 	if err != nil {
+		return err
+	}
+	if err := c.waitForAutoTitleGeneration(ctx); err != nil {
 		return err
 	}
 	done := make(chan codexappPromptResult, 1)

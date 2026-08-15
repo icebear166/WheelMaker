@@ -4633,6 +4633,179 @@ func TestCodexAppAutoTitleWaitsForOriginalPromptCompletion(t *testing.T) {
 	}
 }
 
+func TestCodexAppQueuedPromptWaitsForAutoTitleGeneration(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-1", "formal-thread")
+	conn.autoTitleEligible = true
+	firstTurnStarted := make(chan struct{}, 1)
+	titleTurnStarted := make(chan struct{}, 1)
+	secondTurnStarted := make(chan struct{}, 1)
+	nameSet := make(chan struct{}, 1)
+	var formalTurnMu sync.Mutex
+	formalTurnCount := 0
+
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "turn/start":
+			params := msg["params"].(map[string]any)
+			threadID := params["threadId"].(string)
+			switch threadID {
+			case "formal-thread":
+				formalTurnMu.Lock()
+				formalTurnCount++
+				turnCount := formalTurnCount
+				formalTurnMu.Unlock()
+				turnID := "formal-turn"
+				started := firstTurnStarted
+				if turnCount > 1 {
+					turnID = "second-turn"
+					started = secondTurnStarted
+				}
+				if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"turn": map[string]any{"id": turnID}}}); err != nil {
+					t.Errorf("emit original turn response: %v", err)
+				}
+				select {
+				case started <- struct{}{}:
+				default:
+				}
+			case "title-thread":
+				if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"turn": map[string]any{"id": "title-turn"}}}); err != nil {
+					t.Errorf("emit title turn response: %v", err)
+				}
+				select {
+				case titleTurnStarted <- struct{}{}:
+				default:
+				}
+			default:
+				t.Errorf("unexpected turn/start threadId=%q", threadID)
+			}
+		case "thread/start":
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "title-thread"}}}); err != nil {
+				t.Errorf("emit title thread response: %v", err)
+			}
+		case "thread/name/set":
+			select {
+			case nameSet <- struct{}{}:
+			default:
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{}}); err != nil {
+				t.Errorf("emit name response: %v", err)
+			}
+			_ = tr.emit(map[string]any{
+				"method": "thread/name/updated",
+				"params": map[string]any{"threadId": "formal-thread", "threadName": "Name after queued prompt"},
+			})
+		case "thread/unsubscribe":
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"status": "unsubscribed"}}); err != nil {
+				t.Errorf("emit unsubscribe response: %v", err)
+			}
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		var outcome protocol.PromptOutcome
+		firstDone <- conn.sendSessionPrompt(context.Background(), protocol.SessionPromptParams{
+			SessionID: "session-1",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "Name the first queued request"}},
+		}, &outcome)
+	}()
+	select {
+	case <-firstTurnStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first turn did not start")
+	}
+	if err := tr.emit(map[string]any{
+		"method": "turn/completed",
+		"params": map[string]any{
+			"threadId": "formal-thread",
+			"turn":     map[string]any{"id": "formal-turn", "status": "completed"},
+		},
+	}); err != nil {
+		t.Fatalf("emit first turn completion: %v", err)
+	}
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatalf("first prompt: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first prompt did not complete")
+	}
+	select {
+	case <-titleTurnStarted:
+	case <-time.After(time.Second):
+		t.Fatal("title turn did not start")
+	}
+
+	secondDone := make(chan error, 1)
+	go func() {
+		var outcome protocol.PromptOutcome
+		secondDone <- conn.sendSessionPrompt(context.Background(), protocol.SessionPromptParams{
+			SessionID: "session-1",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "Name the second queued request"}},
+		}, &outcome)
+	}()
+	select {
+	case <-secondTurnStarted:
+		t.Fatal("second turn started before auto title generation completed")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	_ = tr.emit(map[string]any{
+		"method": "item/agentMessage/delta",
+		"params": map[string]any{
+			"threadId": "title-thread",
+			"turnId":   "title-turn",
+			"delta":    `{"title":"Name after queued prompt","description":"Name the completed queued request"}`,
+		},
+	})
+	if err := tr.emit(map[string]any{
+		"method": "turn/completed",
+		"params": map[string]any{
+			"threadId": "title-thread",
+			"turn":     map[string]any{"id": "title-turn", "status": "completed"},
+		},
+	}); err != nil {
+		t.Fatalf("emit title turn completion: %v", err)
+	}
+	select {
+	case <-nameSet:
+	case <-time.After(time.Second):
+		t.Fatal("thread/name/set was not sent after title generation completed")
+	}
+	select {
+	case <-secondTurnStarted:
+	case <-time.After(time.Second):
+		t.Fatal("second turn did not start after auto title generation completed")
+	}
+	if err := tr.emit(map[string]any{
+		"method": "turn/completed",
+		"params": map[string]any{
+			"threadId": "formal-thread",
+			"turn":     map[string]any{"id": "second-turn", "status": "completed"},
+		},
+	}); err != nil {
+		t.Fatalf("emit second turn completion: %v", err)
+	}
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("second prompt: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second prompt did not complete")
+	}
+}
+
 func TestCodexAppAutoTitleFailureDoesNotFailPrompt(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

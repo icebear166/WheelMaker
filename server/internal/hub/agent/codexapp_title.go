@@ -98,6 +98,7 @@ func (c *codexappConn) setAutoTitleEligibility(eligible bool) {
 	c.mu.Lock()
 	previousCancel := c.autoTitleCancel
 	c.autoTitleCancel = nil
+	c.autoTitleDone = nil
 	c.autoTitleRun++
 	c.autoTitleEligible = eligible
 	c.autoTitleStarted = false
@@ -114,10 +115,33 @@ func (c *codexappConn) cancelAutoTitleGeneration() {
 	c.mu.Lock()
 	cancel := c.autoTitleCancel
 	c.autoTitleCancel = nil
+	c.autoTitleDone = nil
 	c.autoTitleRun++
 	c.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+}
+
+func (c *codexappConn) waitForAutoTitleGeneration(ctx context.Context) error {
+	if c == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		c.mu.Lock()
+		done := c.autoTitleDone
+		c.mu.Unlock()
+		if done == nil {
+			return nil
+		}
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
@@ -138,6 +162,8 @@ func (c *codexappConn) startAutoTitleGeneration(threadID string, input []appServ
 	}
 	c.autoTitleStarted = true
 	c.autoTitleCancel = cancel
+	done := make(chan struct{})
+	c.autoTitleDone = done
 	run := c.autoTitleRun + 1
 	c.autoTitleRun = run
 	c.mu.Unlock()
@@ -148,8 +174,10 @@ func (c *codexappConn) startAutoTitleGeneration(threadID string, input []appServ
 			c.mu.Lock()
 			if c.autoTitleRun == run {
 				c.autoTitleCancel = nil
+				c.autoTitleDone = nil
 			}
 			c.mu.Unlock()
+			close(done)
 		}()
 		if err := c.generateAndSetTitle(ctx, threadID, prompt); err != nil {
 			agentLogger().Warn("automatic Codex session title generation failed thread=%s err=%v", threadID, err)
