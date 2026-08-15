@@ -1671,10 +1671,12 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 	if resp.Turn.ID != "" {
 		c.setActiveTurnID(resp.Turn.ID)
 	}
-	c.startAutoTitleGeneration(threadID, input)
 
 	select {
 	case promptResult := <-done:
+		if promptResult.turnID != "" {
+			c.startAutoTitleGeneration(threadID, input)
+		}
 		if promptResult.err != nil {
 			return promptResult.err
 		}

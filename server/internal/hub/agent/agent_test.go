@@ -4504,6 +4504,135 @@ func TestCodexAppAutoTitleRunsOnlyOnceForEligibleSession(t *testing.T) {
 	}
 }
 
+func TestCodexAppAutoTitleWaitsForOriginalPromptCompletion(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-1", "formal-thread")
+	conn.autoTitleEligible = true
+	originalTurnStarted := make(chan struct{}, 1)
+	nameSet := make(chan struct{}, 1)
+
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "turn/start":
+			params := msg["params"].(map[string]any)
+			threadID := params["threadId"].(string)
+			switch threadID {
+			case "formal-thread":
+				if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"turn": map[string]any{"id": "formal-turn"}}}); err != nil {
+					t.Errorf("emit original turn response: %v", err)
+				}
+				select {
+				case originalTurnStarted <- struct{}{}:
+				default:
+				}
+			case "title-thread":
+				if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"turn": map[string]any{"id": "title-turn"}}}); err != nil {
+					t.Errorf("emit title turn response: %v", err)
+				}
+				_ = tr.emit(map[string]any{
+					"method": "item/agentMessage/delta",
+					"params": map[string]any{
+						"threadId": "title-thread",
+						"turnId":   "title-turn",
+						"delta":    `{"title":"Name after completion","description":"Name the completed request"}`,
+					},
+				})
+				_ = tr.emit(map[string]any{
+					"method": "turn/completed",
+					"params": map[string]any{
+						"threadId": "title-thread",
+						"turn":     map[string]any{"id": "title-turn", "status": "completed"},
+					},
+				})
+			default:
+				t.Errorf("unexpected turn/start threadId=%q", threadID)
+			}
+		case "thread/start":
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "title-thread"}}}); err != nil {
+				t.Errorf("emit title thread response: %v", err)
+			}
+		case "thread/name/set":
+			select {
+			case nameSet <- struct{}{}:
+			default:
+			}
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{}}); err != nil {
+				t.Errorf("emit name response: %v", err)
+			}
+			_ = tr.emit(map[string]any{
+				"method": "thread/name/updated",
+				"params": map[string]any{"threadId": "formal-thread", "threadName": "Name after completion"},
+			})
+		case "thread/unsubscribe":
+			if err := tr.emit(map[string]any{"id": id, "result": map[string]any{"status": "unsubscribed"}}); err != nil {
+				t.Errorf("emit unsubscribe response: %v", err)
+			}
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	promptDone := make(chan struct {
+		outcome protocol.PromptOutcome
+		err     error
+	}, 1)
+	go func() {
+		var outcome protocol.PromptOutcome
+		err := conn.sendSessionPrompt(context.Background(), protocol.SessionPromptParams{
+			SessionID: "session-1",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "Name this completed request"}},
+		}, &outcome)
+		promptDone <- struct {
+			outcome protocol.PromptOutcome
+			err     error
+		}{outcome: outcome, err: err}
+	}()
+
+	select {
+	case <-originalTurnStarted:
+	case <-time.After(time.Second):
+		t.Fatal("original turn did not start")
+	}
+	select {
+	case <-nameSet:
+		t.Fatal("thread/name/set sent while the original turn was active")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	if err := tr.emit(map[string]any{
+		"method": "turn/completed",
+		"params": map[string]any{
+			"threadId": "formal-thread",
+			"turn":     map[string]any{"id": "formal-turn", "status": "completed"},
+		},
+	}); err != nil {
+		t.Fatalf("emit original turn completion: %v", err)
+	}
+
+	select {
+	case <-nameSet:
+	case <-time.After(time.Second):
+		t.Fatal("thread/name/set was not sent after the original turn completed")
+	}
+	select {
+	case result := <-promptDone:
+		if result.err != nil {
+			t.Fatalf("sendSessionPrompt: %v", result.err)
+		}
+		if result.outcome.StopReason != protocol.StopReasonEndTurn {
+			t.Fatalf("prompt stopReason=%q, want end_turn", result.outcome.StopReason)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("prompt did not complete")
+	}
+}
+
 func TestCodexAppAutoTitleFailureDoesNotFailPrompt(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

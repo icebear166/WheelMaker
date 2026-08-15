@@ -151,7 +151,9 @@ func (c *codexappConn) startAutoTitleGeneration(threadID string, input []appServ
 			}
 			c.mu.Unlock()
 		}()
-		_ = c.generateAndSetTitle(ctx, threadID, prompt)
+		if err := c.generateAndSetTitle(ctx, threadID, prompt); err != nil {
+			agentLogger().Warn("automatic Codex session title generation failed thread=%s err=%v", threadID, err)
+		}
 	}()
 }
 
