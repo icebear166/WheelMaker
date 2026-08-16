@@ -94,6 +94,32 @@ describe('session archive state helpers', () => {
     expect(split.showToggle).toBe(false);
   });
 
+  test('keeps pinned sessions visible when older sessions collapse', () => {
+    const split = splitOlderProjectSessions({
+      sessions: [
+        session('pinned-old', '2026-05-20T00:00:00.000Z', {pinned: true}),
+        session('recent-1', '2026-06-02T00:00:00.000Z'),
+        session('recent-2', '2026-06-01T00:00:00.000Z'),
+        session('recent-3', '2026-05-31T00:00:00.000Z'),
+        session('older-a', '2026-05-19T00:00:00.000Z'),
+        session('older-b', '2026-05-18T00:00:00.000Z'),
+      ],
+      nowMs,
+      olderThanDays: 5,
+      expanded: false,
+    });
+
+    expect(split.visibleSessions.map(item => item.sessionId)).toEqual([
+      'pinned-old',
+      'recent-1',
+      'recent-2',
+      'recent-3',
+    ]);
+    expect(split.hiddenOlderSessions.map(item => item.sessionId)).toEqual(['older-a', 'older-b']);
+    expect(split.hiddenOlderCount).toBe(2);
+    expect(split.showToggle).toBe(true);
+  });
+
   test('persists older expanded state and ignores invalid storage JSON', () => {
     const storage = new MemoryStorage();
 
@@ -122,6 +148,24 @@ describe('session archive state helpers', () => {
     expect(candidates.map(item => `${item.project.projectId}:${item.session.sessionId}`)).toEqual([
       'p1:old',
       'p2:hidden-project-old',
+    ]);
+  });
+
+  test('excludes pinned sessions from batch archive candidates', () => {
+    const candidates = collectArchiveCandidates({
+      projects,
+      sessionsByProjectId: {
+        p1: [
+          session('pinned-old', '2026-05-20T00:00:00.000Z', {pinned: true}),
+          session('old', '2026-05-20T00:00:00.000Z'),
+        ],
+      },
+      nowMs,
+      olderThanDays: 7,
+    });
+
+    expect(candidates.map(item => `${item.project.projectId}:${item.session.sessionId}`)).toEqual([
+      'p1:old',
     ]);
   });
 

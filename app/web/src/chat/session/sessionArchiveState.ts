@@ -65,10 +65,11 @@ export function splitOlderProjectSessions(input: {
   const recent: RegistryChatSession[] = [];
   const older: RegistryChatSession[] = [];
   for (const session of input.sessions) {
-    if (isOlderThanDays(session.updatedAt, input.nowMs, olderThanDays)) {
-      older.push(session);
-    } else {
+    // Pinned sessions stay visible regardless of age.
+    if (session.pinned === true || !isOlderThanDays(session.updatedAt, input.nowMs, olderThanDays)) {
       recent.push(session);
+    } else {
+      older.push(session);
     }
   }
 
@@ -157,6 +158,9 @@ export function collectArchiveCandidates(input: {
     const sessions = input.sessionsByProjectId[project.projectId] ?? [];
     for (const session of sessions) {
       if (session.running === true) {
+        continue;
+      }
+      if (session.pinned === true) {
         continue;
       }
       if (!isOlderThanDays(session.updatedAt, input.nowMs, input.olderThanDays)) {
