@@ -38,13 +38,13 @@ describe('web responsive shell split', () => {
     expect(shellTsx).toContain("data-chat-preview-open={desktopChatPreviewOpen ? 'true' : undefined}");
     expect(shellTsx).toContain("data-desktop-window-controls={desktopWindowControlsVisible ? 'true' : undefined}");
     expect(shellTsx).toMatch(
-      /export function MobileShell[\s\S]*?className=\{`workspace theme-\$\{themeMode\} narrow-shell`\}[\s\S]*?className=\{`drawer-overlay \$\{drawerOpen \? 'show' : ''\}`\}/,
+      /export function MobileShell[\s\S]*?className=\{`workspace theme-\$\{themeMode\} narrow-shell`\}[\s\S]*?className=\{`drawer-overlay \$\{visibleDrawerOpen \? 'show' : ''\}`\}/,
     );
     expect(shellTsx).toMatch(
-      /<div\s+className=\{`drawer-overlay \$\{drawerOpen \? 'show' : ''\}`\}\s+onClick=\{onCloseDrawer\}\s+\/>/,
+      /<div\s+className=\{`drawer-overlay \$\{visibleDrawerOpen \? 'show' : ''\}`\}\s+onClick=\{onCloseDrawer\}\s+\/>/,
     );
     expect(shellTsx).toMatch(
-      /<aside\s+className=\{`drawer \$\{drawerOpen \? 'show' : ''\}`\}[\s\S]*?onClick=\{event => event\.stopPropagation\(\)\}/,
+      /<aside\s+className=\{`drawer \$\{visibleDrawerOpen \? 'show' : ''\}`\}[\s\S]*?onClick=\{event => event\.stopPropagation\(\)\}/,
     );
   });
 

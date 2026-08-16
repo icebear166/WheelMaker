@@ -27,6 +27,7 @@ export type MobileShellProps = ShellContentProps & {
   floatingControlSide: 'left' | 'right';
   mobileSettingsScreen: ReactNode;
   mobileOverlay: ReactNode;
+  mobileStandaloneSurfaceOpen: boolean;
   drawerOpen: boolean;
   onCloseDrawer: () => void;
 };
@@ -87,11 +88,14 @@ export function MobileShell({
   floatingControlSide,
   mobileSettingsScreen,
   mobileOverlay,
+  mobileStandaloneSurfaceOpen,
   sidebar,
   main,
   drawerOpen,
   onCloseDrawer,
 }: MobileShellProps) {
+  const visibleDrawerOpen = drawerOpen && !mobileStandaloneSurfaceOpen;
+
   return (
     <div
       className={`workspace theme-${themeMode} narrow-shell`}
@@ -106,11 +110,11 @@ export function MobileShell({
       </div>
 
       <div
-        className={`drawer-overlay ${drawerOpen ? 'show' : ''}`}
+        className={`drawer-overlay ${visibleDrawerOpen ? 'show' : ''}`}
         onClick={onCloseDrawer}
       />
       <aside
-        className={`drawer ${drawerOpen ? 'show' : ''}`}
+        className={`drawer ${visibleDrawerOpen ? 'show' : ''}`}
         onClick={event => event.stopPropagation()}
       >
         {sidebar}

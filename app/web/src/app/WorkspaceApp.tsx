@@ -99,6 +99,7 @@ import {AppLaunchScreen, resolveAppLaunchView} from '../shell/AppLaunchScreen';
 import { installDesktopZoomGuard } from '../shell/desktopZoomGuard';
 import { installPageRefreshGuard } from '../shell/pageRefreshGuard';
 import { ResponsiveShell } from '../shell/ResponsiveShell';
+import {isMobileStandaloneSurfaceOpen} from '../shell/mobileDrawerState';
 import {applyDocumentTheme} from '../theme/documentTheme';
 import {
   getLatestSessionReadCursor,
@@ -3468,6 +3469,20 @@ export function App() {
     }
   }, []);
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
+  const mobileStandaloneSurfaceOpen = !isWide && isMobileStandaloneSurfaceOpen({
+    settingsOpen: sidebarSettingsOpen,
+    releasePublishingOpen,
+    portRelayOpen: portRelayScreenOpen,
+    sharesOpen: sharesScreenOpen,
+    portRelayFrameOpen: mobilePortRelayFrameOpen,
+  });
+
+  useEffect(() => {
+    if (mobileStandaloneSurfaceOpen && drawerOpen) {
+      setDrawerOpen(false);
+    }
+  }, [drawerOpen, mobileStandaloneSurfaceOpen, setDrawerOpen]);
+
   const fileIconResourcesNeeded = quickFileOpen ||
     (chatPreviewOpen && previewWorkbench.drawerMode === 'files');
 
@@ -22581,6 +22596,7 @@ export function App() {
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSharesScreen ?? mobileReleasePublishingScreen ?? mobilePortRelayScreen ?? mobileSettingsScreen}
+        mobileStandaloneSurfaceOpen={mobileStandaloneSurfaceOpen}
         mobileOverlay={(
           <>
             {mobileUsageOverlay}

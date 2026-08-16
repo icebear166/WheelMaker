@@ -27,6 +27,16 @@ test('opening settings from the app menu closes the mobile drawer immediately', 
   expect(openSettingsRoot).toContain('setDrawerOpen(false);');
 });
 
+test('all mobile standalone destinations are wired into the shell drawer guard', () => {
+  expect(workspaceApp).toContain('isMobileStandaloneSurfaceOpen({');
+  expect(workspaceApp).toContain('settingsOpen: sidebarSettingsOpen');
+  expect(workspaceApp).toContain('releasePublishingOpen');
+  expect(workspaceApp).toContain('portRelayOpen: portRelayScreenOpen');
+  expect(workspaceApp).toContain('sharesOpen: sharesScreenOpen');
+  expect(workspaceApp).toContain('portRelayFrameOpen: mobilePortRelayFrameOpen');
+  expect(workspaceApp).toContain('mobileStandaloneSurfaceOpen={mobileStandaloneSurfaceOpen}');
+});
+
 test('mobile Chat title bar reuses the Drawer WheelMaker logo menu and geometry', () => {
   const renderChatTitleBar = sourceBetween(
     workspaceApp,
