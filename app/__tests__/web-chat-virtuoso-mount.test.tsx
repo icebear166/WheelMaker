@@ -384,6 +384,65 @@ describe('chat virtuoso mount fallback', () => {
     }
   });
 
+  test('imperative top scroll jumps to the first display item', async () => {
+    const animationFrames = installAnimationFrameQueue();
+    const scrollParent = createScrollParent({
+      clientHeight: 500,
+      scrollHeight: 1200,
+      scrollTo: jest.fn(),
+    });
+    const listRef = React.createRef<ChatVirtuosoTurnListHandle>();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatVirtuosoTurnList
+            ref={listRef}
+            scrollRef={{current: scrollParent}}
+            displayIndex={{items: [turnItem(1), turnItem(3)]}}
+            runtimeKey="project-a/session-a"
+            renderItem={item => (
+              <span>{item.key}</span>
+            )}
+          />,
+        );
+      });
+
+      await ReactTestRenderer.act(() => {
+        listRef.current?.scrollToTop('auto');
+      });
+
+      expect(mockScrollToIndexCalls).toEqual([{
+        index: 0,
+        align: 'start',
+        behavior: 'auto',
+      }]);
+
+      await flushAnimationFrames(animationFrames.frameCallbacks);
+
+      expect(mockScrollToIndexCalls).toEqual([
+        {
+          index: 0,
+          align: 'start',
+          behavior: 'auto',
+        },
+        {
+          index: 0,
+          align: 'start',
+          behavior: 'auto',
+        },
+      ]);
+    } finally {
+      if (renderer) {
+        await ReactTestRenderer.act(() => {
+          renderer!.unmount();
+        });
+      }
+      animationFrames.restore();
+    }
+  });
+
   test('tail-locked height changes settle the scroll parent to its physical bottom', async () => {
     const animationFrames = installAnimationFrameQueue();
     const scrollTo = jest.fn();

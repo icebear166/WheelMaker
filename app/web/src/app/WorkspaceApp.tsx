@@ -4955,7 +4955,7 @@ export function App() {
     // back to the bottom before the jump lands.
     chatAutoScrollFollowRef.current = false;
     setChatShowScrollToTop(false);
-    chatVirtuosoListRef.current?.scrollToTurnIndex(0, 'auto');
+    chatVirtuosoListRef.current?.scrollToTop('auto');
   }, []);
 
   const forceChatScrollToBottom = useCallback(() => {

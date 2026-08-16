@@ -26,6 +26,7 @@ export type ChatVirtuosoItem = {
 export type ChatVirtuosoTurnListHandle = {
   autoscrollToBottom: () => void;
   scrollToBottom: (behavior?: ChatVirtuosoScrollBehavior) => void;
+  scrollToTop: (behavior?: ChatVirtuosoScrollBehavior) => void;
   scrollToTurnIndex: (turnIndex: number, behavior?: ChatVirtuosoScrollBehavior) => void;
 };
 
@@ -320,12 +321,8 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
     [displayIndex.items.length],
   );
 
-  const scrollToTurnIndex = React.useCallback(
-    (turnIndex: number, behavior: ChatVirtuosoScrollBehavior = 'auto') => {
-      const displayIndexPosition = resolveChatDisplayScrollIndex(displayIndex, turnIndex);
-      if (displayIndexPosition === null) {
-        return;
-      }
+  const scrollToDisplayPosition = React.useCallback(
+    (displayIndexPosition: number, behavior: ChatVirtuosoScrollBehavior = 'auto') => {
       cancelTurnScrollSettle();
       const location = {
         index: displayIndexPosition,
@@ -343,7 +340,30 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
         });
       });
     },
-    [cancelTurnScrollSettle, displayIndex],
+    [cancelTurnScrollSettle],
+  );
+
+  const scrollToTurnIndex = React.useCallback(
+    (turnIndex: number, behavior: ChatVirtuosoScrollBehavior = 'auto') => {
+      const displayIndexPosition = resolveChatDisplayScrollIndex(displayIndex, turnIndex);
+      if (displayIndexPosition === null) {
+        return;
+      }
+      scrollToDisplayPosition(displayIndexPosition, behavior);
+    },
+    [displayIndex, scrollToDisplayPosition],
+  );
+
+  // Turn indexes are 1-based (0 is the "no turn" sentinel), so jumping to the
+  // top goes through the display index directly instead of scrollToTurnIndex.
+  const scrollToTop = React.useCallback(
+    (behavior: ChatVirtuosoScrollBehavior = 'auto') => {
+      if (displayIndex.items.length === 0) {
+        return;
+      }
+      scrollToDisplayPosition(0, behavior);
+    },
+    [displayIndex.items.length, scrollToDisplayPosition],
   );
 
   const settleScrollParentToBottom = React.useCallback(
@@ -423,8 +443,9 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
       settleScrollParentToBottom(behavior);
       requestScrollToLastDisplayItem(behavior, {includeIndexScroll: true});
     },
+    scrollToTop,
     scrollToTurnIndex,
-  }), [requestScrollToLastDisplayItem, scrollToLastDisplayItem, scrollToTurnIndex, settleScrollParentToBottom]);
+  }), [requestScrollToLastDisplayItem, scrollToLastDisplayItem, scrollToTop, scrollToTurnIndex, settleScrollParentToBottom]);
 
   if (!scrollParent) {
     return (

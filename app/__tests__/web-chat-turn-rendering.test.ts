@@ -313,6 +313,8 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('<ChatIcon name="arrowDownToLine" size={16} />');
     expect(main).toContain('<ChatIcon name="arrowUpToLine" size={16} />');
     expect(main).toContain('onClick={scrollChatToTop}');
+    expect(main).toContain("chatVirtuosoListRef.current?.scrollToTop('auto');");
+    expect(main).not.toContain('scrollToTurnIndex(0');
     expect(main).not.toContain('updateSelectedChatWindowFromScroll(event.currentTarget, direction);');
   });
 
