@@ -2597,8 +2597,10 @@ describe('web chat integration', () => {
     expect(chatSurface).not.toContain('renderChatSessionHeader(false)');
     expect(chatSurface).not.toContain('className="breadcrumb-separator"');
     expect(mainTsx).toContain('const selectedChatPromptHistory = useMemo(');
-    expect(mainTsx).toContain('.filter(message => isPromptStartMessage(message))');
-    expect(mainTsx).toContain('summarizeChatTitlePrompt(msgText(message.method, message.param), fallback)');
+    expect(mainTsx).toContain('buildChatPromptHistory(selectedFullChatMessages)');
+    expect(mainTsx).toContain('resolveCurrentChatPromptIndex(activeChatPromptHistory, chatVisibleTurnIndex)');
+    expect(mainTsx).toContain('onVisibleTurnChange={setChatVisibleTurnIndex}');
+    expect(mainTsx).toContain('focusMenuItemAt(chatTitlePromptMenuRef.current, currentChatPromptIndex)');
     expect(mainTsx).toContain('const jumpToChatPromptTurn = useCallback((turnIndex: number) => {');
     expect(mainTsx).toContain("chatVirtuosoListRef.current?.scrollToTurnIndex(turnIndex, 'smooth');");
     expect(mainTsx).toContain('setChatTitlePromptMenuOpen(false);');
@@ -2628,7 +2630,11 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("className={`chat-title-project-menu topbar-menu-surface${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}");
     expect(mainTsx).toContain('className={`chat-title-project-menu-item${selected ? \' selected\' : \'\'}`}');
     expect(mainTsx).toContain("className={`chat-title-prompt-menu topbar-menu-surface${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}");
-    expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
+    expect(mainTsx).toContain("className={`chat-title-prompt-menu-item${index < currentChatPromptIndex ? ' past' : ''}${index === currentChatPromptIndex ? ' current' : ''}`}");
+    expect(mainTsx).toContain('className="chat-title-prompt-menu-header"');
+    expect(mainTsx).toContain('className="chat-title-prompt-menu-rail"');
+    expect(mainTsx).toContain('handleMenuKeyDown(event, chatTitlePromptMenuRef.current)');
+    expect(mainTsx).not.toContain('data-tooltip={item.preview}');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(mainTsx).toContain('className="chat-title-actions"');
     expect(mainTsx).not.toContain('aria-label="Fork current session"');

@@ -364,46 +364,123 @@
   left: 12px;
   top: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));
   z-index: 86;
-  width: min(430px, calc(100vw - 28px));
   max-height: min(360px, calc(100vh - 96px));
   overflow-y: auto;
 }
 
+.chat-title-prompt-menu-header {
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-faint);
+  padding: 4px 10px 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.4;
+  user-select: none;
+}
+
 .chat-title-prompt-menu-item {
+  position: relative;
   width: 100%;
-  min-height: 42px;
+  min-height: 40px;
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 9px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
   border: 0;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 6px 10px 6px 8px;
   background: transparent;
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
 }
 
-.chat-title-prompt-menu-item:hover {
+.chat-title-prompt-menu-item:hover,
+.chat-title-prompt-menu-item:focus-visible {
   background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
-.chat-title-prompt-menu-label {
-  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+.chat-title-prompt-menu-item:focus-visible {
+  outline: none;
+}
+
+/* Timeline spine: every item draws the half-segments above and below its dot,
+   so neighbouring halves join into a continuous rail. Segments up to the
+   current entry are accent-filled; everything past it stays muted. */
+.chat-title-prompt-menu-item::before,
+.chat-title-prompt-menu-item::after {
+  content: '';
+  position: absolute;
+  left: 15px; /* rail center: 8px padding + 16px rail / 2 - 1px */
+  width: 2px;
+  background: color-mix(in srgb, var(--text-tertiary) 32%, transparent);
+}
+
+.chat-title-prompt-menu-item::before {
+  top: 0;
+  height: 50%;
+}
+
+.chat-title-prompt-menu-item::after {
+  top: 50%;
+  bottom: 0;
+}
+
+.chat-title-prompt-menu-item:first-of-type::before,
+.chat-title-prompt-menu-item:last-of-type::after {
+  display: none;
+}
+
+.chat-title-prompt-menu-item.past::before,
+.chat-title-prompt-menu-item.past::after,
+.chat-title-prompt-menu-item.current::before {
+  background: color-mix(in srgb, var(--accent-primary) 72%, transparent);
+}
+
+.chat-title-prompt-menu-rail {
+  position: relative;
+  width: 16px;
+  height: 16px;
+}
+
+.chat-title-prompt-menu-rail::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 7px;
+  height: 7px;
+  border: 2px solid color-mix(in srgb, var(--text-tertiary) 55%, transparent);
+  border-radius: 50%;
+  background: var(--surface-overlay);
+}
+
+.chat-title-prompt-menu-item.past .chat-title-prompt-menu-rail::before {
+  border-color: color-mix(in srgb, var(--accent-primary) 72%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 72%, transparent);
+}
+
+.chat-title-prompt-menu-item.current .chat-title-prompt-menu-rail::before {
+  width: 9px;
+  height: 9px;
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 22%, transparent);
 }
 
 .chat-title-prompt-menu-preview {
   min-width: 0;
   overflow: hidden;
-  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
-  font-size: 12px;
+  color: var(--text-primary);
+  font-size: 13px;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.chat-title-prompt-menu-item.current .chat-title-prompt-menu-preview {
+  font-weight: 600;
 }
 
 .chat-title-actions {

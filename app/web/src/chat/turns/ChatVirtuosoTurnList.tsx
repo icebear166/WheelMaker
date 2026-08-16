@@ -38,9 +38,27 @@ export type ChatVirtuosoTurnListProps = {
   bottomBuffer?: number;
   atBottomThreshold?: number;
   onAtBottomChange?: (atBottom: boolean) => void;
+  onVisibleTurnChange?: (turnIndex: number) => void;
   shouldAutoscroll?: () => boolean;
   renderItem: (item: ChatDisplayIndexItem, virtualItem: ChatVirtuosoItem) => React.ReactNode;
 };
+
+/**
+ * First rendered row whose bottom edge crosses the viewport top — the row the
+ * reader is currently looking at. Rows fully scrolled above (bottom at or
+ * under the viewport top) are skipped; returns null when nothing is visible.
+ */
+export function findTopVisibleRowIndex(
+  rows: Array<{index: number; bottom: number}>,
+  viewportTop: number,
+): number | null {
+  for (const row of rows) {
+    if (row.bottom > viewportTop + 1) {
+      return row.index;
+    }
+  }
+  return null;
+}
 
 const ChatVirtuosoList: Components<ChatDisplayIndexItem, ChatVirtuosoContext>['List'] =
   React.forwardRef<HTMLDivElement, React.ComponentProps<'div'>>(
@@ -131,6 +149,7 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
   bottomBuffer = DEFAULT_BOTTOM_BUFFER,
   atBottomThreshold = DEFAULT_AT_BOTTOM_THRESHOLD,
   onAtBottomChange,
+  onVisibleTurnChange,
   shouldAutoscroll,
   renderItem,
 }: ChatVirtuosoTurnListProps, ref) {
@@ -138,6 +157,9 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
   const tailLockSettleFrameRef = React.useRef<number | null>(null);
   const tailLockSettleFollowupFrameRef = React.useRef<number | null>(null);
   const turnScrollSettleFrameRef = React.useRef<number | null>(null);
+  const displayIndexRef = React.useRef(displayIndex);
+  displayIndexRef.current = displayIndex;
+  const lastReportedVisibleTurnRef = React.useRef(-1);
   const [scrollParent, setScrollParent] = React.useState<HTMLElement | null>(null);
   const previousTailRef = React.useRef<{
     runtimeKey: string;
@@ -236,6 +258,53 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
     },
     [onAtBottomChange],
   );
+
+  // Reports the turn that owns the row at the top of the viewport. Rows carry
+  // virtuoso's data-index; overscan rows above the viewport are skipped by
+  // their geometry, so rangeChanged (which includes overscan) is not usable.
+  React.useEffect(() => {
+    if (!scrollParent || !onVisibleTurnChange) {
+      return undefined;
+    }
+    lastReportedVisibleTurnRef.current = -1;
+    let frame = 0;
+    const report = () => {
+      frame = 0;
+      if (typeof scrollParent.querySelectorAll !== 'function') {
+        return;
+      }
+      const rows: Array<{index: number; bottom: number}> = [];
+      scrollParent.querySelectorAll('.chat-virtuoso-row').forEach(row => {
+        const raw = row.getAttribute('data-index');
+        const index = raw === null ? Number.NaN : Number(raw);
+        if (Number.isInteger(index)) {
+          rows.push({index, bottom: row.getBoundingClientRect().bottom});
+        }
+      });
+      const topIndex = findTopVisibleRowIndex(rows, scrollParent.getBoundingClientRect().top);
+      const turnIndex = topIndex === null
+        ? 0
+        : displayIndexRef.current.items[topIndex]?.turnIndex ?? 0;
+      if (turnIndex === lastReportedVisibleTurnRef.current) {
+        return;
+      }
+      lastReportedVisibleTurnRef.current = turnIndex;
+      onVisibleTurnChange(turnIndex);
+    };
+    const onScroll = () => {
+      if (frame === 0) {
+        frame = window.requestAnimationFrame(report);
+      }
+    };
+    report();
+    scrollParent.addEventListener('scroll', onScroll, {passive: true});
+    return () => {
+      scrollParent.removeEventListener('scroll', onScroll);
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [scrollParent, runtimeKey, onVisibleTurnChange]);
 
   const scrollToLastDisplayItem = React.useCallback(
     (behavior: ChatVirtuosoScrollBehavior = 'auto') => {

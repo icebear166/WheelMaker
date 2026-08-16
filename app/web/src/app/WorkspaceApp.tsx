@@ -195,7 +195,7 @@ import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {SessionIcon, type SessionIconName} from '../chat/sessionlist/SessionIcon';
 import {SessionSearchProjectPicker} from '../chat/session/SessionSearchProjectPicker';
 import {MENU_EXIT_MS, useMenuExitFlag, useMenuExitState} from '../chat/sessionlist/menuExit';
-import {focusFirstMenuItem, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
+import {focusFirstMenuItem, focusMenuItemAt, handleMenuKeyDown} from '../common/menuKeyboardNavigation';
 import {ChatStopStatusPill} from '../chat/composer/ChatStopStatusPill';
 import {useChatComposerMenu} from '../chat/composer/useChatComposerMenu';
 import {ChatIcon} from '../chat/ChatIcon';
@@ -286,6 +286,7 @@ import {
 import {useChatLayoutMetrics} from '../chat/layout/chatLayoutMetrics';
 import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from '../chat/layout/wideProjectActionPopover';
 import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';
+import {buildChatPromptHistory, resolveCurrentChatPromptIndex} from '../chat/turns/chatPromptHistory';
 import {
   DESKTOP_SESSION_LIST_DENSITY,
   MOBILE_SESSION_LIST_DENSITY,
@@ -1865,14 +1866,6 @@ function msgText(method: string, param: Record<string, unknown>): string {
     return typeof param.stopReason === 'string' ? param.stopReason : '';
   }
   return extractTextFromSessionTurnParam(param);
-}
-
-function summarizeChatTitlePrompt(text: string, fallback: string): string {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return fallback;
-  }
-  return normalized.length > 96 ? `${normalized.slice(0, 95)}...` : normalized;
 }
 
 function msgBlocks(
@@ -3980,6 +3973,9 @@ export function App() {
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
+  // Turn owning the row at the top of the chat viewport, reported by
+  // ChatVirtuosoTurnList; 0 means unknown (the list settles at the bottom).
+  const [chatVisibleTurnIndex, setChatVisibleTurnIndex] = useState(0);
 
   const [chatSlashQuery, setChatSlashQuery] = useState<string | null>(null);
   const [chatSlashActiveIndex, setChatSlashActiveIndex] = useState(0);
@@ -4307,25 +4303,20 @@ export function App() {
     [archivedMode, selectedFullChatMessages],
   );
   const selectedChatPromptHistory = useMemo(
-    () =>
-      [...selectedFullChatMessages]
-        .filter(message => isPromptStartMessage(message))
-        .sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0))
-        .map((message, index) => {
-          const turnIndex = Math.max(0, Math.trunc(message.turnIndex ?? 0));
-          const fallback = `Prompt ${index + 1}`;
-          return {
-            key: `${message.sessionId}:${turnIndex}:${message.method}`,
-            label: fallback,
-            preview: summarizeChatTitlePrompt(msgText(message.method, message.param), fallback),
-            turnIndex,
-          };
-        })
-        .filter(item => item.turnIndex > 0),
+    () => buildChatPromptHistory(selectedFullChatMessages),
     [selectedFullChatMessages],
   );
   const activeChatPromptHistory = !archivedMode ? selectedChatPromptHistory : [];
   const chatTitlePromptMenuAvailable = activeChatPromptHistory.length > 0;
+  const currentChatPromptIndex = resolveCurrentChatPromptIndex(activeChatPromptHistory, chatVisibleTurnIndex);
+  // Opening the prompt history menu focuses the entry owning the turn the
+  // reader is currently looking at; focusing also scrolls it into view.
+  useEffect(() => {
+    if (!chatTitlePromptMenuOpen) {
+      return;
+    }
+    focusMenuItemAt(chatTitlePromptMenuRef.current, currentChatPromptIndex);
+  }, [chatTitlePromptMenuOpen, currentChatPromptIndex]);
   const chatTitleProjectMenuStyle = useMemo<React.CSSProperties | undefined>(() => {
     if (!chatTitleProjectMenuOpen || typeof window === 'undefined') {
       return undefined;
@@ -19450,6 +19441,7 @@ export function App() {
                   atBottomThreshold={CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD}
                   bottomBuffer={chatPermissionDialogHeight > 0 ? chatPermissionDialogHeight + CHAT_PERMISSION_DIALOG_SCROLL_GAP : 0}
                   onAtBottomChange={handleChatAtBottomChange}
+                  onVisibleTurnChange={setChatVisibleTurnIndex}
                   shouldAutoscroll={shouldAutoscrollChat}
                   renderItem={renderChatVirtuosoItem}
                 />
@@ -20707,17 +20699,33 @@ export function App() {
       role="menu"
       aria-label="Prompt history"
       style={chatTitlePromptMenuStyle}
+      onKeyDown={event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          chatTitlePromptButtonRef.current?.focus();
+          setChatTitlePromptMenuOpen(false);
+          return;
+        }
+        handleMenuKeyDown(event, chatTitlePromptMenuRef.current);
+      }}
     >
-      {activeChatPromptHistory.map(item => (
+      <div className="chat-title-prompt-menu-header" aria-hidden="true">
+        {`Prompts · ${activeChatPromptHistory.length}`}
+      </div>
+      {activeChatPromptHistory.map((item, index) => (
         <button
           key={item.key}
           type="button"
-          className="chat-title-prompt-menu-item"
+          className={`chat-title-prompt-menu-item${index < currentChatPromptIndex ? ' past' : ''}${index === currentChatPromptIndex ? ' current' : ''}`}
           role="menuitem"
-          data-tooltip={item.preview}
-          onClick={() => jumpToChatPromptTurn(item.turnIndex)}
+          aria-label={`Prompt ${item.position} of ${activeChatPromptHistory.length}: ${item.preview}`}
+          onClick={() => {
+            chatTitlePromptButtonRef.current?.focus();
+            jumpToChatPromptTurn(item.turnIndex);
+          }}
         >
-          <span className="chat-title-prompt-menu-label">{item.label}</span>
+          <span className="chat-title-prompt-menu-rail" aria-hidden="true" />
           <span className="chat-title-prompt-menu-preview">{item.preview}</span>
         </button>
       ))}

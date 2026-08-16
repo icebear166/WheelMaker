@@ -1,11 +1,33 @@
 import fs from 'fs';
 import path from 'path';
+import {focusMenuItemAt} from '../web/src/common/menuKeyboardNavigation';
 
 const root = path.join(__dirname, '..', 'web', 'src');
 
 function read(relativePath: string): string {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
+
+describe('focusMenuItemAt', () => {
+  test('focuses the requested enabled item, clamping into range', () => {
+    const items = [{focus: jest.fn()}, {focus: jest.fn()}, {focus: jest.fn()}];
+    const container = {querySelectorAll: () => items} as unknown as HTMLElement;
+
+    focusMenuItemAt(container, 1);
+    expect(items[1].focus).toHaveBeenCalledTimes(1);
+
+    focusMenuItemAt(container, 99);
+    expect(items[2].focus).toHaveBeenCalledTimes(1);
+
+    focusMenuItemAt(container, -3);
+    expect(items[0].focus).toHaveBeenCalledTimes(1);
+  });
+
+  test('does nothing for an empty menu', () => {
+    const container = {querySelectorAll: () => []} as unknown as HTMLElement;
+    expect(() => focusMenuItemAt(container, 2)).not.toThrow();
+  });
+});
 
 describe('menu keyboard navigation', () => {
   test('gives the new context and session menus roving focus controls', () => {

@@ -1,6 +1,10 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../web/src/chat/turns/ChatVirtuosoTurnList';
+import {
+  ChatVirtuosoTurnList,
+  findTopVisibleRowIndex,
+  type ChatVirtuosoTurnListHandle,
+} from '../web/src/chat/turns/ChatVirtuosoTurnList';
 import type {ChatDisplayIndexItem} from '../web/src/chat/turns/chatDisplayIndex';
 
 const mockVirtuosoProps: any[] = [];
@@ -671,6 +675,95 @@ describe('chat virtuoso mount fallback', () => {
           renderer!.unmount();
         });
       }
+    }
+  });
+
+  test('findTopVisibleRowIndex picks the first row crossing the viewport top', () => {
+    expect(findTopVisibleRowIndex([
+      {index: 0, bottom: 50},
+      {index: 1, bottom: 140},
+      {index: 2, bottom: 400},
+    ], 100)).toBe(1);
+    expect(findTopVisibleRowIndex([{index: 0, bottom: 50}], 100)).toBeNull();
+    expect(findTopVisibleRowIndex([], 100)).toBeNull();
+  });
+
+  test('reports the turn owning the top of the viewport on scroll', async () => {
+    const animationFrames = installAnimationFrameQueue();
+    const listeners: Record<string, (() => void) | undefined> = {};
+    const rowBottoms = [90, 300];
+    const rows = [0, 1].map(index => ({
+      getAttribute: (name: string) => (name === 'data-index' ? String(index) : null),
+      getBoundingClientRect: () => ({bottom: rowBottoms[index]}),
+    }));
+    const scrollParent = {
+      clientHeight: 500,
+      scrollHeight: 1200,
+      scrollTo: jest.fn(),
+      getBoundingClientRect: () => ({top: 100}),
+      querySelectorAll: () => rows,
+      addEventListener: (name: string, listener: () => void) => {
+        listeners[name] = listener;
+      },
+      removeEventListener: () => undefined,
+    } as unknown as HTMLElement;
+    const onVisibleTurnChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatVirtuosoTurnList
+            scrollRef={{current: scrollParent}}
+            displayIndex={{items: [turnItem(1), turnItem(3)]}}
+            runtimeKey="project-a/session-a"
+            onVisibleTurnChange={onVisibleTurnChange}
+            renderItem={item => (
+              <span>{item.key}</span>
+            )}
+          />,
+        );
+      });
+
+      // Row 0 ends above the viewport top (90 < 100); row 1 crosses it → turn 3.
+      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(3);
+
+      await ReactTestRenderer.act(() => {
+        listeners.scroll?.();
+      });
+      await flushAnimationFrames(animationFrames.frameCallbacks);
+      expect(onVisibleTurnChange).toHaveBeenCalledTimes(1);
+
+      rowBottoms[0] = 200;
+      await ReactTestRenderer.act(() => {
+        listeners.scroll?.();
+      });
+      await flushAnimationFrames(animationFrames.frameCallbacks);
+      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(1);
+      expect(onVisibleTurnChange).toHaveBeenCalledTimes(2);
+
+      await ReactTestRenderer.act(() => {
+        renderer!.update(
+          <ChatVirtuosoTurnList
+            scrollRef={{current: scrollParent}}
+            displayIndex={{items: [turnItem(1), turnItem(3)]}}
+            runtimeKey="project-a/session-b"
+            onVisibleTurnChange={onVisibleTurnChange}
+            renderItem={item => (
+              <span>{item.key}</span>
+            )}
+          />,
+        );
+      });
+      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(1);
+      expect(onVisibleTurnChange).toHaveBeenCalledTimes(3);
+    } finally {
+      if (renderer) {
+        await ReactTestRenderer.act(() => {
+          renderer!.unmount();
+        });
+      }
+      animationFrames.restore();
     }
   });
 });

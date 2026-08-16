@@ -9,6 +9,18 @@ export function focusFirstMenuItem(container: HTMLElement | null): void {
   enabledMenuItems(container)[0]?.focus();
 }
 
+/**
+ * Focuses the enabled item at `index`, clamping into range. Menus that reopen
+ * to a remembered position (e.g. a table of contents) focus their current
+ * entry instead of the first one.
+ */
+export function focusMenuItemAt(container: HTMLElement | null, index: number): void {
+  const items = enabledMenuItems(container);
+  if (items.length === 0) return;
+  const clamped = Math.max(0, Math.min(Math.trunc(index), items.length - 1));
+  items[clamped]?.focus();
+}
+
 export function handleMenuKeyDown(
   event: ReactKeyboardEvent,
   container: HTMLElement | null,
