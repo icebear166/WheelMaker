@@ -91,9 +91,10 @@ export function resolveChatKeyboardInsetScrollAction(input: {
   return nextInset > previousInset ? 'immediate' : 'deferred';
 }
 
-export type ChatScrollToBottomVisibility = {
+export type ChatScrollNavVisibility = {
   atBottom: boolean;
   showScrollToBottom: boolean;
+  showScrollToTop: boolean;
 };
 
 export function resolveChatScrollBottomTop(input: {
@@ -105,16 +106,21 @@ export function resolveChatScrollBottomTop(input: {
   return Math.max(0, scrollHeight - clientHeight);
 }
 
-export function resolveChatScrollToBottomVisibility(input: {
+export function resolveChatScrollNavVisibility(input: {
   scrollTop: number;
   scrollHeight: number;
   clientHeight: number;
   threshold: number;
-}): ChatScrollToBottomVisibility {
+  /** Distance from the top beyond which jump-to-top appears; defaults to one viewport. */
+  topThreshold?: number;
+}): ChatScrollNavVisibility {
   const scrollTop = Number.isFinite(input.scrollTop) ? Math.max(0, input.scrollTop) : 0;
   const scrollHeight = Number.isFinite(input.scrollHeight) ? Math.max(0, input.scrollHeight) : 0;
   const clientHeight = Number.isFinite(input.clientHeight) ? Math.max(0, input.clientHeight) : 0;
   const threshold = Number.isFinite(input.threshold) ? Math.max(0, input.threshold) : 0;
+  const topThreshold = Number.isFinite(input.topThreshold)
+    ? Math.max(0, input.topThreshold ?? 0)
+    : clientHeight;
   const distanceFromBottom = Math.max(
     0,
     resolveChatScrollBottomTop({scrollHeight, clientHeight}) - scrollTop,
@@ -124,6 +130,9 @@ export function resolveChatScrollToBottomVisibility(input: {
   return {
     atBottom,
     showScrollToBottom: !atBottom,
+    // The nav group only exists while away from the bottom, so jump-to-top is
+    // offered on top of that, once the reader is at least a viewport deep.
+    showScrollToTop: !atBottom && scrollTop > topThreshold,
   };
 }
 

@@ -9,7 +9,7 @@ import {
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollBottomTop,
-  resolveChatScrollToBottomVisibility,
+  resolveChatScrollNavVisibility,
   shouldAutoScrollChatToBottom,
 } from '../web/src/chat/layout/chatScrollIntent';
 
@@ -107,23 +107,41 @@ describe('web drag scroll behavior', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(
-      resolveChatScrollToBottomVisibility({
+      resolveChatScrollNavVisibility({
         scrollTop: 300,
         scrollHeight: 1200,
         clientHeight: 500,
         threshold: 80,
       }),
-    ).toEqual({atBottom: false, showScrollToBottom: true});
+    ).toEqual({atBottom: false, showScrollToBottom: true, showScrollToTop: false});
     expect(
-      resolveChatScrollToBottomVisibility({
+      resolveChatScrollNavVisibility({
         scrollTop: 620,
         scrollHeight: 1200,
         clientHeight: 500,
         threshold: 80,
       }),
-    ).toEqual({atBottom: true, showScrollToBottom: false});
+    ).toEqual({atBottom: true, showScrollToBottom: false, showScrollToTop: false});
+    // More than a viewport away from the top offers jump-to-top on top of the group.
+    expect(
+      resolveChatScrollNavVisibility({
+        scrollTop: 560,
+        scrollHeight: 2000,
+        clientHeight: 500,
+        threshold: 80,
+      }),
+    ).toEqual({atBottom: false, showScrollToBottom: true, showScrollToTop: true});
+    // Jump-to-top never appears while following the bottom.
+    expect(
+      resolveChatScrollNavVisibility({
+        scrollTop: 1500,
+        scrollHeight: 2000,
+        clientHeight: 500,
+        threshold: 80,
+      }),
+    ).toEqual({atBottom: true, showScrollToBottom: false, showScrollToTop: false});
     expect(mainTsx).toContain('const handleChatScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {');
-    expect(mainTsx).toContain('resolveChatScrollToBottomVisibility({');
+    expect(mainTsx).toContain('resolveChatScrollNavVisibility({');
     expect(mainTsx).toContain('onScroll={handleChatScroll}');
   });
 

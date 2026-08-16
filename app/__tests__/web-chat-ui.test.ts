@@ -368,7 +368,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('chatAutoScrollFollowRef.current = atBottom;');
     expect(mainTsx).toContain('setChatShowScrollToBottom(!atBottom);');
     expect(mainTsx).toContain('const handleChatScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {');
-    expect(mainTsx).toContain('resolveChatScrollToBottomVisibility({');
+    expect(mainTsx).toContain('resolveChatScrollNavVisibility({');
     expect(mainTsx).toContain('const scrollChatToBottom = useCallback((force = false) => {');
     expect(mainTsx).toContain('shouldAutoScrollChatToBottom({');
     expect(mainTsx).toContain("chatVirtuosoListRef.current?.scrollToBottom('auto');");
@@ -386,7 +386,8 @@ describe('web chat integration', () => {
     const composerFrameStart = mainTsx.indexOf('chat-composer-frame', composerContentStart);
     expect(composerFrameStart).toBeGreaterThan(composerContentStart);
     const composerHeaderSlice = mainTsx.slice(composerContentStart, composerFrameStart);
-    expect(composerHeaderSlice).toContain('className="chat-scroll-bottom-button"');
+    expect(composerHeaderSlice).toContain('className="chat-scroll-nav"');
+    expect(composerHeaderSlice).toContain('className="chat-scroll-nav-button"');
     expect(mainTsx).toContain('useLayoutEffect(() => {');
     expect(mainTsx).toContain('resizeChatComposerTextarea();');
     expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
@@ -1537,7 +1538,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-confirmation-reply-action');
     expect(stylesCss).not.toContain('.chat-confirmation-reply-check');
     expect(stylesCss).not.toContain('.chat-confirmation-reply-text');
-    expect(stylesCss).not.toContain('.chat-reply-target,\n.chat-scroll-bottom-button {');
+    expect(stylesCss).not.toContain('.chat-reply-target,\n.chat-scroll-nav-button {');
     expect(stylesCss).not.toContain('.chat-option-replies {');
     expect(stylesCss).not.toContain('.chat-option-reply-button {');
     expect(stylesCss).toMatch(
@@ -1559,7 +1560,10 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-cancel-button {');
     expect(mainTsx).toContain('<ChatIcon name="send" size={17} />');
     expect(stylesCss).toMatch(
-      /\.chat-scroll-bottom-button \{[\s\S]*right: 0;[\s\S]*bottom: calc\(100% \+ 10px\);[\s\S]*\}/,
+      /\.chat-scroll-nav \{[\s\S]*right: 0;[\s\S]*bottom: calc\(100% \+ 10px\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-scroll-nav-button \{[\s\S]*border-radius: 50%;[\s\S]*backdrop-filter: blur\(12px\) saturate\(1\.5\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(/\.chat-composer-content \{[\s\S]*position: relative;[\s\S]*\}/);
     expect(stylesCss).not.toContain('--chat-scroll-bottom-offset');

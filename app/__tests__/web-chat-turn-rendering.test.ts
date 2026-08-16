@@ -302,13 +302,17 @@ describe('web chat turn rendering', () => {
     expect(main).not.toContain('codicon-stop-circle');
   });
 
-  test('shows a scroll-to-bottom button when the user is away from the bottom', () => {
+  test('shows scroll navigation buttons when the user is away from the bottom', () => {
     const main = readMain();
 
     expect(main).toContain('const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);');
+    expect(main).toContain('const [chatShowScrollToTop, setChatShowScrollToTop] = useState(false);');
     expect(main).toContain('setChatShowScrollToBottom(!atBottom);');
-    expect(main).toContain('className="chat-scroll-bottom-button"');
-    expect(main).toContain('className="chat-scroll-bottom-glyph"');
+    expect(main).toContain('className="chat-scroll-nav"');
+    expect(main).toContain('className="chat-scroll-nav-button"');
+    expect(main).toContain('<ChatIcon name="arrowDownToLine" size={16} />');
+    expect(main).toContain('<ChatIcon name="arrowUpToLine" size={16} />');
+    expect(main).toContain('onClick={scrollChatToTop}');
     expect(main).not.toContain('updateSelectedChatWindowFromScroll(event.currentTarget, direction);');
   });
 

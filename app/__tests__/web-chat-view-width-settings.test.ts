@@ -109,7 +109,7 @@ describe('web chat fixed 800px layout', () => {
     expect(stylesCss).toMatch(
       /\.chat-block \{[\s\S]*overflow-y: scroll;[\s\S]*scrollbar-gutter: stable;[\s\S]*padding: 18px 18px 0;/,
     );
-    expect(stylesCss).not.toContain('.chat-view-width-fixed-800 .chat-scroll-bottom-button');
+    expect(stylesCss).not.toContain('.chat-view-width-fixed-800 .chat-scroll-nav');
   });
 
   test('keeps fixed-width chat centered while preserving preview resize', () => {

@@ -376,7 +376,7 @@ import {
   resolveChatKeyboardLayoutViewportHeight,
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
-  resolveChatScrollToBottomVisibility,
+  resolveChatScrollNavVisibility,
   shouldAutoScrollChatToBottom,
 } from '../chat/layout/chatScrollIntent';
 import {
@@ -3858,6 +3858,7 @@ export function App() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});
   const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);
+  const [chatShowScrollToTop, setChatShowScrollToTop] = useState(false);
   const [chatReloadingSessionId, setChatReloadingSessionId] = useState('');
   const [chatArchivingSessionId, setChatArchivingSessionId] = useState('');
   const [chatDeletingSessionId, setChatDeletingSessionId] = useState('');
@@ -4820,6 +4821,7 @@ export function App() {
       chatUserScrollLockUntilRef.current = 0;
       chatPointerScrollingRef.current = false;
       setChatShowScrollToBottom(false);
+      setChatShowScrollToTop(false);
     }
     const revealingTurn = Number.isFinite(options?.revealTurnIndex)
       ? Math.max(0, Math.trunc(options?.revealTurnIndex ?? 0))
@@ -4829,6 +4831,7 @@ export function App() {
       chatUserScrollLockUntilRef.current = 0;
       chatPointerScrollingRef.current = false;
       setChatShowScrollToBottom(true);
+      setChatShowScrollToTop(false);
     }
     if (encodeChatSessionKey(selectedChatKeyRef.current) === runtimeKey) {
       chatVisibleRuntimeKeyRef.current = runtimeKey;
@@ -4901,21 +4904,36 @@ export function App() {
     })
   ), []);
 
-  const handleChatAtBottomChange = useCallback((atBottom: boolean) => {
-    chatAutoScrollFollowRef.current = atBottom;
-    setChatShowScrollToBottom(!atBottom);
-  }, []);
-
-  const handleChatScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    const visibility = resolveChatScrollToBottomVisibility({
-      scrollTop: event.currentTarget.scrollTop,
-      scrollHeight: event.currentTarget.scrollHeight,
-      clientHeight: event.currentTarget.clientHeight,
+  const applyChatScrollNavVisibility = useCallback((scroller: HTMLElement) => {
+    const visibility = resolveChatScrollNavVisibility({
+      scrollTop: scroller.scrollTop,
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
       threshold: CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD,
     });
     chatAutoScrollFollowRef.current = visibility.atBottom;
     setChatShowScrollToBottom(visibility.showScrollToBottom);
+    setChatShowScrollToTop(visibility.showScrollToTop);
   }, []);
+
+  const handleChatAtBottomChange = useCallback((atBottom: boolean) => {
+    const scroller = chatScrollRef.current;
+    if (scroller) {
+      // Recompute from live metrics so the jump-to-top button reflects the real
+      // position even when no scroll event follows this at-bottom flip.
+      applyChatScrollNavVisibility(scroller);
+      return;
+    }
+    chatAutoScrollFollowRef.current = atBottom;
+    setChatShowScrollToBottom(!atBottom);
+    if (atBottom) {
+      setChatShowScrollToTop(false);
+    }
+  }, [applyChatScrollNavVisibility]);
+
+  const handleChatScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    applyChatScrollNavVisibility(event.currentTarget);
+  }, [applyChatScrollNavVisibility]);
 
   const scrollChatToBottom = useCallback((force = false) => {
     if (!shouldAutoscrollChat(force)) {
@@ -4928,8 +4946,17 @@ export function App() {
       chatVirtuosoListRef.current?.scrollToBottom('auto');
       chatAutoScrollFollowRef.current = true;
       setChatShowScrollToBottom(false);
+      setChatShowScrollToTop(false);
     });
   }, [shouldAutoscrollChat]);
+
+  const scrollChatToTop = useCallback(() => {
+    // Stop following synchronously so streaming output cannot yank the view
+    // back to the bottom before the jump lands.
+    chatAutoScrollFollowRef.current = false;
+    setChatShowScrollToTop(false);
+    chatVirtuosoListRef.current?.scrollToTurnIndex(0, 'auto');
+  }, []);
 
   const forceChatScrollToBottom = useCallback(() => {
     const runtimeKey = encodeChatSessionKey(selectedChatKeyRef.current);
@@ -4942,6 +4969,7 @@ export function App() {
     }
     chatAutoScrollFollowRef.current = true;
     setChatShowScrollToBottom(false);
+    setChatShowScrollToTop(false);
     scrollChatToBottom(true);
   }, [scrollChatToBottom, setVisibleChatMessagesForRuntimeKey]);
 
@@ -19607,17 +19635,28 @@ export function App() {
               />
             ) : null}
             {!archivedMode && chatShowScrollToBottom ? (
-              <button
-                type="button"
-                className="chat-scroll-bottom-button"
-                onClick={forceChatScrollToBottom}
-                data-tooltip="Scroll to bottom"
-                aria-label="Scroll to bottom"
-              >
-                <span className="chat-scroll-bottom-glyph" aria-hidden="true">
-                  <ChatIcon name="arrowDown" size={15} />
-                </span>
-              </button>
+              <div className="chat-scroll-nav">
+                {chatShowScrollToTop ? (
+                  <button
+                    type="button"
+                    className="chat-scroll-nav-button"
+                    onClick={scrollChatToTop}
+                    data-tooltip="Scroll to top"
+                    aria-label="Scroll to top"
+                  >
+                    <ChatIcon name="arrowUpToLine" size={16} />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="chat-scroll-nav-button"
+                  onClick={forceChatScrollToBottom}
+                  data-tooltip="Scroll to bottom"
+                  aria-label="Scroll to bottom"
+                >
+                  <ChatIcon name="arrowDownToLine" size={16} />
+                </button>
+              </div>
             ) : null}
             <input
               ref={chatFileInputRef}

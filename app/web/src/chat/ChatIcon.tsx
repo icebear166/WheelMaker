@@ -17,6 +17,8 @@ const GLYPHS = {
   chevronRight: (<><path d="m9 18 6-6-6-6" /></>),
   // lucide:arrow-down
   arrowDown: (<><path d="M12 5v14" /><path d="m19 12-7 7-7-7" /></>),
+  // lucide:arrow-down-to-line
+  arrowDownToLine: (<><path d="M12 17V3" /><path d="m6 11 6 6 6-6" /><path d="M5 21h14" /></>),
   // lucide:arrow-left
   arrowLeft: (<><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></>),
   // lucide:corner-down-left

@@ -5226,10 +5226,6 @@ button.chat-hub-skill-name:disabled {
   opacity: 0.86;
 }
 
-.chat-scroll-bottom-button {
-  backdrop-filter: blur(1px);
-}
-
 .chat-reply-target {
   outline: 1px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-subtle));
   outline-offset: 3px;
@@ -5759,47 +5755,69 @@ li.chat-reply-target::marker {
   color: var(--state-danger);
 }
 
-.chat-scroll-bottom-button {
+.chat-scroll-nav {
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
   z-index: 5;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-canvas) 88%, var(--surface-panel));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-scroll-nav-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 65%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-overlay) 72%, transparent);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
   color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 10px 28px color-mix(in srgb, #000 28%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 6%, transparent),
+    var(--shadow-floating);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+  animation: chat-scroll-nav-in var(--motion-standard) var(--ease-out);
 }
 
-
-.chat-scroll-bottom-button:hover {
-  background: var(--hover);
+.chat-scroll-nav-button:hover {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--surface-overlay) 86%, transparent);
+  transform: translateY(-1px);
 }
 
-.chat-scroll-bottom-glyph {
-  position: relative;
-  width: 16px;
-  height: 18px;
-  display: inline-flex;
-  align-items: flex-start;
-  justify-content: center;
+.chat-scroll-nav-button:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
 }
 
-.chat-scroll-bottom-glyph::after {
-  content: '';
-  position: absolute;
-  left: 3px;
-  right: 3px;
-  bottom: 1px;
-  height: 1.5px;
-  border-radius: 999px;
-  background: currentColor;
+@keyframes chat-scroll-nav-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-scroll-nav-button {
+    animation: none;
+    transition: none;
+  }
 }
 
 .chat-composer {
