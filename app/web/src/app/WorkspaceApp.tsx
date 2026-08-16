@@ -3974,7 +3974,7 @@ export function App() {
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
-  // Turn owning the row at the top of the chat viewport, reported by
+  // Turn owning the row at the bottom edge of the chat viewport, reported by
   // ChatVirtuosoTurnList; 0 means unknown (the list settles at the bottom).
   const [chatVisibleTurnIndex, setChatVisibleTurnIndex] = useState(0);
 

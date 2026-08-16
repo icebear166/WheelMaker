@@ -45,20 +45,22 @@ export type ChatVirtuosoTurnListProps = {
 };
 
 /**
- * First rendered row whose bottom edge crosses the viewport top — the row the
- * reader is currently looking at. Rows fully scrolled above (bottom at or
- * under the viewport top) are skipped; returns null when nothing is visible.
+ * Last rendered row whose top edge starts above the viewport bottom — the row
+ * at the bottom of what the reader can see. Chat rests at the live tail, so
+ * the bottom edge (not the top) is the position that reads as "current".
+ * Returns null when every rendered row sits below the viewport.
  */
-export function findTopVisibleRowIndex(
-  rows: Array<{index: number; bottom: number}>,
-  viewportTop: number,
+export function findBottomVisibleRowIndex(
+  rows: Array<{index: number; top: number}>,
+  viewportBottom: number,
 ): number | null {
+  let found: number | null = null;
   for (const row of rows) {
-    if (row.bottom > viewportTop + 1) {
-      return row.index;
+    if (row.top < viewportBottom - 1) {
+      found = row.index;
     }
   }
-  return null;
+  return found;
 }
 
 const ChatVirtuosoList: Components<ChatDisplayIndexItem, ChatVirtuosoContext>['List'] =
@@ -260,9 +262,10 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
     [onAtBottomChange],
   );
 
-  // Reports the turn that owns the row at the top of the viewport. Rows carry
-  // virtuoso's data-index; overscan rows above the viewport are skipped by
-  // their geometry, so rangeChanged (which includes overscan) is not usable.
+  // Reports the turn that owns the row at the bottom edge of the viewport.
+  // Rows carry virtuoso's data-index; overscan rows past the viewport are
+  // skipped by their geometry, so rangeChanged (which includes overscan) is
+  // not usable.
   React.useEffect(() => {
     if (!scrollParent || !onVisibleTurnChange) {
       return undefined;
@@ -274,18 +277,18 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
       if (typeof scrollParent.querySelectorAll !== 'function') {
         return;
       }
-      const rows: Array<{index: number; bottom: number}> = [];
+      const rows: Array<{index: number; top: number}> = [];
       scrollParent.querySelectorAll('.chat-virtuoso-row').forEach(row => {
         const raw = row.getAttribute('data-index');
         const index = raw === null ? Number.NaN : Number(raw);
         if (Number.isInteger(index)) {
-          rows.push({index, bottom: row.getBoundingClientRect().bottom});
+          rows.push({index, top: row.getBoundingClientRect().top});
         }
       });
-      const topIndex = findTopVisibleRowIndex(rows, scrollParent.getBoundingClientRect().top);
-      const turnIndex = topIndex === null
+      const bottomIndex = findBottomVisibleRowIndex(rows, scrollParent.getBoundingClientRect().bottom);
+      const turnIndex = bottomIndex === null
         ? 0
-        : displayIndexRef.current.items[topIndex]?.turnIndex ?? 0;
+        : displayIndexRef.current.items[bottomIndex]?.turnIndex ?? 0;
       if (turnIndex === lastReportedVisibleTurnRef.current) {
         return;
       }

@@ -2,7 +2,7 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import {
   ChatVirtuosoTurnList,
-  findTopVisibleRowIndex,
+  findBottomVisibleRowIndex,
   type ChatVirtuosoTurnListHandle,
 } from '../web/src/chat/turns/ChatVirtuosoTurnList';
 import type {ChatDisplayIndexItem} from '../web/src/chat/turns/chatDisplayIndex';
@@ -737,29 +737,34 @@ describe('chat virtuoso mount fallback', () => {
     }
   });
 
-  test('findTopVisibleRowIndex picks the first row crossing the viewport top', () => {
-    expect(findTopVisibleRowIndex([
-      {index: 0, bottom: 50},
-      {index: 1, bottom: 140},
-      {index: 2, bottom: 400},
-    ], 100)).toBe(1);
-    expect(findTopVisibleRowIndex([{index: 0, bottom: 50}], 100)).toBeNull();
-    expect(findTopVisibleRowIndex([], 100)).toBeNull();
+  test('findBottomVisibleRowIndex picks the last row starting above the viewport bottom', () => {
+    expect(findBottomVisibleRowIndex([
+      {index: 0, top: 0},
+      {index: 1, top: 120},
+      {index: 2, top: 280},
+    ], 300)).toBe(2);
+    expect(findBottomVisibleRowIndex([
+      {index: 0, top: 0},
+      {index: 1, top: 120},
+      {index: 2, top: 280},
+    ], 150)).toBe(1);
+    expect(findBottomVisibleRowIndex([{index: 0, top: 400}], 300)).toBeNull();
+    expect(findBottomVisibleRowIndex([], 300)).toBeNull();
   });
 
-  test('reports the turn owning the top of the viewport on scroll', async () => {
+  test('reports the turn owning the bottom of the viewport on scroll', async () => {
     const animationFrames = installAnimationFrameQueue();
     const listeners: Record<string, (() => void) | undefined> = {};
-    const rowBottoms = [90, 300];
+    const rowTops = [20, 640];
     const rows = [0, 1].map(index => ({
       getAttribute: (name: string) => (name === 'data-index' ? String(index) : null),
-      getBoundingClientRect: () => ({bottom: rowBottoms[index]}),
+      getBoundingClientRect: () => ({top: rowTops[index]}),
     }));
     const scrollParent = {
       clientHeight: 500,
       scrollHeight: 1200,
       scrollTo: jest.fn(),
-      getBoundingClientRect: () => ({top: 100}),
+      getBoundingClientRect: () => ({top: 100, bottom: 600}),
       querySelectorAll: () => rows,
       addEventListener: (name: string, listener: () => void) => {
         listeners[name] = listener;
@@ -784,8 +789,8 @@ describe('chat virtuoso mount fallback', () => {
         );
       });
 
-      // Row 0 ends above the viewport top (90 < 100); row 1 crosses it → turn 3.
-      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(3);
+      // Only row 0 starts above the viewport bottom (640 >= 599) → turn 1.
+      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(1);
 
       await ReactTestRenderer.act(() => {
         listeners.scroll?.();
@@ -793,12 +798,12 @@ describe('chat virtuoso mount fallback', () => {
       await flushAnimationFrames(animationFrames.frameCallbacks);
       expect(onVisibleTurnChange).toHaveBeenCalledTimes(1);
 
-      rowBottoms[0] = 200;
+      rowTops[1] = 480;
       await ReactTestRenderer.act(() => {
         listeners.scroll?.();
       });
       await flushAnimationFrames(animationFrames.frameCallbacks);
-      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(1);
+      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(3);
       expect(onVisibleTurnChange).toHaveBeenCalledTimes(2);
 
       await ReactTestRenderer.act(() => {
@@ -814,7 +819,7 @@ describe('chat virtuoso mount fallback', () => {
           />,
         );
       });
-      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(1);
+      expect(onVisibleTurnChange).toHaveBeenLastCalledWith(3);
       expect(onVisibleTurnChange).toHaveBeenCalledTimes(3);
     } finally {
       if (renderer) {
