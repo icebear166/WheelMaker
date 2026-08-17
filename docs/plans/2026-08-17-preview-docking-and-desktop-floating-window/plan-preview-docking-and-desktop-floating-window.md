@@ -349,11 +349,15 @@ Run: `cd server && go build ./... && go test ./...`
 
 Expected: PASS；若非 Windows 环境跳过实际 WebView2 smoke，只记录 Windows 编译/测试结果。
 
-- [ ] **Step 4: 对照 spec 验收**
+实际结果：feature-focused Web suites、`tsc:web`、`build:web`、Desktop Go tests 和 `go build ./...` 均通过；全量 Web/Go 仍包含主分支可复现的既有失败，未将其归因于本任务。
+
+- [x] **Step 4: 对照 spec 验收**
 
 逐项记录 pinned split、unpinned overlay、独立任务栏、唯一 renderer、Bring to front、Dock/system close、Chat 来源路由、smart bounds、重启不恢复 detached、browser/mobile 不变和无 Registry protocol 变更的验证证据。
 
-- [ ] **Step 5: Git checkpoint**
+验收证据：PreviewWorkbenchChrome/PreviewWindowApp/host/channel 测试覆盖 split、portal、Dock、intent 和 lifecycle；`main.tsx` 专用 pathname 只挂载 PreviewWindowApp；Desktop controller 使用独立顶层 WebView2、独立 taskbar window、BroadcastChannel close 通知和 bounds relocation；主分支没有 Registry protocol 或 Android 入口改动。
+
+- [x] **Step 5: Git checkpoint**
 
 只提交两个 Wiki 页面、目录索引和本任务验证相关文件。
 
