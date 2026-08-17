@@ -136,7 +136,7 @@ func TestDesktopWebViewInstallsWorkAreaConstraintForCustomTitleBar(t *testing.T)
 	cleanupIndex := strings.Index(sourceText, "defer cleanupWindowWorkAreaConstraint()")
 	themeIndex := strings.Index(sourceText, "applyDesktopWindowTheme(hwnd, opts.ThemeColor)")
 	suppressBorderIndex := strings.Index(sourceText, "suppressDesktopWindowBorder(hwnd)")
-	bridgeIndex := strings.Index(sourceText, "bindDesktopWindowBridge(w, hwnd, opts.Runtime)")
+	bridgeIndex := strings.Index(sourceText, "bindDesktopWindowBridge(w, hwnd, opts.Runtime, notifications)")
 	themeGuardIndex := strings.Index(sourceText, "if !opts.CustomTitleBar {")
 	if frameIndex < 0 || installIndex < 0 || installIndex > frameIndex || cleanupIndex < installIndex ||
 		suppressBorderIndex < frameIndex || bridgeIndex < suppressBorderIndex || themeGuardIndex < 0 || themeIndex < themeGuardIndex {
@@ -270,6 +270,36 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 		"newDefaultDesktopFileActionEnvironment().showFileInFolder(absolutePath)",
 		"authorize(desktopBridgeCopyFileToClipboard)",
 		"setDesktopFileClipboard(hwnd, absolutePath)",
+	} {
+		if !strings.Contains(string(source), want) {
+			t.Errorf("Windows desktop binding source missing %q", want)
+		}
+	}
+}
+
+func TestDesktopRuntimeNotificationBinding(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	want := "showNotification: invoke('" + desktopShowNotificationBinding + "')"
+	if got := strings.Count(script, want); got != 2 {
+		t.Fatalf("desktop runtime script must expose showNotification on trusted and local dev bridges, got %d occurrences", got)
+	}
+
+	bootstrapStart := strings.Index(script, "window.wheelMakerBootstrap")
+	if bootstrapStart < 0 {
+		t.Fatal("desktop runtime script bootstrap object section was not found")
+	}
+	bootstrapEnd := strings.Index(script[bootstrapStart:], "return;")
+	if strings.Contains(script[bootstrapStart:bootstrapStart+bootstrapEnd], desktopShowNotificationBinding) {
+		t.Fatal("bootstrap object must not expose the notification binding")
+	}
+
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"authorize(desktopBridgeShowNotification)",
+		"notifications.show(raw)",
 	} {
 		if !strings.Contains(string(source), want) {
 			t.Errorf("Windows desktop binding source missing %q", want)

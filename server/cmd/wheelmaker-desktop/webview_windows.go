@@ -66,7 +66,9 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		if opts.CustomTitleBar {
 			suppressDesktopWindowBorder(hwnd)
 		}
-		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime); err != nil {
+		notifications := newDesktopNotificationCenterUnavailable()
+		defer notifications.close()
+		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime, notifications); err != nil {
 			return err
 		}
 		w.Init(desktopRuntimeInitScript(opts.Runtime.TrustedLocalhostURL()))
@@ -81,9 +83,12 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 	return nil
 }
 
-func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *desktopRuntime) error {
+func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *desktopRuntime, notifications desktopNotificationSink) error {
 	if desktopRuntime == nil {
 		return errors.New("desktop runtime is unavailable")
+	}
+	if notifications == nil {
+		return errors.New("desktop notification sink is unavailable")
 	}
 	localDevController, err := newWindowsLocalDevController()
 	if err != nil {
@@ -244,6 +249,12 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			}
 			return state, err
 		}},
+		{desktopShowNotificationBinding, func(raw string) (string, error) {
+			if err := authorize(desktopBridgeShowNotification); err != nil {
+				return "", err
+			}
+			return notifications.show(raw), nil
+		}},
 		{desktopOpenProjectFileInVSCodeBinding, func(projectRoot, relativePath string) error {
 			if err := authorize(desktopBridgeOpenProjectFileInVSCode); err != nil {
 				return err
@@ -380,3 +391,24 @@ func parseColorRef(hexColor string) (uint32, bool) {
 	blue := value & 0xff
 	return uint32(red | green<<8 | blue<<16), true
 }
+
+// desktopNotificationSink shows a notification from a trusted page payload and
+// reports the outcome as a JSON string compatible with the Android bridge.
+type desktopNotificationSink interface {
+	show(raw string) string
+	close()
+}
+
+// desktopNotificationCenterUnavailable is the placeholder used until the
+// self-drawn notification center is wired in.
+type desktopNotificationCenterUnavailable struct{}
+
+func newDesktopNotificationCenterUnavailable() desktopNotificationCenterUnavailable {
+	return desktopNotificationCenterUnavailable{}
+}
+
+func (desktopNotificationCenterUnavailable) show(string) string {
+	return `{"ok":false,"error":"unavailable"}`
+}
+
+func (desktopNotificationCenterUnavailable) close() {}

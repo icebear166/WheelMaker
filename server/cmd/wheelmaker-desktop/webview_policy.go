@@ -48,6 +48,7 @@ const (
 	desktopBridgeRunLocalDevOperation
 	desktopBridgeGetUpdateInfo
 	desktopBridgeRequestUpdate
+	desktopBridgeShowNotification
 )
 
 type desktopNavigationAction uint8
@@ -120,6 +121,8 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 			desktopBridgeSaveLocalDevSource,
 			desktopBridgeRunLocalDevOperation:
 			return true
+		case desktopBridgeShowNotification:
+			return true
 		default:
 			return false
 		}
@@ -143,7 +146,8 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeCancelHTMLFileClipboard,
 		desktopBridgeGetUpdateInfo,
 		desktopBridgeRequestUpdate,
-		desktopBridgeDeepSeekLogin:
+		desktopBridgeDeepSeekLogin,
+		desktopBridgeShowNotification:
 		return true
 	default:
 		return false

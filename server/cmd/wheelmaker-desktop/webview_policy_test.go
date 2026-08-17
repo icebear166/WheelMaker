@@ -55,11 +55,15 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 		{name: "bootstrap cannot write HTML clipboard file", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeBeginHTMLFileClipboard},
 		{name: "bootstrap cannot read Desktop update info", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeGetUpdateInfo},
 		{name: "bootstrap cannot request Desktop update", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRequestUpdate},
+		{name: "bootstrap cannot show notification", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeShowNotification},
 		{name: "remote window control", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeClose, want: true},
 		{name: "remote server change", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestServerChange, want: true},
 		{name: "remote device name", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeGetDeviceName, want: true},
 		{name: "remote Desktop update info", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeGetUpdateInfo, want: true},
 		{name: "remote Desktop update request", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestUpdate, want: true},
+		{name: "remote shows notification", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeShowNotification, want: true},
+		{name: "old origin cannot show notification", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeShowNotification},
+		{name: "iframe cannot show notification", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeShowNotification},
 		{name: "old origin cannot request Desktop update", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestUpdate},
 		{name: "iframe cannot request Desktop update", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeRequestUpdate},
 		{name: "remote open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode, want: true},
@@ -97,6 +101,24 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 				t.Fatalf("AllowsBridge()=%v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNotificationBridgeAllowedOnLocalhostAndLocalDevPages(t *testing.T) {
+	localhostURL := fixedDesktopLocalhostTestURL()
+	localhostPolicy, err := newDesktopLocalhostWebViewPolicy(localhostURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !localhostPolicy.AllowsBridge(desktopTrustedLocalhostPage, localhostURL, true, desktopBridgeShowNotification) {
+		t.Fatal("notification bridge must be allowed on the trusted localhost page")
+	}
+	localDevPolicy, err := newDesktopLocalDevWebViewPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !localDevPolicy.AllowsBridge(desktopTrustedLocalDevPage, desktopLocalDevURL, true, desktopBridgeShowNotification) {
+		t.Fatal("notification bridge must be allowed on the local dev page")
 	}
 }
 

@@ -34,6 +34,7 @@ const (
 	desktopGetLocalDevStateBinding         = "__wheelMakerDesktopGetLocalDevState"
 	desktopSaveLocalDevSourceBinding       = "__wheelMakerDesktopSaveLocalDevSource"
 	desktopRunLocalDevBinding              = "__wheelMakerDesktopRunLocalDev"
+	desktopShowNotificationBinding         = "__wheelMakerDesktopShowNotification"
 )
 
 func desktopRuntimeInitScript(localhostURLs ...string) string {
@@ -92,6 +93,7 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
 		getDesktopUpdateInfo: invoke('` + desktopGetUpdateInfoBinding + `'),
 		requestDesktopUpdate: invoke('` + desktopRequestUpdateBinding + `'),
 		deepSeekLogin: invoke('` + desktopDeepSeekLoginBinding + `'),
+		showNotification: invoke('` + desktopShowNotificationBinding + `'),
     });
 	};
   if (location.protocol === 'https:') {
@@ -118,6 +120,7 @@ func desktopRuntimeInitScript(localhostURLs ...string) string {
 			minimize: invoke('` + desktopMinimizeBinding + `'),
 			toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
 			close: invoke('` + desktopCloseBinding + `'),
+			showNotification: invoke('` + desktopShowNotificationBinding + `'),
 			localDev: Object.freeze({
 				getState: invoke('` + desktopGetLocalDevStateBinding + `'),
 				saveSource: invoke('` + desktopSaveLocalDevSourceBinding + `'),
