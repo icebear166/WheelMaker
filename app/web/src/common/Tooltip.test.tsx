@@ -4,6 +4,7 @@
 import React, {act} from 'react';
 import {createRoot, Root} from 'react-dom/client';
 import {GlobalTooltip} from './Tooltip';
+import {shellTransientSurfaceStore} from '../shell/shellSurfaceCoordinator';
 
 (globalThis as unknown as {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,6 +44,7 @@ describe('GlobalTooltip', () => {
     container?.remove();
     container = null;
     document.body.innerHTML = '';
+    shellTransientSurfaceStore.reset();
     delete (window as unknown as {matchMedia?: unknown}).matchMedia;
     jest.useRealTimers();
   });
@@ -121,6 +123,19 @@ describe('GlobalTooltip', () => {
     act(() => {
       jest.advanceTimersByTime(400);
     });
+    expect(tooltip()).toBeNull();
+  });
+
+  test('unmounts immediately when a shell surface opens', () => {
+    const {anchor} = mountAnchor();
+    render();
+    fire(anchor, new FocusEvent('focusin', {bubbles: true}));
+    expect(tooltip()).not.toBeNull();
+
+    act(() => {
+      shellTransientSurfaceStore.open({kind: 'app-menu', drawerPolicy: 'close'});
+    });
+
     expect(tooltip()).toBeNull();
   });
 });

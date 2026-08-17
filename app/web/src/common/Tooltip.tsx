@@ -1,6 +1,7 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {createPortal} from 'react-dom';
 import {autoUpdate, computePosition, flip, offset, shift} from '@floating-ui/react';
+import {shellTransientSurfaceStore} from '../shell/shellSurfaceCoordinator';
 
 const HOVER_DELAY_MS = 300;
 const EXIT_DURATION_MS = 120;
@@ -15,6 +16,11 @@ function resolveAnchor(target: EventTarget | null): Element | null {
 // styled hover/focus hint. Visual-only — accessible names stay on the element's own
 // aria-label. Disabled on touch devices ((hover: none)), mirroring native title reach.
 export function GlobalTooltip(): React.JSX.Element | null {
+  const shellSurface = useSyncExternalStore(
+    shellTransientSurfaceStore.subscribe,
+    shellTransientSurfaceStore.getSnapshot,
+    shellTransientSurfaceStore.getSnapshot,
+  );
   const [content, setContent] = useState<TooltipContent | null>(null);
   const [open, setOpen] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -132,6 +138,15 @@ export function GlobalTooltip(): React.JSX.Element | null {
     };
   }, [show, hide, hoverCapable, clearHoverTimer, clearExitTimer]);
 
+  useEffect(() => {
+    if (!shellSurface) return;
+    clearHoverTimer();
+    clearExitTimer();
+    setContent(null);
+    setOpen(false);
+    setExiting(false);
+  }, [clearExitTimer, clearHoverTimer, shellSurface]);
+
   // Enter transition: mount hidden, flip to visible on the next frame.
   useEffect(() => {
     if (!content) {
@@ -164,7 +179,7 @@ export function GlobalTooltip(): React.JSX.Element | null {
     return autoUpdate(content.anchor, node, update, {ancestorScroll: false});
   }, [content]);
 
-  if (!content) return null;
+  if (!content || shellSurface) return null;
   return createPortal(
     <div ref={nodeRef} role="tooltip" className={`sl-tooltip${open && !exiting ? ' visible' : ''}`}>
       {content.text}

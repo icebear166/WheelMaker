@@ -70,11 +70,14 @@ test('mobile top-level menus own an exclusive layer instead of the drawer', () =
   const mobileProjectAction = workspaceApp.slice(mobileProjectActionStart, mobileProjectActionEnd);
 
   expect(sessionHeader).not.toContain('mobile ? renderWheelMakerAppMenu(true) : (');
-  expect(workspaceApp).toContain('onMenuOpen={mobile ? closeMobileDrawerForTopLevelSurface : undefined}');
+  expect(workspaceApp).toContain('onMenuOpen={handleWheelMakerAppMenuOpen}');
   expect(workspaceApp).toContain('const closeMobileDrawerForTopLevelSurface = useCallback(() => {');
+  expect(workspaceApp).toContain("activeShellSurface?.drawerPolicy !== 'close'");
   expect(workspaceApp).toContain('closeSidebarTransientMenus();');
   expect(workspaceApp).toContain('setDrawerOpen(false);');
-  expect(mobileBreadcrumb).toContain('if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();');
-  expect(workspaceApp).toContain('if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();');
+  expect(mobileBreadcrumb).toContain('toggleChatTitleProjectMenu();');
+  expect(workspaceApp).toContain('const toggleChatTitleProjectMenu = () => {');
+  expect(workspaceApp).toContain('closeMobileDrawerForTopLevelSurface();');
+  expect(mobileProjectAction).toContain("if (isWide || kind === 'actions')");
   expect(mobileProjectAction).toContain('closeMobileDrawerForTopLevelSurface();');
 });

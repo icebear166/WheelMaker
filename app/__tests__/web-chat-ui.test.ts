@@ -175,7 +175,7 @@ describe('web chat integration', () => {
     expect(sessionListTsx).toContain('bindSessionContextMenu({projectId, sessionId: session.sessionId})');
 
     const contextMenuStart = mainTsx.indexOf('const openProjectSessionContextMenu = useCallback((');
-    const contextMenuEnd = mainTsx.indexOf('}, [closeSidebarTransientMenus, isWide, setProjectSessionActionMenu]);', contextMenuStart);
+    const contextMenuEnd = mainTsx.indexOf('}, [claimShellSurface, closeSidebarTransientMenus, isWide, setProjectSessionActionMenu]);', contextMenuStart);
     expect(contextMenuStart).toBeGreaterThanOrEqual(0);
     expect(contextMenuEnd).toBeGreaterThan(contextMenuStart);
     const contextMenuBody = mainTsx.slice(contextMenuStart, contextMenuEnd);

@@ -100,6 +100,11 @@ import { installDesktopZoomGuard } from '../shell/desktopZoomGuard';
 import { installPageRefreshGuard } from '../shell/pageRefreshGuard';
 import { ResponsiveShell } from '../shell/ResponsiveShell';
 import {isMobileStandaloneSurfaceOpen} from '../shell/mobileDrawerState';
+import {
+  shellTransientSurfaceStore,
+  type ShellSurface,
+  type ShellSurfaceKind,
+} from '../shell/shellSurfaceCoordinator';
 import {applyDocumentTheme} from '../theme/documentTheme';
 import {
   getLatestSessionReadCursor,
@@ -2207,6 +2212,11 @@ function buildPromptArtifactPreviewFiles(
 
 export function App() {
   const persistedGlobal = useMemo(() => workspaceStore.getGlobalState(), []);
+  const activeShellSurface = useSyncExternalStore(
+    shellTransientSurfaceStore.subscribe,
+    shellTransientSurfaceStore.getSnapshot,
+    shellTransientSurfaceStore.getSnapshot,
+  );
   const [chatSkinAsset, setChatSkinAsset] = useState<PersistedChatSkinAsset | null>(null);
   const [chatSkinObjectUrl, setChatSkinObjectUrl] = useState('');
   const chatSkinObjectUrlRef = useRef('');
@@ -2487,6 +2497,7 @@ export function App() {
     const current = chatComposerMenuRef.current;
     const resolved = typeof next === 'function' ? next(current.id === 'slash') : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'slash'});
       return;
     }
@@ -2498,6 +2509,7 @@ export function App() {
     const current = chatComposerMenuRef.current;
     const resolved = typeof next === 'function' ? next(current.id === 'file-mention') : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'file-mention'});
       return;
     }
@@ -2509,6 +2521,7 @@ export function App() {
     const current = chatComposerMenuRef.current;
     const resolved = typeof next === 'function' ? next(current.id === 'attachment-tray') : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'attachment-tray'});
       return;
     }
@@ -2520,6 +2533,7 @@ export function App() {
     const current = chatComposerMenuRef.current;
     const resolved = typeof next === 'function' ? next(current.id === 'context-usage') : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'context-usage'});
       return;
     }
@@ -2531,6 +2545,7 @@ export function App() {
     const current = chatComposerMenuRef.current;
     const resolved = typeof next === 'function' ? next(current.id === 'core-config') : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'core-config'});
       return;
     }
@@ -2543,6 +2558,7 @@ export function App() {
     const previous = current.id === 'config-value' ? current.optionId : '';
     const resolved = typeof next === 'function' ? next(previous) : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'config-value', optionId: resolved});
       return;
     }
@@ -2702,12 +2718,17 @@ export function App() {
     const current = chatComposerMenuRef.current;
     const resolved = typeof next === 'function' ? next(current.id === 'config-overflow') : next;
     if (resolved) {
+      shellTransientSurfaceStore.close();
       setChatComposerMenu({id: 'config-overflow'});
       return;
     }
     if (current.id === 'config-overflow') {
       setChatComposerMenu(null);
     }
+  }, [setChatComposerMenu]);
+  const claimShellSurface = useCallback((surface: ShellSurface) => {
+    setChatComposerMenu(null);
+    shellTransientSurfaceStore.open(surface);
   }, [setChatComposerMenu]);
   const setChatKeyboardInset = useCallback((next: WorkspaceUiStateValue<number>) => {
     dispatchWorkspaceUi({ type: 'transient/setChatKeyboardInset', next });
@@ -3443,6 +3464,7 @@ export function App() {
   const [chatShareCaptureTask, setChatShareCaptureTask] = useState<ChatShareCaptureTask | null>(null);
   const [exportingMarkdownHtmlKey, setExportingMarkdownHtmlKey] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  const [toastExiting, setToastExiting] = useState(false);
   const markdownHtmlExportIdRef = useRef(0);
   const markdownShareCaptureIdRef = useRef(0);
   const chatShareCaptureIdRef = useRef(0);
@@ -3518,6 +3540,66 @@ export function App() {
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen, chatTitlePromptMenuExiting] = useMenuExitFlag();
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!activeShellSurface) return;
+    const projectMenuIsActionParent = activeShellSurface.kind === 'project-action' &&
+      Boolean(wideProjectActionMenu) &&
+      chatTitleProjectMenuOpen;
+    setChatComposerMenu(null);
+    if (activeShellSurface.kind !== 'hub') {
+      setChatHubMenuOpen(false);
+      setChatHubColorMenu(null);
+    }
+    if (activeShellSurface.kind !== 'project' && !projectMenuIsActionParent) {
+      setChatTitleProjectMenuOpen(false);
+    }
+    if (activeShellSurface.kind !== 'prompt') {
+      setChatTitlePromptMenuOpen(false);
+    }
+    if (activeShellSurface.kind !== 'archive') {
+      setSessionArchiveMenuOpen(false);
+    }
+    if (activeShellSurface.kind !== 'project-action') {
+      setWideProjectActionMenu(null);
+      setMobileProjectActionMenu(null);
+    }
+    if (activeShellSurface.kind !== 'project-session-action') {
+      setProjectSessionActionMenu(null);
+    }
+  }, [activeShellSurface, chatTitleProjectMenuOpen, setChatComposerMenu, wideProjectActionMenu]);
+  const shellSurfaceVisible = (kind: ShellSurfaceKind) => {
+    if (!activeShellSurface || activeShellSurface.kind === kind) return true;
+    return kind === 'project' &&
+      activeShellSurface.kind === 'project-action' &&
+      Boolean(wideProjectActionMenu) &&
+      chatTitleProjectMenuOpen;
+  };
+  useEffect(() => {
+    if (!chatHubMenuOpen) shellTransientSurfaceStore.close('hub');
+  }, [chatHubMenuOpen]);
+  useEffect(() => {
+    if (!chatTitleProjectMenuOpen) shellTransientSurfaceStore.close('project');
+  }, [chatTitleProjectMenuOpen]);
+  useEffect(() => {
+    if (!chatTitlePromptMenuOpen) shellTransientSurfaceStore.close('prompt');
+  }, [chatTitlePromptMenuOpen]);
+  useEffect(() => {
+    if (!sessionArchiveMenuOpen) shellTransientSurfaceStore.close('archive');
+  }, [sessionArchiveMenuOpen]);
+  useEffect(() => {
+    if (wideProjectActionMenu || mobileProjectActionMenu) return;
+    if (
+      chatTitleProjectMenuOpen &&
+      shellTransientSurfaceStore.getSnapshot()?.kind === 'project-action'
+    ) {
+      shellTransientSurfaceStore.open({kind: 'project', drawerPolicy: isWide ? 'keep' : 'close'});
+      return;
+    }
+    shellTransientSurfaceStore.close('project-action');
+  }, [chatTitleProjectMenuOpen, isWide, mobileProjectActionMenu, wideProjectActionMenu]);
+  useEffect(() => {
+    if (!projectSessionActionMenu) shellTransientSurfaceStore.close('project-session-action');
+  }, [projectSessionActionMenu]);
   // Turn owning the row at the bottom edge of the chat viewport, reported by
   // ChatVirtuosoTurnList; 0 means unknown (the list settles at the bottom).
   const [chatVisibleTurnIndex, setChatVisibleTurnIndex] = useState(0);
@@ -4547,9 +4629,20 @@ export function App() {
   );
   useEffect(() => {
     if (!toastMessage) return undefined;
-    const timer = window.setTimeout(() => setToastMessage(''), 2200);
+    setToastExiting(false);
+    const timer = window.setTimeout(() => setToastExiting(true), 5000);
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
+
+  // Keep the toast mounted for the 120ms (--motion-fast) exit animation.
+  useEffect(() => {
+    if (!toastExiting) return undefined;
+    const timer = window.setTimeout(() => {
+      setToastMessage('');
+      setToastExiting(false);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [toastExiting]);
 
   useEffect(() => workspaceStore.subscribeStorageErrors(storageError => {
     const isChatSkinOperation = storageError.operation.includes('chat skin');
@@ -5637,6 +5730,16 @@ export function App() {
     : 'chat-main';
   const desktopChatFixedPreview = isWide && chatPreviewOpen;
   const closeSidebarTransientMenus = useCallback((keepOpen: 'hub' | 'project' | 'prompt' | null = null) => {
+    const keptSurfaceKind: ShellSurfaceKind | null = keepOpen === 'hub'
+      ? 'hub'
+      : keepOpen === 'project'
+        ? 'project'
+        : keepOpen === 'prompt'
+          ? 'prompt'
+          : null;
+    if (shellTransientSurfaceStore.getSnapshot()?.kind !== keptSurfaceKind) {
+      shellTransientSurfaceStore.close();
+    }
     setProjectMenuOpen(false);
     setWorkspaceProjectMenuOpen(false);
     setWideProjectActionMenu(null);
@@ -6009,6 +6112,7 @@ export function App() {
       )) {
         return;
       }
+      shellTransientSurfaceStore.close('project-action');
       setWideProjectActionMenu(null);
     };
     window.addEventListener('pointerdown', handlePointerDown);
@@ -6327,13 +6431,16 @@ export function App() {
       if (wideProjectActionMenuRef.current) {
         return;
       }
+      shellTransientSurfaceStore.close('project');
       setChatTitleProjectMenuOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (wideProjectActionMenuRef.current) {
+          shellTransientSurfaceStore.close('project-action');
           setWideProjectActionMenu(null);
         } else {
+          shellTransientSurfaceStore.close('project');
           setChatTitleProjectMenuOpen(false);
         }
       }
@@ -6357,10 +6464,12 @@ export function App() {
       ) {
         return;
       }
+      shellTransientSurfaceStore.close('prompt');
       setChatTitlePromptMenuOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        shellTransientSurfaceStore.close('prompt');
         setChatTitlePromptMenuOpen(false);
       }
     };
@@ -6465,6 +6574,7 @@ export function App() {
         !chatHubPopoverRef.current?.contains(target) &&
         !inHubInteractionSurface
       ) {
+        shellTransientSurfaceStore.close('hub');
         setChatHubMenuOpen(false);
         setChatHubColorMenu(null);
 
@@ -6486,6 +6596,7 @@ export function App() {
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        shellTransientSurfaceStore.close('hub');
         setChatHubMenuOpen(false);
         setChatHubColorMenu(null);
 
@@ -6501,6 +6612,7 @@ export function App() {
 
   useEffect(() => {
     if (sidebarSettingsOpen) {
+      shellTransientSurfaceStore.close('hub');
       setChatHubMenuOpen(false);
       setChatHubColorMenu(null);
     }
@@ -6736,6 +6848,20 @@ export function App() {
     closeMobileDrawerCompanionOverlays();
     setDrawerOpen(false);
   }, [closeMobileDrawerCompanionOverlays, closeSidebarTransientMenus, isWide, setDrawerOpen]);
+  useEffect(() => {
+    if (isWide || activeShellSurface?.drawerPolicy !== 'close') {
+      return;
+    }
+    setDrawerOpen(false);
+  }, [activeShellSurface, isWide, setDrawerOpen]);
+  const handleWheelMakerAppMenuOpen = useCallback(() => {
+    if (isWide) {
+      closeSidebarTransientMenus();
+      setChatComposerMenu(null);
+      return;
+    }
+    closeMobileDrawerForTopLevelSurface();
+  }, [closeMobileDrawerForTopLevelSurface, closeSidebarTransientMenus, isWide, setChatComposerMenu]);
   const renderChatHubSummary = () => {
     const hubIds = chatHubTreeItems.map(item => item.hubId);
     const hubCount = hubIds.length;
@@ -6745,7 +6871,7 @@ export function App() {
     return (
       <ChatHubMenu
         mobile={!isWide}
-        open={chatHubMenuOpen}
+        open={chatHubMenuOpen && shellSurfaceVisible('hub')}
         exiting={chatHubMenuExiting}
         summaryLabel={chatHubSummaryLabel}
         projectLabel={chatHubProjectLabel}
@@ -6756,14 +6882,22 @@ export function App() {
         menuRef={chatHubMenuRef}
         popoverRef={chatHubPopoverRef}
         onToggle={() => {
+          const nextOpen = !chatHubMenuOpen;
+          if (nextOpen) {
+            closeSidebarTransientMenus('hub');
+            claimShellSurface({kind: 'hub', drawerPolicy: 'keep'});
+          } else {
+            shellTransientSurfaceStore.close('hub');
+          }
           setChatPromptMenuOpen(false);
           setChatFileMentionMenuOpen(false);
           setChatConfigMenuOptionId('');
           setChatConfigOverflowOpen(false);
           setChatHubColorMenu(null);
-          setChatHubMenuOpen(open => !open);
+          setChatHubMenuOpen(nextOpen);
         }}
         onClose={() => {
+          shellTransientSurfaceStore.close('hub');
           setChatHubMenuOpen(false);
           setChatHubColorMenu(null);
         }}
@@ -7383,6 +7517,8 @@ export function App() {
     setSidebarSettingsOpen(false);
   }, [setSidebarSettingsOpen]);
   const openSettingsRoot = useCallback(() => {
+    shellTransientSurfaceStore.close();
+    setChatComposerMenu(null);
     setDrawerOpen(false);
     setReleasePublishingOpen(false);
     mobilePortRelayHistoryRef.current = false;
@@ -7392,8 +7528,10 @@ export function App() {
     setShareSource(null);
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
-  }, [setDrawerOpen, setSidebarSettingsOpen]);
+  }, [setChatComposerMenu, setDrawerOpen, setSidebarSettingsOpen]);
   const openReleasePublishing = useCallback(() => {
+    shellTransientSurfaceStore.close();
+    setChatComposerMenu(null);
     closeSettingsPanel();
     setDrawerOpen(false);
     mobilePortRelayHistoryRef.current = false;
@@ -7410,7 +7548,7 @@ export function App() {
       );
       mobileReleasePublishingHistoryRef.current = true;
     }
-  }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  }, [closeSettingsPanel, isWide, setChatComposerMenu, setDrawerOpen]);
   const closeReleasePublishing = useCallback(() => {
     if (!isWide && mobileReleasePublishingHistoryRef.current) {
       window.history.back();
@@ -7420,6 +7558,8 @@ export function App() {
     setReleasePublishingOpen(false);
   }, [isWide]);
   const openPortRelayScreen = useCallback(() => {
+    shellTransientSurfaceStore.close();
+    setChatComposerMenu(null);
     closeSettingsPanel();
     setDrawerOpen(false);
     mobileReleasePublishingHistoryRef.current = false;
@@ -7437,7 +7577,7 @@ export function App() {
       );
       mobilePortRelayHistoryRef.current = true;
     }
-  }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  }, [closeSettingsPanel, isWide, setChatComposerMenu, setDrawerOpen]);
   const closePortRelayScreen = useCallback(() => {
     if (!isWide && mobilePortRelayHistoryRef.current) {
       window.history.back();
@@ -7447,6 +7587,8 @@ export function App() {
     setPortRelayScreenOpen(false);
   }, [isWide]);
   const openShares = useCallback(() => {
+    shellTransientSurfaceStore.close();
+    setChatComposerMenu(null);
     closeSettingsPanel();
     setDrawerOpen(false);
     mobileReleasePublishingHistoryRef.current = false;
@@ -7462,7 +7604,7 @@ export function App() {
       );
       mobileSharesHistoryRef.current = true;
     }
-  }, [closeSettingsPanel, isWide, setDrawerOpen]);
+  }, [closeSettingsPanel, isWide, setChatComposerMenu, setDrawerOpen]);
   const openShareCreate = useCallback((nextSource: ShareManagerSource) => {
     closeSettingsPanel();
     setDrawerOpen(false);
@@ -7921,10 +8063,15 @@ export function App() {
     targetProjectId: string,
     kind: 'new' | 'resume' | 'actions',
   ) => {
-    if (isWide) {
+    if (isWide || kind === 'actions') {
       closeSidebarTransientMenus();
+    } else {
+      closeMobileDrawerForTopLevelSurface();
     }
-    closeMobileDrawerForTopLevelSurface();
+    claimShellSurface({
+      kind: 'project-action',
+      drawerPolicy: kind === 'actions' ? 'keep' : 'close',
+    });
     resetProjectResumeState();
     setMobileProjectActionMenu(current => {
       if (current?.projectId === targetProjectId && current.kind === kind) {
@@ -7947,7 +8094,7 @@ export function App() {
         popover: null,
       };
     });
-  }, [closeMobileDrawerForTopLevelSurface, closeSidebarTransientMenus, isWide, resetProjectResumeState]);
+  }, [claimShellSurface, closeMobileDrawerForTopLevelSurface, closeSidebarTransientMenus, isWide, resetProjectResumeState]);
   const projectSessionActionKey = (targetProjectId: string, sessionId: string) =>
     `${targetProjectId}:${sessionId}`;
   useEffect(() => {
@@ -7957,6 +8104,7 @@ export function App() {
       if (target?.closest('.project-session-action-menu')) {
         return;
       }
+      shellTransientSurfaceStore.close('project-session-action');
       setProjectSessionActionMenu(null);
     };
     window.addEventListener('pointerdown', onPointerDown);
@@ -7972,6 +8120,7 @@ export function App() {
     if (!targetProjectId || !normalizedSessionId) {
       return;
     }
+    claimShellSurface({kind: 'project-session-action', drawerPolicy: 'keep'});
     setProjectSessionActionMenu({
       projectId: targetProjectId,
       sessionId: normalizedSessionId,
@@ -7991,7 +8140,7 @@ export function App() {
           })
         : null,
     });
-  }, [closeSidebarTransientMenus, isWide, setProjectSessionActionMenu]);
+  }, [claimShellSurface, closeSidebarTransientMenus, isWide, setProjectSessionActionMenu]);
   projectsRef.current = projects;
   terminalSyncRef.current = terminalSync;
   activeTerminalKeyRef.current = activeTerminalKey;
@@ -10471,6 +10620,7 @@ export function App() {
     anchor: HTMLElement | null,
   ) => {
     closeSidebarTransientMenus();
+    claimShellSurface({kind: 'project-action', drawerPolicy: 'keep'});
     resetProjectResumeState();
     setWideProjectActionMenu({
       projectId: targetProjectId,
@@ -10496,6 +10646,7 @@ export function App() {
       return;
     }
     closeSidebarTransientMenus();
+    claimShellSurface({kind: 'project-action', drawerPolicy: 'keep'});
     resetProjectResumeState();
     if (!isWide) {
       setMobileProjectActionMenu({
@@ -10527,6 +10678,7 @@ export function App() {
       }),
     });
   }, [
+    claimShellSurface,
     closeSidebarTransientMenus,
     isWide,
     resetProjectResumeState,
@@ -10596,6 +10748,7 @@ export function App() {
   };
 
   const requestArchiveOlderSessions = (days: number) => {
+    shellTransientSurfaceStore.close('archive');
     setSessionArchiveMenuOpen(false);
     setArchiveBatchSummary('');
     const candidates = collectArchiveCandidates({
@@ -10675,6 +10828,7 @@ export function App() {
   };
 
   const enterArchivedMode = async () => {
+    shellTransientSurfaceStore.close('archive');
     setSessionArchiveMenuOpen(false);
     setArchivedMode(true);
     setArchivedLoading(true);
@@ -14707,6 +14861,16 @@ export function App() {
     );
   };
 
+  const toggleSessionArchiveMenu = useCallback(() => {
+    const nextOpen = !sessionArchiveMenuOpen;
+    if (nextOpen) {
+      closeSidebarTransientMenus();
+      claimShellSurface({kind: 'archive', drawerPolicy: 'keep'});
+    } else {
+      shellTransientSurfaceStore.close('archive');
+    }
+    setSessionArchiveMenuOpen(nextOpen);
+  }, [claimShellSurface, closeSidebarTransientMenus, sessionArchiveMenuOpen]);
   const renderChatArchiveControls = () => {
     if (sessionSearchHeaderExpanded) {
       return null;
@@ -14716,7 +14880,7 @@ export function App() {
         <button
           type="button"
           className="session-search-icon-btn chat-menu-icon-button"
-          onClick={() => setSessionArchiveMenuOpen(value => !value)}
+          onClick={toggleSessionArchiveMenu}
           data-tooltip="Archive"
           aria-label="Archive"
           aria-haspopup="menu"
@@ -14724,12 +14888,15 @@ export function App() {
         >
           <SessionIcon name="archive" />
         </button>
-        {sessionArchiveMenuOpen ? (
+        {sessionArchiveMenuOpen && shellSurfaceVisible('archive') ? (
           <>
             <div
               className={`sl-sheet-overlay${sessionArchiveMenuExiting ? ' sl-menu-exit' : ''}`}
               aria-hidden="true"
-              onPointerDown={() => setSessionArchiveMenuOpen(false)}
+              onPointerDown={() => {
+                shellTransientSurfaceStore.close('archive');
+                setSessionArchiveMenuOpen(false);
+              }}
             />
             <div
               ref={sessionArchiveMenuRef}
@@ -14739,6 +14906,7 @@ export function App() {
               onKeyDown={event => {
                 if (event.key === 'Escape') {
                   event.preventDefault();
+                  shellTransientSurfaceStore.close('archive');
                   setSessionArchiveMenuOpen(false);
                   return;
                 }
@@ -15391,7 +15559,7 @@ export function App() {
   };
 
   const renderProjectSessionActionMenu = () => {
-    if (!projectSessionActionMenu) {
+    if (!projectSessionActionMenu || !shellSurfaceVisible('project-session-action')) {
       return null;
     }
     const targetProjectId = projectSessionActionMenu.projectId;
@@ -16175,7 +16343,7 @@ export function App() {
     <WheelMakerAppMenu
       themeMode={themeMode}
       setThemeMode={setThemeMode}
-      onMenuOpen={mobile ? closeMobileDrawerForTopLevelSurface : undefined}
+      onMenuOpen={handleWheelMakerAppMenuOpen}
       onOpenSettings={handleDesktopSettingsSelect}
       onOpenPortRelay={openPortRelayScreen}
       onOpenShares={openShares}
@@ -16236,7 +16404,7 @@ export function App() {
   // open from any entry point — e.g. the title-bar project dropdown's per-row
   // create button — even when the mobile drawer is closed.
   const renderMobileProjectActionSheet = () => {
-    if (!mobileProjectActionMenu) {
+    if (!mobileProjectActionMenu || !shellSurfaceVisible('project-action')) {
       return null;
     }
     const sheetMenu = mobileProjectActionMenu;
@@ -16404,7 +16572,7 @@ export function App() {
     projectAgents?: string[],
   ) => {
     const actionMenu = wideProjectActionMenu;
-    if (!actionMenu) return null;
+    if (!actionMenu || !shellSurfaceVisible('project-action')) return null;
     const actionProject = projectItem ?? sortedProjectItems.find(
       item => item.projectId === actionMenu.projectId,
     );
@@ -18676,7 +18844,16 @@ export function App() {
   const toggleChatTitlePromptMenu = () => {
     if (!chatTitlePromptMenuAvailable) return;
     const nextOpen = !chatTitlePromptMenuOpen;
-    if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();
+    if (nextOpen) {
+      if (!isWide) {
+        closeMobileDrawerForTopLevelSurface();
+      } else {
+        closeSidebarTransientMenus('prompt');
+      }
+      claimShellSurface({kind: 'prompt', drawerPolicy: isWide ? 'keep' : 'close'});
+    } else {
+      shellTransientSurfaceStore.close('prompt');
+    }
     setChatPromptMenuOpen(false);
     setChatFileMentionMenuOpen(false);
     setChatAttachmentTrayOpen(false);
@@ -18686,16 +18863,28 @@ export function App() {
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(nextOpen);
   };
+  const toggleChatTitleProjectMenu = () => {
+    const nextOpen = !chatTitleProjectMenuOpen;
+    if (nextOpen) {
+      if (!isWide) {
+        closeMobileDrawerForTopLevelSurface();
+      } else {
+        closeSidebarTransientMenus('project');
+      }
+      claimShellSurface({kind: 'project', drawerPolicy: isWide ? 'keep' : 'close'});
+    } else {
+      shellTransientSurfaceStore.close('project');
+    }
+    setChatTitlePromptMenuOpen(false);
+    setChatTitleProjectMenuOpen(nextOpen);
+  };
   const renderDesktopChatProjectSelector = () => (
     <button
       ref={chatTitleProjectButtonRef}
       type="button"
       className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
       onPointerDown={event => event.stopPropagation()}
-      onClick={() => {
-        setChatTitlePromptMenuOpen(false);
-        setChatTitleProjectMenuOpen(open => !open);
-      }}
+      onClick={toggleChatTitleProjectMenu}
       data-tooltip="Switch project"
       aria-label="Switch project"
       aria-haspopup="menu"
@@ -18735,10 +18924,7 @@ export function App() {
         className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
         onPointerDown={event => event.stopPropagation()}
         onClick={() => {
-          const nextOpen = !chatTitleProjectMenuOpen;
-          if (nextOpen && !isWide) closeMobileDrawerForTopLevelSurface();
-          setChatTitlePromptMenuOpen(false);
-          setChatTitleProjectMenuOpen(nextOpen);
+          toggleChatTitleProjectMenu();
         }}
         data-tooltip="Switch project"
         aria-label="Switch project"
@@ -20584,7 +20770,7 @@ export function App() {
   );
 
   const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();
-  const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
+  const chatTitleProjectMenu = chatTitleProjectMenuOpen && shellSurfaceVisible('project') ? (
     <div
       ref={chatTitleProjectMenuRef}
       className={`chat-title-project-menu topbar-menu-surface${chatTitleProjectMenuExiting ? ' sl-menu-exit' : ''}`}
@@ -20641,7 +20827,7 @@ export function App() {
       })}
     </div>
   ) : null;
-  const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
+  const chatTitlePromptMenu = chatTitlePromptMenuOpen && shellSurfaceVisible('prompt') && chatTitlePromptMenuAvailable ? (
     <div
       ref={chatTitlePromptMenuRef}
       className={`chat-title-prompt-menu topbar-menu-surface${chatTitlePromptMenuExiting ? ' sl-menu-exit' : ''}`}
@@ -22628,7 +22814,11 @@ export function App() {
         />
       ) : null}
       {toastMessage ? (
-        <div className="app-toast" role="status" aria-live="polite">
+        <div
+          className={toastExiting ? 'app-toast app-toast-exit' : 'app-toast'}
+          role="status"
+          aria-live="polite"
+        >
           {toastMessage}
         </div>
       ) : null}

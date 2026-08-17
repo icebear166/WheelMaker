@@ -3,11 +3,13 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
 import {WheelMakerAppMenu} from './WheelMakerAppMenu';
+import {shellTransientSurfaceStore} from './shellSurfaceCoordinator';
 
 const originalWindow = (global as typeof globalThis & {window?: unknown}).window;
 
 afterEach(() => {
   (global as typeof globalThis & {window?: unknown}).window = originalWindow;
+  shellTransientSurfaceStore.reset();
 });
 
 function actionNames(root: ReactTestRenderer.ReactTestInstance): string[] {
@@ -117,6 +119,26 @@ test('notifies the host when the menu opens, but not when it closes', async () =
     trigger.props.onClick();
   });
   expect(onMenuOpen).toHaveBeenCalledTimes(1);
+});
+
+test('closes when another shell surface claims the shared slot', async () => {
+  (global as typeof globalThis & {window?: unknown}).window = {};
+  let renderer: ReactTestRenderer.ReactTestRenderer;
+
+  await ReactTestRenderer.act(async () => {
+    renderer = ReactTestRenderer.create(<WheelMakerAppMenu {...baseProps} />);
+  });
+  const trigger = renderer!.root.findByProps({'aria-label': 'Open WheelMaker menu'});
+
+  await ReactTestRenderer.act(async () => {
+    trigger.props.onClick();
+  });
+  expect(renderer!.root.findAll(node => node.props['aria-label'] === 'WheelMaker menu')).toHaveLength(1);
+
+  await ReactTestRenderer.act(async () => {
+    shellTransientSurfaceStore.open({kind: 'hub', drawerPolicy: 'keep'});
+  });
+  expect(renderer!.root.findAll(node => node.props['aria-label'] === 'WheelMaker menu')).toHaveLength(0);
 });
 
 test('native update checks on every open and starts only once', async () => {

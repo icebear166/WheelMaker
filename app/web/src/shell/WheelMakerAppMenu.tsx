@@ -4,6 +4,7 @@ import React, {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import {createPortal} from 'react-dom';
 import {Icon, type IconName} from '../common/Icon';
@@ -20,6 +21,7 @@ import {
   getDesktopWindowBridge,
   openLocalDevPanelEvent,
 } from '../platform/desktop/desktopRuntime';
+import {shellTransientSurfaceStore} from './shellSurfaceCoordinator';
 
 export type ClientUpdateController = {
   check: () => Promise<ClientUpdateState>;
@@ -98,6 +100,11 @@ export function WheelMakerAppMenu({
 }: WheelMakerAppMenuProps) {
   const desktopBridge = getDesktopWindowBridge();
   const [menuOpen, setMenuOpen, menuExiting] = useMenuExitFlag();
+  const shellSurface = useSyncExternalStore(
+    shellTransientSurfaceStore.subscribe,
+    shellTransientSurfaceStore.getSnapshot,
+    shellTransientSurfaceStore.getSnapshot,
+  );
   const [localDevDialogOpen, setLocalDevDialogOpen] = useState(false);
   const [localDevSource, setLocalDevSource] = useState('');
   const [localDevError, setLocalDevError] = useState('');
@@ -115,6 +122,8 @@ export function WheelMakerAppMenu({
   );
   const updateView = clientUpdateView(updateState);
   const currentTheme = themeMode === 'dark' ? 'Dark' : 'Light';
+  const appMenuActive = shellSurface?.kind === 'app-menu';
+  const appMenuVisible = menuOpen && (shellSurface === null || appMenuActive);
 
   useEffect(() => {
     localDevBusyRef.current = localDevBusy;
@@ -168,6 +177,13 @@ export function WheelMakerAppMenu({
     };
   }, [localDevDialogOpen]);
 
+  useEffect(() => {
+    if (shellSurface?.kind === 'app-menu' || !menuOpen) return;
+    setMenuOpen(false);
+  }, [menuOpen, setMenuOpen, shellSurface]);
+
+  useEffect(() => () => shellTransientSurfaceStore.close('app-menu'), []);
+
   const checkForUpdate = useCallback(async () => {
     if (!updateController) return;
     updateStartPendingRef.current = false;
@@ -182,12 +198,20 @@ export function WheelMakerAppMenu({
   const toggleMenu = useCallback(() => {
     if (!menuOpen) {
       onMenuOpen?.();
+      shellTransientSurfaceStore.open({kind: 'app-menu', drawerPolicy: 'close'});
+    } else {
+      shellTransientSurfaceStore.close('app-menu');
     }
     if ((!menuOpen || menuExiting) && updateController) {
       void checkForUpdate();
     }
     setMenuOpen(open => !open);
   }, [checkForUpdate, menuExiting, menuOpen, onMenuOpen, setMenuOpen, updateController]);
+
+  const closeMenu = useCallback(() => {
+    shellTransientSurfaceStore.close('app-menu');
+    setMenuOpen(false);
+  }, [setMenuOpen]);
 
   const updateMenuPosition = useCallback(() => {
     const triggerRect = triggerRef.current?.getBoundingClientRect();
@@ -224,11 +248,11 @@ export function WheelMakerAppMenu({
       if (target && (rootRef.current?.contains(target) || menuRef.current?.contains(target))) {
         return;
       }
-      setMenuOpen(false);
+      closeMenu();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setMenuOpen(false);
+        closeMenu();
         triggerRef.current?.focus();
       }
     };
@@ -238,10 +262,10 @@ export function WheelMakerAppMenu({
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [menuOpen, setMenuOpen]);
+  }, [closeMenu, menuOpen]);
 
   const closeAndRun = (action: () => void) => {
-    setMenuOpen(false);
+    closeMenu();
     action();
   };
 
@@ -263,7 +287,7 @@ export function WheelMakerAppMenu({
   };
 
   const selectLocalDev = () => {
-    setMenuOpen(false);
+    closeMenu();
     if (!desktopBridge) return;
     if (desktopBridge.localDev) {
       if (typeof window.dispatchEvent === 'function') {
@@ -292,7 +316,7 @@ export function WheelMakerAppMenu({
     }
   };
 
-  const appMenu = menuOpen ? (
+  const appMenu = appMenuVisible ? (
     <div
       ref={menuRef}
       className={`app-menu-surface topbar-menu-surface${menuExiting ? ' sl-menu-exit' : ''}`}
@@ -368,7 +392,7 @@ export function WheelMakerAppMenu({
           type="button"
           className={`app-menu-trigger ${triggerClassName}`.trim()}
           aria-label="Open WheelMaker menu"
-          aria-expanded={menuOpen}
+          aria-expanded={menuOpen && appMenuActive}
           data-tooltip="WheelMaker menu"
           onClick={toggleMenu}
         >
