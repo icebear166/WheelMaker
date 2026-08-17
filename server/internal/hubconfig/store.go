@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +69,7 @@ type Snapshot struct {
 	FlickerBridge    FlickerBridgeSnapshot     `json:"flickerBridge"`
 	APIKeys          map[string]APIKeySnapshot `json:"apiKeys"`
 	DeepSeekPlatform DeepSeekPlatformSnapshot  `json:"deepSeekPlatform"`
+	MCPServers       []MCPServerSnapshot       `json:"mcpServers"`
 }
 
 type Store struct {
@@ -255,10 +257,15 @@ func (s *Store) Snapshot() (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
+	mcpServers, err := mcpServersFromRoot(root)
+	if err != nil {
+		return Snapshot{}, err
+	}
 	snapshot := Snapshot{
 		FlickerBridge:    FlickerBridgeSnapshot{Mode: mode, Enabled: enabled},
 		APIKeys:          make(map[string]APIKeySnapshot, len(APIKeyNames)),
 		DeepSeekPlatform: DeepSeekPlatformSnapshot{},
+		MCPServers:       make([]MCPServerSnapshot, 0, len(mcpServers)),
 	}
 	for _, name := range APIKeyNames {
 		entry := keys[string(name)]
@@ -273,6 +280,12 @@ func (s *Store) Snapshot() (Snapshot, error) {
 	if !platformEntry.UpdatedAt.IsZero() {
 		snapshot.DeepSeekPlatform.UpdatedAt = platformEntry.UpdatedAt.UTC().Format(time.RFC3339)
 	}
+	for _, server := range mcpServers {
+		snapshot.MCPServers = append(snapshot.MCPServers, mcpServerSnapshot(server))
+	}
+	sort.SliceStable(snapshot.MCPServers, func(i, j int) bool {
+		return strings.ToLower(snapshot.MCPServers[i].Name) < strings.ToLower(snapshot.MCPServers[j].Name)
+	})
 	return snapshot, nil
 }
 
@@ -325,6 +338,9 @@ func (s *Store) loadLocked() (map[string]json.RawMessage, bool, error) {
 		return nil, true, fmt.Errorf("unsupported hub config version %d", version)
 	}
 	if _, err := modeFromRoot(root); err != nil {
+		return nil, true, err
+	}
+	if _, err := mcpServersFromRoot(root); err != nil {
 		return nil, true, err
 	}
 	return root, true, nil

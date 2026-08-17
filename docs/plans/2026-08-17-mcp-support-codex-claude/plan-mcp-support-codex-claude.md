@@ -26,29 +26,29 @@
 
 **Acceptance:** A HubConfig store can add/update/delete/enable/disable validated STDIO and HTTP entries, preserves secret values internally, returns sanitized snapshots, rejects unsupported transports/invalid fields, and imports the current Codex Neo4j shape without leaking its password.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   - Add `TestStoreMCPAddReturnsSanitizedSnapshot` asserting command/args/non-secret env are visible while a secret env value is represented only by configured metadata.
   - Add `TestStoreMCPUpdatePreservesSecretWhenValueOmitted` and `TestStoreMCPUpdateClearSecret`.
   - Add `TestStoreMCPRejectsInvalidTransportAndMissingCommand`.
   - Add `TestImportCodexMCPConfigMapsNeo4jStdio` using a temporary TOML fixture with `python.exe`, `-m neo4j_mcp_server`, `NEO4J_URI`, and `NEO4J_PASSWORD`, asserting no secret appears in the sanitized result.
   - Add `TestImportClaudeMCPConfigSkipsSSEWithReason` and `TestImportMCPNameConflictRequiresResolution`.
-- [ ] **Step 2: Run tests to verify RED**
+- [x] **Step 2: Run tests to verify RED**
   - Run `go test ./server/internal/hubconfig -run 'Test(StoreMCP|Import)' -count=1`.
   - Expected: compile/test failure because MCP types, store methods, and import functions do not exist.
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
   - Define normalized MCP config/value types and sanitized snapshot types in `mcp.go`.
   - Extend `hubconfig.Snapshot` with a sanitized MCP list and add store methods for CRUD, enable/disable, raw effective values, and stable fingerprints.
   - Preserve unknown root sections and existing API key/Flicker/DeepSeek behavior through the existing raw-root update pattern.
   - Validate server names, command/url, args, cwd, env/header names, duplicate IDs/names, transport-specific fields, secret size, and aggregate 64 KiB config size.
   - Parse Codex TOML using the existing BurntSushi TOML dependency and Claude JSON shapes without writing native files; produce preview records for unsupported SSE/OAuth fields and conflicts.
   - Keep secret raw values out of snapshots and error text.
-- [ ] **Step 4: Run tests to verify GREEN**
+- [x] **Step 4: Run tests to verify GREEN**
   - Run `go test ./server/internal/hubconfig -run 'Test(StoreMCP|Import)' -count=1`.
   - Expected: PASS with no secret string in serialized snapshots.
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
   - Run `go test ./server/internal/hubconfig -count=1`.
   - Expected: existing HubConfig tests and MCP tests PASS.
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
   - Run `git diff --check`, stage only Task 1 files, and commit with `git-workflow checkpoint`.
 
 ## Task 2: Expose MCP config through Hub RPC and inject effective servers into new clients
