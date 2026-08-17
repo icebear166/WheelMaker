@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="927"
+    android:viewportHeight="927">
+    <!-- Mark geometry mirrored from app/web/public/icons/icon-mark.svg (viewBox 160 292 927 600),
+         recentered onto a square canvas and flattened to a white silhouette: the evenOdd fill
+         keeps the slash knocked out of the chevrons so the status-bar alpha mask stays readable. -->
+    <group
+        android:translateX="-160"
+        android:translateY="-128.5">
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M820 362 L885 362 L1049.7 550.8 Q1077 591 1050.1 633.7 L864 850 Q847 868 818 868 L693 868 Q677 868 683 840 L892 591 L786 470 L877 362 Z M427 822 L362 822 L197.3 633.2 Q170 593 196.9 550.3 L383 334 Q400 316 429 316 L554 316 Q570 316 564 344 L355 593 L461 714 L370 822 Z M809 316 L923 316 L688 580 L436 868 L326 868 Z" />
+    </group>
+</vector>

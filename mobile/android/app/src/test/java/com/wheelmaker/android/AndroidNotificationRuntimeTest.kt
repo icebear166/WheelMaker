@@ -44,4 +44,29 @@ class AndroidNotificationRuntimeTest {
         assertTrue(mainActivity.contains("handleNotificationIntent(intent)"))
         assertTrue(manifest.contains("android:launchMode=\"singleTop\""))
     }
+
+    @Test
+    fun statusBarIconIsMonochromeAndNotificationIsColoredByStatus() {
+        val runtime = source("src/main/java/com/wheelmaker/android/AndroidNotificationRuntime.kt")
+        assertTrue(runtime.contains("R.drawable.ic_notification"))
+        assertFalse(runtime.contains("R.mipmap.ic_launcher"))
+        assertTrue(runtime.contains("setColor("))
+
+        val icon = source("src/main/res/drawable/ic_notification.xml")
+        assertTrue(icon.contains("#FFFFFF"))
+        assertTrue(icon.contains("evenOdd"))
+    }
+
+    @Test
+    fun notificationIdIsPerSessionSoNewTurnsReplaceInPlace() {
+        val runtime = source("src/main/java/com/wheelmaker/android/AndroidNotificationRuntime.kt")
+        assertTrue(
+            Regex("fun notificationId\\(projectId: String, sessionId: String\\)")
+                .containsMatchIn(runtime)
+        )
+        assertFalse(
+            Regex("notificationId\\(projectId, sessionId, input\\.optInt")
+                .containsMatchIn(runtime)
+        )
+    }
 }

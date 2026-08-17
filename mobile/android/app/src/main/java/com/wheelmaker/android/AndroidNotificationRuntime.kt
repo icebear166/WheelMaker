@@ -77,7 +77,12 @@ class AndroidNotificationRuntime(
             createPromptCompletionChannel()
             val title = input.optString("title", "Prompt completed")
             val body = input.optString("body", "WheelMaker")
-            val notificationId = notificationId(projectId, sessionId, input.optInt("turnIndex", 0))
+            val statusColor = when (input.optString("status")) {
+                "failed" -> 0xFFFF453A.toInt()
+                "cancelled", "interrupted" -> 0xFF8E8E93.toInt()
+                else -> 0xFF34C759.toInt()
+            }
+            val notificationId = notificationId(projectId, sessionId)
             val pendingIntent = PendingIntent.getActivity(
                 activity,
                 notificationId,
@@ -85,7 +90,8 @@ class AndroidNotificationRuntime(
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             val notification = NotificationCompat.Builder(activity, NOTIFICATION_CHANNEL_PROMPT_COMPLETION)
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(statusColor)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -175,8 +181,8 @@ class AndroidNotificationRuntime(
     }
 }
 
-private fun notificationId(projectId: String, sessionId: String, turnIndex: Int): Int {
-    return "$projectId:$sessionId:$turnIndex".hashCode() and 0x7fffffff
+private fun notificationId(projectId: String, sessionId: String): Int {
+    return "$projectId:$sessionId".hashCode() and 0x7fffffff
 }
 
 private fun permissionStateJson(state: String, pending: Boolean = false): String {
