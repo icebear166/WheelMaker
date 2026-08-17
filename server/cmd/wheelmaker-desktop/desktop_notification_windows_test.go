@@ -25,7 +25,7 @@ type fakeNotificationOps struct {
 func newFakeNotificationOps() *fakeNotificationOps {
 	return &fakeNotificationOps{
 		metrics: desktopNotificationMetrics{
-			width: 360, height: 88, gap: 8, marginX: 12, marginY: 12,
+			width: 480, height: 112, gap: 10, marginX: 16, marginY: 16,
 		},
 		workAreaRect: desktopWindowRect{left: 0, top: 0, right: 1920, bottom: 1040},
 		createdState: map[uintptr]*desktopNotificationWindowState{},
@@ -90,6 +90,14 @@ func TestParseDesktopNotification(t *testing.T) {
 		if _, err := parseDesktopNotification(raw); err == nil {
 			t.Fatalf("parseDesktopNotification(%s) expected error", raw)
 		}
+	}
+}
+
+func TestDesktopNotificationMetricsUseLargerCard(t *testing.T) {
+	ops := newWin32DesktopNotificationOps(0, nil)
+	metrics := ops.metricsForWindow()
+	if metrics.width != 480 || metrics.height != 112 {
+		t.Fatalf("metrics = %+v, want 480x112 logical pixels at 100%% DPI", metrics)
 	}
 }
 

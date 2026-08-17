@@ -58,6 +58,7 @@ export function shouldNotifyPromptCompletion(input: {
   selectedRuntimeKey: string;
   documentVisibility: DocumentVisibilityState | 'hidden' | 'visible';
   activeTab: string;
+  windowFocused: boolean;
 }): boolean {
   if (!input.enabled || !input.projectId || !input.message.sessionId) {
     return false;
@@ -65,7 +66,7 @@ export function shouldNotifyPromptCompletion(input: {
   if (input.message.method !== 'prompt_done') {
     return false;
   }
-  if (input.documentVisibility !== 'visible') {
+  if (!input.windowFocused || input.documentVisibility !== 'visible') {
     return true;
   }
   if (input.activeTab !== 'chat') {

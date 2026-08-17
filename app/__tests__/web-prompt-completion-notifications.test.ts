@@ -42,6 +42,7 @@ describe('prompt completion notifications', () => {
       selectedRuntimeKey: 'other:sess-2',
       documentVisibility: 'hidden',
       activeTab: 'chat',
+      windowFocused: true,
     })).toBe(false);
 
     expect(shouldNotifyPromptCompletion({
@@ -51,6 +52,7 @@ describe('prompt completion notifications', () => {
       selectedRuntimeKey: 'other:sess-2',
       documentVisibility: 'hidden',
       activeTab: 'chat',
+      windowFocused: true,
     })).toBe(true);
   });
 
@@ -62,6 +64,7 @@ describe('prompt completion notifications', () => {
       selectedRuntimeKey: 'proj-1:sess-1',
       documentVisibility: 'visible',
       activeTab: 'chat',
+      windowFocused: true,
     })).toBe(false);
   });
 
@@ -73,6 +76,7 @@ describe('prompt completion notifications', () => {
       selectedRuntimeKey: 'proj-1:sess-1',
       documentVisibility: 'hidden',
       activeTab: 'chat',
+      windowFocused: true,
     })).toBe(true);
 
     expect(shouldNotifyPromptCompletion({
@@ -82,7 +86,22 @@ describe('prompt completion notifications', () => {
       selectedRuntimeKey: 'proj-1:sess-1',
       documentVisibility: 'visible',
       activeTab: 'files',
+      windowFocused: true,
     })).toBe(true);
+  });
+
+  test('notifies the selected session when the desktop window is unfocused', () => {
+    const input = {
+      enabled: true,
+      message: message('prompt_done'),
+      projectId: 'proj-1',
+      selectedRuntimeKey: 'proj-1:sess-1',
+      documentVisibility: 'visible' as const,
+      activeTab: 'chat',
+      windowFocused: false,
+    };
+
+    expect(shouldNotifyPromptCompletion(input)).toBe(true);
   });
 
   test('builds IM-style payload with reply preview and session tag', () => {

@@ -43,6 +43,8 @@ describe('chat prompt completion notification settings', () => {
     expect(mainTsx).toContain('const notifiedPromptCompletionIdsRef = useRef<Set<string>>(new Set());');
     expect(mainTsx).toContain('const maybeNotifyPromptCompletion = (');
     expect(mainTsx).toContain("message.method !== 'prompt_done'");
+    expect(mainTsx).toContain('document.hasFocus()');
+    expect(mainTsx).toContain('windowFocused');
     expect(mainTsx).toContain('shouldNotifyPromptCompletion({');
     expect(mainTsx).toContain('buildPromptCompletionNotification({');
     expect(mainTsx).toContain('notificationProvider.show(payload)');

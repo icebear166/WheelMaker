@@ -80,6 +80,22 @@ type desktopNotificationMetrics struct {
 	marginY int32
 }
 
+const (
+	desktopNotificationLogicalWidth           int32 = 480
+	desktopNotificationLogicalHeight          int32 = 112
+	desktopNotificationLogicalGap             int32 = 10
+	desktopNotificationLogicalMarginX         int32 = 16
+	desktopNotificationLogicalMarginY         int32 = 16
+	desktopNotificationLogicalPadding         int32 = 16
+	desktopNotificationLogicalDotSize         int32 = 10
+	desktopNotificationLogicalTextGap         int32 = 10
+	desktopNotificationLogicalTitleFontSize   int32 = 15
+	desktopNotificationLogicalBodyFontSize    int32 = 13
+	desktopNotificationLogicalTitleHeight     int32 = 22
+	desktopNotificationLogicalBodyTop         int32 = 26
+	desktopNotificationLogicalBodyBottomInset int32 = 10
+)
+
 type desktopNotificationWindowState struct {
 	notification desktopNotification
 	hwnd         uintptr
@@ -289,33 +305,33 @@ const (
 )
 
 var (
-	desktopGdi32                       = windows.NewLazySystemDLL("gdi32.dll")
-	procGetCurrentThreadID             = kernel32.NewProc("GetCurrentThreadId")
-	procSetTimer                       = user32.NewProc("SetTimer")
-	procKillTimer                      = user32.NewProc("KillTimer")
-	procBeginPaint                     = user32.NewProc("BeginPaint")
-	procEndPaint                       = user32.NewProc("EndPaint")
-	procFillRect                       = user32.NewProc("FillRect")
-	procDrawTextW                      = user32.NewProc("DrawTextW")
-	procSetWindowRgn                   = user32.NewProc("SetWindowRgn")
-	procIsIconic                       = user32.NewProc("IsIconic")
-	procSetForegroundWindow            = user32.NewProc("SetForegroundWindow")
-	procGetForegroundWindow            = user32.NewProc("GetForegroundWindow")
-	procAttachThreadInput              = user32.NewProc("AttachThreadInput")
-	procGetWindowThreadProcessID       = user32.NewProc("GetWindowThreadProcessId")
-	procSetActiveWindow                = user32.NewProc("SetActiveWindow")
-	procGetDpiForWindow                = user32.NewProc("GetDpiForWindow")
-	procInvalidateRect                 = user32.NewProc("InvalidateRect")
-	procCreateSolidBrush               = desktopGdi32.NewProc("CreateSolidBrush")
-	procCreateFontW                    = desktopGdi32.NewProc("CreateFontW")
-	procEllipse                        = desktopGdi32.NewProc("Ellipse")
-	procCreateRoundRectRgn             = desktopGdi32.NewProc("CreateRoundRectRgn")
-	procSelectObject                   = desktopGdi32.NewProc("SelectObject")
-	procDeleteObject                   = desktopGdi32.NewProc("DeleteObject")
-	procSetBkMode                      = desktopGdi32.NewProc("SetBkMode")
-	procSetTextColor                   = desktopGdi32.NewProc("SetTextColor")
-	desktopNotificationWndProcCallback = windows.NewCallback(desktopNotificationWndProc)
-	desktopNotificationClassOnce       sync.Once
+	desktopGdi32                        = windows.NewLazySystemDLL("gdi32.dll")
+	procGetCurrentThreadID              = kernel32.NewProc("GetCurrentThreadId")
+	procSetTimer                        = user32.NewProc("SetTimer")
+	procKillTimer                       = user32.NewProc("KillTimer")
+	procBeginPaint                      = user32.NewProc("BeginPaint")
+	procEndPaint                        = user32.NewProc("EndPaint")
+	procFillRect                        = user32.NewProc("FillRect")
+	procDrawTextW                       = user32.NewProc("DrawTextW")
+	procSetWindowRgn                    = user32.NewProc("SetWindowRgn")
+	procIsIconic                        = user32.NewProc("IsIconic")
+	procSetForegroundWindow             = user32.NewProc("SetForegroundWindow")
+	procGetForegroundWindow             = user32.NewProc("GetForegroundWindow")
+	procAttachThreadInput               = user32.NewProc("AttachThreadInput")
+	procGetWindowThreadProcessID        = user32.NewProc("GetWindowThreadProcessId")
+	procSetActiveWindow                 = user32.NewProc("SetActiveWindow")
+	procGetDpiForWindow                 = user32.NewProc("GetDpiForWindow")
+	procInvalidateRect                  = user32.NewProc("InvalidateRect")
+	procCreateSolidBrush                = desktopGdi32.NewProc("CreateSolidBrush")
+	procCreateFontW                     = desktopGdi32.NewProc("CreateFontW")
+	procEllipse                         = desktopGdi32.NewProc("Ellipse")
+	procCreateRoundRectRgn              = desktopGdi32.NewProc("CreateRoundRectRgn")
+	procSelectObject                    = desktopGdi32.NewProc("SelectObject")
+	procDeleteObject                    = desktopGdi32.NewProc("DeleteObject")
+	procSetBkMode                       = desktopGdi32.NewProc("SetBkMode")
+	procSetTextColor                    = desktopGdi32.NewProc("SetTextColor")
+	desktopNotificationWndProcCallback  = windows.NewCallback(desktopNotificationWndProc)
+	desktopNotificationClassOnce        sync.Once
 	desktopNotificationClassRegisterErr error
 )
 
@@ -335,12 +351,12 @@ type desktopWndClassEx struct {
 }
 
 type desktopPaintStruct struct {
-	hdc         uintptr
-	erase       int32
-	rcPaint     desktopWindowRect
-	restore     int32
-	incUpdate   int32
-	reserved    [32]byte
+	hdc       uintptr
+	erase     int32
+	rcPaint   desktopWindowRect
+	restore   int32
+	incUpdate int32
+	reserved  [32]byte
 }
 
 type desktopCreateStruct struct {
@@ -379,11 +395,11 @@ func (o *win32DesktopNotificationOps) metricsForWindow() desktopNotificationMetr
 	scale := o.dpiScale()
 	scaled := func(logical int32) int32 { return int32(float64(logical)*scale + 0.5) }
 	return desktopNotificationMetrics{
-		width:   scaled(360),
-		height:  scaled(88),
-		gap:     scaled(8),
-		marginX: scaled(12),
-		marginY: scaled(12),
+		width:   scaled(desktopNotificationLogicalWidth),
+		height:  scaled(desktopNotificationLogicalHeight),
+		gap:     scaled(desktopNotificationLogicalGap),
+		marginX: scaled(desktopNotificationLogicalMarginX),
+		marginY: scaled(desktopNotificationLogicalMarginY),
 	}
 }
 
@@ -553,7 +569,7 @@ func paintDesktopNotification(hwnd uintptr, state *desktopNotificationWindowStat
 	procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&client)))
 	width := client.width()
 	height := client.height()
-	scale := float64(height) / 88 // derived from the logical 88px height
+	scale := float64(height) / float64(desktopNotificationLogicalHeight)
 
 	background, _ := parseColorRef("#202226")
 	backgroundBrush, _, _ := procCreateSolidBrush.Call(uintptr(background))
@@ -561,10 +577,10 @@ func paintDesktopNotification(hwnd uintptr, state *desktopNotificationWindowStat
 	procDeleteObject.Call(backgroundBrush)
 
 	scaled := func(logical int32) int32 { return int32(float64(logical)*scale + 0.5) }
-	pad := scaled(14)
+	pad := scaled(desktopNotificationLogicalPadding)
 
 	// Status dot.
-	dotSize := scaled(10)
+	dotSize := scaled(desktopNotificationLogicalDotSize)
 	dotTop := pad + scaled(3)
 	dotBrush, _, _ := procCreateSolidBrush.Call(uintptr(desktopNotificationStatusColor(state.notification.Status)))
 	procEllipse.Call(hdc,
@@ -573,10 +589,10 @@ func paintDesktopNotification(hwnd uintptr, state *desktopNotificationWindowStat
 	procDeleteObject.Call(dotBrush)
 
 	procSetBkMode.Call(hdc, transparentBkMode)
-	textLeft := pad + dotSize + scaled(10)
+	textLeft := pad + dotSize + scaled(desktopNotificationLogicalTextGap)
 
 	// Title.
-	titleFont := createNotificationFont(scaled(13), true)
+	titleFont := createNotificationFont(scaled(desktopNotificationLogicalTitleFontSize), true)
 	if titleFont != 0 {
 		procSelectObject.Call(hdc, titleFont)
 	}
@@ -586,7 +602,7 @@ func paintDesktopNotification(hwnd uintptr, state *desktopNotificationWindowStat
 		left:   textLeft,
 		top:    pad,
 		right:  width - pad,
-		bottom: pad + scaled(20),
+		bottom: pad + scaled(desktopNotificationLogicalTitleHeight),
 	}
 	drawNotificationText(hdc, state.notification.Title, &titleRect, dtSingleLine|dtEndEllipsis|dtNoPrefix)
 	if titleFont != 0 {
@@ -594,7 +610,7 @@ func paintDesktopNotification(hwnd uintptr, state *desktopNotificationWindowStat
 	}
 
 	// Body preview.
-	bodyFont := createNotificationFont(scaled(12), false)
+	bodyFont := createNotificationFont(scaled(desktopNotificationLogicalBodyFontSize), false)
 	if bodyFont != 0 {
 		procSelectObject.Call(hdc, bodyFont)
 	}
@@ -602,9 +618,9 @@ func paintDesktopNotification(hwnd uintptr, state *desktopNotificationWindowStat
 	procSetTextColor.Call(hdc, uintptr(bodyColor))
 	bodyRect := desktopWindowRect{
 		left:   textLeft,
-		top:    pad + scaled(22),
+		top:    pad + scaled(desktopNotificationLogicalBodyTop),
 		right:  width - pad,
-		bottom: height - scaled(8),
+		bottom: height - scaled(desktopNotificationLogicalBodyBottomInset),
 	}
 	drawNotificationText(hdc, state.notification.Body, &bodyRect, dtWordBreak|dtEndEllipsis|dtNoPrefix)
 	if bodyFont != 0 {

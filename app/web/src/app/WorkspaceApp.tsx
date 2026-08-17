@@ -12611,6 +12611,8 @@ export function App() {
     }
     const documentVisibility =
       typeof document !== 'undefined' ? document.visibilityState : 'hidden';
+    const windowFocused =
+      typeof document !== 'undefined' ? document.hasFocus() : false;
     if (!shouldNotifyPromptCompletion({
       enabled: promptCompletionNotificationsEnabledRef.current,
       message,
@@ -12618,6 +12620,7 @@ export function App() {
       selectedRuntimeKey: encodeChatSessionKey(selectedChatKeyRef.current),
       documentVisibility,
       activeTab: 'chat',
+      windowFocused,
     })) {
       return;
     }
