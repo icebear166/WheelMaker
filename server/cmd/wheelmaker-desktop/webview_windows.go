@@ -66,7 +66,7 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		if opts.CustomTitleBar {
 			suppressDesktopWindowBorder(hwnd)
 		}
-		notifications := newDesktopNotificationCenterUnavailable()
+		notifications := newDesktopNotificationCenter(hwnd, func(script string) { w.Eval(script) })
 		defer notifications.close()
 		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime, notifications); err != nil {
 			return err
@@ -398,17 +398,3 @@ type desktopNotificationSink interface {
 	show(raw string) string
 	close()
 }
-
-// desktopNotificationCenterUnavailable is the placeholder used until the
-// self-drawn notification center is wired in.
-type desktopNotificationCenterUnavailable struct{}
-
-func newDesktopNotificationCenterUnavailable() desktopNotificationCenterUnavailable {
-	return desktopNotificationCenterUnavailable{}
-}
-
-func (desktopNotificationCenterUnavailable) show(string) string {
-	return `{"ok":false,"error":"unavailable"}`
-}
-
-func (desktopNotificationCenterUnavailable) close() {}
