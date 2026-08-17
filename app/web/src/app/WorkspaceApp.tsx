@@ -386,6 +386,7 @@ import {
 } from '../chat/turns/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
+  chatSessionKeyFromNotificationUrl,
   promptCompletionNotificationKey,
   shouldNotifyPromptCompletion,
 } from '../chat/notifications/promptCompletionNotification';
@@ -16006,6 +16007,43 @@ export function App() {
     await refreshChatProjectSessions(target.projectId, {force: true});
     await selectProjectChatSession(target.projectId, target.sessionId);
   };
+
+  const applyPendingNotificationTargetRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    applyPendingNotificationTargetRef.current = applyPendingNotificationTarget;
+  });
+
+  const requestChatSessionJump = (target: ChatSessionKey | null) => {
+    if (!target) {
+      return;
+    }
+    pendingNotificationTargetRef.current = target;
+    applyPendingNotificationTargetRef.current().catch(() => undefined);
+  };
+
+  useEffect(() => {
+    const onDesktopNotificationClick = (event: Event) => {
+      const detail = (event as CustomEvent<{projectId?: string; sessionId?: string}>).detail;
+      requestChatSessionJump(chatSessionKeyFromParts(
+        detail?.projectId ?? '',
+        detail?.sessionId ?? '',
+      ));
+    };
+    window.addEventListener('wheelmaker:desktop-notification-click', onDesktopNotificationClick);
+    const serviceWorker = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'WM_NOTIFICATION_NAVIGATE') {
+        return;
+      }
+      requestChatSessionJump(chatSessionKeyFromNotificationUrl(String(event.data?.url ?? '')));
+    };
+    serviceWorker?.addEventListener('message', onServiceWorkerMessage);
+    return () => {
+      window.removeEventListener('wheelmaker:desktop-notification-click', onDesktopNotificationClick);
+      serviceWorker?.removeEventListener('message', onServiceWorkerMessage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     applyPendingNotificationTarget().catch(() => undefined);

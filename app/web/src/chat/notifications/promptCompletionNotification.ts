@@ -3,10 +3,27 @@ import type {
   RegistrySessionSummary,
 } from '../../registry/registryTypes';
 import {resolveChatSessionTitle} from '../session/chatSessionTitle';
+import {
+  chatSessionKeyFromParts,
+  type ChatSessionKey,
+} from '../session/chatSessionKey';
 import type {
   PromptCompletionNotificationStatus,
   WheelMakerNotificationPayload,
 } from '../../notifications/notificationPayload';
+
+export function chatSessionKeyFromNotificationUrl(rawUrl: string): ChatSessionKey | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl, 'https://wheelmaker.invalid');
+  } catch {
+    return null;
+  }
+  return chatSessionKeyFromParts(
+    url.searchParams.get('wmProjectId') ?? '',
+    url.searchParams.get('wmSessionId') ?? '',
+  );
+}
 
 export function promptCompletionNotificationKey(
   projectId: string,

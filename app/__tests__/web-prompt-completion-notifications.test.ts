@@ -1,5 +1,6 @@
 import {
   buildPromptCompletionNotification,
+  chatSessionKeyFromNotificationUrl,
   promptCompletionNotificationKey,
   promptCompletionSessionKey,
   promptCompletionStatusPhrase,
@@ -136,6 +137,17 @@ describe('prompt completion notifications', () => {
     expect(promptCompletionStatusPhrase('failed')).toBe('Prompt failed');
     expect(promptCompletionStatusPhrase('cancelled')).toBe('Prompt cancelled');
     expect(promptCompletionStatusPhrase('interrupted')).toBe('Prompt interrupted');
+  });
+
+  test('parses chat session key from notification urls', () => {
+    expect(chatSessionKeyFromNotificationUrl('/?wmProjectId=proj-1&wmSessionId=sess-1'))
+      .toEqual({projectId: 'proj-1', sessionId: 'sess-1'});
+    expect(chatSessionKeyFromNotificationUrl(
+      '/?wmProjectId=proj%20x&wmSessionId=sess%2F1',
+    )).toEqual({projectId: 'proj x', sessionId: 'sess/1'});
+    expect(chatSessionKeyFromNotificationUrl('/')).toBeNull();
+    expect(chatSessionKeyFromNotificationUrl('/?wmProjectId=proj-1')).toBeNull();
+    expect(chatSessionKeyFromNotificationUrl('not a url')).toBeNull();
   });
 
   test('uses the same resolved session title as the chat list', () => {
