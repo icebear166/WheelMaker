@@ -89,7 +89,7 @@ Expected: PASS。
 
 **Acceptance:** unpinned Desktop 继续 portal 到外部 host；pinned Desktop 不 portal，drawer 在 Preview body 左侧占据固定列，内容滚动层位于右侧；mobile 继续 inline overlay，不受 pinned split CSS 影响。共享 View 负责 Chrome、drawer、tabs、search slot 和 body slot，不把 WorkspaceApp 状态带入。
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 追加测试：
 
@@ -112,29 +112,29 @@ test('unpinned desktop keeps the external drawer portal', () => {
 
 `PreviewWorkbenchView.test.tsx` 断言 inline 与 detached mode 都消费同一 `PreviewWorkbenchView`，并将 `onDrawerModeChange`、`onTabSelect`、`onTabClose`、`onDock`/`onFloat` 等 intent callback 原样转交。
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/PreviewWorkbenchChrome.test.tsx web/preview/PreviewWorkbenchView.test.tsx`
 
 Expected: pinned surface 缺少 internal split class，新增 View 尚不能编译。
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 在 `PreviewWorkbenchView.tsx` 收纳当前 `PreviewWorkbenchChrome` 的通用 props，inline 与 detached 只提供 view model 和 intent callbacks。`PreviewWorkbenchChrome` 根据 `mode === 'desktop' && drawerPinned && !drawerPortalTarget` 增加 `drawer-pinned` surface/body 标记；CSS 只对该标记启用 flex 分栏，保留外部 portal 和 mobile 规则。删除“关闭 drawer 清 pin”的行为，显式 Unpin 才改变 pin。
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd app && npm test -- --runTestsByPath web/preview/PreviewWorkbenchChrome.test.tsx web/preview/PreviewWorkbenchView.test.tsx`
 
 Expected: PASS。
 
-- [ ] **Step 5: Run focused regression checks**
+- [x] **Step 5: Run focused regression checks**
 
 Run: `cd app && npm run tsc:web`
 
 Expected: TypeScript 检查通过，mobile drawer 和既有 external portal 测试均通过。
 
-- [ ] **Step 6: Git checkpoint**
+- [x] **Step 6: Git checkpoint**
 
 只提交本任务的 shared View、Chrome/CSS 与测试文件。
 

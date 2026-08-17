@@ -318,6 +318,7 @@ describe('PreviewWorkbenchChrome drawer', () => {
     render(props);
     const panel = document.querySelector('.preview-workbench-drawer-panel') as HTMLElement;
     expect(panel).toBeTruthy();
+    expect(document.querySelector('.preview-workbench-surface')?.className).toContain('drawer-pinned');
 
     pointerDown(document.body);
     expect(props.onDrawerModeChange).not.toHaveBeenCalled();
@@ -428,6 +429,16 @@ describe('PreviewWorkbenchChrome drawer', () => {
     const panel = container!.querySelector('.preview-workbench-drawer-panel');
     expect(panel).toBeTruthy();
     expect((panel as HTMLElement).className).not.toContain('external');
+  });
+
+  test('desktop pinned drawer stays inline even when an external host is available', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    render(createProps({drawerMode: 'files', drawerPinned: true, drawerPortalTarget: host}));
+
+    expect(host.querySelector('.preview-workbench-drawer-panel')).toBeNull();
+    expect(container!.querySelector('.preview-workbench-drawer-panel')).toBeTruthy();
+    expect(container!.querySelector('.preview-workbench-surface')?.className).toContain('drawer-pinned');
   });
 
   test('desktop hides the chrome close button', () => {

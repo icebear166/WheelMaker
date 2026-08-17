@@ -645,6 +645,31 @@
   animation: preview-workbench-drawer-in var(--motion-standard) var(--ease-out);
 }
 
+.preview-workbench-surface.drawer-pinned .preview-workbench-body {
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.preview-workbench-surface.drawer-pinned .preview-workbench-drawer-panel {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  flex: 0 0 min(360px, calc(100% - 56px));
+  width: min(360px, calc(100% - 56px));
+  height: auto;
+  border-right: 1px solid var(--border-subtle);
+  box-shadow: 18px 0 48px color-mix(in srgb, #000 22%, transparent);
+}
+
+.preview-workbench-surface.drawer-pinned .chat-file-peek-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.preview-workbench-surface.drawer-pinned .preview-workbench-search-hud {
+  left: min(370px, calc(100% - 46px));
+}
+
 .preview-workbench-drawer-panel.external {
   width: 100%;
   height: 100%;

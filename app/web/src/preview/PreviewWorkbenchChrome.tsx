@@ -44,6 +44,8 @@ type PreviewWorkbenchChromeProps = {
   onMobilePortRelayRefresh?: () => void;
   mobileFullscreen?: boolean;
   onMobileFullscreenChange?: (fullscreen: boolean) => void;
+  onFloat?: () => void;
+  onDock?: () => void;
   children: React.ReactNode;
 };
 
@@ -80,6 +82,8 @@ export function PreviewWorkbenchChrome({
   onMobilePortRelayRefresh,
   mobileFullscreen = false,
   onMobileFullscreenChange,
+  onFloat,
+  onDock,
   children,
 }: PreviewWorkbenchChromeProps) {
   const bindTabContextMenu = useContextMenuTargetGesture<string>((tabId, position) => {
@@ -123,7 +127,8 @@ export function PreviewWorkbenchChrome({
       ? gitDrawer
       : null;
   const drawerExiting = !drawerOpen && exitMode !== null;
-  const useDrawerPortal = mode === 'desktop' && !!drawerPortalTarget;
+  const useDrawerPortal = mode === 'desktop' && !!drawerPortalTarget && !drawerPinned;
+  const drawerPinnedInternal = mode === 'desktop' && drawerPinned && !useDrawerPortal;
   const drawerPanel = renderedMode && drawerContent ? (
     <div
       ref={drawerPanelRef}
@@ -170,6 +175,17 @@ export function PreviewWorkbenchChrome({
             </div>
           ) : null}
         </div>
+      ) : null}
+      {mode === 'desktop' && (onFloat || onDock) ? (
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onDock ?? onFloat}
+          aria-label={onDock ? 'Dock preview' : 'Float preview'}
+          data-tooltip={onDock ? 'Dock preview' : 'Float preview'}
+        >
+          <Icon name={onDock ? 'arrowLeft' : 'externalLink'} />
+        </button>
       ) : null}
     </>
   );
@@ -327,7 +343,7 @@ export function PreviewWorkbenchChrome({
   return (
     <WorkbenchChrome
       mode={mode}
-      surfaceClassName="preview-workbench-surface chat-file-peek-surface"
+      surfaceClassName={`preview-workbench-surface chat-file-peek-surface${drawerPinnedInternal ? ' drawer-pinned' : ''}`}
       ariaLabel="Preview workbench"
       title={activeTitle}
       closeLabel={mode === 'mobile' ? 'Back to Chat' : 'Close preview'}
