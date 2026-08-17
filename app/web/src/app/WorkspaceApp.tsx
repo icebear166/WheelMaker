@@ -20297,6 +20297,189 @@ export function App() {
   const keepWorkspaceVisible =
     reconnecting && hasCachedWorkspace;
 
+  const restoreInlinePreview = useCallback(() => {
+    setPreviewDockPending(false);
+    setPreviewDetached(false);
+    setChatPreviewManualCollapsed(false);
+    setChatPreviewManualOpen(true);
+    previewWorkbenchChannel?.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: false,
+    });
+  }, [previewWorkbenchChannel]);
+  const floatPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    if (!previewWorkbenchChannel?.post || !bridge?.openPreviewWindow) return;
+    setPreviewDockPending(false);
+    setPreviewDetached(true);
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(true);
+    previewWorkbenchChannel.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: true,
+    });
+    Promise.resolve(bridge.openPreviewWindow()).catch(error => {
+      restoreInlinePreview();
+      const reason = error instanceof Error ? error.message : String(error);
+      setToastMessage(`Failed to open Preview window: ${reason}`);
+    });
+  }, [previewWorkbenchChannel, restoreInlinePreview]);
+  const dockPreviewWindow = useCallback(() => {
+    const bridge = getDesktopWindowBridge();
+    if (!previewDetached || previewDockPending) return;
+    if (!bridge?.dockPreviewWindow) {
+      restoreInlinePreview();
+      return;
+    }
+    setPreviewDockPending(true);
+    Promise.resolve(bridge.dockPreviewWindow()).catch(error => {
+      setPreviewDockPending(false);
+      const reason = error instanceof Error ? error.message : String(error);
+      setToastMessage(`Failed to dock Preview window: ${reason}`);
+    });
+  }, [previewDockPending, previewDetached, restoreInlinePreview]);
+  const handlePreviewWorkbenchIntent = useCallback((intent: PreviewWorkbenchIntent) => {
+    switch (intent.kind) {
+      case 'select-tab':
+        setPreviewWorkbench(current => selectPreviewTab(current, intent.projectId, intent.tabId));
+        return;
+      case 'close-tab':
+        closeWorkbenchTab(intent.projectId, intent.tabId);
+        return;
+      case 'drawer-mode':
+        updatePreviewDrawerMode(intent.mode);
+        return;
+      case 'toggle-drawer-pin':
+        setPreviewDrawerPinned(pinned => !pinned);
+        return;
+      case 'search':
+        setPreviewSearchOpen(intent.open);
+        setPreviewSearchQuery(intent.query);
+        setPreviewSearchActiveIndex(intent.activeIndex);
+        return;
+      case 'file-tree-search':
+        updatePreviewFileTreeSearchQuery(intent.query);
+        return;
+      case 'scroll':
+        setPreviewSearchScrollTop(intent.scrollTop);
+        return;
+      case 'toggle-directory':
+        void togglePreviewDirectory(intent.path);
+        return;
+      case 'toggle-search-directory':
+        togglePreviewFileTreeSearchDirectory(intent.path);
+        return;
+      case 'toggle-diff-file':
+        togglePreviewDiffFile(intent.projectId, intent.tabId, intent.path);
+        return;
+      case 'open-file':
+        openChatFilePeek(intent.path, intent.targetLine, intent.projectId);
+        return;
+      case 'open-git':
+        openGitDiffPreview(intent.projectId, intent.source, intent.file);
+        return;
+      case 'git-selected-refs':
+        void gitBrowserStore.setSelectedRefs(intent.projectId, intent.refs);
+        return;
+      case 'git-toggle-commit':
+        void gitBrowserStore.toggleCommit(intent.projectId, intent.sha);
+        return;
+      case 'git-refresh':
+      case 'git-retry':
+        void gitBrowserStore.refresh(intent.projectId);
+        return;
+      case 'git-load-more':
+        void gitBrowserStore.loadMore(intent.projectId);
+        return;
+      case 'copy-commit-sha':
+        void writeTextToClipboard(intent.sha);
+        return;
+      case 'focus':
+        focusPreviewWindow();
+        return;
+      case 'dock':
+        dockPreviewWindow();
+        return;
+    }
+  }, [
+    closeWorkbenchTab,
+    dockPreviewWindow,
+    focusPreviewWindow,
+    openChatFilePeek,
+    openGitDiffPreview,
+    togglePreviewDiffFile,
+    togglePreviewFileTreeSearchDirectory,
+    togglePreviewDirectory,
+    updatePreviewDrawerMode,
+    updatePreviewFileTreeSearchQuery,
+  ]);
+  const previewMirrorStateRef = useRef(previewMirrorState);
+  previewMirrorStateRef.current = previewMirrorState;
+  const getPreviewMirrorState = useCallback((): PreviewWorkbenchMirrorState => {
+    const state = previewMirrorStateRef.current;
+    return {
+      ...state,
+      search: {
+        ...state.search,
+        scrollTop: previewSearchScrollTopRef.current,
+      },
+    };
+  }, []);
+  const handlePreviewWindowReady = useCallback(() => {
+    setPreviewDockPending(false);
+    setPreviewDetached(true);
+    previewWorkbenchChannel?.post({
+      kind: 'preview-host-status',
+      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
+      detached: true,
+    });
+  }, [previewWorkbenchChannel]);
+  const handlePreviewWindowClosed = useCallback(() => {
+    restoreInlinePreview();
+  }, [restoreInlinePreview]);
+  const previewWorkbenchHost = useMemo(() => {
+    if (!previewWorkbenchChannel) return null;
+    return createPreviewWorkbenchHost({
+      channel: previewWorkbenchChannel,
+      getState: getPreviewMirrorState,
+      onReady: handlePreviewWindowReady,
+      onIntent: handlePreviewWorkbenchIntent,
+      onClosed: handlePreviewWindowClosed,
+    });
+  }, [
+    handlePreviewWindowClosed,
+    handlePreviewWindowReady,
+    handlePreviewWorkbenchIntent,
+    getPreviewMirrorState,
+    previewWorkbenchChannel,
+  ]);
+  useEffect(() => {
+    if (!previewWorkbenchHost) return undefined;
+    return previewWorkbenchHost.close;
+  }, [previewWorkbenchHost]);
+  useEffect(() => () => {
+    previewWorkbenchChannel?.close();
+  }, [previewWorkbenchChannel]);
+  useEffect(() => {
+    previewWorkbenchHost?.publishState(previewMirrorState);
+  }, [previewMirrorState, previewWorkbenchHost]);
+  useEffect(() => {
+    if (!previewDetached) return;
+    previewWorkbenchHost?.publishScroll(previewSearchScrollTop);
+  }, [previewDetached, previewSearchScrollTop, previewWorkbenchHost]);
+  const handlePreviewScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    setPreviewSearchScrollTop(event.currentTarget.scrollTop);
+  }, []);
+  useEffect(() => {
+    if (previewDetached || !chatPreviewOpen) return;
+    const container = chatFilePeekScrollRef.current;
+    if (container && container.scrollTop !== previewSearchScrollTop) {
+      container.scrollTop = previewSearchScrollTop;
+    }
+  }, [chatPreviewOpen, previewDetached, previewSearchScrollTop]);
+
   if (!connected && !keepWorkspaceVisible) {
     const launchView = resolveAppLaunchView(registryAuth.state, !!error);
     const hasDesktopTitlebar = !!getDesktopWindowBridge();
@@ -20791,13 +20974,13 @@ export function App() {
       })
       .finally(scrollLocatedPreviewFileIntoView);
   };
-  const togglePreviewFileTreeSearchDirectory = (path: string) => {
+  function togglePreviewFileTreeSearchDirectory(path: string) {
     setPreviewFileTreeSearchCollapsedDirs(current =>
       current.includes(path)
         ? current.filter(item => item !== path)
         : [...current, path],
     );
-  };
+  }
   const managedProjectFileMenuTarget = (
     targetProjectId: string,
     path: string,
@@ -20934,7 +21117,7 @@ export function App() {
   const selectWorkbenchTab = (projectId: string, tabId: string) => {
     setPreviewWorkbench(current => selectPreviewTab(current, projectId, tabId));
   };
-  const closeWorkbenchTab = (projectId: string, tabId: string) => {
+  function closeWorkbenchTab(projectId: string, tabId: string) {
     const loadKey = fileMemoryCacheKey(projectId, tabId);
     previewFileLoadControllersRef.current.get(loadKey)?.abort();
     previewFileLoadControllersRef.current.delete(loadKey);
@@ -20948,7 +21131,7 @@ export function App() {
       setChatPreviewManualOpen(true);
       setChatPreviewManualCollapsed(false);
     }
-  };
+  }
   const activatePreviewSearchMatch = (index: number) => {
     if (previewSearchMatches.length === 0) {
       return;
@@ -21771,188 +21954,6 @@ export function App() {
   const previewCompanionSupported = Boolean(
     previewWorkbenchChannel && getDesktopWindowBridge()?.openPreviewWindow,
   );
-  const restoreInlinePreview = useCallback(() => {
-    setPreviewDockPending(false);
-    setPreviewDetached(false);
-    setChatPreviewManualCollapsed(false);
-    setChatPreviewManualOpen(true);
-    previewWorkbenchChannel?.post({
-      kind: 'preview-host-status',
-      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
-      detached: false,
-    });
-  }, [previewWorkbenchChannel]);
-  const floatPreviewWindow = useCallback(() => {
-    const bridge = getDesktopWindowBridge();
-    if (!previewWorkbenchChannel?.post || !bridge?.openPreviewWindow) return;
-    setPreviewDockPending(false);
-    setPreviewDetached(true);
-    setChatPreviewManualOpen(false);
-    setChatPreviewManualCollapsed(true);
-    previewWorkbenchChannel.post({
-      kind: 'preview-host-status',
-      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
-      detached: true,
-    });
-    Promise.resolve(bridge.openPreviewWindow()).catch(error => {
-      restoreInlinePreview();
-      const reason = error instanceof Error ? error.message : String(error);
-      setToastMessage(`Failed to open Preview window: ${reason}`);
-    });
-  }, [previewWorkbenchChannel, restoreInlinePreview]);
-  const dockPreviewWindow = useCallback(() => {
-    const bridge = getDesktopWindowBridge();
-    if (!previewDetached || previewDockPending) return;
-    if (!bridge?.dockPreviewWindow) {
-      restoreInlinePreview();
-      return;
-    }
-    setPreviewDockPending(true);
-    Promise.resolve(bridge.dockPreviewWindow()).catch(error => {
-      setPreviewDockPending(false);
-      const reason = error instanceof Error ? error.message : String(error);
-      setToastMessage(`Failed to dock Preview window: ${reason}`);
-    });
-  }, [previewDockPending, previewDetached, restoreInlinePreview]);
-  const handlePreviewWorkbenchIntent = useCallback((intent: PreviewWorkbenchIntent) => {
-    switch (intent.kind) {
-      case 'select-tab':
-        setPreviewWorkbench(current => selectPreviewTab(current, intent.projectId, intent.tabId));
-        return;
-      case 'close-tab':
-        closeWorkbenchTab(intent.projectId, intent.tabId);
-        return;
-      case 'drawer-mode':
-        updatePreviewDrawerMode(intent.mode);
-        return;
-      case 'toggle-drawer-pin':
-        setPreviewDrawerPinned(pinned => !pinned);
-        return;
-      case 'search':
-        setPreviewSearchOpen(intent.open);
-        setPreviewSearchQuery(intent.query);
-        setPreviewSearchActiveIndex(intent.activeIndex);
-        return;
-      case 'file-tree-search':
-        updatePreviewFileTreeSearchQuery(intent.query);
-        return;
-      case 'scroll':
-        setPreviewSearchScrollTop(intent.scrollTop);
-        return;
-      case 'toggle-directory':
-        void togglePreviewDirectory(intent.path);
-        return;
-      case 'toggle-search-directory':
-        togglePreviewFileTreeSearchDirectory(intent.path);
-        return;
-      case 'toggle-diff-file':
-        togglePreviewDiffFile(intent.projectId, intent.tabId, intent.path);
-        return;
-      case 'open-file':
-        openChatFilePeek(intent.path, intent.targetLine, intent.projectId);
-        return;
-      case 'open-git':
-        openGitDiffPreview(intent.projectId, intent.source, intent.file);
-        return;
-      case 'git-selected-refs':
-        void gitBrowserStore.setSelectedRefs(intent.projectId, intent.refs);
-        return;
-      case 'git-toggle-commit':
-        void gitBrowserStore.toggleCommit(intent.projectId, intent.sha);
-        return;
-      case 'git-refresh':
-      case 'git-retry':
-        void gitBrowserStore.refresh(intent.projectId);
-        return;
-      case 'git-load-more':
-        void gitBrowserStore.loadMore(intent.projectId);
-        return;
-      case 'copy-commit-sha':
-        void writeTextToClipboard(intent.sha);
-        return;
-      case 'focus':
-        focusPreviewWindow();
-        return;
-      case 'dock':
-        dockPreviewWindow();
-        return;
-    }
-  }, [
-    closeWorkbenchTab,
-    dockPreviewWindow,
-    focusPreviewWindow,
-    openChatFilePeek,
-    openGitDiffPreview,
-    togglePreviewDiffFile,
-    togglePreviewFileTreeSearchDirectory,
-    togglePreviewDirectory,
-    updatePreviewDrawerMode,
-    updatePreviewFileTreeSearchQuery,
-  ]);
-  const previewMirrorStateRef = useRef(previewMirrorState);
-  previewMirrorStateRef.current = previewMirrorState;
-  const getPreviewMirrorState = useCallback((): PreviewWorkbenchMirrorState => {
-    const state = previewMirrorStateRef.current;
-    return {
-      ...state,
-      search: {
-        ...state.search,
-        scrollTop: previewSearchScrollTopRef.current,
-      },
-    };
-  }, []);
-  const handlePreviewWindowReady = useCallback(() => {
-    setPreviewDockPending(false);
-    setPreviewDetached(true);
-    previewWorkbenchChannel?.post({
-      kind: 'preview-host-status',
-      version: PREVIEW_WORKBENCH_CHANNEL_VERSION,
-      detached: true,
-    });
-  }, [previewWorkbenchChannel]);
-  const handlePreviewWindowClosed = useCallback(() => {
-    restoreInlinePreview();
-  }, [restoreInlinePreview]);
-  const previewWorkbenchHost = useMemo(() => {
-    if (!previewWorkbenchChannel) return null;
-    return createPreviewWorkbenchHost({
-      channel: previewWorkbenchChannel,
-      getState: getPreviewMirrorState,
-      onReady: handlePreviewWindowReady,
-      onIntent: handlePreviewWorkbenchIntent,
-      onClosed: handlePreviewWindowClosed,
-    });
-  }, [
-    handlePreviewWindowClosed,
-    handlePreviewWindowReady,
-    handlePreviewWorkbenchIntent,
-    getPreviewMirrorState,
-    previewWorkbenchChannel,
-  ]);
-  useEffect(() => {
-    if (!previewWorkbenchHost) return undefined;
-    return previewWorkbenchHost.close;
-  }, [previewWorkbenchHost]);
-  useEffect(() => () => {
-    previewWorkbenchChannel?.close();
-  }, [previewWorkbenchChannel]);
-  useEffect(() => {
-    previewWorkbenchHost?.publishState(previewMirrorState);
-  }, [previewMirrorState, previewWorkbenchHost]);
-  useEffect(() => {
-    if (!previewDetached) return;
-    previewWorkbenchHost?.publishScroll(previewSearchScrollTop);
-  }, [previewDetached, previewSearchScrollTop, previewWorkbenchHost]);
-  const handlePreviewScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    setPreviewSearchScrollTop(event.currentTarget.scrollTop);
-  }, []);
-  useEffect(() => {
-    if (previewDetached || !chatPreviewOpen) return;
-    const container = chatFilePeekScrollRef.current;
-    if (container && container.scrollTop !== previewSearchScrollTop) {
-      container.scrollTop = previewSearchScrollTop;
-    }
-  }, [chatPreviewOpen, previewDetached, previewSearchScrollTop]);
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchView
       mode={mode}

@@ -612,7 +612,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const result = previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex];');
     expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
     expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(');
-    expect(mainTsx).toContain('const togglePreviewFileTreeSearchDirectory = (path: string) => {');
+    expect(mainTsx).toContain('function togglePreviewFileTreeSearchDirectory(path: string) {');
     expect(mainTsx).toContain('const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);');
     expect(mainTsx).toContain('onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}');
     expect(mainTsx).toContain("<Icon name={collapsed ? 'chevronRight' : 'chevronDown'}");
@@ -779,6 +779,8 @@ describe('web chat file peek viewer', () => {
       'if (!previewSearchOpen || previewSearchMatches.length === 0) {',
       'if (!quickFileOpen) {',
       'const handleWorkspaceShortcutKeyDown = (event: KeyboardEvent) => {',
+      'const restoreInlinePreview = useCallback(() => {',
+      'const handlePreviewScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {',
     ].forEach(pattern => {
       const hookIndex = mainTsx.indexOf(pattern);
       expect(hookIndex).toBeGreaterThanOrEqual(0);
@@ -854,7 +856,7 @@ describe('web chat file peek viewer', () => {
 
   test('closing the last workbench tab leaves the preview open on the empty state', () => {
     const mainTsx = readSourceText(mainPath);
-    const closeStart = mainTsx.indexOf('const closeWorkbenchTab = (projectId: string, tabId: string) => {');
+    const closeStart = mainTsx.indexOf('function closeWorkbenchTab(projectId: string, tabId: string) {');
     expect(closeStart).toBeGreaterThanOrEqual(0);
     const closeEnd = mainTsx.indexOf('const toggleChatFilePreviewTree = () => {', closeStart);
     const closeBody = mainTsx.slice(closeStart, closeEnd);
