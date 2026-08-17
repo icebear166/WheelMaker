@@ -7,11 +7,13 @@ const workspaceApp = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.t
 
 describe('main surface boundaries', () => {
   test('main only owns the bootstrap render boundary', () => {
-    expect(main).toContain("import { App, workspaceAppReady } from './app/WorkspaceApp';");
     expect(main).toContain("import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';");
     expect(main).toContain('requestPersistentBrowserStorageOnStartup();');
-    expect(main).toContain('workspaceAppReady.then(() => {');
-    expect(main).toContain("createRoot(document.getElementById('root')!).render(<><App /><GlobalTooltip /></>);");
+    expect(main).toContain("const {App, workspaceAppReady} = await import('./app/WorkspaceApp');");
+    expect(main).toContain('await workspaceAppReady;');
+    expect(main).toContain("createRoot(root).render(<><App /><GlobalTooltip /></>);");
+    expect(main).toContain("const {PreviewWindowApp} = await import('./preview/PreviewWindowApp');");
+    expect(main).toContain('isPreviewWindowPath(window.location.pathname)');
     expect(main).not.toContain('AppConfirmDialog');
     expect(main).not.toContain('<ChatVirtuosoTurnList');
   });

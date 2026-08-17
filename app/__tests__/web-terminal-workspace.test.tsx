@@ -82,7 +82,7 @@ describe('terminal workspace integration', () => {
   test('places Terminal before Preview and renders a desktop bottom panel', () => {
     const source = read('web/src/app/WorkspaceApp.tsx');
     const terminalButton = source.indexOf('className={`chat-terminal-toggle${terminalOpen ? \' active\' : \'\'}`}');
-    const previewButton = source.indexOf('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
+    const previewButton = source.indexOf('className={`chat-preview-toggle');
     expect(terminalButton).toBeGreaterThan(0);
     expect(previewButton).toBeGreaterThan(terminalButton);
     expect(source).toContain('className="terminal-splitter"');
