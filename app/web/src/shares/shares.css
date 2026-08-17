@@ -76,6 +76,9 @@
   padding: 0;
   text-decoration: none;
 }
+.share-link-icon-action:active:not(:disabled) {
+  transform: scale(.96);
+}
 .share-manager-record-actions .share-link-icon-action {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;

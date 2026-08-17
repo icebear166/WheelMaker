@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Icon} from '../common/Icon';
 import {writeTextToClipboard} from '../platform/clipboard';
 import {AppConfirmDialog} from '../shell/AppDialogs';
@@ -73,6 +73,8 @@ const EXPIRY_OPTIONS: Array<{value: RegistryShareExpiry; label: string}> = [
   {value: 'permanent', label: 'Permanent'},
 ];
 
+const COPY_FEEDBACK_MS = 1200;
+
 function shareManagerSourceDescription(source: ShareManagerSource): string {
   if (source.sourceType === 'chat_response') {
     return `Current response · ${source.sessionTitle}`;
@@ -119,6 +121,25 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
   const [deleteError, setDeleteError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [copiedTarget, setCopiedTarget] = useState('');
+  const copyFeedbackTimerRef = useRef<number | null>(null);
+
+  const showCopyFeedback = useCallback((target: string) => {
+    setCopiedTarget(target);
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      copyFeedbackTimerRef.current = null;
+      setCopiedTarget(current => current === target ? '' : current);
+    }, COPY_FEEDBACK_MS);
+  }, []);
+
+  useEffect(() => () => {
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+  }, []);
 
   const loadRecords = useCallback(async (cursor = '', append = false) => {
     setLoading(true);
@@ -145,6 +166,11 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     setDeleteError('');
     setError('');
     setNotice('');
+    setCopiedTarget('');
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+      copyFeedbackTimerRef.current = null;
+    }
   }, [initialSource]);
 
   useEffect(() => {
@@ -246,6 +272,7 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     try {
       await writeTextToClipboard(createdUrl);
       setNotice('Share link copied.');
+      showCopyFeedback('created');
     } catch (copyError) {
       const reason = copyError instanceof Error ? copyError.message : String(copyError);
       setError(`Failed to copy share link: ${reason}`);
@@ -260,6 +287,7 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
     try {
       await writeTextToClipboard(record.url);
       setNotice('Share link copied.');
+      showCopyFeedback(`record:${record.token}`);
     } catch (copyError) {
       setError(copyError instanceof Error ? copyError.message : String(copyError));
     }
@@ -404,11 +432,11 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
                 <button
                   type="button"
                   className="app-confirm-btn primary share-link-icon-action"
-                  aria-label="Copy share link"
-                  data-tooltip="Copy share link"
+                  aria-label={copiedTarget === 'created' ? 'Copied' : 'Copy share link'}
+                  data-tooltip={copiedTarget === 'created' ? 'Copied' : 'Copy share link'}
                   onClick={() => void copyCreatedLink()}
                 >
-                  <Icon name="copy" />
+                  <Icon name={copiedTarget === 'created' ? 'check' : 'copy'} />
                 </button>
               </>
             ) : (
@@ -488,13 +516,13 @@ export function ShareManager({service, initialSource = null, captureSnapshot, on
                 <button
                   type="button"
                   className="share-link-icon-action"
-                  aria-label="Copy share link"
-                  data-tooltip="Copy share link"
+                  aria-label={copiedTarget === `record:${record.token}` ? 'Copied' : 'Copy share link'}
+                  data-tooltip={copiedTarget === `record:${record.token}` ? 'Copied' : 'Copy share link'}
                   data-share-action="copy"
                   onClick={() => void copyLink(record)}
                   disabled={!record.url}
                 >
-                  <Icon name="copy" />
+                  <Icon name={copiedTarget === `record:${record.token}` ? 'check' : 'copy'} />
                 </button>
                 <button
                   type="button"

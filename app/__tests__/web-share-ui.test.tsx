@@ -158,9 +158,25 @@ test('ShareManager automatically copies a created link and offers compact open a
   expect(findButton(renderer, 'Done')).toBeDefined();
   expect(renderer.root.findAllByProps({'aria-label': 'Delete share'})).toHaveLength(0);
 
-  await ReactTestRenderer.act(async () => copy.props.onClick());
-  expect(writeTextToClipboardMock).toHaveBeenCalledTimes(2);
-  expect(writeTextToClipboardMock).toHaveBeenLastCalledWith(url);
+  jest.useFakeTimers();
+  try {
+    await ReactTestRenderer.act(async () => copy.props.onClick());
+    expect(writeTextToClipboardMock).toHaveBeenCalledTimes(2);
+    expect(writeTextToClipboardMock).toHaveBeenLastCalledWith(url);
+    const copied = renderer.root.findByProps({'aria-label': 'Copied'});
+    expect(copied.props['data-tooltip']).toBe('Copied');
+    expect(copied.findByProps({'data-icon-name': 'check'})).toBeDefined();
+
+    ReactTestRenderer.act(() => jest.advanceTimersByTime(800));
+    await ReactTestRenderer.act(async () => copied.props.onClick());
+    ReactTestRenderer.act(() => jest.advanceTimersByTime(800));
+    expect(renderer.root.findByProps({'aria-label': 'Copied'})).toBeDefined();
+
+    ReactTestRenderer.act(() => jest.advanceTimersByTime(400));
+    expect(renderer.root.findByProps({'aria-label': 'Copy share link'}).findByProps({'data-icon-name': 'copy'})).toBeDefined();
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test('ShareManager keeps the created link visible when automatic clipboard copy fails', async () => {
@@ -327,8 +343,17 @@ test('ShareManager labels full-session records and presents three compact link a
   const copy = record.findByProps({'data-share-action': 'copy'});
   expect(copy.props).toMatchObject({'aria-label': 'Copy share link', 'data-tooltip': 'Copy share link'});
   expect(copy.findByProps({'data-icon-name': 'copy'})).toBeDefined();
-  await ReactTestRenderer.act(async () => copy.props.onClick());
-  expect(writeTextToClipboardMock).toHaveBeenCalledWith(url);
+  jest.useFakeTimers();
+  try {
+    await ReactTestRenderer.act(async () => copy.props.onClick());
+    expect(writeTextToClipboardMock).toHaveBeenCalledWith(url);
+    const copied = record.findByProps({'data-share-action': 'copy'});
+    expect(copied.props).toMatchObject({'aria-label': 'Copied', 'data-tooltip': 'Copied'});
+    expect(copied.findByProps({'data-icon-name': 'check'})).toBeDefined();
+    ReactTestRenderer.act(() => jest.runOnlyPendingTimers());
+  } finally {
+    jest.useRealTimers();
+  }
 
   const remove = record.findByProps({'data-share-action': 'delete'});
   expect(remove.props).toMatchObject({'aria-label': 'Delete share', 'data-tooltip': 'Delete share'});
@@ -337,6 +362,7 @@ test('ShareManager labels full-session records and presents three compact link a
   const shareStyles = fs.readFileSync(path.resolve(__dirname, '../web/src/shares/shares.css'), 'utf8');
   expect(shareStyles).toMatch(/\.share-manager-record-actions\s*\{[^}]*gap:\s*6px/);
   expect(shareStyles).toMatch(/\.share-manager-record-actions \.share-manager-danger-button\s*\{[^}]*color:\s*var\(--state-danger/);
+  expect(shareStyles).toMatch(/\.share-link-icon-action:active:not\(:disabled\)\s*\{[^}]*transform:\s*scale\(\.96\)/);
 });
 
 test('ShareManager confirms deletion before revoking a public link', async () => {
