@@ -354,7 +354,6 @@ import {
 import {
   buildMarkdownHtmlFileNameFromStem,
   buildMarkdownHtmlFileName,
-  buildPromptMarkdownHtmlFileStem,
   resolveExternalMarkdownImagePath,
   resolveProjectMarkdownImagePath,
   validateMarkdownHtmlFileStem,
@@ -2141,13 +2140,7 @@ function buildSessionChatShareFileStem(snapshot: ChatShareSnapshot): string {
     .replace(/[. ]+$/g, '')
     .replace(/\s+/g, ' ')
     .slice(0, 100) || 'wheelmaker-session';
-  const parsed = new Date(snapshot.capturedAt);
-  const timestamp = (Number.isNaN(parsed.getTime()) ? new Date() : parsed)
-    .toISOString()
-    .replace(/\.\d{3}Z$/, 'Z')
-    .replace(/[:T]/g, '-')
-    .replace(/Z$/, '');
-  return `${title}-${timestamp}`;
+  return title;
 }
 
 function promptArtifactPreviewTitle(fileCount: number): string {
@@ -17147,9 +17140,7 @@ export function App() {
       setPromptMarkdownHtmlExportDraft({
         snapshot,
         action,
-        fileNameStem: action.scope === 'session'
-          ? buildSessionChatShareFileStem(snapshot)
-          : buildPromptMarkdownHtmlFileStem(),
+        fileNameStem: buildSessionChatShareFileStem(snapshot),
       });
       return;
     }

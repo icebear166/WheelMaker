@@ -229,7 +229,6 @@ describe('web chat file peek viewer', () => {
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
 
     expect(mainTsx).toContain('buildMarkdownHtmlFileName,');
-    expect(mainTsx).toContain('buildPromptMarkdownHtmlFileStem,');
     expect(mainTsx).toContain('buildMarkdownHtmlFileNameFromStem,');
     expect(mainTsx).toContain('validateMarkdownHtmlFileStem,');
     expect(mainTsx).toContain('resolveProjectMarkdownImagePath,');
@@ -258,6 +257,22 @@ describe('web chat file peek viewer', () => {
     expect(hostRule).toContain('left: -10000px;');
     expect(hostRule).toContain('pointer-events: none;');
     expect(hostRule).toContain('width: 800px;');
+  });
+
+  test('uses the resolved session title as the default name for every chat HTML export', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stemStart = mainTsx.indexOf('function buildSessionChatShareFileStem');
+    const stemEnd = mainTsx.indexOf('\n}\n\nfunction promptArtifactPreviewTitle', stemStart);
+    const stemBody = mainTsx.slice(stemStart, stemEnd);
+    const htmlActionStart = mainTsx.indexOf("if (action.format === 'html') {");
+    const htmlActionEnd = mainTsx.indexOf('if (chatShareReservationPendingRef.current) return;', htmlActionStart);
+    const htmlActionBody = mainTsx.slice(htmlActionStart, htmlActionEnd);
+
+    expect(stemBody).toContain('const title = snapshot.title');
+    expect(stemBody).not.toContain('capturedAt');
+    expect(stemBody).toContain('return title;');
+    expect(htmlActionBody).toContain('fileNameStem: buildSessionChatShareFileStem(snapshot)');
+    expect(htmlActionBody).not.toContain('buildPromptMarkdownHtmlFileStem');
   });
 
   test('prompt attachments open unified attachment tabs', () => {

@@ -4,7 +4,6 @@ import path from 'node:path';
 import {
   buildMarkdownHtmlFileNameFromStem,
   buildMarkdownHtmlFileName,
-  buildPromptMarkdownHtmlFileStem,
   buildStandaloneMarkdownHtmlDocument,
   MARKDOWN_EXPORT_CONTENT_STYLE,
   resolveExternalMarkdownImagePath,
@@ -30,9 +29,6 @@ function readMarkdownHtmlExportDocumentSource(): string {
 describe('markdown HTML export', () => {
   test('uses deterministic HTML export names', () => {
     expect(buildMarkdownHtmlFileName('docs/README.MD')).toBe('README.html');
-    expect(
-      buildPromptMarkdownHtmlFileStem(new Date(2026, 6, 30, 15, 42, 8)),
-    ).toBe('2026-07-30_15-42-08');
     expect(buildMarkdownHtmlFileNameFromStem(' Project recap ')).toBe('Project recap.html');
   });
 

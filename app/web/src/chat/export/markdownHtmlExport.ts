@@ -183,22 +183,6 @@ export function buildMarkdownHtmlFileName(path: string): string {
   return `${base.replace(/\.md$/i, '') || 'document'}.html`;
 }
 
-function twoDigitDatePart(value: number): string {
-  return String(value).padStart(2, '0');
-}
-
-export function buildPromptMarkdownHtmlFileStem(now = new Date()): string {
-  return [
-    now.getFullYear(),
-    twoDigitDatePart(now.getMonth() + 1),
-    twoDigitDatePart(now.getDate()),
-  ].join('-') + '_' + [
-    twoDigitDatePart(now.getHours()),
-    twoDigitDatePart(now.getMinutes()),
-    twoDigitDatePart(now.getSeconds()),
-  ].join('-');
-}
-
 export function buildMarkdownHtmlFileNameFromStem(stem: string): string {
   return `${stem.trim()}.html`;
 }
