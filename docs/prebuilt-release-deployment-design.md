@@ -21,10 +21,7 @@
 - `wheelmaker-updater` 常驻 Go 进程和 `update-now.signal` 轮询机制；
 - Hub/Monitor/Updater 三个常驻程序的组合。
 
-旧设计文档保留作历史记录，不再是新部署的实现依据：
-
-- `docs/superpowers/specs/2026-05-30-wheelmaker-deploy-cli-design.md`
-- `docs/superpowers/specs/2026-05-19-wheelmaker-update-publish-design.md`
+旧部署设计曾记录在早期工作流文档中；相关历史工作产物已清理，不再是新部署的实现依据。
 
 ## 已确认的边界
 

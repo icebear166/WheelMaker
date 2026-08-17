@@ -58,7 +58,7 @@ Expected: PASS.
 
 **Files:**
 - Modify as needed: `README.md`
-- Modify as needed: `docs/superpowers/specs/2026-05-30-wheelmaker-deploy-cli-design.md`
+- Related historical deployment design was removed during documentation cleanup; use the current deployment design and implementation as the source of truth.
 
 - [ ] **Step 1: Run package tests**
 

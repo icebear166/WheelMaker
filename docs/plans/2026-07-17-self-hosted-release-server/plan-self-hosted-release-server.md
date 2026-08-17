@@ -1200,7 +1200,7 @@ git diff --check
 git status --short
 ```
 
-Expected: `rg` returns no active matches, diff check passes, and only intentional implementation changes/commits exist. Do not touch the unrelated `docs/handoff/2026-07-17-session-list-redesign-handoff.md` unless its owning task has separately committed it.
+Expected: `rg` returns no active matches, diff check passes, and only intentional implementation changes/commits exist. Do not touch unrelated historical task records unless their owning task has separately committed them.
 
 - [ ] **Step 3: Deploy the release server to the confirmed Ubuntu host**
 
