@@ -4339,16 +4339,17 @@ export function App() {
     if (!chatTitlePromptMenuOpen || !chatTitlePromptMenuAvailable || typeof window === 'undefined') {
       return undefined;
     }
-    const anchor = chatTitlePromptButtonRef.current?.getBoundingClientRect();
+    // Span the title bar: the dropdown reads as the title region's own panel
+    // rather than a small floating card, on desktop and wide foldables alike.
+    const anchor =
+      chatTitlePromptButtonRef.current?.closest('.chat-title-bar')?.getBoundingClientRect() ??
+      chatTitlePromptButtonRef.current?.getBoundingClientRect();
     if (!anchor) {
       return undefined;
     }
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-    const menuWidth = Math.min(430, Math.max(280, viewportWidth - 24));
-    const left = Math.max(12, Math.min(anchor.left, viewportWidth - menuWidth - 12));
     return {
-      left,
-      width: menuWidth,
+      left: anchor.left + 8,
+      width: Math.max(280, anchor.width - 16),
     };
   }, [chatTitlePromptMenuAvailable, chatTitlePromptMenuOpen, isWide]);
   const chatHubPopoverStyle = useMemo<React.CSSProperties | undefined>(() => {

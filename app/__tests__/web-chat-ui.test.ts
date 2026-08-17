@@ -2730,6 +2730,25 @@ describe('web chat integration', () => {
     expect(sessionTitleBlock2).toContain('font-weight: 500;');
   });
 
+  test('prompt history menu spans the title bar and tightens rows on desktop pointers', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("closest('.chat-title-bar')");
+    expect(mainTsx).toContain('left: anchor.left + 8');
+    expect(mainTsx).toContain('width: Math.max(280, anchor.width - 16)');
+    const promptMenuBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-menu');
+    expect(promptMenuBlock).not.toContain('width:');
+    const promptMenuItemBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-menu-item');
+    expect(promptMenuItemBlock).toContain('min-height: 40px');
+    const densityMediaBlock = stylesCss.match(
+      /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.chat-title-prompt-menu-item \{([\s\S]*?)\}\s*\}/,
+    )?.[1] ?? '';
+    expect(densityMediaBlock).toContain('min-height: 36px');
+    expect(densityMediaBlock).toContain('padding: 4px 10px 4px 8px;');
+  });
+
   test('top bar menus share the session glass recipe and menu exit wiring', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
