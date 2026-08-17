@@ -57,7 +57,11 @@ export function shouldNotifyPromptCompletion(input: {
   return input.selectedRuntimeKey !== `${input.projectId}:${input.message.sessionId}`;
 }
 
-function notificationTitle(status: PromptCompletionNotificationStatus): string {
+export function promptCompletionSessionKey(projectId: string, sessionId: string): string {
+  return `${projectId}:${sessionId}`;
+}
+
+export function promptCompletionStatusPhrase(status: PromptCompletionNotificationStatus): string {
   switch (status) {
     case 'cancelled':
       return 'Prompt cancelled';
@@ -81,6 +85,13 @@ export function buildPromptCompletionNotification(input: {
   const projectId = input.projectId;
   const sessionId = input.message.sessionId;
   const turnIndex = Math.max(0, Math.trunc(Number(input.message.turnIndex) || 0));
+  const replyPreview = typeof input.message.param.replyPreview === 'string'
+    ? input.message.param.replyPreview
+    : '';
+  const errorMessage = status === 'failed' && typeof input.message.param.message === 'string'
+    ? input.message.param.message
+    : '';
+  const preview = replyPreview || errorMessage;
 
   return {
     type: 'chat.prompt.completed',
@@ -88,8 +99,10 @@ export function buildPromptCompletionNotification(input: {
     sessionId,
     turnIndex,
     title: sessionTitle,
-    body: notificationTitle(status),
+    body: preview || promptCompletionStatusPhrase(status),
+    preview,
     status,
+    tag: promptCompletionSessionKey(projectId, sessionId),
     url: `/?wmProjectId=${encodeURIComponent(projectId)}&wmSessionId=${encodeURIComponent(sessionId)}`,
   };
 }

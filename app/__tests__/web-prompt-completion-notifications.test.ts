@@ -1,6 +1,8 @@
 import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
+  promptCompletionSessionKey,
+  promptCompletionStatusPhrase,
   shouldNotifyPromptCompletion,
 } from '../web/src/chat/notifications/promptCompletionNotification';
 import type {
@@ -82,10 +84,10 @@ describe('prompt completion notifications', () => {
     })).toBe(true);
   });
 
-  test('builds privacy-preserving payload with the session display title and stable dedupe key', () => {
+  test('builds IM-style payload with reply preview and session tag', () => {
     const promptDone = message('prompt_done', 9, {
-      stopReason: 'failed',
-      message: 'agent crashed with a very long diagnostic',
+      stopReason: 'end_turn',
+      replyPreview: 'Fixed the login bug and added tests',
     });
     const payload = buildPromptCompletionNotification({
       message: promptDone,
@@ -98,16 +100,42 @@ describe('prompt completion notifications', () => {
       projectId: 'proj-1',
       sessionId: 'sess-1',
       turnIndex: 9,
-      status: 'failed',
+      status: 'completed',
       title: 'Build Android',
-      body: 'Prompt failed',
+      preview: 'Fixed the login bug and added tests',
+      body: 'Fixed the login bug and added tests',
+      tag: 'proj-1:sess-1',
     });
-    expect(payload.body).not.toContain('Build Android');
-    expect(payload.body).not.toContain('agent crashed');
-    expect(payload.body).not.toContain('assistant answer');
     expect(payload.url).toContain('wmProjectId=proj-1');
     expect(payload.url).toContain('wmSessionId=sess-1');
     expect(promptCompletionNotificationKey('proj-1', promptDone)).toBe('proj-1:sess-1:9');
+    expect(promptCompletionSessionKey('proj-1', 'sess-1')).toBe('proj-1:sess-1');
+  });
+
+  test('falls back to status phrase when no preview, and to error message for failed', () => {
+    const done = buildPromptCompletionNotification({
+      message: message('prompt_done', 10, {stopReason: 'end_turn'}),
+      projectId: 'proj-1',
+      session,
+    });
+    expect(done.preview).toBe('');
+    expect(done.body).toBe('Prompt completed');
+
+    const failedOldHub = buildPromptCompletionNotification({
+      message: message('prompt_done', 11, {stopReason: 'failed', message: 'agent crashed'}),
+      projectId: 'proj-1',
+      session,
+    });
+    expect(failedOldHub.status).toBe('failed');
+    expect(failedOldHub.preview).toBe('agent crashed');
+    expect(failedOldHub.body).toBe('agent crashed');
+  });
+
+  test('status phrase covers all four states', () => {
+    expect(promptCompletionStatusPhrase('completed')).toBe('Prompt completed');
+    expect(promptCompletionStatusPhrase('failed')).toBe('Prompt failed');
+    expect(promptCompletionStatusPhrase('cancelled')).toBe('Prompt cancelled');
+    expect(promptCompletionStatusPhrase('interrupted')).toBe('Prompt interrupted');
   });
 
   test('uses the same resolved session title as the chat list', () => {
@@ -127,5 +155,6 @@ describe('prompt completion notifications', () => {
 
     expect(payload.title).toBe('Manual session title');
     expect(payload.body).toBe('Prompt completed');
+    expect(payload.tag).toBe('proj-1:sess-1');
   });
 });

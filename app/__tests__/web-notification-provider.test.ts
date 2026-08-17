@@ -10,9 +10,11 @@ const payload: WheelMakerNotificationPayload = {
   projectId: 'proj-1',
   sessionId: 'sess-1',
   turnIndex: 1,
-  title: 'Prompt completed',
-  body: 'Build Android',
+  title: 'Build Android',
+  body: 'Prompt completed',
+  preview: '',
   status: 'completed',
+  tag: 'proj-1:sess-1',
   url: '/?wmProjectId=proj-1&wmSessionId=sess-1',
 };
 

@@ -13,6 +13,8 @@ export type WheelMakerNotificationPayload = {
   turnIndex: number;
   title: string;
   body: string;
+  preview: string;
   status: PromptCompletionNotificationStatus;
+  tag: string;
   url: string;
 };
